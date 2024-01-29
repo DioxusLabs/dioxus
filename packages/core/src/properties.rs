@@ -32,7 +32,16 @@ pub trait Properties: Clone + Sized + 'static {
     fn builder() -> Self::Builder;
 
     /// Compare two props to see if they are memoizable.
-    fn memoize(&self, other: &Self) -> bool;
+    fn memoize(&mut self, other: &Self) -> bool;
+
+    /// Create a component from the props.
+    fn into_vcomponent<M: 'static>(
+        self,
+        render_fn: impl ComponentFunction<Self, M>,
+        component_name: &'static str,
+    ) -> VComponent {
+        VComponent::new(render_fn, self, component_name)
+    }
 }
 
 impl Properties for () {
@@ -40,7 +49,7 @@ impl Properties for () {
     fn builder() -> Self::Builder {
         EmptyBuilder {}
     }
-    fn memoize(&self, _other: &Self) -> bool {
+    fn memoize(&mut self, _other: &Self) -> bool {
         true
     }
 }
@@ -65,7 +74,7 @@ where
     fn builder() -> Self::Builder {
         todo!()
     }
-    fn memoize(&self, _other: &Self) -> bool {
+    fn memoize(&mut self, _other: &Self) -> bool {
         true
     }
 }

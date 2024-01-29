@@ -57,5 +57,17 @@ fn app() -> Element {
         } else {
             "No saved values"
         }
+
+        // You can pass a value directly to any prop that accepts a signal
+        Child { count: 0 }
+    }
+}
+
+#[component]
+fn Child(mut count: Signal<i32>) -> Element {
+    rsx! {
+        h1 { "{count}" }
+        button { onclick: move |_| count += 1, "Up high!" }
+        button { onclick: move |_| count -= 1, "Down low!" }
     }
 }

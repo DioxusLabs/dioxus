@@ -5,7 +5,6 @@ use crate::{
 use std::{
     any::Any,
     cell::RefCell,
-    mem::MaybeUninit,
     ops::{Deref, DerefMut},
     rc::Rc,
     sync::Arc,
@@ -346,6 +345,11 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
                 owner,
             ),
         }
+    }
+
+    /// Take the value out of the signal, invalidating the signal in the process.
+    pub fn take(&self) -> T {
+        self.inner.take().value
     }
 
     /// Get the scope the signal was created in.

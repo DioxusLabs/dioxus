@@ -75,6 +75,13 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
     fn set(&self, value: T) {
         *self.0.borrow_mut() = Some(Box::new(value));
     }
+
+    fn take(&'static self) -> Option<T> {
+        self.0
+            .borrow_mut()
+            .take()
+            .map(|any| *any.downcast().unwrap())
+    }
 }
 
 thread_local! {
@@ -128,7 +135,7 @@ impl AnyStorage for UnsyncStorage {
         self.0.as_ptr() as *const ()
     }
 
-    fn take(&self) -> bool {
+    fn manually_drop(&self) -> bool {
         self.0.borrow_mut().take().is_some()
     }
 

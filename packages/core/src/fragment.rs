@@ -90,7 +90,7 @@ impl Properties for FragmentProps {
     fn builder() -> Self::Builder {
         FragmentBuilder(None)
     }
-    fn memoize(&self, _other: &Self) -> bool {
+    fn memoize(&mut self, _other: &Self) -> bool {
         false
     }
 }

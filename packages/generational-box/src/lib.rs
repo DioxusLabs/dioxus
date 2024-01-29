@@ -185,6 +185,15 @@ impl<T: 'static, S: Storage<T>> GenerationalBox<T, S> {
             self.raw.0.data.data_ptr() == other.raw.0.data.data_ptr()
         }
     }
+
+    /// Take the value out of the generational box and invalidate the generational box. This will return the value if the value was taken.
+    pub fn take(&self) -> Option<T> {
+        if self.validate() {
+            Storage::take(&self.raw.0.data)
+        } else {
+            None
+        }
+    }
 }
 
 impl<T, S: 'static> Copy for GenerationalBox<T, S> {}
@@ -211,6 +220,9 @@ pub trait Storage<Data = ()>: AnyStorage + 'static {
 
     /// Set the value
     fn set(&'static self, value: Data);
+
+    /// Take the value out of the storage. This will return the value if the value was taken.
+    fn take(&'static self) -> Option<Data>;
 }
 
 /// A trait for any storage backing type.
@@ -248,8 +260,8 @@ pub trait AnyStorage: Default {
     /// Get the data pointer. No guarantees are made about the data pointer. It should only be used for debugging.
     fn data_ptr(&self) -> *const ();
 
-    /// Take the value out of the storage. This will return true if the value was taken.
-    fn take(&self) -> bool;
+    /// Drop the value from the storage. This will return true if the value was taken.
+    fn manually_drop(&self) -> bool;
 
     /// Recycle a memory location. This will drop the memory location and return it to the runtime.
     fn recycle(location: &MemoryLocation<Self>);
@@ -259,10 +271,9 @@ pub trait AnyStorage: Default {
 
     /// Create a new owner. The owner will be responsible for dropping all of the generational boxes that it creates.
     fn owner() -> Owner<Self> {
-        Owner {
+        Owner(Arc::new(Mutex::new(OwnerInner {
             owned: Default::default(),
-            phantom: PhantomData,
-        }
+        })))
     }
 }
 
@@ -324,7 +335,7 @@ impl<S> MemoryLocation<S> {
     where
         S: AnyStorage,
     {
-        let old = self.0.data.take();
+        let old = self.0.data.manually_drop();
         #[cfg(any(debug_assertions, feature = "check_generation"))]
         if old {
             let new_generation = self.0.generation.load(std::sync::atomic::Ordering::Relaxed) + 1;
@@ -355,10 +366,31 @@ impl<S> MemoryLocation<S> {
     }
 }
 
+struct OwnerInner<S: AnyStorage + 'static> {
+    owned: Vec<MemoryLocation<S>>,
+}
+
+impl<S: AnyStorage> Drop for OwnerInner<S> {
+    fn drop(&mut self) {
+        for location in &self.owned {
+            S::recycle(location)
+        }
+    }
+}
+
 /// Owner: Handles dropping generational boxes. The owner acts like a runtime lifetime guard. Any states that you create with an owner will be dropped when that owner is dropped.
-pub struct Owner<S: AnyStorage + 'static = UnsyncStorage> {
-    owned: Arc<Mutex<Vec<MemoryLocation<S>>>>,
-    phantom: PhantomData<S>,
+pub struct Owner<S: AnyStorage + 'static = UnsyncStorage>(Arc<Mutex<OwnerInner<S>>>);
+
+impl<S: AnyStorage> Default for Owner<S> {
+    fn default() -> Self {
+        S::owner()
+    }
+}
+
+impl<S: AnyStorage> Clone for Owner<S> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
 }
 
 impl<S: AnyStorage> Owner<S> {
@@ -391,7 +423,7 @@ impl<S: AnyStorage> Owner<S> {
             #[cfg(any(debug_assertions, feature = "debug_borrows"))]
             caller,
         );
-        self.owned.lock().push(location);
+        self.0.lock().owned.push(location);
         key
     }
 
@@ -409,15 +441,7 @@ impl<S: AnyStorage> Owner<S> {
             created_at: std::panic::Location::caller(),
             _marker: PhantomData,
         };
-        self.owned.lock().push(location);
+        self.0.lock().owned.push(location);
         generational_box
-    }
-}
-
-impl<S: AnyStorage> Drop for Owner<S> {
-    fn drop(&mut self) {
-        for location in self.owned.lock().iter() {
-            S::recycle(location)
-        }
     }
 }

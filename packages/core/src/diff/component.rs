@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
 use crate::{
     any_props::AnyProps,
@@ -72,7 +72,7 @@ impl VNode {
 
         // copy out the box for both
         let old_scope = &mut dom.scopes[scope_id.0];
-        let old_props: &dyn AnyProps = old_scope.props.deref();
+        let old_props: &mut dyn AnyProps = old_scope.props.deref_mut();
         let new_props: &dyn AnyProps = new.props.deref();
 
         // If the props are static, then we try to memoize by setting the new with the old

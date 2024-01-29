@@ -72,7 +72,7 @@ impl AnyStorage for SyncStorage {
         self.0.data_ptr() as *const ()
     }
 
-    fn take(&self) -> bool {
+    fn manually_drop(&self) -> bool {
         self.0.write().take().is_some()
     }
 
@@ -161,5 +161,12 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
 
     fn set(&self, value: T) {
         *self.0.write() = Some(Box::new(value));
+    }
+
+    fn take(&'static self) -> Option<T> {
+        self.0
+            .write()
+            .take()
+            .and_then(|any| any.downcast().ok().map(|boxed| *boxed))
     }
 }

@@ -8,7 +8,7 @@ pub(crate) trait AnyProps: 'static {
     /// Render the component with the internal props.
     fn render(&self) -> RenderReturn;
     /// Check if the props are the same as the type erased props of another component.
-    fn memoize(&self, other: &dyn Any) -> bool;
+    fn memoize(&mut self, other: &dyn Any) -> bool;
     /// Get the props as a type erased `dyn Any`.
     fn props(&self) -> &dyn Any;
     /// Duplicate this component into a new boxed component.
@@ -18,7 +18,7 @@ pub(crate) trait AnyProps: 'static {
 /// A component along with the props the component uses to render.
 pub(crate) struct VProps<F: ComponentFunction<P, M>, P, M> {
     render_fn: F,
-    memo: fn(&P, &P) -> bool,
+    memo: fn(&mut P, &P) -> bool,
     props: P,
     name: &'static str,
     phantom: std::marker::PhantomData<M>,
@@ -40,7 +40,7 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> VProps<
     /// Create a [`VProps`] object.
     pub fn new(
         render_fn: F,
-        memo: fn(&P, &P) -> bool,
+        memo: fn(&mut P, &P) -> bool,
         props: P,
         name: &'static str,
     ) -> VProps<F, P, M> {
@@ -57,9 +57,9 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> VProps<
 impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> AnyProps
     for VProps<F, P, M>
 {
-    fn memoize(&self, other: &dyn Any) -> bool {
+    fn memoize(&mut self, other: &dyn Any) -> bool {
         match other.downcast_ref::<P>() {
-            Some(other) => (self.memo)(&self.props, other),
+            Some(other) => (self.memo)(&mut self.props, other),
             None => false,
         }
     }

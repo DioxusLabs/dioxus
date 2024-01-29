@@ -1,8 +1,12 @@
+use generational_box::AnyStorage;
 use generational_box::GenerationalBoxId;
+use generational_box::SyncStorage;
 use generational_box::UnsyncStorage;
+use std::any::Any;
+use std::any::TypeId;
+use std::cell::RefCell;
 use std::mem::MaybeUninit;
 use std::ops::Deref;
-use std::rc::Rc;
 
 use dioxus_core::prelude::*;
 use dioxus_core::ScopeId;
@@ -13,7 +17,72 @@ use crate::Effect;
 use crate::Readable;
 use crate::Writable;
 
-fn current_owner<S: Storage<T>, T>() -> Rc<Owner<S>> {
+/// Run a closure with the given owner.
+pub fn with_owner<S: AnyStorage, F: FnOnce() -> R, R>(owner: Owner<S>, f: F) -> R {
+    let old_owner = set_owner(Some(owner));
+    let result = f();
+    set_owner(old_owner);
+    result
+}
+
+/// Set the owner for the current thread.
+fn set_owner<S: AnyStorage>(owner: Option<Owner<S>>) -> Option<Owner<S>> {
+    let id = TypeId::of::<S>();
+    if id == TypeId::of::<SyncStorage>() {
+        SYNC_OWNER.with(|cell| {
+            std::mem::replace(
+                &mut *cell.borrow_mut(),
+                owner.map(|owner| {
+                    *(Box::new(owner) as Box<dyn Any>)
+                        .downcast::<Owner<SyncStorage>>()
+                        .unwrap()
+                }),
+            )
+            .map(|owner| *(Box::new(owner) as Box<dyn Any>).downcast().unwrap())
+        })
+    } else {
+        UNSYNC_OWNER.with(|cell| {
+            std::mem::replace(
+                &mut *cell.borrow_mut(),
+                owner.map(|owner| {
+                    *(Box::new(owner) as Box<dyn Any>)
+                        .downcast::<Owner<UnsyncStorage>>()
+                        .unwrap()
+                }),
+            )
+            .map(|owner| *(Box::new(owner) as Box<dyn Any>).downcast().unwrap())
+        })
+    }
+}
+
+thread_local! {
+    static SYNC_OWNER: RefCell<Option<Owner<SyncStorage>>> = RefCell::new(None);
+    static UNSYNC_OWNER: RefCell<Option<Owner<UnsyncStorage>>> = RefCell::new(None);
+}
+
+fn current_owner<S: Storage<T>, T>() -> Owner<S> {
+    let id = TypeId::of::<S>();
+    let override_owner = if id == TypeId::of::<SyncStorage>() {
+        SYNC_OWNER.with(|cell| {
+            cell.borrow().clone().map(|owner| {
+                *(Box::new(owner) as Box<dyn Any>)
+                    .downcast::<Owner<S>>()
+                    .unwrap()
+            })
+        })
+    } else {
+        UNSYNC_OWNER.with(|cell| {
+            cell.borrow().clone().map(|owner| {
+                *(Box::new(owner) as Box<dyn Any>)
+                    .downcast::<Owner<S>>()
+                    .unwrap()
+            })
+        })
+    };
+    if let Some(owner) = override_owner {
+        return owner;
+    }
+
     match Effect::current() {
         // If we are inside of an effect, we should use the owner of the effect as the owner of the value.
         Some(effect) => {
@@ -24,18 +93,18 @@ fn current_owner<S: Storage<T>, T>() -> Rc<Owner<S>> {
         None => match has_context() {
             Some(rt) => rt,
             None => {
-                let owner = Rc::new(S::owner());
+                let owner = S::owner();
                 provide_context(owner)
             }
         },
     }
 }
 
-fn owner_in_scope<S: Storage<T>, T>(scope: ScopeId) -> Rc<Owner<S>> {
+fn owner_in_scope<S: Storage<T>, T>(scope: ScopeId) -> Owner<S> {
     match consume_context_from_scope(scope) {
         Some(rt) => rt,
         None => {
-            let owner = Rc::new(S::owner());
+            let owner = S::owner();
             scope.provide_context(owner)
         }
     }
@@ -126,6 +195,13 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
             value: owner.insert(value),
             origin_scope: scope,
         }
+    }
+
+    /// Take the value out of the CopyValue, invalidating the value in the process.
+    pub fn take(&self) -> T {
+        self.value
+            .take()
+            .expect("value is already dropped or borrowed")
     }
 
     pub(crate) fn invalid() -> Self {

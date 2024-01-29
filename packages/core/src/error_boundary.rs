@@ -330,7 +330,7 @@ impl Properties for ErrorBoundaryProps {
     fn builder() -> Self::Builder {
         ErrorBoundaryProps::builder()
     }
-    fn memoize(&self, _: &Self) -> bool {
+    fn memoize(&mut self, _: &Self) -> bool {
         false
     }
 }
