@@ -84,7 +84,7 @@ mod segment;
 ///
 /// # `#[route("path", component)]`
 ///
-/// The `#[route]` attribute is used to define a route. It takes up to 3 parameters:
+/// The `#[route]` attribute is used to define a route. It takes up to 2 parameters:
 /// - `path`: The path to the enum variant (relative to the parent nest)
 /// - (optional) `component`: The component to render when the route is matched. If not specified, the name of the variant is used
 ///
