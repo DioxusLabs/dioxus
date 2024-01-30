@@ -39,14 +39,14 @@ pub fn build(config: &CrateConfig, _: bool, skip_assets: bool) -> Result<BuildRe
     // [6] Link up the html page to the wasm module
 
     let CrateConfig {
-        out_dir,
         crate_dir,
         target_dir,
-        asset_dir,
         executable,
         dioxus_config,
         ..
     } = config;
+    let out_dir = config.out_dir();
+    let asset_dir = config.asset_dir();
 
     let _guard = WebAssetConfigDropGuard::new();
     let _manganis_support = ManganisSupportGuard::default();
@@ -251,15 +251,15 @@ pub fn build(config: &CrateConfig, _: bool, skip_assets: bool) -> Result<BuildRe
             if path.is_file() {
                 std::fs::copy(&path, out_dir.join(path.file_name().unwrap()))?;
             } else {
-                match fs_extra::dir::copy(&path, out_dir, &copy_options) {
+                match fs_extra::dir::copy(&path, &out_dir, &copy_options) {
                     Ok(_) => {}
                     Err(_e) => {
                         log::warn!("Error copying dir: {}", _e);
                     }
                 }
                 for ignore in &ignore_files {
-                    let ignore = ignore.strip_prefix(&config.asset_dir).unwrap();
-                    let ignore = config.out_dir.join(ignore);
+                    let ignore = ignore.strip_prefix(&config.asset_dir()).unwrap();
+                    let ignore = out_dir.join(ignore);
                     if ignore.is_file() {
                         std::fs::remove_file(ignore)?;
                     }
@@ -369,13 +369,13 @@ pub fn build_desktop(
         file_name
     };
 
-    if !config.out_dir.is_dir() {
-        create_dir_all(&config.out_dir)?;
+    if !config.out_dir().is_dir() {
+        create_dir_all(config.out_dir())?;
     }
-    copy(res_path, config.out_dir.join(target_file))?;
+    copy(res_path, config.out_dir().join(target_file))?;
 
     // this code will copy all public file to the output dir
-    if config.asset_dir.is_dir() {
+    if config.asset_dir().is_dir() {
         let copy_options = fs_extra::dir::CopyOptions {
             overwrite: true,
             skip_exist: false,
@@ -385,20 +385,20 @@ pub fn build_desktop(
             depth: 0,
         };
 
-        for entry in std::fs::read_dir(&config.asset_dir)? {
+        for entry in std::fs::read_dir(config.asset_dir())? {
             let path = entry?.path();
             if path.is_file() {
-                std::fs::copy(&path, &config.out_dir.join(path.file_name().unwrap()))?;
+                std::fs::copy(&path, &config.out_dir().join(path.file_name().unwrap()))?;
             } else {
-                match fs_extra::dir::copy(&path, &config.out_dir, &copy_options) {
+                match fs_extra::dir::copy(&path, &config.out_dir(), &copy_options) {
                     Ok(_) => {}
                     Err(e) => {
                         log::warn!("Error copying dir: {}", e);
                     }
                 }
                 for ignore in &ignore_files {
-                    let ignore = ignore.strip_prefix(&config.asset_dir).unwrap();
-                    let ignore = config.out_dir.join(ignore);
+                    let ignore = ignore.strip_prefix(&config.asset_dir()).unwrap();
+                    let ignore = config.out_dir().join(ignore);
                     if ignore.is_file() {
                         std::fs::remove_file(ignore)?;
                     }
@@ -635,7 +635,7 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
 
                     if file == "*" {
                         // if the sass open auto, we need auto-check the assets dir.
-                        let asset_dir = config.asset_dir.clone();
+                        let asset_dir = config.asset_dir().clone();
                         if asset_dir.is_dir() {
                             for entry in walkdir::WalkDir::new(&asset_dir)
                                 .into_iter()
@@ -655,7 +655,7 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
                                             temp.file_stem().unwrap().to_str().unwrap()
                                         );
                                         let target_path = config
-                                            .out_dir
+                                            .out_dir()
                                             .join(
                                                 temp.strip_prefix(&asset_dir)
                                                     .unwrap()
@@ -685,11 +685,11 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
                         } else {
                             file
                         };
-                        let path = config.asset_dir.join(relative_path);
+                        let path = config.asset_dir().join(relative_path);
                         let out_file =
                             format!("{}.css", path.file_stem().unwrap().to_str().unwrap());
                         let target_path = config
-                            .out_dir
+                            .out_dir()
                             .join(PathBuf::from(relative_path).parent().unwrap())
                             .join(out_file);
                         if path.is_file() {
@@ -719,11 +719,11 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
                             } else {
                                 path
                             };
-                            let path = config.asset_dir.join(relative_path);
+                            let path = config.asset_dir().join(relative_path);
                             let out_file =
                                 format!("{}.css", path.file_stem().unwrap().to_str().unwrap());
                             let target_path = config
-                                .out_dir
+                                .out_dir()
                                 .join(PathBuf::from(relative_path).parent().unwrap())
                                 .join(out_file);
                             if path.is_file() {
