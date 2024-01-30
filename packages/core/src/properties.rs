@@ -106,13 +106,6 @@ pub trait ComponentFunction<Props, Marker = ()>: Clone + 'static {
     fn rebuild(&self, props: Props) -> Element;
 }
 
-/// Accept pre-formed component render functions as components
-impl<P: 'static> ComponentFunction<P> for Component<P> {
-    fn rebuild(&self, props: P) -> Element {
-        (self)(props)
-    }
-}
-
 /// Accept any callbacks that take props
 impl<F: Fn(P) -> Element + Clone + 'static, P> ComponentFunction<P> for F {
     fn rebuild(&self, props: P) -> Element {

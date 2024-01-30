@@ -70,7 +70,7 @@ pub(crate) mod innerlude {
     ///     Example {}
     /// )
     /// ```
-    pub type Component<P = ()> = std::rc::Rc<dyn Fn(P) -> Element>;
+    pub type Component<P = ()> = fn(P) -> Element;
 }
 
 pub use crate::innerlude::{
