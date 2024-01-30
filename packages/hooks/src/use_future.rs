@@ -1,14 +1,12 @@
 #![allow(missing_docs)]
+use crate::{use_hook_did_run, use_signal};
 use dioxus_core::{
-    prelude::{spawn, use_before_render, use_drop, use_hook},
-    ScopeState, Task,
+    prelude::{spawn, use_drop, use_hook},
+    Task,
 };
 use dioxus_signals::*;
 use dioxus_signals::{Readable, Writable};
-use futures_util::{future, pin_mut, FutureExt};
-use std::{any::Any, cell::Cell, future::Future, pin::Pin, rc::Rc, sync::Arc, task::Poll};
-
-use crate::use_callback;
+use std::future::Future;
 
 /// A hook that allows you to spawn a future
 ///
@@ -17,43 +15,27 @@ pub fn use_future<F>(mut future: impl FnMut() -> F) -> UseFuture
 where
     F: Future + 'static,
 {
-    let state = use_signal(|| UseFutureState::Pending);
+    let mut state = use_signal(|| UseFutureState::Pending);
 
     // Create the task inside a copyvalue so we can reset it in-place later
     let task = use_hook(|| {
         let fut = future();
         CopyValue::new(spawn(async move {
             fut.await;
+            state.set(UseFutureState::Complete);
         }))
     });
 
-    /*
-    Early returns in dioxus have consequences for use_memo, use_resource, and use_future, etc
-    We *don't* want futures to be running if the component early returns. It's a rather weird behavior to have
-    use_memo running in the background even if the component isn't hitting those hooks anymore.
-
-    React solves this by simply not having early returns interleave with hooks.
-    However, since dioxus allows early returns (since we use them for suspense), we need to solve this problem.
-
-
-     */
-    // Track if this *current* render is the same
-    let gen = use_hook(|| CopyValue::new((0, 0)));
-
-    // Early returns will pause this task, effectively
-    use_before_render(move || {
-        gen.write().0 += 1;
-        task.peek().set_active(false);
+    // Early returns in dioxus have consequences for use_memo, use_resource, and use_future, etc
+    // We *don't* want futures to be running if the component early returns. It's a rather weird behavior to have
+    // use_memo running in the background even if the component isn't hitting those hooks anymore.
+    //
+    // React solves this by simply not having early returns interleave with hooks.
+    // However, since dioxus allows early returns (since we use them for suspense), we need to solve this problem
+    use_hook_did_run(move |did_run| match did_run {
+        true => task.peek().resume(),
+        false => task.peek().pause(),
     });
-
-    // However when we actually run this component, we want to resume the task
-    task.peek().set_active(true);
-    gen.write().1 += 1;
-
-    // if the gens are different, we need to wake the task
-    if gen().0 != gen().1 {
-        task.peek().wake();
-    }
 
     use_drop(move || task.peek().stop());
 

@@ -24,6 +24,7 @@ pub(crate) struct Scope {
     pub(crate) shared_contexts: RefCell<Vec<Box<dyn Any>>>,
     pub(crate) spawned_tasks: RefCell<FxHashSet<Task>>,
     pub(crate) before_render: RefCell<Vec<Box<dyn FnMut()>>>,
+    pub(crate) after_render: RefCell<Vec<Box<dyn FnMut()>>>,
 }
 
 impl Scope {
@@ -45,6 +46,7 @@ impl Scope {
             hooks: RefCell::new(vec![]),
             hook_index: Cell::new(0),
             before_render: RefCell::new(vec![]),
+            after_render: RefCell::new(vec![]),
         }
     }
 
@@ -283,6 +285,10 @@ impl Scope {
 
     pub fn push_before_render(&self, f: impl FnMut() + 'static) {
         self.before_render.borrow_mut().push(Box::new(f));
+    }
+
+    pub fn push_after_render(&self, f: impl FnMut() + 'static) {
+        self.after_render.borrow_mut().push(Box::new(f));
     }
 
     /// Get the current render since the inception of this component

@@ -10,17 +10,11 @@ pub use rt::*;
 mod effect;
 pub use effect::*;
 
-mod memo;
-pub use memo::*;
-
 pub(crate) mod signal;
 pub use signal::*;
 
 mod read_only_signal;
 pub use read_only_signal::*;
-
-mod dependency;
-pub use dependency::*;
 
 mod map;
 pub use map::*;

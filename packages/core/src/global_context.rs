@@ -216,17 +216,33 @@ pub fn use_drop<D: FnOnce() + 'static>(destroy: D) {
     });
 }
 
+pub fn use_before_render(f: impl FnMut() + 'static) {
+    use_hook(|| before_render(f));
+}
+
+pub fn use_after_render(f: impl FnMut() + 'static) {
+    use_hook(|| after_render(f));
+}
+
 /// Push a function to be run before the next render
 /// This is a hook and will always run, so you can't unschedule it
 /// Will run for every progression of suspense, though this might change in the future
-pub fn use_before_render(f: impl FnMut() + 'static) {
+pub fn before_render(f: impl FnMut() + 'static) {
     Runtime::with_current_scope(|cx| cx.push_before_render(f));
+}
+
+/// Push a function to be run after the render is complete, even if it didn't complete successfully
+pub fn after_render(f: impl FnMut() + 'static) {
+    Runtime::with_current_scope(|cx| cx.push_after_render(f));
 }
 
 /// Wait for the virtualdom to finish its sync work before proceeding
 ///
 /// This is useful if you've just triggered an update and want to wait for it to finish before proceeding with valid
 /// DOM nodes.
+///
+/// Effects rely on this to ensure that they only run effects after the DOM has been updated. Without flush_sync effects
+/// are run immediately before diffing the DOM, which causes all sorts of out-of-sync weirdness.
 pub async fn flush_sync() {
     let mut polled = false;
 
@@ -246,7 +262,8 @@ pub async fn flush_sync() {
     .await;
 
     // If the the future got polled, then we don't need to prevent it from being dropped
-    // This would all be solved with generational indicies on tasks
+    // If we had generational indicies on tasks we could simply let the task remain in the queue and just be a no-op
+    // when it's run
     std::mem::forget(_task);
 
     struct FlushKey(Task);

@@ -57,6 +57,11 @@ impl VirtualDom {
 
         let context = scope.state();
 
+        // Run all post-render hooks
+        for post_run in context.after_render.borrow_mut().iter_mut() {
+            post_run();
+        }
+
         // And move the render generation forward by one
         context.render_count.set(context.render_count.get() + 1);
 

@@ -47,60 +47,75 @@ impl EffectStackRef {
 }
 
 pub(crate) fn get_effect_ref() -> EffectStackRef {
-    match try_consume_context() {
-        Some(rt) => rt,
-        None => {
-            let (sender, mut receiver) = futures_channel::mpsc::unbounded();
-            spawn_forever(async move {
-                let mut queued_memos = Vec::new();
-
-                loop {
-                    // Wait for a flush
-                    // This gives a chance for effects to be updated in place and memos to compute their values
-                    let flush_await = flush_sync();
-                    pin_mut!(flush_await);
-
-                    loop {
-                        let res =
-                            futures_util::future::select(&mut flush_await, receiver.next()).await;
-
-                        match res {
-                            Either::Right((_queued, _)) => {
-                                if let Some(task) = _queued {
-                                    queued_memos.push(task);
-                                }
-                                continue;
-                            }
-                            Either::Left(_flushed) => break,
-                        }
-                    }
-
-                    EFFECT_STACK.with(|stack| {
-                        for id in queued_memos.drain(..) {
-                            let effect_mapping = stack.effect_mapping.read();
-                            if let Some(mut effect) = effect_mapping.get(&id).copied() {
-                                tracing::trace!("Rerunning effect: {:?}", id);
-                                effect.try_run();
-                            } else {
-                                tracing::trace!("Effect not found: {:?}", id);
-                            }
-                        }
-                    });
-                }
-            });
-            let stack_ref = EffectStackRef {
-                rerun_effect: sender,
-            };
-            provide_root_context(stack_ref.clone());
-            stack_ref
-        }
+    if let Some(rt) = try_consume_context() {
+        return rt;
     }
+
+    let (sender, receiver) = futures_channel::mpsc::unbounded();
+
+    spawn_forever(async move { effect_driver(receiver).await });
+
+    let stack_ref = EffectStackRef {
+        rerun_effect: sender,
+    };
+
+    provide_root_context(stack_ref.clone());
+
+    stack_ref
 }
 
-/// Create a new effect. The effect will be run immediately and whenever any signal it reads changes.
-/// The signal will be owned by the current component and will be dropped when the component is dropped.
-pub fn use_effect(callback: impl FnMut() + 'static) {
-    use_hook(|| Effect::new(callback));
+/// The primary top-level driver of all effects
+///
+/// In Dioxus, effects are neither react effects nor solidjs effects. They are a hybrid of the two, making our model
+/// more complex but also more powerful.
+///
+/// In react, when a component renders, it can queue up effects to be run after the component is done rendering.
+/// This is done *only during render* and determined by the dependency array attached to the effect. In Dioxus,
+/// we track effects using signals, so these effects can actually run multiple times after the component has rendered.
+///
+///
+async fn effect_driver(
+    mut receiver: futures_channel::mpsc::UnboundedReceiver<GenerationalBoxId>,
+) -> ! {
+    let mut queued_memos = Vec::new();
+
+    loop {
+        // Wait for a flush
+        // This gives a chance for effects to be updated in place and memos to compute their values
+        let flush_await = flush_sync();
+        pin_mut!(flush_await);
+
+        // Until the flush is ready, wait for a new effect to be queued
+        // We don't run the effects immediately because we want to batch them on the next call to flush
+        // todo: the queued memos should be unqueued when components are dropped
+        loop {
+            match futures_util::future::select(&mut flush_await, receiver.next()).await {
+                // VDOM is flushed and we can run the queued effects
+                Either::Left(_flushed) => break,
+
+                // A new effect was queued to be run after the next flush
+                // Marking components as dirty is handled syncrhonously on write, though we could try
+                // batching them here too
+                Either::Right((_queued, _)) => {
+                    if let Some(task) = _queued {
+                        queued_memos.push(task);
+                    }
+                }
+            }
+        }
+
+        EFFECT_STACK.with(|stack| {
+            for id in queued_memos.drain(..) {
+                let effect_mapping = stack.effect_mapping.read();
+                if let Some(mut effect) = effect_mapping.get(&id).copied() {
+                    tracing::trace!("Rerunning effect: {:?}", id);
+                    effect.try_run();
+                } else {
+                    tracing::trace!("Effect not found: {:?}", id);
+                }
+            }
+        });
+    }
 }
 
 /// Effects allow you to run code when a signal changes. Effects are run immediately and whenever any signal it reads changes.

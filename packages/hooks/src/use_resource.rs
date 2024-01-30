@@ -1,4 +1,5 @@
 #![allow(missing_docs)]
+use crate::use_signal;
 use dioxus_core::{
     prelude::{spawn, use_hook},
     ScopeState, Task,

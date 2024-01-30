@@ -1,47 +1,123 @@
-use dioxus_core::ScopeState;
+use dioxus_core::prelude::*;
+use dioxus_signals::{CopyValue, ReadOnlySignal, Readable, Signal, SignalData};
+use dioxus_signals::{Storage, Writable};
+// use generational_box::Storage;
 
-use crate::UseFutureDep;
+use crate::use_signal;
+use crate::{dependency::Dependency, use_hook_did_run};
+// use dioxus_signals::{signal::SignalData, ReadOnlySignal, Signal};
 
-/// A hook that provides a callback that executes if the dependencies change.
-/// This is useful to avoid running computation-expensive calculations even when the data doesn't change.
+/// Creates a new unsync Selector. The selector will be run immediately and whenever any signal it reads changes.
 ///
-/// - dependencies: a tuple of references to values that are `PartialEq` + `Clone`
+/// Selectors can be used to efficiently compute derived data from signals.
 ///
-/// ## Examples
+/// ```rust
+/// use dioxus::prelude::*;
+/// use dioxus_signals::*;
 ///
-/// ```rust, no_run
-/// # use dioxus::prelude::*;
-///
-/// #[component]
-/// fn Calculator(number: usize) -> Element {
-///     let bigger_number = use_memo((number,), |(number,)| {
-///         // This will only be calculated when `number` has changed.
-///         number * 100
-///     });
-///     rsx!(
-///         p { "{bigger_number}" }
-///     )
-/// }
-///
-/// #[component]
 /// fn App() -> Element {
-///     rsx!(Calculator { number: 0 })
+///     let mut count = use_signal(|| 0);
+///     let double = use_memo(move || count * 2);
+///     count += 1;
+///     assert_eq!(double.value(), count * 2);
+///
+///     rsx! { "{double}" }
 /// }
 /// ```
-#[must_use = "Consider using `use_effect` to run rerun a callback when dependencies change"]
-pub fn use_memo<T, D>(, dependencies: D, callback: impl FnOnce(D::Out) -> T) -> &T
+#[track_caller]
+pub fn use_memo<R: PartialEq>(f: impl FnMut() -> R + 'static) -> ReadOnlySignal<R> {
+    use_maybe_sync_memo(f)
+}
+
+/// Creates a new Selector that may be sync. The selector will be run immediately and whenever any signal it reads changes.
+///
+/// Selectors can be used to efficiently compute derived data from signals.
+///
+/// ```rust
+/// use dioxus::prelude::*;
+/// use dioxus_signals::*;
+///
+/// fn App(cx: Scope) -> Element {
+///     let mut count = use_signal(cx, || 0);
+///     let double = use_memo(cx, move || count * 2);
+///     count += 1;
+///     assert_eq!(double.value(), count * 2);
+///
+///     render! { "{double}" }
+/// }
+/// ```
+#[track_caller]
+pub fn use_maybe_sync_memo<R: PartialEq, S: Storage<SignalData<R>>>(
+    f: impl FnMut() -> R + 'static,
+) -> ReadOnlySignal<R, S> {
+    use_hook(|| Signal::maybe_sync_memo(f))
+}
+
+/// Creates a new unsync Selector with some local dependencies. The selector will be run immediately and whenever any signal it reads or any dependencies it tracks changes
+///
+/// Selectors can be used to efficiently compute derived data from signals.
+///
+/// ```rust
+/// use dioxus::prelude::*;
+/// use dioxus_signals::*;
+///
+/// fn App(cx: Scope) -> Element {
+///     let mut local_state = use_state(cx, || 0);
+///     let double = use_memo_with_dependencies(cx, (local_state.get(),), move |(local_state,)| local_state * 2);
+///     local_state.set(1);
+///
+///     render! { "{double}" }
+/// }
+/// ```
+#[track_caller]
+pub fn use_memo_with_dependencies<R: PartialEq, D: Dependency>(
+    dependencies: D,
+    f: impl FnMut(D::Out) -> R + 'static,
+) -> ReadOnlySignal<R>
 where
-    T: 'static,
-    D: UseFutureDep,
+    D::Out: 'static,
 {
-    let value = cx.use_hook(|| None);
+    use_maybe_sync_selector_with_dependencies(dependencies, f)
+}
 
-    let dependancies_vec = cx.use_hook(Vec::new);
-
-    if dependencies.clone().apply(dependancies_vec) || value.is_none() {
-        // Create the new value
-        *value = Some(callback(dependencies.out()));
+/// Creates a new Selector that may be sync with some local dependencies. The selector will be run immediately and whenever any signal it reads or any dependencies it tracks changes
+///
+/// Selectors can be used to efficiently compute derived data from signals.
+///
+/// ```rust
+/// use dioxus::prelude::*;
+/// use dioxus_signals::*;
+///
+/// fn App(cx: Scope) -> Element {
+///     let mut local_state = use_state(cx, || 0);
+///     let double = use_memo_with_dependencies(cx, (local_state.get(),), move |(local_state,)| local_state * 2);
+///     local_state.set(1);
+///
+///     render! { "{double}" }
+/// }
+/// ```
+#[track_caller]
+pub fn use_maybe_sync_selector_with_dependencies<
+    R: PartialEq,
+    D: Dependency,
+    S: Storage<SignalData<R>>,
+>(
+    dependencies: D,
+    mut f: impl FnMut(D::Out) -> R + 'static,
+) -> ReadOnlySignal<R, S>
+where
+    D::Out: 'static,
+{
+    let mut dependencies_signal = use_signal(|| dependencies.out());
+    let selector = use_hook(|| {
+        Signal::maybe_sync_memo(move || {
+            let deref = &*dependencies_signal.read();
+            f(deref.clone())
+        })
+    });
+    let changed = { dependencies.changed(&*dependencies_signal.read()) };
+    if changed {
+        dependencies_signal.set(dependencies.out());
     }
-
-    value.as_ref().unwrap()
+    selector
 }
