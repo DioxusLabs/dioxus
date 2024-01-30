@@ -1,5 +1,5 @@
 #![allow(missing_docs)]
-use crate::use_hook_did_run;
+use crate::{use_hook_did_run, use_signal};
 use dioxus_core::{
     prelude::{spawn, use_drop, use_hook},
     Task,

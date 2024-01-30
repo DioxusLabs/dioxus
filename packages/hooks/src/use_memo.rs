@@ -3,8 +3,8 @@ use dioxus_signals::{CopyValue, ReadOnlySignal, Readable, Signal, SignalData};
 use dioxus_signals::{Storage, Writable};
 // use generational_box::Storage;
 
+use crate::use_signal;
 use crate::{dependency::Dependency, use_hook_did_run};
-use dioxus_signals::use_signal;
 // use dioxus_signals::{signal::SignalData, ReadOnlySignal, Signal};
 
 /// Creates a new unsync Selector. The selector will be run immediately and whenever any signal it reads changes.
