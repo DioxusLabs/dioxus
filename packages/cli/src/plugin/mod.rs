@@ -160,13 +160,18 @@ pub(crate) fn handle_change(
 ) {
     match change {
         ResponseEvent::Rebuild if reload_tx.is_some() => {
-            let _ = reload_tx.as_ref().unwrap().send(WsMessage::Reload);
+            if let Err(err) = reload_tx.as_ref().unwrap().send(WsMessage::Reload) {
+                log::error!("Failed to send reload message: {}", err);
+            }
         }
         ResponseEvent::Refresh(assets) if reload_tx.is_some() => {
-            let _ = reload_tx
+            if let Err(err) = reload_tx
                 .as_ref()
                 .unwrap()
-                .send(WsMessage::RefreshAssets { urls: assets });
+                .send(WsMessage::RefreshAssets { urls: assets })
+            {
+                log::error!("Failed to send refresh asset message: {}", err);
+            }
         }
         ResponseEvent::Rebuild => *needs_full_rebuild = true,
         _ => (),

@@ -207,7 +207,7 @@ pub struct HotReloadState {
     pub file_map: Arc<Mutex<FileMap<HtmlCtx>>>,
 }
 
-#[derive(serde::Deserialize, Debug, Clone)]
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
 #[serde(tag = "method", content = "params")]
 pub enum WsMessage {
     #[serde(rename = "reload")]

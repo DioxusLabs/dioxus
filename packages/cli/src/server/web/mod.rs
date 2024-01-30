@@ -396,10 +396,10 @@ async fn ws_handler(
         let mut rx = state.update.subscribe();
         let reload_watcher = tokio::spawn(async move {
             loop {
-                rx.recv().await.unwrap();
+                let message = rx.recv().await.unwrap();
                 // ignore the error
                 if socket
-                    .send(Message::Text(String::from("{type:\"reload\"}")))
+                    .send(Message::Text(serde_json::to_string(&message).unwrap()))
                     .await
                     .is_err()
                 {
