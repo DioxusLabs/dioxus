@@ -1,7 +1,15 @@
 use crate::{
-    read::Readable, write::Writable, Effect, EffectInner, GlobalMemo, GlobalSignal, MappedSignal,
-    ReadOnlySignal,
+    get_effect_ref, read::Readable, write::Writable, CopyValue, Effect, EffectInner,
+    EffectStackRef, GlobalMemo, GlobalSignal, MappedSignal, ReadOnlySignal, EFFECT_STACK,
 };
+use dioxus_core::{
+    prelude::{
+        current_scope_id, has_context, provide_context, schedule_update_any, IntoAttributeValue,
+    },
+    ScopeId,
+};
+use generational_box::{AnyStorage, GenerationalBoxId, Storage, SyncStorage, UnsyncStorage};
+use parking_lot::RwLock;
 use std::{
     any::Any,
     cell::RefCell,
@@ -9,154 +17,6 @@ use std::{
     rc::Rc,
     sync::Arc,
 };
-
-use dioxus_core::{
-    prelude::{
-        current_scope_id, has_context, provide_context, schedule_update_any, use_hook,
-        IntoAttributeValue,
-    },
-    ScopeId,
-};
-use generational_box::{AnyStorage, GenerationalBoxId, Storage, SyncStorage, UnsyncStorage};
-use parking_lot::RwLock;
-
-use crate::{get_effect_ref, CopyValue, EffectStackRef, EFFECT_STACK};
-
-/// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
-///
-/// ```rust
-/// use dioxus::prelude::*;
-/// use dioxus_signals::*;
-///
-/// fn App() -> Element {
-///     let mut count = use_signal(|| 0);
-///
-///     // Because signals have automatic dependency tracking, if you never read them in a component, that component will not be re-rended when the signal is updated.
-///     // The app component will never be rerendered in this example.
-///     rsx! { Child { state: count } }
-/// }
-///
-/// #[component]
-/// fn Child(state: Signal<u32>) -> Element {
-///     let state = *state;
-///
-///     use_future( |()| async move {
-///         // Because the signal is a Copy type, we can use it in an async block without cloning it.
-///         *state.write() += 1;
-///     });
-///
-///     rsx! {
-///         button {
-///             onclick: move |_| *state.write() += 1,
-///             "{state}"
-///         }
-///     }
-/// }
-/// ```
-#[track_caller]
-#[must_use]
-pub fn use_signal<T: 'static>(f: impl FnOnce() -> T) -> Signal<T, UnsyncStorage> {
-    #[cfg(debug_assertions)]
-    let caller = std::panic::Location::caller();
-
-    use_hook(|| {
-        Signal::new_with_caller(
-            f(),
-            #[cfg(debug_assertions)]
-            caller,
-        )
-    })
-}
-
-/// Creates a new `Send + Sync`` Signal. Signals are a Copy state management solution with automatic dependency tracking.
-///
-/// ```rust
-/// use dioxus::prelude::*;
-/// use dioxus_signals::*;
-///
-/// fn App(cx: Scope) -> Element {
-///     let mut count = use_signal_sync(cx, || 0);
-///
-///     // Because signals have automatic dependency tracking, if you never read them in a component, that component will not be re-rended when the signal is updated.
-///     // The app component will never be rerendered in this example.
-///     render! { Child { state: count } }
-/// }
-///
-/// #[component]
-/// fn Child(cx: Scope, state: Signal<u32, SyncStorage>) -> Element {
-///     let state = *state;
-///
-///     use_future!(cx,  |()| async move {
-///         // This signal is Send + Sync, so we can use it in an another thread
-///         tokio::spawn(async move {
-///             // Because the signal is a Copy type, we can use it in an async block without cloning it.
-///             *state.write() += 1;
-///         }).await;
-///     });
-///
-///     render! {
-///         button {
-///             onclick: move |_| *state.write() += 1,
-///             "{state}"
-///         }
-///     }
-/// }
-/// ```
-#[must_use]
-#[track_caller]
-pub fn use_signal_sync<T: Send + Sync + 'static>(f: impl FnOnce() -> T) -> Signal<T, SyncStorage> {
-    #[cfg(debug_assertions)]
-    let caller = std::panic::Location::caller();
-    use_hook(|| {
-        Signal::new_with_caller(
-            f(),
-            #[cfg(debug_assertions)]
-            caller,
-        )
-    })
-}
-
-struct Unsubscriber {
-    scope: ScopeId,
-    subscribers: UnsubscriberArray,
-}
-
-type UnsubscriberArray = Vec<Rc<RefCell<Vec<ScopeId>>>>;
-
-impl Drop for Unsubscriber {
-    fn drop(&mut self) {
-        for subscribers in &self.subscribers {
-            subscribers.borrow_mut().retain(|s| *s != self.scope);
-        }
-    }
-}
-
-fn current_unsubscriber() -> Rc<RefCell<Unsubscriber>> {
-    match has_context() {
-        Some(rt) => rt,
-        None => {
-            let owner = Unsubscriber {
-                scope: current_scope_id().expect("in a virtual dom"),
-                subscribers: Default::default(),
-            };
-            provide_context(Rc::new(RefCell::new(owner)))
-        }
-    }
-}
-
-#[derive(Default)]
-pub(crate) struct SignalSubscribers {
-    pub(crate) subscribers: Vec<ScopeId>,
-    pub(crate) effect_subscribers: Vec<GenerationalBoxId>,
-}
-
-/// The data stored for tracking in a signal.
-pub struct SignalData<T> {
-    pub(crate) subscribers: Arc<RwLock<SignalSubscribers>>,
-    pub(crate) update_any: Arc<dyn Fn(ScopeId) + Sync + Send>,
-    pub(crate) effect_ref: EffectStackRef,
-    pub(crate) value: T,
-}
 
 /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
 ///
@@ -197,22 +57,18 @@ pub struct Signal<T: 'static, S: Storage<SignalData<T>> = UnsyncStorage> {
 /// A signal that can safely shared between threads.
 pub type SyncSignal<T> = Signal<T, SyncStorage>;
 
-#[cfg(feature = "serde")]
-impl<T: serde::Serialize + 'static, Store: Storage<SignalData<T>>> serde::Serialize
-    for Signal<T, Store>
-{
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        self.read().serialize(serializer)
-    }
+/// The data stored for tracking in a signal.
+pub struct SignalData<T> {
+    pub(crate) subscribers: Arc<RwLock<SignalSubscribers>>,
+    pub(crate) update_any: Arc<dyn Fn(ScopeId) + Sync + Send>,
+    pub(crate) effect_ref: EffectStackRef,
+    pub(crate) value: T,
 }
 
-#[cfg(feature = "serde")]
-impl<'de, T: serde::Deserialize<'de> + 'static, Store: Storage<SignalData<T>>>
-    serde::Deserialize<'de> for Signal<T, Store>
-{
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        Ok(Self::new_maybe_sync(T::deserialize(deserializer)?))
-    }
+#[derive(Default)]
+pub(crate) struct SignalSubscribers {
+    pub(crate) subscribers: Vec<ScopeId>,
+    pub(crate) effect_subscribers: Vec<GenerationalBoxId>,
 }
 
 impl<T: 'static> Signal<T> {
@@ -312,7 +168,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     }
 
     /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
-    fn new_with_caller(
+    pub fn new_with_caller(
         value: T,
         #[cfg(debug_assertions)] caller: &'static std::panic::Location<'static>,
     ) -> Self {
@@ -386,6 +242,15 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
         }
     }
 
+    pub fn unsubscribe(&self, scope: ScopeId) {
+        self.inner
+            .read()
+            .subscribers
+            .write()
+            .subscribers
+            .retain(|s| *s != scope);
+    }
+
     /// Map the signal to a new type.
     pub fn map<O>(self, f: impl Fn(&T) -> &O + 'static) -> MappedSignal<S::Ref<O>> {
         MappedSignal::new(self, f)
@@ -411,7 +276,8 @@ impl<T, S: Storage<SignalData<T>>> Readable<T> for Signal<T, S> {
         S::try_map(ref_, f)
     }
 
-    /// Get the current value of the signal. This will subscribe the current scope to the signal.  If you would like to read the signal without subscribing to it, you can use [`Self::peek`] instead.
+    /// Get the current value of the signal. This will subscribe the current scope to the signal.
+    /// If you would like to read the signal without subscribing to it, you can use [`Self::peek`] instead.
     ///
     /// If the signal has been dropped, this will panic.
     #[track_caller]
@@ -506,6 +372,52 @@ impl<T: Clone, S: Storage<SignalData<T>> + 'static> Deref for Signal<T, S> {
 
     fn deref(&self) -> &Self::Target {
         Readable::deref_impl(self)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<T: serde::Serialize + 'static, Store: Storage<SignalData<T>>> serde::Serialize
+    for Signal<T, Store>
+{
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.read().serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, T: serde::Deserialize<'de> + 'static, Store: Storage<SignalData<T>>>
+    serde::Deserialize<'de> for Signal<T, Store>
+{
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        Ok(Self::new_maybe_sync(T::deserialize(deserializer)?))
+    }
+}
+
+struct Unsubscriber {
+    scope: ScopeId,
+    subscribers: UnsubscriberArray,
+}
+
+type UnsubscriberArray = Vec<Rc<RefCell<Vec<ScopeId>>>>;
+
+impl Drop for Unsubscriber {
+    fn drop(&mut self) {
+        for subscribers in &self.subscribers {
+            subscribers.borrow_mut().retain(|s| *s != self.scope);
+        }
+    }
+}
+
+fn current_unsubscriber() -> Rc<RefCell<Unsubscriber>> {
+    match has_context() {
+        Some(rt) => rt,
+        None => {
+            let owner = Unsubscriber {
+                scope: current_scope_id().expect("in a virtual dom"),
+                subscribers: Default::default(),
+            };
+            provide_context(Rc::new(RefCell::new(owner)))
+        }
     }
 }
 

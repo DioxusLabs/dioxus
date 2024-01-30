@@ -1,7 +1,8 @@
 use std::cmp::Ordering;
 use std::ops::DerefMut;
 
-use dioxus_signals::{use_memo, ReadOnlySignal, Signal};
+use crate::use_memo;
+use dioxus_signals::{ReadOnlySignal, Signal};
 
 pub fn use_sorted<V: 'static, T: PartialEq>(
     collection: impl FnMut() -> Signal<V>,

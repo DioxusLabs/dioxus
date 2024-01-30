@@ -430,6 +430,7 @@ impl VirtualDom {
     async fn poll_tasks(&mut self) {
         loop {
             // Process all events - Scopes are marked dirty, etc
+            // Sometimes when wakers fire we get a slew of updates at once, so its important that we drain this completely
             self.process_events();
 
             // Now that we have collected all queued work, we should check if we have any dirty scopes. If there are not, then we can poll any queued futures

@@ -54,6 +54,8 @@ macro_rules! to_owned {
         $(to_owned![$($rest)*])?
     };
 }
+mod dependency;
+pub use dependency::*;
 
 mod use_callback;
 pub use use_callback::*;
@@ -76,6 +78,12 @@ pub use use_sorted::*;
 mod use_resource;
 pub use use_resource::*;
 
+mod use_effect;
+pub use use_effect::*;
+
+mod use_memo;
+pub use use_memo::*;
+
 // mod use_on_create;
 // pub use use_on_create::*;
 
@@ -84,3 +92,6 @@ pub use use_root_context::*;
 
 mod use_hook_did_run;
 pub use use_hook_did_run::*;
+
+mod use_signal;
+pub use use_signal::*;

@@ -118,12 +118,6 @@ async fn effect_driver(
     }
 }
 
-/// Create a new effect. The effect will be run immediately and whenever any signal it reads changes.
-/// The signal will be owned by the current component and will be dropped when the component is dropped.
-pub fn use_effect(callback: impl FnMut() + 'static) {
-    use_hook(|| Effect::new(callback));
-}
-
 /// Effects allow you to run code when a signal changes. Effects are run immediately and whenever any signal it reads changes.
 #[derive(Copy, Clone, PartialEq)]
 pub struct Effect {

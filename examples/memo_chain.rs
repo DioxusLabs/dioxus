@@ -5,23 +5,19 @@ fn main() {
 }
 
 fn app() -> Element {
-    let mut state = use_signal(|| 0);
+    let mut value = use_signal(|| 0);
     let mut depth = use_signal(|| 0 as usize);
     let mut items = use_memo(move || (0..depth()).map(|f| f as _).collect::<Vec<isize>>());
 
-    let a = use_memo(move || state() + 1);
+    let state = use_memo(move || value() + 1);
 
     println!("rendering app");
 
     rsx! {
-        button { onclick: move |_| state += 1, "Increment" }
+        button { onclick: move |_| value += 1, "Increment" }
         button { onclick: move |_| depth += 1, "Add depth" }
         button { onclick: move |_| depth -= 1, "Remove depth" }
-        Child {
-            depth: depth.into(),
-            items: items,
-            state: a,
-        }
+        Child { depth, items, state }
     }
 }
 
@@ -36,7 +32,6 @@ fn Child(
     }
 
     // These memos don't get re-computed when early returns happen
-    // In dioxus futures spawned with use_future won't progress if they don't get hit during rendering
     let state = use_memo(move || state() + 1);
     let item = use_memo(move || items()[depth()]);
     let depth = use_memo(move || depth() - 1);
@@ -45,10 +40,6 @@ fn Child(
 
     rsx! {
         h3 { "Depth({depth})-Item({item}): {state}"}
-        Child {
-            depth,
-            state,
-            items
-        }
+        Child { depth, state, items }
     }
 }
