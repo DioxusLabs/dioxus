@@ -338,11 +338,9 @@ pub struct WebHttpsConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrateConfig {
-    pub out_dir: PathBuf,
     pub crate_dir: PathBuf,
     pub workspace_dir: PathBuf,
     pub target_dir: PathBuf,
-    pub asset_dir: PathBuf,
     #[cfg(feature = "cli")]
     pub manifest: cargo_toml::Manifest<cargo_toml::Value>,
     pub executable: ExecutableType,
@@ -383,11 +381,7 @@ impl CrateConfig {
         let workspace_dir = meta.workspace_root;
         let target_dir = meta.target_directory;
 
-        let out_dir = crate_dir.join(&dioxus_config.application.out_dir);
-
         let cargo_def = &crate_dir.join("Cargo.toml");
-
-        let asset_dir = crate_dir.join(&dioxus_config.application.asset_dir);
 
         let manifest = cargo_toml::Manifest::from_path(cargo_def).unwrap();
 
@@ -414,6 +408,7 @@ impl CrateConfig {
 
         let release = false;
         let hot_reload = false;
+        let cross_origin_policy = false;
         let verbose = false;
         let custom_profile = None;
         let features = None;
@@ -421,24 +416,36 @@ impl CrateConfig {
         let cargo_args = vec![];
 
         Ok(Self {
-            out_dir,
             crate_dir,
             workspace_dir,
             target_dir,
-            asset_dir,
             #[cfg(feature = "cli")]
             manifest,
             executable,
-            release,
             dioxus_config,
+            release,
             hot_reload,
-            cross_origin_policy: false,
+            cross_origin_policy,
+            verbose,
             custom_profile,
             features,
-            verbose,
             target,
             cargo_args,
         })
+    }
+
+    /// Compose an asset directory. Represents the typical "public" directory
+    /// with publicly available resources (configurable in the `Dioxus.toml`).
+    pub fn asset_dir(&self) -> PathBuf {
+        self.crate_dir
+            .join(&self.dioxus_config.application.asset_dir)
+    }
+
+    /// Compose an out directory. Represents the typical "dist" directory that
+    /// is "distributed" after building an application (configurable in the
+    /// `Dioxus.toml`).
+    pub fn out_dir(&self) -> PathBuf {
+        self.crate_dir.join(&self.dioxus_config.application.out_dir)
     }
 
     pub fn as_example(&mut self, example_name: String) -> &mut Self {

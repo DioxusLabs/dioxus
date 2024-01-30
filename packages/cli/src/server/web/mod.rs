@@ -290,7 +290,7 @@ async fn setup_router(
                         std::fs::read_to_string(
                             file_service_config
                                 .crate_dir
-                                .join(file_service_config.out_dir)
+                                .join(file_service_config.out_dir())
                                 .join("index.html"),
                         )
                         .ok()
@@ -315,7 +315,7 @@ async fn setup_router(
                 Ok(response)
             },
         )
-        .service(ServeDir::new(config.crate_dir.join(&config.out_dir)));
+        .service(ServeDir::new(config.crate_dir.join(config.out_dir())));
 
     // Setup websocket
     let mut router = Router::new().route("/_dioxus/ws", get(ws_handler));
