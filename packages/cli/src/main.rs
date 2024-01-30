@@ -1,7 +1,7 @@
 use dioxus_cli_config::DioxusConfig;
 use std::path::PathBuf;
 
-use anyhow::anyhow;
+use anyhow::Context;
 use clap::Parser;
 use dioxus_cli::*;
 
@@ -19,22 +19,24 @@ fn get_bin(bin: Option<String>) -> Result<PathBuf> {
             .workspace_packages()
             .into_iter()
             .find(|p| p.name == bin)
-            .ok_or(format!("no such package: {}", bin))
-            .map_err(Error::CargoError)?
+            .ok_or(Error::CargoError(format!("no such package: {}", bin)))?
     } else {
         metadata
             .root_package()
-            .ok_or("no root package?".into())
-            .map_err(Error::CargoError)?
+            .ok_or(Error::CargoError("no root package?".to_string()))?
     };
 
     let crate_dir = package
         .manifest_path
         .parent()
-        .ok_or("couldn't take parent dir".into())
-        .map_err(Error::CargoError)?;
+        .ok_or(Error::CargoError("couldn't take parent dir".to_string()))?;
 
     Ok(crate_dir.into())
+}
+
+/// Simplifies error messages that use the same pattern.
+fn error_wrapper(message: &str) -> String {
+    format!("🚫 {message}:")
 }
 
 #[tokio::main]
@@ -46,35 +48,35 @@ async fn main() -> anyhow::Result<()> {
     match args.action {
         Translate(opts) => opts
             .translate()
-            .map_err(|e| anyhow!("🚫 Translation of HTML into RSX failed: {}", e)),
+            .context(error_wrapper("Translation of HTML into RSX failed")),
 
         Create(opts) => opts
             .create()
-            .map_err(|e| anyhow!("🚫 Creating new project failed: {}", e)),
+            .context(error_wrapper("Creating new project failed")),
 
         Init(opts) => opts
             .init()
-            .map_err(|e| anyhow!("🚫 Initialising a new project failed: {}", e)),
+            .context(error_wrapper("Initialising a new project failed")),
 
         Config(opts) => opts
             .config()
-            .map_err(|e| anyhow!("🚫 Configuring new project failed: {}", e)),
+            .context(error_wrapper("Configuring new project failed")),
 
         #[cfg(feature = "plugin")]
         Plugin(opts) => opts
             .plugin()
             .await
-            .map_err(|e| anyhow!("🚫 Error with plugin: {}", e)),
+            .context(error_wrapper("Error with plugin")),
 
         Autoformat(opts) => opts
             .autoformat()
             .await
-            .map_err(|e| anyhow!("🚫 Error autoformatting RSX: {}", e)),
+            .context(error_wrapper("Error autoformatting RSX")),
 
         Check(opts) => opts
             .check()
             .await
-            .map_err(|e| anyhow!("🚫 Error checking RSX: {}", e)),
+            .context(error_wrapper("Error checking RSX")),
 
         Version(opt) => {
             let version = opt.version();
@@ -85,33 +87,33 @@ async fn main() -> anyhow::Result<()> {
         action => {
             let bin = get_bin(args.bin)?;
             let _dioxus_config = DioxusConfig::load(Some(bin.clone()))
-                       .map_err(|e| anyhow!("Failed to load Dioxus config because: {e}"))?
-                       .unwrap_or_else(|| {
-                           log::info!("You appear to be creating a Dioxus project from scratch; we will use the default config");
-                           DioxusConfig::default()
-                    });
+                .context("Failed to load Dioxus config because")?
+                .unwrap_or_else(|| {
+                    log::info!("You appear to be creating a Dioxus project from scratch; we will use the default config");
+                    DioxusConfig::default()
+                });
 
             #[cfg(feature = "plugin")]
             PluginManager::init(_dioxus_config.plugin)
-                .map_err(|e| anyhow!("🚫 Plugin system initialization failed: {e}"))?;
+                .context(error_wrapper("Plugin system initialization failed"))?;
 
             match action {
                 Build(opts) => opts
                     .build(Some(bin.clone()), None)
-                    .map_err(|e| anyhow!("🚫 Building project failed: {}", e)),
+                    .context(error_wrapper("Building project failed")),
 
                 Clean(opts) => opts
                     .clean(Some(bin.clone()))
-                    .map_err(|e| anyhow!("🚫 Cleaning project failed: {}", e)),
+                    .context(error_wrapper("Cleaning project failed")),
 
                 Serve(opts) => opts
                     .serve(Some(bin.clone()))
                     .await
-                    .map_err(|e| anyhow!("🚫 Serving project failed: {}", e)),
+                    .context(error_wrapper("Serving project failed")),
 
                 Bundle(opts) => opts
                     .bundle(Some(bin.clone()))
-                    .map_err(|e| anyhow!("🚫 Bundling project failed: {}", e)),
+                    .context(error_wrapper("Bundling project failed")),
 
                 _ => unreachable!(),
             }
