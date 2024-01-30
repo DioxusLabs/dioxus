@@ -20,9 +20,50 @@ pub struct Element {
     pub name: ElementName,
     pub key: Option<IfmtInput>,
     pub attributes: Vec<AttributeType>,
-    pub merged_attributes: Vec<AttributeType>,
+    pub(crate) merged_attributes: Vec<AttributeType>,
     pub children: Vec<BodyNode>,
     pub brace: syn::token::Brace,
+}
+
+impl Element {
+    /// Create a new element with the given name, attributes and children
+    pub fn new(
+        key: Option<IfmtInput>,
+        name: ElementName,
+        attributes: Vec<AttributeType>,
+        children: Vec<BodyNode>,
+        brace: syn::token::Brace,
+    ) -> Self {
+        // Deduplicate any attributes that can be combined
+        // For example, if there are two `class` attributes, combine them into one
+        let mut merged_attributes: Vec<AttributeType> = Vec::new();
+        for attr in &attributes {
+            let attr_index = merged_attributes
+                .iter()
+                .position(|a| a.matches_attr_name(attr));
+
+            if let Some(old_attr_index) = attr_index {
+                let old_attr = &mut merged_attributes[old_attr_index];
+
+                if let Some(combined) = old_attr.try_combine(attr) {
+                    *old_attr = combined;
+                }
+
+                continue;
+            }
+
+            merged_attributes.push(attr.clone());
+        }
+
+        Self {
+            name,
+            key,
+            attributes,
+            merged_attributes,
+            children,
+            brace,
+        }
+    }
 }
 
 impl Parse for Element {
@@ -194,27 +235,6 @@ Like so:
             break;
         }
 
-        // Deduplicate any attributes that can be combined
-        // For example, if there are two `class` attributes, combine them into one
-        let mut merged_attributes: Vec<AttributeType> = Vec::new();
-        for attr in &attributes {
-            let attr_index = merged_attributes
-                .iter()
-                .position(|a| a.matches_attr_name(attr));
-
-            if let Some(old_attr_index) = attr_index {
-                let old_attr = &mut merged_attributes[old_attr_index];
-
-                if let Some(combined) = old_attr.try_combine(attr) {
-                    *old_attr = combined;
-                }
-
-                continue;
-            }
-
-            merged_attributes.push(attr.clone());
-        }
-
         while !content.is_empty() {
             if (content.peek(LitStr) && content.peek2(Token![:])) && !content.peek3(Token![:]) {
                 attr_after_element!(content.span());
@@ -232,14 +252,7 @@ Like so:
             }
         }
 
-        Ok(Self {
-            key,
-            name: el_name,
-            attributes,
-            merged_attributes,
-            children,
-            brace,
-        })
+        Ok(Self::new(key, el_name, attributes, children, brace))
     }
 }
 
