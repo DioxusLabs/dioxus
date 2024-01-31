@@ -6,6 +6,7 @@ use std::any::Any;
 use crate::prelude::*;
 
 /// A builder for a fullstack app.
+#[must_use]
 pub struct LaunchBuilder<Cfg: 'static = (), ContextFn: ?Sized = ValidContext> {
     launch_fn: LaunchFn<Cfg, ContextFn>,
     contexts: Vec<Box<ContextFn>>,

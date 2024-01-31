@@ -1,6 +1,5 @@
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
-use dioxus_fullstack::prelude::*;
 
 pub fn app() -> Element {
     let mut count = use_signal(|| 0);

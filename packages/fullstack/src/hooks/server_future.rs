@@ -1,6 +1,6 @@
 use dioxus_lib::prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
-use std::any::Any;
+// use std::any::Any;
 use std::cell::Cell;
 use std::cell::Ref;
 use std::cell::RefCell;
@@ -23,13 +23,12 @@ use std::sync::Arc;
 ///
 /// - dependencies: a tuple of references to values that are PartialEq + Clone
 #[must_use = "Consider using `cx.spawn` to run a future without reading its value"]
-pub fn use_server_future<T, F>(future: impl FnOnce() -> F) -> Option<UseServerFuture<T>>
+pub fn use_server_future<T, F>(_future: impl FnOnce() -> F) -> Option<UseServerFuture<T>>
 where
     T: 'static + Serialize + DeserializeOwned + Debug,
     F: Future<Output = T> + 'static,
 {
     todo!()
-
     // let state = use_hook(move || UseServerFuture {
     //     update: schedule_update(),
     //     needs_regen: Cell::new(true),
@@ -110,7 +109,6 @@ pub struct UseServerFuture<T> {
     update: Arc<dyn Fn()>,
     needs_regen: Cell<bool>,
     task: Cell<Option<Task>>,
-    dependencies: Vec<Box<dyn Any>>,
     value: Rc<RefCell<Option<Box<T>>>>,
 }
 

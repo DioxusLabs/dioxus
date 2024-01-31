@@ -3,7 +3,7 @@ use crate::write::Writable;
 use crate::Write;
 use dioxus_core::prelude::{IntoAttributeValue, ScopeId};
 use generational_box::{AnyStorage, GenerationalRef, UnsyncStorage};
-use std::{cell::Ref, io::prelude::Read, mem::MaybeUninit, ops::Deref};
+use std::{cell::Ref, mem::MaybeUninit, ops::Deref};
 
 use super::get_global_context;
 use crate::{MappedSignal, Signal};
@@ -43,6 +43,7 @@ impl<T: 'static> GlobalSignal<T> {
         }
     }
 
+    /// Write this value
     pub fn write(&self) -> Write<T, UnsyncStorage> {
         self.signal().write()
     }

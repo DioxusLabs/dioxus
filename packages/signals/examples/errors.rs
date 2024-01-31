@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    // dioxus::desktop::launch(app);
+    launch(app);
 }
 
 #[derive(Clone, Copy)]
@@ -14,12 +14,12 @@ enum ErrorComponent {
 fn app() -> Element {
     let mut error = use_signal(|| None as Option<ErrorComponent>);
 
-    render! {
+    rsx! {
         match error() {
-            Some(ErrorComponent::Read) => render! { Read {} },
-            Some(ErrorComponent::ReadMut) => render! { ReadMut {} },
-            Some(ErrorComponent::ReadDropped) => render! { ReadDropped {} },
-            None => render! {
+            Some(ErrorComponent::Read) => rsx! { Read {} },
+            Some(ErrorComponent::ReadMut) => rsx! { ReadMut {} },
+            Some(ErrorComponent::ReadDropped) => rsx! { ReadDropped {} },
+            None => rsx! {
                 button { onclick: move |_| error.set(Some(ErrorComponent::Read)), "Read" }
                 button { onclick: move |_| error.set(Some(ErrorComponent::ReadMut)), "ReadMut" }
                 button { onclick: move |_| error.set(Some(ErrorComponent::ReadDropped)), "ReadDropped"}
@@ -56,7 +56,7 @@ fn ReadDropped() -> Element {
         needs_update();
     }
 
-    render! {
+    rsx! {
         if let Some(value) = signal() {
             "{value:?}"
         } else {
@@ -71,5 +71,5 @@ fn ReadDroppedSignalChild(parent_signal: SyncSignal<Option<SyncSignal<i32>>>) ->
 
     use_hook(move || parent_signal.set(Some(signal)));
 
-    render! { "{signal}" }
+    rsx! { "{signal}" }
 }

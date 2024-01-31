@@ -25,7 +25,7 @@ const STYLE: &str = include_str!("./assets/todomvc.css");
 
 fn app() -> Element {
     let mut todos = use_signal(|| HashMap::<u32, TodoItem>::new());
-    let mut filter = use_signal(|| FilterState::All);
+    let filter = use_signal(|| FilterState::All);
 
     let active_todo_count =
         use_memo(move || todos.read().values().filter(|item| !item.checked).count());
@@ -47,7 +47,7 @@ fn app() -> Element {
         filtered_todos
     });
 
-    let mut toggle_all = move |_| {
+    let toggle_all = move |_| {
         let check = active_todo_count() != 0;
         for (_, item) in todos.write().iter_mut() {
             item.checked = check;

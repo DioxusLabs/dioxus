@@ -32,7 +32,7 @@ fn app() -> Element {
 
     let mut input_operator = move |key: &str| val.write().push_str(key);
 
-    let mut handle_key_down_event = move |evt: KeyboardEvent| match evt.key() {
+    let handle_key_down_event = move |evt: KeyboardEvent| match evt.key() {
         Key::Backspace => {
             if !val().is_empty() {
                 val.write().pop();

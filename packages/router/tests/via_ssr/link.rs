@@ -34,7 +34,8 @@ where
         }
     }
 
-    fn App<R: Routable>(props: AppProps<R>) -> Element
+    #[allow(non_snake_case)]
+    fn App<R: Routable>(_props: AppProps<R>) -> Element
     where
         <R as FromStr>::Err: std::fmt::Display,
     {

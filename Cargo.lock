@@ -772,9 +772,6 @@ version = "0.1.0"
 dependencies = [
  "axum 0.6.20",
  "dioxus",
- "dioxus-desktop",
- "dioxus-fullstack",
- "dioxus-router",
  "serde",
  "tokio",
 ]
@@ -810,9 +807,6 @@ version = "0.1.0"
 dependencies = [
  "axum 0.6.20",
  "dioxus",
- "dioxus-fullstack",
- "dioxus-router",
- "dioxus-web",
  "serde",
  "tokio",
 ]

@@ -1,6 +1,5 @@
+use dioxus::prelude::*;
 use std::{collections::VecDeque, fmt::Debug, rc::Rc};
-
-use dioxus::{events::*, html::MouseEvent, prelude::*};
 
 fn main() {
     launch(app);

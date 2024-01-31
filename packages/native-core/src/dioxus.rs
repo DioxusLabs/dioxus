@@ -86,7 +86,10 @@ impl DioxusState {
 
 /// A writer for mutations that can be used with the RealDom.
 pub struct DioxusNativeCoreMutationWriter<'a, V: FromAnyValue + Send + Sync = ()> {
+    /// The realdom associated with this writer
     pub rdom: &'a mut RealDom<V>,
+
+    /// The state associated with this writer
     pub state: &'a mut DioxusState,
 }
 

@@ -1,12 +1,10 @@
 #![allow(missing_docs)]
+
 use crate::use_signal;
-use dioxus_core::{
-    prelude::{spawn, use_hook},
-    ScopeState, Task,
-};
+use dioxus_core::{prelude::spawn, Task};
 use dioxus_signals::*;
 use futures_util::{future, pin_mut, FutureExt};
-use std::{any::Any, cell::Cell, future::Future, pin::Pin, rc::Rc, sync::Arc, task::Poll};
+use std::future::Future;
 
 /// A future that resolves to a value.
 ///
@@ -27,7 +25,7 @@ where
     F: Future<Output = T> + 'static,
 {
     let mut value = use_signal(|| None);
-    let mut state = use_signal(|| UseResourceState::Pending);
+    let state = use_signal(|| UseResourceState::Pending);
 
     let task = use_signal(|| {
         // Create the user's task
@@ -61,6 +59,7 @@ where
     UseResource { task, value, state }
 }
 
+#[allow(unused)]
 pub struct UseResource<T: 'static> {
     value: Signal<Option<T>>,
     task: Signal<Option<Task>>,

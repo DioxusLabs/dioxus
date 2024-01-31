@@ -35,7 +35,7 @@ fn Dice() -> Element {
         svg {
             view_box: "-1000 -1000 2000 2000",
             prevent_default: "onclick",
-            onclick: move |e| value.set(thread_rng().gen_range(1..=6)),
+            onclick: move |_| value.set(thread_rng().gen_range(1..=6)),
             rect { x: -1000, y: -1000, width: 2000, height: 2000, rx: 200, fill: "#aaa" }
             for ((x, y), _) in DOTS.iter().zip(active_dots.read().iter()).filter(|(_, &active)| active) {
                 circle {

@@ -5,8 +5,7 @@
 //! ```
 
 use dioxus::prelude::*;
-use dioxus::router::prelude::*;
-use dioxus_fullstack::prelude::*;
+use dioxus_router::prelude::*;
 
 fn main() {
     let config = LaunchBuilder::fullstack();

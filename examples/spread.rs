@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    let mut dom = VirtualDom::prebuilt(app);
+    let dom = VirtualDom::prebuilt(app);
     let html = dioxus_ssr::render(&dom);
 
     println!("{}", html);

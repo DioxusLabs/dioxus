@@ -33,7 +33,7 @@ fn key_down() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let mut render_count = use_signal(|| 0);
+        let render_count = use_signal(|| 0);
         let mut render_count_handle = render_count.clone();
         let tui_ctx: TuiContext = consume_context();
 
@@ -75,7 +75,7 @@ fn mouse_down() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let mut render_count = use_signal(|| 0);
+        let render_count = use_signal(|| 0);
         let tui_ctx: TuiContext = consume_context();
         let mut render_count_handle = render_count.clone();
         spawn(async move {
@@ -111,7 +111,7 @@ fn mouse_up() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let mut render_count = use_signal(|| 0);
+        let render_count = use_signal(|| 0);
         let tui_ctx: TuiContext = consume_context();
         let mut render_count_handle = render_count.clone();
         spawn(async move {
@@ -150,7 +150,7 @@ fn mouse_enter() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let mut render_count = use_signal(|| 0);
+        let render_count = use_signal(|| 0);
         let mut render_count_handle = render_count.clone();
         let tui_ctx: TuiContext = consume_context();
         spawn(async move {
@@ -189,7 +189,7 @@ fn mouse_exit() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let mut render_count = use_signal(|| 0);
+        let render_count = use_signal(|| 0);
         let tui_ctx: TuiContext = consume_context();
         let mut render_count_handle = render_count.clone();
         spawn(async move {
@@ -228,7 +228,7 @@ fn mouse_move() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let mut render_count = use_signal(|| 0);
+        let render_count = use_signal(|| 0);
         let tui_ctx: TuiContext = consume_context();
         let mut render_count_handle = render_count.clone();
         spawn(async move {
@@ -267,7 +267,7 @@ fn wheel() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let mut render_count = use_signal(|| 0);
+        let render_count = use_signal(|| 0);
         let tui_ctx: TuiContext = consume_context();
         let mut render_count_handle = render_count.clone();
         spawn(async move {
@@ -307,7 +307,7 @@ fn click() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let mut render_count = use_signal(|| 0);
+        let render_count = use_signal(|| 0);
         let tui_ctx: TuiContext = consume_context();
         let mut render_count_handle = render_count.clone();
         spawn(async move {
@@ -346,7 +346,7 @@ fn context_menu() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app() -> Element {
-        let mut render_count = use_signal(|| 0);
+        let render_count = use_signal(|| 0);
         let tui_ctx: TuiContext = consume_context();
         let mut render_count_handle = render_count.clone();
         spawn(async move {

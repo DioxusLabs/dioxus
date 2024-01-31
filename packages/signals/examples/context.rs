@@ -1,10 +1,9 @@
 #![allow(non_snake_case)]
 
 use dioxus::prelude::*;
-use dioxus_signals::Signal;
 
 fn main() {
-    // dioxus::desktop::launch(app);
+    launch(app)
 }
 
 // Because signal is never read in this component, this component will not rerun when the signal changes

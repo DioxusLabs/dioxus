@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use dioxus_html::{FocusData, KeyboardData, MouseData, WheelData};
 use std::{fmt::Debug, rc::Rc};
 
 fn main() {

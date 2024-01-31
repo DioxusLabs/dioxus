@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 use dioxus_signals::Signal;
 
 fn main() {
-    // dioxus::desktop::launch(app);
+    launch(app);
 }
 
 #[derive(Clone, Copy, Default)]

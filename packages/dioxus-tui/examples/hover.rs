@@ -33,7 +33,7 @@ fn app() -> Element {
     let mut buttons = use_signal(|| "".to_string());
     let mut modifiers = use_signal(|| "".to_string());
 
-    let mut update_data = move |event: Event<MouseData>| {
+    let update_data = move |event: Event<MouseData>| {
         page_coordinates.set(format!("{:?}", event.page_coordinates()));
         element_coordinates.set(format!("{:?}", event.element_coordinates()));
 

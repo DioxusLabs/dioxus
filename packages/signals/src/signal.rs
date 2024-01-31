@@ -242,6 +242,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
         }
     }
 
+    /// Unsubscribe this scope from the signal's effect list
     pub fn unsubscribe(&self, scope: ScopeId) {
         self.inner
             .read()

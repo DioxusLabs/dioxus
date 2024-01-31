@@ -42,6 +42,7 @@ where
     UseFuture { task, state }
 }
 
+#[allow(unused)]
 pub struct UseFuture {
     task: CopyValue<Task>,
     state: Signal<UseFutureState>,
@@ -58,10 +59,8 @@ impl UseFuture {
     }
 
     /// Forcefully cancel a future
-    pub fn cancel(&self) {
-        // if let Some(task) = self.task.take() {
-        //     cx.remove_future(task);
-        // }
+    pub fn cancel(&mut self) {
+        self.task.write().stop();
     }
 
     /// Get the ID of the future in Dioxus' internal scheduler

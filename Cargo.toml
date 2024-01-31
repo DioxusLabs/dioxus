@@ -56,7 +56,7 @@ version = "0.4.3"
 
 # dependencies that are shared across packages
 [workspace.dependencies]
-dioxus = { path = "packages/dioxus", version = "0.4.0" }
+dioxus = { path = "packages/dioxus", version = "0.4.0", default-features = false }
 dioxus-lib = { path = "packages/dioxus-lib", version = "0.4.0" }
 dioxus-core = { path = "packages/core", version = "0.4.2" }
 dioxus-core-macro = { path = "packages/core-macro", version = "0.4.0" }
@@ -66,9 +66,9 @@ dioxus-router-macro = { path = "packages/router-macro", version = "0.4.1" }
 dioxus-html = { path = "packages/html", default-features = false, version = "0.4.0"  }
 dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.4.0"  }
 dioxus-hooks = { path = "packages/hooks", version = "0.4.0" }
-dioxus-web = { path = "packages/web", version = "0.4.0"  }
-dioxus-ssr = { path = "packages/ssr", version = "0.4.0"  }
-dioxus-desktop = { path = "packages/desktop", version = "0.4.0"  }
+dioxus-web = { path = "packages/web", version = "0.4.0", default-features = false  }
+dioxus-ssr = { path = "packages/ssr", version = "0.4.0", default-features = false  }
+dioxus-desktop = { path = "packages/desktop", version = "0.4.0", default-features = false }
 dioxus-mobile = { path = "packages/mobile", version = "0.4.0"  }
 dioxus-interpreter-js = { path = "packages/interpreter", version = "0.4.0" }
 dioxus-liveview = { path = "packages/liveview", version = "0.4.0"  }

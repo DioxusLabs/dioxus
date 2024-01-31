@@ -1,12 +1,10 @@
 use dioxus::prelude::*;
-use dioxus_signals::*;
 
 fn main() {
-    // dioxus::desktop::launch(App);
+    launch(app);
 }
 
-#[component]
-fn App() -> Element {
+fn app() -> Element {
     let mut signal = use_signal_sync(|| 0);
 
     use_hook(|| {

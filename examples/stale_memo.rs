@@ -15,7 +15,7 @@ fn app() -> Element {
         };
     }
 
-    let mut items = use_memo(move || (0..depth()).map(|f| f as _).collect::<Vec<isize>>());
+    let items = use_memo(move || (0..depth()).map(|f| f as _).collect::<Vec<isize>>());
 
     rsx! {
         button { onclick: move |_| state += 1, "Increment" }

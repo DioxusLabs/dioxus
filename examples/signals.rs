@@ -39,7 +39,7 @@ fn app() -> Element {
     });
 
     // use_resource will spawn a future that resolves to a value - essentially an async memo
-    let slow_count = use_resource(move || async move {
+    let _slow_count = use_resource(move || async move {
         tokio::time::sleep(Duration::from_millis(200)).await;
         count() * 2
     });

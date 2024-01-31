@@ -1,4 +1,3 @@
-use dioxus::desktop::{tao::dpi::LogicalSize, Config, WindowBuilder};
 use dioxus::prelude::*;
 use dioxus::router::prelude::*;
 

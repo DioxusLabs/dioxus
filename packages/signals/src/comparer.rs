@@ -19,12 +19,12 @@ impl<R: Eq + Hash> Comparer<R> {
     ///
     /// Generally, you shouldn't need to use this hook. Instead you can use [`crate::use_memo`]. If you have many values that you need to compare to a single value, this hook will change updates from O(n) to O(1) where n is the number of values you are comparing to.
     pub fn new(mut f: impl FnMut() -> R + 'static) -> Comparer<R> {
-        let mut subscribers: CopyValue<FxHashMap<R, Signal<bool>>> =
+        let subscribers: CopyValue<FxHashMap<R, Signal<bool>>> =
             CopyValue::new(FxHashMap::default());
         let mut previous = CopyValue::new(None);
 
         Effect::new(move || {
-            let mut subscribers = subscribers.read();
+            let subscribers = subscribers.read();
             let mut previous = previous.write();
 
             if let Some(previous) = previous.take() {
@@ -79,7 +79,7 @@ impl<R: Eq + Hash, S: Storage<SignalData<bool>>> Comparer<R, S> {
 
     /// Returns a signal which is true when the value is equal to the value passed to this function.
     pub fn equal(&mut self, value: R) -> ReadOnlySignal<bool, S> {
-        let mut subscribers = self.subscribers.write();
+        let subscribers = self.subscribers.write();
 
         match subscribers.get(&value) {
             Some(&signal) => signal.into(),

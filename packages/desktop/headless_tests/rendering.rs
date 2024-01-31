@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_core::Element;
-use dioxus_desktop::{window, DesktopContext};
+use dioxus_desktop::DesktopContext;
 
 fn main() {
     check_app_exits(check_html_renders);

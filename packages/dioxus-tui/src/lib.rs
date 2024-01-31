@@ -26,6 +26,10 @@ pub fn launch(app: fn() -> Element) {
 }
 
 pub fn launch_cfg(app: fn() -> Element, cfg: Config) {
+    launch_vdom_cfg(VirtualDom::new(app), cfg)
+}
+
+pub fn launch_vdom_cfg(vdom: VirtualDom, cfg: Config) {
     dioxus_html::set_event_converter(Box::new(events::SerializedHtmlEventConverter));
 
     render(cfg, |rdom, taffy, event_tx| {
@@ -34,7 +38,7 @@ pub fn launch_cfg(app: fn() -> Element, cfg: Config) {
             DioxusState::create(&mut rdom)
         };
         let dioxus_state = Rc::new(RwLock::new(dioxus_state));
-        let mut vdom = VirtualDom::new(app)
+        let vdom = vdom
             .with_root_context(TuiContext::new(event_tx))
             .with_root_context(Query::new(rdom.clone(), taffy.clone()))
             .with_root_context(DioxusElementToNodeId {

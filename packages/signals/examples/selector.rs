@@ -1,12 +1,10 @@
 use dioxus::prelude::*;
-use dioxus_signals::*;
 
 fn main() {
-    // dioxus::desktop::launch(App);
+    launch(app)
 }
 
-#[component]
-fn App() -> Element {
+fn app() -> Element {
     let mut signal = use_signal(|| 0);
     let doubled = use_memo(move || signal * 2);
 

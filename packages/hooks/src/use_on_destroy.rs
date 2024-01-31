@@ -1,4 +1,4 @@
-use dioxus_core::{prelude::use_drop, use_hook};
+use dioxus_core::prelude::use_drop;
 
 #[deprecated(
     note = "Use `use_on_destroy` instead, which has the same functionality. \

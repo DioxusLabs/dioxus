@@ -5,9 +5,16 @@ use dioxus_tui::{Config, TuiContext};
 fn main() {
     for size in 1..=20usize {
         for _ in 0..10 {
-            todo!()
-            // dioxus_tui::launch_cfg(app, vec![size], Config::default().with_headless())
+            let dom = VirtualDom::new(app).with_root_context(size);
+            dioxus_tui::launch_vdom_cfg(dom, Config::default().with_headless())
         }
+    }
+}
+
+fn app() -> Element {
+    let size = use_context::<usize>();
+    rsx! {
+        div { width: "100%", height: "100%", Grid { size } }
     }
 }
 
@@ -84,16 +91,6 @@ fn Grid(size: usize) -> Element {
                     }
                 }
             }
-        }
-    }
-}
-
-fn app(props: usize) -> Element {
-    rsx! {
-        div{
-            width: "100%",
-            height: "100%",
-            Grid{ size: props }
         }
     }
 }
