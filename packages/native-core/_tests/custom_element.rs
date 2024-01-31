@@ -271,7 +271,7 @@ fn custom_elements_work() {
                     testing132 {}
                 }
             }
-        })
+        }
     }
 
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -338,7 +338,7 @@ fn slotless_custom_element_cant_have_children() {
             customelementnoslot {
                 testing132 {}
             }
-        })
+        }
     }
 
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -366,7 +366,7 @@ fn slotless_custom_element() {
         rsx! {
             customelementnoslot {
             }
-        })
+        }
     }
 
     let rt = tokio::runtime::Builder::new_current_thread()

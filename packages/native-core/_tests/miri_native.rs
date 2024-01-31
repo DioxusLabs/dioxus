@@ -122,7 +122,7 @@ fn native_core_is_okay() {
 
         rsx! {
             blabla {}
-        })
+        }
     }
 
     let rt = tokio::runtime::Builder::new_current_thread()

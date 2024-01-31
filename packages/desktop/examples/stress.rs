@@ -1,5 +1,9 @@
 use dioxus::prelude::*;
 
+fn main() {
+    launch_desktop(app);
+}
+
 fn app() -> Element {
     let mut state = use_signal(|| 0);
 
@@ -11,18 +15,9 @@ fn app() -> Element {
     });
 
     rsx! {
-        button {
-            onclick: move |_| state.set(0),
-            "reset"
-        }
+        button { onclick: move |_| state.set(0), "reset" }
         for _ in 0..10000 {
-            div {
-                "hello desktop! {state}"
-            }
+            div { "hello desktop! {state}" }
         }
     }
-}
-
-fn main() {
-    dioxus::desktop::launch::launch(app, Default::default(), Default::default());
 }
