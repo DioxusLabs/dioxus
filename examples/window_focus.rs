@@ -13,12 +13,14 @@ fn main() {
 fn app() -> Element {
     let mut focused = use_signal(|| true);
 
-    use_wry_event_handler(move |event, _| match event {
-        WryEvent::WindowEvent {
+    use_wry_event_handler(move |event, _| {
+        if let WryEvent::WindowEvent {
             event: WindowEvent::Focused(new_focused),
             ..
-        } => focused.set(*new_focused),
-        _ => {}
+        } = event
+        {
+            focused.set(*new_focused)
+        }
     });
 
     rsx! {

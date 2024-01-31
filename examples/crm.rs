@@ -25,7 +25,7 @@ fn main() {
 }
 
 /// We only have one list of clients for the whole app, so we can use a global signal.
-static CLIENTS: GlobalSignal<Vec<Client>> = Signal::global(|| Vec::new());
+static CLIENTS: GlobalSignal<Vec<Client>> = Signal::global(Vec::new);
 
 struct Client {
     first_name: String,
@@ -93,7 +93,9 @@ fn ClientAdd() -> Element {
                         oninput: move |e| first_name.set(e.value()),
 
                         // when the form mounts, focus the first name input
-                        onmounted: move |e| {e.inner().set_focus(true);},
+                        onmounted: move |e| async move {
+                            _ = e.inner().set_focus(true).await;
+                        },
                     }
                 }
 

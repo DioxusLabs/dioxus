@@ -6,7 +6,7 @@ fn main() {
 
 fn app() -> Element {
     let mut state = use_signal(|| 0);
-    let mut depth = use_signal(|| 1 as usize);
+    let mut depth = use_signal(|| 1_usize);
 
     if depth() == 5 {
         return rsx! {

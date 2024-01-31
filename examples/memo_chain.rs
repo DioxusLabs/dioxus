@@ -6,7 +6,7 @@ fn main() {
 
 fn app() -> Element {
     let mut value = use_signal(|| 0);
-    let mut depth = use_signal(|| 0 as usize);
+    let mut depth = use_signal(|| 0_usize);
     let items = use_memo(move || (0..depth()).map(|f| f as _).collect::<Vec<isize>>());
 
     let state = use_memo(move || value() + 1);

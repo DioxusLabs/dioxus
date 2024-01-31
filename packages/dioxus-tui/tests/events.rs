@@ -34,7 +34,7 @@ fn key_down() {
 
     fn app() -> Element {
         let render_count = use_signal(|| 0);
-        let mut render_count_handle = render_count.clone();
+        let mut render_count_handle = render_count;
         let tui_ctx: TuiContext = consume_context();
 
         spawn(async move {
@@ -77,7 +77,7 @@ fn mouse_down() {
     fn app() -> Element {
         let render_count = use_signal(|| 0);
         let tui_ctx: TuiContext = consume_context();
-        let mut render_count_handle = render_count.clone();
+        let mut render_count_handle = render_count;
         spawn(async move {
             PollN::new(2).await;
             render_count_handle.with_mut(|x| *x + 1);
@@ -113,7 +113,7 @@ fn mouse_up() {
     fn app() -> Element {
         let render_count = use_signal(|| 0);
         let tui_ctx: TuiContext = consume_context();
-        let mut render_count_handle = render_count.clone();
+        let mut render_count_handle = render_count;
         spawn(async move {
             PollN::new(3).await;
             render_count_handle.with_mut(|x| *x + 1);
@@ -151,7 +151,7 @@ fn mouse_enter() {
 
     fn app() -> Element {
         let render_count = use_signal(|| 0);
-        let mut render_count_handle = render_count.clone();
+        let mut render_count_handle = render_count;
         let tui_ctx: TuiContext = consume_context();
         spawn(async move {
             PollN::new(3).await;
@@ -191,7 +191,7 @@ fn mouse_exit() {
     fn app() -> Element {
         let render_count = use_signal(|| 0);
         let tui_ctx: TuiContext = consume_context();
-        let mut render_count_handle = render_count.clone();
+        let mut render_count_handle = render_count;
         spawn(async move {
             PollN::new(3).await;
             render_count_handle.with_mut(|x| *x + 1);
@@ -230,7 +230,7 @@ fn mouse_move() {
     fn app() -> Element {
         let render_count = use_signal(|| 0);
         let tui_ctx: TuiContext = consume_context();
-        let mut render_count_handle = render_count.clone();
+        let mut render_count_handle = render_count;
         spawn(async move {
             PollN::new(3).await;
             render_count_handle.with_mut(|x| *x + 1);
@@ -269,7 +269,7 @@ fn wheel() {
     fn app() -> Element {
         let render_count = use_signal(|| 0);
         let tui_ctx: TuiContext = consume_context();
-        let mut render_count_handle = render_count.clone();
+        let mut render_count_handle = render_count;
         spawn(async move {
             PollN::new(3).await;
             render_count_handle.with_mut(|x| *x + 1);
@@ -309,7 +309,7 @@ fn click() {
     fn app() -> Element {
         let render_count = use_signal(|| 0);
         let tui_ctx: TuiContext = consume_context();
-        let mut render_count_handle = render_count.clone();
+        let mut render_count_handle = render_count;
         spawn(async move {
             PollN::new(3).await;
             render_count_handle.with_mut(|x| *x + 1);
@@ -348,7 +348,7 @@ fn context_menu() {
     fn app() -> Element {
         let render_count = use_signal(|| 0);
         let tui_ctx: TuiContext = consume_context();
-        let mut render_count_handle = render_count.clone();
+        let mut render_count_handle = render_count;
         spawn(async move {
             PollN::new(3).await;
             render_count_handle.with_mut(|x| *x + 1);

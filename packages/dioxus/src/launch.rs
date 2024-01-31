@@ -1,5 +1,5 @@
 //! Launch helper macros for fullstack apps
-
+#![allow(clippy::new_without_default)]
 #![allow(unused)]
 use std::any::Any;
 

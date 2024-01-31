@@ -24,7 +24,7 @@ struct TodoItem {
 const STYLE: &str = include_str!("./assets/todomvc.css");
 
 fn app() -> Element {
-    let mut todos = use_signal(|| HashMap::<u32, TodoItem>::new());
+    let mut todos = use_signal(HashMap::<u32, TodoItem>::new);
     let filter = use_signal(|| FilterState::All);
 
     let active_todo_count =

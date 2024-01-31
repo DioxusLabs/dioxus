@@ -29,6 +29,10 @@ pub fn launch_cfg(app: fn() -> Element, cfg: Config) {
     launch_vdom_cfg(VirtualDom::new(app), cfg)
 }
 
+pub fn launch_cfg_with_props<P: Clone + 'static>(app: fn(P) -> Element, props: P, cfg: Config) {
+    launch_vdom_cfg(VirtualDom::new_with_props(app, props), cfg)
+}
+
 pub fn launch_vdom_cfg(vdom: VirtualDom, cfg: Config) {
     dioxus_html::set_event_converter(Box::new(events::SerializedHtmlEventConverter));
 
