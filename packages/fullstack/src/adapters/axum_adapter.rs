@@ -63,7 +63,6 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use dioxus_lib::prelude::dioxus_core::AnyProps;
 use dioxus_lib::prelude::VirtualDom;
 use server_fn::{Encoding, ServerFunctionRegistry};
 use std::sync::Arc;

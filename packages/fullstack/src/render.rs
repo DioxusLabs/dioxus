@@ -1,5 +1,4 @@
 //! A shared pool of renderers for efficient server side rendering.
-use crate::render::dioxus_core::AnyProps;
 use crate::render::dioxus_core::NoOpMutations;
 use crate::server_context::SERVER_CONTEXT;
 use dioxus_lib::prelude::VirtualDom;
