@@ -87,7 +87,7 @@ impl Bundle {
         build_desktop(&crate_config, false, false)?;
 
         // copy the binary to the out dir
-        let package = crate_config.manifest.package.unwrap();
+        let package = crate_config.manifest.package.as_ref().unwrap();
 
         let mut name: PathBuf = match &crate_config.executable {
             ExecutableType::Binary(name)
@@ -149,7 +149,7 @@ impl Bundle {
         }
 
         let mut settings = SettingsBuilder::new()
-            .project_out_directory(crate_config.out_dir)
+            .project_out_directory(crate_config.out_dir())
             .package_settings(PackageSettings {
                 product_name: crate_config.dioxus_config.application.name.clone(),
                 version: package.version().to_string(),

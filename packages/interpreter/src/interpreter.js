@@ -351,6 +351,7 @@ async function serialize_event(event) {
     case "keyup": {
       let {
         charCode,
+        isComposing,
         key,
         altKey,
         ctrlKey,
@@ -364,6 +365,7 @@ async function serialize_event(event) {
       } = event;
       return {
         char_code: charCode,
+        is_composing: isComposing,
         key: key,
         alt_key: altKey,
         ctrl_key: ctrlKey,

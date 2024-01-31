@@ -147,7 +147,7 @@ fn app() -> Element {
         ctrlKey: false,
         metaKey: false,
         shiftKey: false,
-        isComposing: false,
+        isComposing: true,
         which: 65,
         bubbles: true,
         })"#,
@@ -343,7 +343,8 @@ fn app() -> Element {
                     assert_eq!(event.data.code().to_string(), "KeyA");
                     assert_eq!(event.data.location(), Location::Standard);
                     assert!(event.data.is_auto_repeating());
-                    received_events.with_mut(|x| *x + 1);
+                    assert!(event.data.is_composing());
+                    received_events.with_mut(|x| *x + 1)
                 }
             }
             input {
@@ -355,7 +356,8 @@ fn app() -> Element {
                     assert_eq!(event.data.code().to_string(), "KeyA");
                     assert_eq!(event.data.location(), Location::Standard);
                     assert!(!event.data.is_auto_repeating());
-                    received_events.with_mut(|x| *x + 1);
+                    assert!(!event.data.is_composing());
+                    received_events.with_mut(|x| *x + 1)
                 }
             }
             input {
@@ -367,7 +369,8 @@ fn app() -> Element {
                     assert_eq!(event.data.code().to_string(), "KeyA");
                     assert_eq!(event.data.location(), Location::Standard);
                     assert!(!event.data.is_auto_repeating());
-                    received_events.with_mut(|x| *x + 1);
+                    assert!(!event.data.is_composing());
+                    received_events.with_mut(|x| *x + 1)
                 }
             }
             input {

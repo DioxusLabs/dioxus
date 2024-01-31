@@ -78,6 +78,7 @@ impl From<ConfigOptsServe> for ConfigOptsBuild {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
+#[command(group = clap::ArgGroup::new("release-incompatible").multiple(true).conflicts_with("release"))]
 pub struct ConfigOptsServe {
     /// Port of dev server
     #[clap(long)]
@@ -116,8 +117,9 @@ pub struct ConfigOptsServe {
     #[clap(long, value_enum)]
     pub platform: Option<Platform>,
 
-    /// Build with hot reloading rsx [default: false]
+    /// Build with hot reloading rsx. Will not work with release builds. [default: false]
     #[clap(long)]
+    #[clap(group = "release-incompatible")]
     #[serde(default)]
     pub hot_reload: bool,
 

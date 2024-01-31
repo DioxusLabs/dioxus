@@ -84,7 +84,7 @@ mod segment;
 ///
 /// # `#[route("path", component)]`
 ///
-/// The `#[route]` attribute is used to define a route. It takes up to 3 parameters:
+/// The `#[route]` attribute is used to define a route. It takes up to 2 parameters:
 /// - `path`: The path to the enum variant (relative to the parent nest)
 /// - (optional) `component`: The component to render when the route is matched. If not specified, the name of the variant is used
 ///
@@ -162,7 +162,7 @@ mod segment;
 ///
 /// # `#[layout(component)]`
 ///
-/// The `#[layout]` attribute is used to define a layout. It takes 2 parameters:
+/// The `#[layout]` attribute is used to define a layout. It takes 1 parameters:
 /// - `component`: The component to render when the route is matched. If not specified, the name of the variant is used
 ///
 /// The layout component allows you to wrap all children of the layout in a component. The child routes are rendered in the Outlet of the layout component. The layout component must take all dynamic parameters of the nests it is nested in.

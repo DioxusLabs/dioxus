@@ -221,7 +221,7 @@ fn start_desktop(config: &CrateConfig, skip_assets: bool) -> Result<(RAIIChild, 
         ExecutableType::Binary(name)
         | ExecutableType::Lib(name)
         | ExecutableType::Example(name) => {
-            let mut file = config.out_dir.join(name);
+            let mut file = config.out_dir().join(name);
             if cfg!(windows) {
                 file.set_extension("exe");
             }

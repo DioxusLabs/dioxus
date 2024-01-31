@@ -21,12 +21,13 @@ log = "0.4.14"
 fern = { version = "0.6.0", features = ["colored"] }
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
+toml = "0.8.8"
 fs_extra = "1.2.0"
-cargo_toml = "0.16.0"
-futures = "0.3.21"
+cargo_toml = "0.18.0"
+futures-util = { workspace = true }
 notify = { version = "5.0.0-pre.16", features = ["serde"] }
 html_parser  = { workspace = true }
-cargo_metadata = "0.15.0"
+cargo_metadata = "0.18.1"
 tokio = { version = "1.16.1", features = ["fs", "sync", "rt", "macros"] }
 atty = "0.2.14"
 chrono = "0.4.19"
@@ -44,7 +45,7 @@ headers = "0.3.7"
 walkdir = "2"
 
 # tools download
-dirs = "4.0.0"
+dirs = "5.0.1"
 reqwest = { version = "0.11", features = [
     "rustls-tls",
     "stream",
@@ -55,7 +56,6 @@ flate2 = "1.0.22"
 tar = "0.4.38"
 zip = "0.6.2"
 tower = "0.4.12"
-syn = { version = "2.0", features = ["full", "extra-traits"] }
 lazy_static = "1.4.0"
 
 # plugin packages
@@ -67,13 +67,12 @@ mlua = { version = "0.8.1", features = [
     "macros",
 ], optional = true }
 ctrlc = "3.2.3"
-open = "4.1.0"
-cargo-generate = "0.18"
-toml_edit = "0.19.11"
+open = "5.0.1"
+cargo-generate = "0.19.0"
+toml_edit = "0.21.0"
 
 # bundling
 tauri-bundler = { version = "=1.4.*", features = ["native-tls-vendored"] }
-tauri-utils = "=1.5.*"
 
 manganis-cli-support = { workspace = true, features = ["webp", "html"] }
 

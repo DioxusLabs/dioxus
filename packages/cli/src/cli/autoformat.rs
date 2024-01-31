@@ -1,5 +1,5 @@
 use dioxus_autofmt::{IndentOptions, IndentType};
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures_util::{stream::FuturesUnordered, StreamExt};
 use std::{fs, path::Path, process::exit};
 
 use super::*;
