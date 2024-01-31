@@ -240,11 +240,11 @@ mod tests {
         );
 
         let expected = indoc! {r#"
-            error: hook called conditionally: `use_state` (inside `if`)
+            error: hook called conditionally: `use_signal` (inside `if`)
               --> src/main.rs:3:25
               |
             3 |         let something = use_signal(|| "hands");
-              |                         ^^^^^^^^^
+              |                         ^^^^^^^^^^
               |
               = note: `if you_are_happy && you_know_it { … }` is the conditional
         "#};
@@ -271,11 +271,11 @@ mod tests {
         );
 
         let expected = indoc! {r#"
-            error: hook called conditionally: `use_state` (inside `match`)
+            error: hook called conditionally: `use_signal` (inside `match`)
               --> src/main.rs:4:29
               |
             4 |             let something = use_signal(|| "hands");
-              |                             ^^^^^^^^^
+              |                             ^^^^^^^^^^
               |
               = note: `match you_are_happy && you_know_it { … }` is the conditional
         "#};
@@ -299,11 +299,11 @@ mod tests {
         );
 
         let expected = indoc! {r#"
-            error: hook called in a loop: `use_state` (inside `for` loop)
+            error: hook called in a loop: `use_signal` (inside `for` loop)
               --> src/main.rs:3:25
               |
             3 |         let something = use_signal(|| "hands");
-              |                         ^^^^^^^^^
+              |                         ^^^^^^^^^^
               |
               = note: `for i in 0..10 { … }` is the loop
         "#};
@@ -327,11 +327,11 @@ mod tests {
         );
 
         let expected = indoc! {r#"
-            error: hook called in a loop: `use_state` (inside `while` loop)
+            error: hook called in a loop: `use_signal` (inside `while` loop)
               --> src/main.rs:3:25
               |
             3 |         let something = use_signal(|| "hands");
-              |                         ^^^^^^^^^
+              |                         ^^^^^^^^^^
               |
               = note: `while check_thing() { … }` is the loop
         "#};
@@ -355,11 +355,11 @@ mod tests {
         );
 
         let expected = indoc! {r#"
-            error: hook called in a loop: `use_state` (inside `loop`)
+            error: hook called in a loop: `use_signal` (inside `loop`)
               --> src/main.rs:3:25
               |
             3 |         let something = use_signal(|| "hands");
-              |                         ^^^^^^^^^
+              |                         ^^^^^^^^^^
               |
               = note: `loop { … }` is the loop
         "#};
@@ -383,11 +383,11 @@ mod tests {
         );
 
         let expected = indoc! {r#"
-            error: hook called in a closure: `use_state`
+            error: hook called in a closure: `use_signal`
               --> src/main.rs:3:25
               |
             3 |         let something = use_signal(|| "hands");
-              |                         ^^^^^^^^^
+              |                         ^^^^^^^^^^
         "#};
 
         assert_eq!(expected, issue_report.to_string());
@@ -411,11 +411,11 @@ mod tests {
         );
 
         let expected = indoc! {r#"
-            error: hook called conditionally: `use_state` (inside `if`)
+            error: hook called conditionally: `use_signal` (inside `if`)
               --> src/main.rs:3:25
               |
             3 |         let something = use_signal(|| {
-              |                         ^^^^^^^^^
+              |                         ^^^^^^^^^^
             4 |             "hands"
             5 |         });
               |

@@ -81,6 +81,9 @@ impl From<&Url> for IntoRoutable {
 /// The properties for a [`Link`].
 #[derive(Props, Clone, PartialEq)]
 pub struct LinkProps {
+    /// The class attribute for the `a` tag.
+    pub class: Option<String>,
+
     /// A class to apply to the generate HTML anchor tag if the `target` route is active.
     pub active_class: Option<String>,
 
@@ -204,6 +207,7 @@ pub fn Link(props: LinkProps) -> Element {
         onclick_only,
         rel,
         to,
+        class,
         ..
     } = props;
 
@@ -226,9 +230,19 @@ pub fn Link(props: LinkProps) -> Element {
         IntoRoutable::Route(route) => router.any_route_to_string(&**route),
     };
     let parsed_route: NavigationTarget<Rc<dyn Any>> = router.resolve_into_routable(to.clone());
-    let class = active_class
-        .and_then(|active_class| (href == current_url).then(|| format!(" {active_class}")))
-        .unwrap_or_default();
+
+    let mut class_ = String::new();
+    if let Some(c) = class {
+        class_.push_str(&c);
+    }
+    if let Some(c) = active_class {
+        if href == current_url {
+            if !class_.is_empty() {
+                class_.push(' ');
+            }
+            class_.push_str(&c);
+        }
+    }
 
     let tag_target = new_tab.then_some("_blank").unwrap_or_default();
 
@@ -254,10 +268,10 @@ pub fn Link(props: LinkProps) -> Element {
     rsx! {
         a {
             onclick: action,
-            href: "{href}",
-            prevent_default: "{prevent_default}",
-            class: "{class}",
-            rel: "{rel}",
+            href,
+            prevent_default,
+            class: class_,
+            rel,
             target: "{tag_target}",
             ..attributes,
             {children}

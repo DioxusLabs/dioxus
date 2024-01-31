@@ -85,13 +85,3 @@ pub use dioxus_tui as tui;
 
 #[cfg(feature = "ssr")]
 pub use dioxus_ssr as ssr;
-
-/// Try to evaluate javascript in the target window
-///
-/// For the browser, this is the window object
-/// For desktop/mobile, this is the webview object
-///
-/// For native, it will try and use the platform's JS engine if available
-pub async fn eval(src: String) -> std::result::Result<String, Box<dyn std::error::Error>> {
-    todo!()
-}

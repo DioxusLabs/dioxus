@@ -45,10 +45,12 @@ impl Task {
         Runtime::with(|rt| !rt.tasks.borrow()[self.0].active.get()).unwrap_or_default()
     }
 
+    /// Wake the task.
     pub fn wake(&self) {
         Runtime::with(|rt| _ = rt.sender.unbounded_send(SchedulerMsg::TaskNotified(*self)));
     }
 
+    /// Set the task as active or paused.
     pub fn set_active(&self, active: bool) {
         Runtime::with(|rt| rt.tasks.borrow()[self.0].active.set(active));
     }

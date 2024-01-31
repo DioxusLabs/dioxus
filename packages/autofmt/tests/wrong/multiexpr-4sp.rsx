@@ -4,5 +4,5 @@ fn ItWroks() {
             {left},
             {right}
         }
-    })
+    }
 }

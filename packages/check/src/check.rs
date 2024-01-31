@@ -361,10 +361,10 @@ mod tests {
                         LineColumn { line: 3, column: 24 },
                     ),
                     Span::new_from_str(
-                        r#"use_state"#,
+                        r#"use_signal"#,
                         LineColumn { line: 3, column: 24 },
                     ),
-                    "use_state".to_string()
+                    "use_signal".to_string()
                 ),
                 ConditionalInfo::If(IfInfo::new(
                     Span::new_from_str(
@@ -401,8 +401,8 @@ mod tests {
             vec![Issue::HookInsideConditional(
                 HookInfo::new(
                     Span::new_from_str(r#"use_signal(|| "hands")"#, LineColumn { line: 4, column: 28 }),
-                    Span::new_from_str(r#"use_state"#, LineColumn { line: 4, column: 28 }),
-                    "use_state".to_string()
+                    Span::new_from_str(r#"use_signal"#, LineColumn { line: 4, column: 28 }),
+                    "use_signal".to_string()
                 ),
                 ConditionalInfo::Match(MatchInfo::new(
                     Span::new_from_str(
@@ -437,10 +437,10 @@ mod tests {
                         LineColumn { line: 3, column: 26 },
                     ),
                     Span::new_from_str(
-                        "use_state",
+                        "use_signal",
                         LineColumn { line: 3, column: 26 },
                     ),
-                    "use_state".to_string()
+                    "use_signal".to_string()
                 ),
                 AnyLoopInfo::For(ForInfo::new(
                     Span::new_from_str(
@@ -478,10 +478,10 @@ mod tests {
                         LineColumn { line: 3, column: 24 },
                     ),
                     Span::new_from_str(
-                        "use_state",
+                        "use_signal",
                         LineColumn { line: 3, column: 24 },
                     ),
-                    "use_state".to_string()
+                    "use_signal".to_string()
                 ),
                 AnyLoopInfo::While(WhileInfo::new(
                     Span::new_from_str(
@@ -519,10 +519,10 @@ mod tests {
                         LineColumn { line: 3, column: 24 },
                     ),
                     Span::new_from_str(
-                        "use_state",
+                        "use_signal",
                         LineColumn { line: 3, column: 24 },
                     ),
-                    "use_state".to_string()
+                    "use_signal".to_string()
                 ),
                 AnyLoopInfo::Loop(LoopInfo::new(Span::new_from_str(
                     "loop {\n        let something = use_signal(|| \"hands\");\n        println!(\"clap your {something}\")\n    }",
@@ -573,13 +573,13 @@ mod tests {
                         },
                     ),
                     Span::new_from_str(
-                        "use_state",
+                        "use_signal",
                         LineColumn {
                             line: 3,
                             column: 16
                         },
                     ),
-                    "use_state".to_string()
+                    "use_signal".to_string()
                 ),
                 ClosureInfo::new(Span::new_from_str(
                     "|| {\n        let b = use_signal(|| 0);\n        b.get()\n    }",
@@ -613,13 +613,13 @@ mod tests {
                     }
                 ),
                 Span::new_from_str(
-                    "use_state",
+                    "use_signal",
                     LineColumn {
                         line: 2,
                         column: 13
                     },
                 ),
-                "use_state".to_string()
+                "use_signal".to_string()
             ))]
         );
     }

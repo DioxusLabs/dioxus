@@ -90,7 +90,7 @@ fn memo_works_properly() {
         na: String,
     }
 
-    fn Child(cx: ChildProps) -> Element {
+    fn Child(_props: ChildProps) -> Element {
         rsx!( div { "goodbye world" } )
     }
 

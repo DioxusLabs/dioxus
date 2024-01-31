@@ -3,7 +3,7 @@ use crate::write::Writable;
 use crate::Write;
 use dioxus_core::prelude::{IntoAttributeValue, ScopeId};
 use generational_box::{AnyStorage, GenerationalRef, UnsyncStorage};
-use std::{cell::Ref, mem::MaybeUninit, ops::Deref};
+use std::{cell::Ref, io::prelude::Read, mem::MaybeUninit, ops::Deref};
 
 use super::get_global_context;
 use crate::{MappedSignal, Signal};
@@ -41,6 +41,10 @@ impl<T: 'static> GlobalSignal<T> {
                 signal
             }
         }
+    }
+
+    pub fn write(&self) -> Write<T, UnsyncStorage> {
+        self.signal().write()
     }
 
     /// Get the scope the signal was created in.
@@ -143,8 +147,11 @@ impl<T: Clone + 'static> Deref for GlobalSignal<T> {
 
         // First we create a closure that captures something with the Same in memory layout as Self (MaybeUninit<Self>).
         let uninit_callable = MaybeUninit::<Self>::uninit();
+
         // Then move that value into the closure. We assume that the closure now has a in memory layout of Self.
-        let uninit_closure = move || Self::read(unsafe { &*uninit_callable.as_ptr() }).clone();
+        let uninit_closure = move || {
+            <GlobalSignal<T> as Readable<T>>::read(unsafe { &*uninit_callable.as_ptr() }).clone()
+        };
 
         // Check that the size of the closure is the same as the size of Self in case the compiler changed the layout of the closure.
         let size_of_closure = std::mem::size_of_val(&uninit_closure);

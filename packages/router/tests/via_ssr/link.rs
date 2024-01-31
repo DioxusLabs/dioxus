@@ -73,11 +73,10 @@ fn href_internal() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {class} {id} {rel} {target}>Link</a>",
+        "<h1>App</h1><a {href} {default} {class} {rel} {target}>Link</a>",
         href = r#"href="/test""#,
         default = r#"dioxus-prevent-default="onclick""#,
         class = r#"class="""#,
-        id = r#"id="""#,
         rel = r#"rel="""#,
         target = r#"target="""#
     );
@@ -111,11 +110,10 @@ fn href_external() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {class} {id} {rel} {target}>Link</a>",
+        "<h1>App</h1><a {href} {default} {class} {rel} {target}>Link</a>",
         href = r#"href="https://dioxuslabs.com/""#,
         default = r#"dioxus-prevent-default="""#,
         class = r#"class="""#,
-        id = r#"id="""#,
         rel = r#"rel="noopener noreferrer""#,
         target = r#"target="""#
     );
@@ -150,11 +148,10 @@ fn with_class() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {class} {id} {rel} {target}>Link</a>",
+        "<h1>App</h1><a {href} {default} {class} {rel} {target}>Link</a>",
         href = r#"href="/test""#,
         default = r#"dioxus-prevent-default="onclick""#,
         class = r#"class="test_class""#,
-        id = r#"id="""#,
         rel = r#"rel="""#,
         target = r#"target="""#
     );
@@ -183,11 +180,10 @@ fn with_active_class_active() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {class} {id} {rel} {target}>Link</a>",
+        "<h1>App</h1><a {href} {default} {class} {rel} {target}>Link</a>",
         href = r#"href="/""#,
         default = r#"dioxus-prevent-default="onclick""#,
         class = r#"class="test_class active_class""#,
-        id = r#"id="""#,
         rel = r#"rel="""#,
         target = r#"target="""#
     );
@@ -223,11 +219,10 @@ fn with_active_class_inactive() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {class} {id} {rel} {target}>Link</a>",
+        "<h1>App</h1><a {href} {default} {class} {rel} {target}>Link</a>",
         href = r#"href="/test""#,
         default = r#"dioxus-prevent-default="onclick""#,
         class = r#"class="test_class""#,
-        id = r#"id="""#,
         rel = r#"rel="""#,
         target = r#"target="""#
     );
@@ -262,7 +257,7 @@ fn with_id() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {class} {id} {rel} {target}>Link</a>",
+        "<h1>App</h1><a {href} {default} {class} {rel} {target} {id}>Link</a>",
         href = r#"href="/test""#,
         default = r#"dioxus-prevent-default="onclick""#,
         class = r#"class="""#,
@@ -301,11 +296,10 @@ fn with_new_tab() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {class} {id} {rel} {target}>Link</a>",
+        "<h1>App</h1><a {href} {default} {class} {rel} {target}>Link</a>",
         href = r#"href="/test""#,
         default = r#"dioxus-prevent-default="""#,
         class = r#"class="""#,
-        id = r#"id="""#,
         rel = r#"rel="""#,
         target = r#"target="_blank""#
     );
@@ -333,11 +327,10 @@ fn with_new_tab_external() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {class} {id} {rel} {target}>Link</a>",
+        "<h1>App</h1><a {href} {default} {class} {rel} {target}>Link</a>",
         href = r#"href="https://dioxuslabs.com/""#,
         default = r#"dioxus-prevent-default="""#,
         class = r#"class="""#,
-        id = r#"id="""#,
         rel = r#"rel="noopener noreferrer""#,
         target = r#"target="_blank""#
     );
@@ -372,11 +365,10 @@ fn with_rel() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {class} {id} {rel} {target}>Link</a>",
+        "<h1>App</h1><a {href} {default} {class} {rel} {target}>Link</a>",
         href = r#"href="/test""#,
         default = r#"dioxus-prevent-default="onclick""#,
         class = r#"class="""#,
-        id = r#"id="""#,
         rel = r#"rel="test_rel""#,
         target = r#"target="""#
     );

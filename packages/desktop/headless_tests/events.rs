@@ -3,6 +3,10 @@ use dioxus::prelude::*;
 use dioxus_core::prelude::consume_context;
 use dioxus_desktop::DesktopContext;
 
+pub fn main() {
+    check_app_exits(app);
+}
+
 pub(crate) fn check_app_exits(app: fn() -> Element) {
     use dioxus_desktop::tao::window::WindowBuilder;
     use dioxus_desktop::Config;
@@ -10,7 +14,7 @@ pub(crate) fn check_app_exits(app: fn() -> Element) {
     let should_panic = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
     let should_panic_clone = should_panic.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(100));
+        std::thread::sleep(std::time::Duration::from_secs(5));
         if should_panic_clone.load(std::sync::atomic::Ordering::SeqCst) {
             std::process::exit(exitcode::SOFTWARE);
         }
@@ -24,14 +28,10 @@ pub(crate) fn check_app_exits(app: fn() -> Element) {
     should_panic.store(false, std::sync::atomic::Ordering::SeqCst);
 }
 
-pub fn main() {
-    check_app_exits(app);
-}
-
 fn mock_event(id: &'static str, value: &'static str) {
-    use_effect(move || {
+    use_hook(move || {
         spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
 
             let js = format!(
                 r#"
@@ -45,7 +45,7 @@ fn mock_event(id: &'static str, value: &'static str) {
                 value, id
             );
 
-            dioxus::eval(js);
+            eval(&js).unwrap().await.unwrap();
         });
     })
 }
@@ -205,7 +205,7 @@ fn app() -> Element {
         r#"new FocusEvent("focusout",{bubbles: true})"#,
     );
 
-    if received_events() == 13 {
+    if received_events() == 12 {
         println!("all events recieved");
         desktop_context.close();
     }
@@ -216,12 +216,11 @@ fn app() -> Element {
                 width: "100px",
                 height: "100px",
                 onmounted: move |evt| async move {
-                    todo!();
-                    // let rect = evt.get_client_rect().await.unwrap();
-                    // println!("rect: {:?}", rect);
-                    // assert_eq!(rect.width(), 100.0);
-                    // assert_eq!(rect.height(), 100.0);
-                    // received_events.with_mut(|x| *x + 1)
+                    let rect = evt.get_client_rect().await.unwrap();
+                    println!("rect: {:?}", rect);
+                    assert_eq!(rect.width(), 100.0);
+                    assert_eq!(rect.height(), 100.0);
+                    received_events.with_mut(|x| *x += 1);
                 }
             }
             button {
@@ -234,7 +233,7 @@ fn app() -> Element {
                         event.data.trigger_button(),
                         Some(dioxus_html::input_data::MouseButton::Primary),
                     );
-                    received_events.with_mut(|x| *x + 1);
+                    received_events.with_mut(|x| *x += 1);
                 }
             }
             div {
@@ -248,7 +247,7 @@ fn app() -> Element {
                             .held_buttons()
                             .contains(dioxus_html::input_data::MouseButton::Secondary),
                     );
-                    received_events.with_mut(|x| *x + 1);
+                    received_events.with_mut(|x| *x += 1);
                 }
             }
             div {
@@ -266,7 +265,7 @@ fn app() -> Element {
                         event.data.trigger_button(),
                         Some(dioxus_html::input_data::MouseButton::Secondary),
                     );
-                    received_events.with_mut(|x| *x + 1);
+                    received_events.with_mut(|x| *x += 1);
                 }
             }
             div {
@@ -287,7 +286,7 @@ fn app() -> Element {
                         event.data.trigger_button(),
                         Some(dioxus_html::input_data::MouseButton::Secondary),
                     );
-                    received_events.with_mut(|x| *x + 1);
+                    received_events.with_mut(|x| *x += 1);
                 }
             }
             div {
@@ -305,7 +304,7 @@ fn app() -> Element {
                         event.data.trigger_button(),
                         Some(dioxus_html::input_data::MouseButton::Secondary),
                     );
-                    received_events.with_mut(|x| *x + 1);
+                    received_events.with_mut(|x| *x += 1);
                 }
             }
             div {
@@ -318,7 +317,7 @@ fn app() -> Element {
                         event.data.trigger_button(),
                         Some(dioxus_html::input_data::MouseButton::Primary),
                     );
-                    received_events.with_mut(|x| *x + 1);
+                    received_events.with_mut(|x| *x += 1);
                 }
             }
             div {
@@ -331,7 +330,7 @@ fn app() -> Element {
                     let dioxus_html::geometry::WheelDelta::Pixels(delta) = event.data.delta() else {
                     panic!("Expected delta to be in pixels") };
                     assert_eq!(delta, Vector3D::new(1.0, 2.0, 3.0));
-                    received_events.with_mut(|x| *x + 1);
+                    received_events.with_mut(|x| *x += 1);
                 }
             }
             input {
@@ -344,7 +343,7 @@ fn app() -> Element {
                     assert_eq!(event.data.location(), Location::Standard);
                     assert!(event.data.is_auto_repeating());
                     assert!(event.data.is_composing());
-                    received_events.with_mut(|x| *x + 1)
+                    received_events.with_mut(|x| *x += 1);
                 }
             }
             input {
@@ -357,7 +356,7 @@ fn app() -> Element {
                     assert_eq!(event.data.location(), Location::Standard);
                     assert!(!event.data.is_auto_repeating());
                     assert!(!event.data.is_composing());
-                    received_events.with_mut(|x| *x + 1)
+                    received_events.with_mut(|x| *x += 1);
                 }
             }
             input {
@@ -370,21 +369,21 @@ fn app() -> Element {
                     assert_eq!(event.data.location(), Location::Standard);
                     assert!(!event.data.is_auto_repeating());
                     assert!(!event.data.is_composing());
-                    received_events.with_mut(|x| *x + 1)
+                    received_events.with_mut(|x| *x += 1);
                 }
             }
             input {
                 id: "focus_in_div",
                 onfocusin: move |event| {
                     println!("{:?}", event.data);
-                    received_events.with_mut(|x| *x + 1);
+                    received_events.with_mut(|x| *x += 1);
                 }
             }
             input {
                 id: "focus_out_div",
                 onfocusout: move |event| {
                     println!("{:?}", event.data);
-                    received_events.with_mut(|x| *x + 1);
+                    received_events.with_mut(|x| *x += 1);
                 }
             }
         }

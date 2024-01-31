@@ -175,7 +175,7 @@ fn components_hydrate() {
 
 #[test]
 fn hello_world_hydrates() {
-    use dioxus_signals::use_signal;
+    use dioxus::hooks::use_signal;
 
     fn app() -> Element {
         let mut count = use_signal(|| 0);

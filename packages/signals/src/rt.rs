@@ -64,7 +64,9 @@ fn current_owner<S: Storage<T>, T>() -> Owner<S> {
     let id = TypeId::of::<S>();
     let override_owner = if id == TypeId::of::<SyncStorage>() {
         SYNC_OWNER.with(|cell| {
-            cell.borrow().clone().map(|owner| {
+            let owner = cell.borrow();
+
+            owner.clone().map(|owner| {
                 *(Box::new(owner) as Box<dyn Any>)
                     .downcast::<Owner<S>>()
                     .unwrap()
@@ -268,7 +270,7 @@ impl<T: 'static, S: Storage<T>> Writable<T> for CopyValue<T, S> {
         self.value.try_write()
     }
 
-    fn write(&self) -> Self::Mut<T> {
+    fn write(&mut self) -> Self::Mut<T> {
         self.value.write()
     }
 

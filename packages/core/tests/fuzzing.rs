@@ -1,9 +1,7 @@
 #![cfg(not(miri))]
 
 use dioxus::prelude::*;
-use dioxus_core::{
-    prelude::EventHandler, AttributeValue, DynamicNode, NoOpMutations, VComponent, VNode, *,
-};
+use dioxus_core::{AttributeValue, DynamicNode, NoOpMutations, VComponent, VNode, *};
 use std::{cfg, collections::HashSet, default::Default};
 
 fn random_ns() -> Option<&'static str> {

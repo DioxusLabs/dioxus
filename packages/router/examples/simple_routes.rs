@@ -106,7 +106,7 @@ fn Route2(user_id: usize) -> Element {
 fn Route3(dynamic: String) -> Element {
     let mut current_route_str = use_signal(String::new);
 
-    let current_route = use_route()?;
+    let current_route = use_route();
     let parsed = Route::from_str(&current_route_str.read());
 
     let site_map = Route::SITE_MAP

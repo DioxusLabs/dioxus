@@ -1,11 +1,8 @@
-use dioxus_core::prelude::*;
-use dioxus_signals::{CopyValue, ReadOnlySignal, Readable, Signal, SignalData};
-use dioxus_signals::{Storage, Writable};
-// use generational_box::Storage;
-
+use crate::dependency::Dependency;
 use crate::use_signal;
-use crate::{dependency::Dependency, use_hook_did_run};
-// use dioxus_signals::{signal::SignalData, ReadOnlySignal, Signal};
+use dioxus_core::prelude::*;
+use dioxus_signals::{ReadOnlySignal, Readable, Signal, SignalData};
+use dioxus_signals::{Storage, Writable};
 
 /// Creates a new unsync Selector. The selector will be run immediately and whenever any signal it reads changes.
 ///

@@ -20,7 +20,7 @@ pub struct Element {
     pub name: ElementName,
     pub key: Option<IfmtInput>,
     pub attributes: Vec<AttributeType>,
-    pub(crate) merged_attributes: Vec<AttributeType>,
+    pub merged_attributes: Vec<AttributeType>,
     pub children: Vec<BodyNode>,
     pub brace: syn::token::Brace,
 }

@@ -13,7 +13,7 @@ pub(crate) fn check_app_exits(app: fn() -> Element) {
     let should_panic = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
     let should_panic_clone = should_panic.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(100));
+        std::thread::sleep(std::time::Duration::from_secs(5));
         if should_panic_clone.load(std::sync::atomic::Ordering::SeqCst) {
             std::process::exit(exitcode::SOFTWARE);
         }
@@ -31,19 +31,21 @@ fn use_inner_html(id: &'static str) -> Option<String> {
 
     use_effect(move || {
         spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
 
-            let res = dioxus::eval(format!(
+            let res = eval(&format!(
                 r#"let element = document.getElementById('{}');
                     return element.innerHTML"#,
                 id
             ))
-            .await;
+            .unwrap()
+            .await
+            .unwrap();
 
-            if let Ok(html) = res {
+            if let Some(html) = res.as_str() {
                 // serde_json::Value::String(html)
                 println!("html: {}", html);
-                value.set(Some(html));
+                value.set(Some(html.to_string()));
             }
         });
     });
@@ -51,7 +53,7 @@ fn use_inner_html(id: &'static str) -> Option<String> {
     value.read().clone()
 }
 
-const EXPECTED_HTML: &str = r#"<div id="5" style="width: 100px; height: 100px; color: rgb(0, 0, 0);"><input type="checkbox"><h1>text</h1><div><p>hello world</p></div></div>"#;
+const EXPECTED_HTML: &str = r#"<div style="width: 100px; height: 100px; color: rgb(0, 0, 0);" id="5"><input type="checkbox"><h1>text</h1><div><p>hello world</p></div></div>"#;
 
 fn check_html_renders() -> Element {
     let inner_html = use_inner_html("main_div");
@@ -62,10 +64,6 @@ fn check_html_renders() -> Element {
         println!("{}", raw_html);
         let fragment = &raw_html;
         let expected = EXPECTED_HTML;
-        // let fragment = scraper::Html::parse_fragment(&raw_html);
-        // println!("fragment: {}", fragment.html());
-        // let expected = scraper::Html::parse_fragment(EXPECTED_HTML);
-        // println!("expected: {}", expected.html());
         assert_eq!(raw_html, EXPECTED_HTML);
         if fragment == expected {
             println!("html matches");

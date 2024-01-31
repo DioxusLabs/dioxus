@@ -366,11 +366,11 @@ async fn start_server(
     router: Router,
     start_browser: bool,
     rustls: Option<RustlsConfig>,
-    config: &CrateConfig,
+    _config: &CrateConfig,
 ) -> Result<()> {
     // If plugins, call on_serve_start event
     #[cfg(feature = "plugin")]
-    PluginManager::on_serve_start(config)?;
+    PluginManager::on_serve_start(_config)?;
 
     // Parse address
     let addr = format!("0.0.0.0:{}", port).parse().unwrap();

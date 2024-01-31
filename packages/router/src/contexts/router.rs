@@ -157,7 +157,7 @@ impl RouterContext {
     /// Will fail silently if there is no previous location to go to.
     pub fn go_back(&self) {
         {
-            self.inner.write().history.go_back();
+            self.inner.clone().write().history.go_back();
         }
 
         self.change_route();
@@ -168,7 +168,7 @@ impl RouterContext {
     /// Will fail silently if there is no next location to go to.
     pub fn go_forward(&self) {
         {
-            self.inner.write().history.go_forward();
+            self.inner.clone().write().history.go_forward();
         }
 
         self.change_route();
@@ -179,7 +179,7 @@ impl RouterContext {
         target: NavigationTarget<Rc<dyn Any>>,
     ) -> Option<ExternalNavigationFailure> {
         {
-            let mut write = self.inner.write();
+            let mut write = self.inner.clone().write();
             match target {
                 NavigationTarget::Internal(p) => write.history.push(p),
                 NavigationTarget::External(e) => return write.external(e),
@@ -195,7 +195,7 @@ impl RouterContext {
     pub fn push(&self, target: impl Into<IntoRoutable>) -> Option<ExternalNavigationFailure> {
         let target = self.resolve_into_routable(target.into());
         {
-            let mut write = self.inner.write();
+            let mut write = self.inner.clone().write();
             match target {
                 NavigationTarget::Internal(p) => write.history.push(p),
                 NavigationTarget::External(e) => return write.external(e),
@@ -212,7 +212,7 @@ impl RouterContext {
         let target = self.resolve_into_routable(target.into());
 
         {
-            let mut state = self.inner.write();
+            let mut state = self.inner.clone().write();
             match target {
                 NavigationTarget::Internal(p) => state.history.replace(p),
                 NavigationTarget::External(e) => return state.external(e),
@@ -276,14 +276,14 @@ impl RouterContext {
 
     /// Clear any unresolved errors
     pub fn clear_error(&self) {
-        let mut write_inner = self.inner.write();
+        let mut write_inner = self.inner.clone().write();
         write_inner.unresolved_error = None;
 
         write_inner.update_subscribers();
     }
 
     pub(crate) fn render_error(&self) -> Element {
-        let inner_read = self.inner.write();
+        let inner_read = self.inner.clone().write();
         inner_read
             .unresolved_error
             .as_ref()
@@ -297,7 +297,7 @@ impl RouterContext {
             let callback = callback.clone();
             drop(self_read);
             if let Some(new) = callback(myself) {
-                let mut self_write = self.inner.write();
+                let mut self_write = self.inner.clone().write();
                 match new {
                     NavigationTarget::Internal(p) => self_write.history.replace(p),
                     NavigationTarget::External(e) => return self_write.external(e),

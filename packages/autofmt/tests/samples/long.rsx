@@ -37,5 +37,5 @@ pub fn Explainer<'a>(
             {left},
             {right}
         }
-    })
+    }
 }

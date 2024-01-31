@@ -19,7 +19,7 @@ pub trait Writable<T: 'static>: Readable<T> {
 
     /// Get a mutable reference to the value. If the value has been dropped, this will panic.
     #[track_caller]
-    fn write(&self) -> Self::Mut<T> {
+    fn write(&mut self) -> Self::Mut<T> {
         self.try_write().unwrap()
     }
 
@@ -28,7 +28,7 @@ pub trait Writable<T: 'static>: Readable<T> {
 
     /// Run a function with a mutable reference to the value. If the value has been dropped, this will panic.
     #[track_caller]
-    fn with_mut<O>(&self, f: impl FnOnce(&mut T) -> O) -> O {
+    fn with_mut<O>(&mut self, f: impl FnOnce(&mut T) -> O) -> O {
         f(&mut *self.write())
     }
 
@@ -49,7 +49,7 @@ pub trait Writable<T: 'static>: Readable<T> {
 
     /// Index into the inner value and return a reference to the result.
     #[track_caller]
-    fn index_mut<I>(&self, index: I) -> Self::Mut<T::Output>
+    fn index_mut<I>(&mut self, index: I) -> Self::Mut<T::Output>
     where
         T: std::ops::IndexMut<I>,
     {
@@ -58,7 +58,7 @@ pub trait Writable<T: 'static>: Readable<T> {
 
     /// Takes the value out of the Signal, leaving a Default in its place.
     #[track_caller]
-    fn take(&self) -> T
+    fn take(&mut self) -> T
     where
         T: Default,
     {
@@ -67,7 +67,7 @@ pub trait Writable<T: 'static>: Readable<T> {
 
     /// Replace the value in the Signal, returning the old value.
     #[track_caller]
-    fn replace(&self, value: T) -> T {
+    fn replace(&mut self, value: T) -> T {
         self.with_mut(|v| std::mem::replace(v, value))
     }
 }
@@ -75,12 +75,12 @@ pub trait Writable<T: 'static>: Readable<T> {
 /// An extension trait for Writable<Option<T>> that provides some convenience methods.
 pub trait WritableOptionExt<T: 'static>: Writable<Option<T>> {
     /// Gets the value out of the Option, or inserts the given value if the Option is empty.
-    fn get_or_insert(&self, default: T) -> Self::Mut<T> {
+    fn get_or_insert(&mut self, default: T) -> Self::Mut<T> {
         self.get_or_insert_with(|| default)
     }
 
     /// Gets the value out of the Option, or inserts the value returned by the given function if the Option is empty.
-    fn get_or_insert_with(&self, default: impl FnOnce() -> T) -> Self::Mut<T> {
+    fn get_or_insert_with(&mut self, default: impl FnOnce() -> T) -> Self::Mut<T> {
         let borrow = self.read();
         if borrow.is_none() {
             drop(borrow);
@@ -93,7 +93,7 @@ pub trait WritableOptionExt<T: 'static>: Writable<Option<T>> {
 
     /// Attempts to write the inner value of the Option.
     #[track_caller]
-    fn as_mut(&self) -> Option<Self::Mut<T>> {
+    fn as_mut(&mut self) -> Option<Self::Mut<T>> {
         Self::try_map_mut(self.write(), |v: &mut Option<T>| v.as_mut())
     }
 }
@@ -169,7 +169,7 @@ pub trait WritableVecExt<T: 'static>: Writable<Vec<T>> {
 
     /// Try to mutably get an element from the vector.
     #[track_caller]
-    fn get_mut(&self, index: usize) -> Option<Self::Mut<T>> {
+    fn get_mut(&mut self, index: usize) -> Option<Self::Mut<T>> {
         Self::try_map_mut(self.write(), |v: &mut Vec<T>| v.get_mut(index))
     }
 

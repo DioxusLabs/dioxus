@@ -2787,8 +2787,6 @@ version = "0.1.0"
 dependencies = [
  "axum 0.6.20",
  "dioxus",
- "dioxus-fullstack",
- "dioxus-web",
  "execute",
  "serde",
  "tokio",

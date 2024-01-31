@@ -6,7 +6,7 @@ use crate::{
     LiveViewError,
 };
 use dioxus_core::prelude::*;
-use dioxus_html::{select, EventData, HtmlEvent, PlatformEventData};
+use dioxus_html::{EventData, HtmlEvent, PlatformEventData};
 use dioxus_interpreter_js::MutationState;
 use futures_util::{pin_mut, SinkExt, StreamExt};
 use serde::Serialize;

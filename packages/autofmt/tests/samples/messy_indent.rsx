@@ -9,5 +9,5 @@ fn SaveClipboard() -> Element {
 
     rsx! {
         div { "hello world", "hello world", "hello world" }
-    })
+    }
 }

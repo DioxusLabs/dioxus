@@ -22,7 +22,7 @@ fn into_signal_compiles() {
 
     fn don_t_run() {
         takes_signal_string("hello world");
-        takes_signal_string(ReadOnlySignal::new(String::from("hello world")));
+        takes_signal_string(Signal::new(String::from("hello world")));
         takes_option_signal_string("hello world");
     }
 }

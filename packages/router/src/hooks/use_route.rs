@@ -33,7 +33,7 @@ use crate::utils::use_router_internal::use_router_internal;
 ///
 /// #[component]
 /// fn Index() -> Element {
-///     let path: Route = use_route(&cx).unwrap();
+///     let path: Route = use_route();
 ///     rsx! {
 ///         h2 { "Current Path" }
 ///         p { "{path}" }
@@ -45,14 +45,12 @@ use crate::utils::use_router_internal::use_router_internal;
 /// # assert_eq!(dioxus_ssr::render(&vdom), "<h1>App</h1><h2>Current Path</h2><p>/</p>")
 /// ```
 #[must_use]
-pub fn use_route<R: Routable + Clone>() -> Option<R> {
+pub fn use_route<R: Routable + Clone>() -> R {
     match use_router_internal() {
-        Some(r) => Some(r.current()),
+        Some(r) => r.current(),
         None => {
             #[cfg(debug_assertions)]
             panic!("`use_route` must have access to a parent router");
-            #[allow(unreachable_code)]
-            None
         }
     }
 }

@@ -216,10 +216,18 @@ pub fn use_drop<D: FnOnce() + 'static>(destroy: D) {
     });
 }
 
+/// A hook that allows you to insert a "before render" function.
+///
+/// This function will always be called before dioxus tries to render your component. This should be used for safely handling
+/// early returns
 pub fn use_before_render(f: impl FnMut() + 'static) {
     use_hook(|| before_render(f));
 }
 
+/// Push this function to be run after the next render
+///
+/// This function will always be called before dioxus tries to render your component. This should be used for safely handling
+/// early returns
 pub fn use_after_render(f: impl FnMut() + 'static) {
     use_hook(|| after_render(f));
 }
@@ -274,6 +282,7 @@ pub async fn flush_sync() {
     }
 }
 
+/// Use a hook with a cleanup function
 pub fn use_hook_with_cleanup<T: Clone + 'static>(
     hook: impl FnOnce() -> T,
     cleanup: impl FnOnce(T) + 'static,

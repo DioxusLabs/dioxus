@@ -41,7 +41,7 @@ fullstack = ["dioxus-fullstack"]
 
 [dev-dependencies]
 axum = { version = "0.6.1", features = ["ws"] }
-dioxus = { workspace = true }
+dioxus = { workspace = true, features = ["router" ]}
 # dioxus-liveview = { workspace = true, features = ["axum"] }
 dioxus-ssr = { path = "../ssr" }
 criterion = { version = "0.5", features = ["async_tokio", "html_reports"] }

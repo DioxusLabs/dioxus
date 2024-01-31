@@ -60,7 +60,7 @@ async fn yield_now_works() {
         // these two tasks should yield to eachother
         use_hook(|| {
             spawn(async move {
-                for x in 0..10 {
+                for _ in 0..10 {
                     tokio::task::yield_now().await;
                     SEQUENCE.with(|s| s.borrow_mut().push(1));
                 }
@@ -69,7 +69,7 @@ async fn yield_now_works() {
 
         use_hook(|| {
             spawn(async move {
-                for x in 0..10 {
+                for _ in 0..10 {
                     tokio::task::yield_now().await;
                     SEQUENCE.with(|s| s.borrow_mut().push(2));
                 }

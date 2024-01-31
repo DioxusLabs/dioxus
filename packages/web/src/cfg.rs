@@ -10,19 +10,12 @@
 pub struct Config {
     pub(crate) hydrate: bool,
     pub(crate) root: ConfigRoot,
-    pub(crate) cached_strings: Vec<String>,
     pub(crate) default_panic_hook: bool,
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            hydrate: false,
-            root: ConfigRoot::RootName("main".to_string()),
-            cached_strings: Vec::new(),
-            default_panic_hook: true,
-        }
-    }
+pub(crate) enum ConfigRoot {
+    RootName(String),
+    RootElement(web_sys::Element),
 }
 
 impl Config {
@@ -72,7 +65,12 @@ impl Config {
     }
 }
 
-pub(crate) enum ConfigRoot {
-    RootName(String),
-    RootElement(web_sys::Element),
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            hydrate: false,
+            root: ConfigRoot::RootName("main".to_string()),
+            default_panic_hook: true,
+        }
+    }
 }
