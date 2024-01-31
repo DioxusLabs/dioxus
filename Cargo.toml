@@ -45,9 +45,9 @@ members = [
     "examples/PWA-example",
     # "examples/openid_connect_demo",
     # Playwright tests
-    "playwright-tests/liveview",
-    "playwright-tests/web",
-    "playwright-tests/fullstack",
+    "packages/playwright-tests/liveview",
+    "packages/playwright-tests/web",
+    "packages/playwright-tests/fullstack",
 ]
 exclude = ["examples/mobile_demo", "examples/openid_connect_demo",]
 

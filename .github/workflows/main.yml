@@ -13,7 +13,6 @@ on:
       - lib.rs
       - Cargo.toml
       - Makefile.toml
-      - playwright-tests/**
 
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -172,19 +171,19 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-        working-directory: ./playwright-tests
+        working-directory: ./packages/playwright-tests
 
       - name: Install Playwright
         run: npm install -D @playwright/test
-        working-directory: ./playwright-tests
+        working-directory: ./packages/playwright-tests
 
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
-        working-directory: ./playwright-tests
+        working-directory: ./packages/playwright-tests
 
       - name: Run Playwright tests
         run: npx playwright test
-        working-directory: ./playwright-tests
+        working-directory: ./packages/playwright-tests
 
       - uses: actions/upload-artifact@v4
         if: always()
