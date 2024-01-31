@@ -54,7 +54,7 @@ macro_rules! default_history {
             return Box::new(AnyHistoryProviderImplWrapper::new(WebHistory::<R>::default()));
             // If we are using dioxus fullstack and the ssr feature is enabled, use the memory history with the initial path set to the current path in fullstack
             #[cfg(all(feature = "fullstack", feature = "ssr"))]
-            return dioxus_router::prelude::MemoryHistory::with_initial_path(
+            return MemoryHistory::with_initial_path(
                 dioxus_fullstack::prelude::server_context()
                     .request_parts()
                     .unwrap()

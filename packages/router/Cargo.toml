@@ -32,7 +32,7 @@ dioxus-cli-config = { workspace = true }
 
 [features]
 default = []
-ssr = ["dioxus-ssr", "tokio"]
+ssr = ["dioxus-ssr/incremental", "tokio", "dioxus-fullstack?/ssr"]
 liveview = ["dioxus-liveview", "tokio", "dep:serde", "serde_json"]
 wasm_test = []
 serde = ["dep:serde", "gloo-utils?/serde"]
