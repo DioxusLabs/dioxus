@@ -123,7 +123,7 @@ impl Config {
             let router = axum::Router::new().register_server_fns(server_fn_route);
             #[cfg(not(any(feature = "desktop", feature = "mobile")))]
             let router = router
-                .serve_static_assets(cfg.assets_path)
+                .serve_static_assets(cfg.assets_path.clone())
                 .connect_hot_reload()
                 .fallback(get(render_handler).with_state((
                     cfg,

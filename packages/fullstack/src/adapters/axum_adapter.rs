@@ -325,7 +325,7 @@ where
         let ssr_state = SSRState::new(&cfg);
 
         // Add server functions and render index.html
-        self.serve_static_assets(cfg.assets_path)
+        self.serve_static_assets(cfg.assets_path.clone())
             .connect_hot_reload()
             .register_server_fns(server_fn_route)
             .fallback(get(render_handler).with_state((cfg, Arc::new(build_virtual_dom), ssr_state)))
