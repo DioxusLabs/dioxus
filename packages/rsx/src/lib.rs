@@ -85,7 +85,9 @@ impl CallBody {
         };
 
         quote! {
-            #body
+            Some({
+                #body
+            })
         }
     }
 }
