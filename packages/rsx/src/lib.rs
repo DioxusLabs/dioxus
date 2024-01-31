@@ -85,9 +85,7 @@ impl CallBody {
         };
 
         quote! {
-            dioxus_core::LazyNodes::new( move | __cx: &dioxus_core::ScopeState| -> dioxus_core::VNode {
-                #body
-            })
+            #body
         }
     }
 }
@@ -119,9 +117,7 @@ impl ToTokens for CallBody {
         };
 
         out_tokens.append_all(quote! {
-            dioxus_core::LazyNodes::new( move | __cx: &dioxus_core::ScopeState| -> dioxus_core::VNode {
-                #body
-            })
+            #body
         })
     }
 }
