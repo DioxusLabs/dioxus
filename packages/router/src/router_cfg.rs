@@ -54,7 +54,7 @@ macro_rules! default_history {
             return Box::new(AnyHistoryProviderImplWrapper::new(WebHistory::<R>::default()));
             // If we are using dioxus fullstack and the ssr feature is enabled, use the memory history with the initial path set to the current path in fullstack
             #[cfg(all(feature = "fullstack", feature = "ssr"))]
-            return MemoryHistory::with_initial_path(
+            return Box::new(AnyHistoryProviderImplWrapper::new(MemoryHistory::<R>::with_initial_path(
                 dioxus_fullstack::prelude::server_context()
                     .request_parts()
                     .unwrap()
@@ -69,7 +69,7 @@ macro_rules! default_history {
                                 panic!("Failed to parse uri: {}", err);
                             })
                     }),
-            );
+            )));
             // If we are not on wasm32 and the liveview feature is enabled, use the liveview history.
             #[cfg(all(feature = "liveview"))]
             return Box::new(AnyHistoryProviderImplWrapper::new(LiveviewHistory::new_with_initial_path($initial_route)));
@@ -91,9 +91,9 @@ where
 {
     pub(crate) fn get_history(self) -> Box<dyn HistoryProvider<R>> {
         #[allow(unused)]
-            let initial_route = self.initial_route.clone().unwrap_or("/".parse().unwrap_or_else(|err|
-                panic!("index route does not exist:\n{}\n use MemoryHistory::with_initial_path or RouterConfig::initial_route to set a custom path", err)
-            ));
+        let initial_route = self.initial_route.clone().unwrap_or("/".parse().unwrap_or_else(|err|
+            panic!("index route does not exist:\n{}\n use MemoryHistory::with_initial_path or RouterConfig::initial_route to set a custom path", err)
+        ));
         self.history
             .take()
             .unwrap_or_else(|| default_history!(initial_route))
@@ -122,9 +122,9 @@ where
 {
     pub(crate) fn take_history(&mut self) -> Box<dyn AnyHistoryProvider> {
         #[allow(unused)]
-            let initial_route = self.initial_route.clone().unwrap_or("/".parse().unwrap_or_else(|err|
-                panic!("index route does not exist:\n{}\n use MemoryHistory::with_initial_path or RouterConfig::initial_route to set a custom path", err)
-            ));
+        let initial_route = self.initial_route.clone().unwrap_or("/".parse().unwrap_or_else(|err|
+            panic!("index route does not exist:\n{}\n use MemoryHistory::with_initial_path or RouterConfig::initial_route to set a custom path", err)
+        ));
         self.history
             .take()
             .unwrap_or_else(|| default_history!(initial_route))
