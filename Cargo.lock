@@ -2466,8 +2466,6 @@ name = "dioxus-core"
 version = "0.4.3"
 dependencies = [
  "dioxus",
- "dioxus-core",
- "dioxus-html",
  "dioxus-ssr",
  "futures-channel",
  "futures-util",

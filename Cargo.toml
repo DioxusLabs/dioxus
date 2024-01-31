@@ -56,7 +56,7 @@ version = "0.4.3"
 
 # dependencies that are shared across packages
 [workspace.dependencies]
-dioxus = { path = "packages/dioxus", version = "0.4.0", default-features = false }
+dioxus = { path = "packages/dioxus", version = "0.4.0" }
 dioxus-lib = { path = "packages/dioxus-lib", version = "0.4.0" }
 dioxus-core = { path = "packages/core", version = "0.4.2" }
 dioxus-core-macro = { path = "packages/core-macro", version = "0.4.0" }

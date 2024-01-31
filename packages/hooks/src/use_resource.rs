@@ -39,13 +39,9 @@ where
 
             let res = future::poll_fn(|cx| {
                 // Set the effect stack properly
-
-                // Poll the inner future
-                let ready = fut.poll_unpin(cx);
-
                 // add any dependencies to the effect stack that we need to watch when restarting the future
-
-                ready
+                // Poll the inner future
+                fut.poll_unpin(cx)
             })
             .await;
 

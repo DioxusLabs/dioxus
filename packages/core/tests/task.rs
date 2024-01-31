@@ -94,7 +94,7 @@ async fn flushing() {
     fn app() -> Element {
         use_hook(|| {
             spawn(async move {
-                for x in 0..10 {
+                for _ in 0..10 {
                     flush_sync().await;
                     SEQUENCE.with(|s| s.borrow_mut().push(1));
                 }
@@ -103,7 +103,7 @@ async fn flushing() {
 
         use_hook(|| {
             spawn(async move {
-                for x in 0..10 {
+                for _ in 0..10 {
                     flush_sync().await;
                     SEQUENCE.with(|s| s.borrow_mut().push(2));
                 }

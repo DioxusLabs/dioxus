@@ -3,8 +3,8 @@
 
 //! Tests for the lifecycle of components.
 use dioxus::dioxus_core::{ElementId, Mutation::*};
+use dioxus::html::SerializedHtmlEventConverter;
 use dioxus::prelude::*;
-use dioxus_html::SerializedHtmlEventConverter;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 

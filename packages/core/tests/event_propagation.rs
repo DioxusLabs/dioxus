@@ -6,7 +6,7 @@ static CLICKS: Mutex<usize> = Mutex::new(0);
 
 #[test]
 fn events_propagate() {
-    set_event_converter(Box::new(dioxus_html::SerializedHtmlEventConverter));
+    set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
 
     let mut dom = VirtualDom::new(app);
     dom.rebuild(&mut dioxus_core::NoOpMutations);

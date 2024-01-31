@@ -97,7 +97,7 @@ where
 /// See the docs for [`use_coroutine`] for more details.
 #[must_use]
 pub fn use_coroutine_handle<M: 'static>() -> Coroutine<M> {
-    use_hook(|| consume_context::<Coroutine<M>>())
+    use_hook(consume_context::<Coroutine<M>>)
 }
 
 #[derive(PartialEq)]
@@ -110,7 +110,7 @@ pub struct Coroutine<T: 'static> {
 impl<T> Coroutine<T> {
     /// Get the underlying task handle
     pub fn task(&self) -> Task {
-        self.task.read().clone().unwrap()
+        (*self.task.read()).unwrap()
     }
 
     /// Send a message to the coroutine
@@ -133,12 +133,9 @@ impl<T> Coroutine<T> {
 
 // manual impl since deriving doesn't work with generics
 impl<T> Copy for Coroutine<T> {}
+
 impl<T> Clone for Coroutine<T> {
     fn clone(&self) -> Self {
-        Self {
-            tx: self.tx,
-            task: self.task,
-            needs_regen: self.needs_regen,
-        }
+        *self
     }
 }

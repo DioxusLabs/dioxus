@@ -738,6 +738,7 @@ impl PartialEq for AttributeValue {
             (Self::Bool(l0), Self::Bool(r0)) => l0 == r0,
             (Self::Listener(_), Self::Listener(_)) => true,
             (Self::Any(l0), Self::Any(r0)) => l0.as_ref().any_cmp(r0.as_ref()),
+            (Self::None, Self::None) => true,
             _ => false,
         }
     }
