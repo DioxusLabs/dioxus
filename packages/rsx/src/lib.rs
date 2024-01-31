@@ -110,20 +110,6 @@ impl Parse for CallBody {
     }
 }
 
-/// Serialize the same way, regardless of flavor
-impl ToTokens for CallBody {
-    fn to_tokens(&self, out_tokens: &mut TokenStream2) {
-        let body = TemplateRenderer {
-            roots: &self.roots,
-            location: None,
-        };
-
-        out_tokens.append_all(quote! {
-            #body
-        })
-    }
-}
-
 #[derive(Default, Debug)]
 pub struct RenderCallBody(pub CallBody);
 
