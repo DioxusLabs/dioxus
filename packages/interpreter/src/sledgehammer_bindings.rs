@@ -1,14 +1,14 @@
-#[cfg(feature = "web")]
+#[cfg(feature = "webonly")]
 use js_sys::Function;
-#[cfg(feature = "web")]
+#[cfg(feature = "webonly")]
 use sledgehammer_bindgen::bindgen;
-#[cfg(feature = "web")]
+#[cfg(feature = "webonly")]
 use web_sys::Node;
 
-#[cfg(feature = "web")]
+#[cfg(feature = "webonly")]
 pub const SLEDGEHAMMER_JS: &str = GENERATED_JS;
 
-#[cfg(feature = "web")]
+#[cfg(feature = "webonly")]
 #[bindgen(module)]
 mod js {
     const JS_FILE: &str = "./src/common.js";
@@ -87,7 +87,6 @@ mod js {
         templates[tmpl_id] = nodes;
     }
     export function hydrate(ids) {
-        console.log("hydrating", ids);
         const hydrateNodes = document.querySelectorAll('[data-node-hydration]');
         for (let i = 0; i < hydrateNodes.length; i++) {
             const hydrateNode = hydrateNodes[i];
@@ -95,7 +94,6 @@ mod js {
             const split = hydration.split(',');
             const id = ids[parseInt(split[0])];
             nodes[id] = hydrateNode;
-            console.log("hydrating node", hydrateNode, id);
             if (split.length > 1) {
                 hydrateNode.listening = split.length - 1;
                 hydrateNode.setAttribute('data-dioxus-id', id);
@@ -104,7 +102,6 @@ mod js {
                     const split2 = listener.split(':');
                     const event_name = split2[0];
                     const bubbles = split2[1] === '1';
-                    console.log("hydrating listener", event_name, bubbles);
                     listeners.create(event_name, hydrateNode, bubbles);
                 }
             }
@@ -118,7 +115,6 @@ mod js {
             const id = currentNode.textContent;
             const split = id.split('node-id');
             if (split.length > 1) {
-                console.log("hydrating text", currentNode.nextSibling, id);
                 nodes[ids[parseInt(split[1])]] = currentNode.nextSibling;
             }
             currentNode = treeWalker.nextNode();
@@ -325,7 +321,7 @@ pub mod binary_protocol {
             }
             node.setAttribute('data-dioxus-id', `\${id}`);
             const event_name = $event$;
-    
+
             // if this is a mounted listener, we send the event immediately
             if (event_name === "mounted") {
                 window.ipc.postMessage(

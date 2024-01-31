@@ -8,23 +8,14 @@
 /// dioxus_web::launch(App, Config::new().hydrate(true).root_name("myroot"))
 /// ```
 pub struct Config {
-    #[cfg(feature = "hydrate")]
     pub(crate) hydrate: bool,
-    pub(crate) rootname: String,
-    pub(crate) cached_strings: Vec<String>,
+    pub(crate) root: ConfigRoot,
     pub(crate) default_panic_hook: bool,
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            #[cfg(feature = "hydrate")]
-            hydrate: false,
-            rootname: "main".to_string(),
-            cached_strings: Vec::new(),
-            default_panic_hook: true,
-        }
-    }
+pub(crate) enum ConfigRoot {
+    RootName(String),
+    RootElement(web_sys::Element),
 }
 
 impl Config {
@@ -50,17 +41,18 @@ impl Config {
     /// Set the name of the element that Dioxus will use as the root.
     ///
     /// This is akin to calling React.render() on the element with the specified name.
+    /// Note that this only works on the current document, i.e. `window.document`.
+    /// To use a different document (popup, iframe, ...) use [Self::rootelement] instead.
     pub fn rootname(mut self, name: impl Into<String>) -> Self {
-        self.rootname = name.into();
+        self.root = ConfigRoot::RootName(name.into());
         self
     }
 
-    /// Sets a string cache for wasm bindgen to [intern](https://docs.rs/wasm-bindgen/0.2.84/wasm_bindgen/fn.intern.html). This can help reduce the time it takes for wasm bindgen to pass
-    /// strings from rust to javascript. This can significantly improve pefromance when passing strings to javascript, but can have a negative impact on startup time.
+    /// Set the element that Dioxus will use as root.
     ///
-    /// > Currently this cache is only used when creating static elements and attributes.
-    pub fn with_string_cache(mut self, cache: Vec<String>) -> Self {
-        self.cached_strings = cache;
+    /// This is akin to calling React.render() on the given element.
+    pub fn rootelement(mut self, elem: web_sys::Element) -> Self {
+        self.root = ConfigRoot::RootElement(elem);
         self
     }
 
@@ -70,5 +62,15 @@ impl Config {
     pub fn with_default_panic_hook(mut self, f: bool) -> Self {
         self.default_panic_hook = f;
         self
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            hydrate: false,
+            root: ConfigRoot::RootName("main".to_string()),
+            default_panic_hook: true,
+        }
     }
 }

@@ -88,13 +88,13 @@ where
     W: tokio::io::AsyncWrite + Unpin + Send,
 {
     #[component]
-    fn RenderPath<R>(cx: Scope, path: R) -> Element
+    fn RenderPath<R>(path: R) -> Element
     where
         R: Routable,
         <R as FromStr>::Err: std::fmt::Display,
     {
         let path = path.clone();
-        render! {
+        rsx! {
             Router::<R> {
                 config: || RouterConfig::default().history(MemoryHistory::with_initial_path(path))
             }

@@ -1,4 +1,5 @@
 use core::panic;
+use dioxus_cli_config::ExecutableType;
 use std::{fs::create_dir_all, str::FromStr};
 
 use tauri_bundler::{BundleSettings, PackageSettings, SettingsBuilder};
@@ -67,7 +68,7 @@ impl From<PackageType> for tauri_bundler::PackageType {
 
 impl Bundle {
     pub async fn bundle(self, bin: Option<PathBuf>) -> Result<()> {
-        let mut crate_config = crate::CrateConfig::new(bin)?;
+        let mut crate_config = dioxus_cli_config::CrateConfig::new(bin)?;
 
         plugins_before_command(BundleEvent).await;
 
@@ -90,15 +91,15 @@ impl Bundle {
         crate_config.set_cargo_args(self.build.cargo_args);
 
         // build the desktop app
-        build_desktop(&crate_config, false)?;
+        build_desktop(&crate_config, false, false)?;
 
         // copy the binary to the out dir
-        let package = crate_config.manifest.package.unwrap();
+        let package = crate_config.manifest.package.as_ref().unwrap();
 
         let mut name: PathBuf = match &crate_config.executable {
-            crate::ExecutableType::Binary(name)
-            | crate::ExecutableType::Lib(name)
-            | crate::ExecutableType::Example(name) => name,
+            ExecutableType::Binary(name)
+            | ExecutableType::Lib(name)
+            | ExecutableType::Example(name) => name,
         }
         .into();
         if cfg!(windows) {
@@ -141,8 +142,21 @@ impl Bundle {
             }
         }
 
+        // Add all assets from collect assets to the bundle
+        {
+            let config = manganis_cli_support::Config::current();
+            let location = config.assets_serve_location().to_string();
+            let location = format!("./{}", location);
+            println!("Adding assets from {} to bundle", location);
+            if let Some(resources) = &mut bundle_settings.resources {
+                resources.push(location);
+            } else {
+                bundle_settings.resources = Some(vec![location]);
+            }
+        }
+
         let mut settings = SettingsBuilder::new()
-            .project_out_directory(crate_config.out_dir)
+            .project_out_directory(crate_config.out_dir())
             .package_settings(PackageSettings {
                 product_name: crate_config.dioxus_config.application.name.clone(),
                 version: package.version().to_string(),

@@ -4,14 +4,14 @@ use plugins::main::imports::Host as ImportHost;
 use plugins::main::types::Host as TypeHost;
 use std::collections::HashMap;
 use wasmtime::component::*;
-use wasmtime_wasi::preview2::{Table, WasiCtx, WasiView};
+use wasmtime_wasi::preview2::{WasiCtx, WasiView};
 
 use self::plugins::main::types::{Platform, PluginInfo, ProjectInfo};
 
 use super::PLUGINS_CONFIG;
 
 pub struct PluginRuntimeState {
-    pub table: Table,
+    pub table: ResourceTable,
     pub ctx: WasiCtx,
     pub metadata: PluginInfo,
     // pub tomls: slab::Slab<TomlValue>,
@@ -108,18 +108,13 @@ impl ImportHost for PluginRuntimeState {
     async fn get_project_info(&mut self) -> wasmtime::Result<ProjectInfo> {
         let application = &PLUGINS_CONFIG.lock().await.application;
 
-        let has_output_directory = application.out_dir.is_some();
-        let has_assets_directory = application.asset_dir.is_some();
         let default_platform = match application.default_platform {
-            crate::cfg::Platform::Web => Platform::Web,
-            crate::cfg::Platform::Desktop => Platform::Desktop,
+            dioxus_cli_config::Platform::Web => Platform::Web,
+            dioxus_cli_config::Platform::Desktop => Platform::Desktop,
+            dioxus_cli_config::Platform::Fullstack => todo!(),
         };
 
-        Ok(ProjectInfo {
-            has_output_directory,
-            has_assets_directory,
-            default_platform,
-        })
+        Ok(ProjectInfo { default_platform })
     }
 
     async fn watch_path(&mut self, path: String) -> wasmtime::Result<()> {
@@ -197,11 +192,11 @@ impl ImportHost for PluginRuntimeState {
 }
 
 impl WasiView for PluginRuntimeState {
-    fn table(&self) -> &Table {
+    fn table(&self) -> &ResourceTable {
         &self.table
     }
 
-    fn table_mut(&mut self) -> &mut Table {
+    fn table_mut(&mut self) -> &mut ResourceTable {
         &mut self.table
     }
 

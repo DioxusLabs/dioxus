@@ -6,16 +6,16 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch_desktop(app);
 }
 
-fn app(cx: Scope) -> Element {
-    cx.render(rsx! {
+fn app() -> Element {
+    rsx! {
         div {
             h1 { "Form" }
             form {
-                onsubmit: move |ev| println!("Submitted {:?}", ev.values),
-                oninput: move |ev| println!("Input {:?}", ev.values),
+                onsubmit: move |ev| println!("Submitted {:?}", ev.values()),
+                oninput: move |ev| println!("Input {:?}", ev.values()),
                 input { r#type: "text", name: "username" }
                 input { r#type: "text", name: "full-name" }
                 input { r#type: "password", name: "password" }
@@ -24,5 +24,5 @@ fn app(cx: Scope) -> Element {
                 button { r#type: "submit", value: "Submit", "Submit the form" }
             }
         }
-    })
+    }
 }

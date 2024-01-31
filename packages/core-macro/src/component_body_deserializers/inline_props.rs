@@ -46,12 +46,20 @@ fn get_props_struct(component_body: &ComponentBody) -> ItemStruct {
         ..
     } = sig;
 
-    // Skip first arg since that's the context
-    let struct_fields = inputs.iter().skip(1).map(move |f| {
+    let struct_fields = inputs.iter().map(move |f| {
         match f {
             FnArg::Receiver(_) => unreachable!(), // Unreachable because of ComponentBody parsing
             FnArg::Typed(pt) => {
-                let arg_pat = &pt.pat; // Pattern (identifier)
+                let arg_pat = match pt.pat.as_ref() {
+                    // rip off mutability
+                    Pat::Ident(f) => {
+                        let mut f = f.clone();
+                        f.mutability = None;
+                        quote! { #f }
+                    }
+                    a => quote! { #a },
+                };
+
                 let arg_colon = &pt.colon_token;
                 let arg_ty = &pt.ty; // Type
                 let arg_attrs = &pt.attrs; // Attributes
@@ -74,9 +82,9 @@ fn get_props_struct(component_body: &ComponentBody) -> ItemStruct {
     };
 
     let struct_attrs = if first_lifetime.is_some() {
-        quote! { #[derive(Props)] }
+        quote! { #[derive(Props, Clone)] }
     } else {
-        quote! { #[derive(Props, PartialEq)] }
+        quote! { #[derive(Props, Clone, PartialEq)] }
     };
 
     let struct_generics = if first_lifetime.is_some() {
@@ -225,11 +233,7 @@ fn get_props_docs(fn_ident: &Ident, inputs: Vec<&FnArg>) -> Vec<Attribute> {
 }
 
 fn get_function(component_body: &ComponentBody) -> ItemFn {
-    let ComponentBody {
-        item_fn,
-        cx_pat_type,
-        ..
-    } = component_body;
+    let ComponentBody { item_fn, .. } = component_body;
     let ItemFn {
         attrs: fn_attrs,
         vis,
@@ -246,13 +250,23 @@ fn get_function(component_body: &ComponentBody) -> ItemFn {
     } = sig;
     let Generics { where_clause, .. } = generics;
 
-    let cx_pat = &cx_pat_type.pat;
     let struct_ident = Ident::new(&format!("{fn_ident}Props"), fn_ident.span());
 
     // Skip first arg since that's the context
-    let struct_field_names = inputs.iter().skip(1).filter_map(|f| match f {
+    let struct_field_names = inputs.iter().filter_map(|f| match f {
         FnArg::Receiver(_) => unreachable!(), // ComponentBody prohibits receiver parameters.
-        FnArg::Typed(pt) => Some(&pt.pat),
+        FnArg::Typed(pt) => {
+            let pat = &pt.pat;
+
+            let mut pat = pat.clone();
+
+            // rip off mutability, but still write it out eventually
+            if let Pat::Ident(ref mut pat_ident) = pat.as_mut() {
+                pat_ident.mutability = None;
+            }
+
+            Some(quote!(mut  #pat))
+        }
     });
 
     let first_lifetime = if let Some(GenericParam::Lifetime(lt)) = generics.params.first() {
@@ -261,7 +275,7 @@ fn get_function(component_body: &ComponentBody) -> ItemFn {
         None
     };
 
-    let (scope_lifetime, fn_generics) = if let Some(lt) = first_lifetime {
+    let (_scope_lifetime, fn_generics) = if let Some(lt) = first_lifetime {
         (quote! { #lt, }, generics.clone())
     } else {
         let lifetime: LifetimeParam = parse_quote! { 'a };
@@ -298,10 +312,10 @@ fn get_function(component_body: &ComponentBody) -> ItemFn {
     parse_quote! {
         #(#fn_attrs)*
         #(#props_docs)*
-        #asyncness #vis fn #fn_ident #fn_generics (#cx_pat: Scope<#scope_lifetime #struct_ident #generics_no_bounds>) #fn_output
+        #asyncness #vis fn #fn_ident #fn_generics (mut __props: #struct_ident #generics_no_bounds) #fn_output
         #where_clause
         {
-            let #struct_ident { #(#struct_field_names),* } = &#cx_pat.props;
+            let #struct_ident { #(#struct_field_names),* } = __props;
             #fn_block
         }
     }

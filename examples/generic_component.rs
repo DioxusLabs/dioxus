@@ -3,24 +3,22 @@ use std::fmt::Display;
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch_desktop(app);
 }
 
-fn app(cx: Scope) -> Element {
-    cx.render(rsx! { generic_child {
-        data: 0i32
-    } })
+fn app() -> Element {
+    rsx! {
+        generic_child { data: 0 }
+    }
 }
 
-#[derive(PartialEq, Props)]
-struct GenericChildProps<T: Display + PartialEq> {
+#[derive(PartialEq, Props, Clone)]
+struct GenericChildProps<T: Display + PartialEq + Clone + 'static> {
     data: T,
 }
 
-fn generic_child<T: Display + PartialEq>(cx: Scope<GenericChildProps<T>>) -> Element {
-    let data = &cx.props.data;
-
-    cx.render(rsx! { div {
-        "{data}"
-    } })
+fn generic_child<T: Display + PartialEq + Clone>(props: GenericChildProps<T>) -> Element {
+    rsx! {
+        div { "{props.data}" }
+    }
 }

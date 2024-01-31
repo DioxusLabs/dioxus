@@ -12,18 +12,6 @@ rsx! {
             let blah = 120;
             true
         },
-        onclick: move |_| {
-            let blah = 120;
-            true
-        },
-        onclick: move |_| {
-            let blah = 120;
-            true
-        },
-        onclick: move |_| {
-            let blah = 120;
-            true
-        },
         div {
             div { "hi" }
             h2 { class: "asd" }

@@ -1,6 +1,7 @@
+use dioxus_cli_config::DioxusConfig;
 use std::path::PathBuf;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use clap::Parser;
 use dioxus_cli::{
     plugin::{init_plugins, save_plugin_config},
@@ -17,22 +18,24 @@ fn get_bin(bin: Option<String>) -> Result<PathBuf> {
             .workspace_packages()
             .into_iter()
             .find(|p| p.name == bin)
-            .ok_or(format!("no such package: {}", bin))
-            .map_err(Error::CargoError)?
+            .ok_or(Error::CargoError(format!("no such package: {}", bin)))?
     } else {
         metadata
             .root_package()
-            .ok_or("no root package?".into())
-            .map_err(Error::CargoError)?
+            .ok_or(Error::CargoError("no root package?".to_string()))?
     };
 
     let crate_dir = package
         .manifest_path
         .parent()
-        .ok_or("couldn't take parent dir".into())
-        .map_err(Error::CargoError)?;
+        .ok_or(Error::CargoError("couldn't take parent dir".to_string()))?;
 
     Ok(crate_dir.into())
+}
+
+/// Simplifies error messages that use the same pattern.
+fn error_wrapper(message: &str) -> String {
+    format!("🚫 {message}:")
 }
 
 #[tokio::main]
@@ -50,7 +53,7 @@ async fn main() -> anyhow::Result<()> {
             DioxusConfig::default()
         });
 
-    let crate_dir = crate::crate_root()?;
+    let crate_dir = dioxus_cli_config::crate_root()?;
     init_plugins(&dioxus_config, &crate_dir).await?;
 
     match args.action {
@@ -60,7 +63,7 @@ async fn main() -> anyhow::Result<()> {
             .map_err(|e| anyhow!("🚫 Translation of HTML into RSX failed: {}", e)),
 
         Build(opts) => opts
-            .build(Some(bin.clone()))
+            .build(Some(bin.clone()), None)
             .await
             .map_err(|e| anyhow!("🚫 Building project failed: {}", e)),
 
@@ -75,7 +78,11 @@ async fn main() -> anyhow::Result<()> {
 
         Create(opts) => opts
             .create()
-            .map_err(|e| anyhow!("🚫 Creating new project failed: {}", e)),
+            .context(error_wrapper("Creating new project failed")),
+
+        Init(opts) => opts
+            .init()
+            .context(error_wrapper("Initialising a new project failed")),
 
         Config(opts) => opts
             .config()
@@ -94,12 +101,12 @@ async fn main() -> anyhow::Result<()> {
         Autoformat(opts) => opts
             .autoformat()
             .await
-            .map_err(|e| anyhow!("🚫 Error autoformatting RSX: {}", e)),
+            .context(error_wrapper("Error autoformatting RSX")),
 
         Check(opts) => opts
             .check()
             .await
-            .map_err(|e| anyhow!("🚫 Error checking RSX: {}", e)),
+            .context(error_wrapper("Error checking RSX")),
 
         Version(opt) => {
             let version = opt.version();

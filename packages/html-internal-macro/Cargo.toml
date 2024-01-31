@@ -1,0 +1,28 @@
+[package]
+name = "dioxus-html-internal-macro"
+version = { workspace = true }
+edition = "2021"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+keywords = ["dom", "ui", "gui", "react", "liveview"]
+license = "MIT OR Apache-2.0"
+description = "HTML function macros for Dioxus"
+
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+proc-macro2 = "1.0.66"
+syn = { version = "2", features = ["full"] }
+quote = "^1.0.26"
+convert_case = "^0.6.0"
+
+[lib]
+proc-macro = true
+
+[[test]]
+name = "tests"
+path = "tests/progress.rs"
+
+[dev-dependencies]
+trybuild = { version = "1.0.82", features = ["diff"] }

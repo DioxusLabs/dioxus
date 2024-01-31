@@ -8,11 +8,11 @@ use serde::{de::DeserializeOwned, Serialize};
 ///
 /// # Example
 /// ```rust
-/// use dioxus::prelude::*;
+/// use dioxus_lib::prelude::*;
 /// use dioxus_fullstack::prelude::*;
 ///
-/// fn app(cx: Scope) -> Element {
-///    let state1 = server_cached(cx, || from_server(|| {
+/// fn app() -> Element {
+///    let state1 = server_cached(|| from_server(|| {
 ///       1234
 ///    }));
 ///

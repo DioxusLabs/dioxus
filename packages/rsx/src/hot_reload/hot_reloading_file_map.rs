@@ -15,7 +15,7 @@ use syn::spanned::Spanned;
 use super::hot_reload_diff::{find_rsx, DiffResult};
 
 pub enum UpdateResult {
-    UpdatedRsx(Vec<Template<'static>>),
+    UpdatedRsx(Vec<Template>),
     NeedsRebuild,
 }
 
@@ -28,7 +28,7 @@ pub struct FileMapBuildResult<Ctx: HotReloadingContext> {
 }
 
 pub struct FileMap<Ctx: HotReloadingContext> {
-    pub map: HashMap<PathBuf, (String, Option<Template<'static>>)>,
+    pub map: HashMap<PathBuf, (String, Option<Template>)>,
     in_workspace: HashMap<PathBuf, Option<PathBuf>>,
     phantom: std::marker::PhantomData<Ctx>,
 }
@@ -45,7 +45,7 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
         mut filter: impl FnMut(&Path) -> bool,
     ) -> io::Result<FileMapBuildResult<Ctx>> {
         struct FileMapSearchResult {
-            map: HashMap<PathBuf, (String, Option<Template<'static>>)>,
+            map: HashMap<PathBuf, (String, Option<Template>)>,
             errors: Vec<io::Error>,
         }
         fn find_rs_files(
@@ -115,7 +115,7 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
                             self.map.insert(file_path.to_path_buf(), (src, None));
                         }
                         DiffResult::RsxChanged(changed) => {
-                            let mut messages: Vec<Template<'static>> = Vec::new();
+                            let mut messages: Vec<Template> = Vec::new();
                             for (old, new) in changed.into_iter() {
                                 let old_start = old.span().start();
 

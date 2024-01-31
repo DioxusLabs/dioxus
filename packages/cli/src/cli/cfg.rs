@@ -1,5 +1,4 @@
-use clap::ValueEnum;
-use serde::Serialize;
+use dioxus_cli_config::Platform;
 
 use super::*;
 
@@ -10,6 +9,11 @@ pub struct ConfigOptsBuild {
     #[clap(long)]
     #[serde(default)]
     pub release: bool,
+
+    /// This flag only applies to fullstack builds. By default fullstack builds will run with something in between debug and release mode. This flag will force the build to run in debug mode. [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub force_debug: bool,
 
     // Use verbose output [default: false]
     #[clap(long)]
@@ -28,9 +32,22 @@ pub struct ConfigOptsBuild {
     #[clap(long, value_enum)]
     pub platform: Option<Platform>,
 
+    /// Skip collecting assets from dependencies [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub skip_assets: bool,
+
     /// Space separated list of features to activate
     #[clap(long)]
     pub features: Option<Vec<String>>,
+
+    /// The feature to use for the client in a fullstack app [default: "web"]
+    #[clap(long, default_value_t = { "web".to_string() })]
+    pub client_feature: String,
+
+    /// The feature to use for the server in a fullstack app [default: "server"]
+    #[clap(long, default_value_t = { "server".to_string() })]
+    pub server_feature: String,
 
     /// Rustc platform triple
     #[clap(long)]
@@ -41,7 +58,27 @@ pub struct ConfigOptsBuild {
     pub cargo_args: Vec<String>,
 }
 
+impl From<ConfigOptsServe> for ConfigOptsBuild {
+    fn from(serve: ConfigOptsServe) -> Self {
+        Self {
+            target: serve.target,
+            release: serve.release,
+            verbose: serve.verbose,
+            example: serve.example,
+            profile: serve.profile,
+            platform: serve.platform,
+            features: serve.features,
+            client_feature: serve.client_feature,
+            server_feature: serve.server_feature,
+            skip_assets: serve.skip_assets,
+            force_debug: serve.force_debug,
+            cargo_args: serve.cargo_args,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
+#[command(group = clap::ArgGroup::new("release-incompatible").multiple(true).conflicts_with("release"))]
 pub struct ConfigOptsServe {
     /// Port of dev server
     #[clap(long)]
@@ -62,6 +99,11 @@ pub struct ConfigOptsServe {
     #[serde(default)]
     pub release: bool,
 
+    /// This flag only applies to fullstack builds. By default fullstack builds will run with something in between debug and release mode. This flag will force the build to run in debug mode. [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub force_debug: bool,
+
     // Use verbose output [default: false]
     #[clap(long)]
     #[serde(default)]
@@ -71,12 +113,13 @@ pub struct ConfigOptsServe {
     #[clap(long)]
     pub profile: Option<String>,
 
-    /// Build platform: support Web & Desktop [default: "default_platform"]
+    /// Build platform: support Web, Desktop, and Fullstack [default: "default_platform"]
     #[clap(long, value_enum)]
     pub platform: Option<Platform>,
 
-    /// Build with hot reloading rsx [default: false]
+    /// Build with hot reloading rsx. Will not work with release builds. [default: false]
     #[clap(long)]
+    #[clap(group = "release-incompatible")]
     #[serde(default)]
     pub hot_reload: bool,
 
@@ -90,6 +133,19 @@ pub struct ConfigOptsServe {
     #[clap(long)]
     pub features: Option<Vec<String>>,
 
+    /// Skip collecting assets from dependencies [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub skip_assets: bool,
+
+    /// The feature to use for the client in a fullstack app [default: "web"]
+    #[clap(long, default_value_t = { "web".to_string() })]
+    pub client_feature: String,
+
+    /// The feature to use for the server in a fullstack app [default: "server"]
+    #[clap(long, default_value_t = { "server".to_string() })]
+    pub server_feature: String,
+
     /// Rustc platform triple
     #[clap(long)]
     pub target: Option<String>,
@@ -97,16 +153,6 @@ pub struct ConfigOptsServe {
     /// Extra arguments passed to cargo build
     #[clap(last = true)]
     pub cargo_args: Vec<String>,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Serialize, Deserialize, Debug)]
-pub enum Platform {
-    #[clap(name = "web")]
-    #[serde(rename = "web")]
-    Web,
-    #[clap(name = "desktop")]
-    #[serde(rename = "desktop")]
-    Desktop,
 }
 
 /// Config options for the bundling system.

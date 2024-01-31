@@ -39,22 +39,20 @@ pub fn derive_typed_builder(input: TokenStream) -> TokenStream {
 
 /// The rsx! macro makes it easy for developers to write jsx-style markup in their components.
 #[proc_macro]
-pub fn rsx(s: TokenStream) -> TokenStream {
-    match syn::parse::<rsx::CallBody>(s) {
-        Err(err) => err.to_compile_error().into(),
-        Ok(body) => body.to_token_stream().into(),
-    }
-}
-
-/// The render! macro makes it easy for developers to write jsx-style markup in their components.
-///
-/// The render macro automatically renders rsx - making it unhygienic.
-#[proc_macro]
-pub fn render(s: TokenStream) -> TokenStream {
-    match syn::parse::<rsx::CallBody>(s) {
+pub fn rsx(tokens: TokenStream) -> TokenStream {
+    match syn::parse::<rsx::CallBody>(tokens) {
         Err(err) => err.to_compile_error().into(),
         Ok(body) => RenderCallBody(body).into_token_stream().into(),
     }
+}
+
+/// The rsx! macro makes it easy for developers to write jsx-style markup in their components.
+///
+/// The render macro automatically renders rsx - making it unhygienic.
+#[deprecated(note = "Use `rsx!` instead.")]
+#[proc_macro]
+pub fn render(tokens: TokenStream) -> TokenStream {
+    rsx(tokens)
 }
 
 /// Derive props for a component within the component definition.
@@ -68,8 +66,8 @@ pub fn render(s: TokenStream) -> TokenStream {
 /// # Example
 /// ```rust,ignore
 /// #[inline_props]
-/// fn app(cx: Scope, bob: String) -> Element {
-///     cx.render(rsx!("hello, {bob}"))
+/// fn app(bob: String) -> Element {
+///     rsx!("hello, {bob}"))
 /// }
 ///
 /// // is equivalent to
@@ -80,7 +78,7 @@ pub fn render(s: TokenStream) -> TokenStream {
 /// }
 ///
 /// fn app(cx: Scope<AppProps>) -> Element {
-///     cx.render(rsx!("hello, {bob}"))
+///     rsx!("hello, {bob}"))
 /// }
 /// ```
 #[proc_macro_attribute]
@@ -131,18 +129,18 @@ pub(crate) const COMPONENT_ARG_CASE_CHECK_OFF: &str = "no_case_check";
 /// * Without props:
 /// ```rust,ignore
 /// #[component]
-/// fn GreetBob(cx: Scope) -> Element {
-///     render! { "hello, bob" }
+/// fn GreetBob() -> Element {
+///     rsx! { "hello, bob" }
 /// }
 ///
 /// // is equivalent to
 ///
 /// #[allow(non_snake_case)]
-/// fn GreetBob(cx: Scope) -> Element {
+/// fn GreetBob() -> Element {
 ///     #[warn(non_snake_case)]
 ///     #[inline(always)]
-///     fn __dx_inner_comp(cx: Scope) -> Element {
-///         render! { "hello, bob" }
+///     fn __dx_inner_comp() -> Element {
+///         rsx! { "hello, bob" }
 ///     }
 ///     // There's no function call overhead since __dx_inner_comp has the #[inline(always)] attribute,
 ///     // so don't worry about performance.
@@ -152,8 +150,8 @@ pub(crate) const COMPONENT_ARG_CASE_CHECK_OFF: &str = "no_case_check";
 /// * With props:
 /// ```rust,ignore
 /// #[component(no_case_check)]
-/// fn GreetPerson(cx: Scope, person: String) -> Element {
-///     render! { "hello, {person}" }
+/// fn GreetPerson(person: String) -> Element {
+///     rsx! { "hello, {person}" }
 /// }
 ///
 /// // is equivalent to
@@ -165,13 +163,13 @@ pub(crate) const COMPONENT_ARG_CASE_CHECK_OFF: &str = "no_case_check";
 /// }
 ///
 /// #[allow(non_snake_case)]
-/// fn GreetPerson<'a>(cx: Scope<'a, GreetPersonProps>) -> Element {
+/// fn GreetPerson(props: GreetPersonProps>) -> Element {
 ///     #[warn(non_snake_case)]
 ///     #[inline(always)]
-///     fn __dx_inner_comp<'a>(cx: Scope<'a, GreetPersonProps>e) -> Element {
+///     fn __dx_inner_comp(props: GreetPersonProps>e) -> Element {
 ///         let GreetPersonProps { person } = &cx.props;
 ///         {
-///             render! { "hello, {person}" }
+///             rsx! { "hello, {person}" }
 ///         }
 ///     }
 ///

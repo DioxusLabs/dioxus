@@ -19,7 +19,7 @@ pub enum NavigationTarget<R> {
     /// # use dioxus_router::prelude::*;
     /// # use dioxus_router::navigation::NavigationTarget;
     /// # #[component]
-    /// # fn Index(cx: Scope) -> Element {
+    /// # fn Index() -> Element {
     /// #     todo!()
     /// # }
     /// #[derive(Clone, Routable, PartialEq, Debug)]
@@ -39,7 +39,7 @@ pub enum NavigationTarget<R> {
     /// # use dioxus_router::prelude::*;
     /// # use dioxus_router::navigation::NavigationTarget;
     /// # #[component]
-    /// # fn Index(cx: Scope) -> Element {
+    /// # fn Index() -> Element {
     /// #     todo!()
     /// # }
     /// #[derive(Clone, Routable, PartialEq, Debug)]

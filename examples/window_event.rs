@@ -1,35 +1,31 @@
+use dioxus::desktop::{window, Config, WindowBuilder};
 use dioxus::prelude::*;
-use dioxus_desktop::{Config, WindowBuilder};
 
 fn main() {
-    let cfg = Config::new().with_window(
-        WindowBuilder::new()
-            .with_title("Borderless Window")
-            .with_decorations(false),
-    );
-
-    dioxus_desktop::launch_cfg(app, cfg);
+    LaunchBuilder::desktop()
+        .with_cfg(
+            Config::new().with_window(
+                WindowBuilder::new()
+                    .with_title("Borderless Window")
+                    .with_decorations(false),
+            ),
+        )
+        .launch(app)
 }
 
-fn app(cx: Scope) -> Element {
-    // Just trying to please the cargo gods
-    #[allow(deprecated)]
-    let window = dioxus_desktop::use_window(cx);
+fn app() -> Element {
+    let mut fullscreen = use_signal(|| false);
+    let mut always_on_top = use_signal(|| false);
+    let mut decorations = use_signal(|| false);
 
-    // if you want to make window fullscreen, you need close the resizable.
-    // window.set_fullscreen(true);
-    // window.set_resizable(false);
-
-    let fullscreen = use_state(cx, || false);
-    let always_on_top = use_state(cx, || false);
-    let decorations = use_state(cx, || false);
-
-    cx.render(rsx!(
+    rsx!(
         link {
             href: "https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css",
             rel: "stylesheet"
         }
-        header { class: "text-gray-400 bg-gray-900 body-font", onmousedown: move |_| window.drag(),
+        header {
+            class: "text-gray-400 bg-gray-900 body-font",
+            onmousedown: move |_| window().drag(),
             div { class: "container mx-auto flex flex-wrap p-5 flex-col md:flex-row items-center",
                 a { class: "flex title-font font-medium items-center text-white mb-4 md:mb-0",
                     span { class: "ml-3 text-xl", "Dioxus" }
@@ -38,23 +34,23 @@ fn app(cx: Scope) -> Element {
                 button {
                     class: "inline-flex items-center bg-gray-800 border-0 py-1 px-3 focus:outline-none hover:bg-gray-700 rounded text-base mt-4 md:mt-0",
                     onmousedown: |evt| evt.stop_propagation(),
-                    onclick: move |_| window.set_minimized(true),
+                    onclick: move |_| window().set_minimized(true),
                     "Minimize"
                 }
                 button {
                     class: "inline-flex items-center bg-gray-800 border-0 py-1 px-3 focus:outline-none hover:bg-gray-700 rounded text-base mt-4 md:mt-0",
                     onmousedown: |evt| evt.stop_propagation(),
                     onclick: move |_| {
-                        window.set_fullscreen(!**fullscreen);
-                        window.set_resizable(**fullscreen);
-                        fullscreen.modify(|f| !*f);
+                        window().set_fullscreen(!fullscreen());
+                        window().set_resizable(fullscreen());
+                        fullscreen.toggle();
                     },
                     "Fullscreen"
                 }
                 button {
                     class: "inline-flex items-center bg-gray-800 border-0 py-1 px-3 focus:outline-none hover:bg-gray-700 rounded text-base mt-4 md:mt-0",
                     onmousedown: |evt| evt.stop_propagation(),
-                    onclick: move |_| window.close(),
+                    onclick: move |_| window().close(),
                     "Close"
                 }
             }
@@ -67,8 +63,8 @@ fn app(cx: Scope) -> Element {
                         class: "inline-flex items-center text-white bg-green-500 border-0 py-1 px-3 hover:bg-green-700 rounded",
                         onmousedown: |evt| evt.stop_propagation(),
                         onclick: move |_| {
-                            window.set_always_on_top(!always_on_top);
-                            always_on_top.set(!always_on_top);
+                            window().set_always_on_top(!always_on_top());
+                            always_on_top.toggle();
                         },
                         "Always On Top"
                     }
@@ -78,8 +74,8 @@ fn app(cx: Scope) -> Element {
                         class: "inline-flex items-center text-white bg-blue-500 border-0 py-1 px-3 hover:bg-green-700 rounded",
                         onmousedown: |evt| evt.stop_propagation(),
                         onclick: move |_| {
-                            window.set_decorations(!decorations);
-                            decorations.set(!decorations);
+                            window().set_decorations(!decorations());
+                            decorations.toggle();
                         },
                         "Set Decorations"
                     }
@@ -88,11 +84,11 @@ fn app(cx: Scope) -> Element {
                     button {
                         class: "inline-flex items-center text-white bg-blue-500 border-0 py-1 px-3 hover:bg-green-700 rounded",
                         onmousedown: |evt| evt.stop_propagation(),
-                        onclick: move |_| window.set_title("Dioxus Application"),
+                        onclick: move |_| window().set_title("Dioxus Application"),
                         "Change Title"
                     }
                 }
             }
         }
-    ))
+    )
 }

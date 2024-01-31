@@ -1,0 +1,27 @@
+[package]
+name = "dioxus-config-macro"
+version = { workspace = true }
+authors = ["Jonathan Kelley"]
+edition = "2021"
+description = "Configuration macros for Dioxus"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+keywords = ["dom", "ui", "gui", "react"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = { version = "1.0" }
+quote = "1.0"
+
+[features]
+default = []
+fullstack = []
+desktop = []
+mobile = []
+web = []
+ssr = []
+liveview = []
+tui = []

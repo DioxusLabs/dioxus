@@ -12,12 +12,20 @@ where
             phantom: std::marker::PhantomData,
         },
     );
-    let _ = vdom.rebuild();
+    vdom.rebuild_in_place();
     return dioxus_ssr::render(&vdom);
 
     #[derive(Props)]
     struct AppProps<R: Routable> {
         phantom: std::marker::PhantomData<R>,
+    }
+
+    impl<R: Routable> Clone for AppProps<R> {
+        fn clone(&self) -> Self {
+            Self {
+                phantom: std::marker::PhantomData,
+            }
+        }
     }
 
     impl<R: Routable> PartialEq for AppProps<R> {
@@ -26,12 +34,12 @@ where
         }
     }
 
-    #[component]
-    fn App<R: Routable>(cx: Scope<AppProps<R>>) -> Element
+    #[allow(non_snake_case)]
+    fn App<R: Routable>(_props: AppProps<R>) -> Element
     where
         <R as FromStr>::Err: std::fmt::Display,
     {
-        render! {
+        rsx! {
             h1 { "App" }
             Router::<R> {
                 config: || RouterConfig::default().history(MemoryHistory::default())
@@ -51,13 +59,13 @@ fn href_internal() {
     }
 
     #[component]
-    fn Test(_cx: Scope) -> Element {
+    fn Test() -> Element {
         todo!()
     }
 
     #[component]
-    fn Root(cx: Scope) -> Element {
-        render! {
+    fn Root() -> Element {
+        rsx! {
             Link {
                 to: Route::Test {},
                 "Link"
@@ -66,11 +74,10 @@ fn href_internal() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {class} {id} {rel} {target}>Link</a>",
+        "<h1>App</h1><a {href} {default} {class} {rel} {target}>Link</a>",
         href = r#"href="/test""#,
         default = r#"dioxus-prevent-default="onclick""#,
         class = r#"class="""#,
-        id = r#"id="""#,
         rel = r#"rel="""#,
         target = r#"target="""#
     );
@@ -89,13 +96,13 @@ fn href_external() {
     }
 
     #[component]
-    fn Test(_cx: Scope) -> Element {
+    fn Test() -> Element {
         todo!()
     }
 
     #[component]
-    fn Root(cx: Scope) -> Element {
-        render! {
+    fn Root() -> Element {
+        rsx! {
             Link {
                 to: "https://dioxuslabs.com/",
                 "Link"
@@ -104,11 +111,10 @@ fn href_external() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {class} {id} {rel} {target}>Link</a>",
+        "<h1>App</h1><a {href} {default} {class} {rel} {target}>Link</a>",
         href = r#"href="https://dioxuslabs.com/""#,
         default = r#"dioxus-prevent-default="""#,
         class = r#"class="""#,
-        id = r#"id="""#,
         rel = r#"rel="noopener noreferrer""#,
         target = r#"target="""#
     );
@@ -127,13 +133,13 @@ fn with_class() {
     }
 
     #[component]
-    fn Test(_cx: Scope) -> Element {
+    fn Test() -> Element {
         todo!()
     }
 
     #[component]
-    fn Root(cx: Scope) -> Element {
-        render! {
+    fn Root() -> Element {
+        rsx! {
             Link {
                 to: Route::Test {},
                 class: "test_class",
@@ -143,11 +149,10 @@ fn with_class() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {class} {id} {rel} {target}>Link</a>",
+        "<h1>App</h1><a {href} {default} {class} {rel} {target}>Link</a>",
         href = r#"href="/test""#,
         default = r#"dioxus-prevent-default="onclick""#,
         class = r#"class="test_class""#,
-        id = r#"id="""#,
         rel = r#"rel="""#,
         target = r#"target="""#
     );
@@ -164,11 +169,11 @@ fn with_active_class_active() {
     }
 
     #[component]
-    fn Root(cx: Scope) -> Element {
-        render! {
+    fn Root() -> Element {
+        rsx! {
             Link {
                 to: Route::Root {},
-                active_class: "active_class",
+                active_class: "active_class".to_string(),
                 class: "test_class",
                 "Link"
             }
@@ -176,11 +181,10 @@ fn with_active_class_active() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {class} {id} {rel} {target}>Link</a>",
+        "<h1>App</h1><a {href} {default} {class} {rel} {target}>Link</a>",
         href = r#"href="/""#,
         default = r#"dioxus-prevent-default="onclick""#,
         class = r#"class="test_class active_class""#,
-        id = r#"id="""#,
         rel = r#"rel="""#,
         target = r#"target="""#
     );
@@ -199,16 +203,16 @@ fn with_active_class_inactive() {
     }
 
     #[component]
-    fn Test(_cx: Scope) -> Element {
+    fn Test() -> Element {
         todo!()
     }
 
     #[component]
-    fn Root(cx: Scope) -> Element {
-        render! {
+    fn Root() -> Element {
+        rsx! {
             Link {
                 to: Route::Test {},
-                active_class: "active_class",
+                active_class: "active_class".to_string(),
                 class: "test_class",
                 "Link"
             }
@@ -216,11 +220,10 @@ fn with_active_class_inactive() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {class} {id} {rel} {target}>Link</a>",
+        "<h1>App</h1><a {href} {default} {class} {rel} {target}>Link</a>",
         href = r#"href="/test""#,
         default = r#"dioxus-prevent-default="onclick""#,
         class = r#"class="test_class""#,
-        id = r#"id="""#,
         rel = r#"rel="""#,
         target = r#"target="""#
     );
@@ -239,13 +242,13 @@ fn with_id() {
     }
 
     #[component]
-    fn Test(_cx: Scope) -> Element {
+    fn Test() -> Element {
         todo!()
     }
 
     #[component]
-    fn Root(cx: Scope) -> Element {
-        render! {
+    fn Root() -> Element {
+        rsx! {
             Link {
                 to: Route::Test {},
                 id: "test_id",
@@ -255,7 +258,7 @@ fn with_id() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {class} {id} {rel} {target}>Link</a>",
+        "<h1>App</h1><a {href} {default} {class} {rel} {target} {id}>Link</a>",
         href = r#"href="/test""#,
         default = r#"dioxus-prevent-default="onclick""#,
         class = r#"class="""#,
@@ -278,13 +281,13 @@ fn with_new_tab() {
     }
 
     #[component]
-    fn Test(_cx: Scope) -> Element {
+    fn Test() -> Element {
         todo!()
     }
 
     #[component]
-    fn Root(cx: Scope) -> Element {
-        render! {
+    fn Root() -> Element {
+        rsx! {
             Link {
                 to: Route::Test {},
                 new_tab: true,
@@ -294,11 +297,10 @@ fn with_new_tab() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {class} {id} {rel} {target}>Link</a>",
+        "<h1>App</h1><a {href} {default} {class} {rel} {target}>Link</a>",
         href = r#"href="/test""#,
         default = r#"dioxus-prevent-default="""#,
         class = r#"class="""#,
-        id = r#"id="""#,
         rel = r#"rel="""#,
         target = r#"target="_blank""#
     );
@@ -315,8 +317,8 @@ fn with_new_tab_external() {
     }
 
     #[component]
-    fn Root(cx: Scope) -> Element {
-        render! {
+    fn Root() -> Element {
+        rsx! {
             Link {
                 to: "https://dioxuslabs.com/",
                 new_tab: true,
@@ -326,11 +328,10 @@ fn with_new_tab_external() {
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {class} {id} {rel} {target}>Link</a>",
+        "<h1>App</h1><a {href} {default} {class} {rel} {target}>Link</a>",
         href = r#"href="https://dioxuslabs.com/""#,
         default = r#"dioxus-prevent-default="""#,
         class = r#"class="""#,
-        id = r#"id="""#,
         rel = r#"rel="noopener noreferrer""#,
         target = r#"target="_blank""#
     );
@@ -349,27 +350,26 @@ fn with_rel() {
     }
 
     #[component]
-    fn Test(_cx: Scope) -> Element {
+    fn Test() -> Element {
         todo!()
     }
 
     #[component]
-    fn Root(cx: Scope) -> Element {
-        render! {
+    fn Root() -> Element {
+        rsx! {
             Link {
                 to: Route::Test {},
-                rel: "test_rel",
+                rel: "test_rel".to_string(),
                 "Link"
             }
         }
     }
 
     let expected = format!(
-        "<h1>App</h1><a {href} {default} {class} {id} {rel} {target}>Link</a>",
+        "<h1>App</h1><a {href} {default} {class} {rel} {target}>Link</a>",
         href = r#"href="/test""#,
         default = r#"dioxus-prevent-default="onclick""#,
         class = r#"class="""#,
-        id = r#"id="""#,
         rel = r#"rel="test_rel""#,
         target = r#"target="""#
     );

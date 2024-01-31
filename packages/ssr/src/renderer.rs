@@ -1,8 +1,9 @@
 use super::cache::Segment;
 use crate::cache::StringCache;
+use dioxus_core::RenderReturn;
 
 use dioxus_core::Attribute;
-use dioxus_core::{prelude::*, AttributeValue, DynamicNode, RenderReturn};
+use dioxus_core::{prelude::*, AttributeValue, DynamicNode};
 use std::collections::HashMap;
 use std::fmt::Write;
 use std::sync::Arc;
@@ -90,25 +91,26 @@ impl Renderer {
         for segment in entry.segments.iter() {
             match segment {
                 Segment::Attr(idx) => {
-                    let attr = &template.dynamic_attrs[*idx];
-                    if attr.name == "dangerous_inner_html" {
-                        inner_html = Some(attr);
-                    } else if attr.namespace == Some("style") {
-                        accumulated_dynamic_styles.push(attr);
-                    } else if BOOL_ATTRS.contains(&attr.name) {
-                        if truthy(&attr.value) {
-                            write!(buf, " {}=", attr.name)?;
-                            write_value(buf, &attr.value)?;
+                    let attrs = &*template.dynamic_attrs[*idx];
+                    for attr in attrs {
+                        if attr.name == "dangerous_inner_html" {
+                            inner_html = Some(attr);
+                        } else if attr.namespace == Some("style") {
+                            accumulated_dynamic_styles.push(attr);
+                        } else if BOOL_ATTRS.contains(&attr.name) {
+                            if truthy(&attr.value) {
+                                write_attribute(buf, attr)?;
+                            }
+                        } else {
+                            write_attribute(buf, attr)?;
                         }
-                    } else {
-                        write_attribute(buf, attr)?;
-                    }
 
-                    if self.pre_render {
-                        if let AttributeValue::Listener(_) = &attr.value {
-                            // The onmounted event doesn't need a DOM listener
-                            if attr.name != "onmounted" {
-                                accumulated_listeners.push(attr.name);
+                        if self.pre_render {
+                            if let AttributeValue::Listener(_) = &attr.value {
+                                // The onmounted event doesn't need a DOM listener
+                                if attr.name != "onmounted" {
+                                    accumulated_listeners.push(attr.name);
+                                }
                             }
                         }
                     }
@@ -118,8 +120,7 @@ impl Renderer {
                         if self.skip_components {
                             write!(buf, "<{}><{}/>", node.name, node.name)?;
                         } else {
-                            let id = node.mounted_scope().unwrap();
-                            let scope = dom.get_scope(id).unwrap();
+                            let scope = node.mounted_scope(*idx, template, dom).unwrap();
                             let node = scope.root_node();
                             match node {
                                 RenderReturn::Ready(node) => {
@@ -141,7 +142,7 @@ impl Renderer {
                         write!(
                             buf,
                             "{}",
-                            askama_escape::escape(text.value, askama_escape::Html)
+                            askama_escape::escape(&text.value, askama_escape::Html)
                         )?;
 
                         if self.pre_render {
@@ -149,7 +150,7 @@ impl Renderer {
                         }
                     }
                     DynamicNode::Fragment(nodes) => {
-                        for child in *nodes {
+                        for child in nodes {
                             self.render_template(buf, dom, child)?;
                         }
                     }
@@ -227,11 +228,11 @@ impl Renderer {
 fn to_string_works() {
     use dioxus::prelude::*;
 
-    fn app(cx: Scope) -> Element {
+    fn app() -> Element {
         let dynamic = 123;
         let dyn2 = "</diiiiiiiiv>"; // this should be escaped
 
-        render! {
+        rsx! {
             div { class: "asdasdasd", class: "asdasdasd", id: "id-{dynamic}",
                 "Hello world 1 -->"
                 "{dynamic}"
@@ -240,13 +241,15 @@ fn to_string_works() {
                 div {}
                 div { "nest 2" }
                 "{dyn2}"
-                (0..5).map(|i| rsx! { div { "finalize {i}" } })
+                for i in (0..5) {
+                    div { "finalize {i}" }
+                }
             }
         }
     }
 
     let mut dom = VirtualDom::new(app);
-    _ = dom.rebuild();
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     let mut renderer = Renderer::new();
     let out = renderer.render(&dom);
@@ -285,8 +288,8 @@ fn to_string_works() {
 fn empty_for_loop_works() {
     use dioxus::prelude::*;
 
-    fn app(cx: Scope) -> Element {
-        render! {
+    fn app() -> Element {
+        rsx! {
             div { class: "asdasdasd",
                 for _ in (0..5) {
 
@@ -296,7 +299,7 @@ fn empty_for_loop_works() {
     }
 
     let mut dom = VirtualDom::new(app);
-    _ = dom.rebuild();
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     let mut renderer = Renderer::new();
     let out = renderer.render(&dom);
@@ -328,35 +331,12 @@ fn empty_for_loop_works() {
 fn empty_render_works() {
     use dioxus::prelude::*;
 
-    fn app(cx: Scope) -> Element {
-        render! {}
+    fn app() -> Element {
+        rsx! {}
     }
 
     let mut dom = VirtualDom::new(app);
-    _ = dom.rebuild();
-
-    let mut renderer = Renderer::new();
-    let out = renderer.render(&dom);
-
-    for item in renderer.template_cache.iter() {
-        if item.1.segments.len() > 5 {
-            assert_eq!(item.1.segments, vec![]);
-        }
-    }
-    assert_eq!(out, "");
-}
-
-#[test]
-fn empty_rsx_works() {
-    use dioxus::prelude::*;
-
-    fn app(_: Scope) -> Element {
-        rsx! {};
-        None
-    }
-
-    let mut dom = VirtualDom::new(app);
-    _ = dom.rebuild();
+    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     let mut renderer = Renderer::new();
     let out = renderer.render(&dom);
@@ -415,21 +395,11 @@ pub(crate) fn truthy(value: &AttributeValue) -> bool {
 
 pub(crate) fn write_attribute(buf: &mut impl Write, attr: &Attribute) -> std::fmt::Result {
     let name = &attr.name;
-    match attr.value {
+    match &attr.value {
         AttributeValue::Text(value) => write!(buf, " {name}=\"{value}\""),
         AttributeValue::Bool(value) => write!(buf, " {name}={value}"),
         AttributeValue::Int(value) => write!(buf, " {name}={value}"),
         AttributeValue::Float(value) => write!(buf, " {name}={value}"),
-        _ => Ok(()),
-    }
-}
-
-pub(crate) fn write_value(buf: &mut impl Write, value: &AttributeValue) -> std::fmt::Result {
-    match value {
-        AttributeValue::Text(value) => write!(buf, "\"{}\"", value),
-        AttributeValue::Bool(value) => write!(buf, "{}", value),
-        AttributeValue::Int(value) => write!(buf, "{}", value),
-        AttributeValue::Float(value) => write!(buf, "{}", value),
         _ => Ok(()),
     }
 }

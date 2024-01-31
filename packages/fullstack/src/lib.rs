@@ -7,17 +7,16 @@ pub use once_cell;
 
 mod html_storage;
 
-#[cfg(feature = "router")]
-pub mod router;
-
 #[cfg(feature = "ssr")]
 mod adapters;
 #[cfg(feature = "ssr")]
 pub use adapters::*;
+mod config;
 mod hooks;
 #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
 mod hot_reload;
 pub mod launch;
+pub use config::*;
 #[cfg(feature = "ssr")]
 mod layer;
 #[cfg(feature = "ssr")]
@@ -39,7 +38,6 @@ pub mod prelude {
     use crate::hooks;
     #[cfg(not(feature = "ssr"))]
     pub use crate::html_storage::deserialize::get_root_props_from_document;
-    pub use crate::launch::LaunchBuilder;
     #[cfg(feature = "ssr")]
     pub use crate::layer::{Layer, Service};
     #[cfg(all(feature = "ssr", feature = "router"))]
@@ -68,8 +66,11 @@ pub mod prelude {
 }
 
 // Warn users about overlapping features
-#[cfg(all(feature = "ssr", feature = "web"))]
+#[cfg(all(feature = "ssr", feature = "web", not(doc)))]
 compile_error!("The `ssr` feature (enabled by `warp`, `axum`, or `salvo`) and `web` feature are overlapping. Please choose one or the other.");
 
-#[cfg(all(feature = "ssr", feature = "desktop"))]
+#[cfg(all(feature = "ssr", feature = "desktop", not(doc)))]
 compile_error!("The `ssr` feature (enabled by `warp`, `axum`, or `salvo`) and `desktop` feature are overlapping. Please choose one or the other.");
+
+#[cfg(all(feature = "ssr", feature = "mobile", not(doc)))]
+compile_error!("The `ssr` feature (enabled by `warp`, `axum`, or `salvo`) and `mobile` feature are overlapping. Please choose one or the other.");

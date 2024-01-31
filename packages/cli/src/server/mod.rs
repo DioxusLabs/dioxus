@@ -1,27 +1,29 @@
 use crate::{
+    cfg::ConfigOptsServe,
     plugin::{
         handle_change,
         interface::plugins::main::types::RuntimeEvent::{HotReload, Rebuild},
         plugins_after_runtime, plugins_before_runtime, plugins_watched_paths_changed,
     },
-    BuildResult, CrateConfig, Result,
+    BuildResult, Result,
 };
+use futures::executor::block_on;
 
 use cargo_metadata::diagnostic::Diagnostic;
+use dioxus_cli_config::CrateConfig;
 use dioxus_core::Template;
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;
-use futures::executor::block_on;
-use notify::{RecommendedWatcher, Watcher};
+use notify::{EventKind, RecommendedWatcher, Watcher};
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
 };
 use tokio::sync::broadcast::{self, Sender};
-
 mod output;
 use output::*;
 pub mod desktop;
+pub mod fullstack;
 pub mod web;
 
 /// Sets up a file watcher
@@ -56,6 +58,13 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
             return;
         };
 
+        if !matches!(
+            e.kind,
+            EventKind::Create(_) | EventKind::Remove(_) | EventKind::Modify(_),
+        ) {
+            return;
+        };
+
         if chrono::Local::now().timestamp() <= last_update_time {
             return;
         }
@@ -70,7 +79,7 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
 
             // find changes to the rsx in the file
             let mut rsx_file_map = hot_reload.file_map.lock().unwrap();
-            let mut messages: Vec<Template<'static>> = Vec::new();
+            let mut messages: Vec<Template> = Vec::new();
 
             for path in &e.paths {
                 // if this is not a rust file, rebuild the whole project
@@ -167,6 +176,13 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
     Ok(watcher)
 }
 
+pub(crate) trait Platform {
+    fn start(config: &CrateConfig, serve: &ConfigOptsServe) -> Result<Self>
+    where
+        Self: Sized;
+    fn rebuild(&mut self, config: &CrateConfig) -> Result<BuildResult>;
+}
+
 #[derive(Clone)]
 pub struct ServerReloadState {
     pub hot_reload: Option<HotReloadState>,
@@ -203,7 +219,7 @@ impl ServerReloadState {
 
 #[derive(Clone)]
 pub struct HotReloadState {
-    pub messages: broadcast::Sender<Template<'static>>,
+    pub messages: broadcast::Sender<Template>,
     pub file_map: Arc<Mutex<FileMap<HtmlCtx>>>,
 }
 

@@ -5,7 +5,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch_desktop(app);
 }
 
 const FIELDS: &[(&str, &str)] = &[
@@ -34,17 +34,15 @@ const FIELDS: &[(&str, &str)] = &[
     ("week", ""),  // degrades to text most of the time
 ];
 
-fn app(cx: Scope) -> Element {
-    cx.render(rsx! {
+fn app() -> Element {
+    rsx! {
         div { margin_left: "30px",
-            select_example(cx),
+            {select_example()},
             div {
                 // handling inputs on divs will catch all input events below
                 // so the value of our input event will be either huey, dewey, louie, or true/false (because of the checkboxe)
                 // be mindful in grouping inputs together, as they will all be handled by the same event handler
-                oninput: move |evt| {
-                    println!("{evt:?}");
-                },
+                oninput: move |evt| println!("{evt:?}"),
                 div {
                     input {
                         id: "huey",
@@ -114,7 +112,7 @@ fn app(cx: Scope) -> Element {
                 }
             }
 
-            FIELDS.iter().map(|(field, value)| rsx! {
+            for (field, value) in FIELDS.iter() {
                 div {
                     input {
                         id: "{field}",
@@ -131,38 +129,37 @@ fn app(cx: Scope) -> Element {
                     }
                     br {}
                 }
-            })
+            }
         }
-    })
+    }
 }
 
-fn select_example(cx: Scope) -> Element {
-    cx.render(rsx! {
-    div {
-        select {
-            id: "selection",
-            name: "selection",
-            multiple: true,
-            oninput: move |evt| {
-                println!("{evt:?}");
-            },
-            option {
-                value : "Option 1",
-                label : "Option 1",
+fn select_example() -> Element {
+    rsx! {
+        div {
+            select {
+                id: "selection",
+                name: "selection",
+                multiple: true,
+                oninput: move |evt| println!("{evt:?}"),
+                option {
+                    value: "Option 1",
+                    label: "Option 1",
+                }
+                option {
+                    value: "Option 2",
+                    label: "Option 2",
+                    selected: true,
+                },
+                option {
+                    value: "Option 3",
+                    label: "Option 3",
+                }
             }
-            option {
-                value : "Option 2",
-                label : "Option 2",
-                selected : true,
-            },
-            option {
-                value : "Option 3",
-                label : "Option 3",
+            label {
+                r#for: "selection",
+                "select element"
             }
         }
-        label {
-            r#for: "selection",
-            "select element"
-        }
-    }})
+    }
 }

@@ -55,9 +55,6 @@ fn minify_css() -> Result<ResponseEvent, ()> {
 
 impl Guest for CSSMinifer {
     fn register() -> Result<(), ()> {
-        if !get_project_info().has_output_directory {
-            log("No output directory detected, minifier won't find anything!");
-        }
         Ok(())
     }
 

@@ -1,5 +1,5 @@
-fn app(cx: Scope) -> Element {
-    cx.render(rsx! {
+fn app() -> Element {
+    rsx! {
         div {"hello world" }
-    })
+    }
 }

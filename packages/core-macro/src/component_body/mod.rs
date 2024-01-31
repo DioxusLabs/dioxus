@@ -66,12 +66,12 @@
 //! use dioxus::prelude::*;
 //!
 //! #[name_changer(CoolName)]
-//! pub fn LameName(cx: Scope) -> Element {
-//!     render! { "I want a cool name!" }
+//! pub fn LameName() -> Element {
+//!     rsx! { "I want a cool name!" }
 //! }
 //!
-//! pub fn App(cx: Scope) -> Element {
-//!     render! { CoolName {} } // Renders: "I want a cool name!"
+//! pub fn App() -> Element {
+//!     rsx! { CoolName {} } // Renders: "I want a cool name!"
 //! }
 //! ```
 //! ## Implementing a component body deserializer
@@ -147,9 +147,7 @@ pub mod utils;
 
 pub use utils::DeserializerArgs;
 pub use utils::DeserializerOutput;
-pub use utils::TypeHelper;
 
-use dioxus_core::{Element, Scope};
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
 use syn::*;
@@ -167,12 +165,6 @@ pub struct ComponentBody {
     /// Keep this in mind when creating deserializers, because you often might want to ignore it.
     /// That might be annoying, but it would be bad design for this kind of struct to not be parsable from itself.
     pub item_fn: ItemFn,
-    /// Parsing tries to ensure that this argument will be a [`Scope`].
-    /// **However, macros have limitations that prevent this from always working,
-    /// so don't take this for granted!**
-    pub cx_arg: FnArg,
-    /// The pattern (name) and type of the context argument.
-    pub cx_pat_type: PatType,
     /// If the function has any arguments other than the context.
     pub has_extra_args: bool,
 }
@@ -192,31 +184,8 @@ impl ComponentBody {
 impl Parse for ComponentBody {
     fn parse(input: ParseStream) -> Result<Self> {
         let item_fn: ItemFn = input.parse()?;
-        let scope_type_path = Scope::get_path_string();
 
-        let (cx_arg, cx_pat_type) = if let Some(first_arg) = item_fn.sig.inputs.first() {
-            let incorrect_first_arg_err = Err(Error::new(
-                first_arg.span(),
-                format!("First argument must be a <{}>", scope_type_path),
-            ));
-
-            match first_arg.to_owned() {
-                FnArg::Receiver(_) => {
-                    return incorrect_first_arg_err;
-                }
-                FnArg::Typed(f) => (first_arg.to_owned(), f),
-            }
-        } else {
-            return Err(Error::new(
-                item_fn.sig.ident.span(), // Or maybe just item_f.sig.span()?
-                format!(
-                    "Must have at least one argument that's a <{}>",
-                    scope_type_path
-                ),
-            ));
-        };
-
-        let element_type_path = Element::get_path_string();
+        let element_type_path = "dioxus_core::Element";
 
         if item_fn.sig.output == ReturnType::Default {
             return Err(Error::new(
@@ -225,12 +194,10 @@ impl Parse for ComponentBody {
             ));
         }
 
-        let has_extra_args = item_fn.sig.inputs.len() > 1;
+        let has_extra_args = !item_fn.sig.inputs.is_empty();
 
         Ok(Self {
             item_fn,
-            cx_arg,
-            cx_pat_type,
             has_extra_args,
         })
     }

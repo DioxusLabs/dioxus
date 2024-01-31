@@ -4,9 +4,9 @@ use std::path::PathBuf;
 use crate::lock::DioxusLock;
 use crate::plugin::load_plugin;
 use crate::plugin::PLUGINS_CONFIG;
-use crate::DioxusConfig;
 use clap::Parser;
 use clap::Subcommand;
+use dioxus_cli_config::DioxusConfig;
 use serde::Deserialize;
 
 #[derive(Parser, Debug, Clone, PartialEq, Deserialize)]
@@ -63,7 +63,7 @@ impl Plugin {
             Plugin::Add(data) => match data {
                 PluginAdd::Add { path, priority } => {
                     let mut dioxus_lock = DioxusLock::load()?;
-                    let crate_dir = crate::crate_root()?;
+                    let crate_dir = dioxus_cli_config::crate_root()?;
                     let mut plugin =
                         load_plugin(&path, dx_config, priority, &crate_dir, &mut dioxus_lock)
                             .await?;

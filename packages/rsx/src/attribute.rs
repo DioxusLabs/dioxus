@@ -4,13 +4,91 @@ use super::*;
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens, TokenStreamExt};
-use syn::{parse_quote, Expr, ExprIf, Ident, LitStr};
+use syn::{parse_quote, spanned::Spanned, Expr, ExprIf, Ident, LitStr};
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
+pub enum AttributeType {
+    Named(ElementAttrNamed),
+    Spread(Expr),
+}
+
+impl AttributeType {
+    pub fn start(&self) -> Span {
+        match self {
+            AttributeType::Named(n) => n.attr.start(),
+            AttributeType::Spread(e) => e.span(),
+        }
+    }
+
+    pub fn matches_attr_name(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Named(a), Self::Named(b)) => a.attr.name == b.attr.name,
+            _ => false,
+        }
+    }
+
+    pub(crate) fn try_combine(&self, other: &Self) -> Option<Self> {
+        match (self, other) {
+            (Self::Named(a), Self::Named(b)) => a.try_combine(b).map(Self::Named),
+            _ => None,
+        }
+    }
+
+    pub(crate) fn merge_quote(vec: &[&Self]) -> TokenStream2 {
+        // split into spread and single attributes
+        let mut spread = vec![];
+        let mut single = vec![];
+        for attr in vec.iter() {
+            match attr {
+                AttributeType::Named(named) => single.push(named),
+                AttributeType::Spread(expr) => spread.push(expr),
+            }
+        }
+
+        // If all of them are single attributes, create a static slice
+        if spread.is_empty() {
+            quote! {
+                Box::new([
+                    #(#single),*
+                ])
+            }
+        } else {
+            // Otherwise start with the single attributes and append the spread attributes
+            quote! {
+                {
+                    let mut __attributes = vec![
+                        #(#single),*
+                    ];
+                    #(
+                        let mut __spread = #spread;
+                        __attributes.append(&mut __spread);
+                    )*
+                    __attributes.into_boxed_slice()
+                }
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct ElementAttrNamed {
     pub el_name: ElementName,
     pub attr: ElementAttr,
 }
+
+impl Hash for ElementAttrNamed {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.attr.name.hash(state);
+    }
+}
+
+impl PartialEq for ElementAttrNamed {
+    fn eq(&self, other: &Self) -> bool {
+        self.attr == other.attr
+    }
+}
+
+impl Eq for ElementAttrNamed {}
 
 impl ElementAttrNamed {
     pub(crate) fn try_combine(&self, other: &Self) -> Option<Self> {
@@ -57,18 +135,27 @@ impl ToTokens for ElementAttrNamed {
         };
 
         let attribute = {
+            let value = &self.attr.value;
+            let is_shorthand_event = match &attr.value {
+                ElementAttrValue::Shorthand(s) => s.to_string().starts_with("on"),
+                _ => false,
+            };
+
             match &attr.value {
                 ElementAttrValue::AttrLiteral(_)
                 | ElementAttrValue::AttrExpr(_)
-                | ElementAttrValue::AttrOptionalExpr { .. } => {
+                | ElementAttrValue::Shorthand(_)
+                | ElementAttrValue::AttrOptionalExpr { .. }
+                    if !is_shorthand_event =>
+                {
                     let name = &self.attr.name;
                     let ns = ns(name);
                     let volitile = volitile(name);
                     let attribute = attribute(name);
-                    let value = &self.attr.value;
                     let value = quote! { #value };
+
                     quote! {
-                        __cx.attr(
+                        dioxus_core::Attribute::new(
                             #attribute,
                             #value,
                             #ns,
@@ -79,11 +166,14 @@ impl ToTokens for ElementAttrNamed {
                 ElementAttrValue::EventTokens(tokens) => match &self.attr.name {
                     ElementAttrName::BuiltIn(name) => {
                         quote! {
-                            dioxus_elements::events::#name(__cx, #tokens)
+                            dioxus_elements::events::#name(#tokens)
                         }
                     }
                     ElementAttrName::Custom(_) => todo!(),
                 },
+                _ => {
+                    quote! { dioxus_elements::events::#value(#value) }
+                }
             }
         };
 
@@ -99,6 +189,8 @@ pub struct ElementAttr {
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum ElementAttrValue {
+    /// attribute,
+    Shorthand(Ident),
     /// attribute: "value"
     AttrLiteral(IfmtInput),
     /// attribute: if bool { "value" }
@@ -114,7 +206,7 @@ pub enum ElementAttrValue {
 
 impl Parse for ElementAttrValue {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        Ok(if input.peek(Token![if]) {
+        let element_attr_value = if input.peek(Token![if]) {
             let if_expr = input.parse::<ExprIf>()?;
             if is_if_chain_terminated(&if_expr) {
                 ElementAttrValue::AttrExpr(Expr::If(if_expr))
@@ -135,14 +227,17 @@ impl Parse for ElementAttrValue {
         } else {
             let value = input.parse::<Expr>()?;
             ElementAttrValue::AttrExpr(value)
-        })
+        };
+
+        Ok(element_attr_value)
     }
 }
 
 impl ToTokens for ElementAttrValue {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
-            ElementAttrValue::AttrLiteral(lit) => tokens.append_all(quote! { #lit }),
+            ElementAttrValue::Shorthand(i) => tokens.append_all(quote! { #i }),
+            ElementAttrValue::AttrLiteral(lit) => tokens.append_all(quote! { #lit.to_string() }),
             ElementAttrValue::AttrOptionalExpr { condition, value } => {
                 tokens.append_all(quote! { if #condition { Some(#value) } else { None } })
             }

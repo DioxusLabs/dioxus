@@ -3,6 +3,7 @@ use dioxus_html::{geometry::euclid::Rect, MountedResult, RenderedElementBacking}
 
 use crate::{desktop_context::DesktopContext, query::QueryEngine};
 
+#[derive(Clone)]
 /// A mounted element passed to onmounted events
 pub struct DesktopElement {
     id: ElementId,
@@ -17,8 +18,8 @@ impl DesktopElement {
 }
 
 impl RenderedElementBacking for DesktopElement {
-    fn get_raw_element(&self) -> dioxus_html::MountedResult<&dyn std::any::Any> {
-        Ok(self)
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 
     fn get_client_rect(

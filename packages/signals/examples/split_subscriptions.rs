@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 use dioxus_signals::Signal;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch(app);
 }
 
 #[derive(Clone, Copy, Default)]
@@ -14,25 +14,22 @@ struct ApplicationData {
     many_signals: Signal<Vec<Signal<i32>>>,
 }
 
-fn use_app_data(cx: Scope) -> ApplicationData {
-    *use_context(cx).unwrap()
-}
+fn app() -> Element {
+    use_context_provider(ApplicationData::default);
 
-fn app(cx: Scope) -> Element {
-    use_context_provider(cx, ApplicationData::default);
-
-    render! {
+    rsx! {
         div { ReadsFirst {} }
         div { ReadsSecond {} }
         div { ReadsManySignals {} }
     }
 }
 
-fn ReadsFirst(cx: Scope) -> Element {
+#[component]
+fn ReadsFirst() -> Element {
     println!("running first");
-    let data = use_app_data(cx);
+    let mut data = use_context::<ApplicationData>();
 
-    render! {
+    rsx! {
         button {
             onclick: move |_| {
                 *data.first_data.write() += 1;
@@ -55,88 +52,56 @@ fn ReadsFirst(cx: Scope) -> Element {
     }
 }
 
-fn ReadsSecond(cx: Scope) -> Element {
+#[component]
+fn ReadsSecond() -> Element {
     println!("running second");
-    let data = use_app_data(cx);
+    let mut data = use_context::<ApplicationData>();
 
-    render! {
-        button {
-            onclick: move |_| {
-                *data.second_data.write() += 1;
-            },
-            "Increase"
-        }
-        button {
-            onclick: move |_| {
-                *data.second_data.write() -= 1;
-            },
-            "Decrease"
-        }
-        button {
-            onclick: move |_| {
-                *data.second_data.write() = 0;
-            },
-            "Reset"
-        }
+    rsx! {
+        button { onclick: move |_| data.second_data += 1, "Increase" }
+        button { onclick: move |_| data.second_data -= 1, "Decrease" }
+        button { onclick: move |_| data.second_data.set(0), "Reset" }
         "{data.second_data}"
     }
 }
 
-fn ReadsManySignals(cx: Scope) -> Element {
+#[component]
+fn ReadsManySignals() -> Element {
     println!("running many signals");
-    let data = use_app_data(cx);
+    let mut data = use_context::<ApplicationData>();
 
-    render! {
+    rsx! {
         button {
-            onclick: move |_| {
-                data.many_signals.write().push(Signal::new(0));
-            },
+            onclick: move |_| data.many_signals.write().push(Signal::new(0)),
             "Create"
         }
         button {
-            onclick: move |_| {
-                data.many_signals.write().pop();
-            },
+            onclick: move |_| { data.many_signals.write().pop(); },
             "Destroy"
         }
         button {
             onclick: move |_| {
-                if let Some(first) = data.many_signals.read().first() {
-                    *first.write() += 1;
+                if let Some(mut first) = data.many_signals.read().first().cloned() {
+                    first += 1;
                 }
             },
             "Increase First Item"
         }
-        for signal in data.many_signals {
-            Child { count: signal }
+        for signal in data.many_signals.iter() {
+            Child { count: *signal }
         }
     }
 }
 
-#[derive(Props, PartialEq)]
-struct ChildProps {
-    count: Signal<i32>,
-}
-
-fn Child(cx: Scope<ChildProps>) -> Element {
+#[component]
+fn Child(mut count: Signal<i32>) -> Element {
     println!("running child");
-    let count = cx.props.count;
 
-    render! {
+    rsx! {
         div {
             "Child: {count}"
-            button {
-                onclick: move |_| {
-                    *count.write() += 1;
-                },
-                "Increase"
-            }
-            button {
-                onclick: move |_| {
-                    *count.write() -= 1;
-                },
-                "Decrease"
-            }
+            button { onclick: move |_| count += 1, "Increase" }
+            button { onclick: move |_| count -= 1, "Decrease" }
         }
     }
 }

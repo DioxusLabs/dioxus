@@ -1,31 +1,32 @@
 #![allow(clippy::await_holding_refcell_ref)]
 use async_trait::async_trait;
-use dioxus_core::ScopeState;
 use dioxus_html::prelude::{EvalError, EvalProvider, Evaluator};
 use std::{cell::RefCell, rc::Rc};
 
 use crate::{query::Query, DesktopContext};
 
-/// Provides the DesktopEvalProvider through [`cx.provide_context`].
-pub fn init_eval(cx: &ScopeState) {
-    let desktop_ctx = cx.consume_context::<DesktopContext>().unwrap();
-    let provider: Rc<dyn EvalProvider> = Rc::new(DesktopEvalProvider { desktop_ctx });
-    cx.provide_context(provider);
-}
-
 /// Reprents the desktop-target's provider of evaluators.
 pub struct DesktopEvalProvider {
-    desktop_ctx: DesktopContext,
+    pub(crate) desktop_ctx: DesktopContext,
 }
 
-impl EvalProvider for DesktopEvalProvider {
-    fn new_evaluator(&self, js: String) -> Result<Rc<dyn Evaluator>, EvalError> {
-        Ok(Rc::new(DesktopEvaluator::new(self.desktop_ctx.clone(), js)))
+impl DesktopEvalProvider {
+    pub fn new(desktop_ctx: DesktopContext) -> Self {
+        Self { desktop_ctx }
     }
 }
 
-/// Reprents a desktop-target's JavaScript evaluator.
-pub struct DesktopEvaluator {
+impl EvalProvider for DesktopEvalProvider {
+    fn new_evaluator(&self, js: String) -> Result<Box<dyn Evaluator>, EvalError> {
+        Ok(Box::new(DesktopEvaluator::new(
+            self.desktop_ctx.clone(),
+            js,
+        )))
+    }
+}
+
+/// Represents a desktop-target's JavaScript evaluator.
+pub(crate) struct DesktopEvaluator {
     query: Rc<RefCell<Query<serde_json::Value>>>,
 }
 
@@ -60,7 +61,7 @@ impl Evaluator for DesktopEvaluator {
     }
 
     /// Gets an UnboundedReceiver to receive messages from the evaluated JavaScript.
-    async fn recv(&self) -> Result<serde_json::Value, EvalError> {
+    async fn recv(&mut self) -> Result<serde_json::Value, EvalError> {
         self.query
             .borrow_mut()
             .recv()

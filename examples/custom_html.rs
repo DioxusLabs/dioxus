@@ -1,19 +1,20 @@
 //! This example shows how to use a custom index.html and custom <HEAD> extensions
 //! to add things like stylesheets, scripts, and third-party JS libraries.
 
+use dioxus::desktop::Config;
 use dioxus::prelude::*;
-use dioxus_desktop::Config;
 
 fn main() {
-    dioxus_desktop::launch_cfg(
-        app,
-        Config::new().with_custom_head("<style>body { background-color: red; }</style>".into()),
-    );
+    LaunchBuilder::desktop()
+        .with_cfg(
+            Config::new().with_custom_head("<style>body { background-color: red; }</style>".into()),
+        )
+        .launch(app);
 
-    dioxus_desktop::launch_cfg(
-        app,
-        Config::new().with_custom_index(
-            r#"
+    LaunchBuilder::desktop()
+        .with_cfg(
+            Config::new().with_custom_index(
+                r#"
 <!DOCTYPE html>
 <html>
   <head>
@@ -26,15 +27,14 @@ fn main() {
   </body>
 </html>
         "#
-            .into(),
-        ),
-    );
+                .into(),
+            ),
+        )
+        .launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    cx.render(rsx! {
-        div {
-            h1 {"hello world!"}
-        }
-    })
+fn app() -> Element {
+    rsx! {
+        div { h1 { "hello world!" } }
+    }
 }

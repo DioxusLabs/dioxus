@@ -5,16 +5,16 @@ use crate::{
     DIOXUS_FRONT_URL, FERMI_AUTH_REQUEST, FERMI_AUTH_TOKEN, FERMI_CLIENT,
 };
 use dioxus::prelude::*;
-use dioxus_router::prelude::{Link, NavigationTarget};
+use dioxus::router::prelude::{Link, NavigationTarget};
 use fermi::*;
 use openidconnect::{OAuth2TokenResponse, TokenResponse};
 
 #[component]
-pub fn Login(cx: Scope, query_string: String) -> Element {
-    let fermi_client = use_atom_ref(cx, &FERMI_CLIENT);
-    let fermi_auth_token = use_atom_ref(cx, &FERMI_AUTH_TOKEN);
+pub fn Login(query_string: String) -> Element {
+    let fermi_client = use_atom_ref(&FERMI_CLIENT);
+    let fermi_auth_token = use_atom_ref(&FERMI_AUTH_TOKEN);
     let home_url: NavigationTarget<Route> = DIOXUS_FRONT_URL.parse().unwrap();
-    let fermi_auth_request = use_atom_ref(cx, &FERMI_AUTH_REQUEST);
+    let fermi_auth_request = use_atom_ref(&FERMI_AUTH_REQUEST);
     let client = fermi_client.read().oidc_client.clone();
     let auth_token_read = fermi_auth_token.read().clone();
     cx.render(match (client, auth_token_read) {

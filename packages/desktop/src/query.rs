@@ -1,11 +1,11 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::DesktopContext;
+use futures_util::StreamExt;
 use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::Value;
 use slab::Slab;
 use thiserror::Error;
-use tokio::sync::broadcast::error::RecvError;
 
 const DIOXUS_CODE: &str = r#"
 let dioxus = {
@@ -64,8 +64,8 @@ impl<T> Default for SharedSlab<T> {
 }
 
 struct QueryEntry {
-    channel_sender: tokio::sync::mpsc::UnboundedSender<Value>,
-    return_sender: Option<tokio::sync::oneshot::Sender<Value>>,
+    channel_sender: futures_channel::mpsc::UnboundedSender<Value>,
+    return_sender: Option<futures_channel::oneshot::Sender<Value>>,
 }
 
 const QUEUE_NAME: &str = "__msg_queues";
@@ -83,8 +83,8 @@ impl QueryEngine {
         script: &str,
         context: DesktopContext,
     ) -> Query<V> {
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        let (return_tx, return_rx) = tokio::sync::oneshot::channel();
+        let (tx, rx) = futures_channel::mpsc::unbounded();
+        let (return_tx, return_rx) = futures_channel::oneshot::channel();
         let request_id = self.active_requests.slab.borrow_mut().insert(QueryEntry {
             channel_sender: tx,
             return_sender: Some(return_tx),
@@ -99,14 +99,14 @@ impl QueryEngine {
                     if (!window.{QUEUE_NAME}) {{
                         window.{QUEUE_NAME} = [];
                     }}
-    
+
                     let _request_id = {request_id};
-    
+
                     if (!window.{QUEUE_NAME}[{request_id}]) {{
                         window.{QUEUE_NAME}[{request_id}] = [];
                     }}
                     let _message_queue = window.{QUEUE_NAME}[{request_id}];
-    
+
                     {script}
                 }})().then((result)=>{{
                     let returned_value = {{
@@ -150,7 +150,7 @@ impl QueryEngine {
                     let _ = sender.send(data);
                 }
             } else {
-                let _ = entry.channel_sender.send(data);
+                let _ = entry.channel_sender.unbounded_send(data);
             }
         }
     }
@@ -159,8 +159,8 @@ impl QueryEngine {
 pub(crate) struct Query<V: DeserializeOwned> {
     desktop: DesktopContext,
     slab: SharedSlab<QueryEntry>,
-    receiver: tokio::sync::mpsc::UnboundedReceiver<Value>,
-    return_receiver: Option<tokio::sync::oneshot::Receiver<Value>>,
+    receiver: futures_channel::mpsc::UnboundedReceiver<Value>,
+    return_receiver: Option<futures_channel::oneshot::Receiver<Value>>,
     id: usize,
     phantom: std::marker::PhantomData<V>,
 }
@@ -200,18 +200,13 @@ impl<V: DeserializeOwned> Query<V> {
 
     /// Receive a message from the query
     pub async fn recv(&mut self) -> Result<Value, QueryError> {
-        self.receiver
-            .recv()
-            .await
-            .ok_or(QueryError::Recv(RecvError::Closed))
+        self.receiver.next().await.ok_or(QueryError::Recv)
     }
 
     /// Receive the result of the query
     pub async fn result(&mut self) -> Result<Value, QueryError> {
         match self.return_receiver.take() {
-            Some(receiver) => receiver
-                .await
-                .map_err(|_| QueryError::Recv(RecvError::Closed)),
+            Some(receiver) => receiver.await.map_err(|_| QueryError::Recv),
             None => Err(QueryError::Finished),
         }
     }
@@ -238,8 +233,8 @@ impl<V: DeserializeOwned> Drop for Query<V> {
 
 #[derive(Error, Debug)]
 pub enum QueryError {
-    #[error("Error receiving query result: {0}")]
-    Recv(RecvError),
+    #[error("Error receiving query result.")]
+    Recv,
     #[error("Error sending message to query: {0}")]
     Send(String),
     #[error("Error deserializing query result: {0}")]

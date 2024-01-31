@@ -2,7 +2,8 @@
 #![allow(non_snake_case)]
 
 //! Tests for the lifecycle of components.
-use dioxus::core::{ElementId, Mutation::*};
+use dioxus::dioxus_core::{ElementId, Mutation::*};
+use dioxus::html::SerializedHtmlEventConverter;
 use dioxus::prelude::*;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -11,27 +12,28 @@ type Shared<T> = Arc<Mutex<T>>;
 
 #[test]
 fn manual_diffing() {
+    #[derive(Clone)]
     struct AppProps {
         value: Shared<&'static str>,
     }
 
-    fn app(cx: Scope<AppProps>) -> Element {
-        let val = cx.props.value.lock().unwrap();
-        cx.render(rsx! { div { "{val}" } })
+    fn app(cx: AppProps) -> Element {
+        let val = cx.value.lock().unwrap();
+        rsx! { div { "{val}" } }
     };
 
     let value = Arc::new(Mutex::new("Hello"));
     let mut dom = VirtualDom::new_with_props(app, AppProps { value: value.clone() });
 
-    let _ = dom.rebuild();
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     *value.lock().unwrap() = "goodbye";
 
     assert_eq!(
-        dom.rebuild().santize().edits,
+        dom.rebuild_to_vec().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(3) },
-            HydrateText { path: &[0], value: "goodbye", id: ElementId(4) },
+            HydrateText { path: &[0], value: "goodbye".to_string(), id: ElementId(4) },
             AppendChildren { m: 1, id: ElementId(0) }
         ]
     );
@@ -39,27 +41,33 @@ fn manual_diffing() {
 
 #[test]
 fn events_generate() {
-    fn app(cx: Scope) -> Element {
-        let count = cx.use_hook(|| 0);
+    set_event_converter(Box::new(SerializedHtmlEventConverter));
+    fn app() -> Element {
+        let mut count = use_signal(|| 0);
 
-        match *count {
-            0 => cx.render(rsx! {
-                div { onclick: move |_| *count += 1,
+        match count() {
+            0 => rsx! {
+                div { onclick: move |_| count += 1,
                     div { "nested" }
                     "Click me!"
                 }
-            }),
-            _ => cx.render(rsx!(())),
+            },
+            _ => None,
         }
     };
 
     let mut dom = VirtualDom::new(app);
-    _ = dom.rebuild();
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    dom.handle_event("click", Rc::new(MouseData::default()), ElementId(1), true);
+    dom.handle_event(
+        "click",
+        Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())),
+        ElementId(1),
+        true,
+    );
 
     dom.mark_dirty(ScopeId::ROOT);
-    let edits = dom.render_immediate();
+    let edits = dom.render_immediate_to_vec();
 
     assert_eq!(
         edits.edits,
@@ -72,11 +80,11 @@ fn events_generate() {
 
 // #[test]
 // fn components_generate() {
-//     fn app(cx: Scope) -> Element {
-//         let render_phase = cx.use_hook(|| 0);
+//     fn app() -> Element {
+//         let render_phase = use_hook(|| 0);
 //         *render_phase += 1;
 
-//         cx.render(match *render_phase {
+//         match *render_phase {
 //             1 => rsx_without_templates!("Text0"),
 //             2 => rsx_without_templates!(div {}),
 //             3 => rsx_without_templates!("Text2"),
@@ -89,15 +97,15 @@ fn events_generate() {
 //         })
 //     };
 
-//     fn Child(cx: Scope) -> Element {
+//     fn Child() -> Element {
 //         println!("Running child");
-//         cx.render(rsx_without_templates! {
+//         render_without_templates! {
 //             h1 {}
 //         })
 //     }
 
 //     let mut dom = VirtualDom::new(app);
-//     let edits = dom.rebuild();
+//     let edits = dom.rebuild_to_vec();
 //     assert_eq!(
 //         edits.edits,
 //         [

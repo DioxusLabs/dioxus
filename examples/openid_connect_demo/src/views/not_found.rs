@@ -1,7 +1,10 @@
 use dioxus::prelude::*;
 
 #[component]
-pub fn NotFound(cx: Scope, route: Vec<String>) -> Element {
-    let routes = route.join("");
-    render! {rsx! {div{routes}}}
+pub fn NotFound(route: Vec<String>) -> Element {
+    rsx! {
+        div{
+            {route.join("")}
+        }
+    }
 }

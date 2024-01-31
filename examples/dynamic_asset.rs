@@ -1,29 +1,23 @@
+use dioxus::desktop::{use_asset_handler, wry::http::Response};
 use dioxus::prelude::*;
-use dioxus_desktop::wry::http::Response;
-use dioxus_desktop::{use_asset_handler, AssetRequest};
-use std::path::Path;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch_desktop(app);
 }
 
-fn app(cx: Scope) -> Element {
-    use_asset_handler(cx, |request: &AssetRequest| {
-        let path = request.path().to_path_buf();
-        async move {
-            if path != Path::new("logo.png") {
-                return None;
-            }
-            let image_data: &[u8] = include_bytes!("./assets/logo.png");
-            Some(Response::new(image_data.into()))
+fn app() -> Element {
+    use_asset_handler("logos", |request, response| {
+        // We get the original path - make sure you handle that!
+        if request.uri().path() != "/logos/logo.png" {
+            return;
         }
+
+        response.respond(Response::new(include_bytes!("./assets/logo.png").to_vec()));
     });
 
-    cx.render(rsx! {
+    rsx! {
         div {
-            img {
-                src: "logo.png"
-            }
+            img { src: "/logos/logo.png" }
         }
-    })
+    }
 }

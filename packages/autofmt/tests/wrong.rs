@@ -18,11 +18,11 @@ macro_rules! twoway {
     };
 }
 
-twoway!("comments-4sp" => comments_4sp (IndentOptions::new(IndentType::Spaces, 4)));
-twoway!("comments-tab" => comments_tab (IndentOptions::new(IndentType::Tabs, 4)));
+twoway!("comments-4sp" => comments_4sp (IndentOptions::new(IndentType::Spaces, 4, false)));
+twoway!("comments-tab" => comments_tab (IndentOptions::new(IndentType::Tabs, 4, false)));
 
-twoway!("multi-4sp" => multi_4sp (IndentOptions::new(IndentType::Spaces, 4)));
-twoway!("multi-tab" => multi_tab (IndentOptions::new(IndentType::Tabs, 4)));
+twoway!("multi-4sp" => multi_4sp (IndentOptions::new(IndentType::Spaces, 4, false)));
+twoway!("multi-tab" => multi_tab (IndentOptions::new(IndentType::Tabs, 4, false)));
 
-twoway!("multiexpr-4sp" => multiexpr_4sp (IndentOptions::new(IndentType::Spaces, 4)));
-twoway!("multiexpr-tab" => multiexpr_tab (IndentOptions::new(IndentType::Tabs, 4)));
+twoway!("multiexpr-4sp" => multiexpr_4sp (IndentOptions::new(IndentType::Spaces, 4, false)));
+twoway!("multiexpr-tab" => multiexpr_tab (IndentOptions::new(IndentType::Tabs, 4, false)));

@@ -24,7 +24,7 @@ impl DioxusLock {
     }
 
     pub fn load() -> crate::error::Result<Self> {
-        let crate_dir = crate::cargo::crate_root()?;
+        let crate_dir = dioxus_cli_config::crate_root()?;
 
         let crate_dir = crate_dir.as_path();
 

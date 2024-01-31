@@ -1,6 +1,6 @@
-use dioxus::prelude::*;
+use dioxus_lib::prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
-use std::any::Any;
+// use std::any::Any;
 use std::cell::Cell;
 use std::cell::Ref;
 use std::cell::RefCell;
@@ -23,97 +23,92 @@ use std::sync::Arc;
 ///
 /// - dependencies: a tuple of references to values that are PartialEq + Clone
 #[must_use = "Consider using `cx.spawn` to run a future without reading its value"]
-pub fn use_server_future<T, F, D>(
-    cx: &ScopeState,
-    dependencies: D,
-    future: impl FnOnce(D::Out) -> F,
-) -> Option<&UseServerFuture<T>>
+pub fn use_server_future<T, F>(_future: impl FnOnce() -> F) -> Option<UseServerFuture<T>>
 where
     T: 'static + Serialize + DeserializeOwned + Debug,
     F: Future<Output = T> + 'static,
-    D: UseFutureDep,
 {
-    let state = cx.use_hook(move || UseServerFuture {
-        update: cx.schedule_update(),
-        needs_regen: Cell::new(true),
-        value: Default::default(),
-        task: Cell::new(None),
-        dependencies: Vec::new(),
-    });
+    todo!()
+    // let state = use_hook(move || UseServerFuture {
+    //     update: schedule_update(),
+    //     needs_regen: Cell::new(true),
+    //     value: Default::default(),
+    //     task: Cell::new(None),
+    //     dependencies: Vec::new(),
+    // });
 
-    let first_run = { state.value.borrow().as_ref().is_none() && state.task.get().is_none() };
+    // let first_run = { state.value.borrow().as_ref().is_none() && state.task.get().is_none() };
 
-    #[cfg(not(feature = "ssr"))]
-    {
-        if first_run {
-            match crate::html_storage::deserialize::take_server_data() {
-                Some(data) => {
-                    tracing::trace!("Loaded {data:?} from server");
-                    *state.value.borrow_mut() = Some(Box::new(data));
-                    state.needs_regen.set(false);
-                    return Some(state);
-                }
-                None => {
-                    tracing::trace!("Failed to load from server... running future");
-                }
-            };
-        }
-    }
+    // #[cfg(not(feature = "ssr"))]
+    // {
+    //     if first_run {
+    //         match crate::html_storage::deserialize::take_server_data() {
+    //             Some(data) => {
+    //                 tracing::trace!("Loaded {data:?} from server");
+    //                 *state.value.borrow_mut() = Some(Box::new(data));
+    //                 state.needs_regen.set(false);
+    //                 return Some(state);
+    //             }
+    //             None => {
+    //                 tracing::trace!("Failed to load from server... running future");
+    //             }
+    //         };
+    //     }
+    // }
 
-    if dependencies.clone().apply(&mut state.dependencies) || state.needs_regen.get() {
-        // We don't need regen anymore
-        state.needs_regen.set(false);
+    // if dependencies.clone().apply(&mut state.dependencies) || state.needs_regen.get() {
+    //     // We don't need regen anymore
+    //     state.needs_regen.set(false);
 
-        // Create the new future
-        let fut = future(dependencies.out());
+    //     // Create the new future
+    //     let fut = future(dependencies.out());
 
-        // Clone in our cells
-        let value = state.value.clone();
-        let schedule_update = state.update.clone();
+    //     // Clone in our cells
+    //     let value = state.value.clone();
+    //     let schedule_update = state.update.clone();
 
-        // Cancel the current future
-        if let Some(current) = state.task.take() {
-            cx.remove_future(current);
-        }
+    //     // Cancel the current future
+    //     if let Some(current) = state.task.take() {
+    //         remove_future(current);
+    //     }
 
-        state.task.set(Some(cx.push_future(async move {
-            let data;
-            #[cfg(feature = "ssr")]
-            {
-                data = fut.await;
-                if first_run {
-                    if let Err(err) = crate::prelude::server_context().push_html_data(&data) {
-                        tracing::error!("Failed to push HTML data: {}", err);
-                    };
-                }
-            }
-            #[cfg(not(feature = "ssr"))]
-            {
-                data = fut.await;
-            }
-            *value.borrow_mut() = Some(Box::new(data));
+    //     state.task.set(Some(push_future(async move {
+    //         let data;
+    //         #[cfg(feature = "ssr")]
+    //         {
+    //             data = fut.await;
+    //             if first_run {
+    //                 if let Err(err) = crate::prelude::server_context().push_html_data(&data) {
+    //                     tracing::error!("Failed to push HTML data: {}", err);
+    //                 };
+    //             }
+    //         }
+    //         #[cfg(not(feature = "ssr"))]
+    //         {
+    //             data = fut.await;
+    //         }
+    //         *value.borrow_mut() = Some(Box::new(data));
 
-            schedule_update();
-        })));
-    }
+    //         schedule_update();
+    //     })));
+    // }
 
-    if first_run {
-        #[cfg(feature = "ssr")]
-        {
-            tracing::trace!("Suspending first run of use_server_future");
-            cx.suspend();
-        }
-        None
-    } else {
-        Some(state)
-    }
+    // if first_run {
+    //     #[cfg(feature = "ssr")]
+    //     {
+    //         tracing::trace!("Suspending first run of use_server_future");
+    //         cx.suspend();
+    //     }
+    //     None
+    // } else {
+    //     Some(state)
+    // }
 }
 
 pub struct UseServerFuture<T> {
     update: Arc<dyn Fn()>,
     needs_regen: Cell<bool>,
-    task: Cell<Option<TaskId>>,
-    dependencies: Vec<Box<dyn Any>>,
+    task: Cell<Option<Task>>,
     value: Rc<RefCell<Option<Box<T>>>>,
 }
 
@@ -128,9 +123,9 @@ impl<T> UseServerFuture<T> {
     }
 
     /// Forcefully cancel a future
-    pub fn cancel(&self, cx: &ScopeState) {
+    pub fn cancel(&self) {
         if let Some(task) = self.task.take() {
-            cx.remove_future(task);
+            remove_future(task);
         }
     }
 
@@ -142,7 +137,7 @@ impl<T> UseServerFuture<T> {
     }
 
     /// Get the ID of the future in Dioxus' internal scheduler
-    pub fn task(&self) -> Option<TaskId> {
+    pub fn task(&self) -> Option<Task> {
         self.task.get()
     }
 

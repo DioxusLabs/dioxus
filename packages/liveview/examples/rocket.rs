@@ -7,15 +7,15 @@ use rocket::response::content::RawHtml;
 use rocket::{Config, Rocket, State};
 use rocket_ws::{Channel, WebSocket};
 
-fn app(cx: Scope) -> Element {
-    let mut num = use_state(cx, || 0);
+fn app() -> Element {
+    let mut num = use_signal(|| 0);
 
-    cx.render(rsx! {
+    rsx! {
         div {
             "hello Rocket! {num}"
             button { onclick: move |_| num += 1, "Increment" }
         }
-    })
+    }
 }
 
 fn index_page_with_glue(glue: &str) -> RawHtml<String> {

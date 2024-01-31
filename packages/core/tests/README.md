@@ -44,5 +44,5 @@ Hooks
 
 VirtualDOM API
 - [] work
-- [] rebuild
+- [] rebuild_to_vec
 - [] change props

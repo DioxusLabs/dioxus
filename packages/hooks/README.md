@@ -34,7 +34,7 @@ Unlike React, none of these hooks are foundational since they all build off the 
 This crate also provides a few helpful macros to get around some Rust lifetime management issues in async.
 
 - `to_owned![]`
-- `use_future!()`
+- `use_future()`
 - `use_callback!()`
 
 ## Contributing

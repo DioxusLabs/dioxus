@@ -7,13 +7,11 @@ use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 
-use dioxus::prelude::*;
+use dioxus_lib::prelude::*;
 
 /// A ServeConfig is used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
 #[derive(Clone)]
-pub struct ServeConfigBuilder<P: Clone> {
-    pub(crate) app: Component<P>,
-    pub(crate) props: P,
+pub struct ServeConfigBuilder {
     pub(crate) root_id: Option<&'static str>,
     pub(crate) index_path: Option<&'static str>,
     pub(crate) assets_path: Option<&'static str>,
@@ -41,24 +39,10 @@ impl dioxus_ssr::incremental::WrapBody for EmptyIncrementalRenderTemplate {
     }
 }
 
-#[cfg(feature = "router")]
-impl<R> ServeConfigBuilder<FullstackRouterConfig<R>>
-where
-    R: dioxus_router::prelude::Routable,
-    <R as std::str::FromStr>::Err: std::fmt::Display,
-{
-    /// Create a new ServeConfigBuilder to serve a router on the server.
-    pub fn new_with_router(cfg: FullstackRouterConfig<R>) -> Self {
-        Self::new(RouteWithCfg::<R>, cfg)
-    }
-}
-
-impl<P: Clone> ServeConfigBuilder<P> {
+impl ServeConfigBuilder {
     /// Create a new ServeConfigBuilder with the root component and props to render on the server.
-    pub fn new(app: Component<P>, props: P) -> Self {
+    pub fn new() -> Self {
         Self {
-            app,
-            props,
             root_id: None,
             index_path: None,
             assets_path: None,
@@ -91,7 +75,7 @@ impl<P: Clone> ServeConfigBuilder<P> {
     }
 
     /// Build the ServeConfig
-    pub fn build(self) -> ServeConfig<P> {
+    pub fn build(self) -> ServeConfig {
         let assets_path = self.assets_path.unwrap_or("dist");
 
         let index_path = self
@@ -104,8 +88,6 @@ impl<P: Clone> ServeConfigBuilder<P> {
         let index = load_index_html(index_path, root_id);
 
         ServeConfig {
-            app: self.app,
-            props: self.props,
             index,
             assets_path,
             incremental: self.incremental,
@@ -146,17 +128,22 @@ pub(crate) struct IndexHtml {
 /// Used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
 /// See [`ServeConfigBuilder`] to create a ServeConfig
 #[derive(Clone)]
-pub struct ServeConfig<P: Clone> {
-    pub(crate) app: Component<P>,
-    pub(crate) props: P,
+pub struct ServeConfig {
     pub(crate) index: IndexHtml,
     pub(crate) assets_path: &'static str,
     pub(crate) incremental:
         Option<std::sync::Arc<dioxus_ssr::incremental::IncrementalRendererConfig>>,
 }
 
-impl<P: Clone> From<ServeConfigBuilder<P>> for ServeConfig<P> {
-    fn from(builder: ServeConfigBuilder<P>) -> Self {
+impl ServeConfig {
+    /// Create a new builder for a ServeConfig
+    pub fn builder() -> ServeConfigBuilder {
+        ServeConfigBuilder::new()
+    }
+}
+
+impl From<ServeConfigBuilder> for ServeConfig {
+    fn from(builder: ServeConfigBuilder) -> Self {
         builder.build()
     }
 }

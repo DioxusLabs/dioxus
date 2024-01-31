@@ -5,13 +5,13 @@ pub fn Explainer<'a>(
     cx: Scope<'a>,
     invert: bool,
     title: &'static str,
-    content: Element<'a>,
-    flasher: Element<'a>,
+    content: Element,
+    flasher: Element,
 ) -> Element {
     // pt-5 sm:pt-24 lg:pt-24
 
     let mut right = rsx! {
-        div { class: "relative w-1/2", flasher }
+        div { class: "relative w-1/2", {flasher} }
     };
 
     let align = match invert {
@@ -24,7 +24,7 @@ pub fn Explainer<'a>(
             h2 { class: "mb-6 text-3xl leading-tight md:text-4xl md:leading-tight lg:text-3xl lg:leading-tight font-heading font-mono font-bold",
                 "{title}"
             }
-            content
+            {content}
         }
     };
 
@@ -32,10 +32,10 @@ pub fn Explainer<'a>(
         std::mem::swap(&mut left, &mut right);
     }
 
-    cx.render(rsx! {
+    rsx! {
         div { class: "flex flex-wrap items-center dark:text-white py-16 border-t font-light",
-            left,
-            right
+            {left},
+            {right}
         }
-    })
+    }
 }

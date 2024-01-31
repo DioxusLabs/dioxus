@@ -1,7 +1,7 @@
 //! # Routable
 
 #![allow(non_snake_case)]
-use dioxus::prelude::*;
+use dioxus_lib::prelude::*;
 
 use std::iter::FlatMap;
 use std::slice::Iter;
@@ -24,7 +24,7 @@ impl<E: Display> Display for RouteParseError<E> {
     }
 }
 
-/// Something that can be created from a query string.
+/// Something that can be created from an entire query string.
 ///
 /// This trait needs to be implemented if you want to turn a query string into a struct.
 ///
@@ -37,6 +37,41 @@ pub trait FromQuery {
 impl<T: for<'a> From<&'a str>> FromQuery for T {
     fn from_query(query: &str) -> Self {
         T::from(&*urlencoding::decode(query).expect("Failed to decode url encoding"))
+    }
+}
+
+/// Something that can be created from a query argument.
+///
+/// This trait must be implemented for every type used within a query string in the router macro.
+pub trait FromQueryArgument: Default {
+    /// The error that can occur when parsing a query argument.
+    type Err;
+
+    /// Create an instance of `Self` from a query string.
+    fn from_query_argument(argument: &str) -> Result<Self, Self::Err>;
+}
+
+impl<T: Default + FromStr> FromQueryArgument for T
+where
+    <T as FromStr>::Err: Display,
+{
+    type Err = <T as FromStr>::Err;
+
+    fn from_query_argument(argument: &str) -> Result<Self, Self::Err> {
+        let result = match urlencoding::decode(argument) {
+            Ok(argument) => T::from_str(&argument),
+            Err(err) => {
+                tracing::error!("Failed to decode url encoding: {}", err);
+                T::from_str(argument)
+            }
+        };
+        match result {
+            Ok(result) => Ok(result),
+            Err(err) => {
+                tracing::error!("Failed to parse query argument: {}", err);
+                Err(err)
+            }
+        }
     }
 }
 
@@ -168,7 +203,7 @@ pub trait Routable: FromStr + Display + Clone + 'static {
     const SITE_MAP: &'static [SiteMapSegment];
 
     /// Render the route at the given level
-    fn render<'a>(&self, cx: &'a ScopeState, level: usize) -> Element<'a>;
+    fn render(&self, level: usize) -> Element;
 
     /// Checks if this route is a child of the given route.
     ///
@@ -178,9 +213,9 @@ pub trait Routable: FromStr + Display + Clone + 'static {
     /// use dioxus::prelude::*;
     ///
     /// #[component]
-    /// fn Home(cx: Scope) -> Element { todo!() }
+    /// fn Home() -> Element { todo!() }
     /// #[component]
-    /// fn About(cx: Scope) -> Element { todo!() }
+    /// fn About() -> Element { todo!() }
     ///
     /// #[derive(Routable, Clone, PartialEq, Debug)]
     /// enum Route {
@@ -220,9 +255,9 @@ pub trait Routable: FromStr + Display + Clone + 'static {
     /// use dioxus::prelude::*;
     ///
     /// #[component]
-    /// fn Home(cx: Scope) -> Element { todo!() }
+    /// fn Home() -> Element { todo!() }
     /// #[component]
-    /// fn About(cx: Scope) -> Element { todo!() }
+    /// fn About() -> Element { todo!() }
     ///
     /// #[derive(Routable, Clone, PartialEq, Debug)]
     /// enum Route {
@@ -290,15 +325,15 @@ where
 }
 
 trait RouteRenderable: Display + 'static {
-    fn render<'a>(&self, cx: &'a ScopeState, level: usize) -> Element<'a>;
+    fn render(&self, level: usize) -> Element;
 }
 
 impl<R: Routable> RouteRenderable for R
 where
     <R as FromStr>::Err: Display,
 {
-    fn render<'a>(&self, cx: &'a ScopeState, level: usize) -> Element<'a> {
-        self.render(cx, level)
+    fn render(&self, level: usize) -> Element {
+        self.render(level)
     }
 }
 

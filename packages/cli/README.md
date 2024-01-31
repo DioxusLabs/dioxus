@@ -35,13 +35,13 @@ cargo install --path . --debug
 
 ## Get started
 
-Use `dx create project-name` to initialize a new Dioxus project.
+Use `dx create` to initialize a new Dioxus project.
 It will be cloned from the [dioxus-template](https://github.com/DioxusLabs/dioxus-template) repository.
 
 Alternatively, you can specify the template path:
 
 ```shell
-dx create hello --template gh:dioxuslabs/dioxus-template
+dx create --template gh:dioxuslabs/dioxus-template
 ```
 
 Run `dx --help` for a list of all the available commands.

@@ -108,6 +108,7 @@ interface types {
   enum platform {
     web,
     desktop,
+    fullstack
   }
 
   /// General information given to the host project about the plugin
@@ -119,10 +120,6 @@ interface types {
 
   /// General information about the host project
   record project-info {
-    // Is true when there is a `/dist` folder available
-    has-output-directory: bool,
-    // Is true when there is a `/assets` folder available
-    has-assets-directory: bool,
     default-platform: platform,
   }
 

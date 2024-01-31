@@ -3,7 +3,7 @@ use crate::plugin::convert::Convert;
 // use crate::plugin::convert::Convert;
 use crate::plugin::interface::{PluginRuntimeState, PluginWorld};
 use crate::server::WsMessage;
-use crate::{DioxusConfig, PluginConfigInfo};
+use dioxus_cli_config::{DioxusConfig, PluginConfigInfo};
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -12,7 +12,7 @@ use tokio::sync::broadcast::Sender;
 use tokio::sync::Mutex;
 use wasmtime::component::*;
 use wasmtime::{Config, Engine, Store};
-use wasmtime_wasi::preview2::{self, DirPerms, FilePerms, Table, WasiCtxBuilder};
+use wasmtime_wasi::preview2::{self, DirPerms, FilePerms, ResourceTable, WasiCtxBuilder};
 use wasmtime_wasi::Dir;
 
 // use self::convert::ConvertWithState;
@@ -243,7 +243,7 @@ pub async fn init_plugins(config: &DioxusConfig, crate_dir: &PathBuf) -> crate::
 }
 
 pub async fn save_plugin_config(bin: PathBuf) -> crate::Result<()> {
-    let crate_root = crate::cargo::crate_root()?.join(bin);
+    let crate_root = dioxus_cli_config::crate_root()?.join(bin);
 
     let toml_path = crate_root.join("Dioxus.toml");
 
@@ -304,34 +304,38 @@ pub async fn load_plugin(
         );
 
     // If the application has these directories they might be seperate from the crate root
-    if let Some(out_dir) = config.application.out_dir.as_ref() {
-        if !out_dir.is_dir() {
-            tokio::fs::create_dir(out_dir).await?;
-        }
-
-        ctx_pointer = ctx_pointer.preopened_dir(
-            Dir::open_ambient_dir(out_dir, wasmtime_wasi::sync::ambient_authority()).unwrap(),
-            DirPerms::all(),
-            FilePerms::all(),
-            "/dist",
-        );
+    if !config.application.out_dir.is_dir() {
+        tokio::fs::create_dir(&config.application.out_dir).await?;
     }
 
-    if let Some(asset_dir) = config.application.asset_dir.as_ref() {
-        if !asset_dir.is_dir() {
-            tokio::fs::create_dir(asset_dir).await?;
-        }
+    ctx_pointer = ctx_pointer.preopened_dir(
+        Dir::open_ambient_dir(
+            &config.application.out_dir,
+            wasmtime_wasi::sync::ambient_authority(),
+        )
+        .unwrap(),
+        DirPerms::all(),
+        FilePerms::all(),
+        "/dist",
+    );
 
-        ctx_pointer = ctx_pointer.preopened_dir(
-            Dir::open_ambient_dir(asset_dir, wasmtime_wasi::sync::ambient_authority()).unwrap(),
-            DirPerms::all(),
-            FilePerms::all(),
-            "/assets",
-        );
+    if !config.application.asset_dir.is_dir() {
+        tokio::fs::create_dir(&config.application.asset_dir).await?;
     }
+
+    ctx_pointer = ctx_pointer.preopened_dir(
+        Dir::open_ambient_dir(
+            &config.application.asset_dir,
+            wasmtime_wasi::sync::ambient_authority(),
+        )
+        .unwrap(),
+        DirPerms::all(),
+        FilePerms::all(),
+        "/assets",
+    );
 
     let ctx = ctx_pointer.build();
-    let table = Table::new();
+    let table = ResourceTable::new();
 
     let mut store = Store::new(
         &ENGINE,

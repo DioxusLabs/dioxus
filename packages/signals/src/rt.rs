@@ -1,27 +1,90 @@
+use generational_box::AnyStorage;
+use generational_box::GenerationalBoxId;
+use generational_box::SyncStorage;
+use generational_box::UnsyncStorage;
+use std::any::Any;
+use std::any::TypeId;
+use std::cell::RefCell;
 use std::mem::MaybeUninit;
 use std::ops::Deref;
-use std::rc::Rc;
 
 use dioxus_core::prelude::*;
 use dioxus_core::ScopeId;
 
-use generational_box::{
-    BorrowError, BorrowMutError, GenerationalBox, GenerationalRef, GenerationalRefMut, Owner, Store,
-};
+use generational_box::{GenerationalBox, Owner, Storage};
 
 use crate::Effect;
+use crate::Readable;
+use crate::Writable;
 
-fn current_store() -> Store {
-    match consume_context() {
-        Some(rt) => rt,
-        None => {
-            let store = Store::default();
-            provide_root_context(store).expect("in a virtual dom")
-        }
+/// Run a closure with the given owner.
+pub fn with_owner<S: AnyStorage, F: FnOnce() -> R, R>(owner: Owner<S>, f: F) -> R {
+    let old_owner = set_owner(Some(owner));
+    let result = f();
+    set_owner(old_owner);
+    result
+}
+
+/// Set the owner for the current thread.
+fn set_owner<S: AnyStorage>(owner: Option<Owner<S>>) -> Option<Owner<S>> {
+    let id = TypeId::of::<S>();
+    if id == TypeId::of::<SyncStorage>() {
+        SYNC_OWNER.with(|cell| {
+            std::mem::replace(
+                &mut *cell.borrow_mut(),
+                owner.map(|owner| {
+                    *(Box::new(owner) as Box<dyn Any>)
+                        .downcast::<Owner<SyncStorage>>()
+                        .unwrap()
+                }),
+            )
+            .map(|owner| *(Box::new(owner) as Box<dyn Any>).downcast().unwrap())
+        })
+    } else {
+        UNSYNC_OWNER.with(|cell| {
+            std::mem::replace(
+                &mut *cell.borrow_mut(),
+                owner.map(|owner| {
+                    *(Box::new(owner) as Box<dyn Any>)
+                        .downcast::<Owner<UnsyncStorage>>()
+                        .unwrap()
+                }),
+            )
+            .map(|owner| *(Box::new(owner) as Box<dyn Any>).downcast().unwrap())
+        })
     }
 }
 
-fn current_owner() -> Rc<Owner> {
+thread_local! {
+    static SYNC_OWNER: RefCell<Option<Owner<SyncStorage>>> = RefCell::new(None);
+    static UNSYNC_OWNER: RefCell<Option<Owner<UnsyncStorage>>> = RefCell::new(None);
+}
+
+fn current_owner<S: Storage<T>, T>() -> Owner<S> {
+    let id = TypeId::of::<S>();
+    let override_owner = if id == TypeId::of::<SyncStorage>() {
+        SYNC_OWNER.with(|cell| {
+            let owner = cell.borrow();
+
+            owner.clone().map(|owner| {
+                *(Box::new(owner) as Box<dyn Any>)
+                    .downcast::<Owner<S>>()
+                    .unwrap()
+            })
+        })
+    } else {
+        UNSYNC_OWNER.with(|cell| {
+            cell.borrow().clone().map(|owner| {
+                *(Box::new(owner) as Box<dyn Any>)
+                    .downcast::<Owner<S>>()
+                    .unwrap()
+            })
+        })
+    };
+    if let Some(owner) = override_owner {
+        return owner;
+    }
+
     match Effect::current() {
         // If we are inside of an effect, we should use the owner of the effect as the owner of the value.
         Some(effect) => {
@@ -32,19 +95,19 @@ fn current_owner() -> Rc<Owner> {
         None => match has_context() {
             Some(rt) => rt,
             None => {
-                let owner = Rc::new(current_store().owner());
-                provide_context(owner).expect("in a virtual dom")
+                let owner = S::owner();
+                provide_context(owner)
             }
         },
     }
 }
 
-fn owner_in_scope(scope: ScopeId) -> Rc<Owner> {
+fn owner_in_scope<S: Storage<T>, T>(scope: ScopeId) -> Owner<S> {
     match consume_context_from_scope(scope) {
         Some(rt) => rt,
         None => {
-            let owner = Rc::new(current_store().owner());
-            provide_context_to_scope(scope, owner).expect("in a virtual dom")
+            let owner = S::owner();
+            scope.provide_context(owner)
         }
     }
 }
@@ -52,13 +115,13 @@ fn owner_in_scope(scope: ScopeId) -> Rc<Owner> {
 /// CopyValue is a wrapper around a value to make the value mutable and Copy.
 ///
 /// It is internally backed by [`generational_box::GenerationalBox`].
-pub struct CopyValue<T: 'static> {
-    pub(crate) value: GenerationalBox<T>,
+pub struct CopyValue<T: 'static, S: Storage<T> = UnsyncStorage> {
+    pub(crate) value: GenerationalBox<T, S>,
     origin_scope: ScopeId,
 }
 
 #[cfg(feature = "serde")]
-impl<T: 'static> serde::Serialize for CopyValue<T>
+impl<T: 'static, Store: Storage<T>> serde::Serialize for CopyValue<T, Store>
 where
     T: serde::Serialize,
 {
@@ -68,14 +131,14 @@ where
 }
 
 #[cfg(feature = "serde")]
-impl<'de, T: 'static> serde::Deserialize<'de> for CopyValue<T>
+impl<'de, T: 'static, Store: Storage<T>> serde::Deserialize<'de> for CopyValue<T, Store>
 where
     T: serde::Deserialize<'de>,
 {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let value = T::deserialize(deserializer)?;
 
-        Ok(Self::new(value))
+        Ok(Self::new_maybe_sync(value))
     }
 }
 
@@ -85,6 +148,22 @@ impl<T: 'static> CopyValue<T> {
     /// Once the component this value is created in is dropped, the value will be dropped.
     #[track_caller]
     pub fn new(value: T) -> Self {
+        Self::new_maybe_sync(value)
+    }
+
+    /// Create a new CopyValue. The value will be stored in the given scope. When the specified scope is dropped, the value will be dropped.
+    #[track_caller]
+    pub fn new_in_scope(value: T, scope: ScopeId) -> Self {
+        Self::new_maybe_sync_in_scope(value, scope)
+    }
+}
+
+impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
+    /// Create a new CopyValue. The value will be stored in the current component.
+    ///
+    /// Once the component this value is created in is dropped, the value will be dropped.
+    #[track_caller]
+    pub fn new_maybe_sync(value: T) -> Self {
         let owner = current_owner();
 
         Self {
@@ -110,13 +189,21 @@ impl<T: 'static> CopyValue<T> {
     }
 
     /// Create a new CopyValue. The value will be stored in the given scope. When the specified scope is dropped, the value will be dropped.
-    pub fn new_in_scope(value: T, scope: ScopeId) -> Self {
+    #[track_caller]
+    pub fn new_maybe_sync_in_scope(value: T, scope: ScopeId) -> Self {
         let owner = owner_in_scope(scope);
 
         Self {
             value: owner.insert(value),
             origin_scope: scope,
         }
+    }
+
+    /// Take the value out of the CopyValue, invalidating the value in the process.
+    pub fn take(&self) -> T {
+        self.value
+            .take()
+            .expect("value is already dropped or borrowed")
     }
 
     pub(crate) fn invalid() -> Self {
@@ -133,63 +220,73 @@ impl<T: 'static> CopyValue<T> {
         self.origin_scope
     }
 
-    /// Try to read the value. If the value has been dropped, this will return None.
-    #[track_caller]
-    pub fn try_read(&self) -> Result<GenerationalRef<T>, BorrowError> {
-        self.value.try_read()
+    /// Get the generational id of the value.
+    pub fn id(&self) -> GenerationalBoxId {
+        self.value.id()
+    }
+}
+
+impl<T: 'static, S: Storage<T>> Readable<T> for CopyValue<T, S> {
+    type Ref<R: ?Sized + 'static> = S::Ref<R>;
+
+    fn map_ref<I, U: ?Sized, F: FnOnce(&I) -> &U>(ref_: Self::Ref<I>, f: F) -> Self::Ref<U> {
+        S::map(ref_, f)
     }
 
-    /// Read the value. If the value has been dropped, this will panic.
-    #[track_caller]
-    pub fn read(&self) -> GenerationalRef<T> {
+    fn try_map_ref<I, U: ?Sized, F: FnOnce(&I) -> Option<&U>>(
+        ref_: Self::Ref<I>,
+        f: F,
+    ) -> Option<Self::Ref<U>> {
+        S::try_map(ref_, f)
+    }
+
+    fn read(&self) -> Self::Ref<T> {
         self.value.read()
     }
 
-    /// Try to write the value. If the value has been dropped, this will return None.
-    #[track_caller]
-    pub fn try_write(&self) -> Result<GenerationalRefMut<T>, BorrowMutError> {
+    fn peek(&self) -> Self::Ref<T> {
+        self.value.read()
+    }
+}
+
+impl<T: 'static, S: Storage<T>> Writable<T> for CopyValue<T, S> {
+    type Mut<R: ?Sized + 'static> = S::Mut<R>;
+
+    fn map_mut<I, U: ?Sized, F: FnOnce(&mut I) -> &mut U>(
+        mut_: Self::Mut<I>,
+        f: F,
+    ) -> Self::Mut<U> {
+        S::map_mut(mut_, f)
+    }
+
+    fn try_map_mut<I, U: ?Sized, F: FnOnce(&mut I) -> Option<&mut U>>(
+        mut_: Self::Mut<I>,
+        f: F,
+    ) -> Option<Self::Mut<U>> {
+        S::try_map_mut(mut_, f)
+    }
+
+    fn try_write(&self) -> Result<Self::Mut<T>, generational_box::BorrowMutError> {
         self.value.try_write()
     }
 
-    /// Write the value. If the value has been dropped, this will panic.
-    #[track_caller]
-    pub fn write(&self) -> GenerationalRefMut<T> {
+    fn write(&mut self) -> Self::Mut<T> {
         self.value.write()
     }
 
-    /// Set the value. If the value has been dropped, this will panic.
-    pub fn set(&mut self, value: T) {
-        *self.write() = value;
-    }
-
-    /// Run a function with a reference to the value. If the value has been dropped, this will panic.
-    pub fn with<O>(&self, f: impl FnOnce(&T) -> O) -> O {
-        let write = self.read();
-        f(&*write)
-    }
-
-    /// Run a function with a mutable reference to the value. If the value has been dropped, this will panic.
-    pub fn with_mut<O>(&self, f: impl FnOnce(&mut T) -> O) -> O {
-        let mut write = self.write();
-        f(&mut *write)
+    fn set(&mut self, value: T) {
+        self.value.set(value);
     }
 }
 
-impl<T: Clone + 'static> CopyValue<T> {
-    /// Get the value. If the value has been dropped, this will panic.
-    pub fn value(&self) -> T {
-        self.read().clone()
-    }
-}
-
-impl<T: 'static> PartialEq for CopyValue<T> {
+impl<T: 'static, S: Storage<T>> PartialEq for CopyValue<T, S> {
     fn eq(&self, other: &Self) -> bool {
         self.value.ptr_eq(&other.value)
     }
 }
 
-impl<T> Deref for CopyValue<T> {
-    type Target = dyn Fn() -> GenerationalRef<T>;
+impl<T: Copy, S: Storage<T>> Deref for CopyValue<T, S> {
+    type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
         // https://github.com/dtolnay/case-studies/tree/master/callable-types
@@ -197,7 +294,7 @@ impl<T> Deref for CopyValue<T> {
         // First we create a closure that captures something with the Same in memory layout as Self (MaybeUninit<Self>).
         let uninit_callable = MaybeUninit::<Self>::uninit();
         // Then move that value into the closure. We assume that the closure now has a in memory layout of Self.
-        let uninit_closure = move || Self::read(unsafe { &*uninit_callable.as_ptr() });
+        let uninit_closure = move || *Self::read(unsafe { &*uninit_callable.as_ptr() });
 
         // Check that the size of the closure is the same as the size of Self in case the compiler changed the layout of the closure.
         let size_of_closure = std::mem::size_of_val(&uninit_closure);
