@@ -107,8 +107,8 @@ impl<T> Event<T> {
     ///     }
     /// }
     /// ```
-    pub fn inner(&self) -> &Rc<T> {
-        &self.data
+    pub fn data(&self) -> Rc<T> {
+        self.data.clone()
     }
 }
 

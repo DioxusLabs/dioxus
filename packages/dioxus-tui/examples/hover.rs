@@ -18,7 +18,7 @@ fn app() -> Element {
         result
     }
 
-    fn get_brightness(m: &Rc<MouseData>) -> i32 {
+    fn get_brightness(m: Rc<MouseData>) -> i32 {
         let b: i32 = m.held_buttons().len().try_into().unwrap();
         127 * b
     }
@@ -59,9 +59,9 @@ fn app() -> Element {
                     justify_content: "center",
                     align_items: "center",
                     background_color: to_str(&q1_color()),
-                    onmouseenter: move |m| q1_color.set([get_brightness(m.inner()), 0, 0]),
-                    onmousedown: move |m| q1_color.set([get_brightness(m.inner()), 0, 0]),
-                    onmouseup: move |m| q1_color.set([get_brightness(m.inner()), 0, 0]),
+                    onmouseenter: move |m| q1_color.set([get_brightness(m.data()), 0, 0]),
+                    onmousedown: move |m| q1_color.set([get_brightness(m.data()), 0, 0]),
+                    onmouseup: move |m| q1_color.set([get_brightness(m.data()), 0, 0]),
                     onwheel: move |w| q1_color.set([q1_color()[0] + (10.0 * w.delta().strip_units().y) as i32, 0, 0]),
                     onmouseleave: move |_| q1_color.set([200; 3]),
                     onmousemove: update_data,
@@ -73,9 +73,9 @@ fn app() -> Element {
                     justify_content: "center",
                     align_items: "center",
                     background_color: to_str(&q2_color()),
-                    onmouseenter: move |m| q2_color.set([get_brightness(m.inner()); 3]),
-                    onmousedown: move |m| q2_color.set([get_brightness(m.inner()); 3]),
-                    onmouseup: move |m| q2_color.set([get_brightness(m.inner()); 3]),
+                    onmouseenter: move |m| q2_color.set([get_brightness(m.data()); 3]),
+                    onmousedown: move |m| q2_color.set([get_brightness(m.data()); 3]),
+                    onmouseup: move |m| q2_color.set([get_brightness(m.data()); 3]),
                     onwheel: move |w| q2_color.set([q2_color()[0] + (10.0 * w.delta().strip_units().y) as i32; 3]),
                     onmouseleave: move |_| q2_color.set([200; 3]),
                     onmousemove: update_data,
@@ -93,9 +93,9 @@ fn app() -> Element {
                     justify_content: "center",
                     align_items: "center",
                     background_color: to_str(&q3_color()),
-                    onmouseenter: move |m| q3_color.set([0, get_brightness(m.inner()), 0]),
-                    onmousedown: move |m| q3_color.set([0, get_brightness(m.inner()), 0]),
-                    onmouseup: move |m| q3_color.set([0, get_brightness(m.inner()), 0]),
+                    onmouseenter: move |m| q3_color.set([0, get_brightness(m.data()), 0]),
+                    onmousedown: move |m| q3_color.set([0, get_brightness(m.data()), 0]),
+                    onmouseup: move |m| q3_color.set([0, get_brightness(m.data()), 0]),
                     onwheel: move |w| q3_color.set([0, q3_color()[1] + (10.0 * w.delta().strip_units().y) as i32, 0]),
                     onmouseleave: move |_| q3_color.set([200; 3]),
                     onmousemove: update_data,
@@ -107,9 +107,9 @@ fn app() -> Element {
                     justify_content: "center",
                     align_items: "center",
                     background_color: to_str(&q4_color()),
-                    onmouseenter: move |m| q4_color.set([0, 0, get_brightness(m.inner())]),
-                    onmousedown: move |m| q4_color.set([0, 0, get_brightness(m.inner())]),
-                    onmouseup: move |m| q4_color.set([0, 0, get_brightness(m.inner())]),
+                    onmouseenter: move |m| q4_color.set([0, 0, get_brightness(m.data())]),
+                    onmousedown: move |m| q4_color.set([0, 0, get_brightness(m.data())]),
+                    onmouseup: move |m| q4_color.set([0, 0, get_brightness(m.data())]),
                     onwheel: move |w| q4_color.set([0, 0, q4_color()[2] + (10.0 * w.delta().strip_units().y) as i32]),
                     onmouseleave: move |_| q4_color.set([200; 3]),
                     onmousemove: update_data,

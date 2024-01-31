@@ -10,7 +10,7 @@ fn app() -> Element {
     rsx! {
         div {
             h1 {
-                onmounted: move |cx| header_element.set(Some(cx.inner().clone())),
+                onmounted: move |cx| header_element.set(Some(cx.data())),
                 "Scroll to top example"
             }
 

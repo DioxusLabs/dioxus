@@ -32,7 +32,7 @@ fn app() -> Element {
                 input {
                     value: "{i}",
                     onmounted: move |cx| {
-                        elements.write().push(cx.inner().clone());
+                        elements.write().push(cx.data());
                     },
                     oninput: move |_| {
                         running.set(false);

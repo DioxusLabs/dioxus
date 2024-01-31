@@ -48,7 +48,7 @@ fn app() -> Element {
                         id: "huey",
                         r#type: "radio",
                         value: "huey",
-                        checked: "",
+                        checked: true,
                         name: "drone",
                     }
                     label {
@@ -63,10 +63,7 @@ fn app() -> Element {
                         value: "dewey",
                         name: "drone",
                     }
-                    label {
-                        r#for: "dewey",
-                        "Dewey"
-                    }
+                    label { r#for: "dewey", "Dewey" }
                 }
                 div {
                     input {

@@ -39,21 +39,21 @@ fn app() -> Element {
     rsx! {
         div { style: "{CONTAINER_STYLE}",
             // focusing is necessary to catch keyboard events
-            div { style: "{RECT_STYLE}", tabindex: "0",
-                onmousemove: move |event| log_event(event.inner().clone()),
-                onclick: move |event| log_event(event.inner().clone()),
-                ondoubleclick: move |event| log_event(event.inner().clone()),
-                onmousedown: move |event| log_event(event.inner().clone()),
-                onmouseup: move |event| log_event(event.inner().clone()),
+            div { style: "{RECT_STYLE}", tabindex: 0,
+                onmousemove: move |event| log_event(event.data()),
+                onclick: move |event| log_event(event.data()),
+                ondoubleclick: move |event| log_event(event.data()),
+                onmousedown: move |event| log_event(event.data()),
+                onmouseup: move |event| log_event(event.data()),
 
-                onwheel: move |event| log_event(event.inner().clone()),
+                onwheel: move |event| log_event(event.data()),
 
-                onkeydown: move |event| log_event(event.inner().clone()),
-                onkeyup: move |event| log_event(event.inner().clone()),
-                onkeypress: move |event| log_event(event.inner().clone()),
+                onkeydown: move |event| log_event(event.data()),
+                onkeyup: move |event| log_event(event.data()),
+                onkeypress: move |event| log_event(event.data()),
 
-                onfocusin: move |event| log_event(event.inner().clone()),
-                onfocusout: move |event| log_event(event.inner().clone()),
+                onfocusin: move |event| log_event(event.data()),
+                onfocusout: move |event| log_event(event.data()),
 
                 "Hover, click, type or scroll to see the info down below"
             }

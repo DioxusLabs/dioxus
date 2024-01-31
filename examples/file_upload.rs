@@ -35,7 +35,7 @@ fn App() -> Element {
             input {
                 r#type: "checkbox",
                 checked: enable_directory_upload,
-                oninput: move |evt| enable_directory_upload.set(evt.value().parse().unwrap()),
+                oninput: move |evt| enable_directory_upload.set(evt.checked()),
             },
             "Enable directory upload"
         }
