@@ -25,7 +25,6 @@ pub use dioxus_html as html;
 pub use dioxus_core_macro as core_macro;
 
 pub mod prelude {
-
     #[cfg(feature = "launch")]
     pub use crate::launch::*;
 
@@ -60,6 +59,8 @@ pub mod prelude {
 
     #[cfg(feature = "router")]
     pub use dioxus_router;
+    #[cfg(feature = "router")]
+    pub use dioxus_router::prelude::*;
 }
 
 #[cfg(feature = "web")]
