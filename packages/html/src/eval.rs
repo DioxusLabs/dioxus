@@ -91,10 +91,15 @@ impl IntoFuture for UseEval {
 /// Represents an error when evaluating JavaScript
 #[derive(Debug)]
 pub enum EvalError {
+    /// The platform does not support evaluating JavaScript.
+    Unspported,
+
     /// The provided JavaScript has already been ran.
     Finished,
+
     /// The provided JavaScript is not valid and can't be ran.
     InvalidJs(String),
+
     /// Represents an error communicating between JavaScript and Rust.
     Communication(String),
 }

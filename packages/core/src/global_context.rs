@@ -111,6 +111,11 @@ pub fn needs_update() {
     Runtime::with_current_scope(|cx| cx.needs_update());
 }
 
+/// Mark the current scope as dirty, causing it to re-render
+pub fn needs_update_any(id: ScopeId) {
+    Runtime::with_current_scope(|cx| cx.needs_update_any(id));
+}
+
 /// Schedule an update for the current component
 ///
 /// Note: Unlike [`needs_update`], the function returned by this method will work outside of the dioxus runtime.
@@ -252,6 +257,10 @@ pub fn after_render(f: impl FnMut() + 'static) {
 /// Effects rely on this to ensure that they only run effects after the DOM has been updated. Without flush_sync effects
 /// are run immediately before diffing the DOM, which causes all sorts of out-of-sync weirdness.
 pub async fn flush_sync() {
+    // if flushing() {
+    //      return;
+    // }
+
     _ = Runtime::with(|rt| rt.flush.clone())
         .unwrap()
         .recv_async()

@@ -77,6 +77,8 @@ fn app() -> Element {
 
 #[component]
 fn Child(mut count: ReadOnlySignal<i32>) -> Element {
+    println!("rendering child with count {count}");
+
     rsx! {
         h1 { "{count}" }
     }

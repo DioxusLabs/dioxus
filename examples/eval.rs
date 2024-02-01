@@ -22,7 +22,7 @@ fn app() -> Element {
         res
     });
 
-    match future.value().read().as_ref() {
+    match future.value().as_ref() {
         Some(v) => rsx!( p { "{v}" } ),
         _ => rsx!( p { "waiting.." } ),
     }

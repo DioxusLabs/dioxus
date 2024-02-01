@@ -16,9 +16,7 @@ fn app() -> Element {
     let mut text = use_signal(|| "...".to_string());
 
     rsx! {
-        div {
-            "Server state: {state.unwrap().value().clone()}"
-        }
+        div { "Server state: {state.value().unwrap()}" }
         h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }
@@ -51,6 +49,7 @@ async fn get_server_data() -> Result<String, ServerFnError> {
 fn main() {
     #[cfg(feature = "web")]
     tracing_wasm::set_as_global_default();
+
     #[cfg(feature = "ssr")]
     tracing_subscriber::fmt::init();
 

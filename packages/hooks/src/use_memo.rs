@@ -1,7 +1,7 @@
 use crate::dependency::Dependency;
 use crate::use_signal;
 use dioxus_core::prelude::*;
-use dioxus_signals::{ReadOnlySignal, Readable, Signal, SignalData};
+use dioxus_signals::{ReactiveContext, ReadOnlySignal, Readable, Signal, SignalData};
 use dioxus_signals::{Storage, Writable};
 
 /// Creates a new unsync Selector. The selector will be run immediately and whenever any signal it reads changes.
@@ -45,9 +45,33 @@ pub fn use_memo<R: PartialEq>(f: impl FnMut() -> R + 'static) -> ReadOnlySignal<
 /// ```
 #[track_caller]
 pub fn use_maybe_sync_memo<R: PartialEq, S: Storage<SignalData<R>>>(
-    f: impl FnMut() -> R + 'static,
+    mut f: impl FnMut() -> R + 'static,
 ) -> ReadOnlySignal<R, S> {
-    use_hook(|| Signal::maybe_sync_memo(f))
+    use_hook(|| {
+        // Get the current reactive context
+        let rc = ReactiveContext::new(None);
+
+        // Create a new signal in that context, wiring up its dependencies and subscribers
+        let mut state: Signal<R, S> = rc.run_in(|| Signal::new_maybe_sync(f()));
+
+        spawn(async move {
+            loop {
+                rc.changed().await;
+
+                println!("change triggered in memo");
+
+                let new = rc.run_in(|| f());
+
+                if new != *state.peek() {
+                    println!("change sett in memo");
+                    *state.write() = new;
+                }
+            }
+        });
+
+        // And just return the readonly variant of that signal
+        ReadOnlySignal::new_maybe_sync(state)
+    })
 }
 
 /// Creates a new unsync Selector with some local dependencies. The selector will be run immediately and whenever any signal it reads or any dependencies it tracks changes

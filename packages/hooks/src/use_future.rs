@@ -21,11 +21,6 @@ where
     let mut callback = use_callback(move || {
         let fut = future();
         spawn(async move {
-            // todo: not sure if we should flush_sync
-            // It's fine for most cases but means that the future will always be started in the next frame
-            // The point here is to not run use_future on the server... which like, shouldn't we?
-            flush_sync().await;
-
             state.set(UseFutureState::Pending);
             fut.await;
             state.set(UseFutureState::Complete);

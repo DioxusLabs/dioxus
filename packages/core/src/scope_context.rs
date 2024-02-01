@@ -60,8 +60,13 @@ impl Scope {
 
     /// Mark this scope as dirty, and schedule a render for it.
     pub fn needs_update(&self) {
+        self.needs_update_any(self.id)
+    }
+
+    /// Mark this scope as dirty, and schedule a render for it.
+    pub fn needs_update_any(&self, id: ScopeId) {
         self.sender()
-            .unbounded_send(SchedulerMsg::Immediate(self.id))
+            .unbounded_send(SchedulerMsg::Immediate(id))
             .expect("Scheduler to exist if scope exists");
     }
 

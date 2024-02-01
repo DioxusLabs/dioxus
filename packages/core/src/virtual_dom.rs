@@ -372,11 +372,15 @@ impl VirtualDom {
     ///
     /// Whenever the Runtime "works", it will re-render this scope
     pub fn mark_dirty(&mut self, id: ScopeId) {
-        if let Some(context) = self.runtime.get_state(id) {
-            let height = context.height();
-            tracing::trace!("Marking scope {:?} ({}) as dirty", id, context.name);
-            self.dirty_scopes.insert(DirtyScope { height, id });
-        }
+        let Some(scope) = self.runtime.get_state(id) else {
+            return;
+        };
+
+        tracing::trace!("Marking scope {:?} ({}) as dirty", id, scope.name);
+        self.dirty_scopes.insert(DirtyScope {
+            height: scope.height(),
+            id,
+        });
     }
 
     /// Call a listener inside the VirtualDom with data from outside the VirtualDom. **The ElementId passed in must be the id of an element with a listener, not a static node or a text node.**
@@ -422,9 +426,6 @@ impl VirtualDom {
     /// let dom = VirtualDom::new(app);
     /// ```
     pub async fn wait_for_work(&mut self) {
-        // Send the flush signal to the runtime
-        _ = self.flush_tx.try_send(());
-
         // And then poll the futures
         self.poll_tasks().await;
     }
@@ -432,6 +433,9 @@ impl VirtualDom {
     /// Poll futures without progressing any futures from the flush table
     async fn poll_tasks(&mut self) {
         loop {
+            // Send the flush signal to the runtime, waking up tasks
+            _ = self.flush_tx.try_send(());
+
             // Process all events - Scopes are marked dirty, etc
             // Sometimes when wakers fire we get a slew of updates at once, so its important that we drain this completely
             self.process_events();

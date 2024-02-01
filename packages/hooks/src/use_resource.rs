@@ -27,20 +27,20 @@ where
 
         // Spawn a wrapper task that polls the innner future and watch its dependencies
         let task = spawn(async move {
-            // move the future here and pin it so we can poll it
-            let fut = fut;
-            pin_mut!(fut);
+            // // move the future here and pin it so we can poll it
+            // let fut = fut;
+            // pin_mut!(fut);
 
-            let res = future::poll_fn(|cx| {
-                // Set the effect stack properly
-                // add any dependencies to the effect stack that we need to watch when restarting the future
-                // Poll the inner future
-                fut.poll_unpin(cx)
-            })
-            .await;
+            // let res = future::poll_fn(|cx| {
+            //     // Set the effect stack properly
+            //     // add any dependencies to the effect stack that we need to watch when restarting the future
+            //     // Poll the inner future
+            //     fut.poll_unpin(cx)
+            // })
+            // .await;
 
-            // Set the value
-            value.set(Some(Signal::new(res)));
+            // // Set the value
+            // value.set(Some(Signal::new(res)));
         });
 
         Some(task)

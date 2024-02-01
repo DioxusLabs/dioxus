@@ -284,6 +284,7 @@ impl<T: 'static, S: Storage<T>> PartialEq for CopyValue<T, S> {
         self.value.ptr_eq(&other.value)
     }
 }
+impl<T: 'static, S: Storage<T>> Eq for CopyValue<T, S> {}
 
 impl<T: Copy, S: Storage<T>> Deref for CopyValue<T, S> {
     type Target = dyn Fn() -> T;
