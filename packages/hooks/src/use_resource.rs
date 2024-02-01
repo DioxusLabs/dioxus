@@ -1,25 +1,19 @@
 #![allow(missing_docs)]
 
 use crate::use_signal;
-use dioxus_core::{prelude::spawn, Task};
+use dioxus_core::{
+    prelude::{spawn, suspend},
+    Task,
+};
 use dioxus_signals::*;
 use futures_util::{future, pin_mut, FutureExt};
 use std::future::Future;
 
-/// A future that resolves to a value.
+/// A memo that resolve to a value asynchronously.
 ///
-/// This runs the future only once - though the future may be regenerated
-/// through the [`UseFuture::restart`] method.
-///
-/// This is commonly used for components that cannot be rendered until some
-/// asynchronous operation has completed.
-///
-/// Whenever the hooks dependencies change, the future will be re-evaluated.
-/// If a future is pending when the dependencies change, the previous future
-/// will be canceled before the new one is started.
-///
-/// - dependencies: a tuple of references to values that are PartialEq + Clone
-pub fn use_resource<T, F>(future: impl Fn() -> F + 'static) -> UseResource<T>
+/// Regular memos are synchronous and resolve immediately. However, you might want to resolve a memo
+#[must_use = "Consider using `cx.spawn` to run a future without reading its value"]
+pub fn use_async_memo<T, F>(future: impl Fn() -> F + 'static) -> AsyncMemo<T>
 where
     T: 'static,
     F: Future<Output = T> + 'static,
@@ -46,23 +40,23 @@ where
             .await;
 
             // Set the value
-            value.set(Some(res));
+            value.set(Some(Signal::new(res)));
         });
 
         Some(task)
     });
 
-    UseResource { task, value, state }
+    AsyncMemo { task, value, state }
 }
 
 #[allow(unused)]
-pub struct UseResource<T: 'static> {
-    value: Signal<Option<T>>,
+pub struct AsyncMemo<T: 'static> {
+    value: Signal<Option<Signal<T>>>,
     task: Signal<Option<Task>>,
     state: Signal<UseResourceState<T>>,
 }
 
-impl<T> UseResource<T> {
+impl<T> AsyncMemo<T> {
     /// Restart the future with new dependencies.
     ///
     /// Will not cancel the previous future, but will ignore any values that it
@@ -81,14 +75,15 @@ impl<T> UseResource<T> {
 
     // Manually set the value in the future slot without starting the future over
     pub fn set(&mut self, new_value: T) {
-        self.value.set(Some(new_value));
+        todo!()
+        // self.value.set(Some(new_value));
     }
 
     /// Return any value, even old values if the future has not yet resolved.
     ///
     /// If the future has never completed, the returned value will be `None`.
-    pub fn value(&self) -> Signal<Option<T>> {
-        self.value
+    pub fn value(&self) -> Option<Signal<T>> {
+        self.value.cloned()
     }
 
     /// Get the ID of the future in Dioxus' internal scheduler
@@ -113,6 +108,16 @@ impl<T> UseResource<T> {
         //     // Task, no value - we're still pending
         //     (Some(_), None) => UseResourceState::Pending,
         // }
+    }
+
+    /// Wait for this async memo to resolve, returning the inner signal value
+    /// If the value is pending, returns none and suspends the current component
+    pub fn suspend(&self) -> Option<ReadOnlySignal<T>> {
+        let out = self.value();
+        if out.is_none() {
+            suspend();
+        }
+        out.map(|sig| sig.into())
     }
 }
 

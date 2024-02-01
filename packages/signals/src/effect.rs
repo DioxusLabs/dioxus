@@ -1,4 +1,5 @@
 use crate::write::*;
+use crate::CopyValue;
 use core::{self, fmt::Debug};
 use dioxus_core::prelude::*;
 use futures_channel::mpsc::UnboundedSender;
@@ -8,24 +9,14 @@ use parking_lot::RwLock;
 use rustc_hash::FxHashMap;
 use std::fmt::{self, Formatter};
 
-use crate::CopyValue;
-
 thread_local! {
     pub(crate)static EFFECT_STACK: EffectStack = EffectStack::default();
 }
 
+#[derive(Default)]
 pub(crate) struct EffectStack {
     pub(crate) effects: RwLock<Vec<Effect>>,
     pub(crate) effect_mapping: RwLock<FxHashMap<GenerationalBoxId, Effect>>,
-}
-
-impl Default for EffectStack {
-    fn default() -> Self {
-        Self {
-            effects: RwLock::new(Vec::new()),
-            effect_mapping: RwLock::new(FxHashMap::default()),
-        }
-    }
 }
 
 impl EffectStack {

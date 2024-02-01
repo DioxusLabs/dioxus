@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 use crate::{use_callback, use_hook_did_run, use_signal, UseCallback};
 use dioxus_core::{
-    prelude::{flush_sync, spawn, use_drop, use_hook},
+    prelude::{flush_sync, spawn, use_hook},
     Task,
 };
 use dioxus_signals::*;
@@ -16,7 +16,7 @@ pub fn use_future<F>(mut future: impl FnMut() -> F + 'static) -> UseFuture
 where
     F: Future + 'static,
 {
-    let mut complete = use_signal(|| UseFutureState::Pending);
+    let mut state = use_signal(|| UseFutureState::Pending);
 
     let mut callback = use_callback(move || {
         let fut = future();
@@ -26,9 +26,9 @@ where
             // The point here is to not run use_future on the server... which like, shouldn't we?
             flush_sync().await;
 
-            complete.set(UseFutureState::Pending);
+            state.set(UseFutureState::Pending);
             fut.await;
-            complete.set(UseFutureState::Complete);
+            state.set(UseFutureState::Complete);
         })
     });
 
@@ -46,11 +46,9 @@ where
         false => task.peek().pause(),
     });
 
-    use_drop(move || task.peek().stop());
-
     UseFuture {
         task,
-        state: complete,
+        state,
         callback,
     }
 }
@@ -62,13 +60,30 @@ pub struct UseFuture {
     callback: UseCallback<Task>,
 }
 
+/// A signal that represents the state of a future
+// we might add more states (panicked, etc)
+#[derive(Clone, Copy, PartialEq, Hash, Eq, Debug)]
+pub enum UseFutureState {
+    /// The future is still running
+    Pending,
+
+    /// The future has been forcefully stopped
+    Stopped,
+
+    /// The future has been paused, tempoarily
+    Paused,
+
+    /// The future has completed
+    Complete,
+}
+
 impl UseFuture {
     /// Restart the future with new dependencies.
     ///
     /// Will not cancel the previous future, but will ignore any values that it
     /// generates.
     pub fn restart(&mut self) {
-        self.task.write().stop();
+        self.task.write().cancel();
         let new_task = self.callback.call();
         self.task.set(new_task);
     }
@@ -76,7 +91,7 @@ impl UseFuture {
     /// Forcefully cancel a future
     pub fn cancel(&mut self) {
         self.state.set(UseFutureState::Stopped);
-        self.task.write().stop();
+        self.task.write().cancel();
     }
 
     /// Pause the future
@@ -101,30 +116,18 @@ impl UseFuture {
         self.task.cloned()
     }
 
-    /// Get the current state of the future.
+    /// Is the future currently finished running?
+    ///
+    /// Reading this does not subscribe to the future's state
     pub fn finished(&self) -> bool {
-        matches!(self.state.peek().clone(), UseFutureState::Complete)
+        matches!(
+            self.state.peek().clone(),
+            UseFutureState::Complete | UseFutureState::Stopped
+        )
     }
 
     /// Get the current state of the future.
     pub fn state(&self) -> ReadOnlySignal<UseFutureState> {
         self.state.clone().into()
     }
-}
-
-/// A signal that represents the state of a future
-// we might add more states (panicked, etc)
-#[derive(Clone, Copy, PartialEq, Hash, Eq, Debug)]
-pub enum UseFutureState {
-    /// The future is still running
-    Pending,
-
-    /// The future has been forcefully stopped
-    Stopped,
-
-    /// The future has been paused, tempoarily
-    Paused,
-
-    /// The future has completed
-    Complete,
 }

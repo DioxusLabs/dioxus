@@ -34,7 +34,7 @@ pub fn use_memo<R: PartialEq>(f: impl FnMut() -> R + 'static) -> ReadOnlySignal<
 /// use dioxus::prelude::*;
 /// use dioxus_signals::*;
 ///
-/// fn App(cx: Scope) -> Element {
+/// fn App() -> Element {
 ///     let mut count = use_signal(cx, || 0);
 ///     let double = use_memo(cx, move || count * 2);
 ///     count += 1;
@@ -56,10 +56,9 @@ pub fn use_maybe_sync_memo<R: PartialEq, S: Storage<SignalData<R>>>(
 ///
 /// ```rust
 /// use dioxus::prelude::*;
-/// use dioxus_signals::*;
 ///
-/// fn App(cx: Scope) -> Element {
-///     let mut local_state = use_state(cx, || 0);
+/// fn App() -> Element {
+///     let mut local_state = use_state(|| 0);
 ///     let double = use_memo_with_dependencies(cx, (local_state.get(),), move |(local_state,)| local_state * 2);
 ///     local_state.set(1);
 ///
@@ -85,8 +84,8 @@ where
 /// use dioxus::prelude::*;
 /// use dioxus_signals::*;
 ///
-/// fn App(cx: Scope) -> Element {
-///     let mut local_state = use_state(cx, || 0);
+/// fn App() -> Element {
+///     let mut local_state = use_state(|| 0);
 ///     let double = use_memo_with_dependencies(cx, (local_state.get(),), move |(local_state,)| local_state * 2);
 ///     local_state.set(1);
 ///
