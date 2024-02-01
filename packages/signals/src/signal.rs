@@ -1,6 +1,7 @@
 use crate::{
     get_effect_ref, read::Readable, write::Writable, CopyValue, Effect, EffectInner,
-    EffectStackRef, GlobalMemo, GlobalSignal, MappedSignal, ReadOnlySignal, EFFECT_STACK,
+    EffectStackRef, GlobalMemo, GlobalSignal, MappedSignal, ReactiveContext,
+    ReactiveContextProvider, ReadSignal, EFFECT_STACK,
 };
 use dioxus_core::{
     prelude::{
@@ -13,6 +14,7 @@ use parking_lot::RwLock;
 use std::{
     any::Any,
     cell::RefCell,
+    collections::HashSet,
     ops::{Deref, DerefMut},
     rc::Rc,
     sync::Arc,
@@ -59,17 +61,18 @@ pub type SyncSignal<T> = Signal<T, SyncStorage>;
 
 /// The data stored for tracking in a signal.
 pub struct SignalData<T> {
-    pub(crate) subscribers: Arc<RwLock<SignalSubscribers>>,
+    pub(crate) subscribers: Arc<RwLock<HashSet<ReactiveContext>>>,
     pub(crate) update_any: Arc<dyn Fn(ScopeId) + Sync + Send>,
     pub(crate) effect_ref: EffectStackRef,
     pub(crate) value: T,
 }
 
-#[derive(Default)]
-pub(crate) struct SignalSubscribers {
-    pub(crate) subscribers: Vec<ScopeId>,
-    pub(crate) effect_subscribers: Vec<GenerationalBoxId>,
-}
+// #[derive(Default)]
+// pub(crate) struct SignalSubscribers {
+//     // todo: use a linear map here for faster scans
+//     pub(crate) subscribers: FxHashSet<ScopeId>,
+//     pub(crate) effect_subscribers: FxHashSet<GenerationalBoxId>,
+// }
 
 impl<T: 'static> Signal<T> {
     /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
@@ -214,42 +217,44 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     }
 
     fn update_subscribers(&self) {
-        {
-            let inner = self.inner.read();
-            for &scope_id in &*inner.subscribers.read().subscribers {
-                tracing::trace!(
-                    "Write on {:?} triggered update on {:?}",
-                    self.inner.value,
-                    scope_id
-                );
-                (inner.update_any)(scope_id);
-            }
-        }
+        todo!()
+        // {
+        //     let inner = self.inner.read();
+        //     for &scope_id in inner.subscribers.read().subscribers.iter() {
+        //         tracing::trace!(
+        //             "Write on {:?} triggered update on {:?}",
+        //             self.inner.value,
+        //             scope_id
+        //         );
+        //         (inner.update_any)(scope_id);
+        //     }
+        // }
 
-        let self_read = &self.inner.read();
-        let subscribers = {
-            let effects = &mut self_read.subscribers.write().effect_subscribers;
-            std::mem::take(&mut *effects)
-        };
-        let effect_ref = &self_read.effect_ref;
-        for effect in subscribers {
-            tracing::trace!(
-                "Write on {:?} triggered effect {:?}",
-                self.inner.value,
-                effect
-            );
-            effect_ref.rerun_effect(effect);
-        }
+        // let self_read = &self.inner.read();
+        // let subscribers = {
+        //     let effects = &mut self_read.subscribers.write().effect_subscribers;
+        //     std::mem::take(&mut *effects)
+        // };
+        // let effect_ref = &self_read.effect_ref;
+        // for effect in subscribers {
+        //     tracing::trace!(
+        //         "Write on {:?} triggered effect {:?}",
+        //         self.inner.value,
+        //         effect
+        //     );
+        //     effect_ref.queue_effect(effect);
+        // }
     }
 
     /// Unsubscribe this scope from the signal's effect list
     pub fn unsubscribe(&self, scope: ScopeId) {
-        self.inner
-            .read()
-            .subscribers
-            .write()
-            .subscribers
-            .retain(|s| *s != scope);
+        todo!()
+        // self.inner
+        //     .read()
+        //     .subscribers
+        //     .write()
+        //     .subscribers
+        //     .retain(|s| *s != scope);
     }
 
     /// Map the signal to a new type.
@@ -284,31 +289,36 @@ impl<T, S: Storage<SignalData<T>>> Readable<T> for Signal<T, S> {
     #[track_caller]
     fn read(&self) -> S::Ref<T> {
         let inner = self.inner.read();
-        if let Some(effect) = EFFECT_STACK.with(|stack| stack.current()) {
-            let subscribers = inner.subscribers.read();
-            if !subscribers.effect_subscribers.contains(&effect.inner.id()) {
-                drop(subscribers);
-                let mut subscribers = inner.subscribers.write();
-                subscribers.effect_subscribers.push(effect.inner.id());
-            }
-        } else if let Some(current_scope_id) = current_scope_id() {
-            // only subscribe if the vdom is rendering
-            if dioxus_core::vdom_is_rendering() {
-                tracing::trace!(
-                    "{:?} subscribed to {:?}",
-                    self.inner.value,
-                    current_scope_id
-                );
-                let subscribers = inner.subscribers.read();
-                if !subscribers.subscribers.contains(&current_scope_id) {
-                    drop(subscribers);
-                    let mut subscribers = inner.subscribers.write();
-                    subscribers.subscribers.push(current_scope_id);
-                    let unsubscriber = current_unsubscriber();
-                    subscribers.subscribers.push(unsubscriber.borrow().scope);
-                }
-            }
-        }
+
+        todo!();
+
+        // // if we're in a reactive context, attach the context to the signal via the mapping
+        // if let Some(effect) = ReactiveContextProvider::current() {
+        //     inner
+        //         .subscribers
+        //         .write()
+        //         .effect_subscribers
+        //         .insert(effect.inner.id());
+        // } else if let Some(current_scope_id) = current_scope_id() {
+        //     // only subscribe if the vdom is rendering
+        //     if dioxus_core::vdom_is_rendering() {
+        //         tracing::trace!(
+        //             "{:?} subscribed to {:?}",
+        //             self.inner.value,
+        //             current_scope_id
+        //         );
+
+        //         let mut subscribers = inner.subscribers.write();
+
+        //         if !subscribers.subscribers.contains(&current_scope_id) {
+        //             subscribers.subscribers.insert(current_scope_id);
+        //             subscribers
+        //                 .subscribers
+        //                 .insert(current_unsubscriber().borrow().scope);
+        //         }
+        //     }
+        // }
+
         S::map(inner, |v| &v.value)
     }
 

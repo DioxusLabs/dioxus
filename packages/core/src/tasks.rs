@@ -122,13 +122,6 @@ impl Runtime {
         self.tasks.borrow().get(task.0)?.parent
     }
 
-    /// Add this task to the queue of tasks that will manually get poked when the scheduler is flushed
-    pub(crate) fn add_to_flush_table(&self) -> Task {
-        let value = self.current_task().unwrap();
-        self.flush_table.borrow_mut().insert(value);
-        value
-    }
-
     pub(crate) fn handle_task_wakeup(&self, id: Task) {
         debug_assert!(Runtime::current().is_some(), "Must be in a dioxus runtime");
 

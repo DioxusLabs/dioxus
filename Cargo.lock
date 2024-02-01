@@ -2476,6 +2476,7 @@ version = "0.4.3"
 dependencies = [
  "dioxus",
  "dioxus-ssr",
+ "flume",
  "futures-channel",
  "futures-util",
  "longest-increasing-subsequence",
@@ -2883,6 +2884,7 @@ version = "0.4.3"
 dependencies = [
  "dioxus",
  "dioxus-core",
+ "flume",
  "futures-channel",
  "futures-util",
  "generational-box",

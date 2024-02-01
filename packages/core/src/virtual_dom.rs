@@ -202,6 +202,7 @@ pub struct VirtualDom {
     pub(crate) suspended_scopes: FxHashSet<ScopeId>,
 
     rx: futures_channel::mpsc::UnboundedReceiver<SchedulerMsg>,
+    flush_tx: flume::Sender<()>,
 }
 
 impl VirtualDom {
@@ -305,10 +306,12 @@ impl VirtualDom {
     /// ```
     pub(crate) fn new_with_component(root: impl AnyProps + 'static) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
+        let (flush_tx, flush_rx) = flume::unbounded(); // I don't think this needs to be unbounded
 
         let mut dom = Self {
             rx,
-            runtime: Runtime::new(tx),
+            flush_tx,
+            runtime: Runtime::new(tx, flush_rx),
             scopes: Default::default(),
             dirty_scopes: Default::default(),
             templates: Default::default(),
@@ -419,8 +422,8 @@ impl VirtualDom {
     /// let dom = VirtualDom::new(app);
     /// ```
     pub async fn wait_for_work(&mut self) {
-        // Ping tasks waiting on the flush table - they're waiting for sync stuff to be done before progressing
-        self.clear_flush_table();
+        // Send the flush signal to the runtime
+        _ = self.flush_tx.try_send(());
 
         // And then poll the futures
         self.poll_tasks().await;
@@ -445,17 +448,6 @@ impl VirtualDom {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
                 SchedulerMsg::TaskNotified(id) => self.runtime.handle_task_wakeup(id),
             };
-        }
-    }
-
-    fn clear_flush_table(&mut self) {
-        // Make sure we set the runtime since we're running user code
-        let _runtime = RuntimeGuard::new(self.runtime.clone());
-
-        // Manually flush tasks that called `flush().await`
-        // Tasks that might've been waiting for `flush` finally have a chance to run to their next await point
-        for task in self.runtime.flush_table.take() {
-            self.runtime.handle_task_wakeup(task);
         }
     }
 

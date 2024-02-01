@@ -33,19 +33,22 @@ pub struct Runtime {
     pub(crate) sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
 
     // Tasks waiting to be manually resumed when we call wait_for_work
-    pub(crate) flush_table: RefCell<FxHashSet<Task>>,
+    pub(crate) flush: flume::Receiver<()>,
 }
 
 impl Runtime {
-    pub(crate) fn new(sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>) -> Rc<Self> {
+    pub(crate) fn new(
+        sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
+        flush: flume::Receiver<()>,
+    ) -> Rc<Self> {
         Rc::new(Self {
             sender,
+            flush,
             rendering: Cell::new(true),
             scope_states: Default::default(),
             scope_stack: Default::default(),
             current_task: Default::default(),
             tasks: Default::default(),
-            flush_table: Default::default(),
         })
     }
 

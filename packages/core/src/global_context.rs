@@ -252,34 +252,10 @@ pub fn after_render(f: impl FnMut() + 'static) {
 /// Effects rely on this to ensure that they only run effects after the DOM has been updated. Without flush_sync effects
 /// are run immediately before diffing the DOM, which causes all sorts of out-of-sync weirdness.
 pub async fn flush_sync() {
-    let mut polled = false;
-
-    let _task =
-        FlushKey(Runtime::with(|rt| rt.add_to_flush_table()).expect("to be in a dioxus runtime"));
-
-    // Poll without giving the waker to anyone
-    // The runtime will manually wake this task up when it's ready
-    poll_fn(|_| {
-        if !polled {
-            polled = true;
-            futures_util::task::Poll::Pending
-        } else {
-            futures_util::task::Poll::Ready(())
-        }
-    })
-    .await;
-
-    // If the the future got polled, then we don't need to prevent it from being dropped
-    // If we had generational indicies on tasks we could simply let the task remain in the queue and just be a no-op
-    // when it's run
-    std::mem::forget(_task);
-
-    struct FlushKey(Task);
-    impl Drop for FlushKey {
-        fn drop(&mut self) {
-            Runtime::with(|rt| rt.flush_table.borrow_mut().remove(&self.0));
-        }
-    }
+    _ = Runtime::with(|rt| rt.flush.clone())
+        .unwrap()
+        .recv_async()
+        .await;
 }
 
 /// Use a hook with a cleanup function
