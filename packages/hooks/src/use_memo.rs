@@ -57,13 +57,8 @@ pub fn use_maybe_sync_memo<R: PartialEq, S: Storage<SignalData<R>>>(
         spawn(async move {
             loop {
                 rc.changed().await;
-
-                println!("change triggered in memo");
-
                 let new = rc.run_in(|| f());
-
                 if new != *state.peek() {
-                    println!("change sett in memo");
                     *state.write() = new;
                 }
             }

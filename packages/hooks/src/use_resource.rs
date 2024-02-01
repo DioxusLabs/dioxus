@@ -1,8 +1,8 @@
 #![allow(missing_docs)]
 
-use crate::use_signal;
+use crate::{use_callback, use_signal};
 use dioxus_core::{
-    prelude::{spawn, suspend},
+    prelude::{spawn, suspend, use_hook},
     Task,
 };
 use dioxus_signals::*;
@@ -19,31 +19,44 @@ where
     F: Future<Output = T> + 'static,
 {
     let mut value = use_signal(|| None);
-    let state = use_signal(|| UseResourceState::Pending);
+    let mut state = use_signal(|| UseResourceState::Pending);
+    let rc = use_hook(|| ReactiveContext::new(None));
 
-    let task = use_signal(|| {
+    let mut cb = use_callback(move || {
         // Create the user's task
-        let fut = future();
+        let fut = rc.run_in(|| future());
 
         // Spawn a wrapper task that polls the innner future and watch its dependencies
-        let task = spawn(async move {
-            // // move the future here and pin it so we can poll it
-            // let fut = fut;
-            // pin_mut!(fut);
+        spawn(async move {
+            // move the future here and pin it so we can poll it
+            let fut = fut;
+            pin_mut!(fut);
 
-            // let res = future::poll_fn(|cx| {
-            //     // Set the effect stack properly
-            //     // add any dependencies to the effect stack that we need to watch when restarting the future
-            //     // Poll the inner future
-            //     fut.poll_unpin(cx)
-            // })
-            // .await;
+            // Run each poll in the context of the reactive scope
+            // This ensures the scope is properly subscribed to the future's dependencies
+            let res = future::poll_fn(|cx| rc.run_in(|| fut.poll_unpin(cx))).await;
 
-            // // Set the value
-            // value.set(Some(Signal::new(res)));
-        });
+            // Set the value and state
+            state.set(UseResourceState::Complete);
+            value.set(Some(Signal::new(res)));
+        })
+    });
 
-        Some(task)
+    let mut task = use_hook(|| Signal::new(cb.call()));
+
+    use_hook(|| {
+        spawn(async move {
+            loop {
+                // Wait for the dependencies to change
+                rc.changed().await;
+
+                // Stop the old task
+                task.write().cancel();
+
+                // Start a new task
+                task.set(cb.call());
+            }
+        })
     });
 
     AsyncMemo { task, value, state }
@@ -52,8 +65,8 @@ where
 #[allow(unused)]
 pub struct AsyncMemo<T: 'static> {
     value: Signal<Option<Signal<T>>>,
-    task: Signal<Option<Task>>,
-    state: Signal<UseResourceState<T>>,
+    task: Signal<Task>,
+    state: Signal<UseResourceState>,
 }
 
 impl<T> AsyncMemo<T> {
@@ -93,7 +106,7 @@ impl<T> AsyncMemo<T> {
     }
 
     /// Get the current state of the future.
-    pub fn state(&self) -> UseResourceState<T> {
+    pub fn state(&self) -> UseResourceState {
         todo!()
         // match (&self.task.get(), &self.value()) {
         //     // If we have a task and an existing value, we're reloading
@@ -121,8 +134,8 @@ impl<T> AsyncMemo<T> {
     }
 }
 
-pub enum UseResourceState<T: 'static> {
+pub enum UseResourceState {
     Pending,
-    Complete(Signal<T>),
-    Regenerating(Signal<T>), // the old value
+    Complete,
+    Regenerating, // the old value
 }

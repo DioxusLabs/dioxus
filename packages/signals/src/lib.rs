@@ -19,8 +19,8 @@ pub use read_only_signal::*;
 mod map;
 pub use map::*;
 
-mod comparer;
-pub use comparer::*;
+// mod comparer;
+// pub use comparer::*;
 
 mod global;
 pub use global::*;

@@ -1,7 +1,7 @@
 use crate::use_hook_did_run;
 use dioxus_core::prelude::*;
 use dioxus_signals::{CopyValue, Effect, ReactiveContext, Writable};
-use futures_util::select;
+// use futures_util::select;
 
 /// Create a new effect. The effect will be run immediately and whenever any signal it reads changes.
 /// The signal will be owned by the current component and will be dropped when the component is dropped.

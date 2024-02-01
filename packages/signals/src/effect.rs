@@ -156,7 +156,7 @@ impl Effect {
     /// Create a new effect. The effect will be run immediately and whenever any signal it reads changes.
     ///
     /// The signal will be owned by the current component and will be dropped when the component is dropped.
-    pub fn new(mut callback: impl FnMut() + 'static) -> Self {
+    fn new(mut callback: impl FnMut() + 'static) -> Self {
         let source = current_scope_id().expect("in a virtual dom");
         let myself = Self {
             source,

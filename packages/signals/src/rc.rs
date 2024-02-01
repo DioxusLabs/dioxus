@@ -5,7 +5,6 @@ use dioxus_core::prelude::{
 use generational_box::{GenerationalBoxId, SyncStorage};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::{cell::RefCell, hash::Hash};
-use tokio::signal;
 
 use crate::{CopyValue, RcList, Readable, Writable};
 
@@ -37,17 +36,17 @@ impl ReactiveContext {
             signal_subscribers: FxHashMap::default(),
             scope_subscribers,
             sender: tx,
-            _self: None,
+            self_: None,
             receiver: rx,
         };
 
-        let mut _self = Self {
+        let mut self_ = Self {
             inner: CopyValue::new_maybe_sync(inner),
         };
 
-        _self.inner.write()._self = Some(_self);
+        self_.inner.write().self_ = Some(self_);
 
-        _self
+        self_
     }
 
     /// Get the current reactive context
@@ -60,24 +59,16 @@ impl ReactiveContext {
 
         // If we're already inside a reactive context, then return that
         if let Some(cur) = cur {
-            println!("Already found context!");
             return Some(cur);
         }
 
-        // Try and get the context out of the current scope
-        let scope = current_scope_id().unwrap();
-
         // If we're rendering, then try and use the reactive context attached to this component
-
         if let Some(cx) = has_context() {
-            println!("found context at {scope:?}");
             return Some(cx);
         }
 
-        println!("creating new context at {scope:?}");
-
         // Otherwise, create a new context at the current scope
-        Some(provide_context(ReactiveContext::new(Some(scope))))
+        Some(provide_context(ReactiveContext::new(current_scope_id())))
     }
 
     /// Run this function in the context of this reactive context
@@ -96,7 +87,6 @@ impl ReactiveContext {
     /// If there's a scope associated with this context, then it will be marked as dirty too
     pub fn mark_dirty(&self) {
         for scope in self.inner.read().scope_subscribers.iter() {
-            println!("marking dirty {scope:?}");
             needs_update_any(*scope);
         }
 
@@ -105,8 +95,8 @@ impl ReactiveContext {
         _ = self.inner.read().sender.try_send(());
     }
 
-    // Create a two-way binding between this reactive context and a signal
-    pub fn link(&self, signal: GenerationalBoxId, rc_list: RcList) {
+    /// Create a two-way binding between this reactive context and a signal
+    pub fn link(&mut self, signal: GenerationalBoxId, rc_list: RcList) {
         rc_list.write().insert(*self);
         self.inner
             .write()
@@ -132,11 +122,11 @@ impl Hash for ReactiveContext {
     }
 }
 
-pub struct Inner {
+struct Inner {
     // Set of signals bound to this context
-    pub signal_subscribers: FxHashMap<GenerationalBoxId, RcList>,
+    signal_subscribers: FxHashMap<GenerationalBoxId, RcList>,
     scope_subscribers: FxHashSet<ScopeId>,
-    _self: Option<ReactiveContext>,
+    self_: Option<ReactiveContext>,
 
     // Futures will call .changed().await
     sender: flume::Sender<()>,
@@ -144,10 +134,10 @@ pub struct Inner {
 }
 
 impl Drop for Inner {
+    // Remove this context from all the subscribers
     fn drop(&mut self) {
-        // Remove this context from all the subscribers
         self.signal_subscribers.values().for_each(|sub_list| {
-            sub_list.write().remove(&self._self.unwrap());
+            sub_list.write().remove(&self.self_.unwrap());
         });
     }
 }
