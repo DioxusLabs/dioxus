@@ -29,7 +29,61 @@ pub enum LiveViewError {
     SendingFailed,
 }
 
-static MINIFIED: &str = include_str!("./minified.js");
+fn handle_edits_code() -> String {
+    use dioxus_interpreter_js::binary_protocol::SLEDGEHAMMER_JS;
+
+    let serialize_file_uploads = r#"if (
+        target.tagName === "INPUT" &&
+        (event.type === "change" || event.type === "input")
+      ) {
+        const type = target.getAttribute("type");
+        if (type === "file") {
+          async function read_files() {
+            const files = target.files;
+            const file_contents = {};
+
+            for (let i = 0; i < files.length; i++) {
+              const file = files[i];
+
+              file_contents[file.name] = Array.from(
+                new Uint8Array(await file.arrayBuffer())
+              );
+            }
+            let file_engine = {
+              files: file_contents,
+            };
+            contents.files = file_engine;
+
+            if (realId === null) {
+              return;
+            }
+            const message = window.interpreter.serializeIpcMessage("user_event", {
+              name: name,
+              element: parseInt(realId),
+              data: contents,
+              bubbles,
+            });
+            window.ipc.postMessage(message);
+          }
+          read_files();
+          return;
+        }
+      }"#;
+    let mut interpreter = SLEDGEHAMMER_JS
+        .replace("/*POST_EVENT_SERIALIZATION*/", serialize_file_uploads)
+        .replace("export", "");
+    while let Some(import_start) = interpreter.find("import") {
+        let import_end = interpreter[import_start..]
+            .find(|c| c == ';' || c == '\n')
+            .map(|i| i + import_start)
+            .unwrap_or_else(|| interpreter.len());
+        interpreter.replace_range(import_start..import_end, "");
+    }
+
+    let main_js = include_str!("./main.js");
+
+    format!("{interpreter}\n{main_js}")
+}
 
 /// This script that gets injected into your app connects this page to the websocket endpoint
 ///
@@ -67,6 +121,8 @@ pub fn interpreter_glue(url_or_path: &str) -> String {
         "return path;"
     };
 
+    let handle_edits = handle_edits_code();
+
     format!(
         r#"
 <script>
@@ -75,7 +131,7 @@ pub fn interpreter_glue(url_or_path: &str) -> String {
     }}
     
     var WS_ADDR = __dioxusGetWsUrl("{url_or_path}");
-    {MINIFIED}
+    {handle_edits}
 </script>
     "#
     )

@@ -1,11 +1,82 @@
 use crate::{assets::*, edits::EditQueue};
+use dioxus_interpreter_js::SLEDGEHAMMER_JS;
 use std::path::{Path, PathBuf};
 use wry::{
     http::{status::StatusCode, Request, Response},
     RequestAsyncResponder, Result,
 };
 
-static MINIFIED: &str = include_str!("./minified.js");
+fn handle_edits_code() -> String {
+    const EDITS_PATH: &str = {
+        #[cfg(any(target_os = "android", target_os = "windows"))]
+        {
+            "http://dioxus.index.html/edits"
+        }
+        #[cfg(not(any(target_os = "android", target_os = "windows")))]
+        {
+            "dioxus://index.html/edits"
+        }
+    };
+
+    let prevent_file_upload = r#"// Prevent file inputs from opening the file dialog on click
+    let inputs = document.querySelectorAll("input");
+    for (let input of inputs) {
+      if (!input.getAttribute("data-dioxus-file-listener")) {
+        // prevent file inputs from opening the file dialog on click
+        const type = input.getAttribute("type");
+        if (type === "file") {
+          input.setAttribute("data-dioxus-file-listener", true);
+          input.addEventListener("click", (event) => {
+            let target = event.target;
+            let target_id = find_real_id(target);
+            if (target_id !== null) {
+              const send = (event_name) => {
+                const message = window.interpreter.serializeIpcMessage("file_diolog", { accept: target.getAttribute("accept"), directory: target.getAttribute("webkitdirectory") === "true", multiple: target.hasAttribute("multiple"), target: parseInt(target_id), bubbles: event_bubbles(event_name), event: event_name });
+                window.ipc.postMessage(message);
+              };
+              send("change&input");
+            }
+            event.preventDefault();
+          });
+        }
+      }
+    }"#;
+    let polling_request = format!(
+        r#"// Poll for requests
+    window.interpreter.wait_for_request = (headless) => {{
+      fetch(new Request("{EDITS_PATH}"))
+          .then(response => {{
+              response.arrayBuffer()
+                  .then(bytes => {{
+                      // In headless mode, the requestAnimationFrame callback is never called, so we need to run the bytes directly
+                      if (headless) {{
+                        run_from_bytes(bytes);
+                      }}
+                      else {{
+                        requestAnimationFrame(() => {{
+                          run_from_bytes(bytes);
+                        }});
+                      }}
+                      window.interpreter.wait_for_request(headless);
+                  }});
+          }})
+    }}"#
+    );
+    let mut interpreter = SLEDGEHAMMER_JS
+        .replace("/*POST_HANDLE_EDITS*/", prevent_file_upload)
+        .replace("export", "")
+        + &polling_request;
+    while let Some(import_start) = interpreter.find("import") {
+        let import_end = interpreter[import_start..]
+            .find(|c| c == ';' || c == '\n')
+            .map(|i| i + import_start)
+            .unwrap_or_else(|| interpreter.len());
+        interpreter.replace_range(import_start..import_end, "");
+    }
+
+    format!("{interpreter}\nconst config = new InterpreterConfig(false);")
+}
+
 static DEFAULT_INDEX: &str = include_str!("./index.html");
 
 /// Build the index.html file we use for bootstrapping a new app
@@ -162,10 +233,11 @@ fn serve_from_fs(path: PathBuf) -> Result<Response<Vec<u8>>> {
 /// - headless: is this page being loaded but invisible? Important because not all windows are visible and the
 ///             interpreter can't connect until the window is ready.
 fn module_loader(root_id: &str, headless: bool) -> String {
+    let js = handle_edits_code();
     format!(
         r#"
 <script type="module">
-    {MINIFIED}
+    {js}
     // Wait for the page to load
     window.onload = function() {{
         let rootname = "{root_id}";
