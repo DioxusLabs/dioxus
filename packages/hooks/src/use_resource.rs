@@ -19,7 +19,7 @@ use std::future::Future;
 /// will be canceled before the new one is started.
 ///
 /// - dependencies: a tuple of references to values that are PartialEq + Clone
-pub fn use_resource<T, F>(future: impl Fn() -> F) -> UseResource<T>
+pub fn use_resource<T, F>(future: impl Fn() -> F + 'static) -> UseResource<T>
 where
     T: 'static,
     F: Future<Output = T> + 'static,

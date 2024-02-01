@@ -38,7 +38,7 @@ impl<O: 'static + ?Sized> Clone for UseCallback<O> {
         Self { inner: self.inner }
     }
 }
-// impl<O: 'static> Copy for UseCallback<O> {}
+impl<O: 'static> Copy for UseCallback<O> {}
 
 impl<O> UseCallback<O> {
     /// Call the callback

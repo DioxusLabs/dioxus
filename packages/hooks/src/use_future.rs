@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
-use crate::{use_callback, use_hook_did_run, use_signal};
+use crate::{use_callback, use_hook_did_run, use_signal, UseCallback};
 use dioxus_core::{
-    prelude::{spawn, use_drop, use_hook},
+    prelude::{flush_sync, spawn, use_drop, use_hook},
     Task,
 };
 use dioxus_signals::*;
@@ -10,22 +10,30 @@ use std::future::Future;
 
 /// A hook that allows you to spawn a future
 ///
-/// Does not regenerate the future when dependencies change.
-pub fn use_future<F>(future: impl FnMut() -> F + 'static) -> UseFuture
+/// The future is spawned on the next call to `flush_sync` which means that it will not run on the server.
+/// To run a future on the server, you should use `spawn` directly.
+pub fn use_future<F>(mut future: impl FnMut() -> F + 'static) -> UseFuture
 where
     F: Future + 'static,
 {
-    let mut callback = use_callback(future);
-    let mut state = use_signal(|| UseFutureState::Pending);
+    let mut complete = use_signal(|| UseFutureState::Pending);
+
+    let mut callback = use_callback(move || {
+        let fut = future();
+        spawn(async move {
+            // todo: not sure if we should flush_sync
+            // It's fine for most cases but means that the future will always be started in the next frame
+            // The point here is to not run use_future on the server... which like, shouldn't we?
+            flush_sync().await;
+
+            complete.set(UseFutureState::Pending);
+            fut.await;
+            complete.set(UseFutureState::Complete);
+        })
+    });
 
     // Create the task inside a copyvalue so we can reset it in-place later
-    let task = use_hook(|| {
-        let fut = callback.call();
-        CopyValue::new(spawn(async move {
-            fut.await;
-            state.set(UseFutureState::Complete);
-        }))
-    });
+    let task = use_hook(|| CopyValue::new(callback.call()));
 
     // Early returns in dioxus have consequences for use_memo, use_resource, and use_future, etc
     // We *don't* want futures to be running if the component early returns. It's a rather weird behavior to have
@@ -40,13 +48,18 @@ where
 
     use_drop(move || task.peek().stop());
 
-    UseFuture { task, state }
+    UseFuture {
+        task,
+        state: complete,
+        callback,
+    }
 }
 
-#[allow(unused)]
+#[derive(Clone, Copy)]
 pub struct UseFuture {
     task: CopyValue<Task>,
     state: Signal<UseFutureState>,
+    callback: UseCallback<Task>,
 }
 
 impl UseFuture {
@@ -54,43 +67,64 @@ impl UseFuture {
     ///
     /// Will not cancel the previous future, but will ignore any values that it
     /// generates.
-    pub fn restart(&self) {
-        // self.needs_regen.set(true);
-        // (self.update)();
+    pub fn restart(&mut self) {
+        self.task.write().stop();
+        let new_task = self.callback.call();
+        self.task.set(new_task);
     }
 
     /// Forcefully cancel a future
     pub fn cancel(&mut self) {
+        self.state.set(UseFutureState::Stopped);
         self.task.write().stop();
     }
 
-    /// Get the ID of the future in Dioxus' internal scheduler
-    pub fn task(&self) -> Option<Task> {
-        todo!()
-        // self.task.get()
+    /// Pause the future
+    pub fn pause(&mut self) {
+        self.state.set(UseFutureState::Paused);
+        self.task.write().pause();
+    }
+
+    /// Resume the future
+    pub fn resume(&mut self) {
+        if self.finished() {
+            return;
+        }
+
+        self.state.set(UseFutureState::Pending);
+        self.task.write().resume();
+    }
+
+    /// Get a handle to the inner task backing this future
+    /// Modify the task through this handle will cause inconsistent state
+    pub fn task(&self) -> Task {
+        self.task.cloned()
     }
 
     /// Get the current state of the future.
-    pub fn state(&self) -> UseFutureState {
-        todo!()
-        // match (&self.task.get(), &self.value()) {
-        //     // If we have a task and an existing value, we're reloading
-        //     (Some(_), Some(val)) => UseFutureState::Reloading(val),
+    pub fn finished(&self) -> bool {
+        matches!(self.state.peek().clone(), UseFutureState::Complete)
+    }
 
-        //     // no task, but value - we're done
-        //     (None, Some(val)) => UseFutureState::Complete(val),
-
-        //     // no task, no value - something's wrong? return pending
-        //     (None, None) => UseFutureState::Pending,
-
-        //     // Task, no value - we're still pending
-        //     (Some(_), None) => UseFutureState::Pending,
-        // }
+    /// Get the current state of the future.
+    pub fn state(&self) -> ReadOnlySignal<UseFutureState> {
+        self.state.clone().into()
     }
 }
 
+/// A signal that represents the state of a future
+// we might add more states (panicked, etc)
+#[derive(Clone, Copy, PartialEq, Hash, Eq, Debug)]
 pub enum UseFutureState {
+    /// The future is still running
     Pending,
+
+    /// The future has been forcefully stopped
+    Stopped,
+
+    /// The future has been paused, tempoarily
+    Paused,
+
+    /// The future has completed
     Complete,
-    Regenerating, // the old value
 }
