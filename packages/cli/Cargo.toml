@@ -68,7 +68,10 @@ mlua = { version = "0.8.1", features = [
 ], optional = true }
 ctrlc = "3.2.3"
 open = "5.0.1"
+
 cargo-generate = "0.19.0"
+rhai_codegen = "=1.6.0"
+
 toml_edit = "0.21.0"
 
 # bundling
