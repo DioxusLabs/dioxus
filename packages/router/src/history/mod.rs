@@ -54,9 +54,9 @@ pub trait HistoryProvider<R: Routable> {
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
-    /// # fn Index() -> Element { todo!() }
+    /// # fn Index() -> Element { None }
     /// # #[component]
-    /// # fn OtherPage() -> Element { todo!() }
+    /// # fn OtherPage() -> Element { None }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]
@@ -92,8 +92,8 @@ pub trait HistoryProvider<R: Routable> {
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
-    /// # fn Index() -> Element { todo!() }
-    /// # fn Other() -> Element { todo!() }
+    /// # fn Index() -> Element { None }
+    /// # fn Other() -> Element { None }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]
@@ -121,9 +121,9 @@ pub trait HistoryProvider<R: Routable> {
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
-    /// # fn Index() -> Element { todo!() }
+    /// # fn Index() -> Element { None }
     /// # #[component]
-    /// # fn OtherPage() -> Element { todo!() }
+    /// # fn OtherPage() -> Element { None }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]
@@ -153,9 +153,9 @@ pub trait HistoryProvider<R: Routable> {
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
-    /// # fn Index() -> Element { todo!() }
+    /// # fn Index() -> Element { None }
     /// # #[component]
-    /// # fn OtherPage() -> Element { todo!() }
+    /// # fn OtherPage() -> Element { None }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]
@@ -186,9 +186,9 @@ pub trait HistoryProvider<R: Routable> {
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
-    /// # fn Index() -> Element { todo!() }
+    /// # fn Index() -> Element { None }
     /// # #[component]
-    /// # fn OtherPage() -> Element { todo!() }
+    /// # fn OtherPage() -> Element { None }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]
@@ -219,9 +219,9 @@ pub trait HistoryProvider<R: Routable> {
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
-    /// # fn Index() -> Element { todo!() }
+    /// # fn Index() -> Element { None }
     /// # #[component]
-    /// # fn OtherPage() -> Element { todo!() }
+    /// # fn OtherPage() -> Element { None }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]
@@ -248,9 +248,9 @@ pub trait HistoryProvider<R: Routable> {
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
-    /// # fn Index() -> Element { todo!() }
+    /// # fn Index() -> Element { None }
     /// # #[component]
-    /// # fn OtherPage() -> Element { todo!() }
+    /// # fn OtherPage() -> Element { None }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]

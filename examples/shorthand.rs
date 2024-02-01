@@ -25,14 +25,12 @@ fn app() -> Element {
 }
 
 #[component]
-fn Component(a: i32, b: i32, c: i32, children: Element, onclick: EventHandler<()>) -> Element {
+fn Component(a: i32, b: i32, c: i32, children: Element, onclick: EventHandler) -> Element {
     rsx! {
         div { "{a}" }
         div { "{b}" }
         div { "{c}" }
         div { {children} }
-        div {
-            onclick: move |_| onclick.call(()),
-        }
+        div { onclick: move |_| onclick.call(()) }
     }
 }

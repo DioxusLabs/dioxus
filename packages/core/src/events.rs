@@ -150,8 +150,8 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
 /// }
 ///
 /// #[derive(Props)]
-/// struct MyProps<'a> {
-///     onclick: EventHandler<'a, MouseEvent>,
+/// struct MyProps {
+///     onclick: EventHandler<MouseEvent>,
 /// }
 ///
 /// fn MyComponent(cx: MyProps) -> Element {

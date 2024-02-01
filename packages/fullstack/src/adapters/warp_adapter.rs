@@ -177,7 +177,7 @@ pub fn register_server_fns(server_fn_route: &'static str) -> BoxedFilter<(impl R
 /// }
 ///
 /// fn app() -> Element {
-///     todo!()
+///     None
 /// }
 /// ```
 pub fn serve_dioxus_application(

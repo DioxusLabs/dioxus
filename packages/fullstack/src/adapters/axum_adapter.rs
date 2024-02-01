@@ -184,7 +184,7 @@ pub trait DioxusRouterExt<S> {
     /// }
     ///
     /// fn app() -> Element {
-    ///     todo!()
+    ///     unimplemented!()
     /// }
     /// ```
     fn serve_static_assets(self, assets_path: impl Into<std::path::PathBuf>) -> Self;
@@ -213,7 +213,7 @@ pub trait DioxusRouterExt<S> {
     /// }
     ///
     /// fn app() -> Element {
-    ///     todo!()
+    ///     unimplemented!()
     /// }
     /// ```
     fn serve_dioxus_application(

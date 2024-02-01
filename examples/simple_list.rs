@@ -22,7 +22,7 @@ fn app() -> Element {
 
             // use a for loop where the body itself is RSX
             for name in 0..10 {
-                div {"{name}"}
+                div { "{name}" }
             }
 
             // Or even use an unterminated conditional

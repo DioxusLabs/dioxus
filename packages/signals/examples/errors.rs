@@ -35,7 +35,7 @@ fn Read() -> Element {
     let _write = signal.write();
     let _read = signal.read();
 
-    todo!()
+    unreachable!()
 }
 
 #[component]
@@ -45,7 +45,7 @@ fn ReadMut() -> Element {
     let _read = signal.read();
     let _write = signal.write();
 
-    todo!()
+    unreachable!()
 }
 
 #[component]

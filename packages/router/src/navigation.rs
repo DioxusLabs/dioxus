@@ -20,7 +20,7 @@ pub enum NavigationTarget<R> {
     /// # use dioxus_router::navigation::NavigationTarget;
     /// # #[component]
     /// # fn Index() -> Element {
-    /// #     todo!()
+    /// #     unreachable!()
     /// # }
     /// #[derive(Clone, Routable, PartialEq, Debug)]
     /// enum Route {
@@ -40,7 +40,7 @@ pub enum NavigationTarget<R> {
     /// # use dioxus_router::navigation::NavigationTarget;
     /// # #[component]
     /// # fn Index() -> Element {
-    /// #     todo!()
+    /// #     unreachable!()
     /// # }
     /// #[derive(Clone, Routable, PartialEq, Debug)]
     /// enum Route {

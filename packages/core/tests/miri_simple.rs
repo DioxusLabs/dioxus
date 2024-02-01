@@ -95,7 +95,7 @@ fn diffing_drops_old() {
                 match generation() % 2 {
                     0 => rsx!( ChildComp1 { name: "asdasd".to_string() }),
                     1 => rsx!( ChildComp2 { name: "asdasd".to_string() }),
-                    _ => todo!()
+                    _ => unreachable!()
                 }
             }
         }

@@ -200,7 +200,7 @@ pub trait DioxusRouterExt {
     ///         .await;
     /// }
     ///
-    /// fn app() -> Element {todo!()}
+    /// fn app() -> Element {unimplemented!() }
     /// ```
     fn serve_dioxus_application(
         self,

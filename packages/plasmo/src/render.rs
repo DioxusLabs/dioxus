@@ -210,7 +210,7 @@ impl RinkWidget for NodeRef<'_> {
                             [1, -1] => [points_history[1][0], points_history[1][1] - 1],
                             [-1, 1] => [points_history[1][0], points_history[1][1] + 1],
                             [-1, -1] => [points_history[1][0] - 1, points_history[1][1]],
-                            _ => todo!(),
+                            _ => unreachable!(),
                         };
                         draw(
                             buf,
@@ -253,7 +253,7 @@ impl RinkWidget for NodeRef<'_> {
                 _ => match border.radius {
                     Dimension::Percent(p) => p * area.width as f32 / 100.0,
                     Dimension::Points(p) => p,
-                    _ => todo!(),
+                    _ => unreachable!(),
                 }
                 .abs()
                 .min((area.width as f32 / RADIUS_MULTIPLIER[0]) / 2.0)

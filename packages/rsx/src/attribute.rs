@@ -169,7 +169,7 @@ impl ToTokens for ElementAttrNamed {
                             dioxus_elements::events::#name(#tokens)
                         }
                     }
-                    ElementAttrName::Custom(_) => todo!(),
+                    ElementAttrName::Custom(_) => unreachable!("Handled elsewhere in the macro"),
                 },
                 _ => {
                     quote! { dioxus_elements::events::#value(#value) }
@@ -338,7 +338,7 @@ impl ElementAttrValue {
                     }
                 })
             }
-            _ => todo!(),
+            _ => unreachable!("Invalid combination of attributes"),
         }
     }
 }

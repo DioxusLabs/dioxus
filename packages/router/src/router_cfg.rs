@@ -15,7 +15,7 @@ use crate::prelude::*;
 /// # use dioxus::prelude::*;
 /// # #[component]
 /// # fn Index() -> Element {
-/// #     todo!()
+/// #     None
 /// # }
 /// #[derive(Clone, Routable)]
 /// enum Route {

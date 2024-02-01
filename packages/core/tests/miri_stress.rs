@@ -97,14 +97,6 @@ fn memo_works_properly() {
     let mut dom = VirtualDom::new(app);
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
-    // todo!()
-    // dom.hard_diff(ScopeId::ROOT);
-    // dom.hard_diff(ScopeId::ROOT);
-    // dom.hard_diff(ScopeId::ROOT);
-    // dom.hard_diff(ScopeId::ROOT);
-    // dom.hard_diff(ScopeId::ROOT);
-    // dom.hard_diff(ScopeId::ROOT);
-    // dom.hard_diff(ScopeId::ROOT);
 }
 
 #[test]

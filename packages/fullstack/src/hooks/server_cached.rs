@@ -16,7 +16,7 @@ use serde::{de::DeserializeOwned, Serialize};
 ///       1234
 ///    }));
 ///
-///    todo!()
+///    None
 /// }
 /// ```
 pub fn server_cached<O: 'static + Serialize + DeserializeOwned>(server_fn: impl Fn() -> O) -> O {

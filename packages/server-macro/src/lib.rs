@@ -40,7 +40,7 @@ use syn::{
 /// #[server(ReadPosts, "/api")]
 /// pub async fn read_posts(how_many: u8, query: String) -> Result<Vec<Post>, ServerFnError> {
 ///   // do some work on the server to access the database
-///   todo!()
+/// #   unimplemented!()
 /// }
 /// ```
 ///
