@@ -1,5 +1,5 @@
 #![allow(missing_docs)]
-use crate::{use_hook_did_run, use_signal};
+use crate::{use_callback, use_hook_did_run, use_signal};
 use dioxus_core::{
     prelude::{spawn, use_drop, use_hook},
     Task,
@@ -11,15 +11,16 @@ use std::future::Future;
 /// A hook that allows you to spawn a future
 ///
 /// Does not regenerate the future when dependencies change.
-pub fn use_future<F>(mut future: impl FnMut() -> F) -> UseFuture
+pub fn use_future<F>(future: impl FnMut() -> F + 'static) -> UseFuture
 where
     F: Future + 'static,
 {
+    let mut callback = use_callback(future);
     let mut state = use_signal(|| UseFutureState::Pending);
 
     // Create the task inside a copyvalue so we can reset it in-place later
     let task = use_hook(|| {
-        let fut = future();
+        let fut = callback.call();
         CopyValue::new(spawn(async move {
             fut.await;
             state.set(UseFutureState::Complete);

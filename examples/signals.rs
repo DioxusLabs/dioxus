@@ -29,7 +29,7 @@ fn app() -> Element {
     }
 
     // use_future will spawn an infinitely running future that can be started and stopped
-    use_future(|| async move {
+    use_future(move || async move {
         loop {
             if running() {
                 count += 1;

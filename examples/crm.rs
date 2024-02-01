@@ -1,6 +1,5 @@
 //! Tiny CRM: A port of the Yew CRM example to Dioxus.
 use dioxus::prelude::*;
-use dioxus::router::prelude::*;
 
 fn main() {
     LaunchBuilder::new()

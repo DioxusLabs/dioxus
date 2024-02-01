@@ -50,7 +50,7 @@ fn app() -> Element {
 /// Suspense is achieved my moving the future into only the component that
 /// actually renders the data.
 fn Doggo() -> Element {
-    let fut = use_future(|| async move {
+    let fut = use_future(move || async move {
         #[derive(serde::Deserialize)]
         struct DogApi {
             message: String,

@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use dioxus_router::prelude::*;
 use std::str::FromStr;
 
 fn prepare<R: Routable>() -> String

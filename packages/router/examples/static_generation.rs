@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use dioxus::prelude::*;
-use dioxus::router::prelude::*;
 
 use dioxus_ssr::incremental::{DefaultRenderer, IncrementalRendererConfig};
 

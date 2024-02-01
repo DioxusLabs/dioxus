@@ -169,7 +169,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     fn app() -> Element {
         let mut count = use_signal(|| 0);
 
-        use_future(|| async move {
+        use_future(move || async move {
             loop {
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 count += 1;
