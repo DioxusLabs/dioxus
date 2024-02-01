@@ -571,7 +571,7 @@ fn convert_grid_track_item(input: grid::TrackListItem) -> TrackSizingFunction {
         grid::TrackListItem::TrackSize(size) => {
             TrackSizingFunction::Single(convert_grid_track_size(size))
         }
-        grid::TrackListItem::TrackRepeat(_) => todo!(), // TODO: requires TrackRepeat fields to be public!
+        grid::TrackListItem::TrackRepeat(_) => todo!("requires TrackRepeat fields to be public!"),
     }
 }
 
