@@ -61,9 +61,6 @@ rocket_ws = "0.1.0"
 tower = "0.4.13"
 dioxus = { workspace = true }
 
-[build-dependencies]
-# dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
-
 [features]
 default = ["hot-reload"]
 # actix = ["actix-files", "actix-web", "actix-ws"]

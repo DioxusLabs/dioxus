@@ -82,9 +82,6 @@ features = ["tokio_runtime", "hot-reload"]
 dioxus = { workspace = true, features = ["desktop"] }
 exitcode = "1.1.2"
 
-[build-dependencies]
-# dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
-
 # These tests need to be run on the main thread, so they cannot use rust's test harness.
 [[test]]
 name = "check_events"

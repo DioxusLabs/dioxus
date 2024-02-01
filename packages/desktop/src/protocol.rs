@@ -1,5 +1,5 @@
 use crate::{assets::*, edits::EditQueue};
-use dioxus_interpreter_js::SLEDGEHAMMER_JS;
+use dioxus_interpreter_js::binary_protocol::SLEDGEHAMMER_JS;
 use std::path::{Path, PathBuf};
 use wry::{
     http::{status::StatusCode, Request, Response},
