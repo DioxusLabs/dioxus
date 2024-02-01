@@ -104,11 +104,6 @@ impl ReactiveContext {
             .insert(signal, rc_list);
     }
 
-    /// Clear all subscribers from this reactive context
-    pub fn clear_subscribers(&self) {
-        todo!()
-    }
-
     /// Wait for this reactive context to change
     pub async fn changed(&self) {
         let rx = self.inner.read().receiver.clone();
