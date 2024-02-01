@@ -31,6 +31,7 @@ pub enum LiveViewError {
 
 fn handle_edits_code() -> String {
     use dioxus_interpreter_js::binary_protocol::SLEDGEHAMMER_JS;
+    use minify_js::{minify, Session, TopLevelMode};
 
     let serialize_file_uploads = r#"if (
         target.tagName === "INPUT" &&
@@ -82,7 +83,12 @@ fn handle_edits_code() -> String {
 
     let main_js = include_str!("./main.js");
 
-    format!("{interpreter}\n{main_js}")
+    let js = format!("{interpreter}\n{main_js}");
+
+    let session = Session::new();
+    let mut out = Vec::new();
+    minify(&session, TopLevelMode::Module, js.as_bytes(), &mut out).unwrap();
+    String::from_utf8(out).unwrap()
 }
 
 /// This script that gets injected into your app connects this page to the websocket endpoint

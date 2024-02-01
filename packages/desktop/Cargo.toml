@@ -84,7 +84,6 @@ exitcode = "1.1.2"
 
 [build-dependencies]
 # dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
-# minify-js = "0.5.6"
 
 # These tests need to be run on the main thread, so they cannot use rust's test harness.
 [[test]]
