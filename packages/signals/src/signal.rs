@@ -121,9 +121,8 @@ impl<T: PartialEq + 'static> Signal<T> {
 
         spawn(async move {
             loop {
+                flush_sync().await;
                 rc.changed().await;
-                println!("changed");
-
                 let new = f();
                 if new != *state.peek() {
                     *state.write() = new;
