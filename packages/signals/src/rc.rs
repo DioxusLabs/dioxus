@@ -1,6 +1,5 @@
 use dioxus_core::prelude::{
-    consume_context, consume_context_from_scope, current_scope_id, has_context, needs_update_any,
-    provide_context, schedule_update, schedule_update_any, try_consume_context, ScopeId,
+    current_scope_id, has_context, needs_update_any, provide_context, ScopeId,
 };
 use generational_box::{GenerationalBoxId, SyncStorage};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -16,7 +15,7 @@ use crate::{CopyValue, RcList, Readable, Writable};
 /// When the ReactiveContext drops, it will remove itself from the the associated contexts attached to signal
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ReactiveContext {
-    pub inner: CopyValue<Inner, SyncStorage>,
+    inner: CopyValue<Inner, SyncStorage>,
 }
 
 thread_local! {

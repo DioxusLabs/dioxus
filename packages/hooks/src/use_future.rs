@@ -21,6 +21,7 @@ where
     let mut callback = use_callback(move || {
         let fut = future();
         spawn(async move {
+            flush_sync().await;
             state.set(UseFutureState::Pending);
             fut.await;
             state.set(UseFutureState::Complete);
