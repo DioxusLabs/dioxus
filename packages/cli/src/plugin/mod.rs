@@ -227,8 +227,6 @@ async fn load_plugins(
         plugins.push(plugin);
     }
 
-    let mut dioxus_lock = DioxusLock::load()?;
-
     dioxus_lock.initialize_new_plugins(&mut plugins).await?;
 
     Ok(plugins)
