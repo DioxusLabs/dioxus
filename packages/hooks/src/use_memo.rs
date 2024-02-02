@@ -56,6 +56,9 @@ pub fn use_maybe_sync_memo<R: PartialEq, S: Storage<SignalData<R>>>(
 
         spawn(async move {
             loop {
+                // Wait for the dom the be finished with sync work
+                flush_sync().await;
+
                 rc.changed().await;
                 let new = rc.run_in(|| f());
                 if new != *state.peek() {

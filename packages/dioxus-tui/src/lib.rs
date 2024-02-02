@@ -21,6 +21,26 @@ use element::DioxusTUIMutationWriter;
 pub use plasmo::{query::Query, Config, RenderingMode, Size, TuiContext};
 use plasmo::{render, Driver};
 
+pub mod launch {
+    use super::*;
+
+    pub type Config = super::Config;
+    /// Launches the WebView and runs the event loop, with configuration and root props.
+    pub fn launch(
+        root: fn() -> Element,
+        contexts: Vec<Box<dyn Fn() -> Box<dyn Any>>>,
+        platform_config: Config,
+    ) {
+        let mut virtual_dom = VirtualDom::new(root);
+
+        for context in contexts {
+            virtual_dom.insert_any_root_context(context());
+        }
+
+        launch_vdom_cfg(virtual_dom, platform_config)
+    }
+}
+
 pub fn launch(app: fn() -> Element) {
     launch_cfg(app, Config::default())
 }

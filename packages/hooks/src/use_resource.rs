@@ -2,7 +2,7 @@
 
 use crate::{use_callback, use_signal};
 use dioxus_core::{
-    prelude::{spawn, suspend, use_hook},
+    prelude::{flush_sync, spawn, suspend, use_hook},
     Task,
 };
 use dioxus_signals::*;
@@ -13,7 +13,7 @@ use std::future::Future;
 ///
 /// Regular memos are synchronous and resolve immediately. However, you might want to resolve a memo
 #[must_use = "Consider using `cx.spawn` to run a future without reading its value"]
-pub fn use_async_memo<T, F>(future: impl Fn() -> F + 'static) -> AsyncMemo<T>
+pub fn use_resource<T, F>(future: impl Fn() -> F + 'static) -> AsyncMemo<T>
 where
     T: 'static,
     F: Future<Output = T> + 'static,
@@ -28,6 +28,9 @@ where
 
         // Spawn a wrapper task that polls the innner future and watch its dependencies
         spawn(async move {
+            // Wait for the dom the be finished with sync work
+            flush_sync().await;
+
             // move the future here and pin it so we can poll it
             let fut = fut;
             pin_mut!(fut);
@@ -88,7 +91,9 @@ impl<T> AsyncMemo<T> {
 
     // Manually set the value in the future slot without starting the future over
     pub fn set(&mut self, new_value: T) {
-        todo!()
+        // if let Some(task) = self.task.take() {
+        //     cx.remove_future(task);
+        // }
         // self.value.set(Some(new_value));
     }
 

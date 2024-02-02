@@ -21,10 +21,7 @@ fn app() -> Element {
     if count() > 30 {
         return rsx! {
             h1 { "Count is too high!" }
-            button {
-                onclick: move |_| count.set(0),
-                "Press to reset"
-            }
+            button { onclick: move |_| count.set(0), "Press to reset" }
         };
     }
 
@@ -38,8 +35,8 @@ fn app() -> Element {
         }
     });
 
-    // use_resource will spawn a future that resolves to a value - essentially an async memo
-    let _slow_count = use_async_memo(move || async move {
+    // use_resource will spawn a future that resolves to a value
+    let _slow_count = use_resource(move || async move {
         tokio::time::sleep(Duration::from_millis(200)).await;
         count() * 2
     });

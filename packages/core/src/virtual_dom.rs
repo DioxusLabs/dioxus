@@ -202,7 +202,6 @@ pub struct VirtualDom {
     pub(crate) suspended_scopes: FxHashSet<ScopeId>,
 
     rx: futures_channel::mpsc::UnboundedReceiver<SchedulerMsg>,
-    flush_tx: flume::Sender<()>,
 }
 
 impl VirtualDom {
@@ -306,12 +305,10 @@ impl VirtualDom {
     /// ```
     pub(crate) fn new_with_component(root: impl AnyProps + 'static) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
-        let (flush_tx, flush_rx) = flume::unbounded(); // I don't think this needs to be unbounded
 
         let mut dom = Self {
             rx,
-            flush_tx,
-            runtime: Runtime::new(tx, flush_rx),
+            runtime: Runtime::new(tx),
             scopes: Default::default(),
             dirty_scopes: Default::default(),
             templates: Default::default(),
@@ -430,12 +427,13 @@ impl VirtualDom {
         self.poll_tasks().await;
     }
 
-    /// Poll futures without progressing any futures from the flush table
+    ///
     async fn poll_tasks(&mut self) {
-        loop {
-            // Send the flush signal to the runtime, waking up tasks
-            _ = self.flush_tx.try_send(());
+        // Release the flush lock
+        // This will cause all the flush wakers to immediately spring to life, which we will off with process_events
+        self.runtime.release_flush_lock();
 
+        loop {
             // Process all events - Scopes are marked dirty, etc
             // Sometimes when wakers fire we get a slew of updates at once, so its important that we drain this completely
             self.process_events();
@@ -447,6 +445,10 @@ impl VirtualDom {
 
             // Make sure we set the runtime since we're running user code
             let _runtime = RuntimeGuard::new(self.runtime.clone());
+
+            // Hold a lock to the flush sync to prevent tasks from running in the event we get an immediate
+            // When we're doing awaiting the rx, the lock will be dropped and tasks waiting on the lock will get waked
+            self.runtime.acquire_flush_lock();
 
             match self.rx.next().await.expect("channel should never close") {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
@@ -546,6 +548,7 @@ impl VirtualDom {
 
         // Process any events that might be pending in the queue
         // Signals marked with .write() need a chance to be handled by the effect driver
+        // This also processes futures which might progress into immediates
         self.process_events();
 
         // Next, diff any dirty scopes

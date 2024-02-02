@@ -69,6 +69,7 @@ impl TuiContext {
     }
 
     pub fn quit(&self) {
+        // panic!("ack")
         self.tx.unbounded_send(InputEvent::Close).unwrap();
     }
 
@@ -258,7 +259,7 @@ pub fn render<R: Driver>(
                                     TermEvent::Resize(_, _) => updated = true,
                                     _ => {}
                                 },
-                                InputEvent::Close => break,
+                                InputEvent::Close => panic!("ackkkk"),
                             };
 
                             if let InputEvent::UserInput(evt) = evt.unwrap() {

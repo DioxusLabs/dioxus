@@ -20,8 +20,6 @@ slab = { workspace = true }
 futures-channel = { workspace = true }
 tracing = { workspace = true }
 serde = { version = "1", features = ["derive"], optional = true }
-flume = { version = "0.11.0", default-features = false, features = ["async"]}
-
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
