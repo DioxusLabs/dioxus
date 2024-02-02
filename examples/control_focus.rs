@@ -12,16 +12,21 @@ fn app() -> Element {
 
     use_future(move || async move {
         let mut focused = 0;
-        if running() {
-            loop {
-                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-                if let Some(element) = elements.with(|f| f.get(focused).cloned()) {
-                    _ = element.set_focus(true).await;
-                } else {
-                    focused = 0;
-                }
-                focused += 1;
+
+        loop {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+
+            if !running() {
+                continue;
             }
+
+            if let Some(element) = elements.with(|f| f.get(focused).cloned()) {
+                _ = element.set_focus(true).await;
+            } else {
+                focused = 0;
+            }
+
+            focused += 1;
         }
     });
 

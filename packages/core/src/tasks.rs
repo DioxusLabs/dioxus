@@ -37,12 +37,24 @@ impl Task {
 
     /// Pause the task.
     pub fn pause(&self) {
-        Runtime::with(|rt| rt.tasks.borrow()[self.0].active.set(false));
+        self.set_active(false);
+    }
+
+    /// Resume the task.
+    pub fn resume(&self) {
+        self.set_active(true);
     }
 
     /// Check if the task is paused.
     pub fn paused(&self) -> bool {
-        Runtime::with(|rt| !rt.tasks.borrow()[self.0].active.get()).unwrap_or_default()
+        Runtime::with(|rt| {
+            if let Some(task) = rt.tasks.borrow().get(self.0) {
+                !task.active.get()
+            } else {
+                false
+            }
+        })
+        .unwrap_or_default()
     }
 
     /// Wake the task.
@@ -57,16 +69,12 @@ impl Task {
 
     /// Set the task as active or paused.
     pub fn set_active(&self, active: bool) {
-        Runtime::with(|rt| rt.tasks.borrow()[self.0].active.set(active));
-    }
-
-    /// Resume the task.
-    pub fn resume(&self) {
         Runtime::with(|rt| {
-            // set the active flag, and then ping the scheduler to ensure the task gets queued
-            let was_active = rt.tasks.borrow()[self.0].active.replace(true);
-            if !was_active {
-                _ = rt.sender.unbounded_send(SchedulerMsg::TaskNotified(*self));
+            if let Some(task) = rt.tasks.borrow().get(self.0) {
+                let was_active = task.active.replace(active);
+                if !was_active && active {
+                    _ = rt.sender.unbounded_send(SchedulerMsg::TaskNotified(*self));
+                }
             }
         });
     }
