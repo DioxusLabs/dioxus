@@ -5,7 +5,7 @@ use crate::{
 };
 use dioxus_core::{
     prelude::{
-        current_scope_id, has_context, provide_context, schedule_update_any, spawn,
+        current_scope_id, flush_sync, has_context, provide_context, schedule_update_any, spawn,
         IntoAttributeValue,
     },
     ScopeId,
