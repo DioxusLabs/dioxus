@@ -95,8 +95,8 @@ impl<T> AsyncMemo<T> {
     /// Return any value, even old values if the future has not yet resolved.
     ///
     /// If the future has never completed, the returned value will be `None`.
-    pub fn value(&self) -> Option<Signal<T>> {
-        self.value.cloned()
+    pub fn value(&self) -> Option<ReadOnlySignal<T>> {
+        self.value.cloned().map(|sig| sig.into())
     }
 
     /// Get the ID of the future in Dioxus' internal scheduler
