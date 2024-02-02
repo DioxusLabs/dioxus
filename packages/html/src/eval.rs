@@ -59,6 +59,7 @@ pub fn eval(script: &str) -> Result<UseEval, EvalError> {
 }
 
 /// A wrapper around the target platform's evaluator.
+#[derive(Clone, Copy)]
 pub struct UseEval {
     evaluator: GenerationalBox<Box<dyn Evaluator>>,
 }
