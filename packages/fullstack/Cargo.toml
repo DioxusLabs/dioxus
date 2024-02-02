@@ -69,7 +69,6 @@ dioxus-cli-config = { workspace = true, optional = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 dioxus-hot-reload = { workspace = true }
 
-
 [features]
 default = ["hot-reload"]
 hot-reload = ["serde_json", "futures-util"]

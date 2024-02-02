@@ -10,7 +10,7 @@ where
     F: Future<Output = T> + 'static,
 {
     let mut cb = use_callback(_future);
-    let mut gen = use_hook(|| CopyValue::new(0));
+    let mut first_run = use_hook(|| CopyValue::new(true));
 
     let resource = use_resource(move || {
         async move {
@@ -18,11 +18,13 @@ where
             // We're doing this regardless so inputs get tracked, even if we drop the future before polling it
             let user_fut = cb.call();
 
-            // If this is the first run, the data might be cached
-            if gen() == 0 {
-                #[cfg(not(feature = "web"))]
+            // If this is the first run and we are on the web client, the data might be cached
+            if *first_run.peek() {
+                // This is no longer the first run
+                first_run.set(false);
+
+                #[cfg(feature = "web")]
                 if let Some(o) = crate::html_storage::deserialize::take_server_data::<T>() {
-                    gen.set(1);
                     return o;
                 }
             }
@@ -30,28 +32,28 @@ where
             // Otherwise just run the future itself
             let out = user_fut.await;
 
-            // and push the gen forward
-            gen.set(1);
+            // If this is the first run and we are on the server, cache the data
+            #[cfg(feature = "ssr")]
+            if *first_run.peek() {
+                let _ = crate::server_context::server_context().push_html_data(&out);
+            }
 
+            #[allow(clippy::let_and_return)]
             out
         }
     });
 
     // On the first run, force this task to be polled right away in case its value is ready
     use_hook(|| {
-        let _ = resource.task().unwrap().poll_now();
+        let _ = resource.task().poll_now();
     });
 
     // Suspend if the value isn't ready
-    match resource.state() {
+    match resource.state().cloned() {
         UseResourceState::Pending => {
             suspend();
             None
         }
-        UseResourceState::Regenerating => {
-            suspend();
-            Some(resource)
-        }
-        UseResourceState::Ready => Some(resource),
+        _ => Some(resource),
     }
 }

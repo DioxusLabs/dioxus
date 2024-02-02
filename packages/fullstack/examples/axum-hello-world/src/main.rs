@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 fn app() -> Element {
     let mut count = use_signal(|| 0);
     let text = use_signal(|| "...".to_string());
+    let server_future = use_server_future(get_server_data)?;
 
     rsx! {
         h1 { "High-Five counter: {count}" }
@@ -30,6 +31,7 @@ fn app() -> Element {
             "Run a server function!"
         }
         "Server said: {text}"
+        "{server_future.state():?}"
     }
 }
 
