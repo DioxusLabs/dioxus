@@ -1,11 +1,11 @@
 use crate::innerlude::{remove_future, spawn, Runtime};
 use crate::ScopeId;
 use futures_util::task::ArcWake;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Waker;
 use std::{cell::Cell, future::Future};
 use std::{cell::RefCell, rc::Rc};
+use std::{pin::Pin, task::Poll};
 
 /// A task's unique identifier.
 ///
@@ -48,6 +48,11 @@ impl Task {
     /// Wake the task.
     pub fn wake(&self) {
         Runtime::with(|rt| _ = rt.sender.unbounded_send(SchedulerMsg::TaskNotified(*self)));
+    }
+
+    /// Poll the task immediately.
+    pub fn poll_now(&self) -> Poll<()> {
+        Runtime::with(|rt| rt.handle_task_wakeup(*self)).unwrap()
     }
 
     /// Set the task as active or paused.
@@ -122,19 +127,19 @@ impl Runtime {
         self.tasks.borrow().get(task.0)?.parent
     }
 
-    pub(crate) fn handle_task_wakeup(&self, id: Task) {
+    pub(crate) fn handle_task_wakeup(&self, id: Task) -> Poll<()> {
         debug_assert!(Runtime::current().is_some(), "Must be in a dioxus runtime");
 
         let task = self.tasks.borrow().get(id.0).cloned();
 
         // The task was removed from the scheduler, so we can just ignore it
         let Some(task) = task else {
-            return;
+            return Poll::Ready(());
         };
 
         // If a task woke up but is paused, we can just ignore it
         if !task.active.get() {
-            return;
+            return Poll::Pending;
         }
 
         let mut cx = std::task::Context::from_waker(&task.waker);
@@ -144,7 +149,9 @@ impl Runtime {
         self.rendering.set(false);
         self.current_task.set(Some(id));
 
-        if task.task.borrow_mut().as_mut().poll(&mut cx).is_ready() {
+        let poll_result = task.task.borrow_mut().as_mut().poll(&mut cx);
+
+        if poll_result.is_ready() {
             // Remove it from the scope so we dont try to double drop it when the scope dropes
             self.get_state(task.scope)
                 .unwrap()
@@ -160,6 +167,8 @@ impl Runtime {
         self.scope_stack.borrow_mut().pop();
         self.rendering.set(true);
         self.current_task.set(None);
+
+        poll_result
     }
 
     /// Drop the future with the given TaskId

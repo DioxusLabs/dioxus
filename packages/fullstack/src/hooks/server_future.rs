@@ -1,99 +1,57 @@
 use dioxus_lib::prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
-use std::cell::Cell;
-use std::cell::Ref;
-use std::cell::RefCell;
-use std::fmt::Debug;
 use std::future::Future;
-use std::rc::Rc;
-use std::sync::Arc;
 
 /// A future that resolves to a value.
-///
-///
-///
-/// ```rust
-/// fn User(id: String) -> Element {
-///     let data = use_sever_future(move || fetch_user(id)).suspend()?;
-///
-///
-/// }
-///
-/// ```
 #[must_use = "Consider using `cx.spawn` to run a future without reading its value"]
-pub fn use_server_future<T, F>(_future: impl Fn() -> F) -> UseServerFuture<T>
+pub fn use_server_future<T, F>(_future: impl Fn() -> F + 'static) -> Option<Resource<T>>
 where
     T: Serialize + DeserializeOwned + 'static,
     F: Future<Output = T> + 'static,
 {
-    let value: Signal<Option<T>> = use_signal(|| {
-        // Doesn't this need to be keyed by something?
-        // We should try and link these IDs across the server and client
-        // Just the file/line/col span should be fine (or byte index)
-        #[cfg(feature = "ssr")]
-        return crate::html_storage::deserialize::take_server_data::<T>();
+    let mut cb = use_callback(_future);
+    let mut gen = use_hook(|| CopyValue::new(0));
 
-        #[cfg(not(feature = "ssr"))]
-        return None;
+    let resource = use_resource(move || {
+        async move {
+            // this is going to subscribe this resource to any reactivity given to use in the callback
+            // We're doing this regardless so inputs get tracked, even if we drop the future before polling it
+            let user_fut = cb.call();
+
+            // If this is the first run, the data might be cached
+            if gen() == 0 {
+                #[cfg(not(feature = "web"))]
+                if let Some(o) = crate::html_storage::deserialize::take_server_data::<T>() {
+                    gen.set(1);
+                    return o;
+                }
+            }
+
+            // Otherwise just run the future itself
+            let out = user_fut.await;
+
+            // and push the gen forward
+            gen.set(1);
+
+            out
+        }
     });
 
-    // Run the callback regardless, giving us the future without actually polling it
-    // This is where use_server_future gets its reactivity from
-    // If the client is using signals to drive the future itself, (say, via args to the server_fn), then we need to know
-    // what signals are being used
-    use_future(move || async move {
-        // watch the reactive context
-        // if it changes, restart the future
-        //
-        // if let Err(err) = crate::prelude::server_context().push_html_data(&data) {
-        //     tracing::error!("Failed to push HTML data: {}", err);
-        // };
+    // On the first run, force this task to be polled right away in case its value is ready
+    use_hook(|| {
+        let _ = resource.task().unwrap().poll_now();
     });
 
-    // if there's no value ready, mark this component as suspended and return early
-    if value.peek().is_none() {
-        suspend();
+    // Suspend if the value isn't ready
+    match resource.state() {
+        UseResourceState::Pending => {
+            suspend();
+            None
+        }
+        UseResourceState::Regenerating => {
+            suspend();
+            Some(resource)
+        }
+        UseResourceState::Ready => Some(resource),
     }
-
-    todo!()
-}
-
-pub struct UseServerFuture<T: 'static> {
-    value: Signal<Option<Signal<T>>>,
-}
-
-impl<T> UseServerFuture<T> {
-    //     /// Restart the future with new dependencies.
-    //     ///
-    //     /// Will not cancel the previous future, but will ignore any values that it
-    //     /// generates.
-    //     pub fn restart(&self) {
-    //         self.needs_regen.set(true);
-    //         (self.update)();
-    //     }
-
-    //     /// Forcefully cancel a future
-    //     pub fn cancel(&self) {
-    //         if let Some(task) = self.task.take() {
-    //             remove_future(task);
-    //         }
-    //     }
-
-    /// Return any value, even old values if the future has not yet resolved.
-    ///
-    /// If the future has never completed, the returned value will be `None`.
-    pub fn value(&self) -> Option<Signal<T>> {
-        todo!()
-        // Ref::map(self.value.read(), |v: &Option<T>| v.as_deref().unwrap())
-    }
-
-    //     /// Get the ID of the future in Dioxus' internal scheduler
-    //     pub fn task(&self) -> Option<Task> {
-    //         self.task.get()
-    //     }
-
-    //     /// Get the current state of the future.
-    //     pub fn reloading(&self) -> bool {
-    //         self.task.get().is_some()
-    //     }
 }

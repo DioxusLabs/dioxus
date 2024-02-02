@@ -11,9 +11,9 @@ use std::future::Future;
 
 /// A memo that resolve to a value asynchronously.
 ///
-/// Regular memos are synchronous and resolve immediately. However, you might want to resolve a memo
+/// This runs on the server
 #[must_use = "Consider using `cx.spawn` to run a future without reading its value"]
-pub fn use_resource<T, F>(future: impl Fn() -> F + 'static) -> AsyncMemo<T>
+pub fn use_resource<T, F>(future: impl Fn() -> F + 'static) -> Resource<T>
 where
     T: 'static,
     F: Future<Output = T> + 'static,
@@ -28,9 +28,6 @@ where
 
         // Spawn a wrapper task that polls the innner future and watch its dependencies
         spawn(async move {
-            // Wait for the dom the be finished with sync work
-            flush_sync().await;
-
             // move the future here and pin it so we can poll it
             let fut = fut;
             pin_mut!(fut);
@@ -40,7 +37,7 @@ where
             let res = future::poll_fn(|cx| rc.run_in(|| fut.poll_unpin(cx))).await;
 
             // Set the value and state
-            state.set(UseResourceState::Complete);
+            state.set(UseResourceState::Ready);
             value.set(Some(Signal::new(res)));
         })
     });
@@ -62,17 +59,17 @@ where
         })
     });
 
-    AsyncMemo { task, value, state }
+    Resource { task, value, state }
 }
 
 #[allow(unused)]
-pub struct AsyncMemo<T: 'static> {
+pub struct Resource<T: 'static> {
     value: Signal<Option<Signal<T>>>,
     task: Signal<Task>,
     state: Signal<UseResourceState>,
 }
 
-impl<T> AsyncMemo<T> {
+impl<T> Resource<T> {
     /// Restart the future with new dependencies.
     ///
     /// Will not cancel the previous future, but will ignore any values that it
@@ -139,8 +136,9 @@ impl<T> AsyncMemo<T> {
     }
 }
 
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum UseResourceState {
     Pending,
-    Complete,
+    Ready,
     Regenerating, // the old value
 }

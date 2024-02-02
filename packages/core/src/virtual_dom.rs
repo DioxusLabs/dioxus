@@ -454,7 +454,7 @@ impl VirtualDom {
 
             match self.rx.next().await.expect("channel should never close") {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
-                SchedulerMsg::TaskNotified(id) => self.runtime.handle_task_wakeup(id),
+                SchedulerMsg::TaskNotified(id) => _ = self.runtime.handle_task_wakeup(id),
             };
         }
     }
@@ -467,7 +467,7 @@ impl VirtualDom {
         while let Ok(Some(msg)) = self.rx.try_next() {
             match msg {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
-                SchedulerMsg::TaskNotified(task) => self.runtime.handle_task_wakeup(task),
+                SchedulerMsg::TaskNotified(task) => _ = self.runtime.handle_task_wakeup(task),
             }
         }
     }
