@@ -20,6 +20,7 @@ dioxus-html = { workspace = true, features = [
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
 dioxus-hot-reload = { workspace = true, optional = true }
 dioxus-cli-config = { workspace = true }
+generational-box = { workspace = true }
 
 serde = "1.0.136"
 serde_json = "1.0.79"

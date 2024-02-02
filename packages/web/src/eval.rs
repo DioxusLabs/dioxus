@@ -1,10 +1,10 @@
-use async_trait::async_trait;
 use dioxus_core::ScopeId;
 use dioxus_html::prelude::{EvalError, EvalProvider, Evaluator};
 use futures_util::StreamExt;
+use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 use js_sys::Function;
 use serde_json::Value;
-use std::{cell::RefCell, rc::Rc, str::FromStr};
+use std::{rc::Rc, str::FromStr};
 use wasm_bindgen::prelude::*;
 
 /// Provides the WebEvalProvider through [`cx.provide_context`].
@@ -16,8 +16,8 @@ pub fn init_eval() {
 /// Represents the web-target's provider of evaluators.
 pub struct WebEvalProvider;
 impl EvalProvider for WebEvalProvider {
-    fn new_evaluator(&self, js: String) -> Result<Box<dyn Evaluator>, EvalError> {
-        WebEvaluator::new(js).map(|eval| Box::new(eval) as Box<dyn Evaluator + 'static>)
+    fn new_evaluator(&self, js: String) -> Result<GenerationalBox<Box<dyn Evaluator>>, EvalError> {
+        WebEvaluator::create(js)
     }
 }
 
@@ -30,19 +30,23 @@ const PROMISE_WRAPPER: &str = r#"
     "#;
 
 /// Represents a web-target's JavaScript evaluator.
-pub struct WebEvaluator {
+struct WebEvaluator {
     dioxus: Dioxus,
     channel_receiver: futures_channel::mpsc::UnboundedReceiver<serde_json::Value>,
-    result: RefCell<Option<serde_json::Value>>,
+    result: Option<serde_json::Value>,
 }
 
 impl WebEvaluator {
     /// Creates a new evaluator for web-based targets.
-    pub fn new(js: String) -> Result<Self, EvalError> {
+    fn create(js: String) -> Result<GenerationalBox<Box<dyn Evaluator>>, EvalError> {
         let (mut channel_sender, channel_receiver) = futures_channel::mpsc::unbounded();
+        let owner = UnsyncStorage::owner();
+        let invalid = owner.invalid();
 
         // This Rc cloning mess hurts but it seems to work..
         let recv_value = Closure::<dyn FnMut(JsValue)>::new(move |data| {
+            // Drop the owner when the sender is dropped.
+            let _ = &owner;
             match serde_wasm_bindgen::from_value::<serde_json::Value>(data) {
                 Ok(data) => _ = channel_sender.start_send(data),
                 Err(e) => {
@@ -84,19 +88,27 @@ impl WebEvaluator {
             }
         };
 
-        Ok(Self {
+        invalid.set(Box::new(Self {
             dioxus,
             channel_receiver,
-            result: RefCell::new(Some(result)),
-        })
+            result: Some(result),
+        }) as Box<dyn Evaluator + 'static>);
+
+        Ok(invalid)
     }
 }
 
-#[async_trait(?Send)]
 impl Evaluator for WebEvaluator {
     /// Runs the evaluated JavaScript.
-    async fn join(&self) -> Result<serde_json::Value, EvalError> {
-        self.result.take().ok_or(EvalError::Finished)
+    fn poll_join(
+        &mut self,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<serde_json::Value, EvalError>> {
+        if let Some(result) = self.result.take() {
+            std::task::Poll::Ready(Ok(result))
+        } else {
+            std::task::Poll::Ready(Err(EvalError::Finished))
+        }
     }
 
     /// Sends a message to the evaluated JavaScript.
@@ -111,11 +123,15 @@ impl Evaluator for WebEvaluator {
     }
 
     /// Gets an UnboundedReceiver to receive messages from the evaluated JavaScript.
-    async fn recv(&mut self) -> Result<serde_json::Value, EvalError> {
-        self.channel_receiver
-            .next()
-            .await
-            .ok_or_else(|| EvalError::Communication("failed to receive data from js".to_string()))
+    fn poll_recv(
+        &mut self,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<serde_json::Value, EvalError>> {
+        self.channel_receiver.poll_next_unpin(context).map(|poll| {
+            poll.ok_or_else(|| {
+                EvalError::Communication("failed to receive data from js".to_string())
+            })
+        })
     }
 }
 

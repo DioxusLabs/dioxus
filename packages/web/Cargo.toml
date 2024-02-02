@@ -16,6 +16,7 @@ dioxus-interpreter-js = { workspace = true, features = [
     "minimal_bindings",
     "webonly",
 ] }
+generational-box = { workspace = true }
 
 js-sys = "0.3.56"
 wasm-bindgen = { workspace = true }

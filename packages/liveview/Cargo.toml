@@ -29,6 +29,7 @@ dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
 dioxus-hot-reload = { workspace = true, optional = true }
 dioxus-cli-config = { workspace = true }
+generational-box = { workspace = true }
 
 # warp
 warp = { version = "0.3.3", optional = true }
