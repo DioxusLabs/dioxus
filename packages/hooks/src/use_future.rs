@@ -24,7 +24,7 @@ where
             flush_sync().await;
             state.set(UseFutureState::Pending);
             fut.await;
-            state.set(UseFutureState::Complete);
+            state.set(UseFutureState::Ready);
         })
     });
 
@@ -70,7 +70,7 @@ pub enum UseFutureState {
     Paused,
 
     /// The future has completed
-    Complete,
+    Ready,
 }
 
 impl UseFuture {
@@ -118,7 +118,7 @@ impl UseFuture {
     pub fn finished(&self) -> bool {
         matches!(
             self.state.peek().clone(),
-            UseFutureState::Complete | UseFutureState::Stopped
+            UseFutureState::Ready | UseFutureState::Stopped
         )
     }
 

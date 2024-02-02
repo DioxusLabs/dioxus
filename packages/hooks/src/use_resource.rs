@@ -1,8 +1,8 @@
 #![allow(missing_docs)]
 
-use crate::{use_callback, use_signal};
+use crate::{use_callback, use_signal, UseCallback};
 use dioxus_core::{
-    prelude::{flush_sync, spawn, suspend, use_hook},
+    prelude::{spawn, suspend, use_hook},
     Task,
 };
 use dioxus_signals::*;
@@ -59,7 +59,12 @@ where
         })
     });
 
-    Resource { task, value, state }
+    Resource {
+        task,
+        value,
+        state,
+        callback: cb,
+    }
 }
 
 #[allow(unused)]
@@ -67,6 +72,24 @@ pub struct Resource<T: 'static> {
     value: Signal<Option<Signal<T>>>,
     task: Signal<Task>,
     state: Signal<UseResourceState>,
+    callback: UseCallback<Task>,
+}
+
+/// A signal that represents the state of a future
+// we might add more states (panicked, etc)
+#[derive(Clone, Copy, PartialEq, Hash, Eq, Debug)]
+pub enum UseResourceState {
+    /// The future is still running
+    Pending,
+
+    /// The future has been forcefully stopped
+    Stopped,
+
+    /// The future has been paused, tempoarily
+    Paused,
+
+    /// The future has completed
+    Ready,
 }
 
 impl<T> Resource<T> {
@@ -74,71 +97,62 @@ impl<T> Resource<T> {
     ///
     /// Will not cancel the previous future, but will ignore any values that it
     /// generates.
-    pub fn restart(&self) {
-        // self.needs_regen.set(true);
-        // (self.update)();
+    pub fn restart(&mut self) {
+        self.task.write().cancel();
+        let new_task = self.callback.call();
+        self.task.set(new_task);
     }
 
     /// Forcefully cancel a future
-    pub fn cancel(&self) {
-        // if let Some(task) = self.task.take() {
-        //     cx.remove_future(task);
-        // }
+    pub fn cancel(&mut self) {
+        self.state.set(UseResourceState::Stopped);
+        self.task.write().cancel();
     }
 
-    // Manually set the value in the future slot without starting the future over
-    pub fn set(&mut self, new_value: T) {
-        // if let Some(task) = self.task.take() {
-        //     cx.remove_future(task);
-        // }
-        // self.value.set(Some(new_value));
+    /// Pause the future
+    pub fn pause(&mut self) {
+        self.state.set(UseResourceState::Paused);
+        self.task.write().pause();
     }
 
-    /// Return any value, even old values if the future has not yet resolved.
+    /// Resume the future
+    pub fn resume(&mut self) {
+        if self.finished() {
+            return;
+        }
+
+        self.state.set(UseResourceState::Pending);
+        self.task.write().resume();
+    }
+
+    /// Get a handle to the inner task backing this future
+    /// Modify the task through this handle will cause inconsistent state
+    pub fn task(&self) -> Task {
+        self.task.cloned()
+    }
+
+    /// Is the future currently finished running?
     ///
-    /// If the future has never completed, the returned value will be `None`.
-    pub fn value(&self) -> Option<ReadOnlySignal<T>> {
-        self.value.cloned().map(|sig| sig.into())
-    }
-
-    /// Get the ID of the future in Dioxus' internal scheduler
-    pub fn task(&self) -> Option<Task> {
-        todo!()
-        // self.task.get()
+    /// Reading this does not subscribe to the future's state
+    pub fn finished(&self) -> bool {
+        matches!(
+            self.state.peek().clone(),
+            UseResourceState::Ready | UseResourceState::Stopped
+        )
     }
 
     /// Get the current state of the future.
-    pub fn state(&self) -> UseResourceState {
-        todo!()
-        // match (&self.task.get(), &self.value()) {
-        //     // If we have a task and an existing value, we're reloading
-        //     (Some(_), Some(val)) => UseResourceState::Reloading(val),
-
-        //     // no task, but value - we're done
-        //     (None, Some(val)) => UseResourceState::Complete(val),
-
-        //     // no task, no value - something's wrong? return pending
-        //     (None, None) => UseResourceState::Pending,
-
-        //     // Task, no value - we're still pending
-        //     (Some(_), None) => UseResourceState::Pending,
-        // }
+    pub fn state(&self) -> ReadOnlySignal<UseResourceState> {
+        self.state.clone().into()
     }
 
     /// Wait for this async memo to resolve, returning the inner signal value
     /// If the value is pending, returns none and suspends the current component
     pub fn suspend(&self) -> Option<ReadOnlySignal<T>> {
-        let out = self.value();
+        let out = self.value.read().clone();
         if out.is_none() {
             suspend();
         }
         out.map(|sig| sig.into())
     }
-}
-
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
-pub enum UseResourceState {
-    Pending,
-    Ready,
-    Regenerating, // the old value
 }
