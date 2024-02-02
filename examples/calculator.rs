@@ -51,7 +51,13 @@ fn app() -> Element {
         div { id: "wrapper",
             div { class: "app",
                 div { class: "calculator", tabindex: "0", onkeydown: handle_key_down_event,
-                    div { class: "calculator-display", "{val}" }
+                    div { class: "calculator-display",
+                        if val().is_empty() {
+                            "0"
+                        } else {
+                            "{val}"
+                        }
+                    }
                     div { class: "calculator-keypad",
                         div { class: "input-keys",
                             div { class: "function-keys",
