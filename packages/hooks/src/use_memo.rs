@@ -126,15 +126,37 @@ where
     D::Out: 'static,
 {
     let mut dependencies_signal = use_signal(|| dependencies.out());
+
     let selector = use_hook(|| {
-        Signal::maybe_sync_memo(move || {
-            let deref = &*dependencies_signal.read();
-            f(deref.clone())
-        })
+        // Get the current reactive context
+        let rc = ReactiveContext::new(None);
+
+        // Create a new signal in that context, wiring up its dependencies and subscribers
+        let mut state: Signal<R, S> =
+            rc.run_in(|| Signal::new_maybe_sync(f(dependencies_signal.read().clone())));
+
+        spawn(async move {
+            loop {
+                // Wait for the dom the be finished with sync work
+                flush_sync().await;
+                rc.changed().await;
+
+                let new = rc.run_in(|| f(dependencies_signal.read().clone()));
+                if new != *state.peek() {
+                    *state.write() = new;
+                }
+            }
+        });
+
+        // And just return the readonly variant of that signal
+        ReadOnlySignal::new_maybe_sync(state)
     });
+
+    // This will cause a re-run of the selector if the dependencies change
     let changed = { dependencies.changed(&*dependencies_signal.read()) };
     if changed {
         dependencies_signal.set(dependencies.out());
     }
+
     selector
 }
