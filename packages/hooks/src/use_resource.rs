@@ -24,6 +24,7 @@ where
 
     let mut cb = use_callback(move || {
         // Create the user's task
+        #[allow(clippy::redundant_closure)]
         let fut = rc.run_in(|| future());
 
         // Spawn a wrapper task that polls the innner future and watch its dependencies
@@ -136,20 +137,20 @@ impl<T> Resource<T> {
     /// Reading this does not subscribe to the future's state
     pub fn finished(&self) -> bool {
         matches!(
-            self.state.peek().clone(),
+            *self.state.peek(),
             UseResourceState::Ready | UseResourceState::Stopped
         )
     }
 
     /// Get the current state of the future.
     pub fn state(&self) -> ReadOnlySignal<UseResourceState> {
-        self.state.clone().into()
+        self.state.into()
     }
 
     /// Wait for this async memo to resolve, returning the inner signal value
     /// If the value is pending, returns none and suspends the current component
     pub fn suspend(&self) -> Option<ReadOnlySignal<T>> {
-        let out = self.value.read().clone();
+        let out = self.value.cloned();
         if out.is_none() {
             suspend();
         }

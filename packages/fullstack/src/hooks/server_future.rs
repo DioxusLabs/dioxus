@@ -18,8 +18,11 @@ where
             // We're doing this regardless so inputs get tracked, even if we drop the future before polling it
             let user_fut = cb.call();
 
+            let currently_in_first_run = first_run.cloned();
+
             // If this is the first run and we are on the web client, the data might be cached
-            if *first_run.peek() {
+            if currently_in_first_run {
+                tracing::info!("First run of use_server_future");
                 // This is no longer the first run
                 first_run.set(false);
 
@@ -34,7 +37,7 @@ where
 
             // If this is the first run and we are on the server, cache the data
             #[cfg(feature = "ssr")]
-            if *first_run.peek() {
+            if currently_in_first_run {
                 let _ = crate::server_context::server_context().push_html_data(&out);
             }
 

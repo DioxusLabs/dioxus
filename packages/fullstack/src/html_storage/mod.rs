@@ -1,7 +1,8 @@
 #![allow(unused)]
-
+use base64::Engine;
 use std::{io::Cursor, sync::atomic::AtomicUsize};
 
+use base64::engine::general_purpose::STANDARD;
 use serde::{de::DeserializeOwned, Serialize};
 
 pub(crate) mod deserialize;
@@ -45,8 +46,9 @@ impl HTMLDataCursor {
             return None;
         }
         let mut cursor = &self.data[current];
+        let mut decoded = STANDARD.decode(cursor).unwrap();
         self.index.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        match ciborium::from_reader(Cursor::new(cursor)) {
+        match ciborium::from_reader(Cursor::new(decoded)) {
             Ok(x) => Some(x),
             Err(e) => {
                 tracing::error!("Error deserializing data: {:?}", e);
