@@ -1,23 +1,17 @@
 use crate::{
-    get_effect_ref, read::Readable, write::Writable, CopyValue, Effect, EffectInner,
-    EffectStackRef, GlobalMemo, GlobalSignal, MappedSignal, ReactiveContext, ReadOnlySignal,
-    EFFECT_STACK,
+    read::Readable, write::Writable, CopyValue, GlobalMemo, GlobalSignal, MappedSignal,
+    ReactiveContext, ReadOnlySignal,
 };
 use dioxus_core::{
-    prelude::{
-        current_scope_id, flush_sync, has_context, provide_context, schedule_update_any, spawn,
-        IntoAttributeValue,
-    },
+    prelude::{flush_sync, spawn, IntoAttributeValue},
     ScopeId,
 };
-use generational_box::{AnyStorage, GenerationalBoxId, Storage, SyncStorage, UnsyncStorage};
+use generational_box::{AnyStorage, Storage, SyncStorage, UnsyncStorage};
 use parking_lot::RwLock;
 use std::{
     any::Any,
-    cell::RefCell,
     collections::HashSet,
     ops::{Deref, DerefMut},
-    rc::Rc,
     sync::Arc,
 };
 

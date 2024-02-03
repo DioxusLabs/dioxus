@@ -10,7 +10,7 @@ use dioxus_fullstack::{launch, prelude::*};
 use serde::{Deserialize, Serialize};
 
 fn app() -> Element {
-    let state = use_server_future(move || async move { get_server_data().await.unwrap() });
+    let state = use_server_future(move || async move { get_server_data().await.unwrap() })?;
 
     let mut count = use_signal(|| 0);
     let mut text = use_signal(|| "...".to_string());

@@ -7,9 +7,6 @@
 mod rt;
 pub use rt::*;
 
-mod effect;
-pub use effect::*;
-
 pub(crate) mod signal;
 pub use signal::*;
 

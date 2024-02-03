@@ -147,6 +147,11 @@ impl<T> Resource<T> {
         self.state.into()
     }
 
+    /// Get the current value of the future.
+    pub fn value(&self) -> Option<ReadOnlySignal<T>> {
+        self.value.peek().as_ref().map(|sig| sig.clone().into())
+    }
+
     /// Wait for this async memo to resolve, returning the inner signal value
     /// If the value is pending, returns none and suspends the current component
     pub fn suspend(&self) -> Option<ReadOnlySignal<T>> {

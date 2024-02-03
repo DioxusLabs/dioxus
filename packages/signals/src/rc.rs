@@ -23,6 +23,7 @@ thread_local! {
 }
 
 impl ReactiveContext {
+    /// Create a new reactive context
     pub fn new(scope: Option<ScopeId>) -> Self {
         let (tx, rx) = flume::unbounded();
 
@@ -102,6 +103,11 @@ impl ReactiveContext {
             .write()
             .signal_subscribers
             .insert(signal, rc_list);
+    }
+
+    /// Get the scope that inner CopyValue is associated with
+    pub fn origin_scope(&self) -> ScopeId {
+        self.inner.origin_scope()
     }
 
     /// Wait for this reactive context to change

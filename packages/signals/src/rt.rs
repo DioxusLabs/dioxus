@@ -13,9 +13,8 @@ use dioxus_core::ScopeId;
 
 use generational_box::{GenerationalBox, Owner, Storage};
 
-use crate::Effect;
-use crate::Readable;
 use crate::Writable;
+use crate::{ReactiveContext, Readable};
 
 /// Run a closure with the given owner.
 pub fn with_owner<S: AnyStorage, F: FnOnce() -> R, R>(owner: Owner<S>, f: F) -> R {
@@ -85,20 +84,15 @@ fn current_owner<S: Storage<T>, T>() -> Owner<S> {
         return owner;
     }
 
-    match Effect::current() {
-        // If we are inside of an effect, we should use the owner of the effect as the owner of the value.
-        Some(effect) => {
-            let scope_id = effect.source;
-            owner_in_scope(scope_id)
-        }
-        // Otherwise either get an owner from the current scope or create a new one.
-        None => match has_context() {
-            Some(rt) => rt,
-            None => {
-                let owner = S::owner();
-                provide_context(owner)
-            }
-        },
+    // If we are inside of an effect, we should use the owner of the effect as the owner of the value.
+    if let Some(scope) = ReactiveContext::current() {
+        return owner_in_scope(scope.origin_scope());
+    }
+
+    // Otherwise either get an owner from the current scope or create a new one.
+    match has_context() {
+        Some(rt) => rt,
+        None => provide_context(S::owner()),
     }
 }
 
@@ -204,15 +198,6 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
         self.value
             .take()
             .expect("value is already dropped or borrowed")
-    }
-
-    pub(crate) fn invalid() -> Self {
-        let owner = current_owner();
-
-        Self {
-            value: owner.invalid(),
-            origin_scope: current_scope_id().expect("in a virtual dom"),
-        }
     }
 
     /// Get the scope this value was created in.
