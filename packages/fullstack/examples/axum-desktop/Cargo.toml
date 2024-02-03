@@ -14,7 +14,7 @@ serde = "1.0.159"
 
 [features]
 default = []
-ssr = ["axum", "tokio", "dioxus/axum"]
+server = ["axum", "tokio", "dioxus/axum"]
 desktop = ["dioxus/desktop"]
 
 [[bin]]

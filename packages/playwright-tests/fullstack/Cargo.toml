@@ -15,5 +15,5 @@ execute = "0.2.12"
 
 [features]
 default = []
-ssr = ["axum", "tokio", "dioxus/axum"]
+server = ["axum", "tokio", "dioxus/axum"]
 web = ["dioxus/web"]

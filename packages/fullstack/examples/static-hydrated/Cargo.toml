@@ -16,5 +16,5 @@ serde = "1.0.159"
 
 [features]
 default = []
-ssr = ["tokio", "dioxus-fullstack/ssr"]
+server = ["tokio", "dioxus-fullstack/server"]
 web = ["dioxus-web"]
