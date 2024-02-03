@@ -113,7 +113,7 @@ pub fn launch_with_props_blocking<P: 'static>(root: Component<P>, props: P, cfg:
                 EventData::Poll => app.poll_vdom(id),
                 EventData::NewWindow => app.handle_new_window(),
                 EventData::CloseWindow => app.handle_close_msg(id),
-                #[cfg(feature = "hot-reload")]
+                #[cfg(all(feature = "hot-reload", debug_assertions))]
                 EventData::HotReloadEvent(msg) => app.handle_hot_reload_msg(msg),
                 EventData::Ipc(msg) => match msg.method() {
                     IpcMethod::FileDialog => app.handle_file_dialog_msg(msg, id),
