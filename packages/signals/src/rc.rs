@@ -1,9 +1,9 @@
 use dioxus_core::prelude::{
-    current_scope_id, has_context, needs_update_any, provide_context, ScopeId,
+    current_scope_id, has_context, provide_context, schedule_update_any, ScopeId,
 };
 use generational_box::{GenerationalBoxId, SyncStorage};
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::{cell::RefCell, hash::Hash};
+use std::{cell::RefCell, hash::Hash, sync::Arc};
 
 use crate::{CopyValue, RcList, Readable, Writable};
 
@@ -36,6 +36,7 @@ impl ReactiveContext {
             scope_subscribers,
             sender: tx,
             self_: None,
+            update_any: schedule_update_any(),
             receiver: rx,
         };
 
@@ -86,7 +87,7 @@ impl ReactiveContext {
     /// If there's a scope associated with this context, then it will be marked as dirty too
     pub fn mark_dirty(&self) {
         for scope in self.inner.read().scope_subscribers.iter() {
-            needs_update_any(*scope);
+            (self.inner.read().update_any)(*scope);
         }
 
         // mark the listeners as dirty
@@ -121,6 +122,7 @@ struct Inner {
     signal_subscribers: FxHashMap<GenerationalBoxId, RcList>,
     scope_subscribers: FxHashSet<ScopeId>,
     self_: Option<ReactiveContext>,
+    update_any: Arc<dyn Fn(ScopeId) + Send + Sync>,
 
     // Futures will call .changed().await
     sender: flume::Sender<()>,
