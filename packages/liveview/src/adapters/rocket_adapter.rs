@@ -2,9 +2,9 @@ use crate::{LiveViewError, LiveViewSocket};
 use rocket::futures::{SinkExt, StreamExt};
 use rocket_ws::{result::Error, stream::DuplexStream, Message};
 
-/// Convert a rocket websocket into a LiveViewSocket
+/// Convert a Rocket WebSocket into a `LiveViewSocket`.
 ///
-/// This is required to launch a LiveView app using the rocket web framework
+/// This is required to launch a LiveView app using the Rocket web framework.
 pub fn rocket_socket(stream: DuplexStream) -> impl LiveViewSocket {
     stream
         .map(transform_rx)
