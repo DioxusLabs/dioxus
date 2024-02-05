@@ -45,8 +45,9 @@ pub fn provide_context<T: 'static + Clone>(value: T) -> T {
 }
 
 /// Provide a context to the root scope
-pub fn provide_root_context<T: 'static + Clone>(value: T) -> Option<T> {
+pub fn provide_root_context<T: 'static + Clone>(value: T) -> T {
     Runtime::with_current_scope(|cx| cx.provide_root_context(value))
+        .expect("to be in a dioxus runtime")
 }
 
 /// Suspends the current component

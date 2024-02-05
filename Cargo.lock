@@ -2811,6 +2811,8 @@ version = "0.0.1"
 dependencies = [
  "dioxus",
  "serde_json",
+ "tracing",
+ "tracing-wasm",
 ]
 
 [[package]]

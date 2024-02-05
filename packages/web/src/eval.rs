@@ -1,4 +1,4 @@
-use dioxus_core::ScopeId;
+use core::panic;
 use dioxus_html::prelude::{EvalError, EvalProvider, Evaluator};
 use futures_util::StreamExt;
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
@@ -9,8 +9,8 @@ use wasm_bindgen::prelude::*;
 
 /// Provides the WebEvalProvider through [`cx.provide_context`].
 pub fn init_eval() {
-    let provider: Rc<dyn EvalProvider> = Rc::new(WebEvalProvider {});
-    ScopeId::ROOT.provide_context(provider);
+    let provider: Rc<dyn EvalProvider> = Rc::new(WebEvalProvider);
+    dioxus_core::ScopeId::ROOT.provide_context(provider);
 }
 
 /// Represents the web-target's provider of evaluators.
