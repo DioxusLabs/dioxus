@@ -1,11 +1,11 @@
 use dioxus_core::prelude::{
     current_scope_id, has_context, provide_context, schedule_update_any, ScopeId,
 };
-use generational_box::{GenerationalBoxId, SyncStorage};
-use rustc_hash::{FxHashMap, FxHashSet};
+use generational_box::SyncStorage;
+use rustc_hash::FxHashSet;
 use std::{cell::RefCell, hash::Hash, sync::Arc};
 
-use crate::{CopyValue, RcList, Readable, Writable};
+use crate::{CopyValue, Readable, Writable};
 
 /// A context for signal reads and writes to be directed to
 ///
@@ -33,8 +33,7 @@ impl ReactiveContext {
         }
 
         let inner = Inner {
-            signal_subscribers: FxHashMap::default(),
-            scope_subscribers,
+            scope_subscriber: scope,
             sender: tx,
             self_: None,
             update_any: schedule_update_any(),
@@ -58,21 +57,21 @@ impl ReactiveContext {
     /// If this was set manually, then that value will be returned.
     ///
     /// If there's no current reactive context, then a new one will be created at the current scope and returned.
-    pub fn current() -> Option<Self> {
+    pub fn current() -> Self {
         let cur = CURRENT.with(|current| current.borrow().last().cloned());
 
         // If we're already inside a reactive context, then return that
         if let Some(cur) = cur {
-            return Some(cur);
+            return cur;
         }
 
         // If we're rendering, then try and use the reactive context attached to this component
         if let Some(cx) = has_context() {
-            return Some(cx);
+            return cx;
         }
 
         // Otherwise, create a new context at the current scope
-        Some(provide_context(ReactiveContext::new(current_scope_id())))
+        provide_context(ReactiveContext::new(current_scope_id()))
     }
 
     /// Run this function in the context of this reactive context
@@ -89,23 +88,21 @@ impl ReactiveContext {
     /// Marks this reactive context as dirty
     ///
     /// If there's a scope associated with this context, then it will be marked as dirty too
-    pub fn mark_dirty(&self) {
-        for scope in self.inner.read().scope_subscribers.iter() {
-            (self.inner.read().update_any)(*scope);
+    ///
+    /// Returns true if the context was marked as dirty, or false if the context has been dropped
+    pub fn mark_dirty(&self) -> bool {
+        if let Ok(self_read) = self.inner.try_read() {
+            if let Some(scope) = self_read.scope_subscriber {
+                (self_read.update_any)(scope);
+            }
+
+            // mark the listeners as dirty
+            // If the channel is full it means that the receivers have already been marked as dirty
+            _ = self_read.sender.try_send(());
+            true
+        } else {
+            false
         }
-
-        // mark the listeners as dirty
-        // If the channel is full it means that the receivers have already been marked as dirty
-        _ = self.inner.read().sender.try_send(());
-    }
-
-    /// Create a two-way binding between this reactive context and a signal
-    pub fn link(&mut self, signal: GenerationalBoxId, rc_list: RcList) {
-        rc_list.write().insert(*self);
-        self.inner
-            .write()
-            .signal_subscribers
-            .insert(signal, rc_list);
     }
 
     /// Get the scope that inner CopyValue is associated with
@@ -127,22 +124,12 @@ impl Hash for ReactiveContext {
 }
 
 struct Inner {
-    // Set of signals bound to this context
-    signal_subscribers: FxHashMap<GenerationalBoxId, RcList>,
-    scope_subscribers: FxHashSet<ScopeId>,
+    // A scope we mark as dirty when this context is written to
+    scope_subscriber: Option<ScopeId>,
     self_: Option<ReactiveContext>,
     update_any: Arc<dyn Fn(ScopeId) + Send + Sync>,
 
     // Futures will call .changed().await
     sender: flume::Sender<()>,
     receiver: flume::Receiver<()>,
-}
-
-impl Drop for Inner {
-    // Remove this context from all the subscribers
-    fn drop(&mut self) {
-        self.signal_subscribers.values().for_each(|sub_list| {
-            sub_list.write().remove(&self.self_.unwrap());
-        });
-    }
 }

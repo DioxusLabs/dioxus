@@ -68,17 +68,15 @@ impl<T, S: Storage<SignalData<T>>> Readable<T> for ReadOnlySignal<T, S> {
         S::try_map(ref_, f)
     }
 
-    /// Get the current value of the signal. This will subscribe the current scope to the signal.  If you would like to read the signal without subscribing to it, you can use [`Self::peek`] instead.
-    ///
-    /// If the signal has been dropped, this will panic.
     #[track_caller]
-    fn read(&self) -> S::Ref<T> {
-        self.inner.read()
+    fn try_read(&self) -> Result<Self::Ref<T>, generational_box::BorrowError> {
+        self.inner.try_read()
     }
 
     /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
     ///
     /// If the signal has been dropped, this will panic.
+    #[track_caller]
     fn peek(&self) -> S::Ref<T> {
         self.inner.peek()
     }

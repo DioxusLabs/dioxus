@@ -7,12 +7,11 @@ use dioxus_core::{
     ScopeId,
 };
 use generational_box::{AnyStorage, Storage, SyncStorage, UnsyncStorage};
-use parking_lot::RwLock;
 use std::{
     any::Any,
     collections::HashSet,
     ops::{Deref, DerefMut},
-    sync::Arc,
+    sync::Mutex,
 };
 
 /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
@@ -54,13 +53,9 @@ pub struct Signal<T: 'static, S: Storage<SignalData<T>> = UnsyncStorage> {
 /// A signal that can safely shared between threads.
 pub type SyncSignal<T> = Signal<T, SyncStorage>;
 
-/// The list of reactive contexts this signal is assocaited with
-/// Whenever we call .write() on the signal, these contexts will be notified of the change
-pub type RcList = Arc<RwLock<HashSet<ReactiveContext>>>;
-
 /// The data stored for tracking in a signal.
 pub struct SignalData<T> {
-    pub(crate) subscribers: RcList,
+    pub(crate) subscribers: Mutex<HashSet<ReactiveContext>>,
     pub(crate) value: T,
 }
 
@@ -107,8 +102,7 @@ impl<T: PartialEq + 'static> Signal<T> {
         mut f: impl FnMut() -> T + 'static,
     ) -> ReadOnlySignal<T, S> {
         // Get the current reactive context
-        let rc = ReactiveContext::current()
-            .expect("Cannot use a selector outside of a reactive context");
+        let rc = ReactiveContext::current();
 
         // Create a new signal in that context, wiring up its dependencies and subscribers
         let mut state: Signal<T, S> = rc.run_in(|| Signal::new_maybe_sync(f()));
@@ -188,9 +182,8 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
         {
             let inner = self.inner.read();
 
-            for cx in inner.subscribers.read().iter() {
-                cx.mark_dirty();
-            }
+            let mut subscribers = inner.subscribers.lock().unwrap();
+            subscribers.retain(|reactive_context| reactive_context.mark_dirty())
         }
     }
 
@@ -219,19 +212,14 @@ impl<T, S: Storage<SignalData<T>>> Readable<T> for Signal<T, S> {
         S::try_map(ref_, f)
     }
 
-    /// Get the current value of the signal. This will subscribe the current scope to the signal.
-    /// If you would like to read the signal without subscribing to it, you can use [`Self::peek`] instead.
-    ///
-    /// If the signal has been dropped, this will panic.
     #[track_caller]
-    fn read(&self) -> S::Ref<T> {
-        let inner = self.inner.read();
+    fn try_read(&self) -> Result<S::Ref<T>, generational_box::BorrowError> {
+        let inner = self.inner.try_read()?;
 
-        if let Some(mut cx) = ReactiveContext::current() {
-            cx.link(self.id(), inner.subscribers.clone());
-        }
+        let reactive_context = ReactiveContext::current();
+        inner.subscribers.lock().unwrap().insert(reactive_context);
 
-        S::map(inner, |v| &v.value)
+        Ok(S::map(inner, |v| &v.value))
     }
 
     /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**

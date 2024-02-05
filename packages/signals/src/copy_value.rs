@@ -84,16 +84,9 @@ fn current_owner<S: Storage<T>, T>() -> Owner<S> {
         return owner;
     }
 
-    // If we are inside of an effect, we should use the owner of the effect as the owner of the value.
-    if let Some(scope) = ReactiveContext::current() {
-        return owner_in_scope(scope.origin_scope());
-    }
-
-    // Otherwise either get an owner from the current scope or create a new one.
-    match has_context() {
-        Some(rt) => rt,
-        None => provide_context(S::owner()),
-    }
+    // Otherwise get the owner from the current reactive context.
+    let current_reactive_context = ReactiveContext::current();
+    owner_in_scope(current_reactive_context.origin_scope())
 }
 
 fn owner_in_scope<S: Storage<T>, T>(scope: ScopeId) -> Owner<S> {
@@ -225,8 +218,8 @@ impl<T: 'static, S: Storage<T>> Readable<T> for CopyValue<T, S> {
         S::try_map(ref_, f)
     }
 
-    fn read(&self) -> Self::Ref<T> {
-        self.value.read()
+    fn try_read(&self) -> Result<S::Ref<T>, generational_box::BorrowError> {
+        self.value.try_read()
     }
 
     fn peek(&self) -> Self::Ref<T> {

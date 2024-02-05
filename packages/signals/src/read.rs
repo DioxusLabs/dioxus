@@ -14,8 +14,14 @@ pub trait Readable<T: 'static = ()> {
         f: F,
     ) -> Option<Self::Ref<U>>;
 
+    /// Try to get the current value of the state. If this is a signal, this will subscribe the current scope to the signal. If the value has been dropped, this will panic.
+    fn try_read(&self) -> Result<Self::Ref<T>, generational_box::BorrowError>;
+
     /// Get the current value of the state. If this is a signal, this will subscribe the current scope to the signal. If the value has been dropped, this will panic.
-    fn read(&self) -> Self::Ref<T>;
+    #[track_caller]
+    fn read(&self) -> Self::Ref<T> {
+        self.try_read().unwrap()
+    }
 
     /// Get the current value of the state without subscribing to updates. If the value has been dropped, this will panic.
     fn peek(&self) -> Self::Ref<T>;

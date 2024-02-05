@@ -66,8 +66,8 @@ impl<T: PartialEq + 'static> Readable<T> for GlobalMemo<T> {
     }
 
     #[track_caller]
-    fn read(&self) -> Self::Ref<T> {
-        self.signal().read()
+    fn try_read(&self) -> Result<Self::Ref<T>, generational_box::BorrowError> {
+        self.signal().try_read()
     }
 
     #[track_caller]
