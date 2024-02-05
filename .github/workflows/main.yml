@@ -71,6 +71,11 @@ jobs:
       - uses: jetli/wasm-pack-action@v0.4.0
       - name: Free Disk Space (Ubuntu)
         uses: jlumbroso/free-disk-space@v1.3.1
+        with: # speed things up a bit
+          large-packages: false
+          docker-images: false
+          swap-storage: false
+
       - run: cargo make tests
 
   fmt:
@@ -158,6 +163,10 @@ jobs:
           node-version: 16
       - name: Free Disk Space (Ubuntu)
         uses: jlumbroso/free-disk-space@v1.3.1
+        with: # speed things up a bit
+          large-packages: false
+          docker-images: false
+          swap-storage: false
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -251,6 +260,10 @@ jobs:
       - name: Free Disk Space (Ubuntu)
         if: ${{ matrix.platform.os == 'ubuntu-latest' }}
         uses: jlumbroso/free-disk-space@v1.3.1
+        with: # speed things up a bit
+          large-packages: false
+          docker-images: false
+          swap-storage: false
 
       - uses: Swatinem/rust-cache@v2
         with:
