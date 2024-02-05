@@ -20,14 +20,14 @@ pub fn launch(
         vdom
     };
 
-    #[cfg(feature = "ssr")]
+    #[cfg(feature = "server")]
     tokio::runtime::Runtime::new()
         .unwrap()
         .block_on(async move {
             platform_config.launch_server(virtual_dom_factory).await;
         });
 
-    #[cfg(not(feature = "ssr"))]
+    #[cfg(not(feature = "server"))]
     {
         #[cfg(feature = "web")]
         {

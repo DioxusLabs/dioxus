@@ -7,7 +7,7 @@
 
 #![allow(non_snake_case, unused)]
 
-#[cfg(feature = "ssr")]
+#[cfg(feature = "server")]
 mod auth;
 
 use dioxus::prelude::*;
@@ -19,7 +19,7 @@ fn main() {
     // Hydrate the application on the client
     dioxus_web::launch_cfg(app, dioxus_web::Config::new().hydrate(true));
 
-    #[cfg(feature = "ssr")]
+    #[cfg(feature = "server")]
     {
         use crate::auth::*;
         use axum::routing::*;

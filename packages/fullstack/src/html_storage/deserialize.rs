@@ -58,7 +58,7 @@ pub(crate) fn take_server_data<T: DeserializeOwned>() -> Option<T> {
     SERVER_DATA.as_ref()?.take()
 }
 
-#[cfg(not(feature = "ssr"))]
+#[cfg(not(feature = "server"))]
 /// Get the props from the document. This is only available in the browser.
 ///
 /// When dioxus-fullstack renders the page, it will serialize the root props and put them in the document. This function gets them from the document.

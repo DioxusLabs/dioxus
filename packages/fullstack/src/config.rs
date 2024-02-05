@@ -6,13 +6,13 @@ use std::sync::Arc;
 
 /// Settings for a fullstack app.
 pub struct Config {
-    #[cfg(feature = "ssr")]
+    #[cfg(feature = "server")]
     pub(crate) server_fn_route: &'static str,
 
-    #[cfg(feature = "ssr")]
+    #[cfg(feature = "server")]
     pub(crate) server_cfg: ServeConfigBuilder,
 
-    #[cfg(feature = "ssr")]
+    #[cfg(feature = "server")]
     pub(crate) addr: std::net::SocketAddr,
 
     #[cfg(feature = "web")]
@@ -29,11 +29,11 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            #[cfg(feature = "ssr")]
+            #[cfg(feature = "server")]
             server_fn_route: "",
-            #[cfg(feature = "ssr")]
+            #[cfg(feature = "server")]
             addr: std::net::SocketAddr::from(([127, 0, 0, 1], 8080)),
-            #[cfg(feature = "ssr")]
+            #[cfg(feature = "server")]
             server_cfg: ServeConfigBuilder::new(),
             #[cfg(feature = "web")]
             web_cfg: dioxus_web::Config::default(),
@@ -52,14 +52,14 @@ impl Config {
     }
 
     /// Set the address to serve the app on.
-    #[cfg(feature = "ssr")]
+    #[cfg(feature = "server")]
     pub fn addr(self, addr: impl Into<std::net::SocketAddr>) -> Self {
         let addr = addr.into();
         Self { addr, ..self }
     }
 
     /// Set the route to the server functions.
-    #[cfg(feature = "ssr")]
+    #[cfg(feature = "server")]
     pub fn server_fn_route(self, server_fn_route: &'static str) -> Self {
         Self {
             server_fn_route,
@@ -68,7 +68,7 @@ impl Config {
     }
 
     /// Set the incremental renderer config.
-    #[cfg(feature = "ssr")]
+    #[cfg(feature = "server")]
     pub fn incremental(self, cfg: IncrementalRendererConfig) -> Self {
         Self {
             server_cfg: self.server_cfg.incremental(cfg),
@@ -77,7 +77,7 @@ impl Config {
     }
 
     /// Set the server config.
-    #[cfg(feature = "ssr")]
+    #[cfg(feature = "server")]
     pub fn server_cfg(self, server_cfg: ServeConfigBuilder) -> Self {
         Self { server_cfg, ..self }
     }
@@ -103,7 +103,7 @@ impl Config {
         Self { mobile_cfg, ..self }
     }
 
-    #[cfg(feature = "ssr")]
+    #[cfg(feature = "server")]
     /// Launch a server application
     pub async fn launch_server(
         self,

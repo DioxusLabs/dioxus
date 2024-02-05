@@ -36,7 +36,7 @@ where
             let out = user_fut.await;
 
             // If this is the first run and we are on the server, cache the data
-            #[cfg(feature = "ssr")]
+            #[cfg(feature = "server")]
             if currently_in_first_run {
                 let _ = crate::server_context::server_context().push_html_data(&out);
             }

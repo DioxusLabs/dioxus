@@ -20,7 +20,7 @@ use serde::{de::DeserializeOwned, Serialize};
 /// }
 /// ```
 pub fn server_cached<O: 'static + Serialize + DeserializeOwned>(server_fn: impl Fn() -> O) -> O {
-    #[cfg(feature = "ssr")]
+    #[cfg(feature = "server")]
     {
         let data = server_fn();
         let sc = crate::prelude::server_context();
@@ -29,7 +29,7 @@ pub fn server_cached<O: 'static + Serialize + DeserializeOwned>(server_fn: impl 
         }
         data
     }
-    #[cfg(not(feature = "ssr"))]
+    #[cfg(not(feature = "server"))]
     {
         crate::html_storage::deserialize::take_server_data().unwrap_or_else(server_fn)
     }

@@ -25,4 +25,4 @@ required-features = ["desktop"]
 [[bin]]
 name = "server"
 path = "src/server.rs"
-required-features = ["ssr"]
+required-features = ["server"]

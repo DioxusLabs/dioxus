@@ -10,7 +10,7 @@
 //!     #[cfg(feature = "web")]
 //!     // Hydrate the application on the client
 //!     dioxus_web::launch_cfg(app, dioxus_web::Config::new().hydrate(true));
-//!     #[cfg(feature = "ssr")]
+//!     #[cfg(feature = "server")]
 //!     {
 //!         tokio::runtime::Runtime::new()
 //!             .unwrap()
@@ -332,7 +332,7 @@ where
     }
 
     fn connect_hot_reload(self) -> Self {
-        #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
+        #[cfg(all(debug_assertions, feature = "hot-reload", feature = "server"))]
         {
             self.nest(
                 "/_dioxus",
@@ -354,7 +354,7 @@ where
                     .route("/hot_reload", get(hot_reload_handler)),
             )
         }
-        #[cfg(not(all(debug_assertions, feature = "hot-reload", feature = "ssr")))]
+        #[cfg(not(all(debug_assertions, feature = "hot-reload", feature = "server")))]
         {
             self
         }
@@ -476,7 +476,7 @@ fn report_err<E: std::fmt::Display>(e: E) -> Response<BoxBody> {
 }
 
 /// A handler for Dioxus web hot reload websocket. This will send the updated static parts of the RSX to the client when they change.
-#[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
+#[cfg(all(debug_assertions, feature = "hot-reload", feature = "server"))]
 pub async fn hot_reload_handler(ws: axum::extract::WebSocketUpgrade) -> impl IntoResponse {
     use axum::extract::ws::Message;
     use futures_util::StreamExt;

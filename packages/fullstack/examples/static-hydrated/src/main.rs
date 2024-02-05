@@ -11,7 +11,7 @@ use dioxus_fullstack::{launch, prelude::*};
 use serde::{Deserialize, Serialize};
 
 // Generate all routes and output them to the docs path
-#[cfg(feature = "ssr")]
+#[cfg(feature = "server")]
 #[tokio::main]
 async fn main() {
     pre_cache_static_routes_with_props(
@@ -37,7 +37,7 @@ fn main() {
     );
 }
 
-#[cfg(not(any(feature = "web", feature = "ssr")))]
+#[cfg(not(any(feature = "web", feature = "server")))]
 fn main() {}
 
 #[derive(Clone, Routable, Debug, PartialEq, Serialize, Deserialize)]

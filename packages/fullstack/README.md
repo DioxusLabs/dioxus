@@ -44,7 +44,7 @@ fn main() {
         get_root_props_from_document().unwrap_or_default(),
         dioxus_web::Config::new().hydrate(true),
     );
-    #[cfg(feature = "ssr")]
+    #[cfg(feature = "server")]
     {
         tokio::runtime::Runtime::new()
             .unwrap()

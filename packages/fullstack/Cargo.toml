@@ -7,7 +7,7 @@ description = "Fullstack Dioxus Utilities"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
-keywords = ["ui", "gui", "react", "ssr", "fullstack"]
+keywords = ["ui", "gui", "react", "server", "fullstack"]
 resolver = "2"
 
 [dependencies]
