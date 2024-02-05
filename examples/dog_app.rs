@@ -29,7 +29,7 @@ fn app() -> Element {
         }
     });
 
-    let Some(breed_list) = breed_list.value().cloned() else {
+    let Some(breed_list) = breed_list() else {
         return rsx! { "loading breeds..." };
     };
 
@@ -44,7 +44,7 @@ fn app() -> Element {
 
 #[component]
 fn BreedPic(breed: Signal<String>) -> Element {
-    let fut = use_resource(move || async move {
+    let mut fut = use_resource(move || async move {
         reqwest::get(format!("https://dog.ceo/api/breed/{breed}/images/random"))
             .await
             .unwrap()
@@ -52,14 +52,13 @@ fn BreedPic(breed: Signal<String>) -> Element {
             .await
     });
 
-    match fut.value().read().as_ref() {
+    match fut.read().as_ref() {
         Some(Ok(resp)) => rsx! {
-            div {
-                button { onclick: move |_| fut.restart(), "Click to fetch another doggo" }
-                img { max_width: "500px", max_height: "500px", src: "{resp.message}" }
-            }
+            button { onclick: move |_| fut.restart(), "Click to fetch another doggo" }
+            img { max_width: "500px", max_height: "500px", src: "{resp.message}" }
         },
-        _ => rsx! { "loading image..." },
+        Some(Err(_)) => rsx! { "loading image failed" },
+        None => rsx! { "loading image..." },
     }
 }
 

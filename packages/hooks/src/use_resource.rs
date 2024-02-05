@@ -2,7 +2,7 @@
 
 use crate::{use_callback, use_signal, UseCallback};
 use dioxus_core::{
-    prelude::{spawn, suspend, use_hook},
+    prelude::{spawn, use_hook},
     Task,
 };
 use dioxus_signals::*;
@@ -39,7 +39,7 @@ where
 
             // Set the value and state
             state.set(UseResourceState::Ready);
-            value.set(Some(Signal::new(res)));
+            value.set(Some(res));
         })
     });
 
@@ -70,7 +70,7 @@ where
 
 #[allow(unused)]
 pub struct Resource<T: 'static> {
-    value: Signal<Option<Signal<T>>>,
+    value: Signal<Option<T>>,
     task: Signal<Task>,
     state: Signal<UseResourceState>,
     callback: UseCallback<Task>,
@@ -148,17 +148,15 @@ impl<T> Resource<T> {
     }
 
     /// Get the current value of the future.
-    pub fn value(&self) -> Option<ReadOnlySignal<T>> {
-        self.value.peek().as_ref().map(|sig| (*sig).into())
+    pub fn value(&self) -> ReadOnlySignal<Option<T>> {
+        self.value.into()
     }
+}
 
-    /// Wait for this async memo to resolve, returning the inner signal value
-    /// If the value is pending, returns none and suspends the current component
-    pub fn suspend(&self) -> Option<ReadOnlySignal<T>> {
-        let out = self.value.cloned();
-        if out.is_none() {
-            suspend();
-        }
-        out.map(|sig| sig.into())
+impl<T> std::ops::Deref for Resource<T> {
+    type Target = Signal<Option<T>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
     }
 }
