@@ -2,7 +2,7 @@
 //!
 //! ```sh
 //! dx build --features web --release
-//! cargo run --features ssr
+//! cargo run --features server
 //! ```
 
 #![allow(unused)]

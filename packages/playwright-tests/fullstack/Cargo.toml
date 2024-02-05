@@ -7,13 +7,10 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus = { workspace = true }
-axum = { version = "0.6.12", optional = true }
-tokio = { version = "1.27.0", features = ["full"], optional = true }
+dioxus = { workspace = true, features = ["fullstack"] }
 serde = "1.0.159"
-execute = "0.2.12"
 
 [features]
 default = []
-server = ["axum", "tokio", "dioxus/axum"]
+server = ["dioxus/axum"]
 web = ["dioxus/web"]

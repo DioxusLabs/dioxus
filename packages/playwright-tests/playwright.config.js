@@ -90,7 +90,7 @@ module.exports = defineConfig({
     },
     {
       cwd: path.join(process.cwd(), 'fullstack'),
-      command: 'cargo run --package dioxus-cli --release -- build --features web --release --skip-assets\ncargo run --release --features ssr',
+      command: 'cargo run --package dioxus-cli --release -- serve --platform fullstack --skip-assets',
       port: 3333,
       timeout: 20 * 60 * 1000,
       reuseExistingServer: !process.env.CI,

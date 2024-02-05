@@ -123,7 +123,7 @@ pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
         Err(e) => e.to_compile_error().into(),
         Ok(tokens) => quote::quote! {
             #tokens
-            #[cfg(feature = "ssr")]
+            #[cfg(feature = "server")]
             #server_fn_path::inventory::submit! {
                 ::dioxus::fullstack::prelude::ServerFnMiddleware {
                     prefix: #struct_name::PREFIX,

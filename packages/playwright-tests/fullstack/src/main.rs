@@ -6,55 +6,18 @@
 
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
-use serde::{Deserialize, Serialize};
 
 fn main() {
-    #[cfg(feature = "web")]
-    dioxus_web::launch_with_props(
-        app,
-        get_root_props_from_document().unwrap_or_default(),
-        dioxus_web::Config::new().hydrate(true),
-    );
-    #[cfg(feature = "ssr")]
-    {
-        // Start hot reloading
-        hot_reload_init!(dioxus_hot_reload::Config::new().with_rebuild_callback(|| {
-            execute::shell("dx build --features web")
-                .spawn()
-                .unwrap()
-                .wait()
-                .unwrap();
-            execute::shell("cargo run --features ssr").spawn().unwrap();
-            true
-        }));
-
-        tokio::runtime::Runtime::new()
-            .unwrap()
-            .block_on(async move {
-                let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3333));
-                axum::Server::bind(&addr)
-                    .serve(
-                        axum::Router::new()
-                            .serve_dioxus_application(
-                                "",
-                                ServeConfigBuilder::new(app, AppProps { count: 12345 }).build(),
-                            )
-                            .into_make_service(),
-                    )
-                    .await
-                    .unwrap();
-            });
-    }
-}
-
-#[derive(Props, PartialEq, Debug, Default, Serialize, Deserialize, Clone)]
-struct AppProps {
-    count: i32,
+    LaunchBuilder::fullstack()
+        .with_cfg(ssr! {
+            dioxus::fullstack::Config::default().addr(std::net::SocketAddr::from(([127, 0, 0, 1], 3333)))
+        })
+        .launch(app);
 }
 
 #[allow(unused)]
-fn app(props: AppProps) -> Element {
-    let mut count = use_signal(|| props.count);
+fn app() -> Element {
+    let mut count = use_signal(|| 12345);
     let mut text = use_signal(|| "...".to_string());
 
     rsx! {

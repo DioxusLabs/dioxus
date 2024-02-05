@@ -2791,11 +2791,8 @@ dependencies = [
 name = "dioxus-playwright-fullstack-test"
 version = "0.1.0"
 dependencies = [
- "axum 0.6.20",
  "dioxus",
- "execute",
  "serde",
- "tokio",
 ]
 
 [[package]]
