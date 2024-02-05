@@ -63,7 +63,7 @@ dioxus-core-macro = { path = "packages/core-macro", version = "0.4.0" }
 dioxus-config-macro = { path = "packages/config-macro", version = "0.4.0" }
 dioxus-router = { path = "packages/router", version = "0.4.1"  }
 dioxus-router-macro = { path = "packages/router-macro", version = "0.4.1" }
-dioxus-html = { path = "packages/html", default-features = false, version = "0.4.0"  }
+dioxus-html = { path = "packages/html", version = "0.4.0"  }
 dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.4.0"  }
 dioxus-hooks = { path = "packages/hooks", version = "0.4.0" }
 dioxus-web = { path = "packages/web", version = "0.4.0", default-features = false  }
