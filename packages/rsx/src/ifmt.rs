@@ -1,8 +1,8 @@
-use std::{collections::HashSet, str::FromStr};
+use std::str::FromStr;
 
 use proc_macro2::{Span, TokenStream};
 
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
     *,
@@ -64,6 +64,41 @@ impl IfmtInput {
                     None
                 }
             })
+    }
+
+    /// Try to convert this into a single _.to_string() call if possible
+    ///
+    /// Using "{single_expression}" is pretty common, but you don't need to go through the whole format! machinery for that, so we optimize it here.
+    fn try_to_string(&self) -> Option<TokenStream> {
+        let mut single_dynamic = None;
+        for segment in &self.segments {
+            match segment {
+                Segment::Literal(literal) => {
+                    if !literal.is_empty() {
+                        return None;
+                    }
+                }
+                Segment::Formatted(FormattedSegment {
+                    segment,
+                    format_args,
+                }) => {
+                    if format_args.is_empty() {
+                        match single_dynamic {
+                            Some(current_string) => {
+                                single_dynamic =
+                                    Some(quote!(#current_string + &(#segment).to_string()));
+                            }
+                            None => {
+                                single_dynamic = Some(quote!((#segment).to_string()));
+                            }
+                        }
+                    } else {
+                        return None;
+                    }
+                }
+            }
+        }
+        single_dynamic
     }
 }
 
@@ -141,26 +176,22 @@ impl FromStr for IfmtInput {
 
 impl ToTokens for IfmtInput {
     fn to_tokens(&self, tokens: &mut TokenStream) {
+        // Try to turn it into a single _.to_string() call
+        if let Some(single_dynamic) = self.try_to_string() {
+            tokens.extend(single_dynamic);
+            return;
+        }
+
         // build format_literal
         let mut format_literal = String::new();
         let mut expr_counter = 0;
         for segment in self.segments.iter() {
             match segment {
                 Segment::Literal(s) => format_literal += &s.replace('{', "{{").replace('}', "}}"),
-                Segment::Formatted(FormattedSegment {
-                    format_args,
-                    segment,
-                }) => {
+                Segment::Formatted(FormattedSegment { format_args, .. }) => {
                     format_literal += "{";
-                    match segment {
-                        FormattedSegmentType::Expr(_) => {
-                            format_literal += &expr_counter.to_string();
-                            expr_counter += 1;
-                        }
-                        FormattedSegmentType::Ident(ident) => {
-                            format_literal += &ident.to_string();
-                        }
-                    }
+                    format_literal += &expr_counter.to_string();
+                    expr_counter += 1;
                     format_literal += ":";
                     format_literal += format_args;
                     format_literal += "}";
@@ -168,43 +199,29 @@ impl ToTokens for IfmtInput {
             }
         }
 
+        let span = match self.source.as_ref() {
+            Some(source) => source.span(),
+            None => Span::call_site(),
+        };
+
         let positional_args = self.segments.iter().filter_map(|seg| {
-            if let Segment::Formatted(FormattedSegment {
-                segment: FormattedSegmentType::Expr(expr),
-                ..
-            }) = seg
-            {
-                Some(expr)
+            if let Segment::Formatted(FormattedSegment { segment, .. }) = seg {
+                let mut segment = segment.clone();
+                // We set the span of the ident here, so that we can use it in diagnostics
+                if let FormattedSegmentType::Ident(ident) = &mut segment {
+                    ident.set_span(span);
+                }
+                Some(segment)
             } else {
                 None
             }
         });
 
-        // remove duplicate idents
-        let named_args_idents: HashSet<_> = self
-            .segments
-            .iter()
-            .filter_map(|seg| {
-                if let Segment::Formatted(FormattedSegment {
-                    segment: FormattedSegmentType::Ident(ident),
-                    ..
-                }) = seg
-                {
-                    Some(ident)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        let named_args = named_args_idents
-            .iter()
-            .map(|ident| quote!(#ident = #ident));
-
-        quote! {
-            format_args!(
+        quote_spanned! {
+            span =>
+            ::std::format_args!(
                 #format_literal
                 #(, #positional_args)*
-                #(, #named_args)*
             )
         }
         .to_tokens(tokens)

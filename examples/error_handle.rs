@@ -1,28 +1,25 @@
-use dioxus::{core::CapturedError, prelude::*};
+use dioxus::{dioxus_core::CapturedError, prelude::*};
 
 fn main() {
-    dioxus_desktop::launch(App);
+    launch_desktop(app);
 }
 
-#[component]
-fn App(cx: Scope) -> Element {
-    cx.render(rsx! {
+fn app() -> Element {
+    rsx! {
         ErrorBoundary {
             handle_error: |error: CapturedError| rsx! {"Found error {error}"},
-            DemoC {
-                x: 1
-            }
+            DemoC { x: 1 }
         }
-    })
+    }
 }
 
 #[component]
-fn DemoC(cx: Scope, x: i32) -> Element {
+fn DemoC(x: i32) -> Element {
     let result = Err("Error");
 
     result.throw()?;
 
-    render! {
+    rsx! {
         h1 { "{x}" }
     }
 }

@@ -39,7 +39,7 @@ use tower_http::{
 };
 
 #[cfg(feature = "plugin")]
-use plugin::PluginManager;
+use crate::plugin::PluginManager;
 
 mod proxy;
 
@@ -159,10 +159,10 @@ pub async fn serve(
     );
 
     // Router
-    let router = setup_router(config, ws_reload_state, hot_reload_state).await?;
+    let router = setup_router(config.clone(), ws_reload_state, hot_reload_state).await?;
 
     // Start server
-    start_server(port, router, start_browser, rustls_config).await?;
+    start_server(port, router, start_browser, rustls_config, &config).await?;
 
     Ok(())
 }
@@ -366,10 +366,11 @@ async fn start_server(
     router: Router,
     start_browser: bool,
     rustls: Option<RustlsConfig>,
+    _config: &CrateConfig,
 ) -> Result<()> {
     // If plugins, call on_serve_start event
     #[cfg(feature = "plugin")]
-    PluginManager::on_serve_start(&config)?;
+    PluginManager::on_serve_start(_config)?;
 
     // Parse address
     let addr = format!("0.0.0.0:{}", port).parse().unwrap();

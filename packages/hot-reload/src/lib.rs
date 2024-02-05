@@ -16,10 +16,10 @@ pub use file_watcher::*;
 
 /// A message the hot reloading server sends to the client
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+#[serde(bound(deserialize = "'de: 'static"))]
 pub enum HotReloadMsg {
     /// A template has been updated
-    #[serde(borrow = "'static")]
-    UpdateTemplate(Template<'static>),
+    UpdateTemplate(Template),
     /// The program needs to be recompiled, and the client should shut down
     Shutdown,
 }

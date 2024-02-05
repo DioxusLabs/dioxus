@@ -1,21 +1,21 @@
 use crate::{
-    scope_context::{consume_context, current_scope_id, schedule_update_any},
-    Element, IntoDynNode, LazyNodes, Properties, Scope, ScopeId, ScopeState, Template,
-    TemplateAttribute, TemplateNode, VNode,
+    global_context::{current_scope_id, try_consume_context},
+    innerlude::provide_context,
+    use_hook, Element, IntoDynNode, Properties, ScopeId, Template, TemplateAttribute, TemplateNode,
+    VNode,
 };
 use std::{
     any::{Any, TypeId},
     backtrace::Backtrace,
-    cell::{Cell, RefCell},
+    cell::RefCell,
     error::Error,
     fmt::{Debug, Display},
     rc::Rc,
-    sync::Arc,
 };
 
 /// Provide an error boundary to catch errors from child components
-pub fn use_error_boundary(cx: &ScopeState) -> &ErrorBoundary {
-    cx.use_hook(|| cx.provide_context(ErrorBoundary::new()))
+pub fn use_error_boundary() -> ErrorBoundary {
+    use_hook(|| provide_context(ErrorBoundary::new()))
 }
 
 /// A boundary that will capture any errors from child components
@@ -28,7 +28,6 @@ pub struct ErrorBoundary {
 pub struct ErrorBoundaryInner {
     error: RefCell<Option<CapturedError>>,
     _id: ScopeId,
-    rerun_boundary: Arc<dyn Fn(ScopeId) + Send + Sync>,
 }
 
 impl Debug for ErrorBoundaryInner {
@@ -39,11 +38,22 @@ impl Debug for ErrorBoundaryInner {
     }
 }
 
+/// A trait for any type that can be downcast to a concrete type and implements Debug. This is automatically implemented for all types that implement Any + Debug.
+pub trait AnyDebug: Any + Debug {
+    fn as_any(&self) -> &dyn Any;
+}
+
+impl<T: Any + Debug> AnyDebug for T {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 #[derive(Debug)]
 /// An instance of an error captured by a descendant component.
 pub struct CapturedError {
     /// The error captured by the error boundary
-    pub error: Box<dyn Debug + 'static>,
+    pub error: Box<dyn AnyDebug + 'static>,
 
     /// The backtrace of the error
     pub backtrace: Backtrace,
@@ -67,8 +77,7 @@ impl CapturedError {
     /// Downcast the error type into a concrete error type
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         if TypeId::of::<T>() == self.error.type_id() {
-            let raw = self.error.as_ref() as *const _ as *const T;
-            Some(unsafe { &*raw })
+            self.error.as_any().downcast_ref::<T>()
         } else {
             None
         }
@@ -81,7 +90,6 @@ impl Default for ErrorBoundaryInner {
             error: RefCell::new(None),
             _id: current_scope_id()
                 .expect("Cannot create an error boundary outside of a component's scope."),
-            rerun_boundary: schedule_update_any().unwrap(),
         }
     }
 }
@@ -93,33 +101,25 @@ impl ErrorBoundary {
     }
 
     /// Create a new error boundary in the current scope
-    pub(crate) fn new_in_scope(
-        scope: ScopeId,
-        rerun_boundary: Arc<dyn Fn(ScopeId) + Send + Sync>,
-    ) -> Self {
+    pub(crate) fn new_in_scope(scope: ScopeId) -> Self {
         Self {
             inner: Rc::new(ErrorBoundaryInner {
                 error: RefCell::new(None),
                 _id: scope,
-                rerun_boundary,
             }),
         }
     }
 
     /// Push an error into this Error Boundary
-    pub fn insert_error(
-        &self,
-        scope: ScopeId,
-        error: Box<dyn Debug + 'static>,
-        backtrace: Backtrace,
-    ) {
-        println!("{:?} {:?}", error, self.inner._id);
+    pub fn insert_error(&self, scope: ScopeId, error: impl Debug + 'static, backtrace: Backtrace) {
         self.inner.error.replace(Some(CapturedError {
-            error,
+            error: Box::new(error),
             scope,
             backtrace,
         }));
-        (self.inner.rerun_boundary)(self.inner._id);
+        if self.inner._id != ScopeId::ROOT {
+            self.inner._id.needs_update();
+        }
     }
 
     /// Take any error that has been captured by this error boundary
@@ -140,10 +140,10 @@ impl ErrorBoundary {
 ///
 /// ```rust, ignore
 /// #[component]
-/// fn App(cx: Scope, count: String) -> Element {
+/// fn app( count: String) -> Element {
 ///     let id: i32 = count.parse().throw()?;
 ///
-///     cx.render(rsx! {
+///     rsx! {
 ///         div { "Count {}" }
 ///     })
 /// }
@@ -165,10 +165,10 @@ pub trait Throw<S = ()>: Sized {
     ///
     /// ```rust, ignore
     /// #[component]
-    /// fn App(cx: Scope, count: String) -> Element {
+    /// fn app( count: String) -> Element {
     ///     let id: i32 = count.parse().throw()?;
     ///
-    ///     cx.render(rsx! {
+    ///     rsx! {
     ///         div { "Count {}" }
     ///     })
     /// }
@@ -188,10 +188,10 @@ pub trait Throw<S = ()>: Sized {
     ///
     /// ```rust, ignore
     /// #[component]
-    /// fn App(cx: Scope, count: String) -> Element {
+    /// fn app( count: String) -> Element {
     ///     let id: i32 = count.parse().throw()?;
     ///
-    ///     cx.render(rsx! {
+    ///     rsx! {
     ///         div { "Count {}" }
     ///     })
     /// }
@@ -202,7 +202,7 @@ pub trait Throw<S = ()>: Sized {
 }
 
 fn throw_error<T>(e: impl Debug + 'static) -> Option<T> {
-    if let Some(cx) = consume_context::<ErrorBoundary>() {
+    if let Some(cx) = try_consume_context::<ErrorBoundary>() {
         match current_scope_id() {
             Some(id) => cx.insert_error(id, Box::new(e), Backtrace::capture()),
             None => {
@@ -262,85 +262,75 @@ impl<T> Throw for Option<T> {
     }
 }
 
-pub struct ErrorHandler<'a>(Box<dyn Fn(CapturedError) -> LazyNodes<'a, 'a> + 'a>);
-impl<'a, F: Fn(CapturedError) -> LazyNodes<'a, 'a> + 'a> From<F> for ErrorHandler<'a> {
+#[derive(Clone)]
+pub struct ErrorHandler(Rc<dyn Fn(CapturedError) -> Element>);
+impl<F: Fn(CapturedError) -> Element + 'static> From<F> for ErrorHandler {
     fn from(value: F) -> Self {
-        Self(Box::new(value))
+        Self(Rc::new(value))
     }
 }
-fn default_handler<'a>(error: CapturedError) -> LazyNodes<'a, 'a> {
-    LazyNodes::new(move |__cx: &ScopeState| -> VNode {
-        static TEMPLATE: Template = Template {
-            name: "error_handle.rs:42:5:884",
-            roots: &[TemplateNode::Element {
-                tag: "pre",
-                namespace: None,
-                attrs: &[TemplateAttribute::Static {
-                    name: "color",
-                    namespace: Some("style"),
-                    value: "red",
-                }],
-                children: &[TemplateNode::DynamicText { id: 0usize }],
+fn default_handler(error: CapturedError) -> Element {
+    static TEMPLATE: Template = Template {
+        name: "error_handle.rs:42:5:884",
+        roots: &[TemplateNode::Element {
+            tag: "pre",
+            namespace: None,
+            attrs: &[TemplateAttribute::Static {
+                name: "color",
+                namespace: Some("style"),
+                value: "red",
             }],
-            node_paths: &[&[0u8, 0u8]],
-            attr_paths: &[],
-        };
-        VNode {
-            parent: Default::default(),
-            stable_id: Default::default(),
-            key: None,
-            template: std::cell::Cell::new(TEMPLATE),
-            root_ids: bumpalo::collections::Vec::with_capacity_in(1usize, __cx.bump()).into(),
-            dynamic_nodes: __cx
-                .bump()
-                .alloc([__cx.text_node(format_args!("{0}", error))]),
-            dynamic_attrs: __cx.bump().alloc([]),
-        }
-    })
+            children: &[TemplateNode::DynamicText { id: 0usize }],
+        }],
+        node_paths: &[&[0u8, 0u8]],
+        attr_paths: &[],
+    };
+    Some(VNode::new(
+        None,
+        TEMPLATE,
+        Box::new([error.to_string().into_dyn_node()]),
+        Default::default(),
+    ))
 }
-pub struct ErrorBoundaryProps<'a> {
-    children: Element<'a>,
-    handle_error: ErrorHandler<'a>,
+
+#[derive(Clone)]
+pub struct ErrorBoundaryProps {
+    children: Element,
+    handle_error: ErrorHandler,
 }
-impl<'a> ErrorBoundaryProps<'a> {
+impl ErrorBoundaryProps {
     /**
     Create a builder for building `ErrorBoundaryProps`.
     On the builder, call `.children(...)`(optional), `.handle_error(...)`(optional) to set the values of the fields.
     Finally, call `.build()` to create the instance of `ErrorBoundaryProps`.
                         */
     #[allow(dead_code)]
-    pub fn builder() -> ErrorBoundaryPropsBuilder<'a, ((), ())> {
-        ErrorBoundaryPropsBuilder {
-            fields: ((), ()),
-            _phantom: ::core::default::Default::default(),
-        }
+    pub fn builder() -> ErrorBoundaryPropsBuilder<((), ())> {
+        ErrorBoundaryPropsBuilder { fields: ((), ()) }
     }
 }
 #[must_use]
 #[doc(hidden)]
 #[allow(dead_code, non_camel_case_types, non_snake_case)]
-pub struct ErrorBoundaryPropsBuilder<'a, TypedBuilderFields> {
+pub struct ErrorBoundaryPropsBuilder<TypedBuilderFields> {
     fields: TypedBuilderFields,
-    _phantom: ::core::marker::PhantomData<&'a ()>,
 }
-impl<'a, TypedBuilderFields> Clone for ErrorBoundaryPropsBuilder<'a, TypedBuilderFields>
+impl<TypedBuilderFields> Clone for ErrorBoundaryPropsBuilder<TypedBuilderFields>
 where
     TypedBuilderFields: Clone,
 {
     fn clone(&self) -> Self {
         Self {
             fields: self.fields.clone(),
-            _phantom: ::core::default::Default::default(),
         }
     }
 }
-impl<'a> Properties<'a> for ErrorBoundaryProps<'a> {
-    type Builder = ErrorBoundaryPropsBuilder<'a, ((), ())>;
-    const IS_STATIC: bool = false;
-    fn builder(_: &'a ScopeState) -> Self::Builder {
+impl Properties for ErrorBoundaryProps {
+    type Builder = ErrorBoundaryPropsBuilder<((), ())>;
+    fn builder() -> Self::Builder {
         ErrorBoundaryProps::builder()
     }
-    unsafe fn memoize(&self, _: &Self) -> bool {
+    fn memoize(&mut self, _: &Self) -> bool {
         false
     }
 }
@@ -360,16 +350,15 @@ impl<T> ErrorBoundaryPropsBuilder_Optional<T> for (T,) {
     }
 }
 #[allow(dead_code, non_camel_case_types, missing_docs)]
-impl<'a, __handle_error> ErrorBoundaryPropsBuilder<'a, ((), __handle_error)> {
+impl<__handle_error> ErrorBoundaryPropsBuilder<((), __handle_error)> {
     pub fn children(
         self,
-        children: Element<'a>,
-    ) -> ErrorBoundaryPropsBuilder<'a, ((Element<'a>,), __handle_error)> {
+        children: Element,
+    ) -> ErrorBoundaryPropsBuilder<((Element,), __handle_error)> {
         let children = (children,);
         let (_, handle_error) = self.fields;
         ErrorBoundaryPropsBuilder {
             fields: (children, handle_error),
-            _phantom: self._phantom,
         }
     }
 }
@@ -378,26 +367,25 @@ impl<'a, __handle_error> ErrorBoundaryPropsBuilder<'a, ((), __handle_error)> {
 pub enum ErrorBoundaryPropsBuilder_Error_Repeated_field_children {}
 #[doc(hidden)]
 #[allow(dead_code, non_camel_case_types, missing_docs)]
-impl<'a, __handle_error> ErrorBoundaryPropsBuilder<'a, ((Element<'a>,), __handle_error)> {
+impl<__handle_error> ErrorBoundaryPropsBuilder<((Element,), __handle_error)> {
     #[deprecated(note = "Repeated field children")]
     pub fn children(
         self,
         _: ErrorBoundaryPropsBuilder_Error_Repeated_field_children,
-    ) -> ErrorBoundaryPropsBuilder<'a, ((Element<'a>,), __handle_error)> {
+    ) -> ErrorBoundaryPropsBuilder<((Element,), __handle_error)> {
         self
     }
 }
 #[allow(dead_code, non_camel_case_types, missing_docs)]
-impl<'a, __children> ErrorBoundaryPropsBuilder<'a, (__children, ())> {
+impl<__children> ErrorBoundaryPropsBuilder<(__children, ())> {
     pub fn handle_error(
         self,
-        handle_error: impl ::core::convert::Into<ErrorHandler<'a>>,
-    ) -> ErrorBoundaryPropsBuilder<'a, (__children, (ErrorHandler<'a>,))> {
+        handle_error: impl ::core::convert::Into<ErrorHandler>,
+    ) -> ErrorBoundaryPropsBuilder<(__children, (ErrorHandler,))> {
         let handle_error = (handle_error.into(),);
         let (children, _) = self.fields;
         ErrorBoundaryPropsBuilder {
             fields: (children, handle_error),
-            _phantom: self._phantom,
         }
     }
 }
@@ -406,29 +394,28 @@ impl<'a, __children> ErrorBoundaryPropsBuilder<'a, (__children, ())> {
 pub enum ErrorBoundaryPropsBuilder_Error_Repeated_field_handle_error {}
 #[doc(hidden)]
 #[allow(dead_code, non_camel_case_types, missing_docs)]
-impl<'a, __children> ErrorBoundaryPropsBuilder<'a, (__children, (ErrorHandler<'a>,))> {
+impl<__children> ErrorBoundaryPropsBuilder<(__children, (ErrorHandler,))> {
     #[deprecated(note = "Repeated field handle_error")]
     pub fn handle_error(
         self,
         _: ErrorBoundaryPropsBuilder_Error_Repeated_field_handle_error,
-    ) -> ErrorBoundaryPropsBuilder<'a, (__children, (ErrorHandler<'a>,))> {
+    ) -> ErrorBoundaryPropsBuilder<(__children, (ErrorHandler,))> {
         self
     }
 }
 #[allow(dead_code, non_camel_case_types, missing_docs)]
 impl<
-        'a,
-        __handle_error: ErrorBoundaryPropsBuilder_Optional<ErrorHandler<'a>>,
-        __children: ErrorBoundaryPropsBuilder_Optional<Element<'a>>,
-    > ErrorBoundaryPropsBuilder<'a, (__children, __handle_error)>
+        __handle_error: ErrorBoundaryPropsBuilder_Optional<ErrorHandler>,
+        __children: ErrorBoundaryPropsBuilder_Optional<Element>,
+    > ErrorBoundaryPropsBuilder<(__children, __handle_error)>
 {
-    pub fn build(self) -> ErrorBoundaryProps<'a> {
+    pub fn build(self) -> ErrorBoundaryProps {
         let (children, handle_error) = self.fields;
         let children = ErrorBoundaryPropsBuilder_Optional::into_value(children, || {
             ::core::default::Default::default()
         });
         let handle_error = ErrorBoundaryPropsBuilder_Optional::into_value(handle_error, || {
-            ErrorHandler(Box::new(default_handler))
+            ErrorHandler(Rc::new(default_handler))
         });
         ErrorBoundaryProps {
             children,
@@ -459,30 +446,23 @@ impl<
 /// They are similar to `try/catch` in JavaScript, but they only catch errors in the tree below them.
 /// Error boundaries are quick to implement, but it can be useful to individually handle errors in your components to provide a better user experience when you know that an error is likely to occur.
 #[allow(non_upper_case_globals, non_snake_case)]
-pub fn ErrorBoundary<'a>(cx: Scope<'a, ErrorBoundaryProps<'a>>) -> Element {
-    let error_boundary = use_error_boundary(cx);
+pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
+    let error_boundary = use_error_boundary();
     match error_boundary.take_error() {
-        Some(error) => cx.render((cx.props.handle_error.0)(error)),
+        Some(error) => (props.handle_error.0)(error),
         None => Some({
-            let __cx = cx;
             static TEMPLATE: Template = Template {
                 name: "examples/error_handle.rs:81:17:2342",
                 roots: &[TemplateNode::Dynamic { id: 0usize }],
                 node_paths: &[&[0u8]],
                 attr_paths: &[],
             };
-            VNode {
-                parent: Cell::new(None),
-                stable_id: Cell::new(None),
-                key: None,
-                template: std::cell::Cell::new(TEMPLATE),
-                root_ids: bumpalo::collections::Vec::with_capacity_in(1usize, __cx.bump()).into(),
-                dynamic_nodes: __cx.bump().alloc([{
-                    let ___nodes = (&cx.props.children).into_dyn_node(__cx);
-                    ___nodes
-                }]),
-                dynamic_attrs: __cx.bump().alloc([]),
-            }
+            VNode::new(
+                None,
+                TEMPLATE,
+                Box::new([(props.children).into_dyn_node()]),
+                Default::default(),
+            )
         }),
     }
 }

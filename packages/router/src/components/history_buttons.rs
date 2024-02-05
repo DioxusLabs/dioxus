@@ -1,13 +1,14 @@
-use dioxus::prelude::*;
+use dioxus_lib::prelude::*;
+
 use tracing::error;
 
 use crate::utils::use_router_internal::use_router_internal;
 
 /// The properties for a [`GoBackButton`] or a [`GoForwardButton`].
-#[derive(Debug, Props)]
-pub struct HistoryButtonProps<'a> {
+#[derive(Debug, Props, Clone, PartialEq)]
+pub struct HistoryButtonProps {
     /// The children to render within the generated HTML button tag.
-    pub children: Element<'a>,
+    pub children: Element,
 }
 
 /// A button to go back through the navigation history. Similar to a browsers back button.
@@ -31,15 +32,15 @@ pub struct HistoryButtonProps<'a> {
 /// }
 ///
 /// #[component]
-/// fn App(cx: Scope) -> Element {
-///     render! {
+/// fn App() -> Element {
+///     rsx! {
 ///         Router::<Route> {}
 ///     }
 /// }
 ///
 /// #[component]
-/// fn Index(cx: Scope) -> Element {
-///     render! {
+/// fn Index() -> Element {
+///     rsx! {
 ///         GoBackButton {
 ///             "go back"
 ///         }
@@ -54,11 +55,14 @@ pub struct HistoryButtonProps<'a> {
 /// # );
 /// ```
 #[component]
-pub fn GoBackButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
-    let HistoryButtonProps { children } = cx.props;
+pub fn GoBackButton(
+    /// The props...
+    mut props: HistoryButtonProps,
+) -> Element {
+    let HistoryButtonProps { children } = props;
 
     // hook up to router
-    let router = match use_router_internal(cx) {
+    let router = match use_router_internal() {
         Some(r) => r,
         #[allow(unreachable_code)]
         None => {
@@ -72,13 +76,8 @@ pub fn GoBackButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
 
     let disabled = !router.can_go_back();
 
-    render! {
-        button {
-            disabled: "{disabled}",
-            prevent_default: "onclick",
-            onclick: move |_| router.go_back(),
-            {children}
-        }
+    rsx! {
+        button { disabled: "{disabled}", prevent_default: "onclick", onclick: move |_| router.go_back(), {children} }
     }
 }
 
@@ -103,15 +102,15 @@ pub fn GoBackButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
 /// }
 ///
 /// #[component]
-/// fn App(cx: Scope) -> Element {
-///     render! {
+/// fn App() -> Element {
+///     rsx! {
 ///         Router::<Route> {}
 ///     }
 /// }
 ///
 /// #[component]
-/// fn Index(cx: Scope) -> Element {
-///     render! {
+/// fn Index() -> Element {
+///     rsx! {
 ///         GoForwardButton {
 ///             "go forward"
 ///         }
@@ -126,11 +125,14 @@ pub fn GoBackButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
 /// # );
 /// ```
 #[component]
-pub fn GoForwardButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
-    let HistoryButtonProps { children } = cx.props;
+pub fn GoForwardButton(
+    /// Props...
+    mut props: HistoryButtonProps,
+) -> Element {
+    let HistoryButtonProps { children } = props;
 
     // hook up to router
-    let router = match use_router_internal(cx) {
+    let router = match use_router_internal() {
         Some(r) => r,
         #[allow(unreachable_code)]
         None => {
@@ -144,12 +146,7 @@ pub fn GoForwardButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
 
     let disabled = !router.can_go_forward();
 
-    render! {
-        button {
-            disabled: "{disabled}",
-            prevent_default: "onclick",
-            onclick: move |_| router.go_forward(),
-            {children}
-        }
+    rsx! {
+        button { disabled: "{disabled}", prevent_default: "onclick", onclick: move |_| router.go_forward(), {children} }
     }
 }

@@ -1,9 +1,10 @@
-use dioxus_core::ScopeState;
+use dioxus_core::{prelude::provide_root_context, prelude::try_consume_context, use_hook};
 
 ///
-pub fn use_root_context<T: 'static + Clone>(cx: &ScopeState, new: impl FnOnce() -> T) -> &T {
-    cx.use_hook(|| {
-        cx.consume_context::<T>()
-            .unwrap_or_else(|| cx.provide_root_context(new()))
+pub fn use_root_context<T: 'static + Clone>(new: impl FnOnce() -> T) -> T {
+    use_hook(|| {
+        try_consume_context::<T>()
+            // If no context is provided, create a new one at the root
+            .unwrap_or_else(|| provide_root_context(new()))
     })
 }

@@ -12,24 +12,48 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use dioxus_core::{Component, ElementId, VirtualDom};
+use dioxus_core::{Element, ElementId, ScopeId, VirtualDom};
 use dioxus_html::PlatformEventData;
 use dioxus_native_core::dioxus::{DioxusState, NodeImmutableDioxusExt};
 use dioxus_native_core::prelude::*;
 
-use element::{create_mounted_events, find_mount_events};
+use element::DioxusTUIMutationWriter;
 pub use plasmo::{query::Query, Config, RenderingMode, Size, TuiContext};
 use plasmo::{render, Driver};
 
-pub fn launch(app: Component<()>) {
+pub mod launch {
+    use super::*;
+
+    pub type Config = super::Config;
+    /// Launches the WebView and runs the event loop, with configuration and root props.
+    pub fn launch(
+        root: fn() -> Element,
+        contexts: Vec<Box<dyn Fn() -> Box<dyn Any>>>,
+        platform_config: Config,
+    ) {
+        let mut virtual_dom = VirtualDom::new(root);
+
+        for context in contexts {
+            virtual_dom.insert_any_root_context(context());
+        }
+
+        launch_vdom_cfg(virtual_dom, platform_config)
+    }
+}
+
+pub fn launch(app: fn() -> Element) {
     launch_cfg(app, Config::default())
 }
 
-pub fn launch_cfg(app: Component<()>, cfg: Config) {
-    launch_cfg_with_props(app, (), cfg);
+pub fn launch_cfg(app: fn() -> Element, cfg: Config) {
+    launch_vdom_cfg(VirtualDom::new(app), cfg)
 }
 
-pub fn launch_cfg_with_props<Props: 'static>(app: Component<Props>, props: Props, cfg: Config) {
+pub fn launch_cfg_with_props<P: Clone + 'static>(app: fn(P) -> Element, props: P, cfg: Config) {
+    launch_vdom_cfg(VirtualDom::new_with_props(app, props), cfg)
+}
+
+pub fn launch_vdom_cfg(vdom: VirtualDom, cfg: Config) {
     dioxus_html::set_event_converter(Box::new(events::SerializedHtmlEventConverter));
 
     render(cfg, |rdom, taffy, event_tx| {
@@ -38,36 +62,16 @@ pub fn launch_cfg_with_props<Props: 'static>(app: Component<Props>, props: Props
             DioxusState::create(&mut rdom)
         };
         let dioxus_state = Rc::new(RwLock::new(dioxus_state));
-        let mut vdom = VirtualDom::new_with_props(app, props)
+        let vdom = vdom
             .with_root_context(TuiContext::new(event_tx))
             .with_root_context(Query::new(rdom.clone(), taffy.clone()))
             .with_root_context(DioxusElementToNodeId {
                 mapping: dioxus_state.clone(),
             });
-        let muts = vdom.rebuild();
 
-        let mut queued_events = Vec::new();
+        let queued_events = Vec::new();
 
-        {
-            let mut rdom = rdom.write().unwrap();
-            let mut dioxus_state = dioxus_state.write().unwrap();
-
-            // Find any mount events
-            let mounted = find_mount_events(&muts);
-
-            dioxus_state.apply_mutations(&mut rdom, muts);
-
-            // Send the mount events
-            create_mounted_events(
-                &vdom,
-                &mut queued_events,
-                mounted
-                    .iter()
-                    .map(|id| (*dbg!(id), dioxus_state.element_to_node_id(*id))),
-            );
-        }
-
-        DioxusRenderer {
+        let mut myself = DioxusRenderer {
             vdom,
             dioxus_state,
             queued_events,
@@ -80,7 +84,25 @@ pub fn launch_cfg_with_props<Props: 'static>(app: Component<Props>, props: Props
                 });
                 hot_reload_rx
             },
+        };
+
+        {
+            let mut rdom = rdom.write().unwrap();
+            let mut dioxus_state = myself.dioxus_state.write().unwrap();
+
+            let mut writer = DioxusTUIMutationWriter {
+                query: myself
+                    .vdom
+                    .in_runtime(|| ScopeId::ROOT.consume_context().unwrap()),
+                events: &mut myself.queued_events,
+                native_core_writer: dioxus_state.create_mutation_writer(&mut rdom),
+            };
+
+            // Find any mount events
+            myself.vdom.rebuild(&mut writer);
         }
+
+        myself
     })
     .unwrap();
 }
@@ -96,27 +118,19 @@ struct DioxusRenderer {
 
 impl Driver for DioxusRenderer {
     fn update(&mut self, rdom: &Arc<RwLock<RealDom>>) {
-        let muts = self.vdom.render_immediate();
-        {
-            let mut rdom = rdom.write().unwrap();
+        let mut rdom = rdom.write().unwrap();
+        let mut dioxus_state = self.dioxus_state.write().unwrap();
 
-            {
-                // Find any mount events
-                let mounted = find_mount_events(&muts);
+        let mut writer = DioxusTUIMutationWriter {
+            query: self
+                .vdom
+                .in_runtime(|| ScopeId::ROOT.consume_context().unwrap()),
+            events: &mut self.queued_events,
+            native_core_writer: dioxus_state.create_mutation_writer(&mut rdom),
+        };
 
-                let mut dioxus_state = self.dioxus_state.write().unwrap();
-                dioxus_state.apply_mutations(&mut rdom, muts);
-
-                // Send the mount events
-                create_mounted_events(
-                    &self.vdom,
-                    &mut self.queued_events,
-                    mounted
-                        .iter()
-                        .map(|id| (*id, dioxus_state.element_to_node_id(*id))),
-                );
-            }
-        }
+        // Find any mount events
+        self.vdom.render_immediate(&mut writer);
     }
 
     fn handle_event(

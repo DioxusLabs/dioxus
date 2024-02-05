@@ -392,7 +392,12 @@ impl CrateConfig {
                 None => manifest
                     .bin
                     .iter()
-                    .find(|b| b.name == manifest.package.as_ref().map(|pkg| pkg.name.clone()))
+                    .find(|b| {
+                        #[allow(clippy::useless_asref)]
+                        let matching_bin =
+                            b.name == manifest.package.as_ref().map(|pkg| pkg.name.clone());
+                        matching_bin
+                    })
                     .or(manifest
                         .bin
                         .iter()

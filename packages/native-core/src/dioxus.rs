@@ -1,7 +1,7 @@
 //! Integration between Dioxus and the RealDom
 
 use crate::tree::TreeMut;
-use dioxus_core::{BorrowedAttributeValue, ElementId, Mutations, TemplateNode};
+use dioxus_core::{AttributeValue, ElementId, TemplateNode, WriteMutations};
 use rustc_hash::{FxHashMap, FxHashSet};
 use shipyard::Component;
 
@@ -48,6 +48,14 @@ impl DioxusState {
         self.node_id_mapping.get(element_id.0).copied().flatten()
     }
 
+    /// Create a mutation writer for the RealDom
+    pub fn create_mutation_writer<'a, V: FromAnyValue + Send + Sync>(
+        &'a mut self,
+        rdom: &'a mut RealDom<V>,
+    ) -> DioxusNativeCoreMutationWriter<'a, V> {
+        DioxusNativeCoreMutationWriter { rdom, state: self }
+    }
+
     fn set_element_id<V: FromAnyValue + Send + Sync>(
         &mut self,
         mut node: NodeMut<V>,
@@ -74,164 +82,181 @@ impl DioxusState {
         }
         current.id()
     }
+}
 
-    /// Updates the dom with some mutations and return a set of nodes that were updated. Pass the dirty nodes to update_state.
-    pub fn apply_mutations<V: FromAnyValue + Send + Sync>(
+/// A writer for mutations that can be used with the RealDom.
+pub struct DioxusNativeCoreMutationWriter<'a, V: FromAnyValue + Send + Sync = ()> {
+    /// The realdom associated with this writer
+    pub rdom: &'a mut RealDom<V>,
+
+    /// The state associated with this writer
+    pub state: &'a mut DioxusState,
+}
+
+impl<V: FromAnyValue + Send + Sync> WriteMutations for DioxusNativeCoreMutationWriter<'_, V> {
+    fn register_template(&mut self, template: dioxus_core::prelude::Template) {
+        let mut template_root_ids = Vec::new();
+        for root in template.roots {
+            let id = create_template_node(self.rdom, root);
+            template_root_ids.push(id);
+        }
+        self.state
+            .templates
+            .insert(template.name.to_string(), template_root_ids);
+    }
+
+    fn append_children(&mut self, id: ElementId, m: usize) {
+        let children = self.state.stack.split_off(self.state.stack.len() - m);
+        let parent = self.state.element_to_node_id(id);
+        for child in children {
+            self.rdom.get_mut(parent).unwrap().add_child(child);
+        }
+    }
+
+    fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
+        let node_id = self.state.load_child(self.rdom, path);
+        self.state
+            .set_element_id(self.rdom.get_mut(node_id).unwrap(), id);
+    }
+
+    fn create_placeholder(&mut self, id: ElementId) {
+        let node = NodeType::Placeholder;
+        let node = self.rdom.create_node(node);
+        let node_id = node.id();
+        self.state.set_element_id(node, id);
+        self.state.stack.push(node_id);
+    }
+
+    fn create_text_node(&mut self, value: &str, id: ElementId) {
+        let node_data = NodeType::Text(TextNode {
+            listeners: FxHashSet::default(),
+            text: value.to_string(),
+        });
+        let node = self.rdom.create_node(node_data);
+        let node_id = node.id();
+        self.state.set_element_id(node, id);
+        self.state.stack.push(node_id);
+    }
+
+    fn hydrate_text_node(&mut self, path: &'static [u8], value: &str, id: ElementId) {
+        let node_id = self.state.load_child(self.rdom, path);
+        let node = self.rdom.get_mut(node_id).unwrap();
+        self.state.set_element_id(node, id);
+        let mut node = self.rdom.get_mut(node_id).unwrap();
+        let node_type_mut = node.node_type_mut();
+        if let NodeTypeMut::Text(mut text) = node_type_mut {
+            *text.text_mut() = value.to_string();
+        } else {
+            drop(node_type_mut);
+            node.set_type(NodeType::Text(TextNode {
+                text: value.to_string(),
+                listeners: FxHashSet::default(),
+            }));
+        }
+    }
+
+    fn load_template(&mut self, name: &'static str, index: usize, id: ElementId) {
+        let template_id = self.state.templates[name][index];
+        let clone_id = self.rdom.get_mut(template_id).unwrap().clone_node();
+        let clone = self.rdom.get_mut(clone_id).unwrap();
+        self.state.set_element_id(clone, id);
+        self.state.stack.push(clone_id);
+    }
+
+    fn replace_node_with(&mut self, id: ElementId, m: usize) {
+        let new_nodes = self.state.stack.split_off(self.state.stack.len() - m);
+        let old_node_id = self.state.element_to_node_id(id);
+        for new in new_nodes {
+            let mut node = self.rdom.get_mut(new).unwrap();
+            node.insert_before(old_node_id);
+        }
+        self.rdom.get_mut(old_node_id).unwrap().remove();
+    }
+
+    fn replace_placeholder_with_nodes(&mut self, path: &'static [u8], m: usize) {
+        let new_nodes = self.state.stack.split_off(self.state.stack.len() - m);
+        let old_node_id = self.state.load_child(self.rdom, path);
+        for new in new_nodes {
+            let mut node = self.rdom.get_mut(new).unwrap();
+            node.insert_before(old_node_id);
+        }
+        self.rdom.get_mut(old_node_id).unwrap().remove();
+    }
+
+    fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
+        let new_nodes = self.state.stack.split_off(self.state.stack.len() - m);
+        let old_node_id = self.state.element_to_node_id(id);
+        for new in new_nodes.into_iter().rev() {
+            let mut node = self.rdom.get_mut(new).unwrap();
+            node.insert_after(old_node_id);
+        }
+    }
+
+    fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
+        let new_nodes = self.state.stack.split_off(self.state.stack.len() - m);
+        let old_node_id = self.state.element_to_node_id(id);
+        for new in new_nodes {
+            self.rdom.tree_mut().insert_before(old_node_id, new);
+        }
+    }
+
+    fn set_attribute(
         &mut self,
-        rdom: &mut RealDom<V>,
-        mutations: Mutations,
+        name: &'static str,
+        ns: Option<&'static str>,
+        value: &AttributeValue,
+        id: ElementId,
     ) {
-        for template in mutations.templates {
-            let mut template_root_ids = Vec::new();
-            for root in template.roots {
-                let id = create_template_node(rdom, root);
-                template_root_ids.push(id);
+        let node_id = self.state.element_to_node_id(id);
+        let mut node = self.rdom.get_mut(node_id).unwrap();
+        let mut node_type_mut = node.node_type_mut();
+        if let NodeTypeMut::Element(element) = &mut node_type_mut {
+            if let AttributeValue::None = &value {
+                element.remove_attribute(&OwnedAttributeDiscription {
+                    name: name.to_string(),
+                    namespace: ns.map(|s| s.to_string()),
+                });
+            } else {
+                element.set_attribute(
+                    OwnedAttributeDiscription {
+                        name: name.to_string(),
+                        namespace: ns.map(|s| s.to_string()),
+                    },
+                    OwnedAttributeValue::from(value),
+                );
             }
-            self.templates
-                .insert(template.name.to_string(), template_root_ids);
         }
+    }
 
-        for e in mutations.edits {
-            use dioxus_core::Mutation::*;
-            match e {
-                AppendChildren { id, m } => {
-                    let children = self.stack.split_off(self.stack.len() - m);
-                    let parent = self.element_to_node_id(id);
-                    for child in children {
-                        rdom.get_mut(parent).unwrap().add_child(child);
-                    }
-                }
-                AssignId { path, id } => {
-                    let node_id = self.load_child(rdom, path);
-                    self.set_element_id(rdom.get_mut(node_id).unwrap(), id);
-                }
-                CreatePlaceholder { id } => {
-                    let node = NodeType::Placeholder;
-                    let node = rdom.create_node(node);
-                    let node_id = node.id();
-                    self.set_element_id(node, id);
-                    self.stack.push(node_id);
-                }
-                CreateTextNode { value, id } => {
-                    let node_data = NodeType::Text(TextNode {
-                        listeners: FxHashSet::default(),
-                        text: value.to_string(),
-                    });
-                    let node = rdom.create_node(node_data);
-                    let node_id = node.id();
-                    self.set_element_id(node, id);
-                    self.stack.push(node_id);
-                }
-                HydrateText { path, value, id } => {
-                    let node_id = self.load_child(rdom, path);
-                    let node = rdom.get_mut(node_id).unwrap();
-                    self.set_element_id(node, id);
-                    let mut node = rdom.get_mut(node_id).unwrap();
-                    let node_type_mut = node.node_type_mut();
-                    if let NodeTypeMut::Text(mut text) = node_type_mut {
-                        *text.text_mut() = value.to_string();
-                    } else {
-                        drop(node_type_mut);
-                        node.set_type(NodeType::Text(TextNode {
-                            text: value.to_string(),
-                            listeners: FxHashSet::default(),
-                        }));
-                    }
-                }
-                LoadTemplate { name, index, id } => {
-                    let template_id = self.templates[name][index];
-                    let clone_id = rdom.get_mut(template_id).unwrap().clone_node();
-                    let clone = rdom.get_mut(clone_id).unwrap();
-                    self.set_element_id(clone, id);
-                    self.stack.push(clone_id);
-                }
-                ReplaceWith { id, m } => {
-                    let new_nodes = self.stack.split_off(self.stack.len() - m);
-                    let old_node_id = self.element_to_node_id(id);
-                    for new in new_nodes {
-                        let mut node = rdom.get_mut(new).unwrap();
-                        node.insert_before(old_node_id);
-                    }
-                    rdom.get_mut(old_node_id).unwrap().remove();
-                }
-                ReplacePlaceholder { path, m } => {
-                    let new_nodes = self.stack.split_off(self.stack.len() - m);
-                    let old_node_id = self.load_child(rdom, path);
-                    for new in new_nodes {
-                        let mut node = rdom.get_mut(new).unwrap();
-                        node.insert_before(old_node_id);
-                    }
-                    rdom.get_mut(old_node_id).unwrap().remove();
-                }
-                InsertAfter { id, m } => {
-                    let new_nodes = self.stack.split_off(self.stack.len() - m);
-                    let old_node_id = self.element_to_node_id(id);
-                    for new in new_nodes.into_iter().rev() {
-                        let mut node = rdom.get_mut(new).unwrap();
-                        node.insert_after(old_node_id);
-                    }
-                }
-                InsertBefore { id, m } => {
-                    let new_nodes = self.stack.split_off(self.stack.len() - m);
-                    let old_node_id = self.element_to_node_id(id);
-                    for new in new_nodes {
-                        rdom.tree_mut().insert_before(old_node_id, new);
-                    }
-                }
-                SetAttribute {
-                    name,
-                    value,
-                    id,
-                    ns,
-                } => {
-                    let node_id = self.element_to_node_id(id);
-                    let mut node = rdom.get_mut(node_id).unwrap();
-                    let mut node_type_mut = node.node_type_mut();
-                    if let NodeTypeMut::Element(element) = &mut node_type_mut {
-                        if let BorrowedAttributeValue::None = &value {
-                            element.remove_attribute(&OwnedAttributeDiscription {
-                                name: name.to_string(),
-                                namespace: ns.map(|s| s.to_string()),
-                            });
-                        } else {
-                            element.set_attribute(
-                                OwnedAttributeDiscription {
-                                    name: name.to_string(),
-                                    namespace: ns.map(|s| s.to_string()),
-                                },
-                                OwnedAttributeValue::from(value),
-                            );
-                        }
-                    }
-                }
-                SetText { value, id } => {
-                    let node_id = self.element_to_node_id(id);
-                    let mut node = rdom.get_mut(node_id).unwrap();
-                    let node_type_mut = node.node_type_mut();
-                    if let NodeTypeMut::Text(mut text) = node_type_mut {
-                        *text.text_mut() = value.to_string();
-                    }
-                }
-                NewEventListener { name, id } => {
-                    let node_id = self.element_to_node_id(id);
-                    let mut node = rdom.get_mut(node_id).unwrap();
-                    node.add_event_listener(name);
-                }
-                RemoveEventListener { id, name } => {
-                    let node_id = self.element_to_node_id(id);
-                    let mut node = rdom.get_mut(node_id).unwrap();
-                    node.remove_event_listener(name);
-                }
-                Remove { id } => {
-                    let node_id = self.element_to_node_id(id);
-                    rdom.get_mut(node_id).unwrap().remove();
-                }
-                PushRoot { id } => {
-                    let node_id = self.element_to_node_id(id);
-                    self.stack.push(node_id);
-                }
-            }
+    fn set_node_text(&mut self, value: &str, id: ElementId) {
+        let node_id = self.state.element_to_node_id(id);
+        let mut node = self.rdom.get_mut(node_id).unwrap();
+        let node_type_mut = node.node_type_mut();
+        if let NodeTypeMut::Text(mut text) = node_type_mut {
+            *text.text_mut() = value.to_string();
         }
+    }
+
+    fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
+        let node_id = self.state.element_to_node_id(id);
+        let mut node = self.rdom.get_mut(node_id).unwrap();
+        node.add_event_listener(name);
+    }
+
+    fn remove_event_listener(&mut self, name: &'static str, id: ElementId) {
+        let node_id = self.state.element_to_node_id(id);
+        let mut node = self.rdom.get_mut(node_id).unwrap();
+        node.remove_event_listener(name);
+    }
+
+    fn remove_node(&mut self, id: ElementId) {
+        let node_id = self.state.element_to_node_id(id);
+        self.rdom.get_mut(node_id).unwrap().remove();
+    }
+
+    fn push_root(&mut self, id: ElementId) {
+        let node_id = self.state.element_to_node_id(id);
+        self.state.stack.push(node_id);
     }
 }
 

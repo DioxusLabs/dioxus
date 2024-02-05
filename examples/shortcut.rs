@@ -1,17 +1,14 @@
+use dioxus::desktop::use_global_shortcut;
 use dioxus::prelude::*;
-use dioxus_desktop::use_global_shortcut;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch_desktop(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let toggled = use_state(cx, || false);
+fn app() -> Element {
+    let mut toggled = use_signal(|| false);
 
-    use_global_shortcut(cx, "ctrl+s", {
-        to_owned![toggled];
-        move || toggled.modify(|t| !*t)
-    });
+    _ = use_global_shortcut("ctrl+s", move || toggled.toggle());
 
-    cx.render(rsx!("toggle: {toggled.get()}"))
+    rsx!("toggle: {toggled}")
 }

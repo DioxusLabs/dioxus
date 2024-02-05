@@ -6,65 +6,58 @@ This calculator version uses React-style state management. All state is held as 
 use dioxus::events::*;
 use dioxus::html::input_data::keyboard_types::Key;
 use dioxus::prelude::*;
-use dioxus_desktop::{Config, LogicalSize, WindowBuilder};
 
 fn main() {
-    let config = Config::new().with_window(
-        WindowBuilder::default()
-            .with_title("Calculator")
-            .with_inner_size(LogicalSize::new(300.0, 500.0)),
-    );
-
-    dioxus_desktop::launch_cfg(app, config);
+    LaunchBuilder::new()
+        .with_cfg(desktop!({
+            use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
+            Config::new().with_window(
+                WindowBuilder::default()
+                    .with_title("Calculator")
+                    .with_inner_size(LogicalSize::new(300.0, 525.0)),
+            )
+        }))
+        .launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let val = use_state(cx, || String::from("0"));
+fn app() -> Element {
+    let mut val = use_signal(|| String::from("0"));
 
-    let input_digit = move |num: u8| {
-        if val.get() == "0" {
+    let mut input_digit = move |num: String| {
+        if val() == "0" {
             val.set(String::new());
         }
-
-        val.make_mut().push_str(num.to_string().as_str());
+        val.write().push_str(num.as_str());
     };
 
-    let input_operator = move |key: &str| val.make_mut().push_str(key);
+    let mut input_operator = move |key: &str| val.write().push_str(key);
 
     let handle_key_down_event = move |evt: KeyboardEvent| match evt.key() {
         Key::Backspace => {
-            if !val.len() != 0 {
-                val.make_mut().pop();
+            if !val().is_empty() {
+                val.write().pop();
             }
         }
         Key::Character(character) => match character.as_str() {
-            "+" => input_operator("+"),
-            "-" => input_operator("-"),
-            "/" => input_operator("/"),
-            "*" => input_operator("*"),
-            "0" => input_digit(0),
-            "1" => input_digit(1),
-            "2" => input_digit(2),
-            "3" => input_digit(3),
-            "4" => input_digit(4),
-            "5" => input_digit(5),
-            "6" => input_digit(6),
-            "7" => input_digit(7),
-            "8" => input_digit(8),
-            "9" => input_digit(9),
+            "+" | "-" | "/" | "*" => input_operator(&character),
+            "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" => input_digit(character),
             _ => {}
         },
         _ => {}
     };
 
-    cx.render(rsx!(
+    rsx! {
         style { {include_str!("./assets/calculator.css")} }
         div { id: "wrapper",
             div { class: "app",
-                div { class: "calculator",
-                    tabindex: "0",
-                    onkeydown: handle_key_down_event,
-                    div { class: "calculator-display", "{val}" }
+                div { class: "calculator", tabindex: "0", onkeydown: handle_key_down_event,
+                    div { class: "calculator-display",
+                        if val().is_empty() {
+                            "0"
+                        } else {
+                            "{val}"
+                        }
+                    }
                     div { class: "calculator-keypad",
                         div { class: "input-keys",
                             div { class: "function-keys",
@@ -72,55 +65,62 @@ fn app(cx: Scope) -> Element {
                                     class: "calculator-key key-clear",
                                     onclick: move |_| {
                                         val.set(String::new());
-                                        if !val.is_empty(){
+                                        if !val.cloned().is_empty() {
                                             val.set("0".into());
                                         }
                                     },
-                                    if val.is_empty() { "C" } else { "AC" }
+                                    if val.cloned().is_empty() { "C" } else { "AC" }
                                 }
                                 button {
                                     class: "calculator-key key-sign",
                                     onclick: move |_| {
-                                        let temp = calc_val(val.as_str());
-                                        if temp > 0.0 {
-                                            val.set(format!("-{temp}"));
+                                        let new_val = calc_val(val.cloned().as_str());
+                                        if new_val > 0.0 {
+                                            val.set(format!("-{new_val}"));
                                         } else {
-                                            val.set(format!("{}", temp.abs()));
+                                            val.set(format!("{}", new_val.abs()));
                                         }
                                     },
                                     "±"
                                 }
                                 button {
                                     class: "calculator-key key-percent",
-                                    onclick: move |_| {
-                                        val.set(
-                                            format!("{}", calc_val(val.as_str()) / 100.0)
-                                        );
-                                    },
+                                    onclick: move |_| val.set(format!("{}", calc_val(val.cloned().as_str()) / 100.0)),
                                     "%"
                                 }
                             }
                             div { class: "digit-keys",
-                                button { class: "calculator-key key-0", onclick: move |_| input_digit(0), "0" }
-                                button { class: "calculator-key key-dot", onclick: move |_| val.make_mut().push('.'), "●" }
+                                button {
+                                    class: "calculator-key key-0",
+                                    onclick: move |_| input_digit(0.to_string()),
+                                    "0"
+                                }
+                                button {
+                                    class: "calculator-key key-dot",
+                                    onclick: move |_| val.write().push('.'),
+                                    "●"
+                                }
                                 for k in 1..10 {
                                     button {
                                         class: "calculator-key {k}",
                                         name: "key-{k}",
-                                        onclick: move |_| input_digit(k),
+                                        onclick: move |_| input_digit(k.to_string()),
                                         "{k}"
                                     }
                                 }
                             }
                         }
                         div { class: "operator-keys",
-                            button { class: "calculator-key key-divide", onclick: move |_| input_operator("/"), "÷" }
-                            button { class: "calculator-key key-multiply", onclick: move |_| input_operator("*"), "×" }
-                            button { class: "calculator-key key-subtract", onclick: move |_| input_operator("-"), "−" }
-                            button { class: "calculator-key key-add", onclick: move |_| input_operator("+"), "+" }
+                            for (key, class) in [("/", "key-divide"), ("*", "key-multiply"), ("-", "key-subtract"), ("+", "key-add")] {
+                                button {
+                                    class: "calculator-key {class}",
+                                    onclick: move |_| input_operator(key),
+                                    "{key}"
+                                }
+                            }
                             button {
                                 class: "calculator-key key-equals",
-                                onclick: move |_| val.set(format!("{}", calc_val(val.as_str()))),
+                                onclick: move |_| val.set(format!("{}", calc_val(val.cloned().as_str()))),
                                 "="
                             }
                         }
@@ -128,8 +128,7 @@ fn app(cx: Scope) -> Element {
                 }
             }
         }
-
-    ))
+    }
 }
 
 fn calc_val(val: &str) -> f64 {

@@ -16,10 +16,10 @@ execute = "0.2.12"
 reqwest = "0.11.18"
 simple_logger = "4.2.0"
 tracing-wasm = "0.2.1"
-tracing.workspace = true
+tracing = { workspace = true }
 tracing-subscriber = "0.3.17"
 
 [features]
 default = []
-ssr = ["salvo", "dioxus-fullstack/salvo"]
+server = ["salvo", "dioxus-fullstack/salvo"]
 web = ["dioxus-web"]

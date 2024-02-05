@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 
 #[test]
-fn it_works() {
+fn suspense_resolves() {
     // wait just a moment, not enough time for the boundary to resolve
 
     tokio::runtime::Builder::new_current_thread()
@@ -9,7 +9,7 @@ fn it_works() {
         .unwrap()
         .block_on(async {
             let mut dom = VirtualDom::new(app);
-            _ = dom.rebuild();
+            dom.rebuild(&mut dioxus_core::NoOpMutations);
             dom.wait_for_suspense().await;
             let out = dioxus_ssr::render(&dom);
 
@@ -19,25 +19,24 @@ fn it_works() {
         });
 }
 
-fn app(cx: Scope) -> Element {
-    cx.render(rsx!(
+fn app() -> Element {
+    rsx!(
         div {
             "Waiting for... "
             suspended_child {}
         }
-    ))
+    )
 }
 
-fn suspended_child(cx: Scope) -> Element {
-    let val = use_state(cx, || 0);
+fn suspended_child() -> Element {
+    let mut val = use_signal(|| 0);
 
-    if **val < 3 {
-        let mut val = val.clone();
-        cx.spawn(async move {
+    if val() < 3 {
+        spawn(async move {
             val += 1;
         });
-        cx.suspend()?;
+        suspend()?;
     }
 
-    render!("child")
+    rsx!("child")
 }

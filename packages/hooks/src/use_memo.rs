@@ -1,47 +1,162 @@
-use dioxus_core::ScopeState;
+use crate::dependency::Dependency;
+use crate::use_signal;
+use dioxus_core::prelude::*;
+use dioxus_signals::{ReactiveContext, ReadOnlySignal, Readable, Signal, SignalData};
+use dioxus_signals::{Storage, Writable};
 
-use crate::UseFutureDep;
-
-/// A hook that provides a callback that executes if the dependencies change.
-/// This is useful to avoid running computation-expensive calculations even when the data doesn't change.
+/// Creates a new unsync Selector. The selector will be run immediately and whenever any signal it reads changes.
 ///
-/// - dependencies: a tuple of references to values that are `PartialEq` + `Clone`
+/// Selectors can be used to efficiently compute derived data from signals.
 ///
-/// ## Examples
+/// ```rust
+/// use dioxus::prelude::*;
+/// use dioxus_signals::*;
 ///
-/// ```rust, no_run
-/// # use dioxus::prelude::*;
+/// fn App() -> Element {
+///     let mut count = use_signal(|| 0);
+///     let double = use_memo(move || count * 2);
+///     count += 1;
+///     assert_eq!(double.value(), count * 2);
 ///
-/// #[component]
-/// fn Calculator(cx: Scope, number: usize) -> Element {
-///     let bigger_number = use_memo(cx, (number,), |(number,)| {
-///         // This will only be calculated when `number` has changed.
-///         number * 100
-///     });
-///     render!(
-///         p { "{bigger_number}" }
-///     )
-/// }
-///
-/// #[component]
-/// fn App(cx: Scope) -> Element {
-///     render!(Calculator { number: 0 })
+///     rsx! { "{double}" }
 /// }
 /// ```
-#[must_use = "Consider using `use_effect` to run rerun a callback when dependencies change"]
-pub fn use_memo<T, D>(cx: &ScopeState, dependencies: D, callback: impl FnOnce(D::Out) -> T) -> &T
+#[track_caller]
+pub fn use_memo<R: PartialEq>(f: impl FnMut() -> R + 'static) -> ReadOnlySignal<R> {
+    use_maybe_sync_memo(f)
+}
+
+/// Creates a new Selector that may be sync. The selector will be run immediately and whenever any signal it reads changes.
+///
+/// Selectors can be used to efficiently compute derived data from signals.
+///
+/// ```rust
+/// use dioxus::prelude::*;
+/// use dioxus_signals::*;
+///
+/// fn App() -> Element {
+///     let mut count = use_signal(cx, || 0);
+///     let double = use_memo(cx, move || count * 2);
+///     count += 1;
+///     assert_eq!(double.value(), count * 2);
+///
+///     render! { "{double}" }
+/// }
+/// ```
+#[track_caller]
+pub fn use_maybe_sync_memo<R: PartialEq, S: Storage<SignalData<R>>>(
+    mut f: impl FnMut() -> R + 'static,
+) -> ReadOnlySignal<R, S> {
+    use_hook(|| {
+        // Get the current reactive context
+        let rc = ReactiveContext::new();
+
+        // Create a new signal in that context, wiring up its dependencies and subscribers
+        let mut state: Signal<R, S> = rc.run_in(|| Signal::new_maybe_sync(f()));
+
+        spawn(async move {
+            loop {
+                // Wait for the dom the be finished with sync work
+                flush_sync().await;
+                rc.changed().await;
+                let new = rc.run_in(&mut f);
+                if new != *state.peek() {
+                    *state.write() = new;
+                }
+            }
+        });
+
+        // And just return the readonly variant of that signal
+        ReadOnlySignal::new_maybe_sync(state)
+    })
+}
+
+/// Creates a new unsync Selector with some local dependencies. The selector will be run immediately and whenever any signal it reads or any dependencies it tracks changes
+///
+/// Selectors can be used to efficiently compute derived data from signals.
+///
+/// ```rust
+/// use dioxus::prelude::*;
+///
+/// fn App() -> Element {
+///     let mut local_state = use_state(|| 0);
+///     let double = use_memo_with_dependencies(cx, (local_state.get(),), move |(local_state,)| local_state * 2);
+///     local_state.set(1);
+///
+///     render! { "{double}" }
+/// }
+/// ```
+#[track_caller]
+pub fn use_memo_with_dependencies<R: PartialEq, D: Dependency>(
+    dependencies: D,
+    f: impl FnMut(D::Out) -> R + 'static,
+) -> ReadOnlySignal<R>
 where
-    T: 'static,
-    D: UseFutureDep,
+    D::Out: 'static,
 {
-    let value = cx.use_hook(|| None);
+    use_maybe_sync_selector_with_dependencies(dependencies, f)
+}
 
-    let dependancies_vec = cx.use_hook(Vec::new);
+/// Creates a new Selector that may be sync with some local dependencies. The selector will be run immediately and whenever any signal it reads or any dependencies it tracks changes
+///
+/// Selectors can be used to efficiently compute derived data from signals.
+///
+/// ```rust
+/// use dioxus::prelude::*;
+/// use dioxus_signals::*;
+///
+/// fn App() -> Element {
+///     let mut local_state = use_state(|| 0);
+///     let double = use_memo_with_dependencies(cx, (local_state.get(),), move |(local_state,)| local_state * 2);
+///     local_state.set(1);
+///
+///     render! { "{double}" }
+/// }
+/// ```
+#[track_caller]
+pub fn use_maybe_sync_selector_with_dependencies<
+    R: PartialEq,
+    D: Dependency,
+    S: Storage<SignalData<R>>,
+>(
+    dependencies: D,
+    mut f: impl FnMut(D::Out) -> R + 'static,
+) -> ReadOnlySignal<R, S>
+where
+    D::Out: 'static,
+{
+    let mut dependencies_signal = use_signal(|| dependencies.out());
 
-    if dependencies.clone().apply(dependancies_vec) || value.is_none() {
-        // Create the new value
-        *value = Some(callback(dependencies.out()));
+    let selector = use_hook(|| {
+        // Get the current reactive context
+        let rc = ReactiveContext::new();
+
+        // Create a new signal in that context, wiring up its dependencies and subscribers
+        let mut state: Signal<R, S> =
+            rc.run_in(|| Signal::new_maybe_sync(f(dependencies_signal.read().clone())));
+
+        spawn(async move {
+            loop {
+                // Wait for the dom the be finished with sync work
+                flush_sync().await;
+                rc.changed().await;
+
+                let new = rc.run_in(|| f(dependencies_signal.read().clone()));
+                if new != *state.peek() {
+                    *state.write() = new;
+                }
+            }
+        });
+
+        // And just return the readonly variant of that signal
+        ReadOnlySignal::new_maybe_sync(state)
+    });
+
+    // This will cause a re-run of the selector if the dependencies change
+    let changed = { dependencies.changed(&*dependencies_signal.read()) };
+    if changed {
+        dependencies_signal.set(dependencies.out());
     }
 
-    value.as_ref().unwrap()
+    selector
 }

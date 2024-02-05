@@ -4,18 +4,16 @@ use crate::{
     edits::EditQueue,
     ipc::{EventData, UserWindowEvent},
     query::QueryEngine,
-    shortcut::{HotKey, ShortcutId, ShortcutRegistryError},
+    shortcut::{HotKey, ShortcutHandle, ShortcutRegistryError},
     webview::WebviewInstance,
-    AssetRequest, Config,
+    AssetRequest, Config, WryEventHandler,
 };
 use dioxus_core::{
     prelude::{current_scope_id, ScopeId},
-    Mutations, VirtualDom,
+    VirtualDom,
 };
-use dioxus_interpreter_js::binary_protocol::Channel;
-use rustc_hash::FxHashMap;
-use slab::Slab;
-use std::{cell::RefCell, fmt::Debug, rc::Rc, rc::Weak, sync::atomic::AtomicU16};
+use dioxus_interpreter_js::MutationState;
+use std::{cell::RefCell, rc::Rc, rc::Weak};
 use tao::{
     event::Event,
     event_loop::EventLoopWindowTarget,
@@ -32,7 +30,7 @@ use tao::platform::ios::WindowExtIOS;
 ///
 /// This function will panic if it is called outside of the context of a Dioxus App.
 pub fn window() -> DesktopContext {
-    dioxus_core::prelude::consume_context().unwrap()
+    dioxus_core::prelude::consume_context()
 }
 
 /// A handle to the [`DesktopService`] that can be passed around.
@@ -62,9 +60,7 @@ pub struct DesktopService {
     /// The receiver for queries about the current window
     pub(super) query: QueryEngine,
     pub(crate) edit_queue: EditQueue,
-    pub(crate) templates: RefCell<FxHashMap<String, u16>>,
-    pub(crate) max_template_count: AtomicU16,
-    pub(crate) channel: RefCell<Channel>,
+    pub(crate) mutation_state: RefCell<MutationState>,
     pub(crate) asset_handlers: AssetHandlerRegistry,
 
     #[cfg(target_os = "ios")]
@@ -93,26 +89,19 @@ impl DesktopService {
             webview,
             shared,
             edit_queue,
+            mutation_state: Default::default(),
             asset_handlers,
             query: Default::default(),
-            templates: Default::default(),
-            max_template_count: Default::default(),
-            channel: Default::default(),
             #[cfg(target_os = "ios")]
             views: Default::default(),
         }
     }
 
     /// Send a list of mutations to the webview
-    pub(crate) fn send_edits(&self, edits: Mutations) {
-        if let Some(bytes) = crate::edits::apply_edits(
-            edits,
-            &mut self.channel.borrow_mut(),
-            &mut self.templates.borrow_mut(),
-            &self.max_template_count,
-        ) {
-            self.edit_queue.add_edits(bytes)
-        }
+    pub(crate) fn send_edits(&self) {
+        let mut mutations = self.mutation_state.borrow_mut();
+        let serialized_edits = mutations.export_memory();
+        self.edit_queue.add_edits(serialized_edits);
     }
 
     /// Create a new window using the props and window builder
@@ -125,7 +114,11 @@ impl DesktopService {
     pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> Weak<DesktopService> {
         let window = WebviewInstance::new(cfg, dom, self.shared.clone());
 
-        let cx = window.desktop_context.clone();
+        let cx = window.dom.in_runtime(|| {
+            ScopeId::ROOT
+                .consume_context::<Rc<DesktopService>>()
+                .unwrap()
+        });
 
         self.shared
             .proxy
@@ -214,12 +207,12 @@ impl DesktopService {
     pub fn create_wry_event_handler(
         &self,
         handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
-    ) -> WryEventHandlerId {
+    ) -> WryEventHandler {
         self.shared.event_handlers.add(self.window.id(), handler)
     }
 
     /// Remove a wry event handler created with [`DesktopContext::create_wry_event_handler`]
-    pub fn remove_wry_event_handler(&self, id: WryEventHandlerId) {
+    pub fn remove_wry_event_handler(&self, id: WryEventHandler) {
         self.shared.event_handlers.remove(id)
     }
 
@@ -230,14 +223,14 @@ impl DesktopService {
         &self,
         hotkey: HotKey,
         callback: impl FnMut() + 'static,
-    ) -> Result<ShortcutId, ShortcutRegistryError> {
+    ) -> Result<ShortcutHandle, ShortcutRegistryError> {
         self.shared
             .shortcut_manager
             .add_shortcut(hotkey, Box::new(callback))
     }
 
     /// Remove a global shortcut
-    pub fn remove_shortcut(&self, id: ShortcutId) {
+    pub fn remove_shortcut(&self, id: ShortcutHandle) {
         self.shared.shortcut_manager.remove_shortcut(id)
     }
 
@@ -256,12 +249,12 @@ impl DesktopService {
     pub fn register_asset_handler(
         &self,
         name: String,
-        f: Box<dyn Fn(AssetRequest, RequestAsyncResponder) + 'static>,
+        handler: Box<dyn Fn(AssetRequest, RequestAsyncResponder) + 'static>,
         scope: Option<ScopeId>,
     ) {
         self.asset_handlers.register_handler(
             name,
-            f,
+            handler,
             scope.unwrap_or(current_scope_id().unwrap_or(ScopeId(0))),
         )
     }
@@ -318,90 +311,4 @@ fn is_main_thread() -> bool {
     let cls = Class::get("NSThread").unwrap();
     let result: BOOL = unsafe { msg_send![cls, isMainThread] };
     result != NO
-}
-
-/// The unique identifier of a window event handler. This can be used to later remove the handler.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct WryEventHandlerId(usize);
-
-#[derive(Clone, Default)]
-pub(crate) struct WindowEventHandlers {
-    handlers: Rc<RefCell<Slab<WryWindowEventHandlerInner>>>,
-}
-
-impl WindowEventHandlers {
-    pub(crate) fn add(
-        &self,
-        window_id: WindowId,
-        handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
-    ) -> WryEventHandlerId {
-        WryEventHandlerId(
-            self.handlers
-                .borrow_mut()
-                .insert(WryWindowEventHandlerInner {
-                    window_id,
-                    handler: Box::new(handler),
-                }),
-        )
-    }
-
-    pub(crate) fn remove(&self, id: WryEventHandlerId) {
-        self.handlers.borrow_mut().try_remove(id.0);
-    }
-
-    pub(crate) fn apply_event(
-        &self,
-        event: &Event<UserWindowEvent>,
-        target: &EventLoopWindowTarget<UserWindowEvent>,
-    ) {
-        for (_, handler) in self.handlers.borrow_mut().iter_mut() {
-            handler.apply_event(event, target);
-        }
-    }
-}
-
-struct WryWindowEventHandlerInner {
-    window_id: WindowId,
-    handler: WryEventHandlerCallback,
-}
-
-type WryEventHandlerCallback =
-    Box<dyn FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static>;
-
-impl WryWindowEventHandlerInner {
-    fn apply_event(
-        &mut self,
-        event: &Event<UserWindowEvent>,
-        target: &EventLoopWindowTarget<UserWindowEvent>,
-    ) {
-        // if this event does not apply to the window this listener cares about, return
-        if let Event::WindowEvent { window_id, .. } = event {
-            if *window_id != self.window_id {
-                return;
-            }
-        }
-        (self.handler)(event, target)
-    }
-}
-
-/// A wry event handler that is scoped to the current component and window. The event handler will only receive events for the window it was created for and global events.
-///
-/// This will automatically be removed when the component is unmounted.
-pub struct WryEventHandler {
-    pub(crate) handlers: WindowEventHandlers,
-    /// The unique identifier of the event handler.
-    pub id: WryEventHandlerId,
-}
-
-impl WryEventHandler {
-    /// Remove the event handler.
-    pub fn remove(&self) {
-        self.handlers.remove(self.id);
-    }
-}
-
-impl Drop for WryEventHandler {
-    fn drop(&mut self) {
-        self.handlers.remove(self.id);
-    }
 }

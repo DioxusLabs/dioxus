@@ -18,7 +18,7 @@ This crate is a part of the broader Dioxus ecosystem. For more resources about D
 Dioxus SSR provides utilities to render Dioxus components to valid HTML. Once rendered, the HTML can be rehydrated client-side or served from your web server of choice.
 
 ```rust, ignore
-let app: Component = |cx| cx.render(rsx!(div {"hello world!"}));
+let app: Component = |cx| rsx!(div {"hello world!"});
 
 let mut vdom = VirtualDom::new(app);
 let _ = vdom.rebuild();
@@ -29,10 +29,10 @@ assert_eq!(text, "<div>hello world!</div>")
 
 ## Basic Usage
 
-The simplest example is to simply render some `rsx!` nodes to HTML. This can be done with the [`render_lazy`] API.
+The simplest example is to simply render some `rsx!` nodes to HTML. This can be done with the [`render_element`] API.
 
 ```rust, ignore
-let content = dioxus_ssr::render_lazy(rsx!{
+let content = dioxus_ssr::render_element(rsx!{
     div {
         (0..5).map(|i| rsx!(
             "Number: {i}"
@@ -84,19 +84,19 @@ The rest of the space - IE doing this more efficiently, caching the VirtualDom, 
 
 ## Usage without a VirtualDom
 
-Dioxus SSR needs an arena to allocate from - whether it be the VirtualDom or a dedicated Bump allocator. To render `rsx!` directly to a string, you'll want to create a `Renderer` and call `render_lazy`.
+Dioxus SSR needs an arena to allocate from - whether it be the VirtualDom or a dedicated Bump allocator. To render `rsx!` directly to a string, you'll want to create a `Renderer` and call `render_element`.
 
 ```rust, ignore
-let text = dioxus_ssr::Renderer::new().render_lazy(rsx!{
+let text = dioxus_ssr::Renderer::new().render_element(rsx!{
     div { "hello world" }
 });
 assert_eq!(text, "<div>hello world!</div>")
 ```
 
-This can be automated with the `render_lazy!` macro:
+This can be automated with the `render_element!` macro:
 
 ```rust, ignore
-let text = render_lazy!(rsx!( div { "hello world" } ));
+let text = render_element!(rsx!( div { "hello world" } ));
 ```
 
 ## Usage in static site generation

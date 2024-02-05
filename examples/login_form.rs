@@ -4,10 +4,10 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch_desktop(app);
 }
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     let onsubmit = move |evt: FormEvent| async move {
         let resp = reqwest::Client::new()
             .post("http://localhost:8080/login")
@@ -29,9 +29,9 @@ fn app(cx: Scope) -> Element {
         }
     };
 
-    cx.render(rsx! {
+    rsx! {
         h1 { "Login" }
-        form { onsubmit: onsubmit,
+        form { onsubmit,
             input { r#type: "text", id: "username", name: "username" }
             label { "Username" }
             br {}
@@ -40,5 +40,5 @@ fn app(cx: Scope) -> Element {
             br {}
             button { "Login" }
         }
-    })
+    }
 }

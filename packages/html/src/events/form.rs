@@ -90,6 +90,14 @@ impl FormData {
         self.inner.value()
     }
 
+    /// Try to parse the value as a boolean
+    ///
+    /// Returns false if the value is not a boolean, or if it is false!
+    /// Does not verify anything about the event itself, use with caution
+    pub fn checked(&self) -> bool {
+        self.value().parse().unwrap_or(false)
+    }
+
     /// Get the values of the form event
     pub fn values(&self) -> HashMap<String, FormValue> {
         self.inner.values()

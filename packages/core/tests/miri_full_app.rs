@@ -7,9 +7,9 @@ use std::rc::Rc;
 #[test]
 fn miri_rollover() {
     set_event_converter(Box::new(SerializedHtmlEventConverter));
-    let mut dom = VirtualDom::new(App);
+    let mut dom = VirtualDom::new(app);
 
-    _ = dom.rebuild();
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     for _ in 0..3 {
         dom.handle_event(
@@ -19,16 +19,15 @@ fn miri_rollover() {
             true,
         );
         dom.process_events();
-        _ = dom.render_immediate();
+        _ = dom.render_immediate_to_vec();
     }
 }
 
-#[component]
-fn App(cx: Scope) -> Element {
-    let mut idx = use_state(cx, || 0);
+fn app() -> Element {
+    let mut idx = use_signal(|| 0);
     let onhover = |_| println!("go!");
 
-    cx.render(rsx! {
+    rsx! {
         div {
             button {
                 onclick: move |_| {
@@ -39,20 +38,15 @@ fn App(cx: Scope) -> Element {
             }
             button { onclick: move |_| idx -= 1, "-" }
             ul {
-                {(0..**idx).map(|i| rsx! {
+                {(0..idx()).map(|i| rsx! {
                     ChildExample { i: i, onhover: onhover }
                 })}
             }
         }
-    })
+    }
 }
 
 #[component]
-fn ChildExample<'a>(cx: Scope<'a>, i: i32, onhover: EventHandler<'a, MouseEvent>) -> Element {
-    cx.render(rsx! {
-        li {
-            onmouseover: move |e| onhover.call(e),
-            "{i}"
-        }
-    })
+fn ChildExample(i: i32, onhover: EventHandler<MouseEvent>) -> Element {
+    rsx! { li { onmouseover: move |e| onhover.call(e), "{i}" } }
 }

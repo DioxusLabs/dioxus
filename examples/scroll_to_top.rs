@@ -1,18 +1,16 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch_desktop(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let header_element = use_ref(cx, || None);
+fn app() -> Element {
+    let mut header_element = use_signal(|| None);
 
-    cx.render(rsx!(
+    rsx! {
         div {
             h1 {
-                onmounted: move |cx| {
-                    header_element.set(Some(cx.inner().clone()));
-                },
+                onmounted: move |cx| header_element.set(Some(cx.data())),
                 "Scroll to top example"
             }
 
@@ -21,15 +19,13 @@ fn app(cx: Scope) -> Element {
             }
 
             button {
-                onclick: move |_| {
-                    if let Some(header) = header_element.read().as_ref().cloned() {
-                        cx.spawn(async move {
-                            let _ = header.scroll_to(ScrollBehavior::Smooth).await;
-                        });
+                onclick: move |_| async move {
+                    if let Some(header) = header_element.cloned() {
+                        let _ = header.scroll_to(ScrollBehavior::Smooth).await;
                     }
                 },
                 "Scroll to top"
             }
         }
-    ))
+    }
 }

@@ -4,13 +4,10 @@ use std::{
     sync::Mutex,
 };
 
+use crate::tools::{app_path, clone_repo};
+use dioxus_cli_config::CrateConfig;
 use mlua::{Lua, Table};
 use serde_json::json;
-
-use crate::{
-    tools::{app_path, clone_repo},
-    CrateConfig,
-};
 
 use self::{
     interface::{

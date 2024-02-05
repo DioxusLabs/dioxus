@@ -5,11 +5,10 @@ use crate::{
     query::{QueryEngine, QueryResult},
     LiveViewError,
 };
-use dioxus_core::{prelude::*, BorrowedAttributeValue, Mutations};
-use dioxus_html::{event_bubbles, EventData, HtmlEvent, PlatformEventData};
-use dioxus_interpreter_js::binary_protocol::Channel;
+use dioxus_core::prelude::*;
+use dioxus_html::{EventData, HtmlEvent, PlatformEventData};
+use dioxus_interpreter_js::MutationState;
 use futures_util::{pin_mut, SinkExt, StreamExt};
-use rustc_hash::FxHashMap;
 use serde::Serialize;
 use std::{rc::Rc, time::Duration};
 use tokio_util::task::LocalPoolHandle;
@@ -38,15 +37,15 @@ impl LiveViewPool {
     pub async fn launch(
         &self,
         ws: impl LiveViewSocket,
-        app: fn(Scope<()>) -> Element,
+        app: fn() -> Element,
     ) -> Result<(), LiveViewError> {
-        self.launch_with_props(ws, app, ()).await
+        self.launch_with_props(ws, |app| app(), app).await
     }
 
-    pub async fn launch_with_props<T: Send + 'static>(
+    pub async fn launch_with_props<T: Clone + Send + 'static>(
         &self,
         ws: impl LiveViewSocket,
-        app: fn(Scope<T>) -> Element,
+        app: fn(T) -> Element,
         props: T,
     ) -> Result<(), LiveViewError> {
         self.launch_virtualdom(ws, move || VirtualDom::new_with_props(app, props))
@@ -126,27 +125,22 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
         rx
     };
 
-    let mut templates: FxHashMap<String, u16> = Default::default();
-    let mut max_template_count = 0;
+    let mut mutations = MutationState::default();
 
     // Create the a proxy for query engine
     let (query_tx, mut query_rx) = tokio::sync::mpsc::unbounded_channel();
     let query_engine = QueryEngine::new(query_tx);
-    vdom.base_scope().provide_context(query_engine.clone());
-    init_eval(vdom.base_scope());
+    vdom.in_runtime(|| {
+        ScopeId::ROOT.provide_context(query_engine.clone());
+        init_eval();
+    });
 
     // pin the futures so we can use select!
     pin_mut!(ws);
 
-    let mut edit_channel = Channel::default();
     if let Some(edits) = {
-        let mutations = vdom.rebuild();
-        apply_edits(
-            mutations,
-            &mut edit_channel,
-            &mut templates,
-            &mut max_template_count,
-        )
+        vdom.rebuild(&mut mutations);
+        take_edits(&mut mutations)
     } {
         // send the initial render to the client
         ws.send(edits).await?;
@@ -233,18 +227,16 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
             }
         }
 
-        let edits = vdom
-            .render_with_deadline(tokio::time::sleep(Duration::from_millis(10)))
-            .await;
+        // wait for suspense to resolve in a 10ms window
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_millis(10)) => {}
+            _ = vdom.wait_for_suspense() => {}
+        }
 
-        if let Some(edits) = {
-            apply_edits(
-                edits,
-                &mut edit_channel,
-                &mut templates,
-                &mut max_template_count,
-            )
-        } {
+        // render the vdom
+        vdom.render_immediate(&mut mutations);
+
+        if let Some(edits) = take_edits(&mut mutations) {
             ws.send(edits).await?;
         }
     }
@@ -256,132 +248,11 @@ fn text_frame(text: &str) -> Vec<u8> {
     bytes
 }
 
-fn add_template(
-    template: &Template<'static>,
-    channel: &mut Channel,
-    templates: &mut FxHashMap<String, u16>,
-    max_template_count: &mut u16,
-) {
-    for root in template.roots.iter() {
-        create_template_node(channel, root);
-        templates.insert(template.name.to_owned(), *max_template_count);
-    }
-    channel.add_templates(*max_template_count, template.roots.len() as u16);
-
-    *max_template_count += 1
-}
-
-fn create_template_node(channel: &mut Channel, v: &'static TemplateNode<'static>) {
-    use TemplateNode::*;
-    match v {
-        Element {
-            tag,
-            namespace,
-            attrs,
-            children,
-            ..
-        } => {
-            // Push the current node onto the stack
-            match namespace {
-                Some(ns) => channel.create_element_ns(tag, ns),
-                None => channel.create_element(tag),
-            }
-            // Set attributes on the current node
-            for attr in *attrs {
-                if let TemplateAttribute::Static {
-                    name,
-                    value,
-                    namespace,
-                } = attr
-                {
-                    channel.set_top_attribute(name, value, namespace.unwrap_or_default())
-                }
-            }
-            // Add each child to the stack
-            for child in *children {
-                create_template_node(channel, child);
-            }
-            // Add all children to the parent
-            channel.append_children_to_top(children.len() as u16);
-        }
-        Text { text } => channel.create_raw_text(text),
-        DynamicText { .. } => channel.create_raw_text("p"),
-        Dynamic { .. } => channel.add_placeholder(),
-    }
-}
-
-fn apply_edits(
-    mutations: Mutations,
-    channel: &mut Channel,
-    templates: &mut FxHashMap<String, u16>,
-    max_template_count: &mut u16,
-) -> Option<Vec<u8>> {
-    use dioxus_core::Mutation::*;
-    if mutations.templates.is_empty() && mutations.edits.is_empty() {
-        return None;
-    }
-    for template in mutations.templates {
-        add_template(&template, channel, templates, max_template_count);
-    }
-    for edit in mutations.edits {
-        match edit {
-            AppendChildren { id, m } => channel.append_children(id.0 as u32, m as u16),
-            AssignId { path, id } => channel.assign_id(path, id.0 as u32),
-            CreatePlaceholder { id } => channel.create_placeholder(id.0 as u32),
-            CreateTextNode { value, id } => channel.create_text_node(value, id.0 as u32),
-            HydrateText { path, value, id } => channel.hydrate_text(path, value, id.0 as u32),
-            LoadTemplate { name, index, id } => {
-                if let Some(tmpl_id) = templates.get(name) {
-                    channel.load_template(*tmpl_id, index as u16, id.0 as u32)
-                }
-            }
-            ReplaceWith { id, m } => channel.replace_with(id.0 as u32, m as u16),
-            ReplacePlaceholder { path, m } => channel.replace_placeholder(path, m as u16),
-            InsertAfter { id, m } => channel.insert_after(id.0 as u32, m as u16),
-            InsertBefore { id, m } => channel.insert_before(id.0 as u32, m as u16),
-            SetAttribute {
-                name,
-                value,
-                id,
-                ns,
-            } => match value {
-                BorrowedAttributeValue::Text(txt) => {
-                    channel.set_attribute(id.0 as u32, name, txt, ns.unwrap_or_default())
-                }
-                BorrowedAttributeValue::Float(f) => {
-                    channel.set_attribute(id.0 as u32, name, &f.to_string(), ns.unwrap_or_default())
-                }
-                BorrowedAttributeValue::Int(n) => {
-                    channel.set_attribute(id.0 as u32, name, &n.to_string(), ns.unwrap_or_default())
-                }
-                BorrowedAttributeValue::Bool(b) => channel.set_attribute(
-                    id.0 as u32,
-                    name,
-                    if b { "true" } else { "false" },
-                    ns.unwrap_or_default(),
-                ),
-                BorrowedAttributeValue::None => {
-                    channel.remove_attribute(id.0 as u32, name, ns.unwrap_or_default())
-                }
-                _ => unreachable!(),
-            },
-            SetText { value, id } => channel.set_text(id.0 as u32, value),
-            NewEventListener { name, id, .. } => {
-                channel.new_event_listener(name, id.0 as u32, event_bubbles(name) as u8)
-            }
-            RemoveEventListener { name, id } => {
-                channel.remove_event_listener(name, id.0 as u32, event_bubbles(name) as u8)
-            }
-            Remove { id } => channel.remove(id.0 as u32),
-            PushRoot { id } => channel.push_root(id.0 as u32),
-        }
-    }
-
+fn take_edits(mutations: &mut MutationState) -> Option<Vec<u8>> {
     // Add an extra one at the beginning to tell the shim this is a binary frame
     let mut bytes = vec![1];
-    bytes.extend(channel.export_memory());
-    channel.reset();
-    Some(bytes)
+    mutations.write_memory_into(&mut bytes);
+    (bytes.len() > 1).then_some(bytes)
 }
 
 #[derive(Serialize)]

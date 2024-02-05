@@ -45,8 +45,8 @@ pub struct ConfigOptsBuild {
     #[clap(long, default_value_t = { "web".to_string() })]
     pub client_feature: String,
 
-    /// The feature to use for the server in a fullstack app [default: "ssr"]
-    #[clap(long, default_value_t = { "ssr".to_string() })]
+    /// The feature to use for the server in a fullstack app [default: "server"]
+    #[clap(long, default_value_t = { "server".to_string() })]
     pub server_feature: String,
 
     /// Rustc platform triple
@@ -142,8 +142,8 @@ pub struct ConfigOptsServe {
     #[clap(long, default_value_t = { "web".to_string() })]
     pub client_feature: String,
 
-    /// The feature to use for the server in a fullstack app [default: "ssr"]
-    #[clap(long, default_value_t = { "ssr".to_string() })]
+    /// The feature to use for the server in a fullstack app [default: "server"]
+    #[clap(long, default_value_t = { "server".to_string() })]
     pub server_feature: String,
 
     /// Rustc platform triple

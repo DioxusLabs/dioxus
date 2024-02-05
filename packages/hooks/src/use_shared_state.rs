@@ -1,5 +1,5 @@
 use self::error::{UseSharedStateError, UseSharedStateResult};
-use dioxus_core::{ScopeId, ScopeState};
+use dioxus_core::ScopeId;
 use std::{collections::HashSet, rc::Rc, sync::Arc};
 
 #[cfg(debug_assertions)]
@@ -104,8 +104,8 @@ impl<T> ProvidedStateInner<T> {
 /// ```rust
 /// # use dioxus::prelude::*;
 /// #
-/// # fn app(cx: Scope) -> Element {
-/// #     render! {
+/// # fn app() -> Element {
+/// #     rsx! {
 /// #         Parent{}
 /// #     }
 /// # }
@@ -117,11 +117,11 @@ impl<T> ProvidedStateInner<T> {
 /// }
 ///
 /// // Provider
-/// fn Parent<'a>(cx: Scope<'a>) -> Element<'a> {
-///     use_shared_state_provider(cx, || Theme::Dark);
-///     let theme = use_shared_state::<Theme>(cx).unwrap();
+/// fn Parent<'a>(cx: Scope<'a>) -> Element {
+///     use_shared_state_provider(|| Theme::Dark);
+///     let theme = use_shared_state::<Theme>().unwrap();
 ///
-///     render! {
+///     rsx! {
 ///         button{
 ///             onclick: move |_| {
 ///                 let current_theme = *theme.read();
@@ -137,11 +137,11 @@ impl<T> ProvidedStateInner<T> {
 /// }
 ///
 /// // Consumer
-/// fn Child<'a>(cx: Scope<'a>) -> Element<'a> {
-///     let theme = use_shared_state::<Theme>(cx).unwrap();
+/// fn Child<'a>(cx: Scope<'a>) -> Element {
+///     let theme = use_shared_state::<Theme>().unwrap();
 ///     let current_theme = *theme.read();
 ///
-///     render! {
+///     rsx! {
 ///         match current_theme {
 ///             Theme::Dark => {
 ///                 "Dark mode"
@@ -160,7 +160,7 @@ impl<T> ProvidedStateInner<T> {
 ///
 /// Right now, there is not a distinction between read-only and write-only, so every consumer will be notified.
 #[must_use]
-pub fn use_shared_state<T: 'static>(cx: &ScopeState) -> Option<&UseSharedState<T>> {
+pub fn use_shared_state<T: 'static>() -> Option<&UseSharedState<T>> {
     let state_owner: &mut Option<UseSharedStateOwner<T>> = &mut *cx.use_hook(move || {
         let scope_id = cx.scope_id();
         let root = cx.consume_context::<ProvidedState<T>>()?;
@@ -330,8 +330,8 @@ impl<T> PartialEq for UseSharedState<T> {
 /// ```rust
 /// # use dioxus::prelude::*;
 /// #
-/// # fn app(cx: Scope) -> Element {
-/// #     render! {
+/// # fn app() -> Element {
+/// #     rsx! {
 /// #         Parent{}
 /// #     }
 /// # }
@@ -343,11 +343,11 @@ impl<T> PartialEq for UseSharedState<T> {
 /// }
 ///
 /// // Provider
-/// fn Parent<'a>(cx: Scope<'a>) -> Element<'a> {
-///     use_shared_state_provider(cx, || Theme::Dark);
-///     let theme = use_shared_state::<Theme>(cx).unwrap();
+/// fn Parent<'a>(cx: Scope<'a>) -> Element {
+///     use_shared_state_provider(|| Theme::Dark);
+///     let theme = use_shared_state::<Theme>().unwrap();
 ///
-///     render! {
+///     rsx! {
 ///         button{
 ///             onclick: move |_| {
 ///                 let current_theme = *theme.read();
@@ -362,7 +362,7 @@ impl<T> PartialEq for UseSharedState<T> {
 ///     }
 /// }
 /// ```
-pub fn use_shared_state_provider<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) {
+pub fn use_shared_state_provider<T: 'static>(f: impl FnOnce() -> T) {
     cx.use_hook(|| {
         let state: ProvidedState<T> = Rc::new(RefCell::new(ProvidedStateInner {
             value: f(),

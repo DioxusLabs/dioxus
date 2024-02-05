@@ -1,10 +1,10 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch_desktop(app);
 }
 
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     let a = 123;
     let b = 456;
     let c = 789;
@@ -14,10 +14,10 @@ fn app(cx: Scope) -> Element {
     // todo: i'd like it for children on elements to be inferred as the children of the element
     // also should shorthands understand references/dereferences?
     // ie **a, *a, &a, &mut a, etc
-    let children = render! { "Child" };
+    let children = rsx! { "Child" };
     let onclick = move |_| println!("Clicked!");
 
-    render! {
+    rsx! {
         div { class, id, {&children} }
         Component { a, b, c, children, onclick }
         Component { a, ..ComponentProps { a: 1, b: 2, c: 3, children: None, onclick: Default::default() } }
@@ -25,21 +25,12 @@ fn app(cx: Scope) -> Element {
 }
 
 #[component]
-fn Component<'a>(
-    cx: Scope<'a>,
-    a: i32,
-    b: i32,
-    c: i32,
-    children: Element<'a>,
-    onclick: EventHandler<'a, ()>,
-) -> Element {
-    render! {
+fn Component(a: i32, b: i32, c: i32, children: Element, onclick: EventHandler) -> Element {
+    rsx! {
         div { "{a}" }
         div { "{b}" }
         div { "{c}" }
         div { {children} }
-        div {
-            onclick: move |_| onclick.call(()),
-        }
+        div { onclick: move |_| onclick.call(()) }
     }
 }

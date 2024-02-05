@@ -1,101 +1,18 @@
+pub use crate::Config;
 use crate::{
     app::App,
     ipc::{EventData, IpcMethod, UserWindowEvent},
-    Config,
 };
 use dioxus_core::*;
+use std::any::Any;
 use tao::event::{Event, StartCause, WindowEvent};
-
-/// Launch the WebView and run the event loop.
-///
-/// This function will start a multithreaded Tokio runtime as well the WebView event loop.
-///
-/// ```rust, no_run
-/// use dioxus::prelude::*;
-///
-/// fn main() {
-///     dioxus_desktop::launch(app);
-/// }
-///
-/// fn app(cx: Scope) -> Element {
-///     cx.render(rsx!{
-///         h1 {"hello world!"}
-///     })
-/// }
-/// ```
-pub fn launch(root: Component) {
-    launch_with_props(root, (), Config::default())
-}
-
-/// Launch the WebView and run the event loop, with configuration.
-///
-/// This function will start a multithreaded Tokio runtime as well the WebView event loop.
-///
-/// You can configure the WebView window with a configuration closure
-///
-/// ```rust, no_run
-/// use dioxus::prelude::*;
-/// use dioxus_desktop::*;
-///
-/// fn main() {
-///     dioxus_desktop::launch_cfg(app, Config::default().with_window(WindowBuilder::new().with_title("My App")));
-/// }
-///
-/// fn app(cx: Scope) -> Element {
-///     cx.render(rsx!{
-///         h1 {"hello world!"}
-///     })
-/// }
-/// ```
-pub fn launch_cfg(root: Component, config_builder: Config) {
-    launch_with_props(root, (), config_builder)
-}
-
-/// Launch the WebView and run the event loop, with configuration and root props.
-///
-/// If the [`tokio`] feature is enabled, this will also startup and block a tokio runtime using the unconstrained task.
-/// This function will start a multithreaded Tokio runtime as well the WebView event loop. This will block the current thread.
-///
-/// You can configure the WebView window with a configuration closure
-///
-/// ```rust, no_run
-/// use dioxus::prelude::*;
-/// use dioxus_desktop::Config;
-///
-/// fn main() {
-///     dioxus_desktop::launch_with_props(app, AppProps { name: "asd" }, Config::default());
-/// }
-///
-/// struct AppProps {
-///     name: &'static str
-/// }
-///
-/// fn app(cx: Scope<AppProps>) -> Element {
-///     cx.render(rsx!{
-///         h1 {"hello {cx.props.name}!"}
-///     })
-/// }
-/// ```
-pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) {
-    #[cfg(feature = "tokio")]
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(tokio::task::unconstrained(async move {
-            launch_with_props_blocking(root, props, cfg);
-        }));
-
-    #[cfg(not(feature = "tokio"))]
-    launch_with_props_blocking(root, props, cfg);
-}
 
 /// Launch the WebView and run the event loop, with configuration and root props.
 ///
 /// This will block the main thread, and *must* be spawned on the main thread. This function does not assume any runtime
 /// and is equivalent to calling launch_with_props with the tokio feature disabled.
-pub fn launch_with_props_blocking<P: 'static>(root: Component<P>, props: P, cfg: Config) {
-    let (event_loop, mut app) = App::new(cfg, props, root);
+pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, desktop_config: Config) {
+    let (event_loop, mut app) = App::new(desktop_config, virtual_dom);
 
     event_loop.run(move |window_event, _, control_flow| {
         app.tick(&window_event);
@@ -129,4 +46,34 @@ pub fn launch_with_props_blocking<P: 'static>(root: Component<P>, props: P, cfg:
 
         *control_flow = app.control_flow;
     })
+}
+
+/// Launches the WebView and runs the event loop, with configuration and root props.
+pub fn launch_virtual_dom(virtual_dom: VirtualDom, desktop_config: Config) {
+    #[cfg(feature = "tokio")]
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(tokio::task::unconstrained(async move {
+            launch_virtual_dom_blocking(virtual_dom, desktop_config)
+        }));
+
+    #[cfg(not(feature = "tokio"))]
+    launch_virtual_dom_blocking(virtual_dom, desktop_config)
+}
+
+/// Launches the WebView and runs the event loop, with configuration and root props.
+pub fn launch(
+    root: fn() -> Element,
+    contexts: Vec<Box<dyn Fn() -> Box<dyn Any>>>,
+    platform_config: Config,
+) {
+    let mut virtual_dom = VirtualDom::new(root);
+
+    for context in contexts {
+        virtual_dom.insert_any_root_context(context());
+    }
+
+    launch_virtual_dom(virtual_dom, platform_config)
 }

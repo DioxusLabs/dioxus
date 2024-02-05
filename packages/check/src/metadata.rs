@@ -3,7 +3,7 @@
 pub struct HookInfo {
     /// The name of the hook, e.g. `use_state`.
     pub name: String,
-    /// The span of the hook, e.g. `use_state(cx, || 0)`.
+    /// The span of the hook, e.g. `use_signal(|| 0)`.
     pub span: Span,
     /// The span of the name, e.g. `use_state`.
     pub name_span: Span,

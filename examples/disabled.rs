@@ -1,25 +1,21 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let disabled = use_state(cx, || false);
+fn app() -> Element {
+    let mut disabled = use_signal(|| false);
 
-    cx.render(rsx! {
+    rsx! {
         div {
-            button {
-                onclick: move |_| disabled.set(!disabled),
+            button { onclick: move |_| disabled.toggle(),
                 "click to "
-                if disabled == true { "enable" } else { "disable" }
+                if disabled() { "enable" } else { "disable" }
                 " the lower button"
             }
 
-            button {
-                disabled: "{disabled}",
-                "lower button"
-            }
+            button { disabled, "lower button" }
         }
-    })
+    }
 }

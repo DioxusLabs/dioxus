@@ -12,11 +12,10 @@ rust-version = "1.60.0"
 publish = false
 
 [dependencies]
-dioxus = { path = "../../packages/dioxus" }
 manganis = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-dioxus-desktop = { path = "../../packages/desktop" }
+dioxus = { path = "../../packages/dioxus", features = ["desktop"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-dioxus-web = { path = "../../packages/web" }
+dioxus = { path = "../../packages/dioxus", features = ["web"] }

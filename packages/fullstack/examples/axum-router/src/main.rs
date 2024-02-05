@@ -1,17 +1,14 @@
 //! Run with:
 //!
 //! ```sh
-//! dx build --features web --release
-//! cargo run --features ssr --release
+//! dx serve --platform fullstack
 //! ```
 
 use dioxus::prelude::*;
-use dioxus_fullstack::prelude::*;
-use dioxus_router::prelude::*;
 
 fn main() {
-    let config = LaunchBuilder::<FullstackRouterConfig<Route>>::router();
-    #[cfg(feature = "ssr")]
+    let config = LaunchBuilder::fullstack();
+    #[cfg(feature = "server")]
     config
         .incremental(
             IncrementalRendererConfig::default()
@@ -19,27 +16,32 @@ fn main() {
         )
         .launch();
 
-    #[cfg(not(feature = "ssr"))]
-    config.launch();
+    #[cfg(not(feature = "server"))]
+    config.launch(|| {
+        rsx! {
+            Router::<Route> {}
+        }
+    });
 }
 
 #[derive(Clone, Routable, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 enum Route {
     #[route("/")]
     Home {},
+
     #[route("/blog/:id")]
     Blog { id: i32 },
 }
 
 #[component]
-fn Blog(cx: Scope, id: i32) -> Element {
-    render! {
+fn Blog(id: i32) -> Element {
+    rsx! {
         Link { to: Route::Home {}, "Go to counter" }
         table {
             tbody {
-                for _ in 0..*id {
+                for _ in 0..id {
                     tr {
-                        for _ in 0..*id {
+                        for _ in 0..id {
                             td { "hello world!" }
                         }
                     }
@@ -50,14 +52,14 @@ fn Blog(cx: Scope, id: i32) -> Element {
 }
 
 #[component]
-fn Home(cx: Scope) -> Element {
-    let mut count = use_state(cx, || 0);
-    let text = use_state(cx, || "...".to_string());
+fn Home() -> Element {
+    let mut count = use_signal(|| 0);
+    let text = use_signal(|| "...".to_string());
 
-    cx.render(rsx! {
+    rsx! {
         Link {
             to: Route::Blog {
-                id: *count.get()
+                id: count()
             },
             "Go to blog"
         }
@@ -80,7 +82,7 @@ fn Home(cx: Scope) -> Element {
             }
             "Server said: {text}"
         }
-    })
+    }
 }
 
 #[server(PostServerData)]

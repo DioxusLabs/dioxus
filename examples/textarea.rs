@@ -3,15 +3,13 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch_desktop(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let model = use_state(cx, || String::from("asd"));
+fn app() -> Element {
+    let mut model = use_signal(|| String::from("asd"));
 
-    println!("{model}");
-
-    cx.render(rsx! {
+    rsx! {
         textarea {
             class: "border",
             rows: "10",
@@ -19,5 +17,5 @@ fn app(cx: Scope) -> Element {
             value: "{model}",
             oninput: move |e| model.set(e.value().clone()),
         }
-    })
+    }
 }

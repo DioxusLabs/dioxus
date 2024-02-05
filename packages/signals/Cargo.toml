@@ -2,7 +2,7 @@
 name = "dioxus-signals"
 authors = ["Jonathan Kelley"]
 version = "0.4.3"
-edition = "2018"
+edition = "2021"
 description = "Signals for Dioxus"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
@@ -16,13 +16,20 @@ rust-version = "1.60.0"
 dioxus-core = { workspace = true }
 generational-box = { workspace = true }
 tracing = { workspace = true }
-simple_logger = "4.2.0"
 serde = { version = "1", features = ["derive"], optional = true }
+parking_lot = "0.12.1"
+once_cell = "1.18.0"
+rustc-hash = { workspace = true }
+futures-channel = { workspace = true }
+futures-util = { workspace = true }
+flume = { version = "0.11.0", default-features = false, features = ["async"] }
 
 [dev-dependencies]
 dioxus = { workspace = true }
-dioxus-desktop = { workspace = true }
+# dioxus-desktop = { workspace = true }
 tokio = { version = "1", features = ["full"] }
+tracing-subscriber = "0.3.17"
+simple_logger = "4.2.0"
 
 [features]
 default = []

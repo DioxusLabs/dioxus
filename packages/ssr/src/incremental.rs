@@ -3,7 +3,7 @@
 #![allow(non_snake_case)]
 
 use crate::fs_cache::ValidCachedPath;
-use dioxus_core::{Element, Scope, VirtualDom};
+use dioxus_core::VirtualDom;
 use rustc_hash::FxHasher;
 use std::{
     future::Future,
@@ -69,23 +69,22 @@ impl IncrementalRenderer {
         self.invalidate_after.is_some()
     }
 
-    async fn render_and_cache<'a, P: 'static, R: WrapBody + Send + Sync>(
+    async fn render_and_cache<'a, R: WrapBody + Send + Sync>(
         &'a mut self,
         route: String,
-        comp: fn(Scope<P>) -> Element,
-        props: P,
+        mut virtual_dom: VirtualDom,
         output: &'a mut (impl AsyncWrite + Unpin + Send),
         rebuild_with: impl FnOnce(&mut VirtualDom) -> Pin<Box<dyn Future<Output = ()> + '_>>,
         renderer: &'a R,
     ) -> Result<RenderFreshness, IncrementalRendererError> {
         let mut html_buffer = WriteBuffer { buffer: Vec::new() };
         {
-            let mut vdom = VirtualDom::new_with_props(comp, props);
-            crate::eval::init_eval(vdom.base_scope());
-            rebuild_with(&mut vdom).await;
+            virtual_dom.in_runtime(crate::eval::init_eval);
+            rebuild_with(&mut virtual_dom).await;
 
             renderer.render_before_body(&mut *html_buffer)?;
-            self.ssr_renderer.render_to(&mut html_buffer, &vdom)?;
+            self.ssr_renderer
+                .render_to(&mut html_buffer, &virtual_dom)?;
         }
         renderer.render_after_body(&mut *html_buffer)?;
         let html_buffer = html_buffer.buffer;
@@ -168,11 +167,10 @@ impl IncrementalRenderer {
     }
 
     /// Render a route or get it from cache.
-    pub async fn render<P: 'static, R: WrapBody + Send + Sync>(
+    pub async fn render<R: WrapBody + Send + Sync>(
         &mut self,
         route: String,
-        component: fn(Scope<P>) -> Element,
-        props: P,
+        virtual_dom_factory: impl FnOnce() -> VirtualDom,
         output: &mut (impl AsyncWrite + Unpin + std::marker::Send),
         rebuild_with: impl FnOnce(&mut VirtualDom) -> Pin<Box<dyn Future<Output = ()> + '_>>,
         renderer: &R,
@@ -183,7 +181,7 @@ impl IncrementalRenderer {
         } else {
             // if not, create it
             let freshness = self
-                .render_and_cache(route, component, props, output, rebuild_with, renderer)
+                .render_and_cache(route, virtual_dom_factory(), output, rebuild_with, renderer)
                 .await?;
             tracing::trace!("cache miss");
             Ok(freshness)

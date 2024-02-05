@@ -6,28 +6,27 @@
 //! - tests to ensure dyn_into works for various event types.
 //! - Partial delegation?
 
-use dioxus_core::{
-    BorrowedAttributeValue, ElementId, Mutation, Template, TemplateAttribute, TemplateNode,
-};
-use dioxus_html::event_bubbles;
+use dioxus_core::ElementId;
 use dioxus_html::PlatformEventData;
-use dioxus_interpreter_js::{get_node, minimal_bindings, save_template, Channel};
+use dioxus_interpreter_js::Channel;
 use futures_channel::mpsc;
 use rustc_hash::FxHashMap;
-use wasm_bindgen::{closure::Closure, JsCast, JsValue};
+use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{Document, Element, Event};
 
 use crate::{load_document, virtual_event_from_websys_event, Config, WebEventConverter};
 
 pub struct WebsysDom {
-    document: Document,
+    pub(crate) document: Document,
     #[allow(dead_code)]
     pub(crate) root: Element,
-    templates: FxHashMap<String, u16>,
-    max_template_id: u16,
+    pub(crate) templates: FxHashMap<String, u16>,
+    pub(crate) max_template_id: u16,
     pub(crate) interpreter: Channel,
     #[cfg(feature = "mounted")]
-    event_channel: mpsc::UnboundedSender<UiEvent>,
+    pub(crate) event_channel: mpsc::UnboundedSender<UiEvent>,
+    #[cfg(feature = "mounted")]
+    pub(crate) queued_mounted_events: Vec<ElementId>,
 }
 
 pub struct UiEvent {
@@ -124,168 +123,13 @@ impl WebsysDom {
             max_template_id: 0,
             #[cfg(feature = "mounted")]
             event_channel,
+            #[cfg(feature = "mounted")]
+            queued_mounted_events: Default::default(),
         }
     }
 
     pub fn mount(&mut self) {
         self.interpreter.mount_to_root();
-    }
-
-    pub fn load_templates(&mut self, templates: &[Template]) {
-        for template in templates {
-            let mut roots = vec![];
-
-            for root in template.roots {
-                roots.push(self.create_template_node(root))
-            }
-
-            self.templates
-                .insert(template.name.to_owned(), self.max_template_id);
-            save_template(roots, self.max_template_id);
-            self.max_template_id += 1
-        }
-    }
-
-    fn create_template_node(&self, v: &TemplateNode) -> web_sys::Node {
-        use TemplateNode::*;
-        match v {
-            Element {
-                tag,
-                namespace,
-                attrs,
-                children,
-                ..
-            } => {
-                let el = match namespace {
-                    Some(ns) => self.document.create_element_ns(Some(ns), tag).unwrap(),
-                    None => self.document.create_element(tag).unwrap(),
-                };
-                for attr in *attrs {
-                    if let TemplateAttribute::Static {
-                        name,
-                        value,
-                        namespace,
-                    } = attr
-                    {
-                        minimal_bindings::setAttributeInner(
-                            el.clone().into(),
-                            name,
-                            JsValue::from_str(value),
-                            *namespace,
-                        );
-                    }
-                }
-                for child in *children {
-                    let _ = el.append_child(&self.create_template_node(child));
-                }
-                el.dyn_into().unwrap()
-            }
-            Text { text } => self.document.create_text_node(text).dyn_into().unwrap(),
-            DynamicText { .. } => self.document.create_text_node("p").dyn_into().unwrap(),
-            Dynamic { .. } => {
-                let el = self.document.create_element("pre").unwrap();
-                let _ = el.toggle_attribute("hidden");
-                el.dyn_into().unwrap()
-            }
-        }
-    }
-
-    pub fn apply_edits(&mut self, mut edits: Vec<Mutation>) {
-        use Mutation::*;
-        let i = &mut self.interpreter;
-        #[cfg(feature = "mounted")]
-        // we need to apply the mount events last, so we collect them here
-        let mut to_mount = Vec::new();
-        for edit in &edits {
-            match edit {
-                AppendChildren { id, m } => i.append_children(id.0 as u32, *m as u16),
-                AssignId { path, id } => {
-                    i.assign_id(path.as_ptr() as u32, path.len() as u8, id.0 as u32)
-                }
-                CreatePlaceholder { id } => i.create_placeholder(id.0 as u32),
-                CreateTextNode { value, id } => i.create_text_node(value, id.0 as u32),
-                HydrateText { path, value, id } => {
-                    i.hydrate_text(path.as_ptr() as u32, path.len() as u8, value, id.0 as u32)
-                }
-                LoadTemplate { name, index, id } => {
-                    if let Some(tmpl_id) = self.templates.get(*name) {
-                        i.load_template(*tmpl_id, *index as u16, id.0 as u32)
-                    }
-                }
-                ReplaceWith { id, m } => i.replace_with(id.0 as u32, *m as u16),
-                ReplacePlaceholder { path, m } => {
-                    i.replace_placeholder(path.as_ptr() as u32, path.len() as u8, *m as u16)
-                }
-                InsertAfter { id, m } => i.insert_after(id.0 as u32, *m as u16),
-                InsertBefore { id, m } => i.insert_before(id.0 as u32, *m as u16),
-                SetAttribute {
-                    name,
-                    value,
-                    id,
-                    ns,
-                } => match value {
-                    BorrowedAttributeValue::Text(txt) => {
-                        i.set_attribute(id.0 as u32, name, txt, ns.unwrap_or_default())
-                    }
-                    BorrowedAttributeValue::Float(f) => {
-                        i.set_attribute(id.0 as u32, name, &f.to_string(), ns.unwrap_or_default())
-                    }
-                    BorrowedAttributeValue::Int(n) => {
-                        i.set_attribute(id.0 as u32, name, &n.to_string(), ns.unwrap_or_default())
-                    }
-                    BorrowedAttributeValue::Bool(b) => i.set_attribute(
-                        id.0 as u32,
-                        name,
-                        if *b { "true" } else { "false" },
-                        ns.unwrap_or_default(),
-                    ),
-                    BorrowedAttributeValue::None => {
-                        i.remove_attribute(id.0 as u32, name, ns.unwrap_or_default())
-                    }
-                    _ => unreachable!(),
-                },
-                SetText { value, id } => i.set_text(id.0 as u32, value),
-                NewEventListener { name, id, .. } => {
-                    match *name {
-                        // mounted events are fired immediately after the element is mounted.
-                        "mounted" => {
-                            #[cfg(feature = "mounted")]
-                            to_mount.push(*id);
-                        }
-                        _ => {
-                            i.new_event_listener(name, id.0 as u32, event_bubbles(name) as u8);
-                        }
-                    }
-                }
-                RemoveEventListener { name, id } => match *name {
-                    "mounted" => {}
-                    _ => {
-                        i.remove_event_listener(name, id.0 as u32, event_bubbles(name) as u8);
-                    }
-                },
-                Remove { id } => i.remove(id.0 as u32),
-                PushRoot { id } => i.push_root(id.0 as u32),
-            }
-        }
-        edits.clear();
-        i.flush();
-
-        #[cfg(feature = "mounted")]
-        for id in to_mount {
-            self.send_mount_event(id);
-        }
-    }
-
-    pub(crate) fn send_mount_event(&self, id: ElementId) {
-        let node = get_node(id.0 as u32);
-        if let Some(element) = node.dyn_ref::<Element>() {
-            let _ = self.event_channel.unbounded_send(UiEvent {
-                name: "mounted".to_string(),
-                bubbles: false,
-                element: id,
-                data: PlatformEventData::new(Box::new(element.clone())),
-            });
-        }
     }
 }
 

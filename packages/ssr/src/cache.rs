@@ -6,7 +6,7 @@ use crate::renderer::{str_truthy, BOOL_ATTRS};
 #[derive(Debug)]
 pub struct StringCache {
     pub segments: Vec<Segment>,
-    pub template: Template<'static>,
+    pub template: Template,
 }
 
 #[derive(Default)]

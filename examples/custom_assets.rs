@@ -1,16 +1,20 @@
 use dioxus::prelude::*;
 
+#[cfg(not(feature = "collect-assets"))]
+static ASSET_PATH: &str = "examples/assets/logo.png";
+
+#[cfg(feature = "collect-assets")]
+static ASSET_PATH: &str = manganis::mg!(image("examples/assets/logo.png").format(ImageType::Avif));
+
 fn main() {
-    dioxus_desktop::launch(app);
+    launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    cx.render(rsx! {
+fn app() -> Element {
+    rsx! {
         div {
-            p {
-                "This should show an image:"
-            }
-            img { src: manganis::mg!(image("examples/assets/logo.png").format(ImageType::Avif)).to_string() }
+            p { "This should show an image:" }
+            img { src: ASSET_PATH.to_string() }
         }
-    })
+    }
 }

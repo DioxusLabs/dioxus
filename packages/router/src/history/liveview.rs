@@ -1,6 +1,6 @@
 use super::HistoryProvider;
 use crate::routable::Routable;
-use dioxus::prelude::*;
+use dioxus_lib::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::sync::{Mutex, RwLock};
 use std::{collections::BTreeMap, rc::Rc, str::FromStr, sync::Arc};
@@ -172,8 +172,7 @@ where
         let updater_callback: Arc<RwLock<Arc<dyn Fn() + Send + Sync>>> =
             Arc::new(RwLock::new(Arc::new(|| {})));
 
-        let eval_provider =
-            consume_context::<Rc<dyn EvalProvider>>().expect("evaluator not provided");
+        let eval_provider = consume_context::<Rc<dyn EvalProvider>>();
 
         let create_eval = Rc::new(move |script: &str| {
             eval_provider
@@ -182,7 +181,7 @@ where
         }) as Rc<dyn Fn(&str) -> Result<UseEval, EvalError>>;
 
         // Listen to server actions
-        push_future({
+        spawn({
             let timeline = timeline.clone();
             let action_rx = action_rx.clone();
             let create_eval = create_eval.clone();
@@ -242,12 +241,12 @@ where
         });
 
         // Listen to browser actions
-        push_future({
+        spawn({
             let updater = updater_callback.clone();
             let timeline = timeline.clone();
             let create_eval = create_eval.clone();
             async move {
-                let popstate_eval = {
+                let mut popstate_eval = {
                     let init_eval = create_eval(
                         r#"
                         return [
