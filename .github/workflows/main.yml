@@ -111,42 +111,43 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/master' }}
       - run: cargo clippy --workspace --examples --tests -- -D warnings
 
-  miri:
-    if: github.event.pull_request.draft == false
-    name: Miri
-    runs-on: ubuntu-latest
-    env:
-      CARGO_UNSTABLE_SPARSE_REGISTRY: 'true'
-      RUSTFLAGS: -Dwarnings
-      RUST_BACKTRACE: 1
-      MIRIFLAGS: -Zmiri-tag-gc=1
-      # Change to specific Rust release to pin
-      rust_stable: stable
-      rust_nightly: nightly-2023-11-16
-      rust_clippy: 1.70.0
+  # We removed most unsafe that we can, and using nightly doubles our cache size
+  # miri:
+  #   if: github.event.pull_request.draft == false
+  #   name: Miri
+  #   runs-on: ubuntu-latest
+  #   env:
+  #     CARGO_UNSTABLE_SPARSE_REGISTRY: 'true'
+  #     RUSTFLAGS: -Dwarnings
+  #     RUST_BACKTRACE: 1
+  #     MIRIFLAGS: -Zmiri-tag-gc=1
+  #     # Change to specific Rust release to pin
+  #     rust_stable: stable
+  #     rust_nightly: nightly-2023-11-16
+  #     rust_clippy: 1.70.0
 
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ilammy/setup-nasm@v1
-      - name: Install Rust ${{ env.rust_nightly }}
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.rust_nightly }}
-          components: miri
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/master' }}
-      - name: miri
-        # Many of tests in tokio/tests and doctests use #[tokio::test] or
-        # #[tokio::main] that calls epoll_create1 that Miri does not support.
-        # run: cargo miri test --features full --lib --no-fail-fast
-        run: |
-          cargo miri test --package dioxus-core -- --exact --nocapture
-          cargo miri test --package dioxus-native-core --test miri_native  -- --exact --nocapture
-        env:
-          MIRIFLAGS: -Zmiri-disable-isolation -Zmiri-strict-provenance -Zmiri-retag-fields
-          PROPTEST_CASES: 10
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: ilammy/setup-nasm@v1
+  #     - name: Install Rust ${{ env.rust_nightly }}
+  #       uses: dtolnay/rust-toolchain@master
+  #       with:
+  #         toolchain: ${{ env.rust_nightly }}
+  #         components: miri
+  #     - uses: Swatinem/rust-cache@v2
+  #       with:
+  #         cache-all-crates: "true"
+  #         save-if: ${{ github.ref == 'refs/heads/master' }}
+  #     - name: miri
+  #       # Many of tests in tokio/tests and doctests use #[tokio::test] or
+  #       # #[tokio::main] that calls epoll_create1 that Miri does not support.
+  #       # run: cargo miri test --features full --lib --no-fail-fast
+  #       run: |
+  #         cargo miri test --package dioxus-core -- --exact --nocapture
+  #         cargo miri test --package dioxus-native-core --test miri_native  -- --exact --nocapture
+  #       env:
+  #         MIRIFLAGS: -Zmiri-disable-isolation -Zmiri-strict-provenance -Zmiri-retag-fields
+  #         PROPTEST_CASES: 10
 
   playwright:
     if: github.event.pull_request.draft == false
