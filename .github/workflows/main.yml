@@ -69,12 +69,7 @@ jobs:
       - uses: davidB/rust-cargo-make@v1
       - uses: browser-actions/setup-firefox@latest
       - uses: jetli/wasm-pack-action@v0.4.0
-      - run: sudo rm -rf /usr/share/dotnet
-      - run: sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-      - run: |
-          df -h
-          sudo rm -rf ${GITHUB_WORKSPACE}/.git
-          df -h
+      - run: bash ./github/free_space.sh
       - run: cargo make tests
 
   fmt:
@@ -160,6 +155,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 16
+      - run: bash ./github/free_space.sh
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -249,7 +245,7 @@ jobs:
         if: ${{ matrix.platform.cross == true }}
 
         uses: taiki-e/install-action@cross
-
+      - run: bash ./github/free_space.sh
       - uses: Swatinem/rust-cache@v2
         with:
           key: "${{ matrix.platform.target }}"
