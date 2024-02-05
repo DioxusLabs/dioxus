@@ -28,7 +28,7 @@ criterion_main!(mbenches);
 fn create_rows(c: &mut Criterion) {
     c.bench_function("create rows", |b| {
         let mut dom = VirtualDom::new(app);
-        let _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+        dom.rebuild(&mut dioxus_core::NoOpMutations);
 
         b.iter(|| {
             dom.rebuild(&mut NoOpMutations);

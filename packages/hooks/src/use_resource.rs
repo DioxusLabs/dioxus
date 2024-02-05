@@ -149,7 +149,7 @@ impl<T> Resource<T> {
 
     /// Get the current value of the future.
     pub fn value(&self) -> Option<ReadOnlySignal<T>> {
-        self.value.peek().as_ref().map(|sig| sig.clone().into())
+        self.value.peek().as_ref().map(|sig| (*sig).into())
     }
 
     /// Wait for this async memo to resolve, returning the inner signal value

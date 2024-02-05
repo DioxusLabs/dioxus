@@ -218,7 +218,6 @@ fn create_random_dynamic_attr() -> Attribute {
         random_ns(),
         rand::random(),
     )
-    .into()
 }
 
 static mut TEMPLATE_COUNT: usize = 0;

@@ -59,7 +59,7 @@ pub fn use_maybe_sync_memo<R: PartialEq, S: Storage<SignalData<R>>>(
                 // Wait for the dom the be finished with sync work
                 flush_sync().await;
                 rc.changed().await;
-                let new = rc.run_in(|| f());
+                let new = rc.run_in(&mut f);
                 if new != *state.peek() {
                     *state.write() = new;
                 }

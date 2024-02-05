@@ -86,17 +86,16 @@ fn use_maybe_signal_sync<T: 'static, U: Storage<SignalData<T>>>(
     #[cfg(debug_assertions)]
     let caller = std::panic::Location::caller();
 
-    let signal = use_hook(|| {
+    // todo: (jon)
+    // By default, we want to unsubscribe the current component from the signal on every render
+    // any calls to .read() in the body will re-subscribe the component to the signal
+    // use_before_render(move || signal.unsubscribe(current_scope_id().unwrap()));
+
+    use_hook(|| {
         Signal::new_with_caller(
             f(),
             #[cfg(debug_assertions)]
             caller,
         )
-    });
-
-    // By default, we want to unsubscribe the current component from the signal on every render
-    // any calls to .read() in the body will re-subscribe the component to the signal
-    // use_before_render(move || signal.unsubscribe(current_scope_id().unwrap()));
-
-    signal
+    })
 }

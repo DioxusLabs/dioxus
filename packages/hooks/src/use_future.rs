@@ -117,13 +117,13 @@ impl UseFuture {
     /// Reading this does not subscribe to the future's state
     pub fn finished(&self) -> bool {
         matches!(
-            self.state.peek().clone(),
+            *self.state.peek(),
             UseFutureState::Ready | UseFutureState::Stopped
         )
     }
 
     /// Get the current state of the future.
     pub fn state(&self) -> ReadOnlySignal<UseFutureState> {
-        self.state.clone().into()
+        self.state.into()
     }
 }
