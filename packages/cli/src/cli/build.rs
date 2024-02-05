@@ -71,7 +71,7 @@ impl Build {
                         }
                         None => web_config.features = Some(vec![web_feature]),
                     };
-                    crate::builder::build(&crate_config, false, self.build.skip_assets)?;
+                    crate::builder::build(&web_config, false, self.build.skip_assets)?;
                 }
                 {
                     let mut desktop_config = crate_config.clone();
