@@ -6,7 +6,7 @@ use super::*;
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 pub struct ConfigOptsBuild {
     /// Build in release mode [default: false]
-    #[clap(long)]
+    #[clap(long, short)]
     #[serde(default)]
     pub release: bool,
 
@@ -159,7 +159,7 @@ pub struct ConfigOptsServe {
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 pub struct ConfigOptsBundle {
     /// Build in release mode [default: false]
-    #[clap(long)]
+    #[clap(long, short)]
     #[serde(default)]
     pub release: bool,
 
