@@ -19,7 +19,7 @@ pub struct ReactiveContext {
 }
 
 thread_local! {
-    static CURRENT: RefCell<Vec<ReactiveContext>> = RefCell::new(vec![]);
+    static CURRENT: RefCell<Vec<ReactiveContext>> = const { RefCell::new(vec![]) };
 }
 
 impl ReactiveContext {
@@ -42,7 +42,10 @@ impl ReactiveContext {
         };
 
         let mut self_ = Self {
-            inner: CopyValue::new_maybe_sync(inner),
+            inner: CopyValue::new_maybe_sync_in_scope(
+                inner,
+                scope.or_else(current_scope_id).unwrap(),
+            ),
         };
 
         self_.inner.write().self_ = Some(self_);

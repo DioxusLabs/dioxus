@@ -55,8 +55,8 @@ fn set_owner<S: AnyStorage>(owner: Option<Owner<S>>) -> Option<Owner<S>> {
 }
 
 thread_local! {
-    static SYNC_OWNER: RefCell<Option<Owner<SyncStorage>>> = RefCell::new(None);
-    static UNSYNC_OWNER: RefCell<Option<Owner<UnsyncStorage>>> = RefCell::new(None);
+    static SYNC_OWNER: RefCell<Option<Owner<SyncStorage>>> = const { RefCell::new(None) };
+    static UNSYNC_OWNER: RefCell<Option<Owner<UnsyncStorage>>> = const { RefCell::new(None) };
 }
 
 fn current_owner<S: Storage<T>, T>() -> Owner<S> {
