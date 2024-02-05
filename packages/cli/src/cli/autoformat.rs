@@ -10,6 +10,10 @@ use super::*;
 /// Format some rsx
 #[derive(Clone, Debug, Parser)]
 pub struct Autoformat {
+    /// Run rustfmt before the dioxus formatter`
+    #[clap(long)]
+    pub rustfmt: bool,
+
     /// Run in 'check' mode. Exits with 0 if input is formatted correctly. Exits
     /// with 1 and prints a diff if formatting is required.
     #[clap(short, long)]
@@ -36,6 +40,7 @@ impl Autoformat {
             raw,
             file,
             split_line_attributes,
+            rustfmt,
             ..
         } = self;
 
@@ -60,14 +65,47 @@ impl Autoformat {
 
         // Format single file
         if let Some(file) = file {
-            refactor_file(file, split_line_attributes)?;
+            refactor_file(file, split_line_attributes, rustfmt)?;
         }
 
         Ok(())
     }
 }
 
-fn refactor_file(file: String, split_line_attributes: bool) -> Result<(), Error> {
+/// Call rustfmt to format code, i32 as exitcode
+fn rustfmt(input: String) -> Result<String> {
+    use std::thread;
+
+    let mut child = Command::new("rustfmt")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .map_err(|e| Error::IO(e))?;
+
+    let mut stdin = child.stdin.take().unwrap();
+    let pass_in = input.to_string();
+    let handle = thread::spawn(move || -> Result<()> {
+        stdin
+            .write_all(pass_in.as_bytes())
+            .map_err(|e| Error::IO(e))?;
+        Ok(())
+    });
+    handle.join().unwrap()?;
+
+    let output = child.wait_with_output().map_err(|e| Error::IO(e))?;
+
+    if let Some(exit_code) = output.status.code() {
+        if exit_code != 0 {
+            return Err(Error::ExitCodeNotZero(exit_code));
+        }
+    }
+
+    let output = String::from_utf8(output.stdout).map_err(|e| Error::Other(e.into()))?;
+
+    Ok(output)
+}
+
+fn refactor_file(file: String, split_line_attributes: bool, do_rustfmt: bool) -> Result<(), Error> {
     let indent = indentation_for(".", split_line_attributes)?;
     let file_content = if file == "-" {
         let mut contents = String::new();
@@ -76,10 +114,15 @@ fn refactor_file(file: String, split_line_attributes: bool) -> Result<(), Error>
     } else {
         fs::read_to_string(&file)
     };
-    let Ok(s) = file_content else {
+    let Ok(mut s) = file_content else {
         eprintln!("failed to open file: {}", file_content.unwrap_err());
         exit(1);
     };
+
+    if do_rustfmt {
+        s = rustfmt(s)?;
+    }
+
     let edits = dioxus_autofmt::fmt_file(&s, indent);
     let out = dioxus_autofmt::apply_formats(&s, edits);
 
@@ -280,6 +323,7 @@ async fn test_auto_fmt() {
     .to_string();
 
     let fmt = Autoformat {
+        rustfmt: false,
         check: false,
         raw: Some(test_rsx),
         file: None,
