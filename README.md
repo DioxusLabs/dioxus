@@ -54,7 +54,6 @@
 
 > [!WARNING]
 > Dioxus 0.5 (currently in master) contains massive breaking changes and is not compatible with Dioxus 0.4
-> The current version of docs and published crates is for Dioxus 0.4 - the docs for 0.5 are not yet complete.
 
 Dioxus is a portable, performant, and ergonomic framework for building cross-platform user interfaces in Rust.
 
