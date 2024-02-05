@@ -212,7 +212,7 @@ jobs:
           - {
               target: x86_64-pc-windows-msvc,
               os: windows-latest,
-              toolchain: "1.70.0",
+              toolchain: "1.75.0",
               cross: false,
               command: "test",
               args: "--all --tests",
@@ -220,7 +220,7 @@ jobs:
           - {
               target: x86_64-apple-darwin,
               os: macos-latest,
-              toolchain: "1.70.0",
+              toolchain: "1.75.0",
               cross: false,
               command: "test",
               args: "--all --tests",
@@ -228,7 +228,7 @@ jobs:
           - {
               target: aarch64-apple-ios,
               os: macos-latest,
-              toolchain: "1.70.0",
+              toolchain: "1.75.0",
               cross: false,
               command: "build",
               args: "--package dioxus-mobile",
@@ -236,7 +236,7 @@ jobs:
           - {
               target: aarch64-linux-android,
               os: ubuntu-latest,
-              toolchain: "1.70.0",
+              toolchain: "1.75.0",
               cross: true,
               command: "build",
               args: "--package dioxus-mobile",
