@@ -4,8 +4,8 @@
 #![warn(missing_docs)]
 #![allow(clippy::type_complexity)]
 
-mod rt;
-pub use rt::*;
+mod copy_value;
+pub use copy_value::*;
 
 pub(crate) mod signal;
 pub use signal::*;
@@ -34,5 +34,5 @@ pub use write::*;
 mod props;
 pub use props::*;
 
-mod rc;
-pub use rc::*;
+mod reactive_context;
+pub use reactive_context::*;

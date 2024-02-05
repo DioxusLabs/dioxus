@@ -1,5 +1,5 @@
+use crate::copy_value::CopyValue;
 use crate::read::Readable;
-use crate::rt::CopyValue;
 use crate::signal::Signal;
 use crate::write::Writable;
 use crate::{GlobalMemo, GlobalSignal, ReadOnlySignal, SignalData};
