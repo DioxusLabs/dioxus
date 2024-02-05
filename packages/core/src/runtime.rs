@@ -11,7 +11,7 @@ use std::{
 };
 
 thread_local! {
-    static RUNTIMES: RefCell<Vec<Rc<Runtime>>> = RefCell::new(vec![]);
+    static RUNTIMES: RefCell<Vec<Rc<Runtime>>> = const { RefCell::new(vec![]) };
 }
 
 /// A global runtime that is shared across all scopes that provides the async runtime and context API

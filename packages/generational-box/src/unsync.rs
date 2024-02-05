@@ -85,7 +85,7 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
 }
 
 thread_local! {
-    static UNSYNC_RUNTIME: RefCell<Vec<MemoryLocation<UnsyncStorage>>> = RefCell::new(Vec::new());
+    static UNSYNC_RUNTIME: RefCell<Vec<MemoryLocation<UnsyncStorage>>> = const { RefCell::new(Vec::new()) };
 }
 
 impl AnyStorage for UnsyncStorage {
