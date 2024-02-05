@@ -16,7 +16,7 @@ async fn run_vdom(app: fn() -> Element) {
 }
 
 #[tokio::test]
-async fn it_works() {
+async fn running_async() {
     static POLL_COUNT: AtomicUsize = AtomicUsize::new(0);
 
     fn app() -> Element {

@@ -450,6 +450,7 @@ impl VirtualDom {
             // When we're doing awaiting the rx, the lock will be dropped and tasks waiting on the lock will get waked
             // We have to own the lock since poll_tasks is cancel safe - the future that this is running in might get dropped
             // and if we held the lock in the scope, the lock would also get dropped prematurely
+            self.runtime.release_flush_lock();
             self.runtime.acquire_flush_lock();
 
             match self.rx.next().await.expect("channel should never close") {

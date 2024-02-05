@@ -155,8 +155,10 @@ impl Runtime {
     /// This means the virtual dom is currently doing syncronous work
     /// The lock will be held until `release_flush_lock` is called - and then the OwnedLock will be dropped
     pub(crate) fn acquire_flush_lock(&self) {
-        self.flush_lock
-            .set(Some(self.flush_mutex.try_lock_owned().unwrap()));
+        // The flush lock might already be held...
+        if let Some(lock) = self.flush_mutex.try_lock_owned() {
+            self.flush_lock.set(Some(lock));
+        }
     }
 
     /// Release the flush lock

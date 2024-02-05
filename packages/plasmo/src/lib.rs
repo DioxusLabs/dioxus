@@ -259,7 +259,7 @@ pub fn render<R: Driver>(
                                     TermEvent::Resize(_, _) => updated = true,
                                     _ => {}
                                 },
-                                InputEvent::Close => panic!("ackkkk"),
+                                InputEvent::Close => break,
                             };
 
                             if let InputEvent::UserInput(evt) = evt.unwrap() {
