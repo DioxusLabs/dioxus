@@ -22,9 +22,20 @@ thread_local! {
     static CURRENT: RefCell<Vec<ReactiveContext>> = const { RefCell::new(vec![]) };
 }
 
+impl Default for ReactiveContext {
+    fn default() -> Self {
+        Self::new_for_scope(None)
+    }
+}
+
 impl ReactiveContext {
     /// Create a new reactive context
-    pub fn new(scope: Option<ScopeId>) -> Self {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Create a new reactive context that may update a scope
+    pub(crate) fn new_for_scope(scope: Option<ScopeId>) -> Self {
         let (tx, rx) = flume::unbounded();
 
         let mut scope_subscribers = FxHashSet::default();
@@ -56,7 +67,7 @@ impl ReactiveContext {
     ///
     /// If this was set manually, then that value will be returned.
     ///
-    /// If there's no current reactive context, then a new one will be created at the current scope and returned.
+    /// If there's no current reactive context, then a new one will be created for the current scope and returned.
     pub fn current() -> Self {
         let cur = CURRENT.with(|current| current.borrow().last().cloned());
 
@@ -71,7 +82,7 @@ impl ReactiveContext {
         }
 
         // Otherwise, create a new context at the current scope
-        provide_context(ReactiveContext::new(current_scope_id()))
+        provide_context(ReactiveContext::new_for_scope(current_scope_id()))
     }
 
     /// Run this function in the context of this reactive context

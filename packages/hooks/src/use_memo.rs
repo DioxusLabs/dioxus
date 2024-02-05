@@ -49,7 +49,7 @@ pub fn use_maybe_sync_memo<R: PartialEq, S: Storage<SignalData<R>>>(
 ) -> ReadOnlySignal<R, S> {
     use_hook(|| {
         // Get the current reactive context
-        let rc = ReactiveContext::new(None);
+        let rc = ReactiveContext::new();
 
         // Create a new signal in that context, wiring up its dependencies and subscribers
         let mut state: Signal<R, S> = rc.run_in(|| Signal::new_maybe_sync(f()));
@@ -129,7 +129,7 @@ where
 
     let selector = use_hook(|| {
         // Get the current reactive context
-        let rc = ReactiveContext::new(None);
+        let rc = ReactiveContext::new();
 
         // Create a new signal in that context, wiring up its dependencies and subscribers
         let mut state: Signal<R, S> =

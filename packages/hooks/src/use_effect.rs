@@ -11,7 +11,7 @@ pub fn use_effect(mut callback: impl FnMut() + 'static) {
 
     use_hook(|| {
         spawn(async move {
-            let rc = ReactiveContext::new(None);
+            let rc = ReactiveContext::new();
 
             loop {
                 // Wait for the dom the be finished with sync work

@@ -20,7 +20,7 @@ where
 {
     let mut value = use_signal(|| None);
     let mut state = use_signal(|| UseResourceState::Pending);
-    let rc = use_hook(|| ReactiveContext::new(None));
+    let rc = use_hook(ReactiveContext::new);
 
     let mut cb = use_callback(move || {
         // Create the user's task
