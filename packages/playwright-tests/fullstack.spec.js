@@ -3,6 +3,7 @@ const { test, expect } = require('@playwright/test');
 
 test('button click', async ({ page }) => {
   await page.goto('http://localhost:3333');
+  await page.waitForTimeout(1000);
 
   // Expect the page to contain the counter text.
   const main = page.locator('#main');
@@ -18,6 +19,7 @@ test('button click', async ({ page }) => {
 
 test('fullstack communication', async ({ page }) => {
   await page.goto('http://localhost:3333');
+  await page.waitForTimeout(1000);
 
   // Expect the page to contain the counter text.
   const main = page.locator('#main');

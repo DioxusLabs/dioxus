@@ -15,7 +15,6 @@ fn main() {
         .launch(app);
 }
 
-#[allow(unused)]
 fn app() -> Element {
     let mut count = use_signal(|| 12345);
     let mut text = use_signal(|| "...".to_string());
