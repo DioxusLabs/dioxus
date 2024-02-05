@@ -109,7 +109,9 @@ pub async fn serve(
     skip_assets: bool,
     hot_reload_state: Option<HotReloadState>,
 ) -> Result<()> {
-    let first_build_result = crate::builder::build(&config, false, skip_assets)?;
+    // Since web platform doesn't use `rust_flags`, this argument is explicitly
+    // set to `None`.
+    let first_build_result = crate::builder::build(&config, false, skip_assets, None)?;
 
     // generate dev-index page
     Serve::regen_dev_page(&config, first_build_result.assets.as_ref())?;
@@ -447,7 +449,9 @@ async fn ws_handler(
 }
 
 fn build(config: &CrateConfig, reload_tx: &Sender<()>, skip_assets: bool) -> Result<BuildResult> {
-    let result = builder::build(config, true, skip_assets)?;
+    // Since web platform doesn't use `rust_flags`, this argument is explicitly
+    // set to `None`.
+    let result = builder::build(config, true, skip_assets, None)?;
     // change the websocket reload state to true;
     // the page will auto-reload.
     if config.dioxus_config.web.watcher.reload_html {

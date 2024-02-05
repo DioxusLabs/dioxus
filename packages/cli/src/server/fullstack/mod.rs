@@ -1,12 +1,37 @@
 use dioxus_cli_config::CrateConfig;
 
 use crate::{
-    assets::WebAssetConfigDropGuard,
     cfg::{ConfigOptsBuild, ConfigOptsServe},
     Result,
 };
 
 use super::{desktop, Platform};
+
+static CLIENT_RUST_FLAGS: &str = "-C debuginfo=none -C strip=debuginfo";
+// The `opt-level=2` increases build times, but can noticeably decrease time
+// between saving changes and being able to interact with an app. The "overall"
+// time difference (between having and not having the optimization) can be
+// almost imperceptible (~1 s) but also can be very noticeable (~6 s) — depends
+// on setup (hardware, OS, browser, idle load).
+static SERVER_RUST_FLAGS: &str = "-C opt-level=2";
+static DEBUG_RUST_FLAG: &str = "-C debug-assertions";
+
+fn rust_flags(build: &ConfigOptsBuild, base_flags: &str) -> String {
+    let mut rust_flags = base_flags.to_string();
+    if !build.release {
+        rust_flags += " ";
+        rust_flags += DEBUG_RUST_FLAG;
+    };
+    rust_flags
+}
+
+pub fn client_rust_flags(build: &ConfigOptsBuild) -> String {
+    rust_flags(build, CLIENT_RUST_FLAGS)
+}
+
+pub fn server_rust_flags(build: &ConfigOptsBuild) -> String {
+    rust_flags(build, SERVER_RUST_FLAGS)
+}
 
 pub async fn startup(config: CrateConfig, serve: &ConfigOptsServe) -> Result<()> {
     desktop::startup_with_platform::<FullstackPlatform>(config, serve).await
@@ -17,15 +42,29 @@ fn start_web_build_thread(
     serve: &ConfigOptsServe,
 ) -> std::thread::JoinHandle<Result<()>> {
     let serve = serve.clone();
-    let target_directory = config.crate_dir.join(".dioxus").join("web");
+    let target_directory = config.client_target_dir();
     std::fs::create_dir_all(&target_directory).unwrap();
     std::thread::spawn(move || build_web(serve, &target_directory))
+}
+
+fn make_desktop_config(config: &CrateConfig, serve: &ConfigOptsServe) -> CrateConfig {
+    let mut desktop_config = config.clone();
+    desktop_config.target_dir = config.server_target_dir();
+    let desktop_feature = serve.server_feature.clone();
+    let features = &mut desktop_config.features;
+    match features {
+        Some(features) => {
+            features.push(desktop_feature);
+        }
+        None => desktop_config.features = Some(vec![desktop_feature]),
+    };
+    desktop_config
 }
 
 struct FullstackPlatform {
     serve: ConfigOptsServe,
     desktop: desktop::DesktopPlatform,
-    _config: WebAssetConfigDropGuard,
+    server_rust_flags: String,
 }
 
 impl Platform for FullstackPlatform {
@@ -35,17 +74,13 @@ impl Platform for FullstackPlatform {
     {
         let thread_handle = start_web_build_thread(config, serve);
 
-        let mut desktop_config = config.clone();
-        let desktop_feature = serve.server_feature.clone();
-        let features = &mut desktop_config.features;
-        match features {
-            Some(features) => {
-                features.push(desktop_feature);
-            }
-            None => desktop_config.features = Some(vec![desktop_feature]),
-        };
-        let config = WebAssetConfigDropGuard::new();
-        let desktop = desktop::DesktopPlatform::start(&desktop_config, serve)?;
+        let desktop_config = make_desktop_config(config, serve);
+        let server_rust_flags = server_rust_flags(&serve.clone().into());
+        let desktop = desktop::DesktopPlatform::start_with_options(
+            &desktop_config,
+            serve,
+            Some(server_rust_flags.clone()),
+        )?;
         thread_handle
             .join()
             .map_err(|_| anyhow::anyhow!("Failed to join thread"))??;
@@ -53,25 +88,16 @@ impl Platform for FullstackPlatform {
         Ok(Self {
             desktop,
             serve: serve.clone(),
-            _config: config,
+            server_rust_flags,
         })
     }
 
     fn rebuild(&mut self, crate_config: &CrateConfig) -> Result<crate::BuildResult> {
         let thread_handle = start_web_build_thread(crate_config, &self.serve);
-        let result = {
-            let mut desktop_config = crate_config.clone();
-            let desktop_feature = self.serve.server_feature.clone();
-            let features = &mut desktop_config.features;
-            match features {
-                Some(features) => {
-                    features.push(desktop_feature);
-                }
-                None => desktop_config.features = Some(vec![desktop_feature]),
-            };
-            let _gaurd = FullstackServerEnvGuard::new(self.serve.force_debug, self.serve.release);
-            self.desktop.rebuild(&desktop_config)
-        };
+        let desktop_config = make_desktop_config(crate_config, &self.serve);
+        let result = self
+            .desktop
+            .rebuild_with_options(&desktop_config, Some(self.server_rust_flags.clone()));
         thread_handle
             .join()
             .map_err(|_| anyhow::anyhow!("Failed to join thread"))??;
@@ -91,74 +117,12 @@ fn build_web(serve: ConfigOptsServe, target_directory: &std::path::Path) -> Resu
     };
     web_config.platform = Some(dioxus_cli_config::Platform::Web);
 
-    let _gaurd = FullstackWebEnvGuard::new(&web_config);
-    crate::cli::build::Build { build: web_config }.build(None, Some(target_directory))
-}
-
-// Debug mode web builds have a very large size by default. If debug mode is not enabled, we strip some of the debug info by default
-// This reduces a hello world from ~40MB to ~2MB
-pub(crate) struct FullstackWebEnvGuard {
-    old_rustflags: Option<String>,
-}
-
-impl FullstackWebEnvGuard {
-    pub fn new(serve: &ConfigOptsBuild) -> Self {
-        Self {
-            old_rustflags: (!serve.force_debug).then(|| {
-                let old_rustflags = std::env::var("RUSTFLAGS").unwrap_or_default();
-                let debug_assertions = if serve.release {
-                    ""
-                } else {
-                    " -C debug-assertions"
-                };
-
-                std::env::set_var(
-                    "RUSTFLAGS",
-                    format!(
-                        "{old_rustflags} -C debuginfo=none -C strip=debuginfo{debug_assertions}"
-                    ),
-                );
-                old_rustflags
-            }),
-        }
+    crate::cli::build::Build {
+        build: web_config.clone(),
     }
-}
-
-impl Drop for FullstackWebEnvGuard {
-    fn drop(&mut self) {
-        if let Some(old_rustflags) = self.old_rustflags.take() {
-            std::env::set_var("RUSTFLAGS", old_rustflags);
-        }
-    }
-}
-
-// Debug mode web builds have a very large size by default. If debug mode is not enabled, we strip some of the debug info by default
-// This reduces a hello world from ~40MB to ~2MB
-pub(crate) struct FullstackServerEnvGuard {
-    old_rustflags: Option<String>,
-}
-
-impl FullstackServerEnvGuard {
-    pub fn new(debug: bool, release: bool) -> Self {
-        Self {
-            old_rustflags: (!debug).then(|| {
-                let old_rustflags = std::env::var("RUSTFLAGS").unwrap_or_default();
-                let debug_assertions = if release { "" } else { " -C debug-assertions" };
-
-                std::env::set_var(
-                    "RUSTFLAGS",
-                    format!("{old_rustflags} -C opt-level=2 {debug_assertions}"),
-                );
-                old_rustflags
-            }),
-        }
-    }
-}
-
-impl Drop for FullstackServerEnvGuard {
-    fn drop(&mut self) {
-        if let Some(old_rustflags) = self.old_rustflags.take() {
-            std::env::set_var("RUSTFLAGS", old_rustflags);
-        }
-    }
+    .build(
+        None,
+        Some(target_directory),
+        Some(client_rust_flags(&web_config)),
+    )
 }
