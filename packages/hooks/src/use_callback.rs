@@ -1,4 +1,4 @@
-use dioxus_core::prelude::use_hook;
+use dioxus_core::prelude::{current_scope_id, use_hook, Runtime};
 use dioxus_signals::CopyValue;
 use dioxus_signals::Writable;
 
@@ -18,10 +18,17 @@ pub fn use_callback<O>(f: impl FnMut() -> O + 'static) -> UseCallback<O> {
     inner.set(Some(f));
 
     // And then wrap that callback in a boxed callback so we're blind to the size of the actual callback
-    use_hook(|| UseCallback {
-        inner: CopyValue::new(Box::new(move || {
-            inner.with_mut(|f: &mut Option<_>| f.as_mut().unwrap()())
-        })),
+    use_hook(|| {
+        let cur_scope = current_scope_id().unwrap();
+        let rt = Runtime::current().unwrap();
+
+        UseCallback {
+            inner: CopyValue::new(Box::new(move || {
+                // run this callback in the context of the scope it was created in.
+                let run_callback = || inner.with_mut(|f: &mut Option<_>| f.as_mut().unwrap()());
+                rt.on_scope(cur_scope, run_callback)
+            })),
+        }
     })
 }
 

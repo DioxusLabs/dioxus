@@ -9,6 +9,7 @@ use dioxus_core::{
     use_hook,
 };
 
+use dioxus_hooks::use_callback;
 use tao::{event::Event, event_loop::EventLoopWindowTarget};
 use wry::RequestAsyncResponder;
 
@@ -56,8 +57,11 @@ pub fn use_global_shortcut(
     accelerator: impl IntoAccelerator,
     handler: impl FnMut() + 'static,
 ) -> Result<ShortcutHandle, ShortcutRegistryError> {
+    // wrap the user's handler in something that will carry the scope/runtime with it
+    let mut cb = use_callback(handler);
+
     use_hook_with_cleanup(
-        move || window().create_shortcut(accelerator.accelerator(), handler),
+        move || window().create_shortcut(accelerator.accelerator(), move || cb.call()),
         |handle| {
             if let Ok(handle) = handle {
                 handle.remove();
