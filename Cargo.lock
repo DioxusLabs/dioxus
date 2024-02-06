@@ -5902,7 +5902,7 @@ dependencies = [
 [[package]]
 name = "manganis"
 version = "0.1.0"
-source = "git+https://github.com/DioxusLabs/collect-assets?rev=e0093a4#e0093a47f0fa3bb50c49cd21aee5aa674faa24ad"
+source = "git+https://github.com/DioxusLabs/collect-assets?rev=f982698#f982698027fc27d22acfb4121fba389ec125d538"
 dependencies = [
  "manganis-macro",
 ]
@@ -5910,7 +5910,7 @@ dependencies = [
 [[package]]
 name = "manganis-cli-support"
 version = "0.1.0"
-source = "git+https://github.com/DioxusLabs/collect-assets?rev=e0093a4#e0093a47f0fa3bb50c49cd21aee5aa674faa24ad"
+source = "git+https://github.com/DioxusLabs/collect-assets?rev=f982698#f982698027fc27d22acfb4121fba389ec125d538"
 dependencies = [
  "anyhow",
  "cargo-lock 9.0.0",
@@ -5936,7 +5936,7 @@ dependencies = [
 [[package]]
 name = "manganis-common"
 version = "0.1.0"
-source = "git+https://github.com/DioxusLabs/collect-assets?rev=e0093a4#e0093a47f0fa3bb50c49cd21aee5aa674faa24ad"
+source = "git+https://github.com/DioxusLabs/collect-assets?rev=f982698#f982698027fc27d22acfb4121fba389ec125d538"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
@@ -5951,7 +5951,7 @@ dependencies = [
 [[package]]
 name = "manganis-macro"
 version = "0.0.1"
-source = "git+https://github.com/DioxusLabs/collect-assets?rev=e0093a4#e0093a47f0fa3bb50c49cd21aee5aa674faa24ad"
+source = "git+https://github.com/DioxusLabs/collect-assets?rev=f982698#f982698027fc27d22acfb4121fba389ec125d538"
 dependencies = [
  "base64 0.21.7",
  "manganis-cli-support",
