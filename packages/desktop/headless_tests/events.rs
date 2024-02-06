@@ -205,10 +205,10 @@ fn app() -> Element {
         r#"new FocusEvent("focusout",{bubbles: true})"#,
     );
 
-    // if received_events() == 13 {
-    //     println!("all events recieved");
-    //     desktop_context.close();
-    // }
+    if received_events() == 13 {
+        println!("all events recieved");
+        desktop_context.close();
+    }
 
     rsx! {
         div {
