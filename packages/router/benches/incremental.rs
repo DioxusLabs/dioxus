@@ -135,8 +135,8 @@ criterion_group!(benches, criterion_benchmark);
 criterion_main!(benches);
 
 #[component]
-fn Blog(cx: Scope) -> Element {
-    render! {
+fn Blog() -> Element {
+    rsx! {
         div {
             "Blog"
         }
@@ -144,8 +144,8 @@ fn Blog(cx: Scope) -> Element {
 }
 
 #[component]
-fn Post(cx: Scope, id: usize) -> Element {
-    render! {
+fn Post(id: usize) -> Element {
+    rsx! {
         for _ in 0..*id {
             div {
                 "PostId: {id}"
@@ -155,8 +155,8 @@ fn Post(cx: Scope, id: usize) -> Element {
 }
 
 #[component]
-fn PostHome(cx: Scope) -> Element {
-    render! {
+fn PostHome() -> Element {
+    rsx! {
         div {
             "Post"
         }
@@ -164,8 +164,8 @@ fn PostHome(cx: Scope) -> Element {
 }
 
 #[component]
-fn Home(cx: Scope) -> Element {
-    render! {
+fn Home() -> Element {
+    rsx! {
         div {
             "Home"
         }
@@ -190,9 +190,9 @@ enum Route {
 }
 
 #[component]
-fn RenderPath(cx: Scope, path: Route) -> Element {
+fn RenderPath(path: Route) -> Element {
     let path = path.clone();
-    render! {
+    rsx! {
         Router::<Route> {
             config: || RouterConfig::default().history(MemoryHistory::with_initial_path(path))
         }

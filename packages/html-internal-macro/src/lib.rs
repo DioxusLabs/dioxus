@@ -61,14 +61,14 @@ impl ToTokens for ImplExtensionAttributes {
                 quote! { <#impl_name as #name>::#ident }
             };
             quote! {
-                fn #ident(self, value: impl IntoAttributeValue<'a>) -> Self {
+                fn #ident(self, value: impl IntoAttributeValue) -> Self {
                     let d = #d;
                     self.push_attribute(d.0, d.1, value, d.2)
                 }
             }
         });
         tokens.append_all(quote! {
-            pub trait #extension_name<'a>: HasAttributes<'a> + Sized {
+            pub trait #extension_name: HasAttributes + Sized {
                 #(#impls)*
             }
         });

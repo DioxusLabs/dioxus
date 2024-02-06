@@ -22,7 +22,7 @@ use std::{
 use tokio::sync::broadcast::{self};
 
 #[cfg(feature = "plugin")]
-use plugin::PluginManager;
+use crate::plugin::PluginManager;
 
 use super::HotReloadState;
 

@@ -1,6 +1,6 @@
 /target
-/playwright-tests/web/dist
-/playwright-tests/fullstack/dist
+/packages/playwright-tests/web/dist
+/packages/playwright-tests/fullstack/dist
 /dist
 .DS_Store
 /examples/assets/test_video.mp4
@@ -19,5 +19,5 @@ tarpaulin-report.html
 .idea/
 node_modules/
 /test-results/
-/playwright-report/
-/playwright/.cache/
+/packages/playwright-report/
+/packages/playwright/.cache/

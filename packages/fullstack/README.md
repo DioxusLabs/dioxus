@@ -44,7 +44,7 @@ fn main() {
         get_root_props_from_document().unwrap_or_default(),
         dioxus_web::Config::new().hydrate(true),
     );
-    #[cfg(feature = "ssr")]
+    #[cfg(feature = "server")]
     {
         tokio::runtime::Runtime::new()
             .unwrap()
@@ -53,7 +53,7 @@ fn main() {
                     // Automatically handles server side rendering, hot reloading intigration, and hosting server functions
                     serve_dioxus_application(
                         "",
-                        ServeConfigBuilder::new(app, ()),
+                        ServerConfig::new(app, ()),
                     )
                 )
                 .run(([127, 0, 0, 1], 8080))
@@ -62,9 +62,9 @@ fn main() {
     }
 }
 
-fn app(cx: Scope) -> Element {
-    let meaning = use_state(cx, || None);
-    cx.render(rsx! {
+fn app() -> Element {
+    let meaning = use_signal(|| None);
+    rsx! {
         button {
             onclick: move |_| {
                 to_owned![meaning];

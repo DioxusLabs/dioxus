@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
+
 use dioxus::prelude::*;
-use dioxus_router::prelude::*;
 
 #[derive(Routable, Clone, PartialEq)]
 enum Route {
@@ -13,30 +13,46 @@ enum Route {
 }
 
 #[component]
-fn Homepage(cx: Scope) -> Element {
-    render! { h1 { "Welcome home" } }
+fn Homepage() -> Element {
+    rsx! { h1 { "Welcome home" } }
 }
 
 #[component]
-fn Blog(cx: Scope, id: String) -> Element {
-    render! {
+fn Blog(id: String) -> Element {
+    rsx! {
         h1 { "How to make: " }
         p { "{id}" }
     }
 }
 
 #[component]
-fn Nav(cx: Scope) -> Element {
-    render! {
+fn Nav() -> Element {
+    rsx! {
         nav {
-            li { Link { to: Route::Homepage { }, "Go home" } }
-            li { Link { to: Route::Blog { id: "Brownies".to_string() }, "Learn Brownies" } }
-            li { Link { to: Route::Blog { id: "Cookies".to_string() }, "Learn Cookies"  } }
+            li {
+                Link { to: Route::Homepage {}, "Go home" }
+            }
+            li {
+                Link {
+                    to: Route::Blog {
+                        id: "Brownies".to_string(),
+                    },
+                    "Learn Brownies"
+                }
+            }
+            li {
+                Link {
+                    to: Route::Blog {
+                        id: "Cookies".to_string(),
+                    },
+                    "Learn Cookies"
+                }
+            }
         }
         div { Outlet::<Route> {} }
     }
 }
 
 fn main() {
-    dioxus_desktop::launch(|cx| render!(Router::<Route> {}));
+    launch_desktop(|| rsx! { Router::<Route> {} });
 }

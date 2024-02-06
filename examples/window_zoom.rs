@@ -1,22 +1,22 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch_desktop(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let level = use_state(cx, || 1.0);
+fn app() -> Element {
+    let mut level = use_signal(|| 1.0);
 
-    cx.render(rsx! {
+    rsx! {
         input {
             r#type: "number",
             value: "{level}",
-            oninput: |e| {
+            oninput: move |e| {
                 if let Ok(new_zoom) = e.value().parse::<f64>() {
                     level.set(new_zoom);
-                    dioxus_desktop::window().webview.zoom(new_zoom);
+                    dioxus::desktop::window().webview.zoom(new_zoom);
                 }
             }
         }
-    })
+    }
 }

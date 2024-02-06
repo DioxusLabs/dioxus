@@ -1,7 +1,7 @@
 [package]
 name = "dioxus-interpreter-js"
 version = { workspace = true }
-edition = "2018"
+edition = "2021"
 authors = ["Jonathan Kelley"]
 description = "JS Intepreter for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
 license = "MIT OR Apache-2.0"
@@ -13,15 +13,27 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 [dependencies]
 wasm-bindgen = { workspace = true, optional = true }
 js-sys = { version = "0.3.56", optional = true }
-web-sys = { version = "0.3.56", optional = true, features = ["Element", "Node"] }
+web-sys = { version = "0.3.56", optional = true, features = [
+    "Element",
+    "Node",
+] }
 sledgehammer_bindgen = { version = "0.3.1", default-features = false, optional = true }
 sledgehammer_utils = { version = "0.2", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
+
+dioxus-core = { workspace = true, optional = true }
+dioxus-html = { workspace = true, optional = true }
 
 [features]
 default = []
 serialize = ["serde"]
 sledgehammer = ["sledgehammer_bindgen", "sledgehammer_utils"]
-web = ["sledgehammer", "wasm-bindgen", "js-sys", "web-sys", "sledgehammer_bindgen/web"]
-binary-protocol = ["sledgehammer", "wasm-bindgen"]
+webonly = [
+    "sledgehammer",
+    "wasm-bindgen",
+    "js-sys",
+    "web-sys",
+    "sledgehammer_bindgen/web",
+]
+binary-protocol = ["sledgehammer", "dioxus-core", "dioxus-html"]
 minimal_bindings = []

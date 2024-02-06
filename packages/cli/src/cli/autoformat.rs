@@ -157,6 +157,10 @@ async fn autoformat_project(check: bool, split_line_attributes: bool) -> Result<
         return Ok(());
     }
 
+    if files_to_format.is_empty() {
+        return Ok(());
+    }
+
     let indent = indentation_for(&files_to_format[0], split_line_attributes)?;
 
     let counts = files_to_format

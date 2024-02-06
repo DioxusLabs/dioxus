@@ -14,7 +14,7 @@ pub(crate) fn serde_to_writable<T: Serialize>(
     Ok(())
 }
 
-#[cfg(feature = "ssr")]
+#[cfg(feature = "server")]
 /// Encode data into a element. This is inteded to be used in the server to send data to the client.
 pub(crate) fn encode_props_in_element<T: Serialize>(
     data: &T,
@@ -27,7 +27,7 @@ pub(crate) fn encode_props_in_element<T: Serialize>(
     Ok(write_to.write_all(r#"" />"#.as_bytes())?)
 }
 
-#[cfg(feature = "ssr")]
+#[cfg(feature = "server")]
 /// Encode data into a element. This is inteded to be used in the server to send data to the client.
 pub(crate) fn encode_in_element(
     data: &super::HTMLData,

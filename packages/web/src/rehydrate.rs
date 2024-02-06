@@ -1,6 +1,9 @@
 use crate::dom::WebsysDom;
+use dioxus_core::prelude::*;
 use dioxus_core::AttributeValue;
+use dioxus_core::WriteMutations;
 use dioxus_core::{DynamicNode, ElementId, ScopeState, TemplateNode, VNode, VirtualDom};
+use dioxus_interpreter_js::save_template;
 
 #[derive(Debug)]
 pub enum RehydrationError {
@@ -22,6 +25,7 @@ impl WebsysDom {
 
         dioxus_interpreter_js::hydrate(ids);
 
+        #[cfg(feature = "mounted")]
         for id in to_mount {
             self.send_mount_event(id);
         }
@@ -36,10 +40,7 @@ impl WebsysDom {
         ids: &mut Vec<u32>,
         to_mount: &mut Vec<ElementId>,
     ) -> Result<(), RehydrationError> {
-        let vnode = match scope.root_node() {
-            dioxus_core::RenderReturn::Ready(ready) => ready,
-            _ => return Err(VNodeNotInitialized),
-        };
+        let vnode = scope.root_node();
         self.rehydrate_vnode(dom, vnode, ids, to_mount)
     }
 
@@ -57,7 +58,7 @@ impl WebsysDom {
                 root,
                 ids,
                 to_mount,
-                Some(*vnode.root_ids.borrow().get(i).ok_or(VNodeNotInitialized)?),
+                Some(vnode.mounted_root(i, dom).ok_or(VNodeNotInitialized)?),
             )?;
         }
         Ok(())
@@ -80,9 +81,11 @@ impl WebsysDom {
                 let mut mounted_id = root_id;
                 for attr in *attrs {
                     if let dioxus_core::TemplateAttribute::Dynamic { id } = attr {
-                        let attribute = &vnode.dynamic_attrs[*id];
-                        let id = attribute.mounted_element();
-                        attribute.attribute_type().for_each(|attribute| {
+                        let attributes = &*vnode.dynamic_attrs[*id];
+                        let id = vnode
+                            .mounted_dynamic_attribute(*id, dom)
+                            .ok_or(VNodeNotInitialized)?;
+                        for attribute in attributes {
                             let value = &attribute.value;
                             mounted_id = Some(id);
                             if let AttributeValue::Listener(_) = value {
@@ -90,7 +93,7 @@ impl WebsysDom {
                                     to_mount.push(id);
                                 }
                             }
-                        });
+                        }
                     }
                 }
                 if let Some(id) = mounted_id {
@@ -102,9 +105,15 @@ impl WebsysDom {
                     }
                 }
             }
-            TemplateNode::Dynamic { id } | TemplateNode::DynamicText { id } => {
-                self.rehydrate_dynamic_node(dom, &vnode.dynamic_nodes[*id], ids, to_mount)?;
-            }
+            TemplateNode::Dynamic { id } | TemplateNode::DynamicText { id } => self
+                .rehydrate_dynamic_node(
+                    dom,
+                    &vnode.dynamic_nodes[*id],
+                    *id,
+                    vnode,
+                    ids,
+                    to_mount,
+                )?,
             _ => {}
         }
         Ok(())
@@ -114,32 +123,91 @@ impl WebsysDom {
         &mut self,
         dom: &VirtualDom,
         dynamic: &DynamicNode,
+        dynamic_node_index: usize,
+        vnode: &VNode,
         ids: &mut Vec<u32>,
         to_mount: &mut Vec<ElementId>,
     ) -> Result<(), RehydrationError> {
         tracing::trace!("rehydrate dynamic node: {:?}", dynamic);
         match dynamic {
-            dioxus_core::DynamicNode::Text(text) => {
-                ids.push(text.mounted_element().ok_or(VNodeNotInitialized)?.0 as u32);
-            }
-            dioxus_core::DynamicNode::Placeholder(placeholder) => {
-                ids.push(placeholder.mounted_element().ok_or(VNodeNotInitialized)?.0 as u32);
+            dioxus_core::DynamicNode::Text(_) | dioxus_core::DynamicNode::Placeholder(_) => {
+                ids.push(
+                    vnode
+                        .mounted_dynamic_node(dynamic_node_index, dom)
+                        .ok_or(VNodeNotInitialized)?
+                        .0 as u32,
+                );
             }
             dioxus_core::DynamicNode::Component(comp) => {
-                let scope = comp.mounted_scope().ok_or(VNodeNotInitialized)?;
-                self.rehydrate_scope(
-                    dom.get_scope(scope).ok_or(VNodeNotInitialized)?,
-                    dom,
-                    ids,
-                    to_mount,
-                )?;
+                let scope = comp
+                    .mounted_scope(dynamic_node_index, vnode, dom)
+                    .ok_or(VNodeNotInitialized)?;
+                self.rehydrate_scope(scope, dom, ids, to_mount)?;
             }
             dioxus_core::DynamicNode::Fragment(fragment) => {
-                for vnode in *fragment {
+                for vnode in fragment {
                     self.rehydrate_vnode(dom, vnode, ids, to_mount)?;
                 }
             }
         }
         Ok(())
     }
+}
+
+/// During rehydration, we don't want to actually write anything to the DOM, but we do need to store any templates that were created. This struct is used to only write templates to the DOM.
+pub(crate) struct OnlyWriteTemplates<'a>(pub &'a mut WebsysDom);
+
+impl WriteMutations for OnlyWriteTemplates<'_> {
+    fn register_template(&mut self, template: Template) {
+        let mut roots = vec![];
+
+        for root in template.roots {
+            roots.push(self.0.create_template_node(root))
+        }
+
+        self.0
+            .templates
+            .insert(template.name.to_owned(), self.0.max_template_id);
+        save_template(roots, self.0.max_template_id);
+        self.0.max_template_id += 1
+    }
+
+    fn append_children(&mut self, _: ElementId, _: usize) {}
+
+    fn assign_node_id(&mut self, _: &'static [u8], _: ElementId) {}
+
+    fn create_placeholder(&mut self, _: ElementId) {}
+
+    fn create_text_node(&mut self, _: &str, _: ElementId) {}
+
+    fn hydrate_text_node(&mut self, _: &'static [u8], _: &str, _: ElementId) {}
+
+    fn load_template(&mut self, _: &'static str, _: usize, _: ElementId) {}
+
+    fn replace_node_with(&mut self, _: ElementId, _: usize) {}
+
+    fn replace_placeholder_with_nodes(&mut self, _: &'static [u8], _: usize) {}
+
+    fn insert_nodes_after(&mut self, _: ElementId, _: usize) {}
+
+    fn insert_nodes_before(&mut self, _: ElementId, _: usize) {}
+
+    fn set_attribute(
+        &mut self,
+        _: &'static str,
+        _: Option<&'static str>,
+        _: &AttributeValue,
+        _: ElementId,
+    ) {
+    }
+
+    fn set_node_text(&mut self, _: &str, _: ElementId) {}
+
+    fn create_event_listener(&mut self, _: &'static str, _: ElementId) {}
+
+    fn remove_event_listener(&mut self, _: &'static str, _: ElementId) {}
+
+    fn remove_node(&mut self, _: ElementId) {}
+
+    fn push_root(&mut self, _: ElementId) {}
 }

@@ -60,18 +60,19 @@ use std::rc::Rc;
 pub use crate::cfg::Config;
 #[cfg(feature = "file_engine")]
 pub use crate::file_engine::WebFileEngineExt;
-use dioxus_core::{Element, Scope, VirtualDom};
+use dioxus_core::VirtualDom;
 use futures_util::{
     future::{select, Either},
     pin_mut, FutureExt, StreamExt,
 };
 
-mod cache;
 mod cfg;
 mod dom;
 #[cfg(feature = "eval")]
 mod eval;
 mod event;
+pub mod launch;
+mod mutations;
 pub use event::*;
 #[cfg(feature = "file_engine")]
 mod file_engine;
@@ -85,85 +86,6 @@ mod rehydrate;
 // mod ric_raf;
 // mod rehydrate;
 
-/// Launch the VirtualDOM given a root component and a configuration.
-///
-/// This function expects the root component to not have root props. To launch the root component with root props, use
-/// `launch_with_props` instead.
-///
-/// This method will block the thread with `spawn_local` from wasm_bindgen_futures.
-///
-/// If you need to run the VirtualDOM in its own thread, use `run_with_props` instead and await the future.
-///
-/// # Example
-///
-/// ```rust, ignore
-/// fn main() {
-///     dioxus_web::launch(App);
-/// }
-///
-/// static App: Component = |cx| {
-///     render!(div {"hello world"})
-/// }
-/// ```
-pub fn launch(root_component: fn(Scope) -> Element) {
-    launch_with_props(root_component, (), Config::default());
-}
-
-/// Launch your app and run the event loop, with configuration.
-///
-/// This function will start your web app on the main web thread.
-///
-/// You can configure the WebView window with a configuration closure
-///
-/// ```rust, ignore
-/// use dioxus::prelude::*;
-///
-/// fn main() {
-///     dioxus_web::launch_with_props(App, Config::new().pre_render(true));
-/// }
-///
-/// fn app(cx: Scope) -> Element {
-///     cx.render(rsx!{
-///         h1 {"hello world!"}
-///     })
-/// }
-/// ```
-pub fn launch_cfg(root: fn(Scope) -> Element, config: Config) {
-    launch_with_props(root, (), config)
-}
-
-/// Launches the VirtualDOM from the specified component function and props.
-///
-/// This method will block the thread with `spawn_local`
-///
-/// # Example
-///
-/// ```rust, ignore
-/// fn main() {
-///     dioxus_web::launch_with_props(
-///         App,
-///         RootProps { name: String::from("joe") },
-///         Config::new()
-///     );
-/// }
-///
-/// #[derive(ParitalEq, Props)]
-/// struct RootProps {
-///     name: String
-/// }
-///
-/// static App: Component<RootProps> = |cx| {
-///     render!(div {"hello {cx.props.name}"})
-/// }
-/// ```
-pub fn launch_with_props<T: 'static>(
-    root_component: fn(Scope<T>) -> Element,
-    root_properties: T,
-    config: Config,
-) {
-    wasm_bindgen_futures::spawn_local(run_with_props(root_component, root_properties, config));
-}
-
 /// Runs the app as a future that can be scheduled around the main thread.
 ///
 /// Polls futures internal to the VirtualDOM, hence the async nature of this function.
@@ -176,73 +98,54 @@ pub fn launch_with_props<T: 'static>(
 ///     wasm_bindgen_futures::spawn_local(app_fut);
 /// }
 /// ```
-pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_props: T, cfg: Config) {
+pub async fn run(virtual_dom: VirtualDom, web_config: Config) {
     tracing::info!("Starting up");
 
-    let mut dom = VirtualDom::new_with_props(root, root_props);
+    let mut dom = virtual_dom;
 
     #[cfg(feature = "eval")]
     {
         // Eval
-        let cx = dom.base_scope();
-        eval::init_eval(cx);
+        dom.in_runtime(|| {
+            eval::init_eval();
+        });
     }
 
     #[cfg(feature = "panic_hook")]
-    if cfg.default_panic_hook {
+    if web_config.default_panic_hook {
         console_error_panic_hook::set_once();
     }
 
     #[cfg(all(feature = "hot_reload", debug_assertions))]
     let mut hotreload_rx = hot_reload::init();
 
-    for s in crate::cache::BUILTIN_INTERNED_STRINGS {
-        wasm_bindgen::intern(s);
-    }
-    for s in &cfg.cached_strings {
-        wasm_bindgen::intern(s);
-    }
-
     let (tx, mut rx) = futures_channel::mpsc::unbounded();
 
-    #[cfg(feature = "hydrate")]
-    let should_hydrate = cfg.hydrate;
-    #[cfg(not(feature = "hydrate"))]
-    let should_hydrate = false;
+    let should_hydrate = web_config.hydrate;
 
-    let mut websys_dom = dom::WebsysDom::new(cfg, tx);
+    let mut websys_dom = dom::WebsysDom::new(web_config, tx);
 
     tracing::info!("rebuilding app");
 
     if should_hydrate {
         #[cfg(feature = "hydrate")]
         {
-            // todo: we need to split rebuild and initialize into two phases
-            // it's a waste to produce edits just to get the vdom loaded
+            dom.rebuild(&mut crate::rehydrate::OnlyWriteTemplates(&mut websys_dom));
 
-            {
-                let mutations = dom.rebuild();
-                web_sys::console::log_1(&format!("mutations: {:#?}", mutations).into());
-                let templates = mutations.templates;
-                websys_dom.load_templates(&templates);
-                websys_dom.interpreter.flush();
-            }
             if let Err(err) = websys_dom.rehydrate(&dom) {
                 tracing::error!("Rehydration failed. {:?}", err);
                 tracing::error!("Rebuild DOM into element from scratch");
                 websys_dom.root.set_text_content(None);
 
-                let edits = dom.rebuild();
+                dom.rebuild(&mut websys_dom);
 
-                websys_dom.load_templates(&edits.templates);
-                websys_dom.apply_edits(edits.edits);
+                websys_dom.flush_edits();
             }
         }
     } else {
-        let edits = dom.rebuild();
+        dom.rebuild(&mut websys_dom);
 
-        websys_dom.load_templates(&edits.templates);
-        websys_dom.apply_edits(edits.edits);
+        websys_dom.flush_edits();
     }
 
     // the mutations come back with nothing - we need to actually mount them
@@ -251,7 +154,7 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
     loop {
         tracing::trace!("waiting for work");
 
-        // if virtualdom has nothing, wait for it to have something before requesting idle time
+        // if virtual dom has nothing, wait for it to have something before requesting idle time
         // if there is work then this future resolves immediately.
         let (mut res, template) = {
             let work = dom.wait_for_work().fuse();
@@ -298,12 +201,11 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
         // let deadline = work_loop.wait_for_idle_time().await;
 
         // run the virtualdom work phase until the frame deadline is reached
-        let edits = dom.render_immediate();
+        dom.render_immediate(&mut websys_dom);
 
         // wait for the animation frame to fire so we can apply our changes
         // work_loop.wait_for_raf().await;
 
-        websys_dom.load_templates(&edits.templates);
-        websys_dom.apply_edits(edits.edits);
+        websys_dom.flush_edits();
     }
 }

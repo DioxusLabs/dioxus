@@ -2,7 +2,7 @@
 name = "dioxus-desktop"
 version = { workspace = true }
 authors = ["Jonathan Kelley"]
-edition = "2018"
+edition = "2021"
 description = "WebView renderer for Dioxus"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
@@ -20,6 +20,7 @@ dioxus-html = { workspace = true, features = [
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
 dioxus-hot-reload = { workspace = true, optional = true }
 dioxus-cli-config = { workspace = true }
+generational-box = { workspace = true }
 
 serde = "1.0.136"
 serde_json = "1.0.79"
@@ -44,6 +45,7 @@ infer = "0.11.0"
 dunce = "1.0.2"
 slab = { workspace = true }
 rustc-hash = { workspace = true }
+dioxus-hooks = { workspace = true }
 
 futures-util = { workspace = true }
 urlencoding = "2.1.2"
@@ -78,15 +80,8 @@ default-features = false
 features = ["tokio_runtime", "hot-reload"]
 
 [dev-dependencies]
-dioxus-core-macro = { workspace = true }
-dioxus-hooks = { workspace = true }
-dioxus = { workspace = true }
+dioxus = { workspace = true, features = ["desktop"] }
 exitcode = "1.1.2"
-scraper = "0.16.0"
-
-[build-dependencies]
-dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
-minify-js = "0.5.6"
 
 # These tests need to be run on the main thread, so they cannot use rust's test harness.
 [[test]]

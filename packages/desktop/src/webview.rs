@@ -8,13 +8,13 @@ use crate::{
     waker::tao_waker,
     Config, DesktopContext, DesktopService,
 };
-use dioxus_core::VirtualDom;
+use dioxus_core::{ScopeId, VirtualDom};
 use dioxus_html::prelude::EvalProvider;
 use futures_util::{pin_mut, FutureExt};
 use std::{any::Any, rc::Rc, task::Waker};
 use wry::{RequestAsyncResponder, WebContext, WebViewBuilder};
 
-pub struct WebviewInstance {
+pub(crate) struct WebviewInstance {
     pub dom: VirtualDom,
     pub desktop_context: DesktopContext,
     pub waker: Waker,
@@ -32,7 +32,11 @@ pub struct WebviewInstance {
 }
 
 impl WebviewInstance {
-    pub fn new(mut cfg: Config, dom: VirtualDom, shared: Rc<SharedContext>) -> WebviewInstance {
+    pub(crate) fn new(
+        mut cfg: Config,
+        dom: VirtualDom,
+        shared: Rc<SharedContext>,
+    ) -> WebviewInstance {
         let window = cfg.window.clone().build(&shared.target).unwrap();
 
         // We assume that if the icon is None in cfg, then the user just didnt set it
@@ -169,16 +173,13 @@ impl WebviewInstance {
             asset_handlers,
         ));
 
-        // Provide the desktop context to the virtualdom
-        dom.base_scope().provide_context(desktop_context.clone());
-
-        // Also set up its eval provider
-        // It's important that we provide as dyn EvalProvider - using the concrete type has
-        // a different TypeId and can not be downcasted as dyn EvalProvider
         let provider: Rc<dyn EvalProvider> =
             Rc::new(DesktopEvalProvider::new(desktop_context.clone()));
 
-        dom.base_scope().provide_context(provider);
+        dom.in_runtime(|| {
+            ScopeId::ROOT.provide_context(desktop_context.clone());
+            ScopeId::ROOT.provide_context(provider);
+        });
 
         WebviewInstance {
             waker: tao_waker(shared.proxy.clone(), desktop_context.window.id()),
@@ -206,7 +207,9 @@ impl WebviewInstance {
                 }
             }
 
-            self.desktop_context.send_edits(self.dom.render_immediate());
+            self.dom
+                .render_immediate(&mut *self.desktop_context.mutation_state.borrow_mut());
+            self.desktop_context.send_edits();
         }
     }
 }

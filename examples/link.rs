@@ -1,30 +1,25 @@
 use dioxus::prelude::*;
-use dioxus_router::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(App);
+    launch_desktop(App);
 }
 
 #[component]
-fn App(cx: Scope) -> Element {
-    cx.render(rsx! (
+fn App() -> Element {
+    rsx! (
         div {
-            p {
-                a { href: "http://dioxuslabs.com/", "Default link - links outside of your app" }
-            }
+            p { a { href: "http://dioxuslabs.com/", "Default link - links outside of your app" } }
             p {
                 a {
                     href: "http://dioxuslabs.com/",
                     prevent_default: "onclick",
                     onclick: |_| println!("Hello Dioxus"),
-                    "Custom event link - links inside of your app",
+                    "Custom event link - links inside of your app"
                 }
             }
         }
-        div {
-            Router::<Route> {}
-        }
-    ))
+        div { Router::<Route> {} }
+    )
 }
 
 #[derive(Routable, Clone)]
@@ -38,23 +33,27 @@ enum Route {
 }
 
 #[component]
-fn Header(cx: Scope) -> Element {
-    render! {
+fn Header() -> Element {
+    rsx! {
         h1 { "Your app here" }
         ul {
-            li { Link { to: Route::Home {}, "home" } }
-            li { Link { to: Route::Settings {}, "settings" } }
+            li {
+                Link { to: Route::Home {}, "home" }
+            }
+            li {
+                Link { to: Route::Settings {}, "settings" }
+            }
         }
         Outlet::<Route> {}
     }
 }
 
 #[component]
-fn Home(cx: Scope) -> Element {
-    render!(h1 { "Home" })
+fn Home() -> Element {
+    rsx!( h1 { "Home" } )
 }
 
 #[component]
-fn Settings(cx: Scope) -> Element {
-    render!(h1 { "Settings" })
+fn Settings() -> Element {
+    rsx!( h1 { "Settings" } )
 }

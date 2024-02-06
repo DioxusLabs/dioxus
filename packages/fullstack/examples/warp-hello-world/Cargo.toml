@@ -7,19 +7,14 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-web = { workspace = true, features=["hydrate"], optional = true }
-dioxus = { workspace = true }
-dioxus-fullstack = { workspace = true }
+dioxus = { workspace = true, features = ["fullstack"] }
 serde = "1.0.159"
-warp = { version = "0.3.3", optional = true }
-execute = "0.2.12"
-reqwest = "0.11.18"
-simple_logger = "4.2.0"
 tracing-wasm = "0.2.1"
-tracing.workspace = true
+tracing = { workspace = true }
 tracing-subscriber = "0.3.17"
+reqwest = "0.11.18"
 
 [features]
 default = []
-ssr = ["warp", "dioxus-fullstack/warp"]
-web = ["dioxus-web"]
+server = ["dioxus/warp"]
+web = ["dioxus/web"]

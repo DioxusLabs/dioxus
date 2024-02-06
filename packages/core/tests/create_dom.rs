@@ -2,26 +2,22 @@
 
 //! Prove that the dom works normally through virtualdom methods.
 //!
-//! This methods all use "rebuild" which completely bypasses the scheduler.
-//! Hard rebuilds don't consume any events from the event queue.
+//! This methods all use "rebuild_to_vec" which completely bypasses the scheduler.
+//! Hard rebuild_to_vecs don't consume any events from the event queue.
 
-use dioxus::core::Mutation::*;
+use dioxus::dioxus_core::Mutation::*;
 use dioxus::prelude::*;
 use dioxus_core::ElementId;
 
 #[test]
 fn test_original_diff() {
-    let mut dom = VirtualDom::new(|cx| {
-        cx.render(rsx! {
-            div {
-                div {
-                    "Hello, world!"
-                }
-            }
-        })
+    let mut dom = VirtualDom::new(|| {
+        rsx! {
+            div { div { "Hello, world!" } }
+        }
     });
 
-    let edits = dom.rebuild().santize();
+    let edits = dom.rebuild_to_vec().santize();
 
     assert_eq!(
         edits.edits,
@@ -35,25 +31,22 @@ fn test_original_diff() {
 
 #[test]
 fn create() {
-    let mut dom = VirtualDom::new(|cx| {
-        cx.render(rsx! {
+    let mut dom = VirtualDom::new(|| {
+        rsx! {
             div {
                 div {
                     "Hello, world!"
                     div {
                         div {
-                            Fragment {
-                                "hello"
-                                "world"
-                            }
+                            Fragment { "hello""world" }
                         }
                     }
                 }
             }
-        })
+        }
     });
 
-    let _edits = dom.rebuild().santize();
+    let _edits = dom.rebuild_to_vec().santize();
 
     // todo: we don't test template mutations anymore since the templates are passed along
 
@@ -82,13 +75,9 @@ fn create() {
 
 #[test]
 fn create_list() {
-    let mut dom = VirtualDom::new(|cx| {
-        cx.render(rsx! {
-            {(0..3).map(|f| rsx!( div { "hello" } ))}
-        })
-    });
+    let mut dom = VirtualDom::new(|| rsx! {{(0..3).map(|f| rsx!( div { "hello" } ))}});
 
-    let _edits = dom.rebuild().santize();
+    let _edits = dom.rebuild_to_vec().santize();
 
     // note: we dont test template edits anymore
     // assert_eq!(
@@ -105,16 +94,16 @@ fn create_list() {
 
 #[test]
 fn create_simple() {
-    let mut dom = VirtualDom::new(|cx| {
-        cx.render(rsx! {
+    let mut dom = VirtualDom::new(|| {
+        rsx! {
             div {}
             div {}
             div {}
             div {}
-        })
+        }
     });
 
-    let edits = dom.rebuild().santize();
+    let edits = dom.rebuild_to_vec().santize();
 
     // note: we dont test template edits anymore
     // assert_eq!(
@@ -132,47 +121,47 @@ fn create_simple() {
 }
 #[test]
 fn create_components() {
-    let mut dom = VirtualDom::new(|cx| {
-        cx.render(rsx! {
+    let mut dom = VirtualDom::new(|| {
+        rsx! {
             Child { "abc1" }
             Child { "abc2" }
             Child { "abc3" }
-        })
+        }
     });
 
-    #[derive(Props)]
-    struct ChildProps<'a> {
-        children: Element<'a>,
+    #[derive(Props, Clone, PartialEq)]
+    struct ChildProps {
+        children: Element,
     }
 
-    fn Child<'a>(cx: Scope<'a, ChildProps<'a>>) -> Element {
-        cx.render(rsx! {
+    fn Child(cx: ChildProps) -> Element {
+        rsx! {
             h1 {}
-            div { {&cx.props.children} }
+            div { {cx.children} }
             p {}
-        })
+        }
     }
 
-    let _edits = dom.rebuild().santize();
+    let _edits = dom.rebuild_to_vec().santize();
 
     // todo: test this
 }
 
 #[test]
 fn anchors() {
-    let mut dom = VirtualDom::new(|cx| {
-        cx.render(rsx! {
+    let mut dom = VirtualDom::new(|| {
+        rsx! {
             if true {
-                div { "hello" }
+                 div { "hello" }
             }
             if false {
                 div { "goodbye" }
             }
-        })
+        }
     });
 
     // note that the template under "false" doesn't show up since it's not loaded
-    let edits = dom.rebuild().santize();
+    let edits = dom.rebuild_to_vec().santize();
 
     // note: we dont test template edits anymore
     // assert_eq!(

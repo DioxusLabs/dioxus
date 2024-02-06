@@ -101,11 +101,13 @@ impl ToTokens for Component {
         let fn_name = self.fn_name();
 
         tokens.append_all(quote! {
-            __cx.component(
-                #name #prop_gen_args,
-                #builder,
-                #fn_name
-            )
+            dioxus_core::DynamicNode::Component({
+                use dioxus_core::prelude::Properties;
+                (#builder).into_vcomponent(
+                    #name #prop_gen_args,
+                    #fn_name
+                )
+            })
         })
     }
 }
@@ -163,8 +165,8 @@ impl Component {
         let name = &self.name;
 
         let mut toks = match &self.prop_gen_args {
-            Some(gen_args) => quote! { fc_to_builder(__cx, #name #gen_args) },
-            None => quote! { fc_to_builder(__cx, #name) },
+            Some(gen_args) => quote! { fc_to_builder(#name #gen_args) },
+            None => quote! { fc_to_builder(#name) },
         };
         for field in &self.fields {
             match field.name.to_string().as_str() {
@@ -242,12 +244,16 @@ impl ToTokens for ContentField {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
             ContentField::Shorthand(i) if i.to_string().starts_with("on") => {
-                tokens.append_all(quote! { __cx.event_handler(#i) })
+                tokens.append_all(quote! { EventHandler::new(#i) })
             }
             ContentField::Shorthand(i) => tokens.append_all(quote! { #i }),
             ContentField::ManExpr(e) => e.to_tokens(tokens),
-            ContentField::Formatted(s) => tokens.append_all(quote! { __cx.raw_text(#s) }),
-            ContentField::OnHandlerRaw(e) => tokens.append_all(quote! { __cx.event_handler(#e) }),
+            ContentField::Formatted(s) => tokens.append_all(quote! {
+                #s
+            }),
+            ContentField::OnHandlerRaw(e) => tokens.append_all(quote! {
+                EventHandler::new(#e)
+            }),
         }
     }
 }

@@ -2,8 +2,8 @@ use dioxus::prelude::*;
 use dioxus_web::Config;
 use web_sys::window;
 
-fn app(cx: Scope) -> Element {
-    cx.render(rsx! {
+fn app() -> Element {
+    rsx! {
         div { h1 { "thing 1" } }
         div { h2 { "thing 2" } }
         div {
@@ -17,12 +17,12 @@ fn app(cx: Scope) -> Element {
                 "thing {f}"
             }
         })}
-    })
+    }
 }
 
 #[allow(non_snake_case)]
-fn Bapp(cx: Scope) -> Element {
-    cx.render(rsx! {
+fn Bapp() -> Element {
+    rsx! {
         div { h1 { "thing 1" } }
         div { h2 { "thing 2" } }
         div {
@@ -30,7 +30,7 @@ fn Bapp(cx: Scope) -> Element {
             "asd"
             "asd"
         }
-    })
+    }
 }
 
 fn main() {
@@ -38,7 +38,7 @@ fn main() {
     tracing_wasm::set_as_global_default();
 
     let mut dom = VirtualDom::new(app);
-    let _ = dom.rebuild();
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     let pre = dioxus_ssr::pre_render(&dom);
     tracing::trace!("{}", pre);
@@ -53,5 +53,5 @@ fn main() {
         .set_inner_html(&pre);
 
     // now rehydrate
-    dioxus_web::launch_with_props(app, (), Config::new().hydrate(true));
+    dioxus_web::launch::launch(app, vec![], Config::new().hydrate(true));
 }

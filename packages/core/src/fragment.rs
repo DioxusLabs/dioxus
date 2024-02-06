@@ -26,27 +26,21 @@ use crate::innerlude::*;
 ///
 /// You want to use this free-function when your fragment needs a key and simply returning multiple nodes from rsx! won't cut it.
 #[allow(non_upper_case_globals, non_snake_case)]
-pub fn Fragment<'a>(cx: Scope<'a, FragmentProps<'a>>) -> Element {
-    let children = cx.props.0.as_ref()?;
-    Some(cx.vnode(
-        children.parent.clone(),
-        children.key,
-        children.template.clone(),
-        children.root_ids.clone(),
-        children.dynamic_nodes,
-        children.dynamic_attrs,
-    ))
+pub fn Fragment(cx: FragmentProps) -> Element {
+    cx.0.clone()
 }
 
-pub struct FragmentProps<'a>(Element<'a>);
-pub struct FragmentBuilder<'a, const BUILT: bool>(Element<'a>);
-impl<'a> FragmentBuilder<'a, false> {
-    pub fn children(self, children: Element<'a>) -> FragmentBuilder<'a, true> {
+#[derive(Clone, PartialEq)]
+pub struct FragmentProps(Element);
+
+pub struct FragmentBuilder<const BUILT: bool>(Element);
+impl FragmentBuilder<false> {
+    pub fn children(self, children: Element) -> FragmentBuilder<true> {
         FragmentBuilder(children)
     }
 }
-impl<'a, const A: bool> FragmentBuilder<'a, A> {
-    pub fn build(self) -> FragmentProps<'a> {
+impl<const A: bool> FragmentBuilder<A> {
+    pub fn build(self) -> FragmentProps {
         FragmentProps(self.0)
     }
 }
@@ -68,8 +62,8 @@ impl<'a, const A: bool> FragmentBuilder<'a, A> {
 /// ## Example
 ///
 /// ```rust, ignore
-/// fn App(cx: Scope) -> Element {
-///     cx.render(rsx!{
+/// fn app() -> Element {
+///     rsx!{
 ///         CustomCard {
 ///             h1 {}
 ///             p {}
@@ -82,22 +76,21 @@ impl<'a, const A: bool> FragmentBuilder<'a, A> {
 ///     children: Element
 /// }
 ///
-/// fn CustomCard(cx: Scope<CardProps>) -> Element {
-///     cx.render(rsx!{
+/// fn CustomCard(cx: CardProps) -> Element {
+///     rsx!{
 ///         div {
 ///             h1 {"Title card"}
-///             {cx.props.children}
+///             {cx.children}
 ///         }
 ///     })
 /// }
 /// ```
-impl<'a> Properties<'_> for FragmentProps<'a> {
-    type Builder = FragmentBuilder<'a, false>;
-    const IS_STATIC: bool = false;
-    fn builder(_cx: &ScopeState) -> Self::Builder {
+impl Properties for FragmentProps {
+    type Builder = FragmentBuilder<false>;
+    fn builder() -> Self::Builder {
         FragmentBuilder(None)
     }
-    unsafe fn memoize(&self, _other: &Self) -> bool {
+    fn memoize(&mut self, _other: &Self) -> bool {
         false
     }
 }

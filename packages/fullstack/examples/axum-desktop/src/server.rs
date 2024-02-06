@@ -1,6 +1,6 @@
 // Run with:
 // ```bash
-// cargo run --bin server --features ssr
+// cargo run --bin server --features server
 // ```
 
 use axum_desktop::*;

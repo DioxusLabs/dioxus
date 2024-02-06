@@ -9,15 +9,15 @@ use crate::{
     FERMI_AUTH_REQUEST, FERMI_AUTH_TOKEN, FERMI_CLIENT,
 };
 use dioxus::prelude::*;
-use dioxus_router::prelude::{Link, Outlet};
+use dioxus::router::prelude::{Link, Outlet};
 use fermi::*;
 use openidconnect::{url::Url, OAuth2TokenResponse, TokenResponse};
 
 #[component]
 pub fn LogOut(cx: Scope<ClientProps>) -> Element {
-    let fermi_auth_token = use_atom_ref(cx, &FERMI_AUTH_TOKEN);
+    let fermi_auth_token = use_atom_ref(&FERMI_AUTH_TOKEN);
     let fermi_auth_token_read = fermi_auth_token.read().clone();
-    let log_out_url_state = use_state(cx, || None::<Option<Result<Url, crate::errors::Error>>>);
+    let log_out_url_state = use_signal(|| None::<Option<Result<Url, crate::errors::Error>>>);
     cx.render(match fermi_auth_token_read {
         Some(fermi_auth_token_read) => match fermi_auth_token_read.id_token.clone() {
             Some(id_token) => match log_out_url_state.get() {
@@ -40,9 +40,7 @@ pub fn LogOut(cx: Scope<ClientProps>) -> Element {
                             }
                         }
                         Err(error) => {
-                            rsx! {
-                                div { "Failed to load disconnection url: {error:?}" }
-                            }
+                            rsx! { div { "Failed to load disconnection url: {error:?}" } }
                         }
                     },
                     None => {
@@ -61,7 +59,7 @@ pub fn LogOut(cx: Scope<ClientProps>) -> Element {
                         })
                     };
                     logout_url_task();
-                    rsx! { div{"Loading log out url... Please wait"}}
+                    rsx! { div { "Loading log out url... Please wait" } }
                 }
             },
             None => {
@@ -76,8 +74,8 @@ pub fn LogOut(cx: Scope<ClientProps>) -> Element {
 
 #[component]
 pub fn RefreshToken(cx: Scope<ClientProps>) -> Element {
-    let fermi_auth_token = use_atom_ref(cx, &FERMI_AUTH_TOKEN);
-    let fermi_auth_request = use_atom_ref(cx, &FERMI_AUTH_REQUEST);
+    let fermi_auth_token = use_atom_ref(&FERMI_AUTH_TOKEN);
+    let fermi_auth_request = use_atom_ref(&FERMI_AUTH_REQUEST);
     let fermi_auth_token_read = fermi_auth_token.read().clone();
     cx.render(match fermi_auth_token_read {
         Some(fermi_auth_client_read) => match fermi_auth_client_read.refresh_token {
@@ -128,9 +126,9 @@ pub fn RefreshToken(cx: Scope<ClientProps>) -> Element {
 }
 
 #[component]
-pub fn LoadClient(cx: Scope) -> Element {
-    let init_client_future = use_future(cx, (), |_| async move { init_oidc_client().await });
-    let fermi_client: &UseAtomRef<ClientState> = use_atom_ref(cx, &FERMI_CLIENT);
+pub fn LoadClient() -> Element {
+    let init_client_future = use_future(move || async move { init_oidc_client().await });
+    let fermi_client: &UseAtomRef<ClientState> = use_atom_ref(&FERMI_CLIENT);
     cx.render(match init_client_future.value() {
         Some(client_props) => match client_props {
             Ok((client_id, client)) => {
@@ -162,10 +160,10 @@ pub fn LoadClient(cx: Scope) -> Element {
 }
 
 #[component]
-pub fn AuthHeader(cx: Scope) -> Element {
-    let auth_token = use_atom_ref(cx, &FERMI_AUTH_TOKEN);
-    let fermi_auth_request = use_atom_ref(cx, &FERMI_AUTH_REQUEST);
-    let fermi_client: &UseAtomRef<ClientState> = use_atom_ref(cx, &FERMI_CLIENT);
+pub fn AuthHeader() -> Element {
+    let auth_token = use_atom_ref(&FERMI_AUTH_TOKEN);
+    let fermi_auth_request = use_atom_ref(&FERMI_AUTH_REQUEST);
+    let fermi_client: &UseAtomRef<ClientState> = use_atom_ref(&FERMI_CLIENT);
     let client = fermi_client.read().oidc_client.clone();
     let auth_request_read = fermi_auth_request.read().clone();
     let auth_token_read = auth_token.read().clone();
@@ -197,7 +195,7 @@ pub fn AuthHeader(cx: Scope) -> Element {
                                         log::info!("Token expired");
                                         rsx! {
                                             div {
-                                                RefreshToken {client_id: client_props.client_id, client: client_props.client}
+                                                RefreshToken { client_id: client_props.client_id, client: client_props.client }
                                                 Outlet::<Route> {}
                                             }
                                         }

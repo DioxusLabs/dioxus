@@ -2,7 +2,7 @@
 name = "dioxus-core"
 version = { workspace = true }
 authors = ["Jonathan Kelley"]
-edition = "2018"
+edition = "2021"
 description = "Core functionality for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
@@ -10,37 +10,23 @@ homepage = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
-# Bumpalo is used as a micro heap backing each component
-bumpalo = { version = "3.6", features = ["collections", "boxed"] }
-
-# faster hashmaps
 rustc-hash = { workspace = true }
-
-# Used in diffing
 longest-increasing-subsequence = "0.1.0"
-
 futures-util = { workspace = true, default-features = false, features = [
     "alloc",
+    "std",
 ] }
-
 slab = { workspace = true }
-
 futures-channel = { workspace = true }
-
-smallbox = "0.8.1"
 tracing = { workspace = true }
-
-# Serialize the Edits for use in Webview/Liveview instances
 serde = { version = "1", features = ["derive"], optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
 dioxus = { workspace = true }
-dioxus-html = { workspace = true, features = ["serialize"] }
 pretty_assertions = "1.3.0"
 rand = "0.8.5"
 dioxus-ssr = { workspace = true }
-trybuild = "1.0"
 
 [features]
 default = []

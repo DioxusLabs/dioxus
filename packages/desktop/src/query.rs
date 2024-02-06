@@ -1,11 +1,12 @@
 use std::{cell::RefCell, rc::Rc};
 
 use crate::DesktopContext;
+use futures_util::{FutureExt, StreamExt};
+use generational_box::Owner;
 use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::Value;
 use slab::Slab;
 use thiserror::Error;
-use tokio::sync::broadcast::error::RecvError;
 
 const DIOXUS_CODE: &str = r#"
 let dioxus = {
@@ -43,8 +44,8 @@ let dioxus = {
 
 /// Tracks what query ids are currently active
 
-struct SharedSlab<T = ()> {
-    slab: Rc<RefCell<Slab<T>>>,
+pub(crate) struct SharedSlab<T = ()> {
+    pub slab: Rc<RefCell<Slab<T>>>,
 }
 
 impl<T> Clone for SharedSlab<T> {
@@ -63,9 +64,10 @@ impl<T> Default for SharedSlab<T> {
     }
 }
 
-struct QueryEntry {
-    channel_sender: tokio::sync::mpsc::UnboundedSender<Value>,
-    return_sender: Option<tokio::sync::oneshot::Sender<Value>>,
+pub(crate) struct QueryEntry {
+    channel_sender: futures_channel::mpsc::UnboundedSender<Value>,
+    return_sender: Option<futures_channel::oneshot::Sender<Value>>,
+    pub owner: Option<Owner>,
 }
 
 const QUEUE_NAME: &str = "__msg_queues";
@@ -73,7 +75,7 @@ const QUEUE_NAME: &str = "__msg_queues";
 /// Handles sending and receiving arbitrary queries from the webview. Queries can be resolved non-sequentially, so we use ids to track them.
 #[derive(Clone, Default)]
 pub(crate) struct QueryEngine {
-    active_requests: SharedSlab<QueryEntry>,
+    pub active_requests: SharedSlab<QueryEntry>,
 }
 
 impl QueryEngine {
@@ -83,11 +85,12 @@ impl QueryEngine {
         script: &str,
         context: DesktopContext,
     ) -> Query<V> {
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        let (return_tx, return_rx) = tokio::sync::oneshot::channel();
+        let (tx, rx) = futures_channel::mpsc::unbounded();
+        let (return_tx, return_rx) = futures_channel::oneshot::channel();
         let request_id = self.active_requests.slab.borrow_mut().insert(QueryEntry {
             channel_sender: tx,
             return_sender: Some(return_tx),
+            owner: None,
         });
 
         // start the query
@@ -99,14 +102,14 @@ impl QueryEngine {
                     if (!window.{QUEUE_NAME}) {{
                         window.{QUEUE_NAME} = [];
                     }}
-    
+
                     let _request_id = {request_id};
-    
+
                     if (!window.{QUEUE_NAME}[{request_id}]) {{
                         window.{QUEUE_NAME}[{request_id}] = [];
                     }}
                     let _message_queue = window.{QUEUE_NAME}[{request_id}];
-    
+
                     {script}
                 }})().then((result)=>{{
                     let returned_value = {{
@@ -150,7 +153,7 @@ impl QueryEngine {
                     let _ = sender.send(data);
                 }
             } else {
-                let _ = entry.channel_sender.send(data);
+                let _ = entry.channel_sender.unbounded_send(data);
             }
         }
     }
@@ -159,9 +162,9 @@ impl QueryEngine {
 pub(crate) struct Query<V: DeserializeOwned> {
     desktop: DesktopContext,
     slab: SharedSlab<QueryEntry>,
-    receiver: tokio::sync::mpsc::UnboundedReceiver<Value>,
-    return_receiver: Option<tokio::sync::oneshot::Receiver<Value>>,
-    id: usize,
+    receiver: futures_channel::mpsc::UnboundedReceiver<Value>,
+    return_receiver: Option<futures_channel::oneshot::Receiver<Value>>,
+    pub id: usize,
     phantom: std::marker::PhantomData<V>,
 }
 
@@ -198,21 +201,32 @@ impl<V: DeserializeOwned> Query<V> {
         Ok(())
     }
 
-    /// Receive a message from the query
-    pub async fn recv(&mut self) -> Result<Value, QueryError> {
+    /// Poll the query for a message
+    pub fn poll_recv(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<Value, QueryError>> {
         self.receiver
-            .recv()
-            .await
-            .ok_or(QueryError::Recv(RecvError::Closed))
+            .poll_next_unpin(cx)
+            .map(|result| result.ok_or(QueryError::Recv))
     }
 
     /// Receive the result of the query
     pub async fn result(&mut self) -> Result<Value, QueryError> {
         match self.return_receiver.take() {
-            Some(receiver) => receiver
-                .await
-                .map_err(|_| QueryError::Recv(RecvError::Closed)),
+            Some(receiver) => receiver.await.map_err(|_| QueryError::Recv),
             None => Err(QueryError::Finished),
+        }
+    }
+
+    /// Poll the query for a result
+    pub fn poll_result(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<Value, QueryError>> {
+        match self.return_receiver.as_mut() {
+            Some(receiver) => receiver.poll_unpin(cx).map_err(|_| QueryError::Recv),
+            None => std::task::Poll::Ready(Err(QueryError::Finished)),
         }
     }
 }
@@ -238,8 +252,8 @@ impl<V: DeserializeOwned> Drop for Query<V> {
 
 #[derive(Error, Debug)]
 pub enum QueryError {
-    #[error("Error receiving query result: {0}")]
-    Recv(RecvError),
+    #[error("Error receiving query result.")]
+    Recv,
     #[error("Error sending message to query: {0}")]
     Send(String),
     #[error("Error deserializing query result: {0}")]

@@ -237,7 +237,7 @@ impl Route {
                 quote! {
                     #[allow(unused)]
                     (#last_index.., Self::#name { #field_name, .. }) => {
-                        #field_name.render(cx, level - #last_index)
+                        #field_name.render(level - #last_index)
                     }
                 }
             }
@@ -247,7 +247,7 @@ impl Route {
                 quote! {
                     #[allow(unused)]
                     (#last_index, Self::#name { #(#dynamic_segments,)* }) => {
-                        render! {
+                        rsx! {
                             #component {
                                 #(#dynamic_segments_from_route: #dynamic_segments_from_route,)*
                             }

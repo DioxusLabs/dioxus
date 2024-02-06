@@ -36,11 +36,12 @@ impl AssetHandlerRegistry {
         responder: RequestAsyncResponder,
     ) {
         if let Some(handler) = self.handlers.borrow().get(name) {
-            // make sure the runtime is alive for the duration of the handler
-            // We should do this for all the things - not just asset handlers
-            RuntimeGuard::with(self.dom_rt.clone(), Some(handler.scope), || {
-                (handler.f)(request, responder)
-            });
+            // Push the runtime onto the stack
+            let _guard = RuntimeGuard::new(self.dom_rt.clone());
+
+            // And run the handler in the scope of the component that created it
+            self.dom_rt
+                .on_scope(handler.scope, || (handler.f)(request, responder));
         }
     }
 

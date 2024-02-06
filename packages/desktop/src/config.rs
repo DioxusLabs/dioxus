@@ -1,7 +1,6 @@
 use std::borrow::Cow;
 use std::path::PathBuf;
 
-use dioxus_core::prelude::Component;
 use tao::window::{Icon, WindowBuilder, WindowId};
 use wry::{
     http::{Request as HttpRequest, Response as HttpResponse},
@@ -69,20 +68,6 @@ impl Config {
             last_window_close_behaviour: WindowCloseBehaviour::LastWindowExitsApp,
             enable_default_menu_bar: true,
         }
-    }
-
-    /// Launch a Dioxus app using the given component and config
-    ///
-    /// See the [`crate::launch::launch`] function for more details.
-    pub fn launch(self, root: Component<()>) {
-        crate::launch::launch_cfg(root, self)
-    }
-
-    /// Launch a Dioxus app using the given component, config, and props
-    ///
-    /// See the [`crate::launch::launch_with_props`] function for more details.
-    pub fn launch_with_props<P: 'static>(self, root: Component<P>, props: P) {
-        crate::launch::launch_with_props(root, props, self)
     }
 
     /// Set whether the default menu bar should be enabled.

@@ -4,7 +4,7 @@ use syn::spanned::Spanned;
 use syn::{parse_quote, Expr, Lit, Meta, Token, Type};
 
 const FORMATTED_TYPE_START: &str = "static TY_AFTER_HERE:";
-const FORMATTED_TYPE_END: &str = "= todo!();";
+const FORMATTED_TYPE_END: &str = "= unreachable!();";
 
 /// Attempts to convert the given literal to a string.
 /// Converts ints and floats to their base 10 counterparts.

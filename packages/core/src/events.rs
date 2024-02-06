@@ -1,4 +1,4 @@
-use crate::{runtime::with_runtime, ScopeId};
+use crate::{global_context::current_scope_id, Runtime, ScopeId};
 use std::{
     cell::{Cell, RefCell},
     rc::Rc,
@@ -25,6 +25,15 @@ pub struct Event<T: 'static + ?Sized> {
     /// The data associated with this event
     pub data: Rc<T>,
     pub(crate) propagates: Rc<Cell<bool>>,
+}
+
+impl<T: ?Sized + 'static> Event<T> {
+    pub(crate) fn new(data: Rc<T>, bubbles: bool) -> Self {
+        Self {
+            data,
+            propagates: Rc::new(Cell::new(bubbles)),
+        }
+    }
 }
 
 impl<T> Event<T> {
@@ -98,8 +107,8 @@ impl<T> Event<T> {
     ///     }
     /// }
     /// ```
-    pub fn inner(&self) -> &Rc<T> {
-        &self.data
+    pub fn data(&self) -> Rc<T> {
+        self.data.clone()
     }
 }
 
@@ -141,25 +150,40 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
 /// }
 ///
 /// #[derive(Props)]
-/// struct MyProps<'a> {
-///     onclick: EventHandler<'a, MouseEvent>,
+/// struct MyProps {
+///     onclick: EventHandler<MouseEvent>,
 /// }
 ///
-/// fn MyComponent(cx: Scope<'a, MyProps<'a>>) -> Element {
-///     cx.render(rsx!{
+/// fn MyComponent(cx: MyProps) -> Element {
+///     rsx!{
 ///         button {
-///             onclick: move |evt| cx.props.onclick.call(evt),
+///             onclick: move |evt| cx.onclick.call(evt),
 ///         }
 ///     })
 /// }
 ///
 /// ```
-pub struct EventHandler<'bump, T = ()> {
+pub struct EventHandler<T = ()> {
     pub(crate) origin: ScopeId,
-    pub(super) callback: RefCell<Option<ExternalListenerCallback<'bump, T>>>,
+    pub(super) callback: Rc<RefCell<Option<ExternalListenerCallback<T>>>>,
 }
 
-impl<T> Default for EventHandler<'_, T> {
+impl<T> Clone for EventHandler<T> {
+    fn clone(&self) -> Self {
+        Self {
+            origin: self.origin,
+            callback: self.callback.clone(),
+        }
+    }
+}
+
+impl<T> PartialEq for EventHandler<T> {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.callback, &other.callback)
+    }
+}
+
+impl<T> Default for EventHandler<T> {
     fn default() -> Self {
         Self {
             origin: ScopeId::ROOT,
@@ -168,21 +192,28 @@ impl<T> Default for EventHandler<'_, T> {
     }
 }
 
-type ExternalListenerCallback<'bump, T> = bumpalo::boxed::Box<'bump, dyn FnMut(T) + 'bump>;
+type ExternalListenerCallback<T> = Box<dyn FnMut(T)>;
 
-impl<T> EventHandler<'_, T> {
+impl<T> EventHandler<T> {
+    /// Create a new [`EventHandler`] from an [`FnMut`]
+    pub fn new(mut f: impl FnMut(T) + 'static) -> EventHandler<T> {
+        let callback = Rc::new(RefCell::new(Some(Box::new(move |event: T| {
+            f(event);
+        }) as Box<dyn FnMut(T)>)));
+        EventHandler {
+            callback,
+            origin: current_scope_id().expect("to be in a dioxus runtime"),
+        }
+    }
+
     /// Call this event handler with the appropriate event type
     ///
     /// This borrows the event using a RefCell. Recursively calling a listener will cause a panic.
     pub fn call(&self, event: T) {
         if let Some(callback) = self.callback.borrow_mut().as_mut() {
-            with_runtime(|rt| {
-                rt.scope_stack.borrow_mut().push(self.origin);
-            });
+            Runtime::with(|rt| rt.scope_stack.borrow_mut().push(self.origin));
             callback(event);
-            with_runtime(|rt| {
-                rt.scope_stack.borrow_mut().pop();
-            });
+            Runtime::with(|rt| rt.scope_stack.borrow_mut().pop());
         }
     }
 

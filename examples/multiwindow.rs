@@ -1,25 +1,22 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch_desktop(app);
 }
 
-fn app(cx: Scope) -> Element {
-    cx.render(rsx! {
-        div {
-            button {
-                onclick: move |_| {
-                    let dom = VirtualDom::new(popup);
-                    dioxus_desktop::window().new_window(dom, Default::default());
-                },
-                "New Window"
-            }
-        }
-    })
+fn app() -> Element {
+    let onclick = move |_| {
+        let dom = VirtualDom::new(popup);
+        dioxus::desktop::window().new_window(dom, Default::default());
+    };
+
+    rsx! {
+        button { onclick, "New Window" }
+    }
 }
 
-fn popup(cx: Scope) -> Element {
-    cx.render(rsx! {
-        div { "This is a popup!" }
-    })
+fn popup() -> Element {
+    rsx! {
+        div { "This is a popup window!" }
+    }
 }

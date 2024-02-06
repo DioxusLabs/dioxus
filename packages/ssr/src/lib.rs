@@ -4,6 +4,7 @@
 
 mod cache;
 pub mod config;
+#[cfg(feature = "incremental")]
 mod fs_cache;
 #[cfg(feature = "incremental")]
 pub mod incremental;
@@ -14,37 +15,22 @@ pub mod eval;
 pub mod renderer;
 pub mod template;
 
-use dioxus_core::{Element, LazyNodes, Scope, VirtualDom};
-use std::cell::Cell;
+use dioxus_core::NoOpMutations;
+use dioxus_core::{Element, VirtualDom};
 
 pub use crate::renderer::Renderer;
 
 /// A convenience function to render an `rsx!` call to a string
 ///
 /// For advanced rendering, create a new `SsrRender`.
-pub fn render_lazy(f: LazyNodes<'_, '_>) -> String {
-    // We need to somehow get the lazy call into the virtualdom even with the lifetime
-    // Since the lazy lifetime is valid for this function, we can just transmute it to static temporarily
-    // This is okay since we're returning an owned value
-    struct RootProps<'a, 'b> {
-        caller: Cell<Option<LazyNodes<'a, 'b>>>,
+pub fn render_element(element: Element) -> String {
+    fn lazy_app(props: Element) -> Element {
+        props
     }
 
-    fn lazy_app<'a>(cx: Scope<'a, RootProps<'static, 'static>>) -> Element<'a> {
-        let lazy = cx.props.caller.take().unwrap();
-        let lazy: LazyNodes = unsafe { std::mem::transmute(lazy) };
-        Some(lazy.call(cx))
-    }
-
-    let props: RootProps = unsafe {
-        std::mem::transmute(RootProps {
-            caller: Cell::new(Some(f)),
-        })
-    };
-
-    let mut dom = VirtualDom::new_with_props(lazy_app, props);
-    crate::eval::init_eval(dom.base_scope());
-    _ = dom.rebuild();
+    let mut dom = VirtualDom::new_with_props(lazy_app, element);
+    dom.in_runtime(crate::eval::init_eval);
+    dom.rebuild(&mut NoOpMutations);
 
     Renderer::new().render(&dom)
 }

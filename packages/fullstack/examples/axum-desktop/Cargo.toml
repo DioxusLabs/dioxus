@@ -7,18 +7,15 @@ publish = false
 [lib]
 
 [dependencies]
-dioxus-desktop = { workspace = true, optional = true }
 dioxus = { workspace = true }
-dioxus-router = { workspace = true }
-dioxus-fullstack = { workspace = true }
 axum = { version = "0.6.12", optional = true }
 tokio = { workspace = true, features = ["full"], optional = true }
 serde = "1.0.159"
 
 [features]
 default = []
-ssr = ["axum", "tokio", "dioxus-fullstack/axum"]
-desktop = ["dioxus-desktop"]
+server = ["axum", "tokio", "dioxus/axum"]
+desktop = ["dioxus/desktop"]
 
 [[bin]]
 name = "client"
@@ -28,4 +25,4 @@ required-features = ["desktop"]
 [[bin]]
 name = "server"
 path = "src/server.rs"
-required-features = ["ssr"]
+required-features = ["server"]

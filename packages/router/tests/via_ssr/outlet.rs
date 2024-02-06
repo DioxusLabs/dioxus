@@ -5,7 +5,7 @@ use dioxus_router::prelude::*;
 
 fn prepare(path: impl Into<String>) -> VirtualDom {
     let mut vdom = VirtualDom::new_with_props(App, AppProps { path: path.into() });
-    let _ = vdom.rebuild();
+    vdom.rebuild_in_place();
     return vdom;
 
     #[derive(Routable, Clone)]
@@ -29,18 +29,13 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
                 ParameterFixed { id: u8 },
     }
 
-    #[derive(Debug, Props, PartialEq)]
-    struct AppProps {
-        path: String,
-    }
-
     #[component]
-    fn App(cx: Scope<AppProps>) -> Element {
-        render! {
+    fn App(path: String) -> Element {
+        rsx! {
             h1 { "App" }
             Router::<Route> {
                 config: {
-                    let path = cx.props.path.parse().unwrap();
+                    let path = path.parse().unwrap();
                     move || RouterConfig::default().history(MemoryHistory::with_initial_path(path))
                 }
             }
@@ -48,54 +43,44 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
     }
 
     #[component]
-    fn RootIndex(cx: Scope) -> Element {
-        render! {
-            h2 { "Root Index" }
-        }
+    fn RootIndex() -> Element {
+        rsx! { h2 { "Root Index" } }
     }
 
     #[component]
-    fn Fixed(cx: Scope) -> Element {
-        render! {
+    fn Fixed() -> Element {
+        rsx! {
             h2 { "Fixed" }
             Outlet::<Route> { }
         }
     }
 
     #[component]
-    fn FixedIndex(cx: Scope) -> Element {
-        render! {
-            h3 { "Fixed - Index" }
-        }
+    fn FixedIndex() -> Element {
+        rsx! { h3 { "Fixed - Index" } }
     }
 
     #[component]
-    fn FixedFixed(cx: Scope) -> Element {
-        render! {
-            h3 { "Fixed - Fixed"}
-        }
+    fn FixedFixed() -> Element {
+        rsx! { h3 { "Fixed - Fixed"} }
     }
 
     #[component]
-    fn Parameter(cx: Scope, id: u8) -> Element {
-        render! {
+    fn Parameter(id: u8) -> Element {
+        rsx! {
             h2 { "Parameter {id}" }
             Outlet::<Route> { }
         }
     }
 
     #[component]
-    fn ParameterIndex(cx: Scope, id: u8) -> Element {
-        render! {
-            h3 { "Parameter - Index" }
-        }
+    fn ParameterIndex(id: u8) -> Element {
+        rsx! { h3 { "Parameter - Index" } }
     }
 
     #[component]
-    fn ParameterFixed(cx: Scope, id: u8) -> Element {
-        render! {
-            h3 { "Parameter - Fixed" }
-        }
+    fn ParameterFixed(id: u8) -> Element {
+        rsx! { h3 { "Parameter - Fixed" } }
     }
 }
 

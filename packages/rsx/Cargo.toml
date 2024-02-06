@@ -2,7 +2,7 @@
 name = "dioxus-rsx"
 version = { workspace = true }
 authors = ["Jonathan Kelley", "Evan Almloff"]
-edition = "2018"
+edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Core functionality for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
 repository = "https://github.com/DioxusLabs/dioxus/"
@@ -20,7 +20,7 @@ quote = { version = "1.0" }
 serde = { version = "1.0", features = ["derive"], optional = true }
 internment = { version = "0.7.0", optional = true }
 krates = { version = "0.12.6", optional = true }
-tracing.workspace = true
+tracing = { workspace = true }
 
 [features]
 default = ["html"]

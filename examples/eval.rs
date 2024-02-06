@@ -1,12 +1,12 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let future = use_future(cx, (), |_| async move {
-        let eval = eval(
+fn app() -> Element {
+    let future = use_resource(move || async move {
+        let mut eval = eval(
             r#"
                 dioxus.send("Hi from JS!");
                 let msg = await dioxus.recv();
@@ -22,12 +22,8 @@ fn app(cx: Scope) -> Element {
         res
     });
 
-    match future.value() {
-        Some(v) => cx.render(rsx!(
-            p { "{v}" }
-        )),
-        _ => cx.render(rsx!(
-            p { "hello" }
-        )),
+    match future.value().as_ref() {
+        Some(v) => rsx!( p { "{v}" } ),
+        _ => rsx!( p { "waiting.." } ),
     }
 }
