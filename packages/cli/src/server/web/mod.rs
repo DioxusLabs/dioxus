@@ -289,14 +289,9 @@ async fn setup_router(
                 {
                     let body = Full::from(
                         // TODO: Cache/memoize this.
-                        std::fs::read_to_string(
-                            file_service_config
-                                .crate_dir
-                                .join(file_service_config.out_dir())
-                                .join("index.html"),
-                        )
-                        .ok()
-                        .unwrap(),
+                        std::fs::read_to_string(file_service_config.out_dir().join("index.html"))
+                            .ok()
+                            .unwrap(),
                     )
                     .map_err(|err| match err {})
                     .boxed();
@@ -317,7 +312,7 @@ async fn setup_router(
                 Ok(response)
             },
         )
-        .service(ServeDir::new(config.crate_dir.join(config.out_dir())));
+        .service(ServeDir::new(config.out_dir()));
 
     // Setup websocket
     let mut router = Router::new().route("/_dioxus/ws", get(ws_handler));

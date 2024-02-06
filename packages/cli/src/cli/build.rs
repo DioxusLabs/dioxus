@@ -111,12 +111,7 @@ impl Build {
 
         let temp = gen_page(&crate_config, build_result.assets.as_ref(), false);
 
-        let mut file = std::fs::File::create(
-            crate_config
-                .crate_dir
-                .join(crate_config.dioxus_config.application.out_dir.clone())
-                .join("index.html"),
-        )?;
+        let mut file = std::fs::File::create(crate_config.out_dir().join("index.html"))?;
         file.write_all(temp.as_bytes())?;
 
         // #[cfg(feature = "plugin")]
