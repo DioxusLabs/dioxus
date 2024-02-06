@@ -46,7 +46,6 @@ impl Autoformat {
 
         // Default to formatting the project
         if raw.is_none() && file.is_none() {
-            println!("format project !");
             if let Err(e) = autoformat_project(check, split_line_attributes, do_rustfmt).await {
                 eprintln!("error formatting project: {}", e);
                 exit(1);
@@ -130,8 +129,6 @@ fn format_file(path: impl AsRef<Path>, indent: IndentOptions, do_rustfmt: bool) 
             contents = formatted;
         }
     }
-
-    println!("at {} : {:#?}", path.as_ref().display(), &contents);
 
     let edits = dioxus_autofmt::fmt_file(&contents, indent);
     let len = edits.len();
