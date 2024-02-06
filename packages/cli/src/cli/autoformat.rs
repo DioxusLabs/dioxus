@@ -1,6 +1,6 @@
 use dioxus_autofmt::{IndentOptions, IndentType};
 use rayon::prelude::*;
-use std::{fs, path::Path, process::exit};
+use std::{fs, io, path::Path, process::exit};
 
 use super::*;
 
@@ -119,20 +119,6 @@ fn get_project_files() -> Vec<PathBuf> {
     files
 }
 
-#[allow(dead_code)]
-fn is_target_dir(file: &Path) -> bool {
-    let stripped = if let Ok(cwd) = std::env::current_dir() {
-        file.strip_prefix(cwd).unwrap_or(file)
-    } else {
-        file
-    };
-    if let Some(first) = stripped.components().next() {
-        first.as_os_str() == "target"
-    } else {
-        false
-    }
-}
-
 fn format_file(path: impl AsRef<Path>, indent: IndentOptions, do_rustfmt: bool) -> Result<usize> {
     let mut contents = fs::read_to_string(&path)?;
     let mut if_write = false;
@@ -173,8 +159,6 @@ async fn autoformat_project(
     do_rustfmt: bool,
 ) -> Result<()> {
     let files_to_format = get_project_files();
-
-    dbg!(&files_to_format);
 
     if files_to_format.is_empty() {
         return Ok(());
@@ -251,31 +235,6 @@ fn indentation_for(
         tab_spaces,
         split_line_attributes,
     ))
-}
-
-#[allow(dead_code)]
-fn collect_rs_files(folder: &impl AsRef<Path>, files: &mut Vec<PathBuf>) {
-    if is_target_dir(folder.as_ref()) {
-        return;
-    }
-    let Ok(folder) = folder.as_ref().read_dir() else {
-        return;
-    };
-    // load the gitignore
-    for entry in folder {
-        let Ok(entry) = entry else {
-            continue;
-        };
-        let path = entry.path();
-        if path.is_dir() {
-            collect_rs_files(&path, files);
-        }
-        if let Some(ext) = path.extension() {
-            if ext == "rs" && !is_target_dir(&path) {
-                files.push(path);
-            }
-        }
-    }
 }
 
 #[tokio::test]
