@@ -1,6 +1,6 @@
 use dioxus_autofmt::{IndentOptions, IndentType};
 use rayon::prelude::*;
-use std::{fs, io, path::Path, process::exit};
+use std::{fs, path::Path, process::exit};
 
 use super::*;
 
