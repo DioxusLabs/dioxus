@@ -26,7 +26,7 @@ fs_extra = "1.2.0"
 cargo_toml = "0.18.0"
 futures-util.workspace = true
 notify = { version = "5.0.0-pre.16", features = ["serde"] }
-html_parser  = { workspace = true }
+html_parser = { workspace = true }
 cargo_metadata = "0.18.1"
 tokio = { version = "1.16.1", features = ["fs", "sync", "rt", "macros"] }
 atty = "0.2.14"
@@ -36,6 +36,7 @@ hyper = "0.14.17"
 hyper-rustls = "0.23.2"
 indicatif = "0.17.5"
 subprocess = "0.2.9"
+rayon = "1.8.0"
 
 axum = { version = "0.5.1", features = ["ws", "headers"] }
 axum-server = { version = "0.5.1", features = ["tls-rustls"] }
@@ -84,7 +85,7 @@ dioxus-html = { workspace = true, features = ["hot-reload-context"] }
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-hot-reload = { workspace = true }
 interprocess-docfix = { version = "1.2.2" }
-gitignore = "1.0.8"
+ignore = "0.4.22"
 
 [features]
 default = []

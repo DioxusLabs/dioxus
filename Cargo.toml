@@ -58,23 +58,23 @@ version = "0.4.3"
 [workspace.dependencies]
 dioxus = { path = "packages/dioxus", version = "0.4.0" }
 dioxus-core = { path = "packages/core", version = "0.4.2" }
-dioxus-core-macro = { path = "packages/core-macro", version = "0.4.0"  }
-dioxus-router = { path = "packages/router", version = "0.4.1"  }
+dioxus-core-macro = { path = "packages/core-macro", version = "0.4.0" }
+dioxus-router = { path = "packages/router", version = "0.4.1" }
 dioxus-router-macro = { path = "packages/router-macro", version = "0.4.1" }
-dioxus-html = { path = "packages/html", default-features = false, version = "0.4.0"  }
-dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.4.0"  }
+dioxus-html = { path = "packages/html", default-features = false, version = "0.4.0" }
+dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.4.0" }
 dioxus-hooks = { path = "packages/hooks", version = "0.4.0" }
-dioxus-web = { path = "packages/web", version = "0.4.0"  }
-dioxus-ssr = { path = "packages/ssr", version = "0.4.0"  }
-dioxus-desktop = { path = "packages/desktop", version = "0.4.0"  }
-dioxus-mobile = { path = "packages/mobile", version = "0.4.0"  }
+dioxus-web = { path = "packages/web", version = "0.4.0" }
+dioxus-ssr = { path = "packages/ssr", version = "0.4.0" }
+dioxus-desktop = { path = "packages/desktop", version = "0.4.0" }
+dioxus-mobile = { path = "packages/mobile", version = "0.4.0" }
 dioxus-interpreter-js = { path = "packages/interpreter", version = "0.4.0" }
-fermi = { path = "packages/fermi", version = "0.4.0"  }
-dioxus-liveview = { path = "packages/liveview", version = "0.4.0"  }
-dioxus-autofmt = { path = "packages/autofmt", version = "0.4.0"  }
-dioxus-check = { path = "packages/check", version = "0.4.0"  }
-dioxus-rsx = { path = "packages/rsx", version = "0.4.0"  }
-dioxus-tui = { path = "packages/dioxus-tui", version = "0.4.0"  }
+fermi = { path = "packages/fermi", version = "0.4.0" }
+dioxus-liveview = { path = "packages/liveview", version = "0.4.0" }
+dioxus-autofmt = { path = "packages/autofmt", version = "0.4.0" }
+dioxus-check = { path = "packages/check", version = "0.4.0" }
+dioxus-rsx = { path = "packages/rsx", version = "0.4.0" }
+dioxus-tui = { path = "packages/dioxus-tui", version = "0.4.0" }
 plasmo = { path = "packages/rink", version = "0.4.0" }
 dioxus-native-core = { path = "packages/native-core", version = "0.4.0" }
 dioxus-native-core-macro = { path = "packages/native-core-macro", version = "0.4.0" }
@@ -83,7 +83,7 @@ dioxus-signals = { path = "packages/signals" }
 dioxus-cli-config = { path = "packages/cli-config", version = "0.4.1" }
 generational-box = { path = "packages/generational-box", version = "0.4.3" }
 dioxus-hot-reload = { path = "packages/hot-reload", version = "0.4.0" }
-dioxus-fullstack = { path = "packages/fullstack", version = "0.4.1"  }
+dioxus-fullstack = { path = "packages/fullstack", version = "0.4.1" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.4.1" }
 tracing = "0.1.37"
 tracing-futures = "0.2.5"
@@ -144,4 +144,3 @@ thiserror = { workspace = true }
 manganis = { workspace = true }
 tracing-subscriber = "0.3.17"
 http-range = "0.1.5"
-
