@@ -14,7 +14,7 @@ macro_rules! impl_event {
             #[inline]
             pub fn $name<E: crate::EventReturn<T>, T>(mut _f: impl FnMut(::dioxus_core::Event<$data>) -> E + 'static) -> ::dioxus_core::Attribute {
                 ::dioxus_core::Attribute::new(
-                    stringify!($name),
+                    impl_event!(@name $name $($js_name)?),
 ::dioxus_core::AttributeValue::listener(move |e: ::dioxus_core::Event<crate::PlatformEventData>| {
                         _f(e.map(|e|e.into())).spawn();
                     }),
