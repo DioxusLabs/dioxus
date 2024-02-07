@@ -1,47 +1,56 @@
-use std::{
-    mem::MaybeUninit,
-    ops::{Deref, Index},
-};
+use std::{mem::MaybeUninit, ops::Index, rc::Rc};
+
+use generational_box::AnyStorage;
 
 use crate::MappedSignal;
+
+/// A reference to a value that can be read from.
+#[allow(type_alias_bounds)]
+pub type ReadableRef<T: Readable, O = <T as Readable>::Target> = <T::Storage as AnyStorage>::Ref<O>;
 
 /// A trait for states that can be read from like [`crate::Signal`], [`crate::GlobalSignal`], or [`crate::ReadOnlySignal`]. You may choose to accept this trait as a parameter instead of the concrete type to allow for more flexibility in your API. For example, instead of creating two functions, one that accepts a [`crate::Signal`] and one that accepts a [`crate::GlobalSignal`], you can create one function that accepts a [`Readable`] type.
 pub trait Readable {
     /// The target type of the reference.
     type Target: ?Sized + 'static;
 
-    /// The type of the reference.
-    type Ref<R: ?Sized + 'static>: Deref<Target = R> + 'static;
-
-    /// Map the reference to a new type.
-    fn map_ref<I: ?Sized, U: ?Sized, F: FnOnce(&I) -> &U>(ref_: Self::Ref<I>, f: F)
-        -> Self::Ref<U>;
-
-    /// Try to map the reference to a new type.
-    fn try_map_ref<I: ?Sized, U: ?Sized, F: FnOnce(&I) -> Option<&U>>(
-        ref_: Self::Ref<I>,
-        f: F,
-    ) -> Option<Self::Ref<U>>;
-
-    /// Try to get the current value of the state. If this is a signal, this will subscribe the current scope to the signal. If the value has been dropped, this will panic.
-    fn try_read(&self) -> Result<Self::Ref<Self::Target>, generational_box::BorrowError>;
+    /// The type of the storage this readable uses.
+    type Storage: AnyStorage;
 
     /// Map the readable type to a new type.
-    fn map<O>(self, f: impl Fn(&Self::Target) -> &O + 'static) -> MappedSignal<O, Self>
+    fn map<O>(self, f: impl Fn(&Self::Target) -> &O + 'static) -> MappedSignal<O, Self::Storage>
     where
-        Self: Sized + 'static,
+        Self: Clone + Sized + 'static,
     {
-        MappedSignal::new(self, f)
+        let mapping = Rc::new(f);
+        let try_read = Rc::new({
+            let self_ = self.clone();
+            let mapping = mapping.clone();
+            move || {
+                self_
+                    .try_read()
+                    .map(|ref_| <Self::Storage as AnyStorage>::map(ref_, |r| mapping(r)))
+            }
+        })
+            as Rc<
+                dyn Fn() -> Result<ReadableRef<Self, O>, generational_box::BorrowError> + 'static,
+            >;
+        let peek = Rc::new(move || <Self::Storage as AnyStorage>::map(self.peek(), |r| mapping(r)))
+            as Rc<dyn Fn() -> ReadableRef<Self, O> + 'static>;
+        MappedSignal::new(try_read, peek)
     }
 
     /// Get the current value of the state. If this is a signal, this will subscribe the current scope to the signal. If the value has been dropped, this will panic.
     #[track_caller]
-    fn read(&self) -> Self::Ref<Self::Target> {
+    fn read(&self) -> ReadableRef<Self> {
         self.try_read().unwrap()
     }
 
+    /// Try to get the current value of the state. If this is a signal, this will subscribe the current scope to the signal. If the value has been dropped, this will panic.
+    #[track_caller]
+    fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError>;
+
     /// Get the current value of the state without subscribing to updates. If the value has been dropped, this will panic.
-    fn peek(&self) -> Self::Ref<Self::Target>;
+    fn peek(&self) -> ReadableRef<Self>;
 
     /// Clone the inner value and return it. If the value has been dropped, this will panic.
     #[track_caller]
@@ -66,11 +75,11 @@ pub trait Readable {
 
     /// Index into the inner value and return a reference to the result. If the value has been dropped or the index is invalid, this will panic.
     #[track_caller]
-    fn index<I>(&self, index: I) -> Self::Ref<<Self::Target as std::ops::Index<I>>::Output>
+    fn index<I>(&self, index: I) -> ReadableRef<Self, <Self::Target as std::ops::Index<I>>::Output>
     where
         Self::Target: std::ops::Index<I>,
     {
-        Self::map_ref(self.read(), |v| v.index(index))
+        <Self::Storage as AnyStorage>::map(self.read(), |v| v.index(index))
     }
 
     #[doc(hidden)]
@@ -124,20 +133,20 @@ pub trait ReadableVecExt<T: 'static>: Readable<Target = Vec<T>> {
 
     /// Get the first element of the inner vector.
     #[track_caller]
-    fn first(&self) -> Option<Self::Ref<T>> {
-        Self::try_map_ref(self.read(), |v| v.first())
+    fn first(&self) -> Option<ReadableRef<Self, T>> {
+        <Self::Storage as AnyStorage>::try_map(self.read(), |v| v.first())
     }
 
     /// Get the last element of the inner vector.
     #[track_caller]
-    fn last(&self) -> Option<Self::Ref<T>> {
-        Self::try_map_ref(self.read(), |v| v.last())
+    fn last(&self) -> Option<ReadableRef<Self, T>> {
+        <Self::Storage as AnyStorage>::try_map(self.read(), |v| v.last())
     }
 
     /// Get the element at the given index of the inner vector.
     #[track_caller]
-    fn get(&self, index: usize) -> Option<Self::Ref<T>> {
-        Self::try_map_ref(self.read(), |v| v.get(index))
+    fn get(&self, index: usize) -> Option<ReadableRef<Self, T>> {
+        <Self::Storage as AnyStorage>::try_map(self.read(), |v| v.get(index))
     }
 
     /// Get an iterator over the values of the inner vector.
@@ -160,7 +169,7 @@ pub struct ReadableValueIterator<'a, R> {
 }
 
 impl<'a, T: 'static, R: Readable<Target = Vec<T>>> Iterator for ReadableValueIterator<'a, R> {
-    type Item = R::Ref<T>;
+    type Item = ReadableRef<R, T>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let index = self.index;
@@ -189,8 +198,8 @@ pub trait ReadableOptionExt<T: 'static>: Readable<Target = Option<T>> {
 
     /// Attempts to read the inner value of the Option.
     #[track_caller]
-    fn as_ref(&self) -> Option<Self::Ref<T>> {
-        Self::try_map_ref(self.read(), |v| v.as_ref())
+    fn as_ref(&self) -> Option<ReadableRef<Self, T>> {
+        <Self::Storage as AnyStorage>::try_map(self.read(), |v| v.as_ref())
     }
 }
 

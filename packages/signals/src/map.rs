@@ -1,97 +1,82 @@
 use std::{ops::Deref, rc::Rc};
 
-use crate::read::Readable;
+use crate::{read::Readable, ReadableRef};
 use dioxus_core::prelude::*;
+use generational_box::{AnyStorage, UnsyncStorage};
 
 /// A read only signal that has been mapped to a new type.
-pub struct MappedSignal<O: ?Sized + 'static, R: Readable> {
-    readable: R,
-    mapping: Rc<dyn Fn(&R::Target) -> &O + 'static>,
+pub struct MappedSignal<O: ?Sized + 'static, S: AnyStorage = UnsyncStorage> {
+    try_read: Rc<dyn Fn() -> Result<S::Ref<O>, generational_box::BorrowError> + 'static>,
+    peek: Rc<dyn Fn() -> S::Ref<O> + 'static>,
 }
 
-impl<O: ?Sized, R: Readable + Clone> Clone for MappedSignal<O, R> {
+impl<O: ?Sized, S: AnyStorage> Clone for MappedSignal<O, S> {
     fn clone(&self) -> Self {
         MappedSignal {
-            readable: self.readable.clone(),
-            mapping: self.mapping.clone(),
+            try_read: self.try_read.clone(),
+            peek: self.peek.clone(),
         }
     }
 }
 
-impl<O, R> MappedSignal<O, R>
+impl<O, S> MappedSignal<O, S>
 where
     O: ?Sized,
-    R: Readable + 'static,
+    S: AnyStorage,
 {
     /// Create a new mapped signal.
-    pub(crate) fn new(readable: R, mapping: impl Fn(&R::Target) -> &O + 'static) -> Self {
-        MappedSignal {
-            readable,
-            mapping: Rc::new(mapping),
-        }
+    pub(crate) fn new(
+        try_read: Rc<dyn Fn() -> Result<S::Ref<O>, generational_box::BorrowError> + 'static>,
+        peek: Rc<dyn Fn() -> S::Ref<O> + 'static>,
+    ) -> Self {
+        MappedSignal { try_read, peek }
     }
 }
 
-impl<O, R> Readable for MappedSignal<O, R>
+impl<O, S> Readable for MappedSignal<O, S>
 where
     O: ?Sized,
-    R: Readable,
+    S: AnyStorage,
 {
     type Target = O;
-    type Ref<J: ?Sized + 'static> = R::Ref<J>;
+    type Storage = S;
 
-    fn map_ref<I: ?Sized, U: ?Sized, F: FnOnce(&I) -> &U>(
-        ref_: Self::Ref<I>,
-        f: F,
-    ) -> Self::Ref<U> {
-        R::map_ref(ref_, f)
+    fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
+        (self.try_read)()
     }
 
-    fn try_map_ref<I: ?Sized, U: ?Sized, F: FnOnce(&I) -> Option<&U>>(
-        ref_: Self::Ref<I>,
-        f: F,
-    ) -> Option<Self::Ref<U>> {
-        R::try_map_ref(ref_, f)
-    }
-
-    fn try_read(&self) -> Result<Self::Ref<O>, generational_box::BorrowError> {
-        self.readable
-            .try_read()
-            .map(|ref_| R::map_ref(ref_, |r| (self.mapping)(r)))
-    }
-
-    fn peek(&self) -> Self::Ref<Self::Target> {
-        R::map_ref(self.readable.peek(), |r| (self.mapping)(r))
+    fn peek(&self) -> ReadableRef<Self> {
+        (self.peek)()
     }
 }
 
-impl<O, R> IntoAttributeValue for MappedSignal<O, R>
+impl<O, S> IntoAttributeValue for MappedSignal<O, S>
 where
-    O: Clone + IntoAttributeValue + ?Sized,
-    R: Readable + 'static,
+    O: Clone + IntoAttributeValue,
+    S: AnyStorage,
 {
     fn into_value(self) -> dioxus_core::AttributeValue {
         self.with(|f| f.clone().into_value())
     }
 }
 
-impl<O, R> PartialEq for MappedSignal<O, R>
+impl<O, S> PartialEq for MappedSignal<O, S>
 where
     O: ?Sized,
-    R: PartialEq + Readable + 'static,
+    S: AnyStorage,
 {
     fn eq(&self, other: &Self) -> bool {
-        self.readable == other.readable && std::ptr::eq(&self.mapping, &other.mapping)
+        std::ptr::eq(&self.peek, &other.peek) && std::ptr::eq(&self.try_read, &other.try_read)
     }
 }
 
 /// Allow calling a signal with signal() syntax
 ///
 /// Currently only limited to copy types, though could probably specialize for string/arc/rc
-impl<O, R> Deref for MappedSignal<O, R>
+impl<O, S> Deref for MappedSignal<O, S>
 where
     O: Clone,
-    R: Readable + 'static,
+    S: AnyStorage + 'static,
 {
     type Target = dyn Fn() -> O;
 

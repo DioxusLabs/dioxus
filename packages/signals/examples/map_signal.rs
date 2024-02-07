@@ -1,7 +1,6 @@
 #![allow(non_snake_case)]
 
 use dioxus::prelude::*;
-use dioxus_signals::Signal;
 
 fn main() {
     launch(app);
@@ -34,12 +33,12 @@ fn app() -> Element {
 }
 
 #[component]
-fn Child(count: MappedSignal<i32, Signal<Vec<i32>>>) -> Element {
+fn Child(count: MappedSignal<i32>) -> Element {
     use_memo({
         to_owned![count];
         move || {
             let value = count.read();
-            print!("Child value: {value}");
+            println!("Child value: {value}");
         }
     });
 

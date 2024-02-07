@@ -1,6 +1,6 @@
 use crate::{
     read::Readable, write::Writable, CopyValue, GlobalMemo, GlobalSignal, ReactiveContext,
-    ReadOnlySignal,
+    ReadOnlySignal, ReadableRef,
 };
 use dioxus_core::{
     prelude::{flush_sync, spawn, IntoAttributeValue},
@@ -195,24 +195,10 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
 
 impl<T, S: Storage<SignalData<T>>> Readable for Signal<T, S> {
     type Target = T;
-    type Ref<R: ?Sized + 'static> = S::Ref<R>;
-
-    fn map_ref<I: ?Sized, U: ?Sized, F: FnOnce(&I) -> &U>(
-        ref_: Self::Ref<I>,
-        f: F,
-    ) -> Self::Ref<U> {
-        S::map(ref_, f)
-    }
-
-    fn try_map_ref<I: ?Sized, U: ?Sized, F: FnOnce(&I) -> Option<&U>>(
-        ref_: Self::Ref<I>,
-        f: F,
-    ) -> Option<Self::Ref<U>> {
-        S::try_map(ref_, f)
-    }
+    type Storage = S;
 
     #[track_caller]
-    fn try_read(&self) -> Result<S::Ref<T>, generational_box::BorrowError> {
+    fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
         let inner = self.inner.try_read()?;
 
         let reactive_context = ReactiveContext::current();
@@ -224,7 +210,7 @@ impl<T, S: Storage<SignalData<T>>> Readable for Signal<T, S> {
     /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
     ///
     /// If the signal has been dropped, this will panic.
-    fn peek(&self) -> S::Ref<T> {
+    fn peek(&self) -> ReadableRef<Self> {
         let inner = self.inner.read();
         S::map(inner, |v| &v.value)
     }

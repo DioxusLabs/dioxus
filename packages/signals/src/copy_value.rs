@@ -13,6 +13,7 @@ use dioxus_core::ScopeId;
 
 use generational_box::{GenerationalBox, Owner, Storage};
 
+use crate::ReadableRef;
 use crate::Writable;
 use crate::{ReactiveContext, Readable};
 
@@ -206,27 +207,13 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
 
 impl<T: 'static, S: Storage<T>> Readable for CopyValue<T, S> {
     type Target = T;
-    type Ref<R: ?Sized + 'static> = S::Ref<R>;
+    type Storage = S;
 
-    fn map_ref<I: ?Sized, U: ?Sized, F: FnOnce(&I) -> &U>(
-        ref_: Self::Ref<I>,
-        f: F,
-    ) -> Self::Ref<U> {
-        S::map(ref_, f)
-    }
-
-    fn try_map_ref<I: ?Sized, U: ?Sized, F: FnOnce(&I) -> Option<&U>>(
-        ref_: Self::Ref<I>,
-        f: F,
-    ) -> Option<Self::Ref<U>> {
-        S::try_map(ref_, f)
-    }
-
-    fn try_read(&self) -> Result<S::Ref<T>, generational_box::BorrowError> {
+    fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
         self.value.try_read()
     }
 
-    fn peek(&self) -> Self::Ref<T> {
+    fn peek(&self) -> ReadableRef<Self> {
         self.value.read()
     }
 }

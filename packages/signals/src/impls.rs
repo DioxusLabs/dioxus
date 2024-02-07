@@ -3,7 +3,7 @@ use crate::read::Readable;
 use crate::signal::Signal;
 use crate::write::Writable;
 use crate::{GlobalMemo, GlobalSignal, MappedSignal, ReadOnlySignal, SignalData};
-use generational_box::Storage;
+use generational_box::{AnyStorage, Storage};
 
 use std::{
     fmt::{Debug, Display},
@@ -164,4 +164,4 @@ default_impl!(GlobalSignal);
 
 read_impls!(GlobalMemo: PartialEq);
 
-read_impls!(MappedSignal, S: Readable, S: Readable);
+read_impls!(MappedSignal, S: AnyStorage, S: AnyStorage);
