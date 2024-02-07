@@ -1,40 +1,46 @@
 use std::ops::DerefMut;
+use std::ops::IndexMut;
 
 use crate::read::Readable;
 
 /// A trait for states that can be read from like [`crate::Signal`], or [`crate::GlobalSignal`]. You may choose to accept this trait as a parameter instead of the concrete type to allow for more flexibility in your API. For example, instead of creating two functions, one that accepts a [`crate::Signal`] and one that accepts a [`crate::GlobalSignal`], you can create one function that accepts a [`Writable`] type.
-pub trait Writable<T: 'static>: Readable<T> {
+pub trait Writable: Readable {
     /// The type of the reference.
     type Mut<R: ?Sized + 'static>: DerefMut<Target = R>;
 
     /// Map the reference to a new type.
-    fn map_mut<I, U: ?Sized, F: FnOnce(&mut I) -> &mut U>(ref_: Self::Mut<I>, f: F)
-        -> Self::Mut<U>;
+    fn map_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> &mut U>(
+        ref_: Self::Mut<I>,
+        f: F,
+    ) -> Self::Mut<U>;
 
     /// Try to map the reference to a new type.
-    fn try_map_mut<I, U: ?Sized, F: FnOnce(&mut I) -> Option<&mut U>>(
+    fn try_map_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> Option<&mut U>>(
         ref_: Self::Mut<I>,
         f: F,
     ) -> Option<Self::Mut<U>>;
 
     /// Get a mutable reference to the value. If the value has been dropped, this will panic.
     #[track_caller]
-    fn write(&mut self) -> Self::Mut<T> {
+    fn write(&mut self) -> Self::Mut<Self::Target> {
         self.try_write().unwrap()
     }
 
     /// Try to get a mutable reference to the value. If the value has been dropped, this will panic.
-    fn try_write(&self) -> Result<Self::Mut<T>, generational_box::BorrowMutError>;
+    fn try_write(&self) -> Result<Self::Mut<Self::Target>, generational_box::BorrowMutError>;
 
     /// Run a function with a mutable reference to the value. If the value has been dropped, this will panic.
     #[track_caller]
-    fn with_mut<O>(&mut self, f: impl FnOnce(&mut T) -> O) -> O {
+    fn with_mut<O>(&mut self, f: impl FnOnce(&mut Self::Target) -> O) -> O {
         f(&mut *self.write())
     }
 
     /// Set the value of the signal. This will trigger an update on all subscribers.
     #[track_caller]
-    fn set(&mut self, value: T) {
+    fn set(&mut self, value: Self::Target)
+    where
+        Self::Target: Sized,
+    {
         *self.write() = value;
     }
 
@@ -42,38 +48,41 @@ pub trait Writable<T: 'static>: Readable<T> {
     #[track_caller]
     fn toggle(&mut self)
     where
-        T: std::ops::Not<Output = T> + Clone,
+        Self::Target: std::ops::Not<Output = Self::Target> + Clone,
     {
         self.set(!self.cloned());
     }
 
     /// Index into the inner value and return a reference to the result.
     #[track_caller]
-    fn index_mut<I>(&mut self, index: I) -> Self::Mut<T::Output>
+    fn index_mut<I>(&mut self, index: I) -> Self::Mut<<Self::Target as std::ops::Index<I>>::Output>
     where
-        T: std::ops::IndexMut<I>,
+        Self::Target: std::ops::IndexMut<I>,
     {
         Self::map_mut(self.write(), |v| v.index_mut(index))
     }
 
     /// Takes the value out of the Signal, leaving a Default in its place.
     #[track_caller]
-    fn take(&mut self) -> T
+    fn take(&mut self) -> Self::Target
     where
-        T: Default,
+        Self::Target: Default,
     {
         self.with_mut(|v| std::mem::take(v))
     }
 
     /// Replace the value in the Signal, returning the old value.
     #[track_caller]
-    fn replace(&mut self, value: T) -> T {
+    fn replace(&mut self, value: Self::Target) -> Self::Target
+    where
+        Self::Target: Sized,
+    {
         self.with_mut(|v| std::mem::replace(v, value))
     }
 }
 
 /// An extension trait for Writable<Option<T>> that provides some convenience methods.
-pub trait WritableOptionExt<T: 'static>: Writable<Option<T>> {
+pub trait WritableOptionExt<T: 'static>: Writable<Target = Option<T>> {
     /// Gets the value out of the Option, or inserts the given value if the Option is empty.
     fn get_or_insert(&mut self, default: T) -> Self::Mut<T> {
         self.get_or_insert_with(|| default)
@@ -101,12 +110,12 @@ pub trait WritableOptionExt<T: 'static>: Writable<Option<T>> {
 impl<T, W> WritableOptionExt<T> for W
 where
     T: 'static,
-    W: Writable<Option<T>>,
+    W: Writable<Target = Option<T>>,
 {
 }
 
 /// An extension trait for Writable<Vec<T>> that provides some convenience methods.
-pub trait WritableVecExt<T: 'static>: Writable<Vec<T>> {
+pub trait WritableVecExt<T: 'static>: Writable<Target = Vec<T>> {
     /// Pushes a new value to the end of the vector.
     #[track_caller]
     fn push(&mut self, value: T) {
@@ -194,7 +203,7 @@ pub struct WritableValueIterator<T, R> {
     phantom: std::marker::PhantomData<T>,
 }
 
-impl<T: 'static, R: Writable<Vec<T>>> Iterator for WritableValueIterator<T, R> {
+impl<T: 'static, R: Writable<Target = Vec<T>>> Iterator for WritableValueIterator<T, R> {
     type Item = R::Mut<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -207,6 +216,6 @@ impl<T: 'static, R: Writable<Vec<T>>> Iterator for WritableValueIterator<T, R> {
 impl<T, W> WritableVecExt<T> for W
 where
     T: 'static,
-    W: Writable<Vec<T>>,
+    W: Writable<Target = Vec<T>>,
 {
 }

@@ -189,7 +189,8 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
 
     /// Map the signal to a new type.
     pub fn map<O>(self, f: impl Fn(&T) -> &O + 'static) -> MappedSignal<S::Ref<O>> {
-        MappedSignal::new(self, f)
+        // MappedSignal::new(self, f)
+        todo!()
     }
 
     /// Get the generational id of the signal.
@@ -198,14 +199,18 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     }
 }
 
-impl<T, S: Storage<SignalData<T>>> Readable<T> for Signal<T, S> {
+impl<T, S: Storage<SignalData<T>>> Readable for Signal<T, S> {
+    type Target = T;
     type Ref<R: ?Sized + 'static> = S::Ref<R>;
 
-    fn map_ref<I, U: ?Sized, F: FnOnce(&I) -> &U>(ref_: Self::Ref<I>, f: F) -> Self::Ref<U> {
+    fn map_ref<I: ?Sized, U: ?Sized, F: FnOnce(&I) -> &U>(
+        ref_: Self::Ref<I>,
+        f: F,
+    ) -> Self::Ref<U> {
         S::map(ref_, f)
     }
 
-    fn try_map_ref<I, U: ?Sized, F: FnOnce(&I) -> Option<&U>>(
+    fn try_map_ref<I: ?Sized, U: ?Sized, F: FnOnce(&I) -> Option<&U>>(
         ref_: Self::Ref<I>,
         f: F,
     ) -> Option<Self::Ref<U>> {
@@ -231,17 +236,21 @@ impl<T, S: Storage<SignalData<T>>> Readable<T> for Signal<T, S> {
     }
 }
 
-impl<T: 'static, S: Storage<SignalData<T>>> Writable<T> for Signal<T, S> {
+impl<T: 'static, S: Storage<SignalData<T>>> Writable for Signal<T, S> {
     type Mut<R: ?Sized + 'static> = Write<R, S>;
 
-    fn map_mut<I, U: ?Sized + 'static, F: FnOnce(&mut I) -> &mut U>(
+    fn map_mut<I: ?Sized, U: ?Sized + 'static, F: FnOnce(&mut I) -> &mut U>(
         ref_: Self::Mut<I>,
         f: F,
     ) -> Self::Mut<U> {
         Write::map(ref_, f)
     }
 
-    fn try_map_mut<I: 'static, U: ?Sized + 'static, F: FnOnce(&mut I) -> Option<&mut U>>(
+    fn try_map_mut<
+        I: ?Sized + 'static,
+        U: ?Sized + 'static,
+        F: FnOnce(&mut I) -> Option<&mut U>,
+    >(
         ref_: Self::Mut<I>,
         f: F,
     ) -> Option<Self::Mut<U>> {

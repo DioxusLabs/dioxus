@@ -65,7 +65,8 @@ impl<T: 'static> GlobalSignal<T> {
         &self,
         f: impl Fn(&T) -> &O + 'static,
     ) -> MappedSignal<GenerationalRef<Ref<'static, O>>> {
-        MappedSignal::new(self.signal(), f)
+        // MappedSignal::new(self.signal(), f)
+        todo!()
     }
 
     /// Get the generational id of the signal.
@@ -74,14 +75,18 @@ impl<T: 'static> GlobalSignal<T> {
     }
 }
 
-impl<T: 'static> Readable<T> for GlobalSignal<T> {
+impl<T: 'static> Readable for GlobalSignal<T> {
+    type Target = T;
     type Ref<R: ?Sized + 'static> = generational_box::GenerationalRef<std::cell::Ref<'static, R>>;
 
-    fn map_ref<I, U: ?Sized, F: FnOnce(&I) -> &U>(ref_: Self::Ref<I>, f: F) -> Self::Ref<U> {
+    fn map_ref<I: ?Sized, U: ?Sized, F: FnOnce(&I) -> &U>(
+        ref_: Self::Ref<I>,
+        f: F,
+    ) -> Self::Ref<U> {
         <UnsyncStorage as AnyStorage>::map(ref_, f)
     }
 
-    fn try_map_ref<I, U: ?Sized, F: FnOnce(&I) -> Option<&U>>(
+    fn try_map_ref<I: ?Sized, U: ?Sized, F: FnOnce(&I) -> Option<&U>>(
         ref_: Self::Ref<I>,
         f: F,
     ) -> Option<Self::Ref<U>> {
@@ -99,17 +104,21 @@ impl<T: 'static> Readable<T> for GlobalSignal<T> {
     }
 }
 
-impl<T: 'static> Writable<T> for GlobalSignal<T> {
+impl<T: 'static> Writable for GlobalSignal<T> {
     type Mut<R: ?Sized + 'static> = Write<R, UnsyncStorage>;
 
-    fn map_mut<I, U: ?Sized + 'static, F: FnOnce(&mut I) -> &mut U>(
+    fn map_mut<I: ?Sized, U: ?Sized + 'static, F: FnOnce(&mut I) -> &mut U>(
         ref_: Self::Mut<I>,
         f: F,
     ) -> Self::Mut<U> {
         Write::map(ref_, f)
     }
 
-    fn try_map_mut<I: 'static, U: ?Sized + 'static, F: FnOnce(&mut I) -> Option<&mut U>>(
+    fn try_map_mut<
+        I: ?Sized + 'static,
+        U: ?Sized + 'static,
+        F: FnOnce(&mut I) -> Option<&mut U>,
+    >(
         ref_: Self::Mut<I>,
         f: F,
     ) -> Option<Self::Mut<U>> {
@@ -151,7 +160,7 @@ impl<T: Clone + 'static> Deref for GlobalSignal<T> {
 
         // Then move that value into the closure. We assume that the closure now has a in memory layout of Self.
         let uninit_closure = move || {
-            <GlobalSignal<T> as Readable<T>>::read(unsafe { &*uninit_callable.as_ptr() }).clone()
+            <GlobalSignal<T> as Readable>::read(unsafe { &*uninit_callable.as_ptr() }).clone()
         };
 
         // Check that the size of the closure is the same as the size of Self in case the compiler changed the layout of the closure.

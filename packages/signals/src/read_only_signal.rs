@@ -54,14 +54,18 @@ impl<T: 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
     }
 }
 
-impl<T, S: Storage<SignalData<T>>> Readable<T> for ReadOnlySignal<T, S> {
+impl<T, S: Storage<SignalData<T>>> Readable for ReadOnlySignal<T, S> {
+    type Target = T;
     type Ref<R: ?Sized + 'static> = S::Ref<R>;
 
-    fn map_ref<I, U: ?Sized, F: FnOnce(&I) -> &U>(ref_: Self::Ref<I>, f: F) -> Self::Ref<U> {
+    fn map_ref<I: ?Sized, U: ?Sized, F: FnOnce(&I) -> &U>(
+        ref_: Self::Ref<I>,
+        f: F,
+    ) -> Self::Ref<U> {
         S::map(ref_, f)
     }
 
-    fn try_map_ref<I, U: ?Sized, F: FnOnce(&I) -> Option<&U>>(
+    fn try_map_ref<I: ?Sized, U: ?Sized, F: FnOnce(&I) -> Option<&U>>(
         ref_: Self::Ref<I>,
         f: F,
     ) -> Option<Self::Ref<U>> {

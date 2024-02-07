@@ -1,66 +1,73 @@
-use std::{mem::MaybeUninit, ops::Deref};
+use std::{
+    mem::MaybeUninit,
+    ops::{Deref, Index},
+};
 
 /// A trait for states that can be read from like [`crate::Signal`], [`crate::GlobalSignal`], or [`crate::ReadOnlySignal`]. You may choose to accept this trait as a parameter instead of the concrete type to allow for more flexibility in your API. For example, instead of creating two functions, one that accepts a [`crate::Signal`] and one that accepts a [`crate::GlobalSignal`], you can create one function that accepts a [`Readable`] type.
-pub trait Readable<T: 'static = ()> {
+pub trait Readable {
+    /// The target type of the reference.
+    type Target: ?Sized + 'static;
+
     /// The type of the reference.
     type Ref<R: ?Sized + 'static>: Deref<Target = R>;
 
     /// Map the reference to a new type.
-    fn map_ref<I, U: ?Sized, F: FnOnce(&I) -> &U>(ref_: Self::Ref<I>, f: F) -> Self::Ref<U>;
+    fn map_ref<I: ?Sized, U: ?Sized, F: FnOnce(&I) -> &U>(ref_: Self::Ref<I>, f: F)
+        -> Self::Ref<U>;
 
     /// Try to map the reference to a new type.
-    fn try_map_ref<I, U: ?Sized, F: FnOnce(&I) -> Option<&U>>(
+    fn try_map_ref<I: ?Sized, U: ?Sized, F: FnOnce(&I) -> Option<&U>>(
         ref_: Self::Ref<I>,
         f: F,
     ) -> Option<Self::Ref<U>>;
 
     /// Try to get the current value of the state. If this is a signal, this will subscribe the current scope to the signal. If the value has been dropped, this will panic.
-    fn try_read(&self) -> Result<Self::Ref<T>, generational_box::BorrowError>;
+    fn try_read(&self) -> Result<Self::Ref<Self::Target>, generational_box::BorrowError>;
 
     /// Get the current value of the state. If this is a signal, this will subscribe the current scope to the signal. If the value has been dropped, this will panic.
     #[track_caller]
-    fn read(&self) -> Self::Ref<T> {
+    fn read(&self) -> Self::Ref<Self::Target> {
         self.try_read().unwrap()
     }
 
     /// Get the current value of the state without subscribing to updates. If the value has been dropped, this will panic.
-    fn peek(&self) -> Self::Ref<T>;
+    fn peek(&self) -> Self::Ref<Self::Target>;
 
     /// Clone the inner value and return it. If the value has been dropped, this will panic.
     #[track_caller]
-    fn cloned(&self) -> T
+    fn cloned(&self) -> Self::Target
     where
-        T: Clone,
+        Self::Target: Clone,
     {
         self.read().clone()
     }
 
     /// Run a function with a reference to the value. If the value has been dropped, this will panic.
     #[track_caller]
-    fn with<O>(&self, f: impl FnOnce(&T) -> O) -> O {
+    fn with<O>(&self, f: impl FnOnce(&Self::Target) -> O) -> O {
         f(&*self.read())
     }
 
     /// Run a function with a reference to the value. If the value has been dropped, this will panic.
     #[track_caller]
-    fn with_peek<O>(&self, f: impl FnOnce(&T) -> O) -> O {
+    fn with_peek<O>(&self, f: impl FnOnce(&Self::Target) -> O) -> O {
         f(&*self.peek())
     }
 
     /// Index into the inner value and return a reference to the result. If the value has been dropped or the index is invalid, this will panic.
     #[track_caller]
-    fn index<I>(&self, index: I) -> Self::Ref<T::Output>
+    fn index<I>(&self, index: I) -> Self::Ref<<Self::Target as std::ops::Index<I>>::Output>
     where
-        T: std::ops::Index<I>,
+        Self::Target: std::ops::Index<I>,
     {
         Self::map_ref(self.read(), |v| v.index(index))
     }
 
     #[doc(hidden)]
-    fn deref_impl<'a>(&self) -> &'a dyn Fn() -> T
+    fn deref_impl<'a>(&self) -> &'a dyn Fn() -> Self::Target
     where
         Self: Sized + 'a,
-        T: Clone,
+        Self::Target: Clone,
     {
         // https://github.com/dtolnay/case-studies/tree/master/callable-types
 
@@ -92,7 +99,7 @@ pub trait Readable<T: 'static = ()> {
 }
 
 /// An extension trait for Readable<Vec<T>> that provides some convenience methods.
-pub trait ReadableVecExt<T: 'static>: Readable<Vec<T>> {
+pub trait ReadableVecExt<T: 'static>: Readable<Target = Vec<T>> {
     /// Returns the length of the inner vector.
     #[track_caller]
     fn len(&self) -> usize {
@@ -144,7 +151,7 @@ pub struct ReadableValueIterator<'a, T, R> {
     phantom: std::marker::PhantomData<T>,
 }
 
-impl<'a, T: 'static, R: Readable<Vec<T>>> Iterator for ReadableValueIterator<'a, T, R> {
+impl<'a, T: 'static, R: Readable<Target = Vec<T>>> Iterator for ReadableValueIterator<'a, T, R> {
     type Item = R::Ref<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -157,12 +164,12 @@ impl<'a, T: 'static, R: Readable<Vec<T>>> Iterator for ReadableValueIterator<'a,
 impl<T, R> ReadableVecExt<T> for R
 where
     T: 'static,
-    R: Readable<Vec<T>>,
+    R: Readable<Target = Vec<T>>,
 {
 }
 
 /// An extension trait for Readable<Option<T>> that provides some convenience methods.
-pub trait ReadableOptionExt<T: 'static>: Readable<Option<T>> {
+pub trait ReadableOptionExt<T: 'static>: Readable<Target = Option<T>> {
     /// Unwraps the inner value and clones it.
     #[track_caller]
     fn unwrap(&self) -> T
@@ -182,6 +189,6 @@ pub trait ReadableOptionExt<T: 'static>: Readable<Option<T>> {
 impl<T, R> ReadableOptionExt<T> for R
 where
     T: 'static,
-    R: Readable<Option<T>>,
+    R: Readable<Target = Option<T>>,
 {
 }
