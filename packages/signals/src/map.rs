@@ -1,107 +1,101 @@
+use std::{ops::Deref, rc::Rc};
+
 use crate::read::Readable;
-use crate::CopyValue;
-use crate::Signal;
-use crate::SignalData;
-use dioxus_core::ScopeId;
-use generational_box::AnyStorage;
-use generational_box::Storage;
-use generational_box::UnsyncStorage;
-use std::fmt::Debug;
-use std::fmt::Display;
+use dioxus_core::prelude::*;
 
 /// A read only signal that has been mapped to a new type.
-pub struct MappedSignal<U: ?Sized + 'static, S: AnyStorage = UnsyncStorage> {
-    mapping: CopyValue<Box<dyn Fn() -> S::Ref<U>>>,
+pub struct MappedSignal<O: ?Sized + 'static, R: Readable> {
+    readable: R,
+    mapping: Rc<dyn Fn(&R::Target) -> &O + 'static>,
 }
 
-impl MappedSignal<()> {
-    /// Create a new mapped signal.
-    pub fn new<R, T, S, U>(readable: R, mapping: impl Fn(&T) -> &U + 'static) -> MappedSignal<U, S>
-    where
-        S: Storage<SignalData<T>>,
-        U: ?Sized,
-    {
-        todo!()
-        // MappedSignal {
-        //     mapping: CopyValue::new(Box::new(move || S::map(signal.read(), &mapping))),
-        // }
+impl<O: ?Sized, R: Readable + Clone> Clone for MappedSignal<O, R> {
+    fn clone(&self) -> Self {
+        MappedSignal {
+            readable: self.readable.clone(),
+            mapping: self.mapping.clone(),
+        }
     }
 }
 
-// impl<U: ?Sized> MappedSignal<U> {
-//     /// Get the current value of the signal. This will subscribe the current scope to the signal.
-//     pub fn read(&self) -> U {
-//         (self.mapping.read())()
-//     }
+impl<O, R> MappedSignal<O, R>
+where
+    O: ?Sized,
+    R: Readable + 'static,
+{
+    /// Create a new mapped signal.
+    pub(crate) fn new(readable: R, mapping: impl Fn(&R::Target) -> &O + 'static) -> Self {
+        MappedSignal {
+            readable,
+            mapping: Rc::new(mapping),
+        }
+    }
+}
 
-//     /// Run a closure with a reference to the signal's value.
-//     pub fn with<O>(&self, f: impl FnOnce(U) -> O) -> O {
-//         f(self.read())
-//     }
-// }
+impl<O, R> Readable for MappedSignal<O, R>
+where
+    O: ?Sized,
+    R: Readable,
+{
+    type Target = O;
+    type Ref<J: ?Sized + 'static> = R::Ref<J>;
 
-// impl<U: ?Sized + Clone> MappedSignal<U> {
-//     /// Get the current value of the signal. This will subscribe the current scope to the signal.
-//     pub fn value(&self) -> U {
-//         self.read().clone()
-//     }
-// }
+    fn map_ref<I: ?Sized, U: ?Sized, F: FnOnce(&I) -> &U>(
+        ref_: Self::Ref<I>,
+        f: F,
+    ) -> Self::Ref<U> {
+        R::map_ref(ref_, f)
+    }
 
-// impl<U: ?Sized> PartialEq for MappedSignal<U> {
-//     fn eq(&self, other: &Self) -> bool {
-//         self.mapping == other.mapping
-//     }
-// }
+    fn try_map_ref<I: ?Sized, U: ?Sized, F: FnOnce(&I) -> Option<&U>>(
+        ref_: Self::Ref<I>,
+        f: F,
+    ) -> Option<Self::Ref<U>> {
+        R::try_map_ref(ref_, f)
+    }
 
-// impl<U> std::clone::Clone for MappedSignal<U> {
-//     fn clone(&self) -> Self {
-//         *self
-//     }
-// }
+    fn try_read(&self) -> Result<Self::Ref<O>, generational_box::BorrowError> {
+        self.readable
+            .try_read()
+            .map(|ref_| R::map_ref(ref_, |r| (self.mapping)(r)))
+    }
 
-// impl<U> Copy for MappedSignal<U> {}
+    fn peek(&self) -> Self::Ref<Self::Target> {
+        R::map_ref(self.readable.peek(), |r| (self.mapping)(r))
+    }
+}
 
-// impl<U: Display> Display for MappedSignal<U> {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         self.with(|v| Display::fmt(&v, f))
-//     }
-// }
+impl<O, R> IntoAttributeValue for MappedSignal<O, R>
+where
+    O: Clone + IntoAttributeValue + ?Sized,
+    R: Readable + 'static,
+{
+    fn into_value(self) -> dioxus_core::AttributeValue {
+        self.with(|f| f.clone().into_value())
+    }
+}
 
-// impl<U: Debug> Debug for MappedSignal<U> {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         self.with(|v| Debug::fmt(&v, f))
-//     }
-// }
+impl<O, R> PartialEq for MappedSignal<O, R>
+where
+    O: ?Sized,
+    R: PartialEq + Readable + 'static,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.readable == other.readable && std::ptr::eq(&self.mapping, &other.mapping)
+    }
+}
 
-// impl<T> std::ops::Deref for MappedSignal<T> {
-//     type Target = dyn Fn() -> T;
+/// Allow calling a signal with signal() syntax
+///
+/// Currently only limited to copy types, though could probably specialize for string/arc/rc
+impl<O, R> Deref for MappedSignal<O, R>
+where
+    O: Clone,
+    R: Readable + 'static,
+{
+    type Target = dyn Fn() -> O;
 
-//     fn deref(&self) -> &Self::Target {
-//         // https://github.com/dtolnay/case-studies/tree/master/callable-types
-
-//         // First we create a closure that captures something with the Same in memory layout as Self (MaybeUninit<Self>).
-//         let uninit_callable = std::mem::MaybeUninit::<Self>::uninit();
-//         // Then move that value into the closure. We assume that the closure now has a in memory layout of Self.
-//         let uninit_closure = move || Self::read(unsafe { &*uninit_callable.as_ptr() });
-
-//         // Check that the size of the closure is the same as the size of Self in case the compiler changed the layout of the closure.
-//         let size_of_closure = std::mem::size_of_val(&uninit_closure);
-//         assert_eq!(size_of_closure, std::mem::size_of::<Self>());
-
-//         // Then cast the lifetime of the closure to the lifetime of &self.
-//         fn cast_lifetime<'a, T>(_a: &T, b: &'a T) -> &'a T {
-//             b
-//         }
-//         let reference_to_closure = cast_lifetime(
-//             {
-//                 // The real closure that we will never use.
-//                 &uninit_closure
-//             },
-//             // We transmute self into a reference to the closure. This is safe because we know that the closure has the same memory layout as Self so &Closure == &Self.
-//             unsafe { std::mem::transmute(self) },
-//         );
-
-//         // Cast the closure to a trait object.
-//         reference_to_closure as &Self::Target
-//     }
-// }
+    fn deref(&self) -> &Self::Target {
+        Readable::deref_impl(self)
+    }
+}

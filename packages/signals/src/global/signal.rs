@@ -2,11 +2,11 @@ use crate::read::Readable;
 use crate::write::Writable;
 use crate::Write;
 use dioxus_core::prelude::{IntoAttributeValue, ScopeId};
-use generational_box::{AnyStorage, GenerationalRef, UnsyncStorage};
-use std::{cell::Ref, mem::MaybeUninit, ops::Deref};
+use generational_box::{AnyStorage, UnsyncStorage};
+use std::{mem::MaybeUninit, ops::Deref};
 
 use super::get_global_context;
-use crate::{MappedSignal, Signal};
+use crate::Signal;
 
 /// A signal that can be accessed from anywhere in the application and created in a static
 pub struct GlobalSignal<T> {
@@ -58,15 +58,6 @@ impl<T: 'static> GlobalSignal<T> {
     #[track_caller]
     pub fn with_mut<O>(&self, f: impl FnOnce(&mut T) -> O) -> O {
         self.signal().with_mut(f)
-    }
-
-    /// Map the signal to a new type.
-    pub fn map<O>(
-        &self,
-        f: impl Fn(&T) -> &O + 'static,
-    ) -> MappedSignal<GenerationalRef<Ref<'static, O>>> {
-        // MappedSignal::new(self.signal(), f)
-        todo!()
     }
 
     /// Get the generational id of the signal.

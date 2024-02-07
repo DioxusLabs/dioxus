@@ -3,13 +3,15 @@ use std::{
     ops::{Deref, Index},
 };
 
+use crate::MappedSignal;
+
 /// A trait for states that can be read from like [`crate::Signal`], [`crate::GlobalSignal`], or [`crate::ReadOnlySignal`]. You may choose to accept this trait as a parameter instead of the concrete type to allow for more flexibility in your API. For example, instead of creating two functions, one that accepts a [`crate::Signal`] and one that accepts a [`crate::GlobalSignal`], you can create one function that accepts a [`Readable`] type.
 pub trait Readable {
     /// The target type of the reference.
     type Target: ?Sized + 'static;
 
     /// The type of the reference.
-    type Ref<R: ?Sized + 'static>: Deref<Target = R>;
+    type Ref<R: ?Sized + 'static>: Deref<Target = R> + 'static;
 
     /// Map the reference to a new type.
     fn map_ref<I: ?Sized, U: ?Sized, F: FnOnce(&I) -> &U>(ref_: Self::Ref<I>, f: F)
@@ -23,6 +25,14 @@ pub trait Readable {
 
     /// Try to get the current value of the state. If this is a signal, this will subscribe the current scope to the signal. If the value has been dropped, this will panic.
     fn try_read(&self) -> Result<Self::Ref<Self::Target>, generational_box::BorrowError>;
+
+    /// Map the readable type to a new type.
+    fn map<O>(self, f: impl Fn(&Self::Target) -> &O + 'static) -> MappedSignal<O, Self>
+    where
+        Self: Sized + 'static,
+    {
+        MappedSignal::new(self, f)
+    }
 
     /// Get the current value of the state. If this is a signal, this will subscribe the current scope to the signal. If the value has been dropped, this will panic.
     #[track_caller]
@@ -132,26 +142,24 @@ pub trait ReadableVecExt<T: 'static>: Readable<Target = Vec<T>> {
 
     /// Get an iterator over the values of the inner vector.
     #[track_caller]
-    fn iter(&self) -> ReadableValueIterator<'_, T, Self>
+    fn iter(&self) -> ReadableValueIterator<'_, Self>
     where
         Self: Sized,
     {
         ReadableValueIterator {
             index: 0,
             value: self,
-            phantom: std::marker::PhantomData,
         }
     }
 }
 
 /// An iterator over the values of a `Readable<Vec<T>>`.
-pub struct ReadableValueIterator<'a, T, R> {
+pub struct ReadableValueIterator<'a, R> {
     index: usize,
     value: &'a R,
-    phantom: std::marker::PhantomData<T>,
 }
 
-impl<'a, T: 'static, R: Readable<Target = Vec<T>>> Iterator for ReadableValueIterator<'a, T, R> {
+impl<'a, T: 'static, R: Readable<Target = Vec<T>>> Iterator for ReadableValueIterator<'a, R> {
     type Item = R::Ref<T>;
 
     fn next(&mut self) -> Option<Self::Item> {

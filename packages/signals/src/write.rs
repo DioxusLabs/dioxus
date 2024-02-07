@@ -6,7 +6,7 @@ use crate::read::Readable;
 /// A trait for states that can be read from like [`crate::Signal`], or [`crate::GlobalSignal`]. You may choose to accept this trait as a parameter instead of the concrete type to allow for more flexibility in your API. For example, instead of creating two functions, one that accepts a [`crate::Signal`] and one that accepts a [`crate::GlobalSignal`], you can create one function that accepts a [`Writable`] type.
 pub trait Writable: Readable {
     /// The type of the reference.
-    type Mut<R: ?Sized + 'static>: DerefMut<Target = R>;
+    type Mut<R: ?Sized + 'static>: DerefMut<Target = R> + 'static;
 
     /// Map the reference to a new type.
     fn map_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> &mut U>(
@@ -68,7 +68,7 @@ pub trait Writable: Readable {
     where
         Self::Target: Default,
     {
-        self.with_mut(|v| std::mem::take(v))
+        self.with_mut(std::mem::take)
     }
 
     /// Replace the value in the Signal, returning the old value.
@@ -184,26 +184,24 @@ pub trait WritableVecExt<T: 'static>: Writable<Target = Vec<T>> {
 
     /// Gets an iterator over the values of the vector.
     #[track_caller]
-    fn iter_mut(&self) -> WritableValueIterator<T, Self>
+    fn iter_mut(&self) -> WritableValueIterator<Self>
     where
         Self: Sized + Clone,
     {
         WritableValueIterator {
             index: 0,
             value: self.clone(),
-            phantom: std::marker::PhantomData,
         }
     }
 }
 
 /// An iterator over the values of a `Writable<Vec<T>>`.
-pub struct WritableValueIterator<T, R> {
+pub struct WritableValueIterator<R> {
     index: usize,
     value: R,
-    phantom: std::marker::PhantomData<T>,
 }
 
-impl<T: 'static, R: Writable<Target = Vec<T>>> Iterator for WritableValueIterator<T, R> {
+impl<T: 'static, R: Writable<Target = Vec<T>>> Iterator for WritableValueIterator<R> {
     type Item = R::Mut<T>;
 
     fn next(&mut self) -> Option<Self::Item> {

@@ -1,6 +1,6 @@
 use crate::{
-    read::Readable, write::Writable, CopyValue, GlobalMemo, GlobalSignal, MappedSignal,
-    ReactiveContext, ReadOnlySignal,
+    read::Readable, write::Writable, CopyValue, GlobalMemo, GlobalSignal, ReactiveContext,
+    ReadOnlySignal,
 };
 use dioxus_core::{
     prelude::{flush_sync, spawn, IntoAttributeValue},
@@ -185,12 +185,6 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
             let mut subscribers = inner.subscribers.lock().unwrap();
             subscribers.retain(|reactive_context| reactive_context.mark_dirty())
         }
-    }
-
-    /// Map the signal to a new type.
-    pub fn map<O>(self, f: impl Fn(&T) -> &O + 'static) -> MappedSignal<S::Ref<O>> {
-        // MappedSignal::new(self, f)
-        todo!()
     }
 
     /// Get the generational id of the signal.

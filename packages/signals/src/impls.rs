@@ -2,7 +2,7 @@ use crate::copy_value::CopyValue;
 use crate::read::Readable;
 use crate::signal::Signal;
 use crate::write::Writable;
-use crate::{GlobalMemo, GlobalSignal, ReadOnlySignal, SignalData};
+use crate::{GlobalMemo, GlobalSignal, MappedSignal, ReadOnlySignal, SignalData};
 use generational_box::Storage;
 
 use std::{
@@ -10,7 +10,7 @@ use std::{
     ops::{Add, Div, Mul, Sub},
 };
 
-macro_rules! read_impls {
+macro_rules! default_impl {
     ($ty:ident $(: $extra_bounds:path)? $(, $bound_ty:ident : $bound:path, $vec_bound_ty:ident : $vec_bound:path)?) => {
         $(
             impl<T: Default + 'static, $bound_ty: $bound> Default for $ty<T, $bound_ty> {
@@ -20,7 +20,11 @@ macro_rules! read_impls {
                 }
             }
         )?
+    }
+}
 
+macro_rules! read_impls {
+    ($ty:ident $(: $extra_bounds:path)? $(, $bound_ty:ident : $bound:path, $vec_bound_ty:ident : $vec_bound:path)?) => {
         impl<T: $($extra_bounds + )? Display + 'static $(,$bound_ty: $bound)?> Display for $ty<T $(, $bound_ty)?> {
             #[track_caller]
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -113,6 +117,7 @@ macro_rules! write_impls {
 }
 
 read_impls!(CopyValue, S: Storage<T>, S: Storage<Vec<T>>);
+default_impl!(CopyValue, S: Storage<T>, S: Storage<Vec<T>>);
 write_impls!(CopyValue, Storage<T>, Storage<Vec<T>>);
 
 impl<T: 'static, S: Storage<T>> Clone for CopyValue<T, S> {
@@ -124,6 +129,7 @@ impl<T: 'static, S: Storage<T>> Clone for CopyValue<T, S> {
 impl<T: 'static, S: Storage<T>> Copy for CopyValue<T, S> {}
 
 read_impls!(Signal, S: Storage<SignalData<T>>, S: Storage<SignalData<Vec<T>>>);
+default_impl!(Signal, S: Storage<SignalData<T>>, S: Storage<SignalData<Vec<T>>>);
 write_impls!(Signal, Storage<SignalData<T>>, Storage<SignalData<Vec<T>>>);
 
 impl<T: 'static, S: Storage<SignalData<T>>> Clone for Signal<T, S> {
@@ -139,6 +145,11 @@ read_impls!(
     S: Storage<SignalData<T>>,
     S: Storage<SignalData<Vec<T>>>
 );
+default_impl!(
+    ReadOnlySignal,
+    S: Storage<SignalData<T>>,
+    S: Storage<SignalData<Vec<T>>>
+);
 
 impl<T: 'static, S: Storage<SignalData<T>>> Clone for ReadOnlySignal<T, S> {
     fn clone(&self) -> Self {
@@ -149,5 +160,8 @@ impl<T: 'static, S: Storage<SignalData<T>>> Clone for ReadOnlySignal<T, S> {
 impl<T: 'static, S: Storage<SignalData<T>>> Copy for ReadOnlySignal<T, S> {}
 
 read_impls!(GlobalSignal);
+default_impl!(GlobalSignal);
 
 read_impls!(GlobalMemo: PartialEq);
+
+read_impls!(MappedSignal, S: Readable, S: Readable);
