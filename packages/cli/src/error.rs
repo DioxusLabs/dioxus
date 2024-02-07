@@ -46,9 +46,6 @@ pub enum Error {
 
     #[error(transparent)]
     Other(#[from] anyhow::Error),
-
-    #[error("Child process exited with {0}")]
-    ExitCodeNotZero(i32),
 }
 
 impl From<&str> for Error {

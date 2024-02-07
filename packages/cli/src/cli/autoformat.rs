@@ -147,9 +147,9 @@ fn format_file(path: impl AsRef<Path>, indent: IndentOptions, do_rustfmt: bool) 
 
 /// Read every .rs file accessible when considering the .gitignore and try to format it
 ///
-/// Runs using Tokio for multithreading, so it should be really really fast
+/// Runs using rayon for multithreading, so it should be really really fast
 ///
-/// Doesnhttps://www.rustwiki.org.cn/zh-CN/std/'t do mod-descending, so it will still try to format unreachable files. TODO.
+/// Doesn't do mod-descending, so it will still try to format unreachable files. TODO.
 async fn autoformat_project(
     check: bool,
     split_line_attributes: bool,
