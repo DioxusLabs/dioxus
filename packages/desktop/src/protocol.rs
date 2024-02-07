@@ -105,7 +105,16 @@ pub(super) fn index_request(
 
     // Insert a custom head if provided
     // We look just for the closing head tag. If a user provided a custom index with weird syntax, this might fail
-    if let Some(head) = custom_head {
+    let head = match custom_head {
+        Some(mut head) => {
+            if let Some(assets_head) = assets_head() {
+                head.push_str(&assets_head);
+            }
+            Some(head)
+        }
+        None => assets_head(),
+    };
+    if let Some(head) = head {
         index.insert_str(index.find("</head>").expect("Head element to exist"), &head);
     }
 
@@ -124,46 +133,40 @@ pub(super) fn index_request(
         .ok()
 }
 
-// let assets_head = {
-//         #[cfg(all(
-//             debug_assertions,
-//             any(
-//                 target_os = "windows",
-//                 target_os = "macos",
-//                 target_os = "linux",
-//                 target_os = "dragonfly",
-//                 target_os = "freebsd",
-//                 target_os = "netbsd",
-//                 target_os = "openbsd"
-//             )
-//         ))]
-//         {
-//             None
-//         }
-//         #[cfg(not(all(
-//             debug_assertions,
-//             any(
-//                 target_os = "windows",
-//                 target_os = "macos",
-//                 target_os = "linux",
-//                 target_os = "dragonfly",
-//                 target_os = "freebsd",
-//                 target_os = "netbsd",
-//                 target_os = "openbsd"
-//             )
-//         )))]
-//         {
-//             let head = crate::protocol::get_asset_root_or_default();
-//             let head = head.join("dist/__assets_head.html");
-//             match std::fs::read_to_string(&head) {
-//                 Ok(s) => Some(s),
-//                 Err(err) => {
-//                     tracing::error!("Failed to read {head:?}: {err}");
-//                     None
-//                 }
-//             }
-//         }
-//     };
+fn assets_head() -> Option<String> {
+    #[cfg(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    ))]
+    {
+        let head = crate::protocol::get_asset_root_or_default();
+        let head = head.join("__assets_head.html");
+        match std::fs::read_to_string(&head) {
+            Ok(s) => Some(s),
+            Err(err) => {
+                tracing::error!("Failed to read {head:?}: {err}");
+                None
+            }
+        }
+    }
+    #[cfg(not(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    )))]
+    {
+        None
+    }
+}
 
 /// Handle a request from the webview
 ///

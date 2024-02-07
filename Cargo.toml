@@ -99,11 +99,11 @@ thiserror = "1.0.40"
 prettyplease = { package = "prettier-please", version = "0.2", features = [
     "verbatim",
 ] }
-manganis-cli-support = { git = "https://github.com/DioxusLabs/collect-assets", rev = "e0093a4", features = [
+manganis-cli-support = { git = "https://github.com/DioxusLabs/collect-assets", rev = "f982698", features = [
     "webp",
     "html",
 ] }
-manganis = { git = "https://github.com/DioxusLabs/collect-assets", rev = "e0093a4" }
+manganis = { git = "https://github.com/DioxusLabs/collect-assets", rev = "f982698" }
 
 # This is a "virtual package"
 # It is not meant to be published, but is used so "cargo run --example XYZ" works properly

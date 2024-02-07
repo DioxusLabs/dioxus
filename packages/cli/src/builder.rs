@@ -1,5 +1,5 @@
 use crate::{
-    assets::{asset_manifest, create_assets_head, process_assets, WebAssetConfigDropGuard},
+    assets::{asset_manifest, create_assets_head, process_assets, AssetConfigDropGuard},
     error::{Error, Result},
     tools::Tool,
 };
@@ -87,7 +87,7 @@ pub fn build(
     let out_dir = config.out_dir();
     let asset_dir = config.asset_dir();
 
-    let _guard = WebAssetConfigDropGuard::new();
+    let _guard = AssetConfigDropGuard::new();
     let _manganis_support = ManganisSupportGuard::default();
 
     // start to build the assets
@@ -339,6 +339,7 @@ pub fn build_desktop(
     let ignore_files = build_assets(config)?;
     let _guard = dioxus_cli_config::__private::save_config(config);
     let _manganis_support = ManganisSupportGuard::default();
+    let _guard = AssetConfigDropGuard::new();
 
     let mut cmd = subprocess::Exec::cmd("cargo")
         .set_rust_flags(rust_flags)
@@ -535,7 +536,7 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
 }
 
 pub fn gen_page(config: &CrateConfig, manifest: Option<&AssetManifest>, serve: bool) -> String {
-    let _gaurd = WebAssetConfigDropGuard::new();
+    let _guard = AssetConfigDropGuard::new();
 
     let crate_root = crate_root().unwrap();
     let custom_html_file = crate_root.join("index.html");

@@ -37,9 +37,9 @@ pub(crate) fn process_assets(config: &CrateConfig, manifest: &AssetManifest) -> 
 }
 
 /// A guard that sets up the environment for the web renderer to compile in. This guard sets the location that assets will be served from
-pub(crate) struct WebAssetConfigDropGuard;
+pub(crate) struct AssetConfigDropGuard;
 
-impl WebAssetConfigDropGuard {
+impl AssetConfigDropGuard {
     pub fn new() -> Self {
         // Set up the collect asset config
         manganis_cli_support::Config::default()
@@ -49,7 +49,7 @@ impl WebAssetConfigDropGuard {
     }
 }
 
-impl Drop for WebAssetConfigDropGuard {
+impl Drop for AssetConfigDropGuard {
     fn drop(&mut self) {
         // Reset the config
         manganis_cli_support::Config::default().save();

@@ -1,6 +1,7 @@
+use crate::assets::AssetConfigDropGuard;
 #[cfg(feature = "plugin")]
 use crate::plugin::PluginManager;
-use crate::{assets::WebAssetConfigDropGuard, server::fullstack};
+use crate::server::fullstack;
 use dioxus_cli_config::Platform;
 
 use super::*;
@@ -69,7 +70,7 @@ impl Build {
             Platform::Fullstack => {
                 // Fullstack mode must be built with web configs on the desktop
                 // (server) binary as well as the web binary
-                let _config = WebAssetConfigDropGuard::new();
+                let _config = AssetConfigDropGuard::new();
                 let client_rust_flags = fullstack::client_rust_flags(&self.build);
                 let server_rust_flags = fullstack::server_rust_flags(&self.build);
                 {
