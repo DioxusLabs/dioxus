@@ -74,7 +74,7 @@ fn handle_edits_code() -> String {
         interpreter.replace_range(import_start..import_end, "");
     }
 
-    format!("{interpreter}\nconst config = new InterpreterConfig(false);")
+    format!("{interpreter}\nconst config = new InterpreterConfig(true);")
 }
 
 static DEFAULT_INDEX: &str = include_str!("./index.html");
