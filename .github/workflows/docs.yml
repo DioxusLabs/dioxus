@@ -27,9 +27,6 @@ jobs:
       - name: cargo doc
         run: cargo doc --no-deps --workspace --features dioxus-fullstack/doc
 
-      - name: upload artifacts
-        uses: actions/upload-pages-artifact@v3
-
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4.5.0
         with:
