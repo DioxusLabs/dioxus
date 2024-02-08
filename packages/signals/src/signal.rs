@@ -1,6 +1,6 @@
 use crate::{
-    read::Readable, write::Writable, CopyValue, GlobalMemo, GlobalSignal, MappedSignal,
-    ReactiveContext, ReadOnlySignal,
+    read::Readable, write::Writable, CopyValue, GlobalMemo, GlobalSignal, ReactiveContext,
+    ReadOnlySignal, ReadableRef,
 };
 use dioxus_core::{
     prelude::{flush_sync, spawn, IntoAttributeValue},
@@ -187,33 +187,18 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
         }
     }
 
-    /// Map the signal to a new type.
-    pub fn map<O>(self, f: impl Fn(&T) -> &O + 'static) -> MappedSignal<S::Ref<O>> {
-        MappedSignal::new(self, f)
-    }
-
     /// Get the generational id of the signal.
     pub fn id(&self) -> generational_box::GenerationalBoxId {
         self.inner.id()
     }
 }
 
-impl<T, S: Storage<SignalData<T>>> Readable<T> for Signal<T, S> {
-    type Ref<R: ?Sized + 'static> = S::Ref<R>;
-
-    fn map_ref<I, U: ?Sized, F: FnOnce(&I) -> &U>(ref_: Self::Ref<I>, f: F) -> Self::Ref<U> {
-        S::map(ref_, f)
-    }
-
-    fn try_map_ref<I, U: ?Sized, F: FnOnce(&I) -> Option<&U>>(
-        ref_: Self::Ref<I>,
-        f: F,
-    ) -> Option<Self::Ref<U>> {
-        S::try_map(ref_, f)
-    }
+impl<T, S: Storage<SignalData<T>>> Readable for Signal<T, S> {
+    type Target = T;
+    type Storage = S;
 
     #[track_caller]
-    fn try_read(&self) -> Result<S::Ref<T>, generational_box::BorrowError> {
+    fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
         let inner = self.inner.try_read()?;
 
         let reactive_context = ReactiveContext::current();
@@ -225,23 +210,27 @@ impl<T, S: Storage<SignalData<T>>> Readable<T> for Signal<T, S> {
     /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
     ///
     /// If the signal has been dropped, this will panic.
-    fn peek(&self) -> S::Ref<T> {
+    fn peek(&self) -> ReadableRef<Self> {
         let inner = self.inner.read();
         S::map(inner, |v| &v.value)
     }
 }
 
-impl<T: 'static, S: Storage<SignalData<T>>> Writable<T> for Signal<T, S> {
+impl<T: 'static, S: Storage<SignalData<T>>> Writable for Signal<T, S> {
     type Mut<R: ?Sized + 'static> = Write<R, S>;
 
-    fn map_mut<I, U: ?Sized + 'static, F: FnOnce(&mut I) -> &mut U>(
+    fn map_mut<I: ?Sized, U: ?Sized + 'static, F: FnOnce(&mut I) -> &mut U>(
         ref_: Self::Mut<I>,
         f: F,
     ) -> Self::Mut<U> {
         Write::map(ref_, f)
     }
 
-    fn try_map_mut<I: 'static, U: ?Sized + 'static, F: FnOnce(&mut I) -> Option<&mut U>>(
+    fn try_map_mut<
+        I: ?Sized + 'static,
+        U: ?Sized + 'static,
+        F: FnOnce(&mut I) -> Option<&mut U>,
+    >(
         ref_: Self::Mut<I>,
         f: F,
     ) -> Option<Self::Mut<U>> {

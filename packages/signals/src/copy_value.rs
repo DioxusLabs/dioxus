@@ -13,6 +13,7 @@ use dioxus_core::ScopeId;
 
 use generational_box::{GenerationalBox, Owner, Storage};
 
+use crate::ReadableRef;
 use crate::Writable;
 use crate::{ReactiveContext, Readable};
 
@@ -204,40 +205,30 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
     }
 }
 
-impl<T: 'static, S: Storage<T>> Readable<T> for CopyValue<T, S> {
-    type Ref<R: ?Sized + 'static> = S::Ref<R>;
+impl<T: 'static, S: Storage<T>> Readable for CopyValue<T, S> {
+    type Target = T;
+    type Storage = S;
 
-    fn map_ref<I, U: ?Sized, F: FnOnce(&I) -> &U>(ref_: Self::Ref<I>, f: F) -> Self::Ref<U> {
-        S::map(ref_, f)
-    }
-
-    fn try_map_ref<I, U: ?Sized, F: FnOnce(&I) -> Option<&U>>(
-        ref_: Self::Ref<I>,
-        f: F,
-    ) -> Option<Self::Ref<U>> {
-        S::try_map(ref_, f)
-    }
-
-    fn try_read(&self) -> Result<S::Ref<T>, generational_box::BorrowError> {
+    fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
         self.value.try_read()
     }
 
-    fn peek(&self) -> Self::Ref<T> {
+    fn peek(&self) -> ReadableRef<Self> {
         self.value.read()
     }
 }
 
-impl<T: 'static, S: Storage<T>> Writable<T> for CopyValue<T, S> {
+impl<T: 'static, S: Storage<T>> Writable for CopyValue<T, S> {
     type Mut<R: ?Sized + 'static> = S::Mut<R>;
 
-    fn map_mut<I, U: ?Sized, F: FnOnce(&mut I) -> &mut U>(
+    fn map_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> &mut U>(
         mut_: Self::Mut<I>,
         f: F,
     ) -> Self::Mut<U> {
         S::map_mut(mut_, f)
     }
 
-    fn try_map_mut<I, U: ?Sized, F: FnOnce(&mut I) -> Option<&mut U>>(
+    fn try_map_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> Option<&mut U>>(
         mut_: Self::Mut<I>,
         f: F,
     ) -> Option<Self::Mut<U>> {

@@ -26,7 +26,6 @@ flume = { version = "0.11.0", default-features = false, features = ["async"] }
 
 [dev-dependencies]
 dioxus = { workspace = true }
-# dioxus-desktop = { workspace = true }
 tokio = { version = "1", features = ["full"] }
 tracing-subscriber = "0.3.17"
 simple_logger = "4.2.0"

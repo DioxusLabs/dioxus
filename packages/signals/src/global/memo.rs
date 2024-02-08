@@ -1,6 +1,6 @@
-use crate::read::Readable;
+use crate::{read::Readable, ReadableRef};
 use dioxus_core::prelude::{IntoAttributeValue, ScopeId};
-use generational_box::{AnyStorage, UnsyncStorage};
+use generational_box::UnsyncStorage;
 use std::{mem::MaybeUninit, ops::Deref};
 
 use crate::{ReadOnlySignal, Signal};
@@ -51,27 +51,17 @@ impl<T: PartialEq + 'static> GlobalMemo<T> {
     }
 }
 
-impl<T: PartialEq + 'static> Readable<T> for GlobalMemo<T> {
-    type Ref<R: ?Sized + 'static> = generational_box::GenerationalRef<std::cell::Ref<'static, R>>;
-
-    fn map_ref<I, U: ?Sized, F: FnOnce(&I) -> &U>(ref_: Self::Ref<I>, f: F) -> Self::Ref<U> {
-        <UnsyncStorage as AnyStorage>::map(ref_, f)
-    }
-
-    fn try_map_ref<I, U: ?Sized, F: FnOnce(&I) -> Option<&U>>(
-        ref_: Self::Ref<I>,
-        f: F,
-    ) -> Option<Self::Ref<U>> {
-        <UnsyncStorage as AnyStorage>::try_map(ref_, f)
-    }
+impl<T: PartialEq + 'static> Readable for GlobalMemo<T> {
+    type Target = T;
+    type Storage = UnsyncStorage;
 
     #[track_caller]
-    fn try_read(&self) -> Result<Self::Ref<T>, generational_box::BorrowError> {
+    fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
         self.signal().try_read()
     }
 
     #[track_caller]
-    fn peek(&self) -> Self::Ref<T> {
+    fn peek(&self) -> ReadableRef<Self> {
         self.signal().peek()
     }
 }

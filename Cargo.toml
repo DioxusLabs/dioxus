@@ -127,7 +127,7 @@ reqwest = { version = "0.11.9", features = ["json"], optional = true}
 http-range = {version = "0.1.5", optional = true }
 
 [dev-dependencies]
-dioxus = { workspace = true, features = ["router"]}
+dioxus = { workspace = true, features = ["router"] }
 dioxus-ssr = { workspace = true }
 futures-util = "0.3.21"
 separator = "0.4.1"
