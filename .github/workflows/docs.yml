@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy:
-    name: deploy
+    name: Build & Deploy
     runs-on: ubuntu-latest
     permissions:
       contents: write
