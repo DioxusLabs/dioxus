@@ -33,8 +33,7 @@ pub struct Autoformat {
 }
 
 impl Autoformat {
-    // Todo: autoformat the entire crate
-    pub async fn autoformat(self) -> Result<()> {
+    pub fn autoformat(self) -> Result<()> {
         let Autoformat {
             check,
             raw,
@@ -46,7 +45,7 @@ impl Autoformat {
 
         // Default to formatting the project
         if raw.is_none() && file.is_none() {
-            if let Err(e) = autoformat_project(check, split_line_attributes, do_rustfmt).await {
+            if let Err(e) = autoformat_project(check, split_line_attributes, do_rustfmt) {
                 eprintln!("error formatting project: {}", e);
                 exit(1);
             }
@@ -87,7 +86,7 @@ fn refactor_file(file: String, split_line_attributes: bool, do_rustfmt: bool) ->
     };
 
     if do_rustfmt {
-        s = dioxus_autofmt::rustfmt(&s).ok_or_else(|| Error::ParseError("Syntax Error".into()))?;
+        s = rustfmt(&s)?;
     }
 
     let edits = dioxus_autofmt::fmt_file(&s, indent);
@@ -122,8 +121,8 @@ fn format_file(path: impl AsRef<Path>, indent: IndentOptions, do_rustfmt: bool) 
     let mut contents = fs::read_to_string(&path)?;
     let mut if_write = false;
     if do_rustfmt {
-        let formatted = dioxus_autofmt::rustfmt(&contents)
-            .ok_or_else(|| Error::ParseError("Syntax Error".into()))?;
+        let formatted = rustfmt(&contents)
+            .map_err(|err| Error::ParseError(format!("Syntax Error:\n{}", err)))?;
         if contents != formatted {
             if_write = true;
             contents = formatted;
@@ -150,11 +149,7 @@ fn format_file(path: impl AsRef<Path>, indent: IndentOptions, do_rustfmt: bool) 
 /// Runs using rayon for multithreading, so it should be really really fast
 ///
 /// Doesn't do mod-descending, so it will still try to format unreachable files. TODO.
-async fn autoformat_project(
-    check: bool,
-    split_line_attributes: bool,
-    do_rustfmt: bool,
-) -> Result<()> {
+fn autoformat_project(check: bool, split_line_attributes: bool, do_rustfmt: bool) -> Result<()> {
     let files_to_format = get_project_files();
 
     if files_to_format.is_empty() {
@@ -235,6 +230,23 @@ fn indentation_for(
         },
         tab_spaces,
         split_line_attributes,
+    ))
+}
+
+/// Format rust code using prettyplease
+pub fn rustfmt(input: &str) -> Result<String> {
+    let syntax_tree = syn::parse_file(input).map_err(format_syn_error)?;
+    let output = prettyplease::unparse(&syntax_tree);
+    Ok(output)
+}
+
+fn format_syn_error(err: syn::Error) -> Error {
+    let start = err.span().start();
+    let line = start.line;
+    let column = start.column;
+    Error::ParseError(format!(
+        "Syntax Error in line {} column {}:\n{}",
+        line, column, err
     ))
 }
 

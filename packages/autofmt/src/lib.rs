@@ -240,10 +240,3 @@ pub(crate) fn write_ifmt(input: &IfmtInput, writable: &mut impl Write) -> std::f
     let display = DisplayIfmt(input);
     write!(writable, "{}", display)
 }
-
-/// Call rustfmt to format code, i32 as exitcode
-pub fn rustfmt(input: &str) -> Option<String> {
-    let syntax_tree = syn::parse_file(input).ok()?;
-    let output = prettyplease::unparse(&syntax_tree);
-    Some(output)
-}

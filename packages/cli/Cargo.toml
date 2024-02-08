@@ -75,6 +75,10 @@ toml_edit = "0.21.0"
 # bundling
 tauri-bundler = { version = "=1.4.*", features = ["native-tls-vendored"] }
 
+# formatting
+syn = { version = "2.0" }
+prettyplease = { workspace = true }
+
 manganis-cli-support = { workspace = true, features = ["webp", "html"] }
 
 dioxus-autofmt = { workspace = true }
