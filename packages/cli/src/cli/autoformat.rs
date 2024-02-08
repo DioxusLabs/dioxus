@@ -287,7 +287,7 @@ async fn test_auto_fmt() {
         split_line_attributes: false,
     };
 
-    fmt.autoformat().await.unwrap();
+    fmt.autoformat().unwrap();
 }
 
 /*#[test]
