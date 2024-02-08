@@ -25,7 +25,7 @@ jobs:
 
 
       - name: cargo doc
-        run: cargo doc --no-deps --workspace --features doc
+        run: cargo doc --no-deps --workspace --exclude fullstack
 
       - name: upload artifacts
         uses: actions/upload-pages-artifact@v3
