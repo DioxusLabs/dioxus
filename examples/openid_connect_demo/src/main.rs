@@ -14,8 +14,6 @@ pub(crate) mod views;
 use oidc::{AuthRequestState, AuthTokenState};
 use router::Route;
 
-use dioxus_router::prelude::*;
-
 use crate::{
     constants::{DIOXUS_FRONT_AUTH_REQUEST, DIOXUS_FRONT_AUTH_TOKEN},
     oidc::ClientState,
@@ -30,14 +28,14 @@ pub static DIOXUS_FRONT_ISSUER_URL: &str = env!("DIOXUS_FRONT_ISSUER_URL");
 pub static DIOXUS_FRONT_CLIENT_ID: &str = env!("DIOXUS_FRONT_CLIENT_ID");
 pub static DIOXUS_FRONT_URL: &str = env!("DIOXUS_FRONT_URL");
 
-fn App(cx: Scope) -> Element {
+fn App() -> Element {
     use_init_atom_root(cx);
 
     // Retrieve the value stored in the browser's storage
     let stored_auth_token = LocalStorage::get(DIOXUS_FRONT_AUTH_TOKEN)
         .ok()
         .unwrap_or(AuthTokenState::default());
-    let fermi_auth_token = use_atom_ref(cx, &FERMI_AUTH_TOKEN);
+    let fermi_auth_token = use_atom_ref(&FERMI_AUTH_TOKEN);
     if fermi_auth_token.read().is_none() {
         *fermi_auth_token.write() = Some(stored_auth_token);
     }
@@ -45,11 +43,11 @@ fn App(cx: Scope) -> Element {
     let stored_auth_request = LocalStorage::get(DIOXUS_FRONT_AUTH_REQUEST)
         .ok()
         .unwrap_or(AuthRequestState::default());
-    let fermi_auth_request = use_atom_ref(cx, &FERMI_AUTH_REQUEST);
+    let fermi_auth_request = use_atom_ref(&FERMI_AUTH_REQUEST);
     if fermi_auth_request.read().is_none() {
         *fermi_auth_request.write() = Some(stored_auth_request);
     }
-    render! { Router::<Route> {} }
+    rsx! { Router::<Route> {} }
 }
 
 fn main() {

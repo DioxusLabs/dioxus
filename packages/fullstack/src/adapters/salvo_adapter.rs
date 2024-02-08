@@ -3,20 +3,20 @@
 //! # Example
 //! ```rust
 //! #![allow(non_snake_case)]
-//! use dioxus::prelude::*;
+//! use dioxus_lib::prelude::*;
 //! use dioxus_fullstack::prelude::*;
 //!
 //! fn main() {
 //!     #[cfg(feature = "web")]
 //!     dioxus_web::launch_cfg(app, dioxus_web::Config::new().hydrate(true));
-//!     #[cfg(feature = "ssr")]
+//!     #[cfg(feature = "server")]
 //!     {
 //!         use salvo::prelude::*;
 //!         tokio::runtime::Runtime::new()
 //!             .unwrap()
 //!             .block_on(async move {
 //!                 let router =
-//!                     Router::new().serve_dioxus_application("", ServeConfigBuilder::new(app, ()));
+//!                     Router::new().serve_dioxus_application("", ServerConfig::new(app, ()));
 //!                 Server::new(TcpListener::bind("127.0.0.1:8080"))
 //!                     .serve(router)
 //!                     .await;
@@ -24,10 +24,10 @@
 //!     }
 //! }
 //!
-//! fn app(cx: Scope) -> Element {
-//!     let text = use_state(cx, || "...".to_string());
+//! fn app() -> Element {
+//!     let text = use_signal(|| "...".to_string());
 //!
-//!     cx.render(rsx! {
+//!     rsx! {
 //!         button {
 //!             onclick: move |_| {
 //!                 to_owned![text];
@@ -49,6 +49,7 @@
 //! }
 //! ```
 
+use dioxus_lib::prelude::*;
 use http_body_util::{BodyExt, Limited};
 use hyper::body::Body as HyperBody;
 use hyper::StatusCode;
@@ -186,25 +187,26 @@ pub trait DioxusRouterExt {
     /// # Example
     /// ```rust
     /// #![allow(non_snake_case)]
-    /// use dioxus::prelude::*;
+    /// use dioxus_lib::prelude::*;
     /// use dioxus_fullstack::prelude::*;
     /// use salvo::prelude::*;
     /// use std::{net::TcpListener, sync::Arc};
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let router = Router::new().serve_dioxus_application("", ServeConfigBuilder::new(app, ()));
+    ///     let router = Router::new().serve_dioxus_application("", ServerConfig::new(app, ()));
     ///     Server::new(TcpListener::bind("127.0.0.1:8080"))
     ///         .serve(router)
     ///         .await;
     /// }
     ///
-    /// fn app(cx: Scope) -> Element {todo!()}
+    /// fn app() -> Element {unimplemented!() }
     /// ```
-    fn serve_dioxus_application<P: Clone + serde::Serialize + Send + Sync + 'static>(
+    fn serve_dioxus_application(
         self,
         server_fn_path: &'static str,
-        cfg: impl Into<ServeConfig<P>>,
+        cfg: impl Into<ServeConfig>,
+        virtual_dom_factory: impl Fn() -> VirtualDom + Send + Sync + 'static,
     ) -> Self;
 }
 
@@ -281,10 +283,11 @@ impl DioxusRouterExt for Router {
         self
     }
 
-    fn serve_dioxus_application<P: Clone + serde::Serialize + Send + Sync + 'static>(
+    fn serve_dioxus_application(
         self,
         server_fn_path: &'static str,
-        cfg: impl Into<ServeConfig<P>>,
+        cfg: impl Into<ServeConfig>,
+        virtual_dom_factory: impl Fn() -> VirtualDom + Send + Sync + 'static,
     ) -> Self {
         let cfg = cfg.into();
 
@@ -298,7 +301,7 @@ impl DioxusRouterExt for Router {
         let mut _dioxus_router = Router::with_path("_dioxus");
         _dioxus_router =
             _dioxus_router.push(Router::with_path("hot_reload").handle(HotReloadHandler));
-        #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
+        #[cfg(all(debug_assertions, feature = "hot-reload", feature = "server"))]
         {
             _dioxus_router = _dioxus_router.push(Router::with_path("disconnect").handle(ignore_ws));
         }
@@ -376,19 +379,26 @@ async fn convert_response(response: HyperResponse, res: &mut Response) {
 }
 
 /// A handler that renders a Dioxus application to HTML using server-side rendering.
-pub struct SSRHandler<P: Clone> {
-    cfg: ServeConfig<P>,
+pub struct SSRHandler {
+    config: ServeConfig,
+    virtual_dom: Box<dyn Fn() -> VirtualDom + Send + Sync>,
 }
 
-impl<P: Clone> SSRHandler<P> {
+impl SSRHandler {
     /// Creates a new SSR handler with the given configuration.
-    pub fn new(cfg: ServeConfig<P>) -> Self {
-        Self { cfg }
+    pub fn new(
+        config: ServeConfig,
+        virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            config,
+            virtual_dom: Box::new(virtual_dom),
+        }
     }
 }
 
 #[async_trait]
-impl<P: Clone + serde::Serialize + Send + Sync + 'static> Handler for SSRHandler<P> {
+impl Handler for SSRHandler {
     async fn handle(
         &self,
         req: &mut Request,
@@ -475,11 +485,11 @@ fn handle_error(error: impl Error + Send + Sync, res: &mut Response) {
 }
 
 /// A handler for Dioxus web hot reload websocket. This will send the updated static parts of the RSX to the client when they change.
-#[cfg(not(all(debug_assertions, feature = "hot-reload", feature = "ssr")))]
+#[cfg(not(all(debug_assertions, feature = "hot-reload", feature = "server")))]
 #[derive(Default)]
 pub struct HotReloadHandler;
 
-#[cfg(not(all(debug_assertions, feature = "hot-reload", feature = "ssr")))]
+#[cfg(not(all(debug_assertions, feature = "hot-reload", feature = "server")))]
 #[handler]
 impl HotReloadHandler {
     async fn handle(
@@ -493,11 +503,11 @@ impl HotReloadHandler {
 }
 
 /// A handler for Dioxus web hot reload websocket. This will send the updated static parts of the RSX to the client when they change.
-#[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
+#[cfg(all(debug_assertions, feature = "hot-reload", feature = "server"))]
 #[derive(Default)]
 pub struct HotReloadHandler;
 
-#[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
+#[cfg(all(debug_assertions, feature = "hot-reload", feature = "server"))]
 #[handler]
 impl HotReloadHandler {
     async fn handle(
@@ -551,7 +561,7 @@ impl HotReloadHandler {
     }
 }
 
-#[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
+#[cfg(all(debug_assertions, feature = "hot-reload", feature = "server"))]
 #[handler]
 async fn ignore_ws(req: &mut Request, res: &mut Response) -> Result<(), salvo::http::StatusError> {
     use salvo::websocket::WebSocketUpgrade;

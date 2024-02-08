@@ -13,7 +13,6 @@ on:
       - lib.rs
       - Cargo.toml
       - Makefile.toml
-      - playwright-tests/**
 
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -70,12 +69,13 @@ jobs:
       - uses: davidB/rust-cargo-make@v1
       - uses: browser-actions/setup-firefox@latest
       - uses: jetli/wasm-pack-action@v0.4.0
-      - run: sudo rm -rf /usr/share/dotnet
-      - run: sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-      - run: |
-          df -h
-          sudo rm -rf ${GITHUB_WORKSPACE}/.git
-          df -h
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with: # speed things up a bit
+          large-packages: false
+          docker-images: false
+          swap-storage: false
+
       - run: cargo make tests
 
   fmt:
@@ -112,42 +112,43 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/master' }}
       - run: cargo clippy --workspace --examples --tests -- -D warnings
 
-  miri:
-    if: github.event.pull_request.draft == false
-    name: Miri
-    runs-on: ubuntu-latest
-    env:
-      CARGO_UNSTABLE_SPARSE_REGISTRY: 'true'
-      RUSTFLAGS: -Dwarnings
-      RUST_BACKTRACE: 1
-      MIRIFLAGS: -Zmiri-tag-gc=1
-      # Change to specific Rust release to pin
-      rust_stable: stable
-      rust_nightly: nightly-2023-11-16
-      rust_clippy: 1.70.0
+  # We removed most unsafe that we can, and using nightly doubles our cache size
+  # miri:
+  #   if: github.event.pull_request.draft == false
+  #   name: Miri
+  #   runs-on: ubuntu-latest
+  #   env:
+  #     CARGO_UNSTABLE_SPARSE_REGISTRY: 'true'
+  #     RUSTFLAGS: -Dwarnings
+  #     RUST_BACKTRACE: 1
+  #     MIRIFLAGS: -Zmiri-tag-gc=1
+  #     # Change to specific Rust release to pin
+  #     rust_stable: stable
+  #     rust_nightly: nightly-2023-11-16
+  #     rust_clippy: 1.70.0
 
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ilammy/setup-nasm@v1
-      - name: Install Rust ${{ env.rust_nightly }}
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ env.rust_nightly }}
-          components: miri
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/master' }}
-      - name: miri
-        # Many of tests in tokio/tests and doctests use #[tokio::test] or
-        # #[tokio::main] that calls epoll_create1 that Miri does not support.
-        # run: cargo miri test --features full --lib --no-fail-fast
-        run: |
-          cargo miri test --package dioxus-core -- --exact --nocapture
-          cargo miri test --package dioxus-native-core --test miri_native  -- --exact --nocapture
-        env:
-          MIRIFLAGS: -Zmiri-disable-isolation -Zmiri-strict-provenance -Zmiri-retag-fields
-          PROPTEST_CASES: 10
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: ilammy/setup-nasm@v1
+  #     - name: Install Rust ${{ env.rust_nightly }}
+  #       uses: dtolnay/rust-toolchain@master
+  #       with:
+  #         toolchain: ${{ env.rust_nightly }}
+  #         components: miri
+  #     - uses: Swatinem/rust-cache@v2
+  #       with:
+  #         cache-all-crates: "true"
+  #         save-if: ${{ github.ref == 'refs/heads/master' }}
+  #     - name: miri
+  #       # Many of tests in tokio/tests and doctests use #[tokio::test] or
+  #       # #[tokio::main] that calls epoll_create1 that Miri does not support.
+  #       # run: cargo miri test --features full --lib --no-fail-fast
+  #       run: |
+  #         cargo miri test --package dioxus-core -- --exact --nocapture
+  #         cargo miri test --package dioxus-native-core --test miri_native  -- --exact --nocapture
+  #       env:
+  #         MIRIFLAGS: -Zmiri-disable-isolation -Zmiri-strict-provenance -Zmiri-retag-fields
+  #         PROPTEST_CASES: 10
 
   playwright:
     if: github.event.pull_request.draft == false
@@ -160,6 +161,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 16
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with: # speed things up a bit
+          large-packages: false
+          docker-images: false
+          swap-storage: false
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -172,19 +179,19 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-        working-directory: ./playwright-tests
+        working-directory: ./packages/playwright-tests
 
       - name: Install Playwright
         run: npm install -D @playwright/test
-        working-directory: ./playwright-tests
+        working-directory: ./packages/playwright-tests
 
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
-        working-directory: ./playwright-tests
+        working-directory: ./packages/playwright-tests
 
       - name: Run Playwright tests
         run: npx playwright test
-        working-directory: ./playwright-tests
+        working-directory: ./packages/playwright-tests
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -205,7 +212,7 @@ jobs:
           - {
               target: x86_64-pc-windows-msvc,
               os: windows-latest,
-              toolchain: "1.70.0",
+              toolchain: "1.75.0",
               cross: false,
               command: "test",
               args: "--all --tests",
@@ -213,7 +220,7 @@ jobs:
           - {
               target: x86_64-apple-darwin,
               os: macos-latest,
-              toolchain: "1.70.0",
+              toolchain: "1.75.0",
               cross: false,
               command: "test",
               args: "--all --tests",
@@ -221,7 +228,7 @@ jobs:
           - {
               target: aarch64-apple-ios,
               os: macos-latest,
-              toolchain: "1.70.0",
+              toolchain: "1.75.0",
               cross: false,
               command: "build",
               args: "--package dioxus-mobile",
@@ -229,7 +236,7 @@ jobs:
           - {
               target: aarch64-linux-android,
               os: ubuntu-latest,
-              toolchain: "1.70.0",
+              toolchain: "1.75.0",
               cross: true,
               command: "build",
               args: "--package dioxus-mobile",
@@ -249,6 +256,14 @@ jobs:
         if: ${{ matrix.platform.cross == true }}
 
         uses: taiki-e/install-action@cross
+
+      - name: Free Disk Space (Ubuntu)
+        if: ${{ matrix.platform.os == 'ubuntu-latest' }}
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with: # speed things up a bit
+          large-packages: false
+          docker-images: false
+          swap-storage: false
 
       - uses: Swatinem/rust-cache@v2
         with:

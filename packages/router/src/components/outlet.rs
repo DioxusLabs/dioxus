@@ -1,5 +1,5 @@
 use crate::prelude::{outlet::OutletContext, *};
-use dioxus::prelude::*;
+use dioxus_lib::prelude::*;
 
 /// An outlet for the current content.
 ///
@@ -30,8 +30,8 @@ use dioxus::prelude::*;
 /// }
 ///
 /// #[component]
-/// fn Index(cx: Scope) -> Element {
-///     render! {
+/// fn Index() -> Element {
+///     rsx! {
 ///         div {
 ///             "Index"
 ///         }
@@ -39,16 +39,16 @@ use dioxus::prelude::*;
 /// }
 ///
 /// #[component]
-/// fn Wrapper(cx: Scope) -> Element {
-///     render! {
+/// fn Wrapper() -> Element {
+///     rsx! {
 ///         h1 { "App" }
 ///         Outlet::<Route> {} // The content of child routes will be rendered here
 ///     }
 /// }
 ///
 /// #[component]
-/// fn Child(cx: Scope) -> Element {
-///     render! {
+/// fn Child() -> Element {
+///     rsx! {
 ///         p {
 ///             "Child"
 ///         }
@@ -56,8 +56,8 @@ use dioxus::prelude::*;
 /// }
 ///
 /// # #[component]
-/// # fn App(cx: Scope) -> Element {
-/// #     render! {
+/// # fn App() -> Element {
+/// #     rsx! {
 /// #         Router::<Route> {
 /// #             config: || RouterConfig::default().history(MemoryHistory::with_initial_path(Route::Child {}))
 /// #         }
@@ -68,6 +68,6 @@ use dioxus::prelude::*;
 /// # let _ = vdom.rebuild();
 /// # assert_eq!(dioxus_ssr::render(&vdom), "<h1>App</h1><p>Child</p>");
 /// ```
-pub fn Outlet<R: Routable + Clone>(cx: Scope) -> Element {
-    OutletContext::<R>::render(cx)
+pub fn Outlet<R: Routable + Clone>() -> Element {
+    OutletContext::<R>::render()
 }

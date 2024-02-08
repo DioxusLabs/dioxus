@@ -1,21 +1,21 @@
-// use dioxus::core::Mutation::*;
+// use dioxus::dioxus_core::Mutation::*;
 use dioxus::prelude::*;
 
 #[test]
 fn multiroot() {
-    let mut dom = VirtualDom::new(|cx| {
-        cx.render(rsx! {
+    let mut dom = VirtualDom::new(|| {
+        rsx! {
             div { "Hello a" }
             div { "Hello b" }
             div { "Hello c" }
-        })
+        }
     });
 
     // note: we dont test template edits anymore
-    let _templates = dom.rebuild().santize().templates;
+    let _templates = dom.rebuild_to_vec().santize().templates;
 
     // assert_eq!(
-    //     dom.rebuild().santize().templates,
+    //     dom.rebuild_to_vec().santize().templates,
     //     [
     //         CreateElement { name: "div" },
     //         CreateStaticText { value: "Hello a" },

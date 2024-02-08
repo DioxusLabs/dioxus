@@ -2,10 +2,12 @@
 resolver = "2"
 members = [
     "packages/dioxus",
+    "packages/dioxus-lib",
     "packages/core",
     "packages/cli",
     "packages/cli-config",
     "packages/core-macro",
+    "packages/config-macro",
     "packages/router-macro",
     "packages/extension",
     "packages/router",
@@ -17,13 +19,12 @@ members = [
     "packages/desktop",
     "packages/mobile",
     "packages/interpreter",
-    "packages/fermi",
     "packages/liveview",
     "packages/autofmt",
     "packages/check",
     "packages/rsx",
     "packages/dioxus-tui",
-    "packages/rink",
+    "packages/plasmo",
     "packages/native-core",
     "packages/native-core-macro",
     "packages/rsx-rosetta",
@@ -42,14 +43,13 @@ members = [
     # Full project examples
     "examples/tailwind",
     "examples/PWA-example",
-    "examples/query_segments_demo",
-    "examples/openid_connect_demo",
+    # "examples/openid_connect_demo",
     # Playwright tests
-    "playwright-tests/liveview",
-    "playwright-tests/web",
-    "playwright-tests/fullstack",
+    "packages/playwright-tests/liveview",
+    "packages/playwright-tests/web",
+    "packages/playwright-tests/fullstack",
 ]
-exclude = ["examples/mobile_demo"]
+exclude = ["examples/mobile_demo", "examples/openid_connect_demo",]
 
 [workspace.package]
 version = "0.4.3"
@@ -57,25 +57,26 @@ version = "0.4.3"
 # dependencies that are shared across packages
 [workspace.dependencies]
 dioxus = { path = "packages/dioxus", version = "0.4.0" }
+dioxus-lib = { path = "packages/dioxus-lib", version = "0.4.0" }
 dioxus-core = { path = "packages/core", version = "0.4.2" }
 dioxus-core-macro = { path = "packages/core-macro", version = "0.4.0" }
-dioxus-router = { path = "packages/router", version = "0.4.1" }
+dioxus-config-macro = { path = "packages/config-macro", version = "0.4.0" }
+dioxus-router = { path = "packages/router", version = "0.4.1"  }
 dioxus-router-macro = { path = "packages/router-macro", version = "0.4.1" }
-dioxus-html = { path = "packages/html", default-features = false, version = "0.4.0" }
-dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.4.0" }
+dioxus-html = { path = "packages/html", version = "0.4.0"  }
+dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.4.0"  }
 dioxus-hooks = { path = "packages/hooks", version = "0.4.0" }
 dioxus-web = { path = "packages/web", version = "0.4.0" }
-dioxus-ssr = { path = "packages/ssr", version = "0.4.0" }
+dioxus-ssr = { path = "packages/ssr", version = "0.4.0", default-features = false }
 dioxus-desktop = { path = "packages/desktop", version = "0.4.0" }
-dioxus-mobile = { path = "packages/mobile", version = "0.4.0" }
+dioxus-mobile = { path = "packages/mobile", version = "0.4.0"  }
 dioxus-interpreter-js = { path = "packages/interpreter", version = "0.4.0" }
-fermi = { path = "packages/fermi", version = "0.4.0" }
-dioxus-liveview = { path = "packages/liveview", version = "0.4.0" }
-dioxus-autofmt = { path = "packages/autofmt", version = "0.4.0" }
-dioxus-check = { path = "packages/check", version = "0.4.0" }
-dioxus-rsx = { path = "packages/rsx", version = "0.4.0" }
-dioxus-tui = { path = "packages/dioxus-tui", version = "0.4.0" }
-plasmo = { path = "packages/rink", version = "0.4.0" }
+dioxus-liveview = { path = "packages/liveview", version = "0.4.0"  }
+dioxus-autofmt = { path = "packages/autofmt", version = "0.4.0"  }
+dioxus-check = { path = "packages/check", version = "0.4.0"  }
+dioxus-rsx = { path = "packages/rsx", version = "0.4.0"  }
+dioxus-tui = { path = "packages/dioxus-tui", version = "0.4.0"  }
+plasmo = { path = "packages/plasmo", version = "0.4.0" }
 dioxus-native-core = { path = "packages/native-core", version = "0.4.0" }
 dioxus-native-core-macro = { path = "packages/native-core-macro", version = "0.4.0" }
 rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.4.0" }
@@ -98,11 +99,11 @@ thiserror = "1.0.40"
 prettyplease = { package = "prettier-please", version = "0.2", features = [
     "verbatim",
 ] }
-manganis-cli-support = { git = "https://github.com/DioxusLabs/collect-assets", rev = "e0093a4", features = [
+manganis-cli-support = { git = "https://github.com/DioxusLabs/collect-assets", rev = "f982698", features = [
     "webp",
     "html",
 ] }
-manganis = { git = "https://github.com/DioxusLabs/collect-assets", rev = "e0093a4" }
+manganis = { git = "https://github.com/DioxusLabs/collect-assets", rev = "f982698" }
 
 # This is a "virtual package"
 # It is not meant to be published, but is used so "cargo run --example XYZ" works properly
@@ -120,27 +121,53 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 rust-version = "1.60.0"
 publish = false
 
+[dependencies]
+manganis = { workspace = true, optional = true}
+reqwest = { version = "0.11.9", features = ["json"], optional = true}
+http-range = {version = "0.1.5", optional = true }
+
 [dev-dependencies]
-dioxus = { workspace = true }
-dioxus-desktop = { workspace = true, features = ["transparent"] }
+dioxus = { workspace = true, features = ["router"] }
 dioxus-ssr = { workspace = true }
-dioxus-router = { workspace = true }
-dioxus-signals = { workspace = true }
-fermi = { workspace = true }
 futures-util = "0.3.21"
-log = "0.4.14"
-num-format = "0.4.0"
 separator = "0.4.1"
 serde = { version = "1.0.136", features = ["derive"] }
-im-rc = "15.0.0"
-anyhow = "1.0.53"
 serde_json = "1.0.79"
 rand = { version = "0.8.4", features = ["small_rng"] }
+form_urlencoded = "1.2.0"
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+getrandom = { version = "0.2.12", features = ["js"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tokio = { version = "1.16.1", features = ["full"] }
-reqwest = { version = "0.11.9", features = ["json"] }
-env_logger = "0.10.0"
-simple_logger = "4.0.0"
-thiserror = { workspace = true }
-manganis = { workspace = true }
-tracing-subscriber = "0.3.17"
-http-range = "0.1.5"
+
+# To make most examples faster to compile, we split out assets and http-related stuff
+# This trims off like 270 dependencies, leading to a significant speedup in compilation time
+[features]
+liveview = ["dioxus/liveview"]
+fullstack = ["dioxus/fullstack"]
+axum = ["dioxus/axum"]
+salvo = ["dioxus/salvo"]
+rocket = ["dioxus/rocket"]
+server = ["dioxus/axum"]
+default = ["dioxus/desktop"]
+web = ["dioxus/web"]
+collect-assets = ["manganis"]
+http = ["reqwest", "http-range"]
+
+[[example]]
+name = "login_form"
+required-features = ["http"]
+
+[[example]]
+name = "dog_app"
+required-features = ["http"]
+
+[[example]]
+name = "video_stream"
+required-features = ["http"]
+
+[[example]]
+name = "suspense"
+required-features = ["http"]

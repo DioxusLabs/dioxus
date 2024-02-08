@@ -392,7 +392,12 @@ impl CrateConfig {
                 None => manifest
                     .bin
                     .iter()
-                    .find(|b| b.name == manifest.package.as_ref().map(|pkg| pkg.name.clone()))
+                    .find(|b| {
+                        #[allow(clippy::useless_asref)]
+                        let matching_bin =
+                            b.name == manifest.package.as_ref().map(|pkg| pkg.name.clone());
+                        matching_bin
+                    })
                     .or(manifest
                         .bin
                         .iter()
@@ -446,6 +451,22 @@ impl CrateConfig {
     /// `Dioxus.toml`).
     pub fn out_dir(&self) -> PathBuf {
         self.crate_dir.join(&self.dioxus_config.application.out_dir)
+    }
+
+    /// Compose an out directory for the fullstack platform. See `out_dir()`
+    /// method.
+    pub fn fullstack_out_dir(&self) -> PathBuf {
+        self.crate_dir.join(".dioxus")
+    }
+
+    /// Compose a target directory for the server (fullstack-only?).
+    pub fn server_target_dir(&self) -> PathBuf {
+        self.fullstack_out_dir().join("ssr")
+    }
+
+    /// Compose a target directory for the client (fullstack-only?).
+    pub fn client_target_dir(&self) -> PathBuf {
+        self.fullstack_out_dir().join("web")
     }
 
     pub fn as_example(&mut self, example_name: String) -> &mut Self {

@@ -73,9 +73,7 @@ impl Serve {
     ) -> anyhow::Result<()> {
         let serve_html = gen_page(crate_config, manifest, true);
 
-        let dist_path = crate_config
-            .crate_dir
-            .join(crate_config.dioxus_config.application.out_dir.clone());
+        let dist_path = crate_config.out_dir();
         if !dist_path.is_dir() {
             create_dir_all(&dist_path)?;
         }

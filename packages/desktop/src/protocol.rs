@@ -1,11 +1,82 @@
 use crate::{assets::*, edits::EditQueue};
+use dioxus_interpreter_js::binary_protocol::SLEDGEHAMMER_JS;
 use std::path::{Path, PathBuf};
 use wry::{
-    http::{status::StatusCode, Request, Response, Uri},
+    http::{status::StatusCode, Request, Response},
     RequestAsyncResponder, Result,
 };
 
-static MINIFIED: &str = include_str!("./minified.js");
+fn handle_edits_code() -> String {
+    const EDITS_PATH: &str = {
+        #[cfg(any(target_os = "android", target_os = "windows"))]
+        {
+            "http://dioxus.index.html/edits"
+        }
+        #[cfg(not(any(target_os = "android", target_os = "windows")))]
+        {
+            "dioxus://index.html/edits"
+        }
+    };
+
+    let prevent_file_upload = r#"// Prevent file inputs from opening the file dialog on click
+    let inputs = document.querySelectorAll("input");
+    for (let input of inputs) {
+      if (!input.getAttribute("data-dioxus-file-listener")) {
+        // prevent file inputs from opening the file dialog on click
+        const type = input.getAttribute("type");
+        if (type === "file") {
+          input.setAttribute("data-dioxus-file-listener", true);
+          input.addEventListener("click", (event) => {
+            let target = event.target;
+            let target_id = find_real_id(target);
+            if (target_id !== null) {
+              const send = (event_name) => {
+                const message = window.interpreter.serializeIpcMessage("file_diolog", { accept: target.getAttribute("accept"), directory: target.getAttribute("webkitdirectory") === "true", multiple: target.hasAttribute("multiple"), target: parseInt(target_id), bubbles: event_bubbles(event_name), event: event_name });
+                window.ipc.postMessage(message);
+              };
+              send("change&input");
+            }
+            event.preventDefault();
+          });
+        }
+      }
+    }"#;
+    let polling_request = format!(
+        r#"// Poll for requests
+    window.interpreter.wait_for_request = (headless) => {{
+      fetch(new Request("{EDITS_PATH}"))
+          .then(response => {{
+              response.arrayBuffer()
+                  .then(bytes => {{
+                      // In headless mode, the requestAnimationFrame callback is never called, so we need to run the bytes directly
+                      if (headless) {{
+                        run_from_bytes(bytes);
+                      }}
+                      else {{
+                        requestAnimationFrame(() => {{
+                          run_from_bytes(bytes);
+                        }});
+                      }}
+                      window.interpreter.wait_for_request(headless);
+                  }});
+          }})
+    }}"#
+    );
+    let mut interpreter = SLEDGEHAMMER_JS
+        .replace("/*POST_HANDLE_EDITS*/", prevent_file_upload)
+        .replace("export", "")
+        + &polling_request;
+    while let Some(import_start) = interpreter.find("import") {
+        let import_end = interpreter[import_start..]
+            .find(|c| c == ';' || c == '\n')
+            .map(|i| i + import_start)
+            .unwrap_or_else(|| interpreter.len());
+        interpreter.replace_range(import_start..import_end, "");
+    }
+
+    format!("{interpreter}\nconst config = new InterpreterConfig(true);")
+}
+
 static DEFAULT_INDEX: &str = include_str!("./index.html");
 
 /// Build the index.html file we use for bootstrapping a new app
@@ -34,7 +105,16 @@ pub(super) fn index_request(
 
     // Insert a custom head if provided
     // We look just for the closing head tag. If a user provided a custom index with weird syntax, this might fail
-    if let Some(head) = custom_head {
+    let head = match custom_head {
+        Some(mut head) => {
+            if let Some(assets_head) = assets_head() {
+                head.push_str(&assets_head);
+            }
+            Some(head)
+        }
+        None => assets_head(),
+    };
+    if let Some(head) = head {
         index.insert_str(index.find("</head>").expect("Head element to exist"), &head);
     }
 
@@ -53,13 +133,48 @@ pub(super) fn index_request(
         .ok()
 }
 
+fn assets_head() -> Option<String> {
+    #[cfg(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    ))]
+    {
+        let head = crate::protocol::get_asset_root_or_default();
+        let head = head.join("__assets_head.html");
+        match std::fs::read_to_string(&head) {
+            Ok(s) => Some(s),
+            Err(err) => {
+                tracing::error!("Failed to read {head:?}: {err}");
+                None
+            }
+        }
+    }
+    #[cfg(not(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    )))]
+    {
+        None
+    }
+}
+
 /// Handle a request from the webview
 ///
 /// - Tries to stream edits if they're requested.
 /// - If that doesn't match, tries a user provided asset handler
 /// - If that doesn't match, tries to serve a file from the filesystem
 pub(super) fn desktop_handler(
-    mut request: Request<Vec<u8>>,
+    request: Request<Vec<u8>>,
     asset_handlers: AssetHandlerRegistry,
     edit_queue: &EditQueue,
     responder: RequestAsyncResponder,
@@ -77,19 +192,12 @@ pub(super) fn desktop_handler(
             .as_ref(),
     );
 
-    let Some(name) = path.parent() else {
-        return tracing::error!("Asset request has no root {path:?}");
-    };
+    if path.parent().is_none() {
+        return tracing::error!("Asset request has no parent {path:?}");
+    }
 
-    if let Some(name) = name.to_str() {
+    if let Some(name) = path.iter().next().unwrap().to_str() {
         if asset_handlers.has_handler(name) {
-            // Trim the leading path from the URI
-            //
-            // I hope this is reliable!
-            //
-            // so a request for /assets/logos/logo.png?query=123 will become /logos/logo.png?query=123
-            strip_uri_prefix(&mut request, name);
-
             return asset_handlers.handle_request(name, request, responder);
         }
     }
@@ -121,26 +229,6 @@ fn serve_from_fs(path: PathBuf) -> Result<Response<Vec<u8>>> {
         .body(std::fs::read(asset)?)?)
 }
 
-fn strip_uri_prefix(request: &mut Request<Vec<u8>>, name: &str) {
-    // trim the leading path
-    if let Some(path) = request.uri().path_and_query() {
-        let new_path = path
-            .path()
-            .trim_start_matches('/')
-            .strip_prefix(name)
-            .expect("expected path to have prefix");
-
-        let new_uri = Uri::builder()
-            .scheme(request.uri().scheme_str().unwrap_or("http"))
-            .path_and_query(format!("{}{}", new_path, path.query().unwrap_or("")))
-            .authority("index.html")
-            .build()
-            .expect("failed to build new URI");
-
-        *request.uri_mut() = new_uri;
-    }
-}
-
 /// Construct the inline script that boots up the page and bridges the webview with rust code.
 ///
 /// The arguments here:
@@ -148,10 +236,11 @@ fn strip_uri_prefix(request: &mut Request<Vec<u8>>, name: &str) {
 /// - headless: is this page being loaded but invisible? Important because not all windows are visible and the
 ///             interpreter can't connect until the window is ready.
 fn module_loader(root_id: &str, headless: bool) -> String {
+    let js = handle_edits_code();
     format!(
         r#"
 <script type="module">
-    {MINIFIED}
+    {js}
     // Wait for the page to load
     window.onload = function() {{
         let rootname = "{root_id}";

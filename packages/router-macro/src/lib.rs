@@ -162,7 +162,7 @@ mod segment;
 ///
 /// # `#[layout(component)]`
 ///
-/// The `#[layout]` attribute is used to define a layout. It takes 1 parameters:
+/// The `#[layout]` attribute is used to define a layout. It takes 1 parameter:
 /// - `component`: The component to render when the route is matched. If not specified, the name of the variant is used
 ///
 /// The layout component allows you to wrap all children of the layout in a component. The child routes are rendered in the Outlet of the layout component. The layout component must take all dynamic parameters of the nests it is nested in.
@@ -213,6 +213,7 @@ pub fn routable(input: TokenStream) -> TokenStream {
     let parse_impl = route_enum.parse_impl();
     let display_impl = route_enum.impl_display();
     let routable_impl = route_enum.routable_impl();
+    let component_impl = route_enum.component_impl();
 
     (quote! {
         #error_type
@@ -220,6 +221,8 @@ pub fn routable(input: TokenStream) -> TokenStream {
         #display_impl
 
         #routable_impl
+
+        #component_impl
 
         #parse_impl
     })
@@ -589,11 +592,29 @@ impl RouteEnum {
                     #(#site_map,)*
                 ];
 
-                fn render<'a>(&self, cx: &'a dioxus::prelude::ScopeState, level: usize) -> dioxus::prelude::Element<'a> {
+                fn render(&self, level: usize) -> ::dioxus::prelude::Element {
                     let myself = self.clone();
                     match (level, myself) {
                         #(#matches)*
                         _ => None
+                    }
+                }
+            }
+        }
+    }
+
+    fn component_impl(&self) -> TokenStream2 {
+        let name = &self.name;
+        let props = quote! { ::std::rc::Rc<::std::cell::Cell<dioxus_router::prelude::RouterConfig<#name>>> };
+
+        quote! {
+            impl dioxus_core::ComponentFunction<#props> for #name {
+                fn rebuild(&self, props: #props) -> dioxus_core::Element {
+                    let initial_route = self.clone();
+                    rsx! {
+                        dioxus_router::prelude::Router::<#name> {
+                            config: move || props.take().initial_route(initial_route)
+                        }
                     }
                 }
             }

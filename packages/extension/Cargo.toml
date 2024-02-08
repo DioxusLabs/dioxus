@@ -7,10 +7,10 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-wasm-bindgen.workspace = true
-dioxus-autofmt.workspace = true
-rsx-rosetta.workspace = true
-html_parser.workspace = true
+wasm-bindgen = { workspace = true }
+dioxus-autofmt = { workspace = true }
+rsx-rosetta = { workspace = true }
+html_parser = { workspace = true }
 
 
 [lib]

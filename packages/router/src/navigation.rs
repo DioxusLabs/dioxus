@@ -19,8 +19,8 @@ pub enum NavigationTarget<R> {
     /// # use dioxus_router::prelude::*;
     /// # use dioxus_router::navigation::NavigationTarget;
     /// # #[component]
-    /// # fn Index(cx: Scope) -> Element {
-    /// #     todo!()
+    /// # fn Index() -> Element {
+    /// #     unreachable!()
     /// # }
     /// #[derive(Clone, Routable, PartialEq, Debug)]
     /// enum Route {
@@ -39,8 +39,8 @@ pub enum NavigationTarget<R> {
     /// # use dioxus_router::prelude::*;
     /// # use dioxus_router::navigation::NavigationTarget;
     /// # #[component]
-    /// # fn Index(cx: Scope) -> Element {
-    /// #     todo!()
+    /// # fn Index() -> Element {
+    /// #     unreachable!()
     /// # }
     /// #[derive(Clone, Routable, PartialEq, Debug)]
     /// enum Route {

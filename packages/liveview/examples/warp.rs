@@ -1,14 +1,14 @@
 use dioxus::prelude::*;
-use dioxus_liveview::adapters::warp_adapter::warp_socket;
+use dioxus_liveview::warp_adapter::warp_socket;
 use dioxus_liveview::LiveViewPool;
 use std::net::SocketAddr;
 use warp::ws::Ws;
 use warp::Filter;
 
-fn app(cx: Scope) -> Element {
-    let mut num = use_state(cx, || 0);
+fn app() -> Element {
+    let mut num = use_signal(|| 0);
 
-    cx.render(rsx! {
+    rsx! {
         div {
             "hello warp! {num}"
             button {
@@ -16,7 +16,7 @@ fn app(cx: Scope) -> Element {
                 "Increment"
             }
         }
-    })
+    }
 }
 
 #[tokio::main]

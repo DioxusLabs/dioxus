@@ -161,7 +161,7 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
             // This will cause the local socket listener to fail to open
             // We check if the file socket is already open from an old session and then delete it
             if hot_reload_socket_path.exists() {
-                let _ = std::fs::remove_file(hot_reload_socket_path);
+                let _ = std::fs::remove_file(hot_reload_socket_path.clone());
             }
         }
 

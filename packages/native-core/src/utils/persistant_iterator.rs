@@ -201,8 +201,8 @@ fn traverse() {
     use crate::prelude::*;
     use dioxus::prelude::*;
     #[allow(non_snake_case)]
-    fn Base(cx: Scope) -> Element {
-        render!(
+    fn Base() -> Element {
+        rsx!(
             div{
                 div{
                     "hello"
@@ -216,13 +216,12 @@ fn traverse() {
     }
 
     let mut vdom = VirtualDom::new(Base);
-    let mutations = vdom.rebuild();
 
     let mut rdom: RealDom = RealDom::new([]);
 
     let mut iter = PersistantElementIter::create(&mut rdom);
     let mut dioxus_state = DioxusState::create(&mut rdom);
-    dioxus_state.apply_mutations(&mut rdom, mutations);
+    vdom.rebuild(&mut dioxus_state.create_mutation_writer(&mut rdom));
 
     let div_tag = "div".to_string();
     assert!(matches!(
@@ -299,13 +298,13 @@ fn persist_removes() {
     use crate::prelude::*;
     use dioxus::prelude::*;
     #[allow(non_snake_case)]
-    fn Base(cx: Scope) -> Element {
-        let children = match cx.generation() % 2 {
+    fn Base() -> Element {
+        let children = match generation() % 2 {
             0 => 3,
             1 => 2,
             _ => unreachable!(),
         };
-        render!(
+        rsx!(
             div {
                 for i in 0..children {
                     p { key: "{i}", "{i}" }
@@ -317,14 +316,13 @@ fn persist_removes() {
 
     let mut rdom: RealDom = RealDom::new([]);
 
-    let build = vdom.rebuild();
-    println!("{build:#?}");
     // this will end on the node that is removed
     let mut iter1 = PersistantElementIter::create(&mut rdom);
     // this will end on the after node that is removed
     let mut iter2 = PersistantElementIter::create(&mut rdom);
     let mut dioxus_state = DioxusState::create(&mut rdom);
-    dioxus_state.apply_mutations(&mut rdom, build);
+
+    vdom.rebuild(&mut dioxus_state.create_mutation_writer(&mut rdom));
 
     // root
     iter1.next(&rdom).id();
@@ -350,9 +348,7 @@ fn persist_removes() {
     iter2.next(&rdom).id();
 
     vdom.mark_dirty(ScopeId::ROOT);
-    let update = vdom.render_immediate();
-    println!("{update:#?}");
-    dioxus_state.apply_mutations(&mut rdom, update);
+    vdom.render_immediate(&mut dioxus_state.create_mutation_writer(&mut rdom));
 
     let root_tag = "Root".to_string();
     let idx = iter1.next(&rdom).id();
@@ -375,13 +371,13 @@ fn persist_instertions_before() {
     use crate::prelude::*;
     use dioxus::prelude::*;
     #[allow(non_snake_case)]
-    fn Base(cx: Scope) -> Element {
-        let children = match cx.generation() % 2 {
+    fn Base() -> Element {
+        let children = match generation() % 2 {
             0 => 3,
             1 => 2,
             _ => unreachable!(),
         };
-        render!(
+        rsx!(
             div {
                 for i in 0..children {
                     p { key: "{i}", "{i}" }
@@ -394,8 +390,7 @@ fn persist_instertions_before() {
     let mut rdom: RealDom = RealDom::new([]);
     let mut dioxus_state = DioxusState::create(&mut rdom);
 
-    let build = vdom.rebuild();
-    dioxus_state.apply_mutations(&mut rdom, build);
+    vdom.rebuild(&mut dioxus_state.create_mutation_writer(&mut rdom));
 
     let mut iter = PersistantElementIter::create(&mut rdom);
     // div
@@ -410,8 +405,7 @@ fn persist_instertions_before() {
     iter.next(&rdom).id();
 
     vdom.mark_dirty(ScopeId::ROOT);
-    let update = vdom.render_immediate();
-    dioxus_state.apply_mutations(&mut rdom, update);
+    vdom.render_immediate(&mut dioxus_state.create_mutation_writer(&mut rdom));
 
     let p_tag = "div".to_string();
     let idx = iter.next(&rdom).id();
@@ -428,13 +422,13 @@ fn persist_instertions_after() {
     use crate::prelude::*;
     use dioxus::prelude::*;
     #[allow(non_snake_case)]
-    fn Base(cx: Scope) -> Element {
-        let children = match cx.generation() % 2 {
+    fn Base() -> Element {
+        let children = match generation() % 2 {
             0 => 3,
             1 => 2,
             _ => unreachable!(),
         };
-        render!(
+        rsx!(
             div{
                 for i in 0..children {
                     p { key: "{i}", "{i}" }
@@ -448,8 +442,8 @@ fn persist_instertions_after() {
     let mut iter = PersistantElementIter::create(&mut rdom);
     let mut dioxus_state = DioxusState::create(&mut rdom);
 
-    let build = vdom.rebuild();
-    dioxus_state.apply_mutations(&mut rdom, build);
+    let mut writer = dioxus_state.create_mutation_writer(&mut rdom);
+    vdom.rebuild(&mut writer);
 
     // div
     iter.next(&rdom).id();
@@ -462,8 +456,8 @@ fn persist_instertions_after() {
     // "world"
     iter.next(&rdom).id();
 
-    let update = vdom.rebuild();
-    dioxus_state.apply_mutations(&mut rdom, update);
+    let mut writer = dioxus_state.create_mutation_writer(&mut rdom);
+    vdom.rebuild(&mut writer);
 
     let p_tag = "p".to_string();
     let idx = iter.next(&rdom).id();

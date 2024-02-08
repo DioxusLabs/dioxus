@@ -2,7 +2,7 @@
 name = "dioxus-html"
 version = { workspace = true }
 authors = ["Jonathan Kelley"]
-edition = "2018"
+edition = "2021"
 description = "HTML Element pack for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
@@ -13,6 +13,7 @@ keywords = ["dom", "ui", "gui", "react"]
 dioxus-core = { workspace = true }
 dioxus-rsx = { workspace = true, features = ["hot_reload"], optional = true }
 dioxus-html-internal-macro = { workspace = true }
+generational-box = { workspace = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_repr = { version = "0.1", optional = true }
 wasm-bindgen = { workspace = true, optional = true }
@@ -23,7 +24,7 @@ async-trait = "0.1.58"
 serde-value = { version = "0.7.0", optional = true }
 tokio = { workspace = true, features = ["fs", "io-util"], optional = true }
 rfd = { version = "0.12", optional = true }
-async-channel = "1.8.0"
+futures-channel = { workspace = true }
 serde_json = { version = "1", optional = true }
 
 [dependencies.web-sys]

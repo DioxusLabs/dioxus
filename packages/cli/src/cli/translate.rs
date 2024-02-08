@@ -71,7 +71,7 @@ fn write_callbody_with_icon_section(mut callbody: CallBody) -> String {
 }
 
 fn write_component_body(raw: String) -> String {
-    let mut out = String::from("fn component(cx: Scope) -> Element {\n    cx.render(rsx! {");
+    let mut out = String::from("fn component() -> Element {\n    rsx! {");
     indent_and_write(&raw, 1, &mut out);
     out.push_str("    })\n}");
     out
@@ -84,7 +84,7 @@ fn write_svg_section(out: &mut String, svgs: Vec<BodyNode>) {
         let raw = dioxus_autofmt::write_block_out(CallBody { roots: vec![icon] }).unwrap();
         out.push_str("\n\n    pub fn icon_");
         out.push_str(&idx.to_string());
-        out.push_str("(cx: Scope) -> Element {\n        cx.render(rsx! {");
+        out.push_str("() -> Element {\n        rsx! {");
         indent_and_write(&raw, 2, out);
         out.push_str("        })\n    }");
     }

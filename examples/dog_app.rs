@@ -2,57 +2,49 @@ use dioxus::prelude::*;
 use std::collections::HashMap;
 
 fn main() {
-    dioxus_desktop::launch(|cx| render!(AppRoot {}));
+    launch(app);
 }
 
-#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
-struct ListBreeds {
-    message: HashMap<String, Vec<String>>,
-}
-
-#[component]
-fn AppRoot(cx: Scope<'_>) -> Element {
-    let breed = use_state(cx, || "deerhound".to_string());
-
-    let breeds = use_future!(cx, || async move {
-        reqwest::get("https://dog.ceo/api/breeds/list/all")
+fn app() -> Element {
+    let mut breed = use_signal(|| "deerhound".to_string());
+    let breed_list = use_resource(move || async move {
+        let list = reqwest::get("https://dog.ceo/api/breeds/list/all")
             .await
             .unwrap()
             .json::<ListBreeds>()
-            .await
-    });
+            .await;
 
-    match breeds.value()? {
-        Ok(breed_list) => cx.render(rsx! {
-            div { height: "500px",
-                h1 { "Select a dog breed!" }
-                div { display: "flex",
-                    ul { flex: "50%",
-                        for cur_breed in breed_list.message.keys().take(10) {
-                            li { key: "{cur_breed}",
-                                button {
-                                    onclick: move |_| breed.set(cur_breed.clone()),
-                                    "{cur_breed}"
-                                }
-                            }
-                        }
+        let Ok(breeds) = list else {
+            return rsx! { "error fetching breeds" };
+        };
+
+        rsx! {
+            for cur_breed in breeds.message.keys().take(10).cloned() {
+                li { key: "{cur_breed}",
+                    button { onclick: move |_| breed.set(cur_breed.clone()),
+                        "{cur_breed}"
                     }
-                    div { flex: "50%", BreedPic { breed: breed.to_string() } }
                 }
             }
-        }),
-        Err(_e) => cx.render(rsx! { div { "Error fetching breeds" } }),
+        }
+    });
+
+    let Some(breed_list) = breed_list() else {
+        return rsx! { "loading breeds..." };
+    };
+
+    rsx! {
+        h1 { "Select a dog breed!" }
+        div { height: "500px", display: "flex",
+            ul { flex: "50%", {breed_list} }
+            div { flex: "50%", BreedPic { breed } }
+        }
     }
 }
 
-#[derive(serde::Deserialize, Debug)]
-struct DogApi {
-    message: String,
-}
-
 #[component]
-fn BreedPic(cx: Scope, breed: String) -> Element {
-    let fut = use_future!(cx, |breed| async move {
+fn BreedPic(breed: Signal<String>) -> Element {
+    let mut fut = use_resource(move || async move {
         reqwest::get(format!("https://dog.ceo/api/breed/{breed}/images/random"))
             .await
             .unwrap()
@@ -60,23 +52,22 @@ fn BreedPic(cx: Scope, breed: String) -> Element {
             .await
     });
 
-    match fut.value()? {
-        Ok(resp) => render! {
-            div {
-                button {
-                    onclick: move |_| {
-                        println!("clicked");
-                        fut.restart()
-                    },
-                    "Click to fetch another doggo"
-                }
-                img {
-                    src: "{resp.message}",
-                    max_width: "500px",
-                    max_height: "500px",
-                }
-            }
+    match fut.read().as_ref() {
+        Some(Ok(resp)) => rsx! {
+            button { onclick: move |_| fut.restart(), "Click to fetch another doggo" }
+            img { max_width: "500px", max_height: "500px", src: "{resp.message}" }
         },
-        Err(_) => render! { div { "loading dogs failed" } },
+        Some(Err(_)) => rsx! { "loading image failed" },
+        None => rsx! { "loading image..." },
     }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+struct ListBreeds {
+    message: HashMap<String, Vec<String>>,
+}
+
+#[derive(serde::Deserialize, Debug)]
+struct DogApi {
+    message: String,
 }

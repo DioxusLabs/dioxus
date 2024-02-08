@@ -40,7 +40,7 @@ use syn::{
 /// #[server(ReadPosts, "/api")]
 /// pub async fn read_posts(how_many: u8, query: String) -> Result<Vec<Post>, ServerFnError> {
 ///   // do some work on the server to access the database
-///   todo!()
+/// #   unimplemented!()
 /// }
 /// ```
 ///
@@ -98,9 +98,9 @@ pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
         }
     };
 
-    let server_fn_path: syn::Path = syn::parse_quote!(::dioxus_fullstack::prelude::server_fn);
+    let server_fn_path: syn::Path = syn::parse_quote!(::dioxus::fullstack::prelude::server_fn);
     let trait_obj_wrapper: syn::Type =
-        syn::parse_quote!(::dioxus_fullstack::prelude::ServerFnTraitObj);
+        syn::parse_quote!(::dioxus::fullstack::prelude::ServerFnTraitObj);
     let mut args: ServerFnArgs = match syn::parse(args) {
         Ok(args) => args,
         Err(e) => return e.to_compile_error().into(),
@@ -123,9 +123,9 @@ pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
         Err(e) => e.to_compile_error().into(),
         Ok(tokens) => quote::quote! {
             #tokens
-            #[cfg(feature = "ssr")]
+            #[cfg(feature = "server")]
             #server_fn_path::inventory::submit! {
-                ::dioxus_fullstack::prelude::ServerFnMiddleware {
+                ::dioxus::fullstack::prelude::ServerFnMiddleware {
                     prefix: #struct_name::PREFIX,
                     url: #struct_name::URL,
                     middleware: || vec![

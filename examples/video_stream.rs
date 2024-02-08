@@ -1,7 +1,7 @@
+use dioxus::desktop::wry::http;
+use dioxus::desktop::wry::http::Response;
+use dioxus::desktop::{use_asset_handler, AssetRequest};
 use dioxus::prelude::*;
-use dioxus_desktop::wry::http;
-use dioxus_desktop::wry::http::Response;
-use dioxus_desktop::{use_asset_handler, AssetRequest};
 use http::{header::*, response::Builder as ResponseBuilder, status::StatusCode};
 use std::{io::SeekFrom, path::PathBuf};
 use tokio::io::AsyncReadExt;
@@ -26,11 +26,11 @@ fn main() {
                 }
             });
     }
-    dioxus_desktop::launch(app);
+    launch_desktop(app);
 }
 
-fn app(cx: Scope) -> Element {
-    use_asset_handler(cx, "videos", move |request, responder| {
+fn app() -> Element {
+    use_asset_handler("videos", move |request, responder| {
         // Using dioxus::spawn works, but is slower than a dedicated thread
         tokio::task::spawn(async move {
             let video_file = PathBuf::from(VIDEO_PATH);
@@ -43,7 +43,7 @@ fn app(cx: Scope) -> Element {
         });
     });
 
-    render! {
+    rsx! {
         div {
             video {
                 src: "/videos/test_video.mp4",

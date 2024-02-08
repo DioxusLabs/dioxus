@@ -14,19 +14,46 @@ rust-version = "1.65.0"
 dioxus-core = { workspace = true }
 dioxus-html = { workspace = true, optional = true }
 dioxus-core-macro = { workspace = true, optional = true }
+dioxus-config-macro = { workspace = true, optional = true }
 dioxus-hooks = { workspace = true, optional = true }
-dioxus-rsx = { workspace = true, optional = true }
+dioxus-signals = { workspace = true, optional = true }
+dioxus-router = { workspace = true, optional = true }
+dioxus-web = { workspace = true, optional = true }
+dioxus-mobile = { workspace = true, optional = true }
+dioxus-desktop = { workspace = true, optional = true }
+dioxus-fullstack = { workspace = true, optional = true }
+dioxus-liveview = { workspace = true, optional = true }
+dioxus-ssr ={ workspace = true, optional = true }
+dioxus-tui = { workspace = true, optional = true }
+
+serde = { version = "1.0.136", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 dioxus-hot-reload = { workspace = true, optional = true }
 
 [features]
-default = ["macro", "hooks", "html", "hot-reload"]
-macro = ["dioxus-core-macro", "dioxus-rsx"]
+default = ["macro", "html", "hot-reload", "signals", "hooks", "launch"]
+signals = ["dioxus-signals"]
+macro = ["dioxus-core-macro"]
 html = ["dioxus-html"]
 hooks = ["dioxus-hooks"]
 hot-reload = ["dioxus-hot-reload"]
 
+launch = ["dioxus-config-macro"]
+router = ["dioxus-router"]
+
+# Platforms
+fullstack = ["dioxus-fullstack", "dioxus-config-macro/fullstack", "serde", "dioxus-router?/fullstack"]
+desktop = ["dioxus-desktop", "dioxus-fullstack?/desktop", "dioxus-config-macro/desktop"]
+mobile = ["dioxus-mobile", "dioxus-fullstack?/mobile", "dioxus-config-macro/mobile"]
+web = ["dioxus-web", "dioxus-fullstack?/web", "dioxus-config-macro/web", "dioxus-router?/web"]
+ssr = ["dioxus-ssr", "dioxus-router?/ssr", "dioxus-config-macro/ssr"]
+liveview = ["dioxus-liveview", "dioxus-config-macro/liveview", "dioxus-router?/liveview"]
+axum = ["dioxus-fullstack?/axum", "ssr", "dioxus-liveview?/axum"]
+salvo = ["dioxus-fullstack?/salvo", "ssr", "dioxus-liveview?/salvo"]
+warp = ["dioxus-fullstack?/warp", "ssr", "dioxus-liveview?/warp"]
+rocket = ["dioxus-liveview?/rocket"]
+tui = ["dioxus-tui", "dioxus-config-macro/tui"]
 
 [dev-dependencies]
 futures-util = { workspace = true }

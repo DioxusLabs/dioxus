@@ -3,26 +3,27 @@
 use std::rc::Rc;
 
 use dioxus::prelude::*;
+use dioxus_core::NoOpMutations;
 
 /// This test checks that we should release all memory used by the virtualdom when it exits.
 ///
 /// When miri runs, it'll let us know if we leaked or aliased.
 #[test]
 fn test_memory_leak() {
-    fn app(cx: Scope) -> Element {
-        let val = cx.generation();
+    fn app() -> Element {
+        let val = generation();
 
-        cx.spawn(async {});
+        spawn(async {});
 
         if val == 2 || val == 4 {
-            return render!({});
+            return rsx!({});
         }
 
-        let name = cx.use_hook(|| String::from("numbers: "));
+        let mut name = use_hook(|| String::from("numbers: "));
 
         name.push_str("123 ");
 
-        cx.render(rsx!(
+        rsx!(
             div { "Hello, world!" }
             Child {}
             Child {}
@@ -30,80 +31,72 @@ fn test_memory_leak() {
             Child {}
             Child {}
             Child {}
-            BorrowedChild { name: name }
-            BorrowedChild { name: name }
-            BorrowedChild { name: name }
-            BorrowedChild { name: name }
-            BorrowedChild { name: name }
-        ))
+            BorrowedChild { name: name.clone() }
+            BorrowedChild { name: name.clone() }
+            BorrowedChild { name: name.clone() }
+            BorrowedChild { name: name.clone() }
+            BorrowedChild { name: name.clone() }
+        )
     }
 
-    #[derive(Props)]
-    struct BorrowedProps<'a> {
-        name: &'a str,
+    #[derive(Props, Clone, PartialEq)]
+    struct BorrowedProps {
+        name: String,
     }
 
-    fn BorrowedChild<'a>(cx: Scope<'a, BorrowedProps<'a>>) -> Element {
-        cx.render(rsx! {
+    fn BorrowedChild(cx: BorrowedProps) -> Element {
+        rsx! {
             div {
-                "goodbye {cx.props.name}"
+                "goodbye {cx.name}"
                 Child {}
                 Child {}
             }
-        })
+        }
     }
 
-    fn Child(cx: Scope) -> Element {
-        render!(div { "goodbye world" })
+    fn Child() -> Element {
+        rsx!( div { "goodbye world" } )
     }
 
     let mut dom = VirtualDom::new(app);
 
-    _ = dom.rebuild();
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     for _ in 0..5 {
         dom.mark_dirty(ScopeId::ROOT);
-        _ = dom.render_immediate();
+        _ = dom.render_immediate_to_vec();
     }
 }
 
 #[test]
 fn memo_works_properly() {
-    fn app(cx: Scope) -> Element {
-        let val = cx.generation();
+    fn app() -> Element {
+        let val = generation();
 
         if val == 2 || val == 4 {
             return None;
         }
 
-        let name = cx.use_hook(|| String::from("asd"));
+        let name = use_hook(|| String::from("asd"));
 
-        cx.render(rsx!(
+        rsx!(
             div { "Hello, world! {name}" }
             Child { na: "asdfg".to_string() }
-        ))
+        )
     }
 
-    #[derive(PartialEq, Props)]
+    #[derive(PartialEq, Clone, Props)]
     struct ChildProps {
         na: String,
     }
 
-    fn Child(cx: Scope<ChildProps>) -> Element {
-        render!(div { "goodbye world" })
+    fn Child(_props: ChildProps) -> Element {
+        rsx!( div { "goodbye world" } )
     }
 
     let mut dom = VirtualDom::new(app);
 
-    _ = dom.rebuild();
-    // todo!()
-    // dom.hard_diff(ScopeId::ROOT);
-    // dom.hard_diff(ScopeId::ROOT);
-    // dom.hard_diff(ScopeId::ROOT);
-    // dom.hard_diff(ScopeId::ROOT);
-    // dom.hard_diff(ScopeId::ROOT);
-    // dom.hard_diff(ScopeId::ROOT);
-    // dom.hard_diff(ScopeId::ROOT);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 }
 
 #[test]
@@ -116,21 +109,21 @@ fn free_works_on_root_hooks() {
         inner: Rc<String>,
     }
 
-    fn app(cx: Scope<AppProps>) -> Element {
-        let name: &AppProps = cx.use_hook(|| cx.props.clone());
-        render!(child_component { inner: name.inner.clone() })
+    fn app(cx: AppProps) -> Element {
+        let name: AppProps = use_hook(|| cx.clone());
+        rsx!(child_component { inner: name.inner.clone() })
     }
 
-    fn child_component(cx: Scope<AppProps>) -> Element {
-        render!(div { "{cx.props.inner}" })
+    fn child_component(props: AppProps) -> Element {
+        rsx!( div { "{props.inner}" } )
     }
 
     let ptr = Rc::new("asdasd".to_string());
     let mut dom = VirtualDom::new_with_props(app, AppProps { inner: ptr.clone() });
-    let _ = dom.rebuild();
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     // ptr gets cloned into props and then into the hook
-    assert_eq!(Rc::strong_count(&ptr), 4);
+    assert_eq!(Rc::strong_count(&ptr), 5);
 
     drop(dom);
 
@@ -142,59 +135,48 @@ fn supports_async() {
     use std::time::Duration;
     use tokio::time::sleep;
 
-    fn app(cx: Scope) -> Element {
-        let colors = use_state(cx, || vec!["green", "blue", "red"]);
-        let padding = use_state(cx, || 10);
+    fn app() -> Element {
+        let mut colors = use_signal(|| vec!["green", "blue", "red"]);
+        let mut padding = use_signal(|| 10);
 
-        use_effect(cx, colors, |colors| async move {
-            sleep(Duration::from_millis(1000)).await;
-            colors.with_mut(|colors| colors.reverse());
-        });
-
-        use_effect(cx, padding, |padding| async move {
-            sleep(Duration::from_millis(10)).await;
-            padding.with_mut(|padding| {
-                if *padding < 65 {
-                    *padding += 1;
-                } else {
-                    *padding = 5;
+        use_hook(|| {
+            spawn(async move {
+                loop {
+                    sleep(Duration::from_millis(1000)).await;
+                    colors.with_mut(|colors| colors.reverse());
                 }
-            });
+            })
         });
 
+        use_hook(|| {
+            spawn(async move {
+                loop {
+                    sleep(Duration::from_millis(10)).await;
+                    padding.with_mut(|padding| {
+                        if *padding < 65 {
+                            *padding += 1;
+                        } else {
+                            *padding = 5;
+                        }
+                    });
+                }
+            })
+        });
+
+        let colors = colors.read();
         let big = colors[0];
         let mid = colors[1];
         let small = colors[2];
 
-        cx.render(rsx! {
-            div {
-                background: "{big}",
-                height: "stretch",
-                width: "stretch",
-                padding: "50",
-                label {
-                    "hello",
+        rsx! {
+            div { background: "{big}", height: "stretch", width: "stretch", padding: "50",
+                label { "hello" }
+                div { background: "{mid}", height: "auto", width: "stretch", padding: "{padding}",
+                    label { "World" }
+                    div { background: "{small}", height: "auto", width: "stretch", padding: "20", label { "ddddddd" } }
                 }
-                div {
-                    background: "{mid}",
-                    height: "auto",
-                    width: "stretch",
-                    padding: "{padding}",
-                    label {
-                        "World",
-                    }
-                    div {
-                        background: "{small}",
-                        height: "auto",
-                        width: "stretch",
-                        padding: "20",
-                        label {
-                            "ddddddd",
-                        }
-                    }
-                },
             }
-        })
+        }
     }
 
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -204,11 +186,11 @@ fn supports_async() {
 
     rt.block_on(async {
         let mut dom = VirtualDom::new(app);
-        let _ = dom.rebuild();
+        dom.rebuild(&mut dioxus_core::NoOpMutations);
 
         for _ in 0..10 {
             dom.wait_for_work().await;
-            let _edits = dom.render_immediate();
+            dom.render_immediate(&mut NoOpMutations);
         }
     });
 }

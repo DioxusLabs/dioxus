@@ -2,7 +2,7 @@
 name = "dioxus-web"
 version = { workspace = true }
 authors = ["Jonathan Kelley"]
-edition = "2018"
+edition = "2021"
 description = "Web renderer for Dioxus using websys"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
@@ -14,11 +14,12 @@ dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-html = { workspace = true, features = ["wasm-bind"] }
 dioxus-interpreter-js = { workspace = true, features = [
     "minimal_bindings",
-    "web",
+    "webonly",
 ] }
+generational-box = { workspace = true }
 
 js-sys = "0.3.56"
-wasm-bindgen = { workspace = true, features = ["enable-interning"] }
+wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = "0.4.29"
 tracing = { workspace = true }
 rustc-hash = { workspace = true }
@@ -27,9 +28,8 @@ futures-util = { workspace = true, features = ["std", "async-await", "async-awai
 futures-channel = { workspace = true }
 serde_json = { version = "1.0" }
 serde = { version = "1.0" }
-serde-wasm-bindgen = "0.5.0"
-async-trait = "0.1.58"
-async-channel = "1.8.0"
+serde-wasm-bindgen = { version = "0.5.0", optional = true }
+async-trait = { version = "0.1.58", optional = true }
 
 [dependencies.web-sys]
 version = "0.3.56"
@@ -60,6 +60,7 @@ file_engine = [
     "web-sys/File",
     "web-sys/FileList",
     "web-sys/FileReader",
+    "async-trait"
 ]
 hot_reload = [
     "web-sys/MessageEvent",
@@ -68,13 +69,14 @@ hot_reload = [
 ]
 eval = [
     "dioxus-html/eval",
+    "serde-wasm-bindgen",
+    "async-trait"
 ]
 
 [dev-dependencies]
 dioxus = { workspace = true }
 wasm-bindgen-test = "0.3.29"
-dioxus-ssr = { workspace = true}
-wasm-logger = "0.2.0"
+dioxus-ssr = { workspace = true, default-features = false }
 gloo-timers = "0.2.3"
 gloo-dialogs = "0.1.1"
 dioxus-web = { path = ".", features = ["hydrate"] }

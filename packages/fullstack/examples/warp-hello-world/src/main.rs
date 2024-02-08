@@ -1,31 +1,17 @@
 //! Run with:
 //!
 //! ```sh
-//! dx build --features web --release
-//! cargo run --features ssr --release
+//! dx serve --platform fullstack
 //! ```
 
 #![allow(non_snake_case, unused)]
 use dioxus::prelude::*;
-use dioxus_fullstack::{launch, prelude::*};
-use serde::{Deserialize, Serialize};
 
-#[derive(Props, PartialEq, Debug, Default, Serialize, Deserialize, Clone)]
-struct AppProps {
-    count: i32,
-}
+fn app() -> Element {
+    let mut count = use_signal(|| 0);
+    let text = use_signal(|| "...".to_string());
 
-fn app(cx: Scope<AppProps>) -> Element {
-    let state =
-        use_server_future(cx, (), |()| async move { get_server_data().await.unwrap() })?.value();
-
-    let mut count = use_state(cx, || 0);
-    let text = use_state(cx, || "...".to_string());
-
-    cx.render(rsx! {
-        div {
-            "Server state: {state}"
-        }
+    rsx! {
         h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }
@@ -43,17 +29,17 @@ fn app(cx: Scope<AppProps>) -> Element {
             "Run a server function!"
         }
         "Server said: {text}"
-    })
+    }
 }
 
-#[server(PostServerData)]
+#[server]
 async fn post_server_data(data: String) -> Result<(), ServerFnError> {
     println!("Server received: {}", data);
 
     Ok(())
 }
 
-#[server(GetServerData)]
+#[server]
 async fn get_server_data() -> Result<String, ServerFnError> {
     Ok(reqwest::get("https://httpbin.org/ip").await?.text().await?)
 }
@@ -61,8 +47,8 @@ async fn get_server_data() -> Result<String, ServerFnError> {
 fn main() {
     #[cfg(feature = "web")]
     tracing_wasm::set_as_global_default();
-    #[cfg(feature = "ssr")]
+    #[cfg(feature = "server")]
     tracing_subscriber::fmt::init();
 
-    LaunchBuilder::new_with_props(app, AppProps { count: 0 }).launch()
+    launch(app);
 }

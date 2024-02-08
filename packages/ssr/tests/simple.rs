@@ -1,19 +1,20 @@
+#![allow(non_snake_case)]
+
 use dioxus::prelude::*;
 
 #[test]
 fn simple() {
-    #[component]
-    fn App(cx: Scope) -> Element {
-        render! { div { "hello!" } }
+    fn App() -> Element {
+        rsx! { div { "hello!" } }
     }
 
     let mut dom = VirtualDom::new(App);
-    _ = dom.rebuild();
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(dioxus_ssr::render(&dom), "<div>hello!</div>");
 
     assert_eq!(
-        dioxus_ssr::render_lazy(rsx!( div {"hello!"} )),
+        dioxus_ssr::render_element(rsx!( div {"hello!"} )),
         "<div>hello!</div>"
     );
 }
@@ -21,10 +22,12 @@ fn simple() {
 #[test]
 fn lists() {
     assert_eq!(
-        dioxus_ssr::render_lazy(rsx! {
+        dioxus_ssr::render_element(rsx! {
             ul {
-                for i in 0..5 {
-                    li { "item {i}" }
+                {
+                    (0..5).map(|i| rsx! {
+                        li { "item {i}" }
+                    })
                 }
             }
         }),
@@ -36,7 +39,7 @@ fn lists() {
 fn dynamic() {
     let dynamic = 123;
     assert_eq!(
-        dioxus_ssr::render_lazy(rsx! {
+        dioxus_ssr::render_element(rsx! {
             div { "Hello world 1 -->" "{dynamic}" "<-- Hello world 2" }
         }),
         "<div>Hello world 1 --&gt;123&lt;-- Hello world 2</div>"
@@ -45,16 +48,22 @@ fn dynamic() {
 
 #[test]
 fn components() {
-    #[component]
-    fn MyComponent(cx: Scope, name: i32) -> Element {
-        render! { div { "component {name}" } }
+    #[derive(Props, Clone, PartialEq)]
+    struct MyComponentProps {
+        name: i32,
+    }
+
+    fn MyComponent(MyComponentProps { name }: MyComponentProps) -> Element {
+        rsx! { div { "component {name}" } }
     }
 
     assert_eq!(
-        dioxus_ssr::render_lazy(rsx! {
+        dioxus_ssr::render_element(rsx! {
             div {
-                for name in 0..5 {
-                    MyComponent { name: name }
+                {
+                    (0..5).map(|name| rsx! {
+                        MyComponent { name: name }
+                    })
                 }
             }
         }),
@@ -65,10 +74,10 @@ fn components() {
 #[test]
 fn fragments() {
     assert_eq!(
-        dioxus_ssr::render_lazy(rsx! {
+        dioxus_ssr::render_element(rsx! {
             div {
-                for _ in 0..5 {
-                    {}
+                {
+                    (0..5).map(|_| rsx! ({}))
                 }
             }
         }),

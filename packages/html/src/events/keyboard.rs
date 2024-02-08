@@ -264,8 +264,6 @@ impl<'de> serde::Deserialize<'de> for KeyCode {
     where
         D: serde::Deserializer<'de>,
     {
-        use std::convert::TryInto;
-
         // We could be deserializing a unicode character, so we need to use u64 even if the output only takes u8
         let value = u64::deserialize(deserializer)?;
 

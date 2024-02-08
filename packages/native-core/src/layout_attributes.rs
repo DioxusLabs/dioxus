@@ -470,7 +470,7 @@ pub fn apply_layout_attributes_cfg(
 fn extract_px_value(length_value: LengthValue) -> f32 {
     match length_value {
         LengthValue::Px(value) => value,
-        _ => todo!(),
+        _ => todo!("Only px values are supported"),
     }
 }
 
@@ -480,7 +480,7 @@ fn convert_length_percentage(
     match dimension_percentage {
         DimensionPercentage::Dimension(value) => LengthPercentage::Points(extract_px_value(value)),
         DimensionPercentage::Percentage(percentage) => LengthPercentage::Percent(percentage.0),
-        DimensionPercentage::Calc(_) => todo!(),
+        DimensionPercentage::Calc(_) => todo!("Calc is not supported yet"),
     }
 }
 
@@ -492,7 +492,7 @@ fn convert_padding(dimension_percentage: LengthPercentageOrAuto) -> LengthPercen
                 LengthPercentage::Points(extract_px_value(value))
             }
             DimensionPercentage::Percentage(percentage) => LengthPercentage::Percent(percentage.0),
-            DimensionPercentage::Calc(_) => unimplemented!(),
+            DimensionPercentage::Calc(_) => unimplemented!("Calc is not supported yet"),
         },
     }
 }
@@ -509,7 +509,7 @@ fn convert_length_percentage_or_auto(
             DimensionPercentage::Percentage(percentage) => {
                 LengthPercentageAuto::Percent(percentage.0)
             }
-            DimensionPercentage::Calc(_) => todo!(),
+            DimensionPercentage::Calc(_) => todo!("Calc is not supported yet"),
         },
     }
 }
@@ -518,7 +518,7 @@ fn convert_dimension(dimension_percentage: DimensionPercentage<LengthValue>) -> 
     match dimension_percentage {
         DimensionPercentage::Dimension(value) => Dimension::Points(extract_px_value(value)),
         DimensionPercentage::Percentage(percentage) => Dimension::Percent(percentage.0),
-        DimensionPercentage::Calc(_) => todo!(),
+        DimensionPercentage::Calc(_) => todo!("Calc is not supported yet"),
     }
 }
 
@@ -533,7 +533,7 @@ fn convert_border_side_width(
         border::BorderSideWidth::Thick => LengthPercentage::Points(border_width_config.thick),
         border::BorderSideWidth::Medium => LengthPercentage::Points(border_width_config.medium),
         border::BorderSideWidth::Thin => LengthPercentage::Points(border_width_config.thin),
-        border::BorderSideWidth::Length(_) => unimplemented!(),
+        border::BorderSideWidth::Length(_) => todo!("Only Length::Value is supported"),
     }
 }
 
@@ -571,7 +571,7 @@ fn convert_grid_track_item(input: grid::TrackListItem) -> TrackSizingFunction {
         grid::TrackListItem::TrackSize(size) => {
             TrackSizingFunction::Single(convert_grid_track_size(size))
         }
-        grid::TrackListItem::TrackRepeat(_) => todo!(), // TODO: requires TrackRepeat fields to be public!
+        grid::TrackListItem::TrackRepeat(_) => todo!("requires TrackRepeat fields to be public!"),
     }
 }
 

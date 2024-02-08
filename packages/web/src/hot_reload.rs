@@ -4,7 +4,7 @@ use futures_channel::mpsc::UnboundedReceiver;
 
 use dioxus_core::Template;
 
-pub(crate) fn init() -> UnboundedReceiver<Template<'static>> {
+pub(crate) fn init() -> UnboundedReceiver<Template> {
     use wasm_bindgen::closure::Closure;
     use wasm_bindgen::JsCast;
     use web_sys::{MessageEvent, WebSocket};
@@ -34,7 +34,7 @@ pub(crate) fn init() -> UnboundedReceiver<Template<'static>> {
             let val = serde_json::from_str::<serde_json::Value>(&string).unwrap();
             // leak the value
             let val: &'static serde_json::Value = Box::leak(Box::new(val));
-            let template: Template<'_> = Template::deserialize(val).unwrap();
+            let template: Template = Template::deserialize(val).unwrap();
             tx.unbounded_send(template).unwrap();
         }
     }) as Box<dyn FnMut(MessageEvent)>);

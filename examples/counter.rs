@@ -4,32 +4,49 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let counters = use_state(cx, || vec![0, 0, 0]);
-    let sum: usize = counters.iter().copied().sum();
+fn app() -> Element {
+    let mut counters = use_signal(|| vec![0, 0, 0]);
+    let sum = use_memo(move || counters.read().iter().copied().sum::<i32>());
 
-    render! {
+    rsx! {
         div {
-            button { onclick: move |_| counters.make_mut().push(0), "Add counter" }
-            button { onclick: move |_| { counters.make_mut().pop(); }, "Remove counter" }
+            button { onclick: move |_| counters.write().push(0), "Add counter" }
+            button {
+                onclick: move |_| {
+                    counters.write().pop();
+                },
+                "Remove counter"
+            }
             p { "Total: {sum}" }
-            for (i, counter) in counters.iter().enumerate() {
-                li {
-                    button { onclick: move |_| counters.make_mut()[i] -= 1, "-1" }
-                    input {
-                        value: "{counter}",
-                        oninput: move |e| {
-                            if let Ok(value) = e.value().parse::<usize>() {
-                                counters.make_mut()[i] = value;
-                            }
-                        }
+            for i in 0..counters.len() {
+                Child { i, counters }
+            }
+        }
+    }
+}
+
+#[component]
+fn Child(counters: Signal<Vec<i32>>, i: usize) -> Element {
+    rsx! {
+        li {
+            button { onclick: move |_| counters.write()[i] -= 1, "-1" }
+            input {
+                value: "{counters.read()[i]}",
+                oninput: move |e| {
+                    if let Ok(value) = e.value().parse::<i32>() {
+                        counters.write()[i] = value;
                     }
-                    button { onclick: move |_| counters.make_mut()[i] += 1, "+1" }
-                    button { onclick: move |_| { counters.make_mut().remove(i); }, "x" }
                 }
+            }
+            button { onclick: move |_| counters.write()[i] += 1, "+1" }
+            button {
+                onclick: move |_| {
+                    counters.write().remove(i);
+                },
+                "x"
             }
         }
     }

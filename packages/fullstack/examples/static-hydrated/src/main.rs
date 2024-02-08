@@ -2,23 +2,22 @@
 //!
 //! ```sh
 //! dx build --features web --release
-//! cargo run --features ssr
+//! cargo run --features server
 //! ```
 
 #![allow(unused)]
 use dioxus::prelude::*;
 use dioxus_fullstack::{launch, prelude::*};
-use dioxus_router::prelude::*;
 use serde::{Deserialize, Serialize};
 
 // Generate all routes and output them to the docs path
-#[cfg(feature = "ssr")]
+#[cfg(feature = "server")]
 #[tokio::main]
 async fn main() {
     pre_cache_static_routes_with_props(
-        &ServeConfigBuilder::new_with_router(dioxus_fullstack::router::FullstackRouterConfig::<
-            Route,
-        >::default())
+        &ServerConfig::new_with_router(
+            dioxus_fullstack::router::FullstackRouterConfig::<Route>::default(),
+        )
         .assets_path("docs")
         .incremental(IncrementalRendererConfig::default().static_dir("docs"))
         .build(),
@@ -38,7 +37,7 @@ fn main() {
     );
 }
 
-#[cfg(not(any(feature = "web", feature = "ssr")))]
+#[cfg(not(any(feature = "web", feature = "server")))]
 fn main() {}
 
 #[derive(Clone, Routable, Debug, PartialEq, Serialize, Deserialize)]
@@ -50,8 +49,8 @@ enum Route {
 }
 
 #[component]
-fn Blog(cx: Scope) -> Element {
-    render! {
+fn Blog() -> Element {
+    rsx! {
         Link { to: Route::Home {}, "Go to counter" }
         table {
             tbody {
@@ -68,11 +67,11 @@ fn Blog(cx: Scope) -> Element {
 }
 
 #[component]
-fn Home(cx: Scope) -> Element {
-    let mut count = use_state(cx, || 0);
-    let text = use_state(cx, || "...".to_string());
+fn Home() -> Element {
+    let mut count = use_signal(|| 0);
+    let text = use_signal(|| "...".to_string());
 
-    cx.render(rsx! {
+    rsx! {
         Link {
             to: Route::Blog {},
             "Go to blog"
@@ -82,5 +81,5 @@ fn Home(cx: Scope) -> Element {
             button { onclick: move |_| count += 1, "Up high!" }
             button { onclick: move |_| count -= 1, "Down low!" }
         }
-    })
+    }
 }

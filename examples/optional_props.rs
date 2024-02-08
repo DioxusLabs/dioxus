@@ -7,11 +7,11 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    cx.render(rsx! {
+fn app() -> Element {
+    rsx! {
         Button {
             a: "asd".to_string(),
             c: "asd".to_string(),
@@ -30,12 +30,10 @@ fn app(cx: Scope) -> Element {
             c: "asd".to_string(),
             d: Some("asd".to_string()),
         }
-    })
+    }
 }
 
-type SthElse<T> = Option<T>;
-
-#[derive(Props, PartialEq)]
+#[derive(Props, PartialEq, Clone)]
 struct ButtonProps {
     a: String,
 
@@ -51,14 +49,16 @@ struct ButtonProps {
     e: SthElse<String>,
 }
 
-fn Button(cx: Scope<ButtonProps>) -> Element {
-    cx.render(rsx! {
+type SthElse<T> = Option<T>;
+
+fn Button(props: ButtonProps) -> Element {
+    rsx! {
         button {
-            "{cx.props.a} | "
-            "{cx.props.b:?} | "
-            "{cx.props.c:?} | "
-            "{cx.props.d:?} | "
-            "{cx.props.e:?}"
+            "{props.a} | "
+            "{props.b:?} | "
+            "{props.c:?} | "
+            "{props.d:?} | "
+            "{props.e:?}"
         }
-    })
+    }
 }

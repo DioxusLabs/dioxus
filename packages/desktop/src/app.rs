@@ -1,7 +1,7 @@
 use crate::{
     config::{Config, WindowCloseBehaviour},
-    desktop_context::WindowEventHandlers,
     element::DesktopElement,
+    event_handlers::WindowEventHandlers,
     file_upload::FileDialogRequest,
     ipc::IpcMessage,
     ipc::{EventData, UserWindowEvent},
@@ -10,7 +10,8 @@ use crate::{
     webview::WebviewInstance,
 };
 use crossbeam_channel::Receiver;
-use dioxus_core::{Component, ElementId, VirtualDom};
+use dioxus_core::ElementId;
+use dioxus_core::VirtualDom;
 use dioxus_html::{
     native_bind::NativeFileEngine, FileEngine, HasFileData, HasFormData, HtmlEvent,
     PlatformEventData,
@@ -28,14 +29,13 @@ use tao::{
 };
 
 /// The single top-level object that manages all the running windows, assets, shortcuts, etc
-pub(crate) struct App<P> {
+pub(crate) struct App {
     // move the props into a cell so we can pop it out later to create the first window
     // iOS panics if we create a window before the event loop is started, so we toss them into a cell
-    pub(crate) props: Cell<Option<P>>,
+    pub(crate) unmounted_dom: Cell<Option<VirtualDom>>,
     pub(crate) cfg: Cell<Option<Config>>,
 
     // Stuff we need mutable access to
-    pub(crate) root: Component<P>,
     pub(crate) control_flow: ControlFlow,
     pub(crate) is_visible_before_start: bool,
     pub(crate) window_behavior: WindowCloseBehaviour,
@@ -50,7 +50,7 @@ pub(crate) struct App<P> {
 /// A bundle of state shared between all the windows, providing a way for us to communicate with running webview.
 ///
 /// Todo: everything in this struct is wrapped in Rc<>, but we really only need the one top-level refcell
-pub struct SharedContext {
+pub(crate) struct SharedContext {
     pub(crate) event_handlers: WindowEventHandlers,
     pub(crate) pending_webviews: RefCell<Vec<WebviewInstance>>,
     pub(crate) shortcut_manager: ShortcutRegistry,
@@ -59,17 +59,16 @@ pub struct SharedContext {
     pub(crate) target: EventLoopWindowTarget<UserWindowEvent>,
 }
 
-impl<P: 'static> App<P> {
-    pub fn new(cfg: Config, props: P, root: Component<P>) -> (EventLoop<UserWindowEvent>, Self) {
+impl App {
+    pub fn new(cfg: Config, virtual_dom: VirtualDom) -> (EventLoop<UserWindowEvent>, Self) {
         let event_loop = EventLoopBuilder::<UserWindowEvent>::with_user_event().build();
 
         let app = Self {
-            root,
             window_behavior: cfg.last_window_close_behaviour,
             is_visible_before_start: true,
             webviews: HashMap::new(),
             control_flow: ControlFlow::Wait,
-            props: Cell::new(Some(props)),
+            unmounted_dom: Cell::new(Some(virtual_dom)),
             cfg: Cell::new(Some(cfg)),
             shared: Rc::new(SharedContext {
                 event_handlers: WindowEventHandlers::default(),
@@ -164,16 +163,12 @@ impl<P: 'static> App<P> {
     }
 
     pub fn handle_start_cause_init(&mut self) {
-        let props = self.props.take().unwrap();
+        let virtual_dom = self.unmounted_dom.take().unwrap();
         let cfg = self.cfg.take().unwrap();
 
         self.is_visible_before_start = cfg.window.window.visible;
 
-        let webview = WebviewInstance::new(
-            cfg,
-            VirtualDom::new_with_props(self.root, props),
-            self.shared.clone(),
-        );
+        let webview = WebviewInstance::new(cfg, virtual_dom, self.shared.clone());
 
         let id = webview.desktop_context.window.id();
         self.webviews.insert(id, webview);
@@ -197,7 +192,9 @@ impl<P: 'static> App<P> {
 
     pub fn handle_initialize_msg(&mut self, id: WindowId) {
         let view = self.webviews.get_mut(&id).unwrap();
-        view.desktop_context.send_edits(view.dom.rebuild());
+        view.dom
+            .rebuild(&mut *view.desktop_context.mutation_state.borrow_mut());
+        view.desktop_context.send_edits();
         view.desktop_context
             .window
             .set_visible(self.is_visible_before_start);
@@ -249,7 +246,9 @@ impl<P: 'static> App<P> {
         };
 
         view.dom.handle_event(&name, as_any, element, bubbles);
-        view.desktop_context.send_edits(view.dom.render_immediate());
+        view.dom
+            .render_immediate(&mut *view.desktop_context.mutation_state.borrow_mut());
+        view.desktop_context.send_edits();
     }
 
     #[cfg(all(feature = "hot-reload", debug_assertions))]
@@ -306,7 +305,9 @@ impl<P: 'static> App<P> {
             view.dom.handle_event(event_name, data, id, event_bubbles);
         }
 
-        view.desktop_context.send_edits(view.dom.render_immediate());
+        view.dom
+            .render_immediate(&mut *view.desktop_context.mutation_state.borrow_mut());
+        view.desktop_context.send_edits();
     }
 
     /// Poll the virtualdom until it's pending

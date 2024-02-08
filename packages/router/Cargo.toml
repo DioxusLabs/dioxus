@@ -2,7 +2,7 @@
 name = "dioxus-router"
 authors = ["Jonathan Kelley", "Evan Almloff"]
 version = { workspace = true }
-edition = "2018"
+edition = "2021"
 description = "Cross-platform router for Dioxus apps"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
@@ -10,7 +10,7 @@ homepage = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
-dioxus = { workspace = true }
+dioxus-lib = { workspace = true }
 dioxus-router-macro = { workspace = true }
 gloo = { version = "0.8.0", optional = true }
 tracing = { workspace = true }
@@ -26,21 +26,23 @@ js-sys = { version = "0.3.63", optional = true }
 gloo-utils = { version = "0.1.6", optional = true }
 dioxus-liveview = { workspace = true, optional = true }
 dioxus-ssr = { workspace = true, optional = true }
+dioxus-fullstack = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["full"], optional = true }
-dioxus-cli-config.workspace = true
+dioxus-cli-config = { workspace = true }
 
 [features]
-default = ["web"]
-ssr = ["dioxus-ssr", "tokio"]
+default = []
+ssr = ["dioxus-ssr/incremental", "tokio", "dioxus-fullstack?/server"]
 liveview = ["dioxus-liveview", "tokio", "dep:serde", "serde_json"]
 wasm_test = []
 serde = ["dep:serde", "gloo-utils?/serde"]
 web = ["gloo", "web-sys", "wasm-bindgen", "gloo-utils", "js-sys"]
+fullstack = ["dioxus-fullstack"]
 
 [dev-dependencies]
 axum = { version = "0.6.1", features = ["ws"] }
-dioxus = { path = "../dioxus" }
-dioxus-liveview = { workspace = true, features = ["axum"] }
+dioxus = { workspace = true, features = ["router" ]}
+# dioxus-liveview = { workspace = true, features = ["axum"] }
 dioxus-ssr = { path = "../ssr" }
 criterion = { version = "0.5", features = ["async_tokio", "html_reports"] }
 
@@ -53,13 +55,12 @@ name = "incremental"
 required-features = ["ssr"]
 harness = false
 
-[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
-dioxus-desktop = { path = "../desktop" }
+# [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
+# dioxus-desktop = { path = "../desktop" }
 
 [target.'cfg(target_family = "wasm")'.dev-dependencies]
 console_error_panic_hook = "0.1.7"
 dioxus-router = { path = ".", features = ["web"] }
-dioxus-web = { workspace = true }
+# dioxus-web = { workspace = true }
 gloo = "0.8.0"
 wasm-bindgen-test = "0.3.33"
-wasm-logger = "0.2.0"

@@ -39,7 +39,7 @@ use tower_http::{
 };
 
 #[cfg(feature = "plugin")]
-use plugin::PluginManager;
+use crate::plugin::PluginManager;
 
 mod proxy;
 
@@ -109,7 +109,9 @@ pub async fn serve(
     skip_assets: bool,
     hot_reload_state: Option<HotReloadState>,
 ) -> Result<()> {
-    let first_build_result = crate::builder::build(&config, false, skip_assets)?;
+    // Since web platform doesn't use `rust_flags`, this argument is explicitly
+    // set to `None`.
+    let first_build_result = crate::builder::build(&config, false, skip_assets, None)?;
 
     // generate dev-index page
     Serve::regen_dev_page(&config, first_build_result.assets.as_ref())?;
@@ -159,10 +161,10 @@ pub async fn serve(
     );
 
     // Router
-    let router = setup_router(config, ws_reload_state, hot_reload_state).await?;
+    let router = setup_router(config.clone(), ws_reload_state, hot_reload_state).await?;
 
     // Start server
-    start_server(port, router, start_browser, rustls_config).await?;
+    start_server(port, router, start_browser, rustls_config, &config).await?;
 
     Ok(())
 }
@@ -287,14 +289,9 @@ async fn setup_router(
                 {
                     let body = Full::from(
                         // TODO: Cache/memoize this.
-                        std::fs::read_to_string(
-                            file_service_config
-                                .crate_dir
-                                .join(file_service_config.out_dir())
-                                .join("index.html"),
-                        )
-                        .ok()
-                        .unwrap(),
+                        std::fs::read_to_string(file_service_config.out_dir().join("index.html"))
+                            .ok()
+                            .unwrap(),
                     )
                     .map_err(|err| match err {})
                     .boxed();
@@ -315,7 +312,7 @@ async fn setup_router(
                 Ok(response)
             },
         )
-        .service(ServeDir::new(config.crate_dir.join(config.out_dir())));
+        .service(ServeDir::new(config.out_dir()));
 
     // Setup websocket
     let mut router = Router::new().route("/_dioxus/ws", get(ws_handler));
@@ -366,10 +363,11 @@ async fn start_server(
     router: Router,
     start_browser: bool,
     rustls: Option<RustlsConfig>,
+    _config: &CrateConfig,
 ) -> Result<()> {
     // If plugins, call on_serve_start event
     #[cfg(feature = "plugin")]
-    PluginManager::on_serve_start(&config)?;
+    PluginManager::on_serve_start(_config)?;
 
     // Parse address
     let addr = format!("0.0.0.0:{}", port).parse().unwrap();
@@ -447,7 +445,9 @@ async fn ws_handler(
 }
 
 fn build(config: &CrateConfig, reload_tx: &Sender<()>, skip_assets: bool) -> Result<BuildResult> {
-    let result = builder::build(config, true, skip_assets)?;
+    // Since web platform doesn't use `rust_flags`, this argument is explicitly
+    // set to `None`.
+    let result = builder::build(config, true, skip_assets, None)?;
     // change the websocket reload state to true;
     // the page will auto-reload.
     if config.dioxus_config.web.watcher.reload_html {

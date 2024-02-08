@@ -1,7 +1,7 @@
 //! # Routable
 
 #![allow(non_snake_case)]
-use dioxus::prelude::*;
+use dioxus_lib::prelude::*;
 
 use std::iter::FlatMap;
 use std::slice::Iter;
@@ -203,7 +203,7 @@ pub trait Routable: FromStr + Display + Clone + 'static {
     const SITE_MAP: &'static [SiteMapSegment];
 
     /// Render the route at the given level
-    fn render<'a>(&self, cx: &'a ScopeState, level: usize) -> Element<'a>;
+    fn render(&self, level: usize) -> Element;
 
     /// Checks if this route is a child of the given route.
     ///
@@ -213,9 +213,9 @@ pub trait Routable: FromStr + Display + Clone + 'static {
     /// use dioxus::prelude::*;
     ///
     /// #[component]
-    /// fn Home(cx: Scope) -> Element { todo!() }
+    /// fn Home() -> Element { None }
     /// #[component]
-    /// fn About(cx: Scope) -> Element { todo!() }
+    /// fn About() -> Element { None }
     ///
     /// #[derive(Routable, Clone, PartialEq, Debug)]
     /// enum Route {
@@ -255,9 +255,9 @@ pub trait Routable: FromStr + Display + Clone + 'static {
     /// use dioxus::prelude::*;
     ///
     /// #[component]
-    /// fn Home(cx: Scope) -> Element { todo!() }
+    /// fn Home() -> Element { None }
     /// #[component]
-    /// fn About(cx: Scope) -> Element { todo!() }
+    /// fn About() -> Element { None }
     ///
     /// #[derive(Routable, Clone, PartialEq, Debug)]
     /// enum Route {
@@ -325,15 +325,15 @@ where
 }
 
 trait RouteRenderable: Display + 'static {
-    fn render<'a>(&self, cx: &'a ScopeState, level: usize) -> Element<'a>;
+    fn render(&self, level: usize) -> Element;
 }
 
 impl<R: Routable> RouteRenderable for R
 where
     <R as FromStr>::Err: Display,
 {
-    fn render<'a>(&self, cx: &'a ScopeState, level: usize) -> Element<'a> {
-        self.render(cx, level)
+    fn render(&self, level: usize) -> Element {
+        self.render(level)
     }
 }
 

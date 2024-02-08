@@ -5,8 +5,8 @@ pub fn Explainer<'a>(
     cx: Scope<'a>,
     invert: bool,
     title: &'static str,
-    content: Element<'a>,
-    flasher: Element<'a>,
+    content: Element,
+    flasher: Element,
 ) -> Element {
     // pt-5 sm:pt-24 lg:pt-24
 
@@ -32,10 +32,10 @@ pub fn Explainer<'a>(
         std::mem::swap(&mut left, &mut right);
     }
 
-    cx.render(rsx! {
+    rsx! {
         div { class: "flex flex-wrap items-center dark:text-white py-16 border-t font-light",
             {left},
             {right}
         }
-    })
+    }
 }

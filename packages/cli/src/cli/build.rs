@@ -1,8 +1,7 @@
-use crate::assets::WebAssetConfigDropGuard;
+use crate::assets::AssetConfigDropGuard;
 #[cfg(feature = "plugin")]
 use crate::plugin::PluginManager;
-use crate::server::fullstack::FullstackServerEnvGuard;
-use crate::server::fullstack::FullstackWebEnvGuard;
+use crate::server::fullstack;
 use dioxus_cli_config::Platform;
 
 use super::*;
@@ -16,7 +15,13 @@ pub struct Build {
 }
 
 impl Build {
-    pub fn build(self, bin: Option<PathBuf>, target_dir: Option<&std::path::Path>) -> Result<()> {
+    /// Note: `rust_flags` argument is only used for the fullstack platform.
+    pub fn build(
+        self,
+        bin: Option<PathBuf>,
+        target_dir: Option<&std::path::Path>,
+        rust_flags: Option<String>,
+    ) -> Result<()> {
         let mut crate_config = dioxus_cli_config::CrateConfig::new(bin)?;
         if let Some(target_dir) = target_dir {
             crate_config.target_dir = target_dir.to_path_buf();
@@ -53,16 +58,23 @@ impl Build {
         // let _ = PluginManager::on_build_start(&crate_config, &platform);
 
         let build_result = match platform {
-            Platform::Web => crate::builder::build(&crate_config, false, self.build.skip_assets)?,
+            Platform::Web => {
+                // `rust_flags` are used by fullstack's client build.
+                crate::builder::build(&crate_config, false, self.build.skip_assets, rust_flags)?
+            }
             Platform::Desktop => {
-                crate::builder::build_desktop(&crate_config, false, self.build.skip_assets)?
+                // Since desktop platform doesn't use `rust_flags`, this
+                // argument is explicitly set to `None`.
+                crate::builder::build_desktop(&crate_config, false, self.build.skip_assets, None)?
             }
             Platform::Fullstack => {
-                // Fullstack mode must be built with web configs on the desktop (server) binary as well as the web binary
-                let _config = WebAssetConfigDropGuard::new();
+                // Fullstack mode must be built with web configs on the desktop
+                // (server) binary as well as the web binary
+                let _config = AssetConfigDropGuard::new();
+                let client_rust_flags = fullstack::client_rust_flags(&self.build);
+                let server_rust_flags = fullstack::server_rust_flags(&self.build);
                 {
                     let mut web_config = crate_config.clone();
-                    let _gaurd = FullstackWebEnvGuard::new(&self.build);
                     let web_feature = self.build.client_feature;
                     let features = &mut web_config.features;
                     match features {
@@ -71,7 +83,12 @@ impl Build {
                         }
                         None => web_config.features = Some(vec![web_feature]),
                     };
-                    crate::builder::build(&crate_config, false, self.build.skip_assets)?;
+                    crate::builder::build(
+                        &web_config,
+                        false,
+                        self.build.skip_assets,
+                        Some(client_rust_flags),
+                    )?;
                 }
                 {
                     let mut desktop_config = crate_config.clone();
@@ -83,21 +100,19 @@ impl Build {
                         }
                         None => desktop_config.features = Some(vec![desktop_feature]),
                     };
-                    let _gaurd =
-                        FullstackServerEnvGuard::new(self.build.force_debug, self.build.release);
-                    crate::builder::build_desktop(&desktop_config, false, self.build.skip_assets)?
+                    crate::builder::build_desktop(
+                        &desktop_config,
+                        false,
+                        self.build.skip_assets,
+                        Some(server_rust_flags),
+                    )?
                 }
             }
         };
 
         let temp = gen_page(&crate_config, build_result.assets.as_ref(), false);
 
-        let mut file = std::fs::File::create(
-            crate_config
-                .crate_dir
-                .join(crate_config.dioxus_config.application.out_dir.clone())
-                .join("index.html"),
-        )?;
+        let mut file = std::fs::File::create(crate_config.out_dir().join("index.html"))?;
         file.write_all(temp.as_bytes())?;
 
         // #[cfg(feature = "plugin")]

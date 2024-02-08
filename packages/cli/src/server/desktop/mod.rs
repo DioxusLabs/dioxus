@@ -14,6 +14,7 @@ use dioxus_hot_reload::HotReloadMsg;
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;
 use interprocess_docfix::local_socket::LocalSocketListener;
+use std::fs::create_dir_all;
 use std::{
     process::{Child, Command},
     sync::{Arc, Mutex, RwLock},
@@ -21,7 +22,7 @@ use std::{
 use tokio::sync::broadcast::{self};
 
 #[cfg(feature = "plugin")]
-use plugin::PluginManager;
+use crate::plugin::PluginManager;
 
 use super::HotReloadState;
 
@@ -109,6 +110,7 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
         .exec()
         .unwrap();
     let target_dir = metadata.target_directory.as_std_path();
+    let _ = create_dir_all(target_dir); // `_all` is for good measure and future-proofness.
     let path = target_dir.join("dioxusin");
     clear_paths(&path);
     match LocalSocketListener::bind(path) {
@@ -213,9 +215,14 @@ fn send_msg(msg: HotReloadMsg, channel: &mut impl std::io::Write) -> bool {
     }
 }
 
-fn start_desktop(config: &CrateConfig, skip_assets: bool) -> Result<(RAIIChild, BuildResult)> {
+fn start_desktop(
+    config: &CrateConfig,
+    skip_assets: bool,
+    rust_flags: Option<String>,
+) -> Result<(RAIIChild, BuildResult)> {
     // Run the desktop application
-    let result = crate::builder::build_desktop(config, true, skip_assets)?;
+    // Only used for the fullstack platform,
+    let result = crate::builder::build_desktop(config, true, skip_assets, rust_flags)?;
 
     match &config.executable {
         ExecutableType::Binary(name)
@@ -242,9 +249,15 @@ pub(crate) struct DesktopPlatform {
     skip_assets: bool,
 }
 
-impl Platform for DesktopPlatform {
-    fn start(config: &CrateConfig, serve: &ConfigOptsServe) -> Result<Self> {
-        let (child, first_build_result) = start_desktop(config, serve.skip_assets)?;
+impl DesktopPlatform {
+    /// `rust_flags` argument is added because it is used by the
+    /// `DesktopPlatform`'s implementation of the `Platform::start()`.
+    pub fn start_with_options(
+        config: &CrateConfig,
+        serve: &ConfigOptsServe,
+        rust_flags: Option<String>,
+    ) -> Result<Self> {
+        let (child, first_build_result) = start_desktop(config, serve.skip_assets, rust_flags)?;
 
         log::info!("🚀 Starting development server...");
 
@@ -265,11 +278,35 @@ impl Platform for DesktopPlatform {
         })
     }
 
-    fn rebuild(&mut self, config: &CrateConfig) -> Result<BuildResult> {
+    /// `rust_flags` argument is added because it is used by the
+    /// `DesktopPlatform`'s implementation of the `Platform::rebuild()`.
+    pub fn rebuild_with_options(
+        &mut self,
+        config: &CrateConfig,
+        rust_flags: Option<String>,
+    ) -> Result<BuildResult> {
         self.currently_running_child.0.kill()?;
-        let (child, result) = start_desktop(config, self.skip_assets)?;
+        let (child, result) = start_desktop(config, self.skip_assets, rust_flags)?;
         self.currently_running_child = child;
         Ok(result)
+    }
+}
+
+impl Platform for DesktopPlatform {
+    fn start(config: &CrateConfig, serve: &ConfigOptsServe) -> Result<Self> {
+        // See `start_with_options()`'s docs for the explanation why the code
+        // was moved there.
+        // Since desktop platform doesn't use `rust_flags`, this argument is
+        // explicitly set to `None`.
+        DesktopPlatform::start_with_options(config, serve, None)
+    }
+
+    fn rebuild(&mut self, config: &CrateConfig) -> Result<BuildResult> {
+        // See `rebuild_with_options()`'s docs for the explanation why the code
+        // was moved there.
+        // Since desktop platform doesn't use `rust_flags`, this argument is
+        // explicitly set to `None`.
+        DesktopPlatform::rebuild_with_options(self, config, None)
     }
 }
 

@@ -12,11 +12,11 @@ macro_rules! impl_event {
         $(
             $( #[$attr] )*
             #[inline]
-            pub fn $name<'a, E: crate::EventReturn<T>, T>(_cx: &'a ::dioxus_core::ScopeState, mut _f: impl FnMut(::dioxus_core::Event<$data>) -> E + 'a) -> ::dioxus_core::MountedAttribute<'a> {
+            pub fn $name<E: crate::EventReturn<T>, T>(mut _f: impl FnMut(::dioxus_core::Event<$data>) -> E + 'static) -> ::dioxus_core::Attribute {
                 ::dioxus_core::Attribute::new(
                     impl_event!(@name $name $($js_name)?),
-                    _cx.listener(move |e: ::dioxus_core::Event<crate::PlatformEventData>| {
-                        _f(e.map(|e|e.into())).spawn(_cx);
+::dioxus_core::AttributeValue::listener(move |e: ::dioxus_core::Event<crate::PlatformEventData>| {
+                        _f(e.map(|e|e.into())).spawn();
                     }),
                     None,
                     false,
@@ -350,7 +350,7 @@ pub fn event_bubbles(evt: &str) -> bool {
 
 #[doc(hidden)]
 pub trait EventReturn<P>: Sized {
-    fn spawn(self, _cx: &dioxus_core::ScopeState) {}
+    fn spawn(self) {}
 }
 
 impl EventReturn<()> for () {}
@@ -362,7 +362,7 @@ where
     T: std::future::Future<Output = ()> + 'static,
 {
     #[inline]
-    fn spawn(self, cx: &dioxus_core::ScopeState) {
-        cx.spawn(self);
+    fn spawn(self) {
+        dioxus_core::prelude::spawn(self);
     }
 }

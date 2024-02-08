@@ -1,5 +1,5 @@
 use crate::{
-    assets::{asset_manifest, create_assets_head, process_assets, WebAssetConfigDropGuard},
+    assets::{asset_manifest, create_assets_head, process_assets, AssetConfigDropGuard},
     error::{Error, Result},
     tools::Tool,
 };
@@ -11,6 +11,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 use manganis_cli_support::{AssetManifest, ManganisSupportGuard};
 use std::{
+    env,
     fs::{copy, create_dir_all, File},
     io::Read,
     panic,
@@ -30,7 +31,45 @@ pub struct BuildResult {
     pub assets: Option<AssetManifest>,
 }
 
-pub fn build(config: &CrateConfig, _: bool, skip_assets: bool) -> Result<BuildResult> {
+/// This trait is only created for the convenient and concise way to set
+/// `RUSTFLAGS` environment variable for the `subprocess::Exec`.
+pub trait ExecWithRustFlagsSetter {
+    fn set_rust_flags(self, rust_flags: Option<String>) -> Self;
+}
+
+impl ExecWithRustFlagsSetter for subprocess::Exec {
+    /// Sets (appends to, if already set) `RUSTFLAGS` environment variable if
+    /// `rust_flags` is not `None`.
+    fn set_rust_flags(self, rust_flags: Option<String>) -> Self {
+        if let Some(rust_flags) = rust_flags {
+            // Some `RUSTFLAGS` might be already set in the environment or provided
+            // by the user. They should take higher priority than the default flags.
+            // If no default flags are provided, then there is no point in
+            // redefining the environment variable with the same value, if it is
+            // even set. If no custom flags are set, then there is no point in
+            // adding the unnecessary whitespace to the command.
+            self.env(
+                "RUSTFLAGS",
+                if let Ok(custom_rust_flags) = env::var("RUSTFLAGS") {
+                    rust_flags + " " + custom_rust_flags.as_str()
+                } else {
+                    rust_flags
+                },
+            )
+        } else {
+            self
+        }
+    }
+}
+
+/// Build client (WASM).
+/// Note: `rust_flags` argument is only used for the fullstack platform.
+pub fn build(
+    config: &CrateConfig,
+    _: bool,
+    skip_assets: bool,
+    rust_flags: Option<String>,
+) -> Result<BuildResult> {
     // [1] Build the project with cargo, generating a wasm32-unknown-unknown target (is there a more specific, better target to leverage?)
     // [2] Generate the appropriate build folders
     // [3] Wasm-bindgen the .wasm file, and move it into the {builddir}/modules/xxxx/xxxx_bg.wasm
@@ -48,7 +87,7 @@ pub fn build(config: &CrateConfig, _: bool, skip_assets: bool) -> Result<BuildRe
     let out_dir = config.out_dir();
     let asset_dir = config.asset_dir();
 
-    let _guard = WebAssetConfigDropGuard::new();
+    let _guard = AssetConfigDropGuard::new();
     let _manganis_support = ManganisSupportGuard::default();
 
     // start to build the assets
@@ -72,6 +111,7 @@ pub fn build(config: &CrateConfig, _: bool, skip_assets: bool) -> Result<BuildRe
     }
 
     let cmd = subprocess::Exec::cmd("cargo")
+        .set_rust_flags(rust_flags)
         .env("CARGO_TARGET_DIR", target_dir)
         .cwd(crate_dir)
         .arg("build")
@@ -79,6 +119,8 @@ pub fn build(config: &CrateConfig, _: bool, skip_assets: bool) -> Result<BuildRe
         .arg("wasm32-unknown-unknown")
         .arg("--message-format=json");
 
+    // TODO: make the initial variable mutable to simplify all the expressions
+    // below. Look inside the `build_desktop()` as an example.
     let cmd = if config.release {
         cmd.arg("--release")
     } else {
@@ -283,10 +325,13 @@ pub fn build(config: &CrateConfig, _: bool, skip_assets: bool) -> Result<BuildRe
     })
 }
 
+/// Note: `rust_flags` argument is only used for the fullstack platform
+/// (server).
 pub fn build_desktop(
     config: &CrateConfig,
     _is_serve: bool,
     skip_assets: bool,
+    rust_flags: Option<String>,
 ) -> Result<BuildResult> {
     log::info!("🚅 Running build [Desktop] command...");
 
@@ -294,8 +339,10 @@ pub fn build_desktop(
     let ignore_files = build_assets(config)?;
     let _guard = dioxus_cli_config::__private::save_config(config);
     let _manganis_support = ManganisSupportGuard::default();
+    let _guard = AssetConfigDropGuard::new();
 
     let mut cmd = subprocess::Exec::cmd("cargo")
+        .set_rust_flags(rust_flags)
         .env("CARGO_TARGET_DIR", &config.target_dir)
         .cwd(&config.crate_dir)
         .arg("build")
@@ -489,7 +536,7 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
 }
 
 pub fn gen_page(config: &CrateConfig, manifest: Option<&AssetManifest>, serve: bool) -> String {
-    let _gaurd = WebAssetConfigDropGuard::new();
+    let _guard = AssetConfigDropGuard::new();
 
     let crate_root = crate_root().unwrap();
     let custom_html_file = crate_root.join("index.html");

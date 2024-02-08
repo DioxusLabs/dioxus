@@ -2,36 +2,34 @@
 
 use dioxus::prelude::*;
 
-const _STYLE: &str = manganis::mg!(file("./public/tailwind.css"));
+const _STYLE: &str = manganis::mg!(file("public/tailwind.css"));
 
 fn main() {
-    #[cfg(not(target_arch = "wasm32"))]
-    dioxus_desktop::launch(app);
-    #[cfg(target_arch = "wasm32")]
-    dioxus_web::launch(app);
+    launch(app);
 }
 
-pub fn app(cx: Scope) -> Element {
+pub fn app() -> Element {
     let grey_background = true;
-    cx.render(rsx!(
+    rsx!(
         div {
             header {
                 class: "text-gray-400 body-font",
                 // you can use optional attributes to optionally apply a tailwind class
-                class: if grey_background { "bg-gray-900" },
+                class: if grey_background {
+                    "bg-gray-900"
+                },
                 div { class: "container mx-auto flex flex-wrap p-5 flex-col md:flex-row items-center",
                     a { class: "flex title-font font-medium items-center text-white mb-4 md:mb-0",
                         StacksIcon {}
-                        span { class: "ml-3 text-xl", "Hello Dioxus!"}
+                        span { class: "ml-3 text-xl", "Hello Dioxus!" }
                     }
                     nav { class: "md:ml-auto flex flex-wrap items-center text-base justify-center",
-                        a { class: "mr-5 hover:text-white", "First Link"}
-                        a { class: "mr-5 hover:text-white", "Second Link"}
-                        a { class: "mr-5 hover:text-white", "Third Link"}
-                        a { class: "mr-5 hover:text-white", "Fourth Link"}
+                        a { class: "mr-5 hover:text-white", "First Link" }
+                        a { class: "mr-5 hover:text-white", "Second Link" }
+                        a { class: "mr-5 hover:text-white", "Third Link" }
+                        a { class: "mr-5 hover:text-white", "Fourth Link" }
                     }
-                    button {
-                        class: "inline-flex items-center bg-gray-800 border-0 py-1 px-3 focus:outline-none hover:bg-gray-700 rounded text-base mt-4 md:mt-0",
+                    button { class: "inline-flex items-center bg-gray-800 border-0 py-1 px-3 focus:outline-none hover:bg-gray-700 rounded text-base mt-4 md:mt-0",
                         "Button"
                         RightArrowIcon {}
                     }
@@ -45,21 +43,17 @@ pub fn app(cx: Scope) -> Element {
                             br { class: "hidden lg:inline-block" }
                             "Dioxus Sneak Peek"
                         }
-                        p {
-                            class: "mb-8 leading-relaxed",
+                        p { class: "mb-8 leading-relaxed",
 
                             "Dioxus is a new UI framework that makes it easy and simple to write cross-platform apps using web
                             technologies! It is functional, fast, and portable. Dioxus can run on the web, on the desktop, and
                             on mobile and embedded platforms."
-
                         }
                         div { class: "flex justify-center",
-                            button {
-                                class: "inline-flex text-white bg-indigo-500 border-0 py-2 px-6 focus:outline-none hover:bg-indigo-600 rounded text-lg",
+                            button { class: "inline-flex text-white bg-indigo-500 border-0 py-2 px-6 focus:outline-none hover:bg-indigo-600 rounded text-lg",
                                 "Learn more"
                             }
-                            button {
-                                class: "ml-4 inline-flex text-gray-400 bg-gray-800 border-0 py-2 px-6 focus:outline-none hover:bg-gray-700 hover:text-white rounded text-lg",
+                            button { class: "ml-4 inline-flex text-gray-400 bg-gray-800 border-0 py-2 px-6 focus:outline-none hover:bg-gray-700 hover:text-white rounded text-lg",
                                 "Build an app"
                             }
                         }
@@ -68,18 +62,18 @@ pub fn app(cx: Scope) -> Element {
                         img {
                             class: "object-cover object-center rounded",
                             src: "https://i.imgur.com/oK6BLtw.png",
-                            referrerpolicy:"no-referrer",
-                            alt: "hero",
+                            referrerpolicy: "no-referrer",
+                            alt: "hero"
                         }
                     }
                 }
             }
         }
-    ))
+    )
 }
 
-pub fn StacksIcon(cx: Scope) -> Element {
-    cx.render(rsx!(
+pub fn StacksIcon() -> Element {
+    rsx!(
         svg {
             fill: "none",
             stroke: "currentColor",
@@ -88,13 +82,13 @@ pub fn StacksIcon(cx: Scope) -> Element {
             stroke_width: "2",
             class: "w-10 h-10 text-white p-2 bg-indigo-500 rounded-full",
             view_box: "0 0 24 24",
-            path { d: "M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"}
+            path { d: "M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" }
         }
-    ))
+    )
 }
 
-pub fn RightArrowIcon(cx: Scope) -> Element {
-    cx.render(rsx!(
+pub fn RightArrowIcon() -> Element {
+    rsx!(
         svg {
             fill: "none",
             stroke: "currentColor",
@@ -103,7 +97,7 @@ pub fn RightArrowIcon(cx: Scope) -> Element {
             stroke_width: "2",
             class: "w-4 h-4 ml-1",
             view_box: "0 0 24 24",
-            path { d: "M5 12h14M12 5l7 7-7 7"}
+            path { d: "M5 12h14M12 5l7 7-7 7" }
         }
-    ))
+    )
 }

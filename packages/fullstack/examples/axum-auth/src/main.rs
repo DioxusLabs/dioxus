@@ -2,12 +2,12 @@
 //!
 //! ```sh
 //! dx build --features web
-//! cargo run --features ssr
+//! cargo run --features server
 //! ```
 
 #![allow(non_snake_case, unused)]
 
-#[cfg(feature = "ssr")]
+#[cfg(feature = "server")]
 mod auth;
 
 use dioxus::prelude::*;
@@ -19,7 +19,7 @@ fn main() {
     // Hydrate the application on the client
     dioxus_web::launch_cfg(app, dioxus_web::Config::new().hydrate(true));
 
-    #[cfg(feature = "ssr")]
+    #[cfg(feature = "server")]
     {
         use crate::auth::*;
         use axum::routing::*;
@@ -51,7 +51,7 @@ fn main() {
                 // build our application with some routes
                 let app = Router::new()
                     // Server side render the application, serve static assets, and register server functions
-                    .serve_dioxus_application("", ServeConfigBuilder::new(app, ()))
+                    .serve_dioxus_application("", ServerConfig::new(app, ()))
                     .layer(
                         axum_session_auth::AuthSessionLayer::<
                             crate::auth::User,
@@ -74,11 +74,11 @@ fn main() {
     }
 }
 //
-fn app(cx: Scope) -> Element {
-    let user_name = use_state(cx, || "?".to_string());
-    let permissions = use_state(cx, || "?".to_string());
+fn app() -> Element {
+    let user_name = use_signal(|| "?".to_string());
+    let permissions = use_signal(|| "?".to_string());
 
-    cx.render(rsx! {
+    rsx! {
         div {
             button {
                 onclick: move |_| {
@@ -117,7 +117,7 @@ fn app(cx: Scope) -> Element {
             }
             "Permissions: {permissions}"
         }
-    })
+    }
 }
 
 #[server(GetUserName)]

@@ -7,36 +7,28 @@ wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
 #[test]
 fn makes_tree() {
-    fn app(cx: Scope) -> Element {
-        cx.render(rsx! {
+    fn app() -> Element {
+        rsx! {
             div {
-                div {
-                    h1 {}
-                }
-                div {
-                    h2 {}
-                }
+                div { h1 {} }
+                div { h2 {} }
             }
-        })
+        }
     }
 
     let mut dom = VirtualDom::new(app);
-    let muts = dom.rebuild();
+    let muts = dom.rebuild_to_vec();
 
     dbg!(muts.edits);
 }
 
 #[wasm_bindgen_test]
 fn rehydrates() {
-    fn app(cx: Scope) -> Element {
-        cx.render(rsx! {
+    fn app() -> Element {
+        rsx! {
             div {
-                div {
-                    h1 { "h1" }
-                }
-                div {
-                    h2 { "h2" }
-                }
+                div { h1 { "h1" } }
+                div { h2 { "h2" } }
                 button {
                     onclick: move |_| {
                         println!("clicked");
@@ -45,11 +37,11 @@ fn rehydrates() {
                 }
                 {false.then(|| rsx!{ "hello" })}
             }
-        })
+        }
     }
 
     let mut dom = VirtualDom::new(app);
-    let _ = dom.rebuild();
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
     let out = dioxus_ssr::render(&dom);
 
     window()
@@ -60,5 +52,5 @@ fn rehydrates() {
         .unwrap()
         .set_inner_html(&format!("<div id='main'>{out}</div>"));
 
-    dioxus_web::launch_cfg(app, Config::new().hydrate(true));
+    dioxus_web::launch::launch_cfg(app, Config::new().hydrate(true));
 }

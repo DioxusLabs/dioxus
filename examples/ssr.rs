@@ -6,14 +6,13 @@ use dioxus::prelude::*;
 
 fn main() {
     // We can render VirtualDoms
-    let mut vdom = VirtualDom::new(app);
-    let _ = vdom.rebuild();
+    let vdom = VirtualDom::prebuilt(app);
     println!("{}", dioxus_ssr::render(&vdom));
 
     // Or we can render rsx! calls themselves
     println!(
         "{}",
-        dioxus_ssr::render_lazy(rsx! {
+        dioxus_ssr::render_element(rsx! {
             div {
                 h1 { "Hello, world!" }
             }
@@ -30,11 +29,11 @@ fn main() {
     println!("{file}");
 }
 
-fn app(cx: Scope) -> Element {
-    cx.render(rsx!(
+fn app() -> Element {
+    rsx!(
         div {
             h1 { "Title" }
             p { "Body" }
         }
-    ))
+    )
 }

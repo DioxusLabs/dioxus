@@ -7,7 +7,8 @@ description = "Fullstack Dioxus Utilities"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
-keywords = ["ui", "gui", "react", "ssr", "fullstack"]
+keywords = ["ui", "gui", "react", "server", "fullstack"]
+resolver = "2"
 
 [dependencies]
 # server functions
@@ -25,8 +26,9 @@ tower-http = { version = "0.4.0", optional = true, features = ["fs", "compressio
 salvo = { version = "0.63.0", optional = true, features = ["serve-static", "websocket", "compression"] }
 http-body-util = { version = "0.1.0-rc.2", optional = true }
 
+dioxus-lib = { workspace = true }
+
 # Dioxus + SSR
-dioxus = { workspace = true }
 dioxus-ssr = { workspace = true, optional = true }
 hyper = { version = "0.14.25", optional = true }
 http = { version = "0.2.9", optional = true }
@@ -37,8 +39,8 @@ dioxus-web = { workspace = true, features = ["hydrate"], optional = true }
 # Desktop Integration
 dioxus-desktop = { workspace = true, optional = true }
 
-# Router Integration
-dioxus-router = { workspace = true, optional = true }
+# Mobile Integration
+dioxus-mobile = { workspace = true, optional = true }
 
 tracing = { workspace = true }
 tracing-futures = { workspace = true, optional = true }
@@ -60,23 +62,22 @@ async-trait = "0.1.71"
 bytes = "1.4.0"
 tower = { version = "0.4.13", features = ["util"], optional = true }
 tower-layer = { version = "0.3.2", optional = true }
+web-sys = { version = "0.3.61", optional = true, features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"] }
+
+dioxus-cli-config = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 dioxus-hot-reload = { workspace = true }
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-web-sys = { version = "0.3.61", features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"] }
-
-
 [features]
 default = ["hot-reload"]
-router = ["dioxus-router"]
 hot-reload = ["serde_json", "futures-util"]
-web = ["dioxus-web"]
+web = ["dioxus-web", "web-sys"]
 desktop = ["dioxus-desktop"]
-warp = ["dep:warp", "ssr"]
-axum = ["dep:axum", "tower-http", "ssr"]
-salvo = ["dep:salvo", "ssr", "http-body-util"]
-ssr = ["server_fn/ssr", "dioxus_server_macro/ssr", "tokio", "tokio-util", "tokio-stream", "dioxus-ssr", "tower", "hyper", "http", "dioxus-router?/ssr", "tower-layer", "anymap", "tracing-futures", "pin-project", "thiserror"]
+mobile = ["dioxus-mobile"]
+warp = ["dep:warp", "server"]
+axum = ["dep:axum", "tower-http", "server"]
+salvo = ["dep:salvo", "server", "http-body-util"]
+server = ["server_fn/ssr", "dioxus_server_macro/server", "tokio", "tokio-util", "tokio-stream", "dioxus-ssr", "dioxus-ssr/incremental", "tower", "hyper", "http", "tower-layer", "anymap", "tracing-futures", "pin-project", "thiserror", "dioxus-cli-config"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls"]

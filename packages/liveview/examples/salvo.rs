@@ -5,15 +5,15 @@ use salvo::prelude::*;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-fn app(cx: Scope) -> Element {
-    let mut num = use_state(cx, || 0);
+fn app() -> Element {
+    let mut num = use_signal(|| 0);
 
-    cx.render(rsx! {
+    rsx! {
         div {
             "hello salvo! {num}"
             button { onclick: move |_| num += 1, "Increment" }
         }
-    })
+    }
 }
 
 #[tokio::main]
@@ -36,7 +36,7 @@ async fn main() {
 }
 
 #[handler]
-fn index(_depot: &mut Depot, res: &mut Response) {
+fn index(res: &mut Response) {
     let addr: SocketAddr = ([127, 0, 0, 1], 3030).into();
     res.render(Text::Html(format!(
         r#"

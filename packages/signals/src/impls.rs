@@ -1,294 +1,167 @@
-use crate::rt::CopyValue;
-use crate::signal::{ReadOnlySignal, Signal, Write};
-use generational_box::GenerationalRef;
-use generational_box::GenerationalRefMut;
+use crate::copy_value::CopyValue;
+use crate::read::Readable;
+use crate::signal::Signal;
+use crate::write::Writable;
+use crate::{GlobalMemo, GlobalSignal, MappedSignal, ReadOnlySignal, SignalData};
+use generational_box::{AnyStorage, Storage};
 
 use std::{
     fmt::{Debug, Display},
     ops::{Add, Div, Mul, Sub},
 };
 
+macro_rules! default_impl {
+    ($ty:ident $(: $extra_bounds:path)? $(, $bound_ty:ident : $bound:path, $vec_bound_ty:ident : $vec_bound:path)?) => {
+        $(
+            impl<T: Default + 'static, $bound_ty: $bound> Default for $ty<T, $bound_ty> {
+                #[track_caller]
+                fn default() -> Self {
+                    Self::new_maybe_sync(Default::default())
+                }
+            }
+        )?
+    }
+}
+
 macro_rules! read_impls {
-    ($ty:ident) => {
-        impl<T: Default + 'static> Default for $ty<T> {
-            fn default() -> Self {
-                Self::new(Default::default())
-            }
-        }
-
-        impl<T> std::clone::Clone for $ty<T> {
-            fn clone(&self) -> Self {
-                *self
-            }
-        }
-
-        impl<T> Copy for $ty<T> {}
-
-        impl<T: Display + 'static> Display for $ty<T> {
+    ($ty:ident $(: $extra_bounds:path)? $(, $bound_ty:ident : $bound:path, $vec_bound_ty:ident : $vec_bound:path)?) => {
+        impl<T: $($extra_bounds + )? Display + 'static $(,$bound_ty: $bound)?> Display for $ty<T $(, $bound_ty)?> {
+            #[track_caller]
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 self.with(|v| Display::fmt(v, f))
             }
         }
 
-        impl<T: Debug + 'static> Debug for $ty<T> {
+        impl<T: $($extra_bounds + )? Debug + 'static $(,$bound_ty: $bound)?> Debug for $ty<T $(, $bound_ty)?> {
+            #[track_caller]
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 self.with(|v| Debug::fmt(v, f))
             }
         }
 
-        impl<T: 'static> $ty<Vec<T>> {
-            /// Read a value from the inner vector.
-            pub fn get(&self, index: usize) -> Option<GenerationalRef<T>> {
-                GenerationalRef::filter_map(self.read(), |v| v.get(index))
-            }
-        }
-
-        impl<T: 'static> $ty<Option<T>> {
-            /// Unwraps the inner value and clones it.
-            pub fn unwrap(&self) -> T
-            where
-                T: Clone,
-            {
-                self.with(|v| v.clone()).unwrap()
-            }
-
-            /// Attempts to read the inner value of the Option.
-            pub fn as_ref(&self) -> Option<GenerationalRef<T>> {
-                GenerationalRef::filter_map(self.read(), |v| v.as_ref())
+        impl<T: $($extra_bounds + )? PartialEq + 'static $(,$bound_ty: $bound)?> PartialEq<T> for $ty<T $(, $bound_ty)?> {
+            #[track_caller]
+            fn eq(&self, other: &T) -> bool {
+                self.with(|v| *v == *other)
             }
         }
     };
 }
 
 macro_rules! write_impls {
-    ($ty:ident) => {
-        impl<T: Add<Output = T> + Copy + 'static> std::ops::Add<T> for $ty<T> {
+    ($ty:ident, $bound:path, $vec_bound:path) => {
+        impl<T: Add<Output = T> + Copy + 'static, S: $bound> std::ops::Add<T> for $ty<T, S> {
             type Output = T;
 
+            #[track_caller]
             fn add(self, rhs: T) -> Self::Output {
                 self.with(|v| *v + rhs)
             }
         }
 
-        impl<T: Add<Output = T> + Copy + 'static> std::ops::AddAssign<T> for $ty<T> {
+        impl<T: Add<Output = T> + Copy + 'static, S: $bound> std::ops::AddAssign<T> for $ty<T, S> {
+            #[track_caller]
             fn add_assign(&mut self, rhs: T) {
                 self.with_mut(|v| *v = *v + rhs)
             }
         }
 
-        impl<T: Sub<Output = T> + Copy + 'static> std::ops::SubAssign<T> for $ty<T> {
+        impl<T: Sub<Output = T> + Copy + 'static, S: $bound> std::ops::SubAssign<T> for $ty<T, S> {
+            #[track_caller]
             fn sub_assign(&mut self, rhs: T) {
                 self.with_mut(|v| *v = *v - rhs)
             }
         }
 
-        impl<T: Sub<Output = T> + Copy + 'static> std::ops::Sub<T> for $ty<T> {
+        impl<T: Sub<Output = T> + Copy + 'static, S: $bound> std::ops::Sub<T> for $ty<T, S> {
             type Output = T;
 
+            #[track_caller]
             fn sub(self, rhs: T) -> Self::Output {
                 self.with(|v| *v - rhs)
             }
         }
 
-        impl<T: Mul<Output = T> + Copy + 'static> std::ops::MulAssign<T> for $ty<T> {
+        impl<T: Mul<Output = T> + Copy + 'static, S: $bound> std::ops::MulAssign<T> for $ty<T, S> {
+            #[track_caller]
             fn mul_assign(&mut self, rhs: T) {
                 self.with_mut(|v| *v = *v * rhs)
             }
         }
 
-        impl<T: Mul<Output = T> + Copy + 'static> std::ops::Mul<T> for $ty<T> {
+        impl<T: Mul<Output = T> + Copy + 'static, S: $bound> std::ops::Mul<T> for $ty<T, S> {
             type Output = T;
 
+            #[track_caller]
             fn mul(self, rhs: T) -> Self::Output {
                 self.with(|v| *v * rhs)
             }
         }
 
-        impl<T: Div<Output = T> + Copy + 'static> std::ops::DivAssign<T> for $ty<T> {
+        impl<T: Div<Output = T> + Copy + 'static, S: $bound> std::ops::DivAssign<T> for $ty<T, S> {
+            #[track_caller]
             fn div_assign(&mut self, rhs: T) {
                 self.with_mut(|v| *v = *v / rhs)
             }
         }
 
-        impl<T: Div<Output = T> + Copy + 'static> std::ops::Div<T> for $ty<T> {
+        impl<T: Div<Output = T> + Copy + 'static, S: $bound> std::ops::Div<T> for $ty<T, S> {
             type Output = T;
 
+            #[track_caller]
             fn div(self, rhs: T) -> Self::Output {
                 self.with(|v| *v / rhs)
-            }
-        }
-
-        impl<T: 'static> $ty<Vec<T>> {
-            /// Pushes a new value to the end of the vector.
-            pub fn push(&self, value: T) {
-                self.with_mut(|v| v.push(value))
-            }
-
-            /// Pops the last value from the vector.
-            pub fn pop(&self) -> Option<T> {
-                self.with_mut(|v| v.pop())
-            }
-
-            /// Inserts a new value at the given index.
-            pub fn insert(&self, index: usize, value: T) {
-                self.with_mut(|v| v.insert(index, value))
-            }
-
-            /// Removes the value at the given index.
-            pub fn remove(&self, index: usize) -> T {
-                self.with_mut(|v| v.remove(index))
-            }
-
-            /// Clears the vector, removing all values.
-            pub fn clear(&self) {
-                self.with_mut(|v| v.clear())
-            }
-
-            /// Extends the vector with the given iterator.
-            pub fn extend(&self, iter: impl IntoIterator<Item = T>) {
-                self.with_mut(|v| v.extend(iter))
-            }
-
-            /// Truncates the vector to the given length.
-            pub fn truncate(&self, len: usize) {
-                self.with_mut(|v| v.truncate(len))
-            }
-
-            /// Swaps two values in the vector.
-            pub fn swap_remove(&self, index: usize) -> T {
-                self.with_mut(|v| v.swap_remove(index))
-            }
-
-            /// Retains only the values that match the given predicate.
-            pub fn retain(&self, f: impl FnMut(&T) -> bool) {
-                self.with_mut(|v| v.retain(f))
-            }
-
-            /// Splits the vector into two at the given index.
-            pub fn split_off(&self, at: usize) -> Vec<T> {
-                self.with_mut(|v| v.split_off(at))
-            }
-        }
-
-        impl<T: 'static> $ty<Option<T>> {
-            /// Takes the value out of the Option.
-            pub fn take(&self) -> Option<T> {
-                self.with_mut(|v| v.take())
-            }
-
-            /// Replace the value in the Option.
-            pub fn replace(&self, value: T) -> Option<T> {
-                self.with_mut(|v| v.replace(value))
-            }
-
-            /// Gets the value out of the Option, or inserts the given value if the Option is empty.
-            pub fn get_or_insert(&self, default: T) -> GenerationalRef<T> {
-                self.get_or_insert_with(|| default)
-            }
-
-            /// Gets the value out of the Option, or inserts the value returned by the given function if the Option is empty.
-            pub fn get_or_insert_with(&self, default: impl FnOnce() -> T) -> GenerationalRef<T> {
-                let borrow = self.read();
-                if borrow.is_none() {
-                    drop(borrow);
-                    self.with_mut(|v| *v = Some(default()));
-                    GenerationalRef::map(self.read(), |v| v.as_ref().unwrap())
-                } else {
-                    GenerationalRef::map(borrow, |v| v.as_ref().unwrap())
-                }
             }
         }
     };
 }
 
-read_impls!(CopyValue);
-write_impls!(CopyValue);
-read_impls!(Signal);
-write_impls!(Signal);
-read_impls!(ReadOnlySignal);
+read_impls!(CopyValue, S: Storage<T>, S: Storage<Vec<T>>);
+default_impl!(CopyValue, S: Storage<T>, S: Storage<Vec<T>>);
+write_impls!(CopyValue, Storage<T>, Storage<Vec<T>>);
 
-/// An iterator over the values of a `CopyValue<Vec<T>>`.
-pub struct CopyValueIterator<T: 'static> {
-    index: usize,
-    value: CopyValue<Vec<T>>,
-}
-
-impl<T: Clone> Iterator for CopyValueIterator<T> {
-    type Item = T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let index = self.index;
-        self.index += 1;
-        self.value.get(index).map(|v| v.clone())
+impl<T: 'static, S: Storage<T>> Clone for CopyValue<T, S> {
+    fn clone(&self) -> Self {
+        *self
     }
 }
 
-impl<T: Clone + 'static> IntoIterator for CopyValue<Vec<T>> {
-    type IntoIter = CopyValueIterator<T>;
+impl<T: 'static, S: Storage<T>> Copy for CopyValue<T, S> {}
 
-    type Item = T;
+read_impls!(Signal, S: Storage<SignalData<T>>, S: Storage<SignalData<Vec<T>>>);
+default_impl!(Signal, S: Storage<SignalData<T>>, S: Storage<SignalData<Vec<T>>>);
+write_impls!(Signal, Storage<SignalData<T>>, Storage<SignalData<Vec<T>>>);
 
-    fn into_iter(self) -> Self::IntoIter {
-        CopyValueIterator {
-            index: 0,
-            value: self,
-        }
+impl<T: 'static, S: Storage<SignalData<T>>> Clone for Signal<T, S> {
+    fn clone(&self) -> Self {
+        *self
     }
 }
 
-impl<T: 'static> CopyValue<Vec<T>> {
-    /// Write to an element in the inner vector.
-    pub fn get_mut(&self, index: usize) -> Option<GenerationalRefMut<T>> {
-        GenerationalRefMut::filter_map(self.write(), |v| v.get_mut(index))
+impl<T: 'static, S: Storage<SignalData<T>>> Copy for Signal<T, S> {}
+
+read_impls!(
+    ReadOnlySignal,
+    S: Storage<SignalData<T>>,
+    S: Storage<SignalData<Vec<T>>>
+);
+default_impl!(
+    ReadOnlySignal,
+    S: Storage<SignalData<T>>,
+    S: Storage<SignalData<Vec<T>>>
+);
+
+impl<T: 'static, S: Storage<SignalData<T>>> Clone for ReadOnlySignal<T, S> {
+    fn clone(&self) -> Self {
+        *self
     }
 }
 
-impl<T: 'static> CopyValue<Option<T>> {
-    /// Deref the inner value mutably.
-    pub fn as_mut(&self) -> Option<GenerationalRefMut<T>> {
-        GenerationalRefMut::filter_map(self.write(), |v| v.as_mut())
-    }
-}
+impl<T: 'static, S: Storage<SignalData<T>>> Copy for ReadOnlySignal<T, S> {}
 
-/// An iterator over items in a `Signal<Vec<T>>`.
-pub struct SignalIterator<T: 'static> {
-    index: usize,
-    value: Signal<Vec<T>>,
-}
+read_impls!(GlobalSignal);
+default_impl!(GlobalSignal);
 
-impl<T: Clone> Iterator for SignalIterator<T> {
-    type Item = T;
+read_impls!(GlobalMemo: PartialEq);
 
-    fn next(&mut self) -> Option<Self::Item> {
-        let index = self.index;
-        self.index += 1;
-        self.value.get(index).map(|v| v.clone())
-    }
-}
-
-impl<T: Clone + 'static> IntoIterator for Signal<Vec<T>> {
-    type IntoIter = SignalIterator<T>;
-
-    type Item = T;
-
-    fn into_iter(self) -> Self::IntoIter {
-        SignalIterator {
-            index: 0,
-            value: self,
-        }
-    }
-}
-
-impl<T: 'static> Signal<Vec<T>> {
-    /// Returns a reference to an element or `None` if out of bounds.
-    pub fn get_mut(&self, index: usize) -> Option<Write<T, Vec<T>>> {
-        Write::filter_map(self.write(), |v| v.get_mut(index))
-    }
-}
-
-impl<T: 'static> Signal<Option<T>> {
-    /// Returns a reference to an element or `None` if out of bounds.
-    pub fn as_mut(&self) -> Option<Write<T, Option<T>>> {
-        Write::filter_map(self.write(), |v| v.as_mut())
-    }
-}
+read_impls!(MappedSignal, S: AnyStorage, S: AnyStorage);
