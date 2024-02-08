@@ -13,16 +13,15 @@ jobs:
       contents: write
 
     steps:
-      - name: Clone Repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update
+      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
 
-      - name: Set up cargo cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          prefix-key: 'v0-docs'
 
       - name: cargo doc
-        run: cargo doc --no-deps --workspace --keep-going
+        run: cargo doc --no-deps --workspace
 
       - name: upload artifacts
         uses: actions/upload-pages-artifact@v3
