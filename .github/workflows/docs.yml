@@ -6,6 +6,7 @@ on:
 
 jobs:
   deploy:
+  if: github.event.pull_request.draft == false
     name: Build & Deploy
     runs-on: ubuntu-latest
     permissions:
@@ -24,7 +25,7 @@ jobs:
 
 
       - name: cargo doc
-        run: cargo doc --no-deps --workspace
+        run: cargo doc --no-deps --workspace --features fullstack/server
 
       - name: upload artifacts
         uses: actions/upload-pages-artifact@v3
