@@ -6,7 +6,7 @@ on:
 
 jobs:
   deploy:
-  if: github.event.pull_request.draft == false
+    if: github.event.pull_request.draft == false
     name: Build & Deploy
     runs-on: ubuntu-latest
     permissions:
