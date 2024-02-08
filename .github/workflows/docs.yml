@@ -7,30 +7,30 @@ on:
 
 jobs:
   deploy:
-  name: deploy
-  runs-on: ubuntu-latest
-  permissions:
-    contents: write
+    name: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
-  steps:
-    - name: Clone Repo
-      uses: actions/checkout@v4
+    steps:
+      - name: Clone Repo
+        uses: actions/checkout@v4
 
-    - name: Set up cargo cache
-      uses: Swatinem/rust-cache@v2
-      with:
+      - name: Set up cargo cache
+        uses: Swatinem/rust-cache@v2
+        with:
         prefix-key: "v0-docs"
 
-    - name: cargo doc
-      run: cargo doc --no-deps --workspace
+      - name: cargo doc
+        run: cargo doc --no-deps --workspace
 
-    - name: upload artifacts
-      uses: actions/upload-pages-artifact@v3
+      - name: upload artifacts
+        uses: actions/upload-pages-artifact@v3
 
-    - name: Deploy
-      uses: JamesIves/github-pages-deploy-action@v4.5.0
-      with:
-        branch: gh-pages-docs
-        folder: target/doc
-        #target-folder: docs
-        #repository-name: 
+      - name: Deploy
+        uses: JamesIves/github-pages-deploy-action@v4.5.0
+        with:
+          branch: gh-pages-docs
+          folder: target/doc
+          #target-folder: docs
+          #repository-name: 
