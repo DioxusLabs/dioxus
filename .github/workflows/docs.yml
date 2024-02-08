@@ -22,7 +22,7 @@ jobs:
           prefix-key: 'v0-docs'
 
       - name: cargo doc
-        run: cargo doc --no-deps --workspace
+        run: cargo doc --no-deps --workspace --keep-going
 
       - name: upload artifacts
         uses: actions/upload-pages-artifact@v3
