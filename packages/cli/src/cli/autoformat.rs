@@ -10,9 +10,9 @@ use super::*;
 /// Format some rsx
 #[derive(Clone, Debug, Parser)]
 pub struct Autoformat {
-    /// Run rustfmt before the dioxus formatter`
+    /// Format rust code before the formatting the rsx macros
     #[clap(long)]
-    pub rustfmt: bool,
+    pub all_code: bool,
 
     /// Run in 'check' mode. Exits with 0 if input is formatted correctly. Exits
     /// with 1 and prints a diff if formatting is required.
@@ -39,13 +39,13 @@ impl Autoformat {
             raw,
             file,
             split_line_attributes,
-            rustfmt: do_rustfmt,
+            all_code: format_rust_code,
             ..
         } = self;
 
         // Default to formatting the project
         if raw.is_none() && file.is_none() {
-            if let Err(e) = autoformat_project(check, split_line_attributes, do_rustfmt) {
+            if let Err(e) = autoformat_project(check, split_line_attributes, format_rust_code) {
                 eprintln!("error formatting project: {}", e);
                 exit(1);
             }
@@ -64,14 +64,18 @@ impl Autoformat {
 
         // Format single file
         if let Some(file) = file {
-            refactor_file(file, split_line_attributes, do_rustfmt)?;
+            refactor_file(file, split_line_attributes, format_rust_code)?;
         }
 
         Ok(())
     }
 }
 
-fn refactor_file(file: String, split_line_attributes: bool, do_rustfmt: bool) -> Result<(), Error> {
+fn refactor_file(
+    file: String,
+    split_line_attributes: bool,
+    format_rust_code: bool,
+) -> Result<(), Error> {
     let indent = indentation_for(".", split_line_attributes)?;
     let file_content = if file == "-" {
         let mut contents = String::new();
@@ -85,8 +89,8 @@ fn refactor_file(file: String, split_line_attributes: bool, do_rustfmt: bool) ->
         exit(1);
     };
 
-    if do_rustfmt {
-        s = rustfmt(&s)?;
+    if format_rust_code {
+        s = format_rust(&s)?;
     }
 
     let edits = dioxus_autofmt::fmt_file(&s, indent);
@@ -117,11 +121,15 @@ fn get_project_files() -> Vec<PathBuf> {
     files
 }
 
-fn format_file(path: impl AsRef<Path>, indent: IndentOptions, do_rustfmt: bool) -> Result<usize> {
+fn format_file(
+    path: impl AsRef<Path>,
+    indent: IndentOptions,
+    format_rust_code: bool,
+) -> Result<usize> {
     let mut contents = fs::read_to_string(&path)?;
     let mut if_write = false;
-    if do_rustfmt {
-        let formatted = rustfmt(&contents)
+    if format_rust_code {
+        let formatted = format_rust(&contents)
             .map_err(|err| Error::ParseError(format!("Syntax Error:\n{}", err)))?;
         if contents != formatted {
             if_write = true;
@@ -149,7 +157,11 @@ fn format_file(path: impl AsRef<Path>, indent: IndentOptions, do_rustfmt: bool) 
 /// Runs using rayon for multithreading, so it should be really really fast
 ///
 /// Doesn't do mod-descending, so it will still try to format unreachable files. TODO.
-fn autoformat_project(check: bool, split_line_attributes: bool, do_rustfmt: bool) -> Result<()> {
+fn autoformat_project(
+    check: bool,
+    split_line_attributes: bool,
+    format_rust_code: bool,
+) -> Result<()> {
     let files_to_format = get_project_files();
 
     if files_to_format.is_empty() {
@@ -165,7 +177,7 @@ fn autoformat_project(check: bool, split_line_attributes: bool, do_rustfmt: bool
     let counts = files_to_format
         .into_par_iter()
         .map(|path| {
-            let res = format_file(&path, indent.clone(), do_rustfmt);
+            let res = format_file(&path, indent.clone(), format_rust_code);
             match res {
                 Ok(cnt) => Some(cnt),
                 Err(err) => {
@@ -234,7 +246,7 @@ fn indentation_for(
 }
 
 /// Format rust code using prettyplease
-pub fn rustfmt(input: &str) -> Result<String> {
+fn format_rust(input: &str) -> Result<String> {
     let syntax_tree = syn::parse_file(input).map_err(format_syn_error)?;
     let output = prettyplease::unparse(&syntax_tree);
     Ok(output)
@@ -268,7 +280,7 @@ async fn test_auto_fmt() {
     .to_string();
 
     let fmt = Autoformat {
-        rustfmt: false,
+        all_code: false,
         check: false,
         raw: Some(test_rsx),
         file: None,
