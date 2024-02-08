@@ -19,7 +19,7 @@ jobs:
       - name: Set up cargo cache
         uses: Swatinem/rust-cache@v2
         with:
-        prefix-key: "v0-docs"
+        prefix-key: 'v0-docs'
 
       - name: cargo doc
         run: cargo doc --no-deps --workspace
