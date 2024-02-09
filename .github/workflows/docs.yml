@@ -6,7 +6,6 @@ on:
 
 jobs:
   deploy:
-    if: github.event.pull_request.draft == false
     name: Build & Deploy
     runs-on: ubuntu-latest
     permissions:
@@ -16,21 +15,18 @@ jobs:
       - uses: actions/checkout@v4
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@nightly
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
           save-if: ${{ github.ref == 'refs/heads/master' }}
       - uses: ilammy/setup-nasm@v1
 
-
       - name: cargo doc
-        run: cargo doc --no-deps --workspace --features dioxus-fullstack/doc
+        run: cargo doc --no-deps --workspace --all-features
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4.5.0
         with:
           branch: gh-pages-docs
           folder: target/doc
-          #target-folder: docs
-          #repository-name: 

@@ -187,7 +187,7 @@ pub fn serve_dioxus_application(
 ) -> BoxedFilter<(impl Reply,)> {
     let cfg = cfg.into();
     // Serve the dist folder and the index.html file
-    let serve_dir = warp::fs::dir(cfg.assets_path);
+    let serve_dir = warp::fs::dir(cfg.assets_path.clone());
 
     let virtual_dom_factory =
         Arc::new(virtual_dom_factory) as Arc<dyn Fn() -> VirtualDom + Send + Sync + 'static>;
@@ -332,13 +332,13 @@ impl warp::reject::Reject for RecieveFailed {}
 /// ```
 pub fn connect_hot_reload() -> impl Filter<Extract = (impl Reply,), Error = warp::Rejection> + Clone
 {
-    #[cfg(not(all(debug_assertions, feature = "hot-reload", feature = "server")))]
+    #[cfg(not(all(debug_assertions, feature = "hot-reload")))]
     {
         warp::path!("_dioxus" / "hot_reload")
             .map(warp::reply)
             .map(|reply| warp::reply::with_status(reply, warp::http::StatusCode::NOT_FOUND))
     }
-    #[cfg(all(debug_assertions, feature = "hot-reload", feature = "server"))]
+    #[cfg(all(debug_assertions, feature = "hot-reload"))]
     {
         use crate::hot_reload::HotReloadState;
         use futures_util::sink::SinkExt;
@@ -349,7 +349,7 @@ pub fn connect_hot_reload() -> impl Filter<Extract = (impl Reply,), Error = warp
             .and(warp::any().then(crate::hot_reload::spawn_hot_reload))
             .and(warp::ws())
             .map(move |state: &'static HotReloadState, ws: warp::ws::Ws| {
-                #[cfg(all(debug_assertions, feature = "hot-reload", feature = "server"))]
+                // #[cfg(all(debug_assertions, feature = "hot-reload"))]
                 ws.on_upgrade(move |mut websocket| {
                     async move {
                         println!("🔥 Hot Reload WebSocket connected");
@@ -393,7 +393,7 @@ pub fn connect_hot_reload() -> impl Filter<Extract = (impl Reply,), Error = warp
                 .and(warp::ws())
                 .map(move |ws: warp::ws::Ws| {
                     println!("disconnect");
-                    #[cfg(all(debug_assertions, feature = "hot-reload", feature = "server"))]
+                    #[cfg(all(debug_assertions, feature = "hot-reload",))]
                     ws.on_upgrade(move |mut websocket| async move {
                         struct DisconnectOnDrop(Option<warp::ws::WebSocket>);
                         impl Drop for DisconnectOnDrop {

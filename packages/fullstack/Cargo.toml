@@ -81,4 +81,5 @@ salvo = ["dep:salvo", "server", "http-body-util"]
 server = ["server_fn/ssr", "dioxus_server_macro/server", "tokio", "tokio-util", "tokio-stream", "dioxus-ssr", "dioxus-ssr/incremental", "tower", "hyper", "http", "tower-layer", "anymap", "tracing-futures", "pin-project", "thiserror", "dioxus-cli-config"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls"]
-doc = ["thiserror"]
+# This feature enables some nightly flags that make it more clear what structs/methods are available in each feature
+nightly-doc = []
