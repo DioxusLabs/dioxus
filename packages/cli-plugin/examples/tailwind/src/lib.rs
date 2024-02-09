@@ -72,7 +72,14 @@ fn parse_and_save_css(paths: Vec<PathBuf>) -> Result<ResponseEvent, ()> {
     let naive = match get_config("naive_check") {
         Some(st) if &st == "true" => true,
         Some(st) if &st == "false" => false,
-        _ => return Err(()),
+        Some(other) => {
+            log(&format!("Incorrect value for naive_check: {other}"));
+            return Err(());
+        }
+        None => {
+            log(&format!("naive_check config value missing!"));
+            return Err(());
+        }
     };
 
     let classes: Vec<_> = if !naive {
@@ -126,6 +133,7 @@ fn gen_tailwind() -> Result<ResponseEvent, ()> {
     let mut event = ResponseEvent::None;
     for path in watched_paths.iter() {
         let Some(paths) = get_parsable_files(path) else {
+            log(&format!("Found no watchable files in {}", path.display()));
             continue;
         };
         if let ResponseEvent::Refresh(paths) = parse_and_save_css(paths)? {
