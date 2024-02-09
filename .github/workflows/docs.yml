@@ -28,7 +28,7 @@ jobs:
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4.5.0
         with:
-          branch: gh-pages-docs
+          branch: gh-pages
           folder: target/doc
           target-folder: api-docs/nightly
           repository-name: dioxuslabs/docsite
