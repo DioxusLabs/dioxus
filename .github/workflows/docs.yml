@@ -35,5 +35,3 @@ jobs:
           target-folder: api-docs/nightly
           repository-name: dioxuslabs/docsite
           clean: false
-          token: ${{ secrets.DEPLOY_KEY }} # let's pretend I don't need it for now
-
