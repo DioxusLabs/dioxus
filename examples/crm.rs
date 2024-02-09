@@ -1,6 +1,5 @@
 //! Tiny CRM: A port of the Yew CRM example to Dioxus.
 use dioxus::prelude::*;
-use dioxus::router::prelude::*;
 
 fn main() {
     LaunchBuilder::new()
@@ -79,55 +78,59 @@ fn ClientAdd() -> Element {
     };
 
     rsx! {
-        h2 { "Add new Client" }
-        form { class: "pure-form pure-form-aligned", onsubmit: submit_client,
-            fieldset {
-                div { class: "pure-control-group",
-                    label { r#for: "first_name", "First Name" }
-                    input {
-                        id: "first_name",
-                        r#type: "text",
-                        placeholder: "First Name…",
-                        required: "",
-                        value: "{first_name}",
-                        oninput: move |e| first_name.set(e.value()),
+            h2 { "Add new Client" }
+            form { class: "pure-form pure-form-aligned", onsubmit: submit_client,
+                fieldset {
+                    div { class: "pure-control-group",
+                        label { r#for: "first_name", "First Name" }
+                        input {
+                            id: "first_name",
+                            r#type: "text",
+                            placeholder: "First Name…",
+                            required: "",
+                            value: "{first_name}",
+                            oninput: move |e| first_name.set(e.value()),
 
-                        // when the form mounts, focus the first name input
-                        onmounted: move |e| async move {
-                            _ = e.inner().set_focus(true).await;
-                        },
+                            // when the form mounts, focus the first name input
+                            onmounted: move |e| async move {
+    <<<<<<< HEAD
+                                _ = e.inner().set_focus(true).await;
+    =======
+                                _ = e.set_focus(true).await;
+    >>>>>>> dioxuslabs/master
+                            },
+                        }
                     }
-                }
 
-                div { class: "pure-control-group",
-                    label { "for": "last_name", "Last Name" }
-                    input {
-                        id: "last_name",
-                        r#type: "text",
-                        placeholder: "Last Name…",
-                        required: "",
-                        value: "{last_name}",
-                        oninput: move |e| last_name.set(e.value())
+                    div { class: "pure-control-group",
+                        label { "for": "last_name", "Last Name" }
+                        input {
+                            id: "last_name",
+                            r#type: "text",
+                            placeholder: "Last Name…",
+                            required: "",
+                            value: "{last_name}",
+                            oninput: move |e| last_name.set(e.value())
+                        }
                     }
-                }
 
-                div { class: "pure-control-group",
-                    label { "for": "description", "Description" }
-                    textarea {
-                        id: "description",
-                        placeholder: "Description…",
-                        value: "{description}",
-                        oninput: move |e| description.set(e.value())
+                    div { class: "pure-control-group",
+                        label { "for": "description", "Description" }
+                        textarea {
+                            id: "description",
+                            placeholder: "Description…",
+                            value: "{description}",
+                            oninput: move |e| description.set(e.value())
+                        }
                     }
-                }
 
-                div { class: "pure-controls",
-                    button { r#type: "submit", class: "pure-button pure-button-primary", "Save" }
-                    Link { to: Route::ClientList, class: "pure-button pure-button-primary red", "Cancel" }
+                    div { class: "pure-controls",
+                        button { r#type: "submit", class: "pure-button pure-button-primary", "Save" }
+                        Link { to: Route::ClientList, class: "pure-button pure-button-primary red", "Cancel" }
+                    }
                 }
             }
         }
-    }
 }
 
 #[component]

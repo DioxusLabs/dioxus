@@ -10,15 +10,13 @@ use dioxus_fullstack::{launch, prelude::*};
 use serde::{Deserialize, Serialize};
 
 fn app() -> Element {
-    let state = use_server_future(move || async move { get_server_data().await.unwrap() });
+    let state = use_server_future(move || async move { get_server_data().await.unwrap() })?;
 
     let mut count = use_signal(|| 0);
     let mut text = use_signal(|| "...".to_string());
 
     rsx! {
-        div {
-            "Server state: {state.unwrap().value().clone()}"
-        }
+        div { "Server state: {state.value().unwrap()}" }
         h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }
@@ -51,7 +49,8 @@ async fn get_server_data() -> Result<String, ServerFnError> {
 fn main() {
     #[cfg(feature = "web")]
     tracing_wasm::set_as_global_default();
-    #[cfg(feature = "ssr")]
+
+    #[cfg(feature = "server")]
     tracing_subscriber::fmt::init();
 
     LaunchBuilder::fullstack().launch(app);

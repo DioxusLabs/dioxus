@@ -9,10 +9,7 @@ fn app() -> Element {
 
     rsx! {
         div {
-            h1 {
-                onmounted: move |cx| header_element.set(Some(cx.inner().clone())),
-                "Scroll to top example"
-            }
+            h1 { onmounted: move |cx| header_element.set(Some(cx.data())), "Scroll to top example" }
 
             for i in 0..100 {
                 div { "Item {i}" }

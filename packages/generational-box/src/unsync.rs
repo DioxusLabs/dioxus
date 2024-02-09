@@ -85,14 +85,14 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
 }
 
 thread_local! {
-    static UNSYNC_RUNTIME: RefCell<Vec<MemoryLocation<UnsyncStorage>>> = RefCell::new(Vec::new());
+    static UNSYNC_RUNTIME: RefCell<Vec<MemoryLocation<UnsyncStorage>>> = const { RefCell::new(Vec::new()) };
 }
 
 impl AnyStorage for UnsyncStorage {
     type Ref<R: ?Sized + 'static> = GenerationalRef<Ref<'static, R>>;
     type Mut<W: ?Sized + 'static> = GenerationalRefMut<RefMut<'static, W>>;
 
-    fn try_map<I, U: ?Sized + 'static>(
+    fn try_map<I: ?Sized, U: ?Sized + 'static>(
         _self: Self::Ref<I>,
         f: impl FnOnce(&I) -> Option<&U>,
     ) -> Option<Self::Ref<U>> {

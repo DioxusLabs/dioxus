@@ -13,9 +13,9 @@ use dioxus_core::ScopeId;
 
 use generational_box::{GenerationalBox, Owner, Storage};
 
-use crate::Effect;
-use crate::Readable;
+use crate::ReadableRef;
 use crate::Writable;
+use crate::{ReactiveContext, Readable};
 
 /// Run a closure with the given owner.
 pub fn with_owner<S: AnyStorage, F: FnOnce() -> R, R>(owner: Owner<S>, f: F) -> R {
@@ -56,8 +56,8 @@ fn set_owner<S: AnyStorage>(owner: Option<Owner<S>>) -> Option<Owner<S>> {
 }
 
 thread_local! {
-    static SYNC_OWNER: RefCell<Option<Owner<SyncStorage>>> = RefCell::new(None);
-    static UNSYNC_OWNER: RefCell<Option<Owner<UnsyncStorage>>> = RefCell::new(None);
+    static SYNC_OWNER: RefCell<Option<Owner<SyncStorage>>> = const { RefCell::new(None) };
+    static UNSYNC_OWNER: RefCell<Option<Owner<UnsyncStorage>>> = const { RefCell::new(None) };
 }
 
 fn current_owner<S: Storage<T>, T>() -> Owner<S> {
@@ -85,21 +85,9 @@ fn current_owner<S: Storage<T>, T>() -> Owner<S> {
         return owner;
     }
 
-    match Effect::current() {
-        // If we are inside of an effect, we should use the owner of the effect as the owner of the value.
-        Some(effect) => {
-            let scope_id = effect.source;
-            owner_in_scope(scope_id)
-        }
-        // Otherwise either get an owner from the current scope or create a new one.
-        None => match has_context() {
-            Some(rt) => rt,
-            None => {
-                let owner = S::owner();
-                provide_context(owner)
-            }
-        },
-    }
+    // Otherwise get the owner from the current reactive context.
+    let current_reactive_context = ReactiveContext::current();
+    owner_in_scope(current_reactive_context.origin_scope())
 }
 
 fn owner_in_scope<S: Storage<T>, T>(scope: ScopeId) -> Owner<S> {
@@ -206,15 +194,6 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
             .expect("value is already dropped or borrowed")
     }
 
-    pub(crate) fn invalid() -> Self {
-        let owner = current_owner();
-
-        Self {
-            value: owner.invalid(),
-            origin_scope: current_scope_id().expect("in a virtual dom"),
-        }
-    }
-
     /// Get the scope this value was created in.
     pub fn origin_scope(&self) -> ScopeId {
         self.origin_scope
@@ -226,40 +205,30 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
     }
 }
 
-impl<T: 'static, S: Storage<T>> Readable<T> for CopyValue<T, S> {
-    type Ref<R: ?Sized + 'static> = S::Ref<R>;
+impl<T: 'static, S: Storage<T>> Readable for CopyValue<T, S> {
+    type Target = T;
+    type Storage = S;
 
-    fn map_ref<I, U: ?Sized, F: FnOnce(&I) -> &U>(ref_: Self::Ref<I>, f: F) -> Self::Ref<U> {
-        S::map(ref_, f)
+    fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
+        self.value.try_read()
     }
 
-    fn try_map_ref<I, U: ?Sized, F: FnOnce(&I) -> Option<&U>>(
-        ref_: Self::Ref<I>,
-        f: F,
-    ) -> Option<Self::Ref<U>> {
-        S::try_map(ref_, f)
-    }
-
-    fn read(&self) -> Self::Ref<T> {
-        self.value.read()
-    }
-
-    fn peek(&self) -> Self::Ref<T> {
+    fn peek(&self) -> ReadableRef<Self> {
         self.value.read()
     }
 }
 
-impl<T: 'static, S: Storage<T>> Writable<T> for CopyValue<T, S> {
+impl<T: 'static, S: Storage<T>> Writable for CopyValue<T, S> {
     type Mut<R: ?Sized + 'static> = S::Mut<R>;
 
-    fn map_mut<I, U: ?Sized, F: FnOnce(&mut I) -> &mut U>(
+    fn map_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> &mut U>(
         mut_: Self::Mut<I>,
         f: F,
     ) -> Self::Mut<U> {
         S::map_mut(mut_, f)
     }
 
-    fn try_map_mut<I, U: ?Sized, F: FnOnce(&mut I) -> Option<&mut U>>(
+    fn try_map_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> Option<&mut U>>(
         mut_: Self::Mut<I>,
         f: F,
     ) -> Option<Self::Mut<U>> {
@@ -284,6 +253,7 @@ impl<T: 'static, S: Storage<T>> PartialEq for CopyValue<T, S> {
         self.value.ptr_eq(&other.value)
     }
 }
+impl<T: 'static, S: Storage<T>> Eq for CopyValue<T, S> {}
 
 impl<T: Copy, S: Storage<T>> Deref for CopyValue<T, S> {
     type Target = dyn Fn() -> T;

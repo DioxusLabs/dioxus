@@ -1,11 +1,8 @@
 use dioxus::prelude::*;
-use dioxus::router::prelude::*;
 
 fn main() {
     launch_desktop(|| {
-        rsx! {
-            Router::<Route> {}
-        }
+        rsx! { Router::<Route> {} }
     });
 }
 
@@ -67,26 +64,26 @@ fn Blog() -> Element {
 #[component]
 fn BlogList() -> Element {
     rsx! {
-        h2 { "Choose a post" }
-        ul {
-            li {
-                Link {
-                    to: Route::BlogPost {
-                        name: "Blog post 1".into(),
-                    },
-                    "Read the first blog post"
+            h2 { "Choose a post" }
+            ul {
+                li {
+                    Link {
+                        to: Route::BlogPost {
+        name: "Blog post 1".into(),
+    },
+                        "Read the first blog post"
+                    }
                 }
-            }
-            li {
-                Link {
-                    to: Route::BlogPost {
-                        name: "Blog post 2".into(),
-                    },
-                    "Read the second blog post"
+                li {
+                    Link {
+                        to: Route::BlogPost {
+        name: "Blog post 2".into(),
+    },
+                        "Read the second blog post"
+                    }
                 }
             }
         }
-    }
 }
 
 #[component]

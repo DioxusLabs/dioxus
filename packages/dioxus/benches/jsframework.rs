@@ -28,7 +28,7 @@ criterion_main!(mbenches);
 fn create_rows(c: &mut Criterion) {
     c.bench_function("create rows", |b| {
         let mut dom = VirtualDom::new(app);
-        let _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+        dom.rebuild(&mut dioxus_core::NoOpMutations);
 
         b.iter(|| {
             dom.rebuild(&mut NoOpMutations);
@@ -43,10 +43,7 @@ fn app() -> Element {
         table {
             tbody {
                 for f in 0..10_000_usize {
-                    table_row {
-                        row_id: f,
-                        label: Label::new(&mut rng)
-                    }
+                    table_row { row_id: f, label: Label::new(&mut rng) }
                 }
             }
         }
@@ -63,14 +60,12 @@ fn table_row(props: RowProps) -> Element {
 
     rsx! {
         tr {
-            td { class:"col-md-1", "{props.row_id}" }
-            td { class:"col-md-1", onclick: move |_| { /* run onselect */ },
-                a { class: "lbl", "{adj}" "{col}" "{noun}" }
+            td { class: "col-md-1", "{props.row_id}" }
+            td { class: "col-md-1", onclick: move |_| {},
+                a { class: "lbl", "{adj}", "{col}", "{noun}" }
             }
             td { class: "col-md-1",
-                a { class: "remove", onclick: move |_| {/* remove */},
-                    span { class: "glyphicon glyphicon-remove remove", aria_hidden: "true" }
-                }
+                a { class: "remove", onclick: move |_| {}, span { class: "glyphicon glyphicon-remove remove", aria_hidden: "true" } }
             }
             td { class: "col-md-6" }
         }

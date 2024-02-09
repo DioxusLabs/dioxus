@@ -12,9 +12,9 @@ use salvo::Server;
 use salvo::{handler, Depot, Request, Response, Router};
 use std::sync::Arc;
 
-/// Convert a salvo websocket into a LiveViewSocket
+/// Convert a Salvo WebSocket into a `LiveViewSocket`.
 ///
-/// This is required to launch a LiveView app using the warp web framework
+/// This is required to launch a LiveView app using the Salvo web framework.
 pub fn salvo_socket(ws: WebSocket) -> impl LiveViewSocket {
     ws.map(transform_rx)
         .with(transform_tx)

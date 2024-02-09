@@ -11,6 +11,7 @@ keywords = ["dom", "ui", "gui", "react", "ssr"]
 [dependencies]
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-html = { workspace = true, features = ["eval"]}
+generational-box = { workspace = true }
 askama_escape = "0.10.3"
 thiserror = "1.0.23"
 rustc-hash = "1.1.0"

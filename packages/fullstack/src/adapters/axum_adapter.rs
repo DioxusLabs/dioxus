@@ -10,7 +10,7 @@
 //!     #[cfg(feature = "web")]
 //!     // Hydrate the application on the client
 //!     dioxus_web::launch_cfg(app, dioxus_web::Config::new().hydrate(true));
-//!     #[cfg(feature = "ssr")]
+//!     #[cfg(feature = "server")]
 //!     {
 //!         tokio::runtime::Runtime::new()
 //!             .unwrap()
@@ -63,7 +63,6 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use dioxus_lib::prelude::dioxus_core::AnyProps;
 use dioxus_lib::prelude::VirtualDom;
 use server_fn::{Encoding, ServerFunctionRegistry};
 use std::sync::Arc;
@@ -185,7 +184,7 @@ pub trait DioxusRouterExt<S> {
     /// }
     ///
     /// fn app() -> Element {
-    ///     todo!()
+    ///     unimplemented!()
     /// }
     /// ```
     fn serve_static_assets(self, assets_path: impl Into<std::path::PathBuf>) -> Self;
@@ -214,7 +213,7 @@ pub trait DioxusRouterExt<S> {
     /// }
     ///
     /// fn app() -> Element {
-    ///     todo!()
+    ///     unimplemented!()
     /// }
     /// ```
     fn serve_dioxus_application(
@@ -326,14 +325,14 @@ where
         let ssr_state = SSRState::new(&cfg);
 
         // Add server functions and render index.html
-        self.serve_static_assets(cfg.assets_path)
+        self.serve_static_assets(cfg.assets_path.clone())
             .connect_hot_reload()
             .register_server_fns(server_fn_route)
             .fallback(get(render_handler).with_state((cfg, Arc::new(build_virtual_dom), ssr_state)))
     }
 
     fn connect_hot_reload(self) -> Self {
-        #[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
+        #[cfg(all(debug_assertions, feature = "hot-reload", feature = "server"))]
         {
             self.nest(
                 "/_dioxus",
@@ -355,7 +354,7 @@ where
                     .route("/hot_reload", get(hot_reload_handler)),
             )
         }
-        #[cfg(not(all(debug_assertions, feature = "hot-reload", feature = "ssr")))]
+        #[cfg(not(all(debug_assertions, feature = "hot-reload", feature = "server")))]
         {
             self
         }
@@ -477,7 +476,7 @@ fn report_err<E: std::fmt::Display>(e: E) -> Response<BoxBody> {
 }
 
 /// A handler for Dioxus web hot reload websocket. This will send the updated static parts of the RSX to the client when they change.
-#[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
+#[cfg(all(debug_assertions, feature = "hot-reload", feature = "server"))]
 pub async fn hot_reload_handler(ws: axum::extract::WebSocketUpgrade) -> impl IntoResponse {
     use axum::extract::ws::Message;
     use futures_util::StreamExt;

@@ -1,11 +1,11 @@
 use crate::innerlude::{remove_future, spawn, Runtime};
 use crate::ScopeId;
 use futures_util::task::ArcWake;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Waker;
 use std::{cell::Cell, future::Future};
 use std::{cell::RefCell, rc::Rc};
+use std::{pin::Pin, task::Poll};
 
 /// A task's unique identifier.
 ///
@@ -31,18 +31,30 @@ impl Task {
     /// Drop the task immediately.
     ///
     /// This does not abort the task, so you'll want to wrap it in an abort handle if that's important to you
-    pub fn stop(self) {
+    pub fn cancel(self) {
         remove_future(self);
     }
 
     /// Pause the task.
     pub fn pause(&self) {
-        Runtime::with(|rt| rt.tasks.borrow()[self.0].active.set(false));
+        self.set_active(false);
+    }
+
+    /// Resume the task.
+    pub fn resume(&self) {
+        self.set_active(true);
     }
 
     /// Check if the task is paused.
     pub fn paused(&self) -> bool {
-        Runtime::with(|rt| !rt.tasks.borrow()[self.0].active.get()).unwrap_or_default()
+        Runtime::with(|rt| {
+            if let Some(task) = rt.tasks.borrow().get(self.0) {
+                !task.active.get()
+            } else {
+                false
+            }
+        })
+        .unwrap_or_default()
     }
 
     /// Wake the task.
@@ -50,18 +62,19 @@ impl Task {
         Runtime::with(|rt| _ = rt.sender.unbounded_send(SchedulerMsg::TaskNotified(*self)));
     }
 
-    /// Set the task as active or paused.
-    pub fn set_active(&self, active: bool) {
-        Runtime::with(|rt| rt.tasks.borrow()[self.0].active.set(active));
+    /// Poll the task immediately.
+    pub fn poll_now(&self) -> Poll<()> {
+        Runtime::with(|rt| rt.handle_task_wakeup(*self)).unwrap()
     }
 
-    /// Resume the task.
-    pub fn resume(&self) {
+    /// Set the task as active or paused.
+    pub fn set_active(&self, active: bool) {
         Runtime::with(|rt| {
-            // set the active flag, and then ping the scheduler to ensure the task gets queued
-            let was_active = rt.tasks.borrow()[self.0].active.replace(true);
-            if !was_active {
-                _ = rt.sender.unbounded_send(SchedulerMsg::TaskNotified(*self));
+            if let Some(task) = rt.tasks.borrow().get(self.0) {
+                let was_active = task.active.replace(active);
+                if !was_active && active {
+                    _ = rt.sender.unbounded_send(SchedulerMsg::TaskNotified(*self));
+                }
             }
         });
     }
@@ -122,26 +135,19 @@ impl Runtime {
         self.tasks.borrow().get(task.0)?.parent
     }
 
-    /// Add this task to the queue of tasks that will manually get poked when the scheduler is flushed
-    pub(crate) fn add_to_flush_table(&self) -> Task {
-        let value = self.current_task().unwrap();
-        self.flush_table.borrow_mut().insert(value);
-        value
-    }
-
-    pub(crate) fn handle_task_wakeup(&self, id: Task) {
+    pub(crate) fn handle_task_wakeup(&self, id: Task) -> Poll<()> {
         debug_assert!(Runtime::current().is_some(), "Must be in a dioxus runtime");
 
         let task = self.tasks.borrow().get(id.0).cloned();
 
         // The task was removed from the scheduler, so we can just ignore it
         let Some(task) = task else {
-            return;
+            return Poll::Ready(());
         };
 
         // If a task woke up but is paused, we can just ignore it
         if !task.active.get() {
-            return;
+            return Poll::Pending;
         }
 
         let mut cx = std::task::Context::from_waker(&task.waker);
@@ -151,7 +157,9 @@ impl Runtime {
         self.rendering.set(false);
         self.current_task.set(Some(id));
 
-        if task.task.borrow_mut().as_mut().poll(&mut cx).is_ready() {
+        let poll_result = task.task.borrow_mut().as_mut().poll(&mut cx);
+
+        if poll_result.is_ready() {
             // Remove it from the scope so we dont try to double drop it when the scope dropes
             self.get_state(task.scope)
                 .unwrap()
@@ -167,6 +175,8 @@ impl Runtime {
         self.scope_stack.borrow_mut().pop();
         self.rendering.set(true);
         self.current_task.set(None);
+
+        poll_result
     }
 
     /// Drop the future with the given TaskId

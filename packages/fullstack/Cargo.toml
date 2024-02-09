@@ -7,7 +7,7 @@ description = "Fullstack Dioxus Utilities"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
-keywords = ["ui", "gui", "react", "ssr", "fullstack"]
+keywords = ["ui", "gui", "react", "server", "fullstack"]
 resolver = "2"
 
 [dependencies]
@@ -64,9 +64,10 @@ tower = { version = "0.4.13", features = ["util"], optional = true }
 tower-layer = { version = "0.3.2", optional = true }
 web-sys = { version = "0.3.61", optional = true, features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"] }
 
+dioxus-cli-config = { workspace = true, optional = true }
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 dioxus-hot-reload = { workspace = true }
-
 
 [features]
 default = ["hot-reload"]
@@ -74,9 +75,9 @@ hot-reload = ["serde_json", "futures-util"]
 web = ["dioxus-web", "web-sys"]
 desktop = ["dioxus-desktop"]
 mobile = ["dioxus-mobile"]
-warp = ["dep:warp", "ssr"]
-axum = ["dep:axum", "tower-http", "ssr"]
-salvo = ["dep:salvo", "ssr", "http-body-util"]
-ssr = ["server_fn/ssr", "dioxus_server_macro/ssr", "tokio", "tokio-util", "tokio-stream", "dioxus-ssr", "dioxus-ssr/incremental", "tower", "hyper", "http", "tower-layer", "anymap", "tracing-futures", "pin-project", "thiserror"]
+warp = ["dep:warp", "server"]
+axum = ["dep:axum", "tower-http", "server"]
+salvo = ["dep:salvo", "server", "http-body-util"]
+server = ["server_fn/ssr", "dioxus_server_macro/server", "tokio", "tokio-util", "tokio-stream", "dioxus-ssr", "dioxus-ssr/incremental", "tower", "hyper", "http", "tower-layer", "anymap", "tracing-futures", "pin-project", "thiserror", "dioxus-cli-config"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls"]

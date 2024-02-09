@@ -49,8 +49,7 @@ pub fn use_route<R: Routable + Clone>() -> R {
     match use_router_internal() {
         Some(r) => r.current(),
         None => {
-            #[cfg(debug_assertions)]
-            panic!("`use_route` must have access to a parent router");
+            panic!("`use_route` must have access to a parent router")
         }
     }
 }

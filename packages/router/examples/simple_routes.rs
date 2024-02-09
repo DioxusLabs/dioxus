@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use dioxus::router::prelude::*;
 use std::str::FromStr;
 
 #[cfg(feature = "liveview")]
@@ -45,7 +44,9 @@ async fn main() {
 #[cfg(not(feature = "liveview"))]
 fn main() {
     launch(|| {
-        rsx! { Router::<Route> {} }
+        rsx! {
+            Router::<Route> {}
+        }
     })
 }
 
@@ -63,41 +64,41 @@ fn UserFrame(user_id: usize) -> Element {
 #[component]
 fn Route1(user_id: usize, dynamic: usize, query: String, extra: String) -> Element {
     rsx! {
-            pre {
-                "Route1{{\n\tuser_id:{user_id},\n\tdynamic:{dynamic},\n\tquery:{query},\n\textra:{extra}\n}}"
-            }
-            Link {
-                to: Route::Route1 {
-        user_id,
-        dynamic,
-        query: String::new(),
-        extra: extra.clone() + ".",
-    },
-                "Route1 with extra+\".\""
-            }
-            p { "Footer" }
-            Link {
-                to: Route::Route3 {
-        dynamic: String::new(),
-    },
-                "Home"
-            }
+        pre {
+            "Route1{{\n\tuser_id:{user_id},\n\tdynamic:{dynamic},\n\tquery:{query},\n\textra:{extra}\n}}"
         }
+        Link {
+            to: Route::Route1 {
+                user_id,
+                dynamic,
+                query: String::new(),
+                extra: extra.clone() + ".",
+            },
+            "Route1 with extra+\".\""
+        }
+        p { "Footer" }
+        Link {
+            to: Route::Route3 {
+                dynamic: String::new(),
+            },
+            "Home"
+        }
+    }
 }
 
 #[component]
 fn Route2(user_id: usize) -> Element {
     rsx! {
-            pre { "Route2{{\n\tuser_id:{user_id}\n}}" }
-            {(0..user_id).map(|i| rsx!{ p { "{i}" } })},
-            p { "Footer" }
-            Link {
-                to: Route::Route3 {
-        dynamic: String::new(),
-    },
-                "Home"
-            }
+        pre { "Route2{{\n\tuser_id:{user_id}\n}}" }
+        {(0..user_id).map(|i| rsx!{ p { "{i}" } })},
+        p { "Footer" }
+        Link {
+            to: Route::Route3 {
+                dynamic: String::new(),
+            },
+            "Home"
         }
+    }
 }
 
 #[component]

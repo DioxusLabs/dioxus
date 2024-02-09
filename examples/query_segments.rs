@@ -5,7 +5,6 @@
 //!
 //! Run `dx serve` and navigate to `http://localhost:8080/blog?name=John&surname=Doe`
 use dioxus::prelude::*;
-use dioxus::router::prelude::*;
 use std::fmt::Display;
 
 #[derive(Routable, Clone)]

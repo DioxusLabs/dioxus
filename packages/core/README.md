@@ -17,7 +17,7 @@ loop {
 }
 
 # fn app() -> Element { None }
-# struct SomeRenderer; impl SomeRenderer { fn new() -> SomeRenderer { SomeRenderer; } async fn event() -> () { todo!() } }
+# struct SomeRenderer; impl SomeRenderer { fn new() -> SomeRenderer { SomeRenderer; } async fn event() -> () { unimplemented!() } }
 ```
 
 ## Features

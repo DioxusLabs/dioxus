@@ -9,7 +9,7 @@ fn main() {
 fn app() -> Element {
     let mut count = use_signal(|| 10);
 
-    use_future(|| async move {
+    use_future(move || async move {
         let mut stream = some_stream();
 
         while let Some(second) = stream.next().await {

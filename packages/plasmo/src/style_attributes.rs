@@ -384,7 +384,7 @@ fn apply_border(name: &str, value: &str, style: &mut StyleModifier) {
             "outset" => BorderStyle::Outset,
             "none" => BorderStyle::None,
             "hidden" => BorderStyle::Hidden,
-            _ => todo!(),
+            _ => todo!("Implement other border styles"),
         }
     }
     match name {
@@ -582,7 +582,7 @@ fn apply_font(name: &str, value: &str, style: &mut StyleModifier) {
             "oblique" => style.core = style.core.add_modifier(Modifier::ITALIC),
             _ => (),
         },
-        "font-variant" => todo!(),
+        "font-variant" => todo!("Implement font-variant"),
         "font-weight" => match value {
             "bold" => style.core = style.core.add_modifier(Modifier::BOLD),
             "normal" => style.core = style.core.remove_modifier(Modifier::BOLD),
@@ -596,8 +596,8 @@ fn apply_text(name: &str, value: &str, style: &mut StyleModifier) {
     use ratatui::style::Modifier;
 
     match name {
-        "text-align" => todo!(),
-        "text-align-last" => todo!(),
+        "text-align" => todo!("Implement text-align"),
+        "text-align-last" => todo!("text-Implement align-last"),
         "text-decoration" | "text-decoration-line" => {
             for v in value.split(' ') {
                 match v {
@@ -607,19 +607,19 @@ fn apply_text(name: &str, value: &str, style: &mut StyleModifier) {
                 }
             }
         }
-        "text-decoration-color" => todo!(),
-        "text-decoration-style" => todo!(),
-        "text-indent" => todo!(),
-        "text-justify" => todo!(),
-        "text-overflow" => todo!(),
-        "text-shadow" => todo!(),
-        "text-transform" => todo!(),
-        _ => todo!(),
+        "text-decoration-color" => todo!("text-Implement decoration-color"),
+        "text-decoration-style" => todo!("text-Implement decoration-style"),
+        "text-indent" => todo!("Implement text-indent"),
+        "text-justify" => todo!("Implement text-justify"),
+        "text-overflow" => todo!("Implement text-overflow"),
+        "text-shadow" => todo!("Implement text-shadow"),
+        "text-transform" => todo!("Implement text-transform"),
+        _ => todo!("Implement other text attributes"),
     }
 }
 
 fn apply_transition(_name: &str, _value: &str, _style: &mut StyleModifier) {
-    todo!()
+    todo!("Implement transitions")
 }
 
 const SORTED_STYLE_ATTRS: &[&str] = &[

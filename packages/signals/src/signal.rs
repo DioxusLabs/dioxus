@@ -1,21 +1,17 @@
 use crate::{
-    get_effect_ref, read::Readable, write::Writable, CopyValue, Effect, EffectInner,
-    EffectStackRef, GlobalMemo, GlobalSignal, MappedSignal, ReadOnlySignal, EFFECT_STACK,
+    read::Readable, write::Writable, CopyValue, GlobalMemo, GlobalSignal, ReactiveContext,
+    ReadOnlySignal, ReadableRef,
 };
 use dioxus_core::{
-    prelude::{
-        current_scope_id, has_context, provide_context, schedule_update_any, IntoAttributeValue,
-    },
+    prelude::{flush_sync, spawn, IntoAttributeValue},
     ScopeId,
 };
-use generational_box::{AnyStorage, GenerationalBoxId, Storage, SyncStorage, UnsyncStorage};
-use parking_lot::RwLock;
+use generational_box::{AnyStorage, Storage, SyncStorage, UnsyncStorage};
 use std::{
     any::Any,
-    cell::RefCell,
+    collections::HashSet,
     ops::{Deref, DerefMut},
-    rc::Rc,
-    sync::Arc,
+    sync::Mutex,
 };
 
 /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
@@ -59,16 +55,8 @@ pub type SyncSignal<T> = Signal<T, SyncStorage>;
 
 /// The data stored for tracking in a signal.
 pub struct SignalData<T> {
-    pub(crate) subscribers: Arc<RwLock<SignalSubscribers>>,
-    pub(crate) update_any: Arc<dyn Fn(ScopeId) + Sync + Send>,
-    pub(crate) effect_ref: EffectStackRef,
+    pub(crate) subscribers: Mutex<HashSet<ReactiveContext>>,
     pub(crate) value: T,
-}
-
-#[derive(Default)]
-pub(crate) struct SignalSubscribers {
-    pub(crate) subscribers: Vec<ScopeId>,
-    pub(crate) effect_subscribers: Vec<GenerationalBoxId>,
 }
 
 impl<T: 'static> Signal<T> {
@@ -94,10 +82,7 @@ impl<T: 'static> Signal<T> {
 impl<T: PartialEq + 'static> Signal<T> {
     /// Creates a new global Signal that can be used in a global static.
     #[track_caller]
-    pub const fn global_memo(constructor: fn() -> T) -> GlobalMemo<T>
-    where
-        T: PartialEq,
-    {
+    pub const fn global_memo(constructor: fn() -> T) -> GlobalMemo<T> {
         GlobalMemo::new(constructor)
     }
 
@@ -116,38 +101,24 @@ impl<T: PartialEq + 'static> Signal<T> {
     pub fn maybe_sync_memo<S: Storage<SignalData<T>>>(
         mut f: impl FnMut() -> T + 'static,
     ) -> ReadOnlySignal<T, S> {
-        let effect = Effect {
-            source: current_scope_id().expect("in a virtual dom"),
-            inner: CopyValue::invalid(),
-        };
+        // Get the current reactive context
+        let rc = ReactiveContext::current();
 
-        {
-            EFFECT_STACK.with(|stack| stack.effects.write().push(effect));
-        }
-        let mut state: Signal<T, S> = Signal::new_maybe_sync(f());
-        {
-            EFFECT_STACK.with(|stack| stack.effects.write().pop());
-        }
+        // Create a new signal in that context, wiring up its dependencies and subscribers
+        let mut state: Signal<T, S> = rc.run_in(|| Signal::new_maybe_sync(f()));
 
-        let invalid_id = effect.id();
-        tracing::trace!("Creating effect: {:?}", invalid_id);
-        effect.inner.value.set(EffectInner {
-            callback: Box::new(move || {
-                let value = f();
-                let changed = {
-                    let old = state.inner.read();
-                    value != old.value
-                };
-                if changed {
-                    state.set(value)
+        spawn(async move {
+            loop {
+                flush_sync().await;
+                rc.changed().await;
+                let new = f();
+                if new != *state.peek() {
+                    *state.write() = new;
                 }
-            }),
-            id: invalid_id,
+            }
         });
-        {
-            EFFECT_STACK.with(|stack| stack.effect_mapping.write().insert(invalid_id, effect));
-        }
 
+        // And just return the readonly variant of that signal
         ReadOnlySignal::new_maybe_sync(state)
     }
 }
@@ -160,9 +131,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
         Self {
             inner: CopyValue::<SignalData<T>, S>::new_maybe_sync(SignalData {
                 subscribers: Default::default(),
-                update_any: schedule_update_any(),
                 value,
-                effect_ref: get_effect_ref(),
             }),
         }
     }
@@ -176,9 +145,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
             inner: CopyValue::new_with_caller(
                 SignalData {
                     subscribers: Default::default(),
-                    update_any: schedule_update_any(),
                     value,
-                    effect_ref: get_effect_ref(),
                 },
                 #[cfg(debug_assertions)]
                 caller,
@@ -194,9 +161,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
             inner: CopyValue::<SignalData<T>, S>::new_maybe_sync_in_scope(
                 SignalData {
                     subscribers: Default::default(),
-                    update_any: schedule_update_any(),
                     value,
-                    effect_ref: get_effect_ref(),
                 },
                 owner,
             ),
@@ -216,45 +181,10 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     fn update_subscribers(&self) {
         {
             let inner = self.inner.read();
-            for &scope_id in &*inner.subscribers.read().subscribers {
-                tracing::trace!(
-                    "Write on {:?} triggered update on {:?}",
-                    self.inner.value,
-                    scope_id
-                );
-                (inner.update_any)(scope_id);
-            }
+
+            let mut subscribers = inner.subscribers.lock().unwrap();
+            subscribers.retain(|reactive_context| reactive_context.mark_dirty())
         }
-
-        let self_read = &self.inner.read();
-        let subscribers = {
-            let effects = &mut self_read.subscribers.write().effect_subscribers;
-            std::mem::take(&mut *effects)
-        };
-        let effect_ref = &self_read.effect_ref;
-        for effect in subscribers {
-            tracing::trace!(
-                "Write on {:?} triggered effect {:?}",
-                self.inner.value,
-                effect
-            );
-            effect_ref.rerun_effect(effect);
-        }
-    }
-
-    /// Unsubscribe this scope from the signal's effect list
-    pub fn unsubscribe(&self, scope: ScopeId) {
-        self.inner
-            .read()
-            .subscribers
-            .write()
-            .subscribers
-            .retain(|s| *s != scope);
-    }
-
-    /// Map the signal to a new type.
-    pub fn map<O>(self, f: impl Fn(&T) -> &O + 'static) -> MappedSignal<S::Ref<O>> {
-        MappedSignal::new(self, f)
     }
 
     /// Get the generational id of the signal.
@@ -263,75 +193,44 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     }
 }
 
-impl<T, S: Storage<SignalData<T>>> Readable<T> for Signal<T, S> {
-    type Ref<R: ?Sized + 'static> = S::Ref<R>;
+impl<T, S: Storage<SignalData<T>>> Readable for Signal<T, S> {
+    type Target = T;
+    type Storage = S;
 
-    fn map_ref<I, U: ?Sized, F: FnOnce(&I) -> &U>(ref_: Self::Ref<I>, f: F) -> Self::Ref<U> {
-        S::map(ref_, f)
-    }
-
-    fn try_map_ref<I, U: ?Sized, F: FnOnce(&I) -> Option<&U>>(
-        ref_: Self::Ref<I>,
-        f: F,
-    ) -> Option<Self::Ref<U>> {
-        S::try_map(ref_, f)
-    }
-
-    /// Get the current value of the signal. This will subscribe the current scope to the signal.
-    /// If you would like to read the signal without subscribing to it, you can use [`Self::peek`] instead.
-    ///
-    /// If the signal has been dropped, this will panic.
     #[track_caller]
-    fn read(&self) -> S::Ref<T> {
-        let inner = self.inner.read();
-        if let Some(effect) = EFFECT_STACK.with(|stack| stack.current()) {
-            let subscribers = inner.subscribers.read();
-            if !subscribers.effect_subscribers.contains(&effect.inner.id()) {
-                drop(subscribers);
-                let mut subscribers = inner.subscribers.write();
-                subscribers.effect_subscribers.push(effect.inner.id());
-            }
-        } else if let Some(current_scope_id) = current_scope_id() {
-            // only subscribe if the vdom is rendering
-            if dioxus_core::vdom_is_rendering() {
-                tracing::trace!(
-                    "{:?} subscribed to {:?}",
-                    self.inner.value,
-                    current_scope_id
-                );
-                let subscribers = inner.subscribers.read();
-                if !subscribers.subscribers.contains(&current_scope_id) {
-                    drop(subscribers);
-                    let mut subscribers = inner.subscribers.write();
-                    subscribers.subscribers.push(current_scope_id);
-                    let unsubscriber = current_unsubscriber();
-                    subscribers.subscribers.push(unsubscriber.borrow().scope);
-                }
-            }
-        }
-        S::map(inner, |v| &v.value)
+    fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
+        let inner = self.inner.try_read()?;
+
+        let reactive_context = ReactiveContext::current();
+        inner.subscribers.lock().unwrap().insert(reactive_context);
+
+        Ok(S::map(inner, |v| &v.value))
     }
 
     /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
     ///
     /// If the signal has been dropped, this will panic.
-    fn peek(&self) -> S::Ref<T> {
+    fn peek(&self) -> ReadableRef<Self> {
         let inner = self.inner.read();
         S::map(inner, |v| &v.value)
     }
 }
 
-impl<T: 'static, S: Storage<SignalData<T>>> Writable<T> for Signal<T, S> {
+impl<T: 'static, S: Storage<SignalData<T>>> Writable for Signal<T, S> {
     type Mut<R: ?Sized + 'static> = Write<R, S>;
 
-    fn map_mut<I, U: ?Sized + 'static, F: FnOnce(&mut I) -> &mut U>(
+    fn map_mut<I: ?Sized, U: ?Sized + 'static, F: FnOnce(&mut I) -> &mut U>(
         ref_: Self::Mut<I>,
         f: F,
     ) -> Self::Mut<U> {
         Write::map(ref_, f)
     }
 
-    fn try_map_mut<I: 'static, U: ?Sized + 'static, F: FnOnce(&mut I) -> Option<&mut U>>(
+    fn try_map_mut<
+        I: ?Sized + 'static,
+        U: ?Sized + 'static,
+        F: FnOnce(&mut I) -> Option<&mut U>,
+    >(
         ref_: Self::Mut<I>,
         f: F,
     ) -> Option<Self::Mut<U>> {
@@ -394,44 +293,6 @@ impl<'de, T: serde::Deserialize<'de> + 'static, Store: Storage<SignalData<T>>>
     }
 }
 
-struct Unsubscriber {
-    scope: ScopeId,
-    subscribers: UnsubscriberArray,
-}
-
-type UnsubscriberArray = Vec<Rc<RefCell<Vec<ScopeId>>>>;
-
-impl Drop for Unsubscriber {
-    fn drop(&mut self) {
-        for subscribers in &self.subscribers {
-            subscribers.borrow_mut().retain(|s| *s != self.scope);
-        }
-    }
-}
-
-fn current_unsubscriber() -> Rc<RefCell<Unsubscriber>> {
-    match has_context() {
-        Some(rt) => rt,
-        None => {
-            let owner = Unsubscriber {
-                scope: current_scope_id().expect("in a virtual dom"),
-                subscribers: Default::default(),
-            };
-            provide_context(Rc::new(RefCell::new(owner)))
-        }
-    }
-}
-
-struct SignalSubscriberDrop<T: 'static, S: Storage<SignalData<T>>> {
-    signal: Signal<T, S>,
-}
-
-impl<T: 'static, S: Storage<SignalData<T>>> Drop for SignalSubscriberDrop<T, S> {
-    fn drop(&mut self) {
-        self.signal.update_subscribers();
-    }
-}
-
 /// A mutable reference to a signal's value.
 ///
 /// T is the current type of the write
@@ -477,5 +338,15 @@ impl<T: ?Sized + 'static, S: AnyStorage> Deref for Write<T, S> {
 impl<T: ?Sized, S: AnyStorage> DerefMut for Write<T, S> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.write
+    }
+}
+
+struct SignalSubscriberDrop<T: 'static, S: Storage<SignalData<T>>> {
+    signal: Signal<T, S>,
+}
+
+impl<T: 'static, S: Storage<SignalData<T>>> Drop for SignalSubscriberDrop<T, S> {
+    fn drop(&mut self) {
+        self.signal.update_subscribers();
     }
 }

@@ -21,5 +21,5 @@ tracing-subscriber = "0.3.17"
 
 [features]
 default = []
-ssr = ["salvo", "dioxus-fullstack/salvo"]
+server = ["salvo", "dioxus-fullstack/salvo"]
 web = ["dioxus-web"]

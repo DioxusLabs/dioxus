@@ -25,6 +25,7 @@ impl WebsysDom {
 
         dioxus_interpreter_js::hydrate(ids);
 
+        #[cfg(feature = "mounted")]
         for id in to_mount {
             self.send_mount_event(id);
         }

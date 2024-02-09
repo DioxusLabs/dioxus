@@ -12,9 +12,9 @@ use axum::{
 };
 use futures_util::{SinkExt, StreamExt};
 
-/// Convert a warp websocket into a LiveViewSocket
+/// Convert an Axum WebSocket into a `LiveViewSocket`.
 ///
-/// This is required to launch a LiveView app using the warp web framework
+/// This is required to launch a LiveView app using the Axum web framework.
 pub fn axum_socket(ws: WebSocket) -> impl LiveViewSocket {
     ws.map(transform_rx)
         .with(transform_tx)

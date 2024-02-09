@@ -7,7 +7,7 @@ fn root_ids() {
     }
 
     let mut dom = VirtualDom::new(app);
-    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(
         dioxus_ssr::pre_render(&dom),
@@ -25,7 +25,7 @@ fn dynamic_attributes() {
     }
 
     let mut dom = VirtualDom::new(app);
-    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(
         dioxus_ssr::pre_render(&dom),
@@ -42,7 +42,7 @@ fn listeners() {
     }
 
     let mut dom = VirtualDom::new(app);
-    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(
         dioxus_ssr::pre_render(&dom),
@@ -57,7 +57,7 @@ fn listeners() {
     }
 
     let mut dom = VirtualDom::new(app2);
-    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(
         dioxus_ssr::pre_render(&dom),
@@ -75,7 +75,7 @@ fn text_nodes() {
     }
 
     let mut dom = VirtualDom::new(app);
-    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(
         dioxus_ssr::pre_render(&dom),
@@ -90,7 +90,7 @@ fn text_nodes() {
     }
 
     let mut dom = VirtualDom::new(app2);
-    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(
         dioxus_ssr::pre_render(&dom),
@@ -110,7 +110,7 @@ fn components_hydrate() {
     }
 
     let mut dom = VirtualDom::new(app);
-    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(
         dioxus_ssr::pre_render(&dom),
@@ -129,7 +129,7 @@ fn components_hydrate() {
     }
 
     let mut dom = VirtualDom::new(app2);
-    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(
         dioxus_ssr::pre_render(&dom),
@@ -145,7 +145,7 @@ fn components_hydrate() {
     }
 
     let mut dom = VirtualDom::new(app3);
-    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(
         dioxus_ssr::pre_render(&dom),
@@ -165,7 +165,7 @@ fn components_hydrate() {
     }
 
     let mut dom = VirtualDom::new(app4);
-    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(
         dioxus_ssr::pre_render(&dom),
@@ -188,7 +188,7 @@ fn hello_world_hydrates() {
     }
 
     let mut dom = VirtualDom::new(app);
-    _ = dom.rebuild(&mut dioxus_core::NoOpMutations);
+    dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     assert_eq!(
         dioxus_ssr::pre_render(&dom),

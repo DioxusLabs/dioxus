@@ -22,7 +22,7 @@ fn Button(color_offset: u32, layer: u16) -> Element {
             background_color: "{color}",
             tabindex: "{layer}",
             onkeydown: move |e| {
-                if let Code::Space = e.inner().code() {
+                if let Code::Space = e.code() {
                     toggle.toggle();
                 }
             },

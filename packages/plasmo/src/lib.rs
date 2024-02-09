@@ -69,6 +69,7 @@ impl TuiContext {
     }
 
     pub fn quit(&self) {
+        // panic!("ack")
         self.tx.unbounded_send(InputEvent::Close).unwrap();
     }
 

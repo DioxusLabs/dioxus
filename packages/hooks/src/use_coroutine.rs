@@ -127,7 +127,7 @@ impl<T> Coroutine<T> {
     /// Forces the component to re-render, which will re-invoke the coroutine.
     pub fn restart(&mut self) {
         self.needs_regen.set(true);
-        self.task().stop();
+        self.task().cancel();
     }
 }
 

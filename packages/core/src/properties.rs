@@ -72,7 +72,7 @@ where
 {
     type Builder = P;
     fn builder() -> Self::Builder {
-        todo!()
+        unreachable!("Root props technically are never built")
     }
     fn memoize(&mut self, _other: &Self) -> bool {
         true

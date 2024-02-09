@@ -17,5 +17,5 @@ reqwest = "0.11.18"
 
 [features]
 default = []
-ssr = ["dioxus/axum"]
+server = ["dioxus/axum"]
 web = ["dioxus/web"]

@@ -1,7 +1,7 @@
 use crate::dependency::Dependency;
 use crate::use_signal;
 use dioxus_core::prelude::*;
-use dioxus_signals::{ReadOnlySignal, Readable, Signal, SignalData};
+use dioxus_signals::{ReactiveContext, ReadOnlySignal, Readable, Signal, SignalData};
 use dioxus_signals::{Storage, Writable};
 
 /// Creates a new unsync Selector. The selector will be run immediately and whenever any signal it reads changes.
@@ -34,7 +34,7 @@ pub fn use_memo<R: PartialEq>(f: impl FnMut() -> R + 'static) -> ReadOnlySignal<
 /// use dioxus::prelude::*;
 /// use dioxus_signals::*;
 ///
-/// fn App(cx: Scope) -> Element {
+/// fn App() -> Element {
 ///     let mut count = use_signal(cx, || 0);
 ///     let double = use_memo(cx, move || count * 2);
 ///     count += 1;
@@ -45,9 +45,30 @@ pub fn use_memo<R: PartialEq>(f: impl FnMut() -> R + 'static) -> ReadOnlySignal<
 /// ```
 #[track_caller]
 pub fn use_maybe_sync_memo<R: PartialEq, S: Storage<SignalData<R>>>(
-    f: impl FnMut() -> R + 'static,
+    mut f: impl FnMut() -> R + 'static,
 ) -> ReadOnlySignal<R, S> {
-    use_hook(|| Signal::maybe_sync_memo(f))
+    use_hook(|| {
+        // Get the current reactive context
+        let rc = ReactiveContext::new();
+
+        // Create a new signal in that context, wiring up its dependencies and subscribers
+        let mut state: Signal<R, S> = rc.run_in(|| Signal::new_maybe_sync(f()));
+
+        spawn(async move {
+            loop {
+                // Wait for the dom the be finished with sync work
+                flush_sync().await;
+                rc.changed().await;
+                let new = rc.run_in(&mut f);
+                if new != *state.peek() {
+                    *state.write() = new;
+                }
+            }
+        });
+
+        // And just return the readonly variant of that signal
+        ReadOnlySignal::new_maybe_sync(state)
+    })
 }
 
 /// Creates a new unsync Selector with some local dependencies. The selector will be run immediately and whenever any signal it reads or any dependencies it tracks changes
@@ -56,10 +77,9 @@ pub fn use_maybe_sync_memo<R: PartialEq, S: Storage<SignalData<R>>>(
 ///
 /// ```rust
 /// use dioxus::prelude::*;
-/// use dioxus_signals::*;
 ///
-/// fn App(cx: Scope) -> Element {
-///     let mut local_state = use_state(cx, || 0);
+/// fn App() -> Element {
+///     let mut local_state = use_state(|| 0);
 ///     let double = use_memo_with_dependencies(cx, (local_state.get(),), move |(local_state,)| local_state * 2);
 ///     local_state.set(1);
 ///
@@ -85,8 +105,8 @@ where
 /// use dioxus::prelude::*;
 /// use dioxus_signals::*;
 ///
-/// fn App(cx: Scope) -> Element {
-///     let mut local_state = use_state(cx, || 0);
+/// fn App() -> Element {
+///     let mut local_state = use_state(|| 0);
 ///     let double = use_memo_with_dependencies(cx, (local_state.get(),), move |(local_state,)| local_state * 2);
 ///     local_state.set(1);
 ///
@@ -106,12 +126,33 @@ where
     D::Out: 'static,
 {
     let mut dependencies_signal = use_signal(|| dependencies.out());
+
     let selector = use_hook(|| {
-        Signal::maybe_sync_memo(move || {
-            let deref = &*dependencies_signal.read();
-            f(deref.clone())
-        })
+        // Get the current reactive context
+        let rc = ReactiveContext::new();
+
+        // Create a new signal in that context, wiring up its dependencies and subscribers
+        let mut state: Signal<R, S> =
+            rc.run_in(|| Signal::new_maybe_sync(f(dependencies_signal.read().clone())));
+
+        spawn(async move {
+            loop {
+                // Wait for the dom the be finished with sync work
+                flush_sync().await;
+                rc.changed().await;
+
+                let new = rc.run_in(|| f(dependencies_signal.read().clone()));
+                if new != *state.peek() {
+                    *state.write() = new;
+                }
+            }
+        });
+
+        // And just return the readonly variant of that signal
+        ReadOnlySignal::new_maybe_sync(state)
     });
+
+    // This will cause a re-run of the selector if the dependencies change
     let changed = { dependencies.changed(&*dependencies_signal.read()) };
     if changed {
         dependencies_signal.set(dependencies.out());

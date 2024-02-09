@@ -24,4 +24,4 @@ proc-macro = true
 
 [features]
 default = []
-ssr = ["server_fn_macro/ssr"]
+server = ["server_fn_macro/ssr"]

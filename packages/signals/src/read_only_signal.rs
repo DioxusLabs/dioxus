@@ -1,4 +1,4 @@
-use crate::{read::Readable, Signal, SignalData};
+use crate::{read::Readable, ReadableRef, Signal, SignalData};
 use std::ops::Deref;
 
 use dioxus_core::{prelude::IntoAttributeValue, ScopeId};
@@ -54,31 +54,19 @@ impl<T: 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
     }
 }
 
-impl<T, S: Storage<SignalData<T>>> Readable<T> for ReadOnlySignal<T, S> {
-    type Ref<R: ?Sized + 'static> = S::Ref<R>;
+impl<T, S: Storage<SignalData<T>>> Readable for ReadOnlySignal<T, S> {
+    type Target = T;
+    type Storage = S;
 
-    fn map_ref<I, U: ?Sized, F: FnOnce(&I) -> &U>(ref_: Self::Ref<I>, f: F) -> Self::Ref<U> {
-        S::map(ref_, f)
-    }
-
-    fn try_map_ref<I, U: ?Sized, F: FnOnce(&I) -> Option<&U>>(
-        ref_: Self::Ref<I>,
-        f: F,
-    ) -> Option<Self::Ref<U>> {
-        S::try_map(ref_, f)
-    }
-
-    /// Get the current value of the signal. This will subscribe the current scope to the signal.  If you would like to read the signal without subscribing to it, you can use [`Self::peek`] instead.
-    ///
-    /// If the signal has been dropped, this will panic.
     #[track_caller]
-    fn read(&self) -> S::Ref<T> {
-        self.inner.read()
+    fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
+        self.inner.try_read()
     }
 
     /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
     ///
     /// If the signal has been dropped, this will panic.
+    #[track_caller]
     fn peek(&self) -> S::Ref<T> {
         self.inner.peek()
     }

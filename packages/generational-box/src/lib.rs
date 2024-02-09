@@ -228,9 +228,9 @@ pub trait Storage<Data = ()>: AnyStorage + 'static {
 /// A trait for any storage backing type.
 pub trait AnyStorage: Default {
     /// The reference this storage type returns.
-    type Ref<T: ?Sized + 'static>: Deref<Target = T>;
+    type Ref<T: ?Sized + 'static>: Deref<Target = T> + 'static;
     /// The mutable reference this storage type returns.
-    type Mut<T: ?Sized + 'static>: DerefMut<Target = T>;
+    type Mut<T: ?Sized + 'static>: DerefMut<Target = T> + 'static;
 
     /// Try to map the mutable ref.
     fn try_map_mut<T: ?Sized, U: ?Sized + 'static>(
@@ -247,13 +247,16 @@ pub trait AnyStorage: Default {
     }
 
     /// Try to map the ref.
-    fn try_map<T, U: ?Sized + 'static>(
+    fn try_map<T: ?Sized, U: ?Sized + 'static>(
         ref_: Self::Ref<T>,
         f: impl FnOnce(&T) -> Option<&U>,
     ) -> Option<Self::Ref<U>>;
 
     /// Map the ref.
-    fn map<T, U: ?Sized + 'static>(ref_: Self::Ref<T>, f: impl FnOnce(&T) -> &U) -> Self::Ref<U> {
+    fn map<T: ?Sized, U: ?Sized + 'static>(
+        ref_: Self::Ref<T>,
+        f: impl FnOnce(&T) -> &U,
+    ) -> Self::Ref<U> {
         Self::try_map(ref_, |v| Some(f(v))).unwrap()
     }
 

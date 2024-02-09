@@ -1,9 +1,9 @@
-#[cfg(any(feature = "ssr", doc))]
+#[cfg(any(feature = "server", doc))]
 #[derive(Clone)]
 /// A trait object for a function that be called on serializable arguments and returns a serializable result.
 pub struct ServerFnTraitObj(server_fn::ServerFnTraitObj<()>);
 
-#[cfg(any(feature = "ssr", doc))]
+#[cfg(any(feature = "server", doc))]
 impl std::ops::Deref for ServerFnTraitObj {
     type Target = server_fn::ServerFnTraitObj<()>;
 
@@ -12,14 +12,14 @@ impl std::ops::Deref for ServerFnTraitObj {
     }
 }
 
-#[cfg(any(feature = "ssr", doc))]
+#[cfg(any(feature = "server", doc))]
 impl std::ops::DerefMut for ServerFnTraitObj {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-#[cfg(any(feature = "ssr", doc))]
+#[cfg(any(feature = "server", doc))]
 impl ServerFnTraitObj {
     fn new(
         prefix: &'static str,
@@ -36,10 +36,10 @@ impl ServerFnTraitObj {
     }
 }
 
-#[cfg(feature = "ssr")]
+#[cfg(feature = "server")]
 server_fn::inventory::collect!(ServerFnTraitObj);
 
-#[cfg(feature = "ssr")]
+#[cfg(feature = "server")]
 /// Middleware for a server function
 pub struct ServerFnMiddleware {
     /// The prefix of the server function.
@@ -50,7 +50,7 @@ pub struct ServerFnMiddleware {
     pub middleware: fn() -> Vec<std::sync::Arc<dyn crate::layer::Layer>>,
 }
 
-#[cfg(feature = "ssr")]
+#[cfg(feature = "server")]
 pub(crate) static MIDDLEWARE: once_cell::sync::Lazy<
     std::collections::HashMap<
         (&'static str, &'static str),
@@ -69,14 +69,14 @@ pub(crate) static MIDDLEWARE: once_cell::sync::Lazy<
     map
 });
 
-#[cfg(feature = "ssr")]
+#[cfg(feature = "server")]
 server_fn::inventory::collect!(ServerFnMiddleware);
 
-#[cfg(any(feature = "ssr", doc))]
+#[cfg(any(feature = "server", doc))]
 /// A server function that can be called on serializable arguments and returns a serializable result.
 pub type ServerFunction = server_fn::SerializedFnTraitObj<()>;
 
-#[cfg(feature = "ssr")]
+#[cfg(feature = "server")]
 #[allow(clippy::type_complexity)]
 static REGISTERED_SERVER_FUNCTIONS: once_cell::sync::Lazy<
     std::sync::Arc<std::sync::RwLock<std::collections::HashMap<&'static str, ServerFnTraitObj>>>,
@@ -88,11 +88,11 @@ static REGISTERED_SERVER_FUNCTIONS: once_cell::sync::Lazy<
     std::sync::Arc::new(std::sync::RwLock::new(map))
 });
 
-#[cfg(any(feature = "ssr", doc))]
+#[cfg(any(feature = "server", doc))]
 /// The registry of all Dioxus server functions.
 pub struct DioxusServerFnRegistry;
 
-#[cfg(feature = "ssr")]
+#[cfg(feature = "server")]
 impl server_fn::ServerFunctionRegistry<()> for DioxusServerFnRegistry {
     type Error = ServerRegistrationFnError;
 
@@ -155,7 +155,7 @@ impl server_fn::ServerFunctionRegistry<()> for DioxusServerFnRegistry {
     }
 }
 
-#[cfg(any(feature = "ssr", doc))]
+#[cfg(any(feature = "server", doc))]
 /// Errors that can occur when registering a server function.
 #[derive(thiserror::Error, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum ServerRegistrationFnError {
@@ -178,7 +178,7 @@ pub enum ServerRegistrationFnError {
 /// Technically, the trait is implemented on a type that describes the server function's arguments, not the function itself.
 pub trait DioxusServerFn: server_fn::ServerFn<()> {
     /// Registers the server function, allowing the client to query it by URL.
-    #[cfg(any(feature = "ssr", doc))]
+    #[cfg(any(feature = "server", doc))]
     fn register_explicit() -> Result<(), server_fn::ServerFnError> {
         Self::register_in_explicit::<DioxusServerFnRegistry>()
     }

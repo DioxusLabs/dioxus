@@ -1,5 +1,5 @@
 use crate::{runtime::Runtime, Element, ScopeId, Task};
-use futures_util::{future::poll_fn, Future};
+use futures_util::Future;
 use std::sync::Arc;
 
 /// Get the current scope id
@@ -45,8 +45,9 @@ pub fn provide_context<T: 'static + Clone>(value: T) -> T {
 }
 
 /// Provide a context to the root scope
-pub fn provide_root_context<T: 'static + Clone>(value: T) -> Option<T> {
+pub fn provide_root_context<T: 'static + Clone>(value: T) -> T {
     Runtime::with_current_scope(|cx| cx.provide_root_context(value))
+        .expect("to be in a dioxus runtime")
 }
 
 /// Suspends the current component
@@ -109,6 +110,11 @@ pub fn parent_scope() -> Option<ScopeId> {
 /// Mark the current scope as dirty, causing it to re-render
 pub fn needs_update() {
     Runtime::with_current_scope(|cx| cx.needs_update());
+}
+
+/// Mark the current scope as dirty, causing it to re-render
+pub fn needs_update_any(id: ScopeId) {
+    Runtime::with_current_scope(|cx| cx.needs_update_any(id));
 }
 
 /// Schedule an update for the current component
@@ -252,34 +258,12 @@ pub fn after_render(f: impl FnMut() + 'static) {
 /// Effects rely on this to ensure that they only run effects after the DOM has been updated. Without flush_sync effects
 /// are run immediately before diffing the DOM, which causes all sorts of out-of-sync weirdness.
 pub async fn flush_sync() {
-    let mut polled = false;
-
-    let _task =
-        FlushKey(Runtime::with(|rt| rt.add_to_flush_table()).expect("to be in a dioxus runtime"));
-
-    // Poll without giving the waker to anyone
-    // The runtime will manually wake this task up when it's ready
-    poll_fn(|_| {
-        if !polled {
-            polled = true;
-            futures_util::task::Poll::Pending
-        } else {
-            futures_util::task::Poll::Ready(())
-        }
-    })
-    .await;
-
-    // If the the future got polled, then we don't need to prevent it from being dropped
-    // If we had generational indicies on tasks we could simply let the task remain in the queue and just be a no-op
-    // when it's run
-    std::mem::forget(_task);
-
-    struct FlushKey(Task);
-    impl Drop for FlushKey {
-        fn drop(&mut self) {
-            Runtime::with(|rt| rt.flush_table.borrow_mut().remove(&self.0));
-        }
-    }
+    // Wait for the flush lock to be available
+    // We release it immediately, so it's impossible for the lock to be held longer than this function
+    Runtime::with(|rt| rt.flush_mutex.clone())
+        .unwrap()
+        .lock()
+        .await;
 }
 
 /// Use a hook with a cleanup function

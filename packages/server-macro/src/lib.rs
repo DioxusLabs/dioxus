@@ -40,7 +40,7 @@ use syn::{
 /// #[server(ReadPosts, "/api")]
 /// pub async fn read_posts(how_many: u8, query: String) -> Result<Vec<Post>, ServerFnError> {
 ///   // do some work on the server to access the database
-///   todo!()
+/// #   unimplemented!()
 /// }
 /// ```
 ///
@@ -123,7 +123,7 @@ pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
         Err(e) => e.to_compile_error().into(),
         Ok(tokens) => quote::quote! {
             #tokens
-            #[cfg(feature = "ssr")]
+            #[cfg(feature = "server")]
             #server_fn_path::inventory::submit! {
                 ::dioxus::fullstack::prelude::ServerFnMiddleware {
                     prefix: #struct_name::PREFIX,

@@ -24,10 +24,12 @@ serde = { version = "1.0.151", features = ["derive"] }
 serde_json = "1.0.91"
 dioxus-html = { workspace = true, features = ["serialize", "eval", "mounted"] }
 rustc-hash = { workspace = true }
+minify-js = "0.5.6"
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
 dioxus-hot-reload = { workspace = true, optional = true }
 dioxus-cli-config = { workspace = true }
+generational-box = { workspace = true }
 
 # warp
 warp = { version = "0.3.3", optional = true }
@@ -59,10 +61,6 @@ rocket = "0.5.0"
 rocket_ws = "0.1.0"
 tower = "0.4.13"
 dioxus = { workspace = true }
-
-[build-dependencies]
-# dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
-# minify-js = "0.5.6"
 
 [features]
 default = ["hot-reload"]

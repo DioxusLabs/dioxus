@@ -1,11 +1,8 @@
 use dioxus::prelude::*;
-use dioxus::router::prelude::*;
 
 fn main() {
     launch(|| {
-        rsx! {
-            Router::<Route> {}
-        }
+        rsx! { Router::<Route> {} }
     })
 }
 

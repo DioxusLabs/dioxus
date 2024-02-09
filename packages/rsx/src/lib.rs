@@ -85,7 +85,7 @@ impl CallBody {
         };
 
         quote! {
-            dioxus_core::LazyNodes::new( move | __cx: &dioxus_core::ScopeState| -> dioxus_core::VNode {
+            Some({
                 #body
             })
         }
@@ -107,22 +107,6 @@ impl Parse for CallBody {
         }
 
         Ok(Self { roots })
-    }
-}
-
-/// Serialize the same way, regardless of flavor
-impl ToTokens for CallBody {
-    fn to_tokens(&self, out_tokens: &mut TokenStream2) {
-        let body = TemplateRenderer {
-            roots: &self.roots,
-            location: None,
-        };
-
-        out_tokens.append_all(quote! {
-            dioxus_core::LazyNodes::new( move | __cx: &dioxus_core::ScopeState| -> dioxus_core::VNode {
-                #body
-            })
-        })
     }
 }
 

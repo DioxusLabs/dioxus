@@ -16,7 +16,7 @@ async fn run_vdom(app: fn() -> Element) {
 }
 
 #[tokio::test]
-async fn it_works() {
+async fn running_async() {
     static POLL_COUNT: AtomicUsize = AtomicUsize::new(0);
 
     fn app() -> Element {
@@ -36,7 +36,7 @@ async fn it_works() {
             });
         });
 
-        rsx!({ () })
+        rsx!({})
     }
 
     run_vdom(app).await;
@@ -76,7 +76,7 @@ async fn yield_now_works() {
             })
         });
 
-        rsx!({ () })
+        rsx!({})
     }
 
     run_vdom(app).await;
@@ -110,7 +110,7 @@ async fn flushing() {
             })
         });
 
-        rsx!({ () })
+        rsx!({})
     }
 
     let mut dom = VirtualDom::new(app);

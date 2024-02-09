@@ -13,6 +13,7 @@ keywords = ["dom", "ui", "gui", "react"]
 dioxus-core = { workspace = true }
 dioxus-rsx = { workspace = true, features = ["hot_reload"], optional = true }
 dioxus-html-internal-macro = { workspace = true }
+generational-box = { workspace = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_repr = { version = "0.1", optional = true }
 wasm-bindgen = { workspace = true, optional = true }

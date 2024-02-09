@@ -110,6 +110,7 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
                         log::error!("{}", err);
                     }
                 }
+                // _ => {}
             }
 
             if needs_full_rebuild {

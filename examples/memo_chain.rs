@@ -8,7 +8,6 @@ fn app() -> Element {
     let mut value = use_signal(|| 0);
     let mut depth = use_signal(|| 0_usize);
     let items = use_memo(move || (0..depth()).map(|f| f as _).collect::<Vec<isize>>());
-
     let state = use_memo(move || value() + 1);
 
     println!("rendering app");
@@ -17,7 +16,7 @@ fn app() -> Element {
         button { onclick: move |_| value += 1, "Increment" }
         button { onclick: move |_| depth += 1, "Add depth" }
         button { onclick: move |_| depth -= 1, "Remove depth" }
-        Child { depth, items, state }
+        Child { depthitemsstate }
     }
 }
 
@@ -39,7 +38,7 @@ fn Child(
     println!("rendering child: {}", depth());
 
     rsx! {
-        h3 { "Depth({depth})-Item({item}): {state}"}
-        Child { depth, state, items }
+        h3 { "Depth({depth})-Item({item}): {state}" }
+        Child { depthstateitems }
     }
 }

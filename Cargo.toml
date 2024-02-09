@@ -67,12 +67,12 @@ dioxus-core-macro = { path = "packages/core-macro", version = "0.4.0" }
 dioxus-config-macro = { path = "packages/config-macro", version = "0.4.0" }
 dioxus-router = { path = "packages/router", version = "0.4.1"  }
 dioxus-router-macro = { path = "packages/router-macro", version = "0.4.1" }
-dioxus-html = { path = "packages/html", default-features = false, version = "0.4.0"  }
+dioxus-html = { path = "packages/html", version = "0.4.0"  }
 dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.4.0"  }
 dioxus-hooks = { path = "packages/hooks", version = "0.4.0" }
-dioxus-web = { path = "packages/web", version = "0.4.0", default-features = false  }
-dioxus-ssr = { path = "packages/ssr", version = "0.4.0", default-features = false  }
-dioxus-desktop = { path = "packages/desktop", version = "0.4.0", default-features = false }
+dioxus-web = { path = "packages/web", version = "0.4.0" }
+dioxus-ssr = { path = "packages/ssr", version = "0.4.0", default-features = false }
+dioxus-desktop = { path = "packages/desktop", version = "0.4.0" }
 dioxus-mobile = { path = "packages/mobile", version = "0.4.0"  }
 dioxus-interpreter-js = { path = "packages/interpreter", version = "0.4.0" }
 dioxus-liveview = { path = "packages/liveview", version = "0.4.0"  }
@@ -103,11 +103,11 @@ thiserror = "1.0.40"
 prettyplease = { package = "prettier-please", version = "0.2", features = [
     "verbatim",
 ] }
-manganis-cli-support = { git = "https://github.com/DioxusLabs/collect-assets", rev = "e0093a4", features = [
+manganis-cli-support = { git = "https://github.com/DioxusLabs/collect-assets", rev = "f982698", features = [
     "webp",
     "html",
 ] }
-manganis = { git = "https://github.com/DioxusLabs/collect-assets", rev = "e0093a4" }
+manganis = { git = "https://github.com/DioxusLabs/collect-assets", rev = "f982698" }
 
 # This is a "virtual package"
 # It is not meant to be published, but is used so "cargo run --example XYZ" works properly
@@ -154,7 +154,7 @@ fullstack = ["dioxus/fullstack"]
 axum = ["dioxus/axum"]
 salvo = ["dioxus/salvo"]
 rocket = ["dioxus/rocket"]
-server = ["dioxus/server"]
+server = ["dioxus/axum"]
 default = ["dioxus/desktop"]
 web = ["dioxus/web"]
 collect-assets = ["manganis"]

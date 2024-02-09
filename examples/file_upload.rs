@@ -35,18 +35,12 @@ fn App() -> Element {
             input {
                 r#type: "checkbox",
                 checked: enable_directory_upload,
-                oninput: move |evt| enable_directory_upload.set(evt.value().parse().unwrap()),
-            },
+                oninput: move |evt| enable_directory_upload.set(evt.checked())
+            }
             "Enable directory upload"
         }
 
-        input {
-            r#type: "file",
-            accept: ".txt,.rs",
-            multiple: true,
-            directory: enable_directory_upload,
-            onchange: upload_files,
-        }
+        input { r#type: "file", accept: ".txt,.rs", multiple: true, directory: enable_directory_upload, onchange: upload_files }
         div {
             width: "100px",
             height: "100px",

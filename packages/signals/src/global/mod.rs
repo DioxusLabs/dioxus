@@ -19,7 +19,7 @@ pub(crate) fn get_global_context() -> GlobalSignalContext {
             let context = GlobalSignalContext {
                 signal: Rc::new(RefCell::new(HashMap::new())),
             };
-            provide_root_context(context).unwrap()
+            provide_root_context(context)
         }
     }
 }

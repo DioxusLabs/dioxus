@@ -5,11 +5,10 @@
 //! ```
 
 use dioxus::prelude::*;
-use dioxus_router::prelude::*;
 
 fn main() {
     let config = LaunchBuilder::fullstack();
-    #[cfg(feature = "ssr")]
+    #[cfg(feature = "server")]
     config
         .incremental(
             IncrementalRendererConfig::default()
@@ -17,7 +16,7 @@ fn main() {
         )
         .launch();
 
-    #[cfg(not(feature = "ssr"))]
+    #[cfg(not(feature = "server"))]
     config.launch(|| {
         rsx! {
             Router::<Route> {}

@@ -14,7 +14,7 @@ use futures_util::{pin_mut, FutureExt};
 use std::{any::Any, rc::Rc, task::Waker};
 use wry::{RequestAsyncResponder, WebContext, WebViewBuilder};
 
-pub struct WebviewInstance {
+pub(crate) struct WebviewInstance {
     pub dom: VirtualDom,
     pub desktop_context: DesktopContext,
     pub waker: Waker,
@@ -32,7 +32,11 @@ pub struct WebviewInstance {
 }
 
 impl WebviewInstance {
-    pub fn new(mut cfg: Config, dom: VirtualDom, shared: Rc<SharedContext>) -> WebviewInstance {
+    pub(crate) fn new(
+        mut cfg: Config,
+        dom: VirtualDom,
+        shared: Rc<SharedContext>,
+    ) -> WebviewInstance {
         let window = cfg.window.clone().build(&shared.target).unwrap();
 
         // We assume that if the icon is None in cfg, then the user just didnt set it

@@ -7,7 +7,7 @@ fn main() {
 fn app() -> Element {
     let mut signal = use_signal(|| 0);
 
-    use_future(|| async move {
+    use_future(move || async move {
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             signal += 1;

@@ -369,11 +369,15 @@ impl VirtualDom {
     ///
     /// Whenever the Runtime "works", it will re-render this scope
     pub fn mark_dirty(&mut self, id: ScopeId) {
-        if let Some(context) = self.runtime.get_state(id) {
-            let height = context.height();
-            tracing::trace!("Marking scope {:?} ({}) as dirty", id, context.name);
-            self.dirty_scopes.insert(DirtyScope { height, id });
-        }
+        let Some(scope) = self.runtime.get_state(id) else {
+            return;
+        };
+
+        tracing::trace!("Marking scope {:?} ({}) as dirty", id, scope.name);
+        self.dirty_scopes.insert(DirtyScope {
+            height: scope.height(),
+            id,
+        });
     }
 
     /// Call a listener inside the VirtualDom with data from outside the VirtualDom. **The ElementId passed in must be the id of an element with a listener, not a static node or a text node.**
@@ -419,8 +423,15 @@ impl VirtualDom {
     /// let dom = VirtualDom::new(app);
     /// ```
     pub async fn wait_for_work(&mut self) {
-        // Ping tasks waiting on the flush table - they're waiting for sync stuff to be done before progressing
-        self.clear_flush_table();
+        // And then poll the futures
+        self.poll_tasks().await;
+    }
+
+    ///
+    async fn poll_tasks(&mut self) {
+        // Release the flush lock
+        // This will cause all the flush wakers to immediately spring to life, which we will off with process_events
+        self.runtime.release_flush_lock();
 
         // And then poll the futures
         self.poll_tasks().await;
@@ -441,21 +452,17 @@ impl VirtualDom {
             // Make sure we set the runtime since we're running user code
             let _runtime = RuntimeGuard::new(self.runtime.clone());
 
+            // Hold a lock to the flush sync to prevent tasks from running in the event we get an immediate
+            // When we're doing awaiting the rx, the lock will be dropped and tasks waiting on the lock will get waked
+            // We have to own the lock since poll_tasks is cancel safe - the future that this is running in might get dropped
+            // and if we held the lock in the scope, the lock would also get dropped prematurely
+            self.runtime.release_flush_lock();
+            self.runtime.acquire_flush_lock();
+
             match self.rx.next().await.expect("channel should never close") {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
-                SchedulerMsg::TaskNotified(id) => self.runtime.handle_task_wakeup(id),
+                SchedulerMsg::TaskNotified(id) => _ = self.runtime.handle_task_wakeup(id),
             };
-        }
-    }
-
-    fn clear_flush_table(&mut self) {
-        // Make sure we set the runtime since we're running user code
-        let _runtime = RuntimeGuard::new(self.runtime.clone());
-
-        // Manually flush tasks that called `flush().await`
-        // Tasks that might've been waiting for `flush` finally have a chance to run to their next await point
-        for task in self.runtime.flush_table.take() {
-            self.runtime.handle_task_wakeup(task);
         }
     }
 
@@ -467,7 +474,7 @@ impl VirtualDom {
         while let Ok(Some(msg)) = self.rx.try_next() {
             match msg {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
-                SchedulerMsg::TaskNotified(task) => self.runtime.handle_task_wakeup(task),
+                SchedulerMsg::TaskNotified(task) => _ = self.runtime.handle_task_wakeup(task),
             }
         }
     }
@@ -550,6 +557,7 @@ impl VirtualDom {
 
         // Process any events that might be pending in the queue
         // Signals marked with .write() need a chance to be handled by the effect driver
+        // This also processes futures which might progress into immediates
         self.process_events();
 
         // Next, diff any dirty scopes

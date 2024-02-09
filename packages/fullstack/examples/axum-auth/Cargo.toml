@@ -42,5 +42,5 @@ optional = true
 
 [features]
 default = []
-ssr = ["axum", "tokio", "dioxus-fullstack/axum", "tower-http", "simple_logger", "async-trait", "sqlx", "axum_session", "axum_session_auth", "http", "tower"]
+server = ["axum", "tokio", "dioxus-fullstack/axum", "tower-http", "simple_logger", "async-trait", "sqlx", "axum_session", "axum_session_auth", "http", "tower"]
 web = ["dioxus-web"]

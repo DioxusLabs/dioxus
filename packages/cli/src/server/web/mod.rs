@@ -113,7 +113,7 @@ pub async fn serve(
     reload_tx: Sender<WsMessage>,
     skip_assets: bool,
 ) -> Result<()> {
-    let first_build_result = crate::builder::build(&config, false, skip_assets)?;
+    let first_build_result = crate::builder::build(&config, false, skip_assets, None)?;
 
     // generate dev-index page
     Serve::regen_dev_page(&config, first_build_result.assets.as_ref())?;
@@ -288,14 +288,9 @@ async fn setup_router(
                 {
                     let body = Full::from(
                         // TODO: Cache/memoize this.
-                        std::fs::read_to_string(
-                            file_service_config
-                                .crate_dir
-                                .join(file_service_config.out_dir())
-                                .join("index.html"),
-                        )
-                        .ok()
-                        .unwrap(),
+                        std::fs::read_to_string(file_service_config.out_dir().join("index.html"))
+                            .ok()
+                            .unwrap(),
                     )
                     .map_err(|err| match err {})
                     .boxed();
@@ -316,7 +311,7 @@ async fn setup_router(
                 Ok(response)
             },
         )
-        .service(ServeDir::new(config.crate_dir.join(config.out_dir())));
+        .service(ServeDir::new(config.out_dir()));
 
     // Setup websocket
     let mut router = Router::new().route("/_dioxus/ws", get(ws_handler));
@@ -444,12 +439,12 @@ async fn ws_handler(
     })
 }
 
-fn build(
-    config: &CrateConfig,
-    reload_tx: &Sender<WsMessage>,
-    skip_assets: bool,
-) -> Result<BuildResult> {
-    let result = builder::build(config, true, skip_assets)?;
+fn build(config: &CrateConfig, reload_tx: &Sender<()>, skip_assets: bool) -> Result<BuildResult> {
+    // Since web platform doesn't use `rust_flags`, this argument is explicitly
+    // set to `None`.
+    let result = builder::build(config, true, skip_assets, None)?;
+    // change the websocket reload state to true;
+    // the page will auto-reload.
     if config.dioxus_config.watcher.reload_html {
         let _ = Serve::regen_dev_page(config, result.assets.as_ref());
     }
