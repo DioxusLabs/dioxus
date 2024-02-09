@@ -31,21 +31,6 @@ pub struct RouterConfig<R: Routable> {
     pub(crate) initial_route: Option<R>,
 }
 
-#[cfg(feature = "serde")]
-impl<R: Routable + Clone> Default for RouterConfig<R>
-where
-    <R as std::str::FromStr>::Err: std::fmt::Display,
-    R: serde::Serialize + serde::de::DeserializeOwned,
-{
-    fn default() -> Self {
-        Self {
-            failure_external_navigation: FailureExternalNavigation::<R>,
-            history: None,
-            on_update: None,
-        }
-    }
-}
-
 macro_rules! default_history {
     ($initial_route:ident) => {
         {
@@ -83,24 +68,6 @@ macro_rules! default_history {
     };
 }
 
-#[cfg(feature = "serde")]
-impl<R: Routable + Clone> RouterConfig<R>
-where
-    <R as std::str::FromStr>::Err: std::fmt::Display,
-    R: serde::Serialize + serde::de::DeserializeOwned,
-{
-    pub(crate) fn get_history(self) -> Box<dyn HistoryProvider<R>> {
-        #[allow(unused)]
-        let initial_route = self.initial_route.clone().unwrap_or("/".parse().unwrap_or_else(|err|
-            panic!("index route does not exist:\n{}\n use MemoryHistory::with_initial_path or RouterConfig::initial_route to set a custom path", err)
-        ));
-        self.history
-            .take()
-            .unwrap_or_else(|| default_history!(initial_route))
-    }
-}
-
-#[cfg(not(feature = "serde"))]
 impl<R: Routable + Clone> Default for RouterConfig<R>
 where
     <R as std::str::FromStr>::Err: std::fmt::Display,

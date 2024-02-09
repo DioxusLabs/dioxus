@@ -291,17 +291,20 @@ impl DioxusRouterExt for Router {
     ) -> Self {
         let cfg = cfg.into();
 
-        self.serve_static_assets(cfg.assets_path)
+        self.serve_static_assets(cfg.assets_path.clone())
             .connect_hot_reload()
             .register_server_fns(server_fn_path)
-            .push(Router::with_path("/<**any_path>").get(SSRHandler { cfg }))
+            .push(Router::with_path("/<**any_path>").get(SSRHandler {
+                config: cfg,
+                virtual_dom: virtual_dom_factory,
+            }))
     }
 
     fn connect_hot_reload(self) -> Self {
         let mut _dioxus_router = Router::with_path("_dioxus");
         _dioxus_router =
             _dioxus_router.push(Router::with_path("hot_reload").handle(HotReloadHandler));
-        #[cfg(all(debug_assertions, feature = "hot-reload", feature = "server"))]
+        #[cfg(all(debug_assertions, feature = "hot-reload"))]
         {
             _dioxus_router = _dioxus_router.push(Router::with_path("disconnect").handle(ignore_ws));
         }
@@ -485,11 +488,11 @@ fn handle_error(error: impl Error + Send + Sync, res: &mut Response) {
 }
 
 /// A handler for Dioxus web hot reload websocket. This will send the updated static parts of the RSX to the client when they change.
-#[cfg(not(all(debug_assertions, feature = "hot-reload", feature = "server")))]
+#[cfg(not(all(debug_assertions, feature = "hot-reload")))]
 #[derive(Default)]
 pub struct HotReloadHandler;
 
-#[cfg(not(all(debug_assertions, feature = "hot-reload", feature = "server")))]
+#[cfg(not(all(debug_assertions, feature = "hot-reload")))]
 #[handler]
 impl HotReloadHandler {
     async fn handle(
@@ -503,11 +506,11 @@ impl HotReloadHandler {
 }
 
 /// A handler for Dioxus web hot reload websocket. This will send the updated static parts of the RSX to the client when they change.
-#[cfg(all(debug_assertions, feature = "hot-reload", feature = "server"))]
+#[cfg(all(debug_assertions, feature = "hot-reload"))]
 #[derive(Default)]
 pub struct HotReloadHandler;
 
-#[cfg(all(debug_assertions, feature = "hot-reload", feature = "server"))]
+#[cfg(all(debug_assertions, feature = "hot-reload"))]
 #[handler]
 impl HotReloadHandler {
     async fn handle(
@@ -561,7 +564,7 @@ impl HotReloadHandler {
     }
 }
 
-#[cfg(all(debug_assertions, feature = "hot-reload", feature = "server"))]
+#[cfg(all(debug_assertions, feature = "hot-reload"))]
 #[handler]
 async fn ignore_ws(req: &mut Request, res: &mut Response) -> Result<(), salvo::http::StatusError> {
     use salvo::websocket::WebSocketUpgrade;

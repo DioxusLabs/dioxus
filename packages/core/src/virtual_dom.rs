@@ -24,7 +24,7 @@ use std::{any::Any, collections::BTreeSet, rc::Rc};
 ///
 /// ## Guide
 ///
-/// Components are defined as simple functions that take [`Scope`] and return an [`Element`].
+/// Components are defined as simple functions that take [`crate::properties::Properties`] and return an [`Element`].
 ///
 /// ```rust
 /// # use dioxus::prelude::*;
@@ -218,7 +218,7 @@ impl VirtualDom {
     /// # Example
     /// ```rust, ignore
     /// fn Example() -> Element  {
-    ///     rsx!( div { "hello world" } ))
+    ///     rsx!( div { "hello world" } )
     /// }
     ///
     /// let dom = VirtualDom::new(Example);
@@ -526,7 +526,7 @@ impl VirtualDom {
     ///
     /// # Example
     /// ```rust, ignore
-    /// static app: Component = |cx|  rsx!{ "hello world" });
+    /// static app: Component = |cx|  rsx!{ "hello world" };
     ///
     /// let mut dom = VirtualDom::new();
     /// let edits = dom.rebuild();

@@ -50,7 +50,7 @@ fn main() {
 // It's not required, but highly recommended. For example, UpperCamelCase components will not generate a warning.
 #[component]
 fn App() -> Element {
-    rsx!("hello world!"))
+    rsx!("hello world!")
 }
 ```
 
@@ -97,13 +97,12 @@ If we want to omit the boilerplate of `cx.render`, we can simply pass in
 render nodes in match statements.
 
 ```rust, ignore
-#[component[
+#[component]
 fn Example() -> Element {
-
     // both of these are equivalent
-    rsx!("hello world"))
+    rsx!("hello world");
 
-    rsx!("hello world!")
+    rsx!("hello world!");
 }
 ```
 
@@ -127,7 +126,7 @@ fn App() -> Element {
             ))
 
         }
-    ))
+    )
 }
 ```
 
@@ -147,7 +146,7 @@ fn App() -> Element {
             title: "My App",
             color: "red",
         }
-    ))
+    )
 }
 ```
 
@@ -169,7 +168,7 @@ fn Header(cx: Scope<HeaderProps>) -> Element {
             background_color: "{cx.props.color}"
             h1 { "{cx.props.title}" }
         }
-    ))
+    )
 }
 ```
 
@@ -184,7 +183,7 @@ fn Header(title: String, color: String) -> Element {
             background_color: "{color}"
             h1 { "{title}" }
         }
-    ))
+    )
 }
 ```
 
@@ -201,13 +200,13 @@ struct HeaderProps<'a> {
 }
 
 #[component]
-fn Header(props: HeaderProps -> Element {
+fn Header(props: HeaderProps) -> Element {
     rsx!(
         div {
             background_color: "{cx.props.color}"
             h1 { "{cx.props.title}" }
         }
-    ))
+    )
 }
 ```
 
@@ -299,7 +298,7 @@ fn App() -> Element {
         div { "Count: {count}" }
         button { onclick: move |_| count.set(count + 1), "Increment" }
         button { onclick: move |_| count.set(count - 1), "Decrement" }
-    ))
+    )
 }
 ```
 

@@ -1,7 +1,6 @@
 #![doc = include_str!("../README.md")]
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
-#![cfg_attr(feature = "nightly-features", feature(debug_refcell))]
 
 #[macro_export]
 /// A helper macro for using hooks and properties in async environments.

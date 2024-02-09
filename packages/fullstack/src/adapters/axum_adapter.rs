@@ -332,7 +332,7 @@ where
     }
 
     fn connect_hot_reload(self) -> Self {
-        #[cfg(all(debug_assertions, feature = "hot-reload", feature = "server"))]
+        #[cfg(all(debug_assertions, feature = "hot-reload"))]
         {
             self.nest(
                 "/_dioxus",
@@ -354,7 +354,7 @@ where
                     .route("/hot_reload", get(hot_reload_handler)),
             )
         }
-        #[cfg(not(all(debug_assertions, feature = "hot-reload", feature = "server")))]
+        #[cfg(not(all(debug_assertions, feature = "hot-reload")))]
         {
             self
         }
@@ -476,7 +476,7 @@ fn report_err<E: std::fmt::Display>(e: E) -> Response<BoxBody> {
 }
 
 /// A handler for Dioxus web hot reload websocket. This will send the updated static parts of the RSX to the client when they change.
-#[cfg(all(debug_assertions, feature = "hot-reload", feature = "server"))]
+#[cfg(all(debug_assertions, feature = "hot-reload"))]
 pub async fn hot_reload_handler(ws: axum::extract::WebSocketUpgrade) -> impl IntoResponse {
     use axum::extract::ws::Message;
     use futures_util::StreamExt;
