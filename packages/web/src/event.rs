@@ -49,10 +49,7 @@ impl HtmlEventConverter for WebEventConverter {
     #[inline(always)]
     fn convert_drag_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::DragData {
         let event = downcast_event(event);
-        DragData::new(WebDragData::new(
-            event.element.clone(),
-            event.raw.clone().unchecked_into(),
-        ))
+        DragData::new(WebDragData::new(event.raw.clone().unchecked_into()))
     }
 
     #[inline(always)]
@@ -462,13 +459,12 @@ impl HasFileData for WebFormData {
 }
 
 struct WebDragData {
-    element: Element,
     raw: MouseEvent,
 }
 
 impl WebDragData {
-    fn new(element: Element, raw: MouseEvent) -> Self {
-        Self { element, raw }
+    fn new(raw: MouseEvent) -> Self {
+        Self { raw }
     }
 }
 
