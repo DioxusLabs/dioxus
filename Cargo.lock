@@ -2405,11 +2405,11 @@ dependencies = [
  "flate2",
  "fs_extra",
  "futures-util",
- "gitignore",
  "headers 0.3.9",
  "html_parser",
  "hyper 0.14.28",
  "hyper-rustls 0.23.2",
+ "ignore",
  "indicatif",
  "interprocess-docfix",
  "lazy_static",
@@ -2418,11 +2418,14 @@ dependencies = [
  "mlua",
  "notify",
  "open",
+ "prettier-please",
+ "rayon",
  "reqwest",
  "rsx-rosetta",
  "serde",
  "serde_json",
  "subprocess",
+ "syn 2.0.48",
  "tar",
  "tauri-bundler",
  "tempfile",
@@ -3915,15 +3918,6 @@ dependencies = [
  "openssl-probe",
  "openssl-sys",
  "url",
-]
-
-[[package]]
-name = "gitignore"
-version = "1.0.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d051488d9a601181a9b90c9ad8ae7e8251d642ddd2463008f2f5019d255bd89"
-dependencies = [
- "glob",
 ]
 
 [[package]]

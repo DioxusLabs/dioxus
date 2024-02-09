@@ -70,7 +70,6 @@ async fn main() -> anyhow::Result<()> {
 
         Autoformat(opts) => opts
             .autoformat()
-            .await
             .context(error_wrapper("Error autoformatting RSX")),
 
         Check(opts) => opts

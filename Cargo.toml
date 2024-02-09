@@ -84,7 +84,7 @@ dioxus-signals = { path = "packages/signals" }
 dioxus-cli-config = { path = "packages/cli-config", version = "0.4.1" }
 generational-box = { path = "packages/generational-box", version = "0.4.3" }
 dioxus-hot-reload = { path = "packages/hot-reload", version = "0.4.0" }
-dioxus-fullstack = { path = "packages/fullstack", version = "0.4.1"  }
+dioxus-fullstack = { path = "packages/fullstack", version = "0.4.1" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.4.1" }
 tracing = "0.1.37"
 tracing-futures = "0.2.5"
