@@ -439,7 +439,11 @@ async fn ws_handler(
     })
 }
 
-fn build(config: &CrateConfig, reload_tx: &Sender<()>, skip_assets: bool) -> Result<BuildResult> {
+fn build(
+    config: &CrateConfig,
+    reload_tx: &Sender<WsMessage>,
+    skip_assets: bool,
+) -> Result<BuildResult> {
     // Since web platform doesn't use `rust_flags`, this argument is explicitly
     // set to `None`.
     let result = builder::build(config, true, skip_assets, None)?;

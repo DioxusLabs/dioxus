@@ -427,15 +427,15 @@ impl VirtualDom {
         self.poll_tasks().await;
     }
 
-    ///
-    async fn poll_tasks(&mut self) {
-        // Release the flush lock
-        // This will cause all the flush wakers to immediately spring to life, which we will off with process_events
-        self.runtime.release_flush_lock();
+    // ///
+    // async fn poll_tasks(&mut self) {
+    //     // Release the flush lock
+    //     // This will cause all the flush wakers to immediately spring to life, which we will off with process_events
+    //     self.runtime.release_flush_lock();
 
-        // And then poll the futures
-        self.poll_tasks().await;
-    }
+    //     // And then poll the futures
+    //     self.poll_tasks().await;
+    // }
 
     /// Poll futures without progressing any futures from the flush table
     async fn poll_tasks(&mut self) {

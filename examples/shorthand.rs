@@ -19,7 +19,7 @@ fn app() -> Element {
 
     rsx! {
         div { class, id, {&children} }
-        Component { abcchildrenonclick }
+        Component { a, b, c, children, onclick }
         Component {
             ..ComponentProps {
                 a: 1,

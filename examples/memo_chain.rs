@@ -16,7 +16,7 @@ fn app() -> Element {
         button { onclick: move |_| value += 1, "Increment" }
         button { onclick: move |_| depth += 1, "Add depth" }
         button { onclick: move |_| depth -= 1, "Remove depth" }
-        Child { depthitemsstate }
+        Child { depth, items, state }
     }
 }
 
@@ -39,6 +39,6 @@ fn Child(
 
     rsx! {
         h3 { "Depth({depth})-Item({item}): {state}" }
-        Child { depthstateitems }
+        Child { depth, state, items }
     }
 }
