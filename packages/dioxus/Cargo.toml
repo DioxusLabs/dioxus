@@ -35,7 +35,7 @@ dioxus-hot-reload = { workspace = true, optional = true }
 default = ["macro", "html", "hot-reload", "signals", "hooks", "launch"]
 signals = ["dioxus-signals"]
 macro = ["dioxus-core-macro"]
-html = ["dioxus-html"]
+html = ["dioxus-html", "dioxus-hot-reload/html"]
 hooks = ["dioxus-hooks"]
 hot-reload = ["dioxus-hot-reload"]
 

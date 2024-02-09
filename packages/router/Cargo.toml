@@ -35,7 +35,7 @@ default = []
 ssr = ["dioxus-ssr/incremental", "tokio", "dioxus-fullstack?/server"]
 liveview = ["dioxus-liveview", "tokio", "dep:serde", "serde_json"]
 wasm_test = []
-web = ["gloo", "web-sys", "wasm-bindgen", "gloo-utils", "js-sys"]
+web = ["gloo", "web-sys", "wasm-bindgen", "gloo-utils", "js-sys", "dioxus-lib/html"]
 fullstack = ["dioxus-fullstack"]
 
 [dev-dependencies]

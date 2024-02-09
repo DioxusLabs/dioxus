@@ -24,6 +24,7 @@ once_cell = { version = "1.17.0", optional = true }
 ignore = { version = "0.4.19", optional = true }
 
 [features]
-default = ["dioxus-html"]
+default = []
+html = ["dioxus-html"]
 custom_file_watcher = ["ignore", "chrono", "notify", "execute", "once_cell", "ignore"]
 file_watcher = ["custom_file_watcher", "dioxus-html/hot-reload-context"]
