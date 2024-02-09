@@ -42,7 +42,7 @@ pub(crate) mod innerlude {
     /// An Errored [`Element`] will propagate the error to the nearest error boundary.
     pub type Element = Option<VNode>;
 
-    /// A [`Component`] is a function that takes a [`Scope`] and returns an [`Element`].
+    /// A [`Component`] is a function that takes [`Properties`] and returns an [`Element`].
     ///
     /// Components can be used in other components with two syntax options:
     /// - lowercase as a function call with named arguments (rust style)
@@ -84,7 +84,7 @@ pub use crate::innerlude::{
 
 /// The purpose of this module is to alleviate imports of many common types
 ///
-/// This includes types like [`Scope`], [`Element`], and [`Component`].
+/// This includes types like [`Element`], and [`Component`].
 pub mod prelude {
     pub use crate::innerlude::{
         consume_context, consume_context_from_scope, current_scope_id, fc_to_builder, flush_sync,

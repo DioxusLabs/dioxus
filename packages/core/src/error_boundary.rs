@@ -140,12 +140,12 @@ impl ErrorBoundary {
 ///
 /// ```rust, ignore
 /// #[component]
-/// fn app( count: String) -> Element {
+/// fn app(count: String) -> Element {
 ///     let id: i32 = count.parse().throw()?;
 ///
 ///     rsx! {
 ///         div { "Count {}" }
-///     })
+///     }
 /// }
 /// ```
 pub trait Throw<S = ()>: Sized {
@@ -170,7 +170,7 @@ pub trait Throw<S = ()>: Sized {
     ///
     ///     rsx! {
     ///         div { "Count {}" }
-    ///     })
+    ///     }
     /// }
     /// ```
     fn throw(self) -> Option<Self::Out>;
@@ -193,7 +193,7 @@ pub trait Throw<S = ()>: Sized {
     ///
     ///     rsx! {
     ///         div { "Count {}" }
-    ///     })
+    ///     }
     /// }
     /// ```
     fn throw_with<D: Debug + 'static>(self, e: impl FnOnce() -> D) -> Option<Self::Out> {
