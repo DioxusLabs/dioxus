@@ -18,7 +18,7 @@ rustc-hash = "1.1.0"
 lru = "0.10.0"
 tracing = { workspace = true }
 http = "0.2.9"
-tokio = { version = "1.28", features = ["fs", "io-util"], optional = true }
+tokio = { version = "1.28", features = ["io-util"], optional = true }
 async-trait = "0.1.58"
 serde_json = { version = "1.0" }
 

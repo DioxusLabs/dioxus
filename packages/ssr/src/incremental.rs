@@ -152,6 +152,7 @@ impl IncrementalRenderer {
             }
         }
         // check the file cache
+        #[cfg(not(target_arch = "wasm32"))]
         if let Some(file_path) = self.find_file(&route) {
             if let Some(freshness) = file_path.freshness(self.invalidate_after) {
                 if let Ok(file) = tokio::fs::File::open(file_path.full_path).await {

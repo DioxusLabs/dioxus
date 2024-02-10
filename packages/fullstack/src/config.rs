@@ -129,7 +129,7 @@ impl Config {
 
             let ssr_state = SSRState::new(&cfg);
             let router = axum::Router::new().register_server_fns(server_fn_route);
-            #[cfg(not(any(feature = "desktop", feature = "mobile")))]
+            #[cfg(not(any(feature = "desktop", feature = "mobile", target_arch = "wasm32")))]
             let router = router
                 .serve_static_assets(cfg.assets_path.clone())
                 .connect_hot_reload()
@@ -144,6 +144,7 @@ impl Config {
                         .layer(tower_http::compression::CompressionLayer::new().gzip(true)),
                 )
                 .into_make_service();
+            #[cfg(not(target_arch = "wasm32"))]
             axum::Server::bind(&addr).serve(router).await.unwrap();
         }
         #[cfg(all(feature = "warp", not(feature = "axum"), not(feature = "salvo")))]

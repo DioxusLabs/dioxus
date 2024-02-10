@@ -1,3 +1,7 @@
+use cfg_if::cfg_if;
+
+cfg_if! {
+    if #[cfg(not(target_arch = "wasm32"))] {
 use std::sync::Arc;
 
 use dioxus_lib::prelude::Template;
@@ -58,4 +62,6 @@ pub(crate) async fn spawn_hot_reload() -> &'static HotReloadState {
             r
         })
         .await
+}
+    }
 }

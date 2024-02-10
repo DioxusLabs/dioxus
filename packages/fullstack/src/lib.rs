@@ -51,6 +51,9 @@ pub mod prelude {
     #[cfg(feature = "warp")]
     #[cfg_attr(any(docsrs, feature = "nightly-doc"), doc(cfg(feature = "warp")))]
     pub use crate::adapters::warp_adapter::*;
+    #[cfg(feature = "cloudflare-workers")]
+    #[cfg_attr(any(docsrs, feature = "nightly-doc"), doc(cfg(feature = "cloudflare-workers")))]
+    pub use crate::adapters::worker_adapter::*;
     use crate::hooks;
     #[cfg(not(feature = "server"))]
     #[cfg_attr(
