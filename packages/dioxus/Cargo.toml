@@ -50,6 +50,7 @@ web = ["dioxus-web", "dioxus-fullstack?/web", "dioxus-config-macro/web", "dioxus
 ssr = ["dioxus-ssr", "dioxus-router?/ssr", "dioxus-config-macro/ssr"]
 liveview = ["dioxus-liveview", "dioxus-config-macro/liveview", "dioxus-router?/liveview"]
 axum = ["dioxus-fullstack?/axum", "ssr", "dioxus-liveview?/axum"]
+cloudflare-workers = ["dioxus-fullstack?/cloudflare-workers", "ssr"]
 salvo = ["dioxus-fullstack?/salvo", "ssr", "dioxus-liveview?/salvo"]
 warp = ["dioxus-fullstack?/warp", "ssr", "dioxus-liveview?/warp"]
 rocket = ["dioxus-liveview?/rocket"]

@@ -1,0 +1,33 @@
+[package]
+name = "cloudflare-workers-hello-world"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "cloudflare_workers_hello_world"
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "hello-world"
+path = "src/main.rs"
+
+[dependencies]
+dioxus = { workspace = true, features = ["fullstack"]}
+dioxus-web = { workspace = true, features = ["hydrate"], optional = true }
+
+worker = { workspace = true, optional = true }
+serde = "1.0.159"
+simple_logger = "4.2.0"
+tracing-wasm = "0.2.1"
+tracing = { workspace = true }
+tracing-subscriber = "0.3.17"
+reqwest = "0.11.18"
+
+[features]
+default = []
+server = ["dioxus/cloudflare-workers", "worker"]
+web = ["dioxus-web"]

@@ -37,6 +37,7 @@ members = [
     "packages/fullstack/examples/axum-router",
     "packages/fullstack/examples/axum-desktop",
     "packages/fullstack/examples/axum-auth",
+    "packages/fullstack/examples/cloudflare-workers-hello-world",
     "packages/fullstack/examples/salvo-hello-world",
     "packages/fullstack/examples/warp-hello-world",
     "packages/fullstack/examples/static-hydrated",
@@ -104,6 +105,7 @@ manganis-cli-support = { git = "https://github.com/DioxusLabs/collect-assets", r
     "html",
 ] }
 manganis = { git = "https://github.com/DioxusLabs/collect-assets", rev = "f982698" }
+worker = { git = "https://github.com/spigaz/workers-rs.git", rev = "7bbd74efeda63852369a0725d6e45a006301a93e" }
 
 # This is a "virtual package"
 # It is not meant to be published, but is used so "cargo run --example XYZ" works properly

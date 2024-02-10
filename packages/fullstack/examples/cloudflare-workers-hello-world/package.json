@@ -1,0 +1,17 @@
+{
+  "name": "cloudflare-workers-hello-world",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "serve": "concurrently \"npm run serve:web\" \"npm run serve:server\"",
+    "serve:web": "dx serve --platform web --features web",
+    "serve:server": "wrangler dev"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "wrangler": "^3.28.1"
+  }
+}

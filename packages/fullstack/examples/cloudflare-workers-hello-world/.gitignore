@@ -1,0 +1,6 @@
+build
+dist
+target
+static
+.dioxus
+.wrangler

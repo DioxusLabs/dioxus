@@ -27,7 +27,7 @@ salvo = { version = "0.63.0", optional = true, features = ["serve-static", "webs
 http-body-util = { version = "0.1.0-rc.2", optional = true }
 
 # cloudflare-workers
-worker = { git = "https://github.com/spigaz/workers-rs.git", rev = "7bbd74efeda63852369a0725d6e45a006301a93e", optional = true }
+worker = { workspace = true, optional = true }
 
 dioxus-lib = { workspace = true }
 

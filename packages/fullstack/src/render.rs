@@ -9,7 +9,7 @@ use dioxus_ssr::{
 use serde::Serialize;
 use std::sync::Arc;
 use std::sync::RwLock;
-use tokio::task::spawn_blocking;
+use tokio::task::{spawn_blocking, spawn_local};
 
 use crate::prelude::*;
 use dioxus_lib::prelude::*;
