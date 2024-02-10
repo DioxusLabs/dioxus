@@ -1576,14 +1576,17 @@ checksum = "702fc72eb24e5a1e48ce58027a675bc24edd52096d5397d4aea7c6dd9eca0bd1"
 name = "cloudflare-workers-hello-world"
 version = "0.1.0"
 dependencies = [
+ "console_error_panic_hook",
  "dioxus",
  "dioxus-web",
  "reqwest",
  "serde",
  "simple_logger",
+ "time",
  "tracing",
  "tracing-subscriber",
- "tracing-wasm",
+ "tracing-web",
+ "wasm-bindgen",
  "worker",
 ]
 
@@ -10048,6 +10051,7 @@ checksum = "c8248b6521bb14bc45b4067159b9b6ad792e2d6d754d6c41fb50e29fefe38749"
 dependencies = [
  "deranged",
  "itoa 1.0.10",
+ "js-sys",
  "libc",
  "num-conv",
  "num_threads",
@@ -10513,6 +10517,19 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "tracing-web"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9e6a141feebd51f8d91ebfd785af50fca223c570b86852166caa3b141defe7c"
+dependencies = [
+ "js-sys",
+ "tracing-core",
+ "tracing-subscriber",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]

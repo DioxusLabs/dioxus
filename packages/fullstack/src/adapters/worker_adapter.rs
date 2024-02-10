@@ -10,7 +10,10 @@ use crate::{prelude::*, server_context::DioxusServerContext, server_fn::DioxusSe
 pub fn serve_dioxus_application(server_fn_route: &'static str) -> Box<dyn FnOnce(worker::Request, worker::Env) -> Pin<Box<dyn Future<Output = worker::Result<worker::Response>>>>>
 {
     Box::new(move |mut req: worker::Request, env: worker::Env| Box::pin(async move {
+        // tracing::debug!("Request: {:?}", req);
         let path = req.path().strip_prefix(server_fn_route).map(|s| s.to_string()).unwrap_or(req.path());
+        tracing::trace!("Path: {:?}", path);
+        // tracing::trace!("registered: {:?}", DioxusServerFnRegistry::paths_registered());
         if let Some(func) = DioxusServerFnRegistry::get(&path) {
             let mut service = server_fn_service(DioxusServerContext::default(), func.clone());
             let bytes = req.bytes().await.unwrap();

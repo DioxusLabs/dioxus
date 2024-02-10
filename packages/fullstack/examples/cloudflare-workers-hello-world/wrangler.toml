@@ -5,4 +5,4 @@ main = "build/worker/shim.mjs"
 name = "worker"
 
 [build]
-command = "cargo install -q worker-build && worker-build --release --features server"
+command = "cargo install -q worker-build && worker-build --dev --features server"

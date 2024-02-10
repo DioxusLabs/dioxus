@@ -15,6 +15,16 @@ crate-type = ["cdylib", "rlib"]
 name = "hello-world"
 path = "src/main.rs"
 
+[profile.dev]
+strip = false
+debug = true
+
+[package.metadata.wasm-pack.profile.dev.wasm-bindgen]
+dwarf-debug-info = true
+
+[package.metadata.wasm-pack.dev.release]
+wasm-opt = ["-Os", "--debuginfo"]
+
 [dependencies]
 dioxus = { workspace = true, features = ["fullstack"]}
 dioxus-web = { workspace = true, features = ["hydrate"], optional = true }
@@ -22,10 +32,13 @@ dioxus-web = { workspace = true, features = ["hydrate"], optional = true }
 worker = { workspace = true, optional = true }
 serde = "1.0.159"
 simple_logger = "4.2.0"
-tracing-wasm = "0.2.1"
+tracing-web = "0.1.3"
 tracing = { workspace = true }
 tracing-subscriber = "0.3.17"
+console_error_panic_hook = "0.1.7"
 reqwest = "0.11.18"
+wasm-bindgen = { workspace = true }
+time = { version = "0.3", features = ["wasm-bindgen"] }
 
 [features]
 default = []
