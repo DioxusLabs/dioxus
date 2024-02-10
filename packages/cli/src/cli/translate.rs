@@ -2,11 +2,6 @@ use std::process::exit;
 
 use dioxus_rsx::{BodyNode, CallBody};
 
-use crate::plugin::{
-    interface::plugins::main::types::CommandEvent::Translate as TranslateEvent,
-    plugins_after_command, plugins_before_command,
-};
-
 use super::*;
 
 /// Translate some source file into Dioxus code
@@ -33,8 +28,6 @@ pub struct Translate {
 
 impl Translate {
     pub async fn translate(self) -> Result<()> {
-        plugins_before_command(TranslateEvent).await;
-
         // Get the right input for the translation
         let contents = determine_input(self.file, self.raw)?;
 
@@ -49,9 +42,6 @@ impl Translate {
             Some(output) => std::fs::write(output, out)?,
             None => print!("{}", out),
         }
-
-        plugins_after_command(TranslateEvent).await;
-
         Ok(())
     }
 }

@@ -3,7 +3,7 @@ use crate::plugin::convert::Convert;
 // use crate::plugin::convert::Convert;
 use crate::plugin::interface::{PluginRuntimeState, PluginWorld};
 use crate::server::WsMessage;
-use dioxus_cli_config::{DioxusConfig, PluginConfigInfo};
+use dioxus_cli_config::{ApplicationConfig, DioxusConfig, PluginConfigInfo};
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -12,8 +12,8 @@ use tokio::sync::broadcast::Sender;
 use tokio::sync::Mutex;
 use wasmtime::component::*;
 use wasmtime::{Config, Engine, Store};
-use wasmtime_wasi::preview2::{self, DirPerms, FilePerms, ResourceTable, WasiCtxBuilder};
-use wasmtime_wasi::Dir;
+use wasmtime_wasi::preview2::{self, DirPerms, FilePerms, ResourceTable, WasiCtx, WasiCtxBuilder};
+use wasmtime_wasi::{ambient_authority, Dir};
 
 // use self::convert::ConvertWithState;
 // use self::interface::plugins::main::toml::Toml;
@@ -209,6 +209,7 @@ async fn load_plugins(
     config: &DioxusConfig,
     crate_dir: &PathBuf,
     dioxus_lock: &mut DioxusLock,
+    dependency_paths: &[PathBuf],
 ) -> wasmtime::Result<Vec<CliPlugin>> {
     let mut sorted_plugins: Vec<&PluginConfigInfo> = config.plugins.plugins.values().collect();
     // Have some leeway to have some plugins execute before the default priority plugins
@@ -222,6 +223,7 @@ async fn load_plugins(
             plugin.priority,
             crate_dir,
             dioxus_lock,
+            dependency_paths,
         )
         .await?;
         plugins.push(plugin);
@@ -234,7 +236,8 @@ async fn load_plugins(
 
 pub async fn init_plugins(config: &DioxusConfig, crate_dir: &PathBuf) -> crate::Result<()> {
     let mut dioxus_lock = DioxusLock::load()?;
-    let plugins = load_plugins(config, crate_dir, &mut dioxus_lock).await?;
+    let dependency_paths = &[];
+    let plugins = load_plugins(config, crate_dir, &mut dioxus_lock, dependency_paths).await?;
     *PLUGINS.lock().await = plugins;
     *PLUGINS_CONFIG.lock().await = config.clone();
     Ok(())
@@ -272,20 +275,11 @@ pub async fn save_plugin_config(bin: PathBuf) -> crate::Result<()> {
     Ok(())
 }
 
-pub async fn load_plugin(
-    path: impl AsRef<Path>,
-    config: &DioxusConfig,
-    priority: Option<usize>,
+async fn wasi_context(
     crate_dir: &PathBuf,
-    dioxus_lock: &mut DioxusLock,
-) -> crate::Result<CliPlugin> {
-    let path = path.as_ref();
-    let component = Component::from_file(&ENGINE, path)?;
-
-    let mut linker = Linker::new(&ENGINE);
-    preview2::command::add_to_linker(&mut linker)?;
-    PluginWorld::add_to_linker(&mut linker, |state: &mut PluginRuntimeState| state)?;
-
+    config: &ApplicationConfig,
+    dependency_paths: &[PathBuf],
+) -> crate::Result<WasiCtx> {
     let mut ctx = WasiCtxBuilder::new();
 
     // Give the plugins access to the terminal as well as crate files
@@ -295,44 +289,73 @@ pub async fn load_plugin(
         .inherit_stdio()
         .inherit_stdout()
         .preopened_dir(
-            Dir::open_ambient_dir(crate_dir, wasmtime_wasi::sync::ambient_authority()).unwrap(),
+            Dir::open_ambient_dir(crate_dir, ambient_authority())?,
             DirPerms::all(),
             FilePerms::all(),
             ".",
         );
 
     // If the application has these directories they might be seperate from the crate root
-    if !config.application.out_dir.is_dir() {
-        tokio::fs::create_dir(&config.application.out_dir).await?;
+    if !config.out_dir.is_dir() {
+        tokio::fs::create_dir(&config.out_dir).await?;
     }
 
     ctx_pointer = ctx_pointer.preopened_dir(
-        Dir::open_ambient_dir(
-            &config.application.out_dir,
-            wasmtime_wasi::sync::ambient_authority(),
-        )
-        .unwrap(),
+        Dir::open_ambient_dir(&config.out_dir, ambient_authority())?,
         DirPerms::all(),
         FilePerms::all(),
         "/dist",
     );
 
-    if !config.application.asset_dir.is_dir() {
-        tokio::fs::create_dir(&config.application.asset_dir).await?;
+    if !config.asset_dir.is_dir() {
+        tokio::fs::create_dir(&config.asset_dir).await?;
     }
 
     ctx_pointer = ctx_pointer.preopened_dir(
-        Dir::open_ambient_dir(
-            &config.application.asset_dir,
-            wasmtime_wasi::sync::ambient_authority(),
-        )
-        .unwrap(),
+        Dir::open_ambient_dir(&config.asset_dir, ambient_authority())?,
         DirPerms::all(),
         FilePerms::all(),
         "/assets",
     );
 
-    let ctx = ctx_pointer.build();
+    for path in dependency_paths {
+        let Some(dep_name) = path.file_name() else {
+            log::warn!(
+                "Invalid path to add as plugin dependency: {}, skipping..",
+                path.display()
+            );
+            continue;
+        };
+        ctx_pointer = ctx_pointer.preopened_dir(
+            Dir::open_ambient_dir(path, ambient_authority())?,
+            DirPerms::all(),
+            FilePerms::all(),
+            PathBuf::from("/deps")
+                .join(dep_name)
+                .to_str()
+                .unwrap_or("/deps/unknown"), // TODO Check if this is possible
+        )
+    }
+
+    Ok(ctx_pointer.build())
+}
+
+pub async fn load_plugin(
+    path: impl AsRef<Path>,
+    config: &DioxusConfig,
+    priority: Option<usize>,
+    crate_dir: &PathBuf,
+    dioxus_lock: &mut DioxusLock,
+    dependency_paths: &[PathBuf],
+) -> crate::Result<CliPlugin> {
+    let path = path.as_ref();
+    let component = Component::from_file(&ENGINE, path)?;
+
+    let mut linker = Linker::new(&ENGINE);
+    preview2::command::add_to_linker(&mut linker)?;
+    PluginWorld::add_to_linker(&mut linker, |state: &mut PluginRuntimeState| state)?;
+
+    let ctx = wasi_context(crate_dir, &config.application, dependency_paths).await?;
     let table = ResourceTable::new();
 
     let mut store = Store::new(

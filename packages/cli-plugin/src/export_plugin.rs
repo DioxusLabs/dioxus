@@ -128,7 +128,6 @@ interface types {
   enum command-event {
     build,
     bundle,
-    translate,
     serve,
   }
 

@@ -64,9 +64,15 @@ impl Plugin {
                 PluginAdd::Add { path, priority } => {
                     let mut dioxus_lock = DioxusLock::load()?;
                     let crate_dir = dioxus_cli_config::crate_root()?;
-                    let mut plugin =
-                        load_plugin(&path, dx_config, priority, &crate_dir, &mut dioxus_lock)
-                            .await?;
+                    let mut plugin = load_plugin(
+                        &path,
+                        dx_config,
+                        priority,
+                        &crate_dir,
+                        &mut dioxus_lock,
+                        &[],
+                    )
+                    .await?;
 
                     // Add the plugin to the lock file
                     dioxus_lock.add_plugin(&mut plugin).await?;
