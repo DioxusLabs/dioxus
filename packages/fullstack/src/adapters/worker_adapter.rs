@@ -1,4 +1,3 @@
-use futures_util::TryStreamExt;
 use std::future::Future;
 use std::pin::Pin;
 
@@ -35,19 +34,11 @@ pub fn handle_dioxus_application(
                 Ok(rep) => {
                     let status = rep.status().as_u16();
                     let bytes = hyper::body::to_bytes(rep.into_body()).await.unwrap();
-                    // let bytes = (*rep.body()).try_fold(Vec::new(), |mut data, chunk| async move {
-                    //     data.extend_from_slice(&chunk);
-                    //     Ok(data)
-                    // }).await.unwrap();
-                    tracing::trace!("Ok");
                     Ok(worker::Response::from_bytes(bytes.to_vec())
                         .unwrap()
                         .with_status(status))
                 }
-                Err(e) => {
-                    tracing::trace!("Err");
-                    Err(worker::Error::from(e.to_string()))
-                }
+                Err(e) => Err(worker::Error::from(e.to_string())),
             }
         } else {
             Ok(worker::Response::from_html("Not found")
