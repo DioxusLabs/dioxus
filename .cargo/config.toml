@@ -3,3 +3,6 @@
 DIOXUS_FRONT_ISSUER_URL  = ""
 DIOXUS_FRONT_CLIENT_ID = ""
 DIOXUS_FRONT_URL = ""
+
+[patch.crates-io]
+server_fn = { path = "../../leptos-rs/leptos/server_fn" }

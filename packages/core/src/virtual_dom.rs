@@ -440,6 +440,7 @@ impl VirtualDom {
 
             // Now that we have collected all queued work, we should check if we have any dirty scopes. If there are not, then we can poll any queued futures
             if !self.dirty_scopes.is_empty() || !self.suspended_scopes.is_empty() {
+                tracing::trace!("Skipping polling");
                 return;
             }
 
@@ -453,6 +454,7 @@ impl VirtualDom {
             self.runtime.release_flush_lock();
             self.runtime.acquire_flush_lock();
 
+            tracing::trace!("Polling tasks");
             match self.rx.next().await.expect("channel should never close") {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
                 SchedulerMsg::TaskNotified(id) => _ = self.runtime.handle_task_wakeup(id),

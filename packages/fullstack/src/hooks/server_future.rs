@@ -31,9 +31,12 @@ where
                     return o;
                 }
             }
+            tracing::trace!("Running use_server_future future");
 
             // Otherwise just run the future itself
             let out = user_fut.await;
+
+            tracing::trace!("use_server_future future resolved");
 
             // If this is the first run and we are on the server, cache the data
             #[cfg(feature = "server")]

@@ -1587,6 +1587,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "tracing-wasm",
  "tracing-web",
  "wasm-bindgen",
  "worker",
@@ -3025,7 +3026,7 @@ dependencies = [
  "convert_case 0.6.0",
  "proc-macro2",
  "quote",
- "server_fn_macro",
+ "server_fn_macro 0.5.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "syn 2.0.48",
 ]
 
@@ -8973,8 +8974,6 @@ dependencies = [
 [[package]]
 name = "server_fn"
 version = "0.5.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c265de965fe48e09ad8899d0ab1ffebdfa1a9914e4de5ff107b07bd94cf7541"
 dependencies = [
  "ciborium",
  "const_format",
@@ -8992,6 +8991,20 @@ dependencies = [
  "server_fn_macro_default",
  "syn 2.0.48",
  "thiserror",
+ "tracing",
+ "xxhash-rust",
+]
+
+[[package]]
+name = "server_fn_macro"
+version = "0.5.7"
+dependencies = [
+ "const_format",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "syn 2.0.48",
  "xxhash-rust",
 ]
 
@@ -9013,10 +9026,8 @@ dependencies = [
 [[package]]
 name = "server_fn_macro_default"
 version = "0.5.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a3353f22e2bcc451074d4feaa37317d9d17dff11d4311928384734ea17ab9ca"
 dependencies = [
- "server_fn_macro",
+ "server_fn_macro 0.5.7",
  "syn 2.0.48",
 ]
 

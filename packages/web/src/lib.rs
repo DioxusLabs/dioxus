@@ -172,6 +172,7 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) {
                 Either::Right((evt, _)) => (evt, None),
             }
         };
+        // tracing::trace!("work found: {:?} {:?}", res.is_some(), template.is_some());
 
         if let Some(template) = template {
             dom.replace_template(template);

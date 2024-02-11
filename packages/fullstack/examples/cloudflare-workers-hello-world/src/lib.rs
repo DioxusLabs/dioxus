@@ -95,3 +95,14 @@ pub fn app() -> Element {
 async fn get_server_data() -> Result<String, ServerFnError> {
     Ok(reqwest::get("https://httpbin.org/ip").await?.text().await?)
 }
+
+// async fn get_server_data2() -> Result<String, ServerFnError> {
+//     let prefix = {
+//         let prefix = GetServerData::PREFIX.to_string();
+//         prefix + "/" + GetServerData::URL
+//     };
+//     tracing::info!("get_server_data2 start: {:?}", prefix);
+//     let r = ::dioxus::fullstack::prelude::server_fn::call_server_fn(&prefix, GetServerData {}, ::dioxus::fullstack::prelude::server_fn::Encoding::Url).await;
+//     tracing::info!("get_server_data2 end");
+//     r
+// }

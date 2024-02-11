@@ -89,33 +89,36 @@ impl Service for ServerFnHandler {
             let query = req.uri().query().unwrap_or_default().as_bytes().to_vec();
             let (parts, body) = req.into_parts();
             let body = hyper::body::to_bytes(body).await?.to_vec();
+
             let headers = &parts.headers;
             let accept_header = headers.get("Accept").cloned();
             let parts = Arc::new(RwLock::new(parts));
 
             // Because the future returned by `server_fn_handler` is `Send`, and the future returned by this function must be send, we need to spawn a new runtime
-            // let result = {
-            //     let pool = get_local_pool();
-            //     pool
-            //         .spawn_pinned({
-            //             let function = function.clone();
-            //             let mut server_context = server_context.clone();
-            //             server_context.parts = parts;
-            //             move || async move {
-            //                 let data = match function.encoding() {
-            //                     Encoding::Url | Encoding::Cbor => &body,
-            //                     Encoding::GetJSON | Encoding::GetCBOR => &query,
-            //                 };
-            //                 let server_function_future = function.call((), data);
-            //                 let server_function_future = ProvideServerContext::new(
-            //                     server_function_future,
-            //                     server_context.clone(),
-            //                 );
-            //                 server_function_future.await
-            //             }
-            //         })
-            //         .await?
-            // };
+            #[cfg(not(target_family = "wasm"))]
+            let result = {
+                let pool = get_local_pool();
+                pool
+                    .spawn_pinned({
+                        let function = function.clone();
+                        let mut server_context = server_context.clone();
+                        server_context.parts = parts;
+                        move || async move {
+                            let data = match function.encoding() {
+                                Encoding::Url | Encoding::Cbor => &body,
+                                Encoding::GetJSON | Encoding::GetCBOR => &query,
+                            };
+                            let server_function_future = function.call((), data);
+                            let server_function_future = ProvideServerContext::new(
+                                server_function_future,
+                                server_context.clone(),
+                            );
+                            server_function_future.await
+                        }
+                    })
+                    .await?
+            };
+            #[cfg(target_family = "wasm")]
             let result = {
                 let function = function.clone();
                 let mut server_context = server_context.clone();
@@ -172,13 +175,16 @@ impl Service for ServerFnHandler {
                 }
             })
         };
-        // #[cfg(target_family = "wasm")]
-
-        // let ls = LocalSet::new();
-        let result = tokio::task::spawn_local(f);
-        let result = result.then(|f| async move { f.unwrap() });
-
-        Box::pin(result)
+        #[cfg(not(target_family = "wasm"))]
+        {
+            Box::pin(f)
+        }
+        #[cfg(target_family = "wasm")]
+        {
+            let result = tokio::task::spawn_local(f);
+            let result = result.then(|f| async move { f.unwrap() });
+            Box::pin(result)
+        }
     }
 }
 
