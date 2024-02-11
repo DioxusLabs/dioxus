@@ -4,12 +4,12 @@
 //! npm run serve
 //! ```
 
-use cloudflare_workers_hello_world::app;
-use tracing_subscriber::prelude::*;
-use tracing_web::MakeWebConsoleWriter;
-
 #[cfg(feature = "web")]
 fn main() {
+    use cloudflare_workers_hello_world::app;
+    use tracing_subscriber::prelude::*;
+    use tracing_web::MakeWebConsoleWriter;
+
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_ansi(true)
         .without_time()
@@ -19,3 +19,6 @@ fn main() {
 
     dioxus_web::launch::launch_cfg(app, dioxus_web::Config::default().hydrate(false));
 }
+
+#[cfg(not(feature = "web"))]
+fn main() {}
