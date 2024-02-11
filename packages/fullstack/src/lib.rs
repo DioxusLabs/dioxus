@@ -26,7 +26,12 @@ pub use adapters::warp_adapter;
 pub use adapters::{server_fn_service, ServerFnHandler};
 mod config;
 mod hooks;
-#[cfg(all(debug_assertions, feature = "hot-reload", feature = "server", not(target_arch = "wasm32")))]
+#[cfg(all(
+    debug_assertions,
+    feature = "hot-reload",
+    feature = "server",
+    not(target_arch = "wasm32")
+))]
 mod hot_reload;
 pub mod launch;
 pub use config::*;
@@ -52,7 +57,10 @@ pub mod prelude {
     #[cfg_attr(any(docsrs, feature = "nightly-doc"), doc(cfg(feature = "warp")))]
     pub use crate::adapters::warp_adapter::*;
     #[cfg(feature = "cloudflare-workers")]
-    #[cfg_attr(any(docsrs, feature = "nightly-doc"), doc(cfg(feature = "cloudflare-workers")))]
+    #[cfg_attr(
+        any(docsrs, feature = "nightly-doc"),
+        doc(cfg(feature = "cloudflare-workers"))
+    )]
     pub use crate::adapters::worker_adapter::*;
     use crate::hooks;
     #[cfg(not(feature = "server"))]

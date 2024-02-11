@@ -94,25 +94,24 @@ impl Service for ServerFnHandler {
             #[cfg(not(target_arch = "wasm32"))]
             let result = {
                 let pool = get_local_pool();
-                pool
-                    .spawn_pinned({
-                        let function = function.clone();
-                        let mut server_context = server_context.clone();
-                        server_context.parts = parts;
-                        move || async move {
-                            let data = match function.encoding() {
-                                Encoding::Url | Encoding::Cbor => &body,
-                                Encoding::GetJSON | Encoding::GetCBOR => &query,
-                            };
-                            let server_function_future = function.call((), data);
-                            let server_function_future = ProvideServerContext::new(
-                                server_function_future,
-                                server_context.clone(),
-                            );
-                            server_function_future.await
-                        }
-                    })
-                    .await?
+                pool.spawn_pinned({
+                    let function = function.clone();
+                    let mut server_context = server_context.clone();
+                    server_context.parts = parts;
+                    move || async move {
+                        let data = match function.encoding() {
+                            Encoding::Url | Encoding::Cbor => &body,
+                            Encoding::GetJSON | Encoding::GetCBOR => &query,
+                        };
+                        let server_function_future = function.call((), data);
+                        let server_function_future = ProvideServerContext::new(
+                            server_function_future,
+                            server_context.clone(),
+                        );
+                        server_function_future.await
+                    }
+                })
+                .await?
             };
             #[cfg(target_arch = "wasm32")]
             let result = {
@@ -125,10 +124,8 @@ impl Service for ServerFnHandler {
                     Encoding::GetJSON | Encoding::GetCBOR => &query,
                 };
                 let server_function_future = function.call((), data);
-                let server_function_future = ProvideServerContext::new(
-                    server_function_future,
-                    server_context.clone(),
-                );
+                let server_function_future =
+                    ProvideServerContext::new(server_function_future, server_context.clone());
                 server_function_future.await
             };
 
