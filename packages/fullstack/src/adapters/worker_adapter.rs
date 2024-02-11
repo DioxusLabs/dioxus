@@ -7,7 +7,7 @@ use server_fn::ServerFunctionRegistry;
 use crate::{prelude::*, server_context::DioxusServerContext, server_fn::DioxusServerFnRegistry, server_fn_service};
 
 /// TODO
-pub fn serve_dioxus_application(server_fn_route: &'static str) -> Box<dyn FnOnce(worker::Request, worker::Env) -> Pin<Box<dyn Future<Output = worker::Result<worker::Response>>>>>
+pub fn handle_dioxus_application(server_fn_route: &'static str) -> Box<dyn FnOnce(worker::Request, worker::Env) -> Pin<Box<dyn Future<Output = worker::Result<worker::Response>>>>>
 {
     Box::new(move |mut req: worker::Request, env: worker::Env| Box::pin(async move {
         // tracing::debug!("Request: {:?}", req);

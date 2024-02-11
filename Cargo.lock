@@ -1581,13 +1581,10 @@ dependencies = [
  "dioxus-web",
  "reqwest",
  "serde",
- "simple_logger",
  "tokio",
  "tracing",
  "tracing-subscriber",
- "tracing-wasm",
  "tracing-web",
- "wasm-bindgen",
  "worker",
 ]
 
