@@ -1576,6 +1576,7 @@ checksum = "702fc72eb24e5a1e48ce58027a675bc24edd52096d5397d4aea7c6dd9eca0bd1"
 name = "cloudflare-workers-hello-world"
 version = "0.1.0"
 dependencies = [
+ "backtrace",
  "console_error_panic_hook",
  "dioxus",
  "dioxus-web",
@@ -1583,6 +1584,7 @@ dependencies = [
  "serde",
  "simple_logger",
  "time",
+ "tokio",
  "tracing",
  "tracing-subscriber",
  "tracing-web",
@@ -2629,6 +2631,7 @@ dependencies = [
  "dioxus-ssr",
  "dioxus-web",
  "dioxus_server_macro",
+ "futures",
  "futures-util",
  "http 0.2.11",
  "http-body-util",
@@ -10503,6 +10506,7 @@ dependencies = [
  "sharded-slab",
  "smallvec",
  "thread_local",
+ "time",
  "tracing",
  "tracing-core",
  "tracing-log",

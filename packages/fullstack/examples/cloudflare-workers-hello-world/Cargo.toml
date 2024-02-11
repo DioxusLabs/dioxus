@@ -16,6 +16,7 @@ name = "hello-world"
 path = "src/main.rs"
 
 [profile.dev]
+opt-level = "s"
 strip = false
 debug = true
 
@@ -34,13 +35,15 @@ serde = "1.0.159"
 simple_logger = "4.2.0"
 tracing-web = "0.1.3"
 tracing = { workspace = true }
-tracing-subscriber = "0.3.17"
+tracing-subscriber = { version = "0.3.17", features = ["time"] }
 console_error_panic_hook = "0.1.7"
+backtrace = "0.3"
 reqwest = "0.11.18"
 wasm-bindgen = { workspace = true }
 time = { version = "0.3", features = ["wasm-bindgen"] }
+tokio = { workspace = true, features = ["rt", "sync", "time"], optional = true }
 
 [features]
 default = []
-server = ["dioxus/cloudflare-workers", "worker"]
+server = ["dioxus/cloudflare-workers", "worker", "tokio"]
 web = ["dioxus-web"]

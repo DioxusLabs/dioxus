@@ -32,6 +32,9 @@ fn start() {
         msg.push_str(&stack);
         msg.push_str("\n\n");
 
+        // let bt = backtrace::Backtrace::new();
+        // msg.push_str(&format!("backtrace: {:?}", bt));
+
         let _ = error(msg);
     }
 
@@ -41,10 +44,10 @@ fn start() {
         .with_ansi(true)
         .without_time()
         .with_writer(MakeConsoleWriter);
-    let perf_layer = tracing_web::performance_layer().with_details_from_fields(tracing_subscriber::fmt::format::Pretty::default());
+    // let perf_layer = tracing_web::performance_layer().with_details_from_fields(tracing_subscriber::fmt::format::Pretty::default());
     tracing_subscriber::registry()
         .with(fmt_layer)
-        .with(perf_layer)
+        // .with(perf_layer)
         .init();
 
     GetServerData::register_explicit().unwrap();
@@ -53,9 +56,11 @@ fn start() {
 #[cfg(feature = "server")]
 #[worker::event(fetch)]
 async fn main(req: worker::Request, env: worker::Env, ctx: worker::Context) -> worker::Result<worker::Response> {
+    let ls = tokio::task::LocalSet::new();
+    let guard = ls.enter();
     let handler = serve_dioxus_application("/api/");
     let rep = handler(req, env);
-    rep.await
+    ls.run_until(rep).await
 }
 
 pub fn app() -> Element {

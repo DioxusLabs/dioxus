@@ -14,7 +14,7 @@ pub fn serve_dioxus_application(server_fn_route: &'static str) -> Box<dyn FnOnce
         let path = req.path().strip_prefix(server_fn_route).map(|s| s.to_string()).unwrap_or(req.path());
         tracing::trace!("Path: {:?}", path);
         // tracing::trace!("registered: {:?}", DioxusServerFnRegistry::paths_registered());
-        if let Some(func) = DioxusServerFnRegistry::get(&path) {
+        let r = if let Some(func) = DioxusServerFnRegistry::get(&path) {
             let mut service = server_fn_service(DioxusServerContext::default(), func.clone());
             let bytes = req.bytes().await.unwrap();
             let body = hyper::body::Body::from(bytes);
@@ -32,14 +32,17 @@ pub fn serve_dioxus_application(server_fn_route: &'static str) -> Box<dyn FnOnce
                     //     data.extend_from_slice(&chunk);
                     //     Ok(data)
                     // }).await.unwrap();
+                    tracing::trace!("Ok");
                     Ok(worker::Response::from_bytes(bytes.to_vec()).unwrap().with_status(status))
                 }
                 Err(e) => {
+                    tracing::trace!("Err");
                     Err(worker::Error::from(e.to_string()))
                 }
             }
         } else {
             Ok(worker::Response::from_html("Not found").unwrap().with_status(404))
-        }
+        };
+        r
     }))
 }

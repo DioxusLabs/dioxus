@@ -1,8 +1,12 @@
 #workers_dev = true
 compatibility_date = "2023-11-29"
 
-main = "build/worker/shim.mjs"
+main = "src/entry.mjs"
 name = "worker"
 
+[[services]]
+binding = "COREDUMP_SERVICE"
+service = "coredump-service"
+
 [build]
-command = "cargo install -q worker-build && worker-build --dev --features server"
+command = "npm run build:server"
