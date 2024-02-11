@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use std::panic;
 use tracing_subscriber::prelude::*;
 use tracing_web::MakeConsoleWriter;
 
@@ -23,12 +22,9 @@ fn start() {
 async fn main(
     req: worker::Request,
     env: worker::Env,
-    ctx: worker::Context,
+    _ctx: worker::Context,
 ) -> worker::Result<worker::Response> {
-    let ls = tokio::task::LocalSet::new();
-    let guard = ls.enter();
-    let rep = handle_dioxus_application("/api/", req, env);
-    ls.run_until(rep).await
+    handle_dioxus_application("/api/", req, env).await
 }
 
 pub fn app() -> Element {

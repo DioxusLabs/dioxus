@@ -4,9 +4,9 @@
 //! npm run serve
 //! ```
 
-use tracing_web::MakeWebConsoleWriter;
 use cloudflare_workers_hello_world::app;
 use tracing_subscriber::prelude::*;
+use tracing_web::MakeWebConsoleWriter;
 
 #[cfg(feature = "web")]
 fn main() {
@@ -15,13 +15,7 @@ fn main() {
         .without_time()
         .with_level(false)
         .with_writer(MakeWebConsoleWriter::new().with_pretty_level());
-    tracing_subscriber::registry()
-        .with(fmt_layer)
-        .init();
+    tracing_subscriber::registry().with(fmt_layer).init();
 
-    dioxus_web::launch::launch_cfg(
-        app,
-        dioxus_web::Config::default().hydrate(false),
-    );
+    dioxus_web::launch::launch_cfg(app, dioxus_web::Config::default().hydrate(false));
 }
-

@@ -37,9 +37,8 @@ tracing = { workspace = true }
 tracing-subscriber = { version = "0.3.17", features = ["time"] }
 console_error_panic_hook = "0.1.7"
 reqwest = "0.11.18"
-tokio = { workspace = true, features = ["rt", "sync"], optional = true }
 
 [features]
 default = []
-server = ["dioxus/cloudflare-workers", "worker", "tokio"]
+server = ["dioxus/cloudflare-workers", "worker"]
 web = ["dioxus-web"]

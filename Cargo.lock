@@ -1581,7 +1581,6 @@ dependencies = [
  "dioxus-web",
  "reqwest",
  "serde",
- "tokio",
  "tracing",
  "tracing-subscriber",
  "tracing-web",

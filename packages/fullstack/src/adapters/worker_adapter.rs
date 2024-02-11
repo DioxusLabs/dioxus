@@ -1,6 +1,3 @@
-use std::future::Future;
-use std::pin::Pin;
-
 use server_fn::ServerFunctionRegistry;
 
 use crate::{
@@ -9,12 +6,14 @@ use crate::{
 };
 
 /// a worker adapter that can be used to run dioxus applications in a worker
-pub fn handle_dioxus_application(
+pub async fn handle_dioxus_application(
     server_fn_route: &'static str,
     mut req: worker::Request,
     env: worker::Env,
-) -> Pin<Box<dyn Future<Output = worker::Result<worker::Response>>>> {
-    Box::pin(async move {
+) -> worker::Result<worker::Response> {
+    let ls = tokio::task::LocalSet::new();
+
+    let result = async move {
         let path = req
             .path()
             .strip_prefix(server_fn_route)
@@ -45,5 +44,7 @@ pub fn handle_dioxus_application(
                 .unwrap()
                 .with_status(404))
         }
-    })
+    };
+
+    ls.run_until(result).await
 }
