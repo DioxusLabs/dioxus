@@ -244,17 +244,22 @@ pub fn get_dependency_paths(crate_dir: &PathBuf) -> crate::Result<Vec<PathBuf>> 
     let mut out = Vec::new();
     let toml_path = crate_dir.join("Cargo.toml");
 
-    let registry_path =
-        std::fs::read_dir(PathBuf::from(std::env::var("CARGO_HOME")?).join("registry/src"))?
-            .find_map(|entry| {
-                entry.ok().filter(|e| {
-                    e.file_name()
-                        .to_str()
-                        .filter(|f| f.starts_with("index.crates.io"))
-                        .is_some()
-                })
-            })
-            .map(|e| e.path());
+    let registry_path = std::fs::read_dir(
+        PathBuf::from(
+            std::env::var("CARGO_HOME")
+                .expect("Cargo Home environment variable should exist if cargo installed"),
+        )
+        .join("registry/src"),
+    )?
+    .find_map(|entry| {
+        entry.ok().filter(|e| {
+            e.file_name()
+                .to_str()
+                .filter(|f| f.starts_with("index.crates.io"))
+                .is_some()
+        })
+    })
+    .map(|e| e.path());
 
     if let None = registry_path {
         log::warn!("Could not find registry path for dependencies, skipping..");
