@@ -26,7 +26,7 @@ pub use adapters::warp_adapter;
 pub use adapters::{server_fn_service, ServerFnHandler};
 mod config;
 mod hooks;
-#[cfg(all(debug_assertions, feature = "hot-reload", feature = "server"))]
+#[cfg(all(debug_assertions, feature = "hot-reload", feature = "server", not(target_arch = "wasm32")))]
 mod hot_reload;
 pub mod launch;
 pub use config::*;

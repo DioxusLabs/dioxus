@@ -137,7 +137,6 @@ impl Runtime {
 
     pub(crate) fn handle_task_wakeup(&self, id: Task) -> Poll<()> {
         debug_assert!(Runtime::current().is_some(), "Must be in a dioxus runtime");
-        tracing::trace!("Waking up task {:?}", id.0);
 
         let task = self.tasks.borrow().get(id.0).cloned();
 

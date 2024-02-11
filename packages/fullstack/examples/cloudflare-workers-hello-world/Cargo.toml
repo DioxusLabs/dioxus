@@ -38,11 +38,9 @@ tracing = { workspace = true }
 tracing-subscriber = { version = "0.3.17", features = ["time"] }
 tracing-wasm = "0.2.1"
 console_error_panic_hook = "0.1.7"
-backtrace = "0.3"
 reqwest = "0.11.18"
 wasm-bindgen = { workspace = true }
-time = { version = "0.3", features = ["wasm-bindgen"] }
-tokio = { workspace = true, features = ["rt", "sync", "time"], optional = true }
+tokio = { workspace = true, features = ["rt", "sync"], optional = true }
 
 [features]
 default = []

@@ -105,6 +105,7 @@ manganis-cli-support = { git = "https://github.com/DioxusLabs/collect-assets", r
     "html",
 ] }
 manganis = { git = "https://github.com/DioxusLabs/collect-assets", rev = "f982698" }
+# This is forked from the original, and has a update for the wasm-bindgen dependency
 worker = { git = "https://github.com/spigaz/workers-rs.git", rev = "7bbd74efeda63852369a0725d6e45a006301a93e" }
 
 # This is a "virtual package"

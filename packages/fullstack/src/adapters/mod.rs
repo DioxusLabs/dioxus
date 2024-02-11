@@ -22,8 +22,6 @@ pub mod worker_adapter;
 use http::StatusCode;
 use server_fn::{Encoding, Payload};
 use std::sync::{Arc, RwLock};
-use futures_util::future::FutureExt;
-use tokio::task::LocalSet;
 
 use crate::{
     layer::{BoxedService, Service},
@@ -84,18 +82,16 @@ impl Service for ServerFnHandler {
             server_context,
             function,
         } = self.clone();
-        // let f = Box::pin(async move {
         let f = async move {
             let query = req.uri().query().unwrap_or_default().as_bytes().to_vec();
             let (parts, body) = req.into_parts();
             let body = hyper::body::to_bytes(body).await?.to_vec();
-
             let headers = &parts.headers;
             let accept_header = headers.get("Accept").cloned();
             let parts = Arc::new(RwLock::new(parts));
 
             // Because the future returned by `server_fn_handler` is `Send`, and the future returned by this function must be send, we need to spawn a new runtime
-            #[cfg(not(target_family = "wasm"))]
+            #[cfg(not(target_arch = "wasm32"))]
             let result = {
                 let pool = get_local_pool();
                 pool
@@ -118,7 +114,7 @@ impl Service for ServerFnHandler {
                     })
                     .await?
             };
-            #[cfg(target_family = "wasm")]
+            #[cfg(target_arch = "wasm32")]
             let result = {
                 let function = function.clone();
                 let mut server_context = server_context.clone();
@@ -175,12 +171,14 @@ impl Service for ServerFnHandler {
                 }
             })
         };
-        #[cfg(not(target_family = "wasm"))]
+        #[cfg(not(target_arch = "wasm32"))]
         {
             Box::pin(f)
         }
-        #[cfg(target_family = "wasm")]
+        #[cfg(target_arch = "wasm32")]
         {
+            use futures_util::future::FutureExt;
+
             let result = tokio::task::spawn_local(f);
             let result = result.then(|f| async move { f.unwrap() });
             Box::pin(result)
