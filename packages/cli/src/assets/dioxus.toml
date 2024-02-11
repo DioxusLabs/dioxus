@@ -75,3 +75,5 @@ short_description = "An amazing dioxus application."
 long_description = """
 An amazing dioxus application.
 """
+
+[plugins]

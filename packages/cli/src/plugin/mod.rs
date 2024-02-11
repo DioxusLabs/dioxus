@@ -3,6 +3,7 @@ use crate::plugin::convert::Convert;
 // use crate::plugin::convert::Convert;
 use crate::plugin::interface::{PluginRuntimeState, PluginWorld};
 use crate::server::WsMessage;
+use cargo_toml::Manifest;
 use dioxus_cli_config::{ApplicationConfig, DioxusConfig, PluginConfigInfo};
 
 use std::collections::HashMap;
@@ -234,10 +235,80 @@ async fn load_plugins(
     Ok(plugins)
 }
 
+enum PackageSource {
+    Version(String, String),
+    Path(String),
+}
+
+pub fn get_dependency_paths(crate_dir: &PathBuf) -> crate::Result<Vec<PathBuf>> {
+    let mut out = Vec::new();
+    let toml_path = crate_dir.join("Cargo.toml");
+
+    let registry_path = std::fs::read_dir(PathBuf::from(env!("CARGO_HOME")).join("registry/src"))?
+        .find_map(|entry| {
+            entry.ok().filter(|e| {
+                e.file_name()
+                    .to_str()
+                    .filter(|f| f.starts_with("index.crates.io"))
+                    .is_some()
+            })
+        })
+        .map(|e| e.path());
+
+    if let None = registry_path {
+        log::warn!("Could not find registry path for dependencies, skipping..");
+        return Ok(out);
+    }
+
+    let registry_path = registry_path.unwrap();
+
+    if let Ok(mut manifest) = Manifest::<Manifest>::from_path_with_metadata(&toml_path) {
+        if let Err(err) = manifest.complete_from_path_and_workspace::<u8>(&toml_path, None) {
+            log::warn!("Could not complete cargo manifest: {err}");
+            return Ok(out);
+        };
+        for (name, dependency) in manifest.dependencies.into_iter() {
+            let source = match dependency {
+                cargo_toml::Dependency::Simple(version) => {
+                    PackageSource::Version(name.clone(), version)
+                }
+                cargo_toml::Dependency::Inherited(_) => {
+                    log::warn!("Could not get path for dependency: {name}, inheritted crate from workspace");
+                    continue;
+                }
+                cargo_toml::Dependency::Detailed(detail) => {
+                    if let Some(version) = detail.version {
+                        PackageSource::Version(name.clone(), version)
+                    } else if let Some(git) = detail.git {
+                        todo!()
+                    } else if let Some(path) = detail.path {
+                        PackageSource::Path(path)
+                    } else {
+                        log::warn!("Could not get path for dependency: {name}, too complex path");
+                        continue;
+                    }
+                }
+            };
+            let source_path = match source {
+                PackageSource::Version(name, version) => {
+                    let source_name = format!("{name}-{version}");
+                    registry_path.join(source_name)
+                }
+                PackageSource::Path(path) => crate_dir.join(path),
+            };
+
+            log::info!("Found source dir for {name}: {}", source_path.display());
+
+            out.push(source_path);
+        }
+    }
+    Ok(out)
+}
+
 pub async fn init_plugins(config: &DioxusConfig, crate_dir: &PathBuf) -> crate::Result<()> {
     let mut dioxus_lock = DioxusLock::load()?;
-    let dependency_paths = &[];
-    let plugins = load_plugins(config, crate_dir, &mut dioxus_lock, dependency_paths).await?;
+    let dependency_paths = get_dependency_paths(crate_dir)?;
+    let plugins = load_plugins(config, crate_dir, &mut dioxus_lock, &dependency_paths).await?;
     *PLUGINS.lock().await = plugins;
     *PLUGINS_CONFIG.lock().await = config.clone();
     Ok(())

@@ -1442,6 +1442,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cargo_toml"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "802b755090e39835a4b0440fb0bbee0df7495a8b337f63db21e616f7821c7e8c"
+dependencies = [
+ "serde",
+ "toml 0.8.10",
+]
+
+[[package]]
 name = "cassowary"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2581,6 +2591,7 @@ dependencies = [
  "base64 0.21.7",
  "cargo-generate",
  "cargo_metadata 0.18.1",
+ "cargo_toml 0.18.0",
  "chrono",
  "clap 4.4.18",
  "colored 2.1.0",
@@ -2631,7 +2642,7 @@ dependencies = [
 name = "dioxus-cli-config"
 version = "0.4.1"
 dependencies = [
- "cargo_toml",
+ "cargo_toml 0.16.3",
  "clap 4.4.18",
  "once_cell",
  "semver",
@@ -6153,7 +6164,7 @@ dependencies = [
  "anyhow",
  "cargo-lock 9.0.0",
  "cargo_metadata 0.17.0",
- "cargo_toml",
+ "cargo_toml 0.16.3",
  "image",
  "imagequant",
  "lightningcss",
