@@ -1,4 +1,3 @@
-#workers_dev = true
 compatibility_date = "2023-11-29"
 
 main = "src/entry.mjs"

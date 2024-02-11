@@ -1,7 +1,7 @@
-use std::panic;
-use tracing_web::MakeConsoleWriter;
 use dioxus::prelude::*;
+use std::panic;
 use tracing_subscriber::prelude::*;
+use tracing_web::MakeConsoleWriter;
 
 #[cfg(feature = "server")]
 #[worker::event(start)]
@@ -12,9 +12,7 @@ fn start() {
         .with_ansi(true)
         .without_time()
         .with_writer(MakeConsoleWriter);
-    tracing_subscriber::registry()
-        .with(fmt_layer)
-        .init();
+    tracing_subscriber::registry().with(fmt_layer).init();
 
     GetServerData::register_explicit().unwrap();
     PostServerData::register_explicit().unwrap()
@@ -22,11 +20,14 @@ fn start() {
 
 #[cfg(feature = "server")]
 #[worker::event(fetch)]
-async fn main(req: worker::Request, env: worker::Env, ctx: worker::Context) -> worker::Result<worker::Response> {
+async fn main(
+    req: worker::Request,
+    env: worker::Env,
+    ctx: worker::Context,
+) -> worker::Result<worker::Response> {
     let ls = tokio::task::LocalSet::new();
     let guard = ls.enter();
-    let handler = handle_dioxus_application("/api/");
-    let rep = handler(req, env);
+    let rep = handle_dioxus_application("/api/", req, env);
     ls.run_until(rep).await
 }
 
