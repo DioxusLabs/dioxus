@@ -1,16 +1,18 @@
 use dioxus::prelude::*;
-use tracing_subscriber::prelude::*;
-use tracing_web::MakeConsoleWriter;
 
 #[cfg(feature = "server")]
 #[worker::event(start)]
 fn start() {
+    use tracing_subscriber::prelude::*;
+    use tracing_web::MakeWebConsoleWriter;
+
     console_error_panic_hook::set_once();
 
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_ansi(true)
         .without_time()
-        .with_writer(MakeConsoleWriter);
+        .with_level(false)
+        .with_writer(MakeWebConsoleWriter::new().with_pretty_level());
     tracing_subscriber::registry().with(fmt_layer).init();
 
     GetServerData::register_explicit().unwrap();
