@@ -162,9 +162,9 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) {
             {
                 let mut hot_reload_next = hotreload_rx.select_next_some();
                 select! {
-                        _ = work => (None, None),
-                        new_template = hot_reload_next => (None, Some(new_template)),
-                        evt = rx_next => (Some(evt), None),
+                    _ = work => (None, None),
+                    new_template = hot_reload_next => (None, Some(new_template)),
+                    evt = rx_next => (Some(evt), None),
                 }
             }
             #[cfg(not(all(feature = "hot_reload", debug_assertions)))]
