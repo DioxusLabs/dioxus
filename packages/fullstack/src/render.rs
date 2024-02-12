@@ -1,18 +1,36 @@
 //! A shared pool of renderers for efficient server side rendering.
-use crate::render::dioxus_core::NoOpMutations;
-use crate::server_context::SERVER_CONTEXT;
+use std::sync::Arc;
+use std::sync::RwLock;
+
+use serde::Serialize;
+use tokio::task::{spawn_blocking, spawn_local};
+
 use dioxus_lib::prelude::VirtualDom;
+use dioxus_lib::prelude::*;
 use dioxus_ssr::{
     incremental::{IncrementalRendererConfig, RenderFreshness, WrapBody},
     Renderer,
 };
-use serde::Serialize;
-use std::sync::Arc;
-use std::sync::RwLock;
-use tokio::task::{spawn_blocking, spawn_local};
 
 use crate::prelude::*;
-use dioxus_lib::prelude::*;
+use crate::render::dioxus_core::NoOpMutations;
+use crate::server_context::SERVER_CONTEXT;
+
+#[cfg(not(target_arch = "wasm32"))]
+macro_rules! spawn_platform {
+    ($f:expr) => {
+        tokio::runtime::Runtime::new()
+            .expect("couldn't spawn runtime")
+            .block_on($f)
+    };
+}
+
+#[cfg(target_arch = "wasm32")]
+macro_rules! spawn_platform {
+    ($f:expr) => {
+        spawn_local($f)
+    };
+}
 
 enum SsrRendererPool {
     Renderer(RwLock<Vec<Renderer>>),
@@ -32,7 +50,6 @@ impl SsrRendererPool {
             cfg: cfg.clone(),
             server_context: server_context.clone(),
         };
-        #[cfg(not(target_arch = "wasm32"))]
         match self {
             Self::Renderer(pool) => {
                 let server_context = Box::new(server_context.clone());
@@ -41,131 +58,7 @@ impl SsrRendererPool {
                 let (tx, rx) = tokio::sync::oneshot::channel();
 
                 spawn_blocking(move || {
-                    tokio::runtime::Runtime::new()
-                        .expect("couldn't spawn runtime")
-                        .block_on(async move {
-                            let mut vdom = virtual_dom_factory();
-                            vdom.in_runtime(|| {
-                                // Make sure the evaluator is initialized
-                                dioxus_ssr::eval::init_eval();
-                            });
-                            let mut to = WriteBuffer { buffer: Vec::new() };
-                            // before polling the future, we need to set the context
-                            let prev_context =
-                                SERVER_CONTEXT.with(|ctx| ctx.replace(server_context));
-                            // poll the future, which may call server_context()
-                            tracing::info!("Rebuilding vdom");
-                            let _ = vdom.rebuild(&mut NoOpMutations);
-                            vdom.wait_for_suspense().await;
-                            tracing::info!("Suspense resolved");
-                            // after polling the future, we need to restore the context
-                            SERVER_CONTEXT.with(|ctx| ctx.replace(prev_context));
-
-                            if let Err(err) = wrapper.render_before_body(&mut *to) {
-                                let _ = tx.send(Err(err));
-                                return;
-                            }
-                            if let Err(err) = renderer.render_to(&mut to, &vdom) {
-                                let _ = tx.send(Err(
-                                    dioxus_ssr::incremental::IncrementalRendererError::RenderError(
-                                        err,
-                                    ),
-                                ));
-                                return;
-                            }
-                            if let Err(err) = wrapper.render_after_body(&mut *to) {
-                                let _ = tx.send(Err(err));
-                                return;
-                            }
-                            match String::from_utf8(to.buffer) {
-                                Ok(html) => {
-                                    let _ =
-                                        tx.send(Ok((renderer, RenderFreshness::now(None), html)));
-                                }
-                                Err(err) => {
-                                    dioxus_ssr::incremental::IncrementalRendererError::Other(
-                                        Box::new(err),
-                                    );
-                                }
-                            }
-                        });
-                });
-                let (renderer, freshness, html) = rx.await.unwrap()?;
-                pool.write().unwrap().push(renderer);
-                Ok((freshness, html))
-            }
-            Self::Incremental(pool) => {
-                let mut renderer =
-                    pool.write().unwrap().pop().unwrap_or_else(|| {
-                        incremental_pre_renderer(cfg.incremental.as_ref().unwrap())
-                    });
-
-                let (tx, rx) = tokio::sync::oneshot::channel();
-
-                let server_context = server_context.clone();
-                spawn_blocking(move || {
-                    tokio::runtime::Runtime::new()
-                        .expect("couldn't spawn runtime")
-                        .block_on(async move {
-                            let mut to = WriteBuffer { buffer: Vec::new() };
-                            match renderer
-                                .render(
-                                    route,
-                                    virtual_dom_factory,
-                                    &mut *to,
-                                    |vdom| {
-                                        Box::pin(async move {
-                                            // before polling the future, we need to set the context
-                                            let prev_context = SERVER_CONTEXT
-                                                .with(|ctx| ctx.replace(Box::new(server_context)));
-                                            // poll the future, which may call server_context()
-                                            tracing::info!("Rebuilding vdom");
-                                            let _ = vdom.rebuild(&mut NoOpMutations);
-                                            vdom.wait_for_suspense().await;
-                                            tracing::info!("Suspense resolved");
-                                            // after polling the future, we need to restore the context
-                                            SERVER_CONTEXT.with(|ctx| ctx.replace(prev_context));
-                                        })
-                                    },
-                                    &wrapper,
-                                )
-                                .await
-                            {
-                                Ok(freshness) => {
-                                    match String::from_utf8(to.buffer).map_err(|err| {
-                                        dioxus_ssr::incremental::IncrementalRendererError::Other(
-                                            Box::new(err),
-                                        )
-                                    }) {
-                                        Ok(html) => {
-                                            let _ = tx.send(Ok((freshness, html)));
-                                        }
-                                        Err(err) => {
-                                            let _ = tx.send(Err(err));
-                                        }
-                                    }
-                                }
-                                Err(err) => {
-                                    let _ = tx.send(Err(err));
-                                }
-                            }
-                        })
-                });
-                let (freshness, html) = rx.await.unwrap()?;
-
-                Ok((freshness, html))
-            }
-        }
-        #[cfg(target_arch = "wasm32")]
-        match self {
-            Self::Renderer(pool) => {
-                let server_context = Box::new(server_context.clone());
-                let mut renderer = pool.write().unwrap().pop().unwrap_or_else(pre_renderer);
-
-                let (tx, rx) = tokio::sync::oneshot::channel();
-
-                spawn_blocking(move || {
-                    spawn_local(async move {
+                    spawn_platform!(async move {
                         let mut vdom = virtual_dom_factory();
                         vdom.in_runtime(|| {
                             // Make sure the evaluator is initialized
@@ -222,7 +115,7 @@ impl SsrRendererPool {
 
                 let server_context = server_context.clone();
                 spawn_blocking(move || {
-                    spawn_local(async move {
+                    spawn_platform!(async move {
                         let mut to = WriteBuffer { buffer: Vec::new() };
                         match renderer
                             .render(
