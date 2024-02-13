@@ -1,4 +1,4 @@
-compatibility_date = "2023-11-29"
+compatibility_date = "2023-12-01"
 
 main = "src/entry.mjs"
 name = "worker"

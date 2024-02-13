@@ -12,9 +12,9 @@ use std::{
     ops::{Deref, DerefMut},
     path::PathBuf,
     pin::Pin,
-    time::{Duration, SystemTime},
 };
 use tokio::io::{AsyncWrite, AsyncWriteExt, BufReader};
+use web_time::{Duration, SystemTime};
 
 pub use crate::fs_cache::*;
 pub use crate::incremental_cfg::*;
@@ -99,22 +99,25 @@ impl IncrementalRenderer {
         route: String,
         html: Vec<u8>,
     ) -> Result<RenderFreshness, IncrementalRendererError> {
-        let file_path = self.route_as_path(&route);
-        if let Some(parent) = file_path.parent() {
-            if !parent.exists() {
-                std::fs::create_dir_all(parent)?;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let file_path = self.route_as_path(&route);
+            if let Some(parent) = file_path.parent() {
+                if !parent.exists() {
+                    std::fs::create_dir_all(parent)?;
+                }
             }
+            let file = std::fs::File::create(file_path)?;
+            let mut file = std::io::BufWriter::new(file);
+            file.write_all(&html)?;
         }
-        let file = std::fs::File::create(file_path)?;
-        let mut file = std::io::BufWriter::new(file);
-        file.write_all(&html)?;
         self.add_to_memory_cache(route, html);
         Ok(RenderFreshness::now(self.invalidate_after))
     }
 
     fn add_to_memory_cache(&mut self, route: String, html: Vec<u8>) {
         if let Some(cache) = self.memory_cache.as_mut() {
-            cache.put(route, (SystemTime::now(), html));
+            cache.put(route, (web_time::SystemTime::now(), html));
         }
     }
 
@@ -219,7 +222,7 @@ impl IncrementalRenderer {
             file_path.exists().then_some({
                 ValidCachedPath {
                     full_path: file_path,
-                    timestamp: SystemTime::now(),
+                    timestamp: std::time::SystemTime::now(),
                 }
             })
         }

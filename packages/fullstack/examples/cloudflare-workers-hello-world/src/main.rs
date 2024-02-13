@@ -17,7 +17,7 @@ fn main() {
         .with_writer(MakeWebConsoleWriter::new().with_pretty_level());
     tracing_subscriber::registry().with(fmt_layer).init();
 
-    dioxus_web::launch::launch_cfg(app, dioxus_web::Config::default().hydrate(false));
+    dioxus_web::launch::launch_cfg(app, dioxus_web::Config::default().hydrate(true));
 }
 
 #[cfg(not(feature = "web"))]

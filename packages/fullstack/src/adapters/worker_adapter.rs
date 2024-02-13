@@ -1,4 +1,7 @@
 use server_fn::ServerFunctionRegistry;
+use std::sync::{Arc, RwLock};
+
+use dioxus_lib::prelude::VirtualDom;
 
 use crate::{
     prelude::*, server_context::DioxusServerContext, server_fn::DioxusServerFnRegistry,
@@ -8,8 +11,10 @@ use crate::{
 /// a worker adapter that can be used to run dioxus applications in a worker
 pub async fn handle_dioxus_application(
     server_fn_route: &'static str,
+    cfg: impl Into<ServeConfig>,
+    build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
     mut req: worker::Request,
-    env: worker::Env,
+    _env: worker::Env,
 ) -> worker::Result<worker::Response> {
     let ls = tokio::task::LocalSet::new();
 
@@ -21,30 +26,83 @@ pub async fn handle_dioxus_application(
             .unwrap_or(req.path());
         if let Some(func) = DioxusServerFnRegistry::get(&path) {
             let mut service = server_fn_service(DioxusServerContext::default(), func.clone());
-            let bytes = req.bytes().await.unwrap();
-            let body = hyper::body::Body::from(bytes);
-            let req = http::Request::builder()
-                .method(req.method().as_ref())
-                .uri(req.path())
-                .body(body)
-                .unwrap();
-
+            let req = request_workers_to_hyper(req).await;
             match service.run(req).await {
-                Ok(rep) => {
-                    let status = rep.status().as_u16();
-                    let bytes = hyper::body::to_bytes(rep.into_body()).await.unwrap();
-                    Ok(worker::Response::from_bytes(bytes.to_vec())
-                        .unwrap()
-                        .with_status(status))
-                }
+                Ok(rep) => Ok(response_hyper_to_workers(rep).await),
                 Err(e) => Err(worker::Error::from(e.to_string())),
             }
         } else {
-            Ok(worker::Response::from_html("Not found")
-                .unwrap()
-                .with_status(404))
+            let cfg = cfg.into();
+            let ssr_state = SSRState::new(&cfg);
+            let req = request_workers_to_hyper(req).await;
+
+            render_handler(cfg, ssr_state, Arc::new(build_virtual_dom), req).await
         }
     };
 
     ls.run_until(result).await
+}
+
+async fn render_handler(
+    cfg: ServeConfig,
+    ssr_state: SSRState,
+    virtual_dom_factory: Arc<dyn Fn() -> VirtualDom + Send + Sync>,
+    request: http::Request<hyper::Body>,
+) -> worker::Result<worker::Response> {
+    let (parts, _) = request.into_parts();
+    let url = parts.uri.path_and_query().unwrap().to_string();
+    let parts: Arc<RwLock<http::request::Parts>> = Arc::new(RwLock::new(parts.into()));
+    let server_context = DioxusServerContext::new(parts.clone());
+
+    match ssr_state
+        .render(url, &cfg, move || virtual_dom_factory(), &server_context)
+        .await
+    {
+        Ok(rendered) => {
+            let crate::render::RenderResponse { html, freshness } = rendered;
+
+            let mut response = http::Response::new(hyper::Body::from(html));
+            freshness.write(response.headers_mut());
+
+            let headers = server_context.response_parts().unwrap().headers.clone();
+            let mut_headers = response.headers_mut();
+            for (key, value) in headers.iter() {
+                mut_headers.insert(key, value.clone());
+            }
+
+            Ok(response_hyper_to_workers(response).await)
+        }
+        Err(e) => {
+            tracing::error!("Failed to render page: {:?}", e);
+            Err(worker::Error::from(e.to_string()))
+        }
+    }
+}
+
+async fn request_workers_to_hyper(mut req: worker::Request) -> http::Request<hyper::Body> {
+    // TODO: use req.stream() to stream the body
+    let bytes = req.bytes().await.unwrap();
+    let body = hyper::Body::from(bytes);
+
+    http::Request::builder()
+        .method(req.method().as_ref())
+        .uri(req.url().unwrap().to_string())
+        .body(body)
+        .unwrap()
+}
+
+async fn response_hyper_to_workers(rep: http::Response<hyper::Body>) -> worker::Response {
+    // TODO: use worker::Response::from_stream() to stream the body
+    let mut headers = worker::Headers::new();
+    for (key, value) in rep.headers().iter() {
+        headers
+            .append(key.as_str(), value.to_str().unwrap())
+            .unwrap();
+    }
+    let status = rep.status().as_u16();
+    let bytes = hyper::body::to_bytes(rep.into_body()).await.unwrap();
+    worker::Response::from_bytes(bytes.to_vec())
+        .unwrap()
+        .with_status(status)
+        .with_headers(headers)
 }

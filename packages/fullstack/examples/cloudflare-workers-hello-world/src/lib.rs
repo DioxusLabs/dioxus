@@ -1,6 +1,15 @@
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
+use rust_embed::RustEmbed;
+
+#[cfg(feature = "server")]
+#[derive(RustEmbed)]
+#[folder = "./"]
+#[include = "index.html"]
+struct Asset;
+
+#[cfg(feature = "server")]
 #[worker::event(start)]
 fn start() {
     use tracing_subscriber::prelude::*;
@@ -21,12 +30,23 @@ fn start() {
 
 #[cfg(feature = "server")]
 #[worker::event(fetch)]
-async fn main(
+async fn fetch(
     req: worker::Request,
     env: worker::Env,
     _ctx: worker::Context,
 ) -> worker::Result<worker::Response> {
-    handle_dioxus_application("/api/", req, env).await
+    let virtual_dom_factory = move || {
+        let mut vdom = VirtualDom::new(app);
+        // for context in &contexts {
+        //     vdom.insert_any_root_context(context());
+        // }
+        vdom
+    };
+    let cfg = dioxus::prelude::ServeConfig::builder()
+        .index_html(String::from_utf8(Asset::get("index.html").unwrap().data.to_vec()).unwrap())
+        .incremental(IncrementalRendererConfig::new().clear_cache(false))
+        .build();
+    handle_dioxus_application("/api/", cfg, virtual_dom_factory, req, env).await
 }
 
 pub fn app() -> Element {
