@@ -8,5 +8,13 @@
 </head>
 <body>
 <div id="main"></div>
+<script type="module">
+  import init from "/./assets/dioxus/Dioxus.js";
+  init("/./assets/dioxus/Dioxus_bg.wasm").then(wasm => {
+    if (wasm.__wbindgen_start == undefined) {
+      wasm.main();
+    }
+  });
+</script>
 </body>
 </html>

@@ -31,6 +31,10 @@ pub async fn handle_dioxus_application(
                 Ok(rep) => Ok(response_hyper_to_workers(rep).await),
                 Err(e) => Err(worker::Error::from(e.to_string())),
             }
+        } else if req.path().starts_with("/_dioxus/") {
+            Ok(worker::Response::from_html(
+                "<!DOCTYPE html><html><head><title>Not Found</title></head><body><h1>Not Found</h1></body></html>"
+            ).unwrap().with_status(404))
         } else {
             let cfg = cfg.into();
             let ssr_state = SSRState::new(&cfg);
