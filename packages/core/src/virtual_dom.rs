@@ -439,7 +439,7 @@ impl VirtualDom {
             self.process_events();
 
             // Now that we have collected all queued work, we should check if we have any dirty scopes. If there are not, then we can poll any queued futures
-            if !self.dirty_scopes.is_empty() || !self.suspended_scopes.is_empty() {
+            if !self.dirty_scopes.is_empty() {
                 return;
             }
 
