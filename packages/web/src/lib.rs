@@ -61,10 +61,7 @@ pub use crate::cfg::Config;
 #[cfg(feature = "file_engine")]
 pub use crate::file_engine::WebFileEngineExt;
 use dioxus_core::VirtualDom;
-use futures_util::{
-    future::{select, Either},
-    pin_mut, FutureExt, StreamExt,
-};
+use futures_util::{pin_mut, select, FutureExt, StreamExt};
 
 mod cfg;
 mod dom;
@@ -159,17 +156,21 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) {
         let (mut res, template) = {
             let work = dom.wait_for_work().fuse();
             pin_mut!(work);
+            let mut rx_next = rx.select_next_some();
 
             #[cfg(all(feature = "hot_reload", debug_assertions))]
-            match select(work, select(hotreload_rx.next(), rx.next())).await {
-                Either::Left((_, _)) => (None, None),
-                Either::Right((Either::Left((new_template, _)), _)) => (None, new_template),
-                Either::Right((Either::Right((evt, _)), _)) => (evt, None),
+            {
+                let mut hot_reload_next = hotreload_rx.select_next_some();
+                select! {
+                    _ = work => (None, None),
+                    new_template = hot_reload_next => (None, Some(new_template)),
+                    evt = rx_next => (Some(evt), None),
+                }
             }
             #[cfg(not(all(feature = "hot_reload", debug_assertions)))]
-            match select(work, rx.next()).await {
-                Either::Left((_, _)) => (None, None),
-                Either::Right((evt, _)) => (evt, None),
+            select! {
+                _ = work => (None, None),
+                evt = rx_next => (Some(evt), None),
             }
         };
 
