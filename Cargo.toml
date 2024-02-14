@@ -171,3 +171,7 @@ required-features = ["http"]
 [[example]]
 name = "suspense"
 required-features = ["http"]
+
+[[example]]
+name = "weather_app"
+required-features = ["http"]
