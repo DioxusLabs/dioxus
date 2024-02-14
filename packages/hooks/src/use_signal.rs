@@ -17,9 +17,7 @@ use dioxus_signals::{Signal, SignalData, Storage, SyncStorage, UnsyncStorage};
 ///
 /// #[component]
 /// fn Child(state: Signal<u32>) -> Element {
-///     let state = *state;
-///
-///     use_future( |()| async move {
+///     use_future(move || async move {
 ///         // Because the signal is a Copy type, we can use it in an async block without cloning it.
 ///         *state.write() += 1;
 ///     });
@@ -44,19 +42,17 @@ pub fn use_signal<T: 'static>(f: impl FnOnce() -> T) -> Signal<T, UnsyncStorage>
 /// use dioxus::prelude::*;
 /// use dioxus_signals::*;
 ///
-/// fn App(cx: Scope) -> Element {
-///     let mut count = use_signal_sync(cx, || 0);
+/// fn App() -> Element {
+///     let mut count = use_signal_sync(|| 0);
 ///
 ///     // Because signals have automatic dependency tracking, if you never read them in a component, that component will not be re-rended when the signal is updated.
 ///     // The app component will never be rerendered in this example.
-///     render! { Child { state: count } }
+///     rsx! { Child { state: count } }
 /// }
 ///
 /// #[component]
-/// fn Child(cx: Scope, state: Signal<u32, SyncStorage>) -> Element {
-///     let state = *state;
-///
-///     use_future!(cx,  |()| async move {
+/// fn Child(state: Signal<u32, SyncStorage>) -> Element {
+///     use_future(move || async move {
 ///         // This signal is Send + Sync, so we can use it in an another thread
 ///         tokio::spawn(async move {
 ///             // Because the signal is a Copy type, we can use it in an async block without cloning it.
@@ -64,7 +60,7 @@ pub fn use_signal<T: 'static>(f: impl FnOnce() -> T) -> Signal<T, UnsyncStorage>
 ///         }).await;
 ///     });
 ///
-///     render! {
+///     rsx! {
 ///         button {
 ///             onclick: move |_| *state.write() += 1,
 ///             "{state}"

@@ -33,7 +33,7 @@ impl<T: PartialEq + 'static> GlobalMemo<T> {
             None => {
                 drop(read);
                 // Constructors are always run in the root scope
-                let signal = ScopeId::ROOT.in_runtime(|| Signal::selector(self.selector));
+                let signal = ScopeId::ROOT.in_runtime(|| Signal::memo(self.selector));
                 context.signal.borrow_mut().insert(key, Box::new(signal));
                 signal
             }
