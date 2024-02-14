@@ -12,7 +12,7 @@ fn main() {
 
 fn app() -> Element {
     // Using a VecDeque so its cheap to pop old events off the front
-    let mut events = use_signal(|| VecDeque::new());
+    let mut events = use_signal(VecDeque::new);
 
     // All events and their data implement Debug, so we can re-cast them as Rc<dyn Debug> instead of their specific type
     let mut log_event = move |event: Rc<dyn Debug>| {

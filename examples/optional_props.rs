@@ -58,7 +58,7 @@ struct ButtonProps {
 
 type SthElse<T> = Option<T>;
 
-#[allow(non_snake_casea)]
+#[allow(non_snake_case)]
 fn Button(props: ButtonProps) -> Element {
     rsx! {
         button {
