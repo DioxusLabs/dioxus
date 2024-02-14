@@ -25,13 +25,13 @@ fn memos_rerun() {
             counter.borrow_mut().component += 1;
 
             let mut signal = use_signal(|| 0);
-            let memo = use_hook(move || {
+            let memo = use_memo({
                 to_owned![counter];
-                Signal::memo(move || {
+                move || {
                     counter.borrow_mut().effect += 1;
                     println!("Signal: {:?}", signal);
                     signal()
-                })
+                }
             });
             assert_eq!(memo(), 0);
             signal += 1;
@@ -101,13 +101,13 @@ fn memos_prevents_component_rerun() {
         let signal = props.signal;
         counter.borrow_mut().component += 1;
 
-        let memo = use_hook(move || {
+        let memo = use_memo({
             to_owned![counter];
-            Signal::memo(move || {
+            move || {
                 counter.borrow_mut().memo += 1;
                 println!("Signal: {:?}", signal);
                 signal()
-            })
+            }
         });
         match generation() {
             0 => {
