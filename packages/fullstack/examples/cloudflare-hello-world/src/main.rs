@@ -13,7 +13,7 @@
 
 #[cfg(feature = "web")]
 fn main() {
-    use cloudflare_workers_hello_world::app;
+    use cloudflare_hello_world::app;
     use tracing_subscriber::prelude::*;
     use tracing_web::MakeWebConsoleWriter;
 

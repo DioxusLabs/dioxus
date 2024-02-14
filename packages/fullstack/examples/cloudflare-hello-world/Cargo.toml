@@ -1,5 +1,5 @@
 [package]
-name = "cloudflare-workers-hello-world"
+name = "cloudflare-hello-world"
 version = "0.1.0"
 edition = "2021"
 publish = false
@@ -7,7 +7,7 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
-name = "cloudflare_workers_hello_world"
+name = "cloudflare_hello_world"
 path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
 
@@ -40,5 +40,5 @@ reqwest = "0.11.18"
 
 [features]
 default = []
-server = ["dioxus/cloudflare-workers", "worker"]
+server = ["dioxus/cloudflare", "worker"]
 web = ["dioxus-web"]
