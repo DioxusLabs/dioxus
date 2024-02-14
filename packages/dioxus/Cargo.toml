@@ -55,6 +55,9 @@ warp = ["dioxus-fullstack?/warp", "ssr", "dioxus-liveview?/warp"]
 rocket = ["dioxus-liveview?/rocket"]
 tui = ["dioxus-tui", "dioxus-config-macro/tui"]
 
+# This feature enables some nightly flags that make it more clear what structs/methods are available in each feature
+nightly-doc = []
+
 [dev-dependencies]
 futures-util = { workspace = true }
 tracing = { workspace = true }

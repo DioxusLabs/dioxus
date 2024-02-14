@@ -112,12 +112,6 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
                                         },
                                         web_info.clone(),
                                     );
-
-                                    #[cfg(feature = "plugin")]
-                                    let _ = PluginManager::on_serve_rebuild(
-                                        chrono::Local::now().timestamp(),
-                                        e.paths,
-                                    );
                                 }
                                 Err(e) => {
                                     last_update_time = chrono::Local::now().timestamp();

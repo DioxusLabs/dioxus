@@ -10,7 +10,7 @@ use dioxus_html::{
 };
 use js_sys::Array;
 use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
-use web_sys::{Document, Element, Event, MouseEvent};
+use web_sys::{Document, DragEvent, Element, Event, MouseEvent};
 
 pub(crate) struct WebEventConverter;
 
@@ -49,10 +49,7 @@ impl HtmlEventConverter for WebEventConverter {
     #[inline(always)]
     fn convert_drag_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::DragData {
         let event = downcast_event(event);
-        DragData::new(WebDragData::new(
-            event.element.clone(),
-            event.raw.clone().unchecked_into(),
-        ))
+        DragData::new(WebDragData::new(event.raw.clone().unchecked_into()))
     }
 
     #[inline(always)]
@@ -462,13 +459,12 @@ impl HasFileData for WebFormData {
 }
 
 struct WebDragData {
-    element: Element,
     raw: MouseEvent,
 }
 
 impl WebDragData {
-    fn new(element: Element, raw: MouseEvent) -> Self {
-        Self { element, raw }
+    fn new(raw: MouseEvent) -> Self {
+        Self { raw }
     }
 }
 
@@ -529,17 +525,16 @@ impl HasFileData for WebDragData {
         #[cfg(not(feature = "file_engine"))]
         let files = None;
         #[cfg(feature = "file_engine")]
-        let files = self
-            .element
-            .dyn_ref()
-            .and_then(|input: &web_sys::HtmlInputElement| {
-                input.files().and_then(|files| {
+        let files = self.raw.dyn_ref::<DragEvent>().and_then(|drag_event| {
+            drag_event.data_transfer().and_then(|dt| {
+                dt.files().and_then(|files| {
                     #[allow(clippy::arc_with_non_send_sync)]
                     crate::file_engine::WebFileEngine::new(files).map(|f| {
                         std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>
                     })
                 })
-            });
+            })
+        });
 
         files
     }

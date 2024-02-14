@@ -53,6 +53,7 @@ impl Config {
 
     /// Set the address to serve the app on.
     #[cfg(feature = "server")]
+    #[cfg_attr(any(docsrs, feature = "nightly-doc"), doc(cfg(feature = "server")))]
     pub fn addr(self, addr: impl Into<std::net::SocketAddr>) -> Self {
         let addr = addr.into();
         Self { addr, ..self }
@@ -60,6 +61,7 @@ impl Config {
 
     /// Set the route to the server functions.
     #[cfg(feature = "server")]
+    #[cfg_attr(any(docsrs, feature = "nightly-doc"), doc(cfg(feature = "server")))]
     pub fn server_fn_route(self, server_fn_route: &'static str) -> Self {
         Self {
             server_fn_route,
@@ -69,6 +71,7 @@ impl Config {
 
     /// Set the incremental renderer config.
     #[cfg(feature = "server")]
+    #[cfg_attr(any(docsrs, feature = "nightly-doc"), doc(cfg(feature = "server")))]
     pub fn incremental(self, cfg: IncrementalRendererConfig) -> Self {
         Self {
             server_cfg: self.server_cfg.incremental(cfg),
@@ -78,18 +81,21 @@ impl Config {
 
     /// Set the server config.
     #[cfg(feature = "server")]
+    #[cfg_attr(any(docsrs, feature = "nightly-doc"), doc(cfg(feature = "server")))]
     pub fn server_cfg(self, server_cfg: ServeConfigBuilder) -> Self {
         Self { server_cfg, ..self }
     }
 
     /// Set the web config.
     #[cfg(feature = "web")]
+    #[cfg_attr(any(docsrs, feature = "nightly-doc"), doc(cfg(feature = "web")))]
     pub fn web_cfg(self, web_cfg: dioxus_web::Config) -> Self {
         Self { web_cfg, ..self }
     }
 
     /// Set the desktop config.
     #[cfg(feature = "desktop")]
+    #[cfg_attr(any(docsrs, feature = "nightly-doc"), doc(cfg(feature = "desktop")))]
     pub fn desktop_cfg(self, desktop_cfg: dioxus_desktop::Config) -> Self {
         Self {
             desktop_cfg,
@@ -99,11 +105,13 @@ impl Config {
 
     /// Set the mobile config.
     #[cfg(feature = "mobile")]
+    #[cfg_attr(any(docsrs, feature = "nightly-doc"), doc(cfg(feature = "mobile")))]
     pub fn mobile_cfg(self, mobile_cfg: dioxus_mobile::Config) -> Self {
         Self { mobile_cfg, ..self }
     }
 
     #[cfg(feature = "server")]
+    #[cfg_attr(any(docsrs, feature = "nightly-doc"), doc(cfg(feature = "server")))]
     /// Launch a server application
     pub async fn launch_server(
         self,

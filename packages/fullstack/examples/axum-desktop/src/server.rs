@@ -4,7 +4,7 @@
 // ```
 
 use axum_desktop::*;
-use dioxus_fullstack::prelude::*;
+use dioxus::prelude::*;
 
 #[tokio::main]
 async fn main() {

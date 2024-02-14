@@ -159,7 +159,7 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
 ///         button {
 ///             onclick: move |evt| cx.onclick.call(evt),
 ///         }
-///     })
+///     }
 /// }
 ///
 /// ```

@@ -1,4 +1,4 @@
-use crate::{read::Readable, Signal, SignalData};
+use crate::{read::Readable, ReadableRef, Signal, SignalData};
 use std::ops::Deref;
 
 use dioxus_core::{prelude::IntoAttributeValue, ScopeId};
@@ -54,22 +54,12 @@ impl<T: 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
     }
 }
 
-impl<T, S: Storage<SignalData<T>>> Readable<T> for ReadOnlySignal<T, S> {
-    type Ref<R: ?Sized + 'static> = S::Ref<R>;
-
-    fn map_ref<I, U: ?Sized, F: FnOnce(&I) -> &U>(ref_: Self::Ref<I>, f: F) -> Self::Ref<U> {
-        S::map(ref_, f)
-    }
-
-    fn try_map_ref<I, U: ?Sized, F: FnOnce(&I) -> Option<&U>>(
-        ref_: Self::Ref<I>,
-        f: F,
-    ) -> Option<Self::Ref<U>> {
-        S::try_map(ref_, f)
-    }
+impl<T, S: Storage<SignalData<T>>> Readable for ReadOnlySignal<T, S> {
+    type Target = T;
+    type Storage = S;
 
     #[track_caller]
-    fn try_read(&self) -> Result<Self::Ref<T>, generational_box::BorrowError> {
+    fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
         self.inner.try_read()
     }
 

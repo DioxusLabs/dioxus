@@ -3,9 +3,9 @@ use std::any::Any;
 
 #[cfg(feature = "axum")]
 pub type Config = crate::Config<axum::Router>;
-#[cfg(feature = "salvo")]
+#[cfg(all(feature = "salvo", not(feature = "axum")))]
 pub type Config = crate::Config<salvo::Router>;
-#[cfg(feature = "rocket")]
+#[cfg(all(feature = "rocket", not(any(feature = "axum", feature = "salvo"))))]
 pub type Config = crate::Config<rocket::Rocket<rocket::Build>>;
 
 /// Launches the WebView and runs the event loop, with configuration and root props.

@@ -228,6 +228,7 @@ impl<T: Send + Sync + Clone + 'static> FromServerContext for FromContext<T> {
 }
 
 #[cfg(feature = "axum")]
+#[cfg_attr(any(docsrs, feature = "nightly-doc"), doc(cfg(feature = "axum")))]
 /// An adapter for axum extractors for the server context
 pub struct Axum;
 
