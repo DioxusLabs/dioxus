@@ -5,8 +5,11 @@
   "main": "index.js",
   "scripts": {
     "postinstall": "dx build --platform web --features web --skip-assets",
-    "serve": "wrangler pages dev --compatibility-date 2024-01-29 --proxy 8080 --script-path dist/worker/shim.mjs -- dx serve --platform web --features web",
-    "build:server": "cargo install -q worker-build && worker-build --features server && ncp build/ dist"
+    "serve": "wrangler pages dev --compatibility-date 2024-01-29 --proxy 8080 --script-path dist/_worker.js -- dx serve --platform web --features web",
+    "build": "npm run build:web && npm run build:server",
+    "build:web": "dx build --platform web --features web --release",
+    "build:server": "cargo install -q worker-build && worker-build --features server && ncp build/ dist",
+    "deploy": "wrangler pages deploy --project-name dioxus-fullstack-hello-world dist"
   },
   "author": "",
   "license": "ISC",

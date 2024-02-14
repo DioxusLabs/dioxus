@@ -49,7 +49,8 @@ pub async fn fetch_dioxus_application(
                 let req = clone_worker_request_without_body(&req)?;
                 assets.fetch_request(req).await?
             };
-            if (200..=399).contains(&rep.status_code()) {
+            // tracing::info!("Asset response: {:?}", rep);
+            if (200..=399).contains(&rep.status_code()) && path != "/" && path != "/index.html" {
                 tracing::info!("Serving asset: {:?}", path);
                 Ok(rep)
             } else {

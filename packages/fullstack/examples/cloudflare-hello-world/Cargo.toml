@@ -20,6 +20,11 @@ opt-level = "s"
 strip = false
 debug = true
 
+[profile.release]
+lto = true
+strip = true
+codegen-units = 1
+
 [package.metadata.wasm-pack.profile.dev.wasm-bindgen]
 dwarf-debug-info = true
 
