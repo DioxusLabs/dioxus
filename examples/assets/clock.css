@@ -1,0 +1,23 @@
+html body {
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+#app {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    height: 100vh;
+    background-color: plum;
+    font-size: 6em;
+    color: aliceblue;
+}
+
+#title {
+    font-size: 0.5em;
+    color: black;
+    margin-bottom: 0.5em;
+}

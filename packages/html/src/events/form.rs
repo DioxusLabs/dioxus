@@ -90,6 +90,14 @@ impl FormData {
         self.inner.value()
     }
 
+    /// Get the value of the form event as a parsed type
+    pub fn parsed<T>(&self) -> Result<T, T::Err>
+    where
+        T: std::str::FromStr,
+    {
+        self.value().parse()
+    }
+
     /// Try to parse the value as a boolean
     ///
     /// Returns false if the value is not a boolean, or if it is false!

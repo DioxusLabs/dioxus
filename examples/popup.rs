@@ -1,9 +1,8 @@
 //! This example shows how to create a popup window and send data back to the parent window.
-
-use std::rc::Rc;
+//! Currently Dioxus doesn't support nested renderers, hence the need to create popups as separate windows.
 
 use dioxus::prelude::*;
-use futures_util::StreamExt;
+use std::rc::Rc;
 
 fn main() {
     launch_desktop(app);
@@ -14,6 +13,7 @@ fn app() -> Element {
 
     // Wait for responses to the compose channel, and then push them to the emails_sent signal.
     let handle = use_coroutine(|mut rx: UnboundedReceiver<String>| async move {
+        use futures_util::StreamExt;
         while let Some(message) = rx.next().await {
             emails_sent.write().push(message);
         }
@@ -22,7 +22,7 @@ fn app() -> Element {
     let open_compose_window = move |_evt: MouseEvent| {
         let tx = handle.tx();
         dioxus::desktop::window().new_window(
-            VirtualDom::new_with_props(compose, Rc::new(move |s| tx.unbounded_send(s).unwrap())),
+            VirtualDom::new_with_props(popup, Rc::new(move |s| tx.unbounded_send(s).unwrap())),
             Default::default(),
         );
     };
@@ -41,21 +41,19 @@ fn app() -> Element {
     }
 }
 
-fn compose(send: Rc<dyn Fn(String)>) -> Element {
+fn popup(send: Rc<dyn Fn(String)>) -> Element {
     let mut user_input = use_signal(String::new);
 
     rsx! {
         div {
             h1 { "Compose a new email" }
-
             button {
                 onclick: move |_| {
                     send(user_input.cloned());
                     dioxus::desktop::window().close();
                 },
-                "Click to send"
+                "Send"
             }
-
             input { oninput: move |e| user_input.set(e.value()), value: "{user_input}" }
         }
     }

@@ -1,3 +1,7 @@
+//! A few ways of mapping elements into rsx! syntax
+//!
+//! Rsx allows anything that's an iterator where the output type implements Into<Element>, so you can use any of the following:
+
 use dioxus::prelude::*;
 
 fn main() {

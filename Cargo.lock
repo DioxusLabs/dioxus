@@ -2558,6 +2558,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "warp",
 ]
 
 [[package]]

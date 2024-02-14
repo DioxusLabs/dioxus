@@ -1,6 +1,9 @@
 //! Example: SSR
 //!
 //! This example shows how we can render the Dioxus Virtualdom using SSR.
+//! Dioxus' SSR is quite comprehensive and can generate a number of utility markers for things like hydration.
+//!
+//! You can also render without any markers to get a clean HTML output.
 
 use dioxus::prelude::*;
 

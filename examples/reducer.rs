@@ -15,12 +15,16 @@ fn app() -> Element {
     let mut state = use_signal(|| PlayerState { is_playing: false });
 
     rsx!(
-        div {
-            h1 {"Select an option"}
-            h3 { "The radio is... ", {state.read().is_playing()}, "!" }
-            button { onclick: move |_| state.write().reduce(PlayerAction::Pause), "Pause" }
-            button { onclick: move |_| state.write().reduce(PlayerAction::Play), "Play" }
+        style { {include_str!("./assets/radio.css")} }
+        h1 {"Select an option"}
+
+        // Add some cute animations if the radio is playing!
+        div { class: if state.read().is_playing { "bounce" },
+            "The radio is... ", {state.read().is_playing()}, "!"
         }
+
+        button { id: "play", onclick: move |_| state.write().reduce(PlayerAction::Pause), "Pause" }
+        button { id: "pause", onclick: move |_| state.write().reduce(PlayerAction::Play), "Play" }
     )
 }
 

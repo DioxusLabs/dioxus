@@ -99,6 +99,10 @@ pub struct LinkProps {
     /// The onclick event handler.
     pub onclick: Option<EventHandler<MouseEvent>>,
 
+    /// The onmounted event handler.
+    /// Fired when the <a> element is mounted.
+    pub onmounted: Option<EventHandler<MountedEvent>>,
+
     #[props(default)]
     /// Whether the default behavior should be executed if an `onclick` handler is provided.
     ///
@@ -269,10 +273,17 @@ pub fn Link(props: LinkProps) -> Element {
         }
     };
 
+    let onmounted = move |event| {
+        if let Some(handler) = props.onmounted.clone() {
+            handler.call(event);
+        }
+    };
+
     rsx! {
         a {
             onclick: action,
             href,
+            onmounted: onmounted,
             prevent_default,
             class,
             rel,

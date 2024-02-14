@@ -10,7 +10,7 @@ keywords = ["dom", "ui", "gui", "react"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-dioxus-desktop = { workspace = true, default-features = false, features = ["tokio_runtime"] }
+dioxus-desktop = { workspace = true, features = ["tokio_runtime"] }
 
 [lib]
 doctest = false
