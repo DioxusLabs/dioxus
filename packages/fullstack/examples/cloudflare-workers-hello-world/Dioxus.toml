@@ -21,10 +21,12 @@ title = "dioxus | ⛺"
 [web.watcher]
 
 # when watcher trigger, regenerate the `index.html`
-reload_html = true
+reload_html = false
 
 # which files or dirs will be watcher monitoring
 watch_path = ["src", "public"]
+
+index_on_404 = false
 
 # include `assets` in web platform
 [web.resource]
@@ -44,6 +46,3 @@ style = []
 
 # Javascript code file
 script = []
-
-[[web.proxy]]
-backend = "http://localhost:8787/api"

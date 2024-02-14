@@ -1580,7 +1580,6 @@ dependencies = [
  "dioxus",
  "dioxus-web",
  "reqwest",
- "rust-embed",
  "serde",
  "tracing",
  "tracing-subscriber",
@@ -8334,7 +8333,6 @@ version = "8.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8cb0a25bfbb2d4b4402179c2cf030387d9990857ce08a32592c6238db9fa8665"
 dependencies = [
- "globset",
  "sha2",
  "walkdir",
 ]

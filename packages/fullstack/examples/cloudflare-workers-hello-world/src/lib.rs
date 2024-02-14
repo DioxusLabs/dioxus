@@ -1,13 +1,7 @@
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
-use rust_embed::RustEmbed;
-
-#[cfg(feature = "server")]
-#[derive(RustEmbed)]
-#[folder = "./"]
-#[include = "index.html"]
-struct Asset;
+const INDEX_HTML: &str = include_str!("../dist/index.html");
 
 #[cfg(feature = "server")]
 #[worker::event(start)]
@@ -43,7 +37,7 @@ async fn fetch(
         vdom
     };
     let cfg = dioxus::prelude::ServeConfig::builder()
-        .index_html(String::from_utf8(Asset::get("index.html").unwrap().data.to_vec()).unwrap())
+        .index_html(INDEX_HTML.to_string())
         .incremental(IncrementalRendererConfig::new().clear_cache(false))
         .build();
     handle_dioxus_application("/api/", cfg, virtual_dom_factory, req, env).await
