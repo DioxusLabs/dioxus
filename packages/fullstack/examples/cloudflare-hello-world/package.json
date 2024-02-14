@@ -8,13 +8,12 @@
     "serve": "wrangler pages dev --compatibility-date 2024-01-29 --proxy 8080 --script-path dist/_worker.js -- dx serve --platform web --features web",
     "build": "npm run build:web && npm run build:server",
     "build:web": "dx build --platform web --features web --release",
-    "build:server": "cargo install -q worker-build && worker-build --features server && ncp build/ dist",
+    "build:server": "cargo install -q worker-build && worker-build --features server",
     "deploy": "wrangler pages deploy --project-name dioxus-fullstack-hello-world dist"
   },
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "ncp": "^2.0.0",
     "wrangler": "^3.28.1"
   }
 }

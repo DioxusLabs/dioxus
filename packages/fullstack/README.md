@@ -24,6 +24,7 @@ Fullstack utilities for the [`Dioxus`](https://dioxuslabs.com) framework.
 # Features
 
 - Intigrations with the [Axum](https::/docs.rs/dioxus-fullstack/latest/dixous_server/axum_adapter/index.html), [Salvo](https::/docs.rs/dioxus-fullstack/latest/dixous_server/salvo_adapter/index.html), and [Warp](https::/docs.rs/dioxus-fullstack/latest/dixous_server/warp_adapter/index.html) server frameworks with utilities for serving and rendering Dioxus applications.
+- Intigrations with the [Cloudflare Pages](https://developers.cloudflare.com/pages/) serverless platform for serving and rendering Dioxus applications.
 - [Server functions](https::/docs.rs/dioxus-fullstack/latest/dixous_server/prelude/attr.server.html) allow you to call code on the server from the client as if it were a normal function.
 - Instant RSX Hot reloading with [`dioxus-hot-reload`](https://crates.io/crates/dioxus-hot-reload).
 - Passing root props from the server to the client.

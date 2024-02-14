@@ -1,4 +1,4 @@
-import shim from "./worker/shim.mjs";
+import shim from "../build/worker/shim.mjs";
 
 async function fetch(request, env, ctx) {
     Error.stackTraceLimit = 100;
