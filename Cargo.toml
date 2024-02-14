@@ -175,3 +175,7 @@ required-features = ["http"]
 [[example]]
 name = "weather_app"
 required-features = ["http"]
+
+[[example]]
+name = "image_generator_openai"
+required-features = ["http"]
