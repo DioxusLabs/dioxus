@@ -1,3 +1,10 @@
+//! Setup with:
+//!
+//! ```sh
+//! bun install
+//! bun run postinstall
+//! ```
+//!
 //! Run with:
 //!
 //! ```sh
