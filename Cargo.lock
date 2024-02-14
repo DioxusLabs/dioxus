@@ -2624,6 +2624,7 @@ dependencies = [
  "futures-util",
  "slab",
  "thiserror",
+ "tokio",
  "tracing",
  "web-sys",
 ]

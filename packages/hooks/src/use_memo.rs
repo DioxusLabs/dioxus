@@ -16,7 +16,7 @@ use dioxus_signals::{Storage, Writable};
 ///     let mut count = use_signal(|| 0);
 ///     let double = use_memo(move || count * 2);
 ///     count += 1;
-///     assert_eq!(double.value(), count * 2);
+///     assert_eq!(double(), count * 2);
 ///
 ///     rsx! { "{double}" }
 /// }
@@ -35,12 +35,12 @@ pub fn use_memo<R: PartialEq>(f: impl FnMut() -> R + 'static) -> ReadOnlySignal<
 /// use dioxus_signals::*;
 ///
 /// fn App() -> Element {
-///     let mut count = use_signal(cx, || 0);
-///     let double = use_memo(cx, move || count * 2);
+///     let mut count = use_signal(|| 0);
+///     let double = use_memo(move || count * 2);
 ///     count += 1;
-///     assert_eq!(double.value(), count * 2);
+///     assert_eq!(double(), count * 2);
 ///
-///     render! { "{double}" }
+///     rsx! { "{double}" }
 /// }
 /// ```
 #[track_caller]
@@ -79,11 +79,11 @@ pub fn use_maybe_sync_memo<R: PartialEq, S: Storage<SignalData<R>>>(
 /// use dioxus::prelude::*;
 ///
 /// fn App() -> Element {
-///     let mut local_state = use_state(|| 0);
-///     let double = use_memo_with_dependencies(cx, (local_state.get(),), move |(local_state,)| local_state * 2);
+///     let mut local_state = use_signal(|| 0);
+///     let double = use_memo_with_dependencies((&local_state(),), move |(local_state,)| local_state * 2);
 ///     local_state.set(1);
 ///
-///     render! { "{double}" }
+///     rsx! { "{double}" }
 /// }
 /// ```
 #[track_caller]
@@ -94,7 +94,7 @@ pub fn use_memo_with_dependencies<R: PartialEq, D: Dependency>(
 where
     D::Out: 'static,
 {
-    use_maybe_sync_selector_with_dependencies(dependencies, f)
+    use_maybe_sync_memo_with_dependencies(dependencies, f)
 }
 
 /// Creates a new Selector that may be sync with some local dependencies. The selector will be run immediately and whenever any signal it reads or any dependencies it tracks changes
@@ -106,15 +106,15 @@ where
 /// use dioxus_signals::*;
 ///
 /// fn App() -> Element {
-///     let mut local_state = use_state(|| 0);
-///     let double = use_memo_with_dependencies(cx, (local_state.get(),), move |(local_state,)| local_state * 2);
+///     let mut local_state = use_signal(|| 0i32);
+///     let double: ReadOnlySignal<i32, SyncStorage> = use_maybe_sync_memo_with_dependencies((&local_state(),), move |(local_state,)| local_state * 2);
 ///     local_state.set(1);
 ///
-///     render! { "{double}" }
+///     rsx! { "{double}" }
 /// }
 /// ```
 #[track_caller]
-pub fn use_maybe_sync_selector_with_dependencies<
+pub fn use_maybe_sync_memo_with_dependencies<
     R: PartialEq,
     D: Dependency,
     S: Storage<SignalData<R>>,
