@@ -1,8 +1,8 @@
 #![allow(unused, non_upper_case_globals, non_snake_case)]
 
-use dioxus_core::NoOpMutations;
 use dioxus::prelude::*;
 use dioxus_core::ElementId;
+use dioxus_core::NoOpMutations;
 use dioxus_signals::*;
 
 #[test]

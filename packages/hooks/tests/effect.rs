@@ -1,7 +1,7 @@
 #![allow(unused, non_upper_case_globals, non_snake_case)]
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::cell::RefCell;
 
 use dioxus::prelude::*;
 use dioxus_core::ElementId;

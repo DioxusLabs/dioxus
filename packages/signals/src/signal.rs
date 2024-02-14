@@ -201,7 +201,7 @@ impl<T, S: Storage<SignalData<T>>> Readable for Signal<T, S> {
     fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
         let inner = self.inner.try_read()?;
 
-        if let Some(reactive_context) = ReactiveContext::current(){
+        if let Some(reactive_context) = ReactiveContext::current() {
             inner.subscribers.lock().unwrap().insert(reactive_context);
         }
 

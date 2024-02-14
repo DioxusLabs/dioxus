@@ -86,11 +86,9 @@ fn current_owner<S: Storage<T>, T>() -> Owner<S> {
     }
 
     // Otherwise get the owner from the current reactive context.
-    match ReactiveContext::current(){
+    match ReactiveContext::current() {
         Some(current_reactive_context) => owner_in_scope(current_reactive_context.origin_scope()),
-        None => {
-            owner_in_scope(current_scope_id().expect("in a virtual dom"))
-        }
+        None => owner_in_scope(current_scope_id().expect("in a virtual dom")),
     }
 }
 

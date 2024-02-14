@@ -1,5 +1,5 @@
 use dioxus_core::prelude::{
-    current_scope_id, has_context, provide_context, schedule_update_any, ScopeId
+    current_scope_id, has_context, provide_context, schedule_update_any, ScopeId,
 };
 use generational_box::SyncStorage;
 use rustc_hash::FxHashSet;
@@ -77,7 +77,7 @@ impl ReactiveContext {
         }
 
         // If we're rendering, then try and use the reactive context attached to this component
-        if !dioxus_core::vdom_is_rendering(){
+        if !dioxus_core::vdom_is_rendering() {
             return None;
         }
         if let Some(cx) = has_context() {
@@ -85,7 +85,9 @@ impl ReactiveContext {
         }
 
         // Otherwise, create a new context at the current scope
-        Some(provide_context(ReactiveContext::new_for_scope(current_scope_id())))
+        Some(provide_context(ReactiveContext::new_for_scope(
+            current_scope_id(),
+        )))
     }
 
     /// Run this function in the context of this reactive context
