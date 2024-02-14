@@ -1,11 +1,2 @@
-compatibility_date = "2023-12-01"
-
-main = "src/entry.mjs"
-name = "worker"
-
-[[services]]
-binding = "COREDUMP_SERVICE"
-service = "coredump-service"
-
 [build]
-command = "npm run build:server"
+command = "bun run build:server"

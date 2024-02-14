@@ -23,19 +23,19 @@ pub async fn fetch_dioxus_application(
 
     let path = req.path().clone();
     let func_path = path
-        .strip_prefix(server_fn_route)
+        .strip_prefix(&format!("/{}", server_fn_route))
         .map(|s| s.to_string())
         .unwrap_or(path.clone());
 
-    let request = request_workers_to_hyper(req.clone()?).await?;
-
-    tracing::info!("Handling request: {:?}", request);
+    tracing::info!("Handling request: {:?}", req);
     let result = async move {
         if path.starts_with("/_dioxus/") {
             tracing::info!("Handling dioxus request: {:?}", path);
+            let request = request_workers_to_hyper(req).await?;
             dioxus_handler(request).await
         } else if let Some(func) = DioxusServerFnRegistry::get(&func_path) {
             tracing::info!("Running server function: {:?}", func_path);
+            let request = request_workers_to_hyper(req).await?;
             let mut service = server_fn_service(DioxusServerContext::default(), func.clone());
             match service.run(request).await {
                 Ok(rep) => Ok(response_hyper_to_workers(rep).await),
@@ -43,16 +43,20 @@ pub async fn fetch_dioxus_application(
             }
         } else {
             // Returns any items that Pages (or proxied development server) serves.
-            let assets = env.get_binding::<worker::Fetcher>("ASSETS")?;
-            let rep = assets.fetch_request(req).await?;
-            if (200..=299).contains(&rep.status_code()) {
+            let rep = {
+                let assets = env.get_binding::<worker::Fetcher>("ASSETS")?;
+                // Assets is a static resource and does not require Body, so it is cloned without consuming Body.
+                let req = clone_worker_request_without_body(&req)?;
+                assets.fetch_request(req).await?
+            };
+            if (200..=399).contains(&rep.status_code()) {
                 tracing::info!("Serving asset: {:?}", path);
                 Ok(rep)
             } else {
                 tracing::info!("Rendering page: {:?}", path);
+                let request = request_workers_to_hyper(req).await?;
                 let cfg = cfg.into();
                 let ssr_state = SSRState::new(&cfg);
-
                 render_handler(cfg, ssr_state, Arc::new(build_virtual_dom), request).await
             }
         }
@@ -131,6 +135,15 @@ async fn dioxus_handler(request: http::Request<hyper::Body>) -> worker::Result<w
             v
         ))),
     }
+}
+
+fn clone_worker_request_without_body(req: &worker::Request) -> worker::Result<worker::Request> {
+    let mut req0 = worker::Request::new(req.url()?.as_str(), req.method())?;
+    let mut headers = req0.headers_mut()?;
+    for (k, v) in req.headers().entries() {
+        headers.append(&k, &v)?;
+    }
+    Ok(req0)
 }
 
 async fn request_workers_to_hyper(

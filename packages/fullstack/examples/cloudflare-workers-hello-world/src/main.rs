@@ -1,7 +1,7 @@
 //! Run with:
 //!
 //! ```sh
-//! npm run serve
+//! bun run serve
 //! ```
 
 #[cfg(feature = "web")]

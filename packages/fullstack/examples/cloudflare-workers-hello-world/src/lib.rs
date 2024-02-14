@@ -41,7 +41,7 @@ async fn fetch(
         .incremental(IncrementalRendererConfig::new().clear_cache(false))
         .build();
 
-    fetch_dioxus_application("/api/", cfg, virtual_dom_factory, req, env, ctx).await
+    fetch_dioxus_application("", cfg, virtual_dom_factory, req, env, ctx).await
 }
 
 pub fn app() -> Element {
@@ -71,14 +71,14 @@ pub fn app() -> Element {
     }
 }
 
-#[server("/api")]
+#[server]
 async fn post_server_data(data: String) -> Result<(), ServerFnError> {
     tracing::info!("Server received: {}", data);
 
     Ok(())
 }
 
-#[server("/api")]
+#[server]
 async fn get_server_data() -> Result<String, ServerFnError> {
     Ok(reqwest::get("https://httpbin.org/ip").await?.text().await?)
 }
