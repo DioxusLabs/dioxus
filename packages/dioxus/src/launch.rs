@@ -161,15 +161,26 @@ mod current_platform {
     #[cfg(all(feature = "desktop", not(feature = "fullstack")))]
     pub use dioxus_desktop::launch::*;
 
+    #[cfg(all(feature = "mobile", not(feature = "fullstack")))]
+    pub use dioxus_desktop::launch::*;
+
     #[cfg(feature = "fullstack")]
     pub use dioxus_fullstack::launch::*;
 
-    #[cfg(all(feature = "web", not(any(feature = "desktop", feature = "fullstack"))))]
+    #[cfg(all(
+        feature = "web",
+        not(any(feature = "desktop", feature = "mobile", feature = "fullstack"))
+    ))]
     pub use dioxus_web::launch::*;
 
     #[cfg(all(
         feature = "liveview",
-        not(any(feature = "web", feature = "desktop", feature = "fullstack"))
+        not(any(
+            feature = "web",
+            feature = "desktop",
+            feature = "mobile",
+            feature = "fullstack"
+        ))
     ))]
     pub use dioxus_liveview::launch::*;
 
@@ -179,6 +190,7 @@ mod current_platform {
             feature = "liveview",
             feature = "web",
             feature = "desktop",
+            feature = "mobile",
             feature = "fullstack"
         ))
     ))]
@@ -187,6 +199,7 @@ mod current_platform {
     #[cfg(not(any(
         feature = "liveview",
         feature = "desktop",
+        feature = "mobile",
         feature = "web",
         feature = "tui",
         feature = "fullstack"
@@ -196,6 +209,7 @@ mod current_platform {
     #[cfg(not(any(
         feature = "liveview",
         feature = "desktop",
+        feature = "mobile",
         feature = "web",
         feature = "tui",
         feature = "fullstack"
@@ -205,6 +219,10 @@ mod current_platform {
         contexts: Vec<Box<super::ValidContext>>,
         platform_config: (),
     ) {
+        #[cfg(feature = "third-party-renderer")]
+        panic!("No first party renderer feature enabled. It looks like you are trying to use a third party renderer. You will need to use the launch function from the third party renderer crate.");
+
+        panic!("No platform feature enabled. Please enable one of the following features: liveview, desktop, mobile, web, tui, fullstack to use the launch API.");
     }
 }
 
