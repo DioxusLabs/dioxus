@@ -7,13 +7,14 @@
     "serve": "concurrently \"npm run serve:web\" \"npm run serve:server\"",
     "serve:web": "dx serve --platform web --features web",
     "serve:server": "wrangler dev",
-    "build:server": "cargo install -q worker-build wasm-coredump-rewriter && cross-env COREDUMP=1 worker-build --dev --features server"
+    "build:server": "cargo install -q worker-build wasm-coredump-rewriter && cross-env COREDUMP=1 worker-build --dev --features server && ncp build/ dist"
   },
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
+    "ncp": "^2.0.0",
     "wrangler": "^3.28.1"
   },
   "dependencies": {

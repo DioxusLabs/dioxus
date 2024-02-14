@@ -30,7 +30,7 @@ async fn fetch(
     _ctx: worker::Context,
 ) -> worker::Result<worker::Response> {
     let virtual_dom_factory = move || {
-        let mut vdom = VirtualDom::new(app);
+        let vdom = VirtualDom::new(app);
         // for context in &contexts {
         //     vdom.insert_any_root_context(context());
         // }

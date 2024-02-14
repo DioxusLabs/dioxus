@@ -14,33 +14,37 @@ pub async fn handle_dioxus_application(
     cfg: impl Into<ServeConfig>,
     build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
     mut req: worker::Request,
-    _env: worker::Env,
+    env: worker::Env,
 ) -> worker::Result<worker::Response> {
     let ls = tokio::task::LocalSet::new();
 
+    let path = req.path().clone();
+    let func_path = path
+        .strip_prefix(server_fn_route)
+        .map(|s| s.to_string())
+        .unwrap_or(path.clone());
+
+    let request = request_workers_to_hyper(req).await?;
+
+    tracing::info!("Handling request: {:?}", request);
     let result = async move {
-        let path = req
-            .path()
-            .strip_prefix(server_fn_route)
-            .map(|s| s.to_string())
-            .unwrap_or(req.path());
-        if let Some(func) = DioxusServerFnRegistry::get(&path) {
+        if let Some(func) = DioxusServerFnRegistry::get(&func_path) {
+            tracing::info!("Running server function: {:?}", func_path);
             let mut service = server_fn_service(DioxusServerContext::default(), func.clone());
-            let req = request_workers_to_hyper(req).await;
-            match service.run(req).await {
+            match service.run(request).await {
                 Ok(rep) => Ok(response_hyper_to_workers(rep).await),
                 Err(e) => Err(worker::Error::from(e.to_string())),
             }
-        } else if req.path().starts_with("/_dioxus/") {
+        } else if path.starts_with("/_dioxus/") {
             Ok(worker::Response::from_html(
                 "<!DOCTYPE html><html><head><title>Not Found</title></head><body><h1>Not Found</h1></body></html>"
             ).unwrap().with_status(404))
         } else {
+            tracing::info!("Rendering page: {:?}", path);
             let cfg = cfg.into();
             let ssr_state = SSRState::new(&cfg);
-            let req = request_workers_to_hyper(req).await;
 
-            render_handler(cfg, ssr_state, Arc::new(build_virtual_dom), req).await
+            render_handler(cfg, ssr_state, Arc::new(build_virtual_dom), request).await
         }
     };
 
@@ -83,16 +87,25 @@ async fn render_handler(
     }
 }
 
-async fn request_workers_to_hyper(mut req: worker::Request) -> http::Request<hyper::Body> {
-    // TODO: use req.stream() to stream the body
-    let bytes = req.bytes().await.unwrap();
-    let body = hyper::Body::from(bytes);
+async fn request_workers_to_hyper(
+    mut req: worker::Request,
+) -> worker::Result<http::Request<hyper::Body>> {
+    let builder = http::Request::builder().method(req.method().as_ref());
+    let builder = match req.url() {
+        Ok(url) => builder.uri(url.to_string()),
+        Err(e) => return Err(e),
+    };
 
-    http::Request::builder()
-        .method(req.method().as_ref())
-        .uri(req.url().unwrap().to_string())
-        .body(body)
-        .unwrap()
+    // TODO: use req.stream() to stream the body
+    match req.bytes().await {
+        Ok(v) => builder
+            .body(hyper::Body::from(v))
+            .map_err(|e| worker::Error::from(e.to_string())),
+        Err(worker::Error::JsError(_)) => builder
+            .body(hyper::Body::empty())
+            .map_err(|e| worker::Error::from(e.to_string())),
+        Err(e) => Err(e),
+    }
 }
 
 async fn response_hyper_to_workers(rep: http::Response<hyper::Body>) -> worker::Response {
