@@ -1,5 +1,7 @@
-use server_fn::ServerFunctionRegistry;
 use std::sync::{Arc, RwLock};
+
+use futures_util::StreamExt;
+use server_fn::ServerFunctionRegistry;
 
 use dioxus_lib::prelude::VirtualDom;
 
@@ -36,9 +38,7 @@ pub async fn handle_dioxus_application(
                 Err(e) => Err(worker::Error::from(e.to_string())),
             }
         } else if path.starts_with("/_dioxus/") {
-            Ok(worker::Response::from_html(
-                "<!DOCTYPE html><html><head><title>Not Found</title></head><body><h1>Not Found</h1></body></html>"
-            ).unwrap().with_status(404))
+            dioxus_handler(request).await
         } else {
             tracing::info!("Rendering page: {:?}", path);
             let cfg = cfg.into();
@@ -87,14 +87,58 @@ async fn render_handler(
     }
 }
 
+async fn dioxus_handler(request: http::Request<hyper::Body>) -> worker::Result<worker::Response> {
+    match request.headers().get("Upgrade") {
+        Some(v) if v == "websocket" => match request.uri().path() {
+            "/_dioxus/ws" | "/_dioxus/disconnect" => {
+                let pair = worker::WebSocketPair::new()?;
+                let server = pair.server;
+                server.accept()?;
+
+                worker::wasm_bindgen_futures::spawn_local(async move {
+                    let mut events = server.events().expect("clould not open stream");
+                    while let Some(evt) = events.next().await {
+                        match evt.expect("failed to get event") {
+                            worker::WebsocketEvent::Message(msg) => {
+                                tracing::info!("Received message: {:?}", msg);
+                            }
+                            worker::WebsocketEvent::Close(msg) => {
+                                tracing::info!("Received close: {:?}", msg);
+                            }
+                            _ => {}
+                        }
+                    }
+                });
+
+                worker::Response::from_websocket(pair.client)
+            }
+            p => Err(worker::Error::RustError(format!("Invalid path: {}", p))),
+        },
+        v => Err(worker::Error::RustError(format!(
+            "Expected websocket: {:?}",
+            v
+        ))),
+    }
+}
+
 async fn request_workers_to_hyper(
     mut req: worker::Request,
 ) -> worker::Result<http::Request<hyper::Body>> {
     let builder = http::Request::builder().method(req.method().as_ref());
-    let builder = match req.url() {
+    let mut builder = match req.url() {
         Ok(url) => builder.uri(url.to_string()),
         Err(e) => return Err(e),
     };
+    let headers = builder
+        .headers_mut()
+        .ok_or(worker::Error::from("empty headers"))?;
+    for (k, v) in req.headers().entries() {
+        let name = http::HeaderName::from_bytes(k.as_bytes())
+            .map_err(|e| worker::Error::from(e.to_string()))?;
+        let value = http::HeaderValue::from_bytes(v.clone().as_bytes())
+            .map_err(|e| worker::Error::from(e.to_string()))?;
+        headers.insert(name, value);
+    }
 
     // TODO: use req.stream() to stream the body
     match req.bytes().await {
