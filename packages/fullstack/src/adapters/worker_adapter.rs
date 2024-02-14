@@ -11,12 +11,13 @@ use crate::{
 };
 
 /// a worker adapter that can be used to run dioxus applications in a worker
-pub async fn handle_dioxus_application(
+pub async fn fetch_dioxus_application(
     server_fn_route: &'static str,
     cfg: impl Into<ServeConfig>,
     build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
     mut req: worker::Request,
     env: worker::Env,
+    _ctx: worker::Context,
 ) -> worker::Result<worker::Response> {
     let ls = tokio::task::LocalSet::new();
 
@@ -26,25 +27,34 @@ pub async fn handle_dioxus_application(
         .map(|s| s.to_string())
         .unwrap_or(path.clone());
 
-    let request = request_workers_to_hyper(req).await?;
+    let request = request_workers_to_hyper(req.clone()?).await?;
 
     tracing::info!("Handling request: {:?}", request);
     let result = async move {
-        if let Some(func) = DioxusServerFnRegistry::get(&func_path) {
+        if path.starts_with("/_dioxus/") {
+            tracing::info!("Handling dioxus request: {:?}", path);
+            dioxus_handler(request).await
+        } else if let Some(func) = DioxusServerFnRegistry::get(&func_path) {
             tracing::info!("Running server function: {:?}", func_path);
             let mut service = server_fn_service(DioxusServerContext::default(), func.clone());
             match service.run(request).await {
                 Ok(rep) => Ok(response_hyper_to_workers(rep).await),
                 Err(e) => Err(worker::Error::from(e.to_string())),
             }
-        } else if path.starts_with("/_dioxus/") {
-            dioxus_handler(request).await
         } else {
-            tracing::info!("Rendering page: {:?}", path);
-            let cfg = cfg.into();
-            let ssr_state = SSRState::new(&cfg);
+            // Returns any items that Pages (or proxied development server) serves.
+            let assets = env.get_binding::<worker::Fetcher>("ASSETS")?;
+            let rep = assets.fetch_request(req).await?;
+            if (200..=299).contains(&rep.status_code()) {
+                tracing::info!("Serving asset: {:?}", path);
+                Ok(rep)
+            } else {
+                tracing::info!("Rendering page: {:?}", path);
+                let cfg = cfg.into();
+                let ssr_state = SSRState::new(&cfg);
 
-            render_handler(cfg, ssr_state, Arc::new(build_virtual_dom), request).await
+                render_handler(cfg, ssr_state, Arc::new(build_virtual_dom), request).await
+            }
         }
     };
 
@@ -90,22 +100,24 @@ async fn render_handler(
 async fn dioxus_handler(request: http::Request<hyper::Body>) -> worker::Result<worker::Response> {
     match request.headers().get("Upgrade") {
         Some(v) if v == "websocket" => match request.uri().path() {
-            "/_dioxus/ws" | "/_dioxus/disconnect" => {
+            "/_dioxus/ws" | "/_dioxus/disconnect" | "/_dioxus/hot_reload" => {
+                // https://blog.cloudflare.com/introducing-websockets-in-workers/
                 let pair = worker::WebSocketPair::new()?;
                 let server = pair.server;
                 server.accept()?;
 
                 worker::wasm_bindgen_futures::spawn_local(async move {
-                    let mut events = server.events().expect("clould not open stream");
+                    let mut events = server.events().expect("could not open stream");
                     while let Some(evt) = events.next().await {
                         match evt.expect("failed to get event") {
                             worker::WebsocketEvent::Message(msg) => {
                                 tracing::info!("Received message: {:?}", msg);
+                                // TODO: actual message handling
                             }
                             worker::WebsocketEvent::Close(msg) => {
                                 tracing::info!("Received close: {:?}", msg);
+                                // TODO: actual close handling
                             }
-                            _ => {}
                         }
                     }
                 });

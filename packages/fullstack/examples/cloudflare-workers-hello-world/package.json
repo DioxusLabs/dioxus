@@ -10,7 +10,6 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "concurrently": "^8.2.2",
     "ncp": "^2.0.0",
     "wrangler": "^3.28.1"
   }

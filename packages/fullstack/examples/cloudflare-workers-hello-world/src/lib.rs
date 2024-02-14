@@ -27,7 +27,7 @@ fn start() {
 async fn fetch(
     req: worker::Request,
     env: worker::Env,
-    _ctx: worker::Context,
+    ctx: worker::Context,
 ) -> worker::Result<worker::Response> {
     let virtual_dom_factory = move || {
         let vdom = VirtualDom::new(app);
@@ -40,7 +40,8 @@ async fn fetch(
         .index_html(INDEX_HTML.to_string())
         .incremental(IncrementalRendererConfig::new().clear_cache(false))
         .build();
-    handle_dioxus_application("/api/", cfg, virtual_dom_factory, req, env).await
+
+    fetch_dioxus_application("/api/", cfg, virtual_dom_factory, req, env, ctx).await
 }
 
 pub fn app() -> Element {
