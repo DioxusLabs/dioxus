@@ -167,12 +167,20 @@ mod current_platform {
     #[cfg(feature = "fullstack")]
     pub use dioxus_fullstack::launch::*;
 
-    #[cfg(all(feature = "web", not(any(feature = "desktop", feature = "mobile", feature = "fullstack"))))]
+    #[cfg(all(
+        feature = "web",
+        not(any(feature = "desktop", feature = "mobile", feature = "fullstack"))
+    ))]
     pub use dioxus_web::launch::*;
 
     #[cfg(all(
         feature = "liveview",
-        not(any(feature = "web", feature = "desktop", feature = "mobile", feature = "fullstack"))
+        not(any(
+            feature = "web",
+            feature = "desktop",
+            feature = "mobile",
+            feature = "fullstack"
+        ))
     ))]
     pub use dioxus_liveview::launch::*;
 
