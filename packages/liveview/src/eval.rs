@@ -18,8 +18,8 @@ pub struct DesktopEvalProvider {
 }
 
 impl EvalProvider for DesktopEvalProvider {
-    fn new_evaluator(&self, js: String) -> Result<GenerationalBox<Box<dyn Evaluator>>, EvalError> {
-        Ok(DesktopEvaluator::create(self.query.clone(), js))
+    fn new_evaluator(&self, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
+        DesktopEvaluator::create(self.query.clone(), js)
     }
 }
 

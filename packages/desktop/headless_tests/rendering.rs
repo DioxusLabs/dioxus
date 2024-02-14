@@ -38,7 +38,6 @@ fn use_inner_html(id: &'static str) -> Option<String> {
                     return element.innerHTML"#,
                 id
             ))
-            .unwrap()
             .await
             .unwrap();
 

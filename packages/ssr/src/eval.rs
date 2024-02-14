@@ -13,9 +13,9 @@ pub fn init_eval() {
 /// Reprents the ssr-target's provider of evaluators.
 pub struct SSREvalProvider;
 impl EvalProvider for SSREvalProvider {
-    fn new_evaluator(&self, _: String) -> Result<GenerationalBox<Box<dyn Evaluator>>, EvalError> {
+    fn new_evaluator(&self, _: String) -> GenerationalBox<Box<dyn Evaluator>> {
         let owner = UnsyncStorage::owner();
-        Ok(owner.insert(Box::new(SSREvaluator) as Box<dyn Evaluator + 'static>))
+        owner.insert(Box::new(SSREvaluator) as Box<dyn Evaluator + 'static>)
     }
 }
 
