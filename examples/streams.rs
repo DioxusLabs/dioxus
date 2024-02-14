@@ -1,3 +1,5 @@
+//! Handle async streams using use_future and awaiting the next value.
+
 use dioxus::prelude::*;
 use futures_util::{future, stream, Stream, StreamExt};
 use std::time::Duration;
@@ -10,8 +12,11 @@ fn app() -> Element {
     let mut count = use_signal(|| 10);
 
     use_future(move || async move {
+        // Create the stream.
+        // This could be a network request, a file read, or any other async operation.
         let mut stream = some_stream();
 
+        // Await the next value from the stream.
         while let Some(second) = stream.next().await {
             count.set(second);
         }
