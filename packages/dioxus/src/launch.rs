@@ -211,6 +211,9 @@ mod current_platform {
         contexts: Vec<Box<super::ValidContext>>,
         platform_config: (),
     ) {
+        #[cfg(feature = "third-party-renderer")]
+        panic!("No first party renderer feature enabled. It looks like you are trying to use a third party renderer. You will need to use the launch function from the third party renderer crate.");
+
         panic!("No platform feature enabled. Please enable one of the following features: liveview, desktop, mobile, web, tui, fullstack to use the launch API.");
     }
 }

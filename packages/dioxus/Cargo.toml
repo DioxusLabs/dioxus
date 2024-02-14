@@ -54,6 +54,8 @@ salvo = ["dioxus-fullstack?/salvo", "ssr", "dioxus-liveview?/salvo"]
 warp = ["dioxus-fullstack?/warp", "ssr", "dioxus-liveview?/warp"]
 rocket = ["dioxus-liveview?/rocket"]
 tui = ["dioxus-tui", "dioxus-config-macro/tui"]
+# This feature just disables the no-renderer-enabled warning
+third-party-renderer = []
 
 # This feature enables some nightly flags that make it more clear what structs/methods are available in each feature
 nightly-doc = []

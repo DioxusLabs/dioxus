@@ -1,6 +1,10 @@
 fn main() {
 	// Warn the user if they enabled the launch feature without any renderers
     if feature_enabled("launch") {
+		if feature_enabled("third-party-renderer"){
+			return;
+		}
+
 		let liveview_renderers = [
 			"liveview",
 			"axum",
