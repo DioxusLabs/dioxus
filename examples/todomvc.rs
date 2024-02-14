@@ -1,4 +1,5 @@
-#![allow(non_snake_case)]
+//! The typical TodoMVC app, implemented in Dioxus.
+
 use dioxus::prelude::*;
 use dioxus_elements::input_data::keyboard_types::Key;
 use std::collections::HashMap;
@@ -21,15 +22,21 @@ struct TodoItem {
     contents: String,
 }
 
-const STYLE: &str = include_str!("./assets/todomvc.css");
-
 fn app() -> Element {
+    // We store the todos in a HashMap in a Signal.
+    // Each key is the id of the todo, and the value is the todo itself.
     let mut todos = use_signal(HashMap::<u32, TodoItem>::new);
+
     let filter = use_signal(|| FilterState::All);
 
+    // We use a simple memoized signal to calculate the number of active todos.
+    // Whenever the todos change, the active_todo_count will be recalculated.
     let active_todo_count =
         use_memo(move || todos.read().values().filter(|item| !item.checked).count());
 
+    // We use a memoized signal to filter the todos based on the current filter state.
+    // Whenever the todos or filter change, the filtered_todos will be recalculated.
+    // Note that we're only storing the IDs of the todos, not the todos themselves.
     let filtered_todos = use_memo(move || {
         let mut filtered_todos = todos
             .read()
@@ -47,6 +54,8 @@ fn app() -> Element {
         filtered_todos
     });
 
+    // Toggle all the todos to the opposite of the current state.
+    // If all todos are checked, uncheck them all. If any are unchecked, check them all.
     let toggle_all = move |_| {
         let check = active_todo_count() != 0;
         for (_, item) in todos.write().iter_mut() {
@@ -55,8 +64,8 @@ fn app() -> Element {
     };
 
     rsx! {
+        style { {include_str!("./assets/todomvc.css")} }
         section { class: "todoapp",
-            style { {STYLE} }
             TodoHeader { todos }
             section { class: "main",
                 if !todos.read().is_empty() {
@@ -69,17 +78,29 @@ fn app() -> Element {
                     }
                     label { r#for: "toggle-all" }
                 }
+
+                // Render the todos using the filtered_todos signal
+                // We pass the ID into the TodoEntry component so it can access the todo from the todos signal.
+                // Since we store the todos in a signal too, we also need to send down the todo list
                 ul { class: "todo-list",
                     for id in filtered_todos() {
                         TodoEntry { key: "{id}", id, todos }
                     }
                 }
+
+                // We only show the footer if there are todos.
                 if !todos.read().is_empty() {
                     ListFooter { active_todo_count, todos, filter }
                 }
             }
         }
-        PageFooter {}
+
+        // A simple info footer
+        footer { class: "info",
+            p { "Double-click to edit a todo" }
+            p { "Created by " a { href: "http://github.com/jkelleyrtp/", "jkelleyrtp" } }
+            p { "Part of " a { href: "http://todomvc.com", "TodoMVC" } }
+        }
     }
 }
 
@@ -117,21 +138,34 @@ fn TodoHeader(mut todos: Signal<HashMap<u32, TodoItem>>) -> Element {
     }
 }
 
+/// A single todo entry
+/// This takes the ID of the todo and the todos signal as props
+/// We can use these together to memoize the todo contents and checked state
 #[component]
 fn TodoEntry(mut todos: Signal<HashMap<u32, TodoItem>>, id: u32) -> Element {
     let mut is_editing = use_signal(|| false);
+
+    // To avoid re-rendering this component when the todo list changes, we isolate our reads to memos
+    // This way, the component will only re-render when the contents of the todo change, or when the editing state changes.
+    // This does involve taking a local clone of the todo contents, but it allows us to prevent this component from re-rendering
     let checked = use_memo(move || todos.read().get(&id).unwrap().checked);
     let contents = use_memo(move || todos.read().get(&id).unwrap().contents.clone());
 
     rsx! {
-        li { class: if checked() { "completed" }, class: if is_editing() { "editing" },
+        li {
+            // Dioxus lets you use if statements in rsx to conditionally render attributes
+            // These will get merged into a single class attribute
+            class: if checked() { "completed" },
+            class: if is_editing() { "editing" },
+
+            // Some basic controls for the todo
             div { class: "view",
                 input {
                     class: "toggle",
                     r#type: "checkbox",
                     id: "cbg-{id}",
                     checked: "{checked}",
-                    oninput: move |evt| todos.write().get_mut(&id).unwrap().checked = evt.value().parse().unwrap(),
+                    oninput: move |evt| todos.write().get_mut(&id).unwrap().checked = evt.checked(),
                 }
                 label {
                     r#for: "cbg-{id}",
@@ -145,6 +179,8 @@ fn TodoEntry(mut todos: Signal<HashMap<u32, TodoItem>>, id: u32) -> Element {
                     prevent_default: "onclick"
                 }
             }
+
+            // Only render the actual input if we're editing
             if is_editing() {
                 input {
                     class: "edit",
@@ -170,6 +206,8 @@ fn ListFooter(
     active_todo_count: ReadOnlySignal<usize>,
     mut filter: Signal<FilterState>,
 ) -> Element {
+    // We use a memoized signal to calculate whether we should show the "Clear completed" button.
+    // This will recompute whenever the todos change, and if the value is true, the button will be shown.
     let show_clear_completed = use_memo(move || todos.read().values().any(|todo| todo.checked));
 
     rsx! {
@@ -207,22 +245,6 @@ fn ListFooter(
                     onclick: move |_| todos.write().retain(|_, todo| !todo.checked),
                     "Clear completed"
                 }
-            }
-        }
-    }
-}
-
-fn PageFooter() -> Element {
-    rsx! {
-        footer { class: "info",
-            p { "Double-click to edit a todo" }
-            p {
-                "Created by "
-                a { href: "http://github.com/jkelleyrtp/", "jkelleyrtp" }
-            }
-            p {
-                "Part of "
-                a { href: "http://todomvc.com", "TodoMVC" }
             }
         }
     }

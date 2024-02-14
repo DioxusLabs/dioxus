@@ -1,3 +1,8 @@
+//! This example shows how you can chain memos together to create a tree of memoized values.
+//!
+//! Memos will also pause when their parent component pauses, so if you have a memo that depends on a signal, and the
+//! signal pauses, the memo will pause too.
+
 use dioxus::prelude::*;
 
 fn main() {

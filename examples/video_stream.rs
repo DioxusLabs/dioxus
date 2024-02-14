@@ -4,9 +4,7 @@ use dioxus::desktop::{use_asset_handler, AssetRequest};
 use dioxus::prelude::*;
 use http::{header::*, response::Builder as ResponseBuilder, status::StatusCode};
 use std::{io::SeekFrom, path::PathBuf};
-use tokio::io::AsyncReadExt;
-use tokio::io::AsyncSeekExt;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 const VIDEO_PATH: &str = "./examples/assets/test_video.mp4";
 

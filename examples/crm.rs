@@ -1,4 +1,14 @@
-//! Tiny CRM: A port of the Yew CRM example to Dioxus.
+//! Tiny CRM - A simple CRM app using the Router component and global signals
+//!
+//! This shows how to use the `Router` component to manage different views in your app. It also shows how to use global
+//! signals to manage state across the entire app.
+//!
+//! We could simply pass the state as a prop to each component, but this is a good example of how to use global state
+//! in a way that works across pages.
+//!
+//! We implement a number of important details here too, like focusing inputs, handling form submits, navigating the router,
+//! platform-specific configuration, and importing 3rd party CSS libaries.
+
 use dioxus::prelude::*;
 
 fn main() {
@@ -16,7 +26,7 @@ fn main() {
                     integrity: "sha384-Uu6IeWbM+gzNVXJcM9XV3SohHtmWE+3VGi496jvgX1jyvDTXfdK+rfZc8C1Aehk5",
                     crossorigin: "anonymous"
                 }
-                style { {r#" .red { background-color: rgb(202, 60, 60) !important; } "#} }
+                style { {include_str!("./assets/crm.css")} }
                 h1 { "Dioxus CRM Example" }
                 Router::<Route> {}
             }
@@ -32,23 +42,24 @@ struct Client {
     description: String,
 }
 
+/// The pages of the app, each with a route
 #[derive(Routable, Clone)]
 enum Route {
     #[route("/")]
-    ClientList,
+    List,
 
     #[route("/new")]
-    ClientAdd,
+    New,
 
     #[route("/settings")]
     Settings,
 }
 
 #[component]
-fn ClientList() -> Element {
+fn List() -> Element {
     rsx! {
         h2 { "List of Clients" }
-        Link { to: Route::ClientAdd, class: "pure-button pure-button-primary", "Add Client" }
+        Link { to: Route::New, class: "pure-button pure-button-primary", "Add Client" }
         Link { to: Route::Settings, class: "pure-button", "Settings" }
         for client in CLIENTS.read().iter() {
             div { class: "client", style: "margin-bottom: 50px",
@@ -60,12 +71,12 @@ fn ClientList() -> Element {
 }
 
 #[component]
-fn ClientAdd() -> Element {
+fn New() -> Element {
     let mut first_name = use_signal(String::new);
     let mut last_name = use_signal(String::new);
     let mut description = use_signal(String::new);
 
-    let submit_client = move |_: FormEvent| {
+    let submit_client = move |_| {
         // Write the client
         CLIENTS.write().push(Client {
             first_name: first_name(),
@@ -74,7 +85,7 @@ fn ClientAdd() -> Element {
         });
 
         // And then navigate back to the client list
-        dioxus::router::router().push(Route::ClientList);
+        router().push(Route::List);
     };
 
     rsx! {
@@ -87,7 +98,7 @@ fn ClientAdd() -> Element {
                         id: "first_name",
                         r#type: "text",
                         placeholder: "First Name…",
-                        required: "",
+                        required: true,
                         value: "{first_name}",
                         oninput: move |e| first_name.set(e.value()),
 
@@ -99,19 +110,19 @@ fn ClientAdd() -> Element {
                 }
 
                 div { class: "pure-control-group",
-                    label { "for": "last_name", "Last Name" }
+                    label { r#for: "last_name", "Last Name" }
                     input {
                         id: "last_name",
                         r#type: "text",
                         placeholder: "Last Name…",
-                        required: "",
+                        required: true,
                         value: "{last_name}",
                         oninput: move |e| last_name.set(e.value())
                     }
                 }
 
                 div { class: "pure-control-group",
-                    label { "for": "description", "Description" }
+                    label { r#for: "description", "Description" }
                     textarea {
                         id: "description",
                         placeholder: "Description…",
@@ -122,7 +133,7 @@ fn ClientAdd() -> Element {
 
                 div { class: "pure-controls",
                     button { r#type: "submit", class: "pure-button pure-button-primary", "Save" }
-                    Link { to: Route::ClientList, class: "pure-button pure-button-primary red", "Cancel" }
+                    Link { to: Route::List, class: "pure-button pure-button-primary red", "Cancel" }
                 }
             }
         }
@@ -137,10 +148,10 @@ fn Settings() -> Element {
             class: "pure-button pure-button-primary red",
             onclick: move |_| {
                 CLIENTS.write().clear();
-                dioxus::router::router().push(Route::ClientList);
+                dioxus::router::router().push(Route::List);
             },
             "Remove all Clients"
         }
-        Link { to: Route::ClientList, class: "pure-button", "Go back" }
+        Link { to: Route::List, class: "pure-button", "Go back" }
     }
 }

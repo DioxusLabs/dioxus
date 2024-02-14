@@ -1,3 +1,8 @@
+//! This example shows how to listen to all events on a div and log them to the console.
+//!
+//! The primary demonstration here is the properties on the events themselves, hoping to give you some inspiration
+//! on adding interactivity to your own application.
+
 use dioxus::prelude::*;
 use std::{collections::VecDeque, fmt::Debug, rc::Rc};
 
@@ -5,41 +10,24 @@ fn main() {
     launch(app);
 }
 
-const MAX_EVENTS: usize = 8;
-
-const CONTAINER_STYLE: &str = r#"
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-"#;
-
-const RECT_STYLE: &str = r#"
-    background: deepskyblue;
-    height: 50vh;
-    width: 50vw;
-    color: white;
-    padding: 20px;
-    margin: 20px;
-    text-aligh: center;
-"#;
-
 fn app() -> Element {
-    let mut events = use_signal(|| VecDeque::new() as VecDeque<Rc<dyn Debug>>);
+    // Using a VecDeque so its cheap to pop old events off the front
+    let mut events = use_signal(|| VecDeque::new());
 
+    // All events and their data implement Debug, so we can re-cast them as Rc<dyn Debug> instead of their specific type
     let mut log_event = move |event: Rc<dyn Debug>| {
-        let mut events = events.write();
-
-        if events.len() >= MAX_EVENTS {
-            events.pop_front();
+        // Only store the last 20 events
+        if events.read().len() >= 20 {
+            events.write().pop_front();
         }
-
-        events.push_back(event);
+        events.write().push_back(event);
     };
 
     rsx! {
-        div { style: "{CONTAINER_STYLE}",
+        style { {include_str!("./assets/events.css")} }
+        div { id: "container",
             // focusing is necessary to catch keyboard events
-            div { style: "{RECT_STYLE}", tabindex: 0,
+            div { id: "receiver", tabindex: 0,
                 onmousemove: move |event| log_event(event.data()),
                 onclick: move |event| log_event(event.data()),
                 ondoubleclick: move |event| log_event(event.data()),
@@ -57,7 +45,7 @@ fn app() -> Element {
 
                 "Hover, click, type or scroll to see the info down below"
             }
-            div {
+            div { id: "log",
                 for event in events.read().iter() {
                     div { "{event:?}" }
                 }

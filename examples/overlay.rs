@@ -1,4 +1,14 @@
-use dioxus::desktop::{tao::dpi::PhysicalPosition, LogicalSize, WindowBuilder};
+//! This example demonstrates how to create an overlay window with dioxus.
+//!
+//! Basically, we just create a new window with a transparent background and no decorations, size it to the screen, and
+//! then we can draw whatever we want on it. In this case, we're drawing a simple overlay with a draggable header.
+//!
+//! We also add a global shortcut to toggle the overlay on and off, so you could build a raycast-type app with this.
+
+use dioxus::desktop::{
+    tao::dpi::PhysicalPosition, use_global_shortcut, use_wry_event_handler, LogicalSize,
+    WindowBuilder,
+};
 use dioxus::prelude::*;
 
 fn main() {
@@ -6,21 +16,27 @@ fn main() {
 }
 
 fn app() -> Element {
-    rsx! {
-        div {
-            width: "100%",
-            height: "100%",
-            background_color: "red",
-            border: "1px solid black",
+    let mut show_overlay = use_signal(|| true);
 
+    use_global_shortcut("cmd+g", move || show_overlay.toggle());
+
+    rsx! {
+        if show_overlay() {
             div {
                 width: "100%",
-                height: "10px",
-                background_color: "black",
-                onmousedown: move |_| dioxus::desktop::window().drag(),
-            }
+                height: "100%",
+                background_color: "red",
+                border: "1px solid black",
 
-            "This is an overlay!"
+                div {
+                    width: "100%",
+                    height: "10px",
+                    background_color: "black",
+                    onmousedown: move |_| dioxus::desktop::window().drag(),
+                }
+
+                "This is an overlay!"
+            }
         }
     }
 }
