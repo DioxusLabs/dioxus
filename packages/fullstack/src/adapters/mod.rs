@@ -21,6 +21,7 @@ pub mod warp_adapter;
 
 use http::StatusCode;
 use server_fn::{Encoding, Payload};
+use std::future::Future;
 use std::sync::{Arc, RwLock};
 
 use crate::{
@@ -67,21 +68,6 @@ impl ServerFnHandler {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-macro_rules! spawn_platform {
-    ($e: expr) => {{
-        let pool = get_local_pool();
-        pool.spawn_pinned($e).await?
-    }};
-}
-#[cfg(target_arch = "wasm32")]
-macro_rules! spawn_platform {
-    ($e: expr) => {{
-        let f = $e;
-        f().await
-    }};
-}
-
 impl Service for ServerFnHandler {
     fn run(
         &mut self,
@@ -106,7 +92,7 @@ impl Service for ServerFnHandler {
             let parts = Arc::new(RwLock::new(parts));
 
             // Because the future returned by `server_fn_handler` is `Send`, and the future returned by this function must be send, we need to spawn a new runtime
-            let result = spawn_platform!({
+            let result = spawn_platform({
                 let function = function.clone();
                 let mut server_context = server_context.clone();
                 server_context.parts = parts;
@@ -120,7 +106,8 @@ impl Service for ServerFnHandler {
                         ProvideServerContext::new(server_function_future, server_context.clone());
                     server_function_future.await
                 }
-            });
+            })
+            .await;
 
             let mut res = http::Response::builder();
 
@@ -173,6 +160,26 @@ impl Service for ServerFnHandler {
             let result = result.then(|f| async move { f.unwrap() });
             Box::pin(result)
         }
+    }
+}
+
+async fn spawn_platform<F, Fut>(create_task: F) -> Fut::Output
+where
+    F: FnOnce() -> Fut,
+    F: Send + 'static,
+    Fut: Future + 'static,
+    Fut::Output: Send + 'static,
+{
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        get_local_pool()
+            .spawn_pinned(create_task)
+            .await
+            .expect("spawn_pinned")
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        create_task().await
     }
 }
 
