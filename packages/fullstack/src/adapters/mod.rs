@@ -23,6 +23,7 @@ use http::StatusCode;
 use server_fn::{Encoding, Payload};
 use std::future::Future;
 use std::sync::{Arc, RwLock};
+use tokio::task::JoinError;
 
 use crate::{
     layer::{BoxedService, Service},
@@ -107,7 +108,7 @@ impl Service for ServerFnHandler {
                     server_function_future.await
                 }
             })
-            .await;
+            .await?;
 
             let mut res = http::Response::builder();
 
@@ -163,7 +164,7 @@ impl Service for ServerFnHandler {
     }
 }
 
-async fn spawn_platform<F, Fut>(create_task: F) -> Fut::Output
+async fn spawn_platform<F, Fut>(create_task: F) -> Result<<Fut as Future>::Output, JoinError>
 where
     F: FnOnce() -> Fut,
     F: Send + 'static,
@@ -172,14 +173,11 @@ where
 {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        get_local_pool()
-            .spawn_pinned(create_task)
-            .await
-            .expect("spawn_pinned")
+        get_local_pool().spawn_pinned(create_task).await
     }
     #[cfg(target_arch = "wasm32")]
     {
-        create_task().await
+        Ok(create_task().await)
     }
 }
 
