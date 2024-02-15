@@ -2,9 +2,6 @@
 
 #![allow(non_snake_case)]
 
-use crate::fs_cache::ValidCachedPath;
-use dioxus_core::VirtualDom;
-use rustc_hash::FxHasher;
 use std::{
     future::Future,
     hash::BuildHasherDefault,
@@ -13,9 +10,14 @@ use std::{
     path::PathBuf,
     pin::Pin,
 };
-use tokio::io::{AsyncWrite, AsyncWriteExt, BufReader};
-use web_time::{Duration, SystemTime};
 
+use rustc_hash::FxHasher;
+use tokio::io::{AsyncWrite, AsyncWriteExt, BufReader};
+use web_time::Duration;
+
+use dioxus_core::VirtualDom;
+
+use crate::fs_cache::ValidCachedPath;
 pub use crate::fs_cache::*;
 pub use crate::incremental_cfg::*;
 
@@ -23,8 +25,9 @@ pub use crate::incremental_cfg::*;
 pub struct IncrementalRenderer {
     pub(crate) static_dir: PathBuf,
     #[allow(clippy::type_complexity)]
-    pub(crate) memory_cache:
-        Option<lru::LruCache<String, (SystemTime, Vec<u8>), BuildHasherDefault<FxHasher>>>,
+    pub(crate) memory_cache: Option<
+        lru::LruCache<String, (web_time::SystemTime, Vec<u8>), BuildHasherDefault<FxHasher>>,
+    >,
     pub(crate) invalidate_after: Option<Duration>,
     pub(crate) ssr_renderer: crate::Renderer,
     pub(crate) map_path: PathMapFn,
