@@ -44,10 +44,6 @@ impl SsrRendererPool {
                         .expect("couldn't spawn runtime")
                         .block_on(async move {
                             let mut vdom = virtual_dom_factory();
-                            vdom.in_runtime(|| {
-                                // Make sure the evaluator is initialized
-                                dioxus_ssr::eval::init_eval();
-                            });
                             let mut to = WriteBuffer { buffer: Vec::new() };
                             // before polling the future, we need to set the context
                             let prev_context =
