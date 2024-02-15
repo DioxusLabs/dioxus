@@ -1,7 +1,7 @@
 //! Forms
 //!
 //! Dioxus forms deviate slightly from html, automatically returning all named inputs
-//! in the "values" field
+//! in the "values" field.
 
 use dioxus::prelude::*;
 

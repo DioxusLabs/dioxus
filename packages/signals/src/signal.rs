@@ -90,19 +90,19 @@ impl<T: PartialEq + 'static> Signal<T> {
     ///
     /// Selectors can be used to efficiently compute derived data from signals.
     #[track_caller]
-    pub fn selector(f: impl FnMut() -> T + 'static) -> ReadOnlySignal<T> {
-        Self::maybe_sync_memo(f)
+    pub fn memo(f: impl FnMut() -> T + 'static) -> ReadOnlySignal<T> {
+        Self::use_maybe_sync_memo(f)
     }
 
     /// Creates a new Selector that may be Sync + Send. The selector will be run immediately and whenever any signal it reads changes.
     ///
     /// Selectors can be used to efficiently compute derived data from signals.
     #[track_caller]
-    pub fn maybe_sync_memo<S: Storage<SignalData<T>>>(
+    pub fn use_maybe_sync_memo<S: Storage<SignalData<T>>>(
         mut f: impl FnMut() -> T + 'static,
     ) -> ReadOnlySignal<T, S> {
         // Get the current reactive context
-        let rc = ReactiveContext::current();
+        let rc = ReactiveContext::new();
 
         // Create a new signal in that context, wiring up its dependencies and subscribers
         let mut state: Signal<T, S> = rc.run_in(|| Signal::new_maybe_sync(f()));
@@ -201,8 +201,9 @@ impl<T, S: Storage<SignalData<T>>> Readable for Signal<T, S> {
     fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
         let inner = self.inner.try_read()?;
 
-        let reactive_context = ReactiveContext::current();
-        inner.subscribers.lock().unwrap().insert(reactive_context);
+        if let Some(reactive_context) = ReactiveContext::current() {
+            inner.subscribers.lock().unwrap().insert(reactive_context);
+        }
 
         Ok(S::map(inner, |v| &v.value))
     }

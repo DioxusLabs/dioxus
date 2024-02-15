@@ -1,0 +1,43 @@
+body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+button {
+    margin: 10px;
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+    background-color: #f0f0f0;
+    cursor: pointer;
+}
+
+#pause {
+    background-color: #ff0000;
+}
+
+#play {
+    background-color: #00ff00;
+}
+
+
+.bounce {
+    animation: boomBox 0.5s infinite;
+}
+
+@keyframes boomBox {
+    0% {
+        transform: scale(1.0);
+    }
+
+    50% {
+        transform: scale(2);
+    }
+
+    100% {
+        transform: scale(1.0);
+    }
+}

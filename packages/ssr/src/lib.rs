@@ -11,7 +11,6 @@ pub mod incremental;
 #[cfg(feature = "incremental")]
 mod incremental_cfg;
 
-pub mod eval;
 pub mod renderer;
 pub mod template;
 
@@ -29,7 +28,6 @@ pub fn render_element(element: Element) -> String {
     }
 
     let mut dom = VirtualDom::new_with_props(lazy_app, element);
-    dom.in_runtime(crate::eval::init_eval);
     dom.rebuild(&mut NoOpMutations);
 
     Renderer::new().render(&dom)

@@ -68,21 +68,26 @@ impl ReactiveContext {
     /// If this was set manually, then that value will be returned.
     ///
     /// If there's no current reactive context, then a new one will be created for the current scope and returned.
-    pub fn current() -> Self {
+    pub fn current() -> Option<Self> {
         let cur = CURRENT.with(|current| current.borrow().last().cloned());
 
         // If we're already inside a reactive context, then return that
         if let Some(cur) = cur {
-            return cur;
+            return Some(cur);
         }
 
         // If we're rendering, then try and use the reactive context attached to this component
+        if !dioxus_core::vdom_is_rendering() {
+            return None;
+        }
         if let Some(cx) = has_context() {
-            return cx;
+            return Some(cx);
         }
 
         // Otherwise, create a new context at the current scope
-        provide_context(ReactiveContext::new_for_scope(current_scope_id()))
+        Some(provide_context(ReactiveContext::new_for_scope(
+            current_scope_id(),
+        )))
     }
 
     /// Run this function in the context of this reactive context

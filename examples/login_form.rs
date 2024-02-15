@@ -1,5 +1,10 @@
-//! This example demonstrates the following:
-//! Futures in a callback, Router, and Forms
+//! Implementing a login form
+//!
+//! This example demonstrates how to implement a login form using Dioxus desktop. Since forms typically navigate the
+//! page on submit, we need to intercept the onsubmit event and send a request to a server. On the web, we could
+//! just leave the submit action` as is, but on desktop, we need to handle the form submission ourselves.
+//!
+//! Todo: actually spin up a server and run the login flow. Login is way more complex than a form override :)
 
 use dioxus::prelude::*;
 

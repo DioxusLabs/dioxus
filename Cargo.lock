@@ -2595,6 +2595,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "warp",
 ]
 
 [[package]]
@@ -2661,6 +2662,7 @@ dependencies = [
  "futures-util",
  "slab",
  "thiserror",
+ "tokio",
  "tracing",
  "web-sys",
 ]

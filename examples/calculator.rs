@@ -1,7 +1,12 @@
-/*
-This example is a simple iOS-style calculator. This particular example can run any platform - Web, Mobile, Desktop.
-This calculator version uses React-style state management. All state is held as individual use_states.
-*/
+//! Calculator
+//!
+//! This example is a simple iOS-style calculator. Instead of wrapping the state in a single struct like the
+//! `calculate_mutable` example, this example uses several closures to manage actions with the state. Most
+//! components will start like this since it's the quickest way to start adding state to your app. The `Signal` type
+//! in Dioxus is `Copy` - meaning you don't need to clone it to use it in a closure.
+//!
+//! Notice how our logic is consolidated into just a few callbacks instead of a single struct. This is a rather organic
+//! way to start building state management in Dioxus, and it's a great way to start.
 
 use dioxus::events::*;
 use dioxus::html::input_data::keyboard_types::Key;

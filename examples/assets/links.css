@@ -1,0 +1,12 @@
+#external-links {
+    display: flex;
+    flex-direction: column;
+}
+
+#nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background-color: #f4f4f4;
+}

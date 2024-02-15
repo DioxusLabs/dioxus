@@ -1,13 +1,17 @@
-#![allow(non_snake_case)]
+//! This example shows how to use the `file` methods on FormEvent and DragEvent to handle file uploads and drops.
+//!
+//! Dioxus intercepts these events and provides a Rusty interface to the file data. Since we want this interface to
+//! be crossplatform,
+
 use dioxus::html::HasFileData;
 use dioxus::prelude::*;
 use tokio::time::sleep;
 
 fn main() {
-    launch(App);
+    launch(app);
 }
 
-fn App() -> Element {
+fn app() -> Element {
     let mut enable_directory_upload = use_signal(|| false);
     let mut files_uploaded = use_signal(|| Vec::new() as Vec<String>);
 
@@ -31,12 +35,16 @@ fn App() -> Element {
     };
 
     rsx! {
+        style { {include_str!("./assets/file_upload.css")} }
+
+        input {
+            r#type: "checkbox",
+            id: "directory-upload",
+            checked: enable_directory_upload,
+            oninput: move |evt| enable_directory_upload.set(evt.checked()),
+        },
         label {
-            input {
-                r#type: "checkbox",
-                checked: enable_directory_upload,
-                oninput: move |evt| enable_directory_upload.set(evt.checked()),
-            },
+            r#for: "directory-upload",
             "Enable directory upload"
         }
 
@@ -47,16 +55,18 @@ fn App() -> Element {
             directory: enable_directory_upload,
             onchange: upload_files,
         }
+
         div {
-            width: "100px",
-            height: "100px",
-            border: "1px solid black",
+            // cheating with a little bit of JS...
+            "ondragover": "this.style.backgroundColor='#88FF88';",
+            "ondragleave": "this.style.backgroundColor='#FFFFFF';",
+
+            id: "drop-zone",
             prevent_default: "ondrop dragover dragenter",
             ondrop: handle_file_drop,
             ondragover: move |event| event.stop_propagation(),
             "Drop files here"
         }
-
         ul {
             for file in files_uploaded.read().iter() {
                 li { "{file}" }

@@ -3,5 +3,6 @@
   "[toml]": {
     "editor.formatOnSave": false
   },
+  "rust-analyzer.check.workspace": true,
   "rust-analyzer.checkOnSave.allTargets": false,
 }

@@ -64,10 +64,6 @@ impl SsrRendererPool {
 
                 spawn_platform(move || async move {
                     let mut vdom = virtual_dom_factory();
-                    vdom.in_runtime(|| {
-                        // Make sure the evaluator is initialized
-                        dioxus_ssr::eval::init_eval();
-                    });
                     let mut to = WriteBuffer { buffer: Vec::new() };
                     // before polling the future, we need to set the context
                     let prev_context = SERVER_CONTEXT.with(|ctx| ctx.replace(server_context));
@@ -102,7 +98,6 @@ impl SsrRendererPool {
                         }
                     }
                 });
-
                 let (renderer, freshness, html) = rx.await.unwrap()?;
                 pool.write().unwrap().push(renderer);
                 Ok((freshness, html))
@@ -161,7 +156,6 @@ impl SsrRendererPool {
                         }
                     }
                 });
-
                 let (freshness, html) = rx.await.unwrap()?;
 
                 Ok((freshness, html))

@@ -1,0 +1,40 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+    padding: 20px;
+    background-color: #f4f4f4;
+    height: 100vh;
+}
+
+nav {
+    display: flex;
+    justify-content: space-around;
+}
+
+.nav-btn {
+    text-decoration: none;
+    color: black;
+}
+
+a {
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+/* button hover effect */
+a:hover {
+    background-color: #dd6a6a;
+}
+
+#content {
+    border: 2px dashed #ccc;
+    padding-top: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    flex-direction: column;
+    gap: 20px;
+}
