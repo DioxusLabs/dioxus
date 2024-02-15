@@ -1,9 +1,11 @@
 //! A shared pool of renderers for efficient server side rendering.
+use std::future::Future;
 use std::sync::Arc;
 use std::sync::RwLock;
+use tokio::task::JoinHandle;
 
 use serde::Serialize;
-use tokio::task::{spawn_blocking, spawn_local};
+use tokio::task::spawn_blocking;
 
 use dioxus_lib::prelude::VirtualDom;
 use dioxus_lib::prelude::*;
@@ -16,22 +18,23 @@ use crate::prelude::*;
 use crate::render::dioxus_core::NoOpMutations;
 use crate::server_context::SERVER_CONTEXT;
 
-#[cfg(not(target_arch = "wasm32"))]
-macro_rules! spawn_platform {
-    ($f:expr) => {
+fn spawn_platform<Fut>(f: impl FnOnce() -> Fut + Send + 'static) -> JoinHandle<Fut::Output>
+where
+    Fut: Future + 'static,
+    Fut::Output: Send + 'static,
+{
+    #[cfg(not(target_arch = "wasm32"))]
+    {
         spawn_blocking(move || {
             tokio::runtime::Runtime::new()
                 .expect("couldn't spawn runtime")
-                .block_on($f)
+                .block_on(f())
         })
-    };
-}
-
-#[cfg(target_arch = "wasm32")]
-macro_rules! spawn_platform {
-    ($f:expr) => {
-        spawn_local($f)
-    };
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        tokio::task::spawn_local(f())
+    }
 }
 
 enum SsrRendererPool {
@@ -59,7 +62,7 @@ impl SsrRendererPool {
 
                 let (tx, rx) = tokio::sync::oneshot::channel();
 
-                spawn_platform!(async move {
+                spawn_platform(move || async move {
                     let mut vdom = virtual_dom_factory();
                     vdom.in_runtime(|| {
                         // Make sure the evaluator is initialized
@@ -114,7 +117,7 @@ impl SsrRendererPool {
 
                 let server_context = server_context.clone();
 
-                spawn_platform!(async move {
+                spawn_platform(move || async move {
                     let mut to = WriteBuffer { buffer: Vec::new() };
                     match renderer
                         .render(
