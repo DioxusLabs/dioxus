@@ -67,6 +67,21 @@ impl ServerFnHandler {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+macro_rules! spawn_platform {
+    ($e: expr) => {{
+        let pool = get_local_pool();
+        pool.spawn_pinned($e).await?
+    }};
+}
+#[cfg(target_arch = "wasm32")]
+macro_rules! spawn_platform {
+    ($e: expr) => {{
+        let f = $e;
+        f().await
+    }};
+}
+
 impl Service for ServerFnHandler {
     fn run(
         &mut self,
@@ -91,43 +106,21 @@ impl Service for ServerFnHandler {
             let parts = Arc::new(RwLock::new(parts));
 
             // Because the future returned by `server_fn_handler` is `Send`, and the future returned by this function must be send, we need to spawn a new runtime
-            #[cfg(not(target_arch = "wasm32"))]
-            let result = {
-                let pool = get_local_pool();
-                pool.spawn_pinned({
-                    let function = function.clone();
-                    let mut server_context = server_context.clone();
-                    server_context.parts = parts;
-                    move || async move {
-                        let data = match function.encoding() {
-                            Encoding::Url | Encoding::Cbor => &body,
-                            Encoding::GetJSON | Encoding::GetCBOR => &query,
-                        };
-                        let server_function_future = function.call((), data);
-                        let server_function_future = ProvideServerContext::new(
-                            server_function_future,
-                            server_context.clone(),
-                        );
-                        server_function_future.await
-                    }
-                })
-                .await?
-            };
-            #[cfg(target_arch = "wasm32")]
-            let result = {
+            let result = spawn_platform!({
                 let function = function.clone();
                 let mut server_context = server_context.clone();
                 server_context.parts = parts;
-
-                let data = match function.encoding() {
-                    Encoding::Url | Encoding::Cbor => &body,
-                    Encoding::GetJSON | Encoding::GetCBOR => &query,
-                };
-                let server_function_future = function.call((), data);
-                let server_function_future =
-                    ProvideServerContext::new(server_function_future, server_context.clone());
-                server_function_future.await
-            };
+                move || async move {
+                    let data = match function.encoding() {
+                        Encoding::Url | Encoding::Cbor => &body,
+                        Encoding::GetJSON | Encoding::GetCBOR => &query,
+                    };
+                    let server_function_future = function.call((), data);
+                    let server_function_future =
+                        ProvideServerContext::new(server_function_future, server_context.clone());
+                    server_function_future.await
+                }
+            });
 
             let mut res = http::Response::builder();
 

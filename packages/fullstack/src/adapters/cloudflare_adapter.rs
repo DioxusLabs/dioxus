@@ -31,14 +31,14 @@ pub async fn fetch_dioxus_application(
     let result = async move {
         if path.starts_with("/_dioxus/") {
             tracing::info!("Handling dioxus request: {:?}", path);
-            let request = request_workers_to_hyper(req).await?;
+            let request = request_worker_to_hyper(req).await?;
             dioxus_handler(request).await
         } else if let Some(func) = DioxusServerFnRegistry::get(&func_path) {
             tracing::info!("Running server function: {:?}", func_path);
-            let request = request_workers_to_hyper(req).await?;
+            let request = request_worker_to_hyper(req).await?;
             let mut service = server_fn_service(DioxusServerContext::default(), func.clone());
             match service.run(request).await {
-                Ok(rep) => Ok(response_hyper_to_workers(rep).await),
+                Ok(rep) => Ok(response_hyper_to_worker(rep).await),
                 Err(e) => Err(worker::Error::from(e.to_string())),
             }
         } else {
@@ -55,7 +55,7 @@ pub async fn fetch_dioxus_application(
                 Ok(rep)
             } else {
                 tracing::info!("Rendering page: {:?}", path);
-                let request = request_workers_to_hyper(req).await?;
+                let request = request_worker_to_hyper(req).await?;
                 let cfg = cfg.into();
                 let ssr_state = SSRState::new(&cfg);
                 render_handler(cfg, ssr_state, Arc::new(build_virtual_dom), request).await
@@ -93,7 +93,7 @@ async fn render_handler(
                 mut_headers.insert(key, value.clone());
             }
 
-            Ok(response_hyper_to_workers(response).await)
+            Ok(response_hyper_to_worker(response).await)
         }
         Err(e) => {
             tracing::error!("Failed to render page: {:?}", e);
@@ -147,7 +147,7 @@ fn clone_worker_request_without_body(req: &worker::Request) -> worker::Result<wo
     Ok(req0)
 }
 
-async fn request_workers_to_hyper(
+async fn request_worker_to_hyper(
     mut req: worker::Request,
 ) -> worker::Result<http::Request<hyper::Body>> {
     let builder = http::Request::builder().method(req.method().as_ref());
@@ -166,7 +166,6 @@ async fn request_workers_to_hyper(
         headers.insert(name, value);
     }
 
-    // TODO: use req.stream() to stream the body
     match req.bytes().await {
         Ok(v) => builder
             .body(hyper::Body::from(v))
@@ -178,8 +177,7 @@ async fn request_workers_to_hyper(
     }
 }
 
-async fn response_hyper_to_workers(rep: http::Response<hyper::Body>) -> worker::Response {
-    // TODO: use worker::Response::from_stream() to stream the body
+async fn response_hyper_to_worker(rep: http::Response<hyper::Body>) -> worker::Response {
     let mut headers = worker::Headers::new();
     for (key, value) in rep.headers().iter() {
         headers

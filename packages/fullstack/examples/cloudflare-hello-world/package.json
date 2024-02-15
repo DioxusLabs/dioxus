@@ -1,5 +1,5 @@
 {
-  "name": "cloudflare-workers-hello-world",
+  "name": "cloudflare-hello-world",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
