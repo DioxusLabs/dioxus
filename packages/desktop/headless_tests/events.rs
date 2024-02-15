@@ -45,7 +45,7 @@ fn mock_event(id: &'static str, value: &'static str) {
                 value, id
             );
 
-            eval(&js).unwrap().await.unwrap();
+            eval(&js).await.unwrap();
         });
     })
 }

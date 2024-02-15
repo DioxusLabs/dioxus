@@ -79,7 +79,6 @@ impl IncrementalRenderer {
     ) -> Result<RenderFreshness, IncrementalRendererError> {
         let mut html_buffer = WriteBuffer { buffer: Vec::new() };
         {
-            virtual_dom.in_runtime(crate::eval::init_eval);
             rebuild_with(&mut virtual_dom).await;
 
             renderer.render_before_body(&mut *html_buffer)?;

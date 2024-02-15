@@ -25,8 +25,7 @@ fn app() -> Element {
                 console.log(msg);
                 return "hi from JS!";
             "#,
-        )
-        .unwrap();
+        );
 
         // Send a message to the JS code.
         eval.send("Hi from Rust!".into()).unwrap();

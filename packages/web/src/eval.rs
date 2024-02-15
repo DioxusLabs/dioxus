@@ -16,7 +16,7 @@ pub fn init_eval() {
 /// Represents the web-target's provider of evaluators.
 pub struct WebEvalProvider;
 impl EvalProvider for WebEvalProvider {
-    fn new_evaluator(&self, js: String) -> Result<GenerationalBox<Box<dyn Evaluator>>, EvalError> {
+    fn new_evaluator(&self, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
         WebEvaluator::create(js)
     }
 }
@@ -33,12 +33,12 @@ const PROMISE_WRAPPER: &str = r#"
 struct WebEvaluator {
     dioxus: Dioxus,
     channel_receiver: futures_channel::mpsc::UnboundedReceiver<serde_json::Value>,
-    result: Option<serde_json::Value>,
+    result: Option<Result<serde_json::Value, EvalError>>,
 }
 
 impl WebEvaluator {
     /// Creates a new evaluator for web-based targets.
-    fn create(js: String) -> Result<GenerationalBox<Box<dyn Evaluator>>, EvalError> {
+    fn create(js: String) -> GenerationalBox<Box<dyn Evaluator>> {
         let (mut channel_sender, channel_receiver) = futures_channel::mpsc::unbounded();
         let owner = UnsyncStorage::owner();
         let invalid = owner.invalid();
@@ -69,23 +69,21 @@ impl WebEvaluator {
                         let string: String = stringified.into();
                         Value::from_str(&string).map_err(|e| {
                             EvalError::Communication(format!("Failed to parse result - {}", e))
-                        })?
+                        })
                     } else {
-                        return Err(EvalError::Communication(
+                        Err(EvalError::Communication(
                             "Failed to stringify result".into(),
-                        ));
+                        ))
                     }
                 } else {
-                    return Err(EvalError::Communication(
+                    Err(EvalError::Communication(
                         "Failed to stringify result".into(),
-                    ));
+                    ))
                 }
             }
-            Err(err) => {
-                return Err(EvalError::InvalidJs(
-                    err.as_string().unwrap_or("unknown".to_string()),
-                ));
-            }
+            Err(err) => Err(EvalError::InvalidJs(
+                err.as_string().unwrap_or("unknown".to_string()),
+            )),
         };
 
         invalid.set(Box::new(Self {
@@ -94,7 +92,7 @@ impl WebEvaluator {
             result: Some(result),
         }) as Box<dyn Evaluator + 'static>);
 
-        Ok(invalid)
+        invalid
     }
 }
 
@@ -105,7 +103,7 @@ impl Evaluator for WebEvaluator {
         _cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<serde_json::Value, EvalError>> {
         if let Some(result) = self.result.take() {
-            std::task::Poll::Ready(Ok(result))
+            std::task::Poll::Ready(result)
         } else {
             std::task::Poll::Ready(Err(EvalError::Finished))
         }
