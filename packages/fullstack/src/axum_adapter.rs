@@ -54,6 +54,7 @@
 //! }
 //! ```
 
+use axum::routing::*;
 use axum::{
     body::{self, Body},
     extract::State,
@@ -63,12 +64,11 @@ use axum::{
     Router,
 };
 use dioxus_lib::prelude::VirtualDom;
+use http::header::*;
 use server_fn::error::NoCustomError;
 use server_fn::error::ServerFnErrorSerde;
 use std::sync::Arc;
 use std::sync::RwLock;
-use axum::routing::*;
-use http::header::*;
 
 use crate::{
     prelude::*, render::SSRState, serve_config::ServeConfig, server_context::DioxusServerContext,
@@ -196,12 +196,12 @@ where
 
         for (path, method) in server_fn::axum::server_fn_paths() {
             tracing::trace!("Registering server function: {} {}", method, path);
-            let handler = move |req| handle_server_fns_inner(path, ||{}, req);
+            let handler = move |req| handle_server_fns_inner(path, || {}, req);
             self = match method {
                 Method::GET => self.route(path, get(handler)),
                 Method::POST => self.route(path, post(handler)),
                 Method::PUT => self.route(path, put(handler)),
-                _ => todo!()
+                _ => todo!(),
             };
         }
 

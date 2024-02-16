@@ -33,6 +33,7 @@ atty = "0.2.14"
 chrono = "0.4.19"
 anyhow = "1"
 hyper = { workspace = true }
+hyper-util = "0.1.3"
 hyper-rustls = { workspace = true }
 indicatif = "0.17.5"
 subprocess = "0.2.9"

@@ -1,16 +1,19 @@
 use crate::Result;
 use dioxus_cli_config::WebProxyConfig;
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use axum::{http::StatusCode, routing::any, Router};
 use hyper::{Request, Response, Uri};
-use hyper::client::legacy::Client;
+use hyper_util::{
+    client::legacy::{self, connect::HttpConnector},
+    rt::TokioExecutor,
+};
 
 use axum::body::Body as MyBody;
 
 #[derive(Debug, Clone)]
 struct ProxyClient {
-    inner: Client<hyper_rustls::HttpsConnector<Client::HttpConnector>>,
+    inner: legacy::Client<hyper_rustls::HttpsConnector<HttpConnector>, MyBody>,
     url: Uri,
 }
 
@@ -23,12 +26,12 @@ impl ProxyClient {
             .enable_http1()
             .build();
         Self {
-            inner: Client::builder().build(https),
+            inner: legacy::Client::builder(TokioExecutor::new()).build(https),
             url,
         }
     }
 
-    async fn send(&self, mut req: Request<MyBody>) -> Result<Response<MyBody>> {
+    async fn send(&self, mut req: Request<MyBody>) -> Result<Response<hyper::body::Incoming>> {
         let mut uri_parts = req.uri().clone().into_parts();
         uri_parts.authority = self.url.authority().cloned();
         uri_parts.scheme = self.url.scheme().cloned();
@@ -36,7 +39,7 @@ impl ProxyClient {
         self.inner
             .request(req)
             .await
-            .map_err(crate::error::Error::ProxyRequestError)
+            .map_err(|err| crate::error::Error::Other(anyhow!(err)))
     }
 }
 
@@ -112,14 +115,14 @@ mod test {
             "/*path",
             any(|path: Path<String>| async move { format!("backend: {}", path.0) }),
         );
-        let backend_server = Server::bind(&"127.0.0.1:0".parse().unwrap())
-            .serve(backend_router.into_make_service());
+        let backend_server =
+            Server::bind("127.0.0.1:0".parse().unwrap()).serve(backend_router.into_make_service());
         let backend_addr = backend_server.local_addr();
         let backend_handle = tokio::spawn(async move { backend_server.await.unwrap() });
         config.backend = format!("http://{}{}", backend_addr, config.backend);
         let router = super::add_proxy(Router::new(), &config);
-        let server = Server::bind("127.0.0.1:0".parse().unwrap())
-            .serve(router.unwrap().into_make_service());
+        let server =
+            Server::bind("127.0.0.1:0".parse().unwrap()).serve(router.unwrap().into_make_service());
         let server_addr = server.local_addr();
         let server_handle = tokio::spawn(async move { server.await.unwrap() });
         (backend_handle, server_handle, server_addr.to_string())

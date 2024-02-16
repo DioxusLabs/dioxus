@@ -70,15 +70,15 @@ use syn::__private::ToTokens;
 /// ```
 #[proc_macro_attribute]
 pub fn server(args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
-   match server_macro_impl(
-       args.into(),
-       s.into(),
-       Some(syn::parse_quote!(server_fn)),
-       "/api",
-       None,
-       None,
-   ) {
-       Err(e) => e.to_compile_error().into(),
-       Ok(s) => s.to_token_stream().into(),
-   }
+    match server_macro_impl(
+        args.into(),
+        s.into(),
+        Some(syn::parse_quote!(server_fn)),
+        "/api",
+        None,
+        None,
+    ) {
+        Err(e) => e.to_compile_error().into(),
+        Ok(s) => s.to_token_stream().into(),
+    }
 }

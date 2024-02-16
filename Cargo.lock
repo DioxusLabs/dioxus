@@ -2275,6 +2275,7 @@ dependencies = [
  "html_parser",
  "hyper 1.1.0",
  "hyper-rustls 0.26.0",
+ "hyper-util",
  "ignore",
  "indicatif",
  "interprocess-docfix",

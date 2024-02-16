@@ -4,11 +4,9 @@ use axum::{
     response::IntoResponse,
     Extension,
 };
-use axum_extra::TypedHeader;
 
 pub async fn hot_reload_handler(
     ws: WebSocketUpgrade,
-    _: Option<TypedHeader<headers::UserAgent>>,
     Extension(state): Extension<HotReloadState>,
 ) -> impl IntoResponse {
     ws.on_upgrade(|mut socket| async move {

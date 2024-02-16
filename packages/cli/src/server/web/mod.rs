@@ -8,7 +8,7 @@ use crate::{
     BuildResult, Result,
 };
 use axum::{
-    body::{Body, HttpBody},
+    body::Body,
     extract::{ws::Message, Extension, WebSocketUpgrade},
     http::{
         self,
@@ -19,8 +19,7 @@ use axum::{
     routing::{get, get_service},
     Router,
 };
-use axum_extra::TypedHeader;
-use axum_server::{service::SendService, tls_rustls::RustlsConfig};
+use axum_server::tls_rustls::RustlsConfig;
 use dioxus_cli_config::CrateConfig;
 use dioxus_cli_config::WebHttpsConfig;
 
@@ -299,9 +298,7 @@ async fn setup_router(
                         .body(body)
                         .unwrap()
                 } else {
-                    response.map(|body| body.try_into().unwrap())
-                    // response.into_body()
-                    // response.map(|body| body.into())
+                    response.into_response()
                 };
                 let headers = response.headers_mut();
                 headers.insert(
@@ -316,7 +313,7 @@ async fn setup_router(
         .service(ServeDir::new(config.out_dir()));
 
     // Setup websocket
-    let mut router = Router::new().route("/_dioxus/ws", get(ws_handler.into()));
+    let mut router = Router::new().route("/_dioxus/ws", get(ws_handler));
 
     // Setup proxy
     for proxy_config in config.dioxus_config.web.proxy {
@@ -324,8 +321,8 @@ async fn setup_router(
     }
 
     // Route file service
-    router = router.fallback(get_service(file_service.into_service()).handle_error(
-        |error: std::io::Error| async move {
+    router = router.fallback(get_service(file_service).handle_error(
+        |error: std::convert::Infallible| async move {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Unhandled internal error: {}", error),
@@ -336,7 +333,7 @@ async fn setup_router(
     router = if let Some(base_path) = config.dioxus_config.web.app.base_path.clone() {
         let base_path = format!("/{}", base_path.trim_matches('/'));
         Router::new()
-            .route(&base_path, axum::routing::any_service(router.into()))
+            .route(&base_path, axum::routing::any_service(router))
             .fallback(get(move || {
                 let base_path = base_path.clone();
                 async move { format!("Outside of the base path: {}", base_path) }
@@ -347,7 +344,7 @@ async fn setup_router(
 
     // Setup routes
     router = router
-        .route("/_dioxus/hot_reload", get(hot_reload_handler.into()))
+        .route("/_dioxus/hot_reload", get(hot_reload_handler))
         .layer(cors)
         .layer(Extension(ws_reload));
 
@@ -418,7 +415,6 @@ fn get_ip() -> Option<String> {
 /// Handle websockets
 async fn ws_handler(
     ws: WebSocketUpgrade,
-    _: Option<TypedHeader<headers::UserAgent>>,
     Extension(state): Extension<Arc<WsReloadState>>,
 ) -> impl IntoResponse {
     ws.on_upgrade(|mut socket| async move {

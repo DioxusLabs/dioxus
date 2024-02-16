@@ -20,7 +20,6 @@ pub mod launch;
 mod hot_reload;
 pub use config::*;
 
-
 #[cfg(feature = "server")]
 mod render;
 
@@ -73,8 +72,8 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     pub use dioxus_ssr::incremental::IncrementalRendererConfig;
 
-    pub use server_fn::{self, ServerFn as _, ServerFnError};
     pub use dioxus_server_macro::*;
+    pub use server_fn::{self, ServerFn as _, ServerFnError};
 }
 
 // // Warn users about overlapping features
