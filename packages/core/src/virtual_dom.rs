@@ -226,7 +226,6 @@ impl VirtualDom {
     /// ```
     ///
     /// Note: the VirtualDom is not progressed, you must either "run_with_deadline" or use "rebuild" to progress it.
-    #[instrument(level = "trace", name = "VirtualDom::new")]
     pub fn new(app: fn() -> Element) -> Self {
         Self::new_with_props(app, ())
     }
@@ -305,6 +304,7 @@ impl VirtualDom {
     /// let mut dom = VirtualDom::new_from_root(VComponent::new(Example, SomeProps { name: "jane" }, "Example"));
     /// let mutations = dom.rebuild();
     /// ```
+    #[instrument(skip(root), level = "trace", name = "VirtualDom::new")]
     pub(crate) fn new_with_component(root: impl AnyProps + 'static) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
 
@@ -347,6 +347,7 @@ impl VirtualDom {
     }
 
     /// Run a closure inside the dioxus runtime
+    #[instrument(skip(self, f), level = "trace", name = "VirtualDom::in_runtime")]
     pub fn in_runtime<O>(&self, f: impl FnOnce() -> O) -> O {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
         f()
@@ -594,6 +595,7 @@ impl VirtualDom {
     ///
     /// We don't call "flush_sync" here since there's no sync work to be done. Futures will be progressed like usual,
     /// however any futures waiting on flush_sync will remain pending
+    #[instrument(skip(self), level = "trace", name = "VirtualDom::wait_for_suspense")]
     pub async fn wait_for_suspense(&mut self) {
         loop {
             if self.suspended_scopes.is_empty() {
@@ -614,6 +616,7 @@ impl VirtualDom {
     }
 
     /// Flush any queued template changes
+    #[instrument(skip(self, to), level = "trace", name = "VirtualDom::flush_templates")]
     fn flush_templates(&mut self, to: &mut impl WriteMutations) {
         for template in self.queued_templates.drain(..) {
             to.register_template(template);
@@ -641,6 +644,7 @@ impl VirtualDom {
     | | |       <-- no, broke early
     |           <-- no, broke early
     */
+    #[instrument(skip(self, uievent), level = "trace", name = "VirtualDom::handle_bubbling_event")]
     fn handle_bubbling_event(
         &mut self,
         mut parent: Option<ElementRef>,
@@ -679,6 +683,7 @@ impl VirtualDom {
 
             // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
             // We check the bubble state between each call to see if the event has been stopped from bubbling
+            tracing::event!(tracing::Level::TRACE, "Calling {} listeners", listeners.len());
             for listener in listeners.into_iter().rev() {
                 if let AttributeValue::Listener(listener) = listener {
                     self.runtime.rendering.set(false);
@@ -697,6 +702,7 @@ impl VirtualDom {
     }
 
     /// Call an event listener in the simplest way possible without bubbling upwards
+    #[instrument(skip(self, uievent), level = "trace", name = "VirtualDom::handle_non_bubbling_event")]
     fn handle_non_bubbling_event(&mut self, node: ElementRef, name: &str, uievent: Event<dyn Any>) {
         let el_ref = &self.mounts[node.mount.0].node;
         let node_template = el_ref.template.get();
