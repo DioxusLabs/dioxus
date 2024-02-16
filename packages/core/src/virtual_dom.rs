@@ -19,6 +19,7 @@ use futures_util::StreamExt;
 use rustc_hash::{FxHashMap, FxHashSet};
 use slab::Slab;
 use std::{any::Any, collections::BTreeSet, rc::Rc};
+use tracing::instrument;
 
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
@@ -225,6 +226,7 @@ impl VirtualDom {
     /// ```
     ///
     /// Note: the VirtualDom is not progressed, you must either "run_with_deadline" or use "rebuild" to progress it.
+    #[instrument(level = "trace", name = "VirtualDom::new")]
     pub fn new(app: fn() -> Element) -> Self {
         Self::new_with_props(app, ())
     }
@@ -373,7 +375,7 @@ impl VirtualDom {
             return;
         };
 
-        tracing::trace!("Marking scope {:?} ({}) as dirty", id, scope.name);
+        tracing::event!(tracing::Level::TRACE, "Marking scope {:?} ({}) as dirty", id, scope.name);
         self.dirty_scopes.insert(DirtyScope {
             height: scope.height(),
             id,
@@ -389,6 +391,7 @@ impl VirtualDom {
     /// It is up to the listeners themselves to mark nodes as dirty.
     ///
     /// If you have multiple events, you can call this method multiple times before calling "render_with_deadline"
+    #[instrument(skip(self), level = "trace", name = "VirtualDom::handle_event")]
     pub fn handle_event(
         &mut self,
         name: &str,
@@ -422,12 +425,14 @@ impl VirtualDom {
     /// ```rust, ignore
     /// let dom = VirtualDom::new(app);
     /// ```
+    #[instrument(skip(self), level = "trace", name = "VirtualDom::wait_for_work")]
     pub async fn wait_for_work(&mut self) {
         // And then poll the futures
         self.poll_tasks().await;
     }
 
     ///
+    #[instrument(skip(self), level = "trace", name = "VirtualDom::poll_tasks")]
     async fn poll_tasks(&mut self) {
         // Release the flush lock
         // This will cause all the flush wakers to immediately spring to life, which we will off with process_events
@@ -461,6 +466,7 @@ impl VirtualDom {
     }
 
     /// Process all events in the queue until there are no more left
+    #[instrument(skip(self), level = "trace", name = "VirtualDom::process_events")]
     pub fn process_events(&mut self) {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
 
@@ -479,6 +485,7 @@ impl VirtualDom {
     /// The caller must ensure that the template references the same dynamic attributes and nodes as the original template.
     ///
     /// This will only replace the parent template, not any nested templates.
+    #[instrument(skip(self), level = "trace", name = "VirtualDom::replace_template")]
     pub fn replace_template(&mut self, template: Template) {
         self.register_template_first_byte_index(template);
         // iterating a slab is very inefficient, but this is a rare operation that will only happen during development so it's fine
@@ -533,6 +540,7 @@ impl VirtualDom {
     ///
     /// apply_edits(edits);
     /// ```
+    #[instrument(skip(self, to), level = "trace", name = "VirtualDom::rebuild")]
     pub fn rebuild(&mut self, to: &mut impl WriteMutations) {
         self.flush_templates(to);
         let _runtime = RuntimeGuard::new(self.runtime.clone());
@@ -546,6 +554,7 @@ impl VirtualDom {
 
     /// Render whatever the VirtualDom has ready as fast as possible without requiring an executor to progress
     /// suspended subtrees.
+    #[instrument(skip(self, to), level = "trace", name = "VirtualDom::render_immediate")]
     pub fn render_immediate(&mut self, to: &mut impl WriteMutations) {
         self.flush_templates(to);
 
