@@ -478,7 +478,7 @@ impl VirtualDom {
     ///
     /// The caller must ensure that the template references the same dynamic attributes and nodes as the original template.
     ///
-    /// This will only replace the the parent template, not any nested templates.
+    /// This will only replace the parent template, not any nested templates.
     pub fn replace_template(&mut self, template: Template) {
         self.register_template_first_byte_index(template);
         // iterating a slab is very inefficient, but this is a rare operation that will only happen during development so it's fine
@@ -518,7 +518,7 @@ impl VirtualDom {
     /// The mutations item expects the RealDom's stack to be the root of the application.
     ///
     /// Tasks will not be polled with this method, nor will any events be processed from the event queue. Instead, the
-    /// root component will be ran once and then diffed. All updates will flow out as mutations.
+    /// root component will be run once and then diffed. All updates will flow out as mutations.
     ///
     /// All state stored in components will be completely wiped away.
     ///
@@ -584,7 +584,7 @@ impl VirtualDom {
     /// The mutations will be thrown out, so it's best to use this method for things like SSR that have async content
     ///
     /// We don't call "flush_sync" here since there's no sync work to be done. Futures will be progressed like usual,
-    /// however any futures wating on flush_sync will remain pending
+    /// however any futures waiting on flush_sync will remain pending
     pub async fn wait_for_suspense(&mut self) {
         loop {
             if self.suspended_scopes.is_empty() {
