@@ -70,7 +70,7 @@ use std::sync::RwLock;
 
 use crate::{
     prelude::*, render::SSRState, serve_config::ServeConfig, server_context::DioxusServerContext,
-    server_fn::DioxusServerFnRegistry,
+    server_fn::collection::DioxusServerFnRegistry,
 };
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.

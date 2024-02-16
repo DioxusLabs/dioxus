@@ -124,7 +124,7 @@ impl Config {
 
         #[cfg(feature = "axum")]
         {
-            use crate::adapters::axum_adapter::{render_handler, DioxusRouterExt};
+            use crate::axum_adapter::{render_handler, DioxusRouterExt};
             use axum::routing::get;
             use tower::ServiceBuilder;
 

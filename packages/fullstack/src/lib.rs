@@ -8,17 +8,13 @@ pub use once_cell;
 
 mod html_storage;
 
-#[cfg(feature = "server")]
-mod adapters;
-
-// Splitting up the glob export lets us document features required for each adapter
 #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
 #[cfg(feature = "axum")]
-pub use adapters::axum_adapter;
+mod axum_adapter;
 
 #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
 #[cfg(feature = "server")]
-pub use adapters::{server_fn_service, ServerFnHandler};
+pub use server_fn::service::{server_fn_service, ServerFnHandler};
 
 mod config;
 mod hooks;
@@ -48,7 +44,7 @@ pub mod prelude {
 
     #[cfg(feature = "axum")]
     #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
-    pub use crate::adapters::axum_adapter::*;
+    pub use crate::axum_adapter::*;
 
     #[cfg(not(feature = "server"))]
     #[cfg_attr(docsrs, doc(cfg(not(feature = "server"))))]
@@ -87,7 +83,7 @@ pub mod prelude {
 
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
-    pub use crate::server_fn::{ServerFnMiddleware, ServerFnTraitObj, ServerFunction};
+    pub use crate::server_fn::collection::{ServerFnMiddleware, ServerFnTraitObj, ServerFunction};
     pub use dioxus_server_macro::*;
 
     #[cfg(feature = "server")]

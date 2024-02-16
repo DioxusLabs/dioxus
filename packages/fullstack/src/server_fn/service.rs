@@ -1,28 +1,18 @@
-//! # Adapters
-//! Adapters for different web frameworks.
-//!
-//! Each adapter provides a set of utilities that is ergonomic to use with the framework.
-//!
-//! Each framework has utilies for some or all of the following:
-//! - Server functions
-//!  - A generic way to register server functions
-//!  - A way to register server functions with a custom handler that allows users to pass in a custom [`crate::server_context::DioxusServerContext`] based on the state of the server framework.
-//! - A way to register static WASM files that is accepts [`crate::serve_config::ServeConfig`]
-//! - A hot reloading web socket that intigrates with [`dioxus-hot-reload`](https://crates.io/crates/dioxus-hot-reload)
+//! # Server function Service
 
-#[cfg(feature = "axum")]
-pub mod axum_adapter;
+//! This module defines a service that can be used to handle server functions.
 
 use http::StatusCode;
 use server_fn::{Encoding, Payload};
 use std::sync::{Arc, RwLock};
 
-type MyBody = axum::body::Body;
-
+use crate::server_fn::collection::MIDDLEWARE;
 use crate::{
     layer::{BoxedService, Service},
     prelude::{DioxusServerContext, ProvideServerContext},
 };
+
+type AxumBody = axum::body::Body;
 
 /// Create a server function handler with the given server context and server function.
 pub fn server_fn_service(
@@ -31,7 +21,7 @@ pub fn server_fn_service(
 ) -> crate::layer::BoxedService {
     let prefix = function.prefix().to_string();
     let url = function.url().to_string();
-    if let Some(middleware) = crate::server_fn::MIDDLEWARE.get(&(&prefix, &url)) {
+    if let Some(middleware) = MIDDLEWARE.get(&(&prefix, &url)) {
         let mut service = BoxedService(Box::new(ServerFnHandler::new(context, function)));
         for middleware in middleware {
             service = middleware.layer(service);
@@ -66,11 +56,11 @@ impl ServerFnHandler {
 impl Service for ServerFnHandler {
     fn run(
         &mut self,
-        req: http::Request<MyBody>,
+        req: http::Request<AxumBody>,
     ) -> std::pin::Pin<
         Box<
             dyn std::future::Future<
-                    Output = Result<http::Response<MyBody>, server_fn::ServerFnError>,
+                    Output = Result<http::Response<AxumBody>, server_fn::ServerFnError>,
                 > + Send,
         >,
     > {
