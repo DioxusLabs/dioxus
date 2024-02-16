@@ -290,15 +290,7 @@ pub(crate) trait AnyHistoryProvider {
     fn parse_route(&self, route: &str) -> Result<Rc<dyn Any>, String>;
 
     #[must_use]
-    fn accepts_type_id(&self, type_id: &std::any::TypeId) -> bool;
-
-    #[must_use]
     fn current_route(&self) -> Rc<dyn Any>;
-
-    #[must_use]
-    fn current_prefix(&self) -> Option<String> {
-        None
-    }
 
     #[must_use]
     fn can_go_back(&self) -> bool {
@@ -359,17 +351,9 @@ where
             .map(|route| Rc::new(route) as Rc<dyn Any>)
     }
 
-    fn accepts_type_id(&self, type_id: &std::any::TypeId) -> bool {
-        type_id == &std::any::TypeId::of::<R>()
-    }
-
     fn current_route(&self) -> Rc<dyn Any> {
         let route = self.inner.current_route();
         Rc::new(route)
-    }
-
-    fn current_prefix(&self) -> Option<String> {
-        self.inner.current_prefix()
     }
 
     fn can_go_back(&self) -> bool {

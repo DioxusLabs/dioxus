@@ -117,6 +117,7 @@ where
 }
 
 /// Get the default history provider for the current platform.
+#[allow(unreachable_code, unused)]
 fn default_history<R: Routable + Clone>(initial_route: R) -> Box<dyn AnyHistoryProvider>
 where
     <R as std::str::FromStr>::Err: std::fmt::Display,
