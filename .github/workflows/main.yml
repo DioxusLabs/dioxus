@@ -50,7 +50,7 @@ jobs:
           cache-all-crates: "true"
           save-if: ${{ github.ref == 'refs/heads/master' }}
       - uses: ilammy/setup-nasm@v1
-      - run: cargo check --all --examples --tests
+      - run: cargo check --all --examples --tests --all-features --all-targets
 
   test:
     if: github.event.pull_request.draft == false
@@ -110,7 +110,7 @@ jobs:
         with:
           cache-all-crates: "true"
           save-if: ${{ github.ref == 'refs/heads/master' }}
-      - run: cargo clippy --workspace --examples --tests -- -D warnings
+      - run: cargo clippy --workspace --examples --tests --all-features --all-targets -- -D warnings
 
   # We removed most unsafe that we can, and using nightly doubles our cache size
   # miri:
