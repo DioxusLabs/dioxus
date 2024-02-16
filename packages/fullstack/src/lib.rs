@@ -12,21 +12,14 @@ mod html_storage;
 #[cfg(feature = "axum")]
 mod axum_adapter;
 
-#[cfg_attr(docsrs, doc(cfg(feature = "server")))]
-#[cfg(feature = "server")]
-pub use server_fn::service::{server_fn_service, ServerFnHandler};
-
 mod config;
 mod hooks;
 pub mod launch;
-mod server_fn;
 
 #[cfg(all(debug_assertions, feature = "hot-reload", feature = "server"))]
 mod hot_reload;
 pub use config::*;
 
-#[cfg(feature = "server")]
-mod layer;
 
 #[cfg(feature = "server")]
 mod render;
@@ -49,10 +42,6 @@ pub mod prelude {
     #[cfg(not(feature = "server"))]
     #[cfg_attr(docsrs, doc(cfg(not(feature = "server"))))]
     pub use crate::html_storage::deserialize::get_root_props_from_document;
-
-    #[cfg(feature = "server")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
-    pub use crate::layer::{Layer, Service};
 
     #[cfg(all(feature = "server", feature = "router"))]
     #[cfg_attr(docsrs, doc(cfg(all(feature = "server", feature = "router"))))]
@@ -79,17 +68,13 @@ pub mod prelude {
     pub use crate::server_context::{
         extract, server_context, DioxusServerContext, FromServerContext, ProvideServerContext,
     };
-    pub use crate::server_fn::DioxusServerFn;
-
-    #[cfg(feature = "server")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
-    pub use crate::server_fn::collection::{ServerFnMiddleware, ServerFnTraitObj, ServerFunction};
-    pub use dioxus_server_macro::*;
 
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     pub use dioxus_ssr::incremental::IncrementalRendererConfig;
+
     pub use server_fn::{self, ServerFn as _, ServerFnError};
+    pub use dioxus_server_macro::*;
 }
 
 // // Warn users about overlapping features

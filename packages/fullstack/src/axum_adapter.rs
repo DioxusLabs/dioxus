@@ -57,61 +57,25 @@
 use axum::{
     body::{self, Body},
     extract::State,
-    handler::Handler,
     http::{Request, Response, StatusCode},
     response::IntoResponse,
     routing::{get, post},
     Router,
 };
 use dioxus_lib::prelude::VirtualDom;
-use server_fn::{Encoding, ServerFunctionRegistry};
+use server_fn::error::NoCustomError;
+use server_fn::error::ServerFnErrorSerde;
 use std::sync::Arc;
 use std::sync::RwLock;
+use axum::routing::*;
+use http::header::*;
 
 use crate::{
     prelude::*, render::SSRState, serve_config::ServeConfig, server_context::DioxusServerContext,
-    server_fn::collection::DioxusServerFnRegistry,
 };
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
 pub trait DioxusRouterExt<S> {
-    /// Registers server functions with a custom handler function. This allows you to pass custom context to your server functions by generating a [`DioxusServerContext`] from the request.
-    ///
-    /// # Example
-    /// ```rust
-    /// use dioxus_lib::prelude::*;
-    /// use dioxus_fullstack::prelude::*;
-    ///
-    /// #[tokio::main]
-    /// async fn main() {
-    ///    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
-    ///    axum::Server::bind(&addr)
-    ///        .serve(
-    ///            axum::Router::new()
-    ///                .register_server_fns_with_handler("", |func| {
-    ///                    move |req: Request<Body>| async move {
-    ///                        let (parts, body) = req.into_parts();
-    ///                        let parts: Arc<http::request::Parts> = Arc::new(parts.into());
-    ///                        let server_context = DioxusServerContext::new(parts.clone());
-    ///                        server_fn_handler(server_context, func.clone(), parts, body).await
-    ///                    }
-    ///                })
-    ///                .into_make_service(),
-    ///        )
-    ///        .await
-    ///        .unwrap();
-    /// }
-    /// ```
-    fn register_server_fns_with_handler<H, T>(
-        self,
-        server_fn_route: &'static str,
-        handler: impl FnMut(server_fn::ServerFnTraitObj<()>) -> H,
-    ) -> Self
-    where
-        H: Handler<T, S>,
-        T: 'static,
-        S: Clone + Send + Sync + 'static;
-
     /// Registers server functions with the default handler. This handler function will pass an empty [`DioxusServerContext`] to your server functions.
     ///
     /// # Example
@@ -133,7 +97,7 @@ pub trait DioxusRouterExt<S> {
     ///         .unwrap();
     /// }
     /// ```
-    fn register_server_fns(self, server_fn_route: &'static str) -> Self;
+    fn register_server_fns(self) -> Self;
 
     /// Register the web RSX hot reloading endpoint. This will enable hot reloading for your application in debug mode when you call [`dioxus_hot_reload::hot_reload_init`].
     ///
@@ -218,7 +182,6 @@ pub trait DioxusRouterExt<S> {
     /// ```
     fn serve_dioxus_application(
         self,
-        server_fn_route: &'static str,
         cfg: impl Into<ServeConfig>,
         build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
     ) -> Self;
@@ -228,51 +191,20 @@ impl<S> DioxusRouterExt<S> for Router<S>
 where
     S: Send + Sync + Clone + 'static,
 {
-    fn register_server_fns_with_handler<H, T>(
-        self,
-        server_fn_route: &'static str,
-        mut handler: impl FnMut(server_fn::ServerFnTraitObj<()>) -> H,
-    ) -> Self
-    where
-        H: Handler<T, S>,
-        T: 'static,
-        S: Clone + Send + Sync + 'static,
-    {
-        let mut router = self;
-        for server_fn_path in DioxusServerFnRegistry::paths_registered() {
-            let func = DioxusServerFnRegistry::get(server_fn_path).unwrap();
-            let full_route = format!("{server_fn_route}/{server_fn_path}");
-            match func.encoding() {
-                Encoding::Url | Encoding::Cbor => {
-                    router = router.route(&full_route, post(handler(func)));
-                }
-                Encoding::GetJSON | Encoding::GetCBOR => {
-                    router = router.route(&full_route, get(handler(func)));
-                }
-            }
-        }
-        router
-    }
+    fn register_server_fns(mut self) -> Self {
+        use http::method::Method;
 
-    fn register_server_fns(self, server_fn_route: &'static str) -> Self {
-        self.register_server_fns_with_handler(server_fn_route, |func| {
-            move |req: Request<Body>| {
-                let mut service = crate::server_fn_service(Default::default(), func);
-                async move {
-                    let (req, body) = req.into_parts();
-                    let req = Request::from_parts(req, body);
-                    let res = service.run(req);
-                    match res.await {
-                        Ok(res) => Ok::<_, std::convert::Infallible>(res.map(|b| b.into())),
-                        Err(e) => {
-                            let mut res = Response::new(Body::from(e.to_string()));
-                            *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-                            Ok(res)
-                        }
-                    }
-                }
-            }
-        })
+        for (path, method) in server_fn::axum::server_fn_paths() {
+            let handler = move |req| handle_server_fns_inner(path, ||{}, req);
+            self = match method {
+                Method::GET => self.route(path, get(handler)),
+                Method::POST => self.route(path, post(handler)),
+                Method::PUT => self.route(path, put(handler)),
+                _ => todo!()
+            };
+        }
+
+        self
     }
 
     fn serve_static_assets(mut self, assets_path: impl Into<std::path::PathBuf>) -> Self {
@@ -317,7 +249,6 @@ where
 
     fn serve_dioxus_application(
         self,
-        server_fn_route: &'static str,
         cfg: impl Into<ServeConfig>,
         build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
     ) -> Self {
@@ -327,7 +258,7 @@ where
         // Add server functions and render index.html
         self.serve_static_assets(cfg.assets_path.clone())
             .connect_hot_reload()
-            .register_server_fns(server_fn_route)
+            .register_server_fns()
             .fallback(get(render_handler).with_state((cfg, Arc::new(build_virtual_dom), ssr_state)))
     }
 
@@ -514,5 +445,106 @@ pub async fn hot_reload_handler(ws: axum::extract::WebSocketUpgrade) -> impl Int
                 };
             }
         }
+    })
+}
+
+fn get_local_pool() -> tokio_util::task::LocalPoolHandle {
+    use once_cell::sync::OnceCell;
+    static LOCAL_POOL: OnceCell<tokio_util::task::LocalPoolHandle> = OnceCell::new();
+    LOCAL_POOL
+        .get_or_init(|| {
+            tokio_util::task::LocalPoolHandle::new(
+                std::thread::available_parallelism()
+                    .map(Into::into)
+                    .unwrap_or(1),
+            )
+        })
+        .clone()
+}
+
+/// A handler for Dioxus server functions. This will run the server function and return the result.
+async fn handle_server_fns_inner(
+    path: &str,
+    additional_context: impl Fn() + 'static + Clone + Send,
+    req: Request<Body>,
+) -> impl IntoResponse {
+    use server_fn::middleware::Service;
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let path_string = path.to_string();
+
+    get_local_pool().spawn_pinned(move || async move {
+            let (parts, body) = req.into_parts();
+            let req = Request::from_parts(parts.clone(), body);
+        
+
+        let res = if let Some(mut service) =
+            server_fn::axum::get_server_fn_service(&path_string)
+        {
+
+            let server_context = DioxusServerContext::new(Arc::new(RwLock::new(parts)));
+            additional_context();
+
+            // store Accepts and Referrer in case we need them for redirect (below)
+            let accepts_html = req
+                .headers()
+                .get(ACCEPT)
+                .and_then(|v| v.to_str().ok())
+                .map(|v| v.contains("text/html"))
+                .unwrap_or(false);
+            let referrer = req.headers().get(REFERER).cloned();
+
+            // actually run the server fn
+            let mut res = service.run(req).await;
+
+
+            // it it accepts text/html (i.e., is a plain form post) and doesn't already have a
+            // Location set, then redirect to to Referer
+            if accepts_html {
+                if let Some(referrer) = referrer {
+                    let has_location = res.headers().get(LOCATION).is_some();
+                    if !has_location {
+                        *res.status_mut() = StatusCode::FOUND;
+                        res.headers_mut().insert(LOCATION, referrer);
+                    }
+                }
+            }
+
+            // apply the response parts from the server context to the response
+            let mut res_options = server_context.response_parts_mut().unwrap();
+            res.headers_mut().extend(res_options.headers.drain());
+
+            Ok(res)
+        } else {
+            Response::builder().status(StatusCode::BAD_REQUEST).body(
+                {
+                    #[cfg(target_family = "wasm")]
+                    {
+                        Body::from(format!(
+                            "No server function found for path: {path_string}\nYou may need to explicitly register the server function with `register_explicit`, rebuild your wasm binary to update a server function link or make sure the prefix your server and client use for server functions match.",
+                        ))
+                    }
+                    #[cfg(not(target_family = "wasm"))]
+                    {
+                        Body::from(format!(
+                            "No server function found for path: {path_string}\nYou may need to rebuild your wasm binary to update a server function link or make sure the prefix your server and client use for server functions match.",
+                        ))
+                    }
+                }
+            )
+        }
+        .expect("could not build Response");
+
+        _ = tx.send(res);
+    });
+
+    rx.await.unwrap_or_else(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            ServerFnError::<NoCustomError>::ServerError(e.to_string())
+                .ser()
+                .unwrap_or_default(),
+        )
+            .into_response()
     })
 }

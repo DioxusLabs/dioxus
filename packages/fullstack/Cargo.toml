@@ -12,9 +12,8 @@ resolver = "2"
 
 [dependencies]
 # server functions
-server_fn = { version = "0.5.2", default-features = false }
-dioxus_server_macro = { workspace = true }
-
+server_fn = { version = "0.6.5", features = ["json", "url", "browser"], default-features = false }
+dioxus_server_macro = { workspace = true, version = "0.6.5", default-features = false }
 
 # axum
 axum = { workspace = true, features = ["ws", "macros"], default-features = false, optional = true }
@@ -71,7 +70,7 @@ desktop = ["dioxus-desktop"]
 mobile = ["dioxus-mobile"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls"]
-axum = ["dep:axum", "tower-http", "server"]
+axum = ["dep:axum", "tower-http", "server", "server_fn/axum", "dioxus_server_macro/axum"]
 server = [
     "server_fn/ssr",
     "dioxus_server_macro/server",

@@ -43,6 +43,7 @@ dioxus = { workspace = true }
 
 [features]
 default = ["hot-reload"]
+axum = ["dep:axum"]
 hot-reload = ["dioxus-hot-reload"]
 
 [[example]]

@@ -15,6 +15,7 @@ mod config;
 mod eval;
 mod events;
 pub use config::*;
+#[cfg(feature = "axum")]
 pub mod launch;
 
 pub trait WebsocketTx: SinkExt<String, Error = LiveViewError> {}

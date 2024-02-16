@@ -1,7 +1,6 @@
 use dioxus_core::*;
 use std::any::Any;
 
-#[cfg(feature = "axum")]
 pub type Config = crate::Config<axum::Router>;
 
 /// Launches the WebView and runs the event loop, with configuration and root props.
