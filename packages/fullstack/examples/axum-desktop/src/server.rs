@@ -5,6 +5,7 @@
 
 use axum_desktop::*;
 use dioxus::prelude::*;
+use dioxus_fullstack::server_fn::axum::register_explicit;
 
 #[tokio::main]
 async fn main() {
@@ -18,7 +19,7 @@ async fn main() {
     axum::serve(
         listener,
         axum::Router::new()
-            .register_server_fns("")
+            .register_server_fns()
             .into_make_service(),
     )
     .await
