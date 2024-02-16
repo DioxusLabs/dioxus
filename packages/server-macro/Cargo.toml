@@ -24,5 +24,4 @@ proc-macro = true
 
 [features]
 axum = ["server_fn_macro/axum"]
-nightly = ["server_fn_macro/nightly"]
 server = ["server_fn_macro/ssr"]
