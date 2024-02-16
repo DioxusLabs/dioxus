@@ -23,8 +23,9 @@ pub use crate::incremental_cfg::*;
 pub struct IncrementalRenderer {
     pub(crate) static_dir: PathBuf,
     #[allow(clippy::type_complexity)]
-    pub(crate) memory_cache:
-        Option<lru::LruCache<String, (SystemTime, Vec<u8>), BuildHasherDefault<FxHasher>>>,
+    pub(crate) memory_cache: Option<
+        lru::LruCache<String, (web_time::SystemTime, Vec<u8>), BuildHasherDefault<FxHasher>>,
+    >,
     pub(crate) invalidate_after: Option<Duration>,
     pub(crate) ssr_renderer: crate::Renderer,
     pub(crate) map_path: PathMapFn,
@@ -98,22 +99,25 @@ impl IncrementalRenderer {
         route: String,
         html: Vec<u8>,
     ) -> Result<RenderFreshness, IncrementalRendererError> {
-        let file_path = self.route_as_path(&route);
-        if let Some(parent) = file_path.parent() {
-            if !parent.exists() {
-                std::fs::create_dir_all(parent)?;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let file_path = self.route_as_path(&route);
+            if let Some(parent) = file_path.parent() {
+                if !parent.exists() {
+                    std::fs::create_dir_all(parent)?;
+                }
             }
+            let file = std::fs::File::create(file_path)?;
+            let mut file = std::io::BufWriter::new(file);
+            file.write_all(&html)?;
         }
-        let file = std::fs::File::create(file_path)?;
-        let mut file = std::io::BufWriter::new(file);
-        file.write_all(&html)?;
         self.add_to_memory_cache(route, html);
         Ok(RenderFreshness::now(self.invalidate_after))
     }
 
     fn add_to_memory_cache(&mut self, route: String, html: Vec<u8>) {
         if let Some(cache) = self.memory_cache.as_mut() {
-            cache.put(route, (SystemTime::now(), html));
+            cache.put(route, (web_time::SystemTime::now(), html));
         }
     }
 
@@ -151,6 +155,7 @@ impl IncrementalRenderer {
             }
         }
         // check the file cache
+        #[cfg(not(target_arch = "wasm32"))]
         if let Some(file_path) = self.find_file(&route) {
             if let Some(freshness) = file_path.freshness(self.invalidate_after) {
                 if let Ok(file) = tokio::fs::File::open(file_path.full_path).await {

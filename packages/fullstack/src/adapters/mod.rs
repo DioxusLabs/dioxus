@@ -19,7 +19,9 @@ pub mod warp_adapter;
 
 use http::StatusCode;
 use server_fn::{Encoding, Payload};
+use std::future::Future;
 use std::sync::{Arc, RwLock};
+use tokio::task::JoinError;
 
 use crate::{
     layer::{BoxedService, Service},
@@ -80,7 +82,7 @@ impl Service for ServerFnHandler {
             server_context,
             function,
         } = self.clone();
-        Box::pin(async move {
+        let f = async move {
             let query = req.uri().query().unwrap_or_default().as_bytes().to_vec();
             let (parts, body) = req.into_parts();
             let body = hyper::body::to_bytes(body).await?.to_vec();
@@ -89,26 +91,22 @@ impl Service for ServerFnHandler {
             let parts = Arc::new(RwLock::new(parts));
 
             // Because the future returned by `server_fn_handler` is `Send`, and the future returned by this function must be send, we need to spawn a new runtime
-            let pool = get_local_pool();
-            let result = pool
-                .spawn_pinned({
-                    let function = function.clone();
-                    let mut server_context = server_context.clone();
-                    server_context.parts = parts;
-                    move || async move {
-                        let data = match function.encoding() {
-                            Encoding::Url | Encoding::Cbor => &body,
-                            Encoding::GetJSON | Encoding::GetCBOR => &query,
-                        };
-                        let server_function_future = function.call((), data);
-                        let server_function_future = ProvideServerContext::new(
-                            server_function_future,
-                            server_context.clone(),
-                        );
-                        server_function_future.await
-                    }
-                })
-                .await?;
+            let result = spawn_platform({
+                let function = function.clone();
+                let mut server_context = server_context.clone();
+                server_context.parts = parts;
+                move || async move {
+                    let data = match function.encoding() {
+                        Encoding::Url | Encoding::Cbor => &body,
+                        Encoding::GetJSON | Encoding::GetCBOR => &query,
+                    };
+                    let server_function_future = function.call((), data);
+                    let server_function_future =
+                        ProvideServerContext::new(server_function_future, server_context.clone());
+                    server_function_future.await
+                }
+            })
+            .await?;
             let mut res = http::Response::builder();
 
             // Set the headers from the server context
@@ -147,7 +145,36 @@ impl Service for ServerFnHandler {
                     res.body(data.into())?
                 }
             })
-        })
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            Box::pin(f)
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            use futures_util::future::FutureExt;
+
+            let result = tokio::task::spawn_local(f);
+            let result = result.then(|f| async move { f.unwrap() });
+            Box::pin(result)
+        }
+    }
+}
+
+async fn spawn_platform<F, Fut>(create_task: F) -> Result<<Fut as Future>::Output, JoinError>
+where
+    F: FnOnce() -> Fut,
+    F: Send + 'static,
+    Fut: Future + 'static,
+    Fut::Output: Send + 'static,
+{
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        get_local_pool().spawn_pinned(create_task).await
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        Ok(create_task().await)
     }
 }
 
