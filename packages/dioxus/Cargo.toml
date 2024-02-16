@@ -49,8 +49,9 @@ mobile = ["dioxus-mobile", "dioxus-fullstack?/mobile", "dioxus-config-macro/mobi
 web = ["dioxus-web", "dioxus-fullstack?/web", "dioxus-config-macro/web", "dioxus-router?/web"]
 ssr = ["dioxus-ssr", "dioxus-router?/ssr", "dioxus-config-macro/ssr"]
 liveview = ["dioxus-liveview", "dioxus-config-macro/liveview", "dioxus-router?/liveview"]
-axum = ["dioxus-fullstack?/axum", "ssr", "dioxus-liveview?/axum"]
+axum = ["dioxus-fullstack?/axum", "dioxus-fullstack?/server", "ssr", "dioxus-liveview?/axum"]
 tui = ["dioxus-tui", "dioxus-config-macro/tui"]
+
 # This feature just disables the no-renderer-enabled warning
 third-party-renderer = []
 

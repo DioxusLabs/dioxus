@@ -31,13 +31,14 @@ serde = "1.0.159"
 execute = "0.2.12"
 anyhow = "1.0.71"
 
+
 [dependencies.axum_session]
-version = "0.3.0"
+workspace = true
 features = ["sqlite-rustls"]
 optional = true
 
 [dependencies.axum_session_auth]
-version = "0.12.0"
+workspace = true
 features = ["sqlite-rustls"]
 optional = true
 

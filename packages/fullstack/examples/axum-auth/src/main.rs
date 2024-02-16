@@ -44,8 +44,6 @@ fn main() {
                 .await
                 .unwrap();
 
-                //Create the Database table for storing our Session Data.
-                session_store.initiate().await.unwrap();
                 User::create_user_tables(&pool).await;
 
                 // build our application with some routes
@@ -67,9 +65,9 @@ fn main() {
 
                 // run it
                 let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 3000));
+                let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
 
-                axum::Server::bind(&addr)
-                    .serve(app.into_make_service())
+                axum::serve(listener, app.into_make_service())
                     .await
                     .unwrap();
             });

@@ -33,8 +33,11 @@ async fn main() {
 
     println!("Listening on http://{listen_address}");
 
-    axum::Server::bind(&listen_address.to_string().parse().unwrap())
-        .serve(app.into_make_service())
+    let listener = tokio::net::TcpListener::bind(&listen_address)
+        .await
+        .unwrap();
+
+    axum::serve(listener, app.into_make_service())
         .await
         .unwrap();
 }

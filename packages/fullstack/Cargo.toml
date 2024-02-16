@@ -69,7 +69,24 @@ hot-reload = ["serde_json", "futures-util"]
 web = ["dioxus-web", "web-sys"]
 desktop = ["dioxus-desktop"]
 mobile = ["dioxus-mobile"]
-axum = ["dep:axum", "tower-http", "server"]
-server = ["server_fn/ssr", "dioxus_server_macro/server", "tokio", "tokio-util", "tokio-stream", "dioxus-ssr", "dioxus-ssr/incremental", "tower", "hyper", "http", "tower-layer", "anymap", "tracing-futures", "pin-project", "thiserror", "dioxus-cli-config"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls"]
+axum = ["dep:axum", "tower-http", "server"]
+server = [
+    "server_fn/ssr",
+    "dioxus_server_macro/server",
+    "tokio",
+    "tokio-util",
+    "tokio-stream",
+    "dioxus-ssr",
+    "dioxus-ssr/incremental",
+    "tower",
+    "hyper",
+    "http",
+    "tower-layer",
+    "anymap",
+    "tracing-futures",
+    "pin-project",
+    "thiserror",
+    "dioxus-cli-config"
+]

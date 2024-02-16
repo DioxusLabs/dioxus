@@ -6,7 +6,6 @@ use dioxus_ssr::{
     incremental::{IncrementalRendererConfig, RenderFreshness, WrapBody},
     Renderer,
 };
-use serde::Serialize;
 use std::sync::Arc;
 use std::sync::RwLock;
 use tokio::task::spawn_blocking;
@@ -28,7 +27,6 @@ impl SsrRendererPool {
         server_context: &DioxusServerContext,
     ) -> Result<(RenderFreshness, String), dioxus_ssr::incremental::IncrementalRendererError> {
         let wrapper = FullstackRenderer {
-            serialized_props: None,
             cfg: cfg.clone(),
             server_context: server_context.clone(),
         };
@@ -210,7 +208,6 @@ impl SSRState {
 }
 
 struct FullstackRenderer {
-    serialized_props: Option<String>,
     cfg: ServeConfig,
     server_context: DioxusServerContext,
 }

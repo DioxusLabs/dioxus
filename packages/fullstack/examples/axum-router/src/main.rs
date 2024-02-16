@@ -7,21 +7,17 @@
 use dioxus::prelude::*;
 
 fn main() {
-    let config = LaunchBuilder::fullstack();
-    #[cfg(feature = "server")]
-    config
-        .incremental(
-            IncrementalRendererConfig::default()
-                .invalidate_after(std::time::Duration::from_secs(120)),
-        )
-        .launch();
+    let cfg = server_only!(dioxus::fullstack::Config::new().incremental(
+        IncrementalRendererConfig::default().invalidate_after(std::time::Duration::from_secs(120)),
+    ));
 
-    #[cfg(not(feature = "server"))]
-    config.launch(|| {
-        rsx! {
-            Router::<Route> {}
-        }
-    });
+    LaunchBuilder::fullstack().with_cfg(cfg).launch(app);
+}
+
+fn app() -> Element {
+    rsx! {
+        Router::<Route> {}
+    }
 }
 
 #[derive(Clone, Routable, Debug, PartialEq, serde::Serialize, serde::Deserialize)]

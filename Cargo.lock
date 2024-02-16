@@ -608,7 +608,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1236b4b292f6c4d6dc34604bb5120d85c3fe1d1aa596bd5cc52ca054d13e7b9e"
 dependencies = [
  "async-trait",
- "axum-core 0.4.3",
+ "axum-core",
  "axum-macros",
  "base64",
  "bytes",
@@ -646,7 +646,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
- "axum_session 0.3.5",
+ "axum_session",
  "axum_session_auth",
  "dioxus",
  "dioxus-fullstack",
@@ -659,23 +659,6 @@ dependencies = [
  "tokio",
  "tower",
  "tower-http",
-]
-
-[[package]]
-name = "axum-core"
-version = "0.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "759fa577a247914fd3f7f76d62972792636412fbfd634cd452f6a385a74d2d2c"
-dependencies = [
- "async-trait",
- "bytes",
- "futures-util",
- "http 0.2.11",
- "http-body 0.4.6",
- "mime",
- "rustversion",
- "tower-layer",
- "tower-service",
 ]
 
 [[package]]
@@ -707,6 +690,28 @@ dependencies = [
  "dioxus",
  "serde",
  "tokio",
+]
+
+[[package]]
+name = "axum-extra"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "895ff42f72016617773af68fb90da2a9677d89c62338ec09162d4909d86fdd8f"
+dependencies = [
+ "axum",
+ "axum-core",
+ "bytes",
+ "futures-util",
+ "headers 0.4.0",
+ "http 1.0.0",
+ "http-body 1.0.0",
+ "http-body-util",
+ "mime",
+ "pin-project-lite",
+ "serde",
+ "tower",
+ "tower-layer",
+ "tower-service",
 ]
 
 [[package]]
@@ -746,51 +751,25 @@ dependencies = [
 
 [[package]]
 name = "axum-server"
-version = "0.5.1"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "447f28c85900215cc1bea282f32d4a2f22d55c5a300afdfbc661c8d6a632e063"
+checksum = "c1ad46c3ec4e12f4a4b6835e173ba21c25e484c9d02b49770bf006ce5367c036"
 dependencies = [
  "arc-swap",
  "bytes",
  "futures-util",
- "http 0.2.11",
- "http-body 0.4.6",
- "hyper 0.14.28",
+ "http 1.0.0",
+ "http-body 1.0.0",
+ "http-body-util",
+ "hyper 1.1.0",
+ "hyper-util",
  "pin-project-lite",
  "rustls 0.21.10",
- "rustls-pemfile 1.0.4",
+ "rustls-pemfile 2.1.0",
  "tokio",
  "tokio-rustls 0.24.1",
+ "tower",
  "tower-service",
-]
-
-[[package]]
-name = "axum_session"
-version = "0.3.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b9a35d2907b706dcd52f875c4f9fe55293ebc03fc5b3c2d8883104c821452b8"
-dependencies = [
- "aes-gcm",
- "async-trait",
- "axum-core 0.3.4",
- "base64",
- "bytes",
- "chrono",
- "cookie 0.17.0",
- "dashmap",
- "futures",
- "http 0.2.11",
- "http-body 0.4.6",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "sqlx",
- "thiserror",
- "tokio",
- "tower-layer",
- "tower-service",
- "tracing",
- "uuid",
 ]
 
 [[package]]
@@ -805,7 +784,7 @@ dependencies = [
  "base64",
  "bytes",
  "chrono",
- "cookie 0.18.0",
+ "cookie",
  "dashmap",
  "forwarded-header-value",
  "futures",
@@ -834,8 +813,8 @@ dependencies = [
  "anyhow",
  "async-recursion",
  "async-trait",
- "axum-core 0.4.3",
- "axum_session 0.12.4",
+ "axum-core",
+ "axum_session",
  "bytes",
  "chrono",
  "dashmap",
@@ -1701,21 +1680,6 @@ dependencies = [
 
 [[package]]
 name = "cookie"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7efb37c3e1ccb1ff97164ad95ac1606e8ccd35b3fa0a7d99a304c7f4a428cc24"
-dependencies = [
- "aes-gcm",
- "base64",
- "percent-encoding",
- "rand 0.8.5",
- "subtle",
- "time",
- "version_check",
-]
-
-[[package]]
-name = "cookie"
 version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3cd91cf61412820176e137621345ee43b3f4423e589e7ae4e50d601d93e35ef8"
@@ -2285,6 +2249,7 @@ dependencies = [
  "anyhow",
  "atty",
  "axum",
+ "axum-extra",
  "axum-server",
  "cargo-generate",
  "cargo_metadata 0.18.1",
@@ -2305,7 +2270,7 @@ dependencies = [
  "flate2",
  "fs_extra",
  "futures-util",
- "headers",
+ "headers 0.3.9",
  "html_parser",
  "hyper 1.1.0",
  "hyper-rustls 0.26.0",
@@ -4475,8 +4440,23 @@ checksum = "06683b93020a07e3dbcf5f8c0f6d40080d725bea7936fc01ad345c01b97dc270"
 dependencies = [
  "base64",
  "bytes",
- "headers-core",
+ "headers-core 0.2.0",
  "http 0.2.11",
+ "httpdate",
+ "mime",
+ "sha1",
+]
+
+[[package]]
+name = "headers"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "322106e6bd0cba2d5ead589ddb8150a13d7c4217cf80d7c4f682ca994ccc6aa9"
+dependencies = [
+ "base64",
+ "bytes",
+ "headers-core 0.3.0",
+ "http 1.0.0",
  "httpdate",
  "mime",
  "sha1",
@@ -4489,6 +4469,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7f66481bfee273957b1f20485a4ff3362987f85b2c236580d81b4eb7a326429"
 dependencies = [
  "http 0.2.11",
+]
+
+[[package]]
+name = "headers-core"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54b4a22553d4242c49fddb9ba998a99962b5cc6f22cb5a3482bec22522403ce4"
+dependencies = [
+ "http 1.0.0",
 ]
 
 [[package]]

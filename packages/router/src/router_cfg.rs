@@ -122,38 +122,36 @@ where
     <R as std::str::FromStr>::Err: std::fmt::Display,
 {
     // If we're on the web and have wasm, use the web history provider
-    if cfg!(all(target_arch = "wasm32", feature = "web")) {
-        return Box::new(AnyHistoryProviderImplWrapper::new(
-            WebHistory::<R>::default(),
-        ));
-    }
+
+    #[cfg(all(target_arch = "wasm32", feature = "web"))]
+    return Box::new(AnyHistoryProviderImplWrapper::new(
+        WebHistory::<R>::default(),
+    ));
 
     // If we're using fullstack and server side rendering, use the memory history provider
-    if cfg!(all(feature = "fullstack", feature = "ssr")) {
-        return Box::new(AnyHistoryProviderImplWrapper::new(
-            MemoryHistory::<R>::with_initial_path(
-                dioxus_fullstack::prelude::server_context()
-                    .request_parts()
-                    .unwrap()
-                    .uri
-                    .to_string()
-                    .parse()
-                    .unwrap_or_else(|err| {
-                        tracing::error!("Failed to parse uri: {}", err);
-                        "/".parse().unwrap_or_else(|err| {
-                            panic!("Failed to parse uri: {}", err);
-                        })
-                    }),
-            ),
-        ));
-    }
+    #[cfg(all(feature = "fullstack", feature = "ssr"))]
+    return Box::new(AnyHistoryProviderImplWrapper::new(
+        MemoryHistory::<R>::with_initial_path(
+            dioxus_fullstack::prelude::server_context()
+                .request_parts()
+                .unwrap()
+                .uri
+                .to_string()
+                .parse()
+                .unwrap_or_else(|err| {
+                    tracing::error!("Failed to parse uri: {}", err);
+                    "/".parse().unwrap_or_else(|err| {
+                        panic!("Failed to parse uri: {}", err);
+                    })
+                }),
+        ),
+    ));
 
     // If liveview is enabled, use the liveview history provider
-    if cfg!(feature = "liveview") {
-        return Box::new(AnyHistoryProviderImplWrapper::new(
-            LiveviewHistory::new_with_initial_path(initial_route),
-        ));
-    }
+    #[cfg(feature = "liveview")]
+    return Box::new(AnyHistoryProviderImplWrapper::new(
+        LiveviewHistory::new_with_initial_path(initial_route),
+    ));
 
     // If none of the above, use the memory history provider, which is a decent enough fallback
     // Eventually we want to integrate with the mobile history provider, and other platform providers

@@ -2,7 +2,7 @@
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![deny(missing_docs)]
-#![cfg_attr(any(docsrs, feature = "nightly-doc"), feature(doc_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub use once_cell;
 
@@ -10,6 +10,7 @@ mod html_storage;
 
 #[cfg(feature = "server")]
 mod adapters;
+
 // Splitting up the glob export lets us document features required for each adapter
 #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
 #[cfg(feature = "axum")]
@@ -21,45 +22,46 @@ pub use adapters::{server_fn_service, ServerFnHandler};
 
 mod config;
 mod hooks;
+pub mod launch;
+mod server_fn;
 
 #[cfg(all(debug_assertions, feature = "hot-reload", feature = "server"))]
 mod hot_reload;
-pub mod launch;
 pub use config::*;
+
 #[cfg(feature = "server")]
 mod layer;
+
 #[cfg(feature = "server")]
 mod render;
+
 #[cfg(feature = "server")]
 mod serve_config;
+
 #[cfg(feature = "server")]
 mod server_context;
-mod server_fn;
 
 /// A prelude of commonly used items in dioxus-fullstack.
 pub mod prelude {
+    use crate::hooks;
+    pub use hooks::{server_cached::server_cached, server_future::use_server_future};
+
     #[cfg(feature = "axum")]
     #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
     pub use crate::adapters::axum_adapter::*;
 
-    use crate::hooks;
-
     #[cfg(not(feature = "server"))]
-    #[cfg_attr(
-        any(docsrs, feature = "nightly-doc"),
-        doc(cfg(not(feature = "server")))
-    )]
+    #[cfg_attr(docsrs, doc(cfg(not(feature = "server"))))]
     pub use crate::html_storage::deserialize::get_root_props_from_document;
+
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     pub use crate::layer::{Layer, Service};
 
     #[cfg(all(feature = "server", feature = "router"))]
-    #[cfg_attr(
-        any(docsrs, feature = "nightly-doc"),
-        doc(cfg(all(feature = "server", feature = "router")))
-    )]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "server", feature = "router"))))]
     pub use crate::render::pre_cache_static_routes_with_props;
+
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     pub use crate::render::SSRState;
@@ -71,28 +73,27 @@ pub mod prelude {
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     pub use crate::serve_config::{ServeConfig, ServeConfigBuilder};
+
     #[cfg(all(feature = "server", feature = "axum"))]
-    #[cfg_attr(
-        any(docsrs, feature = "nightly-doc"),
-        doc(cfg(all(feature = "server", feature = "axum")))
-    )]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "server", feature = "axum"))))]
     pub use crate::server_context::Axum;
+
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     pub use crate::server_context::{
         extract, server_context, DioxusServerContext, FromServerContext, ProvideServerContext,
     };
     pub use crate::server_fn::DioxusServerFn;
+
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     pub use crate::server_fn::{ServerFnMiddleware, ServerFnTraitObj, ServerFunction};
     pub use dioxus_server_macro::*;
+
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     pub use dioxus_ssr::incremental::IncrementalRendererConfig;
     pub use server_fn::{self, ServerFn as _, ServerFnError};
-
-    pub use hooks::{server_cached::server_cached, server_future::use_server_future};
 }
 
 // // Warn users about overlapping features

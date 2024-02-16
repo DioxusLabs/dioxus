@@ -45,6 +45,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
             })
         })
     });
+
     c.bench_function("build 1000 routes no memory cache", |b| {
         b.to_async(tokio::runtime::Runtime::new().unwrap())
             .iter(|| async {
@@ -67,6 +68,7 @@ pub fn criterion_benchmark(c: &mut Criterion) {
                 .memory_cache_limit(0)
                 .invalidate_after(Duration::from_secs(10))
                 .build();
+
                 for id in 0..1000 {
                     render_route(
                         &mut renderer,

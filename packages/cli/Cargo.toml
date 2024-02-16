@@ -32,14 +32,15 @@ tokio = { version = "1.16.1", features = ["fs", "sync", "rt", "macros"] }
 atty = "0.2.14"
 chrono = "0.4.19"
 anyhow = "1"
-hyper = {workspace = true}
-hyper-rustls = {workspace = true}
+hyper = { workspace = true }
+hyper-rustls = { workspace = true }
 indicatif = "0.17.5"
 subprocess = "0.2.9"
 rayon = "1.8.0"
 
 axum = { workspace = true, features = ["ws"] }
-axum-server = { version = "0.5.1", features = ["tls-rustls"] }
+axum-server = { workspace = true, features = ["tls-rustls"] }
+axum-extra = { workspace = true, features = ["typed-header"] }
 tower-http = { workspace = true, features = ["full"] }
 
 headers = "0.3.7"

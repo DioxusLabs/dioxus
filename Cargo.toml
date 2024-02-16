@@ -107,6 +107,7 @@ manganis = { git = "https://github.com/DioxusLabs/collect-assets", rev = "f98269
 lru = "0.12.2"
 async-trait = "0.1.77"
 axum = "0.7.0"
+axum-server = "0.6.0"
 tower = "0.4.13"
 http = "1.0.0"
 tower-http = "0.5.1"
@@ -114,6 +115,9 @@ hyper = "1.0.0"
 hyper-rustls = "0.26.0"
 serde_json = "1.0.61"
 serde = "1.0.61"
+axum_session = "0.12.1"
+axum_session_auth = "0.12.1"
+axum-extra = "0.9.2"
 
 # This is a "virtual package"
 # It is not meant to be published, but is used so "cargo run --example XYZ" works properly

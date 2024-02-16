@@ -19,6 +19,7 @@ use axum::{
     routing::{get, get_service},
     Router,
 };
+use axum_extra::TypedHeader;
 use axum_server::tls_rustls::RustlsConfig;
 use dioxus_cli_config::CrateConfig;
 use dioxus_cli_config::WebHttpsConfig;
@@ -298,7 +299,9 @@ async fn setup_router(
                         .body(body)
                         .unwrap()
                 } else {
-                    response.map(|body| body.into())
+                    response.map(|body| body.try_into().unwrap())
+                    // response.into_body()
+                    // response.map(|body| body.into())
                 };
                 let headers = response.headers_mut();
                 headers.insert(

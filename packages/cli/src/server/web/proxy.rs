@@ -17,6 +17,7 @@ impl ProxyClient {
     fn new(url: Uri) -> Self {
         let https = hyper_rustls::HttpsConnectorBuilder::new()
             .with_native_roots()
+            .unwrap()
             .https_or_http()
             .enable_http1()
             .build();
@@ -138,7 +139,9 @@ mod test {
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         assert_eq!(
-            hyper::body::to_bytes(resp.into_body()).await.unwrap(),
+            axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
             "backend: /api"
         );
 
@@ -148,7 +151,9 @@ mod test {
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         assert_eq!(
-            hyper::body::to_bytes(resp.into_body()).await.unwrap(),
+            axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
             "backend: /api/"
         );
 
@@ -162,7 +167,9 @@ mod test {
             .unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         assert_eq!(
-            hyper::body::to_bytes(resp.into_body()).await.unwrap(),
+            axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap(),
             "backend: /api/subpath"
         );
         backend_handle.abort();
