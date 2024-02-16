@@ -12,8 +12,8 @@ async fn main() {
         .await
         .unwrap();
 
-    let _ = PostServerData::register_explicit();
-    let _ = GetServerData::register_explicit();
+    let _ = register_explicit::<PostServerData>();
+    let _ = register_explicit::<GetServerData>();
 
     axum::serve(
         listener,

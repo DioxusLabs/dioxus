@@ -4,12 +4,13 @@ use dioxus_cli_config::WebProxyConfig;
 use anyhow::Context;
 use axum::{http::StatusCode, routing::any, Router};
 use hyper::{Request, Response, Uri};
+use hyper::client::legacy::Client;
 
 use axum::body::Body as MyBody;
 
 #[derive(Debug, Clone)]
 struct ProxyClient {
-    inner: hyper::Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
+    inner: Client<hyper_rustls::HttpsConnector<Client::HttpConnector>>,
     url: Uri,
 }
 
@@ -22,7 +23,7 @@ impl ProxyClient {
             .enable_http1()
             .build();
         Self {
-            inner: hyper::Client::builder().build(https),
+            inner: Client::builder().build(https),
             url,
         }
     }
@@ -98,6 +99,7 @@ mod test {
     use super::*;
 
     use axum::{extract::Path, Router};
+    use axum_server::Server;
 
     fn setup_servers(
         mut config: WebProxyConfig,
@@ -110,13 +112,13 @@ mod test {
             "/*path",
             any(|path: Path<String>| async move { format!("backend: {}", path.0) }),
         );
-        let backend_server = axum::Server::bind(&"127.0.0.1:0".parse().unwrap())
+        let backend_server = Server::bind(&"127.0.0.1:0".parse().unwrap())
             .serve(backend_router.into_make_service());
         let backend_addr = backend_server.local_addr();
         let backend_handle = tokio::spawn(async move { backend_server.await.unwrap() });
         config.backend = format!("http://{}{}", backend_addr, config.backend);
         let router = super::add_proxy(Router::new(), &config);
-        let server = axum::Server::bind(&"127.0.0.1:0".parse().unwrap())
+        let server = Server::bind("127.0.0.1:0".parse().unwrap())
             .serve(router.unwrap().into_make_service());
         let server_addr = server.local_addr();
         let server_handle = tokio::spawn(async move { server.await.unwrap() });
@@ -132,8 +134,8 @@ mod test {
             // So in day to day usage, use `http://localhost:8000/api` instead!
             backend: path,
         };
-        let (backend_handle, server_handle, server_addr) = setup_servers(config);
-        let resp = hyper::Client::new()
+        let (backend_handle, server_handle, server_addr) = setup_servers(config).await;
+        let resp = Client::new()
             .get(format!("http://{}/api", server_addr).parse().unwrap())
             .await
             .unwrap();
@@ -145,7 +147,7 @@ mod test {
             "backend: /api"
         );
 
-        let resp = hyper::Client::new()
+        let resp = Client::new()
             .get(format!("http://{}/api/", server_addr).parse().unwrap())
             .await
             .unwrap();
@@ -157,7 +159,7 @@ mod test {
             "backend: /api/"
         );
 
-        let resp = hyper::Client::new()
+        let resp = Client::new()
             .get(
                 format!("http://{}/api/subpath", server_addr)
                     .parse()

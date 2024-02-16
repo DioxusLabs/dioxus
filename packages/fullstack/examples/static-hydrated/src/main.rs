@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "server")]
 #[tokio::main]
 async fn main() {
-    pre_cache_static_routes_with_props(
+    pre_cache_static_routes(
         &ServeConfig::new_with_router(
             dioxus_fullstack::router::FullstackRouterConfig::<Route>::default(),
         )

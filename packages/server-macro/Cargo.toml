@@ -23,7 +23,6 @@ server_fn_macro = "^0.6.5"
 proc-macro = true
 
 [features]
-actix = ["server_fn_macro/actix"]
 axum = ["server_fn_macro/axum"]
 nightly = ["server_fn_macro/nightly"]
 server = ["server_fn_macro/ssr"]
