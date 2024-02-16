@@ -195,6 +195,7 @@ where
         use http::method::Method;
 
         for (path, method) in server_fn::axum::server_fn_paths() {
+            tracing::trace!("Registering server function: {} {}", method, path);
             let handler = move |req| handle_server_fns_inner(path, ||{}, req);
             self = match method {
                 Method::GET => self.route(path, get(handler)),
