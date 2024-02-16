@@ -8,8 +8,8 @@ use crate::{
     BuildResult, Result,
 };
 use axum::{
-    body::{Full, HttpBody},
-    extract::{ws::Message, Extension, TypedHeader, WebSocketUpgrade},
+    body::{Body, HttpBody},
+    extract::{ws::Message, Extension, WebSocketUpgrade},
     http::{
         self,
         header::{HeaderName, HeaderValue},
@@ -287,20 +287,18 @@ async fn setup_router(
                 let mut response = if file_service_config.dioxus_config.web.watcher.index_on_404
                     && response.status() == StatusCode::NOT_FOUND
                 {
-                    let body = Full::from(
+                    let body = Body::from(
                         // TODO: Cache/memoize this.
                         std::fs::read_to_string(file_service_config.out_dir().join("index.html"))
                             .ok()
                             .unwrap(),
-                    )
-                    .map_err(|err| match err {})
-                    .boxed();
+                    );
                     Response::builder()
                         .status(StatusCode::OK)
                         .body(body)
                         .unwrap()
                 } else {
-                    response.map(|body| body.boxed())
+                    response.map(|body| body.into())
                 };
                 let headers = response.headers_mut();
                 headers.insert(

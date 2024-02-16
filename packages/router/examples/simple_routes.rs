@@ -26,9 +26,7 @@ async fn main() {
             "/ws",
             get(move |ws: WebSocketUpgrade| async move {
                 ws.on_upgrade(move |socket| async move {
-                    _ = view
-                        .launch(dioxus_liveview::axum_socket(socket), Route::Home {})
-                        .await;
+                    _ = view.launch(dioxus_liveview::axum_socket(socket), app).await;
                 })
             }),
         );
@@ -43,11 +41,13 @@ async fn main() {
 
 #[cfg(not(feature = "liveview"))]
 fn main() {
-    launch(|| {
-        rsx! {
-            Router::<Route> {}
-        }
-    })
+    launch(app)
+}
+
+fn app() -> Element {
+    rsx! {
+        Router::<Route> {}
+    }
 }
 
 #[component]

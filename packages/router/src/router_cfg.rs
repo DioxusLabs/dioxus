@@ -1,11 +1,9 @@
-use std::sync::Arc;
-
 use crate::contexts::router::RoutingCallback;
 use crate::history::HistoryProvider;
+use crate::prelude::*;
 use crate::routable::Routable;
 use dioxus_lib::prelude::*;
-
-use crate::prelude::*;
+use std::sync::Arc;
 
 /// Global configuration options for the router.
 ///
@@ -29,43 +27,6 @@ pub struct RouterConfig<R: Routable> {
     pub(crate) history: Option<Box<dyn AnyHistoryProvider>>,
     pub(crate) on_update: Option<RoutingCallback<R>>,
     pub(crate) initial_route: Option<R>,
-}
-
-macro_rules! default_history {
-    ($initial_route:ident) => {
-        {
-            // If we are on wasm32 and the web feature is enabled, use the web history.
-            #[cfg(all(target_arch = "wasm32", feature = "web"))]
-            return Box::new(AnyHistoryProviderImplWrapper::new(WebHistory::<R>::default()));
-            // If we are using dioxus fullstack and the ssr feature is enabled, use the memory history with the initial path set to the current path in fullstack
-            #[cfg(all(feature = "fullstack", feature = "ssr"))]
-            return Box::new(AnyHistoryProviderImplWrapper::new(MemoryHistory::<R>::with_initial_path(
-                dioxus_fullstack::prelude::server_context()
-                    .request_parts()
-                    .unwrap()
-                    .uri
-                    .to_string()
-                    .parse()
-                    .unwrap_or_else(|err| {
-                        tracing::error!("Failed to parse uri: {}", err);
-                        "/"
-                            .parse()
-                            .unwrap_or_else(|err| {
-                                panic!("Failed to parse uri: {}", err);
-                            })
-                    }),
-            )));
-            // If we are not on wasm32 and the liveview feature is enabled, use the liveview history.
-            #[cfg(all(feature = "liveview"))]
-            return Box::new(AnyHistoryProviderImplWrapper::new(LiveviewHistory::new_with_initial_path($initial_route)));
-            // Otherwise use the memory history.
-            #[cfg(all(
-                not(all(target_arch = "wasm32", feature = "web")),
-                not(all(feature = "liveview", not(target_arch = "wasm32"))),
-            ))]
-            Box::new(AnyHistoryProviderImplWrapper::new(MemoryHistory::with_initial_path($initial_route)))
-        }
-    };
 }
 
 impl<R: Routable + Clone> Default for RouterConfig<R>
@@ -94,7 +55,7 @@ where
         ));
         self.history
             .take()
-            .unwrap_or_else(|| default_history!(initial_route))
+            .unwrap_or_else(|| default_history(initial_route))
     }
 }
 
@@ -153,4 +114,50 @@ where
             ..self
         }
     }
+}
+
+/// Get the default history provider for the current platform.
+fn default_history<R: Routable + Clone>(initial_route: R) -> Box<dyn AnyHistoryProvider>
+where
+    <R as std::str::FromStr>::Err: std::fmt::Display,
+{
+    // If we're on the web and have wasm, use the web history provider
+    if cfg!(all(target_arch = "wasm32", feature = "web")) {
+        return Box::new(AnyHistoryProviderImplWrapper::new(
+            WebHistory::<R>::default(),
+        ));
+    }
+
+    // If we're using fullstack and server side rendering, use the memory history provider
+    if cfg!(all(feature = "fullstack", feature = "ssr")) {
+        return Box::new(AnyHistoryProviderImplWrapper::new(
+            MemoryHistory::<R>::with_initial_path(
+                dioxus_fullstack::prelude::server_context()
+                    .request_parts()
+                    .unwrap()
+                    .uri
+                    .to_string()
+                    .parse()
+                    .unwrap_or_else(|err| {
+                        tracing::error!("Failed to parse uri: {}", err);
+                        "/".parse().unwrap_or_else(|err| {
+                            panic!("Failed to parse uri: {}", err);
+                        })
+                    }),
+            ),
+        ));
+    }
+
+    // If liveview is enabled, use the liveview history provider
+    if cfg!(feature = "liveview") {
+        return Box::new(AnyHistoryProviderImplWrapper::new(
+            LiveviewHistory::new_with_initial_path(initial_route),
+        ));
+    }
+
+    // If none of the above, use the memory history provider, which is a decent enough fallback
+    // Eventually we want to integrate with the mobile history provider, and other platform providers
+    Box::new(AnyHistoryProviderImplWrapper::new(
+        MemoryHistory::with_initial_path(initial_route),
+    ))
 }

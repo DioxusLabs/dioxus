@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 fn main() {
     #[cfg(feature = "web")]
     // Hydrate the application on the client
-    dioxus_web::launch_cfg(app, dioxus_web::Config::new().hydrate(true));
+    dioxus_web::launch::launch_cfg(app, dioxus_web::Config::new().hydrate(true));
 
     #[cfg(feature = "server")]
     {
@@ -51,7 +51,9 @@ fn main() {
                 // build our application with some routes
                 let app = Router::new()
                     // Server side render the application, serve static assets, and register server functions
-                    .serve_dioxus_application("", ServerConfig::new(app, ()))
+                    .serve_dioxus_application("", ServeConfig::builder().build(), || {
+                        VirtualDom::new(app)
+                    })
                     .layer(
                         axum_session_auth::AuthSessionLayer::<
                             crate::auth::User,

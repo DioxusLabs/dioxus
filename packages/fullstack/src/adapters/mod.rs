@@ -12,14 +12,12 @@
 
 #[cfg(feature = "axum")]
 pub mod axum_adapter;
-// #[cfg(feature = "salvo")]
-// pub mod salvo_adapter;
-#[cfg(feature = "warp")]
-pub mod warp_adapter;
 
 use http::StatusCode;
 use server_fn::{Encoding, Payload};
 use std::sync::{Arc, RwLock};
+
+type MyBody = axum::body::Body;
 
 use crate::{
     layer::{BoxedService, Service},
@@ -68,11 +66,11 @@ impl ServerFnHandler {
 impl Service for ServerFnHandler {
     fn run(
         &mut self,
-        req: http::Request<hyper::body::Body>,
+        req: http::Request<MyBody>,
     ) -> std::pin::Pin<
         Box<
             dyn std::future::Future<
-                    Output = Result<http::Response<hyper::body::Body>, server_fn::ServerFnError>,
+                    Output = Result<http::Response<MyBody>, server_fn::ServerFnError>,
                 > + Send,
         >,
     > {
@@ -83,7 +81,7 @@ impl Service for ServerFnHandler {
         Box::pin(async move {
             let query = req.uri().query().unwrap_or_default().as_bytes().to_vec();
             let (parts, body) = req.into_parts();
-            let body = hyper::body::to_bytes(body).await?.to_vec();
+            let body = axum::body::to_bytes(body, usize::MAX).await?.to_vec();
             let headers = &parts.headers;
             let accept_header = headers.get("Accept").cloned();
             let parts = Arc::new(RwLock::new(parts));

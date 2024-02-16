@@ -2,25 +2,10 @@ use std::future::Future;
 
 use dioxus_core::{Element, VirtualDom};
 
-#[cfg(feature = "warp")]
-pub mod warp_adapter;
-#[cfg(feature = "warp")]
-pub use warp_adapter::*;
-
 #[cfg(feature = "axum")]
 pub mod axum_adapter;
 #[cfg(feature = "axum")]
 pub use axum_adapter::*;
-
-#[cfg(feature = "salvo")]
-pub mod salvo_adapter;
-#[cfg(feature = "salvo")]
-pub use salvo_adapter::*;
-
-#[cfg(feature = "rocket")]
-pub mod rocket_adapter;
-#[cfg(feature = "rocket")]
-pub use rocket_adapter::*;
 
 /// A trait for servers that can be used to host a LiveView app.
 pub trait LiveviewRouter {

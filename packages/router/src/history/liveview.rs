@@ -175,10 +175,8 @@ where
         let eval_provider = consume_context::<Rc<dyn EvalProvider>>();
 
         let create_eval = Rc::new(move |script: &str| {
-            eval_provider
-                .new_evaluator(script.to_string())
-                .map(UseEval::new)
-        }) as Rc<dyn Fn(&str) -> Result<UseEval, EvalError>>;
+            UseEval::new(eval_provider.new_evaluator(script.to_string()))
+        }) as Rc<dyn Fn(&str) -> UseEval>;
 
         // Listen to server actions
         spawn({
@@ -256,7 +254,7 @@ where
                           history.length,
                         ];
                     "#,
-                    ).expect("failed to load state").await.expect("serializable state");
+                    ).await.expect("serializable state");
                     let (route, state, session, depth) = serde_json::from_value::<(
                         String,
                         Option<State>,
@@ -276,7 +274,8 @@ where
                     // Call the updater callback
                     (updater.read().unwrap())();
 
-                    create_eval(&format!(r#"
+                    create_eval(&format!(
+                        r#"
                         // this does not trigger a PopState event
                         history.replaceState({state}, "", "{route}");
                         sessionStorage.setItem("liveview", '{session}');
@@ -287,7 +286,8 @@ where
                             event.state,
                           ]);
                         }});
-                    "#)).expect("failed to initialize popstate")
+                    "#
+                    ))
                 };
 
                 loop {

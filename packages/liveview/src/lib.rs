@@ -25,7 +25,7 @@ impl<T> WebsocketRx for T where T: StreamExt<Item = Result<String, LiveViewError
 
 #[derive(Debug, thiserror::Error)]
 pub enum LiveViewError {
-    #[error("warp error")]
+    #[error("Sending to client error")]
     SendingFailed,
 }
 
@@ -113,7 +113,7 @@ pub fn interpreter_glue(url_or_path: &str) -> String {
     // If the url starts with a `/`, generate glue which reuses current host
     let get_ws_url = if url_or_path.starts_with('/') {
         r#"
-  let loc = window.location; 
+  let loc = window.location;
   let new_url = "";
   if (loc.protocol === "https:") {{
       new_url = "wss:";
@@ -135,7 +135,7 @@ pub fn interpreter_glue(url_or_path: &str) -> String {
     function __dioxusGetWsUrl(path) {{
       {get_ws_url}
     }}
-    
+
     var WS_ADDR = __dioxusGetWsUrl("{url_or_path}");
     {handle_edits}
 </script>

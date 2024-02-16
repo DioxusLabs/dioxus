@@ -8,7 +8,7 @@ publish = false
 
 [dependencies]
 dioxus = { workspace = true, features = ["router"] }
-axum = { version = "0.6.12", optional = true }
+axum = { workspace = true, optional = true }
 tokio = {workspace = true, features = ["full"], optional = true }
 serde = { version = "1.0.159", features = ["derive"] }
 

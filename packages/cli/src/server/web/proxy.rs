@@ -5,6 +5,8 @@ use anyhow::Context;
 use axum::{http::StatusCode, routing::any, Router};
 use hyper::{Request, Response, Uri};
 
+use axum::body::Body as MyBody;
+
 #[derive(Debug, Clone)]
 struct ProxyClient {
     inner: hyper::Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
@@ -24,10 +26,7 @@ impl ProxyClient {
         }
     }
 
-    async fn send(
-        &self,
-        mut req: Request<hyper::body::Body>,
-    ) -> Result<Response<hyper::body::Body>> {
+    async fn send(&self, mut req: Request<MyBody>) -> Result<Response<MyBody>> {
         let mut uri_parts = req.uri().clone().into_parts();
         uri_parts.authority = self.url.authority().cloned();
         uri_parts.scheme = self.url.scheme().cloned();
