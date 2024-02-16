@@ -20,7 +20,7 @@ use axum::{
     Router,
 };
 use axum_extra::TypedHeader;
-use axum_server::tls_rustls::RustlsConfig;
+use axum_server::{service::SendService, tls_rustls::RustlsConfig};
 use dioxus_cli_config::CrateConfig;
 use dioxus_cli_config::WebHttpsConfig;
 
@@ -316,7 +316,7 @@ async fn setup_router(
         .service(ServeDir::new(config.out_dir()));
 
     // Setup websocket
-    let mut router = Router::new().route("/_dioxus/ws", get(ws_handler));
+    let mut router = Router::new().route("/_dioxus/ws", get(ws_handler.into()));
 
     // Setup proxy
     for proxy_config in config.dioxus_config.web.proxy {
@@ -324,7 +324,7 @@ async fn setup_router(
     }
 
     // Route file service
-    router = router.fallback(get_service(file_service).handle_error(
+    router = router.fallback(get_service(file_service.into_service()).handle_error(
         |error: std::io::Error| async move {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -336,7 +336,7 @@ async fn setup_router(
     router = if let Some(base_path) = config.dioxus_config.web.app.base_path.clone() {
         let base_path = format!("/{}", base_path.trim_matches('/'));
         Router::new()
-            .nest(&base_path, axum::routing::any_service(router))
+            .nest(&base_path, axum::routing::any_service(router.into()))
             .fallback(get(move || {
                 let base_path = base_path.clone();
                 async move { format!("Outside of the base path: {}", base_path) }
@@ -347,7 +347,7 @@ async fn setup_router(
 
     // Setup routes
     router = router
-        .route("/_dioxus/hot_reload", get(hot_reload_handler))
+        .route("/_dioxus/hot_reload", get(hot_reload_handler.into()))
         .layer(cors)
         .layer(Extension(ws_reload));
 
@@ -389,9 +389,8 @@ async fn start_server(
                 .await?
         }
         None => {
-            axum::Server::bind(&addr)
-                .serve(router.into_make_service())
-                .await?
+            let listener = tokio::net::TcpListener::bind(&addr).await?;
+            axum::serve(listener, router.into_make_service()).await?
         }
     }
 
