@@ -376,7 +376,12 @@ impl VirtualDom {
             return;
         };
 
-        tracing::event!(tracing::Level::TRACE, "Marking scope {:?} ({}) as dirty", id, scope.name);
+        tracing::event!(
+            tracing::Level::TRACE,
+            "Marking scope {:?} ({}) as dirty",
+            id,
+            scope.name
+        );
         self.dirty_scopes.insert(DirtyScope {
             height: scope.height(),
             id,
@@ -644,7 +649,11 @@ impl VirtualDom {
     | | |       <-- no, broke early
     |           <-- no, broke early
     */
-    #[instrument(skip(self, uievent), level = "trace", name = "VirtualDom::handle_bubbling_event")]
+    #[instrument(
+        skip(self, uievent),
+        level = "trace",
+        name = "VirtualDom::handle_bubbling_event"
+    )]
     fn handle_bubbling_event(
         &mut self,
         mut parent: Option<ElementRef>,
@@ -683,7 +692,11 @@ impl VirtualDom {
 
             // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
             // We check the bubble state between each call to see if the event has been stopped from bubbling
-            tracing::event!(tracing::Level::TRACE, "Calling {} listeners", listeners.len());
+            tracing::event!(
+                tracing::Level::TRACE,
+                "Calling {} listeners",
+                listeners.len()
+            );
             for listener in listeners.into_iter().rev() {
                 if let AttributeValue::Listener(listener) = listener {
                     self.runtime.rendering.set(false);
@@ -702,7 +715,11 @@ impl VirtualDom {
     }
 
     /// Call an event listener in the simplest way possible without bubbling upwards
-    #[instrument(skip(self, uievent), level = "trace", name = "VirtualDom::handle_non_bubbling_event")]
+    #[instrument(
+        skip(self, uievent),
+        level = "trace",
+        name = "VirtualDom::handle_non_bubbling_event"
+    )]
     fn handle_non_bubbling_event(&mut self, node: ElementRef, name: &str, uievent: Event<dyn Any>) {
         let el_ref = &self.mounts[node.mount.0].node;
         let node_template = el_ref.template.get();

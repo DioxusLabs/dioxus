@@ -1,10 +1,9 @@
-use std::rc::Rc;
+use dioxus::html::SerializedHtmlEventConverter;
 use dioxus::prelude::*;
 use dioxus_core::ElementId;
-use tracing_fluent_assertions::{AssertionsLayer, AssertionRegistry};
+use std::rc::Rc;
+use tracing_fluent_assertions::{AssertionRegistry, AssertionsLayer};
 use tracing_subscriber::{layer::SubscriberExt, Registry};
-use dioxus::html::SerializedHtmlEventConverter;
-
 
 #[test]
 fn miri_rollover() {
@@ -18,14 +17,16 @@ fn miri_rollover() {
         .with(AssertionsLayer::new(&assertion_registry));
     tracing::subscriber::set_global_default(subscriber).unwrap();
 
-    let new_virtual_dom = assertion_registry.build()
+    let new_virtual_dom = assertion_registry
+        .build()
         .with_name("VirtualDom::new")
         .was_created()
         .was_entered_exactly(1)
         .was_closed()
         .finalize();
 
-    let edited_virtual_dom = assertion_registry.build()
+    let edited_virtual_dom = assertion_registry
+        .build()
         .with_name("VirtualDom::rebuild")
         .was_created()
         .was_entered_exactly(1)
