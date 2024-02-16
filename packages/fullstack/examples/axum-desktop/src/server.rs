@@ -5,7 +5,7 @@
 
 use axum_desktop::*;
 use dioxus::prelude::*;
-use dioxus_fullstack::server_fn::axum::register_explicit;
+use server_fn::axum::register_explicit;
 
 #[tokio::main]
 async fn main() {

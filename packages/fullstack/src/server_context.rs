@@ -12,7 +12,7 @@ pub struct DioxusServerContext {
         std::sync::RwLock<anymap::Map<dyn anymap::any::Any + Send + Sync + 'static>>,
     >,
     response_parts: std::sync::Arc<std::sync::RwLock<http::response::Parts>>,
-    pub(crate) parts: Arc<RwLock<http::request::Parts>>,
+    pub(crate) parts: Arc<tokio::sync::RwLock<http::request::Parts>>,
     html_data: Arc<RwLock<HTMLData>>,
 }
 
@@ -24,7 +24,9 @@ impl Default for DioxusServerContext {
             response_parts: std::sync::Arc::new(RwLock::new(
                 http::response::Response::new(()).into_parts().0,
             )),
-            parts: std::sync::Arc::new(RwLock::new(http::request::Request::new(()).into_parts().0)),
+            parts: std::sync::Arc::new(tokio::sync::RwLock::new(
+                http::request::Request::new(()).into_parts().0,
+            )),
             html_data: Arc::new(RwLock::new(HTMLData::default())),
         }
     }
@@ -40,7 +42,7 @@ mod server_fn_impl {
 
     impl DioxusServerContext {
         /// Create a new server context from a request
-        pub fn new(parts: impl Into<Arc<RwLock<http::request::Parts>>>) -> Self {
+        pub fn new(parts: impl Into<Arc<tokio::sync::RwLock<http::request::Parts>>>) -> Self {
             Self {
                 parts: parts.into(),
                 shared_context: Arc::new(RwLock::new(SendSyncAnyMap::new())),
@@ -82,19 +84,15 @@ mod server_fn_impl {
         /// Get the request that triggered:
         /// - The initial SSR render if called from a ScopeState or ServerFn
         /// - The server function to be called if called from a server function after the initial render
-        pub fn request_parts(
-            &self,
-        ) -> std::sync::LockResult<RwLockReadGuard<'_, http::request::Parts>> {
-            self.parts.read()
+        pub fn request_parts(&self) -> tokio::sync::RwLockReadGuard<'_, http::request::Parts> {
+            self.parts.blocking_read()
         }
 
         /// Get the request that triggered:
         /// - The initial SSR render if called from a ScopeState or ServerFn
         /// - The server function to be called if called from a server function after the initial render
-        pub fn request_parts_mut(
-            &self,
-        ) -> std::sync::LockResult<RwLockWriteGuard<'_, http::request::Parts>> {
-            self.parts.write()
+        pub fn request_parts_mut(&self) -> tokio::sync::RwLockWriteGuard<'_, http::request::Parts> {
+            self.parts.blocking_write()
         }
 
         /// Extract some part from the request
@@ -185,7 +183,7 @@ impl<F: std::future::Future> std::future::Future for ProvideServerContext<F> {
 }
 
 /// A trait for extracting types from the server context
-#[async_trait::async_trait(?Send)]
+#[async_trait::async_trait]
 pub trait FromServerContext<I = ()>: Sized {
     /// The error type returned when extraction fails. This type must implement `std::error::Error`.
     type Rejection: std::error::Error;
@@ -215,7 +213,7 @@ impl<T: 'static> std::error::Error for NotFoundInServerContext<T> {}
 
 pub struct FromContext<T: std::marker::Send + std::marker::Sync + Clone + 'static>(pub(crate) T);
 
-#[async_trait::async_trait(?Send)]
+#[async_trait::async_trait]
 impl<T: Send + Sync + Clone + 'static> FromServerContext for FromContext<T> {
     type Rejection = NotFoundInServerContext<T>;
 
@@ -232,7 +230,7 @@ impl<T: Send + Sync + Clone + 'static> FromServerContext for FromContext<T> {
 pub struct Axum;
 
 #[cfg(feature = "axum")]
-#[async_trait::async_trait(?Send)]
+#[async_trait::async_trait]
 impl<
         I: axum::extract::FromRequestParts<(), Rejection = R>,
         R: axum::response::IntoResponse + std::error::Error,
@@ -241,6 +239,6 @@ impl<
     type Rejection = R;
 
     async fn from_request(req: &DioxusServerContext) -> Result<Self, Self::Rejection> {
-        Ok(I::from_request_parts(&mut *req.request_parts_mut().unwrap(), &()).await?)
+        Ok(I::from_request_parts(&mut *req.request_parts_mut(), &()).await?)
     }
 }

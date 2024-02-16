@@ -135,7 +135,6 @@ where
         MemoryHistory::<R>::with_initial_path(
             dioxus_fullstack::prelude::server_context()
                 .request_parts()
-                .unwrap()
                 .uri
                 .to_string()
                 .parse()

@@ -14,16 +14,25 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "server")]
 #[tokio::main]
 async fn main() {
-    pre_cache_static_routes(
-        &ServeConfig::new_with_router(
-            dioxus_fullstack::router::FullstackRouterConfig::<Route>::default(),
-        )
-        .assets_path("docs")
-        .incremental(IncrementalRendererConfig::default().static_dir("docs"))
-        .build(),
-    )
-    .await
-    .unwrap();
+    let wrapper = DefaultRenderer {
+        before_body: r#"<!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width,
+        initial-scale=1.0">
+        <title>Dioxus Application</title>
+    </head>
+    <body>"#
+            .to_string(),
+        after_body: r#"</body>
+    </html>"#
+            .to_string(),
+    };
+    let mut renderer = IncrementalRenderer::builder().build();
+    pre_cache_static_routes::<Route, _>(&mut renderer, &wrapper)
+        .await
+        .unwrap();
 }
 
 // Hydrate the page

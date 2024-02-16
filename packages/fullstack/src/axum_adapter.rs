@@ -361,7 +361,8 @@ pub async fn render_handler_with_context<F: FnMut(&mut DioxusServerContext)>(
 ) -> impl IntoResponse {
     let (parts, _) = request.into_parts();
     let url = parts.uri.path_and_query().unwrap().to_string();
-    let parts: Arc<RwLock<http::request::Parts>> = Arc::new(RwLock::new(parts.into()));
+    let parts: Arc<tokio::sync::RwLock<http::request::Parts>> =
+        Arc::new(tokio::sync::RwLock::new(parts.into()));
     let mut server_context = DioxusServerContext::new(parts.clone());
     inject_context(&mut server_context);
 
@@ -483,7 +484,7 @@ async fn handle_server_fns_inner(
             server_fn::axum::get_server_fn_service(&path_string)
         {
 
-            let server_context = DioxusServerContext::new(Arc::new(RwLock::new(parts)));
+            let server_context = DioxusServerContext::new(Arc::new(tokio::sync::RwLock::new(parts)));
             additional_context();
 
             // store Accepts and Referrer in case we need them for redirect (below)
