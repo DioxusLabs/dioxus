@@ -6,7 +6,7 @@ use tracing_fluent_assertions::{AssertionRegistry, AssertionsLayer};
 use tracing_subscriber::{layer::SubscriberExt, Registry};
 
 #[test]
-fn miri_rollover() {
+fn basic_tracing() {
     // setup tracing
     let assertion_registry = AssertionRegistry::default();
     let base_subscriber = Registry::default();
