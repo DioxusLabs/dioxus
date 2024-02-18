@@ -1,6 +1,4 @@
 use crate::assets::AssetConfigDropGuard;
-#[cfg(feature = "plugin")]
-use crate::plugin::PluginManager;
 use crate::server::fullstack;
 use dioxus_cli_config::Platform;
 
@@ -55,7 +53,7 @@ impl Build {
         crate_config.set_cargo_args(self.build.cargo_args.clone());
 
         // #[cfg(feature = "plugin")]
-        // let _ = PluginManager::on_build_start(&crate_config, &platform);
+        // let _ = crate::plugin::PluginManager::on_build_start(&crate_config, &platform);
 
         let build_result = match platform {
             Platform::Web => {
@@ -116,7 +114,7 @@ impl Build {
         file.write_all(temp.as_bytes())?;
 
         // #[cfg(feature = "plugin")]
-        // let _ = PluginManager::on_build_finish(&crate_config, &platform);
+        // let _ = crate::plugin::PluginManager::on_build_finish(&crate_config, &platform);
 
         Ok(())
     }

@@ -102,30 +102,43 @@ mod test {
     use super::*;
 
     use axum::{extract::Path, Router};
-    use axum_server::Server;
+    use axum_server::{Handle, Server};
 
-    fn setup_servers(
-        mut config: WebProxyConfig,
-    ) -> (
-        tokio::task::JoinHandle<()>,
-        tokio::task::JoinHandle<()>,
-        String,
-    ) {
+    async fn setup_servers(mut config: WebProxyConfig) -> String {
         let backend_router = Router::new().route(
             "/*path",
             any(|path: Path<String>| async move { format!("backend: {}", path.0) }),
         );
-        let backend_server =
-            Server::bind("127.0.0.1:0".parse().unwrap()).serve(backend_router.into_make_service());
-        let backend_addr = backend_server.local_addr();
-        let backend_handle = tokio::spawn(async move { backend_server.await.unwrap() });
-        config.backend = format!("http://{}{}", backend_addr, config.backend);
+
+        // The API backend server
+        let backend_handle_handle = Handle::new();
+        let backend_handle_handle_ = backend_handle_handle.clone();
+        tokio::spawn(async move {
+            Server::bind("127.0.0.1:0".parse().unwrap())
+                .handle(backend_handle_handle_)
+                .serve(backend_router.into_make_service())
+                .await
+                .unwrap();
+        });
+
+        // Set the user's config to this dummy API we just built so we can test it
+        let backend_addr = backend_handle_handle.listening().await.unwrap();
+        config.backend = dbg!(format!("http://{}{}", backend_addr, config.backend));
+
+        // Now set up our actual filesystem server
         let router = super::add_proxy(Router::new(), &config);
-        let server =
-            Server::bind("127.0.0.1:0".parse().unwrap()).serve(router.unwrap().into_make_service());
-        let server_addr = server.local_addr();
-        let server_handle = tokio::spawn(async move { server.await.unwrap() });
-        (backend_handle, server_handle, server_addr.to_string())
+        let server_handle_handle = Handle::new();
+        let server_handle_handle_ = server_handle_handle.clone();
+        tokio::spawn(async move {
+            Server::bind("127.0.0.1:0".parse().unwrap())
+                .handle(server_handle_handle_)
+                .serve(router.unwrap().into_make_service())
+                .await
+                .unwrap();
+        });
+
+        // Expose *just* the fileystem web server's address
+        server_handle_handle.listening().await.unwrap().to_string()
     }
 
     async fn test_proxy_requests(path: String) {
@@ -137,48 +150,38 @@ mod test {
             // So in day to day usage, use `http://localhost:8000/api` instead!
             backend: path,
         };
-        let (backend_handle, server_handle, server_addr) = setup_servers(config).await;
-        let resp = Client::new()
-            .get(format!("http://{}/api", server_addr).parse().unwrap())
-            .await
-            .unwrap();
-        assert_eq!(resp.status(), StatusCode::OK);
+
+        let server_addr = setup_servers(config).await;
+
         assert_eq!(
-            axum::body::to_bytes(resp.into_body(), usize::MAX)
+            reqwest::get(format!("http://{}/api", server_addr))
+                .await
+                .unwrap()
+                .text()
                 .await
                 .unwrap(),
-            "backend: /api"
+            "backend: api"
         );
 
-        let resp = Client::new()
-            .get(format!("http://{}/api/", server_addr).parse().unwrap())
-            .await
-            .unwrap();
-        assert_eq!(resp.status(), StatusCode::OK);
         assert_eq!(
-            axum::body::to_bytes(resp.into_body(), usize::MAX)
+            reqwest::get(dbg!(format!("http://{}/api/", server_addr)))
+                .await
+                .unwrap()
+                .text()
                 .await
                 .unwrap(),
             "backend: /api/"
         );
 
-        let resp = Client::new()
-            .get(
-                format!("http://{}/api/subpath", server_addr)
-                    .parse()
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(resp.status(), StatusCode::OK);
         assert_eq!(
-            axum::body::to_bytes(resp.into_body(), usize::MAX)
+            reqwest::get(format!("http://{}/api/subpath", server_addr))
+                .await
+                .unwrap()
+                .text()
                 .await
                 .unwrap(),
             "backend: /api/subpath"
         );
-        backend_handle.abort();
-        server_handle.abort();
     }
 
     #[tokio::test]

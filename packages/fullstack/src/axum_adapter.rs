@@ -68,7 +68,6 @@ use http::header::*;
 use server_fn::error::NoCustomError;
 use server_fn::error::ServerFnErrorSerde;
 use std::sync::Arc;
-use std::sync::RwLock;
 
 use crate::{
     prelude::*, render::SSRState, serve_config::ServeConfig, server_context::DioxusServerContext,
@@ -478,7 +477,7 @@ async fn handle_server_fns_inner(
     get_local_pool().spawn_pinned(move || async move {
             let (parts, body) = req.into_parts();
             let req = Request::from_parts(parts.clone(), body);
-        
+
 
         let res = if let Some(mut service) =
             server_fn::axum::get_server_fn_service(&path_string)
