@@ -65,8 +65,7 @@ use axum::{
 };
 use dioxus_lib::prelude::VirtualDom;
 use http::header::*;
-use server_fn::error::NoCustomError;
-use server_fn::error::ServerFnErrorSerde;
+
 use std::sync::Arc;
 
 use crate::{
@@ -453,20 +452,6 @@ pub async fn hot_reload_handler(ws: axum::extract::WebSocketUpgrade) -> impl Int
     })
 }
 
-fn get_local_pool() -> tokio_util::task::LocalPoolHandle {
-    use once_cell::sync::OnceCell;
-    static LOCAL_POOL: OnceCell<tokio_util::task::LocalPoolHandle> = OnceCell::new();
-    LOCAL_POOL
-        .get_or_init(|| {
-            tokio_util::task::LocalPoolHandle::new(
-                std::thread::available_parallelism()
-                    .map(Into::into)
-                    .unwrap_or(1),
-            )
-        })
-        .clone()
-}
-
 /// A handler for Dioxus server functions. This will run the server function and return the result.
 async fn handle_server_fns_inner(
     path: &str,
@@ -475,15 +460,13 @@ async fn handle_server_fns_inner(
 ) -> impl IntoResponse {
     use server_fn::middleware::Service;
 
-    let (tx, rx) = tokio::sync::oneshot::channel();
     let path_string = path.to_string();
 
-    get_local_pool().spawn_pinned(move || async move {
-            let (parts, body) = req.into_parts();
-            let req = Request::from_parts(parts.clone(), body);
+    let future = move || async move {
+        let (parts, body) = req.into_parts();
+        let req = Request::from_parts(parts.clone(), body);
 
-
-        let res = if let Some(mut service) =
+        if let Some(mut service) =
             server_fn::axum::get_server_fn_service(&path_string)
         {
 
@@ -538,18 +521,28 @@ async fn handle_server_fns_inner(
                 }
             )
         }
-        .expect("could not build Response");
+        .expect("could not build Response")
+    };
+    #[cfg(target_arch = "wasm32")]
+    {
+        use futures_util::future::FutureExt;
 
-        _ = tx.send(res);
-    });
-
-    rx.await.unwrap_or_else(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            ServerFnError::<NoCustomError>::ServerError(e.to_string())
-                .ser()
-                .unwrap_or_default(),
-        )
-            .into_response()
-    })
+        let result = tokio::task::spawn_local(future);
+        let result = result.then(|f| async move { f.unwrap() });
+        result.await.unwrap_or_else(|e| {
+            use server_fn::error::NoCustomError;
+            use server_fn::error::ServerFnErrorSerde;
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                ServerFnError::<NoCustomError>::ServerError(e.to_string())
+                    .ser()
+                    .unwrap_or_default(),
+            )
+                .into_response()
+        })
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        future().await
+    }
 }

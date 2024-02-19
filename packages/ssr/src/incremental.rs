@@ -3,18 +3,19 @@
 #![allow(non_snake_case)]
 
 use crate::fs_cache::ValidCachedPath;
+use chrono::offset::Utc;
+use chrono::DateTime;
 use dioxus_core::VirtualDom;
 use rustc_hash::FxHasher;
 use std::{
     future::Future,
     hash::BuildHasherDefault,
-    io::Write,
     ops::{Deref, DerefMut},
     path::PathBuf,
     pin::Pin,
     time::{Duration, SystemTime},
 };
-use tokio::io::{AsyncWrite, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 pub use crate::fs_cache::*;
 pub use crate::incremental_cfg::*;
@@ -24,7 +25,7 @@ pub struct IncrementalRenderer {
     pub(crate) static_dir: PathBuf,
     #[allow(clippy::type_complexity)]
     pub(crate) memory_cache:
-        Option<lru::LruCache<String, (SystemTime, Vec<u8>), BuildHasherDefault<FxHasher>>>,
+        Option<lru::LruCache<String, (DateTime<Utc>, Vec<u8>), BuildHasherDefault<FxHasher>>>,
     pub(crate) invalidate_after: Option<Duration>,
     pub(crate) ssr_renderer: crate::Renderer,
     pub(crate) map_path: PathMapFn,
@@ -65,6 +66,7 @@ impl IncrementalRenderer {
         let _ = std::fs::remove_dir_all(&self.static_dir);
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn track_timestamps(&self) -> bool {
         self.invalidate_after.is_some()
     }
@@ -98,25 +100,30 @@ impl IncrementalRenderer {
         route: String,
         html: Vec<u8>,
     ) -> Result<RenderFreshness, IncrementalRendererError> {
-        let file_path = self.route_as_path(&route);
-        if let Some(parent) = file_path.parent() {
-            if !parent.exists() {
-                std::fs::create_dir_all(parent)?;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            use std::io::Write;
+            let file_path = self.route_as_path(&route);
+            if let Some(parent) = file_path.parent() {
+                if !parent.exists() {
+                    std::fs::create_dir_all(parent)?;
+                }
             }
+            let file = std::fs::File::create(file_path)?;
+            let mut file = std::io::BufWriter::new(file);
+            file.write_all(&html)?;
         }
-        let file = std::fs::File::create(file_path)?;
-        let mut file = std::io::BufWriter::new(file);
-        file.write_all(&html)?;
         self.add_to_memory_cache(route, html);
         Ok(RenderFreshness::now(self.invalidate_after))
     }
 
     fn add_to_memory_cache(&mut self, route: String, html: Vec<u8>) {
         if let Some(cache) = self.memory_cache.as_mut() {
-            cache.put(route, (SystemTime::now(), html));
+            cache.put(route, (Utc::now(), html));
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn promote_memory_cache<K: AsRef<str>>(&mut self, route: K) {
         if let Some(cache) = self.memory_cache.as_mut() {
             cache.promote(route.as_ref())
@@ -134,27 +141,28 @@ impl IncrementalRenderer {
             .as_mut()
             .and_then(|cache| cache.get(&route))
         {
-            if let Ok(elapsed) = timestamp.elapsed() {
-                let age = elapsed.as_secs();
-                if let Some(invalidate_after) = self.invalidate_after {
-                    if elapsed < invalidate_after {
-                        tracing::trace!("memory cache hit {:?}", route);
-                        output.write_all(cache_hit).await?;
-                        let max_age = invalidate_after.as_secs();
-                        return Ok(Some(RenderFreshness::new(age, max_age)));
-                    }
-                } else {
+            let now = Utc::now();
+            let elapsed = timestamp.signed_duration_since(now);
+            let age = elapsed.num_seconds();
+            if let Some(invalidate_after) = self.invalidate_after {
+                if elapsed.to_std().unwrap() < invalidate_after {
                     tracing::trace!("memory cache hit {:?}", route);
                     output.write_all(cache_hit).await?;
-                    return Ok(Some(RenderFreshness::new_age(age)));
+                    let max_age = invalidate_after.as_secs();
+                    return Ok(Some(RenderFreshness::new(age as u64, max_age)));
                 }
+            } else {
+                tracing::trace!("memory cache hit {:?}", route);
+                output.write_all(cache_hit).await?;
+                return Ok(Some(RenderFreshness::new_age(age as u64)));
             }
         }
         // check the file cache
+        #[cfg(not(target_arch = "wasm32"))]
         if let Some(file_path) = self.find_file(&route) {
             if let Some(freshness) = file_path.freshness(self.invalidate_after) {
                 if let Ok(file) = tokio::fs::File::open(file_path.full_path).await {
-                    let mut file = BufReader::new(file);
+                    let mut file = tokio::io::BufReader::new(file);
                     tokio::io::copy_buf(&mut file, output).await?;
                     tracing::trace!("file cache hit {:?}", route);
                     self.promote_memory_cache(&route);
@@ -223,6 +231,7 @@ impl IncrementalRenderer {
         }
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn route_as_path(&self, route: &str) -> PathBuf {
         let mut file_path = (self.map_path)(route);
         if self.track_timestamps() {

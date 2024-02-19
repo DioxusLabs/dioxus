@@ -9,6 +9,7 @@ use std::path::PathBuf;
 #[derive(Clone, Default)]
 pub struct ServeConfigBuilder {
     pub(crate) root_id: Option<&'static str>,
+    pub(crate) index_html: Option<String>,
     pub(crate) index_path: Option<PathBuf>,
     pub(crate) assets_path: Option<PathBuf>,
     pub(crate) incremental:
@@ -40,6 +41,7 @@ impl ServeConfigBuilder {
     pub fn new() -> Self {
         Self {
             root_id: None,
+            index_html: None,
             index_path: None,
             assets_path: None,
             incremental: None,
@@ -49,6 +51,12 @@ impl ServeConfigBuilder {
     /// Enable incremental static generation
     pub fn incremental(mut self, cfg: dioxus_ssr::incremental::IncrementalRendererConfig) -> Self {
         self.incremental = Some(std::sync::Arc::new(cfg));
+        self
+    }
+
+    /// Set the contents of the index.html file to be served. (precedence over index_path)
+    pub fn index_html(mut self, index_html: String) -> Self {
+        self.index_html = Some(index_html);
         self
     }
 
@@ -86,8 +94,11 @@ impl ServeConfigBuilder {
 
         let root_id = self.root_id.unwrap_or("main");
 
-        let index = load_index_html(index_path, root_id);
+        let index_html = self
+            .index_html
+            .unwrap_or_else(|| load_index_path(index_path));
 
+        let index = load_index_html(index_html, root_id);
         ServeConfig {
             index,
             assets_path,
@@ -96,13 +107,16 @@ impl ServeConfigBuilder {
     }
 }
 
-fn load_index_html(path: PathBuf, root_id: &'static str) -> IndexHtml {
+fn load_index_path(path: PathBuf) -> String {
     let mut file = File::open(path).expect("Failed to find index.html. Make sure the index_path is set correctly and the WASM application has been built.");
 
     let mut contents = String::new();
     file.read_to_string(&mut contents)
         .expect("Failed to read index.html");
+    contents
+}
 
+fn load_index_html(contents: String, root_id: &'static str) -> IndexHtml {
     let (pre_main, post_main) = contents.split_once(&format!("id=\"{root_id}\"")).unwrap_or_else(|| panic!("Failed to find id=\"{root_id}\" in index.html. The id is used to inject the application into the page."));
 
     let post_main = post_main.split_once('>').unwrap_or_else(|| {
@@ -131,6 +145,7 @@ pub(crate) struct IndexHtml {
 #[derive(Clone)]
 pub struct ServeConfig {
     pub(crate) index: IndexHtml,
+    #[allow(dead_code)]
     pub(crate) assets_path: PathBuf,
     pub(crate) incremental:
         Option<std::sync::Arc<dioxus_ssr::incremental::IncrementalRendererConfig>>,

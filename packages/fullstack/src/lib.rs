@@ -16,7 +16,12 @@ mod config;
 mod hooks;
 pub mod launch;
 
-#[cfg(all(debug_assertions, feature = "hot-reload", feature = "server"))]
+#[cfg(all(
+    debug_assertions,
+    feature = "hot-reload",
+    feature = "server",
+    not(target_arch = "wasm32")
+))]
 mod hot_reload;
 pub use config::*;
 

@@ -103,6 +103,7 @@ impl ValidCachedPath {
         })
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn freshness(&self, max_age: Option<std::time::Duration>) -> Option<RenderFreshness> {
         let age = self.timestamp.elapsed().ok()?.as_secs();
         let max_age = max_age.map(|max_age| max_age.as_secs());

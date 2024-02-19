@@ -18,9 +18,15 @@ rustc-hash = "1.1.0"
 lru  = { workspace = true }
 tracing = { workspace = true }
 http = { workspace = true }
-tokio = { version = "1.28", features = ["fs", "io-util"], optional = true }
 async-trait = { workspace = true }
 serde_json = { workspace = true }
+chrono = { verison = "0.4.34", optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tokio = { version = "1.28", features = ["io-util"], optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { version = "1.28", features = ["fs", "io-util"], optional = true }
 
 [dev-dependencies]
 dioxus = { workspace = true }
@@ -36,4 +42,4 @@ fs_extra = "1.2.0"
 
 [features]
 default = []
-incremental = ["dep:tokio"]
+incremental = ["dep:tokio", "chrono"]

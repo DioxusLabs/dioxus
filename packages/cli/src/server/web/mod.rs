@@ -367,8 +367,8 @@ async fn start_server(
     #[cfg(feature = "plugin")]
     PluginManager::on_serve_start(_config)?;
 
-    // Parse address
-    let addr = format!("0.0.0.0:{}", port).parse().unwrap();
+    // Bind the server to `[::]` and it will LISTEN for both IPv4 and IPv6. (required IPv6 dual stack)
+    let addr = format!("[::]:{}", port).parse().unwrap();
 
     // Open the browser
     if start_browser {
