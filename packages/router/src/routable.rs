@@ -311,32 +311,6 @@ pub trait Routable: FromStr + Display + Clone + 'static {
     }
 }
 
-trait RoutableFactory {
-    type Err: Display;
-    type Routable: Routable + FromStr<Err = Self::Err>;
-}
-
-impl<R: Routable + FromStr> RoutableFactory for R
-where
-    <R as FromStr>::Err: Display,
-{
-    type Err = <R as FromStr>::Err;
-    type Routable = R;
-}
-
-trait RouteRenderable: Display + 'static {
-    fn render(&self, level: usize) -> Element;
-}
-
-impl<R: Routable> RouteRenderable for R
-where
-    <R as FromStr>::Err: Display,
-{
-    fn render(&self, level: usize) -> Element {
-        self.render(level)
-    }
-}
-
 /// A type erased map of the site structure.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SiteMapSegment {

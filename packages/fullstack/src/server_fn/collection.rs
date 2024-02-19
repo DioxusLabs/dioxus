@@ -1,5 +1,5 @@
 #[cfg(feature = "server")]
-#[cfg_attr(any(docsrs, feature = "nightly-doc"), doc(cfg(feature = "server")))]
+#[cfg_attr(docsrs, doc(cfg(feature = "server")))]
 #[derive(Clone)]
 /// A trait object for a function that be called on serializable arguments and returns a serializable result.
 pub struct ServerFnTraitObj(server_fn::ServerFnTraitObj<()>);
@@ -41,7 +41,7 @@ impl ServerFnTraitObj {
 server_fn::inventory::collect!(ServerFnTraitObj);
 
 #[cfg(feature = "server")]
-#[cfg_attr(any(docsrs, feature = "nightly-doc"), doc(cfg(feature = "server")))]
+#[cfg_attr(docsrs, doc(cfg(feature = "server")))]
 /// Middleware for a server function
 pub struct ServerFnMiddleware {
     /// The prefix of the server function.
@@ -75,7 +75,7 @@ pub(crate) static MIDDLEWARE: once_cell::sync::Lazy<
 server_fn::inventory::collect!(ServerFnMiddleware);
 
 #[cfg(feature = "server")]
-#[cfg_attr(any(docsrs, feature = "nightly-doc"), doc(cfg(feature = "server")))]
+#[cfg_attr(docsrs, doc(cfg(feature = "server")))]
 /// A server function that can be called on serializable arguments and returns a serializable result.
 pub type ServerFunction = server_fn::SerializedFnTraitObj<()>;
 
@@ -92,7 +92,7 @@ static REGISTERED_SERVER_FUNCTIONS: once_cell::sync::Lazy<
 });
 
 #[cfg(feature = "server")]
-#[cfg_attr(any(docsrs, feature = "nightly-doc"), doc(cfg(feature = "server")))]
+#[cfg_attr(docsrs, doc(cfg(feature = "server")))]
 /// The registry of all Dioxus server functions.
 pub struct DioxusServerFnRegistry;
 
@@ -160,7 +160,7 @@ impl server_fn::ServerFunctionRegistry<()> for DioxusServerFnRegistry {
 }
 
 #[cfg(feature = "server")]
-#[cfg_attr(any(docsrs, feature = "nightly-doc"), doc(cfg(feature = "server")))]
+#[cfg_attr(docsrs, doc(cfg(feature = "server")))]
 /// Errors that can occur when registering a server function.
 #[derive(thiserror::Error, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum ServerRegistrationFnError {
@@ -171,23 +171,3 @@ pub enum ServerRegistrationFnError {
     #[error("The server function registry is poisoned: {0}")]
     Poisoned(String),
 }
-
-/// Defines a "server function." A server function can be called from the server or the client,
-/// but the body of its code will only be run on the server, i.e., if a crate feature `ssr` is enabled.
-///
-/// Server functions are created using the `server` macro.
-///
-/// The set of server functions
-/// can be queried on the server for routing purposes by calling [server_fn::ServerFunctionRegistry::get].
-///
-/// Technically, the trait is implemented on a type that describes the server function's arguments, not the function itself.
-pub trait DioxusServerFn: server_fn::ServerFn<()> {
-    /// Registers the server function, allowing the client to query it by URL.
-    #[cfg(feature = "server")]
-    #[cfg_attr(any(docsrs, feature = "nightly-doc"), doc(cfg(feature = "server")))]
-    fn register_explicit() -> Result<(), server_fn::ServerFnError> {
-        Self::register_in_explicit::<DioxusServerFnRegistry>()
-    }
-}
-
-impl<T> DioxusServerFn for T where T: server_fn::ServerFn<()> {}

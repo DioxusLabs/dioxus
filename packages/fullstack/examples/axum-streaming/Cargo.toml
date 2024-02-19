@@ -1,5 +1,5 @@
 [package]
-name = "warp-hello-world"
+name = "axum-streaming"
 version = "0.1.0"
 edition = "2021"
 publish = false
@@ -9,12 +9,16 @@ publish = false
 [dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
 serde = "1.0.159"
+simple_logger = "4.2.0"
 tracing-wasm = "0.2.1"
-tracing = { workspace = true }
+tracing.workspace = true
 tracing-subscriber = "0.3.17"
-reqwest = "0.11.18"
+futures = "0.3.30"
+tokio = { workspace = true, optional = true }
+futures-util.workspace = true
+once_cell = "1.19.0"
 
 [features]
 default = []
-server = ["dioxus/warp"]
+server = ["dioxus/axum", "tokio"]
 web = ["dioxus/web"]

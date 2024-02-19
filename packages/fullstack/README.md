@@ -37,51 +37,43 @@ Full stack Dioxus in under 50 lines of code
 use dioxus::prelude::*;
 use dioxus_fullstack::prelude::*;
 
+// On the web, run our client code
+#[cfg(feature = "web")]
 fn main() {
-    #[cfg(feature = "web")]
     dioxus_web::launch_with_props(
         app,
         get_root_props_from_document().unwrap_or_default(),
         dioxus_web::Config::new().hydrate(true),
     );
-    #[cfg(feature = "server")]
-    {
-        tokio::runtime::Runtime::new()
-            .unwrap()
-            .block_on(async move {
-                warp::serve(
-                    // Automatically handles server side rendering, hot reloading intigration, and hosting server functions
-                    serve_dioxus_application(
-                        "",
-                        ServerConfig::new(app, ()),
-                    )
-                )
-                .run(([127, 0, 0, 1], 8080))
-                .await;
-            });
-    }
+}
+
+// On the server, run a simple warp server
+#[cfg(feature = "server")]
+#[tokio::main]
+async fn main() {
+    // Automatically handles server side rendering, hot reloading intigration, and hosting server functions
+    warp::serve(serve_dioxus_application("", ServerConfig::new(app, ())))
+        .run(([127, 0, 0, 1], 8080))
+        .await;
 }
 
 fn app() -> Element {
     let meaning = use_signal(|| None);
+
     rsx! {
+        h1 { "Meaning of life: {meaning:?}" }
         button {
-            onclick: move |_| {
-                to_owned![meaning];
-                async move {
-                    if let Ok(data) = get_meaning("life the universe and everything".into()).await {
-                        meaning.set(data);
-                    }
+            onclick: move |_| async move {
+                if let Ok(data) = get_meaning("life the universe and everything".into()).await {
+                    meaning.set(data);
                 }
             },
             "Run a server function"
         }
-        "Server said: {meaning:?}"
-    })
+    }
 }
 
-// This code will only run on the server
-#[server(GetMeaning)]
+#[server]
 async fn get_meaning(of: String) -> Result<Option<u32>, ServerFnError> {
     Ok(of.contains("life").then(|| 42))
 }

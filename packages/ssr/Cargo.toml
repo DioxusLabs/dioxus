@@ -15,15 +15,17 @@ generational-box = { workspace = true }
 askama_escape = "0.10.3"
 thiserror = "1.0.23"
 rustc-hash = "1.1.0"
-lru = "0.10.0"
+lru  = { workspace = true }
 tracing = { workspace = true }
-http = "0.2.9"
+http = { workspace = true }
 tokio = { version = "1.28", features = ["fs", "io-util"], optional = true }
-async-trait = "0.1.58"
-serde_json = { version = "1.0" }
+async-trait = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 dioxus = { workspace = true }
+dioxus-signals = { workspace = true }
+
 tracing = { workspace = true }
 fern = { version = "0.6.0", features = ["colored"] }
 anyhow = "1.0"
@@ -31,7 +33,6 @@ argh = "0.1.4"
 serde = "1.0.120"
 serde_json = "1.0.61"
 fs_extra = "1.2.0"
-dioxus-signals = { workspace = true }
 
 [features]
 default = []
