@@ -30,15 +30,9 @@ cargo run --example hello_world
 
 ### Props
 
-[borrowed](./borrowed.rs) - Borrowed props
-
-[inlineprops](./inlineprops.rs) - Demo of `inline_props` macro
-
 [optional_props](./optional_props.rs) - Optional props
 
 ### CSS
-
-[all_css](./all_css.rs) - You can specify any CSS attribute
 
 [tailwind](./tailwind/) - You can use a library for styling
 
@@ -58,12 +52,6 @@ cargo run --example hello_world
 
 ### State Management
 
-[fermi](./fermi.rs) - Fermi library for state management
-
-[pattern_reducer](./pattern_reducer.rs) - The reducer pattern with `use_state`
-
-[rsx_compile_fail](./rsx_compile_fail.rs)
-
 ### Async
 
 [login_form](./login_form.rs) - Login endpoint example
@@ -74,21 +62,7 @@ cargo run --example hello_world
 
 ### SVG
 
-[svg_basic](./svg_basic.rs)
-
 [svg](./svg.rs)
-
-### Performance
-
-[framework_benchmark](./framework_benchmark.rs) - Renders a huge list
-
-> Note: The benchmark should be run in release mode:
->
->```shell
-> cargo run --example framework_benchmark --release
->```
-
-[heavy_compute](./heavy_compute.rs) - How to deal with expensive operations
 
 ## Server-side rendering
 
@@ -119,8 +93,6 @@ cargo run --example hello_world
 ## Example Apps
 
 [calculator](./calculator.rs) - Simple calculator
-
-[pattern_model](./pattern_model.rs) - Simple calculator, but using a custom struct as the model
 
 [crm](./crm.rs) - Toy multi-page customer management app
 
