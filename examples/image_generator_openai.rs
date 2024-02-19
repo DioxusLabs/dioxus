@@ -21,7 +21,7 @@ fn app() -> Element {
         let prompt = prompt.peek().clone();
         let number_of_images = n_image.peek().clone();
 
-        if (api_key.is_empty() || prompt.is_empty() || number_of_images.is_empty()) {
+        if api_key.is_empty() || prompt.is_empty() || number_of_images.is_empty() {
             return;
         }
 

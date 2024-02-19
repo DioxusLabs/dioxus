@@ -39,7 +39,7 @@ web = ["gloo", "web-sys", "wasm-bindgen", "gloo-utils", "js-sys"]
 fullstack = ["dioxus-fullstack"]
 
 [dev-dependencies]
-axum = { version = "0.6.1", features = ["ws"] }
+axum = { workspace = true, features = ["ws"] }
 dioxus = { workspace = true, features = ["router" ]}
 # dioxus-liveview = { workspace = true, features = ["axum"] }
 dioxus-ssr = { path = "../ssr" }

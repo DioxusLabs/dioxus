@@ -17,11 +17,11 @@ proc-macro2 = "^1.0.63"
 quote = "^1.0.26"
 syn = { version = "2", features = ["full"] }
 convert_case = "^0.6.0"
-server_fn_macro = "^0.5.2"
+server_fn_macro = "^0.6.5"
 
 [lib]
 proc-macro = true
 
 [features]
-default = []
+axum = ["server_fn_macro/axum"]
 server = ["server_fn_macro/ssr"]

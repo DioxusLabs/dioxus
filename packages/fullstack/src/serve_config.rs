@@ -1,16 +1,12 @@
 #![allow(non_snake_case)]
-//! Configeration for how to serve a Dioxus application
+//! Configuration for how to serve a Dioxus application
 
-#[cfg(feature = "router")]
-use crate::router::*;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
 
-use dioxus_lib::prelude::*;
-
 /// A ServeConfig is used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct ServeConfigBuilder {
     pub(crate) root_id: Option<&'static str>,
     pub(crate) index_html: Option<String>,
@@ -149,6 +145,7 @@ pub(crate) struct IndexHtml {
 #[derive(Clone)]
 pub struct ServeConfig {
     pub(crate) index: IndexHtml,
+    #[allow(dead_code)]
     pub(crate) assets_path: PathBuf,
     pub(crate) incremental:
         Option<std::sync::Arc<dioxus_ssr::incremental::IncrementalRendererConfig>>,

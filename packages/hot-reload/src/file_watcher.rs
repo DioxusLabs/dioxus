@@ -1,19 +1,17 @@
 use std::{
-    io::{BufRead, BufReader, Write},
+    io::Write,
     path::PathBuf,
     str::FromStr,
     sync::{Arc, Mutex},
 };
 
 use crate::HotReloadMsg;
-use dioxus_core::Template;
 use dioxus_rsx::{
     hot_reload::{FileMap, FileMapBuildResult, UpdateResult},
     HotReloadingContext,
 };
-use interprocess_docfix::local_socket::{LocalSocketListener, LocalSocketStream};
+use interprocess_docfix::local_socket::LocalSocketListener;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
-use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "file_watcher")]
 use dioxus_html::HtmlCtx;

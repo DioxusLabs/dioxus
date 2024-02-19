@@ -5,8 +5,8 @@ fn main() {
             return;
         }
 
-        let liveview_renderers = ["liveview", "axum", "salvo", "warp", "rocket"];
-        let fullstack_renderers = ["axum", "salvo", "warp"];
+        let liveview_renderers = ["liveview", "axum"];
+        let fullstack_renderers = ["axum"];
         let client_renderers = ["desktop", "mobile", "web", "tui"];
         let client_renderer_selected = client_renderers
             .iter()
