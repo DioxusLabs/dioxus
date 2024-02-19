@@ -120,7 +120,7 @@ mod server_fn_impl {
 }
 
 std::thread_local! {
-    pub(crate) static SERVER_CONTEXT: std::cell::RefCell<Box<DioxusServerContext>> = std::cell::RefCell::new(Box::new(DioxusServerContext::default() ));
+    pub(crate) static SERVER_CONTEXT: std::cell::RefCell<Box<DioxusServerContext>> = Default::default();
 }
 
 /// Get information about the current server request.
@@ -218,7 +218,7 @@ impl<T: Send + Sync + Clone + 'static> FromServerContext for FromContext<T> {
     type Rejection = NotFoundInServerContext<T>;
 
     async fn from_request(req: &DioxusServerContext) -> Result<Self, Self::Rejection> {
-        Ok(Self(req.clone().get::<T>().ok_or_else(|| {
+        Ok(Self(req.clone().get::<T>().ok_or({
             NotFoundInServerContext::<T>(std::marker::PhantomData::<T>)
         })?))
     }
@@ -239,6 +239,6 @@ impl<
     type Rejection = R;
 
     async fn from_request(req: &DioxusServerContext) -> Result<Self, Self::Rejection> {
-        Ok(I::from_request_parts(&mut *req.request_parts_mut(), &()).await?)
+        Ok(I::from_request_parts(&mut req.request_parts_mut(), &()).await?)
     }
 }

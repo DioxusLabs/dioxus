@@ -13,8 +13,8 @@ async fn main() {
         .await
         .unwrap();
 
-    let _ = register_explicit::<PostServerData>();
-    let _ = register_explicit::<GetServerData>();
+    register_explicit::<PostServerData>();
+    register_explicit::<GetServerData>();
 
     axum::serve(
         listener,

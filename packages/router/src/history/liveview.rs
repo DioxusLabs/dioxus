@@ -166,8 +166,8 @@ where
     ///
     /// Panics if the function is not called in a dioxus runtime with a Liveview context.
     pub fn new_with_initial_path(initial_path: R) -> Self {
-        let (action_tx, action_rx) = tokio::sync::mpsc::unbounded_channel::<Action<R>>();
-        let action_rx = Arc::new(Mutex::new(action_rx));
+        let (action_tx, mut action_rx) = tokio::sync::mpsc::unbounded_channel::<Action<R>>();
+
         let timeline = Arc::new(Mutex::new(Timeline::new(initial_path)));
         let updater_callback: Arc<RwLock<Arc<dyn Fn() + Send + Sync>>> =
             Arc::new(RwLock::new(Arc::new(|| {})));
@@ -181,12 +181,11 @@ where
         // Listen to server actions
         spawn({
             let timeline = timeline.clone();
-            let action_rx = action_rx.clone();
             let create_eval = create_eval.clone();
             async move {
-                let mut action_rx = action_rx.lock().expect("unpoisoned mutex");
                 loop {
                     let eval = action_rx.recv().await.expect("sender to exist");
+
                     let _ = match eval {
                         Action::GoBack => create_eval(
                             r#"

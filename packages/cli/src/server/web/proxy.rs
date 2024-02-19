@@ -53,7 +53,7 @@ impl ProxyClient {
 pub fn add_proxy(mut router: Router, proxy: &WebProxyConfig) -> Result<Router> {
     let url: Uri = proxy.backend.parse()?;
     let path = url.path().to_string();
-    let trimmed_path = path.trim_end_matches('/');
+    let trimmed_path = path.trim_start_matches('/');
 
     if trimmed_path.is_empty() {
         return Err(crate::Error::ProxySetupError(format!(
@@ -65,14 +65,11 @@ pub fn add_proxy(mut router: Router, proxy: &WebProxyConfig) -> Result<Router> {
 
     let client = ProxyClient::new(url);
 
-    // We also match everything after the path using a wildcard matcher.
-    let wildcard_client = client.clone();
-
     router = router.route(
         // Always remove trailing /'s so that the exact route
         // matches.
-        trimmed_path,
-        any(move |req| async move {
+        &format!("/*{}", trimmed_path.trim_end_matches('/')),
+        any(move |req: Request<MyBody>| async move {
             client
                 .send(req)
                 .await
@@ -80,19 +77,6 @@ pub fn add_proxy(mut router: Router, proxy: &WebProxyConfig) -> Result<Router> {
         }),
     );
 
-    // Wildcard match anything else _after_ the backend URL's path.
-    // Note that we know `path` ends with a trailing `/` in this branch,
-    // so `wildcard` will look like `http://localhost/api/*proxywildcard`.
-    let wildcard = format!("{}/*proxywildcard", trimmed_path);
-    router = router.route(
-        &wildcard,
-        any(move |req| async move {
-            wildcard_client
-                .send(req)
-                .await
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
-        }),
-    );
     Ok(router)
 }
 
@@ -101,14 +85,17 @@ mod test {
 
     use super::*;
 
-    use axum::{extract::Path, Router};
+    use axum::Router;
     use axum_server::{Handle, Server};
 
     async fn setup_servers(mut config: WebProxyConfig) -> String {
-        let backend_router = Router::new().route(
-            "/*path",
-            any(|path: Path<String>| async move { format!("backend: {}", path.0) }),
-        );
+        let backend_router =
+            Router::new().route(
+                "/*path",
+                any(|request: axum::extract::Request| async move {
+                    format!("backend: {}", request.uri())
+                }),
+            );
 
         // The API backend server
         let backend_handle_handle = Handle::new();
@@ -123,7 +110,7 @@ mod test {
 
         // Set the user's config to this dummy API we just built so we can test it
         let backend_addr = backend_handle_handle.listening().await.unwrap();
-        config.backend = dbg!(format!("http://{}{}", backend_addr, config.backend));
+        config.backend = format!("http://{}{}", backend_addr, config.backend);
 
         // Now set up our actual filesystem server
         let router = super::add_proxy(Router::new(), &config);
@@ -160,11 +147,11 @@ mod test {
                 .text()
                 .await
                 .unwrap(),
-            "backend: api"
+            "backend: /api"
         );
 
         assert_eq!(
-            reqwest::get(dbg!(format!("http://{}/api/", server_addr)))
+            reqwest::get(format!("http://{}/api/", server_addr))
                 .await
                 .unwrap()
                 .text()
@@ -174,7 +161,7 @@ mod test {
         );
 
         assert_eq!(
-            reqwest::get(format!("http://{}/api/subpath", server_addr))
+            reqwest::get(format!("http://{server_addr}/api/subpath"))
                 .await
                 .unwrap()
                 .text()

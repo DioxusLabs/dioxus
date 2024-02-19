@@ -302,6 +302,13 @@ fn apply_request_parts_to_response<B>(
     }
 }
 
+type AxumHandler<F> = (
+    F,
+    ServeConfig,
+    SSRState,
+    Arc<dyn Fn() -> VirtualDom + Send + Sync>,
+);
+
 /// SSR renderer handler for Axum with added context injection.
 ///
 /// # Example
@@ -350,18 +357,13 @@ fn apply_request_parts_to_response<B>(
 /// }
 /// ```
 pub async fn render_handler_with_context<F: FnMut(&mut DioxusServerContext)>(
-    State((mut inject_context, cfg, ssr_state, virtual_dom_factory)): State<(
-        F,
-        ServeConfig,
-        SSRState,
-        Arc<dyn Fn() -> VirtualDom + Send + Sync>,
-    )>,
+    State((mut inject_context, cfg, ssr_state, virtual_dom_factory)): State<AxumHandler<F>>,
     request: Request<Body>,
 ) -> impl IntoResponse {
     let (parts, _) = request.into_parts();
     let url = parts.uri.path_and_query().unwrap().to_string();
     let parts: Arc<tokio::sync::RwLock<http::request::Parts>> =
-        Arc::new(tokio::sync::RwLock::new(parts.into()));
+        Arc::new(tokio::sync::RwLock::new(parts));
     let mut server_context = DioxusServerContext::new(parts.clone());
     inject_context(&mut server_context);
 
@@ -384,13 +386,15 @@ pub async fn render_handler_with_context<F: FnMut(&mut DioxusServerContext)>(
     }
 }
 
+type RenderHandlerExtractor = (
+    ServeConfig,
+    Arc<dyn Fn() -> VirtualDom + Send + Sync>,
+    SSRState,
+);
+
 /// SSR renderer handler for Axum
 pub async fn render_handler(
-    State((cfg, virtual_dom_factory, ssr_state)): State<(
-        ServeConfig,
-        Arc<dyn Fn() -> VirtualDom + Send + Sync>,
-        SSRState,
-    )>,
+    State((cfg, virtual_dom_factory, ssr_state)): State<RenderHandlerExtractor>,
     request: Request<Body>,
 ) -> impl IntoResponse {
     render_handler_with_context(

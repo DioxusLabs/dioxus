@@ -6,7 +6,7 @@ use std::io::Read;
 use std::path::PathBuf;
 
 /// A ServeConfig is used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct ServeConfigBuilder {
     pub(crate) root_id: Option<&'static str>,
     pub(crate) index_path: Option<PathBuf>,

@@ -48,7 +48,7 @@ impl SsrRendererPool {
                                 SERVER_CONTEXT.with(|ctx| ctx.replace(server_context));
                             // poll the future, which may call server_context()
                             tracing::info!("Rebuilding vdom");
-                            let _ = vdom.rebuild(&mut NoOpMutations);
+                            vdom.rebuild(&mut NoOpMutations);
                             vdom.wait_for_suspense().await;
                             tracing::info!("Suspense resolved");
                             // after polling the future, we need to restore the context
@@ -76,9 +76,11 @@ impl SsrRendererPool {
                                         tx.send(Ok((renderer, RenderFreshness::now(None), html)));
                                 }
                                 Err(err) => {
-                                    dioxus_ssr::incremental::IncrementalRendererError::Other(
-                                        Box::new(err),
-                                    );
+                                    _ = tx.send(Err(
+                                        dioxus_ssr::incremental::IncrementalRendererError::Other(
+                                            Box::new(err),
+                                        ),
+                                    ));
                                 }
                             }
                         });
@@ -113,7 +115,7 @@ impl SsrRendererPool {
                                                 .with(|ctx| ctx.replace(Box::new(server_context)));
                                             // poll the future, which may call server_context()
                                             tracing::info!("Rebuilding vdom");
-                                            let _ = vdom.rebuild(&mut NoOpMutations);
+                                            vdom.rebuild(&mut NoOpMutations);
                                             vdom.wait_for_suspense().await;
                                             tracing::info!("Suspense resolved");
                                             // after polling the future, we need to restore the context
@@ -184,26 +186,21 @@ impl SSRState {
     }
 
     /// Render the application to HTML.
-    pub fn render<'a>(
+    pub async fn render<'a>(
         &'a self,
         route: String,
         cfg: &'a ServeConfig,
         virtual_dom_factory: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
         server_context: &'a DioxusServerContext,
-    ) -> impl std::future::Future<
-        Output = Result<RenderResponse, dioxus_ssr::incremental::IncrementalRendererError>,
-    > + Send
-           + 'a {
-        async move {
-            let ServeConfig { .. } = cfg;
+    ) -> Result<RenderResponse, dioxus_ssr::incremental::IncrementalRendererError> {
+        let ServeConfig { .. } = cfg;
 
-            let (freshness, html) = self
-                .renderers
-                .render_to(cfg, route, virtual_dom_factory, server_context)
-                .await?;
+        let (freshness, html) = self
+            .renderers
+            .render_to(cfg, route, virtual_dom_factory, server_context)
+            .await?;
 
-            Ok(RenderResponse { html, freshness })
-        }
+        Ok(RenderResponse { html, freshness })
     }
 }
 
@@ -321,7 +318,7 @@ impl RenderResponse {
 fn pre_renderer() -> Renderer {
     let mut renderer = Renderer::default();
     renderer.pre_render = true;
-    renderer.into()
+    renderer
 }
 
 fn incremental_pre_renderer(
