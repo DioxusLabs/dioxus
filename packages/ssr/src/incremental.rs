@@ -3,6 +3,8 @@
 #![allow(non_snake_case)]
 
 use crate::fs_cache::ValidCachedPath;
+use chrono::offset::Utc;
+use chrono::DateTime;
 use dioxus_core::VirtualDom;
 use rustc_hash::FxHasher;
 use std::{
@@ -23,9 +25,8 @@ pub use crate::incremental_cfg::*;
 pub struct IncrementalRenderer {
     pub(crate) static_dir: PathBuf,
     #[allow(clippy::type_complexity)]
-    pub(crate) memory_cache: Option<
-        lru::LruCache<String, (web_time::SystemTime, Vec<u8>), BuildHasherDefault<FxHasher>>,
-    >,
+    pub(crate) memory_cache:
+        Option<lru::LruCache<String, (DateTime<Utc>, Vec<u8>), BuildHasherDefault<FxHasher>>>,
     pub(crate) invalidate_after: Option<Duration>,
     pub(crate) ssr_renderer: crate::Renderer,
     pub(crate) map_path: PathMapFn,
@@ -117,7 +118,7 @@ impl IncrementalRenderer {
 
     fn add_to_memory_cache(&mut self, route: String, html: Vec<u8>) {
         if let Some(cache) = self.memory_cache.as_mut() {
-            cache.put(route, (web_time::SystemTime::now(), html));
+            cache.put(route, (Utc::now(), html));
         }
     }
 
@@ -138,20 +139,20 @@ impl IncrementalRenderer {
             .as_mut()
             .and_then(|cache| cache.get(&route))
         {
-            if let Ok(elapsed) = timestamp.elapsed() {
-                let age = elapsed.as_secs();
-                if let Some(invalidate_after) = self.invalidate_after {
-                    if elapsed < invalidate_after {
-                        tracing::trace!("memory cache hit {:?}", route);
-                        output.write_all(cache_hit).await?;
-                        let max_age = invalidate_after.as_secs();
-                        return Ok(Some(RenderFreshness::new(age, max_age)));
-                    }
-                } else {
+            let now = Utc::now();
+            let elapsed = timestamp.signed_duration_since(now);
+            let age = elapsed.num_seconds();
+            if let Some(invalidate_after) = self.invalidate_after {
+                if elapsed.to_std().unwrap() < invalidate_after {
                     tracing::trace!("memory cache hit {:?}", route);
                     output.write_all(cache_hit).await?;
-                    return Ok(Some(RenderFreshness::new_age(age)));
+                    let max_age = invalidate_after.as_secs();
+                    return Ok(Some(RenderFreshness::new(age as u64, max_age)));
                 }
+            } else {
+                tracing::trace!("memory cache hit {:?}", route);
+                output.write_all(cache_hit).await?;
+                return Ok(Some(RenderFreshness::new_age(age as u64)));
             }
         }
         // check the file cache

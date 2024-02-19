@@ -2902,6 +2902,7 @@ dependencies = [
  "argh",
  "askama_escape",
  "async-trait",
+ "chrono",
  "dioxus",
  "dioxus-core",
  "dioxus-html",
@@ -2917,7 +2918,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
- "web-time",
 ]
 
 [[package]]

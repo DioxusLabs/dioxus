@@ -20,7 +20,7 @@ tracing = { workspace = true }
 http = "0.2.9"
 async-trait = "0.1.58"
 serde_json = { version = "1.0" }
-web-time = "1.0.0"
+chrono = { verison = "0.4.34", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { version = "1.28", features = ["io-util"], optional = true }
@@ -41,4 +41,4 @@ dioxus-signals = { workspace = true }
 
 [features]
 default = []
-incremental = ["dep:tokio"]
+incremental = ["dep:tokio", "chrono"]
