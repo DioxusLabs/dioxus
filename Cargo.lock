@@ -5728,7 +5728,8 @@ dependencies = [
 [[package]]
 name = "manganis"
 version = "0.1.0"
-source = "git+https://github.com/DioxusLabs/collect-assets?rev=f982698#f982698027fc27d22acfb4121fba389ec125d538"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a25951ece27df54c1506824923c824e1b3d9f742bb01beab45123b306c95a0e4"
 dependencies = [
  "manganis-macro",
 ]
@@ -5736,7 +5737,8 @@ dependencies = [
 [[package]]
 name = "manganis-cli-support"
 version = "0.1.0"
-source = "git+https://github.com/DioxusLabs/collect-assets?rev=f982698#f982698027fc27d22acfb4121fba389ec125d538"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78d2f137b00aeba4862491a418930ae727493106c67bd720d8588b92ed7529b7"
 dependencies = [
  "anyhow",
  "cargo-lock 9.0.0",
@@ -5762,7 +5764,8 @@ dependencies = [
 [[package]]
 name = "manganis-common"
 version = "0.1.0"
-source = "git+https://github.com/DioxusLabs/collect-assets?rev=f982698#f982698027fc27d22acfb4121fba389ec125d538"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b22d7de6c9e0ad3332c900a120aadedab171907504ad02440d104272c351c80"
 dependencies = [
  "anyhow",
  "base64",
@@ -5776,11 +5779,10 @@ dependencies = [
 
 [[package]]
 name = "manganis-macro"
-version = "0.0.1"
-source = "git+https://github.com/DioxusLabs/collect-assets?rev=f982698#f982698027fc27d22acfb4121fba389ec125d538"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30a04a22bb5d861f3b4fa37669d0344cf1350f19e18b9a73d1acdd2c8079fbc2"
 dependencies = [
- "base64",
- "manganis-cli-support",
  "manganis-common",
  "proc-macro2",
  "quote",
