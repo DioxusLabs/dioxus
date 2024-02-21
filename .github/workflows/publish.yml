@@ -4,3 +4,51 @@
 # - nightly docs
 # - the website
 # - crates themselves
+
+name: Publish to crates.io
+
+on:
+  workflow_dispatch:
+    inputs:
+      semver:
+        type: choice
+        description: "Semver version to publish"
+        required: true
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+      - name: Install cargo-workspaces
+        run: cargo install cargo-workspaces
+      - name: Login to crates.io
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: nightly
+          command: login
+          args: ${{ secrets.CRATES_TOKEN }}
+      - name: Publish to crates.io
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+
+          # Release as-is
+          # This assumes the version tracking PR has been merged
+
+
+          # cargo workspaces changed
+          # # version will automatically commit back to the repo
+          # # cargo workspaces version -y ${{ github.event.inputs.semver }}
+          # # publish will automatically commit back to the repo **AND** publish to crates.io
+          # # cargo workspaces publish -y ${{ github.event.inputs.semver }}
