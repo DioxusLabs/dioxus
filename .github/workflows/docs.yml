@@ -2,7 +2,7 @@ name: Deploy Nightly Docs
 on:
   push:
     branches:
-      - master
+      - main
 
 jobs:
   deploy:
@@ -21,7 +21,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/master' }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: ilammy/setup-nasm@v1
 
       - name: cargo doc

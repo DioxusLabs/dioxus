@@ -3,7 +3,7 @@ name: Rust CI
 on:
   push:
     branches:
-      - master
+      - main
     paths:
       - packages/**
       - examples/**
@@ -17,7 +17,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     branches:
-      - master
+      - main
     paths:
       - packages/**
       - examples/**
@@ -48,7 +48,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/master' }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: ilammy/setup-nasm@v1
       - run: cargo check --all --examples --tests --all-features --all-targets
 
@@ -64,7 +64,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/master' }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: ilammy/setup-nasm@v1
       - uses: davidB/rust-cargo-make@v1
       - uses: browser-actions/setup-firefox@latest
@@ -91,7 +91,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/master' }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo fmt --all -- --check
 
   clippy:
@@ -109,7 +109,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/master' }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo clippy --workspace --examples --tests --all-features --all-targets -- -D warnings
 
   playwright:
@@ -137,7 +137,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/master' }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
         run: npm ci
@@ -230,7 +230,7 @@ jobs:
         with:
           key: "${{ matrix.platform.target }}"
           cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/master' }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: test
         run: |
