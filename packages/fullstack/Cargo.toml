@@ -13,10 +13,10 @@ resolver = "2"
 [dependencies]
 # server functions
 server_fn = { version = "0.6.5", features = ["json", "url", "browser"], default-features = false }
-dioxus_server_macro = { workspace = true, version = "0.6.5", default-features = false }
+dioxus_server_macro = { workspace = true }
 
 # axum
-axum = { workspace = true, features = ["ws", "macros"], default-features = false, optional = true }
+axum = { workspace = true, features = ["ws", "macros"], optional = true }
 tower-http = { workspace = true, optional = true, features = ["fs", "compression-gzip"] }
 
 dioxus-lib = { workspace = true }
@@ -44,7 +44,7 @@ anymap = { version = "0.12.1", optional = true }
 serde = "1.0.159"
 serde_json = { version = "1.0.95", optional = true }
 tokio-stream = { version = "0.1.12", features = ["sync"], optional = true }
-futures-util = { workspace = true, default-features = false }
+futures-util = { workspace = true }
 ciborium = "0.2.1"
 base64 = "0.21.0"
 

@@ -79,12 +79,13 @@ plasmo = { path = "packages/plasmo", version = "0.4.0" }
 dioxus-native-core = { path = "packages/native-core", version = "0.4.0" }
 dioxus-native-core-macro = { path = "packages/native-core-macro", version = "0.4.0" }
 rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.4.0" }
-dioxus-signals = { path = "packages/signals" }
+dioxus-signals = { path = "packages/signals", version = "0.4.0" }
 dioxus-cli-config = { path = "packages/cli-config", version = "0.4.1" }
 generational-box = { path = "packages/generational-box", version = "0.4.3" }
 dioxus-hot-reload = { path = "packages/hot-reload", version = "0.4.0" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.4.1" }
-dioxus_server_macro = { path = "packages/server-macro", version = "0.4.1" }
+dioxus_server_macro = { path = "packages/server-macro", version = "0.4.1", default-features = false}
+dioxus-ext = { path = "packages/extension", version = "0.4.0" }
 tracing = "0.1.37"
 tracing-futures = "0.2.5"
 toml = "0.8"
@@ -99,16 +100,16 @@ thiserror = "1.0.40"
 prettyplease = { package = "prettier-please", version = "0.2", features = [
     "verbatim",
 ] }
-manganis-cli-support = { git = "https://github.com/DioxusLabs/collect-assets", rev = "f982698", features = [
+manganis-cli-support = { version = "0.1.0", features = [
     "webp",
     "html",
 ] }
-manganis = { git = "https://github.com/DioxusLabs/collect-assets", rev = "f982698" }
+manganis = { version = "0.1.0" }
 
 lru = "0.12.2"
 async-trait = "0.1.77"
 axum = "0.7.0"
-axum-server = "0.6.0"
+axum-server = {version = "0.6.0", default-features = false}
 tower = "0.4.13"
 http = "1.0.0"
 tower-http = "0.5.1"
