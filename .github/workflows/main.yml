@@ -121,8 +121,7 @@ jobs:
   # However, this means we won't attempt to backport them, so you should be careful about using this label, as it will
   # likely make future backporting difficult
   semver:
-    if: github.event.pull_request.draft == false
-    if:  ${{ !contains(github.event.pull_request.labels.*.name, 'breaking') }}
+    if: github.event.pull_request.draft == false && !contains(github.event.pull_request.labels.*.name, 'breaking')
     name: Semver Check
     runs-on: ubuntu-latest
     steps:
