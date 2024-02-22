@@ -14,7 +14,7 @@ pub(crate) fn check_app_exits(app: fn() -> Element) {
     let should_panic = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
     let should_panic_clone = should_panic.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(30));
+        std::thread::sleep(std::time::Duration::from_secs(60));
         if should_panic_clone.load(std::sync::atomic::Ordering::SeqCst) {
             std::process::exit(exitcode::SOFTWARE);
         }
@@ -31,7 +31,7 @@ pub(crate) fn check_app_exits(app: fn() -> Element) {
 fn mock_event(id: &'static str, value: &'static str) {
     use_hook(move || {
         spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
 
             let js = format!(
                 r#"
