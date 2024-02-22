@@ -16,6 +16,7 @@ pub(crate) fn check_app_exits(app: fn() -> Element) {
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_secs(60));
         if should_panic_clone.load(std::sync::atomic::Ordering::SeqCst) {
+            eprintln!("App did not exit in time");
             std::process::exit(exitcode::SOFTWARE);
         }
     });
