@@ -20,7 +20,7 @@ on:
     inputs:
       channel:
         type: choice
-        description: "Branch to publish"
+        name: "Branch to publish"
         required: true
         description: Choose the branch to publish.
         options:
