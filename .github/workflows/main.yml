@@ -3,7 +3,6 @@
 # This can get expensive, so we do a lot of caching and checks to prevent unnecessary runs
 
 name: Rust CI
-description: Run all the tests and checks for the project
 
 on:
   push:
