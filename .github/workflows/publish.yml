@@ -1,0 +1,156 @@
+# Release workflow
+#
+# We parallelize builds, dump all the artifacts into a release, and then publish the release
+# This guarantees everything is properly built and cached in case anything goes wrong
+#
+# The artifacts also need to get pushed to the various places
+# - the CLI goes to the releases page for binstall
+# - the extension goes to the marketplace
+# - the docs go to the website
+#
+# We need to be aware of the channel we're releasing
+# - prerelease is master
+# - stable is whatever the latest stable release is (ie 0.4 or 0.5 or 0.6 etc)
+#
+# It's intended that this workflow is run manually, and only when we're ready to release
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        type: choice
+        description: "Branch to publish"
+        required: true
+        description: Choose the branch to publish. If the branch is main, it will publish a patch prerelease.
+
+        options:
+          - main
+          - v0.4.x
+          - v0.5.x
+          - v0.6.x
+          # todo: more stable releases as time goes on
+
+env:
+  # make sure we have the right semver.
+  # main is always a prepatch until we hit 1.0, and then this script needs to be updated
+  # note that we need to promote the prepatch to a minor bump when we actually do a release
+  # this means the version in git will always be one minor bump ahead of the actual release - basically meaning once
+  # we release a version, it's fair game to merge breaking changes to main since all semver-compatible changes will be
+  # backported automatically
+  SEMVER: ${{ github.event.inputs.channel == 'main' && 'prepatch' || 'patch' }}
+  PRERELEASE_TAG: ${{ github.event.inputs.channel == 'main' && '-prerelease' || '' }}
+
+jobs:
+  # First, run checks (clippy, tests, etc) and then publish the crates to crates.io
+  release-crates:
+    steps:
+      # Checkout the right branch, and the nightly stuff
+      - uses: actions/checkout@v4
+        ref: ${{ github.event.inputs.channel }}
+      - run: sudo apt-get update
+      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: nightly-2024-02-01
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+      - uses: ilammy/setup-nasm@v1
+
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with: # speed things up a bit
+          large-packages: false
+          docker-images: false
+          swap-storage: false
+
+      # Just make sure clippy is happy before doing anything else
+      # Don't publish versions with clippy errors!
+      - name: Clippy
+        run: cargo clippy --workspace --all --examples --tests --all-features --all-targets -- -D warnings
+
+      # Build the docs here too before publishing, to ensure they're up to date
+      - name: cargo doc
+        run: RUSTDOCFLAGS="--cfg docsrs" cargo doc --no-deps --workspace --all-features
+
+      - name: Publish to crates.io
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          cargo workspaces version -y ${{ env.SEMVER }} --no-git-commit
+
+          # todo: actually just publish!
+          # cargo workspaces publish -y ${{ github.event.inputs.semver }}
+
+      # this will be more useful when we publish the website with updated docs
+      # Build the docs.rs docs and publish them to the website under the right folder
+      # v0.4.x -> docs/0.4
+      # v0.5.x -> docs/0.5 etc
+      # main -> docs/nightly
+      # strip the v from the channel, and the .x from the end, and replace main with nightly
+      # - name: determine docs folder by channel
+      #   id: determine_docs_folder
+      #   run: echo "::set-output name=folder::$(echo ${{ github.event.inputs.channel }} | sed 's/v//g' | sed 's/\.x//g' | sed 's/main/nightly/g')"
+
+  # Build the CLI for all platforms, uploading the artifacts to our releases page
+  release-cli:
+    needs: release-crates
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+          - target: aaarch64-pc-windows-msvc
+            os: windows-latest
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+    runs-on: ${{ matrix.platform.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        ref: ${{ github.event.inputs.channel }}
+
+      - name: Install stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.70.0"
+          targets: ${{ matrix.platform.target }}
+
+      - uses: ilammy/setup-nasm@v1
+
+      - name: Setup cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/cli -> ../../target
+
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with: # speed things up a bit
+          large-packages: false
+          docker-images: false
+          swap-storage: false
+
+      # Todo: we want `cargo install dx` to actually just use a prebuilt binary instead of building it
+      - name: Build and upload CLI binaries
+        uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          bin: dx
+          token: ${{ secrets.GITHUB_TOKEN }}
+          target: ${{ matrix.platform.target }}
+          archive: dx-${{ matrix.platform.target }}${{ env.PRERELEASE_TAG }}
+          checksum: sha256
+          manifest_path: packages/cli/Cargo.toml
+
+  # todo: these things
+  # Run benchmarks, which we'll use to display on the website
+  # release-benchmarks:
+  # Build the vscode extension, uploading the artifact to the marketplace
+  # release-extension:

@@ -1,4 +1,9 @@
+# Whenever an open PR is updated, the workflow will be triggered
+#
+# This can get expensive, so we do a lot of caching and checks to prevent unnecessary runs
+
 name: Rust CI
+description: Run all the tests and checks for the project
 
 on:
   push:
@@ -255,24 +260,3 @@ jobs:
       - name: test
         run: |
           ${{ env.RUST_CARGO_COMMAND }} ${{ matrix.platform.command }} ${{ matrix.platform.args }} --target ${{ matrix.platform.target }}
-
-  # Coverage is disabled until we can fix it
-  # coverage:
-  #   name: Coverage
-  #   runs-on: ubuntu-latest
-  #   container:
-  #     image: xd009642/tarpaulin:develop-nightly
-  #     options: --security-opt seccomp=unconfined
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v4
-  #     - name: Generate code coverage
-  #       run: |
-  #         apt-get update &&\
-  #         apt-get install build-essential &&\
-  #         apt install libwebkit2gtk-4.0-dev libgtk-3-dev libayatana-appindicator3-dev -y &&\
-  #         cargo +nightly tarpaulin --verbose --all-features --workspace --timeout 120 --out Xml
-  #     - name: Upload to codecov.io
-  #       uses: codecov/codecov-action@v2
-  #       with:
-  #         fail_ci_if_error: false
