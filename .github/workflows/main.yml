@@ -133,9 +133,9 @@ jobs:
         with:
           cache-all-crates: "true"
           save-if: ${{ github.ref == 'refs/heads/main' }}
-    - name: Check semver
-      uses: obi1kenobi/cargo-semver-checks-action@v2
-    - run: cargo semver-checks check-release --workspace --exclude "dioxus-cli, dioxus-ext"
+      - name: Check semver
+        uses: obi1kenobi/cargo-semver-checks-action@v2
+      - run: cargo semver-checks check-release --workspace --exclude "dioxus-cli, dioxus-ext"
 
   playwright:
     if: github.event.pull_request.draft == false
