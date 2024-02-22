@@ -1,6 +1,7 @@
 # Attempt to backport a merged pull request to the latest stable release
 #
 # If the backported PR is succesfully merged
+# Any PR without the "breaking" label will be attempted to be backported to the latest stable release
 
 name: Backport merged pull request
 on:

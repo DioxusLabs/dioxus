@@ -1,0 +1,4 @@
+# promote nightly to stable
+#
+# runs the various git commands to update the version
+# should be followed up by a stable release

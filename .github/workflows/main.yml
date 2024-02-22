@@ -75,7 +75,6 @@ jobs:
           large-packages: false
           docker-images: false
           swap-storage: false
-
       - run: cargo make tests
 
   fmt:
@@ -111,6 +110,27 @@ jobs:
           cache-all-crates: "true"
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo clippy --workspace --examples --tests --all-features --all-targets -- -D warnings
+
+  # Only run semver checks if the PR is not a draft and does not have the breaking label
+  # Breaking PRs don't need to follow semver since they are breaking changes
+  # However, this means we won't attempt to backport them, so you should be careful about using this label, as it will
+  # likely make future backporting difficult
+  semver:
+    if: github.event.pull_request.draft == false
+    if:  ${{ !contains(github.event.pull_request.labels.*.name, 'breaking') }}
+    name: Semver Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/setup-nasm@v1
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+    - name: Check semver
+      uses: obi1kenobi/cargo-semver-checks-action@v2
+    - run: cargo semver-checks check-release --workspace --exclude "dioxus-cli, dioxus-ext"
 
   playwright:
     if: github.event.pull_request.draft == false
