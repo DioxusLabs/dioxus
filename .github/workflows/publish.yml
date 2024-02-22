@@ -21,24 +21,22 @@ on:
         type: choice
         description: "Branch to publish"
         required: true
-        description: Choose the branch to publish. If the branch is main, it will publish a patch prerelease.
-
+        description: Choose the branch to publish.
         options:
           - main
-          - v0.4.x
-          - v0.5.x
-          - v0.6.x
-          # todo: more stable releases as time goes on
+          - v0.4
+          - v0.5
+          - v0.6
 
 env:
-  # make sure we have the right semver.
+  # make sure we have the right version
   # main is always a prepatch until we hit 1.0, and then this script needs to be updated
   # note that we need to promote the prepatch to a minor bump when we actually do a release
   # this means the version in git will always be one minor bump ahead of the actual release - basically meaning once
   # we release a version, it's fair game to merge breaking changes to main since all semver-compatible changes will be
   # backported automatically
-  SEMVER: ${{ github.event.inputs.channel == 'main' && 'prepatch' || 'patch' }}
-  PRERELEASE_TAG: ${{ github.event.inputs.channel == 'main' && '-prerelease' || '' }}
+  SEMVER: ${{ github.event.inputs.channel == 'main' && 'prerelease' || 'patch' }}
+  PRERELEASE_TAG: ${{ github.event.inputs.channel == 'main' && '-pre' || '' }}
 
 jobs:
   # First, run checks (clippy, tests, etc) and then publish the crates to crates.io
@@ -77,7 +75,7 @@ jobs:
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
-          cargo workspaces version -y ${{ env.SEMVER }} --no-git-commit
+          cargo workspaces version -y ${{ env.SEMVER }} --pre-id rc --no-git-commit
 
           # todo: actually just publish!
           # cargo workspaces publish -y ${{ github.event.inputs.semver }}
