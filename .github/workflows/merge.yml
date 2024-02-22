@@ -1,6 +1,8 @@
 # Runs whenever a PR is merged:
 # - attempt to backports fixes
 # - upload nightly docs
+#
+# Future:
 # - upload nightly CLI builds
 # - upload nightly vscode extension
 # - upload benchmarks
@@ -8,41 +10,64 @@
 #
 # Note that direct commits to master circumvent this workflow!
 
-# - name: Deploy Nightly Docs.rs
-#   uses: JamesIves/github-pages-deploy-action@v4.5.0
-#   with:
-#     branch: gh-pages
-#     folder: target/doc
-#     target-folder: api-docs/nightly
-#     repository-name: dioxuslabs/docsite
-#     clean: false
-#     token: ${{ secrets.DEPLOY_KEY }}
+name: Backport merged pull request
+on:
+  pull_request_target:
+    types: [closed]
 
-# # Attempt to backport a merged pull request to the latest stable release
-# #
-# # If the backported PR is succesfully merged
-# # Any PR without the "breaking" label will be attempted to be backported to the latest stable release
+permissions:
+  contents: write # so it can comment
+  pull-requests: write # so it can create pull requests
 
-# name: Backport merged pull request
-# on:
-#   pull_request_target:
-#     types: [closed]
+jobs:
+  # Attempt to backport a merged pull request to the latest stable release
+  backport:
+    name: Backport pull request
+    runs-on: ubuntu-latest
 
-# permissions:
-#   contents: write # so it can comment
-#   pull-requests: write # so it can create pull requests
+    # Don't run on closed unmerged pull requests, or pull requests with the "breaking" label
+    if: github.event.pull_request.merged && !contains(github.event.pull_request.labels.*.name, 'breaking')
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create backport pull requests
+        uses: korthout/backport-action@v2
 
-# jobs:
-#   backport:
-#     name: Backport pull request
-#     runs-on: ubuntu-latest
+  # Upload nightly docs to the website
+  docs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update
+      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          toolchain: nightly-2024-02-01
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: ilammy/setup-nasm@v1
 
-#     # Don't run on closed unmerged pull requests
-#     if: github.event.pull_request.merged
-#     steps:
-#       - uses: actions/checkout@v4
-#       - name: Create backport pull requests
-#         uses: korthout/backport-action@v2
+      - name: cargo doc
+        run: cargo doc --no-deps --workspace --all-features
+
+      - name: Deploy
+        uses: JamesIves/github-pages-deploy-action@v4.5.0
+        with:
+          branch: gh-pages
+          folder: target/doc
+          target-folder: api-docs/nightly
+          repository-name: dioxuslabs/docsite
+          clean: false
+          token: ${{ secrets.DEPLOY_KEY }}
+
+# Attempt to backport a merged pull request to the latest stable release
+#
+# If the backported PR is succesfully merged
+# Any PR without the "breaking" label will be attempted to be backported to the latest stable release
+
 # Coverage is disabled until we can fix it
 # coverage:
 #   name: Coverage
@@ -63,3 +88,5 @@
 #       uses: codecov/codecov-action@v2
 #       with:
 #         fail_ci_if_error: false
+
+
