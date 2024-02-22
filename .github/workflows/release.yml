@@ -19,17 +19,16 @@ on:
     inputs:
       channel:
         type: choice
-        description: "Channel to publish"
+        description: "Branch to publish"
         required: true
-        description: Publish crates, extension, CLI, and docs
+        description: Choose the branch to publish. If the branch is main, it will publish a prerelease.
+
+        # add more options as we release more stable versions.
+        # todo: automate branch selection
         options:
           - v0.4.x
           - v0.5.x
           - main
-
-          # todo: use better name scheme
-          # - stable        # the currently released version of dioxus
-          # - prerelease    # the next version of dioxus, which we release slowly
 
 jobs:
   # Build the CLI for all platforms
@@ -57,20 +56,18 @@ jobs:
             }
     steps:
       - uses: actions/checkout@v4
+        ref: ${{ github.event.inputs.channel }}
       - name: Install stable
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.platform.toolchain }}
           targets: ${{ matrix.platform.target }}
       - uses: ilammy/setup-nasm@v1
-
-      # Setup the Github Actions Cache for the CLI package
       - name: Setup cache
         uses: Swatinem/rust-cache@v2
+        # cache only the cli - mmmm not sure if this is needed
         with:
           workspaces: packages/cli -> ../../target
-
-      #
 
   # Build the vscode extension
   build-extension:
@@ -83,15 +80,24 @@ jobs:
 
 
   # And then do the releases, once everything is built
+  # This should involve no rust and just pull down the artifacts
   release:
     depends-on: [build-cli, build-extension, build-docs, build-benchmarks]
 
+    # Checkout the right branch
+    - uses: actions/checkout@v4
+      ref: ${{ github.event.inputs.channel }}
+
     # Before anything else, we need to publish the crates
+    # todo: set the semver based on the channel
+    # - all semver is a minor bump,
+    # - if it's main, it's a prerelease, so use the prerelease flag
     - name: Publish to crates.io
       run: |
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
         git config --global user.name "github-actions[bot]"
-        cargo workspaces publish -y ${{ github.event.inputs.semver }}
+        # cargo workspaces version -y ${{ github.event.inputs.semver }}
+        # cargo workspaces publish -y ${{ github.event.inputs.semver }}
 
     # Todo: we want `cargo install dx` to actually just use a prebuilt binary
     - name: Build and upload CLI binaries
@@ -118,7 +124,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          # save-if: ${{ github.ref == 'refs/heads/main' }} # always save the cache
 
       - name: Free Disk Space (Ubuntu)
         uses: jlumbroso/free-disk-space@v1.3.1
