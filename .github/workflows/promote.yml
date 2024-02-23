@@ -1,4 +1,5 @@
-# Create a PR that promotes the current main pre-release to the next stable release
+# Promote the current main branch to a stable release.
+# This will not actually release anything, so you need to run the release workflow after this.
 #
 # IE if the current master version is 0.4.0-rc.7, this will create a PR to promote it to 0.4.0
 #
@@ -12,6 +13,7 @@
 #
 # This is configured to be ran manually, but could honestly just be a release workflow
 
+name: Promote main to stable branch
 on:
   workflow_dispatch:
 
