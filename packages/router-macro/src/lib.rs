@@ -559,7 +559,8 @@ impl RouteEnum {
             #(#type_defs)*
 
             #[allow(non_camel_case_types)]
-            #[derive(Debug, PartialEq, Eq)]
+            #[allow(clippy::derive_partial_eq_without_eq)]
+            #[derive(Debug, PartialEq)]
             pub enum #match_error_name {
                 #(#error_variants),*
             }
