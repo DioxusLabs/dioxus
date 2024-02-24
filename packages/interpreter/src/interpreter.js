@@ -8,155 +8,182 @@ class InterpreterConfig {
 // method is not used by the web implementation
 async function handler(event, name, bubbles, config) {
   let target = event.target;
-  if (target != null) {
-    let preventDefaultRequests = null;
-    // Some events can be triggered on text nodes, which don't have attributes
-    if (target instanceof Element) {
-      preventDefaultRequests = target.getAttribute(`dioxus-prevent-default`);
-    }
+  if (target == null) {
+    return;
+  }
 
-    if (event.type === "click") {
-      // todo call prevent default if it's the right type of event
-      if (config.intercept_link_redirects) {
-        let a_element = target.closest("a");
-        if (a_element != null) {
-          event.preventDefault();
+  const realId = find_real_id(target);
+  if (realId === null) {
+    return;
+  }
 
-          let elementShouldPreventDefault =
-            preventDefaultRequests && preventDefaultRequests.includes(`onclick`);
-          let aElementShouldPreventDefault = a_element.getAttribute(
-            `dioxus-prevent-default`
+  prevent_defaults(event, target, config);
+
+  let contents = await serialize_event(event);
+
+  // TODO: this should be liveview only
+  if (
+    target.tagName === "INPUT" &&
+    (event.type === "change" || event.type === "input")
+  ) {
+    const type = target.getAttribute("type");
+
+    if (type === "file") {
+      async function read_files() {
+        const files = target.files;
+        const file_contents = {};
+
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+
+          file_contents[file.name] = Array.from(
+            new Uint8Array(await file.arrayBuffer())
           );
-          let linkShouldPreventDefault =
-            aElementShouldPreventDefault &&
-            aElementShouldPreventDefault.includes(`onclick`);
-
-          if (!elementShouldPreventDefault && !linkShouldPreventDefault) {
-            const href = a_element.getAttribute("href");
-            if (href !== "" && href !== null && href !== undefined) {
-              window.ipc.postMessage(
-                window.interpreter.serializeIpcMessage("browser_open", { href })
-              );
-            }
-          }
         }
-      }
+        let file_engine = {
+          files: file_contents,
+        };
+        contents.files = file_engine;
 
-      // also prevent buttons from submitting
-      if (target.tagName === "BUTTON" && event.type == "submit") {
-        event.preventDefault();
-      }
-    }
-
-    const realId = find_real_id(target);
-
-    if (
-      preventDefaultRequests &&
-      preventDefaultRequests.includes(`on${event.type}`)
-    ) {
-      event.preventDefault();
-    }
-
-    if (event.type === "submit") {
-      event.preventDefault();
-    }
-
-    let contents = await serialize_event(event);
-
-    // TODO: this should be liveview only
-    if (
-      target.tagName === "INPUT" &&
-      (event.type === "change" || event.type === "input")
-    ) {
-      const type = target.getAttribute("type");
-      if (type === "file") {
-        async function read_files() {
-          const files = target.files;
-          const file_contents = {};
-
-          for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-
-            file_contents[file.name] = Array.from(
-              new Uint8Array(await file.arrayBuffer())
-            );
-          }
-          let file_engine = {
-            files: file_contents,
-          };
-          contents.files = file_engine;
-
-          if (realId === null) {
-            return;
-          }
-          const message = window.interpreter.serializeIpcMessage("user_event", {
-            name: name,
-            element: parseInt(realId),
-            data: contents,
-            bubbles,
-          });
-          window.ipc.postMessage(message);
+        if (realId === null) {
+          return;
         }
-        read_files();
-        return;
+        const message = window.interpreter.serializeIpcMessage("user_event", {
+          name: name,
+          element: parseInt(realId),
+          data: contents,
+          bubbles,
+        });
+        window.ipc.postMessage(message);
       }
-    }
-
-    if (
-      target.tagName === "FORM" &&
-      (event.type === "submit" || event.type === "input")
-    ) {
-      const formData = new FormData(target);
-
-      for (let name of formData.keys()) {
-        const fieldType = target.elements[name].type;
-
-        switch (fieldType) {
-          case "select-multiple":
-            contents.values[name] = formData.getAll(name);
-            break;
-
-          // add cases for fieldTypes that can hold multiple values here
-          default:
-            contents.values[name] = formData.get(name);
-            break;
-        }
-      }
-    }
-
-    if (
-      target.tagName === "SELECT" &&
-      event.type === "input"
-    ) {
-      const selectData = target.options;
-      contents.values["options"] = [];
-      for (let i = 0; i < selectData.length; i++) {
-        let option = selectData[i];
-        if (option.selected) {
-          contents.values["options"].push(option.value.toString());
-        }
-      }
-    }
-
-    if (realId === null) {
+      read_files();
       return;
     }
-    window.ipc.postMessage(
-      window.interpreter.serializeIpcMessage("user_event", {
-        name: name,
-        element: parseInt(realId),
-        data: contents,
-        bubbles,
-      })
-    );
+  }
+
+  if (
+    target.tagName === "FORM" &&
+    (event.type === "submit" || event.type === "input")
+  ) {
+    const formData = new FormData(target);
+
+    for (let name of formData.keys()) {
+      const fieldType = target.elements[name].type;
+
+      switch (fieldType) {
+        case "select-multiple":
+          contents.values[name] = formData.getAll(name);
+          break;
+
+        // add cases for fieldTypes that can hold multiple values here
+        default:
+          contents.values[name] = formData.get(name);
+          break;
+      }
+    }
+  }
+
+  if (
+    target.tagName === "SELECT" &&
+    event.type === "input"
+  ) {
+    const selectData = target.options;
+    contents.values["options"] = [];
+    for (let i = 0; i < selectData.length; i++) {
+      let option = selectData[i];
+      if (option.selected) {
+        contents.values["options"].push(option.value.toString());
+      }
+    }
+  }
+
+  window.ipc.postMessage(
+    window.interpreter.serializeIpcMessage("user_event", {
+      name: name,
+      element: parseInt(realId),
+      data: contents,
+      bubbles,
+    })
+  );
+}
+
+// Do our best to prevent the default action of the event
+// This should:
+// - prevent form submissions from navigating
+// - prevent anchor tags from navigating
+// - prevent buttons from submitting forms
+function prevent_defaults(event, target, config) {
+  let preventDefaultRequests = null;
+
+  // Some events can be triggered on text nodes, which don't have attributes
+  if (target instanceof Element) {
+    preventDefaultRequests = target.getAttribute(`dioxus-prevent-default`);
+  }
+
+  if (preventDefaultRequests && preventDefaultRequests.includes(`on${event.type}`)) {
+    event.preventDefault();
+  }
+
+  if (event.type === "submit") {
+    event.preventDefault();
+  }
+
+  // Attempt to intercept if the event is a click
+  intercept_form_submit(event, target, config, preventDefaultRequests);
+}
+
+function intercept_form_submit(event, target, config, preventDefaultRequests) {
+  if (event.type !== "click") {
+    return;
+  }
+
+  // todo call prevent default if it's the right type of event
+  if (!config.intercept_link_redirects) {
+    return;
+  }
+
+  // prevent buttons in forms from submitting the form
+  if (target.tagName === "BUTTON" && event.type == "submit") {
+    event.preventDefault();
+  }
+
+  // If the target is an anchor tag, we want to intercept the click too, to prevent the browser from navigating
+  let a_element = target.closest("a");
+
+  if (a_element == null) {
+    return;
+  }
+
+  event.preventDefault();
+
+  let elementShouldPreventDefault =
+    preventDefaultRequests && preventDefaultRequests.includes(`onclick`);
+
+  let aElementShouldPreventDefault = a_element.getAttribute(
+    `dioxus-prevent-default`
+  );
+
+  let linkShouldPreventDefault =
+    aElementShouldPreventDefault &&
+    aElementShouldPreventDefault.includes(`onclick`);
+
+  if (!elementShouldPreventDefault && !linkShouldPreventDefault) {
+    const href = a_element.getAttribute("href");
+    if (href !== "" && href !== null && href !== undefined) {
+      window.ipc.postMessage(
+        window.interpreter.serializeIpcMessage("browser_open", { href })
+      );
+    }
   }
 }
 
 function find_real_id(target) {
   let realId = null;
+
   if (target instanceof Element) {
     realId = target.getAttribute(`data-dioxus-id`);
   }
+
   // walk the tree to find the real element
   while (realId == null) {
     // we've reached the root we don't want to send an event
@@ -169,6 +196,7 @@ function find_real_id(target) {
       realId = target.getAttribute(`data-dioxus-id`);
     }
   }
+
   return realId;
 }
 
@@ -421,7 +449,8 @@ async function serialize_event(event) {
     case "drop": {
       let files = null;
       if (event.dataTransfer && event.dataTransfer.files) {
-        files = await serializeFileList(event.dataTransfer.files);
+        files = ["a", "b", "c"];
+        // files = await serializeFileList(event.dataTransfer.files);
       }
 
       return { mouse: get_mouse_data(event), files };
