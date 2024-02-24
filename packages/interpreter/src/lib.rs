@@ -2,8 +2,8 @@
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
-pub static INTERPRETER_JS: &str = include_str!("./interpreter.js");
-pub static COMMON_JS: &str = include_str!("./common.js");
+pub static INTERPRETER_JS: &str = include_str!("./gen/interpreter.js");
+pub static COMMON_JS: &str = include_str!("./gen/common.js");
 
 #[cfg(feature = "sledgehammer")]
 mod sledgehammer_bindings;
@@ -20,7 +20,7 @@ pub use write_native_mutations::*;
 #[cfg(all(feature = "minimal_bindings", feature = "webonly"))]
 pub mod minimal_bindings {
     use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
-    #[wasm_bindgen(module = "/src/common.js")]
+    #[wasm_bindgen(module = "/src/gen/common.js")]
     extern "C" {
         pub fn setAttributeInner(node: JsValue, name: &str, value: JsValue, ns: Option<&str>);
     }

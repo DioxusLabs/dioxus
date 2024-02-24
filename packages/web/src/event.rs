@@ -441,6 +441,7 @@ impl HasFileData for WebFormData {
     fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
         #[cfg(not(feature = "file_engine"))]
         let files = None;
+
         #[cfg(feature = "file_engine")]
         let files = self
             .element

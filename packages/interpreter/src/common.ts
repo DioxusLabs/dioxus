@@ -1,4 +1,5 @@
 export function setAttributeInner(node, field, value, ns) {
+
   const name = field;
   if (ns === "style") {
     // ????? why do we need to do this

@@ -1,5 +1,7 @@
 class InterpreterConfig {
-  constructor(intercept_link_redirects) {
+  intercept_link_redirects: boolean;
+
+  constructor(intercept_link_redirects: boolean) {
     this.intercept_link_redirects = intercept_link_redirects;
   }
 }
@@ -20,6 +22,42 @@ async function handler(event, name, bubbles, config) {
   prevent_defaults(event, target, config);
 
   let contents = await serialize_event(event);
+
+  if (
+    target.tagName === "FORM" &&
+    (event.type === "submit" || event.type === "input")
+  ) {
+    const formData = new FormData(target);
+
+    for (let name of formData.keys()) {
+      const fieldType = target.elements[name].type;
+
+      switch (fieldType) {
+        case "select-multiple":
+          contents.values[name] = formData.getAll(name);
+          break;
+
+        // add cases for fieldTypes that can hold multiple values here
+        default:
+          contents.values[name] = formData.get(name);
+          break;
+      }
+    }
+  }
+
+  if (
+    target.tagName === "SELECT" &&
+    event.type === "input"
+  ) {
+    const selectData = target.options;
+    contents.values["options"] = [];
+    for (let i = 0; i < selectData.length; i++) {
+      let option = selectData[i];
+      if (option.selected) {
+        contents.values["options"].push(option.value.toString());
+      }
+    }
+  }
 
   // TODO: this should be liveview only
   if (
@@ -58,42 +96,6 @@ async function handler(event, name, bubbles, config) {
       }
       read_files();
       return;
-    }
-  }
-
-  if (
-    target.tagName === "FORM" &&
-    (event.type === "submit" || event.type === "input")
-  ) {
-    const formData = new FormData(target);
-
-    for (let name of formData.keys()) {
-      const fieldType = target.elements[name].type;
-
-      switch (fieldType) {
-        case "select-multiple":
-          contents.values[name] = formData.getAll(name);
-          break;
-
-        // add cases for fieldTypes that can hold multiple values here
-        default:
-          contents.values[name] = formData.get(name);
-          break;
-      }
-    }
-  }
-
-  if (
-    target.tagName === "SELECT" &&
-    event.type === "input"
-  ) {
-    const selectData = target.options;
-    contents.values["options"] = [];
-    for (let i = 0; i < selectData.length; i++) {
-      let option = selectData[i];
-      if (option.selected) {
-        contents.values["options"].push(option.value.toString());
-      }
     }
   }
 
@@ -324,7 +326,7 @@ window.interpreter.setFocus = function (id, focus) {
   return true;
 }
 
-function get_mouse_data(event) {
+function get_mouse_data(event: MouseEvent) {
   const {
     altKey,
     button,
@@ -447,7 +449,8 @@ async function serialize_event(event) {
     case "dragover":
     case "dragstart":
     case "drop": {
-      let files = null;
+      let files = [];
+
       if (event.dataTransfer && event.dataTransfer.files) {
         files = ["a", "b", "c"];
         // files = await serializeFileList(event.dataTransfer.files);

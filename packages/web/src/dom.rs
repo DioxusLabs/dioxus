@@ -36,8 +36,6 @@ pub struct UiEvent {
     pub data: PlatformEventData,
 }
 
-//fn get_document(elem: &web_sys::Element) ->
-
 impl WebsysDom {
     pub fn new(cfg: Config, event_channel: mpsc::UnboundedSender<UiEvent>) -> Self {
         let (document, root) = match cfg.root {
