@@ -559,7 +559,7 @@ impl RouteEnum {
             #(#type_defs)*
 
             #[allow(non_camel_case_types)]
-            #[derive(Debug, PartialEq)]
+            #[derive(Debug, PartialEq, Eq)]
             pub enum #match_error_name {
                 #(#error_variants),*
             }

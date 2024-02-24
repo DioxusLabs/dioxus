@@ -309,7 +309,7 @@ pub(crate) fn create_error_type(
 
     quote! {
         #[allow(non_camel_case_types)]
-        #[derive(Debug, PartialEq)]
+        #[derive(Debug, PartialEq, Eq)]
         pub enum #error_name {
             ExtraSegments(String),
             #(#child_type_variant,)*
