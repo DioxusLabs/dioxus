@@ -285,8 +285,9 @@ pub fn get_dependency_paths(crate_dir: &PathBuf) -> crate::Result<Vec<PathBuf>> 
                 cargo_toml::Dependency::Detailed(detail) => {
                     if let Some(version) = detail.version {
                         PackageSource::Version(name.clone(), version)
-                    } else if let Some(git) = detail.git {
-                        todo!()
+                    } else if let Some(_git) = detail.git {
+                        log::warn!("Git dependencies not supported yet!");
+                        continue;
                     } else if let Some(path) = detail.path {
                         PackageSource::Path(path)
                     } else {
@@ -311,10 +312,13 @@ pub fn get_dependency_paths(crate_dir: &PathBuf) -> crate::Result<Vec<PathBuf>> 
     Ok(out)
 }
 
-pub async fn init_plugins(config: &DioxusConfig, crate_dir: &PathBuf) -> crate::Result<()> {
+pub async fn init_plugins(
+    config: &DioxusConfig,
+    crate_dir: &PathBuf,
+    dependency_paths: &[PathBuf],
+) -> crate::Result<()> {
     let mut dioxus_lock = DioxusLock::load()?;
-    let dependency_paths = get_dependency_paths(crate_dir)?;
-    let plugins = load_plugins(config, crate_dir, &mut dioxus_lock, &dependency_paths).await?;
+    let plugins = load_plugins(config, crate_dir, &mut dioxus_lock, dependency_paths).await?;
     *PLUGINS.lock().await = plugins;
     *PLUGINS_CONFIG.lock().await = config.clone();
     Ok(())
@@ -381,7 +385,7 @@ async fn wasi_context(
         Dir::open_ambient_dir(&config.out_dir, ambient_authority())?,
         DirPerms::all(),
         FilePerms::all(),
-        "/dist",
+        "./dist",
     );
 
     if !config.asset_dir.is_dir() {
@@ -392,7 +396,7 @@ async fn wasi_context(
         Dir::open_ambient_dir(&config.asset_dir, ambient_authority())?,
         DirPerms::all(),
         FilePerms::all(),
-        "/assets",
+        "./assets",
     );
 
     for path in dependency_paths {

@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use anyhow::{anyhow, Context};
 use clap::Parser;
 use dioxus_cli::{
-    plugin::{init_plugins, save_plugin_config},
+    plugin::{get_dependency_paths, init_plugins, save_plugin_config},
     *,
 };
 use Commands::*;
@@ -84,7 +84,8 @@ async fn main() -> anyhow::Result<()> {
           });
 
             let crate_dir = dioxus_cli_config::crate_root()?;
-            init_plugins(&dioxus_config, &crate_dir).await?;
+            let dependency_paths = get_dependency_paths(&crate_dir)?;
+            init_plugins(&dioxus_config, &crate_dir, &dependency_paths).await?;
 
             let out = match other {
                 Build(opts) => opts
@@ -99,7 +100,7 @@ async fn main() -> anyhow::Result<()> {
                     .await
                     .map_err(|e| anyhow!("🚫 Serving project failed: {}", e)),
                 Plugin(opts) => opts
-                    .plugin(&dioxus_config)
+                    .plugin(&dioxus_config, &crate_dir, &dependency_paths)
                     .await
                     .map_err(|e| anyhow!("🚫 Plugin manager failed: {}", e)),
                 Bundle(opts) => opts

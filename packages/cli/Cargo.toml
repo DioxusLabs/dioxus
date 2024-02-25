@@ -23,7 +23,7 @@ serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
 toml = "0.8.8"
 fs_extra = "1.2.0"
-cargo_toml = "0.18.0"
+cargo_toml = "0.19.1"
 futures-util = { workspace = true }
 notify = { version = "5.0.0-pre.16", features = ["serde"] }
 html_parser  = { workspace = true }
@@ -62,7 +62,7 @@ lazy_static = "1.4.0"
 ctrlc = "3.2.3"
 open = "5.0.1"
 cargo-generate = "0.19.0"
-toml_edit = "0.21.0"
+toml_edit = "0.22.5"
 wasmtime = { version = "17.0.0", features = ['component-model'] }
 wasmtime-wasi = { version = "17.0.0", features = ['preview2'] }
 futures = "0.3.30"

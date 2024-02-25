@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 // use super::*;
 use crate::lock::DioxusLock;
+use crate::plugin::get_dependency_paths;
 use crate::plugin::load_plugin;
 use crate::plugin::PLUGINS_CONFIG;
 use clap::Parser;
@@ -44,7 +45,12 @@ pub enum Plugin {
 }
 
 impl Plugin {
-    pub async fn plugin(self, dx_config: &DioxusConfig) -> super::Result<()> {
+    pub async fn plugin(
+        self,
+        dx_config: &DioxusConfig,
+        crate_dir: &PathBuf,
+        dependency_paths: &[PathBuf],
+    ) -> super::Result<()> {
         match self {
             // Plugin::Update { ignore_error } => todo!(),
             Plugin::List => {
@@ -63,14 +69,13 @@ impl Plugin {
             Plugin::Add(data) => match data {
                 PluginAdd::Add { path, priority } => {
                     let mut dioxus_lock = DioxusLock::load()?;
-                    let crate_dir = dioxus_cli_config::crate_root()?;
                     let mut plugin = load_plugin(
                         &path,
                         dx_config,
                         priority,
-                        &crate_dir,
+                        crate_dir,
                         &mut dioxus_lock,
-                        &[],
+                        dependency_paths,
                     )
                     .await?;
 
