@@ -7,6 +7,7 @@ use dioxus_lib::prelude::{Element, VirtualDom};
 pub use crate::Config;
 
 /// Launch a fullstack app with the given root component, contexts, and config.
+#[allow(unused)]
 pub fn launch(
     root: fn() -> Element,
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
@@ -20,7 +21,7 @@ pub fn launch(
         vdom
     };
 
-    #[cfg(feature = "server")]
+    #[cfg(all(feature = "server", not(target_arch = "wasm32")))]
     tokio::runtime::Runtime::new()
         .unwrap()
         .block_on(async move {

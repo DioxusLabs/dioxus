@@ -1,0 +1,22 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f4f4;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    flex-direction: column;
+    gap: 20px;
+}
+
+#drop-zone {
+    border: 2px dashed #ccc;
+    border-radius: 3px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    margin: 20px;
+    background-color: rgba(225, 124, 225, 0);
+}

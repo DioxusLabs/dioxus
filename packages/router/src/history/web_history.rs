@@ -1,10 +1,7 @@
 use gloo::console::error;
-#[cfg(feature = "serde")]
-use gloo_utils::format::JsValueSerdeExt;
 use wasm_bindgen::JsValue;
 use web_sys::History;
 
-#[cfg(not(feature = "serde"))]
 pub(crate) fn replace_state_with_url(
     history: &History,
     value: &[f64; 2],
@@ -17,18 +14,6 @@ pub(crate) fn replace_state_with_url(
     history.replace_state_with_url(&position, "", url)
 }
 
-#[cfg(feature = "serde")]
-pub(crate) fn replace_state_with_url<V: serde::Serialize>(
-    history: &History,
-    value: &V,
-    url: Option<&str>,
-) -> Result<(), JsValue> {
-    let position = JsValue::from_serde(value).unwrap();
-
-    history.replace_state_with_url(&position, "", url)
-}
-
-#[cfg(not(feature = "serde"))]
 pub(crate) fn push_state_and_url(
     history: &History,
     value: &[f64; 2],
@@ -41,33 +26,6 @@ pub(crate) fn push_state_and_url(
     history.push_state_with_url(&position, "", Some(&url))
 }
 
-#[cfg(feature = "serde")]
-pub(crate) fn push_state_and_url<V: serde::Serialize>(
-    history: &History,
-    value: &V,
-    url: String,
-) -> Result<(), JsValue> {
-    let position = JsValue::from_serde(value).unwrap();
-
-    history.push_state_with_url(&position, "", Some(&url))
-}
-
-#[cfg(feature = "serde")]
-pub(crate) fn get_current<V: serde::de::DeserializeOwned>(history: &History) -> Option<V> {
-    let state = history.state();
-    if let Err(err) = &state {
-        error!(err);
-    }
-    state.ok().and_then(|state| {
-        let deserialized = state.into_serde();
-        if let Err(err) = &deserialized {
-            error!(format!("{}", err));
-        }
-        deserialized.ok()
-    })
-}
-
-#[cfg(not(feature = "serde"))]
 pub(crate) fn get_current(history: &History) -> Option<[f64; 2]> {
     use wasm_bindgen::JsCast;
 

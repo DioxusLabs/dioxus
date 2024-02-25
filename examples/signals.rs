@@ -1,3 +1,11 @@
+//! A simple example demonstrating how to use signals to modify state from several different places.
+//!
+//! This simlpe example implements a counter that can be incremented, decremented, and paused. It also demonstrates
+//! that background tasks in use_futures can modify the value as well.
+//!
+//! Most signals implement Into<ReadOnlySignal<T>>, making ReadOnlySignal a good default type when building new
+//! library components that don't need to modify their values.
+
 use dioxus::prelude::*;
 use std::time::Duration;
 

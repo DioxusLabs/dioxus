@@ -1,35 +1,26 @@
+//! Using `wry`'s http module, we can stream a video file from the local file system.
+//!
+//! You could load in any file type, but this example uses a video file.
+
 use dioxus::desktop::wry::http;
 use dioxus::desktop::wry::http::Response;
 use dioxus::desktop::{use_asset_handler, AssetRequest};
 use dioxus::prelude::*;
 use http::{header::*, response::Builder as ResponseBuilder, status::StatusCode};
 use std::{io::SeekFrom, path::PathBuf};
-use tokio::io::AsyncReadExt;
-use tokio::io::AsyncSeekExt;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 const VIDEO_PATH: &str = "./examples/assets/test_video.mp4";
 
 fn main() {
-    let video_file = PathBuf::from(VIDEO_PATH);
-    if !video_file.exists() {
-        tokio::runtime::Runtime::new()
-            .unwrap()
-            .block_on(async move {
-                println!("Downloading video file...");
-                let video_url =
-                    "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
-                let mut response = reqwest::get(video_url).await.unwrap();
-                let mut file = tokio::fs::File::create(&video_file).await.unwrap();
-                while let Some(chunk) = response.chunk().await.unwrap() {
-                    file.write_all(&chunk).await.unwrap();
-                }
-            });
-    }
+    // For the sake of this example, we will download the video file if it doesn't exist
+    ensure_video_is_loaded();
+
     launch_desktop(app);
 }
 
 fn app() -> Element {
+    // Any request to /videos will be handled by this handler
     use_asset_handler("videos", move |request, responder| {
         // Using dioxus::spawn works, but is slower than a dedicated thread
         tokio::task::spawn(async move {
@@ -185,4 +176,22 @@ async fn get_stream_response(
     };
 
     http_response.map_err(Into::into)
+}
+
+fn ensure_video_is_loaded() {
+    let video_file = PathBuf::from(VIDEO_PATH);
+    if !video_file.exists() {
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(async move {
+                println!("Downloading video file...");
+                let video_url =
+                    "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
+                let mut response = reqwest::get(video_url).await.unwrap();
+                let mut file = tokio::fs::File::create(&video_file).await.unwrap();
+                while let Some(chunk) = response.chunk().await.unwrap() {
+                    file.write_all(&chunk).await.unwrap();
+                }
+            });
+    }
 }

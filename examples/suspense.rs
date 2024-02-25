@@ -1,5 +1,3 @@
-#![allow(non_snake_case)]
-
 //! Suspense in Dioxus
 //!
 //! Currently, `rsx!` does not accept futures as values. To achieve the functionality
@@ -49,6 +47,7 @@ fn app() -> Element {
 /// This component will re-render when the future has finished
 /// Suspense is achieved my moving the future into only the component that
 /// actually renders the data.
+#[component]
 fn Doggo() -> Element {
     let mut fut = use_resource(move || async move {
         #[derive(serde::Deserialize)]

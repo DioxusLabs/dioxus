@@ -1,5 +1,5 @@
 use dioxus_autofmt::{IndentOptions, IndentType};
-use futures_util::{stream::FuturesUnordered, StreamExt};
+use rayon::prelude::*;
 use std::{fs, path::Path, process::exit};
 
 use super::*;
@@ -10,6 +10,10 @@ use super::*;
 /// Format some rsx
 #[derive(Clone, Debug, Parser)]
 pub struct Autoformat {
+    /// Format rust code before the formatting the rsx macros
+    #[clap(long)]
+    pub all_code: bool,
+
     /// Run in 'check' mode. Exits with 0 if input is formatted correctly. Exits
     /// with 1 and prints a diff if formatting is required.
     #[clap(short, long)]
@@ -29,19 +33,19 @@ pub struct Autoformat {
 }
 
 impl Autoformat {
-    // Todo: autoformat the entire crate
-    pub async fn autoformat(self) -> Result<()> {
+    pub fn autoformat(self) -> Result<()> {
         let Autoformat {
             check,
             raw,
             file,
             split_line_attributes,
+            all_code: format_rust_code,
             ..
         } = self;
 
         // Default to formatting the project
         if raw.is_none() && file.is_none() {
-            if let Err(e) = autoformat_project(check, split_line_attributes).await {
+            if let Err(e) = autoformat_project(check, split_line_attributes, format_rust_code) {
                 eprintln!("error formatting project: {}", e);
                 exit(1);
             }
@@ -60,14 +64,18 @@ impl Autoformat {
 
         // Format single file
         if let Some(file) = file {
-            refactor_file(file, split_line_attributes)?;
+            refactor_file(file, split_line_attributes, format_rust_code)?;
         }
 
         Ok(())
     }
 }
 
-fn refactor_file(file: String, split_line_attributes: bool) -> Result<(), Error> {
+fn refactor_file(
+    file: String,
+    split_line_attributes: bool,
+    format_rust_code: bool,
+) -> Result<(), Error> {
     let indent = indentation_for(".", split_line_attributes)?;
     let file_content = if file == "-" {
         let mut contents = String::new();
@@ -76,10 +84,15 @@ fn refactor_file(file: String, split_line_attributes: bool) -> Result<(), Error>
     } else {
         fs::read_to_string(&file)
     };
-    let Ok(s) = file_content else {
+    let Ok(mut s) = file_content else {
         eprintln!("failed to open file: {}", file_content.unwrap_err());
         exit(1);
     };
+
+    if format_rust_code {
+        s = format_rust(&s)?;
+    }
+
     let edits = dioxus_autofmt::fmt_file(&s, indent);
     let out = dioxus_autofmt::apply_formats(&s, edits);
 
@@ -94,50 +107,46 @@ fn refactor_file(file: String, split_line_attributes: bool) -> Result<(), Error>
     Ok(())
 }
 
-fn get_project_files(config: &CrateConfig) -> Vec<PathBuf> {
-    let mut files = vec![];
-
-    let gitignore_path = config.crate_dir.join(".gitignore");
-    if gitignore_path.is_file() {
-        let gitigno = gitignore::File::new(gitignore_path.as_path()).unwrap();
-        if let Ok(git_files) = gitigno.included_files() {
-            let git_files = git_files
-                .into_iter()
-                .filter(|f| f.ends_with(".rs") && !is_target_dir(f));
-            files.extend(git_files)
-        };
-    } else {
-        collect_rs_files(&config.crate_dir, &mut files);
+use std::ffi::OsStr;
+fn get_project_files() -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    for result in ignore::Walk::new("./") {
+        let path = result.unwrap().into_path();
+        if let Some(ext) = path.extension() {
+            if ext == OsStr::new("rs") {
+                files.push(path);
+            }
+        }
     }
-
     files
 }
 
-fn is_target_dir(file: &Path) -> bool {
-    let stripped = if let Ok(cwd) = std::env::current_dir() {
-        file.strip_prefix(cwd).unwrap_or(file)
-    } else {
-        file
-    };
-    if let Some(first) = stripped.components().next() {
-        first.as_os_str() == "target"
-    } else {
-        false
-    }
-}
-
-async fn format_file(
+fn format_file(
     path: impl AsRef<Path>,
     indent: IndentOptions,
-) -> Result<usize, tokio::io::Error> {
-    let contents = tokio::fs::read_to_string(&path).await?;
+    format_rust_code: bool,
+) -> Result<usize> {
+    let mut contents = fs::read_to_string(&path)?;
+    let mut if_write = false;
+    if format_rust_code {
+        let formatted = format_rust(&contents)
+            .map_err(|err| Error::ParseError(format!("Syntax Error:\n{}", err)))?;
+        if contents != formatted {
+            if_write = true;
+            contents = formatted;
+        }
+    }
 
     let edits = dioxus_autofmt::fmt_file(&contents, indent);
     let len = edits.len();
 
     if !edits.is_empty() {
+        if_write = true;
+    }
+
+    if if_write {
         let out = dioxus_autofmt::apply_formats(&contents, edits);
-        tokio::fs::write(path, out).await?;
+        fs::write(path, out)?;
     }
 
     Ok(len)
@@ -145,13 +154,15 @@ async fn format_file(
 
 /// Read every .rs file accessible when considering the .gitignore and try to format it
 ///
-/// Runs using Tokio for multithreading, so it should be really really fast
+/// Runs using rayon for multithreading, so it should be really really fast
 ///
 /// Doesn't do mod-descending, so it will still try to format unreachable files. TODO.
-async fn autoformat_project(check: bool, split_line_attributes: bool) -> Result<()> {
-    let crate_config = dioxus_cli_config::CrateConfig::new(None)?;
-
-    let files_to_format = get_project_files(&crate_config);
+fn autoformat_project(
+    check: bool,
+    split_line_attributes: bool,
+    format_rust_code: bool,
+) -> Result<()> {
+    let files_to_format = get_project_files();
 
     if files_to_format.is_empty() {
         return Ok(());
@@ -164,26 +175,18 @@ async fn autoformat_project(check: bool, split_line_attributes: bool) -> Result<
     let indent = indentation_for(&files_to_format[0], split_line_attributes)?;
 
     let counts = files_to_format
-        .into_iter()
-        .map(|path| async {
-            let path_clone = path.clone();
-            let res = tokio::spawn(format_file(path, indent.clone())).await;
-
+        .into_par_iter()
+        .map(|path| {
+            let res = format_file(&path, indent.clone(), format_rust_code);
             match res {
+                Ok(cnt) => Some(cnt),
                 Err(err) => {
-                    eprintln!("error formatting file: {}\n{err}", path_clone.display());
+                    eprintln!("error formatting file : {}\n{:#?}", path.display(), err);
                     None
                 }
-                Ok(Err(err)) => {
-                    eprintln!("error formatting file: {}\n{err}", path_clone.display());
-                    None
-                }
-                Ok(Ok(res)) => Some(res),
             }
         })
-        .collect::<FuturesUnordered<_>>()
-        .collect::<Vec<_>>()
-        .await;
+        .collect::<Vec<_>>();
 
     let files_formatted: usize = counts.into_iter().flatten().sum();
 
@@ -242,28 +245,21 @@ fn indentation_for(
     ))
 }
 
-fn collect_rs_files(folder: &impl AsRef<Path>, files: &mut Vec<PathBuf>) {
-    if is_target_dir(folder.as_ref()) {
-        return;
-    }
-    let Ok(folder) = folder.as_ref().read_dir() else {
-        return;
-    };
-    // load the gitignore
-    for entry in folder {
-        let Ok(entry) = entry else {
-            continue;
-        };
-        let path = entry.path();
-        if path.is_dir() {
-            collect_rs_files(&path, files);
-        }
-        if let Some(ext) = path.extension() {
-            if ext == "rs" && !is_target_dir(&path) {
-                files.push(path);
-            }
-        }
-    }
+/// Format rust code using prettyplease
+fn format_rust(input: &str) -> Result<String> {
+    let syntax_tree = syn::parse_file(input).map_err(format_syn_error)?;
+    let output = prettyplease::unparse(&syntax_tree);
+    Ok(output)
+}
+
+fn format_syn_error(err: syn::Error) -> Error {
+    let start = err.span().start();
+    let line = start.line;
+    let column = start.column;
+    Error::ParseError(format!(
+        "Syntax Error in line {} column {}:\n{}",
+        line, column, err
+    ))
 }
 
 #[tokio::test]
@@ -284,13 +280,14 @@ async fn test_auto_fmt() {
     .to_string();
 
     let fmt = Autoformat {
+        all_code: false,
         check: false,
         raw: Some(test_rsx),
         file: None,
         split_line_attributes: false,
     };
 
-    fmt.autoformat().await.unwrap();
+    fmt.autoformat().unwrap();
 }
 
 /*#[test]

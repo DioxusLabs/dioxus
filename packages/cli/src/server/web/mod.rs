@@ -10,8 +10,8 @@ use crate::{
     BuildResult, Result,
 };
 use axum::{
-    body::{Full, HttpBody},
-    extract::{ws::Message, Extension, TypedHeader, WebSocketUpgrade},
+    body::Body,
+    extract::{ws::Message, Extension, WebSocketUpgrade},
     http::{
         self,
         header::{HeaderName, HeaderValue},
@@ -286,20 +286,18 @@ async fn setup_router(
                 let mut response = if file_service_config.dioxus_config.web.index_on_404
                     && response.status() == StatusCode::NOT_FOUND
                 {
-                    let body = Full::from(
+                    let body = Body::from(
                         // TODO: Cache/memoize this.
                         std::fs::read_to_string(file_service_config.out_dir().join("index.html"))
                             .ok()
                             .unwrap(),
-                    )
-                    .map_err(|err| match err {})
-                    .boxed();
+                    );
                     Response::builder()
                         .status(StatusCode::OK)
                         .body(body)
                         .unwrap()
                 } else {
-                    response.map(|body| body.boxed())
+                    response.into_response()
                 };
                 let headers = response.headers_mut();
                 headers.insert(
@@ -323,7 +321,7 @@ async fn setup_router(
 
     // Route file service
     router = router.fallback(get_service(file_service).handle_error(
-        |error: std::io::Error| async move {
+        |error: std::convert::Infallible| async move {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Unhandled internal error: {}", error),
@@ -334,7 +332,7 @@ async fn setup_router(
     router = if let Some(base_path) = config.dioxus_config.web.app.base_path.clone() {
         let base_path = format!("/{}", base_path.trim_matches('/'));
         Router::new()
-            .nest(&base_path, axum::routing::any_service(router))
+            .route(&base_path, axum::routing::any_service(router))
             .fallback(get(move || {
                 let base_path = base_path.clone();
                 async move { format!("Outside of the base path: {}", base_path) }
@@ -364,9 +362,9 @@ async fn start_server(
     rustls: Option<RustlsConfig>,
     _config: &CrateConfig,
 ) -> Result<()> {
-    // Parse address
-    let addr = format!("0.0.0.0:{}", port).parse().unwrap();
-
+    // Bind the server to `[::]` and it will LISTEN for both IPv4 and IPv6. (required IPv6 dual stack)
+    let addr = format!("[::]:{}", port).parse().unwrap();
+    
     // Open the browser
     if start_browser {
         match rustls {
@@ -383,9 +381,8 @@ async fn start_server(
                 .await?
         }
         None => {
-            axum::Server::bind(&addr)
-                .serve(router.into_make_service())
-                .await?
+            let listener = tokio::net::TcpListener::bind(&addr).await?;
+            axum::serve(listener, router.into_make_service()).await?
         }
     }
 
@@ -413,7 +410,6 @@ fn get_ip() -> Option<String> {
 /// Handle websockets
 async fn ws_handler(
     ws: WebSocketUpgrade,
-    _: Option<TypedHeader<headers::UserAgent>>,
     Extension(state): Extension<Arc<WsReloadState>>,
 ) -> impl IntoResponse {
     ws.on_upgrade(|mut socket| async move {

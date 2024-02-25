@@ -38,6 +38,7 @@ impl LaunchBuilder {
 
     /// Launch your web application.
     #[cfg(feature = "web")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "web")))]
     pub fn web() -> LaunchBuilder<dioxus_web::Config, UnsendContext> {
         LaunchBuilder {
             launch_fn: dioxus_web::launch::launch,
@@ -48,6 +49,7 @@ impl LaunchBuilder {
 
     /// Launch your desktop application.
     #[cfg(feature = "desktop")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "desktop")))]
     pub fn desktop() -> LaunchBuilder<dioxus_desktop::Config, UnsendContext> {
         LaunchBuilder {
             launch_fn: dioxus_desktop::launch::launch,
@@ -58,6 +60,7 @@ impl LaunchBuilder {
 
     /// Launch your fullstack application.
     #[cfg(feature = "fullstack")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]
     pub fn fullstack() -> LaunchBuilder<dioxus_fullstack::Config, SendContext> {
         LaunchBuilder {
             launch_fn: dioxus_fullstack::launch::launch,
@@ -68,6 +71,7 @@ impl LaunchBuilder {
 
     /// Launch your fullstack application.
     #[cfg(feature = "mobile")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "mobile")))]
     pub fn mobile() -> LaunchBuilder<dioxus_mobile::Config, UnsendContext> {
         LaunchBuilder {
             launch_fn: dioxus_mobile::launch::launch,
@@ -77,6 +81,7 @@ impl LaunchBuilder {
     }
 
     #[cfg(feature = "tui")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "tui")))]
     /// Launch your tui application
     pub fn tui() -> LaunchBuilder<dioxus_tui::Config, UnsendContext> {
         LaunchBuilder {
@@ -156,15 +161,26 @@ mod current_platform {
     #[cfg(all(feature = "desktop", not(feature = "fullstack")))]
     pub use dioxus_desktop::launch::*;
 
+    #[cfg(all(feature = "mobile", not(feature = "fullstack")))]
+    pub use dioxus_desktop::launch::*;
+
     #[cfg(feature = "fullstack")]
     pub use dioxus_fullstack::launch::*;
 
-    #[cfg(all(feature = "web", not(any(feature = "desktop", feature = "fullstack"))))]
+    #[cfg(all(
+        feature = "web",
+        not(any(feature = "desktop", feature = "mobile", feature = "fullstack"))
+    ))]
     pub use dioxus_web::launch::*;
 
     #[cfg(all(
         feature = "liveview",
-        not(any(feature = "web", feature = "desktop", feature = "fullstack"))
+        not(any(
+            feature = "web",
+            feature = "desktop",
+            feature = "mobile",
+            feature = "fullstack"
+        ))
     ))]
     pub use dioxus_liveview::launch::*;
 
@@ -174,6 +190,7 @@ mod current_platform {
             feature = "liveview",
             feature = "web",
             feature = "desktop",
+            feature = "mobile",
             feature = "fullstack"
         ))
     ))]
@@ -182,6 +199,7 @@ mod current_platform {
     #[cfg(not(any(
         feature = "liveview",
         feature = "desktop",
+        feature = "mobile",
         feature = "web",
         feature = "tui",
         feature = "fullstack"
@@ -191,6 +209,7 @@ mod current_platform {
     #[cfg(not(any(
         feature = "liveview",
         feature = "desktop",
+        feature = "mobile",
         feature = "web",
         feature = "tui",
         feature = "fullstack"
@@ -200,6 +219,10 @@ mod current_platform {
         contexts: Vec<Box<super::ValidContext>>,
         platform_config: (),
     ) {
+        #[cfg(feature = "third-party-renderer")]
+        panic!("No first party renderer feature enabled. It looks like you are trying to use a third party renderer. You will need to use the launch function from the third party renderer crate.");
+
+        panic!("No platform feature enabled. Please enable one of the following features: liveview, desktop, mobile, web, tui, fullstack to use the launch API.");
     }
 }
 
@@ -209,24 +232,28 @@ pub fn launch(app: fn() -> Element) {
 }
 
 #[cfg(feature = "web")]
+#[cfg_attr(docsrs, doc(cfg(feature = "web")))]
 /// Launch your web application without any additional configuration. See [`LaunchBuilder`] for more options.
 pub fn launch_web(app: fn() -> Element) {
     LaunchBuilder::web().launch(app)
 }
 
 #[cfg(feature = "desktop")]
+#[cfg_attr(docsrs, doc(cfg(feature = "desktop")))]
 /// Launch your desktop application without any additional configuration. See [`LaunchBuilder`] for more options.
 pub fn launch_desktop(app: fn() -> Element) {
     LaunchBuilder::desktop().launch(app)
 }
 
 #[cfg(feature = "fullstack")]
+#[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]
 /// Launch your fullstack application without any additional configuration. See [`LaunchBuilder`] for more options.
 pub fn launch_fullstack(app: fn() -> Element) {
     LaunchBuilder::fullstack().launch(app)
 }
 
 #[cfg(feature = "tui")]
+#[cfg_attr(docsrs, doc(cfg(feature = "tui")))]
 /// Launch your tui application without any additional configuration. See [`LaunchBuilder`] for more options.
 pub fn launch_tui(app: fn() -> Element) {
     LaunchBuilder::tui().launch(app)

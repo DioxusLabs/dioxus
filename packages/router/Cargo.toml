@@ -35,12 +35,11 @@ default = []
 ssr = ["dioxus-ssr/incremental", "tokio", "dioxus-fullstack?/server"]
 liveview = ["dioxus-liveview", "tokio", "dep:serde", "serde_json"]
 wasm_test = []
-serde = ["dep:serde", "gloo-utils?/serde"]
 web = ["gloo", "web-sys", "wasm-bindgen", "gloo-utils", "js-sys"]
 fullstack = ["dioxus-fullstack"]
 
 [dev-dependencies]
-axum = { version = "0.6.1", features = ["ws"] }
+axum = { workspace = true, features = ["ws"] }
 dioxus = { workspace = true, features = ["router" ]}
 # dioxus-liveview = { workspace = true, features = ["axum"] }
 dioxus-ssr = { path = "../ssr" }

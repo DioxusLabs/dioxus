@@ -1,3 +1,12 @@
+//! Backgrounded futures example
+//!
+//! This showcases how use_future, use_memo, and use_effect will stop running if the component returns early.
+//! Generally you should avoid using early returns around hooks since most hooks are not properly designed to
+//! handle early returns. However, use_future *does* pause the future when the component returns early, and so
+//! hooks that build on top of it like use_memo and use_effect will also pause.
+//!
+//! This example is more of a demonstration of the behavior than a practical use case, but it's still interesting to see.
+
 use dioxus::prelude::*;
 
 fn main() {
@@ -10,17 +19,17 @@ fn app() -> Element {
 
     let child = use_memo(move || {
         rsx! {
-            Child {
-                count
-            }
+            Child { count }
         }
     });
 
     rsx! {
+        // Some toggle/controls to show the child or increment the count
         button { onclick: move |_| show_child.toggle(), "Toggle child" }
         button { onclick: move |_| count += 1, "Increment count" }
+
         if show_child() {
-            {child.cloned()}
+            {child()}
         }
     }
 }
@@ -44,12 +53,12 @@ fn Child(count: Signal<i32>) -> Element {
         }
     });
 
-    use_effect(move || {
-        println!("Child count: {}", count());
-    });
+    use_effect(move || println!("Child count: {}", count()));
 
     rsx! {
-        "hellO!"
-        {early}
+        div {
+            "Child component"
+            {early}
+        }
     }
 }

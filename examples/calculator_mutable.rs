@@ -1,38 +1,28 @@
-#![allow(non_snake_case)]
-
-//! Example: Calculator
-//! -------------------
+//! This example showcases a simple calculator using an approach to state management where the state is composed of only
+//! a single signal. Since Dioxus implements traditional React diffing, state can be consolidated into a typical Rust struct
+//! with methods that take `&mut self`. For many use cases, this is a simple way to manage complex state without wrapping
+//! everything in a signal.
 //!
-//! Some components benefit through the use of "Models". Models are a single block of encapsulated state that allow mutative
-//! methods to be performed on them. Dioxus exposes the ability to use the model pattern through the "use_model" hook.
-//!
-//! Models are commonly used in the "Model-View-Component" approach for building UI state.
-//!
-//! `use_model` is basically just a fancy wrapper around set_state, but saves a "working copy" of the new state behind a
-//! RefCell. To modify the working copy, you need to call "get_mut" which returns the RefMut. This makes it easy to write
-//! fully encapsulated apps that retain a certain feel of native Rusty-ness. A calculator app is a good example of when this
-//! is useful.
-//!
-//! Do note that "get_mut" returns a `RefMut` (a lock over a RefCell). If two `RefMut`s are held at the same time (ie in a loop)
-//! the RefCell will panic and crash. You can use `try_get_mut` or `.modify` to avoid this problem, or just not hold two
-//! RefMuts at the same time.
+//! Generally, you'll want to split your state into several signals if you have a large application, but for small
+//! applications, or focused components, this is a great way to manage state.
 
 use dioxus::desktop::tao::dpi::LogicalSize;
 use dioxus::desktop::{Config, WindowBuilder};
-use dioxus::events::*;
 use dioxus::html::input_data::keyboard_types::Key;
 use dioxus::html::MouseEvent;
 use dioxus::prelude::*;
 
 fn main() {
-    let cfg = Config::new().with_window(
-        WindowBuilder::new()
-            .with_title("Calculator Demo")
-            .with_resizable(false)
-            .with_inner_size(LogicalSize::new(320.0, 530.0)),
-    );
-
-    LaunchBuilder::desktop().with_cfg(cfg).launch(app);
+    LaunchBuilder::desktop()
+        .with_cfg(
+            Config::new().with_window(
+                WindowBuilder::new()
+                    .with_title("Calculator Demo")
+                    .with_resizable(false)
+                    .with_inner_size(LogicalSize::new(320.0, 530.0)),
+            ),
+        )
+        .launch(app);
 }
 
 const STYLE: &str = include_str!("./assets/calculator.css");
@@ -109,6 +99,7 @@ struct Calculator {
     waiting_for_operand: bool,
     cur_val: f64,
 }
+
 #[derive(Clone)]
 enum Operator {
     Add,
@@ -116,6 +107,7 @@ enum Operator {
     Mul,
     Div,
 }
+
 impl Calculator {
     fn new() -> Self {
         Calculator {

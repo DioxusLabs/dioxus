@@ -81,10 +81,8 @@ impl LiveviewRouter for Router {
     }
 
     async fn start(self, address: impl Into<std::net::SocketAddr>) {
-        if let Err(err) = axum::Server::bind(&address.into())
-            .serve(self.into_make_service())
-            .await
-        {
+        let listener = tokio::net::TcpListener::bind(address.into()).await.unwrap();
+        if let Err(err) = axum::serve(listener, self.into_make_service()).await {
             eprintln!("Failed to start axum server: {}", err);
         }
     }

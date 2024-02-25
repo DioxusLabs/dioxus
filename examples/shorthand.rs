@@ -1,3 +1,5 @@
+//! Dioxus supports shorthand syntax for creating elements and components.
+
 use dioxus::prelude::*;
 
 fn main() {

@@ -57,8 +57,8 @@ async fn main() {
 
     println!("Listening on http://{addr}");
 
-    axum::Server::bind(&addr.to_string().parse().unwrap())
-        .serve(app.into_make_service())
+    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+    axum::serve(listener, app.into_make_service())
         .await
         .unwrap();
 }

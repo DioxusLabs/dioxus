@@ -67,7 +67,6 @@ async fn main() -> anyhow::Result<()> {
             .context(error_wrapper("Initialising a new project failed")),
         Autoformat(opts) => opts
             .autoformat()
-            .await
             .context(error_wrapper("Error autoformatting RSX")),
         Check(opts) => opts
             .check()

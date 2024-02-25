@@ -1,7 +1,6 @@
 #![doc = include_str!("../README.md")]
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
-#![cfg_attr(feature = "nightly-features", feature(debug_refcell))]
 
 #[macro_export]
 /// A helper macro for using hooks and properties in async environments.
@@ -12,17 +11,17 @@
 /// ```
 /// # use dioxus::prelude::*;
 /// #
-/// # #[derive(Props, PartialEq)]
+/// # #[derive(Props, PartialEq, Clone)]
 /// # struct Props {
 /// #    prop: String,
 /// # }
-/// # fn Component(cx: Scope<Props>) -> Element {
+/// # fn Component(props: Props) -> Element {
 ///
 /// let (data) = use_signal(|| {});
 ///
 /// let handle_thing = move |_| {
-///     to_owned![data, cx.props.prop];
-///     cx.spawn(async move {
+///     to_owned![data, props.prop];
+///     spawn(async move {
 ///         // do stuff
 ///     });
 /// };

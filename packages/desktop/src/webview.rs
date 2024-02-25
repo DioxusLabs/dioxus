@@ -37,11 +37,16 @@ impl WebviewInstance {
         dom: VirtualDom,
         shared: Rc<SharedContext>,
     ) -> WebviewInstance {
-        let window = cfg.window.clone().build(&shared.target).unwrap();
+        let mut window = cfg.window.clone();
+
+        // tao makes small windows for some reason, make them bigger
+        if cfg.window.window.inner_size.is_none() {
+            window = window.with_inner_size(tao::dpi::LogicalSize::new(800.0, 600.0));
+        }
 
         // We assume that if the icon is None in cfg, then the user just didnt set it
         if cfg.window.window.window_icon.is_none() {
-            window.set_window_icon(Some(
+            window = window.with_window_icon(Some(
                 tao::window::Icon::from_rgba(
                     include_bytes!("./assets/default_icon.bin").to_vec(),
                     460,
@@ -50,6 +55,8 @@ impl WebviewInstance {
                 .expect("image parse failed"),
             ));
         }
+
+        let window = window.build(&shared.target).unwrap();
 
         let mut web_context = WebContext::new(cfg.data_dir.clone());
         let edit_queue = EditQueue::default();
