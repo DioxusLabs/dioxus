@@ -47,6 +47,12 @@ fn main() {
     );
 }
 
+#[cfg(not(all(feature = "web", not(feature = "server"))))]
+fn main() {
+    panic!("This example is only intended to be run with the `web` feature");
+}
+
+
 #[derive(Clone, Routable, Debug, PartialEq, Serialize, Deserialize)]
 enum Route {
     #[route("/")]

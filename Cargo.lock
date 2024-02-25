@@ -1384,9 +1384,9 @@ dependencies = [
 
 [[package]]
 name = "cargo_toml"
-version = "0.18.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "802b755090e39835a4b0440fb0bbee0df7495a8b337f63db21e616f7821c7e8c"
+checksum = "3dc9f7a067415ab5058020f04c60ec7b557084dbec0e021217bbabc7a8d38d14"
 dependencies = [
  "serde",
  "toml 0.8.10",
@@ -2469,10 +2469,10 @@ dependencies = [
  "axum",
  "axum-extra",
  "axum-server",
- "base64 0.21.7",
+ "base64",
  "cargo-generate",
  "cargo_metadata 0.18.1",
- "cargo_toml 0.18.0",
+ "cargo_toml 0.19.1",
  "chrono",
  "clap 4.4.18",
  "colored 2.1.0",
@@ -2488,6 +2488,7 @@ dependencies = [
  "fs_extra",
  "futures",
  "futures-util",
+ "gitignore",
  "headers 0.3.9",
  "html_parser",
  "hyper 1.2.0",
@@ -2503,23 +2504,20 @@ dependencies = [
  "open",
  "prettier-please",
  "rayon",
- "reqwest",
  "rsx-rosetta",
  "semver",
  "serde",
  "serde_json",
  "subprocess",
  "syn 2.0.50",
- "tar",
  "tauri-bundler",
  "tempfile",
  "thiserror",
  "tokio",
  "toml 0.8.10",
- "toml_edit 0.21.1",
+ "toml_edit 0.22.6",
  "tower",
  "tower-http",
- "walkdir",
  "wasm-bindgen-cli-support",
  "wasmtime",
  "wasmtime-wasi",
@@ -2530,7 +2528,7 @@ dependencies = [
 name = "dioxus-cli-config"
 version = "0.5.0-alpha.0"
 dependencies = [
- "cargo_toml 0.16.3",
+ "cargo_toml 0.19.1",
  "clap 4.4.18",
  "once_cell",
  "semver",
@@ -3231,18 +3229,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7268b386296a025e474d5140678f75d6de9493ae55a5d709eeb9dd08149945e1"
 dependencies = [
  "cfg-if",
-]
-
-[[package]]
-name = "enum-as-inner"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ffccbb6966c05b32ef8fbac435df276c4ae4d3dc55a8cd0eb9745e6c12f546a"
-dependencies = [
- "heck 0.4.1",
- "proc-macro2",
- "quote",
- "syn 2.0.50",
 ]
 
 [[package]]
@@ -4047,7 +4033,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4271d37baee1b8c7e4b708028c57d816cf9d2434acb33a549475f78c181f6253"
 dependencies = [
  "fallible-iterator 0.3.0",
- "indexmap 2.2.2",
+ "indexmap 2.2.3",
  "stable_deref_trait",
 ]
 
@@ -4096,6 +4082,15 @@ dependencies = [
  "openssl-probe",
  "openssl-sys",
  "url",
+]
+
+[[package]]
+name = "gitignore"
+version = "1.0.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d051488d9a601181a9b90c9ad8ae7e8251d642ddd2463008f2f5019d255bd89"
+dependencies = [
+ "glob",
 ]
 
 [[package]]
@@ -6082,12 +6077,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "match_cfg"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ffbee8634e0d45d258acb448e7eaab3fce7a0a467395d4d9f228e3c1f01fb2e4"
-
-[[package]]
 name = "matches"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6666,7 +6655,7 @@ checksum = "a6a622008b6e321afc04970976f62ee297fdbaa6f95318ca343e3eebb9648441"
 dependencies = [
  "crc32fast",
  "hashbrown 0.14.3",
- "indexmap 2.2.2",
+ "indexmap 2.2.3",
  "memchr",
 ]
 
@@ -7834,6 +7823,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "regalloc2"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad156d539c879b7a24a363a2016d77961786e71f48f2e2fc8302a92abd2429a6"
+dependencies = [
+ "hashbrown 0.13.2",
+ "log",
+ "rustc-hash",
+ "slice-group-by",
+ "smallvec",
+]
+
+[[package]]
 name = "regex"
 version = "1.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7923,10 +7925,12 @@ dependencies = [
  "tokio",
  "tokio-native-tls",
  "tokio-rustls 0.24.1",
+ "tokio-util",
  "tower-service",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "wasm-streams",
  "web-sys",
  "webpki-roots 0.25.4",
  "winreg",
@@ -10640,13 +10644,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "977038054fd97977d2b7889005b5f20b62fd3563f2dc8dedfb534e3fdea6b7a7"
 dependencies = [
  "anyhow",
- "indexmap 2.2.2",
+ "indexmap 2.2.3",
  "serde",
  "serde_derive",
  "serde_json",
  "spdx",
  "wasm-encoder 0.41.1",
  "wasmparser 0.121.1",
+]
+
+[[package]]
+name = "wasm-streams"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b65dc4c90b63b118468cf747d8bf3566c1913ef60be765b5730ead9e0a3ba129"
+dependencies = [
+ "futures-util",
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
@@ -10661,7 +10678,7 @@ version = "0.118.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95ee9723b928e735d53000dec9eae7b07a60e490c85ab54abb66659fc61bfcd9"
 dependencies = [
- "indexmap 2.2.2",
+ "indexmap 2.2.3",
  "semver",
 ]
 
@@ -10672,7 +10689,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99ffe16b4aa1ebab8724f61c9ee38cd5481c89caf10bf1a5af9eab8f0c2e6c05"
 dependencies = [
  "bitflags 2.4.2",
- "indexmap 2.2.2",
+ "indexmap 2.2.3",
  "semver",
 ]
 
@@ -10699,7 +10716,7 @@ dependencies = [
  "cfg-if",
  "encoding_rs",
  "fxprof-processed-profile",
- "indexmap 2.2.2",
+ "indexmap 2.2.3",
  "libc",
  "log",
  "object",
@@ -10741,7 +10758,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2de1b065bdbaca3df9e7e9f70eb129e326a99d971b16d666acd798d98d47635"
 dependencies = [
  "anyhow",
- "base64 0.21.7",
+ "base64",
  "bincode",
  "directories-next",
  "log",
@@ -10763,7 +10780,7 @@ dependencies = [
  "anyhow",
  "proc-macro2",
  "quote",
- "syn 2.0.48",
+ "syn 2.0.50",
  "wasmtime-component-util",
  "wasmtime-wit-bindgen",
  "wit-parser",
@@ -10825,7 +10842,7 @@ dependencies = [
  "anyhow",
  "cranelift-entity",
  "gimli 0.28.1",
- "indexmap 2.2.2",
+ "indexmap 2.2.3",
  "log",
  "object",
  "serde",
@@ -10914,7 +10931,7 @@ dependencies = [
  "cc",
  "cfg-if",
  "encoding_rs",
- "indexmap 2.2.2",
+ "indexmap 2.2.3",
  "libc",
  "log",
  "mach",
@@ -10955,7 +10972,7 @@ checksum = "e10fe166d4e4c95d5d80c5b47e1e12256af2099ac525ddb9a19b1aeb8896e5e1"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.48",
+ "syn 2.0.50",
 ]
 
 [[package]]
@@ -11018,7 +11035,7 @@ checksum = "6bb3bc92c031cf4961135bffe055a69c1bd67c253dca20631478189bb05ec27b"
 dependencies = [
  "anyhow",
  "heck 0.4.1",
- "indexmap 2.2.2",
+ "indexmap 2.2.3",
  "wit-parser",
 ]
 
@@ -11228,7 +11245,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "shellexpand",
- "syn 2.0.48",
+ "syn 2.0.50",
  "witx",
 ]
 
@@ -11240,7 +11257,7 @@ checksum = "37ba3b37f402a7513b9ed7973a6e907074987b3afdcede98d3d79939b3e76f1b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.48",
+ "syn 2.0.50",
  "wiggle-generate",
 ]
 
@@ -11656,7 +11673,7 @@ dependencies = [
  "anyhow",
  "proc-macro2",
  "quote",
- "syn 2.0.48",
+ "syn 2.0.50",
  "wit-bindgen-core 0.15.0",
  "wit-bindgen-rust 0.15.0",
  "wit-component",
@@ -11671,7 +11688,7 @@ dependencies = [
  "anyhow",
  "proc-macro2",
  "quote",
- "syn 2.0.48",
+ "syn 2.0.50",
  "wit-bindgen-core 0.16.0",
  "wit-bindgen-rust 0.16.0",
  "wit-component",
@@ -11685,7 +11702,7 @@ checksum = "5b8a35a2a9992898c9d27f1664001860595a4bc99d32dd3599d547412e17d7e2"
 dependencies = [
  "anyhow",
  "bitflags 2.4.2",
- "indexmap 2.2.2",
+ "indexmap 2.2.3",
  "log",
  "serde",
  "serde_derive",
@@ -11704,7 +11721,7 @@ checksum = "316b36a9f0005f5aa4b03c39bc3728d045df136f8c13a73b7db4510dec725e08"
 dependencies = [
  "anyhow",
  "id-arena",
- "indexmap 2.2.2",
+ "indexmap 2.2.3",
  "log",
  "semver",
  "serde",
