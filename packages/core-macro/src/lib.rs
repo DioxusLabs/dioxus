@@ -167,7 +167,7 @@ pub(crate) const COMPONENT_ARG_CASE_CHECK_OFF: &str = "no_case_check";
 ///     #[warn(non_snake_case)]
 ///     #[inline(always)]
 ///     fn __dx_inner_comp(props: GreetPersonProps>e) -> Element {
-///         let GreetPersonProps { person } = &cx.props;
+///         let GreetPersonProps { person } = props;
 ///         {
 ///             rsx! { "hello, {person}" }
 ///         }
