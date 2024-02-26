@@ -5,17 +5,19 @@ use dioxus_signals::ReactiveContext;
 /// The signal will be owned by the current component and will be dropped when the component is dropped.
 ///
 /// If the use_effect call was skipped due to an early return, the effect will no longer activate.
+#[track_caller]
 pub fn use_effect(mut callback: impl FnMut() + 'static) {
     // let mut run_effect = use_hook(|| CopyValue::new(true));
     // use_hook_did_run(move |did_run| run_effect.set(did_run));
 
+    let location = std::panic::Location::caller();
+
     use_hook(|| {
         spawn(async move {
-            let rc = ReactiveContext::new();
-
+            let rc = ReactiveContext::new_with_origin(location);
             loop {
                 // Wait for the dom the be finished with sync work
-                flush_sync().await;
+                // flush_sync().await;
 
                 // Run the effect
                 rc.run_in(&mut callback);

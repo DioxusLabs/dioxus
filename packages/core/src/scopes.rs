@@ -9,8 +9,25 @@ use std::{cell::Ref, fmt::Debug, rc::Rc};
 /// time. We do try and guarantee that between calls to `wait_for_work`, no ScopeIds will be recycled in order to give
 /// time for any logic that relies on these IDs to properly update.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ScopeId(pub usize);
+
+impl std::fmt::Debug for ScopeId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut builder = f.debug_tuple("ScopeId");
+        let mut builder = builder.field(&self.0);
+        #[cfg(debug_assertions)]
+        {
+            if let Some(name) = Runtime::current()
+                .as_ref()
+                .and_then(|rt| rt.get_state(*self))
+            {
+                builder = builder.field(&name.name);
+            }
+        }
+        builder.finish()
+    }
+}
 
 impl ScopeId {
     /// The root ScopeId.

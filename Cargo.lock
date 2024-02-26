@@ -2429,6 +2429,7 @@ name = "dioxus-examples"
 version = "0.4.3"
 dependencies = [
  "dioxus",
+ "dioxus-logger",
  "dioxus-ssr",
  "form_urlencoded",
  "futures-util",
@@ -2612,6 +2613,16 @@ dependencies = [
  "tokio-util",
  "tower",
  "tracing",
+]
+
+[[package]]
+name = "dioxus-logger"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d7cbab0b5519060fe9e14b3c21e3f2329b8386cd905618f78c7b929cd00cf54"
+dependencies = [
+ "log",
+ "web-sys",
 ]
 
 [[package]]
