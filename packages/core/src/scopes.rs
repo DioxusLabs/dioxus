@@ -1,7 +1,7 @@
 use crate::{
     any_props::BoxedAnyProps, nodes::RenderReturn, runtime::Runtime, scope_context::Scope,
 };
-use std::{cell::Ref, fmt::Debug, rc::Rc};
+use std::{cell::Ref, rc::Rc};
 
 /// A component's unique identifier.
 ///
