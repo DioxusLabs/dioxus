@@ -108,6 +108,7 @@ impl WebsysDom {
         }));
 
         dioxus_interpreter_js::initialize(
+            interpreter.js_channel(),
             root.clone().unchecked_into(),
             handler.as_ref().unchecked_ref(),
         );

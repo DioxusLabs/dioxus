@@ -17,6 +17,7 @@ const PREVENT_FILE_UPLOAD: &str = include_str!("../js/prevent_file_upload.js");
 fn handle_edits_code() -> String {
     let polling_request = format!(
         r#"// Poll for requests
+    window.interpreter = new JSChannel();
     window.interpreter.wait_for_request = (headless) => {{
       fetch(new Request("{EDITS_PATH}"))
           .then(response => {{
@@ -24,11 +25,11 @@ fn handle_edits_code() -> String {
                   .then(bytes => {{
                       // In headless mode, the requestAnimationFrame callback is never called, so we need to run the bytes directly
                       if (headless) {{
-                        run_from_bytes(bytes);
+                        window.interpreter.run_from_bytes(bytes);
                       }}
                       else {{
                         requestAnimationFrame(() => {{
-                          run_from_bytes(bytes);
+                            window.interpreter.run_from_bytes(bytes);
                         }});
                       }}
                       window.interpreter.wait_for_request(headless);
@@ -50,7 +51,7 @@ fn handle_edits_code() -> String {
         interpreter.replace_range(import_start..import_end, "");
     }
 
-    format!("{interpreter}\nconst config = new InterpreterConfig(true);")
+    format!("{interpreter}\nconst intercept_link_redirects = true;")
 }
 
 static DEFAULT_INDEX: &str = include_str!("./index.html");

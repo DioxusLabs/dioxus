@@ -19,7 +19,7 @@ pub mod minimal_bindings {
     /// Some useful snippets that we use to share common functionality between the different platforms we support.
     ///
     /// This maintains some sort of consistency between web, desktop, and liveview
-    #[wasm_bindgen(module = "/src/gen/common.js")]
+    #[wasm_bindgen(module = "/src/common_exported.js")]
     extern "C" {
         /// Set the attribute of the node
         pub fn setAttributeInner(node: JsValue, name: &str, value: JsValue, ns: Option<&str>);

@@ -17,7 +17,7 @@ web-sys = { version = "0.3.56", optional = true, features = [
     "Element",
     "Node",
 ] }
-sledgehammer_bindgen = { version = "0.3.1", default-features = false, optional = true }
+sledgehammer_bindgen = { version = "0.4.0", default-features = false, optional = true }
 sledgehammer_utils = { version = "0.2", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 
