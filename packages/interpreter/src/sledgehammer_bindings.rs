@@ -77,6 +77,7 @@ mod js {
         }
         return node;
     }
+<<<<<<< Updated upstream
     const listeners = new ListenerMap();
     let nodes = [];
     let stack = [];
@@ -85,6 +86,14 @@ mod js {
     let node, els, end, ptr_end, k;
     export function save_template(nodes, tmpl_id) {
         templates[tmpl_id] = nodes;
+=======
+    this.listeners = new ListenerMap();
+    this.nodes = [];
+    this.stack = [];
+    this.templates = {};
+    this.save_template = function(nodes, tmpl_id) {
+        this.templates[tmpl_id] = nodes;
+>>>>>>> Stashed changes
     }
     export function hydrate(ids) {
         const hydrateNodes = document.querySelectorAll('[data-node-hydration]');
@@ -129,10 +138,17 @@ mod js {
         stack = [root];
         listeners.root = root;
     }
+<<<<<<< Updated upstream
     function AppendChildren(id, many){
         root = nodes[id];
         els = stack.splice(stack.length-many);
         for (k = 0; k < many; k++) {
+=======
+    this.AppendChildren = function (id, many){
+        let root = this.nodes[id];
+        let els = this.stack.splice(this.stack.length-many);
+        for (let k = 0; k < many; k++) {
+>>>>>>> Stashed changes
             root.appendChild(els[k]);
         }
     }
@@ -153,7 +169,11 @@ mod js {
     }
 
     fn mount_to_root() {
+<<<<<<< Updated upstream
         "{AppendChildren(root, stack.length-1);}"
+=======
+        "{this.AppendChildren(this.listeners.root, this.stack.length-1);}"
+>>>>>>> Stashed changes
     }
     fn push_root(root: u32) {
         "{stack.push(nodes[$root$]);}"
@@ -165,7 +185,11 @@ mod js {
         "{stack.pop();}"
     }
     fn replace_with(id: u32, n: u16) {
+<<<<<<< Updated upstream
         "{root = nodes[$id$]; els = stack.splice(stack.length-$n$); if (root.listening) { listeners.removeAllNonBubbling(root); } root.replaceWith(...els);}"
+=======
+        "{const root = this.nodes[$id$]; let els = this.stack.splice(this.stack.length-$n$); if (root.listening) { this.listeners.removeAllNonBubbling(root); } root.replaceWith(...els);}"
+>>>>>>> Stashed changes
     }
     fn insert_after(id: u32, n: u16) {
         "{nodes[$id$].after(...stack.splice(stack.length-$n$));}"
@@ -242,7 +266,11 @@ mod js {
         }"#
     }
     fn replace_placeholder(ptr: u32, len: u8, n: u16) {
+<<<<<<< Updated upstream
         "{els = stack.splice(stack.length - $n$); node = LoadChild($ptr$, $len$); node.replaceWith(...els);}"
+=======
+        "{els = this.stack.splice(this.stack.length - $n$); let node = this.LoadChild($ptr$, $len$); node.replaceWith(...els);}"
+>>>>>>> Stashed changes
     }
     fn load_template(tmpl_id: u16, index: u16, id: u32) {
         "{node = templates[$tmpl_id$][$index$].cloneNode(true); nodes[$id$] = node; stack.push(node);}"
@@ -259,9 +287,12 @@ pub mod binary_protocol {
         const JS_FILE: &str = "./src/interpreter.js";
         const JS_FILE: &str = "./src/common.js";
 
+<<<<<<< Updated upstream
         fn mount_to_root() {
             "{AppendChildren(root, stack.length-1);}"
         }
+=======
+>>>>>>> Stashed changes
         fn push_root(root: u32) {
             "{stack.push(nodes[$root$]);}"
         }
@@ -270,9 +301,15 @@ pub mod binary_protocol {
         }
         fn append_children_to_top(many: u16) {
             "{
+<<<<<<< Updated upstream
                 root = stack[stack.length-many-1];
                 els = stack.splice(stack.length-many);
                 for (k = 0; k < many; k++) {
+=======
+                let root = this.stack[this.stack.length-many-1];
+                let els = this.stack.splice(this.stack.length-many);
+                for (let k = 0; k < many; k++) {
+>>>>>>> Stashed changes
                     root.appendChild(els[k]);
                 }
             }"
@@ -281,7 +318,11 @@ pub mod binary_protocol {
             "{stack.pop();}"
         }
         fn replace_with(id: u32, n: u16) {
+<<<<<<< Updated upstream
             "{root = nodes[$id$]; els = stack.splice(stack.length-$n$); if (root.listening) { listeners.removeAllNonBubbling(root); } root.replaceWith(...els);}"
+=======
+            "{let root = this.nodes[$id$]; let els = this.stack.splice(this.stack.length-$n$); if (root.listening) { this.listeners.removeAllNonBubbling(root); } root.replaceWith(...els);}"
+>>>>>>> Stashed changes
         }
         fn insert_after(id: u32, n: u16) {
             "{nodes[$id$].after(...stack.splice(stack.length-$n$));}"
@@ -395,7 +436,11 @@ pub mod binary_protocol {
             }"#
         }
         fn replace_placeholder(array: &[u8], n: u16) {
+<<<<<<< Updated upstream
             "{els = stack.splice(stack.length - $n$); node = LoadChild($array$); node.replaceWith(...els);}"
+=======
+            "{let els = this.stack.splice(this.stack.length - $n$); let node = this.LoadChild($array$); node.replaceWith(...els);}"
+>>>>>>> Stashed changes
         }
         fn load_template(tmpl_id: u16, index: u16, id: u32) {
             "{node = templates[$tmpl_id$][$index$].cloneNode(true); nodes[$id$] = node; stack.push(node);}"

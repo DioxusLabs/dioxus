@@ -235,6 +235,7 @@ function LoadChild(array) {
   }
   return node;
 }
+<<<<<<< Updated upstream
 const listeners = new ListenerMap();
 let nodes = [];
 let stack = [];
@@ -246,6 +247,18 @@ function AppendChildren(id, many) {
   root = nodes[id];
   els = stack.splice(stack.length - many);
   for (k = 0; k < many; k++) {
+=======
+this.listeners = new ListenerMap();
+this.nodes = [];
+this.stack = [];
+this.templates = {};
+this.end = null;
+
+this.AppendChildren = function (id, many) {
+  let root = this.nodes[id];
+  let els = this.stack.splice(this.stack.length - many);
+  for (let k = 0; k < many; k++) {
+>>>>>>> Stashed changes
     root.appendChild(els[k]);
   }
 }
