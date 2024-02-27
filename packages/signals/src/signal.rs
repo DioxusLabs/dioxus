@@ -10,8 +10,8 @@ use generational_box::{AnyStorage, Storage, SyncStorage, UnsyncStorage};
 use std::{
     any::Any,
     collections::HashSet,
-    ops::{Deref, DerefMut},
-    sync::Mutex,
+    ops::{Deref, DerefMut, Index, IndexMut},
+    sync::{Arc, Mutex},
 };
 
 /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.

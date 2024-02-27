@@ -12,6 +12,30 @@ use std::future::Future;
 ///
 /// The future is spawned on the next call to `flush_sync` which means that it will not run on the server.
 /// To run a future on the server, you should use `spawn` directly.
+/// use_future assumes your future will never complete - **it won't return a value**.
+/// If you want to return a value, use `use_resource` instead.
+/// ```rust
+/// fn app() -> Element {
+///     let mut count = use_signal(|| 0);
+///     let mut running = use_signal(|| true);
+///     // use_future will spawn an infinitely running future that can be started and stopped
+///     use_future(move || async move {
+///         loop {
+///            if running() {
+///                count += 1;
+///            }
+///            tokio::time::sleep(Duration::from_millis(400)).await;
+///        }
+///     });
+///     rsx! {
+///         div {
+///             h1 { "Current count: {count}" }
+///             button { onclick: move |_| running.toggle(), "Start/Stop the count"}
+///             button { onclick: move |_| count.set(0), "Reset the count" }
+///         }
+///     }
+/// }
+/// ```
 pub fn use_future<F>(mut future: impl FnMut() -> F + 'static) -> UseFuture
 where
     F: Future + 'static,
