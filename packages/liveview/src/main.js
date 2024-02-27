@@ -9,6 +9,7 @@ function main() {
 
 class IPC {
   constructor(root) {
+    window.interpreter = new JSChannel();
     window.interpreter.initialize(root);
     const ws = new WebSocket(WS_ADDR);
     ws.binaryType = "arraybuffer";
@@ -34,7 +35,7 @@ class IPC {
       // The first byte tells the shim if this is a binary of text frame
       if (binaryFrame) {
         // binary frame
-        run_from_bytes(messageData);
+        window.interpreter.run_from_bytes(messageData);
       }
       else {
         // text frame
