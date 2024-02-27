@@ -232,16 +232,14 @@ this.LoadChild = function (array) {
 this.listeners = new ListenerMap();
 this.nodes = [];
 this.stack = [];
-this.root;
 this.templates = {};
-this.els = null;
 this.end = null;
 
 this.AppendChildren = function (id, many) {
-  this.root = this.nodes[id];
-  this.els = this.stack.splice(this.stack.length - many);
+  let root = this.nodes[id];
+  let els = this.stack.splice(this.stack.length - many);
   for (let k = 0; k < many; k++) {
-    this.root.appendChild(this.els[k]);
+    root.appendChild(els[k]);
   }
 }
 
