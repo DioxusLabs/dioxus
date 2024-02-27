@@ -51,11 +51,11 @@ fn handle_edits_code() -> String {
                   .then(bytes => {{
                       // In headless mode, the requestAnimationFrame callback is never called, so we need to run the bytes directly
                       if (headless) {{
-                        interpreter.run_from_bytes(bytes);
+                        window.interpreter.run_from_bytes(bytes);
                       }}
                       else {{
                         requestAnimationFrame(() => {{
-                            interpreter.run_from_bytes(bytes);
+                            window.interpreter.run_from_bytes(bytes);
                         }});
                       }}
                       window.interpreter.wait_for_request(headless);
