@@ -113,6 +113,7 @@ impl WebsysDom {
         );
         dioxus_html::set_event_converter(Box::new(WebEventConverter));
         handler.forget();
+
         Self {
             document,
             root,

@@ -1,46 +1,20 @@
 use crate::{assets::*, edits::EditQueue};
-use dioxus_interpreter_js::binary_protocol::SLEDGEHAMMER_JS;
+use dioxus_interpreter_js::unified_bindings::SLEDGEHAMMER_JS;
 use std::path::{Path, PathBuf};
 use wry::{
     http::{status::StatusCode, Request, Response},
     RequestAsyncResponder, Result,
 };
 
-fn handle_edits_code() -> String {
-    const EDITS_PATH: &str = {
-        #[cfg(any(target_os = "android", target_os = "windows"))]
-        {
-            "http://dioxus.index.html/edits"
-        }
-        #[cfg(not(any(target_os = "android", target_os = "windows")))]
-        {
-            "dioxus://index.html/edits"
-        }
-    };
+#[cfg(any(target_os = "android", target_os = "windows"))]
+const EDITS_PATH: &str = "http://dioxus.index.html/edits";
 
-    let prevent_file_upload = r#"// Prevent file inputs from opening the file dialog on click
-    let inputs = document.querySelectorAll("input");
-    for (let input of inputs) {
-      if (!input.getAttribute("data-dioxus-file-listener")) {
-        // prevent file inputs from opening the file dialog on click
-        const type = input.getAttribute("type");
-        if (type === "file") {
-          input.setAttribute("data-dioxus-file-listener", true);
-          input.addEventListener("click", (event) => {
-            let target = event.target;
-            let target_id = find_real_id(target);
-            if (target_id !== null) {
-              const send = (event_name) => {
-                const message = window.interpreter.serializeIpcMessage("file_diolog", { accept: target.getAttribute("accept"), directory: target.getAttribute("webkitdirectory") === "true", multiple: target.hasAttribute("multiple"), target: parseInt(target_id), bubbles: event_bubbles(event_name), event: event_name });
-                window.ipc.postMessage(message);
-              };
-              send("change&input");
-            }
-            event.preventDefault();
-          });
-        }
-      }
-    }"#;
+#[cfg(not(any(target_os = "android", target_os = "windows")))]
+const EDITS_PATH: &str = "dioxus://index.html/edits";
+
+const PREVENT_FILE_UPLOAD: &str = include_str!("../js/prevent_file_upload.js");
+
+fn handle_edits_code() -> String {
     let polling_request = format!(
         r#"// Poll for requests
     window.interpreter.wait_for_request = (headless) => {{
@@ -62,10 +36,12 @@ fn handle_edits_code() -> String {
           }})
     }}"#
     );
+
     let mut interpreter = SLEDGEHAMMER_JS
-        .replace("/*POST_HANDLE_EDITS*/", prevent_file_upload)
+        .replace("/*POST_HANDLE_EDITS*/", PREVENT_FILE_UPLOAD)
         .replace("export", "")
         + &polling_request;
+
     while let Some(import_start) = interpreter.find("import") {
         let import_end = interpreter[import_start..]
             .find(|c| c == ';' || c == '\n')

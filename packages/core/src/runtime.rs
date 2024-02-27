@@ -168,6 +168,15 @@ impl Runtime {
     pub(crate) fn release_flush_lock(&self) {
         self.flush_lock.take();
     }
+
+    /// Dispatch an event against the current runtime
+    ///
+    /// This won't do any diffing or anything, just calling event listeners syncronously
+    /// We expose this via the runtime so that preventDefault, stopPropagation, and other event methods can be called
+    /// while the event is still active.
+    pub fn dispatch_event(&self) {
+        todo!()
+    }
 }
 
 /// A guard for a new runtime. This must be used to override the current runtime when importing components from a dynamic library that has it's own runtime.

@@ -8,9 +8,9 @@ fn main() {
     // If any TS changes, re-run the build script
     println!("cargo:rerun-if-changed=src/*.ts");
 
-    for entry in ["common", "form", "interpreter"].iter() {
-        gen_bindings(entry);
-    }
+    // for entry in ["common", "form", "interpreter"].iter() {
+    //     gen_bindings(entry);
+    // }
 }
 
 // okay...... so tsc might fail if the user doesn't have it installed
