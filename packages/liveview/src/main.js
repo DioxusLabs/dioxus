@@ -1,4 +1,4 @@
-const config = new InterpreterConfig(false);
+const intercept_link_redirects = false;
 
 function main() {
   let root = window.document.getElementById("main");

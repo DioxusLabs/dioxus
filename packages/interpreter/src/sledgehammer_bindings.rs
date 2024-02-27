@@ -19,7 +19,7 @@ mod js {
             this.global = {};
             // non bubbling events listen at the element the listener was created at
             this.local = {};
-            this.root = null;
+            this.root = root;
             this.handler = null;
         }
 
@@ -65,35 +65,35 @@ mod js {
             delete this.local[id];
         }
     }
-    function LoadChild(ptr, len) {
+    this.LoadChild = function(ptr, len) {
         // iterate through each number and get that child
-        node = stack[stack.length - 1];
-        ptr_end = ptr + len;
+        let node = this.stack[this.stack.length - 1];
+        let ptr_end = ptr + len;
         for (; ptr < ptr_end; ptr++) {
-            end = m.getUint8(ptr);
+            let end = this.m.getUint8(ptr);
             for (node = node.firstChild; end > 0; end--) {
                 node = node.nextSibling;
             }
         }
         return node;
     }
-    const listeners = new ListenerMap();
-    let nodes = [];
-    let stack = [];
-    let root;
-    const templates = {};
-    let node, els, end, ptr_end, k;
-    export function save_template(nodes, tmpl_id) {
-        templates[tmpl_id] = nodes;
+    this.listeners = new ListenerMap();
+    this.nodes = [];
+    this.stack = [];
+    this.root = null;
+    this.templates = {};
+    this.els = null;
+    this.save_template = function(nodes, tmpl_id) {
+        this.templates[tmpl_id] = nodes;
     }
-    export function hydrate(ids) {
+    this.hydrate = function (ids) {
         const hydrateNodes = document.querySelectorAll('[data-node-hydration]');
         for (let i = 0; i < hydrateNodes.length; i++) {
             const hydrateNode = hydrateNodes[i];
             const hydration = hydrateNode.getAttribute('data-node-hydration');
             const split = hydration.split(',');
             const id = ids[parseInt(split[0])];
-            nodes[id] = hydrateNode;
+            this.nodes[id] = hydrateNode;
             if (split.length > 1) {
                 hydrateNode.listening = split.length - 1;
                 hydrateNode.setAttribute('data-dioxus-id', id);
@@ -102,7 +102,7 @@ mod js {
                     const split2 = listener.split(':');
                     const event_name = split2[0];
                     const bubbles = split2[1] === '1';
-                    listeners.create(event_name, hydrateNode, bubbles);
+                    this.listeners.create(event_name, hydrateNode, bubbles);
                 }
             }
         }
@@ -115,91 +115,77 @@ mod js {
             const id = currentNode.textContent;
             const split = id.split('node-id');
             if (split.length > 1) {
-                nodes[ids[parseInt(split[1])]] = currentNode.nextSibling;
+                this.nodes[ids[parseInt(split[1])]] = currentNode.nextSibling;
             }
             currentNode = treeWalker.nextNode();
         }
     }
-    export function get_node(id) {
-        return nodes[id];
+    this.get_node = function(id) {
+        return this.nodes[id];
     }
-    export function initialize(root, handler) {
-        listeners.handler = handler;
-        nodes = [root];
-        stack = [root];
-        listeners.root = root;
+    this.initialize = function(root, handler) {
+        this.listeners.handler = handler;
+        this.nodes = [root];
+        this.stack = [root];
+        this.listeners.root = root;
     }
-    function AppendChildren(id, many){
-        root = nodes[id];
-        els = stack.splice(stack.length-many);
-        for (k = 0; k < many; k++) {
-            root.appendChild(els[k]);
+    this.AppendChildren = function (id, many){
+        let root = this.nodes[id];
+        this.els = this.stack.splice(this.stack.length-many);
+        for (let k = 0; k < many; k++) {
+            root.appendChild(this.els[k]);
         }
     }
     "#;
 
-    extern "C" {
-        #[wasm_bindgen]
-        pub fn save_template(nodes: Vec<Node>, tmpl_id: u16);
-
-        #[wasm_bindgen]
-        pub fn hydrate(ids: Vec<u32>);
-
-        #[wasm_bindgen]
-        pub fn get_node(id: u32) -> Node;
-
-        #[wasm_bindgen]
-        pub fn initialize(root: Node, handler: &Function);
-    }
-
     fn mount_to_root() {
-        "{AppendChildren(root, stack.length-1);}"
+        "{this.AppendChildren(this.root, this.stack.length-1);}"
     }
     fn push_root(root: u32) {
-        "{stack.push(nodes[$root$]);}"
+        "{this.stack.push(this.nodes[$root$]);}"
     }
     fn append_children(id: u32, many: u16) {
-        "{AppendChildren($id$, $many$);}"
+        "{this.AppendChildren($id$, $many$);}"
     }
     fn pop_root() {
-        "{stack.pop();}"
+        "{this.stack.pop();}"
     }
     fn replace_with(id: u32, n: u16) {
-        "{root = nodes[$id$]; els = stack.splice(stack.length-$n$); if (root.listening) { listeners.removeAllNonBubbling(root); } root.replaceWith(...els);}"
+        "{const root = this.nodes[$id$]; this.els = this.stack.splice(this.stack.length-$n$); if (root.listening) { this.listeners.removeAllNonBubbling(root); } root.replaceWith(...this.els);}"
     }
     fn insert_after(id: u32, n: u16) {
-        "{nodes[$id$].after(...stack.splice(stack.length-$n$));}"
+        "{this.nodes[$id$].after(...this.stack.splice(this.stack.length-$n$));}"
     }
     fn insert_before(id: u32, n: u16) {
-        "{nodes[$id$].before(...stack.splice(stack.length-$n$));}"
+        "{this.nodes[$id$].before(...this.stack.splice(this.stack.length-$n$));}"
     }
     fn remove(id: u32) {
-        "{node = nodes[$id$]; if (node !== undefined) { if (node.listening) { listeners.removeAllNonBubbling(node); } node.remove(); }}"
+        "{let node = this.nodes[$id$]; if (node !== undefined) { if (node.listening) { this.listeners.removeAllNonBubbling(node); } node.remove(); }}"
     }
     fn create_raw_text(text: &str) {
-        "{stack.push(document.createTextNode($text$));}"
+        "{this.stack.push(document.createTextNode($text$));}"
     }
     fn create_text_node(text: &str, id: u32) {
-        "{node = document.createTextNode($text$); nodes[$id$] = node; stack.push(node);}"
+        "{let node = document.createTextNode($text$); this.nodes[$id$] = node; this.stack.push(node);}"
     }
     fn create_placeholder(id: u32) {
-        "{node = document.createElement('pre'); node.hidden = true; stack.push(node); nodes[$id$] = node;}"
+        "{let node = document.createElement('pre'); node.hidden = true; this.stack.push(node); this.nodes[$id$] = node;}"
     }
     fn new_event_listener(event_name: &str<u8, evt>, id: u32, bubbles: u8) {
-        r#"node = nodes[id]; if(node.listening){node.listening += 1;}else{node.listening = 1;} node.setAttribute('data-dioxus-id', `\${id}`); listeners.create($event_name$, node, $bubbles$);"#
+        r#"let node = this.nodes[id]; if(node.listening){node.listening += 1;}else{node.listening = 1;} node.setAttribute('data-dioxus-id', `\${id}`); this.listeners.create($event_name$, node, $bubbles$);"#
     }
     fn remove_event_listener(event_name: &str<u8, evt>, id: u32, bubbles: u8) {
-        "{node = nodes[$id$]; node.listening -= 1; node.removeAttribute('data-dioxus-id'); listeners.remove(node, $event_name$, $bubbles$);}"
+        "{let node = this.nodes[$id$]; node.listening -= 1; node.removeAttribute('data-dioxus-id'); this.listeners.remove(node, $event_name$, $bubbles$);}"
     }
     fn set_text(id: u32, text: &str) {
-        "{nodes[$id$].textContent = $text$;}"
+        "{this.nodes[$id$].textContent = $text$;}"
     }
     fn set_attribute(id: u32, field: &str<u8, attr>, value: &str, ns: &str<u8, ns_cache>) {
-        "{node = nodes[$id$]; setAttributeInner(node, $field$, $value$, $ns$);}"
+        "{let node = this.nodes[$id$]; this.setAttributeInner(node, $field$, $value$, $ns$);}"
     }
     fn remove_attribute(id: u32, field: &str<u8, attr>, ns: &str<u8, ns_cache>) {
         r#"{
-            node = nodes[$id$];
+            let node = this.nodes[$id$];
             if (!ns) {
                 switch (field) {
                     case "value":
@@ -226,27 +212,52 @@ mod js {
         }"#
     }
     fn assign_id(ptr: u32, len: u8, id: u32) {
-        "{nodes[$id$] = LoadChild($ptr$, $len$);}"
+        "{this.nodes[$id$] = this.LoadChild($ptr$, $len$);}"
     }
     fn hydrate_text(ptr: u32, len: u8, value: &str, id: u32) {
         r#"{
-            node = LoadChild($ptr$, $len$);
-            if (node.nodeType == Node.TEXT_NODE) {
+            let node = this.LoadChild($ptr$, $len$);
+            if (node.nodeType == node.TEXT_NODE) {
                 node.textContent = value;
             } else {
                 let text = document.createTextNode(value);
                 node.replaceWith(text);
                 node = text;
             }
-            nodes[$id$] = node;
+            this.nodes[$id$] = node;
         }"#
     }
     fn replace_placeholder(ptr: u32, len: u8, n: u16) {
-        "{els = stack.splice(stack.length - $n$); node = LoadChild($ptr$, $len$); node.replaceWith(...els);}"
+        "{this.els = this.stack.splice(this.stack.length - $n$); let node = this.LoadChild($ptr$, $len$); node.replaceWith(...this.els);}"
     }
     fn load_template(tmpl_id: u16, index: u16, id: u32) {
-        "{node = templates[$tmpl_id$][$index$].cloneNode(true); nodes[$id$] = node; stack.push(node);}"
+        "{let node = this.templates[$tmpl_id$][$index$].cloneNode(true); this.nodes[$id$] = node; this.stack.push(node);}"
     }
+}
+
+#[cfg(feature = "webonly")]
+#[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
+export function save_template(channel, nodes, tmpl_id) {
+    channel.save_template(nodes, tmpl_id);
+}
+export function hydrate(channel, ids) {
+    channel.hydrate(ids);
+}
+export function get_node(channel, id) {
+    return channel.get_node(id);
+}
+export function initialize(channel, root, handler) {
+    channel.initialize(root, handler);
+}
+"#)]
+extern "C" {
+    pub fn save_template(channel: &JSChannel, nodes: Vec<Node>, tmpl_id: u16);
+
+    pub fn hydrate(channel: &JSChannel, ids: Vec<u32>);
+
+    pub fn get_node(channel: &JSChannel, id: u32) -> Node;
+
+    pub fn initialize(channel: &JSChannel, root: Node, handler: &Function);
 }
 
 #[cfg(feature = "binary-protocol")]
@@ -260,60 +271,60 @@ pub mod binary_protocol {
         const JS_FILE: &str = "./src/common.js";
 
         fn mount_to_root() {
-            "{AppendChildren(root, stack.length-1);}"
+            "{this.AppendChildren(this.root, this.stack.length-1);}"
         }
         fn push_root(root: u32) {
-            "{stack.push(nodes[$root$]);}"
+            "{this.stack.push(this.nodes[$root$]);}"
         }
         fn append_children(id: u32, many: u16) {
-            "{AppendChildren($id$, $many$);}"
+            "{this.AppendChildren($id$, $many$);}"
         }
         fn append_children_to_top(many: u16) {
             "{
-                root = stack[stack.length-many-1];
-                els = stack.splice(stack.length-many);
-                for (k = 0; k < many; k++) {
-                    root.appendChild(els[k]);
+                let root = this.stack[this.stack.length-many-1];
+                this.els = this.stack.splice(this.stack.length-many);
+                for (let k = 0; k < many; k++) {
+                    root.appendChild(this.els[k]);
                 }
             }"
         }
         fn pop_root() {
-            "{stack.pop();}"
+            "{this.stack.pop();}"
         }
         fn replace_with(id: u32, n: u16) {
-            "{root = nodes[$id$]; els = stack.splice(stack.length-$n$); if (root.listening) { listeners.removeAllNonBubbling(root); } root.replaceWith(...els);}"
+            "{let root = this.nodes[$id$]; this.els = this.stack.splice(this.stack.length-$n$); if (root.listening) { this.listeners.removeAllNonBubbling(root); } root.replaceWith(...this.els);}"
         }
         fn insert_after(id: u32, n: u16) {
-            "{nodes[$id$].after(...stack.splice(stack.length-$n$));}"
+            "{this.nodes[$id$].after(...this.stack.splice(this.stack.length-$n$));}"
         }
         fn insert_before(id: u32, n: u16) {
-            "{nodes[$id$].before(...stack.splice(stack.length-$n$));}"
+            "{this.nodes[$id$].before(...this.stack.splice(this.stack.length-$n$));}"
         }
         fn remove(id: u32) {
-            "{node = nodes[$id$]; if (node !== undefined) { if (node.listening) { listeners.removeAllNonBubbling(node); } node.remove(); }}"
+            "{let node = this.nodes[$id$]; if (node !== undefined) { if (node.listening) { this.listeners.removeAllNonBubbling(node); } node.remove(); }}"
         }
         fn create_raw_text(text: &str) {
-            "{stack.push(document.createTextNode($text$));}"
+            "{this.stack.push(document.createTextNode($text$));}"
         }
         fn create_text_node(text: &str, id: u32) {
-            "{node = document.createTextNode($text$); nodes[$id$] = node; stack.push(node);}"
+            "{let node = document.createTextNode($text$); this.nodes[$id$] = node; this.stack.push(node);}"
         }
         fn create_element(element: &'static str<u8, el>) {
-            "{stack.push(document.createElement($element$))}"
+            "{this.stack.push(document.createElement($element$))}"
         }
         fn create_element_ns(element: &'static str<u8, el>, ns: &'static str<u8, namespace>) {
-            "{stack.push(document.createElementNS($ns$, $element$))}"
+            "{this.stack.push(document.createElementNS($ns$, $element$))}"
         }
         fn create_placeholder(id: u32) {
-            "{node = document.createElement('pre'); node.hidden = true; stack.push(node); nodes[$id$] = node;}"
+            "{let node = document.createElement('pre'); node.hidden = true; this.stack.push(node); this.nodes[$id$] = node;}"
         }
         fn add_placeholder() {
-            "{node = document.createElement('pre'); node.hidden = true; stack.push(node);}"
+            "{let node = document.createElement('pre'); node.hidden = true; this.stack.push(node);}"
         }
         fn new_event_listener(event: &str<u8, evt>, id: u32, bubbles: u8) {
             r#"
             bubbles = bubbles == 1;
-            node = nodes[id];
+            let node = this.nodes[id];
             if(node.listening){
                 node.listening += 1;
             } else {
@@ -325,7 +336,7 @@ pub mod binary_protocol {
             // if this is a mounted listener, we send the event immediately
             if (event_name === "mounted") {
                 window.ipc.postMessage(
-                    window.interpreter.serializeIpcMessage("user_event", {
+                    this.serializeIpcMessage("user_event", {
                         name: event_name,
                         element: id,
                         data: null,
@@ -333,26 +344,26 @@ pub mod binary_protocol {
                     })
                 );
             } else {
-                listeners.create(event_name, node, bubbles, (event) => {
-                    handler(event, event_name, bubbles, config);
+                this.listeners.create(event_name, node, bubbles, (event) => {
+                    this.handler(event, event_name, bubbles);
                 });
             }"#
         }
         fn remove_event_listener(event_name: &str<u8, evt>, id: u32, bubbles: u8) {
-            "{node = nodes[$id$]; node.listening -= 1; node.removeAttribute('data-dioxus-id'); listeners.remove(node, $event_name$, $bubbles$);}"
+            "{let node = this.nodes[$id$]; node.listening -= 1; node.removeAttribute('data-dioxus-id'); this.listeners.remove(node, $event_name$, $bubbles$);}"
         }
         fn set_text(id: u32, text: &str) {
-            "{nodes[$id$].textContent = $text$;}"
+            "{this.nodes[$id$].textContent = $text$;}"
         }
         fn set_attribute(id: u32, field: &str<u8, attr>, value: &str, ns: &str<u8, ns_cache>) {
-            "{node = nodes[$id$]; setAttributeInner(node, $field$, $value$, $ns$);}"
+            "{let node = this.nodes[$id$]; this.setAttributeInner(node, $field$, $value$, $ns$);}"
         }
         fn set_top_attribute(field: &str<u8, attr>, value: &str, ns: &str<u8, ns_cache>) {
-            "{setAttributeInner(stack[stack.length-1], $field$, $value$, $ns$);}"
+            "{this.setAttributeInner(this.stack[this.stack.length-1], $field$, $value$, $ns$);}"
         }
         fn remove_attribute(id: u32, field: &str<u8, attr>, ns: &str<u8, ns_cache>) {
             r#"{
-                node = nodes[$id$];
+                let node = this.nodes[$id$];
                 if (!ns) {
                     switch (field) {
                         case "value":
@@ -379,29 +390,29 @@ pub mod binary_protocol {
             }"#
         }
         fn assign_id(array: &[u8], id: u32) {
-            "{nodes[$id$] = LoadChild($array$);}"
+            "{this.nodes[$id$] = this.LoadChild($array$);}"
         }
         fn hydrate_text(array: &[u8], value: &str, id: u32) {
             r#"{
-                node = LoadChild($array$);
-                if (node.nodeType == Node.TEXT_NODE) {
+                let node = this.LoadChild($array$);
+                if (node.nodeType == node.TEXT_NODE) {
                     node.textContent = value;
                 } else {
                     let text = document.createTextNode(value);
                     node.replaceWith(text);
                     node = text;
                 }
-                nodes[$id$] = node;
+                this.nodes[$id$] = node;
             }"#
         }
         fn replace_placeholder(array: &[u8], n: u16) {
-            "{els = stack.splice(stack.length - $n$); node = LoadChild($array$); node.replaceWith(...els);}"
+            "{this.els = this.stack.splice(this.stack.length - $n$); let node = this.LoadChild($array$); node.replaceWith(...this.els);}"
         }
         fn load_template(tmpl_id: u16, index: u16, id: u32) {
-            "{node = templates[$tmpl_id$][$index$].cloneNode(true); nodes[$id$] = node; stack.push(node);}"
+            "{let node = this.templates[$tmpl_id$][$index$].cloneNode(true); this.nodes[$id$] = node; this.stack.push(node);}"
         }
         fn add_templates(tmpl_id: u16, len: u16) {
-            "{templates[$tmpl_id$] = stack.splice(stack.length-$len$);}"
+            "{this.templates[$tmpl_id$] = this.stack.splice(this.stack.length-$len$);}"
         }
     }
 }
