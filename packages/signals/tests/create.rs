@@ -1,8 +1,5 @@
 #![allow(unused, non_upper_case_globals, non_snake_case)]
 
-use std::collections::HashMap;
-use std::sync::Arc;
-
 use dioxus::prelude::*;
 use dioxus_core::ElementId;
 use dioxus_core::NoOpMutations;

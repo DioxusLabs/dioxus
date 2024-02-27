@@ -5,7 +5,6 @@ use crate::write::Writable;
 use crate::{GlobalMemo, GlobalSignal, MappedSignal, ReadOnlySignal, SignalData};
 use generational_box::{AnyStorage, Storage};
 
-use std::ops::Index;
 use std::{
     fmt::{Debug, Display},
     ops::{Add, Div, Mul, Sub},
