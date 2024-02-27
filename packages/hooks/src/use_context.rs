@@ -45,8 +45,11 @@ pub fn use_context<T: 'static + Clone>() -> T {
 // This component does read from the signal, so when the signal changes it will rerun
 ///#[component]
 ///fn Child() -> Element {
-///    let signal: Signal<i32> = use_context();
-///    rsx! { "{signal}" }
+///     let signal: Signal<i32> = use_context();
+///     rsx! {
+///         button { onclick: move |_| signal += 1, "increment context" }
+///         p {"{signal}"}
+///     }
 ///}
 /// ```
 pub fn use_context_provider<T: 'static + Clone>(f: impl FnOnce() -> T) -> T {

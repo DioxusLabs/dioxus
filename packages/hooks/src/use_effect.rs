@@ -1,7 +1,7 @@
 use dioxus_core::prelude::*;
 use dioxus_signals::ReactiveContext;
 
-/// use_effect will subscribe to any changes in the signal values it captures
+/// `use_effect` will subscribe to any changes in the signal values it captures
 /// effects will always run after first mount and then whenever the signal values change
 /// If the use_effect call was skipped due to an early return, the effect will no longer activate.
 /// ```rust

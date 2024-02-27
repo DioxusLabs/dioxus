@@ -8,17 +8,17 @@ use dioxus_signals::*;
 use dioxus_signals::{Readable, Writable};
 use std::future::Future;
 
-/// A hook that allows you to spawn a future
-///
+/// A hook that allows you to spawn a future.
+/// This future will **not** run on the server
 /// The future is spawned on the next call to `flush_sync` which means that it will not run on the server.
 /// To run a future on the server, you should use `spawn` directly.
-/// use_future assumes your future will never complete - **it won't return a value**.
+/// `use_future` assumes your future will never complete - **it won't return a value**.
 /// If you want to return a value, use `use_resource` instead.
 /// ```rust
 /// fn app() -> Element {
 ///     let mut count = use_signal(|| 0);
 ///     let mut running = use_signal(|| true);
-///     // use_future will spawn an infinitely running future that can be started and stopped
+///     // `use_future` will spawn an infinitely running future that can be started and stopped
 ///     use_future(move || async move {
 ///         loop {
 ///            if running() {
