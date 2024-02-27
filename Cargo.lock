@@ -8524,9 +8524,19 @@ dependencies = [
 
 [[package]]
 name = "sledgehammer_bindgen"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9298e863f0143b89972299110a7fa3e2fc08c412341d588c497bae38409f9e68"
+checksum = "fa1ca40134578bf7cf17973defcd4eb8d7d2adf7868b29892481722957bd543e"
+dependencies = [
+ "sledgehammer_bindgen_macro",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "sledgehammer_bindgen_macro"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04559ded3de5c62f08457cadcb6c44649c4d90e72fdc0804c6c30ce1bc526304"
 dependencies = [
  "quote",
  "syn 2.0.50",
