@@ -5,8 +5,7 @@
             "ES2015",
             "DOM",
             "dom",
-            "dom.iterable",
-            "esnext"
+            "dom.iterable"
         ],
         "noImplicitAny": true,
         "removeComments": true,

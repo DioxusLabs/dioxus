@@ -7,6 +7,7 @@ use std::{
 fn main() {
     // If any TS changes, re-run the build script
     println!("cargo:rerun-if-changed=src/ts/*.ts");
+    println!("cargo:rerun-if-changed=*.json");
 
     // Compute the hash of the ts files
     let hash = hash_dir("src/ts");
