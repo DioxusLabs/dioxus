@@ -4,42 +4,37 @@ use js_sys::Function;
 #[cfg(feature = "webonly")]
 use web_sys::Node;
 
+#[cfg(feature = "webonly")]
+use wasm_bindgen::prelude::wasm_bindgen;
+
 use sledgehammer_bindgen::bindgen;
 
 pub const SLEDGEHAMMER_JS: &str = GENERATED_JS;
 
 #[cfg(feature = "webonly")]
-#[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
-export function save_template(channel, nodes, tmpl_id) {
-    channel.save_template(nodes, tmpl_id);
-}
-export function hydrate(channel, ids) {
-    channel.hydrate(ids);
-}
-export function get_node(channel, id) {
-    return channel.get_node(id);
-}
-export function initialize(channel, root, handler) {
-    channel.initialize(root, handler);
-}
-"#)]
+#[wasm_bindgen(module = "src/js/web.js")]
 extern "C" {
-    pub fn save_template(channel: &JSChannel, nodes: Vec<Node>, tmpl_id: u16);
+    #[wasm_bindgen]
+    pub type Interpreter;
 
-    pub fn hydrate(channel: &JSChannel, ids: Vec<u32>);
+    #[wasm_bindgen(method)]
+    pub fn save_template(this: &Interpreter, nodes: Vec<Node>, tmpl_id: u16);
 
-    pub fn get_node(channel: &JSChannel, id: u32) -> Node;
+    #[wasm_bindgen(method)]
+    pub fn hydrate(this: &Interpreter, ids: Vec<u32>);
 
-    pub fn initialize(channel: &JSChannel, root: Node, handler: &Function);
+    #[wasm_bindgen(method)]
+    pub fn get_node(this: &Interpreter, id: u32) -> Node;
+
+    #[wasm_bindgen(method)]
+    pub fn initialize(this: &Interpreter, root: Node, handler: &Function);
 }
 
 #[bindgen(module)]
 mod js {
-    // Load in the JavaScript file with all the imports
-    const JS_FILE: &str = "./src/gen/interpreter.js";
-
-    // Boot the interpreter and attach us some bindings!
-    const JS: &str = r#""#;
+    /// The interpreter extends the core interpreter which contains the state for the interpreter along with some functions that all platforms use like `AppendChildren`.
+    #[extends(Interpreter)]
+    pub struct InterpreterInterface;
 
     fn mount_to_root() {
         "{this.AppendChildren(this.root, this.stack.length-1);}"
@@ -147,12 +142,12 @@ mod js {
     */
     fn append_children_to_top(many: u16) {
         "{
-            let root = this.stack[this.stack.length-many-1];
-            this.els = this.stack.splice(this.stack.length-many);
-            for (let k = 0; k < many; k++) {
-                root.appendChild(this.els[k]);
-            }
-        }"
+        let root = this.stack[this.stack.length-many-1];
+        this.els = this.stack.splice(this.stack.length-many);
+        for (let k = 0; k < many; k++) {
+            root.appendChild(this.els[k]);
+        }
+    }"
     }
     fn set_top_attribute(field: &str<u8, attr>, value: &str, ns: &str<u8, ns_cache>) {
         "{this.setAttributeInner(this.stack[this.stack.length-1], $field$, $value$, $ns$);}"
@@ -171,47 +166,47 @@ mod js {
     }
     fn foreign_event_listener(event: &str<u8, evt>, id: u32, bubbles: u8) {
         r#"
-        bubbles = bubbles == 1;
-        let node = this.nodes[id];
-        if(node.listening){
-            node.listening += 1;
-        } else {
-            node.listening = 1;
-        }
-        node.setAttribute('data-dioxus-id', `\${id}`);
-        const event_name = $event$;
+    bubbles = bubbles == 1;
+    let node = this.nodes[id];
+    if(node.listening){
+        node.listening += 1;
+    } else {
+        node.listening = 1;
+    }
+    node.setAttribute('data-dioxus-id', `\${id}`);
+    const event_name = $event$;
 
-        // if this is a mounted listener, we send the event immediately
-        if (event_name === "mounted") {
-            window.ipc.postMessage(
-                this.serializeIpcMessage("user_event", {
-                    name: event_name,
-                    element: id,
-                    data: null,
-                    bubbles,
-                })
-            );
-        } else {
-            this.listeners.create(event_name, node, bubbles, (event) => {
-                this.handler(event, event_name, bubbles);
-            });
-        }"#
+    // if this is a mounted listener, we send the event immediately
+    if (event_name === "mounted") {
+        window.ipc.postMessage(
+            this.serializeIpcMessage("user_event", {
+                name: event_name,
+                element: id,
+                data: null,
+                bubbles,
+            })
+        );
+    } else {
+        this.listeners.create(event_name, node, bubbles, (event) => {
+            this.handler(event, event_name, bubbles);
+        });
+    }"#
     }
     fn assign_id_ref(array: &[u8], id: u32) {
         "{this.nodes[$id$] = this.LoadChild($array$);}"
     }
     fn hydrate_text_ref(array: &[u8], value: &str, id: u32) {
         r#"{
-            let node = this.LoadChild($array$);
-            if (node.nodeType == node.TEXT_NODE) {
-                node.textContent = value;
-            } else {
-                let text = document.createTextNode(value);
-                node.replaceWith(text);
-                node = text;
-            }
-            this.nodes[$id$] = node;
-        }"#
+        let node = this.LoadChild($array$);
+        if (node.nodeType == node.TEXT_NODE) {
+            node.textContent = value;
+        } else {
+            let text = document.createTextNode(value);
+            node.replaceWith(text);
+            node = text;
+        }
+        this.nodes[$id$] = node;
+    }"#
     }
     fn replace_placeholder_ref(array: &[u8], n: u16) {
         "{this.els = this.stack.splice(this.stack.length - $n$); let node = this.LoadChild($array$); node.replaceWith(...this.els);}"

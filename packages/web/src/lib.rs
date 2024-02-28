@@ -43,7 +43,6 @@ mod hot_reload;
 #[cfg(feature = "hydrate")]
 mod rehydrate;
 
-
 /// Runs the app as a future that can be scheduled around the main thread.
 ///
 /// Polls futures internal to the VirtualDOM, hence the async nature of this function.
