@@ -11,12 +11,7 @@
         "noImplicitAny": true,
         "removeComments": true,
         "preserveConstEnums": true,
-        "outFile": "gen/main.js",
-        "sourceMap": true
     },
-    "include": [
-        "src/ts/*.ts"
-    ],
     "exclude": [
         "**/*.spec.ts"
     ]

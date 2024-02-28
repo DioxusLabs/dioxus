@@ -1,0 +1,10 @@
+{
+    // extends the base
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "outFile": "src/js/web.js"
+    },
+    "files": [
+        "src/ts/interpreter_web.ts"
+    ],
+}

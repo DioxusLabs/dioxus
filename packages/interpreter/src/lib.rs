@@ -2,8 +2,8 @@
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
-pub static INTERPRETER_JS: &str = include_str!("./gen/interpreter.js");
-pub static COMMON_JS: &str = include_str!("./gen/common.js");
+pub static INTERPRETER_JS: &str = include_str!("./js/native.js");
+pub static COMMON_JS: &str = include_str!("./js/web.js");
 
 #[cfg(all(feature = "binary-protocol", feature = "sledgehammer"))]
 mod write_native_mutations;

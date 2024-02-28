@@ -12,6 +12,7 @@ export class Interpreter {
       [key: string]: EventListener
     }
   };
+
   root: HTMLElement;
   handler: EventListener;
   nodes: Node[];
