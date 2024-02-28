@@ -8,6 +8,31 @@ use sledgehammer_bindgen::bindgen;
 
 pub const SLEDGEHAMMER_JS: &str = GENERATED_JS;
 
+#[cfg(feature = "webonly")]
+#[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
+export function save_template(channel, nodes, tmpl_id) {
+    channel.save_template(nodes, tmpl_id);
+}
+export function hydrate(channel, ids) {
+    channel.hydrate(ids);
+}
+export function get_node(channel, id) {
+    return channel.get_node(id);
+}
+export function initialize(channel, root, handler) {
+    channel.initialize(root, handler);
+}
+"#)]
+extern "C" {
+    pub fn save_template(channel: &JSChannel, nodes: Vec<Node>, tmpl_id: u16);
+
+    pub fn hydrate(channel: &JSChannel, ids: Vec<u32>);
+
+    pub fn get_node(channel: &JSChannel, id: u32) -> Node;
+
+    pub fn initialize(channel: &JSChannel, root: Node, handler: &Function);
+}
+
 #[bindgen(module)]
 mod js {
     // Load in the JavaScript file with all the imports
