@@ -13,7 +13,7 @@ use std::future::Future;
 /// The future is spawned on the next call to `flush_sync` which means that it will not run on the server.
 /// To run a future on the server, you should use `spawn` directly.
 /// `use_future` **won't return a value**.
-/// If you want to return a value, use `use_resource` instead.
+/// If you want to return a value from a future, use `use_resource` instead.
 /// ```rust
 /// fn app() -> Element {
 ///     let mut count = use_signal(|| 0);
