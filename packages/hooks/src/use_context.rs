@@ -42,7 +42,7 @@ pub fn use_context<T: 'static + Clone>() -> T {
 ///    use_context_provider(|| Signal::new(0));
 ///    rsx! { Child {} }
 ///}
-// This component does read from the signal, so when the signal changes it will rerun
+/// // This component does read from the signal, so when the signal changes it will rerun
 ///#[component]
 ///fn Child() -> Element {
 ///     let signal: Signal<i32> = use_context();

@@ -12,7 +12,7 @@ use std::future::Future;
 /// This future will **not** run on the server
 /// The future is spawned on the next call to `flush_sync` which means that it will not run on the server.
 /// To run a future on the server, you should use `spawn` directly.
-/// `use_future` assumes your future will never complete - **it won't return a value**.
+/// `use_future` **won't return a value**.
 /// If you want to return a value, use `use_resource` instead.
 /// ```rust
 /// fn app() -> Element {
