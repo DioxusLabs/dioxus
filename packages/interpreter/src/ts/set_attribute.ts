@@ -1,3 +1,5 @@
+// A unified interface for setting attributes on a node
+
 // this function should try and stay fast, if possible
 export function setAttributeInner(node: HTMLElement, field: string, value: string, ns: string) {
   // we support a single namespace by default: style

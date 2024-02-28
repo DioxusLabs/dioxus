@@ -3,7 +3,10 @@
         "module": "system",
         "lib": [
             "ES2015",
-            "DOM"
+            "DOM",
+            "dom",
+            "dom.iterable",
+            "esnext"
         ],
         "noImplicitAny": true,
         "removeComments": true,

@@ -1,12 +1,12 @@
 // Handle serialization of the event data across the IPC boundarytype SerialziedEvent = {};
 
-type SerializedEvent = {
-  values?: { [key: string]: FormDataEntryValue[] } | FormDataEntryValue[];
+export type SerializedEvent = {
+  values?: { [key: string]: FormDataEntryValue[] };
   value?: string;
   [key: string]: any;
 };
 
-function serializeEvent(event: Event): SerializedEvent {
+export function serializeEvent(event: Event): SerializedEvent {
 
   // copy, cut, paste
   if (event instanceof KeyboardEvent) {

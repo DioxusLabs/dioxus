@@ -1,9 +1,6 @@
 // The root interpreter class that holds state about the mapping between DOM and VirtualDom
 // This always lives in the JS side of things, and is extended by the native and web interpreters
 
-// todo: we want to make these vars that the interpreter uses to be isolated so we can have multiple interpreters
-export let m: DataView; // p, ls, d, t, op, i, e, z, metaflags;
-
 export class Interpreter {
   // non bubbling events listen at the element the listener was created at
   global: {
@@ -15,15 +12,15 @@ export class Interpreter {
       [key: string]: EventListener
     }
   };
-  root: Element;
+  root: HTMLElement;
   handler: EventListener;
-  nodes: Element[];
-  stack: Element[];
+  nodes: Node[];
+  stack: Node[];
   templates: {
-    [key: string]: Element[]
+    [key: string]: Node[]
   };
 
-  constructor(root: Element, handler: EventListener) {
+  constructor(root: HTMLElement, handler: EventListener) {
     this.root = root;
     this.nodes = [root];
     this.stack = [root];
@@ -32,7 +29,7 @@ export class Interpreter {
     this.handler = handler;
   }
 
-  createListener(event_name: string, element: Element, bubbles: boolean) {
+  createListener(event_name: string, element: HTMLElement, bubbles: boolean) {
     if (bubbles) {
       if (this.global[event_name] === undefined) {
         this.global[event_name] = { active: 1, callback: this.handler };
@@ -49,7 +46,7 @@ export class Interpreter {
     }
   }
 
-  removeListener(element: Element, event_name: string, bubbles: boolean) {
+  removeListener(element: HTMLElement, event_name: string, bubbles: boolean) {
     if (bubbles) {
       this.removeBubblingListener(event_name);
     } else {
@@ -65,7 +62,7 @@ export class Interpreter {
     }
   }
 
-  removeNonBubblingListener(element: Element, event_name: string) {
+  removeNonBubblingListener(element: HTMLElement, event_name: string) {
     const id = element.getAttribute("data-dioxus-id");
     delete this.local[id][event_name];
     if (Object.keys(this.local[id]).length === 0) {
@@ -74,7 +71,7 @@ export class Interpreter {
     element.removeEventListener(event_name, this.handler);
   }
 
-  removeAllNonBubblingListeners(element: Element) {
+  removeAllNonBubblingListeners(element: HTMLElement) {
     const id = element.getAttribute("data-dioxus-id");
     delete this.local[id];
   }

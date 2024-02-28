@@ -23,7 +23,7 @@ fn main() {
 fn gen_bindings(name: &str) {
     let contents = read_to_string(&format!("src/{name}.ts")).unwrap();
     let generated = read_to_string(&format!("src/gen/{name}.js")).unwrap_or_default();
-    let hashed = hash_file(&contents);
+    let hashed = hash_it(&contents);
 
     // If the file is generated, and the hash is the same, we're good, don't do anything
     if generated
@@ -58,7 +58,7 @@ fn gen_bindings(name: &str) {
     std::fs::write(&format!("src/gen/{name}.js"), generated).unwrap();
 }
 
-fn hash_file(obj: &str) -> u64 {
+fn hash_it(obj: impl Hash) -> u64 {
     let mut hasher = DefaultHasher::new();
     obj.hash(&mut hasher);
     hasher.finish()

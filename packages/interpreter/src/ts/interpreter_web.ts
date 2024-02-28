@@ -4,10 +4,12 @@
 //
 // We're using sledgehammer directly
 
-import { Interpreter, m } from "./interpreter_core";
+import { Interpreter } from "./interpreter_core";
 
 export class WebInterpreter extends Interpreter {
-  constructor(root: Element, handler: EventListener) {
+  m: any;
+
+  constructor(root: HTMLElement, handler: EventListener) {
     super(root, handler);
   }
 
@@ -17,7 +19,7 @@ export class WebInterpreter extends Interpreter {
     let ptr_end = ptr + len;
 
     for (; ptr < ptr_end; ptr++) {
-      let end = m.getUint8(ptr);
+      let end = this.m.getUint8(ptr);
       for (node = node.firstChild; end > 0; end--) {
         node = node.nextSibling;
       }
@@ -26,7 +28,7 @@ export class WebInterpreter extends Interpreter {
     return node;
   }
 
-  saveTemplate(nodes: Element[], tmpl_id: string) {
+  saveTemplate(nodes: HTMLElement[], tmpl_id: string) {
     this.templates[tmpl_id] = nodes;
   }
 
@@ -34,7 +36,7 @@ export class WebInterpreter extends Interpreter {
     const hydrateNodes = document.querySelectorAll('[data-node-hydration]');
 
     for (let i = 0; i < hydrateNodes.length; i++) {
-      const hydrateNode = hydrateNodes[i];
+      const hydrateNode = hydrateNodes[i] as HTMLElement;
       const hydration = hydrateNode.getAttribute('data-node-hydration');
       const split = hydration!.split(',');
       const id = ids[parseInt(split[0])];
@@ -54,22 +56,27 @@ export class WebInterpreter extends Interpreter {
         }
       }
     }
+
     const treeWalker = document.createTreeWalker(
       document.body,
       NodeFilter.SHOW_COMMENT,
     );
+
     let currentNode = treeWalker.nextNode();
+
     while (currentNode) {
       const id = currentNode.textContent!;
       const split = id.split('node-id');
+
       if (split.length > 1) {
-        this.nodes[ids[parseInt(split[1])]] = currentNode.nextSibling as Element;
+        this.nodes[ids[parseInt(split[1])]] = currentNode.nextSibling;
       }
+
       currentNode = treeWalker.nextNode();
     }
   }
 
-  getNode(id: number): Element {
+  getNode(id: number): Node {
     return this.nodes[id];
   }
 
@@ -77,7 +84,7 @@ export class WebInterpreter extends Interpreter {
     const root = this.nodes[id];
     const els = this.stack.splice(this.stack.length - many);
     for (let k = 0; k < many; k++) {
-      this.root.appendChild(els[k]);
+      root.appendChild(els[k]);
     }
   }
 }
