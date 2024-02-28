@@ -169,6 +169,21 @@ System.register("serialize", [], function (exports_3, context_3) {
     "use strict";
     var __moduleName = context_3 && context_3.id;
     function serializeEvent(event) {
+        var _a;
+        if (event instanceof InputEvent) {
+            if (event.target instanceof HTMLInputElement) {
+                var target = event.target;
+                var value = (_a = target.value) !== null && _a !== void 0 ? _a : target.textContent;
+                if (target.type === "checkbox") {
+                    value = target.checked ? "true" : "false";
+                }
+                return {
+                    value: value,
+                    values: {},
+                };
+            }
+            return {};
+        }
         if (event instanceof KeyboardEvent) {
             return {
                 char_code: event.charCode,
@@ -183,6 +198,24 @@ System.register("serialize", [], function (exports_3, context_3) {
                 repeat: event.repeat,
                 which: event.which,
                 code: event.code,
+            };
+        }
+        if (event instanceof MouseEvent) {
+            return {
+                alt_key: event.altKey,
+                button: event.button,
+                buttons: event.buttons,
+                client_x: event.clientX,
+                client_y: event.clientY,
+                ctrl_key: event.ctrlKey,
+                meta_key: event.metaKey,
+                offset_x: event.offsetX,
+                offset_y: event.offsetY,
+                page_x: event.pageX,
+                page_y: event.pageY,
+                screen_x: event.screenX,
+                screen_y: event.screenY,
+                shift_key: event.shiftKey,
             };
         }
         if (event instanceof PointerEvent) {
@@ -209,24 +242,6 @@ System.register("serialize", [], function (exports_3, context_3) {
                 twist: event.twist,
                 pointer_type: event.pointerType,
                 is_primary: event.isPrimary,
-            };
-        }
-        if (event instanceof MouseEvent) {
-            return {
-                alt_key: event.altKey,
-                button: event.button,
-                buttons: event.buttons,
-                client_x: event.clientX,
-                client_y: event.clientY,
-                ctrl_key: event.ctrlKey,
-                meta_key: event.metaKey,
-                offset_x: event.offsetX,
-                offset_y: event.offsetY,
-                page_x: event.pageX,
-                page_y: event.pageY,
-                screen_x: event.screenX,
-                screen_y: event.screenY,
-                shift_key: event.shiftKey,
             };
         }
         if (event instanceof TouchEvent) {
@@ -287,179 +302,6 @@ System.register("serialize", [], function (exports_3, context_3) {
         return {};
     }
     exports_3("serializeEvent", serializeEvent);
-    function isElementNode(node) {
-        return node.nodeType == 1;
-    }
-    function eventBubbles(eventName) {
-        switch (eventName) {
-            case "copy":
-                return true;
-            case "cut":
-                return true;
-            case "paste":
-                return true;
-            case "compositionend":
-                return true;
-            case "compositionstart":
-                return true;
-            case "compositionupdate":
-                return true;
-            case "keydown":
-                return true;
-            case "keypress":
-                return true;
-            case "keyup":
-                return true;
-            case "focus":
-                return false;
-            case "focusout":
-                return true;
-            case "focusin":
-                return true;
-            case "blur":
-                return false;
-            case "change":
-                return true;
-            case "input":
-                return true;
-            case "invalid":
-                return true;
-            case "reset":
-                return true;
-            case "submit":
-                return true;
-            case "click":
-                return true;
-            case "contextmenu":
-                return true;
-            case "doubleclick":
-                return true;
-            case "dblclick":
-                return true;
-            case "drag":
-                return true;
-            case "dragend":
-                return true;
-            case "dragenter":
-                return false;
-            case "dragexit":
-                return false;
-            case "dragleave":
-                return true;
-            case "dragover":
-                return true;
-            case "dragstart":
-                return true;
-            case "drop":
-                return true;
-            case "mousedown":
-                return true;
-            case "mouseenter":
-                return false;
-            case "mouseleave":
-                return false;
-            case "mousemove":
-                return true;
-            case "mouseout":
-                return true;
-            case "scroll":
-                return false;
-            case "mouseover":
-                return true;
-            case "mouseup":
-                return true;
-            case "pointerdown":
-                return true;
-            case "pointermove":
-                return true;
-            case "pointerup":
-                return true;
-            case "pointercancel":
-                return true;
-            case "gotpointercapture":
-                return true;
-            case "lostpointercapture":
-                return true;
-            case "pointerenter":
-                return false;
-            case "pointerleave":
-                return false;
-            case "pointerover":
-                return true;
-            case "pointerout":
-                return true;
-            case "select":
-                return true;
-            case "touchcancel":
-                return true;
-            case "touchend":
-                return true;
-            case "touchmove":
-                return true;
-            case "touchstart":
-                return true;
-            case "wheel":
-                return true;
-            case "abort":
-                return false;
-            case "canplay":
-                return false;
-            case "canplaythrough":
-                return false;
-            case "durationchange":
-                return false;
-            case "emptied":
-                return false;
-            case "encrypted":
-                return true;
-            case "ended":
-                return false;
-            case "error":
-                return false;
-            case "loadeddata":
-            case "loadedmetadata":
-            case "loadstart":
-            case "load":
-                return false;
-            case "pause":
-                return false;
-            case "play":
-                return false;
-            case "playing":
-                return false;
-            case "progress":
-                return false;
-            case "ratechange":
-                return false;
-            case "seeked":
-                return false;
-            case "seeking":
-                return false;
-            case "stalled":
-                return false;
-            case "suspend":
-                return false;
-            case "timeupdate":
-                return false;
-            case "volumechange":
-                return false;
-            case "waiting":
-                return false;
-            case "animationstart":
-                return true;
-            case "animationend":
-                return true;
-            case "animationiteration":
-                return true;
-            case "transitionend":
-                return true;
-            case "toggle":
-                return true;
-            case "mounted":
-                return false;
-        }
-        return true;
-    }
     return {
         setters: [],
         execute: function () {
