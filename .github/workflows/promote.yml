@@ -1,0 +1,48 @@
+# Promote the current main branch to a stable release.
+# This will not actually release anything, so you need to run the release workflow after this.
+#
+# IE if the current master version is 0.4.0-rc.7, this will create a PR to promote it to 0.4.0
+#
+# - update the version in the Cargo.toml to v0.4.0
+# - generate a v0.4 branch
+# - push the branch to the repository
+# - then bump 0.4.0-rc.1 to 0.5.0-rc.0
+#
+# This means main will never be a "stable" release, and we can always merge breaking changes to main
+# and backport them to the latest stable release
+#
+# This is configured to be ran manually, but could honestly just be a release workflow
+
+name: Promote main to stable branch
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish the next pre-release
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+
+          # go from eg 0.4.0-rc.7 to 0.4.0, committing the change
+          cargo workspaces version -y minor
+
+          # create a new branch for the release
+          RELEASE_BRANCH=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+          RELEASE_BRANCH=v$(echo $RELEASE_BRANCH | sed 's/\.[0-9]*$//')
+          git branch $RELEASE_BRANCH
+
+          # go from 0.4.0 to 0.5.0-rc.0
+          cargo workspaces version -y preminor --pre-id rc
+
+          # push the new branch to the repository
+          git push origin $RELEASE_BRANCH
+
+          # push the new version to the repository
+          git push origin main

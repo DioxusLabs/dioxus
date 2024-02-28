@@ -24,12 +24,11 @@ fn app() -> Element {
             class: "eval-button",
             onclick: move |_| async move {
                 let mut eval = eval(
-                        r#"
-                            window.document.title = 'Hello from Dioxus Eval!';
-                            dioxus.send("returned eval value");
-                        "#,
-                    )
-                    .unwrap();
+                    r#"
+                        window.document.title = 'Hello from Dioxus Eval!';
+                        dioxus.send("returned eval value");
+                    "#,
+                );
 
                 let result = eval.recv().await;
                 if let Ok(serde_json::Value::String(string)) = result {

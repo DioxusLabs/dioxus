@@ -7,8 +7,8 @@ publish = false
 [lib]
 
 [dependencies]
-dioxus = { workspace = true }
-axum = { version = "0.6.12", optional = true }
+dioxus = { workspace = true, features = ["launch", "fullstack"] }
+axum = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["full"], optional = true }
 serde = "1.0.159"
 

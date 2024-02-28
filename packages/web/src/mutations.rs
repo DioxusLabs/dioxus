@@ -62,7 +62,7 @@ impl WebsysDom {
         // Now that we've flushed the edits and the dom nodes exist, we can send the mounted events.
         {
             for id in self.queued_mounted_events.drain(..) {
-                let node = get_node(id.0 as u32);
+                let node = get_node(self.interpreter.js_channel(), id.0 as u32);
                 if let Some(element) = node.dyn_ref::<web_sys::Element>() {
                     let _ = self.event_channel.unbounded_send(UiEvent {
                         name: "mounted".to_string(),
@@ -91,7 +91,7 @@ impl WriteMutations for WebsysDom {
 
         self.templates
             .insert(template.name.to_owned(), self.max_template_id);
-        save_template(roots, self.max_template_id);
+        save_template(self.interpreter.js_channel(), roots, self.max_template_id);
         self.max_template_id += 1
     }
 

@@ -5,9 +5,6 @@ use anyhow::Context;
 use clap::Parser;
 use dioxus_cli::*;
 
-#[cfg(feature = "plugin")]
-use dioxus_cli::plugin::PluginManager;
-
 use Commands::*;
 
 fn get_bin(bin: Option<String>) -> Result<PathBuf> {
@@ -91,6 +88,9 @@ async fn main() -> anyhow::Result<()> {
                     log::info!("You appear to be creating a Dioxus project from scratch; we will use the default config");
                     DioxusConfig::default()
                 });
+
+            #[cfg(feature = "plugin")]
+            use dioxus_cli::plugin::PluginManager;
 
             #[cfg(feature = "plugin")]
             PluginManager::init(_dioxus_config.plugin)

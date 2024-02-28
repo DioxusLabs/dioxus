@@ -93,7 +93,8 @@ where
 }
 
 /// Get a handle to a coroutine higher in the tree
-///
+/// Analagous to use_context_provider and use_context,
+/// but used for coroutines specifically
 /// See the docs for [`use_coroutine`] for more details.
 #[must_use]
 pub fn use_coroutine_handle<M: 'static>() -> Coroutine<M> {

@@ -1,13 +1,19 @@
 use crate::Result;
 use dioxus_cli_config::WebProxyConfig;
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use axum::{http::StatusCode, routing::any, Router};
 use hyper::{Request, Response, Uri};
+use hyper_util::{
+    client::legacy::{self, connect::HttpConnector},
+    rt::TokioExecutor,
+};
+
+use axum::body::Body as MyBody;
 
 #[derive(Debug, Clone)]
 struct ProxyClient {
-    inner: hyper::Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>,
+    inner: legacy::Client<hyper_rustls::HttpsConnector<HttpConnector>, MyBody>,
     url: Uri,
 }
 
@@ -15,19 +21,17 @@ impl ProxyClient {
     fn new(url: Uri) -> Self {
         let https = hyper_rustls::HttpsConnectorBuilder::new()
             .with_native_roots()
+            .unwrap()
             .https_or_http()
             .enable_http1()
             .build();
         Self {
-            inner: hyper::Client::builder().build(https),
+            inner: legacy::Client::builder(TokioExecutor::new()).build(https),
             url,
         }
     }
 
-    async fn send(
-        &self,
-        mut req: Request<hyper::body::Body>,
-    ) -> Result<Response<hyper::body::Body>> {
+    async fn send(&self, mut req: Request<MyBody>) -> Result<Response<hyper::body::Incoming>> {
         let mut uri_parts = req.uri().clone().into_parts();
         uri_parts.authority = self.url.authority().cloned();
         uri_parts.scheme = self.url.scheme().cloned();
@@ -35,7 +39,7 @@ impl ProxyClient {
         self.inner
             .request(req)
             .await
-            .map_err(crate::error::Error::ProxyRequestError)
+            .map_err(|err| crate::error::Error::Other(anyhow!(err)))
     }
 }
 
@@ -49,7 +53,7 @@ impl ProxyClient {
 pub fn add_proxy(mut router: Router, proxy: &WebProxyConfig) -> Result<Router> {
     let url: Uri = proxy.backend.parse()?;
     let path = url.path().to_string();
-    let trimmed_path = path.trim_end_matches('/');
+    let trimmed_path = path.trim_start_matches('/');
 
     if trimmed_path.is_empty() {
         return Err(crate::Error::ProxySetupError(format!(
@@ -61,14 +65,11 @@ pub fn add_proxy(mut router: Router, proxy: &WebProxyConfig) -> Result<Router> {
 
     let client = ProxyClient::new(url);
 
-    // We also match everything after the path using a wildcard matcher.
-    let wildcard_client = client.clone();
-
     router = router.route(
         // Always remove trailing /'s so that the exact route
         // matches.
-        trimmed_path,
-        any(move |req| async move {
+        &format!("/*{}", trimmed_path.trim_end_matches('/')),
+        any(move |req: Request<MyBody>| async move {
             client
                 .send(req)
                 .await
@@ -76,19 +77,6 @@ pub fn add_proxy(mut router: Router, proxy: &WebProxyConfig) -> Result<Router> {
         }),
     );
 
-    // Wildcard match anything else _after_ the backend URL's path.
-    // Note that we know `path` ends with a trailing `/` in this branch,
-    // so `wildcard` will look like `http://localhost/api/*proxywildcard`.
-    let wildcard = format!("{}/*proxywildcard", trimmed_path);
-    router = router.route(
-        &wildcard,
-        any(move |req| async move {
-            wildcard_client
-                .send(req)
-                .await
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
-        }),
-    );
     Ok(router)
 }
 
@@ -97,30 +85,47 @@ mod test {
 
     use super::*;
 
-    use axum::{extract::Path, Router};
+    use axum::Router;
+    use axum_server::{Handle, Server};
 
-    fn setup_servers(
-        mut config: WebProxyConfig,
-    ) -> (
-        tokio::task::JoinHandle<()>,
-        tokio::task::JoinHandle<()>,
-        String,
-    ) {
-        let backend_router = Router::new().route(
-            "/*path",
-            any(|path: Path<String>| async move { format!("backend: {}", path.0) }),
-        );
-        let backend_server = axum::Server::bind(&"127.0.0.1:0".parse().unwrap())
-            .serve(backend_router.into_make_service());
-        let backend_addr = backend_server.local_addr();
-        let backend_handle = tokio::spawn(async move { backend_server.await.unwrap() });
+    async fn setup_servers(mut config: WebProxyConfig) -> String {
+        let backend_router =
+            Router::new().route(
+                "/*path",
+                any(|request: axum::extract::Request| async move {
+                    format!("backend: {}", request.uri())
+                }),
+            );
+
+        // The API backend server
+        let backend_handle_handle = Handle::new();
+        let backend_handle_handle_ = backend_handle_handle.clone();
+        tokio::spawn(async move {
+            Server::bind("127.0.0.1:0".parse().unwrap())
+                .handle(backend_handle_handle_)
+                .serve(backend_router.into_make_service())
+                .await
+                .unwrap();
+        });
+
+        // Set the user's config to this dummy API we just built so we can test it
+        let backend_addr = backend_handle_handle.listening().await.unwrap();
         config.backend = format!("http://{}{}", backend_addr, config.backend);
+
+        // Now set up our actual filesystem server
         let router = super::add_proxy(Router::new(), &config);
-        let server = axum::Server::bind(&"127.0.0.1:0".parse().unwrap())
-            .serve(router.unwrap().into_make_service());
-        let server_addr = server.local_addr();
-        let server_handle = tokio::spawn(async move { server.await.unwrap() });
-        (backend_handle, server_handle, server_addr.to_string())
+        let server_handle_handle = Handle::new();
+        let server_handle_handle_ = server_handle_handle.clone();
+        tokio::spawn(async move {
+            Server::bind("127.0.0.1:0".parse().unwrap())
+                .handle(server_handle_handle_)
+                .serve(router.unwrap().into_make_service())
+                .await
+                .unwrap();
+        });
+
+        // Expose *just* the fileystem web server's address
+        server_handle_handle.listening().await.unwrap().to_string()
     }
 
     async fn test_proxy_requests(path: String) {
@@ -132,42 +137,38 @@ mod test {
             // So in day to day usage, use `http://localhost:8000/api` instead!
             backend: path,
         };
-        let (backend_handle, server_handle, server_addr) = setup_servers(config);
-        let resp = hyper::Client::new()
-            .get(format!("http://{}/api", server_addr).parse().unwrap())
-            .await
-            .unwrap();
-        assert_eq!(resp.status(), StatusCode::OK);
+
+        let server_addr = setup_servers(config).await;
+
         assert_eq!(
-            hyper::body::to_bytes(resp.into_body()).await.unwrap(),
+            reqwest::get(format!("http://{}/api", server_addr))
+                .await
+                .unwrap()
+                .text()
+                .await
+                .unwrap(),
             "backend: /api"
         );
 
-        let resp = hyper::Client::new()
-            .get(format!("http://{}/api/", server_addr).parse().unwrap())
-            .await
-            .unwrap();
-        assert_eq!(resp.status(), StatusCode::OK);
         assert_eq!(
-            hyper::body::to_bytes(resp.into_body()).await.unwrap(),
+            reqwest::get(format!("http://{}/api/", server_addr))
+                .await
+                .unwrap()
+                .text()
+                .await
+                .unwrap(),
             "backend: /api/"
         );
 
-        let resp = hyper::Client::new()
-            .get(
-                format!("http://{}/api/subpath", server_addr)
-                    .parse()
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(resp.status(), StatusCode::OK);
         assert_eq!(
-            hyper::body::to_bytes(resp.into_body()).await.unwrap(),
+            reqwest::get(format!("http://{server_addr}/api/subpath"))
+                .await
+                .unwrap()
+                .text()
+                .await
+                .unwrap(),
             "backend: /api/subpath"
         );
-        backend_handle.abort();
-        server_handle.abort();
     }
 
     #[tokio::test]

@@ -23,7 +23,7 @@ impl WebsysDom {
         // Recursively rehydrate the dom from the VirtualDom
         self.rehydrate_scope(root_scope, dom, &mut ids, &mut to_mount)?;
 
-        dioxus_interpreter_js::hydrate(ids);
+        dioxus_interpreter_js::hydrate(self.interpreter.js_channel(), ids);
 
         #[cfg(feature = "mounted")]
         for id in to_mount {
@@ -168,7 +168,11 @@ impl WriteMutations for OnlyWriteTemplates<'_> {
         self.0
             .templates
             .insert(template.name.to_owned(), self.0.max_template_id);
-        save_template(roots, self.0.max_template_id);
+        save_template(
+            self.0.interpreter.js_channel(),
+            roots,
+            self.0.max_template_id,
+        );
         self.0.max_template_id += 1
     }
 

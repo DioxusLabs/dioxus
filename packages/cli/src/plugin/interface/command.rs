@@ -45,7 +45,7 @@ impl UserData for PluginCommander {
                 if cmd.is_empty() {
                     return Ok(());
                 }
-                let cmd_name = cmd.get(0).unwrap();
+                let cmd_name = cmd.first().unwrap();
                 let mut command = Command::new(cmd_name);
                 let t = cmd
                     .iter()
