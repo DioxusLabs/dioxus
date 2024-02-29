@@ -44,7 +44,7 @@ fn start_web_build_thread(
     let serve = serve.clone();
     let target_directory = config.client_target_dir();
     std::fs::create_dir_all(&target_directory).unwrap();
-    std::thread::spawn(move || build_web(serve, &target_directory))
+    std::thread::spawn(move || futures::executor::block_on(build_web(serve, &target_directory)))
 }
 
 fn make_desktop_config(config: &CrateConfig, serve: &ConfigOptsServe) -> CrateConfig {
@@ -105,7 +105,7 @@ impl Platform for FullstackPlatform {
     }
 }
 
-fn build_web(serve: ConfigOptsServe, target_directory: &std::path::Path) -> Result<()> {
+async fn build_web(serve: ConfigOptsServe, target_directory: &std::path::Path) -> Result<()> {
     let mut web_config: ConfigOptsBuild = serve.into();
     let web_feature = web_config.client_feature.clone();
     let features = &mut web_config.features;
@@ -125,4 +125,5 @@ fn build_web(serve: ConfigOptsServe, target_directory: &std::path::Path) -> Resu
         Some(target_directory),
         Some(client_rust_flags(&web_config)),
     )
+    .await
 }

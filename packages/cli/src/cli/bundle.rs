@@ -4,6 +4,11 @@ use std::{fs::create_dir_all, str::FromStr};
 
 use tauri_bundler::{BundleSettings, PackageSettings, SettingsBuilder};
 
+use crate::plugin::{
+    interface::plugins::main::types::CommandEvent::Bundle as BundleEvent, plugins_after_command,
+    plugins_before_command,
+};
+
 use super::*;
 use crate::{build_desktop, cfg::ConfigOptsBundle};
 
@@ -62,8 +67,10 @@ impl From<PackageType> for tauri_bundler::PackageType {
 }
 
 impl Bundle {
-    pub fn bundle(self, bin: Option<PathBuf>) -> Result<()> {
+    pub async fn bundle(self, bin: Option<PathBuf>) -> Result<()> {
         let mut crate_config = dioxus_cli_config::CrateConfig::new(bin)?;
+
+        plugins_before_command(BundleEvent).await;
 
         // change the release state.
         crate_config.with_release(self.build.release);
@@ -182,12 +189,13 @@ impl Bundle {
         std::env::set_var("CI", "true");
 
         tauri_bundler::bundle::bundle_project(settings.unwrap()).unwrap_or_else(|err|{
-            #[cfg(target_os = "macos")]
-            panic!("Failed to bundle project: {:#?}\nMake sure you have automation enabled in your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208) and full disk access enabled for your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208)", err);
-            #[cfg(not(target_os = "macos"))]
-            panic!("Failed to bundle project: {:#?}", err);
+          #[cfg(target_os = "macos")]
+          panic!("Failed to bundle project: {}\nMake sure you have automation enabled in your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208) and full disk access enabled for your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208)", err);
+          #[cfg(not(target_os = "macos"))]
+          panic!("Failed to bundle project: {}", err);
         });
 
+        plugins_after_command(BundleEvent).await;
         Ok(())
     }
 }

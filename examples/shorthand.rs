@@ -16,13 +16,22 @@ fn app() -> Element {
     // todo: i'd like it for children on elements to be inferred as the children of the element
     // also should shorthands understand references/dereferences?
     // ie **a, *a, &a, &mut a, etc
-    let children = rsx! { "Child" };
+    let children = rsx! {"Child"};
     let onclick = move |_| println!("Clicked!");
 
     rsx! {
         div { class, id, {&children} }
         Component { a, b, c, children, onclick }
-        Component { a, ..ComponentProps { a: 1, b: 2, c: 3, children: None, onclick: Default::default() } }
+        Component {
+            ..ComponentProps {
+                a: 1,
+                b: 2,
+                c: 3,
+                children: None,
+                onclick: Default::default(),
+            }
+            a
+        }
     }
 }
 

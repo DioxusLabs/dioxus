@@ -46,7 +46,7 @@ fn app() -> Element {
             div { width: "80%", height: "50%", flex_direction: "column",
                 // A trailing iterator of the last MAX_EVENTS events
                 // The index actually is a fine key here, since events are append-only and therefore stable
-                for (index, event) in events.read().iter().enumerate().rev().take(MAX_EVENTS).rev() {
+                for (index , event) in events.read().iter().enumerate().rev().take(MAX_EVENTS).rev() {
                     p { key: "{index}",
                         {
                             // TUI panics if text overflows (https://github.com/DioxusLabs/dioxus/issues/371)

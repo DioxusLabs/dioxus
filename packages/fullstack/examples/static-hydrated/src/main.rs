@@ -7,6 +7,7 @@
 
 #![allow(unused)]
 use dioxus::prelude::*;
+use dioxus::router::prelude::*;
 use dioxus_fullstack::{launch, prelude::*};
 use serde::{Deserialize, Serialize};
 
@@ -45,6 +46,12 @@ fn main() {
         dioxus_web::Config::default().hydrate(true),
     );
 }
+
+#[cfg(not(all(feature = "web", not(feature = "server"))))]
+fn main() {
+    panic!("This example is only intended to be run with the `web` feature");
+}
+
 
 #[derive(Clone, Routable, Debug, PartialEq, Serialize, Deserialize)]
 enum Route {

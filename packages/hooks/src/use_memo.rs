@@ -157,6 +157,5 @@ where
     if changed {
         dependencies_signal.set(dependencies.out());
     }
-
     selector
 }

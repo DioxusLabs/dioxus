@@ -1,7 +1,9 @@
+use crate::plugin::{plugins_after_command, plugins_before_command};
 use dioxus_cli_config::Platform;
 use manganis_cli_support::AssetManifest;
 
 use super::*;
+use crate::plugin::interface::plugins::main::types::CommandEvent::Serve as ServeEvent;
 use std::{fs::create_dir_all, io::Write, path::PathBuf};
 
 /// Run the WASM project on dev-server
@@ -46,6 +48,8 @@ impl Serve {
             .platform
             .unwrap_or(crate_config.dioxus_config.application.default_platform);
 
+        plugins_before_command(ServeEvent).await;
+
         match platform {
             Platform::Web => {
                 // start the develop server
@@ -64,6 +68,9 @@ impl Serve {
                 server::fullstack::startup(crate_config.clone(), &serve_cfg).await?;
             }
         }
+
+        plugins_after_command(ServeEvent).await;
+
         Ok(())
     }
 

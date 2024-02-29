@@ -220,6 +220,7 @@ fn create_random_dynamic_attr() -> Attribute {
         random_ns(),
         rand::random(),
     )
+    .into()
 }
 
 static TEMPLATE_COUNT: AtomicUsize = AtomicUsize::new(0);

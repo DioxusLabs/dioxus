@@ -1,3 +1,5 @@
+use crate::server::ServerReloadState;
+use crate::server::WsMessage;
 use crate::{
     builder,
     serve::Serve,
@@ -37,17 +39,13 @@ use tower_http::{
     cors::{Any, CorsLayer},
     ServiceBuilderExt,
 };
-
-#[cfg(feature = "plugin")]
-use crate::plugin::PluginManager;
-
 mod proxy;
 
 mod hot_reload;
 use hot_reload::*;
 
 struct WsReloadState {
-    update: broadcast::Sender<()>,
+    update: broadcast::Sender<WsMessage>,
 }
 
 pub async fn startup(
@@ -59,8 +57,6 @@ pub async fn startup(
     // ctrl-c shutdown checker
     let _crate_config = config.clone();
     let _ = ctrlc::set_handler(move || {
-        #[cfg(feature = "plugin")]
-        let _ = PluginManager::on_serve_shutdown(&_crate_config);
         std::process::exit(0);
     });
 
@@ -87,13 +83,20 @@ pub async fn startup(
         false => None,
     };
 
+    // WS Reload Watching
+    let (reload_tx, _) = broadcast::channel(100);
+
+    let reload_state =
+        ServerReloadState::new(hot_reload_state).with_reload_tx(Some(reload_tx.clone()));
+
     serve(
         ip,
         port,
         config,
         start_browser,
+        reload_state,
+        reload_tx,
         skip_assets,
-        hot_reload_state,
     )
     .await?;
 
@@ -106,20 +109,16 @@ pub async fn serve(
     port: u16,
     config: CrateConfig,
     start_browser: bool,
+    reload_state: ServerReloadState,
+    reload_tx: Sender<WsMessage>,
     skip_assets: bool,
-    hot_reload_state: Option<HotReloadState>,
 ) -> Result<()> {
-    // Since web platform doesn't use `rust_flags`, this argument is explicitly
-    // set to `None`.
     let first_build_result = crate::builder::build(&config, false, skip_assets, None)?;
 
     // generate dev-index page
     Serve::regen_dev_page(&config, first_build_result.assets.as_ref())?;
 
     log::info!("🚀 Starting development server...");
-
-    // WS Reload Watching
-    let (reload_tx, _) = broadcast::channel(100);
 
     // We got to own watcher so that it exists for the duration of serve
     // Otherwise full reload won't work.
@@ -134,7 +133,7 @@ pub async fn serve(
             ip: ip.clone(),
             port,
         }),
-        hot_reload_state.clone(),
+        reload_state.clone(),
     )
     .await?;
 
@@ -161,7 +160,7 @@ pub async fn serve(
     );
 
     // Router
-    let router = setup_router(config.clone(), ws_reload_state, hot_reload_state).await?;
+    let router = setup_router(&config, ws_reload_state, reload_state.hot_reload).await?;
 
     // Start server
     start_server(port, router, start_browser, rustls_config, &config).await?;
@@ -250,7 +249,7 @@ fn get_rustls_without_mkcert(web_config: &WebHttpsConfig) -> Result<(String, Str
 
 /// Sets up and returns a router
 async fn setup_router(
-    config: CrateConfig,
+    config: &CrateConfig,
     ws_reload: Arc<WsReloadState>,
     hot_reload: Option<HotReloadState>,
 ) -> Result<Router> {
@@ -284,7 +283,7 @@ async fn setup_router(
         .override_response_header(HeaderName::from_static("cross-origin-opener-policy"), coop)
         .and_then(
             move |response: Response<ServeFileSystemResponseBody>| async move {
-                let mut response = if file_service_config.dioxus_config.web.watcher.index_on_404
+                let mut response = if file_service_config.dioxus_config.web.index_on_404
                     && response.status() == StatusCode::NOT_FOUND
                 {
                     let body = Body::from(
@@ -316,8 +315,8 @@ async fn setup_router(
     let mut router = Router::new().route("/_dioxus/ws", get(ws_handler));
 
     // Setup proxy
-    for proxy_config in config.dioxus_config.web.proxy {
-        router = proxy::add_proxy(router, &proxy_config)?;
+    for proxy_config in &config.dioxus_config.web.proxy {
+        router = proxy::add_proxy(router, proxy_config)?;
     }
 
     // Route file service
@@ -363,13 +362,9 @@ async fn start_server(
     rustls: Option<RustlsConfig>,
     _config: &CrateConfig,
 ) -> Result<()> {
-    // If plugins, call on_serve_start event
-    #[cfg(feature = "plugin")]
-    PluginManager::on_serve_start(_config)?;
-
     // Bind the server to `[::]` and it will LISTEN for both IPv4 and IPv6. (required IPv6 dual stack)
     let addr = format!("[::]:{}", port).parse().unwrap();
-
+    
     // Open the browser
     if start_browser {
         match rustls {
@@ -421,10 +416,10 @@ async fn ws_handler(
         let mut rx = state.update.subscribe();
         let reload_watcher = tokio::spawn(async move {
             loop {
-                rx.recv().await.unwrap();
+                let message = rx.recv().await.unwrap();
                 // ignore the error
                 if socket
-                    .send(Message::Text(String::from("reload")))
+                    .send(Message::Text(serde_json::to_string(&message).unwrap()))
                     .await
                     .is_err()
                 {
@@ -440,15 +435,19 @@ async fn ws_handler(
     })
 }
 
-fn build(config: &CrateConfig, reload_tx: &Sender<()>, skip_assets: bool) -> Result<BuildResult> {
+fn build(
+    config: &CrateConfig,
+    reload_tx: &Sender<WsMessage>,
+    skip_assets: bool,
+) -> Result<BuildResult> {
     // Since web platform doesn't use `rust_flags`, this argument is explicitly
     // set to `None`.
     let result = builder::build(config, true, skip_assets, None)?;
     // change the websocket reload state to true;
     // the page will auto-reload.
-    if config.dioxus_config.web.watcher.reload_html {
+    if config.dioxus_config.watcher.reload_html {
         let _ = Serve::regen_dev_page(config, result.assets.as_ref());
     }
-    let _ = reload_tx.send(());
+    let _ = reload_tx.send(WsMessage::Reload);
     Ok(result)
 }

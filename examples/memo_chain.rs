@@ -43,7 +43,7 @@ fn Child(
     println!("rendering child: {}", depth());
 
     rsx! {
-        h3 { "Depth({depth})-Item({item}): {state}"}
+        h3 { "Depth({depth})-Item({item}): {state}" }
         Child { depth, state, items }
     }
 }

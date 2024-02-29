@@ -1,0 +1,14 @@
+[package]
+name = "dx-parcel-minifier"
+version = "0.0.1"
+authors = ["Exotik850"]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+dioxus-cli-plugin = { path = "../.." }
+minifier = "0.3.0"
+wit-bindgen = "0.15.0"

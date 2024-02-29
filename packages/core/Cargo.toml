@@ -21,6 +21,7 @@ futures-channel = { workspace = true }
 tracing = { workspace = true }
 serde = { version = "1", features = ["derive"], optional = true }
 
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
 dioxus = { workspace = true }
