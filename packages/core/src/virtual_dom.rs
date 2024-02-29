@@ -2,6 +2,8 @@
 //!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
+use crate::innerlude::ScopeOrder;
+use crate::Task;
 use crate::{
     any_props::AnyProps,
     arena::ElementId,
@@ -183,6 +185,7 @@ pub struct VirtualDom {
     pub(crate) scopes: Slab<ScopeState>,
 
     pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
+    pub(crate) scopes_need_rerun: bool,
 
     // Maps a template path to a map of byte indexes to templates
     pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template>>,
@@ -310,6 +313,7 @@ impl VirtualDom {
             rx,
             runtime: Runtime::new(tx),
             scopes: Default::default(),
+            scopes_need_rerun: false,
             dirty_scopes: Default::default(),
             templates: Default::default(),
             queued_templates: Default::default(),
@@ -374,10 +378,39 @@ impl VirtualDom {
         };
 
         tracing::trace!("Marking scope {:?} as dirty", id);
-        self.dirty_scopes.insert(DirtyScope {
-            height: scope.height(),
-            id,
-        });
+        self.scopes_need_rerun = true;
+        let order = ScopeOrder::new(scope.height(), id);
+        match self.dirty_scopes.get(&order) {
+            Some(dirty) => {
+                dirty.queue_rerun();
+            }
+            None => {
+                let dirty: DirtyScope = order.into();
+                dirty.queue_rerun();
+                self.dirty_scopes.insert(dirty);
+            }
+        }
+    }
+
+    /// Mark a task as dirty
+    fn mark_task_dirty(&mut self, task: Task) {
+        let Some(scope) = self.runtime.task_scope(task) else {
+            return;
+        };
+        let Some(scope) = self.runtime.get_state(scope) else {
+            return;
+        };
+        let order = ScopeOrder::new(scope.height(), scope.id);
+        match self.dirty_scopes.get(&order) {
+            Some(dirty) => {
+                dirty.queue_task(task);
+            }
+            None => {
+                let dirty: DirtyScope = order.into();
+                dirty.queue_task(task);
+                self.dirty_scopes.insert(dirty);
+            }
+        }
     }
 
     /// Call a listener inside the VirtualDom with data from outside the VirtualDom. **The ElementId passed in must be the id of an element with a listener, not a static node or a text node.**
@@ -439,12 +472,31 @@ impl VirtualDom {
             self.process_events();
 
             // Now that we have collected all queued work, we should check if we have any dirty scopes. If there are not, then we can poll any queued futures
-            if !self.dirty_scopes.is_empty() {
+            if self.scopes_need_rerun {
                 return;
             }
 
             // Make sure we set the runtime since we're running user code
             let _runtime = RuntimeGuard::new(self.runtime.clone());
+
+            // Next, run any queued tasks
+            // We choose not to poll the deadline since we complete pretty quickly anyways
+            while let Some(dirty) = self.dirty_scopes.pop_first() {
+                // If the scope doesn't exist for whatever reason, then we should skip it
+                if !self.scopes.contains(dirty.order.id.0) {
+                    continue;
+                }
+
+                // Then poll any tasks that might be pending
+                for task in dirty.tasks_queued.borrow().iter() {
+                    let _ = self.runtime.handle_task_wakeup(*task);
+                    // Running that task, may mark a scope higher up as dirty. If it does, return from the function early
+                    self.process_events();
+                    if self.scopes_need_rerun {
+                        return;
+                    }
+                }
+            }
 
             // Hold a lock to the flush sync to prevent tasks from running in the event we get an immediate
             // When we're doing awaiting the rx, the lock will be dropped and tasks waiting on the lock will get waked
@@ -455,7 +507,12 @@ impl VirtualDom {
 
             match self.rx.next().await.expect("channel should never close") {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
-                SchedulerMsg::TaskNotified(id) => _ = self.runtime.handle_task_wakeup(id),
+                SchedulerMsg::TaskNotified(id) => {
+                    // _ = self.runtime.handle_task_wakeup(id)
+                    // Instead of running the task immediately, we insert it into the runtime's task queue.
+                    // The task may be marked dirty at the same time as the scope that owns the task is dropped.
+                    self.mark_task_dirty(id);
+                }
             };
         }
     }
@@ -468,7 +525,7 @@ impl VirtualDom {
         while let Ok(Some(msg)) = self.rx.try_next() {
             match msg {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
-                SchedulerMsg::TaskNotified(task) => _ = self.runtime.handle_task_wakeup(task),
+                SchedulerMsg::TaskNotified(task) => self.mark_task_dirty(task),
             }
         }
     }
@@ -489,10 +546,8 @@ impl VirtualDom {
                 {
                     let context = scope.state();
                     let height = context.height;
-                    self.dirty_scopes.insert(DirtyScope {
-                        height,
-                        id: context.id,
-                    });
+                    self.dirty_scopes
+                        .insert(DirtyScope::new(height, context.id));
                 }
             }
         }
@@ -558,18 +613,26 @@ impl VirtualDom {
         // We choose not to poll the deadline since we complete pretty quickly anyways
         while let Some(dirty) = self.dirty_scopes.pop_first() {
             // If the scope doesn't exist for whatever reason, then we should skip it
-            if !self.scopes.contains(dirty.id.0) {
+            if !self.scopes.contains(dirty.order.id.0) {
                 continue;
             }
 
             {
                 let _runtime = RuntimeGuard::new(self.runtime.clone());
-                // Run the scope and get the mutations
-                let new_nodes = self.run_scope(dirty.id);
+                // Poll any tasks that might be pending in the scope
+                for task in dirty.tasks_queued.borrow().iter() {
+                    let _ = self.runtime.handle_task_wakeup(*task);
+                }
+                // If the scope is dirty, run the scope and get the mutations
+                if dirty.rerun_queued.get() {
+                    let new_nodes = self.run_scope(dirty.order.id);
 
-                self.diff_scope(to, dirty.id, new_nodes);
+                    self.diff_scope(to, dirty.order.id, new_nodes);
+                }
             }
         }
+
+        self.scopes_need_rerun = false;
     }
 
     /// [`Self::render_immediate`] to a vector of mutations for testing purposes

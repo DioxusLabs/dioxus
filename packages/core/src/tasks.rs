@@ -135,6 +135,10 @@ impl Runtime {
         self.tasks.borrow().get(task.0)?.parent
     }
 
+    pub(crate) fn task_scope(&self, task: Task) -> Option<ScopeId> {
+        self.tasks.borrow().get(task.0).map(|t| t.scope)
+    }
+
     pub(crate) fn handle_task_wakeup(&self, id: Task) -> Poll<()> {
         debug_assert!(Runtime::current().is_some(), "Must be in a dioxus runtime");
 

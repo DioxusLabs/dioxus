@@ -89,14 +89,19 @@ async fn yield_now_works() {
 async fn flushing() {
     thread_local! {
         static SEQUENCE: std::cell::RefCell<Vec<usize>> = std::cell::RefCell::new(Vec::new());
+        static BROADCAST: (tokio::sync::broadcast::Sender<()>, tokio::sync::broadcast::Receiver<()>) = tokio::sync::broadcast::channel(1);
     }
 
     fn app() -> Element {
+        if generation() > 0 {
+            SEQUENCE.with(|s| s.borrow_mut().push(0));
+        }
         use_hook(|| {
             spawn(async move {
                 for _ in 0..10 {
                     flush_sync().await;
                     SEQUENCE.with(|s| s.borrow_mut().push(1));
+                    BROADCAST.with(|b| b.1.resubscribe()).recv().await.unwrap();
                 }
             })
         });
@@ -106,11 +111,12 @@ async fn flushing() {
                 for _ in 0..10 {
                     flush_sync().await;
                     SEQUENCE.with(|s| s.borrow_mut().push(2));
+                    BROADCAST.with(|b| b.1.resubscribe()).recv().await.unwrap();
                 }
             })
         });
 
-        rsx!({})
+        rsx! {}
     }
 
     let mut dom = VirtualDom::new(app);
@@ -119,11 +125,11 @@ async fn flushing() {
 
     let fut = async {
         // Trigger the flush by waiting for work
-        for _ in 0..40 {
-            tokio::select! {
-                _ = dom.wait_for_work() => {}
-                _ = tokio::time::sleep(Duration::from_millis(1)) => {}
-            };
+        for _ in 0..10 {
+            dom.mark_dirty(ScopeId(0));
+            BROADCAST.with(|b| b.0.send(()).unwrap());
+            dom.wait_for_work().await;
+            dom.render_immediate(&mut dioxus_core::NoOpMutations);
         }
     };
 
@@ -132,5 +138,26 @@ async fn flushing() {
         _ = tokio::time::sleep(Duration::from_millis(500)) => {}
     };
 
-    SEQUENCE.with(|s| assert_eq!(s.borrow().len(), 20));
+    SEQUENCE.with(|s| {
+        let s = s.borrow();
+        println!("{:?}", s);
+        assert_eq!(s.len(), 30);
+        // We need to check if every three elements look like [0, 1, 2] or [0, 2, 1]
+        let mut has_seen_1 = false;
+        for (i, &x) in s.iter().enumerate() {
+            let stage = i % 3;
+            if stage == 0 {
+                assert_eq!(x, 0);
+            } else if stage == 1 {
+                assert!(x == 1 || x == 2);
+                has_seen_1 = x == 1;
+            } else if stage == 2 {
+                if has_seen_1 {
+                    assert_eq!(x, 2);
+                } else {
+                    assert_eq!(x, 1);
+                }
+            }
+        }
+    });
 }

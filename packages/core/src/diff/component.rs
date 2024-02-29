@@ -91,10 +91,7 @@ impl VNode {
         dom.diff_scope(to, scope_id, new);
 
         let height = dom.runtime.get_state(scope_id).unwrap().height;
-        dom.dirty_scopes.remove(&DirtyScope {
-            height,
-            id: scope_id,
-        });
+        dom.dirty_scopes.remove(&DirtyScope::new(height, scope_id));
     }
 
     fn replace_vcomponent(
