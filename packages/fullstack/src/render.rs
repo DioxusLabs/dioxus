@@ -9,8 +9,8 @@ use dioxus_ssr::{
 use std::future::Future;
 use std::sync::Arc;
 use std::sync::RwLock;
-use tokio::task::JoinHandle;
 use tokio::task::block_in_place;
+use tokio::task::JoinHandle;
 
 use crate::prelude::*;
 use dioxus_lib::prelude::*;

@@ -134,7 +134,7 @@ where
     return Box::new(AnyHistoryProviderImplWrapper::new(
         MemoryHistory::<R>::with_initial_path(
             dioxus_fullstack::prelude::server_context()
-                .request_parts()
+                .request_parts_blocking()
                 .uri
                 .to_string()
                 .parse()
