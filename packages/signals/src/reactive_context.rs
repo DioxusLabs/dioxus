@@ -22,20 +22,47 @@ thread_local! {
     static CURRENT: RefCell<Vec<ReactiveContext>> = const { RefCell::new(vec![]) };
 }
 
+impl std::fmt::Display for ReactiveContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let read = self.inner.read();
+        match read.scope_subscriber {
+            Some(scope) => write!(f, "ReactiveContext for scope {:?}", scope),
+            None => {
+                #[cfg(debug_assertions)]
+                return write!(f, "ReactiveContext created at {}", read.origin);
+                #[cfg(not(debug_assertions))]
+                write!(f, "ReactiveContext")
+            }
+        }
+    }
+}
+
 impl Default for ReactiveContext {
+    #[track_caller]
     fn default() -> Self {
-        Self::new_for_scope(None)
+        Self::new_for_scope(None, std::panic::Location::caller())
     }
 }
 
 impl ReactiveContext {
     /// Create a new reactive context
+    #[track_caller]
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Create a new reactive context with a location for debugging purposes
+    /// This is useful for reactive contexts created within closures
+    pub fn new_with_origin(origin: &'static std::panic::Location<'static>) -> Self {
+        Self::new_for_scope(None, origin)
+    }
+
     /// Create a new reactive context that may update a scope
-    pub(crate) fn new_for_scope(scope: Option<ScopeId>) -> Self {
+    #[allow(unused)]
+    pub(crate) fn new_for_scope(
+        scope: Option<ScopeId>,
+        origin: &'static std::panic::Location<'static>,
+    ) -> Self {
         let (tx, rx) = flume::unbounded();
 
         let mut scope_subscribers = FxHashSet::default();
@@ -49,6 +76,8 @@ impl ReactiveContext {
             self_: None,
             update_any: schedule_update_any(),
             receiver: rx,
+            #[cfg(debug_assertions)]
+            origin,
         };
 
         let mut self_ = Self {
@@ -87,6 +116,7 @@ impl ReactiveContext {
         // Otherwise, create a new context at the current scope
         Some(provide_context(ReactiveContext::new_for_scope(
             current_scope_id(),
+            std::panic::Location::caller(),
         )))
     }
 
@@ -108,6 +138,17 @@ impl ReactiveContext {
     /// Returns true if the context was marked as dirty, or false if the context has been dropped
     pub fn mark_dirty(&self) -> bool {
         if let Ok(self_read) = self.inner.try_read() {
+            #[cfg(debug_assertions)]
+            {
+                if let Some(scope) = self_read.scope_subscriber {
+                    tracing::trace!("Marking reactive context for scope {:?} as dirty", scope);
+                } else {
+                    tracing::trace!(
+                        "Marking reactive context created at {} as dirty",
+                        self_read.origin
+                    );
+                }
+            }
             if let Some(scope) = self_read.scope_subscriber {
                 (self_read.update_any)(scope);
             }
@@ -148,4 +189,8 @@ struct Inner {
     // Futures will call .changed().await
     sender: flume::Sender<()>,
     receiver: flume::Receiver<()>,
+
+    // Debug information for signal subscriptions
+    #[cfg(debug_assertions)]
+    origin: &'static std::panic::Location<'static>,
 }
