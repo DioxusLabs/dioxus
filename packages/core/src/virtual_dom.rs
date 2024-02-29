@@ -375,14 +375,14 @@ impl VirtualDom {
         let Some(scope) = self.runtime.get_state(id) else {
             return;
         };
-      
+
         tracing::event!(
             tracing::Level::TRACE,
             "Marking scope {:?} ({}) as dirty",
             id,
             scope.name
         );
-      
+
         self.dirty_scopes.insert(DirtyScope {
             height: scope.height(),
             id,
