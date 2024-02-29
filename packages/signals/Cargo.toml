@@ -1,7 +1,7 @@
 [package]
 name = "dioxus-signals"
-authors = ["Jonathan Kelley"]
-version = "0.4.3"
+authors = ["Jonathan Kelley", "Evan Almloff"]
+version = { workspace = true }
 edition = "2021"
 description = "Signals for Dioxus"
 license = "MIT OR Apache-2.0"

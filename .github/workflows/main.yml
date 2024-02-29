@@ -1,9 +1,13 @@
+# Whenever an open PR is updated, the workflow will be triggered
+#
+# This can get expensive, so we do a lot of caching and checks to prevent unnecessary runs
+
 name: Rust CI
 
 on:
   push:
     branches:
-      - master
+      - main
     paths:
       - packages/**
       - examples/**
@@ -17,7 +21,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     branches:
-      - master
+      - main
     paths:
       - packages/**
       - examples/**
@@ -48,7 +52,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/master' }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: ilammy/setup-nasm@v1
       - run: cargo check --all --examples --tests --all-features --all-targets
 
@@ -64,7 +68,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/master' }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: ilammy/setup-nasm@v1
       - uses: davidB/rust-cargo-make@v1
       - uses: browser-actions/setup-firefox@latest
@@ -75,7 +79,6 @@ jobs:
           large-packages: false
           docker-images: false
           swap-storage: false
-
       - run: cargo make tests
 
   fmt:
@@ -91,7 +94,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/master' }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo fmt --all -- --check
 
   clippy:
@@ -109,8 +112,35 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/master' }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo clippy --workspace --examples --tests --all-features --all-targets -- -D warnings
+
+  # Only run semver checks if the PR is not a draft and does not have the breaking label
+  # Breaking PRs don't need to follow semver since they are breaking changes
+  # However, this means we won't attempt to backport them, so you should be careful about using this label, as it will
+  # likely make future backporting difficult
+  #
+  # todo: fix this so even if breaking changes have been merged, the fix can be backported
+  #
+  # This will stop working once the first breaking change has been merged, so we should really try to just backport the fix
+  # and *then* run the semver checks. Basically "would backporting this PR cause a breaking change on stable?"
+  #
+  # semver:
+  #   if: github.event.pull_request.draft == false && !contains(github.event.pull_request.labels.*.name, 'breaking')
+  #   name: Semver Check
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: dtolnay/rust-toolchain@stable
+  #     - uses: Swatinem/rust-cache@v2
+  #       with:
+  #         cache-all-crates: "true"
+  #         save-if: ${{ github.ref == 'refs/heads/main' }}
+  #     - name: Check semver
+  #       uses: obi1kenobi/cargo-semver-checks-action@v2
+  #       with:
+  #         manifest-path: ./Cargo.toml
+  #         exclude: "dioxus-cli, dioxus-ext"
 
   playwright:
     if: github.event.pull_request.draft == false
@@ -137,7 +167,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/master' }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
         run: npm ci
@@ -230,29 +260,8 @@ jobs:
         with:
           key: "${{ matrix.platform.target }}"
           cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/master' }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: test
         run: |
           ${{ env.RUST_CARGO_COMMAND }} ${{ matrix.platform.command }} ${{ matrix.platform.args }} --target ${{ matrix.platform.target }}
-
-  # Coverage is disabled until we can fix it
-  # coverage:
-  #   name: Coverage
-  #   runs-on: ubuntu-latest
-  #   container:
-  #     image: xd009642/tarpaulin:develop-nightly
-  #     options: --security-opt seccomp=unconfined
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v4
-  #     - name: Generate code coverage
-  #       run: |
-  #         apt-get update &&\
-  #         apt-get install build-essential &&\
-  #         apt install libwebkit2gtk-4.0-dev libgtk-3-dev libayatana-appindicator3-dev -y &&\
-  #         cargo +nightly tarpaulin --verbose --all-features --workspace --timeout 120 --out Xml
-  #     - name: Upload to codecov.io
-  #       uses: codecov/codecov-action@v2
-  #       with:
-  #         fail_ci_if_error: false

@@ -1,7 +1,7 @@
 //! A simple example that shows how to use the use_future hook to run a background task.
 //!
-//! use_future assumes your future will never complete - it won't return a value.
-//! If you want to return a value, use use_resource instead.
+//! use_future won't return a value, analagous to use_effect.
+//! If you want to return a value from a future, use use_resource instead.
 
 use dioxus::prelude::*;
 use std::time::Duration;

@@ -10,8 +10,32 @@ use futures_util::{future, pin_mut, FutureExt};
 use std::future::Future;
 
 /// A memo that resolve to a value asynchronously.
+/// Unlike `use_future`, `use_resource` runs on the **server**
+/// See [`Resource`] for more details.
+/// ```rust
+///fn app() -> Element {
+///    let country = use_signal(|| WeatherLocation {
+///        city: "Berlin".to_string(),
+///        country: "Germany".to_string(),
+///        coordinates: (52.5244, 13.4105)
+///    });
 ///
-/// This runs on the server
+///    let current_weather = //run a future inside the use_resource hook
+///        use_resource(move || async move { get_weather(&country.read().clone()).await });
+///    
+///    rsx! {
+///        //the value of the future can be polled to
+///        //conditionally render elements based off if the future
+///        //finished (Some(Ok(_)), errored Some(Err(_)),
+///        //or is still finishing (None)
+///        match current_weather.value() {
+///            Some(Ok(weather)) => WeatherElement { weather },
+///            Some(Err(e)) => p { "Loading weather failed, {e}" }
+///            None =>  p { "Loading..." }
+///        }
+///    }
+///}
+/// ```
 #[must_use = "Consider using `cx.spawn` to run a future without reading its value"]
 pub fn use_resource<T, F>(future: impl Fn() -> F + 'static) -> Resource<T>
 where

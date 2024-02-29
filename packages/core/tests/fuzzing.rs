@@ -2,7 +2,9 @@
 
 use dioxus::prelude::*;
 use dioxus_core::{AttributeValue, DynamicNode, NoOpMutations, VComponent, VNode, *};
-use std::{cfg, collections::HashSet, default::Default};
+use std::{
+    cfg, collections::HashSet, default::Default, sync::atomic::AtomicUsize, sync::atomic::Ordering,
+};
 
 fn random_ns() -> Option<&'static str> {
     let namespace = rand::random::<u8>() % 2;
@@ -220,20 +222,14 @@ fn create_random_dynamic_attr() -> Attribute {
     )
 }
 
-static mut TEMPLATE_COUNT: usize = 0;
+static TEMPLATE_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 fn create_template_location() -> &'static str {
     Box::leak(
         format!(
             "{}{}",
             concat!(file!(), ":", line!(), ":", column!(), ":"),
-            {
-                unsafe {
-                    let old = TEMPLATE_COUNT;
-                    TEMPLATE_COUNT += 1;
-                    old
-                }
-            }
+            TEMPLATE_COUNT.fetch_add(1, Ordering::Relaxed)
         )
         .into_boxed_str(),
     )

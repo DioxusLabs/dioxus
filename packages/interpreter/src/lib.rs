@@ -20,7 +20,7 @@ pub use write_native_mutations::*;
 #[cfg(all(feature = "minimal_bindings", feature = "webonly"))]
 pub mod minimal_bindings {
     use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
-    #[wasm_bindgen(module = "/src/common.js")]
+    #[wasm_bindgen(module = "/src/common_exported.js")]
     extern "C" {
         pub fn setAttributeInner(node: JsValue, name: &str, value: JsValue, ns: Option<&str>);
     }
