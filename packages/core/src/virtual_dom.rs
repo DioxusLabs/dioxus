@@ -373,7 +373,7 @@ impl VirtualDom {
             return;
         };
 
-        tracing::trace!("Marking scope {:?} ({}) as dirty", id, scope.name);
+        tracing::trace!("Marking scope {:?} as dirty", id);
         self.dirty_scopes.insert(DirtyScope {
             height: scope.height(),
             id,
