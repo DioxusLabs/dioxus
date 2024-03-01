@@ -12,11 +12,37 @@ fn main() {
 }
 
 fn app() -> Element {
-    let mut count = use_signal(|| 0);
+    let mut vec = use_signal(|| vec![1, 2, 3]);
+
+    let len = vec.len();
 
     rsx! {
-        h1 { "High-Five counter: {count}" }
-        button { onclick: move |_| count += 1, "Up high!" }
-        button { onclick: move |_| count -= 1, "Down low!" }
+        button {
+            onclick: move |_| {
+                let mut vec = vec.write();
+                vec.push(len);
+            },
+            "Add"
+        }
+        button {
+            onclick: move |_| {
+                vec.pop();
+            },
+            "Remove"
+        }
+        for i in 0..len {
+            Child {
+                index: i,
+                vec,
+            }
+        }
+    }
+}
+
+#[component]
+fn Child(index: usize, vec: Signal<Vec<usize>>) -> Element {
+    let item = use_memo(move || vec.read()[index]);
+    rsx! {
+        div { "Item: {item}" }
     }
 }

@@ -479,25 +479,6 @@ impl VirtualDom {
             // Make sure we set the runtime since we're running user code
             let _runtime = RuntimeGuard::new(self.runtime.clone());
 
-            // Next, run any queued tasks
-            // We choose not to poll the deadline since we complete pretty quickly anyways
-            while let Some(dirty) = self.dirty_scopes.pop_first() {
-                // If the scope doesn't exist for whatever reason, then we should skip it
-                if !self.scopes.contains(dirty.order.id.0) {
-                    continue;
-                }
-
-                // Then poll any tasks that might be pending
-                for task in dirty.tasks_queued.borrow().iter() {
-                    let _ = self.runtime.handle_task_wakeup(*task);
-                    // Running that task, may mark a scope higher up as dirty. If it does, return from the function early
-                    self.process_events();
-                    if self.scopes_need_rerun {
-                        return;
-                    }
-                }
-            }
-
             // Hold a lock to the flush sync to prevent tasks from running in the event we get an immediate
             // When we're doing awaiting the rx, the lock will be dropped and tasks waiting on the lock will get waked
             // We have to own the lock since poll_tasks is cancel safe - the future that this is running in might get dropped
@@ -526,6 +507,30 @@ impl VirtualDom {
             match msg {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
                 SchedulerMsg::TaskNotified(task) => self.mark_task_dirty(task),
+            }
+        }
+
+        // Now that we have collected all queued work, we should check if we have any dirty scopes. If there are not, then we can poll any queued futures
+        if self.scopes_need_rerun {
+            return;
+        }
+
+        // Next, run any queued tasks
+        // We choose not to poll the deadline since we complete pretty quickly anyways
+        while let Some(dirty) = self.dirty_scopes.pop_first() {
+            // If the scope doesn't exist for whatever reason, then we should skip it
+            if !self.scopes.contains(dirty.order.id.0) {
+                continue;
+            }
+
+            // Then poll any tasks that might be pending
+            for task in dirty.tasks_queued.borrow().iter() {
+                let _ = self.runtime.handle_task_wakeup(*task);
+                // Running that task, may mark a scope higher up as dirty. If it does, return from the function early
+                self.process_events();
+                if self.scopes_need_rerun {
+                    return;
+                }
             }
         }
     }
@@ -619,7 +624,8 @@ impl VirtualDom {
 
             {
                 let _runtime = RuntimeGuard::new(self.runtime.clone());
-                // Poll any tasks that might be pending in the scope
+                // Then, poll any tasks that might be pending in the scope
+                // This will run effects, so this **must** be done after the scope is diffed
                 for task in dirty.tasks_queued.borrow().iter() {
                     let _ = self.runtime.handle_task_wakeup(*task);
                 }
