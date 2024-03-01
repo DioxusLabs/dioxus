@@ -74,6 +74,16 @@ System.register("interpreter_core", [], function (exports_1, context_1) {
                     var id = element.getAttribute("data-dioxus-id");
                     delete this.local[id];
                 };
+                Interpreter.prototype.getNode = function (id) {
+                    return this.nodes[id];
+                };
+                Interpreter.prototype.appendChildren = function (id, many) {
+                    var root = this.nodes[id];
+                    var els = this.stack.splice(this.stack.length - many);
+                    for (var k = 0; k < many; k++) {
+                        root.appendChild(els[k]);
+                    }
+                };
                 return Interpreter;
             }());
             exports_1("Interpreter", Interpreter);
@@ -139,16 +149,6 @@ System.register("interpreter_web", ["interpreter_core"], function (exports_2, co
                             this.nodes[ids[parseInt(split[1])]] = currentNode.nextSibling;
                         }
                         currentNode = treeWalker.nextNode();
-                    }
-                };
-                WebInterpreter.prototype.getNode = function (id) {
-                    return this.nodes[id];
-                };
-                WebInterpreter.prototype.appendChildren = function (id, many) {
-                    var root = this.nodes[id];
-                    var els = this.stack.splice(this.stack.length - many);
-                    for (var k = 0; k < many; k++) {
-                        root.appendChild(els[k]);
                     }
                 };
                 return WebInterpreter;

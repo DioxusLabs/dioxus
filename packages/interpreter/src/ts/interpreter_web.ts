@@ -75,16 +75,4 @@ export class WebInterpreter extends Interpreter {
       currentNode = treeWalker.nextNode();
     }
   }
-
-  getNode(id: number): Node {
-    return this.nodes[id];
-  }
-
-  appendChildren(id: number, many: number) {
-    const root = this.nodes[id];
-    const els = this.stack.splice(this.stack.length - many);
-    for (let k = 0; k < many; k++) {
-      root.appendChild(els[k]);
-    }
-  }
 }

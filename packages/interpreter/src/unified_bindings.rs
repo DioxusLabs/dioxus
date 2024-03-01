@@ -1,7 +1,4 @@
 #[cfg(feature = "webonly")]
-use js_sys::Function;
-
-#[cfg(feature = "webonly")]
 use web_sys::Node;
 
 #[cfg(feature = "webonly")]
@@ -11,30 +8,39 @@ use sledgehammer_bindgen::bindgen;
 
 pub const SLEDGEHAMMER_JS: &str = GENERATED_JS;
 
+/// Extensions to the interpreter that are specific to the web platform.
 #[cfg(feature = "webonly")]
 #[wasm_bindgen(module = "src/js/web.js")]
 extern "C" {
-    #[wasm_bindgen]
-    pub type Interpreter;
+    pub type WebInterpreter;
+
+    #[wasm_bindgen(method, js_name = "saveTemplate")]
+    pub fn save_template(this: &WebInterpreter, nodes: Vec<Node>, tmpl_id: u16);
 
     #[wasm_bindgen(method)]
-    pub fn save_template(this: &Interpreter, nodes: Vec<Node>, tmpl_id: u16);
+    pub fn hydrate(this: &WebInterpreter, ids: Vec<u32>);
 
-    #[wasm_bindgen(method)]
-    pub fn hydrate(this: &Interpreter, ids: Vec<u32>);
+    #[wasm_bindgen(method, js_name = "getNode")]
+    pub fn get_node(this: &WebInterpreter, id: u32) -> Node;
+}
 
-    #[wasm_bindgen(method)]
-    pub fn get_node(this: &Interpreter, id: u32) -> Node;
+#[cfg(feature = "webonly")]
+type PlatformInterpreter = WebInterpreter;
 
-    #[wasm_bindgen(method)]
-    pub fn initialize(this: &Interpreter, root: Node, handler: &Function);
+#[cfg(feature = "webonly")]
+impl Interpreter {
+    /// Convert the interpreter to a web interpreter, enabling methods like hydrate and save_template.
+    pub fn as_web(&self) -> &WebInterpreter {
+        use wasm_bindgen::prelude::JsCast;
+        &self.js_channel().unchecked_ref()
+    }
 }
 
 #[bindgen(module)]
 mod js {
     /// The interpreter extends the core interpreter which contains the state for the interpreter along with some functions that all platforms use like `AppendChildren`.
-    #[extends(Interpreter)]
-    pub struct InterpreterInterface;
+    #[extends(PlatformInterpreter)]
+    pub struct Interpreter;
 
     fn mount_to_root() {
         "{this.AppendChildren(this.root, this.stack.length-1);}"

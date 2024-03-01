@@ -159,6 +159,16 @@ System.register("interpreter_core", [], function (exports_2, context_2) {
                     var id = element.getAttribute("data-dioxus-id");
                     delete this.local[id];
                 };
+                Interpreter.prototype.getNode = function (id) {
+                    return this.nodes[id];
+                };
+                Interpreter.prototype.appendChildren = function (id, many) {
+                    var root = this.nodes[id];
+                    var els = this.stack.splice(this.stack.length - many);
+                    for (var k = 0; k < many; k++) {
+                        root.appendChild(els[k]);
+                    }
+                };
                 return Interpreter;
             }());
             exports_2("Interpreter", Interpreter);

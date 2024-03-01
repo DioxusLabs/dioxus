@@ -1,5 +1,4 @@
-// use crate::binary_protocol::Channel;
-use crate::unified_bindings::Channel;
+use crate::unified_bindings::Interpreter as Channel;
 use dioxus_core::{TemplateAttribute, TemplateNode, WriteMutations};
 use dioxus_html::event_bubbles;
 use sledgehammer_utils::rustc_hash::FxHashMap;

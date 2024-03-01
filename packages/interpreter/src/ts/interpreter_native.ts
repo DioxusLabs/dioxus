@@ -7,6 +7,7 @@ import { retriveValues } from "./form";
 import { Interpreter } from "./interpreter_core";
 import { SerializedEvent, serializeEvent } from "./serialize";
 
+
 export class NativeInterpreter extends Interpreter {
   intercept_link_redirects: boolean;
   ipc: any;

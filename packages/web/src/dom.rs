@@ -8,7 +8,7 @@
 
 use dioxus_core::ElementId;
 use dioxus_html::PlatformEventData;
-use dioxus_interpreter_js::Channel;
+use dioxus_interpreter_js::unified_bindings::{Interpreter, InterpreterInterface};
 use futures_channel::mpsc;
 use rustc_hash::FxHashMap;
 use wasm_bindgen::{closure::Closure, JsCast};
@@ -22,7 +22,7 @@ pub struct WebsysDom {
     pub(crate) root: Element,
     pub(crate) templates: FxHashMap<String, u16>,
     pub(crate) max_template_id: u16,
-    pub(crate) interpreter: Channel,
+    pub(crate) interpreter: InterpreterInterface,
     #[cfg(feature = "mounted")]
     pub(crate) event_channel: mpsc::UnboundedSender<UiEvent>,
     #[cfg(feature = "mounted")]
@@ -64,7 +64,7 @@ impl WebsysDom {
             }
         };
 
-        let interpreter = Channel::default();
+        let interpreter = InterpreterInterface::default();
 
         let handler: Closure<dyn FnMut(&Event)> = Closure::wrap(Box::new({
             let event_channel = event_channel.clone();
@@ -107,11 +107,12 @@ impl WebsysDom {
             }
         }));
 
-        dioxus_interpreter_js::initialize(
-            interpreter.js_channel(),
+        let _interpreter: &Interpreter = interpreter.as_ref();
+        _interpreter.initialize(
             root.clone().unchecked_into(),
             handler.as_ref().unchecked_ref(),
         );
+
         dioxus_html::set_event_converter(Box::new(WebEventConverter));
         handler.forget();
 
