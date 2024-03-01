@@ -462,10 +462,6 @@ impl VirtualDom {
 
     ///
     async fn poll_tasks(&mut self) {
-        // Release the flush lock
-        // This will cause all the flush wakers to immediately spring to life, which we will off with process_events
-        self.runtime.release_flush_lock();
-
         loop {
             // Process all events - Scopes are marked dirty, etc
             // Sometimes when wakers fire we get a slew of updates at once, so its important that we drain this completely
@@ -479,13 +475,6 @@ impl VirtualDom {
             // Make sure we set the runtime since we're running user code
             let _runtime = RuntimeGuard::new(self.runtime.clone());
 
-            // Hold a lock to the flush sync to prevent tasks from running in the event we get an immediate
-            // When we're doing awaiting the rx, the lock will be dropped and tasks waiting on the lock will get waked
-            // We have to own the lock since poll_tasks is cancel safe - the future that this is running in might get dropped
-            // and if we held the lock in the scope, the lock would also get dropped prematurely
-            self.runtime.release_flush_lock();
-            self.runtime.acquire_flush_lock();
-
             match self.rx.next().await.expect("channel should never close") {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
                 SchedulerMsg::TaskNotified(id) => {
@@ -498,10 +487,8 @@ impl VirtualDom {
         }
     }
 
-    /// Process all events in the queue until there are no more left
-    pub fn process_events(&mut self) {
-        let _runtime = RuntimeGuard::new(self.runtime.clone());
-
+    /// Queue any pending events
+    fn queue_events(&mut self) {
         // Prevent a task from deadlocking the runtime by repeatedly queueing itself
         while let Ok(Some(msg)) = self.rx.try_next() {
             match msg {
@@ -509,6 +496,12 @@ impl VirtualDom {
                 SchedulerMsg::TaskNotified(task) => self.mark_task_dirty(task),
             }
         }
+    }
+
+    /// Process all events in the queue until there are no more left
+    pub fn process_events(&mut self) {
+        let _runtime = RuntimeGuard::new(self.runtime.clone());
+        self.queue_events();
 
         // Now that we have collected all queued work, we should check if we have any dirty scopes. If there are not, then we can poll any queued futures
         if self.scopes_need_rerun {
@@ -527,7 +520,7 @@ impl VirtualDom {
             for task in dirty.tasks_queued.borrow().iter() {
                 let _ = self.runtime.handle_task_wakeup(*task);
                 // Running that task, may mark a scope higher up as dirty. If it does, return from the function early
-                self.process_events();
+                self.queue_events();
                 if self.scopes_need_rerun {
                     return;
                 }
@@ -639,6 +632,7 @@ impl VirtualDom {
         }
 
         self.scopes_need_rerun = false;
+        self.runtime.render_signal.send();
     }
 
     /// [`Self::render_immediate`] to a vector of mutations for testing purposes

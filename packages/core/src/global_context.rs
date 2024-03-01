@@ -260,10 +260,7 @@ pub fn after_render(f: impl FnMut() + 'static) {
 pub async fn flush_sync() {
     // Wait for the flush lock to be available
     // We release it immediately, so it's impossible for the lock to be held longer than this function
-    Runtime::with(|rt| rt.flush_mutex.clone())
-        .unwrap()
-        .lock()
-        .await;
+    Runtime::with(|rt| rt.render_signal.subscribe()).unwrap().await;
 }
 
 /// Use a hook with a cleanup function

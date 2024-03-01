@@ -125,7 +125,7 @@ async fn flushing() {
 
     let fut = async {
         // Trigger the flush by waiting for work
-        for _ in 0..10 {
+        for _ in 0..30 {
             dom.mark_dirty(ScopeId(0));
             BROADCAST.with(|b| b.0.send(()).unwrap());
             dom.wait_for_work().await;

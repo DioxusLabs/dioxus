@@ -16,6 +16,11 @@ fn app() -> Element {
 
     let len = vec.len();
 
+    println!("app len: {}", len);
+    use_effect(move || {
+        println!("app effect len: {}", vec.len());
+    });
+
     rsx! {
         button {
             onclick: move |_| {

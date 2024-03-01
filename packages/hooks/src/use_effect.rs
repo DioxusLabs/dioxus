@@ -16,14 +16,14 @@ pub fn use_effect(mut callback: impl FnMut() + 'static) {
         spawn(async move {
             let rc = ReactiveContext::new_with_origin(location);
             loop {
-                // Wait for the dom the be finished with sync work
-                // flush_sync().await;
-
                 // Run the effect
                 rc.run_in(&mut callback);
-
+                
                 // Wait for context to change
                 rc.changed().await;
+
+                // Wait for the dom the be finished with sync work
+                flush_sync().await;
             }
         });
     });
