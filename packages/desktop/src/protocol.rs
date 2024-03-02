@@ -1,5 +1,5 @@
 use crate::{assets::*, edits::EditQueue};
-use dioxus_interpreter_js::unified_bindings::SLEDGEHAMMER_JS;
+use dioxus_interpreter_js::unified_bindings::{native_js, SLEDGEHAMMER_JS};
 use std::path::{Path, PathBuf};
 use wry::{
     http::{status::StatusCode, Request, Response},
@@ -38,7 +38,7 @@ fn handle_edits_code() -> String {
     }}"#
     );
 
-    let mut interpreter = SLEDGEHAMMER_JS
+    let mut interpreter = native_js()
         .replace("/*POST_HANDLE_EDITS*/", PREVENT_FILE_UPLOAD)
         .replace("export", "")
         + &polling_request;

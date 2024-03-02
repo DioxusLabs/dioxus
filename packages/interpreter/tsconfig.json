@@ -1,6 +1,6 @@
 {
     "compilerOptions": {
-        "module": "system",
+        "module": "CommonJS",
         "lib": [
             "ES2015",
             "DOM",

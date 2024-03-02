@@ -6,6 +6,10 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 use sledgehammer_bindgen::bindgen;
 
+pub fn native_js() -> String {
+    format!("{}\n{}", include_str!("./js/native.js"), GENERATED_JS,)
+}
+
 pub const SLEDGEHAMMER_JS: &str = GENERATED_JS;
 
 /// Extensions to the interpreter that are specific to the web platform.
@@ -55,7 +59,7 @@ mod js {
         "{this.stack.pop();}"
     }
     fn replace_with(id: u32, n: u16) {
-        "{const root = this.nodes[$id$]; this.els = this.stack.splice(this.stack.length-$n$); if (root.listening) { this.listeners.removeAllNonBubbling(root); } root.replaceWith(...this.els);}"
+        "{const root = this.nodes[$id$]; this.els = this.stack.splice(this.stack.length-$n$); if (root.listening) { this.removeAllNonBubblingListeners(root); } root.replaceWith(...this.els);}"
     }
     fn insert_after(id: u32, n: u16) {
         "{this.nodes[$id$].after(...this.stack.splice(this.stack.length-$n$));}"
@@ -64,7 +68,7 @@ mod js {
         "{this.nodes[$id$].before(...this.stack.splice(this.stack.length-$n$));}"
     }
     fn remove(id: u32) {
-        "{let node = this.nodes[$id$]; if (node !== undefined) { if (node.listening) { this.listeners.removeAllNonBubbling(node); } node.remove(); }}"
+        "{let node = this.nodes[$id$]; if (node !== undefined) { if (node.listening) { this.removeAllNonBubblingListeners(node); } node.remove(); }}"
     }
     fn create_raw_text(text: &str) {
         "{this.stack.push(document.createTextNode($text$));}"
@@ -76,10 +80,10 @@ mod js {
         "{let node = document.createElement('pre'); node.hidden = true; this.stack.push(node); this.nodes[$id$] = node;}"
     }
     fn new_event_listener(event_name: &str<u8, evt>, id: u32, bubbles: u8) {
-        r#"let node = this.nodes[id]; if(node.listening){node.listening += 1;}else{node.listening = 1;} node.setAttribute('data-dioxus-id', `\${id}`); this.listeners.create($event_name$, node, $bubbles$);"#
+        r#"let node = this.nodes[id]; if(node.listening){node.listening += 1;}else{node.listening = 1;} node.setAttribute('data-dioxus-id', `\${id}`); this.createListener($event_name$, node, $bubbles$);"#
     }
     fn remove_event_listener(event_name: &str<u8, evt>, id: u32, bubbles: u8) {
-        "{let node = this.nodes[$id$]; node.listening -= 1; node.removeAttribute('data-dioxus-id'); this.listeners.remove(node, $event_name$, $bubbles$);}"
+        "{let node = this.nodes[$id$]; node.listening -= 1; node.removeAttribute('data-dioxus-id'); this.removeListener(node, $event_name$, $bubbles$);}"
     }
     fn set_text(id: u32, text: &str) {
         "{this.nodes[$id$].textContent = $text$;}"
@@ -173,13 +177,13 @@ mod js {
     fn foreign_event_listener(event: &str<u8, evt>, id: u32, bubbles: u8) {
         r#"
     bubbles = bubbles == 1;
-    let node = this.nodes[id];
-    if(node.listening){
-        node.listening += 1;
+    let this_node = this.nodes[id];
+    if(this_node.listening){
+        this_node.listening += 1;
     } else {
-        node.listening = 1;
+        this_node.listening = 1;
     }
-    node.setAttribute('data-dioxus-id', `\${id}`);
+    this_node.setAttribute('data-dioxus-id', `\${id}`);
     const event_name = $event$;
 
     // if this is a mounted listener, we send the event immediately
@@ -193,7 +197,7 @@ mod js {
             })
         );
     } else {
-        this.listeners.create(event_name, node, bubbles, (event) => {
+        this.createListener(event_name, this_node, bubbles, (event) => {
             this.handler(event, event_name, bubbles);
         });
     }"#

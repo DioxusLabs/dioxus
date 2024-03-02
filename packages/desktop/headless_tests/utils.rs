@@ -30,23 +30,19 @@ pub fn mock_event(id: &'static str, value: &'static str) {
 }
 
 pub fn mock_event_with_extra(id: &'static str, value: &'static str, extra: &'static str) {
-    EXPECTED_EVENTS.with_mut(|x| *x += 1);
-
     use_hook(move || {
+        EXPECTED_EVENTS.with_mut(|x| *x += 1);
+
         spawn(async move {
             tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
 
             let js = format!(
                 r#"
-                //console.log("ran");
-                // Dispatch a synthetic event
-                let event = {};
-                let element = document.getElementById('{}');
-                console.log(element, event);
-                {}
+                let event = {value};
+                let element = document.getElementById('{id}');
+                {extra}
                 element.dispatchEvent(event);
-                "#,
-                value, id, extra
+                "#
             );
 
             eval(&js).await.unwrap();

@@ -24,6 +24,7 @@ pub mod minimal_bindings {
         /// Set the attribute of the node
         pub fn setAttributeInner(node: JsValue, name: &str, value: JsValue, ns: Option<&str>);
 
+        /// Roll up all the values from the node into a JS object that we can deserialize
         pub fn collectFormValues(node: JsValue) -> JsValue;
     }
 }

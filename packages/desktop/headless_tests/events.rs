@@ -20,6 +20,10 @@ fn app() -> Element {
     let received = RECEIVED_EVENTS();
     let expected = utils::EXPECTED_EVENTS();
 
+    use_effect(move || {
+        println!("expecting {} events", utils::EXPECTED_EVENTS());
+    });
+
     if expected != 0 && received == expected {
         println!("all events recieved");
         desktop_context.close();
@@ -41,11 +45,15 @@ fn app() -> Element {
             test_focus_in_div {}
             test_focus_out_div {}
             test_form_input {}
+            test_form_submit {}
+            test_select_multiple_options {}
         }
     }
 }
 
 fn test_mounted() -> Element {
+    use_hook(|| utils::EXPECTED_EVENTS.with_mut(|x| *x += 1));
+
     rsx! {
         div {
             width: "100px",
@@ -433,20 +441,24 @@ fn test_form_input() -> Element {
 
     utils::mock_event_with_extra(
         "form-username",
-        r#"new Event("input", {
-        bubbles: true,
-        cancelable: true,
-        composed: true,
-        })"#,
+        r#"new Event("input", { bubbles: true, cancelable: true, composed: true })"#,
         r#"element.value = "hello";"#,
     );
 
-    let set_values = move |ev: FormEvent| {
+    let set_username = move |ev: FormEvent| {
         values.set(ev.values());
-        eprintln!("values: {:?}", values);
+
+        // The value of the input should match
+        assert_eq!(ev.value(), "hello");
+
+        // And then the value the form gives us should also match
         values.with_mut(|x| {
-            assert_eq!(x.get("username").unwrap().deref(), &["hello"]);
+            assert_eq!(x.get("username").unwrap().deref(), "hello");
+            assert_eq!(x.get("full-name").unwrap().deref(), "lorem");
+            assert_eq!(x.get("password").unwrap().deref(), "ipsum");
+            assert_eq!(x.get("color").unwrap().deref(), "red");
         });
+        RECEIVED_EVENTS.with_mut(|x| *x += 1);
     };
 
     rsx! {
@@ -454,19 +466,90 @@ fn test_form_input() -> Element {
             h1 { "Form" }
             form {
                 id: "form",
-                oninput: move |ev| values.set(ev.values()),
+                oninput: move |ev| {
+                    values.set(ev.values());
+                },
+                onsubmit: move |ev| {
+                    println!("{:?}", ev);
+                },
                 input {
                     r#type: "text",
                     name: "username",
                     id: "form-username",
-                    oninput: set_values,
+                    oninput: set_username,
                 }
-                input { r#type: "text", name: "full-name" }
-                input { r#type: "password", name: "password" }
-                input { r#type: "radio", name: "color", value: "red" }
+                input { r#type: "text", name: "full-name", value: "lorem" }
+                input { r#type: "password", name: "password", value: "ipsum" }
+                input { r#type: "radio", name: "color", value: "red", checked: true }
                 input { r#type: "radio", name: "color", value: "blue" }
                 button { r#type: "submit", value: "Submit", "Submit the form" }
             }
+        }
+    }
+}
+
+fn test_form_submit() -> Element {
+    let mut values = use_signal(|| HashMap::new());
+
+    utils::mock_event_with_extra(
+        "form-submitter",
+        r#"new Event("submit", { bubbles: true, cancelable: true, composed: true })"#,
+        r#"element.submit();"#,
+    );
+
+    let set_values = move |ev: FormEvent| {
+        values.set(ev.values());
+        values.with_mut(|x| {
+            assert_eq!(x.get("username").unwrap().deref(), "goodbye");
+            assert_eq!(x.get("full-name").unwrap().deref(), "lorem");
+            assert_eq!(x.get("password").unwrap().deref(), "ipsum");
+            assert_eq!(x.get("color").unwrap().deref(), "red");
+        });
+        RECEIVED_EVENTS.with_mut(|x| *x += 1);
+    };
+
+    rsx! {
+        div {
+            h1 { "Form" }
+            form {
+                id: "form-submitter",
+                onsubmit: set_values,
+                input { r#type: "text", name: "username", id: "username", value: "goodbye" }
+                input { r#type: "text", name: "full-name", value: "lorem" }
+                input { r#type: "password", name: "password", value: "ipsum" }
+                input { r#type: "radio", name: "color", value: "red", checked: true }
+                input { r#type: "radio", name: "color", value: "blue" }
+                button { r#type: "submit", value: "Submit", "Submit the form" }
+            }
+        }
+    }
+}
+
+fn test_select_multiple_options() -> Element {
+    utils::mock_event_with_extra(
+        "select-many",
+        r#"new Event("input", { bubbles: true, cancelable: true, composed: true })"#,
+        r#"
+            document.getElementById('usa').selected = true;
+            document.getElementById('canada').selected = true;
+            document.getElementById('mexico').selected = false;
+        "#,
+    );
+
+    rsx! {
+        select {
+            id: "select-many",
+            name: "country",
+            multiple: true,
+            oninput: move |ev| {
+                let values = ev.value();
+                let values = values.split(',').collect::<Vec<_>>();
+                assert_eq!(values, vec!["usa", "canada"]);
+                RECEIVED_EVENTS.with_mut(|x| *x += 1);
+            },
+            option { id: "usa", value: "usa",  "USA" }
+            option { id: "canada", value: "canada",  "Canada" }
+            option { id: "mexico", value: "mexico", selected: true,  "Mexico" }
         }
     }
 }

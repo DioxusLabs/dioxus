@@ -6,8 +6,7 @@ use std::{
 
 fn main() {
     // If any TS changes, re-run the build script
-    println!("cargo:rerun-if-changed=src/ts/*.ts");
-    println!("cargo:rerun-if-changed=*.json");
+    println!("cargo:rerun-if-changed=src/ts/*.ts,*.json");
 
     // Compute the hash of the ts files
     let hash = hash_dir("src/ts");
@@ -21,8 +20,8 @@ fn main() {
 
     // Otherwise, generate the bindings and write the new hash to disk
     // Generate the bindings for both native and web
-    gen_bindings("native");
-    gen_bindings("web");
+    gen_bindings("interpreter_native", "native");
+    gen_bindings("interpreter_web", "web");
 
     std::fs::write("src/js/hash.txt", hash.to_string()).unwrap();
 }
@@ -51,18 +50,21 @@ fn hash_dir(dir: &str) -> u64 {
 // we need to hash each of the .ts files and add that hash to the JS files
 // if the hashes don't match, we need to fail the build
 // that way we also don't need
-fn gen_bindings(name: &str) {
+fn gen_bindings(input_name: &str, output_name: &str) {
     // If the file is generated, and the hash is different, we need to generate it
-    let status = Command::new("tsc")
-        .arg("--p")
-        .arg(format!("tsconfig.{name}.json"))
+    let status = Command::new("bun")
+        .arg("build")
+        .arg(format!("src/ts/{input_name}.ts"))
+        .arg("--outfile")
+        .arg(format!("src/js/{output_name}.js"))
+        // .arg("--minify")
         .status()
         .unwrap();
 
     if !status.success() {
         panic!(
             "Failed to generate bindings for {}. Make sure you have tsc installed",
-            name
+            input_name
         );
     }
 }

@@ -3,12 +3,11 @@
 // This file lives on the renderer, not the host. It's basically a polyfill over functionality that the host can't
 // provide since it doesn't have access to the dom.
 
-import { retriveValues } from "./form";
-import { Interpreter } from "./interpreter_core";
+import { Interpreter, NodeId } from "./interpreter_core";
 import { SerializedEvent, serializeEvent } from "./serialize";
+import { setAttributeInner } from "./set_attribute";
 
-
-export class NativeInterpreter extends Interpreter {
+export class PlatformInterpreter extends Interpreter {
   intercept_link_redirects: boolean;
   ipc: any;
 
@@ -21,6 +20,23 @@ export class NativeInterpreter extends Interpreter {
     this.intercept_link_redirects = true;
     this.liveview = false;
 
+    // attach an event listener on the body that prevents file drops from navigating
+    // this is because the browser will try to navigate to the file if it's dropped on the window
+    window.addEventListener("dragover", function (e) {
+      // check which element is our target
+      if (e.target instanceof Element && e.target.tagName != "INPUT") {
+        e.preventDefault();
+      }
+    }, false);
+
+    window.addEventListener("drop", function (e) {
+      // check which element is our target
+      if (e.target instanceof Element && e.target.tagName != "INPUT") {
+        e.preventDefault();
+      }
+    }, false);
+
+
     // @ts-ignore - wry gives us this
     this.ipc = window.ipc;
   }
@@ -29,14 +45,18 @@ export class NativeInterpreter extends Interpreter {
     return JSON.stringify({ method, params });
   }
 
-  scrollTo(id: number, behavior: ScrollBehavior) {
+  setAttributeInner(node: HTMLElement, field: string, value: string, ns: string) {
+    setAttributeInner(node, field, value, ns);
+  }
+
+  scrollTo(id: NodeId, behavior: ScrollBehavior) {
     const node = this.nodes[id];
     if (node instanceof HTMLElement) {
       node.scrollIntoView({ behavior });
     }
   }
 
-  getClientRect(id: number) {
+  getClientRect(id: NodeId): { type: string; origin: number[]; size: number[]; } | undefined {
     const node = this.nodes[id];
     if (node instanceof HTMLElement) {
       const rect = node.getBoundingClientRect();
@@ -48,7 +68,7 @@ export class NativeInterpreter extends Interpreter {
     }
   }
 
-  setFocus(id: number, focus: boolean) {
+  setFocus(id: NodeId, focus: boolean) {
     const node = this.nodes[id];
 
     if (node instanceof HTMLElement) {
@@ -74,7 +94,7 @@ export class NativeInterpreter extends Interpreter {
     return node;
   }
 
-  AppendChildren(id: number, many: number) {
+  AppendChildren(id: NodeId, many: number) {
     const root = this.nodes[id];
     const els = this.stack.splice(this.stack.length - many);
 
@@ -86,12 +106,7 @@ export class NativeInterpreter extends Interpreter {
   handleEvent(event: Event, name: string, bubbles: boolean) {
     const target = event.target!;
     const realId = targetId(target)!;
-    const contents = serializeEvent(event);
-
-    // Attempt to retrive the values from the form and inputs
-    if (target instanceof HTMLElement) {
-      contents.values = retriveValues(event, target);
-    }
+    const contents = serializeEvent(event, target);
 
     // Handle the event on the virtualdom and then preventDefault if it also preventsDefault
     // Some listeners
@@ -119,21 +134,26 @@ export class NativeInterpreter extends Interpreter {
       }
     } else {
 
-      // Run the event handler on the virtualdom
-      // capture/prevent default of the event if the virtualdom wants to
-      const res = handleVirtualdomEventSync(JSON.stringify(body));
+      const message = this.serializeIpcMessage("user_event", body);
+      this.ipc.postMessage(message);
 
-      if (res.preventDefault) {
-        event.preventDefault();
-      }
+      // // Run the event handler on the virtualdom
+      // // capture/prevent default of the event if the virtualdom wants to
+      // const res = handleVirtualdomEventSync(JSON.stringify(body));
 
-      if (res.stopPropagation) {
-        event.stopPropagation();
-      }
+      // if (res.preventDefault) {
+      //   event.preventDefault();
+      // }
+
+      // if (res.stopPropagation) {
+      //   event.stopPropagation();
+      // }
     }
   }
 
-  async readFiles(target: HTMLInputElement, contents: SerializedEvent, bubbles: boolean, realId: number, name: string) {
+  //  A liveview only function
+  // Desktop will intercept the event before it hits this
+  async readFiles(target: HTMLInputElement, contents: SerializedEvent, bubbles: boolean, realId: NodeId, name: string) {
     let files = target.files!;
     let file_contents: { [name: string]: number[] } = {};
 
@@ -251,7 +271,7 @@ function handleVirtualdomEventSync(contents: string): EventSyncResult {
   return JSON.parse(xhr.responseText);
 }
 
-function targetId(target: EventTarget): number | null {
+function targetId(target: EventTarget): NodeId | null {
   // Ensure that the target is a node, sometimes it's nota
   if (!(target instanceof Node)) {
     return null;

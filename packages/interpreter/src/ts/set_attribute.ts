@@ -17,37 +17,36 @@ export function setAttributeInner(node: HTMLElement, field: string, value: strin
   // A few attributes are need to be set with either boolean values or require some sort of translation
   switch (field) {
     case "value":
-      if (value !== node.getAttribute("value")) {
-        node.setAttribute(field, value);
+      // @ts-ignore
+      if (node.value !== value) {
+        // @ts-ignore
+        node.value = value;
       }
       break;
 
     case "initial_value":
-      node.setAttribute("defaultValue", value);
+      // @ts-ignore
+      node.defaultValue = value;
       break;
 
     case "checked":
-      if (node instanceof HTMLInputElement) {
-        node.checked = truthy(value);
-      }
+      // @ts-ignore
+      node.checked = truthy(value);
       break;
 
     case "initial_checked":
-      if (node instanceof HTMLInputElement) {
-        node.defaultChecked = truthy(value);
-      }
+      // @ts-ignore
+      node.defaultChecked = truthy(value);
       break;
 
     case "selected":
-      if (node instanceof HTMLOptionElement) {
-        node.selected = truthy(value);
-      }
+      // @ts-ignore
+      node.selected = truthy(value);
       break;
 
     case "initial_selected":
-      if (node instanceof HTMLOptionElement) {
-        node.defaultSelected = truthy(value);
-      }
+      // @ts-ignore
+      node.defaultSelected = truthy(value);
       break;
 
     case "dangerous_inner_html":

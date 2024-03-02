@@ -1,6 +1,8 @@
 // The root interpreter class that holds state about the mapping between DOM and VirtualDom
 // This always lives in the JS side of things, and is extended by the native and web interpreters
 
+export type NodeId = number;
+
 export class Interpreter {
   // non bubbling events listen at the element the listener was created at
   global: {
@@ -22,12 +24,18 @@ export class Interpreter {
   };
 
   constructor(root: HTMLElement, handler: EventListener) {
-    this.root = root;
-    this.nodes = [root];
-    this.stack = [root];
+    this.handler = handler;
+    this.initialize(root);
+  }
+
+  initialize(root: HTMLElement) {
     this.global = {};
     this.local = {};
-    this.handler = handler;
+    this.root = root;
+
+    this.nodes = [root];
+    this.stack = [root];
+    this.templates = {};
   }
 
   createListener(event_name: string, element: HTMLElement, bubbles: boolean) {
@@ -77,11 +85,11 @@ export class Interpreter {
     delete this.local[id];
   }
 
-  getNode(id: number): Node {
+  getNode(id: NodeId): Node {
     return this.nodes[id];
   }
 
-  appendChildren(id: number, many: number) {
+  appendChildren(id: NodeId, many: number) {
     const root = this.nodes[id];
     const els = this.stack.splice(this.stack.length - many);
     for (let k = 0; k < many; k++) {

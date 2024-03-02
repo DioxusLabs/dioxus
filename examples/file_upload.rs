@@ -43,10 +43,8 @@ fn app() -> Element {
             checked: enable_directory_upload,
             oninput: move |evt| enable_directory_upload.set(evt.checked()),
         },
-        label {
-            r#for: "directory-upload",
-            "Enable directory upload"
-        }
+
+        label { r#for: "directory-upload", "Enable directory upload" }
 
         input {
             r#type: "file",
@@ -60,7 +58,6 @@ fn app() -> Element {
             // cheating with a little bit of JS...
             "ondragover": "this.style.backgroundColor='#88FF88';",
             "ondragleave": "this.style.backgroundColor='#FFFFFF';",
-
             id: "drop-zone",
             prevent_default: "ondrop dragover dragenter",
             ondrop: handle_file_drop,

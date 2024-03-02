@@ -6,7 +6,7 @@
 
 import { Interpreter } from "./interpreter_core";
 
-export class WebInterpreter extends Interpreter {
+export class PlatformInterpreter extends Interpreter {
   m: any;
 
   constructor(root: HTMLElement, handler: EventListener) {

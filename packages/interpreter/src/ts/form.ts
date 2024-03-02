@@ -1,53 +1,58 @@
 // Consistently deserialize forms and form elements for use across web/desktop/mobile
 
-type FormValues = { [key: string]: FormDataEntryValue[] };
+type FormValues = {
+  valid?: boolean;
+  values: { [key: string]: FormDataEntryValue };
+}
 
 export function retriveValues(event: Event, target: HTMLElement): FormValues {
-  const contents: FormValues = {};
+  let contents: FormValues = {
+    values: {}
+  };
 
-  if (target instanceof HTMLFormElement && (event.type === "submit" || event.type === "input")) {
-    retrieveFormValues(target, contents);
-  }
+  // If there's a form...
+  let form = target.closest("form");
 
-  if (target instanceof HTMLSelectElement && (event.type === "input" || event.type === "change")) {
-    retriveInputsValues(target, contents);
+  // If the target is an input, and the event is input or change, we want to get the value without going through the form
+  if (form) {
+    if (
+      event.type === "input"
+      || event.type === "change"
+      || event.type === "submit"
+      || event.type === "reset"
+      || event.type === "click"
+    ) {
+      contents = retrieveFormValues(form);
+    }
   }
 
   return contents;
 }
 
-export function retrieveFormValues(form: HTMLFormElement, contents: FormValues) {
+// todo: maybe encode spaces or something?
+// We encode select multiple as a comma separated list which breaks... when there's commas in the values
+export function retrieveFormValues(form: HTMLFormElement): FormValues {
   const formData = new FormData(form);
-
-  for (let name in formData.keys()) {
-    let element = form.elements.namedItem(name);
-
-    // todo: this is going to be a problem for select-multiple?
-    if (!(element instanceof HTMLInputElement)) {
-      continue;
+  const contents: { [key: string]: FormDataEntryValue } = {};
+  formData.forEach((value, key) => {
+    if (contents[key]) {
+      contents[key] += "," + value;
+    } else {
+      contents[key] = value;
     }
-
-    switch (element.type) {
-      case "select-multiple":
-        contents[name] = formData.getAll(name);
-        break;
-
-      // By default, it's just a single value
-      default:
-        contents[name] = [formData.get(name)];
-        break;
-    }
-  }
+  });
+  return {
+    valid: form.checkValidity(),
+    values: contents
+  };
 }
 
-export function retriveInputsValues(target: HTMLSelectElement, contents: FormValues,) {
-  const selectData = target.options;
-  contents["options"] = [];
-
-  for (let i = 0; i < selectData.length; i++) {
-    let option = selectData[i];
-    if (option.selected) {
-      contents["options"].push(option.value.toString());
-    }
+export function retriveSelectValue(target: HTMLSelectElement): string[] {
+  // there might be multiple...
+  let options = target.selectedOptions;
+  let values = [];
+  for (let i = 0; i < options.length; i++) {
+    values.push(options[i].value);
   }
+  return values;
 }

@@ -181,7 +181,8 @@ impl WriteMutations for MutationState {
     }
 
     fn create_event_listener(&mut self, name: &'static str, id: dioxus_core::ElementId) {
-        // note that we use the foreign event listener here
+        // note that we use the foreign event listener here instead of the native one
+        // the native method assumes we have direct access to the dom, which we don't.
         self.channel
             .foreign_event_listener(name, id.0 as u32, event_bubbles(name) as u8);
     }
