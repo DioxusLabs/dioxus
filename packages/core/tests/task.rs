@@ -105,9 +105,9 @@ async fn flushing() {
         use_hook(|| {
             spawn(async move {
                 for _ in 0..10 {
+                    flush_sync().await;
                     BROADCAST.with(|b| b.1.resubscribe()).recv().await.unwrap();
                     println!("Task 1 recved");
-                    flush_sync().await;
                     println!("Task 1");
                     SEQUENCE.with(|s| s.borrow_mut().push(1));
                 }
@@ -117,9 +117,9 @@ async fn flushing() {
         use_hook(|| {
             spawn(async move {
                 for _ in 0..10 {
+                    flush_sync().await;
                     BROADCAST.with(|b| b.1.resubscribe()).recv().await.unwrap();
                     println!("Task 2 recved");
-                    flush_sync().await;
                     println!("Task 2");
                     SEQUENCE.with(|s| s.borrow_mut().push(2));
                 }
@@ -135,15 +135,15 @@ async fn flushing() {
 
     let fut = async {
         // Trigger the flush by waiting for work
-        for _ in 0..30 {
+        for i in 0..30 {
             BROADCAST.with(|b| b.0.send(()).unwrap());
-            dom.mark_dirty(ScopeId(0));
             tokio::select! {
                 _ = dom.wait_for_work() => {}
                 _ = tokio::time::sleep(Duration::from_millis(10)) => {}
             }
+            dom.mark_dirty(ScopeId(0));
             dom.render_immediate(&mut dioxus_core::NoOpMutations);
-            println!("Flushed");
+            println!("Flushed {}", i);
         }
     };
 
