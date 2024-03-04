@@ -21,6 +21,7 @@ use futures_util::StreamExt;
 use rustc_hash::{FxHashMap, FxHashSet};
 use slab::Slab;
 use std::{any::Any, collections::BTreeSet, rc::Rc};
+use tracing::instrument;
 
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
@@ -305,6 +306,7 @@ impl VirtualDom {
     /// let mut dom = VirtualDom::new_from_root(VComponent::new(Example, SomeProps { name: "jane" }, "Example"));
     /// let mutations = dom.rebuild();
     /// ```
+    #[instrument(skip(root), level = "trace", name = "VirtualDom::new")]
     pub(crate) fn new_with_component(root: impl AnyProps + 'static) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
 
@@ -347,6 +349,7 @@ impl VirtualDom {
     }
 
     /// Run a closure inside the dioxus runtime
+    #[instrument(skip(self, f), level = "trace", name = "VirtualDom::in_runtime")]
     pub fn in_runtime<O>(&self, f: impl FnOnce() -> O) -> O {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
         f()
@@ -375,7 +378,7 @@ impl VirtualDom {
             return;
         };
 
-        tracing::trace!("Marking scope {:?} as dirty", id);
+        tracing::event!(tracing::Level::TRACE, "Marking scope {:?} as dirty", id);
         let order = ScopeOrder::new(scope.height(), id);
         self.dirty_scopes.queue_scope(order);
     }
@@ -388,6 +391,14 @@ impl VirtualDom {
         let Some(scope) = self.runtime.get_state(scope) else {
             return;
         };
+
+        tracing::event!(
+            tracing::Level::TRACE,
+            "Marking task {:?} (spawned in {:?}) as dirty",
+            task,
+            scope.id
+        );
+
         let order = ScopeOrder::new(scope.height(), scope.id);
         self.dirty_scopes.queue_task(task, order);
     }
@@ -401,6 +412,7 @@ impl VirtualDom {
     /// It is up to the listeners themselves to mark nodes as dirty.
     ///
     /// If you have multiple events, you can call this method multiple times before calling "render_with_deadline"
+    #[instrument(skip(self), level = "trace", name = "VirtualDom::handle_event")]
     pub fn handle_event(
         &mut self,
         name: &str,
@@ -434,12 +446,14 @@ impl VirtualDom {
     /// ```rust, ignore
     /// let dom = VirtualDom::new(app);
     /// ```
+    #[instrument(skip(self), level = "trace", name = "VirtualDom::wait_for_work")]
     pub async fn wait_for_work(&mut self) {
         // And then poll the futures
         self.poll_tasks().await;
     }
 
     /// Poll the scheduler for any work
+    #[instrument(skip(self), level = "trace", name = "VirtualDom::poll_tasks")]
     async fn poll_tasks(&mut self) {
         loop {
             // Process all events - Scopes are marked dirty, etc
@@ -478,6 +492,7 @@ impl VirtualDom {
     }
 
     /// Process all events in the queue until there are no more left
+    #[instrument(skip(self), level = "trace", name = "VirtualDom::process_events")]
     pub fn process_events(&mut self) {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
         self.queue_events();
@@ -513,7 +528,8 @@ impl VirtualDom {
     ///
     /// The caller must ensure that the template references the same dynamic attributes and nodes as the original template.
     ///
-    /// This will only replace the the parent template, not any nested templates.
+    /// This will only replace the parent template, not any nested templates.
+    #[instrument(skip(self), level = "trace", name = "VirtualDom::replace_template")]
     pub fn replace_template(&mut self, template: Template) {
         self.register_template_first_byte_index(template);
         // iterating a slab is very inefficient, but this is a rare operation that will only happen during development so it's fine
@@ -552,7 +568,7 @@ impl VirtualDom {
     /// The mutations item expects the RealDom's stack to be the root of the application.
     ///
     /// Tasks will not be polled with this method, nor will any events be processed from the event queue. Instead, the
-    /// root component will be ran once and then diffed. All updates will flow out as mutations.
+    /// root component will be run once and then diffed. All updates will flow out as mutations.
     ///
     /// All state stored in components will be completely wiped away.
     ///
@@ -567,6 +583,7 @@ impl VirtualDom {
     ///
     /// apply_edits(edits);
     /// ```
+    #[instrument(skip(self, to), level = "trace", name = "VirtualDom::rebuild")]
     pub fn rebuild(&mut self, to: &mut impl WriteMutations) {
         self.flush_templates(to);
         let _runtime = RuntimeGuard::new(self.runtime.clone());
@@ -580,6 +597,7 @@ impl VirtualDom {
 
     /// Render whatever the VirtualDom has ready as fast as possible without requiring an executor to progress
     /// suspended subtrees.
+    #[instrument(skip(self, to), level = "trace", name = "VirtualDom::render_immediate")]
     pub fn render_immediate(&mut self, to: &mut impl WriteMutations) {
         self.flush_templates(to);
 
@@ -627,7 +645,8 @@ impl VirtualDom {
     /// The mutations will be thrown out, so it's best to use this method for things like SSR that have async content
     ///
     /// We don't call "flush_sync" here since there's no sync work to be done. Futures will be progressed like usual,
-    /// however any futures wating on flush_sync will remain pending
+    /// however any futures waiting on flush_sync will remain pending
+    #[instrument(skip(self), level = "trace", name = "VirtualDom::wait_for_suspense")]
     pub async fn wait_for_suspense(&mut self) {
         loop {
             if self.suspended_scopes.is_empty() {
@@ -648,6 +667,7 @@ impl VirtualDom {
     }
 
     /// Flush any queued template changes
+    #[instrument(skip(self, to), level = "trace", name = "VirtualDom::flush_templates")]
     fn flush_templates(&mut self, to: &mut impl WriteMutations) {
         for template in self.queued_templates.drain(..) {
             to.register_template(template);
@@ -675,6 +695,11 @@ impl VirtualDom {
     | | |       <-- no, broke early
     |           <-- no, broke early
     */
+    #[instrument(
+        skip(self, uievent),
+        level = "trace",
+        name = "VirtualDom::handle_bubbling_event"
+    )]
     fn handle_bubbling_event(
         &mut self,
         mut parent: Option<ElementRef>,
@@ -713,6 +738,11 @@ impl VirtualDom {
 
             // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
             // We check the bubble state between each call to see if the event has been stopped from bubbling
+            tracing::event!(
+                tracing::Level::TRACE,
+                "Calling {} listeners",
+                listeners.len()
+            );
             for listener in listeners.into_iter().rev() {
                 if let AttributeValue::Listener(listener) = listener {
                     self.runtime.rendering.set(false);
@@ -731,6 +761,11 @@ impl VirtualDom {
     }
 
     /// Call an event listener in the simplest way possible without bubbling upwards
+    #[instrument(
+        skip(self, uievent),
+        level = "trace",
+        name = "VirtualDom::handle_non_bubbling_event"
+    )]
     fn handle_non_bubbling_event(&mut self, node: ElementRef, name: &str, uievent: Event<dyn Any>) {
         let el_ref = &self.mounts[node.mount.0].node;
         let node_template = el_ref.template.get();

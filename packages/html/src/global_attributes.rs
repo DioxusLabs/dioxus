@@ -2285,8 +2285,8 @@ trait_methods! {
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/transform-origin>
     transform_origin: "transform-origin";
 
-    /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/_type>
-    r#type: "_type";
+    /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/type>
+    r#type: "type";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/u1>
     u1: "u1";

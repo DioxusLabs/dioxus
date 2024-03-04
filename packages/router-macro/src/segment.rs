@@ -309,6 +309,7 @@ pub(crate) fn create_error_type(
 
     quote! {
         #[allow(non_camel_case_types)]
+        #[allow(clippy::derive_partial_eq_without_eq)]
         #[derive(Debug, PartialEq)]
         pub enum #error_name {
             ExtraSegments(String),

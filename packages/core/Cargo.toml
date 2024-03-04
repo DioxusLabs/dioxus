@@ -20,9 +20,11 @@ slab = { workspace = true }
 futures-channel = { workspace = true }
 tracing = { workspace = true }
 serde = { version = "1", features = ["derive"], optional = true }
+tracing-subscriber = "0.3.18"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
+tracing-fluent-assertions = "0.3.0"
 dioxus = { workspace = true }
 pretty_assertions = "1.3.0"
 rand = "0.8.5"

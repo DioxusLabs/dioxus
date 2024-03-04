@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-cli-config"
-version = "0.4.1"
+version = { workspace = true }
 authors = ["Jonathan Kelley"]
 edition = "2021"
 description = "Configuration for the Dioxus CLI"

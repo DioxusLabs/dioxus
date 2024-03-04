@@ -1,12 +1,6 @@
-class InterpreterConfig {
-  constructor(intercept_link_redirects) {
-    this.intercept_link_redirects = intercept_link_redirects;
-  }
-}
-
 // this handler is only provided on the desktop and liveview implementations since this
 // method is not used by the web implementation
-async function handler(event, name, bubbles, config) {
+this.handler = async function (event, name, bubbles) {
   let target = event.target;
   if (target != null) {
     let preventDefaultRequests = null;
@@ -17,7 +11,7 @@ async function handler(event, name, bubbles, config) {
 
     if (event.type === "click") {
       // todo call prevent default if it's the right type of event
-      if (config.intercept_link_redirects) {
+      if (intercept_link_redirects) {
         let a_element = target.closest("a");
         if (a_element != null) {
           event.preventDefault();
@@ -35,7 +29,7 @@ async function handler(event, name, bubbles, config) {
             const href = a_element.getAttribute("href");
             if (href !== "" && href !== null && href !== undefined) {
               window.ipc.postMessage(
-                window.interpreter.serializeIpcMessage("browser_open", { href })
+                this.serializeIpcMessage("browser_open", { href })
               );
             }
           }
@@ -142,7 +136,7 @@ async function handler(event, name, bubbles, config) {
       return;
     }
     window.ipc.postMessage(
-      window.interpreter.serializeIpcMessage("user_event", {
+      this.serializeIpcMessage("user_event", {
         name: name,
         element: parseInt(realId),
         data: contents,
@@ -223,43 +217,40 @@ class ListenerMap {
     delete this.local[id];
   }
 }
-function LoadChild(array) {
+this.LoadChild = function (array) {
   // iterate through each number and get that child
-  node = stack[stack.length - 1];
+  let node = this.stack[this.stack.length - 1];
 
   for (let i = 0; i < array.length; i++) {
-    end = array[i];
-    for (node = node.firstChild; end > 0; end--) {
+    this.end = array[i];
+    for (node = node.firstChild; this.end > 0; this.end--) {
       node = node.nextSibling;
     }
   }
   return node;
 }
-const listeners = new ListenerMap();
-let nodes = [];
-let stack = [];
-let root;
-const templates = {};
-let node, els, end, k;
+this.listeners = new ListenerMap();
+this.nodes = [];
+this.stack = [];
+this.templates = {};
+this.end = null;
 
-function AppendChildren(id, many) {
-  root = nodes[id];
-  els = stack.splice(stack.length - many);
-  for (k = 0; k < many; k++) {
+this.AppendChildren = function (id, many) {
+  let root = this.nodes[id];
+  let els = this.stack.splice(this.stack.length - many);
+  for (let k = 0; k < many; k++) {
     root.appendChild(els[k]);
   }
 }
 
-window.interpreter = {}
-
-window.interpreter.initialize = function (root) {
-  nodes = [root];
-  stack = [root];
-  listeners.root = root;
+this.initialize = function (root) {
+  this.nodes = [root];
+  this.stack = [root];
+  this.listeners.root = root;
 }
 
-window.interpreter.getClientRect = function (id) {
-  const node = nodes[id];
+this.getClientRect = function (id) {
+  const node = this.nodes[id];
   if (!node) {
     return;
   }
@@ -271,8 +262,8 @@ window.interpreter.getClientRect = function (id) {
   };
 }
 
-window.interpreter.scrollTo = function (id, behavior) {
-  const node = nodes[id];
+this.scrollTo = function (id, behavior) {
+  const node = this.nodes[id];
   if (!node) {
     return false;
   }
@@ -283,8 +274,8 @@ window.interpreter.scrollTo = function (id, behavior) {
 }
 
 /// Set the focus on the element
-window.interpreter.setFocus = function (id, focus) {
-  const node = nodes[id];
+this.setFocus = function (id, focus) {
+  const node = this.nodes[id];
   if (!node) {
     return false;
   }
@@ -579,7 +570,7 @@ async function serialize_event(event) {
     }
   }
 }
-window.interpreter.serializeIpcMessage = function (method, params = {}) {
+this.serializeIpcMessage = function (method, params = {}) {
   return JSON.stringify({ method, params });
 }
 
