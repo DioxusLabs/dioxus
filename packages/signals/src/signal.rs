@@ -30,17 +30,15 @@ use std::{
 /// }
 ///
 /// #[component]
-/// fn Child(state: Signal<u32>) -> Element {
-///     let state = *state;
-///
-///     use_future( |()| async move {
+/// fn Child(mut state: Signal<u32>) -> Element {
+///     use_future(move || async move {
 ///         // Because the signal is a Copy type, we can use it in an async block without cloning it.
-///         *state.write() += 1;
+///         state += 1;
 ///     });
 ///
 ///     rsx! {
 ///         button {
-///             onclick: move |_| *state.write() += 1,
+///             onclick: move |_| state += 1,
 ///             "{state}"
 ///         }
 ///     }

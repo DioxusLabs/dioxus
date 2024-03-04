@@ -93,7 +93,7 @@ fn current_owner<S: Storage<T>, T>() -> Owner<S> {
 }
 
 fn owner_in_scope<S: Storage<T>, T>(scope: ScopeId) -> Owner<S> {
-    match consume_context_from_scope(scope) {
+    match scope.has_context() {
         Some(rt) => rt,
         None => {
             let owner = S::owner();
