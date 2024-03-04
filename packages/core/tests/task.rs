@@ -84,7 +84,7 @@ async fn yield_now_works() {
     SEQUENCE.with(|s| assert_eq!(s.borrow().len(), 20));
 }
 
-/// Ensure that calling wait_for_flush waits for dioxus to finish its syncrhonous work
+/// Ensure that calling wait_for_flush waits for dioxus to finish its synchronous work
 #[tokio::test]
 async fn flushing() {
     thread_local! {
@@ -97,11 +97,8 @@ async fn flushing() {
             println!("App");
             SEQUENCE.with(|s| s.borrow_mut().push(0));
         }
-        use_hook(|| {
-            spawn(async move {
-                needs_update();
-            });
-        });
+
+        // The next two tasks mimic effects. They should only be run after the app has been rendered
         use_hook(|| {
             spawn(async move {
                 let mut channel = BROADCAST.with(|b| b.1.resubscribe());
