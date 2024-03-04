@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use crate::{
     any_props::AnyProps,
-    innerlude::{DirtyScopes, ElementRef, MountId, ScopeOrder, VComponent, WriteMutations},
+    innerlude::{ElementRef, MountId, ScopeOrder, VComponent, WriteMutations},
     nodes::RenderReturn,
     nodes::VNode,
     scopes::ScopeId,

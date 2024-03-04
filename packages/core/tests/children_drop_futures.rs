@@ -16,6 +16,7 @@ async fn child_futures_drop_first() {
         }
     }
 
+    #[component]
     fn Child() -> Element {
         // Spawn a task that will increment POLL_COUNT every 10 milliseconds
         // This should be dropped after the second time the parent is run

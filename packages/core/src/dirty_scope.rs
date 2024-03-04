@@ -16,8 +16,8 @@
 //!
 //! #[component]
 //! fn Child(vec: Signal<Vec<usize>>, idx: usize) -> Element {
-//!     use_hook(|| {
-//!         spawn(async {
+//!     use_hook(move || {
+//!         spawn(async move {
 //!             // If we let this task run after the child is dropped, it will panic.
 //!             println!("Task {}", vec.read()[idx]);
 //!         });
@@ -30,7 +30,6 @@
 use crate::ScopeId;
 use crate::Task;
 use std::borrow::Borrow;
-use std::cell::Cell;
 use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::hash::Hash;
@@ -83,7 +82,7 @@ impl DirtyScopes {
         match self.tasks.get(&order) {
             Some(scope) => scope.queue_task(task),
             None => {
-                let mut scope = DirtyTasks::from(order);
+                let scope = DirtyTasks::from(order);
                 scope.queue_task(task);
                 self.tasks.insert(scope);
             }
@@ -105,11 +104,6 @@ impl DirtyScopes {
         self.tasks.pop_first()
     }
 
-    /// Take the highest scope that needs to be rerendered
-    pub fn pop_scope(&mut self) -> Option<ScopeOrder> {
-        self.scopes.pop_first()
-    }
-
     /// Take any work from the highest scope. This may include rerunning the scope and/or running tasks
     pub fn pop_work(&mut self) -> Option<Work> {
         let dirty_scope = self.scopes.first();
@@ -121,7 +115,7 @@ impl DirtyScopes {
                     std::cmp::Ordering::Less => {
                         let scope = self.scopes.pop_first().unwrap();
                         Some(Work {
-                            scope: scope,
+                            scope,
                             rerun_scope: true,
                             tasks: Vec::new(),
                         })
@@ -138,22 +132,22 @@ impl DirtyScopes {
                         let scope = self.scopes.pop_first().unwrap();
                         let task = self.tasks.pop_first().unwrap();
                         Some(Work {
-                            scope: scope,
+                            scope,
                             rerun_scope: true,
                             tasks: task.tasks_queued.into_inner(),
                         })
                     }
                 }
             }
-            (Some(scope), None) => {
+            (Some(_), None) => {
                 let scope = self.scopes.pop_first().unwrap();
                 Some(Work {
-                    scope: scope,
+                    scope,
                     rerun_scope: true,
                     tasks: Vec::new(),
                 })
             }
-            (None, Some(task)) => {
+            (None, Some(_)) => {
                 let task = self.tasks.pop_first().unwrap();
                 Some(Work {
                     scope: task.order,

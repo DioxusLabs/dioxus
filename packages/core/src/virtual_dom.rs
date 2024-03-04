@@ -20,7 +20,7 @@ use crate::{
 use futures_util::StreamExt;
 use rustc_hash::{FxHashMap, FxHashSet};
 use slab::Slab;
-use std::{any::Any, collections::BTreeSet, rc::Rc};
+use std::{any::Any, rc::Rc};
 use tracing::instrument;
 
 /// A virtual node system that progresses user events and diffs UI trees.
@@ -468,7 +468,7 @@ impl VirtualDom {
             // Make sure we set the runtime since we're running user code
             let _runtime = RuntimeGuard::new(self.runtime.clone());
 
-            /// There isn't any more work we can do synchronously. Wait for any new work to be ready
+            // There isn't any more work we can do synchronously. Wait for any new work to be ready
             match self.rx.next().await.expect("channel should never close") {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
                 SchedulerMsg::TaskNotified(id) => {
