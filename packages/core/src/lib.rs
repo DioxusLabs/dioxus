@@ -14,13 +14,13 @@ mod global_context;
 mod mutations;
 mod nodes;
 mod properties;
+mod render_signal;
 mod runtime;
 mod scope_arena;
 mod scope_context;
 mod scopes;
 mod tasks;
 mod virtual_dom;
-mod render_signal;
 
 pub(crate) mod innerlude {
     pub(crate) use crate::any_props::*;

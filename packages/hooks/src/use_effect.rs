@@ -18,7 +18,7 @@ pub fn use_effect(mut callback: impl FnMut() + 'static) {
             loop {
                 // Run the effect
                 rc.run_in(&mut callback);
-                
+
                 // Wait for context to change
                 rc.changed().await;
 

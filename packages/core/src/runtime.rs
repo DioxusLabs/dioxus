@@ -1,9 +1,9 @@
 use crate::{
     innerlude::{LocalTask, SchedulerMsg},
+    render_signal::RenderSignal,
     scope_context::Scope,
     scopes::ScopeId,
     Task,
-    render_signal::RenderSignal
 };
 use std::{
     cell::{Cell, Ref, RefCell},

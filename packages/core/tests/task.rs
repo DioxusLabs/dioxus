@@ -94,14 +94,22 @@ async fn flushing() {
 
     fn app() -> Element {
         if generation() > 0 {
+            println!("App");
             SEQUENCE.with(|s| s.borrow_mut().push(0));
         }
         use_hook(|| {
             spawn(async move {
+                needs_update();
+            });
+        });
+        use_hook(|| {
+            spawn(async move {
                 for _ in 0..10 {
-                    flush_sync().await;
-                    SEQUENCE.with(|s| s.borrow_mut().push(1));
                     BROADCAST.with(|b| b.1.resubscribe()).recv().await.unwrap();
+                    println!("Task 1 recved");
+                    flush_sync().await;
+                    println!("Task 1");
+                    SEQUENCE.with(|s| s.borrow_mut().push(1));
                 }
             })
         });
@@ -109,9 +117,11 @@ async fn flushing() {
         use_hook(|| {
             spawn(async move {
                 for _ in 0..10 {
-                    flush_sync().await;
-                    SEQUENCE.with(|s| s.borrow_mut().push(2));
                     BROADCAST.with(|b| b.1.resubscribe()).recv().await.unwrap();
+                    println!("Task 2 recved");
+                    flush_sync().await;
+                    println!("Task 2");
+                    SEQUENCE.with(|s| s.borrow_mut().push(2));
                 }
             })
         });
@@ -126,16 +136,22 @@ async fn flushing() {
     let fut = async {
         // Trigger the flush by waiting for work
         for _ in 0..30 {
-            dom.mark_dirty(ScopeId(0));
             BROADCAST.with(|b| b.0.send(()).unwrap());
-            dom.wait_for_work().await;
+            dom.mark_dirty(ScopeId(0));
+            tokio::select! {
+                _ = dom.wait_for_work() => {}
+                _ = tokio::time::sleep(Duration::from_millis(10)) => {}
+            }
             dom.render_immediate(&mut dioxus_core::NoOpMutations);
+            println!("Flushed");
         }
     };
 
     tokio::select! {
         _ = fut => {}
-        _ = tokio::time::sleep(Duration::from_millis(500)) => {}
+        _ = tokio::time::sleep(Duration::from_millis(500)) => {
+            println!("Aborting due to timeout");
+        }
     };
 
     SEQUENCE.with(|s| {

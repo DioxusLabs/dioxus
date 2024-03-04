@@ -478,7 +478,6 @@ impl VirtualDom {
             match self.rx.next().await.expect("channel should never close") {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
                 SchedulerMsg::TaskNotified(id) => {
-                    // _ = self.runtime.handle_task_wakeup(id)
                     // Instead of running the task immediately, we insert it into the runtime's task queue.
                     // The task may be marked dirty at the same time as the scope that owns the task is dropped.
                     self.mark_task_dirty(id);
@@ -631,8 +630,8 @@ impl VirtualDom {
             }
         }
 
-        self.scopes_need_rerun = false;
         self.runtime.render_signal.send();
+        self.scopes_need_rerun = false;
     }
 
     /// [`Self::render_immediate`] to a vector of mutations for testing purposes

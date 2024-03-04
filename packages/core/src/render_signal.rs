@@ -1,10 +1,10 @@
-use std::rc::Rc;
-use std::task::Waker;
-use std::task::Poll;
-use std::pin::Pin;
-use std::future::Future;
-use std::task::Context;
 use std::cell::RefCell;
+use std::future::Future;
+use std::pin::Pin;
+use std::rc::Rc;
+use std::task::Context;
+use std::task::Poll;
+use std::task::Waker;
 
 /// A signal is a message that can be sent to all listening tasks at once
 #[derive(Default)]
@@ -26,15 +26,14 @@ impl RenderSignal {
     }
 
     /// Create a future that resolves when the signal is sent
-    pub fn subscribe(& self) -> RenderSignalFuture {
-        let inner =Rc::new(RefCell::new(RenderSignalFutureInner {
+    pub fn subscribe(&self) -> RenderSignalFuture {
+        let inner = Rc::new(RefCell::new(RenderSignalFutureInner {
             resolved: false,
             waker: None,
         }));
         self.wakers.borrow_mut().push(inner.clone());
-        let waker = RenderSignalFuture {
-            inner
-        };
+        println!("RenderSignalFutureInner");
+        let waker = RenderSignalFuture { inner };
         waker
     }
 }
