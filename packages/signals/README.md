@@ -36,18 +36,18 @@ use dioxus_signals::*;
 #[component]
 fn App() -> Element {
     // Because signal is never read in this component, this component will not rerun when the signal changes
-    let signal = use_signal(|| 0);
+    let mut signal = use_signal(|| 0);
 
     rsx! {
         button {
             onclick: move |_| {
-                *signal.write() += 1;
+                signal += 1;
             },
             "Increase"
         }
         for id in 0..10 {
             Child {
-                signal: signal,
+                signal,
             }
         }
     }
@@ -58,11 +58,10 @@ struct ChildProps {
     signal: Signal<usize>,
 }
 
-#[component]
-fn Child(cx: Scope<ChildProps>) -> Element {
+fn Child(props: ChildProps) -> Element {
     // This component does read from the signal, so when the signal changes it will rerun
     rsx! {
-        "{cx.props.signal}"
+        "{props.signal}"
     }
 }
 ```
@@ -85,7 +84,7 @@ fn App() -> Element {
 
 #[component]
 fn Child() -> Element {
-    let signal: Signal<i32> = *use_context(cx).unwrap();
+    let signal: Signal<i32> = use_context();
     // This component does read from the signal, so when the signal changes it will rerun
     rsx! {
         "{signal}"
@@ -105,12 +104,12 @@ use dioxus_signals::*;
 
 #[component]
 fn App() -> Element {
-    let signal = use_signal(|| 0);
-    let doubled = use_memo(|| signal * 2);
+    let mut signal = use_signal(|| 0);
+    let doubled = use_memo(move || signal * 2);
 
     rsx! {
         button {
-            onclick: move |_| *signal.write() += 1,
+            onclick: move |_| signal += 1,
             "Increase"
         }
         Child {
