@@ -31,7 +31,7 @@ pub enum LiveViewError {
 }
 
 fn handle_edits_code() -> String {
-    use dioxus_interpreter_js::binary_protocol::SLEDGEHAMMER_JS;
+    use dioxus_interpreter_js::unified_bindings::SLEDGEHAMMER_JS;
     use minify_js::{minify, Session, TopLevelMode};
 
     let serialize_file_uploads = r#"if (

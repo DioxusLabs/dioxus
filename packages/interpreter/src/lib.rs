@@ -11,6 +11,12 @@ mod write_native_mutations;
 #[cfg(all(feature = "binary-protocol", feature = "sledgehammer"))]
 pub use write_native_mutations::*;
 
+#[cfg(feature = "sledgehammer")]
+pub mod unified_bindings;
+
+#[cfg(feature = "sledgehammer")]
+pub use unified_bindings::*;
+
 // Common bindings for minimal usage.
 #[cfg(all(feature = "minimal_bindings", feature = "webonly"))]
 pub mod minimal_bindings {
@@ -28,9 +34,3 @@ pub mod minimal_bindings {
         pub fn collectFormValues(node: JsValue) -> JsValue;
     }
 }
-
-#[cfg(feature = "sledgehammer")]
-pub mod unified_bindings;
-
-#[cfg(feature = "sledgehammer")]
-pub use unified_bindings::*;

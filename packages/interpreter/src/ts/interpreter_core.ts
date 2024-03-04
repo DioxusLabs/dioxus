@@ -28,7 +28,7 @@ export class Interpreter {
     this.initialize(root);
   }
 
-  initialize(root: HTMLElement) {
+  initialize(root: HTMLElement, handler: EventListener | null = null) {
     this.global = {};
     this.local = {};
     this.root = root;
@@ -36,6 +36,10 @@ export class Interpreter {
     this.nodes = [root];
     this.stack = [root];
     this.templates = {};
+
+    if (handler) {
+      this.handler = handler;
+    }
   }
 
   createListener(event_name: string, element: HTMLElement, bubbles: boolean) {

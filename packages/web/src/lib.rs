@@ -30,16 +30,21 @@ use futures_util::{pin_mut, select, FutureExt, StreamExt};
 
 mod cfg;
 mod dom;
-#[cfg(feature = "eval")]
-mod eval;
+
 mod event;
 pub mod launch;
 mod mutations;
 pub use event::*;
+
+#[cfg(feature = "eval")]
+mod eval;
+
 #[cfg(feature = "file_engine")]
 mod file_engine;
+
 #[cfg(all(feature = "hot_reload", debug_assertions))]
 mod hot_reload;
+
 #[cfg(feature = "hydrate")]
 mod rehydrate;
 
@@ -49,7 +54,7 @@ mod rehydrate;
 ///
 /// # Example
 ///
-/// ```ignore
+/// ```rust, ignore
 /// fn main() {
 ///     let app_fut = dioxus_web::run_with_props(App, RootProps { name: String::from("joe") });
 ///     wasm_bindgen_futures::spawn_local(app_fut);
@@ -61,12 +66,7 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) {
     let mut dom = virtual_dom;
 
     #[cfg(feature = "eval")]
-    {
-        // Eval
-        dom.in_runtime(|| {
-            eval::init_eval();
-        });
-    }
+    dom.in_runtime(|| eval::init_eval());
 
     #[cfg(feature = "panic_hook")]
     if web_config.default_panic_hook {
@@ -109,13 +109,12 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) {
     websys_dom.mount();
 
     loop {
-        tracing::trace!("waiting for work");
-
         // if virtual dom has nothing, wait for it to have something before requesting idle time
         // if there is work then this future resolves immediately.
         let (mut res, template) = {
             let work = dom.wait_for_work().fuse();
             pin_mut!(work);
+
             let mut rx_next = rx.select_next_some();
 
             #[cfg(all(feature = "hot_reload", debug_assertions))]
@@ -127,6 +126,7 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) {
                     evt = rx_next => (Some(evt), None),
                 }
             }
+
             #[cfg(not(all(feature = "hot_reload", debug_assertions)))]
             select! {
                 _ = work => (None, None),

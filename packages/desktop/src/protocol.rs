@@ -1,5 +1,5 @@
 use crate::{assets::*, edits::EditQueue};
-use dioxus_interpreter_js::unified_bindings::{native_js, SLEDGEHAMMER_JS};
+use dioxus_interpreter_js::unified_bindings::native_js;
 use std::path::{Path, PathBuf};
 use wry::{
     http::{status::StatusCode, Request, Response},

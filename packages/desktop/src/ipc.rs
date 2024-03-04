@@ -49,7 +49,7 @@ impl IpcMessage {
     pub(crate) fn method(&self) -> IpcMethod {
         match self.method.as_str() {
             // todo: this is a misspelling, needs to be fixed
-            "file_diolog" => IpcMethod::FileDialog,
+            "file_dialog" => IpcMethod::FileDialog,
             "user_event" => IpcMethod::UserEvent,
             "query" => IpcMethod::Query,
             "browser_open" => IpcMethod::BrowserOpen,

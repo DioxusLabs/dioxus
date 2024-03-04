@@ -1,3 +1,5 @@
+#![allow(unused)] // for whatever reason, the compiler is not recognizing the use of these functions
+
 use dioxus::prelude::*;
 use dioxus_core::Element;
 

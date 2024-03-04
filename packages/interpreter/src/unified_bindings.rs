@@ -6,39 +6,12 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 use sledgehammer_bindgen::bindgen;
 
+/// Combine the interpreter class with the sledgehammer_bindgen generated methods.
 pub fn native_js() -> String {
     format!("{}\n{}", include_str!("./js/native.js"), GENERATED_JS,)
 }
 
 pub const SLEDGEHAMMER_JS: &str = GENERATED_JS;
-
-/// Extensions to the interpreter that are specific to the web platform.
-#[cfg(feature = "webonly")]
-#[wasm_bindgen(module = "src/js/web.js")]
-extern "C" {
-    pub type WebInterpreter;
-
-    #[wasm_bindgen(method, js_name = "saveTemplate")]
-    pub fn save_template(this: &WebInterpreter, nodes: Vec<Node>, tmpl_id: u16);
-
-    #[wasm_bindgen(method)]
-    pub fn hydrate(this: &WebInterpreter, ids: Vec<u32>);
-
-    #[wasm_bindgen(method, js_name = "getNode")]
-    pub fn get_node(this: &WebInterpreter, id: u32) -> Node;
-}
-
-#[cfg(feature = "webonly")]
-type PlatformInterpreter = WebInterpreter;
-
-#[cfg(feature = "webonly")]
-impl Interpreter {
-    /// Convert the interpreter to a web interpreter, enabling methods like hydrate and save_template.
-    pub fn as_web(&self) -> &WebInterpreter {
-        use wasm_bindgen::prelude::JsCast;
-        &self.js_channel().unchecked_ref()
-    }
-}
 
 #[bindgen(module)]
 mod js {
@@ -220,5 +193,36 @@ mod js {
     }
     fn replace_placeholder_ref(array: &[u8], n: u16) {
         "{this.els = this.stack.splice(this.stack.length - $n$); let node = this.LoadChild($array$); node.replaceWith(...this.els);}"
+    }
+}
+
+/// Extensions to the interpreter that are specific to the web platform.
+#[cfg(feature = "webonly")]
+#[wasm_bindgen(module = "src/js/web.js")]
+extern "C" {
+    pub type WebInterpreter;
+
+    #[wasm_bindgen(method)]
+    pub fn initialize(this: &WebInterpreter, root: Node, handler: &js_sys::Function);
+
+    #[wasm_bindgen(method, js_name = "saveTemplate")]
+    pub fn save_template(this: &WebInterpreter, nodes: Vec<Node>, tmpl_id: u16);
+
+    #[wasm_bindgen(method)]
+    pub fn hydrate(this: &WebInterpreter, ids: Vec<u32>);
+
+    #[wasm_bindgen(method, js_name = "getNode")]
+    pub fn get_node(this: &WebInterpreter, id: u32) -> Node;
+}
+
+#[cfg(feature = "webonly")]
+type PlatformInterpreter = WebInterpreter;
+
+#[cfg(feature = "webonly")]
+impl Interpreter {
+    /// Convert the interpreter to a web interpreter, enabling methods like hydrate and save_template.
+    pub fn as_web(&self) -> &WebInterpreter {
+        use wasm_bindgen::prelude::JsCast;
+        &self.js_channel().unchecked_ref()
     }
 }

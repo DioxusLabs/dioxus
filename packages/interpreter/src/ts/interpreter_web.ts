@@ -5,6 +5,7 @@
 // We're using sledgehammer directly
 
 import { Interpreter } from "./interpreter_core";
+export { setAttributeInner } from "./set_attribute";
 
 export class PlatformInterpreter extends Interpreter {
   m: any;

@@ -11,13 +11,16 @@ class Interpreter {
     this.handler = handler;
     this.initialize(root);
   }
-  initialize(root) {
+  initialize(root, handler = null) {
     this.global = {};
     this.local = {};
     this.root = root;
     this.nodes = [root];
     this.stack = [root];
     this.templates = {};
+    if (handler) {
+      this.handler = handler;
+    }
   }
   createListener(event_name, element, bubbles) {
     if (bubbles) {
