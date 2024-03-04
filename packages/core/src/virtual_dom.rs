@@ -439,7 +439,7 @@ impl VirtualDom {
         self.poll_tasks().await;
     }
 
-    ///
+    /// Poll the scheduler for any work
     async fn poll_tasks(&mut self) {
         loop {
             // Process all events - Scopes are marked dirty, etc
@@ -454,6 +454,7 @@ impl VirtualDom {
             // Make sure we set the runtime since we're running user code
             let _runtime = RuntimeGuard::new(self.runtime.clone());
 
+            /// There isn't any more work we can do synchronously. Wait for any new work to be ready
             match self.rx.next().await.expect("channel should never close") {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
                 SchedulerMsg::TaskNotified(id) => {

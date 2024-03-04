@@ -1,3 +1,5 @@
+//! In dioxus, effects are run using normal async functions after a render. [RenderSignalFuture] is a future that resolves after a render has passed.
+
 use std::cell::RefCell;
 use std::future::Future;
 use std::pin::Pin;
