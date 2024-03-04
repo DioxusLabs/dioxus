@@ -32,7 +32,6 @@ impl RenderSignal {
             waker: None,
         }));
         self.wakers.borrow_mut().push(inner.clone());
-        println!("RenderSignalFutureInner");
         let waker = RenderSignalFuture { inner };
         waker
     }

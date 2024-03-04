@@ -3,8 +3,8 @@ use crate::Task;
 use std::borrow::Borrow;
 use std::cell::Cell;
 use std::cell::RefCell;
-use std::hash::Hash;
 use std::collections::BTreeSet;
+use std::hash::Hash;
 
 #[derive(Debug, Clone, Copy, Eq)]
 pub struct ScopeOrder {
@@ -82,34 +82,37 @@ impl DirtyScopes {
         match (dirty_scope, dirty_task) {
             (Some(scope), Some(task)) => {
                 let tasks_order = task.borrow();
-                if scope > tasks_order{
-                    let scope = self.scopes.pop_first().unwrap();
-                    Some(Work{
-                        scope: scope,
-                        rerun_scope: true,
-                        tasks: Vec::new(),
-                    })
-                } else if tasks_order> scope {
-                    let task = self.tasks.pop_first().unwrap();
-                    Some(Work{
-                        scope: task.order,
-                        rerun_scope: false,
-                        tasks: task.tasks_queued.into_inner(),
-                    })
-                }
-                else {
-                    let scope = self.scopes.pop_first().unwrap();
-                    let task = self.tasks.pop_first().unwrap();
-                    Some(Work{
-                        scope: scope,
-                        rerun_scope: true,
-                        tasks: task.tasks_queued.into_inner(),
-                    })
+                match scope.cmp(tasks_order) {
+                    std::cmp::Ordering::Less => {
+                        let scope = self.scopes.pop_first().unwrap();
+                        Some(Work {
+                            scope: scope,
+                            rerun_scope: true,
+                            tasks: Vec::new(),
+                        })
+                    }
+                    std::cmp::Ordering::Greater => {
+                        let task = self.tasks.pop_first().unwrap();
+                        Some(Work {
+                            scope: task.order,
+                            rerun_scope: false,
+                            tasks: task.tasks_queued.into_inner(),
+                        })
+                    }
+                    std::cmp::Ordering::Equal => {
+                        let scope = self.scopes.pop_first().unwrap();
+                        let task = self.tasks.pop_first().unwrap();
+                        Some(Work {
+                            scope: scope,
+                            rerun_scope: true,
+                            tasks: task.tasks_queued.into_inner(),
+                        })
+                    }
                 }
             }
             (Some(scope), None) => {
                 let scope = self.scopes.pop_first().unwrap();
-                Some(Work{
+                Some(Work {
                     scope: scope,
                     rerun_scope: true,
                     tasks: Vec::new(),
@@ -117,13 +120,13 @@ impl DirtyScopes {
             }
             (None, Some(task)) => {
                 let task = self.tasks.pop_first().unwrap();
-                Some(Work{
+                Some(Work {
                     scope: task.order,
                     rerun_scope: false,
                     tasks: task.tasks_queued.into_inner(),
                 })
             }
-            (None, None) => None
+            (None, None) => None,
         }
     }
 
@@ -132,6 +135,7 @@ impl DirtyScopes {
     }
 }
 
+#[derive(Debug)]
 pub struct Work {
     pub scope: ScopeOrder,
     pub rerun_scope: bool,
@@ -154,7 +158,6 @@ impl From<ScopeOrder> for DirtyTasks {
 }
 
 impl DirtyTasks {
-
     pub fn queue_task(&self, task: Task) {
         self.tasks_queued.borrow_mut().push(task);
     }

@@ -104,10 +104,11 @@ async fn flushing() {
         });
         use_hook(|| {
             spawn(async move {
+                let mut channel = BROADCAST.with(|b| b.1.resubscribe());
                 for _ in 0..10 {
                     flush_sync().await;
-                    BROADCAST.with(|b| b.1.resubscribe()).recv().await.unwrap();
                     println!("Task 1 recved");
+                    channel.recv().await.unwrap();
                     println!("Task 1");
                     SEQUENCE.with(|s| s.borrow_mut().push(1));
                 }
@@ -116,10 +117,11 @@ async fn flushing() {
 
         use_hook(|| {
             spawn(async move {
+                let mut channel = BROADCAST.with(|b| b.1.resubscribe());
                 for _ in 0..10 {
                     flush_sync().await;
-                    BROADCAST.with(|b| b.1.resubscribe()).recv().await.unwrap();
                     println!("Task 2 recved");
+                    channel.recv().await.unwrap();
                     println!("Task 2");
                     SEQUENCE.with(|s| s.borrow_mut().push(2));
                 }
@@ -135,16 +137,15 @@ async fn flushing() {
 
     let fut = async {
         // Trigger the flush by waiting for work
-        for i in 0..30 {
+        for i in 0..10 {
             BROADCAST.with(|b| b.0.send(()).unwrap());
-            tokio::select! {
-                _ = dom.wait_for_work() => {}
-                _ = tokio::time::sleep(Duration::from_millis(10)) => {}
-            }
             dom.mark_dirty(ScopeId(0));
+            dom.wait_for_work().await;
             dom.render_immediate(&mut dioxus_core::NoOpMutations);
             println!("Flushed {}", i);
         }
+        BROADCAST.with(|b| b.0.send(()).unwrap());
+        dom.wait_for_work().await;
     };
 
     tokio::select! {

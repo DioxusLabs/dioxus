@@ -8,8 +8,8 @@ use crate::{
     any_props::AnyProps,
     arena::ElementId,
     innerlude::{
-        DirtyScopes, ElementRef, ErrorBoundary, NoOpMutations, SchedulerMsg, ScopeState, VNodeMount,
-        VProps, WriteMutations,
+        DirtyScopes, ElementRef, ErrorBoundary, NoOpMutations, SchedulerMsg, ScopeState,
+        VNodeMount, VProps, WriteMutations,
     },
     nodes::RenderReturn,
     nodes::{Template, TemplateId},
@@ -185,7 +185,6 @@ pub struct VirtualDom {
     pub(crate) scopes: Slab<ScopeState>,
 
     pub(crate) dirty_scopes: DirtyScopes,
-    pub(crate) scopes_need_rerun: bool,
 
     // Maps a template path to a map of byte indexes to templates
     pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template>>,
@@ -313,7 +312,6 @@ impl VirtualDom {
             rx,
             runtime: Runtime::new(tx),
             scopes: Default::default(),
-            scopes_need_rerun: false,
             dirty_scopes: Default::default(),
             templates: Default::default(),
             queued_templates: Default::default(),
@@ -378,7 +376,6 @@ impl VirtualDom {
         };
 
         tracing::trace!("Marking scope {:?} as dirty", id);
-        self.scopes_need_rerun = true;
         let order = ScopeOrder::new(scope.height(), id);
         self.dirty_scopes.queue_scope(order);
     }
@@ -450,7 +447,7 @@ impl VirtualDom {
             self.process_events();
 
             // Now that we have collected all queued work, we should check if we have any dirty scopes. If there are not, then we can poll any queued futures
-            if self.scopes_need_rerun {
+            if self.dirty_scopes.has_dirty_scopes() {
                 return;
             }
 
@@ -485,7 +482,7 @@ impl VirtualDom {
         self.queue_events();
 
         // Now that we have collected all queued work, we should check if we have any dirty scopes. If there are not, then we can poll any queued futures
-        if self.scopes_need_rerun {
+        if self.dirty_scopes.has_dirty_scopes() {
             return;
         }
 
@@ -498,12 +495,12 @@ impl VirtualDom {
             }
 
             // Then poll any tasks that might be pending
-            let tasks = std::mem::take(&mut *task.tasks_queued.borrow_mut());
+            let tasks = task.tasks_queued.into_inner();
             for task in tasks {
                 let _ = self.runtime.handle_task_wakeup(task);
                 // Running that task, may mark a scope higher up as dirty. If it does, return from the function early
                 self.queue_events();
-                if self.scopes_need_rerun {
+                if self.dirty_scopes.has_dirty_scopes() {
                     return;
                 }
             }
@@ -602,7 +599,7 @@ impl VirtualDom {
                 let _runtime = RuntimeGuard::new(self.runtime.clone());
                 // Then, poll any tasks that might be pending in the scope
                 // This will run effects, so this **must** be done after the scope is diffed
-                for task in work.tasks{
+                for task in work.tasks {
                     let _ = self.runtime.handle_task_wakeup(task);
                 }
                 // If the scope is dirty, run the scope and get the mutations
@@ -615,7 +612,6 @@ impl VirtualDom {
         }
 
         self.runtime.render_signal.send();
-        self.scopes_need_rerun = false;
     }
 
     /// [`Self::render_immediate`] to a vector of mutations for testing purposes
