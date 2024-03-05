@@ -34,6 +34,7 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, desktop_config: Conf
                 EventData::HotReloadEvent(msg) => app.handle_hot_reload_msg(msg),
                 EventData::Ipc(msg) => match msg.method() {
                     IpcMethod::FileDialog => app.handle_file_dialog_msg(msg, id),
+                    IpcMethod::FileDrag => app.handle_file_drag(msg, id),
                     IpcMethod::UserEvent => app.handle_user_event_msg(msg, id),
                     IpcMethod::Query => app.handle_query_msg(msg, id),
                     IpcMethod::BrowserOpen => app.handle_browser_open(msg),

@@ -2,7 +2,8 @@
 
 use dioxus_html::{native_bind::NativeFileEngine, FileEngine, HasFileData, HasFormData};
 use serde::Deserialize;
-use std::{path::PathBuf, str::FromStr, sync::Arc};
+use std::{cell::Cell, path::PathBuf, rc::Rc, str::FromStr, sync::Arc};
+use wry::FileDropEvent;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct FileDialogRequest {
@@ -140,5 +141,15 @@ impl HasFileData for DesktopFileUploadForm {
 impl HasFormData for DesktopFileUploadForm {
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct NativeFileHover {
+    event: Rc<Cell<Option<FileDropEvent>>>,
+}
+impl NativeFileHover {
+    pub fn set(&self, event: FileDropEvent) {
+        self.event.set(Some(event));
     }
 }

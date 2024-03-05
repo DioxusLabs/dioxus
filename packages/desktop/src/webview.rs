@@ -3,8 +3,9 @@ use crate::{
     assets::AssetHandlerRegistry,
     edits::EditQueue,
     eval::DesktopEvalProvider,
+    file_upload::NativeFileHover,
     ipc::{EventData, UserWindowEvent},
-    protocol::{self},
+    protocol,
     waker::tao_waker,
     Config, DesktopContext, DesktopService,
 };
@@ -65,7 +66,6 @@ impl WebviewInstance {
 
         // Rust :(
         let window_id = window.id();
-        let file_handler = cfg.file_drop_handler.take();
         let custom_head = cfg.custom_head.clone();
         let index_file = cfg.custom_index.clone();
         let root_name = cfg.root_name.clone();
@@ -102,6 +102,8 @@ impl WebviewInstance {
             }
         };
 
+        let file_hover = NativeFileHover::default();
+
         #[cfg(any(
             target_os = "windows",
             target_os = "macos",
@@ -128,12 +130,18 @@ impl WebviewInstance {
             .with_url("dioxus://index.html/")
             .unwrap()
             .with_ipc_handler(ipc_handler)
+            .with_navigation_handler(|var| var.contains("dioxus")) // prevent all navigations
             .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler)
-            .with_web_context(&mut web_context);
-
-        if let Some(handler) = file_handler {
-            webview = webview.with_file_drop_handler(move |evt| handler(window_id, evt))
-        }
+            .with_web_context(&mut web_context)
+            .with_file_drop_handler({
+                let file_hover = file_hover.clone();
+                move |evt| {
+                    println!("file drop: {:?}", evt);
+                    // Update the most recent file hover status
+                    file_hover.set(evt);
+                    false
+                }
+            });
 
         if let Some(color) = cfg.background_color {
             webview = webview.with_background_color(color);
@@ -178,6 +186,7 @@ impl WebviewInstance {
             shared.clone(),
             edit_queue,
             asset_handlers,
+            file_hover,
         ));
 
         let provider: Rc<dyn EvalProvider> =

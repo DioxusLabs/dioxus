@@ -29,9 +29,49 @@ export class NativeInterpreter extends JSChannel_ {
   }
 
   initialize(root: HTMLElement): void {
-
     this.intercept_link_redirects = true;
     this.liveview = false;
+
+
+    const dragEventHandler = (e: DragEvent) => {
+      // e.preventDefault();
+      // e.dataTransfer.effectAllowed = 'none';
+      // e.dataTransfer.dropEffect = 'none';
+
+      //
+
+      // we need to signal to the host to provide a native file path,
+      // not the one coming from here
+
+      // We can't get native
+      // if (e.type === "drop") {
+      //   let target = e.target;
+
+      //   if (target instanceof Element) {
+      //     let target_id = getTargetId(target);
+      //     if (target_id !== null) {
+      //       const message = this.serializeIpcMessage("file_drop", {
+      //         event: "drop",
+      //         target: target_id,
+      //         data: Array.from(e.dataTransfer.files).map(file => {
+      //           return {
+      //             name: file.name,
+      //             type: file.type,
+      //             size: file.size,
+      //           };
+      //         }),
+      //       });
+
+      //       this.ipc.postMessage(message);
+      //     }
+      //   }
+      // }
+    };
+
+
+    // ["dragenter", "dragover", "drop"].forEach((event) => {
+    //   window.addEventListener(event, dragEventHandler, false)
+    // });
 
     // attach an event listener on the body that prevents file drops from navigating
     // this is because the browser will try to navigate to the file if it's dropped on the window
@@ -51,9 +91,6 @@ export class NativeInterpreter extends JSChannel_ {
 
       // Dropping a file on the window will navigate to the file, which we don't want
       e.preventDefault();
-
-      // if the element has a drop listener on it, we should send a message to the host with the contents of the drop instead
-
     }, false);
 
     // attach a listener to the route that listens for clicks and prevents the default file dialog
@@ -123,7 +160,7 @@ export class NativeInterpreter extends JSChannel_ {
     }
   }
 
-  // ignore the fact the base interpreter uses ptr + len but we use array
+  // ignore the fact the base interpreter uses ptr + len but we use array...
   // @ts-ignore
   loadChild(array: number[]) {
     // iterate through each number and get that child
@@ -168,9 +205,6 @@ export class NativeInterpreter extends JSChannel_ {
     // Liveview will still need to use this
     this.preventDefaults(event, target);
 
-
-
-
     // liveview does not have syncronous event handling, so we need to send the event to the host
     if (this.liveview) {
       // Okay, so the user might've requested some files to be read
@@ -183,8 +217,6 @@ export class NativeInterpreter extends JSChannel_ {
 
       const message = this.serializeIpcMessage("user_event", body);
       this.ipc.postMessage(message);
-
-      console.log("sent message to host: ", message);
 
       // // Run the event handler on the virtualdom
       // // capture/prevent default of the event if the virtualdom wants to
@@ -200,30 +232,6 @@ export class NativeInterpreter extends JSChannel_ {
     }
   }
 
-  //  A liveview only function
-  // Desktop will intercept the event before it hits this
-  async readFiles(target: HTMLInputElement, contents: SerializedEvent, bubbles: boolean, realId: NodeId, name: string) {
-    let files = target.files!;
-    let file_contents: { [name: string]: number[] } = {};
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      file_contents[file.name] = Array.from(
-        new Uint8Array(await file.arrayBuffer())
-      );
-    }
-
-    contents.files = { files: file_contents };
-
-    const message = this.serializeIpcMessage("user_event", {
-      name: name,
-      element: realId,
-      data: contents,
-      bubbles,
-    });
-
-    this.ipc.postMessage(message);
-  }
 
 
   // This should:
@@ -307,6 +315,32 @@ export class NativeInterpreter extends JSChannel_ {
         }
         this.waitForRequest(headless);
       });
+  }
+
+
+  //  A liveview only function
+  // Desktop will intercept the event before it hits this
+  async readFiles(target: HTMLInputElement, contents: SerializedEvent, bubbles: boolean, realId: NodeId, name: string) {
+    let files = target.files!;
+    let file_contents: { [name: string]: number[] } = {};
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      file_contents[file.name] = Array.from(
+        new Uint8Array(await file.arrayBuffer())
+      );
+    }
+
+    contents.files = { files: file_contents };
+
+    const message = this.serializeIpcMessage("user_event", {
+      name: name,
+      element: realId,
+      data: contents,
+      bubbles,
+    });
+
+    this.ipc.postMessage(message);
   }
 }
 

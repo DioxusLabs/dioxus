@@ -2,6 +2,7 @@ use crate::{
     app::SharedContext,
     assets::AssetHandlerRegistry,
     edits::EditQueue,
+    file_upload::NativeFileHover,
     ipc::{EventData, UserWindowEvent},
     query::QueryEngine,
     shortcut::{HotKey, ShortcutHandle, ShortcutRegistryError},
@@ -13,13 +14,17 @@ use dioxus_core::{
     VirtualDom,
 };
 use dioxus_interpreter_js::MutationState;
-use std::{cell::RefCell, rc::Rc, rc::Weak};
+use std::{
+    cell::RefCell,
+    rc::{Rc, Weak},
+    sync::Arc,
+};
 use tao::{
     event::Event,
     event_loop::EventLoopWindowTarget,
     window::{Fullscreen as WryFullscreen, Window, WindowId},
 };
-use wry::{RequestAsyncResponder, WebView};
+use wry::{FileDropEvent, RequestAsyncResponder, WebView};
 
 #[cfg(target_os = "ios")]
 use tao::platform::ios::WindowExtIOS;
@@ -62,6 +67,7 @@ pub struct DesktopService {
     pub(crate) edit_queue: EditQueue,
     pub(crate) mutation_state: RefCell<MutationState>,
     pub(crate) asset_handlers: AssetHandlerRegistry,
+    pub(crate) file_hover: NativeFileHover,
 
     #[cfg(target_os = "ios")]
     pub(crate) views: Rc<RefCell<Vec<*mut objc::runtime::Object>>>,
@@ -83,14 +89,16 @@ impl DesktopService {
         shared: Rc<SharedContext>,
         edit_queue: EditQueue,
         asset_handlers: AssetHandlerRegistry,
+        file_hover: NativeFileHover,
     ) -> Self {
         Self {
             window,
             webview,
             shared,
             edit_queue,
-            mutation_state: Default::default(),
             asset_handlers,
+            file_hover,
+            mutation_state: Default::default(),
             query: Default::default(),
             #[cfg(target_os = "ios")]
             views: Default::default(),

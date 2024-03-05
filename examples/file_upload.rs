@@ -9,7 +9,7 @@ use dioxus::prelude::*;
 use dioxus::{html::HasFileData, prelude::dioxus_elements::FileEngine};
 
 fn main() {
-    launch(app);
+    LaunchBuilder::desktop().launch(app);
 }
 
 fn app() -> Element {
@@ -51,7 +51,7 @@ fn app() -> Element {
 
         input {
             r#type: "file",
-            accept: ".txt,.rs",
+            accept: ".txt,.rs,.js",
             multiple: true,
             name: "textreader",
             directory: enable_directory_upload,
@@ -64,10 +64,9 @@ fn app() -> Element {
             // cheating with a little bit of JS...
             "ondragover": "this.style.backgroundColor='#88FF88';",
             "ondragleave": "this.style.backgroundColor='#FFFFFF';",
+            "ondrop": "this.style.backgroundColor='#FFFFFF';",
             id: "drop-zone",
-            // prevent_default: "ondrop dragover dragenter",
             ondrop: handle_file_drop,
-            ondragover: move |event| event.stop_propagation(),
             "Drop files here"
         }
 

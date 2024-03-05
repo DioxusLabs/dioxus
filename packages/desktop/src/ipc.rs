@@ -42,6 +42,7 @@ pub enum IpcMethod<'a> {
     Query,
     BrowserOpen,
     Initialize,
+    FileDrag,
     Other(&'a str),
 }
 
@@ -50,6 +51,7 @@ impl IpcMessage {
         match self.method.as_str() {
             // todo: this is a misspelling, needs to be fixed
             "file_dialog" => IpcMethod::FileDialog,
+            "file_drag" => IpcMethod::FileDrag,
             "user_event" => IpcMethod::UserEvent,
             "query" => IpcMethod::Query,
             "browser_open" => IpcMethod::BrowserOpen,

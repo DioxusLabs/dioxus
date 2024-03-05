@@ -262,6 +262,8 @@ impl App {
         }
     }
 
+    pub fn handle_file_drag(&mut self, msg: IpcMessage, window: WindowId) {}
+
     pub fn handle_file_dialog_msg(&mut self, msg: IpcMessage, window: WindowId) {
         let Ok(file_dialog) = serde_json::from_value::<FileDialogRequest>(msg.params()) else {
             return;

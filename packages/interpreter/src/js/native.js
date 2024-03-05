@@ -248,6 +248,8 @@ class NativeInterpreter extends JSChannel_ {
   initialize(root) {
     this.intercept_link_redirects = true;
     this.liveview = false;
+    const dragEventHandler = (e) => {
+    };
     window.addEventListener("dragover", function(e) {
       if (e.target instanceof Element && e.target.tagName != "INPUT") {
         e.preventDefault();
@@ -349,24 +351,7 @@ class NativeInterpreter extends JSChannel_ {
     } else {
       const message = this.serializeIpcMessage("user_event", body);
       this.ipc.postMessage(message);
-      console.log("sent message to host: ", message);
     }
-  }
-  async readFiles(target, contents, bubbles, realId, name) {
-    let files = target.files;
-    let file_contents = {};
-    for (let i = 0;i < files.length; i++) {
-      const file = files[i];
-      file_contents[file.name] = Array.from(new Uint8Array(await file.arrayBuffer()));
-    }
-    contents.files = { files: file_contents };
-    const message = this.serializeIpcMessage("user_event", {
-      name,
-      element: realId,
-      data: contents,
-      bubbles
-    });
-    this.ipc.postMessage(message);
   }
   preventDefaults(event, target) {
     let preventDefaultRequests = null;
@@ -414,6 +399,22 @@ class NativeInterpreter extends JSChannel_ {
       }
       this.waitForRequest(headless);
     });
+  }
+  async readFiles(target, contents, bubbles, realId, name) {
+    let files = target.files;
+    let file_contents = {};
+    for (let i = 0;i < files.length; i++) {
+      const file = files[i];
+      file_contents[file.name] = Array.from(new Uint8Array(await file.arrayBuffer()));
+    }
+    contents.files = { files: file_contents };
+    const message = this.serializeIpcMessage("user_event", {
+      name,
+      element: realId,
+      data: contents,
+      bubbles
+    });
+    this.ipc.postMessage(message);
   }
 }
 export {
