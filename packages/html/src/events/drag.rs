@@ -109,7 +109,7 @@ impl PointerInteraction for DragData {
 /// A serialized version of DragData
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedDragData {
-    mouse: crate::point_interaction::SerializedPointInteraction,
+    pub mouse: crate::point_interaction::SerializedPointInteraction,
 
     #[serde(default)]
     files: Option<crate::file_data::SerializedFileEngine>,

@@ -1,6 +1,16 @@
 #![allow(unused)]
 
-use dioxus_html::{native_bind::NativeFileEngine, FileEngine, HasFileData, HasFormData};
+use dioxus_html::{
+    geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint},
+    input_data::{MouseButton, MouseButtonSet},
+    native_bind::NativeFileEngine,
+    point_interaction::{
+        InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
+    },
+    prelude::{SerializedMouseData, SerializedPointInteraction},
+    FileEngine, HasDragData, HasFileData, HasFormData, HasMouseData,
+};
+use muda::accelerator::Modifiers;
 use serde::Deserialize;
 use std::{cell::Cell, path::PathBuf, rc::Rc, str::FromStr, sync::Arc};
 use wry::FileDropEvent;
@@ -151,5 +161,73 @@ pub struct NativeFileHover {
 impl NativeFileHover {
     pub fn set(&self, event: FileDropEvent) {
         self.event.set(Some(event));
+    }
+
+    pub fn current(&self) -> Option<FileDropEvent> {
+        self.event.as_ref().clone().take()
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct DesktopFileDragEvent {
+    pub mouse: SerializedPointInteraction,
+    pub files: Arc<NativeFileEngine>,
+}
+
+impl HasFileData for DesktopFileDragEvent {
+    fn files(&self) -> Option<Arc<dyn FileEngine>> {
+        Some(self.files.clone())
+    }
+}
+
+impl HasDragData for DesktopFileDragEvent {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+impl HasMouseData for DesktopFileDragEvent {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+impl InteractionLocation for DesktopFileDragEvent {
+    fn client_coordinates(&self) -> ClientPoint {
+        self.mouse.client_coordinates()
+    }
+
+    fn page_coordinates(&self) -> PagePoint {
+        self.mouse.page_coordinates()
+    }
+
+    fn screen_coordinates(&self) -> ScreenPoint {
+        self.mouse.screen_coordinates()
+    }
+}
+
+impl InteractionElementOffset for DesktopFileDragEvent {
+    fn element_coordinates(&self) -> ElementPoint {
+        self.mouse.element_coordinates()
+    }
+
+    fn coordinates(&self) -> Coordinates {
+        self.mouse.coordinates()
+    }
+}
+
+impl ModifiersInteraction for DesktopFileDragEvent {
+    fn modifiers(&self) -> Modifiers {
+        self.mouse.modifiers()
+    }
+}
+
+impl PointerInteraction for DesktopFileDragEvent {
+    fn held_buttons(&self) -> MouseButtonSet {
+        self.mouse.held_buttons()
+    }
+
+    fn trigger_button(&self) -> Option<MouseButton> {
+        self.mouse.trigger_button()
     }
 }

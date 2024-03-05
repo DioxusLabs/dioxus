@@ -2,7 +2,7 @@ use crate::{
     config::{Config, WindowCloseBehaviour},
     element::DesktopElement,
     event_handlers::WindowEventHandlers,
-    file_upload::{DesktopFileUploadForm, FileDialogRequest},
+    file_upload::{DesktopFileDragEvent, DesktopFileUploadForm, FileDialogRequest},
     ipc::{EventData, IpcMessage, UserWindowEvent},
     query::QueryResult,
     shortcut::{GlobalHotKeyEvent, ShortcutRegistry},
@@ -11,7 +11,7 @@ use crate::{
 use crossbeam_channel::Receiver;
 use dioxus_core::ElementId;
 use dioxus_core::VirtualDom;
-use dioxus_html::{native_bind::NativeFileEngine, HtmlEvent, PlatformEventData};
+use dioxus_html::{native_bind::NativeFileEngine, HasFileData, HtmlEvent, PlatformEventData};
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
@@ -231,12 +231,32 @@ impl App {
 
         let view = self.webviews.get_mut(&id).unwrap();
         let query = view.desktop_context.query.clone();
+        let recent_file = view.desktop_context.file_hover.clone();
 
         // check for a mounted event placeholder and replace it with a desktop specific element
         let as_any = match data {
             dioxus_html::EventData::Mounted => {
                 let element = DesktopElement::new(element, view.desktop_context.clone(), query);
                 Rc::new(PlatformEventData::new(Box::new(element)))
+            }
+            dioxus_html::EventData::Drag(ref drag) => {
+                // we want to override this with a native file engine, provided by the most recent drag event
+                if drag.files().is_some() {
+                    let file_event = recent_file.current().unwrap();
+                    let paths = match file_event {
+                        wry::FileDropEvent::Hovered { paths, position } => paths,
+                        wry::FileDropEvent::Dropped { paths, position } => paths,
+                        _ => vec![],
+                    };
+                    let files = Arc::new(NativeFileEngine::new(paths));
+                    let event = DesktopFileDragEvent {
+                        mouse: drag.mouse.clone(),
+                        files,
+                    };
+                    Rc::new(PlatformEventData::new(Box::new(event)))
+                } else {
+                    data.into_any()
+                }
             }
             _ => data.into_any(),
         };

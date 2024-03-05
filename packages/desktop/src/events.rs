@@ -1,6 +1,9 @@
 //! Convert a serialized event to an event trigger
 
-use crate::{element::DesktopElement, file_upload::DesktopFileUploadForm};
+use crate::{
+    element::DesktopElement,
+    file_upload::{DesktopFileDragEvent, DesktopFileUploadForm},
+};
 use dioxus_html::*;
 
 pub(crate) struct SerializedHtmlEventConverter;
@@ -31,8 +34,14 @@ impl HtmlEventConverter for SerializedHtmlEventConverter {
     }
 
     fn convert_drag_data(&self, event: &PlatformEventData) -> DragData {
+        // Attempt a simple serialized data conversion
+        if let Some(_data) = event.downcast::<SerializedDragData>() {
+            return _data.clone().into();
+        }
+
+        // If that failed then it's a file drag form
         event
-            .downcast::<SerializedDragData>()
+            .downcast::<DesktopFileDragEvent>()
             .cloned()
             .unwrap()
             .into()
