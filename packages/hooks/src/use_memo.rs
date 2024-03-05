@@ -48,7 +48,7 @@ pub fn use_maybe_sync_memo<R: PartialEq, S: Storage<SignalData<R>>>(
     mut f: impl FnMut() -> R + 'static,
 ) -> ReadOnlySignal<R, S> {
     use_hook(|| {
-        // Get the current reactive context
+        // Create a new reactive context for the memo
         let rc = ReactiveContext::new();
 
         // Create a new signal in that context, wiring up its dependencies and subscribers
@@ -56,8 +56,6 @@ pub fn use_maybe_sync_memo<R: PartialEq, S: Storage<SignalData<R>>>(
 
         spawn(async move {
             loop {
-                // Wait for the dom the be finished with sync work
-                flush_sync().await;
                 rc.changed().await;
                 let new = rc.run_in(&mut f);
                 if new != *state.peek() {
@@ -137,8 +135,6 @@ where
 
         spawn(async move {
             loop {
-                // Wait for the dom the be finished with sync work
-                flush_sync().await;
                 rc.changed().await;
 
                 let new = rc.run_in(|| f(dependencies_signal.read().clone()));

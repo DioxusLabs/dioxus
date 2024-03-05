@@ -1,6 +1,7 @@
+use crate::innerlude::ScopeOrder;
 use crate::{
     any_props::{AnyProps, BoxedAnyProps},
-    innerlude::{DirtyScope, ScopeState},
+    innerlude::ScopeState,
     nodes::RenderReturn,
     scope_context::Scope,
     scopes::ScopeId,
@@ -66,10 +67,8 @@ impl VirtualDom {
         context.render_count.set(context.render_count.get() + 1);
 
         // remove this scope from dirty scopes
-        self.dirty_scopes.remove(&DirtyScope {
-            height: context.height,
-            id: context.id,
-        });
+        self.dirty_scopes
+            .remove(&ScopeOrder::new(context.height, scope_id));
 
         if context.suspended.get() {
             if matches!(new_nodes, RenderReturn::Aborted(_)) {

@@ -3,7 +3,7 @@ use crate::{
     ReadOnlySignal, ReadableRef,
 };
 use dioxus_core::{
-    prelude::{flush_sync, spawn, IntoAttributeValue},
+    prelude::{spawn, IntoAttributeValue},
     ScopeId,
 };
 use generational_box::{AnyStorage, Storage, SyncStorage, UnsyncStorage};
@@ -107,7 +107,6 @@ impl<T: PartialEq + 'static> Signal<T> {
 
         spawn(async move {
             loop {
-                flush_sync().await;
                 rc.changed().await;
                 let new = f();
                 if new != *state.peek() {

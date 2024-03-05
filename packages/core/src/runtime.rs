@@ -1,5 +1,6 @@
 use crate::{
     innerlude::{LocalTask, SchedulerMsg},
+    render_signal::RenderSignal,
     scope_context::Scope,
     scopes::ScopeId,
     Task,
@@ -7,7 +8,6 @@ use crate::{
 use std::{
     cell::{Cell, Ref, RefCell},
     rc::Rc,
-    sync::Arc,
 };
 
 thread_local! {
@@ -31,18 +31,15 @@ pub struct Runtime {
 
     pub(crate) sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
 
-    // the virtualdom will hold this lock while it's doing syncronous work
-    // when the lock is lifted, tasks waiting for the lock will be able to run
-    pub(crate) flush_mutex: Arc<futures_util::lock::Mutex<()>>,
-    pub(crate) flush_lock: Cell<Option<futures_util::lock::OwnedMutexGuard<()>>>,
+    // Synchronous tasks need to be run after the next render. The virtual dom stores a list of those tasks to send a signal to them when the next render is done.
+    pub(crate) render_signal: RenderSignal,
 }
 
 impl Runtime {
     pub(crate) fn new(sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>) -> Rc<Self> {
         Rc::new(Self {
             sender,
-            flush_mutex: Default::default(),
-            flush_lock: Default::default(),
+            render_signal: RenderSignal::default(),
             rendering: Cell::new(true),
             scope_states: Default::default(),
             scope_stack: Default::default(),
@@ -148,25 +145,6 @@ impl Runtime {
     /// Runs a function with the current scope
     pub(crate) fn with_scope<R>(scope: ScopeId, f: impl FnOnce(&Scope) -> R) -> Option<R> {
         Self::with(|rt| rt.get_state(scope).map(|sc| f(&sc))).flatten()
-    }
-
-    /// Acquire the flush lock and store it interally
-    ///
-    /// This means the virtual dom is currently doing syncronous work
-    /// The lock will be held until `release_flush_lock` is called - and then the OwnedLock will be dropped
-    pub(crate) fn acquire_flush_lock(&self) {
-        // The flush lock might already be held...
-        if let Some(lock) = self.flush_mutex.try_lock_owned() {
-            self.flush_lock.set(Some(lock));
-        }
-    }
-
-    /// Release the flush lock
-    ///
-    /// On the drop of the flush lock, all tasks waiting on `flush_sync` will spring to life via their wakers.
-    /// You can now freely poll those tasks and they can progress
-    pub(crate) fn release_flush_lock(&self) {
-        self.flush_lock.take();
     }
 }
 

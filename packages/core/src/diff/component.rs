@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use crate::{
     any_props::AnyProps,
-    innerlude::{DirtyScope, ElementRef, MountId, VComponent, WriteMutations},
+    innerlude::{ElementRef, MountId, ScopeOrder, VComponent, WriteMutations},
     nodes::RenderReturn,
     nodes::VNode,
     scopes::ScopeId,
@@ -91,10 +91,7 @@ impl VNode {
         dom.diff_scope(to, scope_id, new);
 
         let height = dom.runtime.get_state(scope_id).unwrap().height;
-        dom.dirty_scopes.remove(&DirtyScope {
-            height,
-            id: scope_id,
-        });
+        dom.dirty_scopes.remove(&ScopeOrder::new(height, scope_id));
     }
 
     fn replace_vcomponent(

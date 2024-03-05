@@ -1,4 +1,5 @@
-use crate::{innerlude::DirtyScope, virtual_dom::VirtualDom, ScopeId};
+use crate::innerlude::ScopeOrder;
+use crate::{virtual_dom::VirtualDom, ScopeId};
 
 /// An Element's unique identifier.
 ///
@@ -74,7 +75,7 @@ impl VirtualDom {
             context.height
         };
 
-        self.dirty_scopes.remove(&DirtyScope { height, id });
+        self.dirty_scopes.remove(&ScopeOrder::new(height, id));
     }
 }
 
