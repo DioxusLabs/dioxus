@@ -1,16 +1,13 @@
 #![allow(missing_docs)]
 use crate::{use_callback, use_hook_did_run, use_signal, UseCallback};
-use dioxus_core::{
-    prelude::{flush_sync, spawn, use_hook},
-    Task,
-};
+use dioxus_core::{prelude::*, Task};
 use dioxus_signals::*;
 use dioxus_signals::{Readable, Writable};
 use std::future::Future;
 
 /// A hook that allows you to spawn a future.
 /// This future will **not** run on the server
-/// The future is spawned on the next call to `flush_sync` which means that it will not run on the server.
+/// The future is spawned on the next call to `wait_for_next_render` which means that it will not run on the server.
 /// To run a future on the server, you should use `spawn` directly.
 /// `use_future` **won't return a value**.
 /// If you want to return a value from a future, use `use_resource` instead.
@@ -45,14 +42,13 @@ where
     let mut callback = use_callback(move || {
         let fut = future();
         spawn(async move {
-            flush_sync().await;
             state.set(UseFutureState::Pending);
             fut.await;
             state.set(UseFutureState::Ready);
         })
     });
 
-    // Create the task inside a copyvalue so we can reset it in-place later
+    // Create the task inside a CopyValue so we can reset it in-place later
     let task = use_hook(|| CopyValue::new(callback.call()));
 
     // Early returns in dioxus have consequences for use_memo, use_resource, and use_future, etc
