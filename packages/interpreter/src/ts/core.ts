@@ -28,10 +28,7 @@ export class BaseInterpreter {
   // sledgehammer is generating this...
   m: any;
 
-  constructor(root: HTMLElement, handler: EventListener) {
-    this.handler = handler;
-    this.initialize(root);
-  }
+  constructor() { }
 
   initialize(root: HTMLElement, handler: EventListener | null = null) {
     this.global = {};

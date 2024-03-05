@@ -1,5 +1,6 @@
 use crate::{assets::*, edits::EditQueue};
-use dioxus_interpreter_js::unified_bindings::native_js;
+use dioxus_interpreter_js::unified_bindings::SLEDGEHAMMER_JS;
+use dioxus_interpreter_js::NATIVE_JS;
 use std::path::{Path, PathBuf};
 use wry::{
     http::{status::StatusCode, Request, Response},
@@ -12,46 +13,16 @@ const EDITS_PATH: &str = "http://dioxus.index.html/edits";
 #[cfg(not(any(target_os = "android", target_os = "windows")))]
 const EDITS_PATH: &str = "dioxus://index.html/edits";
 
-const PREVENT_FILE_UPLOAD: &str = include_str!("../js/prevent_file_upload.js");
+// const PREVENT_FILE_UPLOAD: &str = include_str!("../js/prevent_file_upload.js");
 
 fn handle_edits_code() -> String {
-    let polling_request = format!(
+    format!(
         r#"// Poll for requests
-    window.interpreter = new JSChannel();
-    window.interpreter.wait_for_request = (headless) => {{
-      fetch(new Request("{EDITS_PATH}"))
-          .then(response => {{
-              response.arrayBuffer()
-                  .then(bytes => {{
-                      // In headless mode, the requestAnimationFrame callback is never called, so we need to run the bytes directly
-                      if (headless) {{
-                        window.interpreter.run_from_bytes(bytes);
-                      }}
-                      else {{
-                        requestAnimationFrame(() => {{
-                            window.interpreter.run_from_bytes(bytes);
-                        }});
-                      }}
-                      window.interpreter.wait_for_request(headless);
-                  }});
-          }})
-    }}"#
-    );
-
-    let mut interpreter = native_js()
-        .replace("/*POST_HANDLE_EDITS*/", PREVENT_FILE_UPLOAD)
-        .replace("export", "")
-        + &polling_request;
-
-    while let Some(import_start) = interpreter.find("import") {
-        let import_end = interpreter[import_start..]
-            .find(|c| c == ';' || c == '\n')
-            .map(|i| i + import_start)
-            .unwrap_or_else(|| interpreter.len());
-        interpreter.replace_range(import_start..import_end, "");
-    }
-
-    format!("{interpreter}\nconst intercept_link_redirects = true;")
+        {SLEDGEHAMMER_JS}
+        {NATIVE_JS}
+        window.interpreter = new NativeInterpreter("{EDITS_PATH}");
+    "#
+    )
 }
 
 static DEFAULT_INDEX: &str = include_str!("./index.html");

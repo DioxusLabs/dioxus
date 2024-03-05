@@ -5,18 +5,31 @@
 
 import { BaseInterpreter, NodeId } from "./core";
 import { SerializedEvent, serializeEvent } from "./serialize";
-import { setAttributeInner } from "./set_attribute";
 
-export class PlatformInterpreter extends BaseInterpreter {
+// okay so, we've got this JSChannel thing from sledgehammer, implicitly imported into our scope
+// we want to extend it, and it technically extends base intepreter. To make typescript happy,
+// we're going to bind the JSChannel_ object to the JSChannel object, and then extend it
+var JSChannel_: typeof BaseInterpreter;
+
+// @ts-ignore - this is coming from the host
+if (RawInterpreter) { JSChannel_ = RawInterpreter; }
+
+export class NativeInterpreter extends JSChannel_ {
   intercept_link_redirects: boolean;
   ipc: any;
+  editsPath: string;
 
   // eventually we want to remove liveview and build it into the server-side-events of fullstack
   // however, for now we need to support it since SSE in fullstack doesn't exist yet
   liveview: boolean;
 
-  constructor(root: HTMLElement) {
-    super(root, (event) => this.handleEvent(event, event.type, true));
+  constructor(editsPath: string) {
+    super();
+    this.editsPath = editsPath;
+  }
+
+  initialize(root: HTMLElement): void {
+
     this.intercept_link_redirects = true;
     this.liveview = false;
 
@@ -39,14 +52,14 @@ export class PlatformInterpreter extends BaseInterpreter {
 
     // @ts-ignore - wry gives us this
     this.ipc = window.ipc;
+
+    // make sure we pass the handler to the base interpreter
+    const handler: EventListener = (event) => this.handleEvent(event, event.type, true);
+    super.initialize(root, handler);
   }
 
   serializeIpcMessage(method: string, params = {}) {
     return JSON.stringify({ method, params });
-  }
-
-  setAttributeInner(node: HTMLElement, field: string, value: string, ns: string) {
-    setAttributeInner(node, field, value, ns);
   }
 
   scrollTo(id: NodeId, behavior: ScrollBehavior) {
@@ -80,7 +93,9 @@ export class PlatformInterpreter extends BaseInterpreter {
     }
   }
 
-  LoadChild(array: number[]) {
+  // ignore the fact the base interpreter uses ptr + len but we use array
+  // @ts-ignore
+  loadChild(array: number[]) {
     // iterate through each number and get that child
     let node = this.stack[this.stack.length - 1];
 
@@ -94,7 +109,7 @@ export class PlatformInterpreter extends BaseInterpreter {
     return node;
   }
 
-  AppendChildren(id: NodeId, many: number) {
+  appendChildren(id: NodeId, many: number) {
     const root = this.nodes[id];
     const els = this.stack.splice(this.stack.length - many);
 
@@ -104,6 +119,8 @@ export class PlatformInterpreter extends BaseInterpreter {
   }
 
   handleEvent(event: Event, name: string, bubbles: boolean) {
+    console.log("handling event: ", event);
+
     const target = event.target!;
     const realId = targetId(target)!;
     const contents = serializeEvent(event, target);
@@ -136,6 +153,8 @@ export class PlatformInterpreter extends BaseInterpreter {
 
       const message = this.serializeIpcMessage("user_event", body);
       this.ipc.postMessage(message);
+
+      console.log("sent message to host: ", message);
 
       // // Run the event handler on the virtualdom
       // // capture/prevent default of the event if the virtualdom wants to
@@ -242,6 +261,22 @@ export class PlatformInterpreter extends BaseInterpreter {
         );
       }
     }
+  }
+
+  wait_for_request(headless: boolean) {
+    fetch(new Request(this.editsPath))
+      .then(response => response.arrayBuffer())
+      .then(bytes => {
+        // In headless mode, the requestAnimationFrame callback is never called, so we need to run the bytes directly
+        if (headless) {
+          // @ts-ignore
+          this.run_from_bytes(bytes);
+        } else {
+          // @ts-ignore
+          requestAnimationFrame(() => this.run_from_bytes(bytes));
+        }
+        this.wait_for_request(headless);
+      });
   }
 }
 

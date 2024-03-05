@@ -88,9 +88,7 @@ class BaseInterpreter {
   stack;
   templates;
   m;
-  constructor(root, handler) {
-    this.handler = handler;
-    this.initialize(root);
+  constructor() {
   }
   initialize(root, handler = null) {
     this.global = {};
