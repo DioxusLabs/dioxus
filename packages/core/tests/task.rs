@@ -103,7 +103,7 @@ async fn flushing() {
             spawn(async move {
                 let mut channel = BROADCAST.with(|b| b.1.resubscribe());
                 for _ in 0..10 {
-                    flush_sync().await;
+                    wait_for_next_render().await;
                     println!("Task 1 recved");
                     channel.recv().await.unwrap();
                     println!("Task 1");
@@ -116,7 +116,7 @@ async fn flushing() {
             spawn(async move {
                 let mut channel = BROADCAST.with(|b| b.1.resubscribe());
                 for _ in 0..10 {
-                    flush_sync().await;
+                    wait_for_next_render().await;
                     println!("Task 2 recved");
                     channel.recv().await.unwrap();
                     println!("Task 2");

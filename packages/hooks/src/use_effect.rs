@@ -35,7 +35,7 @@ pub fn use_effect(mut callback: impl FnMut() + 'static) {
                 rc.changed().await;
 
                 // Wait for the dom the be finished with sync work
-                flush_sync().await;
+                wait_for_next_render().await;
             }
         });
     });
