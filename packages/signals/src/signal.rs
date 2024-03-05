@@ -30,17 +30,15 @@ use std::{
 /// }
 ///
 /// #[component]
-/// fn Child(state: Signal<u32>) -> Element {
-///     let state = *state;
-///
-///     use_future( |()| async move {
+/// fn Child(mut state: Signal<u32>) -> Element {
+///     use_future(move || async move {
 ///         // Because the signal is a Copy type, we can use it in an async block without cloning it.
-///         *state.write() += 1;
+///         state += 1;
 ///     });
 ///
 ///     rsx! {
 ///         button {
-///             onclick: move |_| *state.write() += 1,
+///             onclick: move |_| state += 1,
 ///             "{state}"
 ///         }
 ///     }
@@ -202,6 +200,7 @@ impl<T, S: Storage<SignalData<T>>> Readable for Signal<T, S> {
         let inner = self.inner.try_read()?;
 
         if let Some(reactive_context) = ReactiveContext::current() {
+            tracing::trace!("Subscribing to the reactive context {}", reactive_context);
             inner.subscribers.lock().unwrap().insert(reactive_context);
         }
 
@@ -244,7 +243,11 @@ impl<T: 'static, S: Storage<SignalData<T>>> Writable for Signal<T, S> {
             let borrow = S::map_mut(inner, |v| &mut v.value);
             Write {
                 write: borrow,
-                drop_signal: Box::new(SignalSubscriberDrop { signal: *self }),
+                drop_signal: Box::new(SignalSubscriberDrop {
+                    signal: *self,
+                    #[cfg(debug_assertions)]
+                    origin: std::panic::Location::caller(),
+                }),
             }
         })
     }
@@ -344,10 +347,17 @@ impl<T: ?Sized, S: AnyStorage> DerefMut for Write<T, S> {
 
 struct SignalSubscriberDrop<T: 'static, S: Storage<SignalData<T>>> {
     signal: Signal<T, S>,
+    #[cfg(debug_assertions)]
+    origin: &'static std::panic::Location<'static>,
 }
 
 impl<T: 'static, S: Storage<SignalData<T>>> Drop for SignalSubscriberDrop<T, S> {
     fn drop(&mut self) {
+        #[cfg(debug_assertions)]
+        tracing::trace!(
+            "Write on signal at {:?} finished, updating subscribers",
+            self.origin
+        );
         self.signal.update_subscribers();
     }
 }

@@ -80,9 +80,7 @@ mod js {
     this.listeners = new ListenerMap();
     this.nodes = [];
     this.stack = [];
-    this.root = null;
     this.templates = {};
-    this.els = null;
     this.save_template = function(nodes, tmpl_id) {
         this.templates[tmpl_id] = nodes;
     }
@@ -131,15 +129,15 @@ mod js {
     }
     this.AppendChildren = function (id, many){
         let root = this.nodes[id];
-        this.els = this.stack.splice(this.stack.length-many);
+        let els = this.stack.splice(this.stack.length-many);
         for (let k = 0; k < many; k++) {
-            root.appendChild(this.els[k]);
+            root.appendChild(els[k]);
         }
     }
     "#;
 
     fn mount_to_root() {
-        "{this.AppendChildren(this.root, this.stack.length-1);}"
+        "{this.AppendChildren(this.listeners.root, this.stack.length-1);}"
     }
     fn push_root(root: u32) {
         "{this.stack.push(this.nodes[$root$]);}"
@@ -151,7 +149,7 @@ mod js {
         "{this.stack.pop();}"
     }
     fn replace_with(id: u32, n: u16) {
-        "{const root = this.nodes[$id$]; this.els = this.stack.splice(this.stack.length-$n$); if (root.listening) { this.listeners.removeAllNonBubbling(root); } root.replaceWith(...this.els);}"
+        "{const root = this.nodes[$id$]; let els = this.stack.splice(this.stack.length-$n$); if (root.listening) { this.listeners.removeAllNonBubbling(root); } root.replaceWith(...els);}"
     }
     fn insert_after(id: u32, n: u16) {
         "{this.nodes[$id$].after(...this.stack.splice(this.stack.length-$n$));}"
@@ -228,7 +226,7 @@ mod js {
         }"#
     }
     fn replace_placeholder(ptr: u32, len: u8, n: u16) {
-        "{this.els = this.stack.splice(this.stack.length - $n$); let node = this.LoadChild($ptr$, $len$); node.replaceWith(...this.els);}"
+        "{els = this.stack.splice(this.stack.length - $n$); let node = this.LoadChild($ptr$, $len$); node.replaceWith(...els);}"
     }
     fn load_template(tmpl_id: u16, index: u16, id: u32) {
         "{let node = this.templates[$tmpl_id$][$index$].cloneNode(true); this.nodes[$id$] = node; this.stack.push(node);}"
@@ -270,9 +268,6 @@ pub mod binary_protocol {
         const JS_FILE: &str = "./src/interpreter.js";
         const JS_FILE: &str = "./src/common.js";
 
-        fn mount_to_root() {
-            "{this.AppendChildren(this.root, this.stack.length-1);}"
-        }
         fn push_root(root: u32) {
             "{this.stack.push(this.nodes[$root$]);}"
         }
@@ -282,9 +277,9 @@ pub mod binary_protocol {
         fn append_children_to_top(many: u16) {
             "{
                 let root = this.stack[this.stack.length-many-1];
-                this.els = this.stack.splice(this.stack.length-many);
+                let els = this.stack.splice(this.stack.length-many);
                 for (let k = 0; k < many; k++) {
-                    root.appendChild(this.els[k]);
+                    root.appendChild(els[k]);
                 }
             }"
         }
@@ -292,7 +287,7 @@ pub mod binary_protocol {
             "{this.stack.pop();}"
         }
         fn replace_with(id: u32, n: u16) {
-            "{let root = this.nodes[$id$]; this.els = this.stack.splice(this.stack.length-$n$); if (root.listening) { this.listeners.removeAllNonBubbling(root); } root.replaceWith(...this.els);}"
+            "{let root = this.nodes[$id$]; let els = this.stack.splice(this.stack.length-$n$); if (root.listening) { this.listeners.removeAllNonBubbling(root); } root.replaceWith(...els);}"
         }
         fn insert_after(id: u32, n: u16) {
             "{this.nodes[$id$].after(...this.stack.splice(this.stack.length-$n$));}"
@@ -406,7 +401,7 @@ pub mod binary_protocol {
             }"#
         }
         fn replace_placeholder(array: &[u8], n: u16) {
-            "{this.els = this.stack.splice(this.stack.length - $n$); let node = this.LoadChild($array$); node.replaceWith(...this.els);}"
+            "{let els = this.stack.splice(this.stack.length - $n$); let node = this.LoadChild($array$); node.replaceWith(...els);}"
         }
         fn load_template(tmpl_id: u16, index: u16, id: u32) {
             "{let node = this.templates[$tmpl_id$][$index$].cloneNode(true); this.nodes[$id$] = node; this.stack.push(node);}"

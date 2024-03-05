@@ -9,6 +9,7 @@ use dioxus_ssr::{
 use std::future::Future;
 use std::sync::Arc;
 use std::sync::RwLock;
+use tokio::task::block_in_place;
 use tokio::task::JoinHandle;
 
 use crate::prelude::*;
@@ -64,7 +65,7 @@ impl SsrRendererPool {
                     let prev_context = SERVER_CONTEXT.with(|ctx| ctx.replace(server_context));
                     // poll the future, which may call server_context()
                     tracing::info!("Rebuilding vdom");
-                    vdom.rebuild(&mut NoOpMutations);
+                    block_in_place(|| vdom.rebuild(&mut NoOpMutations));
                     vdom.wait_for_suspense().await;
                     tracing::info!("Suspense resolved");
                     // after polling the future, we need to restore the context
@@ -124,7 +125,7 @@ impl SsrRendererPool {
                                         .with(|ctx| ctx.replace(Box::new(server_context)));
                                     // poll the future, which may call server_context()
                                     tracing::info!("Rebuilding vdom");
-                                    vdom.rebuild(&mut NoOpMutations);
+                                    block_in_place(|| vdom.rebuild(&mut NoOpMutations));
                                     vdom.wait_for_suspense().await;
                                     tracing::info!("Suspense resolved");
                                     // after polling the future, we need to restore the context

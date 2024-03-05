@@ -2,7 +2,7 @@ use dioxus_lib::prelude::{try_consume_context, use_hook};
 
 use crate::prelude::{Navigator, RouterContext};
 
-/// A hook that provides access to the navigator to change the router history. Unlike [`use_router`], this hook will not cause a rerender when the current route changes
+/// A hook that provides access to the navigator to change the router history.
 ///
 /// > The Routable macro will define a version of this hook with an explicit type.
 ///
@@ -26,7 +26,7 @@ use crate::prelude::{Navigator, RouterContext};
 ///
 /// #[component]
 /// fn Index() -> Element {
-///     let navigator = use_navigator(&cx);
+///     let navigator = use_navigator();
 ///
 ///     rsx! {
 ///         button {

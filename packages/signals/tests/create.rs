@@ -56,6 +56,11 @@ fn deref_signal() {
 
 #[test]
 fn drop_signals() {
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+
+    static SIGNAL_DROP_COUNT: AtomicUsize = AtomicUsize::new(0);
+
     let mut dom = VirtualDom::new(|| {
         let generation = generation();
 
@@ -68,10 +73,18 @@ fn drop_signals() {
     });
 
     fn Child() -> Element {
-        let signal = create_without_cx();
+        struct TracksDrops;
+
+        impl Drop for TracksDrops {
+            fn drop(&mut self) {
+                SIGNAL_DROP_COUNT.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+
+        use_signal(|| TracksDrops);
 
         rsx! {
-            "{signal}"
+            ""
         }
     }
 
@@ -79,7 +92,5 @@ fn drop_signals() {
     dom.mark_dirty(ScopeId::ROOT);
     dom.render_immediate(&mut NoOpMutations);
 
-    fn create_without_cx() -> Signal<String> {
-        Signal::new("hello world".to_string())
-    }
+    assert_eq!(SIGNAL_DROP_COUNT.load(Ordering::Relaxed), 10);
 }

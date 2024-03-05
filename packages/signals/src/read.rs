@@ -39,7 +39,9 @@ pub trait Readable {
         MappedSignal::new(try_read, peek)
     }
 
-    /// Get the current value of the state. If this is a signal, this will subscribe the current scope to the signal. If the value has been dropped, this will panic.
+    /// Get the current value of the state. If this is a signal, this will subscribe the current scope to the signal.
+    /// If the value has been dropped, this will panic. Calling this on a Signal is the same as
+    /// using the signal() syntax to read and subscribe to its value
     #[track_caller]
     fn read(&self) -> ReadableRef<Self> {
         self.try_read().unwrap()

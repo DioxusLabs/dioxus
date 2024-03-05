@@ -84,14 +84,36 @@ mod server_fn_impl {
         /// Get the request that triggered:
         /// - The initial SSR render if called from a ScopeState or ServerFn
         /// - The server function to be called if called from a server function after the initial render
-        pub fn request_parts(&self) -> tokio::sync::RwLockReadGuard<'_, http::request::Parts> {
+        pub async fn request_parts(
+            &self,
+        ) -> tokio::sync::RwLockReadGuard<'_, http::request::Parts> {
+            self.parts.read().await
+        }
+
+        /// Get the request that triggered:
+        /// - The initial SSR render if called from a ScopeState or ServerFn
+        /// - The server function to be called if called from a server function after the initial render
+        pub fn request_parts_blocking(
+            &self,
+        ) -> tokio::sync::RwLockReadGuard<'_, http::request::Parts> {
             self.parts.blocking_read()
         }
 
         /// Get the request that triggered:
         /// - The initial SSR render if called from a ScopeState or ServerFn
         /// - The server function to be called if called from a server function after the initial render
-        pub fn request_parts_mut(&self) -> tokio::sync::RwLockWriteGuard<'_, http::request::Parts> {
+        pub async fn request_parts_mut(
+            &self,
+        ) -> tokio::sync::RwLockWriteGuard<'_, http::request::Parts> {
+            self.parts.write().await
+        }
+
+        /// Get the request that triggered:
+        /// - The initial SSR render if called from a ScopeState or ServerFn
+        /// - The server function to be called if called from a server function after the initial render
+        pub fn request_parts_mut_blocking(
+            &self,
+        ) -> tokio::sync::RwLockWriteGuard<'_, http::request::Parts> {
             self.parts.blocking_write()
         }
 
@@ -239,6 +261,6 @@ impl<
     type Rejection = R;
 
     async fn from_request(req: &DioxusServerContext) -> Result<Self, Self::Rejection> {
-        Ok(I::from_request_parts(&mut req.request_parts_mut(), &()).await?)
+        Ok(I::from_request_parts(&mut *req.request_parts_mut().await, &()).await?)
     }
 }
