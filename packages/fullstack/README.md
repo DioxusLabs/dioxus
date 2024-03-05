@@ -35,26 +35,9 @@ Full stack Dioxus in under 50 lines of code
 ```rust
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
-use dioxus_fullstack::prelude::*;
 
-// On the web, run our client code
-#[cfg(feature = "web")]
 fn main() {
-    dioxus_web::launch_with_props(
-        app,
-        get_root_props_from_document().unwrap_or_default(),
-        dioxus_web::Config::new().hydrate(true),
-    );
-}
-
-// On the server, run a simple warp server
-#[cfg(feature = "server")]
-#[tokio::main]
-async fn main() {
-    // Automatically handles server side rendering, hot reloading intigration, and hosting server functions
-    warp::serve(serve_dioxus_application("", ServerConfig::new(app, ())))
-        .run(([127, 0, 0, 1], 8080))
-        .await;
+    launch(app)
 }
 
 fn app() -> Element {
