@@ -1,9 +1,11 @@
 // The root interpreter class that holds state about the mapping between DOM and VirtualDom
 // This always lives in the JS side of things, and is extended by the native and web interpreters
 
+import { setAttributeInner } from "./set_attribute";
+
 export type NodeId = number;
 
-export class Interpreter {
+export class BaseInterpreter {
   // non bubbling events listen at the element the listener was created at
   global: {
     [key: string]: { active: number, callback: EventListener }
@@ -22,6 +24,9 @@ export class Interpreter {
   templates: {
     [key: string]: Node[]
   };
+
+  // sledgehammer is generating this...
+  m: any;
 
   constructor(root: HTMLElement, handler: EventListener) {
     this.handler = handler;
@@ -99,6 +104,73 @@ export class Interpreter {
     for (let k = 0; k < many; k++) {
       root.appendChild(els[k]);
     }
+  }
+
+  loadChild(ptr: number, len: number): Node {
+    // iterate through each number and get that child
+    let node = this.stack[this.stack.length - 1] as Node;
+    let ptr_end = ptr + len;
+
+    for (; ptr < ptr_end; ptr++) {
+      let end = this.m.getUint8(ptr);
+      for (node = node.firstChild; end > 0; end--) {
+        node = node.nextSibling;
+      }
+    }
+
+    return node;
+  }
+
+  saveTemplate(nodes: HTMLElement[], tmpl_id: string) {
+    this.templates[tmpl_id] = nodes;
+  }
+
+  hydrateRoot(ids: { [key: number]: number }) {
+    const hydrateNodes = document.querySelectorAll('[data-node-hydration]');
+
+    for (let i = 0; i < hydrateNodes.length; i++) {
+      const hydrateNode = hydrateNodes[i] as HTMLElement;
+      const hydration = hydrateNode.getAttribute('data-node-hydration');
+      const split = hydration!.split(',');
+      const id = ids[parseInt(split[0])];
+
+      this.nodes[id] = hydrateNode;
+
+      if (split.length > 1) {
+        // @ts-ignore
+        hydrateNode.listening = split.length - 1;
+        hydrateNode.setAttribute('data-dioxus-id', id.toString());
+        for (let j = 1; j < split.length; j++) {
+          const listener = split[j];
+          const split2 = listener.split(':');
+          const event_name = split2[0];
+          const bubbles = split2[1] === '1';
+          this.createListener(event_name, hydrateNode, bubbles);
+        }
+      }
+    }
+
+    const treeWalker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_COMMENT,
+    );
+
+    let currentNode = treeWalker.nextNode();
+
+    while (currentNode) {
+      const id = currentNode.textContent!;
+      const split = id.split('node-id');
+
+      if (split.length > 1) {
+        this.nodes[ids[parseInt(split[1])]] = currentNode.nextSibling;
+      }
+
+      currentNode = treeWalker.nextNode();
+    }
+  }
+
+  setAttributeInner(node: HTMLElement, field: string, value: string, ns: string) {
+    setAttributeInner(node, field, value, ns);
   }
 }
 

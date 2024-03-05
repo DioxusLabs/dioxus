@@ -1,81 +1,3 @@
-// src/ts/interpreter_core.ts
-class Interpreter {
-  global;
-  local;
-  root;
-  handler;
-  nodes;
-  stack;
-  templates;
-  constructor(root, handler) {
-    this.handler = handler;
-    this.initialize(root);
-  }
-  initialize(root, handler = null) {
-    this.global = {};
-    this.local = {};
-    this.root = root;
-    this.nodes = [root];
-    this.stack = [root];
-    this.templates = {};
-    if (handler) {
-      this.handler = handler;
-    }
-  }
-  createListener(event_name, element, bubbles) {
-    if (bubbles) {
-      if (this.global[event_name] === undefined) {
-        this.global[event_name] = { active: 1, callback: this.handler };
-        this.root.addEventListener(event_name, this.handler);
-      } else {
-        this.global[event_name].active++;
-      }
-    } else {
-      const id = element.getAttribute("data-dioxus-id");
-      if (!this.local[id]) {
-        this.local[id] = {};
-      }
-      element.addEventListener(event_name, this.handler);
-    }
-  }
-  removeListener(element, event_name, bubbles) {
-    if (bubbles) {
-      this.removeBubblingListener(event_name);
-    } else {
-      this.removeNonBubblingListener(element, event_name);
-    }
-  }
-  removeBubblingListener(event_name) {
-    this.global[event_name].active--;
-    if (this.global[event_name].active === 0) {
-      this.root.removeEventListener(event_name, this.global[event_name].callback);
-      delete this.global[event_name];
-    }
-  }
-  removeNonBubblingListener(element, event_name) {
-    const id = element.getAttribute("data-dioxus-id");
-    delete this.local[id][event_name];
-    if (Object.keys(this.local[id]).length === 0) {
-      delete this.local[id];
-    }
-    element.removeEventListener(event_name, this.handler);
-  }
-  removeAllNonBubblingListeners(element) {
-    const id = element.getAttribute("data-dioxus-id");
-    delete this.local[id];
-  }
-  getNode(id) {
-    return this.nodes[id];
-  }
-  appendChildren(id, many) {
-    const root = this.nodes[id];
-    const els = this.stack.splice(this.stack.length - many);
-    for (let k = 0;k < many; k++) {
-      root.appendChild(els[k]);
-    }
-  }
-}
-
 // src/ts/set_attribute.ts
 function setAttributeInner(node, field, value, ns) {
   if (ns === "style") {
@@ -156,13 +78,84 @@ var isBoolAttr = function(field) {
   }
 };
 
-// src/ts/interpreter_web.ts
-class PlatformInterpreter extends Interpreter {
+// src/ts/core.ts
+class BaseInterpreter {
+  global;
+  local;
+  root;
+  handler;
+  nodes;
+  stack;
+  templates;
   m;
   constructor(root, handler) {
-    super(root, handler);
+    this.handler = handler;
+    this.initialize(root);
   }
-  LoadChild(ptr, len) {
+  initialize(root, handler = null) {
+    this.global = {};
+    this.local = {};
+    this.root = root;
+    this.nodes = [root];
+    this.stack = [root];
+    this.templates = {};
+    if (handler) {
+      this.handler = handler;
+    }
+  }
+  createListener(event_name, element, bubbles) {
+    if (bubbles) {
+      if (this.global[event_name] === undefined) {
+        this.global[event_name] = { active: 1, callback: this.handler };
+        this.root.addEventListener(event_name, this.handler);
+      } else {
+        this.global[event_name].active++;
+      }
+    } else {
+      const id = element.getAttribute("data-dioxus-id");
+      if (!this.local[id]) {
+        this.local[id] = {};
+      }
+      element.addEventListener(event_name, this.handler);
+    }
+  }
+  removeListener(element, event_name, bubbles) {
+    if (bubbles) {
+      this.removeBubblingListener(event_name);
+    } else {
+      this.removeNonBubblingListener(element, event_name);
+    }
+  }
+  removeBubblingListener(event_name) {
+    this.global[event_name].active--;
+    if (this.global[event_name].active === 0) {
+      this.root.removeEventListener(event_name, this.global[event_name].callback);
+      delete this.global[event_name];
+    }
+  }
+  removeNonBubblingListener(element, event_name) {
+    const id = element.getAttribute("data-dioxus-id");
+    delete this.local[id][event_name];
+    if (Object.keys(this.local[id]).length === 0) {
+      delete this.local[id];
+    }
+    element.removeEventListener(event_name, this.handler);
+  }
+  removeAllNonBubblingListeners(element) {
+    const id = element.getAttribute("data-dioxus-id");
+    delete this.local[id];
+  }
+  getNode(id) {
+    return this.nodes[id];
+  }
+  appendChildren(id, many) {
+    const root = this.nodes[id];
+    const els = this.stack.splice(this.stack.length - many);
+    for (let k = 0;k < many; k++) {
+      root.appendChild(els[k]);
+    }
+  }
+  loadChild(ptr, len) {
     let node = this.stack[this.stack.length - 1];
     let ptr_end = ptr + len;
     for (;ptr < ptr_end; ptr++) {
@@ -207,8 +200,10 @@ class PlatformInterpreter extends Interpreter {
       currentNode = treeWalker.nextNode();
     }
   }
+  setAttributeInner(node, field, value, ns) {
+    setAttributeInner(node, field, value, ns);
+  }
 }
 export {
-  setAttributeInner,
-  PlatformInterpreter
+  BaseInterpreter
 };

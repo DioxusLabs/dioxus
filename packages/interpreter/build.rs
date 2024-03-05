@@ -20,8 +20,9 @@ fn main() {
 
     // Otherwise, generate the bindings and write the new hash to disk
     // Generate the bindings for both native and web
-    gen_bindings("interpreter_native", "native");
-    gen_bindings("interpreter_web", "web");
+    gen_bindings("common", "common");
+    gen_bindings("native", "native");
+    gen_bindings("core", "core");
 
     std::fs::write("src/js/hash.txt", hash.to_string()).unwrap();
 }

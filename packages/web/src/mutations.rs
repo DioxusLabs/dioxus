@@ -65,7 +65,7 @@ impl WebsysDom {
     #[cfg(feature = "mounted")]
     fn flush_queued_mounted_events(&mut self) {
         for id in self.queued_mounted_events.drain(..) {
-            let node = self.interpreter.as_web().get_node(id.0 as u32);
+            let node = self.interpreter.base().get_node(id.0 as u32);
             if let Some(element) = node.dyn_ref::<web_sys::Element>() {
                 let _ = self.event_channel.unbounded_send(UiEvent {
                     name: "mounted".to_string(),
@@ -92,7 +92,7 @@ impl WriteMutations for WebsysDom {
         self.templates
             .insert(template.name.to_owned(), self.max_template_id);
         self.interpreter
-            .as_web()
+            .base()
             .save_template(roots, self.max_template_id);
         self.max_template_id += 1
     }

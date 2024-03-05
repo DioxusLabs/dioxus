@@ -8,7 +8,7 @@
 
 use dioxus_core::ElementId;
 use dioxus_html::PlatformEventData;
-use dioxus_interpreter_js::{unified_bindings::Interpreter, WebInterpreter};
+use dioxus_interpreter_js::unified_bindings::Interpreter;
 use futures_channel::mpsc;
 use rustc_hash::FxHashMap;
 use wasm_bindgen::{closure::Closure, JsCast};
@@ -112,7 +112,7 @@ impl WebsysDom {
             }
         }));
 
-        let _interpreter: &WebInterpreter = interpreter.as_web();
+        let _interpreter = interpreter.base();
         _interpreter.initialize(
             root.clone().unchecked_into(),
             handler.as_ref().unchecked_ref(),

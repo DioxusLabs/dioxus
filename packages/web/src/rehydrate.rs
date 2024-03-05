@@ -22,7 +22,7 @@ impl WebsysDom {
         // Recursively rehydrate the dom from the VirtualDom
         self.rehydrate_scope(root_scope, dom, &mut ids, &mut to_mount)?;
 
-        self.interpreter.as_web().hydrate(ids);
+        self.interpreter.base().hydrate(ids);
 
         #[cfg(feature = "mounted")]
         for id in to_mount {
@@ -168,7 +168,7 @@ impl WriteMutations for OnlyWriteTemplates<'_> {
             .insert(template.name.to_owned(), self.0.max_template_id);
         self.0
             .interpreter
-            .as_web()
+            .base()
             .save_template(roots, self.0.max_template_id);
         self.0.max_template_id += 1
     }

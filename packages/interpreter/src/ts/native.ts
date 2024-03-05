@@ -3,11 +3,11 @@
 // This file lives on the renderer, not the host. It's basically a polyfill over functionality that the host can't
 // provide since it doesn't have access to the dom.
 
-import { Interpreter, NodeId } from "./interpreter_core";
+import { BaseInterpreter, NodeId } from "./core";
 import { SerializedEvent, serializeEvent } from "./serialize";
 import { setAttributeInner } from "./set_attribute";
 
-export class PlatformInterpreter extends Interpreter {
+export class PlatformInterpreter extends BaseInterpreter {
   intercept_link_redirects: boolean;
   ipc: any;
 

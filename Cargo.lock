@@ -8527,7 +8527,6 @@ dependencies = [
 [[package]]
 name = "sledgehammer_bindgen"
 version = "0.4.0"
-source = "git+https://github.com/ealmloff/sledgehammer_bindgen#6f90290e1655014f22623eb8b2ea41fb098e1164"
 dependencies = [
  "sledgehammer_bindgen_macro",
  "wasm-bindgen",
@@ -8536,7 +8535,6 @@ dependencies = [
 [[package]]
 name = "sledgehammer_bindgen_macro"
 version = "0.4.0"
-source = "git+https://github.com/ealmloff/sledgehammer_bindgen#6f90290e1655014f22623eb8b2ea41fb098e1164"
 dependencies = [
  "quote",
  "syn 2.0.51",
