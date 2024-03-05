@@ -1,7 +1,8 @@
 #![allow(unused)]
 
+use dioxus_html::{native_bind::NativeFileEngine, FileEngine, HasFileData, HasFormData};
 use serde::Deserialize;
-use std::{path::PathBuf, str::FromStr};
+use std::{path::PathBuf, str::FromStr, sync::Arc};
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct FileDialogRequest {
@@ -122,5 +123,22 @@ impl FromStr for Filters {
                 _ => Ok(Filters::Mime(s.to_string())),
             }
         }
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct DesktopFileUploadForm {
+    pub files: Arc<NativeFileEngine>,
+}
+
+impl HasFileData for DesktopFileUploadForm {
+    fn files(&self) -> Option<Arc<dyn FileEngine>> {
+        Some(self.files.clone())
+    }
+}
+
+impl HasFormData for DesktopFileUploadForm {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

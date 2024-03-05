@@ -3,9 +3,10 @@
 //! Dioxus intercepts these events and provides a Rusty interface to the file data. Since we want this interface to
 //! be crossplatform,
 
-use dioxus::html::HasFileData;
+use std::sync::Arc;
+
 use dioxus::prelude::*;
-use tokio::time::sleep;
+use dioxus::{html::HasFileData, prelude::dioxus_elements::FileEngine};
 
 fn main() {
     launch(app);
@@ -15,22 +16,24 @@ fn app() -> Element {
     let mut enable_directory_upload = use_signal(|| false);
     let mut files_uploaded = use_signal(|| Vec::new() as Vec<String>);
 
+    let read_files = move |file_engine: Arc<dyn FileEngine>| async move {
+        let files = file_engine.files();
+        for file_name in &files {
+            if let Some(file) = file_engine.read_file_to_string(file_name).await {
+                files_uploaded.write().push(file);
+            }
+        }
+    };
+
     let upload_files = move |evt: FormEvent| async move {
-        for file_name in evt.files().unwrap().files() {
-            // no files on form inputs?
-            sleep(std::time::Duration::from_secs(1)).await;
-            files_uploaded.write().push(file_name);
+        if let Some(file_engine) = evt.files() {
+            read_files(file_engine).await;
         }
     };
 
     let handle_file_drop = move |evt: DragEvent| async move {
-        if let Some(file_engine) = &evt.files() {
-            let files = file_engine.files();
-            for file_name in &files {
-                if let Some(file) = file_engine.read_file_to_string(file_name).await {
-                    files_uploaded.write().push(file);
-                }
-            }
+        if let Some(file_engine) = evt.files() {
+            read_files(file_engine).await;
         }
     };
 
@@ -50,20 +53,24 @@ fn app() -> Element {
             r#type: "file",
             accept: ".txt,.rs",
             multiple: true,
+            name: "textreader",
             directory: enable_directory_upload,
             onchange: upload_files,
         }
+
+        label { r#for: "textreader", "Upload text/rust files and read them" }
 
         div {
             // cheating with a little bit of JS...
             "ondragover": "this.style.backgroundColor='#88FF88';",
             "ondragleave": "this.style.backgroundColor='#FFFFFF';",
             id: "drop-zone",
-            prevent_default: "ondrop dragover dragenter",
+            // prevent_default: "ondrop dragover dragenter",
             ondrop: handle_file_drop,
             ondragover: move |event| event.stop_propagation(),
             "Drop files here"
         }
+
         ul {
             for file in files_uploaded.read().iter() {
                 li { "{file}" }

@@ -13,18 +13,6 @@ const EDITS_PATH: &str = "http://dioxus.index.html/edits";
 #[cfg(not(any(target_os = "android", target_os = "windows")))]
 const EDITS_PATH: &str = "dioxus://index.html/edits";
 
-// const PREVENT_FILE_UPLOAD: &str = include_str!("../js/prevent_file_upload.js");
-
-fn handle_edits_code() -> String {
-    format!(
-        r#"// Poll for requests
-        {SLEDGEHAMMER_JS}
-        {NATIVE_JS}
-        window.interpreter = new NativeInterpreter("{EDITS_PATH}");
-    "#
-    )
-}
-
 static DEFAULT_INDEX: &str = include_str!("./index.html");
 
 /// Build the index.html file we use for bootstrapping a new app
@@ -184,20 +172,26 @@ fn serve_from_fs(path: PathBuf) -> Result<Response<Vec<u8>>> {
 /// - headless: is this page being loaded but invisible? Important because not all windows are visible and the
 ///             interpreter can't connect until the window is ready.
 fn module_loader(root_id: &str, headless: bool) -> String {
-    let js = handle_edits_code();
     format!(
         r#"
 <script type="module">
-    {js}
-    // Wait for the page to load
+    // Bring the sledgehammer code
+    {SLEDGEHAMMER_JS}
+
+    // And then extend it with our native bindings
+    {NATIVE_JS}
+
+    // The nativeinterprerter extends the sledgehammer interpreter with a few extra methods that we use for IPC
+    window.interpreter = new NativeInterpreter("{EDITS_PATH}");
+
+    // Wait for the page to load before sending the initialize message
     window.onload = function() {{
-        let rootname = "{root_id}";
-        let root_element = window.document.getElementById(rootname);
+        let root_element = window.document.getElementById("{root_id}");
         if (root_element != null) {{
             window.interpreter.initialize(root_element);
             window.ipc.postMessage(window.interpreter.serializeIpcMessage("initialize"));
         }}
-        window.interpreter.wait_for_request({headless});
+        window.interpreter.waitForRequest({headless});
     }}
 </script>
 "#

@@ -214,7 +214,7 @@ var serializeDragEvent = function(event) {
 };
 
 // src/ts/native.ts
-var targetId = function(target) {
+var getTargetId = function(target) {
   if (!(target instanceof Node)) {
     return null;
   }
@@ -254,10 +254,30 @@ class NativeInterpreter extends JSChannel_ {
       }
     }, false);
     window.addEventListener("drop", function(e) {
-      if (e.target instanceof Element && e.target.tagName != "INPUT") {
-        e.preventDefault();
+      let target = e.target;
+      if (!(target instanceof Element)) {
+        return;
       }
+      e.preventDefault();
     }, false);
+    window.addEventListener("click", (event) => {
+      const target = event.target;
+      if (target instanceof HTMLInputElement && target.getAttribute("type") === "file") {
+        let target_id = getTargetId(target);
+        if (target_id !== null) {
+          const message = this.serializeIpcMessage("file_dialog", {
+            event: "change&input",
+            accept: target.getAttribute("accept"),
+            directory: target.getAttribute("webkitdirectory") === "true",
+            multiple: target.hasAttribute("multiple"),
+            target: target_id,
+            bubbles: event.bubbles
+          });
+          this.ipc.postMessage(message);
+        }
+        event.preventDefault();
+      }
+    });
     this.ipc = window.ipc;
     const handler = (event) => this.handleEvent(event, event.type, true);
     super.initialize(root, handler);
@@ -310,9 +330,8 @@ class NativeInterpreter extends JSChannel_ {
     }
   }
   handleEvent(event, name, bubbles) {
-    console.log("handling event: ", event);
     const target = event.target;
-    const realId = targetId(target);
+    const realId = getTargetId(target);
     const contents = serializeEvent(event, target);
     let body = {
       name,
@@ -386,14 +405,14 @@ class NativeInterpreter extends JSChannel_ {
       }
     }
   }
-  wait_for_request(headless) {
+  waitForRequest(headless) {
     fetch(new Request(this.editsPath)).then((response) => response.arrayBuffer()).then((bytes) => {
       if (headless) {
         this.run_from_bytes(bytes);
       } else {
         requestAnimationFrame(() => this.run_from_bytes(bytes));
       }
-      this.wait_for_request(headless);
+      this.waitForRequest(headless);
     });
   }
 }

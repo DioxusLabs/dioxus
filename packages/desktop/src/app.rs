@@ -2,9 +2,8 @@ use crate::{
     config::{Config, WindowCloseBehaviour},
     element::DesktopElement,
     event_handlers::WindowEventHandlers,
-    file_upload::FileDialogRequest,
-    ipc::IpcMessage,
-    ipc::{EventData, UserWindowEvent},
+    file_upload::{DesktopFileUploadForm, FileDialogRequest},
+    ipc::{EventData, IpcMessage, UserWindowEvent},
     query::QueryResult,
     shortcut::{GlobalHotKeyEvent, ShortcutRegistry},
     webview::WebviewInstance,
@@ -12,10 +11,7 @@ use crate::{
 use crossbeam_channel::Receiver;
 use dioxus_core::ElementId;
 use dioxus_core::VirtualDom;
-use dioxus_html::{
-    native_bind::NativeFileEngine, FileEngine, HasFileData, HasFormData, HtmlEvent,
-    PlatformEventData,
-};
+use dioxus_html::{native_bind::NativeFileEngine, HtmlEvent, PlatformEventData};
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
@@ -270,30 +266,17 @@ impl App {
         let Ok(file_dialog) = serde_json::from_value::<FileDialogRequest>(msg.params()) else {
             return;
         };
-        struct DesktopFileUploadForm {
-            files: Arc<NativeFileEngine>,
-        }
-
-        impl HasFileData for DesktopFileUploadForm {
-            fn files(&self) -> Option<Arc<dyn FileEngine>> {
-                Some(self.files.clone())
-            }
-        }
-
-        impl HasFormData for DesktopFileUploadForm {
-            fn as_any(&self) -> &dyn std::any::Any {
-                self
-            }
-        }
 
         let id = ElementId(file_dialog.target);
         let event_name = &file_dialog.event;
         let event_bubbles = file_dialog.bubbles;
         let files = file_dialog.get_file_event();
 
-        let data = Rc::new(PlatformEventData::new(Box::new(DesktopFileUploadForm {
+        let as_any = Box::new(DesktopFileUploadForm {
             files: Arc::new(NativeFileEngine::new(files)),
-        })));
+        });
+
+        let data = Rc::new(PlatformEventData::new(as_any));
 
         let view = self.webviews.get_mut(&window).unwrap();
 

@@ -36,18 +36,48 @@ export class NativeInterpreter extends JSChannel_ {
     // attach an event listener on the body that prevents file drops from navigating
     // this is because the browser will try to navigate to the file if it's dropped on the window
     window.addEventListener("dragover", function (e) {
-      // check which element is our target
+      // // check which element is our target
       if (e.target instanceof Element && e.target.tagName != "INPUT") {
         e.preventDefault();
       }
     }, false);
 
     window.addEventListener("drop", function (e) {
-      // check which element is our target
-      if (e.target instanceof Element && e.target.tagName != "INPUT") {
-        e.preventDefault();
+      let target = e.target;
+
+      if (!(target instanceof Element)) {
+        return;
       }
+
+      // Dropping a file on the window will navigate to the file, which we don't want
+      e.preventDefault();
+
+      // if the element has a drop listener on it, we should send a message to the host with the contents of the drop instead
+
     }, false);
+
+    // attach a listener to the route that listens for clicks and prevents the default file dialog
+    window.addEventListener("click", (event) => {
+      const target = event.target;
+      if (target instanceof HTMLInputElement && target.getAttribute("type") === "file") {
+        // Send a message to the host to open the file dialog if the target is a file input and has a dioxus id attached to it
+        let target_id = getTargetId(target);
+        if (target_id !== null) {
+          const message = this.serializeIpcMessage("file_dialog", {
+            event: "change&input",
+            accept: target.getAttribute("accept"),
+            directory: target.getAttribute("webkitdirectory") === "true",
+            multiple: target.hasAttribute("multiple"),
+            target: target_id,
+            bubbles: event.bubbles,
+          });
+          this.ipc.postMessage(message);
+        }
+
+        // Prevent default regardless - we don't want file dialogs and we don't want the browser to navigate
+        event.preventDefault();
+      }
+    });
 
 
     // @ts-ignore - wry gives us this
@@ -119,10 +149,8 @@ export class NativeInterpreter extends JSChannel_ {
   }
 
   handleEvent(event: Event, name: string, bubbles: boolean) {
-    console.log("handling event: ", event);
-
     const target = event.target!;
-    const realId = targetId(target)!;
+    const realId = getTargetId(target)!;
     const contents = serializeEvent(event, target);
 
     // Handle the event on the virtualdom and then preventDefault if it also preventsDefault
@@ -139,6 +167,8 @@ export class NativeInterpreter extends JSChannel_ {
     // now that we expose preventDefault to the virtualdom on desktop
     // Liveview will still need to use this
     this.preventDefaults(event, target);
+
+
 
 
     // liveview does not have syncronous event handling, so we need to send the event to the host
@@ -263,7 +293,7 @@ export class NativeInterpreter extends JSChannel_ {
     }
   }
 
-  wait_for_request(headless: boolean) {
+  waitForRequest(headless: boolean) {
     fetch(new Request(this.editsPath))
       .then(response => response.arrayBuffer())
       .then(bytes => {
@@ -275,7 +305,7 @@ export class NativeInterpreter extends JSChannel_ {
           // @ts-ignore
           requestAnimationFrame(() => this.run_from_bytes(bytes));
         }
-        this.wait_for_request(headless);
+        this.waitForRequest(headless);
       });
   }
 }
@@ -306,7 +336,7 @@ function handleVirtualdomEventSync(contents: string): EventSyncResult {
   return JSON.parse(xhr.responseText);
 }
 
-function targetId(target: EventTarget): NodeId | null {
+function getTargetId(target: EventTarget): NodeId | null {
   // Ensure that the target is a node, sometimes it's nota
   if (!(target instanceof Node)) {
     return null;
@@ -329,3 +359,28 @@ function targetId(target: EventTarget): NodeId | null {
 
   return parseInt(realId);
 }
+
+
+// function applyFileUpload() {
+//   let inputs = document.querySelectorAll("input");
+//   for (let input of inputs) {
+//     if (!input.getAttribute("data-dioxus-file-listener")) {
+//       // prevent file inputs from opening the file dialog on click
+//       const type = input.getAttribute("type");
+//       if (type === "file") {
+//         input.setAttribute("data-dioxus-file-listener", true);
+//         input.addEventListener("click", (event) => {
+//           let target = event.target;
+//           let target_id = find_real_id(target);
+//           if (target_id !== null) {
+//             const send = (event_name) => {
+//               const message = window.interpreter.serializeIpcMessage("file_diolog", { accept: target.getAttribute("accept"), directory: target.getAttribute("webkitdirectory") === "true", multiple: target.hasAttribute("multiple"), target: parseInt(target_id), bubbles: event_bubbles(event_name), event: event_name });
+//               window.ipc.postMessage(message);
+//             };
+//             send("change&input");
+//           }
+//           event.preventDefault();
+//         });
+//       }
+//     }
+// }
