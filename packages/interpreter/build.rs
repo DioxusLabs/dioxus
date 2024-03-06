@@ -16,6 +16,8 @@ fn main() {
         if contents.trim() == hash.to_string() {
             return;
         }
+
+        panic!("Hashes don't match {} != {}", contents, hash.to_string());
     }
 
     // Otherwise, generate the bindings and write the new hash to disk
