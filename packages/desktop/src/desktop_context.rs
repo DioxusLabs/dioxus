@@ -3,7 +3,7 @@ use crate::{
     assets::AssetHandlerRegistry,
     edits::EditQueue,
     file_upload::NativeFileHover,
-    ipc::{EventData, UserWindowEvent},
+    ipc::UserWindowEvent,
     query::QueryEngine,
     shortcut::{HotKey, ShortcutHandle, ShortcutRegistryError},
     webview::WebviewInstance,
@@ -17,14 +17,13 @@ use dioxus_interpreter_js::MutationState;
 use std::{
     cell::RefCell,
     rc::{Rc, Weak},
-    sync::Arc,
 };
 use tao::{
     event::Event,
     event_loop::EventLoopWindowTarget,
     window::{Fullscreen as WryFullscreen, Window, WindowId},
 };
-use wry::{FileDropEvent, RequestAsyncResponder, WebView};
+use wry::{RequestAsyncResponder, WebView};
 
 #[cfg(target_os = "ios")]
 use tao::platform::ios::WindowExtIOS;
@@ -130,12 +129,7 @@ impl DesktopService {
 
         self.shared
             .proxy
-            .send_event(UserWindowEvent(EventData::NewWindow, cx.id()))
-            .unwrap();
-
-        self.shared
-            .proxy
-            .send_event(UserWindowEvent(EventData::Poll, cx.id()))
+            .send_event(UserWindowEvent::NewWindow)
             .unwrap();
 
         self.shared.pending_webviews.borrow_mut().push(window);
@@ -167,7 +161,7 @@ impl DesktopService {
         let _ = self
             .shared
             .proxy
-            .send_event(UserWindowEvent(EventData::CloseWindow, self.id()));
+            .send_event(UserWindowEvent::CloseWindow(self.id()));
     }
 
     /// Close a particular window, given its ID
@@ -175,7 +169,7 @@ impl DesktopService {
         let _ = self
             .shared
             .proxy
-            .send_event(UserWindowEvent(EventData::CloseWindow, id));
+            .send_event(UserWindowEvent::CloseWindow(id));
     }
 
     /// change window to fullscreen

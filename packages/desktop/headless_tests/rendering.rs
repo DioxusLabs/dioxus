@@ -14,7 +14,7 @@ fn use_inner_html(id: &'static str) -> Option<String> {
 
     use_effect(move || {
         spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
             let res = eval(&format!(
                 r#"let element = document.getElementById('{}');

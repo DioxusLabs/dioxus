@@ -2384,7 +2384,6 @@ version = "0.5.0-alpha.0"
 dependencies = [
  "async-trait",
  "core-foundation",
- "crossbeam-channel",
  "dioxus",
  "dioxus-cli-config",
  "dioxus-core",

@@ -36,7 +36,7 @@ pub fn mock_event_with_extra(id: &'static str, value: &'static str, extra: &'sta
         EXPECTED_EVENTS.with_mut(|x| *x += 1);
 
         spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(5000)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
             let js = format!(
                 r#"

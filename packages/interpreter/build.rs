@@ -6,13 +6,13 @@ use std::{
 
 fn main() {
     // If any TS changes, re-run the build script
-    println!("cargo:rerun-if-changed=src/ts/*.ts,*.json");
+    println!("cargo:rerun-if-changed=src/ts/*.ts");
 
     // Compute the hash of the ts files
-    let hash = hash_dir("src/ts");
+    let hash = hash_dir("./src/ts");
 
     // If the hash matches the one on disk, we're good and don't need to update bindings
-    if let Ok(contents) = read_to_string("src/js/hash.txt") {
+    if let Ok(contents) = read_to_string("./src/js/hash.txt") {
         if contents.trim() == hash.to_string() {
             return;
         }
@@ -34,11 +34,17 @@ fn hash_dir(dir: &str) -> u64 {
     for entry in std::fs::read_dir(dir).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
-        let metadata = std::fs::metadata(&path).unwrap();
-        if metadata.is_file() {
-            let contents = std::fs::read(&path).unwrap();
-            contents.hash(&mut hasher);
+
+        let Some(ext) = path.extension() else {
+            continue;
+        };
+
+        if ext != "ts" {
+            continue;
         }
+
+        let contents = std::fs::read(&path).unwrap();
+        contents.hash(&mut hasher);
     }
 
     hasher.finish()
@@ -58,7 +64,8 @@ fn gen_bindings(input_name: &str, output_name: &str) {
         .arg(format!("src/ts/{input_name}.ts"))
         .arg("--outfile")
         .arg(format!("src/js/{output_name}.js"))
-        // .arg("--minify")
+        .arg("--minify-whitespace")
+        .arg("--minify-syntax")
         .status()
         .unwrap();
 

@@ -32,47 +32,6 @@ export class NativeInterpreter extends JSChannel_ {
     this.intercept_link_redirects = true;
     this.liveview = false;
 
-
-    const dragEventHandler = (e: DragEvent) => {
-      // e.preventDefault();
-      // e.dataTransfer.effectAllowed = 'none';
-      // e.dataTransfer.dropEffect = 'none';
-
-      //
-
-      // we need to signal to the host to provide a native file path,
-      // not the one coming from here
-
-      // We can't get native
-      // if (e.type === "drop") {
-      //   let target = e.target;
-
-      //   if (target instanceof Element) {
-      //     let target_id = getTargetId(target);
-      //     if (target_id !== null) {
-      //       const message = this.serializeIpcMessage("file_drop", {
-      //         event: "drop",
-      //         target: target_id,
-      //         data: Array.from(e.dataTransfer.files).map(file => {
-      //           return {
-      //             name: file.name,
-      //             type: file.type,
-      //             size: file.size,
-      //           };
-      //         }),
-      //       });
-
-      //       this.ipc.postMessage(message);
-      //     }
-      //   }
-      // }
-    };
-
-
-    // ["dragenter", "dragover", "drop"].forEach((event) => {
-    //   window.addEventListener(event, dragEventHandler, false)
-    // });
-
     // attach an event listener on the body that prevents file drops from navigating
     // this is because the browser will try to navigate to the file if it's dropped on the window
     window.addEventListener("dragover", function (e) {

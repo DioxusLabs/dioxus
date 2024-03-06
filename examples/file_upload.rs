@@ -12,15 +12,23 @@ fn main() {
     LaunchBuilder::desktop().launch(app);
 }
 
+struct UploadedFile {
+    name: String,
+    contents: String,
+}
+
 fn app() -> Element {
     let mut enable_directory_upload = use_signal(|| false);
-    let mut files_uploaded = use_signal(|| Vec::new() as Vec<String>);
+    let mut files_uploaded = use_signal(|| Vec::new() as Vec<UploadedFile>);
 
     let read_files = move |file_engine: Arc<dyn FileEngine>| async move {
         let files = file_engine.files();
         for file_name in &files {
-            if let Some(file) = file_engine.read_file_to_string(file_name).await {
-                files_uploaded.write().push(file);
+            if let Some(contents) = file_engine.read_file_to_string(file_name).await {
+                files_uploaded.write().push(UploadedFile {
+                    name: file_name.clone(),
+                    contents,
+                });
             }
         }
     };
@@ -40,25 +48,31 @@ fn app() -> Element {
     rsx! {
         style { {include_str!("./assets/file_upload.css")} }
 
-        input {
-            r#type: "checkbox",
-            id: "directory-upload",
-            checked: enable_directory_upload,
-            oninput: move |evt| enable_directory_upload.set(evt.checked()),
-        },
+        h1 { "File Upload Example" }
+        p { "Drop a .txt, .rs, or .js file here to read it" }
 
-        label { r#for: "directory-upload", "Enable directory upload" }
 
-        input {
-            r#type: "file",
-            accept: ".txt,.rs,.js",
-            multiple: true,
-            name: "textreader",
-            directory: enable_directory_upload,
-            onchange: upload_files,
+        div {
+            label { r#for: "directory-upload", "Enable directory upload" }
+            input {
+                r#type: "checkbox",
+                id: "directory-upload",
+                checked: enable_directory_upload,
+                oninput: move |evt| enable_directory_upload.set(evt.checked()),
+            },
         }
 
-        label { r#for: "textreader", "Upload text/rust files and read them" }
+        div {
+            label { r#for: "textreader", "Upload text/rust files and read them" }
+            input {
+                r#type: "file",
+                accept: ".txt,.rs,.js",
+                multiple: true,
+                name: "textreader",
+                directory: enable_directory_upload,
+                onchange: upload_files,
+            }
+        }
 
         div {
             // cheating with a little bit of JS...
@@ -71,8 +85,11 @@ fn app() -> Element {
         }
 
         ul {
-            for file in files_uploaded.read().iter() {
-                li { "{file}" }
+            for file in files_uploaded.read().iter().rev() {
+                li {
+                    span { "{file.name}" }
+                    pre  { "{file.contents}"  }
+                }
             }
         }
     }

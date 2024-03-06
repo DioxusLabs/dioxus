@@ -1,18 +1,17 @@
+use global_hotkey::GlobalHotKeyEvent;
 use serde::{Deserialize, Serialize};
 use tao::window::WindowId;
 
-/// A pair of data
 #[derive(Debug, Clone)]
-pub struct UserWindowEvent(pub EventData, pub WindowId);
+pub enum UserWindowEvent {
+    /// A global hotkey event
+    GlobalHotKeyEvent(GlobalHotKeyEvent),
 
-/// The data that might eminate from any window/webview
-#[derive(Debug, Clone)]
-pub enum EventData {
     /// Poll the virtualdom
-    Poll,
+    Poll(WindowId),
 
     /// Handle an ipc message eminating from the window.postMessage of a given webview
-    Ipc(IpcMessage),
+    Ipc { id: WindowId, msg: IpcMessage },
 
     /// Handle a hotreload event, basically telling us to update our templates
     #[cfg(all(feature = "hot-reload", debug_assertions))]
@@ -22,7 +21,7 @@ pub enum EventData {
     NewWindow,
 
     /// Close a given window (could be any window!)
-    CloseWindow,
+    CloseWindow(WindowId),
 }
 
 /// A message struct that manages the communication between the webview and the eventloop code
@@ -42,16 +41,13 @@ pub enum IpcMethod<'a> {
     Query,
     BrowserOpen,
     Initialize,
-    FileDrag,
     Other(&'a str),
 }
 
 impl IpcMessage {
     pub(crate) fn method(&self) -> IpcMethod {
         match self.method.as_str() {
-            // todo: this is a misspelling, needs to be fixed
             "file_dialog" => IpcMethod::FileDialog,
-            "file_drag" => IpcMethod::FileDrag,
             "user_event" => IpcMethod::UserEvent,
             "query" => IpcMethod::Query,
             "browser_open" => IpcMethod::BrowserOpen,

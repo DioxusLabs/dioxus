@@ -3,12 +3,11 @@ use crate::{
     element::DesktopElement,
     event_handlers::WindowEventHandlers,
     file_upload::{DesktopFileDragEvent, DesktopFileUploadForm, FileDialogRequest},
-    ipc::{EventData, IpcMessage, UserWindowEvent},
+    ipc::{IpcMessage, UserWindowEvent},
     query::QueryResult,
     shortcut::{GlobalHotKeyEvent, ShortcutRegistry},
     webview::WebviewInstance,
 };
-use crossbeam_channel::Receiver;
 use dioxus_core::ElementId;
 use dioxus_core::VirtualDom;
 use dioxus_html::{native_bind::NativeFileEngine, HasFileData, HtmlEvent, PlatformEventData};
@@ -50,7 +49,6 @@ pub(crate) struct SharedContext {
     pub(crate) event_handlers: WindowEventHandlers,
     pub(crate) pending_webviews: RefCell<Vec<WebviewInstance>>,
     pub(crate) shortcut_manager: ShortcutRegistry,
-    pub(crate) global_hotkey_channel: Receiver<GlobalHotKeyEvent>,
     pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
     pub(crate) target: EventLoopWindowTarget<UserWindowEvent>,
 }
@@ -70,7 +68,6 @@ impl App {
                 event_handlers: WindowEventHandlers::default(),
                 pending_webviews: Default::default(),
                 shortcut_manager: ShortcutRegistry::new(),
-                global_hotkey_channel: GlobalHotKeyEvent::receiver().clone(),
                 proxy: event_loop.create_proxy(),
                 target: event_loop.clone(),
             }),
@@ -78,6 +75,9 @@ impl App {
 
         // Set the event converter
         dioxus_html::set_event_converter(Box::new(crate::events::SerializedHtmlEventConverter));
+
+        // Wire up the global hotkey handler
+        app.set_global_hotkey_handler();
 
         // Allow hotreloading to work - but only in debug mode
         #[cfg(all(feature = "hot-reload", debug_assertions))]
@@ -88,14 +88,13 @@ impl App {
 
     pub fn tick(&mut self, window_event: &Event<'_, UserWindowEvent>) {
         self.control_flow = ControlFlow::Wait;
-
         self.shared
             .event_handlers
             .apply_event(window_event, &self.shared.target);
+    }
 
-        if let Ok(event) = self.shared.global_hotkey_channel.try_recv() {
-            self.shared.shortcut_manager.call_handlers(event);
-        }
+    pub fn handle_global_hotkey(&self, event: GlobalHotKeyEvent) {
+        self.shared.shortcut_manager.call_handlers(event);
     }
 
     #[cfg(all(feature = "hot-reload", debug_assertions))]
@@ -103,10 +102,7 @@ impl App {
         dioxus_hot_reload::connect({
             let proxy = self.shared.proxy.clone();
             move |template| {
-                let _ = proxy.send_event(UserWindowEvent(
-                    EventData::HotReloadEvent(template),
-                    unsafe { WindowId::dummy() },
-                ));
+                let _ = proxy.send_event(UserWindowEvent::HotReloadEvent(template));
             }
         });
     }
@@ -115,10 +111,7 @@ impl App {
         for handler in self.shared.pending_webviews.borrow_mut().drain(..) {
             let id = handler.desktop_context.window.id();
             self.webviews.insert(id, handler);
-            _ = self
-                .shared
-                .proxy
-                .send_event(UserWindowEvent(EventData::Poll, id));
+            _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
         }
     }
 
@@ -168,11 +161,6 @@ impl App {
 
         let id = webview.desktop_context.window.id();
         self.webviews.insert(id, webview);
-
-        _ = self
-            .shared
-            .proxy
-            .send_event(UserWindowEvent(EventData::Poll, id));
     }
 
     pub fn handle_browser_open(&mut self, msg: IpcMessage) {
@@ -186,19 +174,29 @@ impl App {
         }
     }
 
+    /// The webview is finally loaded
+    ///
+    /// Let's rebuild it and then start polling it
     pub fn handle_initialize_msg(&mut self, id: WindowId) {
         let view = self.webviews.get_mut(&id).unwrap();
+
         view.dom
             .rebuild(&mut *view.desktop_context.mutation_state.borrow_mut());
+
         view.desktop_context.send_edits();
+
         view.desktop_context
             .window
             .set_visible(self.is_visible_before_start);
+
+        _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
     }
 
+    /// Todo: maybe we should poll the virtualdom asking if it has any final actions to apply before closing the webview
+    ///
+    /// Technically you can handle this with the use_window_event hook
     pub fn handle_close_msg(&mut self, id: WindowId) {
         self.webviews.remove(&id);
-
         if self.webviews.is_empty() {
             self.control_flow = ControlFlow::Exit
         }
@@ -244,16 +242,14 @@ impl App {
                 if drag.files().is_some() {
                     let file_event = recent_file.current().unwrap();
                     let paths = match file_event {
-                        wry::FileDropEvent::Hovered { paths, position } => paths,
-                        wry::FileDropEvent::Dropped { paths, position } => paths,
+                        wry::FileDropEvent::Hovered { paths, .. } => paths,
+                        wry::FileDropEvent::Dropped { paths, .. } => paths,
                         _ => vec![],
                     };
-                    let files = Arc::new(NativeFileEngine::new(paths));
-                    let event = DesktopFileDragEvent {
+                    Rc::new(PlatformEventData::new(Box::new(DesktopFileDragEvent {
                         mouse: drag.mouse.clone(),
-                        files,
-                    };
-                    Rc::new(PlatformEventData::new(Box::new(event)))
+                        files: Arc::new(NativeFileEngine::new(paths)),
+                    })))
                 } else {
                     data.into_any()
                 }
@@ -281,8 +277,6 @@ impl App {
             }
         }
     }
-
-    pub fn handle_file_drag(&mut self, msg: IpcMessage, window: WindowId) {}
 
     pub fn handle_file_dialog_msg(&mut self, msg: IpcMessage, window: WindowId) {
         let Ok(file_dialog) = serde_json::from_value::<FileDialogRequest>(msg.params()) else {
@@ -327,6 +321,19 @@ impl App {
 
         view.poll_vdom();
     }
+
+    fn set_global_hotkey_handler(&self) {
+        let receiver = self.shared.proxy.clone();
+
+        // The event loop becomes the hotkey receiver
+        // This means we don't need to poll the receiver on every tick - we just get the events as they come in
+        // This is a bit more efficient than the previous implementation, but if someone else sets a handler, the
+        // receiver will become inert.
+        global_hotkey::GlobalHotKeyEvent::set_event_handler(Some(move |t| {
+            // todo: should we unset the event handler when the app shuts down?
+            _ = receiver.send_event(UserWindowEvent::GlobalHotKeyEvent(t));
+        }));
+    }
 }
 
 /// Different hide implementations per platform
@@ -336,7 +343,6 @@ pub fn hide_app_window(window: &wry::WebView) {
     {
         use tao::platform::windows::WindowExtWindows;
         window.set_visible(false);
-        // window.set_skip_taskbar(true);
     }
 
     #[cfg(target_os = "linux")]

@@ -50,6 +50,7 @@ pub(super) fn index_request(
         }
         None => assets_head(),
     };
+
     if let Some(head) = head {
         index.insert_str(index.find("</head>").expect("Head element to exist"), &head);
     }

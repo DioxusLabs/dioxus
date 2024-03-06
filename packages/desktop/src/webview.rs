@@ -1,13 +1,7 @@
 use crate::{
-    app::SharedContext,
-    assets::AssetHandlerRegistry,
-    edits::EditQueue,
-    eval::DesktopEvalProvider,
-    file_upload::NativeFileHover,
-    ipc::{EventData, UserWindowEvent},
-    protocol,
-    waker::tao_waker,
-    Config, DesktopContext, DesktopService,
+    app::SharedContext, assets::AssetHandlerRegistry, edits::EditQueue, eval::DesktopEvalProvider,
+    file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, waker::tao_waker, Config,
+    DesktopContext, DesktopService,
 };
 use dioxus_core::{ScopeId, VirtualDom};
 use dioxus_html::prelude::EvalProvider;
@@ -61,6 +55,7 @@ impl WebviewInstance {
 
         let mut web_context = WebContext::new(cfg.data_dir.clone());
         let edit_queue = EditQueue::default();
+        let file_hover = NativeFileHover::default();
         let asset_handlers = AssetHandlerRegistry::new(dom.runtime());
         let headless = !cfg.window.window.visible;
 
@@ -72,6 +67,7 @@ impl WebviewInstance {
         let asset_handlers_ = asset_handlers.clone();
         let edit_queue_ = edit_queue.clone();
         let proxy_ = shared.proxy.clone();
+        let file_hover_ = file_hover.clone();
 
         let request_handler = move |request, responder: RequestAsyncResponder| {
             // Try to serve the index file first
@@ -97,12 +93,17 @@ impl WebviewInstance {
 
         let ipc_handler = move |payload: String| {
             // defer the event to the main thread
-            if let Ok(message) = serde_json::from_str(&payload) {
-                _ = proxy_.send_event(UserWindowEvent(EventData::Ipc(message), window_id));
+            if let Ok(msg) = serde_json::from_str(&payload) {
+                _ = proxy_.send_event(UserWindowEvent::Ipc { id: window_id, msg });
             }
         };
 
-        let file_hover = NativeFileHover::default();
+        let file_drop_handler = move |evt| {
+            // Update the most recent file drop event - when the event comes in from the webview we can use the
+            // most recent event to build a new event with the files in it.
+            file_hover_.set(evt);
+            false
+        };
 
         #[cfg(any(
             target_os = "windows",
@@ -133,15 +134,7 @@ impl WebviewInstance {
             .with_navigation_handler(|var| var.contains("dioxus")) // prevent all navigations
             .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler)
             .with_web_context(&mut web_context)
-            .with_file_drop_handler({
-                let file_hover = file_hover.clone();
-                move |evt| {
-                    println!("file drop: {:?}", evt);
-                    // Update the most recent file hover status
-                    file_hover.set(evt);
-                    false
-                }
-            });
+            .with_file_drop_handler(file_drop_handler);
 
         if let Some(color) = cfg.background_color {
             webview = webview.with_background_color(color);
@@ -153,15 +146,15 @@ impl WebviewInstance {
 
         const INITIALIZATION_SCRIPT: &str = r#"
         if (document.addEventListener) {
-        document.addEventListener('contextmenu', function(e) {
-            e.preventDefault();
-        }, false);
+            document.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+            }, false);
         } else {
-        document.attachEvent('oncontextmenu', function() {
-            window.event.returnValue = false;
-        });
+            document.attachEvent('oncontextmenu', function() {
+                window.event.returnValue = false;
+            });
         }
-    "#;
+        "#;
 
         if cfg.disable_context_menu {
             // in release mode, we don't want to show the dev tool or reload menus

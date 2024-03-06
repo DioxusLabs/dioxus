@@ -11,8 +11,8 @@ fn main() {
 }
 
 fn app() -> Element {
-    let mut values = use_signal(|| HashMap::new());
-    let mut submitted_values = use_signal(|| HashMap::new());
+    let mut values = use_signal(HashMap::new);
+    let mut submitted_values = use_signal(HashMap::new);
 
     rsx! {
         div { style: "display: flex",

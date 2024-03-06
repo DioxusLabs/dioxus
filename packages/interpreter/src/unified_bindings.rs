@@ -28,7 +28,7 @@ impl Interpreter {
     /// Convert the interpreter to its baseclass, giving
     pub fn base(&self) -> &BaseInterpreter {
         use wasm_bindgen::prelude::JsCast;
-        &self.js_channel().unchecked_ref()
+        self.js_channel().unchecked_ref()
     }
 }
 

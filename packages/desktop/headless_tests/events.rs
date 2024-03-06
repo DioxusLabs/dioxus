@@ -437,7 +437,7 @@ fn test_focus_out_div() -> Element {
 }
 
 fn test_form_input() -> Element {
-    let mut values = use_signal(|| HashMap::new());
+    let mut values = use_signal(HashMap::new);
 
     utils::mock_event_with_extra(
         "form-username",
@@ -489,7 +489,7 @@ fn test_form_input() -> Element {
 }
 
 fn test_form_submit() -> Element {
-    let mut values = use_signal(|| HashMap::new());
+    let mut values = use_signal(HashMap::new);
 
     utils::mock_event_with_extra(
         "form-submitter",

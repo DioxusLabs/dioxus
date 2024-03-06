@@ -54,11 +54,9 @@ mod rehydrate;
 ///
 /// # Example
 ///
-/// ```rust, ignore
-/// fn main() {
-///     let app_fut = dioxus_web::run_with_props(App, RootProps { name: String::from("joe") });
-///     wasm_bindgen_futures::spawn_local(app_fut);
-/// }
+/// ```ignore, rust
+/// let app_fut = dioxus_web::run_with_props(App, RootProps { name: String::from("foo") });
+/// wasm_bindgen_futures::spawn_local(app_fut);
 /// ```
 pub async fn run(virtual_dom: VirtualDom, web_config: Config) {
     tracing::info!("Starting up");
@@ -66,7 +64,7 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) {
     let mut dom = virtual_dom;
 
     #[cfg(feature = "eval")]
-    dom.in_runtime(|| eval::init_eval());
+    dom.in_runtime(eval::init_eval);
 
     #[cfg(feature = "panic_hook")]
     if web_config.default_panic_hook {

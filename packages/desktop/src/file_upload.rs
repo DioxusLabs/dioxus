@@ -12,7 +12,13 @@ use dioxus_html::{
 };
 use muda::accelerator::Modifiers;
 use serde::Deserialize;
-use std::{cell::Cell, path::PathBuf, rc::Rc, str::FromStr, sync::Arc};
+use std::{
+    cell::{Cell, RefCell},
+    path::PathBuf,
+    rc::Rc,
+    str::FromStr,
+    sync::Arc,
+};
 use wry::FileDropEvent;
 
 #[derive(Debug, Deserialize)]
@@ -156,15 +162,15 @@ impl HasFormData for DesktopFileUploadForm {
 
 #[derive(Default, Clone)]
 pub struct NativeFileHover {
-    event: Rc<Cell<Option<FileDropEvent>>>,
+    event: Rc<RefCell<Option<FileDropEvent>>>,
 }
 impl NativeFileHover {
     pub fn set(&self, event: FileDropEvent) {
-        self.event.set(Some(event));
+        self.event.borrow_mut().replace(event);
     }
 
     pub fn current(&self) -> Option<FileDropEvent> {
-        self.event.as_ref().clone().take()
+        self.event.borrow_mut().clone()
     }
 }
 
