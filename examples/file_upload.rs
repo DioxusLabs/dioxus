@@ -9,7 +9,7 @@ use dioxus::prelude::*;
 use dioxus::{html::HasFileData, prelude::dioxus_elements::FileEngine};
 
 fn main() {
-    LaunchBuilder::desktop().launch(app);
+    launch(app);
 }
 
 struct UploadedFile {
@@ -80,6 +80,8 @@ fn app() -> Element {
             "ondragleave": "this.style.backgroundColor='#FFFFFF';",
             "ondrop": "this.style.backgroundColor='#FFFFFF';",
             id: "drop-zone",
+            prevent_default: "ondragover",
+            prevent_default: "ondrop",
             ondrop: handle_file_drop,
             "Drop files here"
         }

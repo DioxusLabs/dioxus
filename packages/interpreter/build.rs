@@ -27,7 +27,7 @@ fn main() {
 
 /// Hashes the contents of a directory
 fn hash_dir(dir: &str) -> u128 {
-    let mut out = 0_128;
+    let mut out = 0;
 
     for entry in std::fs::read_dir(dir).unwrap() {
         let entry = entry.unwrap();
