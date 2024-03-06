@@ -54,7 +54,7 @@ mod js {
         "{this.stack.pop();}"
     }
     fn replace_with(id: u32, n: u16) {
-        "{const root = this.nodes[$id$]; this.els = this.stack.splice(this.stack.length-$n$); if (root.listening) { this.removeAllNonBubblingListeners(root); } root.replaceWith(...this.els);}"
+        "{const root = this.nodes[$id$]; let els = this.stack.splice(this.stack.length-$n$); if (root.listening) { this.removeAllNonBubblingListeners(root); } root.replaceWith(...els);}"
     }
     fn insert_after(id: u32, n: u16) {
         "{this.nodes[$id$].after(...this.stack.splice(this.stack.length-$n$));}"
@@ -131,7 +131,7 @@ mod js {
         }"#
     }
     fn replace_placeholder(ptr: u32, len: u8, n: u16) {
-        "{this.els = this.stack.splice(this.stack.length - $n$); let node = this.loadChild($ptr$, $len$); node.replaceWith(...this.els);}"
+        "{let els = this.stack.splice(this.stack.length - $n$); let node = this.loadChild($ptr$, $len$); node.replaceWith(...els);}"
     }
     fn load_template(tmpl_id: u16, index: u16, id: u32) {
         "{let node = this.templates[$tmpl_id$][$index$].cloneNode(true); this.nodes[$id$] = node; this.stack.push(node);}"
@@ -141,9 +141,9 @@ mod js {
     fn append_children_to_top(many: u16) {
         "{
         let root = this.stack[this.stack.length-many-1];
-        this.els = this.stack.splice(this.stack.length-many);
+        let els = this.stack.splice(this.stack.length-many);
         for (let k = 0; k < many; k++) {
-            root.appendChild(this.els[k]);
+            root.appendChild(els[k]);
         }
         }"
     }
@@ -227,6 +227,6 @@ mod js {
 
     #[cfg(feature = "binary-protocol")]
     fn replace_placeholder_ref(array: &[u8], n: u16) {
-        "{this.els = this.stack.splice(this.stack.length - $n$); let node = this.loadChild($array$); node.replaceWith(...this.els);}"
+        "{let els = this.stack.splice(this.stack.length - $n$); let node = this.loadChild($array$); node.replaceWith(...els);}"
     }
 }
