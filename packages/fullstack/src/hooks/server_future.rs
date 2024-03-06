@@ -54,7 +54,7 @@ where
     // Suspend if the value isn't ready
     match resource.state().cloned() {
         UseResourceState::Pending => {
-            suspend();
+            suspend(resource.task());
             None
         }
         _ => Some(resource),
