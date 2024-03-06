@@ -1,6 +1,6 @@
 use std::{
     fs::read_to_string,
-    hash::{DefaultHasher, Hash, Hasher},
+    hash::{DefaultHasher, Hasher},
     process::Command,
 };
 
@@ -16,8 +16,6 @@ fn main() {
         if contents.trim() == hash.to_string() {
             return;
         }
-
-        panic!("Hashes don't match {} != {}", contents, hash.to_string());
     }
 
     // Otherwise, generate the bindings and write the new hash to disk
@@ -30,8 +28,8 @@ fn main() {
 }
 
 /// Hashes the contents of a directory
-fn hash_dir(dir: &str) -> u64 {
-    let mut hasher = DefaultHasher::new();
+fn hash_dir(dir: &str) -> u128 {
+    let mut out = 0_128;
 
     for entry in std::fs::read_dir(dir).unwrap() {
         let entry = entry.unwrap();
@@ -45,11 +43,14 @@ fn hash_dir(dir: &str) -> u64 {
             continue;
         }
 
-        let contents = std::fs::read(&path).unwrap();
-        contents.hash(&mut hasher);
+        // Hash the contents of the file and then add it to the overall hash
+        // This makes us order invariant
+        let mut hasher = DefaultHasher::new();
+        hasher.write(&std::fs::read(&path).unwrap());
+        out += hasher.finish() as u128;
     }
 
-    hasher.finish()
+    out
 }
 
 // okay...... so tsc might fail if the user doesn't have it installed
