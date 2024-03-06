@@ -1,7 +1,5 @@
 use std::{
-    fs::read_to_string,
-    hash::{DefaultHasher, Hasher},
-    process::Command,
+    collections::hash_map::DefaultHasher, fs::read_to_string, hash::Hasher, process::Command,
 };
 
 fn main() {
