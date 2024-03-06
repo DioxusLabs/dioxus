@@ -226,7 +226,7 @@ mod js {
         }"#
     }
     fn replace_placeholder(ptr: u32, len: u8, n: u16) {
-        "{els = this.stack.splice(this.stack.length - $n$); let node = this.LoadChild($ptr$, $len$); node.replaceWith(...els);}"
+        "{let els = this.stack.splice(this.stack.length - $n$); let node = this.LoadChild($ptr$, $len$); node.replaceWith(...els);}"
     }
     fn load_template(tmpl_id: u16, index: u16, id: u32) {
         "{let node = this.templates[$tmpl_id$][$index$].cloneNode(true); this.nodes[$id$] = node; this.stack.push(node);}"
