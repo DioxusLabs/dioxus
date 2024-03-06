@@ -26,11 +26,7 @@ fn app() -> Element {
 }
 
 #[component]
-fn Child(
-    state: ReadOnlySignal<isize>,
-    items: ReadOnlySignal<Vec<isize>>,
-    depth: ReadOnlySignal<usize>,
-) -> Element {
+fn Child(state: Memo<isize>, items: Memo<Vec<isize>>, depth: ReadOnlySignal<usize>) -> Element {
     if depth() == 0 {
         return None;
     }

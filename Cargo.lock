@@ -2754,7 +2754,6 @@ version = "0.5.0-alpha.0"
 dependencies = [
  "dioxus",
  "dioxus-core",
- "flume",
  "futures-channel",
  "futures-util",
  "generational-box",

@@ -6,8 +6,8 @@ use dioxus_core::{
     Task,
 };
 use dioxus_signals::*;
-use futures_util::{future, pin_mut, FutureExt};
-use std::future::Future;
+use futures_util::{future, pin_mut, FutureExt, StreamExt};
+use std::{cell::Cell, future::Future, rc::Rc};
 
 /// A memo that resolve to a value asynchronously.
 /// Unlike `use_future`, `use_resource` runs on the **server**
@@ -44,7 +44,10 @@ where
 {
     let mut value = use_signal(|| None);
     let mut state = use_signal(|| UseResourceState::Pending);
-    let rc = use_hook(ReactiveContext::new);
+    let (rc, changed) = use_hook(|| {
+        let (rc, changed) = ReactiveContext::new();
+        (rc, Rc::new(Cell::new(Some(changed))))
+    });
 
     let mut cb = use_callback(move || {
         // Create the user's task
@@ -70,10 +73,11 @@ where
     let mut task = use_hook(|| Signal::new(cb.call()));
 
     use_hook(|| {
+        let mut changed = changed.take().unwrap();
         spawn(async move {
             loop {
                 // Wait for the dependencies to change
-                rc.changed().await;
+                let _ = changed.next().await;
 
                 // Stop the old task
                 task.write().cancel();

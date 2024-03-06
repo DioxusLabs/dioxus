@@ -103,7 +103,7 @@ impl<T: 'static> Writable for GlobalSignal<T> {
     }
 
     #[track_caller]
-    fn try_write(&self) -> Result<Self::Mut<T>, generational_box::BorrowMutError> {
+    fn try_write(&mut self) -> Result<Self::Mut<T>, generational_box::BorrowMutError> {
         self.signal().try_write()
     }
 }

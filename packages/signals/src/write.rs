@@ -27,7 +27,7 @@ pub trait Writable: Readable {
     }
 
     /// Try to get a mutable reference to the value. If the value has been dropped, this will panic.
-    fn try_write(&self) -> Result<Self::Mut<Self::Target>, generational_box::BorrowMutError>;
+    fn try_write(&mut self) -> Result<Self::Mut<Self::Target>, generational_box::BorrowMutError>;
 
     /// Run a function with a mutable reference to the value. If the value has been dropped, this will panic.
     #[track_caller]

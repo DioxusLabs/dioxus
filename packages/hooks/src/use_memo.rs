@@ -1,8 +1,10 @@
 use crate::dependency::Dependency;
-use crate::use_signal;
+use crate::{use_callback, use_signal};
 use dioxus_core::prelude::*;
+use dioxus_signals::Memo;
 use dioxus_signals::{ReactiveContext, ReadOnlySignal, Readable, Signal, SignalData};
 use dioxus_signals::{Storage, Writable};
+use futures_util::StreamExt;
 
 /// Creates a new unsync Selector. The selector will be run immediately and whenever any signal it reads changes.
 ///
@@ -22,51 +24,9 @@ use dioxus_signals::{Storage, Writable};
 /// }
 /// ```
 #[track_caller]
-pub fn use_memo<R: PartialEq>(f: impl FnMut() -> R + 'static) -> ReadOnlySignal<R> {
-    use_maybe_sync_memo(f)
-}
-
-/// Creates a new Selector that may be sync. The selector will be run immediately and whenever any signal it reads changes.
-///
-/// Selectors can be used to efficiently compute derived data from signals.
-///
-/// ```rust
-/// use dioxus::prelude::*;
-/// use dioxus_signals::*;
-///
-/// fn App() -> Element {
-///     let mut count = use_signal(|| 0);
-///     let double = use_memo(move || count * 2);
-///     count += 1;
-///     assert_eq!(double(), count * 2);
-///
-///     rsx! { "{double}" }
-/// }
-/// ```
-#[track_caller]
-pub fn use_maybe_sync_memo<R: PartialEq, S: Storage<SignalData<R>>>(
-    mut f: impl FnMut() -> R + 'static,
-) -> ReadOnlySignal<R, S> {
-    use_hook(|| {
-        // Create a new reactive context for the memo
-        let rc = ReactiveContext::new();
-
-        // Create a new signal in that context, wiring up its dependencies and subscribers
-        let mut state: Signal<R, S> = rc.run_in(|| Signal::new_maybe_sync(f()));
-
-        spawn(async move {
-            loop {
-                rc.changed().await;
-                let new = rc.run_in(&mut f);
-                if new != *state.peek() {
-                    *state.write() = new;
-                }
-            }
-        });
-
-        // And just return the readonly variant of that signal
-        ReadOnlySignal::new_maybe_sync(state)
-    })
+pub fn use_memo<R: PartialEq>(f: impl FnMut() -> R + 'static) -> Memo<R> {
+    let mut callback = use_callback(f);
+    use_hook(|| Signal::memo(move || callback.call()))
 }
 
 /// Creates a new unsync Selector with some local dependencies. The selector will be run immediately and whenever any signal it reads or any dependencies it tracks changes
@@ -127,7 +87,7 @@ where
 
     let selector = use_hook(|| {
         // Get the current reactive context
-        let rc = ReactiveContext::new();
+        let (rc, mut changed) = ReactiveContext::new();
 
         // Create a new signal in that context, wiring up its dependencies and subscribers
         let mut state: Signal<R, S> =
@@ -135,7 +95,8 @@ where
 
         spawn(async move {
             loop {
-                rc.changed().await;
+                // Wait for context to change
+                let _ = changed.next().await;
 
                 let new = rc.run_in(|| f(dependencies_signal.read().clone()));
                 if new != *state.peek() {

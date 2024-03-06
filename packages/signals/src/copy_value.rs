@@ -237,7 +237,7 @@ impl<T: 'static, S: Storage<T>> Writable for CopyValue<T, S> {
         S::try_map_mut(mut_, f)
     }
 
-    fn try_write(&self) -> Result<Self::Mut<T>, generational_box::BorrowMutError> {
+    fn try_write(&mut self) -> Result<Self::Mut<T>, generational_box::BorrowMutError> {
         self.value.try_write()
     }
 

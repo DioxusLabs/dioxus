@@ -1,9 +1,9 @@
-use crate::{read::Readable, ReadableRef};
+use crate::{read::Readable, Memo, ReadableRef};
 use dioxus_core::prelude::{IntoAttributeValue, ScopeId};
 use generational_box::UnsyncStorage;
 use std::{mem::MaybeUninit, ops::Deref};
 
-use crate::{ReadOnlySignal, Signal};
+use crate::Signal;
 
 use super::get_global_context;
 
@@ -22,14 +22,14 @@ impl<T: PartialEq + 'static> GlobalMemo<T> {
     }
 
     /// Get the signal that backs this global.
-    pub fn signal(&self) -> ReadOnlySignal<T> {
+    pub fn memo(&self) -> Memo<T> {
         let key = self as *const _ as *const ();
 
         let context = get_global_context();
 
         let read = context.signal.borrow();
         match read.get(&key) {
-            Some(signal) => *signal.downcast_ref::<ReadOnlySignal<T>>().unwrap(),
+            Some(signal) => *signal.downcast_ref::<Memo<T>>().unwrap(),
             None => {
                 drop(read);
                 // Constructors are always run in the root scope
@@ -47,7 +47,7 @@ impl<T: PartialEq + 'static> GlobalMemo<T> {
 
     /// Get the generational id of the signal.
     pub fn id(&self) -> generational_box::GenerationalBoxId {
-        self.signal().id()
+        self.memo().id()
     }
 }
 
@@ -57,12 +57,12 @@ impl<T: PartialEq + 'static> Readable for GlobalMemo<T> {
 
     #[track_caller]
     fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
-        self.signal().try_read()
+        self.memo().try_read()
     }
 
     #[track_caller]
     fn peek(&self) -> ReadableRef<Self> {
-        self.signal().peek()
+        self.memo().peek()
     }
 }
 
@@ -71,7 +71,7 @@ where
     T: Clone + IntoAttributeValue,
 {
     fn into_value(self) -> dioxus_core::AttributeValue {
-        self.signal().into_value()
+        self.memo().into_value()
     }
 }
 
@@ -81,7 +81,7 @@ impl<T: PartialEq + 'static> PartialEq for GlobalMemo<T> {
     }
 }
 
-/// Allow calling a signal with signal() syntax
+/// Allow calling a signal with memo() syntax
 ///
 /// Currently only limited to copy types, though could probably specialize for string/arc/rc
 impl<T: PartialEq + Clone + 'static> Deref for GlobalMemo<T> {
