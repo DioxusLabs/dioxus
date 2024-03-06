@@ -18,7 +18,7 @@ use crate::{
     AttributeValue, ComponentFunction, Element, Event, Mutations,
 };
 use futures_util::StreamExt;
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 use slab::Slab;
 use std::{any::Any, rc::Rc};
 use tracing::instrument;
@@ -201,9 +201,6 @@ pub struct VirtualDom {
 
     pub(crate) runtime: Rc<Runtime>,
 
-    // Currently suspended scopes
-    pub(crate) suspended_scopes: FxHashSet<ScopeId>,
-
     rx: futures_channel::mpsc::UnboundedReceiver<SchedulerMsg>,
 }
 
@@ -319,7 +316,6 @@ impl VirtualDom {
             queued_templates: Default::default(),
             elements: Default::default(),
             mounts: Default::default(),
-            suspended_scopes: Default::default(),
         };
 
         let root = dom.new_scope(Box::new(root), "app");
@@ -448,13 +444,6 @@ impl VirtualDom {
     /// ```
     #[instrument(skip(self), level = "trace", name = "VirtualDom::wait_for_work")]
     pub async fn wait_for_work(&mut self) {
-        // And then poll the futures
-        self.poll_tasks().await;
-    }
-
-    /// Poll the scheduler for any work
-    #[instrument(skip(self), level = "trace", name = "VirtualDom::poll_tasks")]
-    async fn poll_tasks(&mut self) {
         loop {
             // Process all events - Scopes are marked dirty, etc
             // Sometimes when wakers fire we get a slew of updates at once, so its important that we drain this completely
@@ -469,15 +458,20 @@ impl VirtualDom {
             let _runtime = RuntimeGuard::new(self.runtime.clone());
 
             // There isn't any more work we can do synchronously. Wait for any new work to be ready
-            match self.rx.next().await.expect("channel should never close") {
-                SchedulerMsg::Immediate(id) => self.mark_dirty(id),
-                SchedulerMsg::TaskNotified(id) => {
-                    // Instead of running the task immediately, we insert it into the runtime's task queue.
-                    // The task may be marked dirty at the same time as the scope that owns the task is dropped.
-                    self.mark_task_dirty(id);
-                }
-            };
+            self.wait_for_event().await;
         }
+    }
+
+    /// Wait for the next event to trigger and add it to the queue
+    async fn wait_for_event(&mut self) {
+        match self.rx.next().await.expect("channel should never close") {
+            SchedulerMsg::Immediate(id) => self.mark_dirty(id),
+            SchedulerMsg::TaskNotified(id) => {
+                // Instead of running the task immediately, we insert it into the runtime's task queue.
+                // The task may be marked dirty at the same time as the scope that owns the task is dropped.
+                self.mark_task_dirty(id);
+            }
+        };
     }
 
     /// Queue any pending events
@@ -494,7 +488,6 @@ impl VirtualDom {
     /// Process all events in the queue until there are no more left
     #[instrument(skip(self), level = "trace", name = "VirtualDom::process_events")]
     pub fn process_events(&mut self) {
-        let _runtime = RuntimeGuard::new(self.runtime.clone());
         self.queue_events();
 
         // Now that we have collected all queued work, we should check if we have any dirty scopes. If there are not, then we can poll any queued futures
@@ -502,6 +495,14 @@ impl VirtualDom {
             return;
         }
 
+        self.poll_tasks()
+    }
+
+    /// Poll any queued tasks
+    #[instrument(skip(self), level = "trace", name = "VirtualDom::poll_tasks")]
+    fn poll_tasks(&mut self) {
+        // Make sure we set the runtime since we're running user code
+        let _runtime = RuntimeGuard::new(self.runtime.clone());
         // Next, run any queued tasks
         // We choose not to poll the deadline since we complete pretty quickly anyways
         while let Some(task) = self.dirty_scopes.pop_task() {
@@ -617,7 +618,6 @@ impl VirtualDom {
             {
                 let _runtime = RuntimeGuard::new(self.runtime.clone());
                 // Then, poll any tasks that might be pending in the scope
-                // This will run effects, so this **must** be done after the scope is diffed
                 for task in work.tasks {
                     let _ = self.runtime.handle_task_wakeup(task);
                 }
@@ -649,15 +649,75 @@ impl VirtualDom {
     #[instrument(skip(self), level = "trace", name = "VirtualDom::wait_for_suspense")]
     pub async fn wait_for_suspense(&mut self) {
         loop {
-            if self.suspended_scopes.is_empty() {
+            if self.runtime.suspended_tasks.borrow().is_empty() {
                 break;
             }
 
             // Wait for a work to be ready (IE new suspense leaves to pop up)
-            self.poll_tasks().await;
+            'wait_for_work: loop {
+                // Process all events - Scopes are marked dirty, etc
+                // Sometimes when wakers fire we get a slew of updates at once, so its important that we drain this completely
+                self.queue_events();
+
+                // Now that we have collected all queued work, we should check if we have any dirty scopes. If there are not, then we can poll any queued futures
+                if self.dirty_scopes.has_dirty_scopes() {
+                    println!("dirty scopes");
+                    break;
+                }
+
+                {
+                    // Make sure we set the runtime since we're running user code
+                    let _runtime = RuntimeGuard::new(self.runtime.clone());
+                    // Next, run any queued tasks
+                    // We choose not to poll the deadline since we complete pretty quickly anyways
+                    while let Some(task) = self.dirty_scopes.pop_task() {
+                        // If the scope doesn't exist for whatever reason, then we should skip it
+                        if !self.scopes.contains(task.order.id.0) {
+                            continue;
+                        }
+
+                        // Then poll any tasks that might be pending
+                        let tasks = task.tasks_queued.into_inner();
+                        for task in tasks {
+                            if self.runtime.suspended_tasks.borrow().contains(&task) {
+                                let _ = self.runtime.handle_task_wakeup(task);
+                                // Running that task, may mark a scope higher up as dirty. If it does, return from the function early
+                                self.queue_events();
+                                if self.dirty_scopes.has_dirty_scopes() {
+                                    break 'wait_for_work;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                self.wait_for_event().await;
+            }
 
             // Render whatever work needs to be rendered, unlocking new futures and suspense leaves
-            self.render_immediate(&mut NoOpMutations);
+            while let Some(work) = self.dirty_scopes.pop_work() {
+                // If the scope doesn't exist for whatever reason, then we should skip it
+                if !self.scopes.contains(work.scope.id.0) {
+                    continue;
+                }
+
+                {
+                    let _runtime = RuntimeGuard::new(self.runtime.clone());
+                    // Then, poll any tasks that might be pending in the scope
+                    for task in work.tasks {
+                        // During suspense, we only want to run tasks that are suspended
+                        if self.runtime.suspended_tasks.borrow().contains(&task) {
+                            let _ = self.runtime.handle_task_wakeup(task);
+                        }
+                    }
+                    // If the scope is dirty, run the scope and get the mutations
+                    if work.rerun_scope {
+                        let new_nodes = self.run_scope(work.scope.id);
+
+                        self.diff_scope(&mut NoOpMutations, work.scope.id, new_nodes);
+                    }
+                }
+            }
         }
     }
 

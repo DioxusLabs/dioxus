@@ -50,9 +50,9 @@ pub fn provide_root_context<T: 'static + Clone>(value: T) -> T {
         .expect("to be in a dioxus runtime")
 }
 
-/// Suspends the current component
-pub fn suspend() -> Option<Element> {
-    Runtime::with_current_scope(|cx| cx.suspend());
+/// Suspended the current component on a specific task and then return None
+pub fn suspend(task: Task) -> Element {
+    Runtime::with_current_scope(|cx| cx.suspend(task));
     None
 }
 

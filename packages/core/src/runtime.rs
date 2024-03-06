@@ -1,3 +1,5 @@
+use rustc_hash::FxHashSet;
+
 use crate::{
     innerlude::{LocalTask, SchedulerMsg},
     render_signal::RenderSignal,
@@ -24,10 +26,13 @@ pub struct Runtime {
     // We use this to track the current task
     pub(crate) current_task: Cell<Option<Task>>,
 
-    pub(crate) rendering: Cell<bool>,
-
     /// Tasks created with cx.spawn
     pub(crate) tasks: RefCell<slab::Slab<Rc<LocalTask>>>,
+
+    // Currently suspended tasks
+    pub(crate) suspended_tasks: RefCell<FxHashSet<Task>>,
+
+    pub(crate) rendering: Cell<bool>,
 
     pub(crate) sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
 
@@ -45,6 +50,7 @@ impl Runtime {
             scope_stack: Default::default(),
             current_task: Default::default(),
             tasks: Default::default(),
+            suspended_tasks: Default::default(),
         })
     }
 

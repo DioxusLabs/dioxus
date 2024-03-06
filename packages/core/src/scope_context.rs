@@ -16,13 +16,14 @@ pub(crate) struct Scope {
     pub(crate) parent_id: Option<ScopeId>,
     pub(crate) height: u32,
     pub(crate) render_count: Cell<usize>,
-    pub(crate) suspended: Cell<bool>,
 
     // Note: the order of the hook and context fields is important. The hooks field must be dropped before the contexts field in case a hook drop implementation tries to access a context.
     pub(crate) hooks: RefCell<Vec<Box<dyn Any>>>,
     pub(crate) hook_index: Cell<usize>,
     pub(crate) shared_contexts: RefCell<Vec<Box<dyn Any>>>,
     pub(crate) spawned_tasks: RefCell<FxHashSet<Task>>,
+    /// The task that was last spawned that may suspend. We use this task to check what task to suspend in the event of an early None return from a component
+    pub(crate) last_suspendable_task: Cell<Option<Task>>,
     pub(crate) before_render: RefCell<Vec<Box<dyn FnMut()>>>,
     pub(crate) after_render: RefCell<Vec<Box<dyn FnMut()>>>,
 }
@@ -40,9 +41,9 @@ impl Scope {
             parent_id,
             height,
             render_count: Cell::new(0),
-            suspended: Cell::new(false),
             shared_contexts: RefCell::new(vec![]),
             spawned_tasks: RefCell::new(FxHashSet::default()),
+            last_suspendable_task: Cell::new(None),
             hooks: RefCell::new(vec![]),
             hook_index: Cell::new(0),
             before_render: RefCell::new(vec![]),
@@ -241,9 +242,9 @@ impl Scope {
         Runtime::with(|rt| rt.spawn(self.id, fut)).expect("Runtime to exist")
     }
 
-    /// Mark this component as suspended and then return None
-    pub fn suspend(&self) -> Option<Element> {
-        self.suspended.set(true);
+    /// Mark this component as suspended on a specific task and then return None
+    pub fn suspend(&self, task: Task) -> Option<Element> {
+        self.last_suspendable_task.set(Some(task));
         None
     }
 
@@ -340,10 +341,10 @@ impl ScopeId {
             .expect("to be in a dioxus runtime")
     }
 
-    /// Suspends the current component
-    pub fn suspend(self) -> Option<Element> {
+    /// Suspended a component on a specific task and then return None
+    pub fn suspend(self, task: Task) -> Option<Element> {
         Runtime::with_scope(self, |cx| {
-            cx.suspend();
+            cx.suspend(task);
         });
         None
     }

@@ -173,6 +173,9 @@ impl Runtime {
 
             // Remove it from the scheduler
             self.tasks.borrow_mut().try_remove(id.0);
+
+            // Remove it from the suspended tasks
+            self.suspended_tasks.borrow_mut().remove(&id);
         }
 
         // Remove the scope from the stack
@@ -187,6 +190,7 @@ impl Runtime {
     ///
     /// This does not abort the task, so you'll want to wrap it in an abort handle if that's important to you
     pub(crate) fn remove_task(&self, id: Task) -> Option<Rc<LocalTask>> {
+        self.suspended_tasks.borrow_mut().remove(&id);
         self.tasks.borrow_mut().try_remove(id.0)
     }
 }
