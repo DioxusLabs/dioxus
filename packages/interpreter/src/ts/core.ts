@@ -22,7 +22,7 @@ export class BaseInterpreter {
   nodes: Node[];
   stack: Node[];
   templates: {
-    [key: string]: Node[]
+    [key: number]: Node[]
   };
 
   // sledgehammer is generating this...
@@ -118,11 +118,11 @@ export class BaseInterpreter {
     return node;
   }
 
-  saveTemplate(nodes: HTMLElement[], tmpl_id: string) {
+  saveTemplate(nodes: HTMLElement[], tmpl_id: number) {
     this.templates[tmpl_id] = nodes;
   }
 
-  hydrateRoot(ids: { [key: number]: number }) {
+  hydrate(ids: { [key: number]: number }) {
     const hydrateNodes = document.querySelectorAll('[data-node-hydration]');
 
     for (let i = 0; i < hydrateNodes.length; i++) {
