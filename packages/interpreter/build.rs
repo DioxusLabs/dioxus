@@ -8,7 +8,7 @@ fn main() {
     let hash = hash_ts_files();
 
     // If the hash matches the one on disk, we're good and don't need to update bindings
-    let expected = include_str!("./src/js/hash.txt").trim();
+    let expected = include_str!("src/js/hash.txt").trim();
     if expected == hash.to_string() {
         return;
     }
@@ -21,23 +21,32 @@ fn main() {
     gen_bindings("native", "native");
     gen_bindings("core", "core");
 
-    std::fs::write("src/js/hash.txt", hash).unwrap();
+    std::fs::write("src/js/hash.txt", hash.to_string()).unwrap();
 }
 
 /// Hashes the contents of a directory
-fn hash_ts_files() -> String {
-    let mut out = "".to_string();
+fn hash_ts_files() -> u128 {
+    let mut out = 0;
 
-    let files = &[
-        include_str!("./src/ts/common.ts"),
-        include_str!("./src/ts/native.ts"),
-        include_str!("./src/ts/core.ts"),
+    let files = [
+        include_str!("src/ts/common.ts"),
+        include_str!("src/ts/native.ts"),
+        include_str!("src/ts/core.ts"),
     ];
 
+    // Let's make the dumbest hasher by summing the bytes of the files
+    // The location is multiplied by the byte value to make sure that the order of the bytes matters
+    let mut idx = 0;
     for file in files {
-        out = format!("{out}{file}");
+        // windows + git does a weird thing with line endings, so we need to normalize them
+        for line in file.lines() {
+            idx += 1;
+            for byte in line.bytes() {
+                idx += 1;
+                out += (byte as u128) * (idx as u128);
+            }
+        }
     }
-
     out
 }
 
