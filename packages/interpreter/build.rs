@@ -1,4 +1,4 @@
-use std::{collections::hash_map::DefaultHasher, hash::Hasher, process::Command};
+use std::process::Command;
 
 fn main() {
     // If any TS changes, re-run the build script
@@ -31,12 +31,15 @@ fn hash_ts_files() -> u128 {
         include_str!("src/ts/core.ts"),
     ];
 
-    for file in files.iter() {
-        let mut hasher = DefaultHasher::new();
-        hasher.write(file.as_bytes());
-        out += hasher.finish() as u128;
+    // Let's make the dumbest hasher by summing the bytes of the files
+    // The location is multiplied by the byte value to make sure that the order of the bytes matters
+    let mut idx = 0;
+    for file in files {
+        for byte in file.bytes() {
+            idx += 1;
+            out += (byte as u128) * (idx as u128);
+        }
     }
-
     out
 }
 
