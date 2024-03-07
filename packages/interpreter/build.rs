@@ -8,7 +8,9 @@ fn main() {
     let hash = hash_ts_files();
 
     // If the hash matches the one on disk, we're good and don't need to update bindings
-    if include_str!("src/js/hash.txt").trim() == hash.to_string() {
+    let expected = include_str!("src/js/hash.txt").trim();
+    if expected == hash.to_string() {
+        panic!("Hashes match, no need to update bindings. {expected} != {hash}",);
         return;
     }
 
