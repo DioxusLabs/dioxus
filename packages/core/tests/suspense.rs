@@ -37,9 +37,9 @@ fn suspended_child() -> Element {
         panic!("Non-suspended task was polled");
     });
 
-    // // Memos should still work like normal
-    // let memo = use_memo(move || val * 2);
-    // assert_eq!(memo, val * 2);
+    // Memos should still work like normal
+    let memo = use_memo(move || val * 2);
+    assert_eq!(memo, val * 2);
 
     if val() < 3 {
         let task = spawn(async move {

@@ -150,8 +150,10 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
         {
             let inner = self.inner.read();
 
-            let mut subscribers = inner.subscribers.lock().unwrap();
-            subscribers.retain(|reactive_context| reactive_context.mark_dirty())
+            // We cannot hold the subscribers lock while calling mark_dirty, because mark_dirty can run user code which may cause a new subscriber to be added. If we hold the lock, we will deadlock.
+            let mut subscribers = std::mem::take(&mut *inner.subscribers.lock().unwrap());
+            subscribers.retain(|reactive_context| reactive_context.mark_dirty());
+            *inner.subscribers.lock().unwrap() = subscribers;
         }
     }
 

@@ -24,10 +24,12 @@ thread_local! {
 
 impl std::fmt::Display for ReactiveContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let read = self.inner.read();
         #[cfg(debug_assertions)]
-        return write!(f, "ReactiveContext created at {}", read.origin);
-        #[cfg(not(debug_assertions))]
+        {
+            if let Ok(read) = self.inner.try_read() {
+                return write!(f, "ReactiveContext created at {}", read.origin);
+            }
+        }
         write!(f, "ReactiveContext")
     }
 }
