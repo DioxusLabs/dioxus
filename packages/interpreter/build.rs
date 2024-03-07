@@ -13,7 +13,7 @@ fn main() {
         return;
     }
 
-    // panic!("Hashes match, no need to update bindings. {expected} != {hash}",);
+    panic!("Hashes match, no need to update bindings. {expected} != {hash}",);
 
     // Otherwise, generate the bindings and write the new hash to disk
     // Generate the bindings for both native and web
