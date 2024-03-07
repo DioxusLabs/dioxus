@@ -24,6 +24,9 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 dioxus-core = { workspace = true, optional = true }
 dioxus-html = { workspace = true, optional = true }
 
+[build-dependencies]
+md5 = "0.7.0"
+
 [features]
 default = []
 serialize = ["serde"]

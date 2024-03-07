@@ -2557,6 +2557,7 @@ dependencies = [
  "dioxus-core",
  "dioxus-html",
  "js-sys",
+ "md5",
  "serde",
  "sledgehammer_bindgen",
  "sledgehammer_utils",

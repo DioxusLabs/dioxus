@@ -8,12 +8,12 @@ fn main() {
     let hash = hash_ts_files();
 
     // If the hash matches the one on disk, we're good and don't need to update bindings
-    let expected = include_str!("src/js/hash.txt").trim();
+    let expected = include_str!("./src/js/hash.txt").trim();
     if expected == hash.to_string() {
         return;
     }
 
-    panic!("Hashes match, no need to update bindings. {expected} != {hash}",);
+    // panic!("Hashes match, no need to update bindings. {expected} != {hash}",);
 
     // Otherwise, generate the bindings and write the new hash to disk
     // Generate the bindings for both native and web
@@ -25,24 +25,19 @@ fn main() {
 }
 
 /// Hashes the contents of a directory
-fn hash_ts_files() -> u128 {
-    let mut out = 0;
+fn hash_ts_files() -> String {
+    let mut out = "".to_string();
 
-    let files: &[&[u8]] = &[
-        include_bytes!("src/ts/common.ts"),
-        include_bytes!("src/ts/native.ts"),
-        include_bytes!("src/ts/core.ts"),
+    let files = &[
+        include_str!("./src/ts/common.ts"),
+        include_str!("./src/ts/native.ts"),
+        include_str!("./src/ts/core.ts"),
     ];
 
-    // Let's make the dumbest hasher by summing the bytes of the files
-    // The location is multiplied by the byte value to make sure that the order of the bytes matters
-    let mut idx = 0;
     for file in files {
-        for byte in file.iter() {
-            idx += 1;
-            out += (*byte as u128) * (idx as u128);
-        }
+        out = format!("{out}{:?}", md5::compute(file));
     }
+
     out
 }
 
