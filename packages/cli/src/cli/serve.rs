@@ -2,6 +2,7 @@ use dioxus_cli_config::Platform;
 use manganis_cli_support::AssetManifest;
 
 use super::*;
+use cargo_toml::Dependency::{Detailed, Inherited, Simple};
 use std::{fs::create_dir_all, io::Write, path::PathBuf};
 
 /// Run the WASM project on dev-server
@@ -41,10 +42,23 @@ impl Serve {
 
         crate_config.set_cargo_args(self.serve.cargo_args);
 
-        let platform = self
-            .serve
-            .platform
-            .unwrap_or(crate_config.dioxus_config.application.default_platform);
+        let mut platform = self.serve.platform;
+
+        if platform.is_none() {
+            if let Some(dependency) = &crate_config.manifest.dependencies.get("dioxus") {
+                let features = match dependency {
+                    Inherited(detail) => detail.features.to_vec(),
+                    Detailed(detail) => detail.features.to_vec(),
+                    Simple(_) => vec![],
+                };
+
+                platform = features
+                    .iter()
+                    .find_map(|platform| serde_json::from_str(&format!(r#""{}""#, platform)).ok());
+            }
+        }
+
+        let platform = platform.unwrap_or(crate_config.dioxus_config.application.default_platform);
 
         match platform {
             Platform::Web => {
