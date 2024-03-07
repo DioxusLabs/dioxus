@@ -9,8 +9,9 @@ function main() {
 
 class IPC {
   constructor(root) {
-    window.interpreter = new JSChannel();
+    window.interpreter = new NativeInterpreter();
     window.interpreter.initialize(root);
+    window.interpreter.ipc = this;
     const ws = new WebSocket(WS_ADDR);
     ws.binaryType = "arraybuffer";
 
@@ -42,7 +43,7 @@ class IPC {
 
         let decoder = new TextDecoder("utf-8");
 
-        // Using decode method to get string output 
+        // Using decode method to get string output
         let str = decoder.decode(messageData);
         // Ignore pongs
         if (str != "__pong__") {

@@ -12,7 +12,10 @@ import { SerializedEvent, serializeEvent } from "./serialize";
 var JSChannel_: typeof BaseInterpreter;
 
 // @ts-ignore - this is coming from the host
-if (RawInterpreter) { JSChannel_ = RawInterpreter; }
+if (RawInterpreter !== undefined && RawInterpreter !== null) {
+  // @ts-ignore - this is coming from the host
+  JSChannel_ = RawInterpreter;
+};
 
 export class NativeInterpreter extends JSChannel_ {
   intercept_link_redirects: boolean;
