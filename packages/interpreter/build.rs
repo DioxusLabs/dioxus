@@ -1,19 +1,15 @@
-use std::{
-    collections::hash_map::DefaultHasher, fs::read_to_string, hash::Hasher, process::Command,
-};
+use std::{collections::hash_map::DefaultHasher, hash::Hasher, process::Command};
 
 fn main() {
     // If any TS changes, re-run the build script
     println!("cargo:rerun-if-changed=src/ts/*.ts");
 
     // Compute the hash of the ts files
-    let hash = hash_dir("./src/ts");
+    let hash = hash_ts_files();
 
     // If the hash matches the one on disk, we're good and don't need to update bindings
-    if let Ok(contents) = read_to_string("./src/js/hash.txt") {
-        if contents.trim() == hash.to_string() {
-            return;
-        }
+    if include_str!("src/js/hash.txt").trim() == hash.to_string() {
+        return;
     }
 
     // Otherwise, generate the bindings and write the new hash to disk
@@ -26,25 +22,18 @@ fn main() {
 }
 
 /// Hashes the contents of a directory
-fn hash_dir(dir: &str) -> u128 {
+fn hash_ts_files() -> u128 {
     let mut out = 0;
 
-    for entry in std::fs::read_dir(dir).unwrap() {
-        let entry = entry.unwrap();
-        let path = entry.path();
+    let files = [
+        include_str!("src/ts/common.ts"),
+        include_str!("src/ts/native.ts"),
+        include_str!("src/ts/core.ts"),
+    ];
 
-        let Some(ext) = path.extension() else {
-            continue;
-        };
-
-        if ext != "ts" {
-            continue;
-        }
-
-        // Hash the contents of the file and then add it to the overall hash
-        // This makes us order invariant
+    for file in files.iter() {
         let mut hasher = DefaultHasher::new();
-        hasher.write(&std::fs::read(&path).unwrap());
+        hasher.write(file.as_bytes());
         out += hasher.finish() as u128;
     }
 
