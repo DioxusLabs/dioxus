@@ -1,11 +1,7 @@
 use std::borrow::Cow;
 use std::path::PathBuf;
-
-use tao::window::{Icon, WindowBuilder, WindowId};
-use wry::{
-    http::{Request as HttpRequest, Response as HttpResponse},
-    FileDropEvent,
-};
+use tao::window::{Icon, WindowBuilder};
+use wry::http::{Request as HttpRequest, Response as HttpResponse};
 
 /// The behaviour of the application when the last window is closed.
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -21,7 +17,6 @@ pub enum WindowCloseBehaviour {
 /// The configuration for the desktop application.
 pub struct Config {
     pub(crate) window: WindowBuilder,
-    pub(crate) file_drop_handler: Option<DropHandler>,
     pub(crate) protocols: Vec<WryProtocol>,
     pub(crate) pre_rendered: Option<String>,
     pub(crate) disable_context_menu: bool,
@@ -34,8 +29,6 @@ pub struct Config {
     pub(crate) last_window_close_behaviour: WindowCloseBehaviour,
     pub(crate) enable_default_menu_bar: bool,
 }
-
-type DropHandler = Box<dyn Fn(WindowId, FileDropEvent) -> bool>;
 
 pub(crate) type WryProtocol = (
     String,
@@ -56,7 +49,6 @@ impl Config {
         Self {
             window,
             protocols: Vec::new(),
-            file_drop_handler: None,
             pre_rendered: None,
             disable_context_menu: !cfg!(debug_assertions),
             resource_dir: None,
@@ -115,15 +107,6 @@ impl Config {
     /// Sets the behaviour of the application when the last window is closed.
     pub fn with_close_behaviour(mut self, behaviour: WindowCloseBehaviour) -> Self {
         self.last_window_close_behaviour = behaviour;
-        self
-    }
-
-    /// Set a file drop handler. If this is enabled, html drag events will be disabled.
-    pub fn with_file_drop_handler(
-        mut self,
-        handler: impl Fn(WindowId, FileDropEvent) -> bool + 'static,
-    ) -> Self {
-        self.file_drop_handler = Some(Box::new(handler));
         self
     }
 

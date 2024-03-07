@@ -7,6 +7,7 @@ fn main() {
 }
 
 fn app() -> Element {
+    let mut loading = use_signal(|| "".to_string());
     let mut api = use_signal(|| "".to_string());
     let mut prompt = use_signal(|| "".to_string());
     let mut n_image = use_signal(|| 1.to_string());
@@ -14,7 +15,6 @@ fn app() -> Element {
         created: 0,
         data: Vec::new(),
     });
-    let mut loading = use_signal(|| "".to_string());
 
     let mut generate_images = use_resource(move || async move {
         let api_key = api.peek().clone();
@@ -26,79 +26,54 @@ fn app() -> Element {
         }
 
         loading.set("is-loading".to_string());
-        let images = request(api_key, prompt, number_of_images).await;
-        match images {
-            Ok(imgz) => {
-                image.set(imgz);
-            }
-            Err(e) => {
-                println!("Error: {:?}", e);
-            }
+
+        match request(api_key, prompt, number_of_images).await {
+            Ok(imgz) => image.set(imgz),
+            Err(e) => println!("Error: {:?}", e),
         }
+
         loading.set("".to_string());
     });
 
     rsx! {
-        head {
-            link {
-                rel: "stylesheet",
-                href: "https://unpkg.com/bulma@0.9.0/css/bulma.min.css",
-            }
-        }
+        head { link { rel: "stylesheet", href: "https://unpkg.com/bulma@0.9.0/css/bulma.min.css" } }
         div { class: "container",
-        div { class: "columns",
-            div { class: "column",
-                input { class: "input is-primary mt-4",
-                value:"{api}",
-                    r#type: "text",
-                    placeholder: "API",
-                    oninput: move |evt| {
-                        api.set(evt.value().clone());
-                    },
-                }
-
-                input { class: "input is-primary mt-4",
-                    placeholder: "MAX 1000 Dgts",
-                    r#type: "text",
-                    value:"{prompt}",
-                    oninput: move |evt| {
-                        prompt.set(evt.value().clone());
-                    },
-                }
-
-                input { class: "input is-primary mt-4",
-                    r#type: "number",
-                    min:"1",
-                     max:"10",
-                    value:"{n_image}",
-                    oninput: move |evt| {
-                        n_image.set(evt.value().clone());
-                    },
+            div { class: "columns",
+                div { class: "column",
+                    input { class: "input is-primary mt-4",
+                        value: "{api}",
+                        r#type: "text",
+                        placeholder: "API",
+                        oninput: move |evt| api.set(evt.value()),
+                    }
+                    input { class: "input is-primary mt-4",
+                        placeholder: "MAX 1000 Dgts",
+                        r#type: "text",
+                        value:"{prompt}",
+                        oninput: move |evt| prompt.set(evt.value())
+                    }
+                    input { class: "input is-primary mt-4",
+                        r#type: "number",
+                        min:"1",
+                        max:"10",
+                        value:"{n_image}",
+                        oninput: move |evt| n_image.set(evt.value()),
+                    }
                 }
             }
-        }
-
-        button { class: "button is-primary {loading}",
-            onclick: move |_| {
-                generate_images.restart();
-            },
-            "Generate image"
-        }
-        br {
-        }
-    }
-    {image.read().data.iter().map(|image| {
-            rsx!(
+            button { class: "button is-primary {loading}",
+                onclick: move |_| generate_images.restart(),
+                "Generate image"
+            }
+            br {}
+            for image in image.read().data.as_slice() {
                 section { class: "is-flex",
-            div { class: "container is-fluid",
-                div { class: "container has-text-centered",
-                    div { class: "is-justify-content-center",
-                        div { class: "level",
-                            div { class: "level-item",
-                                figure { class: "image",
-                                    img {
-                                        alt: "",
-                                        src: "{image.url}",
+                    div { class: "container is-fluid",
+                        div { class: "container has-text-centered",
+                            div { class: "is-justify-content-center",
+                                div { class: "level",
+                                    div { class: "level-item",
+                                        figure { class: "image", img { alt: "", src: "{image.url}", } }
                                     }
                                 }
                             }
@@ -107,9 +82,7 @@ fn app() -> Element {
                 }
             }
         }
-            )
-        })
-    } }
+    }
 }
 async fn request(api: String, prompt: String, n_image: String) -> Result<ImageResponse, Error> {
     let client = reqwest::Client::new();

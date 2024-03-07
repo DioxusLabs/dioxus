@@ -1,4 +1,4 @@
-use crate::ipc::{EventData, UserWindowEvent};
+use crate::ipc::UserWindowEvent;
 use futures_util::task::ArcWake;
 use std::sync::Arc;
 use tao::{event_loop::EventLoopProxy, window::WindowId};
@@ -24,7 +24,7 @@ pub fn tao_waker(proxy: EventLoopProxy<UserWindowEvent>, id: WindowId) -> std::t
         fn wake_by_ref(arc_self: &Arc<Self>) {
             _ = arc_self
                 .proxy
-                .send_event(UserWindowEvent(EventData::Poll, arc_self.id));
+                .send_event(UserWindowEvent::Poll(arc_self.id));
         }
     }
 

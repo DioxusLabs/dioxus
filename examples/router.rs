@@ -9,7 +9,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    launch_desktop(|| {
+    launch(|| {
         rsx! {
             style { {include_str!("./assets/router.css")} }
             Router::<Route> {}

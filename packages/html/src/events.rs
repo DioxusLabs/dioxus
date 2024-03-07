@@ -59,6 +59,10 @@ impl PlatformEventData {
         Self { event }
     }
 
+    pub fn inner(&self) -> &Box<dyn Any> {
+        &self.event
+    }
+
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         self.event.downcast_ref::<T>()
     }

@@ -1,17 +1,17 @@
-use dioxus_html::event_bubbles;
-
+use crate::unified_bindings::Interpreter as Channel;
 use dioxus_core::{TemplateAttribute, TemplateNode, WriteMutations};
+use dioxus_html::event_bubbles;
 use sledgehammer_utils::rustc_hash::FxHashMap;
-
-use crate::binary_protocol::Channel;
 
 /// The state needed to apply mutations to a channel. This state should be kept across all mutations for the app
 #[derive(Default)]
 pub struct MutationState {
     /// The maximum number of templates that we have registered
     max_template_count: u16,
+
     /// The currently registered templates with the template ids
     templates: FxHashMap<String, u16>,
+
     /// The channel that we are applying mutations to
     channel: Channel,
 }
@@ -100,7 +100,7 @@ impl WriteMutations for MutationState {
     }
 
     fn assign_node_id(&mut self, path: &'static [u8], id: dioxus_core::ElementId) {
-        self.channel.assign_id(path, id.0 as u32);
+        self.channel.assign_id_ref(path, id.0 as u32);
     }
 
     fn create_placeholder(&mut self, id: dioxus_core::ElementId) {
@@ -112,7 +112,7 @@ impl WriteMutations for MutationState {
     }
 
     fn hydrate_text_node(&mut self, path: &'static [u8], value: &str, id: dioxus_core::ElementId) {
-        self.channel.hydrate_text(path, value, id.0 as u32);
+        self.channel.hydrate_text_ref(path, value, id.0 as u32);
     }
 
     fn load_template(&mut self, name: &'static str, index: usize, id: dioxus_core::ElementId) {
@@ -127,7 +127,7 @@ impl WriteMutations for MutationState {
     }
 
     fn replace_placeholder_with_nodes(&mut self, path: &'static [u8], m: usize) {
-        self.channel.replace_placeholder(path, m as u16);
+        self.channel.replace_placeholder_ref(path, m as u16);
     }
 
     fn insert_nodes_after(&mut self, id: dioxus_core::ElementId, m: usize) {
@@ -181,8 +181,10 @@ impl WriteMutations for MutationState {
     }
 
     fn create_event_listener(&mut self, name: &'static str, id: dioxus_core::ElementId) {
+        // note that we use the foreign event listener here instead of the native one
+        // the native method assumes we have direct access to the dom, which we don't.
         self.channel
-            .new_event_listener(name, id.0 as u32, event_bubbles(name) as u8);
+            .foreign_event_listener(name, id.0 as u32, event_bubbles(name) as u8);
     }
 
     fn remove_event_listener(&mut self, name: &'static str, id: dioxus_core::ElementId) {

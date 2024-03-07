@@ -1,82 +1,17 @@
 use crate::{assets::*, edits::EditQueue};
-use dioxus_interpreter_js::binary_protocol::SLEDGEHAMMER_JS;
+use dioxus_interpreter_js::unified_bindings::SLEDGEHAMMER_JS;
+use dioxus_interpreter_js::NATIVE_JS;
 use std::path::{Path, PathBuf};
 use wry::{
     http::{status::StatusCode, Request, Response},
     RequestAsyncResponder, Result,
 };
 
-fn handle_edits_code() -> String {
-    const EDITS_PATH: &str = {
-        #[cfg(any(target_os = "android", target_os = "windows"))]
-        {
-            "http://dioxus.index.html/edits"
-        }
-        #[cfg(not(any(target_os = "android", target_os = "windows")))]
-        {
-            "dioxus://index.html/edits"
-        }
-    };
+#[cfg(any(target_os = "android", target_os = "windows"))]
+const EDITS_PATH: &str = "http://dioxus.index.html/edits";
 
-    let prevent_file_upload = r#"// Prevent file inputs from opening the file dialog on click
-    let inputs = document.querySelectorAll("input");
-    for (let input of inputs) {
-      if (!input.getAttribute("data-dioxus-file-listener")) {
-        // prevent file inputs from opening the file dialog on click
-        const type = input.getAttribute("type");
-        if (type === "file") {
-          input.setAttribute("data-dioxus-file-listener", true);
-          input.addEventListener("click", (event) => {
-            let target = event.target;
-            let target_id = find_real_id(target);
-            if (target_id !== null) {
-              const send = (event_name) => {
-                const message = window.interpreter.serializeIpcMessage("file_diolog", { accept: target.getAttribute("accept"), directory: target.getAttribute("webkitdirectory") === "true", multiple: target.hasAttribute("multiple"), target: parseInt(target_id), bubbles: event_bubbles(event_name), event: event_name });
-                window.ipc.postMessage(message);
-              };
-              send("change&input");
-            }
-            event.preventDefault();
-          });
-        }
-      }
-    }"#;
-    let polling_request = format!(
-        r#"// Poll for requests
-    window.interpreter = new JSChannel();
-    window.interpreter.wait_for_request = (headless) => {{
-      fetch(new Request("{EDITS_PATH}"))
-          .then(response => {{
-              response.arrayBuffer()
-                  .then(bytes => {{
-                      // In headless mode, the requestAnimationFrame callback is never called, so we need to run the bytes directly
-                      if (headless) {{
-                        window.interpreter.run_from_bytes(bytes);
-                      }}
-                      else {{
-                        requestAnimationFrame(() => {{
-                            window.interpreter.run_from_bytes(bytes);
-                        }});
-                      }}
-                      window.interpreter.wait_for_request(headless);
-                  }});
-          }})
-    }}"#
-    );
-    let mut interpreter = SLEDGEHAMMER_JS
-        .replace("/*POST_HANDLE_EDITS*/", prevent_file_upload)
-        .replace("export", "")
-        + &polling_request;
-    while let Some(import_start) = interpreter.find("import") {
-        let import_end = interpreter[import_start..]
-            .find(|c| c == ';' || c == '\n')
-            .map(|i| i + import_start)
-            .unwrap_or_else(|| interpreter.len());
-        interpreter.replace_range(import_start..import_end, "");
-    }
-
-    format!("{interpreter}\nconst intercept_link_redirects = true;")
-}
+#[cfg(not(any(target_os = "android", target_os = "windows")))]
+const EDITS_PATH: &str = "dioxus://index.html/edits";
 
 static DEFAULT_INDEX: &str = include_str!("./index.html");
 
@@ -115,6 +50,7 @@ pub(super) fn index_request(
         }
         None => assets_head(),
     };
+
     if let Some(head) = head {
         index.insert_str(index.find("</head>").expect("Head element to exist"), &head);
     }
@@ -237,20 +173,26 @@ fn serve_from_fs(path: PathBuf) -> Result<Response<Vec<u8>>> {
 /// - headless: is this page being loaded but invisible? Important because not all windows are visible and the
 ///             interpreter can't connect until the window is ready.
 fn module_loader(root_id: &str, headless: bool) -> String {
-    let js = handle_edits_code();
     format!(
         r#"
 <script type="module">
-    {js}
-    // Wait for the page to load
+    // Bring the sledgehammer code
+    {SLEDGEHAMMER_JS}
+
+    // And then extend it with our native bindings
+    {NATIVE_JS}
+
+    // The nativeinterprerter extends the sledgehammer interpreter with a few extra methods that we use for IPC
+    window.interpreter = new NativeInterpreter("{EDITS_PATH}");
+
+    // Wait for the page to load before sending the initialize message
     window.onload = function() {{
-        let rootname = "{root_id}";
-        let root_element = window.document.getElementById(rootname);
+        let root_element = window.document.getElementById("{root_id}");
         if (root_element != null) {{
             window.interpreter.initialize(root_element);
             window.ipc.postMessage(window.interpreter.serializeIpcMessage("initialize"));
         }}
-        window.interpreter.wait_for_request({headless});
+        window.interpreter.waitForRequest({headless});
     }}
 </script>
 "#

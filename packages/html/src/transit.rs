@@ -34,8 +34,19 @@ impl<'de> Deserialize<'de> for HtmlEvent {
             data,
         } = Inner::deserialize(deserializer)?;
 
+        // in debug mode let's try and be helpful as to why the deserialization failed
+        #[cfg(debug_assertions)]
+        {
+            _ = deserialize_raw(&name, data.clone()).unwrap_or_else(|e| {
+                panic!(
+                    "Failed to deserialize event data for event {}:  {:#?}\n'{:#?}'",
+                    name, e, data,
+                )
+            });
+        }
+
         Ok(HtmlEvent {
-            data: fun_name(&name, data).unwrap(),
+            data: deserialize_raw(&name, data).unwrap(),
             element,
             bubbles,
             name,
@@ -44,7 +55,7 @@ impl<'de> Deserialize<'de> for HtmlEvent {
 }
 
 #[cfg(feature = "serialize")]
-fn fun_name(
+fn deserialize_raw(
     name: &str,
     data: serde_value::Value,
 ) -> Result<EventData, serde_value::DeserializerError> {
@@ -136,7 +147,7 @@ fn fun_name(
 #[cfg(feature = "serialize")]
 impl HtmlEvent {
     pub fn bubbles(&self) -> bool {
-        event_bubbles(&self.name)
+        self.bubbles
     }
 }
 

@@ -9,6 +9,7 @@ pub use adapters::*;
 mod element;
 pub mod pool;
 mod query;
+use dioxus_interpreter_js::NATIVE_JS;
 use futures_util::{SinkExt, StreamExt};
 pub use pool::*;
 mod config;
@@ -31,8 +32,7 @@ pub enum LiveViewError {
 }
 
 fn handle_edits_code() -> String {
-    use dioxus_interpreter_js::binary_protocol::SLEDGEHAMMER_JS;
-    use minify_js::{minify, Session, TopLevelMode};
+    use dioxus_interpreter_js::unified_bindings::SLEDGEHAMMER_JS;
 
     let serialize_file_uploads = r#"if (
         target.tagName === "INPUT" &&
@@ -71,9 +71,17 @@ fn handle_edits_code() -> String {
           return;
         }
       }"#;
-    let mut interpreter = SLEDGEHAMMER_JS
-        .replace("/*POST_EVENT_SERIALIZATION*/", serialize_file_uploads)
-        .replace("export", "");
+    let mut interpreter = format!(
+        r#"
+    // Bring the sledgehammer code
+    {SLEDGEHAMMER_JS}
+
+    // And then extend it with our native bindings
+    {NATIVE_JS}
+    "#
+    )
+    .replace("/*POST_EVENT_SERIALIZATION*/", serialize_file_uploads)
+    .replace("export", "");
     while let Some(import_start) = interpreter.find("import") {
         let import_end = interpreter[import_start..]
             .find(|c| c == ';' || c == '\n')
@@ -81,15 +89,9 @@ fn handle_edits_code() -> String {
             .unwrap_or_else(|| interpreter.len());
         interpreter.replace_range(import_start..import_end, "");
     }
-
     let main_js = include_str!("./main.js");
-
     let js = format!("{interpreter}\n{main_js}");
-
-    let session = Session::new();
-    let mut out = Vec::new();
-    minify(&session, TopLevelMode::Module, js.as_bytes(), &mut out).unwrap();
-    String::from_utf8(out).unwrap()
+    js
 }
 
 /// This script that gets injected into your app connects this page to the websocket endpoint

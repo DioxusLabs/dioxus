@@ -1,55 +1,10 @@
 use crate::file_data::FileEngine;
 use crate::file_data::HasFileData;
-use std::ops::Deref;
 use std::{collections::HashMap, fmt::Debug};
 
 use dioxus_core::Event;
 
 pub type FormEvent = Event<FormData>;
-
-/// A form value that may either be a list of values or a single value
-#[cfg_attr(
-    feature = "serialize",
-    derive(serde::Serialize, serde::Deserialize),
-    // this will serialize Text(String) -> String and VecText(Vec<String>) to Vec<String>
-    serde(untagged)
-)]
-#[derive(Debug, Clone, PartialEq)]
-pub enum FormValue {
-    Text(String),
-    VecText(Vec<String>),
-}
-
-impl From<FormValue> for Vec<String> {
-    fn from(value: FormValue) -> Self {
-        match value {
-            FormValue::Text(s) => vec![s],
-            FormValue::VecText(vec) => vec,
-        }
-    }
-}
-
-impl Deref for FormValue {
-    type Target = [String];
-
-    fn deref(&self) -> &Self::Target {
-        self.as_slice()
-    }
-}
-
-impl FormValue {
-    /// Convenient way to represent Value as slice
-    pub fn as_slice(&self) -> &[String] {
-        match self {
-            FormValue::Text(s) => std::slice::from_ref(s),
-            FormValue::VecText(vec) => vec.as_slice(),
-        }
-    }
-    /// Convert into Vec<String>
-    pub fn to_vec(self) -> Vec<String> {
-        self.into()
-    }
-}
 
 /* DOMEvent:  Send + SyncTarget relatedTarget */
 pub struct FormData {
@@ -73,6 +28,7 @@ impl Debug for FormData {
         f.debug_struct("FormEvent")
             .field("value", &self.value())
             .field("values", &self.values())
+            .field("valid", &self.valid())
             .finish()
     }
 }
@@ -106,8 +62,10 @@ impl FormData {
         self.value().parse().unwrap_or(false)
     }
 
-    /// Get the values of the form event
-    pub fn values(&self) -> HashMap<String, FormValue> {
+    /// Collect all the named form values from the containing form.
+    ///
+    /// Every input must be named!
+    pub fn values(&self) -> HashMap<String, String> {
         self.inner.values()
     }
 
@@ -120,6 +78,11 @@ impl FormData {
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         self.inner.as_any().downcast_ref::<T>()
     }
+
+    /// Did this form pass its own validation?
+    pub fn valid(&self) -> bool {
+        self.inner.value().is_empty()
+    }
 }
 
 /// An object that has all the data for a form event
@@ -128,7 +91,11 @@ pub trait HasFormData: HasFileData + std::any::Any {
         Default::default()
     }
 
-    fn values(&self) -> HashMap<String, FormValue> {
+    fn valid(&self) -> bool {
+        true
+    }
+
+    fn values(&self) -> HashMap<String, String> {
         Default::default()
     }
 
@@ -164,8 +131,16 @@ impl FormData {
 /// A serialized form data object
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedFormData {
+    #[serde(default)]
     value: String,
-    values: HashMap<String, FormValue>,
+
+    #[serde(default)]
+    values: HashMap<String, String>,
+
+    #[serde(default)]
+    valid: bool,
+
+    #[serde(default)]
     files: Option<crate::file_data::SerializedFileEngine>,
 }
 
@@ -174,13 +149,14 @@ impl SerializedFormData {
     /// Create a new serialized form data object
     pub fn new(
         value: String,
-        values: HashMap<String, FormValue>,
+        values: HashMap<String, String>,
         files: Option<crate::file_data::SerializedFileEngine>,
     ) -> Self {
         Self {
             value,
             values,
             files,
+            valid: true,
         }
     }
 
@@ -189,6 +165,7 @@ impl SerializedFormData {
         Self {
             value: data.value(),
             values: data.values(),
+            valid: data.valid(),
             files: match data.files() {
                 Some(files) => {
                     let mut resolved_files = HashMap::new();
@@ -211,6 +188,7 @@ impl SerializedFormData {
         Self {
             value: data.value(),
             values: data.values(),
+            valid: data.valid(),
             files: None,
         }
     }
@@ -222,8 +200,12 @@ impl HasFormData for SerializedFormData {
         self.value.clone()
     }
 
-    fn values(&self) -> HashMap<String, FormValue> {
+    fn values(&self) -> HashMap<String, String> {
         self.values.clone()
+    }
+
+    fn valid(&self) -> bool {
+        self.valid
     }
 
     fn as_any(&self) -> &dyn std::any::Any {

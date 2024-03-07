@@ -16,18 +16,14 @@ fn app() -> Element {
         id: 2950159,
     });
 
-    let current_weather =
-        use_resource(move || async move { get_weather(&country.read().clone()).await });
+    let current_weather = use_resource(move || async move { get_weather(&country()).await });
 
     rsx! {
-        link {
-            rel: "stylesheet",
-            href: "https://unpkg.com/tailwindcss@^2.0/dist/tailwind.min.css"
-        }
+        link { rel: "stylesheet", href: "https://unpkg.com/tailwindcss@^2.0/dist/tailwind.min.css" }
         div { class: "mx-auto p-4 bg-gray-100 h-screen flex justify-center",
             div { class: "flex items-center justify-center flex-row",
                 div { class: "flex items-start justify-center flex-row",
-                    SearchBox { country: country }
+                    SearchBox { country }
                     div { class: "flex flex-wrap w-full px-2",
                         div { class: "bg-gray-900 text-white relative min-w-0 break-words rounded-lg overflow-hidden shadow-sm mb-4 w-full bg-white dark:bg-gray-600",
                             div { class: "px-6 py-6 relative",
@@ -36,14 +32,9 @@ fn app() -> Element {
                                         country: country.read().clone(),
                                         weather: weather.clone(),
                                     }
-                                    Forecast {
-                                        weather: weather.clone(),
-                                    }
-
+                                    Forecast { weather: weather.clone() }
                                 } else {
-                                    p {
-                                        "Loading.."
-                                    }
+                                    p { "Loading.." }
                                 }
                             }
                         }
@@ -93,6 +84,7 @@ fn Forecast(weather: WeatherResponse) -> Element {
     let past_tomorrow = (weather.daily.temperature_2m_max.get(2).unwrap()
         + weather.daily.temperature_2m_max.get(2).unwrap())
         / 2.0;
+
     rsx! {
         div { class: "px-6 pt-4 relative",
             div { class: "w-full h-px bg-gray-100 mb-4" }
@@ -119,10 +111,7 @@ fn Forecast(weather: WeatherResponse) -> Element {
 fn SearchBox(mut country: Signal<WeatherLocation>) -> Element {
     let mut input = use_signal(|| "".to_string());
 
-    let locations = use_resource(move || async move {
-        let current_location = input.read().clone();
-        get_locations(&current_location).await
-    });
+    let locations = use_resource(move || async move { get_locations(&input()).await });
 
     rsx! {
         div {
@@ -150,27 +139,17 @@ fn SearchBox(mut country: Signal<WeatherLocation>) -> Element {
                     }
                 }
                 ul { class: "bg-white border border-gray-100 w-full mt-2 max-h-72 overflow-auto",
-                    {
-                        if let Some(Ok(locs)) = locations.read().as_ref() {
-                            rsx! {
-                                {
-                                    locs.iter().cloned().map(move |wl| {
-                                        rsx! {
-                                            li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative cursor-pointer hover:bg-yellow-50 hover:text-gray-900",
-                                                onclick: move |_| country.set(wl.clone()),
-                                                MapIcon {}
-                                                b {
-                                                    "{wl.name}"
-                                                }
-                                                " · {wl.country}"
-                                            }
-                                        }
-                                    })
-                                }
+                    if let Some(Ok(locs)) = locations.read().as_ref() {
+                        for wl in locs.iter().take(5).cloned() {
+                            li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative cursor-pointer hover:bg-yellow-50 hover:text-gray-900",
+                                onclick: move |_| country.set(wl.clone()),
+                                MapIcon {}
+                                b { "{wl.name}" }
+                                " · {wl.country}"
                             }
-                        } else {
-                            rsx! { "loading locations..." }
                         }
+                    } else {
+                        "loading locations..."
                     }
                 }
             }

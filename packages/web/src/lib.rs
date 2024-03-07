@@ -20,41 +20,6 @@
 //! To purview the examples, check of the root Dioxus crate - the examples in this crate are mostly meant to provide
 //! validation of websys-specific features and not the general use of Dioxus.
 
-// ## RequestAnimationFrame and RequestIdleCallback
-// ------------------------------------------------
-// React implements "jank free rendering" by deliberately not blocking the browser's main thread. For large diffs, long
-// running work, and integration with things like React-Three-Fiber, it's extremeley important to avoid blocking the
-// main thread.
-//
-// React solves this problem by breaking up the rendering process into a "diff" phase and a "render" phase. In Dioxus,
-// the diff phase is non-blocking, using "work_with_deadline" to allow the browser to process other events. When the diff phase
-// is  finally complete, the VirtualDOM will return a set of "Mutations" for this crate to apply.
-//
-// Here, we schedule the "diff" phase during the browser's idle period, achieved by calling RequestIdleCallback and then
-// setting a timeout from the that completes when the idleperiod is over. Then, we call requestAnimationFrame
-//
-//     From Google's guide on rAF and rIC:
-//     -----------------------------------
-//
-//     If the callback is fired at the end of the frame, it will be scheduled to go after the current frame has been committed,
-//     which means that style changes will have been applied, and, importantly, layout calculated. If we make DOM changes inside
-//      of the idle callback, those layout calculations will be invalidated. If there are any kind of layout reads in the next
-//      frame, e.g. getBoundingClientRect, clientWidth, etc, the browser will have to perform a Forced Synchronous Layout,
-//      which is a potential performance bottleneck.
-//
-//     Another reason not trigger DOM changes in the idle callback is that the time impact of changing the DOM is unpredictable,
-//     and as such we could easily go past the deadline the browser provided.
-//
-//     The best practice is to only make DOM changes inside of a requestAnimationFrame callback, since it is scheduled by the
-//     browser with that type of work in mind. That means that our code will need to use a document fragment, which can then
-//     be appended in the next requestAnimationFrame callback. If you are using a VDOM library, you would use requestIdleCallback
-//     to make changes, but you would apply the DOM patches in the next requestAnimationFrame callback, not the idle callback.
-//
-//     Essentially:
-//     ------------
-//     - Do the VDOM work during the idlecallback
-//     - Do DOM work in the next requestAnimationFrame callback
-
 use std::rc::Rc;
 
 pub use crate::cfg::Config;
@@ -65,23 +30,23 @@ use futures_util::{pin_mut, select, FutureExt, StreamExt};
 
 mod cfg;
 mod dom;
-#[cfg(feature = "eval")]
-mod eval;
+
 mod event;
 pub mod launch;
 mod mutations;
 pub use event::*;
+
+#[cfg(feature = "eval")]
+mod eval;
+
 #[cfg(feature = "file_engine")]
 mod file_engine;
+
 #[cfg(all(feature = "hot_reload", debug_assertions))]
 mod hot_reload;
+
 #[cfg(feature = "hydrate")]
 mod rehydrate;
-
-// Currently disabled since it actually slows down immediate rendering
-// todo: only schedule non-immediate renders through ric/raf
-// mod ric_raf;
-// mod rehydrate;
 
 /// Runs the app as a future that can be scheduled around the main thread.
 ///
@@ -89,11 +54,9 @@ mod rehydrate;
 ///
 /// # Example
 ///
-/// ```ignore
-/// fn main() {
-///     let app_fut = dioxus_web::run_with_props(App, RootProps { name: String::from("joe") });
-///     wasm_bindgen_futures::spawn_local(app_fut);
-/// }
+/// ```ignore, rust
+/// let app_fut = dioxus_web::run_with_props(App, RootProps { name: String::from("foo") });
+/// wasm_bindgen_futures::spawn_local(app_fut);
 /// ```
 pub async fn run(virtual_dom: VirtualDom, web_config: Config) {
     tracing::info!("Starting up");
@@ -101,12 +64,7 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) {
     let mut dom = virtual_dom;
 
     #[cfg(feature = "eval")]
-    {
-        // Eval
-        dom.in_runtime(|| {
-            eval::init_eval();
-        });
-    }
+    dom.in_runtime(eval::init_eval);
 
     #[cfg(feature = "panic_hook")]
     if web_config.default_panic_hook {
@@ -149,13 +107,12 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) {
     websys_dom.mount();
 
     loop {
-        tracing::trace!("waiting for work");
-
         // if virtual dom has nothing, wait for it to have something before requesting idle time
         // if there is work then this future resolves immediately.
         let (mut res, template) = {
             let work = dom.wait_for_work().fuse();
             pin_mut!(work);
+
             let mut rx_next = rx.select_next_some();
 
             #[cfg(all(feature = "hot_reload", debug_assertions))]
@@ -167,6 +124,7 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) {
                     evt = rx_next => (Some(evt), None),
                 }
             }
+
             #[cfg(not(all(feature = "hot_reload", debug_assertions)))]
             select! {
                 _ = work => (None, None),
