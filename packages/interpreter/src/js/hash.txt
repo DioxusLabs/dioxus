@@ -1,1 +1,557 @@
-3bd5a1310ebd728bdedb486881d5ad99151cf07b0006de52240dfd757ea3353e90df122a7ae681f33ff620cf15c47a20
+export { setAttributeInner } from "./set_attribute";
+export { retrieveFormValues } from "./form";
+// This file provides an extended variant of the interpreter used for desktop and liveview interaction
+//
+// This file lives on the renderer, not the host. It's basically a polyfill over functionality that the host can't
+// provide since it doesn't have access to the dom.
+
+import { BaseInterpreter, NodeId } from "./core";
+import { SerializedEvent, serializeEvent } from "./serialize";
+
+// okay so, we've got this JSChannel thing from sledgehammer, implicitly imported into our scope
+// we want to extend it, and it technically extends base intepreter. To make typescript happy,
+// we're going to bind the JSChannel_ object to the JSChannel object, and then extend it
+var JSChannel_: typeof BaseInterpreter;
+
+// @ts-ignore - this is coming from the host
+if (RawInterpreter !== undefined && RawInterpreter !== null) {
+  // @ts-ignore - this is coming from the host
+  JSChannel_ = RawInterpreter;
+};
+
+export class NativeInterpreter extends JSChannel_ {
+  intercept_link_redirects: boolean;
+  ipc: any;
+  editsPath: string;
+
+  // eventually we want to remove liveview and build it into the server-side-events of fullstack
+  // however, for now we need to support it since SSE in fullstack doesn't exist yet
+  liveview: boolean;
+
+  constructor(editsPath: string) {
+    super();
+    this.editsPath = editsPath;
+  }
+
+  initialize(root: HTMLElement): void {
+    this.intercept_link_redirects = true;
+    this.liveview = false;
+
+    // attach an event listener on the body that prevents file drops from navigating
+    // this is because the browser will try to navigate to the file if it's dropped on the window
+    window.addEventListener("dragover", function (e) {
+      // // check which element is our target
+      if (e.target instanceof Element && e.target.tagName != "INPUT") {
+        e.preventDefault();
+      }
+    }, false);
+
+    window.addEventListener("drop", function (e) {
+      let target = e.target;
+
+      if (!(target instanceof Element)) {
+        return;
+      }
+
+      // Dropping a file on the window will navigate to the file, which we don't want
+      e.preventDefault();
+    }, false);
+
+    // attach a listener to the route that listens for clicks and prevents the default file dialog
+    window.addEventListener("click", (event) => {
+      const target = event.target;
+      if (target instanceof HTMLInputElement && target.getAttribute("type") === "file") {
+        // Send a message to the host to open the file dialog if the target is a file input and has a dioxus id attached to it
+        let target_id = getTargetId(target);
+        if (target_id !== null) {
+          const message = this.serializeIpcMessage("file_dialog", {
+            event: "change&input",
+            accept: target.getAttribute("accept"),
+            directory: target.getAttribute("webkitdirectory") === "true",
+            multiple: target.hasAttribute("multiple"),
+            target: target_id,
+            bubbles: event.bubbles,
+          });
+          this.ipc.postMessage(message);
+        }
+
+        // Prevent default regardless - we don't want file dialogs and we don't want the browser to navigate
+        event.preventDefault();
+      }
+    });
+
+
+    // @ts-ignore - wry gives us this
+    this.ipc = window.ipc;
+
+    // make sure we pass the handler to the base interpreter
+    const handler: EventListener = (event) => this.handleEvent(event, event.type, true);
+    super.initialize(root, handler);
+  }
+
+  serializeIpcMessage(method: string, params = {}) {
+    return JSON.stringify({ method, params });
+  }
+
+  scrollTo(id: NodeId, behavior: ScrollBehavior) {
+    const node = this.nodes[id];
+    if (node instanceof HTMLElement) {
+      node.scrollIntoView({ behavior });
+    }
+  }
+
+  getClientRect(id: NodeId): { type: string; origin: number[]; size: number[]; } | undefined {
+    const node = this.nodes[id];
+    if (node instanceof HTMLElement) {
+      const rect = node.getBoundingClientRect();
+      return {
+        type: "GetClientRect",
+        origin: [rect.x, rect.y],
+        size: [rect.width, rect.height],
+      };
+    }
+  }
+
+  setFocus(id: NodeId, focus: boolean) {
+    const node = this.nodes[id];
+
+    if (node instanceof HTMLElement) {
+      if (focus) {
+        node.focus();
+      } else {
+        node.blur();
+      }
+    }
+  }
+
+  // ignore the fact the base interpreter uses ptr + len but we use array...
+  // @ts-ignore
+  loadChild(array: number[]) {
+    // iterate through each number and get that child
+    let node = this.stack[this.stack.length - 1];
+
+    for (let i = 0; i < array.length; i++) {
+      let end = array[i];
+      for (node = node.firstChild; end > 0; end--) {
+        node = node.nextSibling;
+      }
+    }
+
+    return node;
+  }
+
+  appendChildren(id: NodeId, many: number) {
+    const root = this.nodes[id];
+    const els = this.stack.splice(this.stack.length - many);
+
+    for (let k = 0; k < many; k++) {
+      root.appendChild(els[k]);
+    }
+  }
+
+  handleEvent(event: Event, name: string, bubbles: boolean) {
+    const target = event.target!;
+    const realId = getTargetId(target)!;
+    const contents = serializeEvent(event, target);
+
+    // Handle the event on the virtualdom and then preventDefault if it also preventsDefault
+    // Some listeners
+    let body = {
+      name: name,
+      data: contents,
+      element: realId,
+      bubbles,
+    };
+
+    // Run any prevent defaults the user might've set
+    // This is to support the prevent_default: "onclick" attribute that dioxus has had for a while, but is not necessary
+    // now that we expose preventDefault to the virtualdom on desktop
+    // Liveview will still need to use this
+    this.preventDefaults(event, target);
+
+    // liveview does not have syncronous event handling, so we need to send the event to the host
+    if (this.liveview) {
+      // Okay, so the user might've requested some files to be read
+      if (target instanceof HTMLInputElement && (event.type === "change" || event.type === "input")) {
+        if (target.getAttribute("type") === "file") {
+          this.readFiles(target, contents, bubbles, realId, name);
+        }
+      }
+    } else {
+
+      const message = this.serializeIpcMessage("user_event", body);
+      this.ipc.postMessage(message);
+
+      // // Run the event handler on the virtualdom
+      // // capture/prevent default of the event if the virtualdom wants to
+      // const res = handleVirtualdomEventSync(JSON.stringify(body));
+
+      // if (res.preventDefault) {
+      //   event.preventDefault();
+      // }
+
+      // if (res.stopPropagation) {
+      //   event.stopPropagation();
+      // }
+    }
+  }
+
+
+
+  // This should:
+  // - prevent form submissions from navigating
+  // - prevent anchor tags from navigating
+  // - prevent buttons from submitting forms
+  // - let the virtualdom attempt to prevent the event
+  preventDefaults(event: Event, target: EventTarget) {
+    let preventDefaultRequests: string | null = null;
+
+    // Some events can be triggered on text nodes, which don't have attributes
+    if (target instanceof Element) {
+      preventDefaultRequests = target.getAttribute(`dioxus-prevent-default`);
+    }
+
+    if (preventDefaultRequests && preventDefaultRequests.includes(`on${event.type}`)) {
+      event.preventDefault();
+    }
+
+    if (event.type === "submit") {
+      event.preventDefault();
+    }
+
+    // Attempt to intercept if the event is a click
+    if (target instanceof Element && event.type === "click") {
+      this.handleClickNavigate(event, target, preventDefaultRequests);
+    }
+  }
+
+  handleClickNavigate(event: Event, target: Element, preventDefaultRequests: string) {
+    // todo call prevent default if it's the right type of event
+    if (!this.intercept_link_redirects) {
+      return;
+    }
+
+    // prevent buttons in forms from submitting the form
+    if (target.tagName === "BUTTON" && event.type == "submit") {
+      event.preventDefault();
+    }
+
+    // If the target is an anchor tag, we want to intercept the click too, to prevent the browser from navigating
+    let a_element = target.closest("a");
+    if (a_element == null) {
+      return;
+    }
+
+    event.preventDefault();
+
+    let elementShouldPreventDefault =
+      preventDefaultRequests && preventDefaultRequests.includes(`onclick`);
+
+    let aElementShouldPreventDefault = a_element.getAttribute(
+      `dioxus-prevent-default`
+    );
+
+    let linkShouldPreventDefault =
+      aElementShouldPreventDefault &&
+      aElementShouldPreventDefault.includes(`onclick`);
+
+    if (!elementShouldPreventDefault && !linkShouldPreventDefault) {
+      const href = a_element.getAttribute("href");
+      if (href !== "" && href !== null && href !== undefined) {
+        this.ipc.postMessage(
+          this.serializeIpcMessage("browser_open", { href })
+        );
+      }
+    }
+  }
+
+  waitForRequest(headless: boolean) {
+    fetch(new Request(this.editsPath))
+      .then(response => response.arrayBuffer())
+      .then(bytes => {
+        // In headless mode, the requestAnimationFrame callback is never called, so we need to run the bytes directly
+        if (headless) {
+          // @ts-ignore
+          this.run_from_bytes(bytes);
+        } else {
+          // @ts-ignore
+          requestAnimationFrame(() => this.run_from_bytes(bytes));
+        }
+        this.waitForRequest(headless);
+      });
+  }
+
+
+  //  A liveview only function
+  // Desktop will intercept the event before it hits this
+  async readFiles(target: HTMLInputElement, contents: SerializedEvent, bubbles: boolean, realId: NodeId, name: string) {
+    let files = target.files!;
+    let file_contents: { [name: string]: number[] } = {};
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      file_contents[file.name] = Array.from(
+        new Uint8Array(await file.arrayBuffer())
+      );
+    }
+
+    contents.files = { files: file_contents };
+
+    const message = this.serializeIpcMessage("user_event", {
+      name: name,
+      element: realId,
+      data: contents,
+      bubbles,
+    });
+
+    this.ipc.postMessage(message);
+  }
+}
+
+type EventSyncResult = {
+  preventDefault: boolean;
+  stopPropagation: boolean;
+  stopImmediatePropagation: boolean;
+  filesRequested: boolean;
+};
+
+// This function sends the event to the virtualdom and then waits for the virtualdom to process it
+//
+// However, it's not really suitable for liveview, because it's synchronous and will block the main thread
+// We should definitely consider using a websocket if we want to block... or just not block on liveview
+// Liveview is a little bit of a tricky beast
+function handleVirtualdomEventSync(contents: string): EventSyncResult {
+  // Handle the event on the virtualdom and then process whatever its output was
+  const xhr = new XMLHttpRequest();
+
+  // Serialize the event and send it to the custom protocol in the Rust side of things
+  xhr.timeout = 1000;
+  xhr.open("GET", "/handle/event.please", false);
+  xhr.setRequestHeader("Content-Type", "application/json");
+  xhr.send(contents);
+
+  // Deserialize the response, and then prevent the default/capture the event if the virtualdom wants to
+  return JSON.parse(xhr.responseText);
+}
+
+function getTargetId(target: EventTarget): NodeId | null {
+  // Ensure that the target is a node, sometimes it's nota
+  if (!(target instanceof Node)) {
+    return null;
+  }
+
+  let ourTarget = target;
+  let realId = null;
+
+  while (realId == null) {
+    if (ourTarget === null) {
+      return null;
+    }
+
+    if (ourTarget instanceof Element) {
+      realId = ourTarget.getAttribute(`data-dioxus-id`);
+    }
+
+    ourTarget = ourTarget.parentNode;
+  }
+
+  return parseInt(realId);
+}
+
+
+// function applyFileUpload() {
+//   let inputs = document.querySelectorAll("input");
+//   for (let input of inputs) {
+//     if (!input.getAttribute("data-dioxus-file-listener")) {
+//       // prevent file inputs from opening the file dialog on click
+//       const type = input.getAttribute("type");
+//       if (type === "file") {
+//         input.setAttribute("data-dioxus-file-listener", true);
+//         input.addEventListener("click", (event) => {
+//           let target = event.target;
+//           let target_id = find_real_id(target);
+//           if (target_id !== null) {
+//             const send = (event_name) => {
+//               const message = window.interpreter.serializeIpcMessage("file_diolog", { accept: target.getAttribute("accept"), directory: target.getAttribute("webkitdirectory") === "true", multiple: target.hasAttribute("multiple"), target: parseInt(target_id), bubbles: event_bubbles(event_name), event: event_name });
+//               window.ipc.postMessage(message);
+//             };
+//             send("change&input");
+//           }
+//           event.preventDefault();
+//         });
+//       }
+//     }
+// }
+// The root interpreter class that holds state about the mapping between DOM and VirtualDom
+// This always lives in the JS side of things, and is extended by the native and web interpreters
+
+import { setAttributeInner } from "./set_attribute";
+
+export type NodeId = number;
+
+export class BaseInterpreter {
+  // non bubbling events listen at the element the listener was created at
+  global: {
+    [key: string]: { active: number, callback: EventListener }
+  };
+  // bubbling events can listen at the root element
+  local: {
+    [key: string]: {
+      [key: string]: EventListener
+    }
+  };
+
+  root: HTMLElement;
+  handler: EventListener;
+  nodes: Node[];
+  stack: Node[];
+  templates: {
+    [key: number]: Node[]
+  };
+
+  // sledgehammer is generating this...
+  m: any;
+
+  constructor() { }
+
+  initialize(root: HTMLElement, handler: EventListener | null = null) {
+    this.global = {};
+    this.local = {};
+    this.root = root;
+
+    this.nodes = [root];
+    this.stack = [root];
+    this.templates = {};
+
+    if (handler) {
+      this.handler = handler;
+    }
+  }
+
+  createListener(event_name: string, element: HTMLElement, bubbles: boolean) {
+    if (bubbles) {
+      if (this.global[event_name] === undefined) {
+        this.global[event_name] = { active: 1, callback: this.handler };
+        this.root.addEventListener(event_name, this.handler);
+      } else {
+        this.global[event_name].active++;
+      }
+    } else {
+      const id = element.getAttribute("data-dioxus-id");
+      if (!this.local[id]) {
+        this.local[id] = {};
+      }
+      element.addEventListener(event_name, this.handler);
+    }
+  }
+
+  removeListener(element: HTMLElement, event_name: string, bubbles: boolean) {
+    if (bubbles) {
+      this.removeBubblingListener(event_name);
+    } else {
+      this.removeNonBubblingListener(element, event_name);
+    }
+  }
+
+  removeBubblingListener(event_name: string) {
+    this.global[event_name].active--;
+    if (this.global[event_name].active === 0) {
+      this.root.removeEventListener(event_name, this.global[event_name].callback);
+      delete this.global[event_name];
+    }
+  }
+
+  removeNonBubblingListener(element: HTMLElement, event_name: string) {
+    const id = element.getAttribute("data-dioxus-id");
+    delete this.local[id][event_name];
+    if (Object.keys(this.local[id]).length === 0) {
+      delete this.local[id];
+    }
+    element.removeEventListener(event_name, this.handler);
+  }
+
+  removeAllNonBubblingListeners(element: HTMLElement) {
+    const id = element.getAttribute("data-dioxus-id");
+    delete this.local[id];
+  }
+
+  getNode(id: NodeId): Node {
+    return this.nodes[id];
+  }
+
+  appendChildren(id: NodeId, many: number) {
+    const root = this.nodes[id];
+    const els = this.stack.splice(this.stack.length - many);
+    for (let k = 0; k < many; k++) {
+      root.appendChild(els[k]);
+    }
+  }
+
+  loadChild(ptr: number, len: number): Node {
+    // iterate through each number and get that child
+    let node = this.stack[this.stack.length - 1] as Node;
+    let ptr_end = ptr + len;
+
+    for (; ptr < ptr_end; ptr++) {
+      let end = this.m.getUint8(ptr);
+      for (node = node.firstChild; end > 0; end--) {
+        node = node.nextSibling;
+      }
+    }
+
+    return node;
+  }
+
+  saveTemplate(nodes: HTMLElement[], tmpl_id: number) {
+    this.templates[tmpl_id] = nodes;
+  }
+
+  hydrate(ids: { [key: number]: number }) {
+    const hydrateNodes = document.querySelectorAll('[data-node-hydration]');
+
+    for (let i = 0; i < hydrateNodes.length; i++) {
+      const hydrateNode = hydrateNodes[i] as HTMLElement;
+      const hydration = hydrateNode.getAttribute('data-node-hydration');
+      const split = hydration!.split(',');
+      const id = ids[parseInt(split[0])];
+
+      this.nodes[id] = hydrateNode;
+
+      if (split.length > 1) {
+        // @ts-ignore
+        hydrateNode.listening = split.length - 1;
+        hydrateNode.setAttribute('data-dioxus-id', id.toString());
+        for (let j = 1; j < split.length; j++) {
+          const listener = split[j];
+          const split2 = listener.split(':');
+          const event_name = split2[0];
+          const bubbles = split2[1] === '1';
+          this.createListener(event_name, hydrateNode, bubbles);
+        }
+      }
+    }
+
+    const treeWalker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_COMMENT,
+    );
+
+    let currentNode = treeWalker.nextNode();
+
+    while (currentNode) {
+      const id = currentNode.textContent!;
+      const split = id.split('node-id');
+
+      if (split.length > 1) {
+        this.nodes[ids[parseInt(split[1])]] = currentNode.nextSibling;
+      }
+
+      currentNode = treeWalker.nextNode();
+    }
+  }
+
+  setAttributeInner(node: HTMLElement, field: string, value: string, ns: string) {
+    setAttributeInner(node, field, value, ns);
+  }
+}
+

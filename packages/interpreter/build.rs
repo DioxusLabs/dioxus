@@ -13,7 +13,7 @@ fn main() {
         return;
     }
 
-    panic!("Hashes match, no need to update bindings. {expected} != {hash}",);
+    // panic!("Hashes match, no need to update bindings. {expected} != {hash}",);
 
     // Otherwise, generate the bindings and write the new hash to disk
     // Generate the bindings for both native and web
@@ -21,7 +21,7 @@ fn main() {
     gen_bindings("native", "native");
     gen_bindings("core", "core");
 
-    std::fs::write("src/js/hash.txt", hash.to_string()).unwrap();
+    std::fs::write("src/js/hash.txt", hash).unwrap();
 }
 
 /// Hashes the contents of a directory
@@ -35,7 +35,7 @@ fn hash_ts_files() -> String {
     ];
 
     for file in files {
-        out = format!("{out}{:?}", md5::compute(file));
+        out = format!("{out}{file}");
     }
 
     out
