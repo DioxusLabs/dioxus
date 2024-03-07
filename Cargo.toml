@@ -155,6 +155,7 @@ form_urlencoded = "1.2.0"
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 getrandom = { version = "0.2.12", features = ["js"] }
+tokio = { version = "1.16.1", no-default-features = true, features = ["sync", "macros", "io-util", "rt", "time"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tokio = { version = "1.16.1", features = ["full"] }

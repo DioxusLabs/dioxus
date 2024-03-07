@@ -36,7 +36,10 @@ pub fn mock_event_with_extra(id: &'static str, value: &'static str, extra: &'sta
         EXPECTED_EVENTS.with_mut(|x| *x += 1);
 
         spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            // We need to wait for edits to be applied before we can send the event
+            // Sometimes (windows...) this takes a while
+            // we should really be running this check when mounted
+            tokio::time::sleep(std::time::Duration::from_millis(10000)).await;
 
             let js = format!(
                 r#"
