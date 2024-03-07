@@ -75,7 +75,12 @@ mod js {
         "{let node = document.createElement('pre'); node.hidden = true; this.stack.push(node); this.nodes[$id$] = node;}"
     }
     fn new_event_listener(event_name: &str<u8, evt>, id: u32, bubbles: u8) {
-        r#"let node = this.nodes[id]; if(node.listening){node.listening += 1;}else{node.listening = 1;} node.setAttribute('data-dioxus-id', `\${id}`); this.createListener($event_name$, node, $bubbles$);"#
+        r#"
+            let node = this.nodes[id];
+            if(node.listening){node.listening += 1;}else{node.listening = 1;}
+            node.setAttribute('data-dioxus-id', `\${id}`);
+            this.createListener($event_name$, node, $bubbles$);
+        "#
     }
     fn remove_event_listener(event_name: &str<u8, evt>, id: u32, bubbles: u8) {
         "{let node = this.nodes[$id$]; node.listening -= 1; node.removeAttribute('data-dioxus-id'); this.removeListener(node, $event_name$, $bubbles$);}"

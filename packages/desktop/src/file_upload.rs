@@ -10,7 +10,7 @@ use dioxus_html::{
     prelude::{SerializedMouseData, SerializedPointInteraction},
     FileEngine, HasDragData, HasFileData, HasFormData, HasMouseData,
 };
-use muda::accelerator::Modifiers;
+
 use serde::Deserialize;
 use std::{
     cell::{Cell, RefCell},
@@ -223,7 +223,7 @@ impl InteractionElementOffset for DesktopFileDragEvent {
 }
 
 impl ModifiersInteraction for DesktopFileDragEvent {
-    fn modifiers(&self) -> Modifiers {
+    fn modifiers(&self) -> dioxus_html::prelude::Modifiers {
         self.mouse.modifiers()
     }
 }

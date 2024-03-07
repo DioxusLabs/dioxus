@@ -147,7 +147,7 @@ fn deserialize_raw(
 #[cfg(feature = "serialize")]
 impl HtmlEvent {
     pub fn bubbles(&self) -> bool {
-        event_bubbles(&self.name)
+        self.bubbles
     }
 }
 

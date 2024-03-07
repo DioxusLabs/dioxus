@@ -32,9 +32,13 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, desktop_config: Conf
                 UserWindowEvent::Poll(id) => app.poll_vdom(id),
                 UserWindowEvent::NewWindow => app.handle_new_window(),
                 UserWindowEvent::CloseWindow(id) => app.handle_close_msg(id),
+
+                #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
                 UserWindowEvent::GlobalHotKeyEvent(evnt) => app.handle_global_hotkey(evnt),
+
                 #[cfg(all(feature = "hot-reload", debug_assertions))]
                 UserWindowEvent::HotReloadEvent(msg) => app.handle_hot_reload_msg(msg),
+
                 UserWindowEvent::Ipc { id, msg } => match msg.method() {
                     IpcMethod::Initialize => app.handle_initialize_msg(id),
                     IpcMethod::FileDialog => app.handle_file_dialog_msg(msg, id),

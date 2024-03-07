@@ -5,7 +5,7 @@ use crate::{
     file_upload::{DesktopFileDragEvent, DesktopFileUploadForm, FileDialogRequest},
     ipc::{IpcMessage, UserWindowEvent},
     query::QueryResult,
-    shortcut::{GlobalHotKeyEvent, ShortcutRegistry},
+    shortcut::ShortcutRegistry,
     webview::WebviewInstance,
 };
 use dioxus_core::ElementId;
@@ -77,6 +77,7 @@ impl App {
         dioxus_html::set_event_converter(Box::new(crate::events::SerializedHtmlEventConverter));
 
         // Wire up the global hotkey handler
+        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
         app.set_global_hotkey_handler();
 
         // Allow hotreloading to work - but only in debug mode
@@ -93,7 +94,8 @@ impl App {
             .apply_event(window_event, &self.shared.target);
     }
 
-    pub fn handle_global_hotkey(&self, event: GlobalHotKeyEvent) {
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    pub fn handle_global_hotkey(&self, event: global_hotkey::GlobalHotKeyEvent) {
         self.shared.shortcut_manager.call_handlers(event);
     }
 
@@ -322,6 +324,7 @@ impl App {
         view.poll_vdom();
     }
 
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     fn set_global_hotkey_handler(&self) {
         let receiver = self.shared.proxy.clone();
 

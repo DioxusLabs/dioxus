@@ -73,7 +73,7 @@ impl WebsysDom {
             move |event: &web_sys::Event| {
                 let name = event.type_();
                 let element = walk_event_for_id(event);
-                let bubbles = dioxus_html::event_bubbles(name.as_str());
+                let bubbles = event.bubbles();
 
                 let Some((element, target)) = element else {
                     return;

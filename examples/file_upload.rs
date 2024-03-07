@@ -20,6 +20,7 @@ struct UploadedFile {
 fn app() -> Element {
     let mut enable_directory_upload = use_signal(|| false);
     let mut files_uploaded = use_signal(|| Vec::new() as Vec<UploadedFile>);
+    let mut hovered = use_signal(|| false);
 
     let read_files = move |file_engine: Arc<dyn FileEngine>| async move {
         let files = file_engine.files();
@@ -39,18 +40,12 @@ fn app() -> Element {
         }
     };
 
-    let handle_file_drop = move |evt: DragEvent| async move {
-        if let Some(file_engine) = evt.files() {
-            read_files(file_engine).await;
-        }
-    };
-
     rsx! {
         style { {include_str!("./assets/file_upload.css")} }
 
         h1 { "File Upload Example" }
         p { "Drop a .txt, .rs, or .js file here to read it" }
-
+        button { onclick: move |_| files_uploaded.write().clear(), "Clear files" }
 
         div {
             label { r#for: "directory-upload", "Enable directory upload" }
@@ -75,14 +70,17 @@ fn app() -> Element {
         }
 
         div {
-            // cheating with a little bit of JS...
-            "ondragover": "this.style.backgroundColor='#88FF88';",
-            "ondragleave": "this.style.backgroundColor='#FFFFFF';",
-            "ondrop": "this.style.backgroundColor='#FFFFFF';",
             id: "drop-zone",
-            prevent_default: "ondragover",
-            prevent_default: "ondrop",
-            ondrop: handle_file_drop,
+            prevent_default: "ondragover ondrop",
+            background_color: if hovered() { "lightblue" } else { "lightgray" },
+            ondragover: move |_| hovered.set(true),
+            ondragleave: move |_| hovered.set(false),
+            ondrop: move |evt| async move {
+                hovered.set(false);
+                if let Some(file_engine) = evt.files() {
+                    read_files(file_engine).await;
+                }
+            },
             "Drop files here"
         }
 

@@ -1,11 +1,11 @@
-use global_hotkey::GlobalHotKeyEvent;
 use serde::{Deserialize, Serialize};
 use tao::window::WindowId;
 
 #[derive(Debug, Clone)]
 pub enum UserWindowEvent {
     /// A global hotkey event
-    GlobalHotKeyEvent(GlobalHotKeyEvent),
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    GlobalHotKeyEvent(global_hotkey::GlobalHotKeyEvent),
 
     /// Poll the virtualdom
     Poll(WindowId),
