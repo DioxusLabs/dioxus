@@ -28,19 +28,19 @@ fn main() {
 fn hash_ts_files() -> u128 {
     let mut out = 0;
 
-    let files = [
-        include_str!("src/ts/common.ts"),
-        include_str!("src/ts/native.ts"),
-        include_str!("src/ts/core.ts"),
+    let files: &[&[u8]] = &[
+        include_bytes!("src/ts/common.ts"),
+        include_bytes!("src/ts/native.ts"),
+        include_bytes!("src/ts/core.ts"),
     ];
 
     // Let's make the dumbest hasher by summing the bytes of the files
     // The location is multiplied by the byte value to make sure that the order of the bytes matters
     let mut idx = 0;
     for file in files {
-        for byte in file.bytes() {
+        for byte in file.iter() {
             idx += 1;
-            out += (byte as u128) * (idx as u128);
+            out += (*byte as u128) * (idx as u128);
         }
     }
     out
