@@ -10,9 +10,10 @@ fn main() {
     // If the hash matches the one on disk, we're good and don't need to update bindings
     let expected = include_str!("src/js/hash.txt").trim();
     if expected == hash.to_string() {
-        panic!("Hashes match, no need to update bindings. {expected} != {hash}",);
         return;
     }
+
+    panic!("Hashes match, no need to update bindings. {expected} != {hash}",);
 
     // Otherwise, generate the bindings and write the new hash to disk
     // Generate the bindings for both native and web
