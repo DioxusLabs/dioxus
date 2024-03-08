@@ -181,3 +181,28 @@ fn attribute_diff() {
         ]
     );
 }
+
+#[test]
+fn diff_empty() {
+    fn app() -> Element {
+        match generation() % 2 {
+            0 => rsx! { div { "hello" } },
+            1 => rsx! {},
+            _ => unreachable!(),
+        }
+    }
+
+    let mut vdom = VirtualDom::new(app);
+    vdom.rebuild(&mut NoOpMutations);
+
+    vdom.mark_dirty(ScopeId::ROOT);
+    let edits = vdom.render_immediate_to_vec().santize().edits;
+
+    assert_eq!(
+        edits,
+        [
+            CreatePlaceholder { id: ElementId(2,) },
+            ReplaceWith { id: ElementId(1,), m: 1 },
+        ]
+    )
+}
