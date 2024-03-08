@@ -25,14 +25,13 @@ fn use_inner_html(id: &'static str) -> Option<String> {
             .unwrap();
 
             if let Some(html) = res.as_str() {
-                // serde_json::Value::String(html)
                 println!("html: {}", html);
                 value.set(Some(html.to_string()));
             }
         });
     });
 
-    value.read().clone()
+    value()
 }
 
 const EXPECTED_HTML: &str = r#"<div style="width: 100px; height: 100px; color: rgb(0, 0, 0);" id="5"><input type="checkbox"><h1>text</h1><div><p>hello world</p></div></div>"#;
