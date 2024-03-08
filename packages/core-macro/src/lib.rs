@@ -4,7 +4,6 @@
 
 use proc_macro::TokenStream;
 use quote::ToTokens;
-use rsx::RenderCallBody;
 use syn::parse::Parser;
 use syn::punctuated::Punctuated;
 use syn::{parse_macro_input, Path, Token};
@@ -42,7 +41,7 @@ pub fn derive_typed_builder(input: TokenStream) -> TokenStream {
 pub fn rsx(tokens: TokenStream) -> TokenStream {
     match syn::parse::<rsx::CallBody>(tokens) {
         Err(err) => err.to_compile_error().into(),
-        Ok(body) => RenderCallBody(body).into_token_stream().into(),
+        Ok(body) => body.into_token_stream().into(),
     }
 }
 
