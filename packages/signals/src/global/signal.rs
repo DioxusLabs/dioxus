@@ -1,6 +1,6 @@
 use crate::write::Writable;
-use crate::Write;
 use crate::{read::Readable, ReadableRef};
+use crate::{WritableRef, Write};
 use dioxus_core::prelude::{IntoAttributeValue, ScopeId};
 use generational_box::UnsyncStorage;
 use std::{mem::MaybeUninit, ops::Deref};
@@ -44,8 +44,8 @@ impl<T: 'static> GlobalSignal<T> {
     }
 
     /// Write this value
-    pub fn write(&self) -> Write<T, UnsyncStorage> {
-        self.signal().write()
+    pub fn write(&self) -> Write<'static, T, UnsyncStorage> {
+        self.signal().try_write_unchecked().unwrap()
     }
 
     /// Get the scope the signal was created in.
@@ -71,23 +71,25 @@ impl<T: 'static> Readable for GlobalSignal<T> {
     type Storage = UnsyncStorage;
 
     #[track_caller]
-    fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
-        self.signal().try_read()
+    fn try_read_unchecked(
+        &self,
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+        self.signal().try_read_unchecked()
     }
 
     #[track_caller]
-    fn peek(&self) -> ReadableRef<Self> {
-        self.signal().peek()
+    fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
+        self.signal().peek_unchecked()
     }
 }
 
 impl<T: 'static> Writable for GlobalSignal<T> {
-    type Mut<R: ?Sized + 'static> = Write<R, UnsyncStorage>;
+    type Mut<'a, R: ?Sized + 'static> = Write<'a, R, UnsyncStorage>;
 
     fn map_mut<I: ?Sized, U: ?Sized + 'static, F: FnOnce(&mut I) -> &mut U>(
-        ref_: Self::Mut<I>,
+        ref_: Self::Mut<'_, I>,
         f: F,
-    ) -> Self::Mut<U> {
+    ) -> Self::Mut<'_, U> {
         Write::map(ref_, f)
     }
 
@@ -96,15 +98,21 @@ impl<T: 'static> Writable for GlobalSignal<T> {
         U: ?Sized + 'static,
         F: FnOnce(&mut I) -> Option<&mut U>,
     >(
-        ref_: Self::Mut<I>,
+        ref_: Self::Mut<'_, I>,
         f: F,
-    ) -> Option<Self::Mut<U>> {
+    ) -> Option<Self::Mut<'_, U>> {
         Write::filter_map(ref_, f)
     }
 
+    fn downcast_mut<'a: 'b, 'b, R: ?Sized + 'static>(mut_: Self::Mut<'a, R>) -> Self::Mut<'b, R> {
+        Write::downcast_lifetime(mut_)
+    }
+
     #[track_caller]
-    fn try_write(&mut self) -> Result<Self::Mut<T>, generational_box::BorrowMutError> {
-        self.signal().try_write()
+    fn try_write_unchecked(
+        &self,
+    ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError> {
+        self.signal().try_write_unchecked()
     }
 }
 

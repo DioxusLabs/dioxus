@@ -98,7 +98,7 @@ impl<T: 'static, S: Storage<T>> GenerationalBox<T, S> {
 
     /// Try to read the value. Returns None if the value is no longer valid.
     #[track_caller]
-    pub fn try_read(&self) -> Result<S::Ref<T>, BorrowError> {
+    pub fn try_read(&self) -> Result<S::Ref<'static, T>, BorrowError> {
         if !self.validate() {
             return Err(BorrowError::Dropped(ValueDroppedError {
                 #[cfg(any(debug_assertions, feature = "debug_borrows"))]
@@ -129,13 +129,13 @@ impl<T: 'static, S: Storage<T>> GenerationalBox<T, S> {
 
     /// Read the value. Panics if the value is no longer valid.
     #[track_caller]
-    pub fn read(&self) -> S::Ref<T> {
+    pub fn read(&self) -> S::Ref<'static, T> {
         self.try_read().unwrap()
     }
 
     /// Try to write the value. Returns None if the value is no longer valid.
     #[track_caller]
-    pub fn try_write(&self) -> Result<S::Mut<T>, BorrowMutError> {
+    pub fn try_write(&self) -> Result<S::Mut<'static, T>, BorrowMutError> {
         if !self.validate() {
             return Err(BorrowMutError::Dropped(ValueDroppedError {
                 #[cfg(any(debug_assertions, feature = "debug_borrows"))]
@@ -162,7 +162,7 @@ impl<T: 'static, S: Storage<T>> GenerationalBox<T, S> {
 
     /// Write the value. Panics if the value is no longer valid.
     #[track_caller]
-    pub fn write(&self) -> S::Mut<T> {
+    pub fn write(&self) -> S::Mut<'static, T> {
         self.try_write().unwrap()
     }
 
@@ -210,13 +210,13 @@ pub trait Storage<Data = ()>: AnyStorage + 'static {
     fn try_read(
         &'static self,
         #[cfg(any(debug_assertions, feature = "debug_ownership"))] at: GenerationalRefBorrowInfo,
-    ) -> Result<Self::Ref<Data>, BorrowError>;
+    ) -> Result<Self::Ref<'static, Data>, BorrowError>;
 
     /// Try to write the value. Returns None if the value is no longer valid.
     fn try_write(
         &'static self,
         #[cfg(any(debug_assertions, feature = "debug_ownership"))] at: GenerationalRefMutBorrowInfo,
-    ) -> Result<Self::Mut<Data>, BorrowMutError>;
+    ) -> Result<Self::Mut<'static, Data>, BorrowMutError>;
 
     /// Set the value
     fn set(&'static self, value: Data);
@@ -228,35 +228,45 @@ pub trait Storage<Data = ()>: AnyStorage + 'static {
 /// A trait for any storage backing type.
 pub trait AnyStorage: Default {
     /// The reference this storage type returns.
-    type Ref<T: ?Sized + 'static>: Deref<Target = T> + 'static;
+    type Ref<'a, T: ?Sized + 'static>: Deref<Target = T>;
     /// The mutable reference this storage type returns.
-    type Mut<T: ?Sized + 'static>: DerefMut<Target = T> + 'static;
+    type Mut<'a, T: ?Sized + 'static>: DerefMut<Target = T>;
+
+    /// Downcast a reference in a Ref to a more specific lifetime
+    ///
+    /// This function enforces the variance of the lifetime parameter `'a` in Ref.
+    fn downcast_ref<'a: 'b, 'b, T: ?Sized + 'static>(ref_: Self::Ref<'a, T>) -> Self::Ref<'b, T>;
+
+    /// Downcast a mutable reference in a RefMut to a more specific lifetime
+    ///
+    /// This function enforces the variance of the lifetime parameter `'a` in Ref.
+    fn downcast_mut<'a: 'b, 'b, T: ?Sized + 'static>(mut_: Self::Mut<'a, T>) -> Self::Mut<'b, T>;
 
     /// Try to map the mutable ref.
-    fn try_map_mut<T: ?Sized, U: ?Sized + 'static>(
-        mut_ref: Self::Mut<T>,
+    fn try_map_mut<T: ?Sized + 'static, U: ?Sized + 'static>(
+        mut_ref: Self::Mut<'_, T>,
         f: impl FnOnce(&mut T) -> Option<&mut U>,
-    ) -> Option<Self::Mut<U>>;
+    ) -> Option<Self::Mut<'_, U>>;
 
     /// Map the mutable ref.
-    fn map_mut<T: ?Sized, U: ?Sized + 'static>(
-        mut_ref: Self::Mut<T>,
+    fn map_mut<T: ?Sized + 'static, U: ?Sized + 'static>(
+        mut_ref: Self::Mut<'_, T>,
         f: impl FnOnce(&mut T) -> &mut U,
-    ) -> Self::Mut<U> {
+    ) -> Self::Mut<'_, U> {
         Self::try_map_mut(mut_ref, |v| Some(f(v))).unwrap()
     }
 
     /// Try to map the ref.
     fn try_map<T: ?Sized, U: ?Sized + 'static>(
-        ref_: Self::Ref<T>,
+        ref_: Self::Ref<'_, T>,
         f: impl FnOnce(&T) -> Option<&U>,
-    ) -> Option<Self::Ref<U>>;
+    ) -> Option<Self::Ref<'_, U>>;
 
     /// Map the ref.
     fn map<T: ?Sized, U: ?Sized + 'static>(
-        ref_: Self::Ref<T>,
+        ref_: Self::Ref<'_, T>,
         f: impl FnOnce(&T) -> &U,
-    ) -> Self::Ref<U> {
+    ) -> Self::Ref<'_, U> {
         Self::try_map(ref_, |v| Some(f(v))).unwrap()
     }
 

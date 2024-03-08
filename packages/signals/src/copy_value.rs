@@ -15,6 +15,7 @@ use generational_box::{GenerationalBox, Owner, Storage};
 
 use crate::ReadableRef;
 use crate::Writable;
+use crate::WritableRef;
 use crate::{ReactiveContext, Readable};
 
 /// Run a closure with the given owner.
@@ -211,40 +212,43 @@ impl<T: 'static, S: Storage<T>> Readable for CopyValue<T, S> {
     type Target = T;
     type Storage = S;
 
-    fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
+    fn try_read_unchecked(
+        &self,
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
         self.value.try_read()
     }
 
-    fn peek(&self) -> ReadableRef<Self> {
+    fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
         self.value.read()
     }
 }
 
 impl<T: 'static, S: Storage<T>> Writable for CopyValue<T, S> {
-    type Mut<R: ?Sized + 'static> = S::Mut<R>;
+    type Mut<'a, R: ?Sized + 'static> = S::Mut<'a, R>;
 
     fn map_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> &mut U>(
-        mut_: Self::Mut<I>,
+        mut_: Self::Mut<'_, I>,
         f: F,
-    ) -> Self::Mut<U> {
+    ) -> Self::Mut<'_, U> {
         S::map_mut(mut_, f)
     }
 
     fn try_map_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> Option<&mut U>>(
-        mut_: Self::Mut<I>,
+        mut_: Self::Mut<'_, I>,
         f: F,
-    ) -> Option<Self::Mut<U>> {
+    ) -> Option<Self::Mut<'_, U>> {
         S::try_map_mut(mut_, f)
     }
 
-    #[track_caller]
-    fn try_write(&mut self) -> Result<Self::Mut<T>, generational_box::BorrowMutError> {
-        self.value.try_write()
+    fn downcast_mut<'a: 'b, 'b, R: ?Sized + 'static>(mut_: Self::Mut<'a, R>) -> Self::Mut<'b, R> {
+        S::downcast_mut(mut_)
     }
 
     #[track_caller]
-    fn write(&mut self) -> Self::Mut<T> {
-        self.value.write()
+    fn try_write_unchecked(
+        &self,
+    ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError> {
+        self.value.try_write()
     }
 
     #[track_caller]
