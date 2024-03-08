@@ -50,7 +50,9 @@ impl<T: 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
     #[doc(hidden)]
     /// This should only be used by the `rsx!` macro.
     pub fn __take(&self) -> T {
-        self.inner.take()
+        self.inner
+            .manually_drop()
+            .expect("Signal has already been dropped")
     }
 }
 

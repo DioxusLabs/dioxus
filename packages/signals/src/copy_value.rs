@@ -190,11 +190,9 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
         }
     }
 
-    /// Take the value out of the CopyValue, invalidating the value in the process.
-    pub fn take(&self) -> T {
-        self.value
-            .take()
-            .expect("value is already dropped or borrowed")
+    /// Manually drop the value in the CopyValue, invalidating the value in the process.
+    pub fn manually_drop(&self) -> Option<T> {
+        self.value.manually_drop()
     }
 
     /// Get the scope this value was created in.

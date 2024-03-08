@@ -186,8 +186,8 @@ impl<T: 'static, S: Storage<T>> GenerationalBox<T, S> {
         }
     }
 
-    /// Take the value out of the generational box and invalidate the generational box. This will return the value if the value was taken.
-    pub fn take(&self) -> Option<T> {
+    /// Drop the value out of the generational box and invalidate the generational box. This will return the value if the value was taken.
+    pub fn manually_drop(&self) -> Option<T> {
         if self.validate() {
             Storage::take(&self.raw.0.data)
         } else {
