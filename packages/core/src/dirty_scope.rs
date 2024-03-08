@@ -29,9 +29,9 @@
 
 use crate::ScopeId;
 use crate::Task;
+use crate::VirtualDom;
 use std::borrow::Borrow;
 use std::cell::RefCell;
-use std::collections::BTreeSet;
 use std::hash::Hash;
 
 #[derive(Debug, Clone, Copy, Eq)]
@@ -70,50 +70,71 @@ impl Hash for ScopeOrder {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct DirtyScopes {
-    pub(crate) scopes: BTreeSet<ScopeOrder>,
-    pub(crate) tasks: BTreeSet<DirtyTasks>,
-}
-
-impl DirtyScopes {
+impl VirtualDom {
     /// Queue a task to be polled
-    pub fn queue_task(&mut self, task: Task, order: ScopeOrder) {
-        match self.tasks.get(&order) {
+    pub(crate) fn queue_task(&mut self, task: Task, order: ScopeOrder) {
+        match self.dirty_tasks.get(&order) {
             Some(scope) => scope.queue_task(task),
             None => {
                 let scope = DirtyTasks::from(order);
                 scope.queue_task(task);
-                self.tasks.insert(scope);
+                self.dirty_tasks.insert(scope);
             }
         }
     }
 
     /// Queue a scope to be rerendered
-    pub fn queue_scope(&mut self, order: ScopeOrder) {
-        self.scopes.insert(order);
+    pub(crate) fn queue_scope(&mut self, order: ScopeOrder) {
+        self.dirty_scopes.insert(order);
     }
 
     /// Check if there are any dirty scopes
-    pub fn has_dirty_scopes(&self) -> bool {
-        !self.scopes.is_empty()
+    pub(crate) fn has_dirty_scopes(&self) -> bool {
+        !self.dirty_scopes.is_empty()
     }
 
     /// Take any tasks from the highest scope
-    pub fn pop_task(&mut self) -> Option<DirtyTasks> {
-        self.tasks.pop_first()
+    pub(crate) fn pop_task(&mut self) -> Option<DirtyTasks> {
+        let mut task = self.dirty_tasks.pop_first()?;
+
+        // If the scope doesn't exist for whatever reason, then we should skip it
+        while !self.scopes.contains(task.order.id.0) {
+            task = self.dirty_tasks.pop_first()?;
+        }
+
+        Some(task)
     }
 
     /// Take any work from the highest scope. This may include rerunning the scope and/or running tasks
-    pub fn pop_work(&mut self) -> Option<Work> {
-        let dirty_scope = self.scopes.first();
-        let dirty_task = self.tasks.first();
+    pub(crate) fn pop_work(&mut self) -> Option<Work> {
+        let mut dirty_scope = self.dirty_scopes.first();
+        // Pop any invalid scopes off of each dirty task;
+        while let Some(scope) = dirty_scope {
+            if !self.scopes.contains(scope.id.0) {
+                self.dirty_scopes.pop_first();
+                dirty_scope = self.dirty_scopes.first();
+            } else {
+                break;
+            }
+        }
+
+        let mut dirty_task = self.dirty_tasks.first();
+        // Pop any invalid tasks off of each dirty scope;
+        while let Some(task) = dirty_task {
+            if !self.scopes.contains(task.order.id.0) {
+                self.dirty_tasks.pop_first();
+                dirty_task = self.dirty_tasks.first();
+            } else {
+                break;
+            }
+        }
+
         match (dirty_scope, dirty_task) {
             (Some(scope), Some(task)) => {
                 let tasks_order = task.borrow();
                 match scope.cmp(tasks_order) {
                     std::cmp::Ordering::Less => {
-                        let scope = self.scopes.pop_first().unwrap();
+                        let scope = self.dirty_scopes.pop_first().unwrap();
                         Some(Work {
                             scope,
                             rerun_scope: true,
@@ -121,7 +142,7 @@ impl DirtyScopes {
                         })
                     }
                     std::cmp::Ordering::Greater => {
-                        let task = self.tasks.pop_first().unwrap();
+                        let task = self.dirty_tasks.pop_first().unwrap();
                         Some(Work {
                             scope: task.order,
                             rerun_scope: false,
@@ -129,8 +150,8 @@ impl DirtyScopes {
                         })
                     }
                     std::cmp::Ordering::Equal => {
-                        let scope = self.scopes.pop_first().unwrap();
-                        let task = self.tasks.pop_first().unwrap();
+                        let scope = self.dirty_scopes.pop_first().unwrap();
+                        let task = self.dirty_tasks.pop_first().unwrap();
                         Some(Work {
                             scope,
                             rerun_scope: true,
@@ -140,7 +161,7 @@ impl DirtyScopes {
                 }
             }
             (Some(_), None) => {
-                let scope = self.scopes.pop_first().unwrap();
+                let scope = self.dirty_scopes.pop_first().unwrap();
                 Some(Work {
                     scope,
                     rerun_scope: true,
@@ -148,7 +169,7 @@ impl DirtyScopes {
                 })
             }
             (None, Some(_)) => {
-                let task = self.tasks.pop_first().unwrap();
+                let task = self.dirty_tasks.pop_first().unwrap();
                 Some(Work {
                     scope: task.order,
                     rerun_scope: false,
@@ -157,10 +178,6 @@ impl DirtyScopes {
             }
             (None, None) => None,
         }
-    }
-
-    pub fn remove(&mut self, scope: &ScopeOrder) {
-        self.scopes.remove(scope);
     }
 }
 
