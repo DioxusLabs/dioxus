@@ -6,7 +6,7 @@ rsx! {
     div { "hello world!" }
 
     // Compression with attributes
-    div { key: "a", class: "ban", style: "color: red" }
+    div { key: "{a}", class: "ban", style: "color: red" }
 
     // Nested one level
     div { div { "nested" } }
