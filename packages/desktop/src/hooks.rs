@@ -58,7 +58,7 @@ pub fn use_global_shortcut(
     handler: impl FnMut() + 'static,
 ) -> Result<ShortcutHandle, ShortcutRegistryError> {
     // wrap the user's handler in something that will carry the scope/runtime with it
-    let mut cb = use_callback(handler);
+    let cb = use_callback(handler);
 
     use_hook_with_cleanup(
         move || window().create_shortcut(accelerator.accelerator(), move || cb.call()),
