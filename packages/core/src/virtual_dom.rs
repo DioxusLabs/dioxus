@@ -661,7 +661,6 @@ impl VirtualDom {
 
                 // Now that we have collected all queued work, we should check if we have any dirty scopes. If there are not, then we can poll any queued futures
                 if self.dirty_scopes.has_dirty_scopes() {
-                    println!("dirty scopes");
                     break;
                 }
 
