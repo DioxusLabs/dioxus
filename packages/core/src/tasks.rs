@@ -171,11 +171,7 @@ impl Runtime {
                 .borrow_mut()
                 .remove(&id);
 
-            // Remove it from the scheduler
-            self.tasks.borrow_mut().try_remove(id.0);
-
-            // Remove it from the suspended tasks
-            self.suspended_tasks.borrow_mut().remove(&id);
+            self.remove_task(id);
         }
 
         // Remove the scope from the stack
