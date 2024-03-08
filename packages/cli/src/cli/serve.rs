@@ -19,7 +19,8 @@ impl Serve {
         let serve_cfg = self.serve.clone();
 
         // change the relase state.
-        crate_config.with_hot_reload(self.serve.hot_reload);
+        let hot_reload = self.serve.hot_reload || crate_config.dioxus_config.application.hot_reload;
+        crate_config.with_hot_reload(hot_reload);
         crate_config.with_cross_origin_policy(self.serve.cross_origin_policy);
         crate_config.with_release(self.serve.release);
         crate_config.with_verbose(self.serve.verbose);

@@ -176,6 +176,7 @@ impl Default for DioxusConfig {
                 default_platform: default_platform(),
                 out_dir: out_dir_default(),
                 asset_dir: asset_dir_default(),
+                hot_reload: hot_reload_default(),
 
                 #[cfg(feature = "cli")]
                 tools: Default::default(),
@@ -226,6 +227,9 @@ pub struct ApplicationConfig {
     #[serde(default = "asset_dir_default")]
     pub asset_dir: PathBuf,
 
+    #[serde(default = "hot_reload_default")]
+    pub hot_reload: bool,
+
     #[cfg(feature = "cli")]
     #[serde(default)]
     pub tools: std::collections::HashMap<String, toml::Value>,
@@ -240,6 +244,10 @@ fn default_name() -> String {
 
 fn default_platform() -> Platform {
     Platform::Web
+}
+
+fn hot_reload_default() -> bool {
+    true
 }
 
 fn asset_dir_default() -> PathBuf {
