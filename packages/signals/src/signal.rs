@@ -3,6 +3,7 @@ use crate::{
     ReadableRef,
 };
 use crate::{Memo, WritableRef};
+use dioxus_core::IntoDynNode;
 use dioxus_core::{prelude::IntoAttributeValue, ScopeId};
 use generational_box::{AnyStorage, Storage, SyncStorage, UnsyncStorage};
 use std::{
@@ -242,6 +243,15 @@ where
 {
     fn into_value(self) -> dioxus_core::AttributeValue {
         self.with(|f| f.clone().into_value())
+    }
+}
+
+impl<T> IntoDynNode for Signal<T>
+where
+    T: Clone + IntoDynNode,
+{
+    fn into_dyn_node(self) -> dioxus_core::DynamicNode {
+        self().into_dyn_node()
     }
 }
 

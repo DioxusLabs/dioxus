@@ -1,7 +1,7 @@
 use crate::{read::Readable, Memo, ReadableRef};
-use dioxus_core::prelude::{IntoAttributeValue, ScopeId};
+use dioxus_core::prelude::ScopeId;
 use generational_box::UnsyncStorage;
-use std::{mem::MaybeUninit, ops::Deref};
+use std::ops::Deref;
 
 use crate::Signal;
 
@@ -68,15 +68,6 @@ impl<T: PartialEq + 'static> Readable for GlobalMemo<T> {
     }
 }
 
-impl<T: PartialEq + 'static> IntoAttributeValue for GlobalMemo<T>
-where
-    T: Clone + IntoAttributeValue,
-{
-    fn into_value(self) -> dioxus_core::AttributeValue {
-        self.memo().into_value()
-    }
-}
-
 impl<T: PartialEq + 'static> PartialEq for GlobalMemo<T> {
     fn eq(&self, other: &Self) -> bool {
         std::ptr::eq(self, other)
@@ -90,31 +81,6 @@ impl<T: PartialEq + Clone + 'static> Deref for GlobalMemo<T> {
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
-        // https://github.com/dtolnay/case-studies/tree/master/callable-types
-
-        // First we create a closure that captures something with the Same in memory layout as Self (MaybeUninit<Self>).
-        let uninit_callable = MaybeUninit::<Self>::uninit();
-        // Then move that value into the closure. We assume that the closure now has a in memory layout of Self.
-        let uninit_closure = move || Self::read(unsafe { &*uninit_callable.as_ptr() }).clone();
-
-        // Check that the size of the closure is the same as the size of Self in case the compiler changed the layout of the closure.
-        let size_of_closure = std::mem::size_of_val(&uninit_closure);
-        assert_eq!(size_of_closure, std::mem::size_of::<Self>());
-
-        // Then cast the lifetime of the closure to the lifetime of &self.
-        fn cast_lifetime<'a, T>(_a: &T, b: &'a T) -> &'a T {
-            b
-        }
-        let reference_to_closure = cast_lifetime(
-            {
-                // The real closure that we will never use.
-                &uninit_closure
-            },
-            // We transmute self into a reference to the closure. This is safe because we know that the closure has the same memory layout as Self so &Closure == &self.
-            unsafe { std::mem::transmute(self) },
-        );
-
-        // Cast the closure to a trait object.
-        reference_to_closure as &Self::Target
+        Readable::deref_impl(self)
     }
 }

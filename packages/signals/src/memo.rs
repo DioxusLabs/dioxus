@@ -204,6 +204,15 @@ where
     }
 }
 
+impl<T> IntoDynNode for Memo<T>
+where
+    T: Clone + IntoDynNode + PartialEq,
+{
+    fn into_dyn_node(self) -> dioxus_core::DynamicNode {
+        self().into_dyn_node()
+    }
+}
+
 impl<T: 'static> PartialEq for Memo<T> {
     fn eq(&self, other: &Self) -> bool {
         self.inner == other.inner

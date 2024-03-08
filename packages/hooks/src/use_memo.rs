@@ -25,8 +25,9 @@ use futures_util::StreamExt;
 /// ```
 #[track_caller]
 pub fn use_memo<R: PartialEq>(f: impl FnMut() -> R + 'static) -> Memo<R> {
-    let mut callback = use_callback(f);
-    use_hook(|| Signal::memo(move || callback.call()))
+    let callback = use_callback(f);
+    #[allow(clippy::redundant_closure)]
+    use_hook(|| Signal::memo(move || callback()))
 }
 
 /// Creates a new unsync Selector with some local dependencies. The selector will be run immediately and whenever any signal it reads or any dependencies it tracks changes

@@ -1,12 +1,14 @@
 #![allow(missing_docs)]
 
 use crate::{use_callback, use_signal, UseCallback};
+use dioxus_core::prelude::*;
 use dioxus_core::{
     prelude::{spawn, use_hook},
     Task,
 };
 use dioxus_signals::*;
 use futures_util::{future, pin_mut, FutureExt, StreamExt};
+use std::ops::Deref;
 use std::{cell::Cell, future::Future, rc::Rc};
 
 /// A memo that resolve to a value asynchronously.
@@ -49,7 +51,7 @@ where
         (rc, Rc::new(Cell::new(Some(changed))))
     });
 
-    let mut cb = use_callback(move || {
+    let cb = use_callback(move || {
         // Create the user's task
         #[allow(clippy::redundant_closure)]
         let fut = rc.run_in(|| future());
@@ -70,7 +72,7 @@ where
         })
     });
 
-    let mut task = use_hook(|| Signal::new(cb.call()));
+    let mut task = use_hook(|| Signal::new(cb()));
 
     use_hook(|| {
         let mut changed = changed.take().unwrap();
@@ -83,7 +85,7 @@ where
                 task.write().cancel();
 
                 // Start a new task
-                task.set(cb.call());
+                task.set(cb());
             }
         })
     });
@@ -181,10 +183,54 @@ impl<T> Resource<T> {
     }
 }
 
-impl<T> std::ops::Deref for Resource<T> {
-    type Target = Signal<Option<T>>;
+impl<T> From<Resource<T>> for ReadOnlySignal<Option<T>> {
+    fn from(val: Resource<T>) -> Self {
+        val.value.into()
+    }
+}
+
+impl<T> Readable for Resource<T> {
+    type Target = Option<T>;
+    type Storage = UnsyncStorage;
+
+    #[track_caller]
+    fn try_read_unchecked(
+        &self,
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+        self.value.try_read_unchecked()
+    }
+
+    #[track_caller]
+    fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
+        self.value.peek_unchecked()
+    }
+}
+
+impl<T> IntoAttributeValue for Resource<T>
+where
+    T: Clone + IntoAttributeValue,
+{
+    fn into_value(self) -> dioxus_core::AttributeValue {
+        self.with(|f| f.clone().into_value())
+    }
+}
+
+impl<T> IntoDynNode for Resource<T>
+where
+    T: Clone + IntoDynNode,
+{
+    fn into_dyn_node(self) -> dioxus_core::DynamicNode {
+        self().into_dyn_node()
+    }
+}
+
+/// Allow calling a signal with signal() syntax
+///
+/// Currently only limited to copy types, though could probably specialize for string/arc/rc
+impl<T: Clone> Deref for Resource<T> {
+    type Target = dyn Fn() -> Option<T>;
 
     fn deref(&self) -> &Self::Target {
-        &self.value
+        Readable::deref_impl(self)
     }
 }

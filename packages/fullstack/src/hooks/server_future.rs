@@ -9,7 +9,7 @@ where
     T: Serialize + DeserializeOwned + 'static,
     F: Future<Output = T> + 'static,
 {
-    let mut cb = use_callback(_future);
+    let cb = use_callback(_future);
     let mut first_run = use_hook(|| CopyValue::new(true));
 
     let resource = use_resource(move || {

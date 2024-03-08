@@ -4,6 +4,7 @@ use dioxus_core::{prelude::*, Task};
 use dioxus_signals::*;
 use dioxus_signals::{Readable, Writable};
 use std::future::Future;
+use std::ops::Deref;
 
 /// A hook that allows you to spawn a future.
 /// This future will **not** run on the server
@@ -39,7 +40,7 @@ where
 {
     let mut state = use_signal(|| UseFutureState::Pending);
 
-    let mut callback = use_callback(move || {
+    let callback = use_callback(move || {
         let fut = future();
         spawn(async move {
             state.set(UseFutureState::Pending);
@@ -145,5 +146,39 @@ impl UseFuture {
     /// Get the current state of the future.
     pub fn state(&self) -> ReadOnlySignal<UseFutureState> {
         self.state.into()
+    }
+}
+
+impl From<UseFuture> for ReadOnlySignal<UseFutureState> {
+    fn from(val: UseFuture) -> Self {
+        val.state.into()
+    }
+}
+
+impl Readable for UseFuture {
+    type Target = UseFutureState;
+    type Storage = UnsyncStorage;
+
+    #[track_caller]
+    fn try_read_unchecked(
+        &self,
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+        self.state.try_read_unchecked()
+    }
+
+    #[track_caller]
+    fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
+        self.state.peek_unchecked()
+    }
+}
+
+/// Allow calling a signal with signal() syntax
+///
+/// Currently only limited to copy types, though could probably specialize for string/arc/rc
+impl Deref for UseFuture {
+    type Target = dyn Fn() -> UseFutureState;
+
+    fn deref(&self) -> &Self::Target {
+        Readable::deref_impl(self)
     }
 }
