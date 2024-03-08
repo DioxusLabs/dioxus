@@ -26,7 +26,9 @@ pub trait Writable: Readable {
     /// Downcast a mutable reference in a RefMut to a more specific lifetime
     ///
     /// This function enforces the variance of the lifetime parameter `'a` in Ref.
-    fn downcast_mut<'a: 'b, 'b, T: ?Sized + 'static>(mut_: Self::Mut<'a, T>) -> Self::Mut<'b, T>;
+    fn downcast_lifetime_mut<'a: 'b, 'b, T: ?Sized + 'static>(
+        mut_: Self::Mut<'a, T>,
+    ) -> Self::Mut<'b, T>;
 
     /// Get a mutable reference to the value. If the value has been dropped, this will panic.
     #[track_caller]
@@ -37,7 +39,7 @@ pub trait Writable: Readable {
     /// Try to get a mutable reference to the value.
     #[track_caller]
     fn try_write(&mut self) -> Result<WritableRef<'_, Self>, generational_box::BorrowMutError> {
-        self.try_write_unchecked().map(Self::downcast_mut)
+        self.try_write_unchecked().map(Self::downcast_lifetime_mut)
     }
 
     /// Try to get a mutable reference to the value without checking the lifetime.
@@ -238,7 +240,7 @@ impl<'a, T: 'static, R: Writable<Target = Vec<T>>> Iterator for WritableValueIte
             self.value.try_write_unchecked().unwrap(),
             |v: &mut Vec<T>| v.get_mut(index),
         )
-        .map(R::downcast_mut)
+        .map(R::downcast_lifetime_mut)
     }
 }
 

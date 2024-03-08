@@ -234,13 +234,17 @@ pub trait AnyStorage: Default {
 
     /// Downcast a reference in a Ref to a more specific lifetime
     ///
-    /// This function enforces the variance of the lifetime parameter `'a` in Ref.
-    fn downcast_ref<'a: 'b, 'b, T: ?Sized + 'static>(ref_: Self::Ref<'a, T>) -> Self::Ref<'b, T>;
+    /// This function enforces the variance of the lifetime parameter `'a` in Ref. Rust will typically infer this cast with a concrete type, but it cannot with a generic type.
+    fn downcast_lifetime_ref<'a: 'b, 'b, T: ?Sized + 'static>(
+        ref_: Self::Ref<'a, T>,
+    ) -> Self::Ref<'b, T>;
 
     /// Downcast a mutable reference in a RefMut to a more specific lifetime
     ///
-    /// This function enforces the variance of the lifetime parameter `'a` in Ref.
-    fn downcast_mut<'a: 'b, 'b, T: ?Sized + 'static>(mut_: Self::Mut<'a, T>) -> Self::Mut<'b, T>;
+    /// This function enforces the variance of the lifetime parameter `'a` in Mut.  Rust will typically infer this cast with a concrete type, but it cannot with a generic type.
+    fn downcast_lifetime_mut<'a: 'b, 'b, T: ?Sized + 'static>(
+        mut_: Self::Mut<'a, T>,
+    ) -> Self::Mut<'b, T>;
 
     /// Try to map the mutable ref.
     fn try_map_mut<T: ?Sized + 'static, U: ?Sized + 'static>(

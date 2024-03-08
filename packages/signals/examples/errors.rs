@@ -30,9 +30,9 @@ fn app() -> Element {
 
 #[component]
 fn Read() -> Element {
-    let mut signal = use_signal_sync(|| 0);
+    let signal = use_signal_sync(|| 0);
 
-    let _write = signal.write();
+    let _write = signal.write_unchecked();
     let _read = signal.read();
 
     unreachable!()
@@ -40,10 +40,10 @@ fn Read() -> Element {
 
 #[component]
 fn ReadMut() -> Element {
-    let mut signal = use_signal_sync(|| 0);
+    let signal = use_signal_sync(|| 0);
 
     let _read = signal.read();
-    let _write = signal.write();
+    let _write = signal.write_unchecked();
 
     unreachable!()
 }

@@ -212,7 +212,9 @@ impl<T: 'static, S: Storage<SignalData<T>>> Writable for Signal<T, S> {
         Write::filter_map(ref_, f)
     }
 
-    fn downcast_mut<'a: 'b, 'b, R: ?Sized + 'static>(mut_: Self::Mut<'a, R>) -> Self::Mut<'b, R> {
+    fn downcast_lifetime_mut<'a: 'b, 'b, R: ?Sized + 'static>(
+        mut_: Self::Mut<'a, R>,
+    ) -> Self::Mut<'b, R> {
         Write::downcast_lifetime(mut_)
     }
 
@@ -312,12 +314,14 @@ impl<'a, T: ?Sized + 'static, S: AnyStorage> Write<'a, T, S> {
     }
 
     /// Downcast the lifetime of the mutable reference to the signal's value.
+    ///
+    /// This function enforces the variance of the lifetime parameter `'a` in Mut.  Rust will typically infer this cast with a concrete type, but it cannot with a generic type.
     pub fn downcast_lifetime<'b>(mut_: Self) -> Write<'b, T, S>
     where
         'a: 'b,
     {
         Write {
-            write: S::downcast_mut(mut_.write),
+            write: S::downcast_lifetime_mut(mut_.write),
             drop_signal: mut_.drop_signal,
         }
     }

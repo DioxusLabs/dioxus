@@ -104,7 +104,9 @@ impl<T: 'static> Writable for GlobalSignal<T> {
         Write::filter_map(ref_, f)
     }
 
-    fn downcast_mut<'a: 'b, 'b, R: ?Sized + 'static>(mut_: Self::Mut<'a, R>) -> Self::Mut<'b, R> {
+    fn downcast_lifetime_mut<'a: 'b, 'b, R: ?Sized + 'static>(
+        mut_: Self::Mut<'a, R>,
+    ) -> Self::Mut<'b, R> {
         Write::downcast_lifetime(mut_)
     }
 

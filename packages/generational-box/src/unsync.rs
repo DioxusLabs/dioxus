@@ -92,11 +92,15 @@ impl AnyStorage for UnsyncStorage {
     type Ref<'a, R: ?Sized + 'static> = GenerationalRef<Ref<'a, R>>;
     type Mut<'a, W: ?Sized + 'static> = GenerationalRefMut<RefMut<'a, W>>;
 
-    fn downcast_ref<'a: 'b, 'b, T: ?Sized + 'static>(ref_: Self::Ref<'a, T>) -> Self::Ref<'b, T> {
+    fn downcast_lifetime_ref<'a: 'b, 'b, T: ?Sized + 'static>(
+        ref_: Self::Ref<'a, T>,
+    ) -> Self::Ref<'b, T> {
         ref_
     }
 
-    fn downcast_mut<'a: 'b, 'b, T: ?Sized + 'static>(mut_: Self::Mut<'a, T>) -> Self::Mut<'b, T> {
+    fn downcast_lifetime_mut<'a: 'b, 'b, T: ?Sized + 'static>(
+        mut_: Self::Mut<'a, T>,
+    ) -> Self::Mut<'b, T> {
         mut_
     }
 

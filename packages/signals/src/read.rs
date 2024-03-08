@@ -53,7 +53,8 @@ pub trait Readable {
     /// Try to get the current value of the state. If this is a signal, this will subscribe the current scope to the signal.
     #[track_caller]
     fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
-        self.try_read_unchecked().map(Self::Storage::downcast_ref)
+        self.try_read_unchecked()
+            .map(Self::Storage::downcast_lifetime_ref)
     }
 
     /// Try to get a reference to the value without checking the lifetime.
@@ -80,7 +81,7 @@ pub trait Readable {
     /// Get the current value of the state without subscribing to updates. If the value has been dropped, this will panic.
     #[track_caller]
     fn peek(&self) -> ReadableRef<Self> {
-        Self::Storage::downcast_ref(self.peek_unchecked())
+        Self::Storage::downcast_lifetime_ref(self.peek_unchecked())
     }
 
     /// Clone the inner value and return it. If the value has been dropped, this will panic.

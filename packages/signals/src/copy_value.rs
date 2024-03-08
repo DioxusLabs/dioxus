@@ -238,8 +238,10 @@ impl<T: 'static, S: Storage<T>> Writable for CopyValue<T, S> {
         S::try_map_mut(mut_, f)
     }
 
-    fn downcast_mut<'a: 'b, 'b, R: ?Sized + 'static>(mut_: Self::Mut<'a, R>) -> Self::Mut<'b, R> {
-        S::downcast_mut(mut_)
+    fn downcast_lifetime_mut<'a: 'b, 'b, R: ?Sized + 'static>(
+        mut_: Self::Mut<'a, R>,
+    ) -> Self::Mut<'b, R> {
+        S::downcast_lifetime_mut(mut_)
     }
 
     #[track_caller]
