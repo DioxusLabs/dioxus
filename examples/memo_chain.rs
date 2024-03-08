@@ -21,29 +21,25 @@ fn app() -> Element {
         button { onclick: move |_| value += 1, "Increment" }
         button { onclick: move |_| depth += 1, "Add depth" }
         button { onclick: move |_| depth -= 1, "Remove depth" }
-        Child { depth, items, state }
+        if depth() > 0 {
+            Child { depth, items, state }
+        }
     }
 }
 
 #[component]
-fn Child(
-    state: ReadOnlySignal<isize>,
-    items: ReadOnlySignal<Vec<isize>>,
-    depth: ReadOnlySignal<usize>,
-) -> Element {
-    if depth() == 0 {
-        return None;
-    }
-
+fn Child(state: Memo<isize>, items: Memo<Vec<isize>>, depth: ReadOnlySignal<usize>) -> Element {
     // These memos don't get re-computed when early returns happen
     let state = use_memo(move || state() + 1);
-    let item = use_memo(move || items()[depth()]);
+    let item = use_memo(move || items()[depth() - 1]);
     let depth = use_memo(move || depth() - 1);
 
     println!("rendering child: {}", depth());
 
     rsx! {
         h3 { "Depth({depth})-Item({item}): {state}"}
-        Child { depth, state, items }
+        if depth() > 0 {
+            Child { depth, state, items }
+        }
     }
 }

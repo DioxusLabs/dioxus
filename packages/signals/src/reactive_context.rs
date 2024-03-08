@@ -1,9 +1,9 @@
 use dioxus_core::prelude::{
     current_scope_id, has_context, provide_context, schedule_update_any, ScopeId,
 };
+use futures_channel::mpsc::UnboundedReceiver;
 use generational_box::SyncStorage;
-use rustc_hash::FxHashSet;
-use std::{cell::RefCell, hash::Hash, sync::Arc};
+use std::{cell::RefCell, hash::Hash};
 
 use crate::{CopyValue, Readable, Writable};
 
@@ -24,67 +24,51 @@ thread_local! {
 
 impl std::fmt::Display for ReactiveContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let read = self.inner.read();
-        match read.scope_subscriber {
-            Some(scope) => write!(f, "ReactiveContext for scope {:?}", scope),
-            None => {
-                #[cfg(debug_assertions)]
+        #[cfg(debug_assertions)]
+        {
+            if let Ok(read) = self.inner.try_read() {
                 return write!(f, "ReactiveContext created at {}", read.origin);
-                #[cfg(not(debug_assertions))]
-                write!(f, "ReactiveContext")
             }
         }
-    }
-}
-
-impl Default for ReactiveContext {
-    #[track_caller]
-    fn default() -> Self {
-        Self::new_for_scope(None, std::panic::Location::caller())
+        write!(f, "ReactiveContext")
     }
 }
 
 impl ReactiveContext {
     /// Create a new reactive context
     #[track_caller]
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new() -> (Self, UnboundedReceiver<()>) {
+        Self::new_with_origin(std::panic::Location::caller())
     }
 
     /// Create a new reactive context with a location for debugging purposes
     /// This is useful for reactive contexts created within closures
-    pub fn new_with_origin(origin: &'static std::panic::Location<'static>) -> Self {
-        Self::new_for_scope(None, origin)
+    pub fn new_with_origin(
+        origin: &'static std::panic::Location<'static>,
+    ) -> (Self, UnboundedReceiver<()>) {
+        let (tx, rx) = futures_channel::mpsc::unbounded();
+        let callback = move || {
+            let _ = tx.unbounded_send(());
+        };
+        let _self = Self::new_with_callback(callback, current_scope_id().unwrap(), origin);
+        (_self, rx)
     }
 
-    /// Create a new reactive context that may update a scope
-    #[allow(unused)]
-    pub(crate) fn new_for_scope(
-        scope: Option<ScopeId>,
+    /// Create a new reactive context that may update a scope. When any signal that this context subscribes to changes, the callback will be run
+    pub fn new_with_callback(
+        callback: impl FnMut() + Send + Sync + 'static,
+        scope: ScopeId,
         origin: &'static std::panic::Location<'static>,
     ) -> Self {
-        let (tx, rx) = flume::unbounded();
-
-        let mut scope_subscribers = FxHashSet::default();
-        if let Some(scope) = scope {
-            scope_subscribers.insert(scope);
-        }
-
         let inner = Inner {
-            scope_subscriber: scope,
-            sender: tx,
             self_: None,
-            update_any: schedule_update_any(),
-            receiver: rx,
+            update: Box::new(callback),
             #[cfg(debug_assertions)]
             origin,
         };
 
         let mut self_ = Self {
-            inner: CopyValue::new_maybe_sync_in_scope(
-                inner,
-                scope.or_else(current_scope_id).unwrap(),
-            ),
+            inner: CopyValue::new_maybe_sync_in_scope(inner, scope),
         };
 
         self_.inner.write().self_ = Some(self_);
@@ -112,10 +96,17 @@ impl ReactiveContext {
         if let Some(cx) = has_context() {
             return Some(cx);
         }
+        let update_any = schedule_update_any();
+        let scope_id = current_scope_id().unwrap();
+        let update_scope = move || {
+            tracing::trace!("Marking scope {:?} as dirty", scope_id);
+            update_any(scope_id)
+        };
 
         // Otherwise, create a new context at the current scope
-        Some(provide_context(ReactiveContext::new_for_scope(
-            current_scope_id(),
+        Some(provide_context(ReactiveContext::new_with_callback(
+            update_scope,
+            scope_id,
             std::panic::Location::caller(),
         )))
     }
@@ -137,25 +128,18 @@ impl ReactiveContext {
     ///
     /// Returns true if the context was marked as dirty, or false if the context has been dropped
     pub fn mark_dirty(&self) -> bool {
-        if let Ok(self_read) = self.inner.try_read() {
+        let mut copy = self.inner;
+        if let Ok(mut self_write) = copy.try_write() {
             #[cfg(debug_assertions)]
             {
-                if let Some(scope) = self_read.scope_subscriber {
-                    tracing::trace!("Marking reactive context for scope {:?} as dirty", scope);
-                } else {
-                    tracing::trace!(
-                        "Marking reactive context created at {} as dirty",
-                        self_read.origin
-                    );
-                }
-            }
-            if let Some(scope) = self_read.scope_subscriber {
-                (self_read.update_any)(scope);
+                tracing::trace!(
+                    "Marking reactive context created at {} as dirty",
+                    self_write.origin
+                );
             }
 
-            // mark the listeners as dirty
-            // If the channel is full it means that the receivers have already been marked as dirty
-            _ = self_read.sender.try_send(());
+            (self_write.update)();
+
             true
         } else {
             false
@@ -166,12 +150,6 @@ impl ReactiveContext {
     pub fn origin_scope(&self) -> ScopeId {
         self.inner.origin_scope()
     }
-
-    /// Wait for this reactive context to change
-    pub async fn changed(&self) {
-        let rx = self.inner.read().receiver.clone();
-        _ = rx.recv_async().await;
-    }
 }
 
 impl Hash for ReactiveContext {
@@ -181,14 +159,10 @@ impl Hash for ReactiveContext {
 }
 
 struct Inner {
-    // A scope we mark as dirty when this context is written to
-    scope_subscriber: Option<ScopeId>,
     self_: Option<ReactiveContext>,
-    update_any: Arc<dyn Fn(ScopeId) + Send + Sync>,
 
     // Futures will call .changed().await
-    sender: flume::Sender<()>,
-    receiver: flume::Receiver<()>,
+    update: Box<dyn FnMut() + Send + Sync>,
 
     // Debug information for signal subscriptions
     #[cfg(debug_assertions)]

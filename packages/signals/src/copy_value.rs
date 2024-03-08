@@ -237,14 +237,17 @@ impl<T: 'static, S: Storage<T>> Writable for CopyValue<T, S> {
         S::try_map_mut(mut_, f)
     }
 
-    fn try_write(&self) -> Result<Self::Mut<T>, generational_box::BorrowMutError> {
+    #[track_caller]
+    fn try_write(&mut self) -> Result<Self::Mut<T>, generational_box::BorrowMutError> {
         self.value.try_write()
     }
 
+    #[track_caller]
     fn write(&mut self) -> Self::Mut<T> {
         self.value.write()
     }
 
+    #[track_caller]
     fn set(&mut self, value: T) {
         self.value.set(value);
     }

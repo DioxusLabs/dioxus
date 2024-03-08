@@ -53,7 +53,7 @@ async fn running_async() {
 #[tokio::test]
 async fn yield_now_works() {
     thread_local! {
-        static SEQUENCE: std::cell::RefCell<Vec<usize>> = std::cell::RefCell::new(Vec::new());
+        static SEQUENCE: std::cell::RefCell<Vec<usize>> = const { std::cell::RefCell::new(Vec::new()) };
     }
 
     fn app() -> Element {
@@ -88,7 +88,7 @@ async fn yield_now_works() {
 #[tokio::test]
 async fn flushing() {
     thread_local! {
-        static SEQUENCE: std::cell::RefCell<Vec<usize>> = std::cell::RefCell::new(Vec::new());
+        static SEQUENCE: std::cell::RefCell<Vec<usize>> = const { std::cell::RefCell::new(Vec::new()) };
         static BROADCAST: (tokio::sync::broadcast::Sender<()>, tokio::sync::broadcast::Receiver<()>) = tokio::sync::broadcast::channel(1);
     }
 

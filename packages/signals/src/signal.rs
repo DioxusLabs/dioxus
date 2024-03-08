@@ -1,11 +1,9 @@
+use crate::Memo;
 use crate::{
     read::Readable, write::Writable, CopyValue, GlobalMemo, GlobalSignal, ReactiveContext,
-    ReadOnlySignal, ReadableRef,
+    ReadableRef,
 };
-use dioxus_core::{
-    prelude::{spawn, IntoAttributeValue},
-    ScopeId,
-};
+use dioxus_core::{prelude::IntoAttributeValue, ScopeId};
 use generational_box::{AnyStorage, Storage, SyncStorage, UnsyncStorage};
 use std::{
     any::Any,
@@ -88,35 +86,8 @@ impl<T: PartialEq + 'static> Signal<T> {
     ///
     /// Selectors can be used to efficiently compute derived data from signals.
     #[track_caller]
-    pub fn memo(f: impl FnMut() -> T + 'static) -> ReadOnlySignal<T> {
-        Self::use_maybe_sync_memo(f)
-    }
-
-    /// Creates a new Selector that may be Sync + Send. The selector will be run immediately and whenever any signal it reads changes.
-    ///
-    /// Selectors can be used to efficiently compute derived data from signals.
-    #[track_caller]
-    pub fn use_maybe_sync_memo<S: Storage<SignalData<T>>>(
-        mut f: impl FnMut() -> T + 'static,
-    ) -> ReadOnlySignal<T, S> {
-        // Get the current reactive context
-        let rc = ReactiveContext::new();
-
-        // Create a new signal in that context, wiring up its dependencies and subscribers
-        let mut state: Signal<T, S> = rc.run_in(|| Signal::new_maybe_sync(f()));
-
-        spawn(async move {
-            loop {
-                rc.changed().await;
-                let new = f();
-                if new != *state.peek() {
-                    *state.write() = new;
-                }
-            }
-        });
-
-        // And just return the readonly variant of that signal
-        ReadOnlySignal::new_maybe_sync(state)
+    pub fn memo(f: impl FnMut() -> T + 'static) -> Memo<T> {
+        Memo::new(f)
     }
 }
 
@@ -179,8 +150,10 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
         {
             let inner = self.inner.read();
 
-            let mut subscribers = inner.subscribers.lock().unwrap();
-            subscribers.retain(|reactive_context| reactive_context.mark_dirty())
+            // We cannot hold the subscribers lock while calling mark_dirty, because mark_dirty can run user code which may cause a new subscriber to be added. If we hold the lock, we will deadlock.
+            let mut subscribers = std::mem::take(&mut *inner.subscribers.lock().unwrap());
+            subscribers.retain(|reactive_context| reactive_context.mark_dirty());
+            *inner.subscribers.lock().unwrap() = subscribers;
         }
     }
 
@@ -237,7 +210,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Writable for Signal<T, S> {
     }
 
     #[track_caller]
-    fn try_write(&self) -> Result<Self::Mut<T>, generational_box::BorrowMutError> {
+    fn try_write(&mut self) -> Result<Self::Mut<T>, generational_box::BorrowMutError> {
         self.inner.try_write().map(|inner| {
             let borrow = S::map_mut(inner, |v| &mut v.value);
             Write {
