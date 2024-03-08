@@ -123,7 +123,7 @@ fn Route3(dynamic: String) -> Element {
             oninput: move |evt| {
                 *current_route_str.write() = evt.value();
             },
-            value: "{current_route_str.read()}"
+            value: "{current_route_str}"
         }
         "dynamic: {dynamic}"
         Link { to: Route::Route2 { user_id: 8888 }, "hello world link" }

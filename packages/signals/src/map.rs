@@ -6,8 +6,8 @@ use generational_box::{AnyStorage, UnsyncStorage};
 
 /// A read only signal that has been mapped to a new type.
 pub struct MappedSignal<O: ?Sized + 'static, S: AnyStorage = UnsyncStorage> {
-    try_read: Rc<dyn Fn() -> Result<S::Ref<O>, generational_box::BorrowError> + 'static>,
-    peek: Rc<dyn Fn() -> S::Ref<O> + 'static>,
+    try_read: Rc<dyn Fn() -> Result<S::Ref<'static, O>, generational_box::BorrowError> + 'static>,
+    peek: Rc<dyn Fn() -> S::Ref<'static, O> + 'static>,
 }
 
 impl<O: ?Sized, S: AnyStorage> Clone for MappedSignal<O, S> {
@@ -26,8 +26,10 @@ where
 {
     /// Create a new mapped signal.
     pub(crate) fn new(
-        try_read: Rc<dyn Fn() -> Result<S::Ref<O>, generational_box::BorrowError> + 'static>,
-        peek: Rc<dyn Fn() -> S::Ref<O> + 'static>,
+        try_read: Rc<
+            dyn Fn() -> Result<S::Ref<'static, O>, generational_box::BorrowError> + 'static,
+        >,
+        peek: Rc<dyn Fn() -> S::Ref<'static, O> + 'static>,
     ) -> Self {
         MappedSignal { try_read, peek }
     }
@@ -41,11 +43,13 @@ where
     type Target = O;
     type Storage = S;
 
-    fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
+    fn try_read_unchecked(
+        &self,
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
         (self.try_read)()
     }
 
-    fn peek(&self) -> ReadableRef<Self> {
+    fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
         (self.peek)()
     }
 }

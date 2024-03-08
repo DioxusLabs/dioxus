@@ -56,13 +56,15 @@ impl<T: PartialEq + 'static> Readable for GlobalMemo<T> {
     type Storage = UnsyncStorage;
 
     #[track_caller]
-    fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
-        self.memo().try_read()
+    fn try_read_unchecked(
+        &self,
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+        self.memo().try_read_unchecked()
     }
 
     #[track_caller]
-    fn peek(&self) -> ReadableRef<Self> {
-        self.memo().peek()
+    fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
+        self.memo().peek_unchecked()
     }
 }
 

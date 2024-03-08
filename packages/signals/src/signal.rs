@@ -1,8 +1,8 @@
-use crate::Memo;
 use crate::{
     read::Readable, write::Writable, CopyValue, GlobalMemo, GlobalSignal, ReactiveContext,
     ReadableRef,
 };
+use crate::{Memo, WritableRef};
 use dioxus_core::{prelude::IntoAttributeValue, ScopeId};
 use generational_box::{AnyStorage, Storage, SyncStorage, UnsyncStorage};
 use std::{
@@ -136,9 +136,9 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
         }
     }
 
-    /// Take the value out of the signal, invalidating the signal in the process.
-    pub fn take(&self) -> T {
-        self.inner.take().value
+    /// Drop the value out of the signal, invalidating the signal in the process.
+    pub fn manually_drop(&self) -> Option<T> {
+        self.inner.manually_drop().map(|i| i.value)
     }
 
     /// Get the scope the signal was created in.
@@ -168,8 +168,10 @@ impl<T, S: Storage<SignalData<T>>> Readable for Signal<T, S> {
     type Storage = S;
 
     #[track_caller]
-    fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
-        let inner = self.inner.try_read()?;
+    fn try_read_unchecked(
+        &self,
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+        let inner = self.inner.try_read_unchecked()?;
 
         if let Some(reactive_context) = ReactiveContext::current() {
             tracing::trace!("Subscribing to the reactive context {}", reactive_context);
@@ -182,19 +184,20 @@ impl<T, S: Storage<SignalData<T>>> Readable for Signal<T, S> {
     /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
     ///
     /// If the signal has been dropped, this will panic.
-    fn peek(&self) -> ReadableRef<Self> {
-        let inner = self.inner.read();
+    #[track_caller]
+    fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
+        let inner = self.inner.try_read_unchecked().unwrap();
         S::map(inner, |v| &v.value)
     }
 }
 
 impl<T: 'static, S: Storage<SignalData<T>>> Writable for Signal<T, S> {
-    type Mut<R: ?Sized + 'static> = Write<R, S>;
+    type Mut<'a, R: ?Sized + 'static> = Write<'a, R, S>;
 
     fn map_mut<I: ?Sized, U: ?Sized + 'static, F: FnOnce(&mut I) -> &mut U>(
-        ref_: Self::Mut<I>,
+        ref_: Self::Mut<'_, I>,
         f: F,
-    ) -> Self::Mut<U> {
+    ) -> Self::Mut<'_, U> {
         Write::map(ref_, f)
     }
 
@@ -203,15 +206,23 @@ impl<T: 'static, S: Storage<SignalData<T>>> Writable for Signal<T, S> {
         U: ?Sized + 'static,
         F: FnOnce(&mut I) -> Option<&mut U>,
     >(
-        ref_: Self::Mut<I>,
+        ref_: Self::Mut<'_, I>,
         f: F,
-    ) -> Option<Self::Mut<U>> {
+    ) -> Option<Self::Mut<'_, U>> {
         Write::filter_map(ref_, f)
     }
 
+    fn downcast_lifetime_mut<'a: 'b, 'b, R: ?Sized + 'static>(
+        mut_: Self::Mut<'a, R>,
+    ) -> Self::Mut<'b, R> {
+        Write::downcast_lifetime(mut_)
+    }
+
     #[track_caller]
-    fn try_write(&mut self) -> Result<Self::Mut<T>, generational_box::BorrowMutError> {
-        self.inner.try_write().map(|inner| {
+    fn try_write_unchecked(
+        &self,
+    ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError> {
+        self.inner.try_write_unchecked().map(|inner| {
             let borrow = S::map_mut(inner, |v| &mut v.value);
             Write {
                 write: borrow,
@@ -273,14 +284,14 @@ impl<'de, T: serde::Deserialize<'de> + 'static, Store: Storage<SignalData<T>>>
 ///
 /// T is the current type of the write
 /// S is the storage type of the signal
-pub struct Write<T: ?Sized + 'static, S: AnyStorage = UnsyncStorage> {
-    write: S::Mut<T>,
+pub struct Write<'a, T: ?Sized + 'static, S: AnyStorage = UnsyncStorage> {
+    write: S::Mut<'a, T>,
     drop_signal: Box<dyn Any>,
 }
 
-impl<T: ?Sized + 'static, S: AnyStorage> Write<T, S> {
+impl<'a, T: ?Sized + 'static, S: AnyStorage> Write<'a, T, S> {
     /// Map the mutable reference to the signal's value to a new type.
-    pub fn map<O: ?Sized>(myself: Self, f: impl FnOnce(&mut T) -> &mut O) -> Write<O, S> {
+    pub fn map<O: ?Sized>(myself: Self, f: impl FnOnce(&mut T) -> &mut O) -> Write<'a, O, S> {
         let Self {
             write, drop_signal, ..
         } = myself;
@@ -294,16 +305,29 @@ impl<T: ?Sized + 'static, S: AnyStorage> Write<T, S> {
     pub fn filter_map<O: ?Sized>(
         myself: Self,
         f: impl FnOnce(&mut T) -> Option<&mut O>,
-    ) -> Option<Write<O, S>> {
+    ) -> Option<Write<'a, O, S>> {
         let Self {
             write, drop_signal, ..
         } = myself;
         let write = S::try_map_mut(write, f);
         write.map(|write| Write { write, drop_signal })
     }
+
+    /// Downcast the lifetime of the mutable reference to the signal's value.
+    ///
+    /// This function enforces the variance of the lifetime parameter `'a` in Mut.  Rust will typically infer this cast with a concrete type, but it cannot with a generic type.
+    pub fn downcast_lifetime<'b>(mut_: Self) -> Write<'b, T, S>
+    where
+        'a: 'b,
+    {
+        Write {
+            write: S::downcast_lifetime_mut(mut_.write),
+            drop_signal: mut_.drop_signal,
+        }
+    }
 }
 
-impl<T: ?Sized + 'static, S: AnyStorage> Deref for Write<T, S> {
+impl<T: ?Sized + 'static, S: AnyStorage> Deref for Write<'_, T, S> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -311,7 +335,7 @@ impl<T: ?Sized + 'static, S: AnyStorage> Deref for Write<T, S> {
     }
 }
 
-impl<T: ?Sized, S: AnyStorage> DerefMut for Write<T, S> {
+impl<T: ?Sized, S: AnyStorage> DerefMut for Write<'_, T, S> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.write
     }

@@ -128,8 +128,7 @@ impl ReactiveContext {
     ///
     /// Returns true if the context was marked as dirty, or false if the context has been dropped
     pub fn mark_dirty(&self) -> bool {
-        let mut copy = self.inner;
-        if let Ok(mut self_write) = copy.try_write() {
+        if let Ok(mut self_write) = self.inner.try_write_unchecked() {
             #[cfg(debug_assertions)]
             {
                 tracing::trace!(

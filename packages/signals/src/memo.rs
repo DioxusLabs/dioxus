@@ -163,8 +163,10 @@ where
     type Storage = UnsyncStorage;
 
     #[track_caller]
-    fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
-        let read = self.inner.try_read();
+    fn try_read_unchecked(
+        &self,
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+        let read = self.inner.try_read_unchecked();
         match read {
             Ok(r) => {
                 let needs_update = self
@@ -175,7 +177,7 @@ where
                 if needs_update {
                     drop(r);
                     self.recompute();
-                    self.inner.try_read()
+                    self.inner.try_read_unchecked()
                 } else {
                     Ok(r)
                 }
@@ -188,8 +190,8 @@ where
     ///
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    fn peek(&self) -> ReadableRef<Self> {
-        self.inner.peek()
+    fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
+        self.inner.peek_unchecked()
     }
 }
 

@@ -50,7 +50,9 @@ impl<T: 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
     #[doc(hidden)]
     /// This should only be used by the `rsx!` macro.
     pub fn __take(&self) -> T {
-        self.inner.take()
+        self.inner
+            .manually_drop()
+            .expect("Signal has already been dropped")
     }
 }
 
@@ -59,16 +61,18 @@ impl<T, S: Storage<SignalData<T>>> Readable for ReadOnlySignal<T, S> {
     type Storage = S;
 
     #[track_caller]
-    fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
-        self.inner.try_read()
+    fn try_read_unchecked(
+        &self,
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+        self.inner.try_read_unchecked()
     }
 
     /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
     ///
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    fn peek(&self) -> S::Ref<T> {
-        self.inner.peek()
+    fn peek_unchecked(&self) -> S::Ref<'static, T> {
+        self.inner.peek_unchecked()
     }
 }
 
