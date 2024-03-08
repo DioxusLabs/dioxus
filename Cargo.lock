@@ -2492,6 +2492,7 @@ dependencies = [
  "dioxus-signals",
  "futures-channel",
  "futures-util",
+ "generational-box",
  "slab",
  "thiserror",
  "tokio",

@@ -1,4 +1,5 @@
 use crate::{read::Readable, ReadableRef, Signal, SignalData};
+use dioxus_core::IntoDynNode;
 use std::ops::Deref;
 
 use dioxus_core::{prelude::IntoAttributeValue, ScopeId};
@@ -102,6 +103,15 @@ where
 {
     fn into_value(self) -> dioxus_core::AttributeValue {
         self.with(|f| f.clone().into_value())
+    }
+}
+
+impl<T> IntoDynNode for ReadOnlySignal<T>
+where
+    T: Clone + IntoDynNode,
+{
+    fn into_dyn_node(self) -> dioxus_core::DynamicNode {
+        self().into_dyn_node()
     }
 }
 
