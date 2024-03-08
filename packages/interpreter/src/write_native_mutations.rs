@@ -196,7 +196,7 @@ impl WriteMutations for MutationState {
         self.channel.remove(id.0 as u32);
     }
 
-    fn push_root(&mut self, _id: dioxus_core::ElementId) {
-        self.channel.push_root(0);
+    fn push_root(&mut self, id: dioxus_core::ElementId) {
+        self.channel.push_root(id.0 as _);
     }
 }
