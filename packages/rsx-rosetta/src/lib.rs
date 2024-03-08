@@ -141,6 +141,7 @@ pub fn collect_svgs(children: &mut [BodyNode], out: &mut Vec<BodyNode>) {
                     fields: vec![],
                     children: vec![],
                     manual_props: None,
+                    key: None,
                     brace: Default::default(),
                 });
 

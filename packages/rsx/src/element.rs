@@ -169,7 +169,13 @@ impl Parse for Element {
                         },
                     }));
                 } else if name_str == "key" {
-                    key = Some(content.parse()?);
+                    let _key: IfmtInput = content.parse()?;
+
+                    if _key.is_static() {
+                        invalid_key!(_key);
+                    }
+
+                    key = Some(_key);
                 } else {
                     let value = content.parse::<ElementAttrValue>()?;
                     attributes.push(attribute::AttributeType::Named(ElementAttrNamed {

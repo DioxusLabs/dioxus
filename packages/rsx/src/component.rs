@@ -27,6 +27,7 @@ use syn::{
 pub struct Component {
     pub name: syn::Path,
     pub prop_gen_args: Option<AngleBracketedGenericArguments>,
+    pub key: Option<IfmtInput>,
     pub fields: Vec<ComponentField>,
     pub children: Vec<BodyNode>,
     pub manual_props: Option<Expr>,
@@ -47,6 +48,7 @@ impl Parse for Component {
         let mut fields = Vec::new();
         let mut children = Vec::new();
         let mut manual_props = None;
+        let mut key = None;
 
         while !content.is_empty() {
             // if we splat into a component then we're merging properties
@@ -56,14 +58,26 @@ impl Parse for Component {
             } else if
             // Named fields
             (content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]))
-            // shorthand struct initialization
+                // shorthand struct initialization
                 // Not a div {}, mod::Component {}, or web-component {}
                 || (content.peek(Ident)
                     && !content.peek2(Brace)
                     && !content.peek2(Token![:])
                     && !content.peek2(Token![-]))
             {
-                fields.push(content.parse()?);
+                // If it
+                if content.fork().parse::<Ident>()? == "key" {
+                    _ = content.parse::<Ident>()?;
+                    _ = content.parse::<Token![:]>()?;
+
+                    let _key: IfmtInput = content.parse()?;
+                    if _key.is_static() {
+                        invalid_key!(_key);
+                    }
+                    key = Some(_key);
+                } else {
+                    fields.push(content.parse()?);
+                }
             } else {
                 children.push(content.parse()?);
             }
@@ -80,6 +94,7 @@ impl Parse for Component {
             children,
             manual_props,
             brace,
+            key,
         })
     }
 }
@@ -137,15 +152,7 @@ impl Component {
     }
 
     pub fn key(&self) -> Option<&IfmtInput> {
-        match self
-            .fields
-            .iter()
-            .find(|f| f.name == "key")
-            .map(|f| &f.content)
-        {
-            Some(ContentField::Formatted(fmt)) => Some(fmt),
-            _ => None,
-        }
+        self.key.as_ref()
     }
 
     fn collect_manual_props(&self, manual_props: &Expr) -> TokenStream2 {
@@ -169,10 +176,7 @@ impl Component {
             None => quote! { fc_to_builder(#name) },
         };
         for field in &self.fields {
-            match field.name.to_string().as_str() {
-                "key" => {}
-                _ => toks.append_all(quote! {#field}),
-            }
+            toks.append_all(quote! {#field})
         }
         if !self.children.is_empty() {
             let renderer: TemplateRenderer = TemplateRenderer {
@@ -216,10 +220,6 @@ impl ContentField {
     fn new_from_name(name: &Ident, input: ParseStream) -> Result<Self> {
         if name.to_string().starts_with("on") {
             return Ok(ContentField::OnHandlerRaw(input.parse()?));
-        }
-
-        if *name == "key" {
-            return Ok(ContentField::Formatted(input.parse()?));
         }
 
         if input.peek(LitStr) {
