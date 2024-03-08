@@ -1276,7 +1276,8 @@ Finally, call `.build()` to create the instance of `{name}`.
             });
             let (impl_generics, _, _) = generics.split_for_impl();
 
-            let (_, ty_generics, where_clause) = self.generics.split_for_impl();
+            let (original_impl_generics, ty_generics, where_clause) =
+                self.generics.split_for_impl();
 
             let modified_ty_generics = modify_types_generics_hack(&ty_generics, |args| {
                 args.insert(
@@ -1344,13 +1345,13 @@ Finally, call `.build()` to create the instance of `{name}`.
                         owner: Owner,
                     }
 
-                    impl #impl_generics PartialEq for #name #ty_generics #where_clause {
+                    impl #original_impl_generics PartialEq for #name #ty_generics #where_clause {
                         fn eq(&self, other: &Self) -> bool {
                             self.inner.eq(&other.inner)
                         }
                     }
 
-                    impl #impl_generics #name #ty_generics #where_clause {
+                    impl #original_impl_generics #name #ty_generics #where_clause {
                         /// Create a component from the props.
                         fn into_vcomponent<M: 'static>(
                             self,
@@ -1362,7 +1363,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                         }
                     }
 
-                    impl #impl_generics dioxus_core::prelude::Properties for #name #ty_generics #where_clause {
+                    impl #original_impl_generics dioxus_core::prelude::Properties for #name #ty_generics #where_clause {
                         type Builder = ();
                         fn builder() -> Self::Builder {
                             unreachable!()
