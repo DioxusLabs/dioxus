@@ -2347,6 +2347,7 @@ dependencies = [
  "longest-increasing-subsequence",
  "pretty_assertions",
  "rand 0.8.5",
+ "reqwest",
  "rustc-hash",
  "serde",
  "slab",

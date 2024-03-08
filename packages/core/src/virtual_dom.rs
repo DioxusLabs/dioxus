@@ -644,7 +644,7 @@ impl VirtualDom {
     #[instrument(skip(self), level = "trace", name = "VirtualDom::wait_for_suspense")]
     pub async fn wait_for_suspense(&mut self) {
         loop {
-            if self.runtime.suspended_tasks.borrow().is_empty() {
+            if self.runtime.suspended_tasks.get() == 0 {
                 break;
             }
 
@@ -668,7 +668,7 @@ impl VirtualDom {
                         // Then poll any tasks that might be pending
                         let tasks = task.tasks_queued.into_inner();
                         for task in tasks {
-                            if self.runtime.suspended_tasks.borrow().contains(&task) {
+                            if self.runtime.task_runs_during_suspense(task) {
                                 let _ = self.runtime.handle_task_wakeup(task);
                                 // Running that task, may mark a scope higher up as dirty. If it does, return from the function early
                                 self.queue_events();
@@ -689,7 +689,7 @@ impl VirtualDom {
                 // Then, poll any tasks that might be pending in the scope
                 for task in work.tasks {
                     // During suspense, we only want to run tasks that are suspended
-                    if self.runtime.suspended_tasks.borrow().contains(&task) {
+                    if self.runtime.task_runs_during_suspense(task) {
                         let _ = self.runtime.handle_task_wakeup(task);
                     }
                 }
