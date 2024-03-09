@@ -57,6 +57,10 @@ function fmtSelection() {
 	const editor = vscode.window.activeTextEditor;
 	if (!editor) return;
 
+	if (editor.document.languageId !== "rust") {
+		return;
+	}
+
 	let end_line = editor.selection.end.line;
 
 	// Select full lines of selection
@@ -69,7 +73,7 @@ function fmtSelection() {
 
 	let unformatted = editor.document.getText(selection_range);
 
-	if (unformatted.length == 0) {
+	if (unformatted.trim().length == 0) {
 		vscode.window.showWarningMessage("Please select rsx invoking this command!");
 		return;
 	}
@@ -110,14 +114,17 @@ function fmtSelection() {
 	let base_indentation = (lines_above.match(/{/g) || []).length - (lines_above.match(/}/g) || []).length - 1;
 
 	try {
-		const formatted = dioxus.format_selection(unformatted, !editor.options.insertSpaces, tabSize, base_indentation);
+		let formatted = dioxus.format_selection(unformatted, !editor.options.insertSpaces, tabSize, base_indentation);
+		for(let i = 0; i <= base_indentation; i++) {
+			formatted = (editor.options.insertSpaces ? " ".repeat(tabSize) : "\t") + formatted;
+		}
 		if (formatted.length > 0) {
 			editor.edit(editBuilder => {
 				editBuilder.replace(selection_range, formatted);
 			});
 		}
 	} catch (error) {
-		vscode.window.showErrorMessage(`Selection is not valid rsx! Make sure to only select elements from within the rsx-Macro! \n${error}`);
+		vscode.window.showErrorMessage(`Errors occurred while formatting. Make sure you have the most recent Dioxus-CLI installed and you have selected valid rsx with your cursor! \n${error}`);
 	}
 
 }
@@ -136,7 +143,7 @@ function fmtDocumentOnSave(e: vscode.TextDocumentWillSaveEvent) {
 
 function fmtDocument(document: vscode.TextDocument) {
 	try {
-		if (document.languageId !== "rust" || document.uri.scheme !== "file") {
+		if (document.languageId !== "rust") {
 			return;
 		}
 
