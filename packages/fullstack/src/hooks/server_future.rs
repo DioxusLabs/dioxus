@@ -14,8 +14,6 @@ where
 
     let resource = use_resource(move || {
         async move {
-            // this is going to subscribe this resource to any reactivity given to use in the callback
-            // We're doing this regardless so inputs get tracked, even if we drop the future before polling it
             let user_fut = cb.call();
 
             let currently_in_first_run = first_run.cloned();
@@ -28,6 +26,10 @@ where
 
                 #[cfg(feature = "web")]
                 if let Some(o) = crate::html_storage::deserialize::take_server_data::<T>() {
+                    // this is going to subscribe this resource to any reactivity given to use in the callback
+                    // We're doing this regardless so inputs get tracked, even if we drop the future before polling it
+                    kick_future(user_fut);
+
                     return o;
                 }
             }
@@ -59,4 +61,18 @@ where
         }
         _ => Some(resource),
     }
+}
+
+#[inline]
+fn kick_future<F, T>(user_fut: F)
+where
+    F: Future<Output = T> + 'static,
+{
+    // Kick the future to subscribe its dependencies
+    use futures_util::future::FutureExt;
+    let waker = futures_util::task::noop_waker();
+    let mut cx = std::task::Context::from_waker(&waker);
+    futures_util::pin_mut!(user_fut);
+
+    let _ = user_fut.poll_unpin(&mut cx);
 }
