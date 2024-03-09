@@ -199,8 +199,8 @@ impl ComponentBody {
 }
 
 struct DocField<'a> {
-    arg_name: &'a Box<Pat>,
-    arg_type: &'a Box<Type>,
+    arg_name: &'a Pat,
+    arg_type: &'a Type,
     deprecation: Option<crate::utils::DeprecatedAttribute>,
     input_arg_doc: String,
 }
