@@ -57,14 +57,68 @@ function fmtSelection() {
 	const editor = vscode.window.activeTextEditor;
 	if (!editor) return;
 
-	const unformatted = editor.document.getText(editor.selection);
+	let end_line = editor.selection.end.line;
+
+	// Select full lines of selection
+	let selection_range = new vscode.Range(
+		editor.selection.start.line, 
+		0, 
+		end_line, 
+		editor.document.lineAt(end_line).range.end.character
+	);
+
+	let unformatted = editor.document.getText(selection_range);
 
 	if (unformatted.length == 0) {
 		vscode.window.showWarningMessage("Please select rsx invoking this command!");
 		return;
 	}
 
-	const fileDir = editor.document.fileName.slice(0, editor.document.fileName.lastIndexOf('\\'));
+	// If number of closing braces is lower than opening braces, expand selection to end of initial block
+	while ((unformatted.match(/{/g) || []).length > (unformatted.match(/}/g) || []).length && end_line < editor.document.lineCount - 1) {
+		end_line += 1;
+
+		selection_range = new vscode.Range(
+			editor.selection.start.line, 
+			0, 
+			end_line, 
+			editor.document.lineAt(end_line).range.end.character
+		);
+
+		unformatted = editor.document.getText(selection_range);
+	}
+
+	let tabSize: number;
+	if (typeof editor.options.tabSize === 'number') {
+		tabSize = editor.options.tabSize;
+	} else {
+		tabSize = 4;
+	}
+
+	let end_above = Math.max(editor.selection.start.line - 1, 0);
+
+	let lines_above = editor.document.getText(
+		new vscode.Range(
+			0, 
+			0, 
+			end_above,
+			editor.document.lineAt(end_above).range.end.character
+		)
+	);
+
+	// Calculate indent for current selection
+	let base_indentation = (lines_above.match(/{/g) || []).length - (lines_above.match(/}/g) || []).length - 1;
+
+	try {
+		const formatted = dioxus.format_selection(unformatted, !editor.options.insertSpaces, tabSize, base_indentation);
+		if (formatted.length > 0) {
+			editor.edit(editBuilder => {
+				editBuilder.replace(selection_range, formatted);
+			});
+		}
+	} catch (error) {
+		vscode.window.showErrorMessage(`Selection is not valid rsx! Make sure to only select elements from within the rsx-Macro! \n${error}`);
+	}
 
 }
 
