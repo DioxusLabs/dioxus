@@ -47,6 +47,8 @@
     <a href="https://github.com/DioxusLabs/dioxus/blob/master/translations/pt-br/README.md"> PT-BR </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/master/translations/ja-jp/README.md"> 日本語 </a>
+    <span> | </span>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/master/translations/tr-tr/README.md"> Türkçe </a>
   </h3>
 </div>
 
