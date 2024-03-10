@@ -47,8 +47,13 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
 
                             for path in &e.paths {
                                 // if this is not a rust file, rebuild the whole project
-                                if path.extension().and_then(|p| p.to_str()) != Some("rs") {
+                                let path_extension = path.extension().and_then(|p| p.to_str());
+                                if path_extension != Some("rs") {
                                     needs_full_rebuild = true;
+                                    // if backup file generated will impact normal hot-reload, so ignore it
+                                    if path_extension == Some("rs~") {
+                                        needs_full_rebuild = false;
+                                    }
                                     break;
                                 }
 
