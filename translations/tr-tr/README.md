@@ -54,8 +54,8 @@
 
 <br/>
 
-> [!UYARI]
-> Dioxus 0.5 (şuan 'master' reposunda) uyumluluk kıran değişiklilere sahip ve Dioxus 0.4 ile uyumlu değil
+> [!WARNING]
+> Dioxus 0.5 (şuan 'master' reposunda) uyumluluk kıran değişiklilere sahip ve Dioxus 0.4 ile uyumlu değil.
 
 
 >Çevirmen Notu (Translator Note): Teknik terimleri orijinal haliyle kullanıp, olabildiğince açıklamaya çalıştım ki hem tecrübeli hem de yeni başlayan arkadaşlar için daha kolay olsun diye. Hatalar varsa affola.
@@ -83,7 +83,7 @@ Eğer React biliyorsanız, Dioxus'u zaten biliyorsunuzdur.
 - İnanılmaz derecede ergonomic ve güçlü durum yönetimine sahiptir.
 - Kod dahilinde kapsayıcı döküman - fareyi üzerine getirdiğinizde bütün HTML elementleri, listeners (takipçileri) ve events (olayları) için bilgi edinebilirsiniz. 
 - Çok hızlı 🔥🔥 ve epey hafıza verimlidir.
-- Hot Reload (Derlemek zorunda olmadan değişikleri görme) sayesinde daha hızlı geliştirme imkanı sağlar.
+- Hot-Reload (Derlemek zorunda olmadan değişikleri görme) sayesinde daha hızlı geliştirme imkanı sağlar.
 - Coroutine(Eş zamanlı gibi hissettiren ama aslında sırayla yapılan işlemler) ve suspense(Yükleme bitene kadar halihazırda var olanı gösteren yapı) ile birinci sınıf asenkron desteği sunar.
 - Daha fazlası için göz at: [Tam Sürüm Notu](https://dioxuslabs.com/blog/introducing-dioxus/).
 
@@ -150,7 +150,7 @@ Uygulama geliştirmek için birsürü seçenek var, neden Dioxusu seçesin ?
 
 Baktığımızda öncelikli olarak Dioxus geliştirici deneyimini önceliğinde tutar. Bu durum Dioxus üzerinde eşsiz birçok özellikte görülür:
 
-- Kendi meta dilimiz (RSX) için oto-format ve VSCode eklentisi.
+- Kendi meta dilimiz (RSX) için oto-format ve [VSCode eklentisi](https://marketplace.visualstudio.com/items?itemName=DioxusLabs.dioxus).
 - Hem masaüstü hem de web için hot-reload RSX interpretter(yorumlayıcı(derlemek yerine satır satır kodları çalıştıran)) kullanır.
 - İyi dökümantasyona önem veriyoruz. Kod rehberi tamamlandı ve HTML elementleri de dökümente edildi.
 - Basitletirmek için çaba gösteriyoruz.
@@ -169,7 +169,7 @@ Yani... Dioxus güzel de, benim neden işime yaramıyor ?
 ## Katkı (Contributing)
 - Websitemizi ziyaret edebilirsiniz. [Katkı kısmı](https://dioxuslabs.com/learn/0.4/contributing).
 - Sorunlarınızı raporlayabilirsiniz. [Sorun takipçisi](https://github.com/dioxuslabs/dioxus/issues).
-- [Katıl](https://discord.gg/XgGxMSkvUM) Discorda ve sorularını sor!
+- [Katıl](https://discord.gg/XgGxMSkvUM) Discord'a ve sorularını sor!
 
 
 <a href="https://github.com/dioxuslabs/dioxus/graphs/contributors">
