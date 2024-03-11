@@ -100,11 +100,11 @@ thiserror = "1.0.40"
 prettyplease = { package = "prettier-please", version = "0.2", features = [
     "verbatim",
 ] }
-manganis-cli-support = { version = "0.1.0", features = [
+manganis-cli-support = { version = "0.2.0", features = [
     "webp",
     "html",
 ] }
-manganis = { version = "0.1.0" }
+manganis = { version = "0.2.0" }
 
 lru = "0.12.2"
 async-trait = "0.1.77"

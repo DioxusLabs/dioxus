@@ -4,8 +4,9 @@ use crate::Result;
 use dioxus_cli_config::CrateConfig;
 use manganis_cli_support::{AssetManifest, AssetManifestExt};
 
-pub fn asset_manifest(crate_config: &CrateConfig) -> AssetManifest {
+pub fn asset_manifest(bin: Option<&str>, crate_config: &CrateConfig) -> AssetManifest {
     AssetManifest::load_from_path(
+        bin,
         crate_config.crate_dir.join("Cargo.toml"),
         crate_config.workspace_dir.join("Cargo.lock"),
     )

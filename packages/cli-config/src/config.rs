@@ -370,6 +370,16 @@ pub enum ExecutableType {
     Example(String),
 }
 
+impl ExecutableType {
+    /// Get the name of the executable if it is a binary or an example.
+    pub fn executable(&self) -> Option<&str> {
+        match self {
+            Self::Binary(bin) | Self::Example(bin) => Some(bin),
+            _ => None,
+        }
+    }
+}
+
 impl CrateConfig {
     #[cfg(feature = "cli")]
     pub fn new(bin: Option<PathBuf>) -> Result<Self, CrateConfigError> {
