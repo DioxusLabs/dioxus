@@ -12,7 +12,7 @@ use std::ops::Deref;
 use std::{cell::Cell, future::Future, rc::Rc};
 
 /// A memo that resolves to a value asynchronously.
-/// Similar to `use_memo` but `use_resource` runs asynchronously.
+/// Similar to `use_future` but `use_resource` returns a value.
 /// See [`Resource`] for more details.
 /// ```rust
 ///fn app() -> Element {
