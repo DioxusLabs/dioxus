@@ -204,7 +204,7 @@ fn module_loader(root_id: &str, headless: bool) -> String {
 /// Defaults to the current directory if no asset directory is found, which is useful for development when the app
 /// isn't bundled.
 fn get_asset_root_or_default() -> PathBuf {
-    get_asset_root().unwrap_or_else(|| Path::new(".").to_path_buf())
+    get_asset_root().unwrap_or_else(|| std::env::current_dir().unwrap())
 }
 
 /// Get the asset directory, following tauri/cargo-bundles directory discovery approach

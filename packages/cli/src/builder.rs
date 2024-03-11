@@ -27,6 +27,7 @@ lazy_static! {
 #[derive(Debug, Clone)]
 pub struct BuildResult {
     pub warnings: Vec<Diagnostic>,
+    pub executable: Option<PathBuf>,
     pub elapsed_time: u128,
     pub assets: Option<AssetManifest>,
 }
@@ -117,7 +118,7 @@ pub fn build(
         .arg("build")
         .arg("--target")
         .arg("wasm32-unknown-unknown")
-        .arg("--message-format=json");
+        .arg("--message-format=json-render-diagnostics");
 
     // TODO: make the initial variable mutable to simplify all the expressions
     // below. Look inside the `build_desktop()` as an example.
@@ -159,28 +160,11 @@ pub fn build(
     // [2] Establish the output directory structure
     let bindgen_outdir = out_dir.join("assets").join("dioxus");
 
-    let build_target = if config.custom_profile.is_some() {
-        let build_profile = config.custom_profile.as_ref().unwrap();
-        if build_profile == "dev" {
-            "debug"
-        } else {
-            build_profile
-        }
-    } else if config.release {
-        "release"
-    } else {
-        "debug"
-    };
-
-    let input_path = match executable {
-        ExecutableType::Binary(name) | ExecutableType::Lib(name) => target_dir
-            .join(format!("wasm32-unknown-unknown/{}", build_target))
-            .join(format!("{}.wasm", name)),
-
-        ExecutableType::Example(name) => target_dir
-            .join(format!("wasm32-unknown-unknown/{}/examples", build_target))
-            .join(format!("{}.wasm", name)),
-    };
+    let input_path = warning_messages
+        .output_location
+        .as_ref()
+        .unwrap()
+        .with_extension("wasm");
 
     let bindgen_result = panic::catch_unwind(move || {
         // [3] Bindgen the final binary for use easy linking
@@ -288,8 +272,8 @@ pub fn build(
         depth: 0,
     };
     if asset_dir.is_dir() {
-        for entry in std::fs::read_dir(asset_dir)? {
-            let path = entry?.path();
+        for entry in std::fs::read_dir(config.asset_dir())?.flatten() {
+            let path = entry.path();
             if path.is_file() {
                 std::fs::copy(&path, out_dir.join(path.file_name().unwrap()))?;
             } else {
@@ -311,7 +295,7 @@ pub fn build(
     }
 
     let assets = if !skip_assets {
-        let assets = asset_manifest(config);
+        let assets = asset_manifest(executable.executable(), config);
         process_assets(config, &assets)?;
         Some(assets)
     } else {
@@ -319,7 +303,8 @@ pub fn build(
     };
 
     Ok(BuildResult {
-        warnings: warning_messages,
+        warnings: warning_messages.warnings,
+        executable: warning_messages.output_location,
         elapsed_time: t_start.elapsed().as_millis(),
         assets,
     })
@@ -346,7 +331,7 @@ pub fn build_desktop(
         .env("CARGO_TARGET_DIR", &config.target_dir)
         .cwd(&config.crate_dir)
         .arg("build")
-        .arg("--message-format=json");
+        .arg("--message-format=json-render-diagnostics");
 
     if config.release {
         cmd = cmd.arg("--release");
@@ -371,8 +356,6 @@ pub fn build_desktop(
         cmd = cmd.arg("--target").arg(target);
     }
 
-    let target_platform = config.target.as_deref().unwrap_or("");
-
     cmd = cmd.args(&config.cargo_args);
 
     let cmd = match &config.executable {
@@ -383,34 +366,9 @@ pub fn build_desktop(
 
     let warning_messages = prettier_build(cmd)?;
 
-    let release_type = match config.release {
-        true => "release",
-        false => "debug",
-    };
-
-    let file_name: String;
-    let mut res_path = match &config.executable {
-        ExecutableType::Binary(name) | ExecutableType::Lib(name) => {
-            file_name = name.clone();
-            config
-                .target_dir
-                .join(target_platform)
-                .join(release_type)
-                .join(name)
-        }
-        ExecutableType::Example(name) => {
-            file_name = name.clone();
-            config
-                .target_dir
-                .join(target_platform)
-                .join(release_type)
-                .join("examples")
-                .join(name)
-        }
-    };
+    let file_name: String = config.executable.executable().unwrap().to_string();
 
     let target_file = if cfg!(windows) {
-        res_path.set_extension("exe");
         format!("{}.exe", &file_name)
     } else {
         file_name
@@ -419,7 +377,10 @@ pub fn build_desktop(
     if !config.out_dir().is_dir() {
         create_dir_all(config.out_dir())?;
     }
-    copy(res_path, config.out_dir().join(target_file))?;
+    let output_path = config.out_dir().join(target_file);
+    if let Some(res_path) = &warning_messages.output_location {
+        copy(res_path, &output_path)?;
+    }
 
     // this code will copy all public file to the output dir
     if config.asset_dir().is_dir() {
@@ -432,8 +393,8 @@ pub fn build_desktop(
             depth: 0,
         };
 
-        for entry in std::fs::read_dir(config.asset_dir())? {
-            let path = entry?.path();
+        for entry in std::fs::read_dir(config.asset_dir())?.flatten() {
+            let path = entry.path();
             if path.is_file() {
                 std::fs::copy(&path, &config.out_dir().join(path.file_name().unwrap()))?;
             } else {
@@ -455,7 +416,7 @@ pub fn build_desktop(
     }
 
     let assets = if !skip_assets {
-        let assets = asset_manifest(config);
+        let assets = asset_manifest(config.executable.executable(), config);
         // Collect assets
         process_assets(config, &assets)?;
         // Create the __assets_head.html file for bundling
@@ -473,13 +434,19 @@ pub fn build_desktop(
     println!("build desktop done");
 
     Ok(BuildResult {
-        warnings: warning_messages,
+        warnings: warning_messages.warnings,
+        executable: Some(output_path),
         elapsed_time: t_start.elapsed().as_millis(),
         assets,
     })
 }
 
-fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
+struct CargoBuildResult {
+    warnings: Vec<Diagnostic>,
+    output_location: Option<PathBuf>,
+}
+
+fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<CargoBuildResult> {
     let mut warning_messages: Vec<Diagnostic> = vec![];
 
     let mut pb = ProgressBar::new_spinner();
@@ -494,6 +461,7 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
 
     let stdout = cmd.detached().stream_stdout()?;
     let reader = std::io::BufReader::new(stdout);
+    let mut output_location = None;
 
     for message in cargo_metadata::Message::parse_stream(reader) {
         match message.unwrap() {
@@ -516,6 +484,9 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
             Message::CompilerArtifact(artifact) => {
                 pb.set_message(format!("⚙️ Compiling {} ", artifact.package_id));
                 pb.tick();
+                if let Some(executable) = artifact.executable {
+                    output_location = Some(executable.into());
+                }
             }
             Message::BuildScriptExecuted(script) => {
                 let _package_id = script.package_id.to_string();
@@ -532,7 +503,11 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
             }
         }
     }
-    Ok(warning_messages)
+
+    Ok(CargoBuildResult {
+        warnings: warning_messages,
+        output_location,
+    })
 }
 
 pub fn gen_page(config: &CrateConfig, manifest: Option<&AssetManifest>, serve: bool) -> String {

@@ -8,7 +8,6 @@ use crate::{
     BuildResult, Result,
 };
 use dioxus_cli_config::CrateConfig;
-use dioxus_cli_config::ExecutableType;
 
 use dioxus_hot_reload::HotReloadMsg;
 use dioxus_html::HtmlCtx;
@@ -224,24 +223,19 @@ fn start_desktop(
     // Only used for the fullstack platform,
     let result = crate::builder::build_desktop(config, true, skip_assets, rust_flags)?;
 
-    match &config.executable {
-        ExecutableType::Binary(name)
-        | ExecutableType::Lib(name)
-        | ExecutableType::Example(name) => {
-            let mut file = config.out_dir().join(name);
-            if cfg!(windows) {
-                file.set_extension("exe");
-            }
-            let active = "DIOXUS_ACTIVE";
-            let child = RAIIChild(
-                Command::new(file.to_str().unwrap())
-                    .env(active, "true")
-                    .spawn()?,
-            );
+    let active = "DIOXUS_ACTIVE";
+    let child = RAIIChild(
+        Command::new(
+            result
+                .executable
+                .clone()
+                .ok_or(anyhow::anyhow!("No executable found after desktop build"))?,
+        )
+        .env(active, "true")
+        .spawn()?,
+    );
 
-            Ok((child, result))
-        }
-    }
+    Ok((child, result))
 }
 
 pub(crate) struct DesktopPlatform {
