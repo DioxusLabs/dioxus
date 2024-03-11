@@ -15,7 +15,7 @@ pub fn server_only(input: TokenStream) -> TokenStream {
         }
     } else {
         quote! {
-            ()
+            || {}
         }
     }
     .into()
@@ -30,7 +30,7 @@ pub fn client(input: TokenStream) -> TokenStream {
         }
     } else {
         quote! {
-            ()
+            || {}
         }
     }
     .into()
@@ -45,7 +45,7 @@ pub fn web(input: TokenStream) -> TokenStream {
         }
     } else {
         quote! {
-            ()
+            || {}
         }
     }
     .into()
@@ -60,7 +60,7 @@ pub fn desktop(input: TokenStream) -> TokenStream {
         }
     } else {
         quote! {
-            ()
+            || {}
         }
     }
     .into()
@@ -75,7 +75,7 @@ pub fn fullstack(input: TokenStream) -> TokenStream {
         }
     } else {
         quote! {
-            ()
+            || {}
         }
     }
     .into()
@@ -90,7 +90,7 @@ pub fn ssr(input: TokenStream) -> TokenStream {
         }
     } else {
         quote! {
-            ()
+            || {}
         }
     }
     .into()
@@ -105,7 +105,7 @@ pub fn liveview(input: TokenStream) -> TokenStream {
         }
     } else {
         quote! {
-            ()
+            || {}
         }
     }
     .into()
@@ -120,7 +120,7 @@ pub fn tui(input: TokenStream) -> TokenStream {
         }
     } else {
         quote! {
-            ()
+            || {}
         }
     }
     .into()

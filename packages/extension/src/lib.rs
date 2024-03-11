@@ -22,10 +22,15 @@ pub fn format_rsx(raw: String, use_tabs: bool, indent_size: usize) -> String {
 }
 
 #[wasm_bindgen]
-pub fn format_selection(raw: String, use_tabs: bool, indent_size: usize) -> String {
+pub fn format_selection(
+    raw: String,
+    use_tabs: bool,
+    indent_size: usize,
+    base_indent: usize,
+) -> String {
     let block = dioxus_autofmt::fmt_block(
         &raw,
-        0,
+        base_indent,
         IndentOptions::new(
             if use_tabs {
                 IndentType::Tabs
