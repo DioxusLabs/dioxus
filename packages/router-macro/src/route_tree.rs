@@ -153,8 +153,8 @@ impl<'a> RouteTree<'a> {
                                 segment,
                                 children: Vec::new(),
                                 error_variant: StaticErrorVariant {
-                                    varient_parse_error: nest.error_ident(),
-                                    enum_varient: nest.error_variant(),
+                                    variant_parse_error: nest.error_ident(),
+                                    enum_variant: nest.error_variant(),
                                 },
                                 index,
                             };
@@ -254,8 +254,8 @@ impl<'a> RouteTree<'a> {
 
 #[derive(Debug, Clone)]
 pub struct StaticErrorVariant {
-    varient_parse_error: Ident,
-    enum_varient: Ident,
+    variant_parse_error: Ident,
+    enum_variant: Ident,
 }
 
 // First deduplicate the routes by the static part of the route
@@ -290,8 +290,8 @@ impl<'a> RouteTreeSegmentData<'a> {
                 index,
                 error_variant:
                     StaticErrorVariant {
-                        varient_parse_error,
-                        enum_varient,
+                        variant_parse_error,
+                        enum_variant,
                     },
             } => {
                 let children = children.iter().map(|child| {
@@ -318,7 +318,7 @@ impl<'a> RouteTreeSegmentData<'a> {
                                 #(#children)*
                             }
                             else {
-                                errors.push(#error_enum_name::#enum_varient(#varient_parse_error::#error_ident(segment.to_string())))
+                                errors.push(#error_enum_name::#enum_variant(#variant_parse_error::#error_ident(segment.to_string())))
                             }
                         }
                     }
@@ -326,8 +326,8 @@ impl<'a> RouteTreeSegmentData<'a> {
             }
             RouteTreeSegmentData::Route(route) => {
                 // At this point, we have matched all static segments, so we can just check if the remaining segments match the route
-                let varient_parse_error = route.error_ident();
-                let enum_varient = &route.route_name;
+                let variant_parse_error = route.error_ident();
+                let enum_variant = &route.route_name;
 
                 let route_segments = route
                     .segments
@@ -353,13 +353,13 @@ impl<'a> RouteTreeSegmentData<'a> {
                         insure_not_trailing,
                         construct_variant,
                         &error_enum_name,
-                        enum_varient,
-                        &varient_parse_error,
+                        enum_variant,
+                        &variant_parse_error,
                         parse_query,
                     ),
                     &error_enum_name,
-                    enum_varient,
-                    &varient_parse_error,
+                    enum_variant,
+                    &variant_parse_error,
                 );
 
                 match &route.ty {
@@ -374,7 +374,7 @@ impl<'a> RouteTreeSegmentData<'a> {
                                 trailing += "/";
                             }
                             trailing.pop();
-                            match #ty::from_str(&trailing).map_err(|err| #error_enum_name::#enum_varient(#varient_parse_error::ChildRoute(err))) {
+                            match #ty::from_str(&trailing).map_err(|err| #error_enum_name::#enum_variant(#variant_parse_error::ChildRoute(err))) {
                                 Ok(#child_name) => {
                                     #print_route_segment
                                 }
@@ -389,8 +389,8 @@ impl<'a> RouteTreeSegmentData<'a> {
             }
             Self::Nest { nest, children } => {
                 // At this point, we have matched all static segments, so we can just check if the remaining segments match the route
-                let varient_parse_error: Ident = nest.error_ident();
-                let enum_varient = nest.error_variant();
+                let variant_parse_error: Ident = nest.error_ident();
+                let enum_variant = nest.error_variant();
 
                 let route_segments = nest
                     .segments
@@ -410,14 +410,14 @@ impl<'a> RouteTreeSegmentData<'a> {
                     route_segments.peekable(),
                     parse_children,
                     &error_enum_name,
-                    &enum_varient,
-                    &varient_parse_error,
+                    &enum_variant,
+                    &variant_parse_error,
                 )
             }
             Self::Redirect(redirect) => {
                 // At this point, we have matched all static segments, so we can just check if the remaining segments match the route
-                let varient_parse_error = redirect.error_ident();
-                let enum_varient = &redirect.error_variant();
+                let variant_parse_error = redirect.error_ident();
+                let enum_variant = &redirect.error_variant();
 
                 let route_segments = redirect
                     .segments
@@ -451,13 +451,13 @@ impl<'a> RouteTreeSegmentData<'a> {
                         insure_not_trailing,
                         return_redirect,
                         &error_enum_name,
-                        enum_varient,
-                        &varient_parse_error,
+                        enum_variant,
+                        &variant_parse_error,
                         parse_query,
                     ),
                     &error_enum_name,
-                    enum_varient,
-                    &varient_parse_error,
+                    enum_variant,
+                    &variant_parse_error,
                 )
             }
         }
@@ -468,23 +468,23 @@ fn print_route_segment<'a, I: Iterator<Item = (usize, &'a RouteSegment)>>(
     mut s: std::iter::Peekable<I>,
     sucess_tokens: TokenStream,
     error_enum_name: &Ident,
-    enum_varient: &Ident,
-    varient_parse_error: &Ident,
+    enum_variant: &Ident,
+    variant_parse_error: &Ident,
 ) -> TokenStream {
     if let Some((i, route)) = s.next() {
         let children = print_route_segment(
             s,
             sucess_tokens,
             error_enum_name,
-            enum_varient,
-            varient_parse_error,
+            enum_variant,
+            variant_parse_error,
         );
 
         route.try_parse(
             i,
             error_enum_name,
-            enum_varient,
-            varient_parse_error,
+            enum_variant,
+            variant_parse_error,
             children,
         )
     } else {
@@ -498,8 +498,8 @@ fn return_constructed(
     insure_not_trailing: bool,
     construct_variant: TokenStream,
     error_enum_name: &Ident,
-    enum_varient: &Ident,
-    varient_parse_error: &Ident,
+    enum_variant: &Ident,
+    variant_parse_error: &Ident,
     parse_query: TokenStream,
 ) -> TokenStream {
     if insure_not_trailing {
@@ -523,7 +523,7 @@ fn return_constructed(
                         trailing += "/";
                     }
                     trailing.pop();
-                    errors.push(#error_enum_name::#enum_varient(#varient_parse_error::ExtraSegments(trailing)))
+                    errors.push(#error_enum_name::#enum_variant(#variant_parse_error::ExtraSegments(trailing)))
                 }
             }
         }
@@ -595,8 +595,8 @@ impl<'a> PathIter<'a> {
 
     fn error_variant(&self) -> StaticErrorVariant {
         StaticErrorVariant {
-            varient_parse_error: self.error_ident.clone(),
-            enum_varient: self.error_variant.clone(),
+            variant_parse_error: self.error_ident.clone(),
+            enum_variant: self.error_variant.clone(),
         }
     }
 }
