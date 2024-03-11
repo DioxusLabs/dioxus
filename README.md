@@ -47,6 +47,8 @@
     <a href="https://github.com/DioxusLabs/dioxus/blob/master/translations/pt-br/README.md"> PT-BR </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/master/translations/ja-jp/README.md"> 日本語 </a>
+    <span> | </span>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/master/translations/tr-tr/README.md"> Türkçe </a>
   </h3>
 </div>
 
@@ -145,7 +147,7 @@ There's tons of options for building apps, so why would you choose Dioxus?
 
 Well, first and foremost, Dioxus prioritizes developer experience. This is reflected in a variety of features unique to Dioxus:
 
-- Autoformatting of our meta language (RSX) and accompanying VSCode extension
+- Autoformatting of our meta language (RSX) and accompanying [VSCode extension](https://marketplace.visualstudio.com/items?itemName=DioxusLabs.dioxus)
 - Hotreloading using an interpreter of RSX for both desktop and web
 - Emphasis on good docs - our guide is complete and our HTML elements are documented
 - Significant research in simplifying
