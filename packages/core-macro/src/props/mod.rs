@@ -1336,11 +1336,12 @@ Finally, call `.build()` to create the instance of `{name}`.
             if self.has_signal_fields() {
                 let name = Ident::new(&format!("{}WithOwner", name), name.span());
                 let original_name = &self.name;
+                let vis = &self.vis;
                 quote! {
                     #[doc(hidden)]
                     #[allow(dead_code, non_camel_case_types, missing_docs)]
                     #[derive(Clone)]
-                    struct #name #ty_generics {
+                    #vis struct #name #ty_generics {
                         inner: #original_name #ty_generics,
                         owner: Owner,
                     }
@@ -1353,7 +1354,7 @@ Finally, call `.build()` to create the instance of `{name}`.
 
                     impl #original_impl_generics #name #ty_generics #where_clause {
                         /// Create a component from the props.
-                        fn into_vcomponent<M: 'static>(
+                        pub fn into_vcomponent<M: 'static>(
                             self,
                             render_fn: impl dioxus_core::prelude::ComponentFunction<#original_name #ty_generics, M>,
                             component_name: &'static str,
