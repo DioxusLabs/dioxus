@@ -468,6 +468,7 @@ impl VirtualDom {
     }
 
     /// Wait for the next event to trigger and add it to the queue
+    #[instrument(skip(self), level = "trace", name = "VirtualDom::wait_for_event")]
     async fn wait_for_event(&mut self) {
         match self.rx.next().await.expect("channel should never close") {
             SchedulerMsg::Immediate(id) => self.mark_dirty(id),
@@ -666,13 +667,17 @@ impl VirtualDom {
                     // We choose not to poll the deadline since we complete pretty quickly anyways
                     while let Some(task) = self.pop_task() {
                         // Then poll any tasks that might be pending
-                        let tasks = task.tasks_queued.into_inner();
-                        for task in tasks {
+                        let mut tasks = task.tasks_queued.into_inner();
+                        while let Some(task) = tasks.pop() {
                             if self.runtime.task_runs_during_suspense(task) {
                                 let _ = self.runtime.handle_task_wakeup(task);
                                 // Running that task, may mark a scope higher up as dirty. If it does, return from the function early
                                 self.queue_events();
                                 if self.has_dirty_scopes() {
+                                    // requeue any remaining tasks
+                                    for task in tasks {
+                                        self.mark_task_dirty(task);
+                                    }
                                     break 'wait_for_work;
                                 }
                             }
