@@ -145,15 +145,7 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         at: crate::GenerationalRefMutBorrowInfo,
     ) -> Result<Self::Mut<'static, T>, error::BorrowMutError> {
-        let write = self.0.try_write();
-
-        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-        let write = write.ok_or_else(|| at.borrowed_from.borrow_mut_error())?;
-
-        #[cfg(not(any(debug_assertions, feature = "debug_ownership")))]
-        let write = write.ok_or_else(|| {
-            error::BorrowMutError::AlreadyBorrowed(error::AlreadyBorrowedError {})
-        })?;
+        let write = self.0.write();
 
         RwLockWriteGuard::try_map(write, |any| any.as_mut()?.downcast_mut())
             .map_err(|_| {

@@ -13,6 +13,8 @@ use std::ops::Deref;
 /// `use_future` **won't return a value**.
 /// If you want to return a value from a future, use `use_resource` instead.
 /// ```rust
+/// # use dioxus::prelude::*;
+/// # use std::time::Duration;
 /// fn app() -> Element {
 ///     let mut count = use_signal(|| 0);
 ///     let mut running = use_signal(|| true);

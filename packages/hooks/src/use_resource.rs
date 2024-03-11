@@ -15,28 +15,40 @@ use std::{cell::Cell, future::Future, rc::Rc};
 /// Unlike `use_future`, `use_resource` runs on the **server**
 /// See [`Resource`] for more details.
 /// ```rust
-///fn app() -> Element {
-///    let country = use_signal(|| WeatherLocation {
-///        city: "Berlin".to_string(),
-///        country: "Germany".to_string(),
-///        coordinates: (52.5244, 13.4105)
-///    });
+/// # use dioxus::prelude::*;
+/// # #[derive(Clone)]
+/// # struct WeatherLocation {
+/// #     city: String,
+/// #     country: String,
+/// #     coordinates: (f64, f64),
+/// # }
+/// # async fn get_weather(location: &WeatherLocation) -> Result<String, String> {
+/// #     Ok("Sunny".to_string())
+/// # }
+/// # #[component]
+/// # fn WeatherElement (weather: String ) -> Element { rsx! { p { "The weather is {weather}" } } }
+/// fn app() -> Element {
+///     let country = use_signal(|| WeatherLocation {
+///         city: "Berlin".to_string(),
+///         country: "Germany".to_string(),
+///         coordinates: (52.5244, 13.4105)
+///     });
 ///
-///    let current_weather = //run a future inside the use_resource hook
-///        use_resource(move || async move { get_weather(&country.read().clone()).await });
-///    
-///    rsx! {
-///        //the value of the future can be polled to
-///        //conditionally render elements based off if the future
-///        //finished (Some(Ok(_)), errored Some(Err(_)),
-///        //or is still finishing (None)
-///        match current_weather.value() {
-///            Some(Ok(weather)) => WeatherElement { weather },
-///            Some(Err(e)) => p { "Loading weather failed, {e}" }
-///            None =>  p { "Loading..." }
-///        }
-///    }
-///}
+///     let current_weather = //run a future inside the use_resource hook
+///         use_resource(move || async move { get_weather(&country()).await });
+///     
+///     rsx! {
+///         //the value of the future can be polled to
+///         //conditionally render elements based off if the future
+///         //finished (Some(Ok(_)), errored Some(Err(_)),
+///         //or is still finishing (None)
+///         match current_weather() {
+///             Some(Ok(weather)) => rsx! { WeatherElement { weather } },
+///             Some(Err(e)) => rsx! { p { "Loading weather failed, {e}" } },
+///             None =>  rsx! { p { "Loading..." } }
+///         }
+///     }
+/// }
 /// ```
 #[must_use = "Consider using `cx.spawn` to run a future without reading its value"]
 pub fn use_resource<T, F>(future: impl Fn() -> F + 'static) -> Resource<T>
