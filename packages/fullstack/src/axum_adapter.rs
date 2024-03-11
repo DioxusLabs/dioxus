@@ -487,7 +487,7 @@ async fn handle_server_fns_inner(
 
 
             // it it accepts text/html (i.e., is a plain form post) and doesn't already have a
-            // Location set, then redirect to to Referer
+            // Location set, then redirect to Referer
             if accepts_html {
                 if let Some(referrer) = referrer {
                     let has_location = res.headers().get(LOCATION).is_some();
