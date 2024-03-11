@@ -108,7 +108,7 @@ type AttributeWatchers<V> = Arc<RwLock<Vec<Box<dyn AttributeWatcher<V> + Send + 
 /// 4) Call [RealDom::update_state] to update the state of incrementally computed values on each node
 ///
 /// # Custom attribute values
-/// To allow custom values to be passed into attributes implement FromAnyValue on a type that can represent your custom value and specify the V generic to be that type. If you have many different custom values, it can be useful to use a enum type to represent the varients.
+/// To allow custom values to be passed into attributes implement FromAnyValue on a type that can represent your custom value and specify the V generic to be that type. If you have many different custom values, it can be useful to use a enum type to represent the variants.
 pub struct RealDom<V: FromAnyValue + Send + Sync = ()> {
     pub(crate) world: World,
     nodes_listening: FxHashMap<String, FxHashSet<NodeId>>,
