@@ -42,13 +42,13 @@
     <span> | </span>
     <a href="https://dioxuslabs.com/learn/0.4/guide"> Guide </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/master/translations/zh-cn/README.md"> 中文 </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/zh-cn/README.md"> 中文 </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/master/translations/pt-br/README.md"> PT-BR </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/pt-br/README.md"> PT-BR </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/master/translations/ja-jp/README.md"> 日本語 </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/ja-jp/README.md"> 日本語 </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/master/translations/tr-tr/README.md"> Türkçe </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/tr-tr"> Türkçe </a>
   </h3>
 </div>
 
