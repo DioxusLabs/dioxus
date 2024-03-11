@@ -11,8 +11,8 @@ use futures_util::{future, pin_mut, FutureExt, StreamExt};
 use std::ops::Deref;
 use std::{cell::Cell, future::Future, rc::Rc};
 
-/// A memo that resolve to a value asynchronously.
-/// Unlike `use_future`, `use_resource` runs on the **server**
+/// A memo that resolves to a value asynchronously.
+/// Similar to `use_future` but `use_resource` returns a value.
 /// See [`Resource`] for more details.
 /// ```rust
 ///fn app() -> Element {
@@ -22,14 +22,15 @@ use std::{cell::Cell, future::Future, rc::Rc};
 ///        coordinates: (52.5244, 13.4105)
 ///    });
 ///
-///    let current_weather = //run a future inside the use_resource hook
-///        use_resource(move || async move { get_weather(&country.read().clone()).await });
+///    // Because the resource's future subscribes to `country` by reading it (`country.read()`),
+///    // everytime `country` changes the resource's future will run again and thus provide a new value.
+///    let current_weather = use_resource(move || async move { get_weather(&country.read().clone()).await });
 ///    
 ///    rsx! {
-///        //the value of the future can be polled to
-///        //conditionally render elements based off if the future
-///        //finished (Some(Ok(_)), errored Some(Err(_)),
-///        //or is still finishing (None)
+///        // the value of the resource can be polled to
+///        // conditionally render elements based off if it's future
+///        // finished (Some(Ok(_)), errored Some(Err(_)),
+///        // or is still running (None)
 ///        match current_weather.value() {
 ///            Some(Ok(weather)) => WeatherElement { weather },
 ///            Some(Err(e)) => p { "Loading weather failed, {e}" }
@@ -106,25 +107,25 @@ pub struct Resource<T: 'static> {
     callback: UseCallback<Task>,
 }
 
-/// A signal that represents the state of a future
+/// A signal that represents the state of the resource
 // we might add more states (panicked, etc)
 #[derive(Clone, Copy, PartialEq, Hash, Eq, Debug)]
 pub enum UseResourceState {
-    /// The future is still running
+    /// The resource's future is still running
     Pending,
 
-    /// The future has been forcefully stopped
+    /// The resource's future has been forcefully stopped
     Stopped,
 
-    /// The future has been paused, tempoarily
+    /// The resource's future has been paused, tempoarily
     Paused,
 
-    /// The future has completed
+    /// The resource's future has completed
     Ready,
 }
 
 impl<T> Resource<T> {
-    /// Restart the future with new dependencies.
+    /// Restart the resource's future.
     ///
     /// Will not cancel the previous future, but will ignore any values that it
     /// generates.
@@ -134,19 +135,19 @@ impl<T> Resource<T> {
         self.task.set(new_task);
     }
 
-    /// Forcefully cancel a future
+    /// Forcefully cancel the resource's future.
     pub fn cancel(&mut self) {
         self.state.set(UseResourceState::Stopped);
         self.task.write().cancel();
     }
 
-    /// Pause the future
+    /// Pause the resource's future.
     pub fn pause(&mut self) {
         self.state.set(UseResourceState::Paused);
         self.task.write().pause();
     }
 
-    /// Resume the future
+    /// Resume the resource's future.
     pub fn resume(&mut self) {
         if self.finished() {
             return;
@@ -156,13 +157,18 @@ impl<T> Resource<T> {
         self.task.write().resume();
     }
 
-    /// Get a handle to the inner task backing this future
+    /// Clear the resource's value.
+    pub fn clear(&mut self) {
+        self.value.write().take();
+    }
+
+    /// Get a handle to the inner task backing this resource
     /// Modify the task through this handle will cause inconsistent state
     pub fn task(&self) -> Task {
         self.task.cloned()
     }
 
-    /// Is the future currently finished running?
+    /// Is the resource's future currently finished running?
     ///
     /// Reading this does not subscribe to the future's state
     pub fn finished(&self) -> bool {
@@ -172,12 +178,12 @@ impl<T> Resource<T> {
         )
     }
 
-    /// Get the current state of the future.
+    /// Get the current state of the resource's future.
     pub fn state(&self) -> ReadOnlySignal<UseResourceState> {
         self.state.into()
     }
 
-    /// Get the current value of the future.
+    /// Get the current value of the resource's future.
     pub fn value(&self) -> ReadOnlySignal<Option<T>> {
         self.value.into()
     }
