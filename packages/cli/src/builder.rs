@@ -495,7 +495,8 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<CargoBuildResult> {
                 if finished.success {
                     log::info!("👑 Build done.");
                 } else {
-                    std::process::exit(1);
+                    log::info!("❌ Build failed.");
+                    return Err(anyhow::anyhow!("Build failed"));
                 }
             }
             _ => {
