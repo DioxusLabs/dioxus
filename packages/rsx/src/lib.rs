@@ -244,12 +244,16 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
                 attr_paths: &[ #(#attr_paths),* ],
             };
 
-            dioxus_core::VNode::new(
-                #key_tokens,
-                TEMPLATE,
-                Box::new([ #( #node_printer),* ]),
-                Box::new([ #(#dyn_attr_printer),* ]),
-            )
+            {
+                // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
+                let __vnodes = dioxus_core::VNode::new(
+                    #key_tokens,
+                    TEMPLATE,
+                    Box::new([ #( #node_printer),* ]),
+                    Box::new([ #(#dyn_attr_printer),* ]),
+                );
+                __vnodes
+            }
         });
     }
 }

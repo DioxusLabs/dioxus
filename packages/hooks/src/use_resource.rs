@@ -119,6 +119,13 @@ pub struct Resource<T: 'static> {
     callback: UseCallback<Task>,
 }
 
+impl<T> Clone for Resource<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl<T> Copy for Resource<T> {}
+
 /// A signal that represents the state of the resource
 // we might add more states (panicked, etc)
 #[derive(Clone, Copy, PartialEq, Hash, Eq, Debug)]
