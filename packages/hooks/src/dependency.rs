@@ -1,7 +1,7 @@
 /// A dependency is a trait that can be used to determine if a effect or selector should be re-run.
 pub trait Dependency: Sized + Clone {
     /// The output of the dependency
-    type Out: Clone + PartialEq;
+    type Out: Clone + PartialEq + 'static;
     /// Returns the output of the dependency.
     fn out(&self) -> Self::Out;
     /// Returns true if the dependency has changed.
@@ -16,10 +16,10 @@ impl Dependency for () {
 }
 
 /// A dependency is a trait that can be used to determine if a effect or selector should be re-run.
-pub trait Dep: 'static + PartialEq + Clone {}
-impl<T> Dep for T where T: 'static + PartialEq + Clone {}
+pub trait DependencyElement: 'static + PartialEq + Clone {}
+impl<T> DependencyElement for T where T: 'static + PartialEq + Clone {}
 
-impl<A: Dep> Dependency for &A {
+impl<A: DependencyElement> Dependency for &A {
     type Out = A;
     fn out(&self) -> Self::Out {
         (*self).clone()
@@ -33,7 +33,7 @@ macro_rules! impl_dep {
         impl< $($el),* > Dependency for ($(&$el,)*)
         where
             $(
-                $el: Dep
+                $el: DependencyElement
             ),*
         {
             type Out = ($($el,)*);

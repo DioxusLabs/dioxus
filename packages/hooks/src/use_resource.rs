@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 
-use crate::{use_callback, use_signal, UseCallback};
+use crate::{dependency, use_callback, use_signal, UseCallback};
 use dioxus_core::prelude::*;
 use dioxus_core::{
     prelude::{spawn, use_hook},
@@ -125,6 +125,46 @@ pub enum UseResourceState {
 }
 
 impl<T> Resource<T> {
+    /// Adds an explicit dependency to the resource. If the dependency changes, the resource's future will rerun.
+    ///
+    /// Signals will automatically be added as dependencies, so you don't need to call this method for them.
+    ///
+    /// NOTE: You must follow the rules of hooks when calling this method.
+    ///
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// # async fn sleep(delay: u32) {}
+    ///
+    /// #[component]
+    /// fn Comp(delay: u32) -> Element {
+    ///     // Because the resource subscribes to `delay` by adding it as a dependency, the resource's future will rerun every time `delay` changes.
+    ///     let current_weather = use_resource(move || async move {
+    ///         sleep(delay).await;
+    ///         "Sunny"
+    ///     })
+    ///     .use_dependencies((&delay,));
+    ///
+    ///     rsx! {
+    ///         // the value of the resource can be polled to
+    ///         // conditionally render elements based off if it's future
+    ///         // finished (Some(Ok(_)), errored Some(Err(_)),
+    ///         // or is still running (None)
+    ///         match &*current_weather.read_unchecked() {
+    ///             Some(weather) => rsx! { "{weather}" },
+    ///             None =>  rsx! { p { "Loading..." } }
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    pub fn use_dependencies(self, dependency: impl dependency::Dependency) -> Self {
+        let mut dependencies_signal = use_signal(|| dependency.out());
+        let changed = { dependency.changed(&*dependencies_signal.read()) };
+        if changed {
+            dependencies_signal.set(dependency.out());
+        }
+        self
+    }
+
     /// Restart the resource's future.
     ///
     /// Will not cancel the previous future, but will ignore any values that it
