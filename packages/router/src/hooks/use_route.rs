@@ -5,12 +5,8 @@ use crate::utils::use_router_internal::use_router_internal;
 ///
 /// > The Routable macro will define a version of this hook with an explicit type.
 ///
-/// # Return values
-/// - None, when not called inside a [`Link`] component.
-/// - Otherwise the current route.
-///
 /// # Panic
-/// - When the calling component is not nested within a [`Link`] component during a debug build.
+/// - When the calling component is not nested within a [`Router`] component.
 ///
 /// # Example
 /// ```rust
@@ -49,7 +45,7 @@ pub fn use_route<R: Routable + Clone>() -> R {
     match use_router_internal() {
         Some(r) => r.current(),
         None => {
-            panic!("`use_route` must have access to a parent router")
+            panic!("`use_route` must be called in a descendant of a Router component")
         }
     }
 }

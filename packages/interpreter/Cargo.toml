@@ -17,12 +17,15 @@ web-sys = { version = "0.3.56", optional = true, features = [
     "Element",
     "Node",
 ] }
-sledgehammer_bindgen = { version = "0.3.1", default-features = false, optional = true }
+sledgehammer_bindgen = { git = "https://github.com/ealmloff/sledgehammer_bindgen", default-features = false, optional = true }
 sledgehammer_utils = { version = "0.2", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 
 dioxus-core = { workspace = true, optional = true }
 dioxus-html = { workspace = true, optional = true }
+
+[build-dependencies]
+md5 = "0.7.0"
 
 [features]
 default = []

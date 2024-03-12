@@ -18,7 +18,6 @@ use dioxus_html::input_data::keyboard_types::{Code, Key, Location, Modifiers};
 use dioxus_html::input_data::{
     MouseButton as DioxusMouseButton, MouseButtonSet as DioxusMouseButtons,
 };
-use dioxus_html::FormValue;
 use dioxus_html::{event_bubbles, prelude::*};
 use std::any::Any;
 use std::collections::HashMap;
@@ -67,7 +66,7 @@ impl EventData {
 pub struct FormData {
     pub(crate) value: String,
 
-    pub values: HashMap<String, FormValue>,
+    pub values: HashMap<String, String>,
 
     pub(crate) files: Option<Files>,
 }
@@ -77,7 +76,7 @@ impl HasFormData for FormData {
         self.value.clone()
     }
 
-    fn values(&self) -> HashMap<String, FormValue> {
+    fn values(&self) -> HashMap<String, String> {
         self.values.clone()
     }
 

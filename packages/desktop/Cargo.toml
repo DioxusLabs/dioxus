@@ -46,16 +46,14 @@ dunce = "1.0.2"
 slab = { workspace = true }
 rustc-hash = { workspace = true }
 dioxus-hooks = { workspace = true }
-
 futures-util = { workspace = true }
 urlencoding = "2.1.2"
 async-trait = "0.1.68"
-crossbeam-channel = "0.5.8"
 tao = { version = "0.24.0", features = ["rwh_05"] }
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
+global-hotkey = "0.5.0"
 rfd = "0.12"
-global-hotkey = "0.4.1"
 muda = "0.11.3"
 
 [target.'cfg(target_os = "ios")'.dependencies]

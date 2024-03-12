@@ -1,6 +1,7 @@
+use crate::innerlude::ScopeOrder;
 use crate::{
     any_props::{AnyProps, BoxedAnyProps},
-    innerlude::{DirtyScope, ScopeState},
+    innerlude::ScopeState,
     nodes::RenderReturn,
     scope_context::Scope,
     scopes::ScopeId,
@@ -40,7 +41,6 @@ impl VirtualDom {
         let new_nodes = {
             let context = scope.state();
 
-            context.suspended.set(false);
             context.hook_index.set(0);
 
             // Run all pre-render hooks
@@ -66,17 +66,14 @@ impl VirtualDom {
         context.render_count.set(context.render_count.get() + 1);
 
         // remove this scope from dirty scopes
-        self.dirty_scopes.remove(&DirtyScope {
-            height: context.height,
-            id: context.id,
-        });
+        self.dirty_scopes
+            .remove(&ScopeOrder::new(context.height, scope_id));
 
-        if context.suspended.get() {
+        if let Some(task) = context.last_suspendable_task.take() {
             if matches!(new_nodes, RenderReturn::Aborted(_)) {
-                self.suspended_scopes.insert(context.id);
+                tracing::trace!("Suspending {:?} on {:?}", scope_id, task);
+                self.runtime.suspended_tasks.borrow_mut().insert(task);
             }
-        } else if !self.suspended_scopes.is_empty() {
-            _ = self.suspended_scopes.remove(&context.id);
         }
 
         self.runtime.scope_stack.borrow_mut().pop();

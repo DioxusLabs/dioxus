@@ -22,6 +22,7 @@ thiserror = { workspace = true }
 slab = { workspace = true }
 dioxus-debug-cell = "0.1.1"
 futures-util = { workspace = true}
+generational-box.workspace = true
 
 [dev-dependencies]
 futures-util = { workspace = true, default-features = false }

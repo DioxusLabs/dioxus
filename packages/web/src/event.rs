@@ -4,7 +4,6 @@ use dioxus_html::{
     point_interaction::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
-    prelude::FormValue,
     DragData, FileEngine, FormData, HasDragData, HasFileData, HasFormData, HasImageData,
     HasMouseData, HtmlEventConverter, ImageData, MountedData, PlatformEventData, ScrollData,
 };
@@ -385,24 +384,14 @@ impl HasFormData for WebFormData {
         .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener")
     }
 
-    fn values(&self) -> HashMap<String, FormValue> {
+    fn values(&self) -> HashMap<String, String> {
         let mut values = HashMap::new();
 
-        fn insert_value(map: &mut HashMap<String, FormValue>, key: String, new_value: String) {
-            match map.entry(key) {
-                std::collections::hash_map::Entry::Occupied(mut o) => {
-                    let first_value = match o.get_mut() {
-                        FormValue::Text(data) => std::mem::take(data),
-                        FormValue::VecText(vec) => {
-                            vec.push(new_value);
-                            return;
-                        }
-                    };
-                    let _ = o.insert(FormValue::VecText(vec![first_value, new_value]));
-                }
-                std::collections::hash_map::Entry::Vacant(v) => {
-                    let _ = v.insert(FormValue::Text(new_value));
-                }
+        fn insert_value(map: &mut HashMap<String, String>, key: String, new_value: String) {
+            if let Some(value) = map.get(&key) {
+                map.insert(key, format!("{},{}", value, new_value));
+            } else {
+                map.insert(key, new_value);
             }
         }
 
@@ -425,8 +414,8 @@ impl HasFormData for WebFormData {
             }
         } else if let Some(select) = self.element.dyn_ref::<web_sys::HtmlSelectElement>() {
             // try to fill in select element values
-            let options = get_select_data(select);
-            values.insert("options".to_string(), FormValue::VecText(options));
+            let options = get_select_data(select).join(",");
+            values.insert("options".to_string(), options);
         }
 
         values
@@ -441,6 +430,7 @@ impl HasFileData for WebFormData {
     fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
         #[cfg(not(feature = "file_engine"))]
         let files = None;
+
         #[cfg(feature = "file_engine")]
         let files = self
             .element

@@ -1,6 +1,6 @@
-<div align="center">
-  <h1>Dioxus</h1>
-</div>
+<p align="center">
+  <img src="../../notes/header.svg">
+</p>
 
 <div align="center">
   <!-- Crates version -->

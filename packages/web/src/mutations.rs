@@ -5,9 +5,7 @@ use dioxus_core::WriteMutations;
 use dioxus_core::{AttributeValue, ElementId};
 use dioxus_html::event_bubbles;
 use dioxus_html::PlatformEventData;
-use dioxus_interpreter_js::get_node;
 use dioxus_interpreter_js::minimal_bindings;
-use dioxus_interpreter_js::save_template;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
 
@@ -58,19 +56,23 @@ impl WebsysDom {
 
     pub fn flush_edits(&mut self) {
         self.interpreter.flush();
-        #[cfg(feature = "mounted")]
+
         // Now that we've flushed the edits and the dom nodes exist, we can send the mounted events.
-        {
-            for id in self.queued_mounted_events.drain(..) {
-                let node = get_node(id.0 as u32);
-                if let Some(element) = node.dyn_ref::<web_sys::Element>() {
-                    let _ = self.event_channel.unbounded_send(UiEvent {
-                        name: "mounted".to_string(),
-                        bubbles: false,
-                        element: id,
-                        data: PlatformEventData::new(Box::new(element.clone())),
-                    });
-                }
+        #[cfg(feature = "mounted")]
+        self.flush_queued_mounted_events();
+    }
+
+    #[cfg(feature = "mounted")]
+    fn flush_queued_mounted_events(&mut self) {
+        for id in self.queued_mounted_events.drain(..) {
+            let node = self.interpreter.base().get_node(id.0 as u32);
+            if let Some(element) = node.dyn_ref::<web_sys::Element>() {
+                let _ = self.event_channel.unbounded_send(UiEvent {
+                    name: "mounted".to_string(),
+                    bubbles: false,
+                    element: id,
+                    data: PlatformEventData::new(Box::new(element.clone())),
+                });
             }
         }
     }
@@ -84,14 +86,14 @@ impl WebsysDom {
 impl WriteMutations for WebsysDom {
     fn register_template(&mut self, template: Template) {
         let mut roots = vec![];
-
         for root in template.roots {
             roots.push(self.create_template_node(root))
         }
-
         self.templates
             .insert(template.name.to_owned(), self.max_template_id);
-        save_template(roots, self.max_template_id);
+        self.interpreter
+            .base()
+            .save_template(roots, self.max_template_id);
         self.max_template_id += 1
     }
 
@@ -184,30 +186,24 @@ impl WriteMutations for WebsysDom {
     }
 
     fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
-        match name {
-            // mounted events are fired immediately after the element is mounted.
-            "mounted" => {
-                #[cfg(feature = "mounted")]
-                self.send_mount_event(id);
-            }
-            _ => {
-                self.interpreter
-                    .new_event_listener(name, id.0 as u32, event_bubbles(name) as u8);
-            }
+        // mounted events are fired immediately after the element is mounted.
+        if name == "mounted" {
+            #[cfg(feature = "mounted")]
+            self.send_mount_event(id);
+            return;
         }
+
+        self.interpreter
+            .new_event_listener(name, id.0 as u32, event_bubbles(name) as u8);
     }
 
     fn remove_event_listener(&mut self, name: &'static str, id: ElementId) {
-        match name {
-            "mounted" => {}
-            _ => {
-                self.interpreter.remove_event_listener(
-                    name,
-                    id.0 as u32,
-                    event_bubbles(name) as u8,
-                );
-            }
+        if name == "mounted" {
+            return;
         }
+
+        self.interpreter
+            .remove_event_listener(name, id.0 as u32, event_bubbles(name) as u8);
     }
 
     fn remove_node(&mut self, id: ElementId) {

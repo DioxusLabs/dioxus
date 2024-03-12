@@ -98,17 +98,17 @@ slab = "0.4.2"
 futures-channel = "0.3.21"
 futures-util = { version = "0.3", default-features = false }
 rustc-hash = "1.1.0"
-wasm-bindgen = "0.2.88"
+wasm-bindgen = "0.2.92"
 html_parser = "0.7.0"
 thiserror = "1.0.40"
 prettyplease = { package = "prettier-please", version = "0.2", features = [
     "verbatim",
 ] }
-manganis-cli-support = { version = "0.1.0", features = [
+manganis-cli-support = { version = "0.2.0", features = [
     "webp",
     "html",
 ] }
-manganis = { version = "0.1.0" }
+manganis = { version = "0.2.0" }
 
 lru = "0.12.2"
 async-trait = "0.1.77"
@@ -159,6 +159,7 @@ form_urlencoded = "1.2.0"
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 getrandom = { version = "0.2.12", features = ["js"] }
+tokio = { version = "1.16.1", default-features = false, features = ["sync", "macros", "io-util", "rt", "time"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tokio = { version = "1.16.1", features = ["full"] }

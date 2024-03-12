@@ -3,7 +3,6 @@ use dioxus_core::prelude::*;
 use dioxus_core::AttributeValue;
 use dioxus_core::WriteMutations;
 use dioxus_core::{DynamicNode, ElementId, ScopeState, TemplateNode, VNode, VirtualDom};
-use dioxus_interpreter_js::save_template;
 
 #[derive(Debug)]
 pub enum RehydrationError {
@@ -23,7 +22,7 @@ impl WebsysDom {
         // Recursively rehydrate the dom from the VirtualDom
         self.rehydrate_scope(root_scope, dom, &mut ids, &mut to_mount)?;
 
-        dioxus_interpreter_js::hydrate(ids);
+        self.interpreter.base().hydrate(ids);
 
         #[cfg(feature = "mounted")]
         for id in to_mount {
@@ -40,8 +39,7 @@ impl WebsysDom {
         ids: &mut Vec<u32>,
         to_mount: &mut Vec<ElementId>,
     ) -> Result<(), RehydrationError> {
-        let vnode = scope.root_node();
-        self.rehydrate_vnode(dom, vnode, ids, to_mount)
+        self.rehydrate_vnode(dom, scope.root_node(), ids, to_mount)
     }
 
     fn rehydrate_vnode(
@@ -168,7 +166,10 @@ impl WriteMutations for OnlyWriteTemplates<'_> {
         self.0
             .templates
             .insert(template.name.to_owned(), self.0.max_template_id);
-        save_template(roots, self.0.max_template_id);
+        self.0
+            .interpreter
+            .base()
+            .save_template(roots, self.0.max_template_id);
         self.0.max_template_id += 1
     }
 

@@ -171,7 +171,7 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Sync + Send + 'stat
             &config.crate_dir.join(sub_path),
             notify::RecursiveMode::Recursive,
         ) {
-            log::error!("Failed to watch path: {}", err);
+            log::warn!("Failed to watch path: {}", err);
         }
     }
     Ok(watcher)

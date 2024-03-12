@@ -1,34 +1,55 @@
 #![allow(missing_docs)]
 use crate::{use_callback, use_hook_did_run, use_signal, UseCallback};
-use dioxus_core::{
-    prelude::{flush_sync, spawn, use_hook},
-    Task,
-};
+use dioxus_core::{prelude::*, Task};
 use dioxus_signals::*;
 use dioxus_signals::{Readable, Writable};
 use std::future::Future;
+use std::ops::Deref;
 
-/// A hook that allows you to spawn a future
-///
-/// The future is spawned on the next call to `flush_sync` which means that it will not run on the server.
+/// A hook that allows you to spawn a future.
+/// This future will **not** run on the server
+/// The future is spawned on the next call to `wait_for_next_render` which means that it will not run on the server.
 /// To run a future on the server, you should use `spawn` directly.
+/// `use_future` **won't return a value**.
+/// If you want to return a value from a future, use `use_resource` instead.
+/// ```rust
+/// fn app() -> Element {
+///     let mut count = use_signal(|| 0);
+///     let mut running = use_signal(|| true);
+///     // `use_future` will spawn an infinitely running future that can be started and stopped
+///     use_future(move || async move {
+///         loop {
+///            if running() {
+///                count += 1;
+///            }
+///            tokio::time::sleep(Duration::from_millis(400)).await;
+///        }
+///     });
+///     rsx! {
+///         div {
+///             h1 { "Current count: {count}" }
+///             button { onclick: move |_| running.toggle(), "Start/Stop the count"}
+///             button { onclick: move |_| count.set(0), "Reset the count" }
+///         }
+///     }
+/// }
+/// ```
 pub fn use_future<F>(mut future: impl FnMut() -> F + 'static) -> UseFuture
 where
     F: Future + 'static,
 {
     let mut state = use_signal(|| UseFutureState::Pending);
 
-    let mut callback = use_callback(move || {
+    let callback = use_callback(move || {
         let fut = future();
         spawn(async move {
-            flush_sync().await;
             state.set(UseFutureState::Pending);
             fut.await;
             state.set(UseFutureState::Ready);
         })
     });
 
-    // Create the task inside a copyvalue so we can reset it in-place later
+    // Create the task inside a CopyValue so we can reset it in-place later
     let task = use_hook(|| CopyValue::new(callback.call()));
 
     // Early returns in dioxus have consequences for use_memo, use_resource, and use_future, etc
@@ -125,5 +146,39 @@ impl UseFuture {
     /// Get the current state of the future.
     pub fn state(&self) -> ReadOnlySignal<UseFutureState> {
         self.state.into()
+    }
+}
+
+impl From<UseFuture> for ReadOnlySignal<UseFutureState> {
+    fn from(val: UseFuture) -> Self {
+        val.state.into()
+    }
+}
+
+impl Readable for UseFuture {
+    type Target = UseFutureState;
+    type Storage = UnsyncStorage;
+
+    #[track_caller]
+    fn try_read_unchecked(
+        &self,
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+        self.state.try_read_unchecked()
+    }
+
+    #[track_caller]
+    fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
+        self.state.peek_unchecked()
+    }
+}
+
+/// Allow calling a signal with signal() syntax
+///
+/// Currently only limited to copy types, though could probably specialize for string/arc/rc
+impl Deref for UseFuture {
+    type Target = dyn Fn() -> UseFutureState;
+
+    fn deref(&self) -> &Self::Target {
+        Readable::deref_impl(self)
     }
 }

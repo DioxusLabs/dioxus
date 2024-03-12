@@ -2,28 +2,11 @@ use dioxus::prelude::*;
 use dioxus_core::Element;
 use dioxus_desktop::DesktopContext;
 
+#[path = "./utils.rs"]
+mod utils;
+
 fn main() {
-    check_app_exits(check_html_renders);
-}
-
-pub(crate) fn check_app_exits(app: fn() -> Element) {
-    use dioxus_desktop::Config;
-    use tao::window::WindowBuilder;
-    // This is a deadman's switch to ensure that the app exits
-    let should_panic = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
-    let should_panic_clone = should_panic.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(5));
-        if should_panic_clone.load(std::sync::atomic::Ordering::SeqCst) {
-            std::process::exit(exitcode::SOFTWARE);
-        }
-    });
-
-    LaunchBuilder::desktop()
-        .with_cfg(Config::new().with_window(WindowBuilder::new().with_visible(true)))
-        .launch(app);
-
-    should_panic.store(false, std::sync::atomic::Ordering::SeqCst);
+    utils::check_app_exits(check_html_renders);
 }
 
 fn use_inner_html(id: &'static str) -> Option<String> {
@@ -31,7 +14,7 @@ fn use_inner_html(id: &'static str) -> Option<String> {
 
     use_effect(move || {
         spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
 
             let res = eval(&format!(
                 r#"let element = document.getElementById('{}');
@@ -42,14 +25,13 @@ fn use_inner_html(id: &'static str) -> Option<String> {
             .unwrap();
 
             if let Some(html) = res.as_str() {
-                // serde_json::Value::String(html)
                 println!("html: {}", html);
                 value.set(Some(html.to_string()));
             }
         });
     });
 
-    value.read().clone()
+    value()
 }
 
 const EXPECTED_HTML: &str = r#"<div style="width: 100px; height: 100px; color: rgb(0, 0, 0);" id="5"><input type="checkbox"><h1>text</h1><div><p>hello world</p></div></div>"#;

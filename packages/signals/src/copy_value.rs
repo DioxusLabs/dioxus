@@ -5,7 +5,6 @@ use generational_box::UnsyncStorage;
 use std::any::Any;
 use std::any::TypeId;
 use std::cell::RefCell;
-use std::mem::MaybeUninit;
 use std::ops::Deref;
 
 use dioxus_core::prelude::*;
@@ -15,6 +14,7 @@ use generational_box::{GenerationalBox, Owner, Storage};
 
 use crate::ReadableRef;
 use crate::Writable;
+use crate::WritableRef;
 use crate::{ReactiveContext, Readable};
 
 /// Run a closure with the given owner.
@@ -93,7 +93,7 @@ fn current_owner<S: Storage<T>, T>() -> Owner<S> {
 }
 
 fn owner_in_scope<S: Storage<T>, T>(scope: ScopeId) -> Owner<S> {
-    match consume_context_from_scope(scope) {
+    match scope.has_context() {
         Some(rt) => rt,
         None => {
             let owner = S::owner();
@@ -189,11 +189,9 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
         }
     }
 
-    /// Take the value out of the CopyValue, invalidating the value in the process.
-    pub fn take(&self) -> T {
-        self.value
-            .take()
-            .expect("value is already dropped or borrowed")
+    /// Manually drop the value in the CopyValue, invalidating the value in the process.
+    pub fn manually_drop(&self) -> Option<T> {
+        self.value.manually_drop()
     }
 
     /// Get the scope this value was created in.
@@ -211,40 +209,48 @@ impl<T: 'static, S: Storage<T>> Readable for CopyValue<T, S> {
     type Target = T;
     type Storage = S;
 
-    fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
+    fn try_read_unchecked(
+        &self,
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
         self.value.try_read()
     }
 
-    fn peek(&self) -> ReadableRef<Self> {
+    fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
         self.value.read()
     }
 }
 
 impl<T: 'static, S: Storage<T>> Writable for CopyValue<T, S> {
-    type Mut<R: ?Sized + 'static> = S::Mut<R>;
+    type Mut<'a, R: ?Sized + 'static> = S::Mut<'a, R>;
 
     fn map_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> &mut U>(
-        mut_: Self::Mut<I>,
+        mut_: Self::Mut<'_, I>,
         f: F,
-    ) -> Self::Mut<U> {
+    ) -> Self::Mut<'_, U> {
         S::map_mut(mut_, f)
     }
 
     fn try_map_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> Option<&mut U>>(
-        mut_: Self::Mut<I>,
+        mut_: Self::Mut<'_, I>,
         f: F,
-    ) -> Option<Self::Mut<U>> {
+    ) -> Option<Self::Mut<'_, U>> {
         S::try_map_mut(mut_, f)
     }
 
-    fn try_write(&self) -> Result<Self::Mut<T>, generational_box::BorrowMutError> {
+    fn downcast_lifetime_mut<'a: 'b, 'b, R: ?Sized + 'static>(
+        mut_: Self::Mut<'a, R>,
+    ) -> Self::Mut<'b, R> {
+        S::downcast_lifetime_mut(mut_)
+    }
+
+    #[track_caller]
+    fn try_write_unchecked(
+        &self,
+    ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError> {
         self.value.try_write()
     }
 
-    fn write(&mut self) -> Self::Mut<T> {
-        self.value.write()
-    }
-
+    #[track_caller]
     fn set(&mut self, value: T) {
         self.value.set(value);
     }
@@ -261,31 +267,6 @@ impl<T: Copy, S: Storage<T>> Deref for CopyValue<T, S> {
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
-        // https://github.com/dtolnay/case-studies/tree/master/callable-types
-
-        // First we create a closure that captures something with the Same in memory layout as Self (MaybeUninit<Self>).
-        let uninit_callable = MaybeUninit::<Self>::uninit();
-        // Then move that value into the closure. We assume that the closure now has a in memory layout of Self.
-        let uninit_closure = move || *Self::read(unsafe { &*uninit_callable.as_ptr() });
-
-        // Check that the size of the closure is the same as the size of Self in case the compiler changed the layout of the closure.
-        let size_of_closure = std::mem::size_of_val(&uninit_closure);
-        assert_eq!(size_of_closure, std::mem::size_of::<Self>());
-
-        // Then cast the lifetime of the closure to the lifetime of &self.
-        fn cast_lifetime<'a, T>(_a: &T, b: &'a T) -> &'a T {
-            b
-        }
-        let reference_to_closure = cast_lifetime(
-            {
-                // The real closure that we will never use.
-                &uninit_closure
-            },
-            // We transmute self into a reference to the closure. This is safe because we know that the closure has the same memory layout as Self so &Closure == &Self.
-            unsafe { std::mem::transmute(self) },
-        );
-
-        // Cast the closure to a trait object.
-        reference_to_closure as &Self::Target
+        Readable::deref_impl(self)
     }
 }

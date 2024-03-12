@@ -20,13 +20,25 @@ fn sync_runtime() -> &'static Arc<Mutex<Vec<MemoryLocation<SyncStorage>>>> {
 }
 
 impl AnyStorage for SyncStorage {
-    type Ref<R: ?Sized + 'static> = GenerationalRef<MappedRwLockReadGuard<'static, R>>;
-    type Mut<W: ?Sized + 'static> = GenerationalRefMut<MappedRwLockWriteGuard<'static, W>>;
+    type Ref<'a, R: ?Sized + 'static> = GenerationalRef<MappedRwLockReadGuard<'a, R>>;
+    type Mut<'a, W: ?Sized + 'static> = GenerationalRefMut<MappedRwLockWriteGuard<'a, W>>;
 
-    fn try_map<I: ?Sized, U: ?Sized + 'static>(
-        ref_: Self::Ref<I>,
+    fn downcast_lifetime_ref<'a: 'b, 'b, T: ?Sized + 'static>(
+        ref_: Self::Ref<'a, T>,
+    ) -> Self::Ref<'b, T> {
+        ref_
+    }
+
+    fn downcast_lifetime_mut<'a: 'b, 'b, T: ?Sized + 'static>(
+        mut_: Self::Mut<'a, T>,
+    ) -> Self::Mut<'b, T> {
+        mut_
+    }
+
+    fn try_map<I: ?Sized + 'static, U: ?Sized + 'static>(
+        ref_: Self::Ref<'_, I>,
         f: impl FnOnce(&I) -> Option<&U>,
-    ) -> Option<Self::Ref<U>> {
+    ) -> Option<Self::Ref<'_, U>> {
         let GenerationalRef {
             inner,
             #[cfg(any(debug_assertions, feature = "debug_borrows"))]
@@ -46,10 +58,10 @@ impl AnyStorage for SyncStorage {
             })
     }
 
-    fn try_map_mut<I: ?Sized, U: ?Sized + 'static>(
-        mut_ref: Self::Mut<I>,
+    fn try_map_mut<I: ?Sized + 'static, U: ?Sized + 'static>(
+        mut_ref: Self::Mut<'_, I>,
         f: impl FnOnce(&mut I) -> Option<&mut U>,
-    ) -> Option<Self::Mut<U>> {
+    ) -> Option<Self::Mut<'_, U>> {
         let GenerationalRefMut {
             inner,
             #[cfg(any(debug_assertions, feature = "debug_borrows"))]
@@ -101,7 +113,7 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
         &'static self,
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         at: crate::GenerationalRefBorrowInfo,
-    ) -> Result<Self::Ref<T>, error::BorrowError> {
+    ) -> Result<Self::Ref<'static, T>, error::BorrowError> {
         let read = self.0.try_read();
 
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
@@ -132,7 +144,7 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
         &'static self,
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         at: crate::GenerationalRefMutBorrowInfo,
-    ) -> Result<Self::Mut<T>, error::BorrowMutError> {
+    ) -> Result<Self::Mut<'static, T>, error::BorrowMutError> {
         let write = self.0.try_write();
 
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]

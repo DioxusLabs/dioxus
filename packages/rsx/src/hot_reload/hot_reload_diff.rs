@@ -59,9 +59,9 @@ fn find_rsx_item(
             if new_item.variants.len() != old_item.variants.len() {
                 return true;
             }
-            for (new_varient, old_varient) in new_item.variants.iter().zip(old_item.variants.iter())
+            for (new_variant, old_variant) in new_item.variants.iter().zip(old_item.variants.iter())
             {
-                match (&new_varient.discriminant, &old_varient.discriminant) {
+                match (&new_variant.discriminant, &old_variant.discriminant) {
                     (Some((new_eq, new_expr)), Some((old_eq, old_expr))) => {
                         if find_rsx_expr(new_expr, old_expr, rsx_calls) || new_eq != old_eq {
                             return true;
@@ -70,9 +70,9 @@ fn find_rsx_item(
                     (None, None) => (),
                     _ => return true,
                 }
-                if new_varient.attrs != old_varient.attrs
-                    || new_varient.ident != old_varient.ident
-                    || new_varient.fields != old_varient.fields
+                if new_variant.attrs != old_variant.attrs
+                    || new_variant.ident != old_variant.ident
+                    || new_variant.fields != old_variant.fields
                 {
                     return true;
                 }

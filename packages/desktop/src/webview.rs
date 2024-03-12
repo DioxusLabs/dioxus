@@ -1,12 +1,7 @@
 use crate::{
-    app::SharedContext,
-    assets::AssetHandlerRegistry,
-    edits::EditQueue,
-    eval::DesktopEvalProvider,
-    ipc::{EventData, UserWindowEvent},
-    protocol::{self},
-    waker::tao_waker,
-    Config, DesktopContext, DesktopService,
+    app::SharedContext, assets::AssetHandlerRegistry, edits::EditQueue, eval::DesktopEvalProvider,
+    file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, waker::tao_waker, Config,
+    DesktopContext, DesktopService,
 };
 use dioxus_core::{ScopeId, VirtualDom};
 use dioxus_html::prelude::EvalProvider;
@@ -60,18 +55,19 @@ impl WebviewInstance {
 
         let mut web_context = WebContext::new(cfg.data_dir.clone());
         let edit_queue = EditQueue::default();
+        let file_hover = NativeFileHover::default();
         let asset_handlers = AssetHandlerRegistry::new(dom.runtime());
         let headless = !cfg.window.window.visible;
 
         // Rust :(
         let window_id = window.id();
-        let file_handler = cfg.file_drop_handler.take();
         let custom_head = cfg.custom_head.clone();
         let index_file = cfg.custom_index.clone();
         let root_name = cfg.root_name.clone();
         let asset_handlers_ = asset_handlers.clone();
         let edit_queue_ = edit_queue.clone();
         let proxy_ = shared.proxy.clone();
+        let file_hover_ = file_hover.clone();
 
         let request_handler = move |request, responder: RequestAsyncResponder| {
             // Try to serve the index file first
@@ -97,9 +93,16 @@ impl WebviewInstance {
 
         let ipc_handler = move |payload: String| {
             // defer the event to the main thread
-            if let Ok(message) = serde_json::from_str(&payload) {
-                _ = proxy_.send_event(UserWindowEvent(EventData::Ipc(message), window_id));
+            if let Ok(msg) = serde_json::from_str(&payload) {
+                _ = proxy_.send_event(UserWindowEvent::Ipc { id: window_id, msg });
             }
+        };
+
+        let file_drop_handler = move |evt| {
+            // Update the most recent file drop event - when the event comes in from the webview we can use the
+            // most recent event to build a new event with the files in it.
+            file_hover_.set(evt);
+            false
         };
 
         #[cfg(any(
@@ -128,12 +131,10 @@ impl WebviewInstance {
             .with_url("dioxus://index.html/")
             .unwrap()
             .with_ipc_handler(ipc_handler)
+            .with_navigation_handler(|var| var.contains("dioxus")) // prevent all navigations
             .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler)
-            .with_web_context(&mut web_context);
-
-        if let Some(handler) = file_handler {
-            webview = webview.with_file_drop_handler(move |evt| handler(window_id, evt))
-        }
+            .with_web_context(&mut web_context)
+            .with_file_drop_handler(file_drop_handler);
 
         if let Some(color) = cfg.background_color {
             webview = webview.with_background_color(color);
@@ -145,15 +146,15 @@ impl WebviewInstance {
 
         const INITIALIZATION_SCRIPT: &str = r#"
         if (document.addEventListener) {
-        document.addEventListener('contextmenu', function(e) {
-            e.preventDefault();
-        }, false);
+            document.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+            }, false);
         } else {
-        document.attachEvent('oncontextmenu', function() {
-            window.event.returnValue = false;
-        });
+            document.attachEvent('oncontextmenu', function() {
+                window.event.returnValue = false;
+            });
         }
-    "#;
+        "#;
 
         if cfg.disable_context_menu {
             // in release mode, we don't want to show the dev tool or reload menus
@@ -178,6 +179,7 @@ impl WebviewInstance {
             shared.clone(),
             edit_queue,
             asset_handlers,
+            file_hover,
         ));
 
         let provider: Rc<dyn EvalProvider> =

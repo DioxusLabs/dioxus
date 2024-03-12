@@ -1,11 +1,10 @@
 use crate::{
     read::Readable, write::Writable, CopyValue, GlobalMemo, GlobalSignal, ReactiveContext,
-    ReadOnlySignal, ReadableRef,
+    ReadableRef,
 };
-use dioxus_core::{
-    prelude::{flush_sync, spawn, IntoAttributeValue},
-    ScopeId,
-};
+use crate::{Memo, WritableRef};
+use dioxus_core::IntoDynNode;
+use dioxus_core::{prelude::IntoAttributeValue, ScopeId};
 use generational_box::{AnyStorage, Storage, SyncStorage, UnsyncStorage};
 use std::{
     any::Any,
@@ -30,17 +29,15 @@ use std::{
 /// }
 ///
 /// #[component]
-/// fn Child(state: Signal<u32>) -> Element {
-///     let state = *state;
-///
-///     use_future( |()| async move {
+/// fn Child(mut state: Signal<u32>) -> Element {
+///     use_future(move || async move {
 ///         // Because the signal is a Copy type, we can use it in an async block without cloning it.
-///         *state.write() += 1;
+///         state += 1;
 ///     });
 ///
 ///     rsx! {
 ///         button {
-///             onclick: move |_| *state.write() += 1,
+///             onclick: move |_| state += 1,
 ///             "{state}"
 ///         }
 ///     }
@@ -90,36 +87,8 @@ impl<T: PartialEq + 'static> Signal<T> {
     ///
     /// Selectors can be used to efficiently compute derived data from signals.
     #[track_caller]
-    pub fn memo(f: impl FnMut() -> T + 'static) -> ReadOnlySignal<T> {
-        Self::use_maybe_sync_memo(f)
-    }
-
-    /// Creates a new Selector that may be Sync + Send. The selector will be run immediately and whenever any signal it reads changes.
-    ///
-    /// Selectors can be used to efficiently compute derived data from signals.
-    #[track_caller]
-    pub fn use_maybe_sync_memo<S: Storage<SignalData<T>>>(
-        mut f: impl FnMut() -> T + 'static,
-    ) -> ReadOnlySignal<T, S> {
-        // Get the current reactive context
-        let rc = ReactiveContext::new();
-
-        // Create a new signal in that context, wiring up its dependencies and subscribers
-        let mut state: Signal<T, S> = rc.run_in(|| Signal::new_maybe_sync(f()));
-
-        spawn(async move {
-            loop {
-                flush_sync().await;
-                rc.changed().await;
-                let new = f();
-                if new != *state.peek() {
-                    *state.write() = new;
-                }
-            }
-        });
-
-        // And just return the readonly variant of that signal
-        ReadOnlySignal::new_maybe_sync(state)
+    pub fn memo(f: impl FnMut() -> T + 'static) -> Memo<T> {
+        Memo::new(f)
     }
 }
 
@@ -168,9 +137,9 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
         }
     }
 
-    /// Take the value out of the signal, invalidating the signal in the process.
-    pub fn take(&self) -> T {
-        self.inner.take().value
+    /// Drop the value out of the signal, invalidating the signal in the process.
+    pub fn manually_drop(&self) -> Option<T> {
+        self.inner.manually_drop().map(|i| i.value)
     }
 
     /// Get the scope the signal was created in.
@@ -182,8 +151,10 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
         {
             let inner = self.inner.read();
 
-            let mut subscribers = inner.subscribers.lock().unwrap();
-            subscribers.retain(|reactive_context| reactive_context.mark_dirty())
+            // We cannot hold the subscribers lock while calling mark_dirty, because mark_dirty can run user code which may cause a new subscriber to be added. If we hold the lock, we will deadlock.
+            let mut subscribers = std::mem::take(&mut *inner.subscribers.lock().unwrap());
+            subscribers.retain(|reactive_context| reactive_context.mark_dirty());
+            *inner.subscribers.lock().unwrap() = subscribers;
         }
     }
 
@@ -198,10 +169,13 @@ impl<T, S: Storage<SignalData<T>>> Readable for Signal<T, S> {
     type Storage = S;
 
     #[track_caller]
-    fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
-        let inner = self.inner.try_read()?;
+    fn try_read_unchecked(
+        &self,
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+        let inner = self.inner.try_read_unchecked()?;
 
         if let Some(reactive_context) = ReactiveContext::current() {
+            tracing::trace!("Subscribing to the reactive context {}", reactive_context);
             inner.subscribers.lock().unwrap().insert(reactive_context);
         }
 
@@ -211,19 +185,20 @@ impl<T, S: Storage<SignalData<T>>> Readable for Signal<T, S> {
     /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
     ///
     /// If the signal has been dropped, this will panic.
-    fn peek(&self) -> ReadableRef<Self> {
-        let inner = self.inner.read();
+    #[track_caller]
+    fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
+        let inner = self.inner.try_read_unchecked().unwrap();
         S::map(inner, |v| &v.value)
     }
 }
 
 impl<T: 'static, S: Storage<SignalData<T>>> Writable for Signal<T, S> {
-    type Mut<R: ?Sized + 'static> = Write<R, S>;
+    type Mut<'a, R: ?Sized + 'static> = Write<'a, R, S>;
 
     fn map_mut<I: ?Sized, U: ?Sized + 'static, F: FnOnce(&mut I) -> &mut U>(
-        ref_: Self::Mut<I>,
+        ref_: Self::Mut<'_, I>,
         f: F,
-    ) -> Self::Mut<U> {
+    ) -> Self::Mut<'_, U> {
         Write::map(ref_, f)
     }
 
@@ -232,19 +207,31 @@ impl<T: 'static, S: Storage<SignalData<T>>> Writable for Signal<T, S> {
         U: ?Sized + 'static,
         F: FnOnce(&mut I) -> Option<&mut U>,
     >(
-        ref_: Self::Mut<I>,
+        ref_: Self::Mut<'_, I>,
         f: F,
-    ) -> Option<Self::Mut<U>> {
+    ) -> Option<Self::Mut<'_, U>> {
         Write::filter_map(ref_, f)
     }
 
+    fn downcast_lifetime_mut<'a: 'b, 'b, R: ?Sized + 'static>(
+        mut_: Self::Mut<'a, R>,
+    ) -> Self::Mut<'b, R> {
+        Write::downcast_lifetime(mut_)
+    }
+
     #[track_caller]
-    fn try_write(&self) -> Result<Self::Mut<T>, generational_box::BorrowMutError> {
-        self.inner.try_write().map(|inner| {
+    fn try_write_unchecked(
+        &self,
+    ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError> {
+        self.inner.try_write_unchecked().map(|inner| {
             let borrow = S::map_mut(inner, |v| &mut v.value);
             Write {
                 write: borrow,
-                drop_signal: Box::new(SignalSubscriberDrop { signal: *self }),
+                drop_signal: Box::new(SignalSubscriberDrop {
+                    signal: *self,
+                    #[cfg(debug_assertions)]
+                    origin: std::panic::Location::caller(),
+                }),
             }
         })
     }
@@ -256,6 +243,15 @@ where
 {
     fn into_value(self) -> dioxus_core::AttributeValue {
         self.with(|f| f.clone().into_value())
+    }
+}
+
+impl<T> IntoDynNode for Signal<T>
+where
+    T: Clone + IntoDynNode,
+{
+    fn into_dyn_node(self) -> dioxus_core::DynamicNode {
+        self().into_dyn_node()
     }
 }
 
@@ -298,14 +294,14 @@ impl<'de, T: serde::Deserialize<'de> + 'static, Store: Storage<SignalData<T>>>
 ///
 /// T is the current type of the write
 /// S is the storage type of the signal
-pub struct Write<T: ?Sized + 'static, S: AnyStorage = UnsyncStorage> {
-    write: S::Mut<T>,
+pub struct Write<'a, T: ?Sized + 'static, S: AnyStorage = UnsyncStorage> {
+    write: S::Mut<'a, T>,
     drop_signal: Box<dyn Any>,
 }
 
-impl<T: ?Sized + 'static, S: AnyStorage> Write<T, S> {
+impl<'a, T: ?Sized + 'static, S: AnyStorage> Write<'a, T, S> {
     /// Map the mutable reference to the signal's value to a new type.
-    pub fn map<O: ?Sized>(myself: Self, f: impl FnOnce(&mut T) -> &mut O) -> Write<O, S> {
+    pub fn map<O: ?Sized>(myself: Self, f: impl FnOnce(&mut T) -> &mut O) -> Write<'a, O, S> {
         let Self {
             write, drop_signal, ..
         } = myself;
@@ -319,16 +315,29 @@ impl<T: ?Sized + 'static, S: AnyStorage> Write<T, S> {
     pub fn filter_map<O: ?Sized>(
         myself: Self,
         f: impl FnOnce(&mut T) -> Option<&mut O>,
-    ) -> Option<Write<O, S>> {
+    ) -> Option<Write<'a, O, S>> {
         let Self {
             write, drop_signal, ..
         } = myself;
         let write = S::try_map_mut(write, f);
         write.map(|write| Write { write, drop_signal })
     }
+
+    /// Downcast the lifetime of the mutable reference to the signal's value.
+    ///
+    /// This function enforces the variance of the lifetime parameter `'a` in Mut.  Rust will typically infer this cast with a concrete type, but it cannot with a generic type.
+    pub fn downcast_lifetime<'b>(mut_: Self) -> Write<'b, T, S>
+    where
+        'a: 'b,
+    {
+        Write {
+            write: S::downcast_lifetime_mut(mut_.write),
+            drop_signal: mut_.drop_signal,
+        }
+    }
 }
 
-impl<T: ?Sized + 'static, S: AnyStorage> Deref for Write<T, S> {
+impl<T: ?Sized + 'static, S: AnyStorage> Deref for Write<'_, T, S> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -336,7 +345,7 @@ impl<T: ?Sized + 'static, S: AnyStorage> Deref for Write<T, S> {
     }
 }
 
-impl<T: ?Sized, S: AnyStorage> DerefMut for Write<T, S> {
+impl<T: ?Sized, S: AnyStorage> DerefMut for Write<'_, T, S> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.write
     }
@@ -344,10 +353,17 @@ impl<T: ?Sized, S: AnyStorage> DerefMut for Write<T, S> {
 
 struct SignalSubscriberDrop<T: 'static, S: Storage<SignalData<T>>> {
     signal: Signal<T, S>,
+    #[cfg(debug_assertions)]
+    origin: &'static std::panic::Location<'static>,
 }
 
 impl<T: 'static, S: Storage<SignalData<T>>> Drop for SignalSubscriberDrop<T, S> {
     fn drop(&mut self) {
+        #[cfg(debug_assertions)]
+        tracing::trace!(
+            "Write on signal at {:?} finished, updating subscribers",
+            self.origin
+        );
         self.signal.update_subscribers();
     }
 }

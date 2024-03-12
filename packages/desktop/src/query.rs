@@ -1,13 +1,17 @@
-use std::{cell::RefCell, rc::Rc};
-
 use crate::DesktopContext;
 use futures_util::{FutureExt, StreamExt};
 use generational_box::Owner;
 use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::Value;
 use slab::Slab;
+use std::{cell::RefCell, rc::Rc};
 use thiserror::Error;
 
+/*
+todo:
+- write this in the interpreter itself rather than in blobs of inline javascript...
+- it could also be simpler, probably?
+*/
 const DIOXUS_CODE: &str = r#"
 let dioxus = {
     recv: function () {
@@ -43,7 +47,6 @@ let dioxus = {
 }"#;
 
 /// Tracks what query ids are currently active
-
 pub(crate) struct SharedSlab<T = ()> {
     pub slab: Rc<RefCell<Slab<T>>>,
 }

@@ -24,3 +24,13 @@ macro_rules! invalid_component_path {
         return Err(Error::new($span, "Invalid component path syntax"));
     };
 }
+
+macro_rules! invalid_key {
+    ($_key:ident) => {
+        let val = $_key.to_static().unwrap();
+        return Err(syn::Error::new(
+            $_key.span(),
+            format!("Element keys must be a dynamic value. Considering using `key: {{{val}}}` instead.\nStatic keys will result in every element using the same key which will cause rendering issues or panics."),
+        ));
+    };
+}

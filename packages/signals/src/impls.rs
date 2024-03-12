@@ -1,4 +1,5 @@
 use crate::copy_value::CopyValue;
+use crate::memo::Memo;
 use crate::read::Readable;
 use crate::signal::Signal;
 use crate::write::Writable;
@@ -158,6 +159,16 @@ impl<T: 'static, S: Storage<SignalData<T>>> Clone for ReadOnlySignal<T, S> {
 }
 
 impl<T: 'static, S: Storage<SignalData<T>>> Copy for ReadOnlySignal<T, S> {}
+
+read_impls!(Memo: PartialEq);
+
+impl<T: 'static> Clone for Memo<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T: 'static> Copy for Memo<T> {}
 
 read_impls!(GlobalSignal);
 default_impl!(GlobalSignal);

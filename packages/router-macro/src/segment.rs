@@ -48,7 +48,7 @@ impl RouteSegment {
         &self,
         idx: usize,
         error_enum_name: &Ident,
-        error_enum_varient: &Ident,
+        error_enum_variant: &Ident,
         inner_parse_enum: &Ident,
         parse_children: TokenStream2,
     ) -> TokenStream2 {
@@ -63,7 +63,7 @@ impl RouteSegment {
                         let parsed = if let Some(#segment) = segment {
                             Ok(())
                         } else {
-                            Err(#error_enum_name::#error_enum_varient(#inner_parse_enum::#error_name(segment.map(|s|s.to_string()).unwrap_or_default())))
+                            Err(#error_enum_name::#error_enum_variant(#inner_parse_enum::#error_name(segment.map(|s|s.to_string()).unwrap_or_default())))
                         };
                         match parsed {
                             Ok(_) => {
@@ -83,9 +83,9 @@ impl RouteSegment {
                         let mut segments = segments.clone();
                         let segment = segments.next();
                         let parsed = if let Some(segment) = segment.as_deref() {
-                            <#ty as dioxus_router::routable::FromRouteSegment>::from_route_segment(segment).map_err(|err| #error_enum_name::#error_enum_varient(#inner_parse_enum::#error_name(err)))
+                            <#ty as dioxus_router::routable::FromRouteSegment>::from_route_segment(segment).map_err(|err| #error_enum_name::#error_enum_variant(#inner_parse_enum::#error_name(err)))
                         } else {
-                            Err(#error_enum_name::#error_enum_varient(#inner_parse_enum::#missing_error_name))
+                            Err(#error_enum_name::#error_enum_variant(#inner_parse_enum::#missing_error_name))
                         };
                         match parsed {
                             Ok(#name) => {
@@ -107,7 +107,7 @@ impl RouteSegment {
                             for segment in &remaining_segments {
                                 new_segments.push(&*segment);
                             }
-                            <#ty as dioxus_router::routable::FromRouteSegments>::from_route_segments(&new_segments).map_err(|err| #error_enum_name::#error_enum_varient(#inner_parse_enum::#error_name(err)))
+                            <#ty as dioxus_router::routable::FromRouteSegments>::from_route_segments(&new_segments).map_err(|err| #error_enum_name::#error_enum_variant(#inner_parse_enum::#error_name(err)))
                         };
                         match parsed {
                             Ok(#name) => {

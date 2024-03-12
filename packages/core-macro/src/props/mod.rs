@@ -1276,7 +1276,8 @@ Finally, call `.build()` to create the instance of `{name}`.
             });
             let (impl_generics, _, _) = generics.split_for_impl();
 
-            let (_, ty_generics, where_clause) = self.generics.split_for_impl();
+            let (original_impl_generics, ty_generics, where_clause) =
+                self.generics.split_for_impl();
 
             let modified_ty_generics = modify_types_generics_hack(&ty_generics, |args| {
                 args.insert(
@@ -1335,24 +1336,25 @@ Finally, call `.build()` to create the instance of `{name}`.
             if self.has_signal_fields() {
                 let name = Ident::new(&format!("{}WithOwner", name), name.span());
                 let original_name = &self.name;
+                let vis = &self.vis;
                 quote! {
                     #[doc(hidden)]
                     #[allow(dead_code, non_camel_case_types, missing_docs)]
                     #[derive(Clone)]
-                    struct #name #ty_generics {
+                    #vis struct #name #ty_generics {
                         inner: #original_name #ty_generics,
                         owner: Owner,
                     }
 
-                    impl #impl_generics PartialEq for #name #ty_generics #where_clause {
+                    impl #original_impl_generics PartialEq for #name #ty_generics #where_clause {
                         fn eq(&self, other: &Self) -> bool {
                             self.inner.eq(&other.inner)
                         }
                     }
 
-                    impl #impl_generics #name #ty_generics #where_clause {
+                    impl #original_impl_generics #name #ty_generics #where_clause {
                         /// Create a component from the props.
-                        fn into_vcomponent<M: 'static>(
+                        pub fn into_vcomponent<M: 'static>(
                             self,
                             render_fn: impl dioxus_core::prelude::ComponentFunction<#original_name #ty_generics, M>,
                             component_name: &'static str,
@@ -1362,7 +1364,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                         }
                     }
 
-                    impl #impl_generics dioxus_core::prelude::Properties for #name #ty_generics #where_clause {
+                    impl #original_impl_generics dioxus_core::prelude::Properties for #name #ty_generics #where_clause {
                         type Builder = ();
                         fn builder() -> Self::Builder {
                             unreachable!()

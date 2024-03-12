@@ -50,9 +50,9 @@ pub fn provide_root_context<T: 'static + Clone>(value: T) -> T {
         .expect("to be in a dioxus runtime")
 }
 
-/// Suspends the current component
-pub fn suspend() -> Option<Element> {
-    Runtime::with_current_scope(|cx| cx.suspend());
+/// Suspended the current component on a specific task and then return None
+pub fn suspend(task: Task) -> Element {
+    Runtime::with_current_scope(|cx| cx.suspend(task));
     None
 }
 
@@ -250,19 +250,18 @@ pub fn after_render(f: impl FnMut() + 'static) {
     Runtime::with_current_scope(|cx| cx.push_after_render(f));
 }
 
-/// Wait for the virtualdom to finish its sync work before proceeding
+/// Wait for the next render to complete
 ///
 /// This is useful if you've just triggered an update and want to wait for it to finish before proceeding with valid
 /// DOM nodes.
 ///
-/// Effects rely on this to ensure that they only run effects after the DOM has been updated. Without flush_sync effects
+/// Effects rely on this to ensure that they only run effects after the DOM has been updated. Without wait_for_next_render effects
 /// are run immediately before diffing the DOM, which causes all sorts of out-of-sync weirdness.
-pub async fn flush_sync() {
+pub async fn wait_for_next_render() {
     // Wait for the flush lock to be available
     // We release it immediately, so it's impossible for the lock to be held longer than this function
-    Runtime::with(|rt| rt.flush_mutex.clone())
+    Runtime::with(|rt| rt.render_signal.subscribe())
         .unwrap()
-        .lock()
         .await;
 }
 

@@ -19,6 +19,9 @@ pub use map::*;
 // mod comparer;
 // pub use comparer::*;
 
+mod memo;
+pub use memo::*;
+
 mod global;
 pub use global::*;
 

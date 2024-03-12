@@ -4,6 +4,7 @@ use manganis_cli_support::AssetManifest;
 
 use super::*;
 use crate::plugin::interface::plugins::main::types::CommandEvent::Serve as ServeEvent;
+use cargo_toml::Dependency::{Detailed, Inherited, Simple};
 use std::{fs::create_dir_all, io::Write, path::PathBuf};
 
 /// Run the WASM project on dev-server
@@ -20,7 +21,8 @@ impl Serve {
         let serve_cfg = self.serve.clone();
 
         // change the relase state.
-        crate_config.with_hot_reload(self.serve.hot_reload);
+        let hot_reload = self.serve.hot_reload || crate_config.dioxus_config.application.hot_reload;
+        crate_config.with_hot_reload(hot_reload);
         crate_config.with_cross_origin_policy(self.serve.cross_origin_policy);
         crate_config.with_release(self.serve.release);
         crate_config.with_verbose(self.serve.verbose);
@@ -43,10 +45,23 @@ impl Serve {
 
         crate_config.set_cargo_args(self.serve.cargo_args);
 
-        let platform = self
-            .serve
-            .platform
-            .unwrap_or(crate_config.dioxus_config.application.default_platform);
+        let mut platform = self.serve.platform;
+
+        if platform.is_none() {
+            if let Some(dependency) = &crate_config.manifest.dependencies.get("dioxus") {
+                let features = match dependency {
+                    Inherited(detail) => detail.features.to_vec(),
+                    Detailed(detail) => detail.features.to_vec(),
+                    Simple(_) => vec![],
+                };
+
+                platform = features
+                    .iter()
+                    .find_map(|platform| serde_json::from_str(&format!(r#""{}""#, platform)).ok());
+            }
+        }
+
+        let platform = platform.unwrap_or(crate_config.dioxus_config.application.default_platform);
 
         plugins_before_command(ServeEvent).await;
 
