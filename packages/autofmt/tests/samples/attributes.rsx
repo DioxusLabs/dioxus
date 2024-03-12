@@ -1,6 +1,6 @@
 rsx! {
     div {
-        key: "ddd",
+        key: "{ddd}",
         class: "asd",
         class: "asd",
         class: "asd",
@@ -8,18 +8,6 @@ rsx! {
         class: "asd",
         class: "asd",
         blah: 123,
-        onclick: move |_| {
-            let blah = 120;
-            true
-        },
-        onclick: move |_| {
-            let blah = 120;
-            true
-        },
-        onclick: move |_| {
-            let blah = 120;
-            true
-        },
         onclick: move |_| {
             let blah = 120;
             true

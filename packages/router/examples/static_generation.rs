@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use dioxus::prelude::*;
-use dioxus_router::prelude::*;
 
 use dioxus_ssr::incremental::{DefaultRenderer, IncrementalRendererConfig};
 
@@ -29,7 +28,7 @@ async fn main() {
     );
 
     // This function is available if you enable the ssr feature
-    // on the dioxus_router crate.
+    // on the dioxus::router crate.
     pre_cache_static_routes::<Route, _>(
         &mut renderer,
         &DefaultRenderer {
@@ -53,8 +52,8 @@ async fn main() {
 }
 
 #[component]
-fn Blog(cx: Scope) -> Element {
-    render! {
+fn Blog() -> Element {
+    rsx! {
         div {
             "Blog"
         }
@@ -62,8 +61,8 @@ fn Blog(cx: Scope) -> Element {
 }
 
 #[component]
-fn Post(cx: Scope, id: usize) -> Element {
-    render! {
+fn Post(id: usize) -> Element {
+    rsx! {
         div {
             "PostId: {id}"
         }
@@ -71,8 +70,8 @@ fn Post(cx: Scope, id: usize) -> Element {
 }
 
 #[component]
-fn PostHome(cx: Scope) -> Element {
-    render! {
+fn PostHome() -> Element {
+    rsx! {
         div {
             "Post"
         }
@@ -80,8 +79,8 @@ fn PostHome(cx: Scope) -> Element {
 }
 
 #[component]
-fn Home(cx: Scope) -> Element {
-    render! {
+fn Home() -> Element {
+    rsx! {
         div {
             "Home"
         }

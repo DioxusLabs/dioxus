@@ -1,0 +1,27 @@
+[package]
+name = "dioxus-lib"
+version = { workspace = true }
+authors = ["Jonathan Kelley", "Dioxus Labs", "ealmloff"]
+edition = "2021"
+description = "Portable, performant, and ergonomic framework for building cross-platform user interfaces in Rust"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com/learn/0.4/"
+keywords = ["dom", "ui", "gui", "react", "wasm"]
+rust-version = "1.65.0"
+
+[dependencies]
+dioxus-core = { workspace = true }
+dioxus-html = { workspace = true, optional = true }
+dioxus-core-macro = { workspace = true, optional = true }
+dioxus-config-macro = { workspace = true, optional = true }
+dioxus-hooks = { workspace = true, optional = true }
+dioxus-rsx = { workspace = true, optional = true }
+dioxus-signals = { workspace = true, optional = true }
+
+[features]
+default = ["macro", "html", "signals", "hooks"]
+signals = ["dioxus-signals"]
+macro = ["dioxus-core-macro", "dioxus-rsx"]
+html = ["dioxus-html"]
+hooks = ["dioxus-hooks"]

@@ -19,62 +19,60 @@
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use dioxus::prelude::*;
+use dioxus_core::NoOpMutations;
 use rand::prelude::*;
 
 criterion_group!(mbenches, create_rows);
 criterion_main!(mbenches);
 
 fn create_rows(c: &mut Criterion) {
-    fn app(cx: Scope) -> Element {
-        let mut rng = SmallRng::from_entropy();
-
-        render!(
-            table {
-                tbody {
-                    (0..10_000_usize).map(|f| {
-                        let label = Label::new(&mut rng);
-                        rsx!( Row { row_id: f, label: label } )
-                    })
-                }
-            }
-        )
-    }
-
     c.bench_function("create rows", |b| {
         let mut dom = VirtualDom::new(app);
-        let _ = dom.rebuild();
+        dom.rebuild(&mut dioxus_core::NoOpMutations);
 
         b.iter(|| {
-            let g = dom.rebuild();
-            assert!(g.edits.len() > 1);
+            dom.rebuild(&mut NoOpMutations);
         })
     });
 }
 
-#[derive(PartialEq, Props)]
+fn app() -> Element {
+    let mut rng = SmallRng::from_entropy();
+
+    rsx! (
+        table {
+            tbody {
+                for f in 0..10_000_usize {
+                    table_row { row_id: f, label: Label::new(&mut rng) }
+                }
+            }
+        }
+    )
+}
+
+#[derive(PartialEq, Props, Clone, Copy)]
 struct RowProps {
     row_id: usize,
     label: Label,
 }
-fn Row(cx: Scope<RowProps>) -> Element {
-    let [adj, col, noun] = cx.props.label.0;
-    cx.render(rsx! {
+fn table_row(props: RowProps) -> Element {
+    let [adj, col, noun] = props.label.0;
+
+    rsx! {
         tr {
-            td { class:"col-md-1", "{cx.props.row_id}" }
-            td { class:"col-md-1", onclick: move |_| { /* run onselect */ },
-                a { class: "lbl", "{adj}" "{col}" "{noun}" }
+            td { class: "col-md-1", "{props.row_id}" }
+            td { class: "col-md-1", onclick: move |_| {},
+                a { class: "lbl", "{adj}", "{col}", "{noun}" }
             }
             td { class: "col-md-1",
-                a { class: "remove", onclick: move |_| {/* remove */},
-                    span { class: "glyphicon glyphicon-remove remove", aria_hidden: "true" }
-                }
+                a { class: "remove", onclick: move |_| {}, span { class: "glyphicon glyphicon-remove remove", aria_hidden: "true" } }
             }
             td { class: "col-md-6" }
         }
-    })
+    }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Copy)]
 struct Label([&'static str; 3]);
 
 impl Label {

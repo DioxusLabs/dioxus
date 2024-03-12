@@ -49,6 +49,7 @@ impl Writer<'_> {
             attributes,
             children,
             brace,
+            ..
         } = el;
 
         /*
@@ -66,7 +67,7 @@ impl Writer<'_> {
 
         // check if we have a lot of attributes
         let attr_len = self.is_short_attrs(attributes);
-        let is_short_attr_list = (attr_len + self.out.indent * 4) < 80;
+        let is_short_attr_list = (attr_len + self.out.indent_level * 4) < 80;
         let children_len = self.is_short_children(children);
         let is_small_children = children_len.is_some();
 
@@ -86,7 +87,7 @@ impl Writer<'_> {
 
         // if we have few children and few attributes, make it a one-liner
         if is_short_attr_list && is_small_children {
-            if children_len.unwrap() + attr_len + self.out.indent * 4 < 100 {
+            if children_len.unwrap() + attr_len + self.out.indent_level * 4 < 100 {
                 opt_level = ShortOptimization::Oneliner;
             } else {
                 opt_level = ShortOptimization::PropsOnTop;
@@ -102,7 +103,7 @@ impl Writer<'_> {
         }
 
         // multiline handlers bump everything down
-        if attr_len > 1000 {
+        if attr_len > 1000 || self.out.indent.split_line_attributes() {
             opt_level = ShortOptimization::NoOpt;
         }
 
@@ -165,7 +166,7 @@ impl Writer<'_> {
 
     fn write_attributes(
         &mut self,
-        attributes: &[ElementAttrNamed],
+        attributes: &[AttributeType],
         key: &Option<IfmtInput>,
         sameline: bool,
     ) -> Result {
@@ -185,11 +186,11 @@ impl Writer<'_> {
         }
 
         while let Some(attr) = attr_iter.next() {
-            self.out.indent += 1;
+            self.out.indent_level += 1;
             if !sameline {
-                self.write_comments(attr.attr.start())?;
+                self.write_comments(attr.start())?;
             }
-            self.out.indent -= 1;
+            self.out.indent_level -= 1;
 
             if !sameline {
                 self.out.indented_tabbed_line()?;
@@ -209,12 +210,37 @@ impl Writer<'_> {
         Ok(())
     }
 
-    fn write_attribute(&mut self, attr: &ElementAttrNamed) -> Result {
-        match &attr.attr {
-            ElementAttr::AttrText { name, value } => {
-                write!(self.out, "{name}: {value}", value = ifmt_to_string(value))?;
+    fn write_attribute_name(&mut self, attr: &ElementAttrName) -> Result {
+        match attr {
+            ElementAttrName::BuiltIn(name) => {
+                write!(self.out, "{}", name)?;
             }
-            ElementAttr::AttrExpression { name, value } => {
+            ElementAttrName::Custom(name) => {
+                write!(self.out, "{}", name.to_token_stream())?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn write_attribute_value(&mut self, value: &ElementAttrValue) -> Result {
+        match value {
+            ElementAttrValue::AttrOptionalExpr { condition, value } => {
+                write!(
+                    self.out,
+                    "if {condition} {{ ",
+                    condition = prettyplease::unparse_expr(condition),
+                )?;
+                self.write_attribute_value(value)?;
+                write!(self.out, " }}")?;
+            }
+            ElementAttrValue::AttrLiteral(value) => {
+                write!(self.out, "{value}", value = ifmt_to_string(value))?;
+            }
+            ElementAttrValue::Shorthand(value) => {
+                write!(self.out, "{value}",)?;
+            }
+            ElementAttrValue::AttrExpr(value) => {
                 let out = prettyplease::unparse_expr(value);
                 let mut lines = out.split('\n').peekable();
                 let first = lines.next().unwrap();
@@ -222,9 +248,9 @@ impl Writer<'_> {
                 // a one-liner for whatever reason
                 // Does not need a new line
                 if lines.peek().is_none() {
-                    write!(self.out, "{name}: {first}")?;
+                    write!(self.out, "{first}")?;
                 } else {
-                    writeln!(self.out, "{name}: {first}")?;
+                    writeln!(self.out, "{first}")?;
 
                     while let Some(line) = lines.next() {
                         self.out.indented_tab()?;
@@ -237,33 +263,17 @@ impl Writer<'_> {
                     }
                 }
             }
-
-            ElementAttr::CustomAttrText { name, value } => {
-                write!(
-                    self.out,
-                    "{name}: {value}",
-                    name = name.to_token_stream(),
-                    value = ifmt_to_string(value)
-                )?;
-            }
-
-            ElementAttr::CustomAttrExpression { name, value } => {
-                let out = prettyplease::unparse_expr(value);
-                write!(self.out, "{}: {}", name.to_token_stream(), out)?;
-            }
-
-            ElementAttr::EventTokens { name, tokens } => {
+            ElementAttrValue::EventTokens(tokens) => {
                 let out = self.retrieve_formatted_expr(tokens).to_string();
-
                 let mut lines = out.split('\n').peekable();
                 let first = lines.next().unwrap();
 
                 // a one-liner for whatever reason
                 // Does not need a new line
                 if lines.peek().is_none() {
-                    write!(self.out, "{name}: {first}")?;
+                    write!(self.out, "{first}")?;
                 } else {
-                    writeln!(self.out, "{name}: {first}")?;
+                    writeln!(self.out, "{first}")?;
 
                     while let Some(line) = lines.next() {
                         self.out.indented_tab()?;
@@ -277,6 +287,28 @@ impl Writer<'_> {
                 }
             }
         }
+
+        Ok(())
+    }
+
+    fn write_attribute(&mut self, attr: &AttributeType) -> Result {
+        match attr {
+            AttributeType::Named(attr) => self.write_named_attribute(attr),
+            AttributeType::Spread(attr) => self.write_spread_attribute(attr),
+        }
+    }
+
+    fn write_named_attribute(&mut self, attr: &ElementAttrNamed) -> Result {
+        self.write_attribute_name(&attr.attr.name)?;
+        write!(self.out, ": ")?;
+        self.write_attribute_value(&attr.attr.value)?;
+
+        Ok(())
+    }
+
+    fn write_spread_attribute(&mut self, attr: &Expr) -> Result {
+        write!(self.out, "..")?;
+        write!(self.out, "{}", prettyplease::unparse_expr(attr))?;
 
         Ok(())
     }
@@ -295,6 +327,10 @@ impl Writer<'_> {
             .unwrap_or_default();
 
         beginning.is_empty()
+    }
+
+    pub fn is_empty_children(&self, children: &[BodyNode]) -> bool {
+        children.is_empty()
     }
 
     // check if the children are short enough to be on the same line
@@ -398,14 +434,14 @@ impl Writer<'_> {
         for idx in start.line..end.line {
             let line = &self.src[idx];
             if line.trim().starts_with("//") {
-                for _ in 0..self.out.indent + 1 {
+                for _ in 0..self.out.indent_level + 1 {
                     write!(self.out, "    ")?
                 }
                 writeln!(self.out, "{}", line.trim()).unwrap();
             }
         }
 
-        for _ in 0..self.out.indent {
+        for _ in 0..self.out.indent_level {
             write!(self.out, "    ")?
         }
 

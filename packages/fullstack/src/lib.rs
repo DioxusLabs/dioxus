@@ -2,72 +2,91 @@
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![deny(missing_docs)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub use once_cell;
 
 mod html_storage;
 
-#[cfg(feature = "router")]
-pub mod router;
+#[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
+#[cfg(feature = "axum")]
+mod axum_adapter;
 
-#[cfg(feature = "ssr")]
-mod adapters;
-#[cfg(feature = "ssr")]
-pub use adapters::*;
+mod config;
 mod hooks;
-#[cfg(all(debug_assertions, feature = "hot-reload", feature = "ssr"))]
-mod hot_reload;
 pub mod launch;
-#[cfg(feature = "ssr")]
-mod layer;
-#[cfg(feature = "ssr")]
+
+#[cfg(all(
+    debug_assertions,
+    feature = "hot-reload",
+    feature = "server",
+    not(target_arch = "wasm32")
+))]
+mod hot_reload;
+pub use config::*;
+
+#[cfg(feature = "server")]
 mod render;
-#[cfg(feature = "ssr")]
+
+#[cfg(feature = "server")]
 mod serve_config;
-#[cfg(feature = "ssr")]
+
+#[cfg(feature = "server")]
 mod server_context;
-mod server_fn;
 
 /// A prelude of commonly used items in dioxus-fullstack.
 pub mod prelude {
-    #[cfg(feature = "axum")]
-    pub use crate::adapters::axum_adapter::*;
-    #[cfg(feature = "salvo")]
-    pub use crate::adapters::salvo_adapter::*;
-    #[cfg(feature = "warp")]
-    pub use crate::adapters::warp_adapter::*;
     use crate::hooks;
-    #[cfg(not(feature = "ssr"))]
+    pub use hooks::{server_cached::server_cached, server_future::use_server_future};
+
+    #[cfg(feature = "axum")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
+    pub use crate::axum_adapter::*;
+
+    #[cfg(not(feature = "server"))]
+    #[cfg_attr(docsrs, doc(cfg(not(feature = "server"))))]
     pub use crate::html_storage::deserialize::get_root_props_from_document;
-    pub use crate::launch::LaunchBuilder;
-    #[cfg(all(feature = "ssr", feature = "router"))]
+
+    #[cfg(all(feature = "server", feature = "router"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "server", feature = "router"))))]
     pub use crate::render::pre_cache_static_routes_with_props;
-    #[cfg(feature = "ssr")]
+
+    #[cfg(feature = "server")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     pub use crate::render::SSRState;
+
     #[cfg(feature = "router")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "router")))]
     pub use crate::router::FullstackRouterConfig;
-    #[cfg(feature = "ssr")]
+
+    #[cfg(feature = "server")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     pub use crate::serve_config::{ServeConfig, ServeConfigBuilder};
-    #[cfg(all(feature = "ssr", feature = "axum"))]
+
+    #[cfg(all(feature = "server", feature = "axum"))]
+    #[cfg_attr(docsrs, doc(cfg(all(feature = "server", feature = "axum"))))]
     pub use crate::server_context::Axum;
-    #[cfg(feature = "ssr")]
+
+    #[cfg(feature = "server")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     pub use crate::server_context::{
         extract, server_context, DioxusServerContext, FromServerContext, ProvideServerContext,
     };
-    pub use crate::server_fn::DioxusServerFn;
-    #[cfg(feature = "ssr")]
-    pub use crate::server_fn::{ServerFnMiddleware, ServerFnTraitObj, ServerFunction};
-    pub use dioxus_server_macro::*;
-    #[cfg(feature = "ssr")]
-    pub use dioxus_ssr::incremental::IncrementalRendererConfig;
-    pub use server_fn::{self, ServerFn as _, ServerFnError};
 
-    pub use hooks::{server_cached::server_cached, server_future::use_server_future};
+    #[cfg(feature = "server")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
+    pub use dioxus_ssr::incremental::IncrementalRendererConfig;
+
+    pub use dioxus_server_macro::*;
+    pub use server_fn::{self, ServerFn as _, ServerFnError};
 }
 
-// Warn users about overlapping features
-#[cfg(all(feature = "ssr", feature = "web"))]
-compile_error!("The `ssr` feature (enabled by `warp`, `axum`, or `salvo`) and `web` feature are overlapping. Please choose one or the other.");
+// // Warn users about overlapping features
+// #[cfg(all(feature = "server", feature = "web", not(doc)))]
+// compile_error!("The `ssr` feature (enabled by `warp`, `axum`, or `salvo`) and `web` feature are overlapping. Please choose one or the other.");
 
-#[cfg(all(feature = "ssr", feature = "desktop"))]
-compile_error!("The `ssr` feature (enabled by `warp`, `axum`, or `salvo`) and `desktop` feature are overlapping. Please choose one or the other.");
+// #[cfg(all(feature = "server", feature = "desktop", not(doc)))]
+// compile_error!("The `ssr` feature (enabled by `warp`, `axum`, or `salvo`) and `desktop` feature are overlapping. Please choose one or the other.");
+
+// #[cfg(all(feature = "server", feature = "mobile", not(doc)))]
+// compile_error!("The `ssr` feature (enabled by `warp`, `axum`, or `salvo`) and `mobile` feature are overlapping. Please choose one or the other.");

@@ -7,11 +7,11 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    cx.render(rsx! {
+fn app() -> Element {
+    rsx! {
         div {
             onclick: move |_| println!("clicked! top"),
             "- div"
@@ -30,5 +30,5 @@ fn app(cx: Scope) -> Element {
                 "Does not handle clicks - only propagate"
             }
         }
-    })
+    }
 }

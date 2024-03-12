@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use dioxus_router::prelude::*;
 use std::str::FromStr;
 
 #[cfg(feature = "liveview")]
@@ -27,48 +26,36 @@ async fn main() {
             "/ws",
             get(move |ws: WebSocketUpgrade| async move {
                 ws.on_upgrade(move |socket| async move {
-                    _ = view
-                        .launch(dioxus_liveview::axum_socket(socket), Root)
-                        .await;
+                    _ = view.launch(dioxus_liveview::axum_socket(socket), app).await;
                 })
             }),
         );
 
     println!("Listening on http://{listen_address}");
 
-    axum::Server::bind(&listen_address.to_string().parse().unwrap())
-        .serve(app.into_make_service())
+    let listener = tokio::net::TcpListener::bind(&listen_address)
+        .await
+        .unwrap();
+
+    axum::serve(listener, app.into_make_service())
         .await
         .unwrap();
 }
 
 #[cfg(not(feature = "liveview"))]
 fn main() {
-    #[cfg(not(target_arch = "wasm32"))]
-    dioxus_desktop::launch(Root);
-
-    #[cfg(target_arch = "wasm32")]
-    dioxus_web::launch(root);
+    launch(app)
 }
 
-#[cfg(feature = "liveview")]
-#[component]
-fn Root(cx: Scope) -> Element {
-    let history = LiveviewHistory::new(cx);
-    render! { Router::<Route> {
-        config: || RouterConfig::default().history(history),
-    } }
-}
-
-#[cfg(not(feature = "liveview"))]
-#[component]
-fn Root(cx: Scope) -> Element {
-    render! { Router::<Route> {} }
+fn app() -> Element {
+    rsx! {
+        Router::<Route> {}
+    }
 }
 
 #[component]
-fn UserFrame(cx: Scope, user_id: usize) -> Element {
-    render! {
+fn UserFrame(user_id: usize) -> Element {
+    rsx! {
         pre { "UserFrame{{\n\tuser_id:{user_id}\n}}" }
         div { background_color: "rgba(0,0,0,50%)",
             "children:"
@@ -78,43 +65,50 @@ fn UserFrame(cx: Scope, user_id: usize) -> Element {
 }
 
 #[component]
-fn Route1(cx: Scope, user_id: usize, dynamic: usize, query: String, extra: String) -> Element {
-    render! {
+fn Route1(user_id: usize, dynamic: usize, query: String, extra: String) -> Element {
+    rsx! {
         pre {
             "Route1{{\n\tuser_id:{user_id},\n\tdynamic:{dynamic},\n\tquery:{query},\n\textra:{extra}\n}}"
         }
         Link {
-            to: Route::Route1 { user_id: *user_id, dynamic: *dynamic, query: String::new(), extra: extra.clone() + "." },
+            to: Route::Route1 {
+                user_id,
+                dynamic,
+                query: String::new(),
+                extra: extra.clone() + ".",
+            },
             "Route1 with extra+\".\""
         }
         p { "Footer" }
         Link {
-            to: Route::Route3 { dynamic: String::new() },
+            to: Route::Route3 {
+                dynamic: String::new(),
+            },
             "Home"
         }
     }
 }
 
 #[component]
-fn Route2(cx: Scope, user_id: usize) -> Element {
-    render! {
-        pre {
-            "Route2{{\n\tuser_id:{user_id}\n}}"
-        }
-        (0..*user_id).map(|i| rsx!{ p { "{i}" } }),
+fn Route2(user_id: usize) -> Element {
+    rsx! {
+        pre { "Route2{{\n\tuser_id:{user_id}\n}}" }
+        {(0..user_id).map(|i| rsx!{ p { "{i}" } })},
         p { "Footer" }
         Link {
-            to: Route::Route3 { dynamic: String::new() },
+            to: Route::Route3 {
+                dynamic: String::new(),
+            },
             "Home"
         }
     }
 }
 
 #[component]
-fn Route3(cx: Scope, dynamic: String) -> Element {
-    let navigator = use_navigator(cx);
-    let current_route = use_route(cx)?;
-    let current_route_str = use_ref(cx, String::new);
+fn Route3(dynamic: String) -> Element {
+    let mut current_route_str = use_signal(String::new);
+
+    let current_route = use_route();
     let parsed = Route::from_str(&current_route_str.read());
 
     let site_map = Route::SITE_MAP
@@ -122,30 +116,35 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
         .flat_map(|seg| seg.flatten().into_iter())
         .collect::<Vec<_>>();
 
-    render! {
+    let navigator = use_navigator();
+
+    rsx! {
         input {
             oninput: move |evt| {
-                *current_route_str.write() = evt.value.clone();
+                *current_route_str.write() = evt.value();
             },
-            value: "{current_route_str.read()}"
+            value: "{current_route_str}"
         }
         "dynamic: {dynamic}"
-        Link {
-            to: Route::Route2 { user_id: 8888 },
-            "hello world link"
-        }
+        Link { to: Route::Route2 { user_id: 8888 }, "hello world link" }
         button {
             disabled: !navigator.can_go_back(),
-            onclick: move |_| { navigator.go_back(); },
+            onclick: move |_| {
+                navigator.go_back();
+            },
             "go back"
         }
         button {
             disabled: !navigator.can_go_forward(),
-            onclick: move |_| { navigator.go_forward(); },
+            onclick: move |_| {
+                navigator.go_forward();
+            },
             "go forward"
         }
         button {
-            onclick: move |_| { navigator.push("https://www.google.com"); },
+            onclick: move |_| {
+                navigator.push("https://www.google.com");
+            },
             "google link"
         }
         p { "Site Map" }
@@ -154,7 +153,7 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
         match parsed {
             Ok(route) => {
                 if route != current_route {
-                    render! {
+                    rsx! {
                         Link {
                             to: route.clone(),
                             "{route}"
@@ -166,7 +165,7 @@ fn Route3(cx: Scope, dynamic: String) -> Element {
                 }
             }
             Err(err) => {
-                render! {
+                rsx! {
                     pre {
                         color: "red",
                         "Invalid route:\n{err}"

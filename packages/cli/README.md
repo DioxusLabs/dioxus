@@ -10,7 +10,7 @@ It handles building, bundling, development and publishing to simplify developmen
 
 ### Install the stable version (recommended)
 
-```
+```shell
 cargo install dioxus-cli
 ```
 
@@ -20,7 +20,7 @@ To get the latest bug fixes and features, you can install the development versio
 However, this is not fully tested.
 That means you're probably going to have more bugs despite having the latest bug fixes.
 
-```
+```shell
 cargo install --git https://github.com/DioxusLabs/dioxus dioxus-cli
 ```
 
@@ -29,19 +29,19 @@ and install it in Cargo's global binary directory (`~/.cargo/bin/` by default).
 
 ### Install from local folder
 
-```
+```shell
 cargo install --path . --debug
 ```
 
 ## Get started
 
-Use `dx create project-name` to initialize a new Dioxus project.
+Use `dx create` to initialize a new Dioxus project.
 It will be cloned from the [dioxus-template](https://github.com/DioxusLabs/dioxus-template) repository.
 
 Alternatively, you can specify the template path:
 
-```
-dx create hello --template gh:dioxuslabs/dioxus-template
+```shell
+dx create --template gh:dioxuslabs/dioxus-template
 ```
 
 Run `dx --help` for a list of all the available commands.

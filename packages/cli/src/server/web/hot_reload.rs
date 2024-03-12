@@ -1,14 +1,12 @@
+use crate::server::HotReloadState;
 use axum::{
     extract::{ws::Message, WebSocketUpgrade},
     response::IntoResponse,
-    Extension, TypedHeader,
+    Extension,
 };
-
-use crate::server::HotReloadState;
 
 pub async fn hot_reload_handler(
     ws: WebSocketUpgrade,
-    _: Option<TypedHeader<headers::UserAgent>>,
     Extension(state): Extension<HotReloadState>,
 ) -> impl IntoResponse {
     ws.on_upgrade(|mut socket| async move {

@@ -15,7 +15,7 @@ use syn::spanned::Spanned;
 use super::hot_reload_diff::{find_rsx, DiffResult};
 
 pub enum UpdateResult {
-    UpdatedRsx(Vec<Template<'static>>),
+    UpdatedRsx(Vec<Template>),
     NeedsRebuild,
 }
 
@@ -28,7 +28,7 @@ pub struct FileMapBuildResult<Ctx: HotReloadingContext> {
 }
 
 pub struct FileMap<Ctx: HotReloadingContext> {
-    pub map: HashMap<PathBuf, (String, Option<Template<'static>>)>,
+    pub map: HashMap<PathBuf, (String, Option<Template>)>,
     in_workspace: HashMap<PathBuf, Option<PathBuf>>,
     phantom: std::marker::PhantomData<Ctx>,
 }
@@ -45,23 +45,30 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
         mut filter: impl FnMut(&Path) -> bool,
     ) -> io::Result<FileMapBuildResult<Ctx>> {
         struct FileMapSearchResult {
-            map: HashMap<PathBuf, (String, Option<Template<'static>>)>,
+            map: HashMap<PathBuf, (String, Option<Template>)>,
             errors: Vec<io::Error>,
         }
         fn find_rs_files(
             root: PathBuf,
             filter: &mut impl FnMut(&Path) -> bool,
-        ) -> io::Result<FileMapSearchResult> {
+        ) -> FileMapSearchResult {
             let mut files = HashMap::new();
             let mut errors = Vec::new();
             if root.is_dir() {
-                for entry in (fs::read_dir(root)?).flatten() {
+                let read_dir = match fs::read_dir(root) {
+                    Ok(read_dir) => read_dir,
+                    Err(err) => {
+                        errors.push(err);
+                        return FileMapSearchResult { map: files, errors };
+                    }
+                };
+                for entry in read_dir.flatten() {
                     let path = entry.path();
                     if !filter(&path) {
                         let FileMapSearchResult {
                             map,
                             errors: child_errors,
-                        } = find_rs_files(path, filter)?;
+                        } = find_rs_files(path, filter);
                         errors.extend(child_errors);
                         files.extend(map);
                     }
@@ -69,14 +76,20 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
             } else if root.extension().and_then(|s| s.to_str()) == Some("rs") {
                 if let Ok(mut file) = File::open(root.clone()) {
                     let mut src = String::new();
-                    file.read_to_string(&mut src)?;
-                    files.insert(root, (src, None));
+                    match file.read_to_string(&mut src) {
+                        Ok(_) => {
+                            files.insert(root, (src, None));
+                        }
+                        Err(err) => {
+                            errors.push(err);
+                        }
+                    }
                 }
             }
-            Ok(FileMapSearchResult { map: files, errors })
+            FileMapSearchResult { map: files, errors }
         }
 
-        let FileMapSearchResult { map, errors } = find_rs_files(path, &mut filter)?;
+        let FileMapSearchResult { map, errors } = find_rs_files(path, &mut filter);
         let result = Self {
             map,
             in_workspace: HashMap::new(),
@@ -102,7 +115,7 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
                             self.map.insert(file_path.to_path_buf(), (src, None));
                         }
                         DiffResult::RsxChanged(changed) => {
-                            let mut messages: Vec<Template<'static>> = Vec::new();
+                            let mut messages: Vec<Template> = Vec::new();
                             for (old, new) in changed.into_iter() {
                                 let old_start = old.span().start();
 

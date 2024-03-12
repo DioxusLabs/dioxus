@@ -1,6 +1,6 @@
-<div align="center">
-  <h1>Dioxus</h1>
-</div>
+<p align="center">
+  <img src="../../notes/header.svg">
+</p>
 
 <div align="center">
   <!-- Crates version -->
@@ -57,10 +57,10 @@
 **Dioxus** é um framework ergonômico para construir interfaces de forma portátil, rápida, escalável e robusta com a linguagem de programação Rust.
 
 ```rust
-fn app(cx: Scope) -> Element {
-    let mut count = use_state(cx, || 0);
+fn app() -> Element {
+    let mut count = use_signal(|| 0);
 
-    cx.render(rsx! {
+    rsx! {
         h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }
@@ -167,7 +167,7 @@ Para mais informações sobre quais funções estão atualmente disponíveis e p
 
 Quer adentrar e ajudar a construir o futuro do frontend em Rust? Há um vasto número de lugares em que você pode contribuir e fazer uma grande diferença:
 
-- [TUI renderer](https://github.com/dioxusLabs/rink)
+- [TUI renderer](https://github.com/dioxusLabs/plasmo)
 - [Ferramentas CLI](https://github.com/dioxusLabs/cli)
 - [Documentação e Exemplos de Projeto](https://github.com/dioxusLabs/docsite)
 - LiveView e Servidor Web

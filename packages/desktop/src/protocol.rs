@@ -1,151 +1,236 @@
-use dioxus_interpreter_js::{COMMON_JS, INTERPRETER_JS};
-use std::{
-    borrow::Cow,
-    path::{Path, PathBuf},
-};
+use crate::{assets::*, edits::EditQueue};
+use dioxus_interpreter_js::unified_bindings::SLEDGEHAMMER_JS;
+use dioxus_interpreter_js::NATIVE_JS;
+use std::path::{Path, PathBuf};
 use wry::{
     http::{status::StatusCode, Request, Response},
-    Result,
+    RequestAsyncResponder, Result,
 };
 
-fn module_loader(root_name: &str) -> String {
-    let js = INTERPRETER_JS.replace(
-        "/*POST_HANDLE_EDITS*/",
-        r#"// Prevent file inputs from opening the file dialog on click
-    let inputs = document.querySelectorAll("input");
-    for (let input of inputs) {
-      if (!input.getAttribute("data-dioxus-file-listener")) {
-        // prevent file inputs from opening the file dialog on click
-        const type = input.getAttribute("type");
-        if (type === "file") {
-          input.setAttribute("data-dioxus-file-listener", true);
-          input.addEventListener("click", (event) => {
-            let target = event.target;
-            let target_id = find_real_id(target);
-            if (target_id !== null) {
-              const send = (event_name) => {
-                const message = serializeIpcMessage("file_diolog", { accept: target.getAttribute("accept"), directory: target.getAttribute("webkitdirectory") === "true", multiple: target.hasAttribute("multiple"), target: parseInt(target_id), bubbles: event_bubbles(event_name), event: event_name });
-                window.ipc.postMessage(message);
-              };
-              send("change&input");
+#[cfg(any(target_os = "android", target_os = "windows"))]
+const EDITS_PATH: &str = "http://dioxus.index.html/edits";
+
+#[cfg(not(any(target_os = "android", target_os = "windows")))]
+const EDITS_PATH: &str = "dioxus://index.html/edits";
+
+static DEFAULT_INDEX: &str = include_str!("./index.html");
+
+/// Build the index.html file we use for bootstrapping a new app
+///
+/// We use wry/webview by building a special index.html that forms a bridge between the webview and your rust code
+///
+/// This is similar to tauri, except we give more power to your rust code and less power to your frontend code.
+/// This lets us skip a build/bundle step - your code just works - but limits how your Rust code can actually
+/// mess with UI elements. We make this decision since other renderers like LiveView are very separate and can
+/// never properly bridge the gap. Eventually of course, the idea is to build a custom CSS/HTML renderer where you
+/// *do* have native control over elements, but that still won't work with liveview.
+pub(super) fn index_request(
+    request: &Request<Vec<u8>>,
+    custom_head: Option<String>,
+    custom_index: Option<String>,
+    root_name: &str,
+    headless: bool,
+) -> Option<Response<Vec<u8>>> {
+    // If the request is for the root, we'll serve the index.html file.
+    if request.uri().path() != "/" {
+        return None;
+    }
+
+    // Load a custom index file if provided
+    let mut index = custom_index.unwrap_or_else(|| DEFAULT_INDEX.to_string());
+
+    // Insert a custom head if provided
+    // We look just for the closing head tag. If a user provided a custom index with weird syntax, this might fail
+    let head = match custom_head {
+        Some(mut head) => {
+            if let Some(assets_head) = assets_head() {
+                head.push_str(&assets_head);
             }
-            event.preventDefault();
-          });
+            Some(head)
         }
-      }
-    }"#,
+        None => assets_head(),
+    };
+
+    if let Some(head) = head {
+        index.insert_str(index.find("</head>").expect("Head element to exist"), &head);
+    }
+
+    // Inject our module loader by looking for a body tag
+    // A failure mode here, obviously, is if the user provided a custom index without a body tag
+    // Might want to document this
+    index.insert_str(
+        index.find("</body>").expect("Body element to exist"),
+        &module_loader(root_name, headless),
     );
+
+    Response::builder()
+        .header("Content-Type", "text/html")
+        .header("Access-Control-Allow-Origin", "*")
+        .body(index.into())
+        .ok()
+}
+
+fn assets_head() -> Option<String> {
+    #[cfg(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    ))]
+    {
+        let head = crate::protocol::get_asset_root_or_default();
+        let head = head.join("__assets_head.html");
+        match std::fs::read_to_string(&head) {
+            Ok(s) => Some(s),
+            Err(err) => {
+                tracing::error!("Failed to read {head:?}: {err}");
+                None
+            }
+        }
+    }
+    #[cfg(not(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    )))]
+    {
+        None
+    }
+}
+
+/// Handle a request from the webview
+///
+/// - Tries to stream edits if they're requested.
+/// - If that doesn't match, tries a user provided asset handler
+/// - If that doesn't match, tries to serve a file from the filesystem
+pub(super) fn desktop_handler(
+    request: Request<Vec<u8>>,
+    asset_handlers: AssetHandlerRegistry,
+    edit_queue: &EditQueue,
+    responder: RequestAsyncResponder,
+) {
+    // If the request is asking for edits (ie binary protocol streaming, do that)
+    if request.uri().path().trim_matches('/') == "edits" {
+        return edit_queue.handle_request(responder);
+    }
+
+    // If the user provided a custom asset handler, then call it and return the response if the request was handled.
+    // The path is the first part of the URI, so we need to trim the leading slash.
+    let path = PathBuf::from(
+        urlencoding::decode(request.uri().path().trim_start_matches('/'))
+            .expect("expected URL to be UTF-8 encoded")
+            .as_ref(),
+    );
+
+    if path.parent().is_none() {
+        return tracing::error!("Asset request has no parent {path:?}");
+    }
+
+    if let Some(name) = path.iter().next().unwrap().to_str() {
+        if asset_handlers.has_handler(name) {
+            return asset_handlers.handle_request(name, request, responder);
+        }
+    }
+
+    // Else, try to serve a file from the filesystem.
+    match serve_from_fs(path) {
+        Ok(res) => responder.respond(res),
+        Err(e) => tracing::error!("Error serving request from filesystem {}", e),
+    }
+}
+
+fn serve_from_fs(path: PathBuf) -> Result<Response<Vec<u8>>> {
+    // If the path is relative, we'll try to serve it from the assets directory.
+    let mut asset = get_asset_root_or_default().join(&path);
+
+    // If we can't find it, make it absolute and try again
+    if !asset.exists() {
+        asset = PathBuf::from("/").join(path);
+    }
+
+    if !asset.exists() {
+        return Ok(Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(String::from("Not Found").into_bytes())?);
+    }
+
+    Ok(Response::builder()
+        .header("Content-Type", get_mime_from_path(&asset)?)
+        .body(std::fs::read(asset)?)?)
+}
+
+/// Construct the inline script that boots up the page and bridges the webview with rust code.
+///
+/// The arguments here:
+/// - root_name: the root element (by Id) that we stream edits into
+/// - headless: is this page being loaded but invisible? Important because not all windows are visible and the
+///             interpreter can't connect until the window is ready.
+fn module_loader(root_id: &str, headless: bool) -> String {
     format!(
         r#"
 <script type="module">
-    {js}
+    // Bring the sledgehammer code
+    {SLEDGEHAMMER_JS}
 
-    let rootname = "{root_name}";
-    let root = window.document.getElementById(rootname);
-    if (root != null) {{
-        window.interpreter = new Interpreter(root, new InterpreterConfig(true));
-        window.ipc.postMessage(serializeIpcMessage("initialize"));
+    // And then extend it with our native bindings
+    {NATIVE_JS}
+
+    // The nativeinterprerter extends the sledgehammer interpreter with a few extra methods that we use for IPC
+    window.interpreter = new NativeInterpreter("{EDITS_PATH}");
+
+    // Wait for the page to load before sending the initialize message
+    window.onload = function() {{
+        let root_element = window.document.getElementById("{root_id}");
+        if (root_element != null) {{
+            window.interpreter.initialize(root_element);
+            window.ipc.postMessage(window.interpreter.serializeIpcMessage("initialize"));
+        }}
+        window.interpreter.waitForRequest({headless});
     }}
 </script>
 "#
     )
 }
 
-pub(super) fn desktop_handler(
-    request: &Request<Vec<u8>>,
-    custom_head: Option<String>,
-    custom_index: Option<String>,
-    root_name: &str,
-) -> Result<Response<Cow<'static, [u8]>>> {
-    // If the request is for the root, we'll serve the index.html file.
-    if request.uri().path() == "/" {
-        // If a custom index is provided, just defer to that, expecting the user to know what they're doing.
-        // we'll look for the closing </body> tag and insert our little module loader there.
-        let body = match custom_index {
-            Some(custom_index) => custom_index
-                .replace("</body>", &format!("{}</body>", module_loader(root_name)))
-                .into_bytes(),
-
-            None => {
-                // Otherwise, we'll serve the default index.html and apply a custom head if that's specified.
-                let mut template = include_str!("./index.html").to_string();
-
-                if let Some(custom_head) = custom_head {
-                    template = template.replace("<!-- CUSTOM HEAD -->", &custom_head);
-                }
-
-                template
-                    .replace("<!-- MODULE LOADER -->", &module_loader(root_name))
-                    .into_bytes()
-            }
-        };
-
-        return Response::builder()
-            .header("Content-Type", "text/html")
-            .body(Cow::from(body))
-            .map_err(From::from);
-    } else if request.uri().path() == "/common.js" {
-        return Response::builder()
-            .header("Content-Type", "text/javascript")
-            .body(Cow::from(COMMON_JS.as_bytes()))
-            .map_err(From::from);
-    }
-
-    // Else, try to serve a file from the filesystem.
-    let decoded = urlencoding::decode(request.uri().path().trim_start_matches('/'))
-        .expect("expected URL to be UTF-8 encoded");
-    let path = PathBuf::from(&*decoded);
-
-    // If the path is relative, we'll try to serve it from the assets directory.
-    let mut asset = get_asset_root()
-        .unwrap_or_else(|| Path::new(".").to_path_buf())
-        .join(&path);
-
-    if !asset.exists() {
-        asset = PathBuf::from("/").join(path);
-    }
-
-    if asset.exists() {
-        return Response::builder()
-            .header("Content-Type", get_mime_from_path(&asset)?)
-            .body(Cow::from(std::fs::read(asset)?))
-            .map_err(From::from);
-    }
-
-    Response::builder()
-        .status(StatusCode::NOT_FOUND)
-        .body(Cow::from(String::from("Not Found").into_bytes()))
-        .map_err(From::from)
+/// Get the asset directory, following tauri/cargo-bundles directory discovery approach
+///
+/// Defaults to the current directory if no asset directory is found, which is useful for development when the app
+/// isn't bundled.
+fn get_asset_root_or_default() -> PathBuf {
+    get_asset_root().unwrap_or_else(|| std::env::current_dir().unwrap())
 }
 
+/// Get the asset directory, following tauri/cargo-bundles directory discovery approach
+///
+/// Currently supports:
+/// - [x] macOS
+/// - [ ] Windows
+/// - [ ] Linux (rpm)
+/// - [ ] Linux (deb)
+/// - [ ] iOS
+/// - [ ] Android
 #[allow(unreachable_code)]
 fn get_asset_root() -> Option<PathBuf> {
-    /*
-    We're matching exactly how cargo-bundle works.
-
-    - [x] macOS
-    - [ ] Windows
-    - [ ] Linux (rpm)
-    - [ ] Linux (deb)
-    - [ ] iOS
-    - [ ] Android
-
-    */
-
+    // If running under cargo, there's no bundle!
+    // There might be a smarter/more resilient way of doing this
     if std::env::var_os("CARGO").is_some() {
         return None;
     }
 
-    // TODO: support for other platforms
     #[cfg(target_os = "macos")]
     {
         let bundle = core_foundation::bundle::CFBundle::main_bundle();
         let bundle_path = bundle.path()?;
         let resources_path = bundle.resources_path()?;
         let absolute_resources_root = bundle_path.join(resources_path);
-        let canonical_resources_root = dunce::canonicalize(absolute_resources_root).ok()?;
-
-        return Some(canonical_resources_root);
+        return dunce::canonicalize(absolute_resources_root).ok();
     }
 
     None
@@ -157,18 +242,10 @@ fn get_mime_from_path(trimmed: &Path) -> Result<&'static str> {
         return Ok("image/svg+xml");
     }
 
-    let res = match infer::get_from_path(trimmed)?.map(|f| f.mime_type()) {
-        Some(f) => {
-            if f == "text/plain" {
-                get_mime_by_ext(trimmed)
-            } else {
-                f
-            }
-        }
-        None => get_mime_by_ext(trimmed),
-    };
-
-    Ok(res)
+    match infer::get_from_path(trimmed)?.map(|f| f.mime_type()) {
+        Some(f) if f != "text/plain" => Ok(f),
+        _ => Ok(get_mime_by_ext(trimmed)),
+    }
 }
 
 /// Get the mime type from a URI using its extension

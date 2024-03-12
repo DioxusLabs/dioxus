@@ -1,0 +1,26 @@
+html body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    font-size: 2rem;
+    height: 100vh;
+    background-color: #f0f0f0;
+}
+
+#controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 20px;
+}
+
+button {
+    padding: 5px 10px;
+    margin: 0 5px;
+}
+
+input {
+    width: 50px;
+}

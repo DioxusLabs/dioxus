@@ -1,24 +1,28 @@
+//! Adjust the zoom of a desktop app
+//!
+//! This example shows how to adjust the zoom of a desktop app using the webview.zoom method.
+
 use dioxus::prelude::*;
-use dioxus_desktop::use_window;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch_desktop(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let window = use_window(cx);
-    let level = use_state(cx, || 1.0);
+fn app() -> Element {
+    let mut level = use_signal(|| 1.0);
 
-    cx.render(rsx! {
+    rsx! {
+        h1 { "Zoom level: {level}" }
+        p { "Change the zoom level of the webview by typing a number in the input below."}
         input {
             r#type: "number",
             value: "{level}",
-            oninput: |e| {
-                if let Ok(new_zoom) = e.value.parse::<f64>() {
+            oninput: move |e| {
+                if let Ok(new_zoom) = e.value().parse::<f64>() {
                     level.set(new_zoom);
-                    window.webview.zoom(new_zoom);
+                    dioxus::desktop::window().webview.zoom(new_zoom);
                 }
             }
         }
-    })
+    }
 }

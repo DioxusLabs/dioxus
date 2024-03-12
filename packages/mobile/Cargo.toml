@@ -2,7 +2,7 @@
 name = "dioxus-mobile"
 version = { workspace = true }
 authors = ["Jonathan Kelley"]
-edition = "2018"
+edition = "2021"
 description = "Mobile-compatible renderer for Dioxus"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com/learn/0.4/getting_started/mobile"
@@ -10,7 +10,7 @@ keywords = ["dom", "ui", "gui", "react"]
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-dioxus-desktop = { workspace = true }
+dioxus-desktop = { workspace = true, features = ["tokio_runtime"] }
 
 [lib]
 doctest = false

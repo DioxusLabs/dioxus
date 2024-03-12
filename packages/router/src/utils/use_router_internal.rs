@@ -1,4 +1,4 @@
-use dioxus::prelude::{ScopeId, ScopeState};
+use dioxus_lib::prelude::*;
 
 use crate::prelude::*;
 
@@ -8,27 +8,20 @@ use crate::prelude::*;
 /// single component, but not recommended. Multiple subscriptions will be discarded.
 ///
 /// # Return values
-/// - [`None`], when the current component isn't a descendant of a [`Link`] component.
+/// - [`None`], when the current component isn't a descendant of a [`Router`] component.
 /// - Otherwise [`Some`].
-pub(crate) fn use_router_internal(cx: &ScopeState) -> &Option<RouterContext> {
-    let inner = cx.use_hook(|| {
-        let router = cx.consume_context::<RouterContext>()?;
-
-        let id = cx.scope_id();
+pub(crate) fn use_router_internal() -> Option<RouterContext> {
+    let router = try_consume_context::<RouterContext>()?;
+    let id = current_scope_id().expect("use_router_internal called outside of a component");
+    use_drop({
+        to_owned![router];
+        move || {
+            router.unsubscribe(id);
+        }
+    });
+    use_hook(move || {
         router.subscribe(id);
 
-        Some(Subscription { router, id })
-    });
-    cx.use_hook(|| inner.as_ref().map(|s| s.router.clone()))
-}
-
-struct Subscription {
-    router: RouterContext,
-    id: ScopeId,
-}
-
-impl Drop for Subscription {
-    fn drop(&mut self) {
-        self.router.unsubscribe(self.id);
-    }
+        Some(router)
+    })
 }

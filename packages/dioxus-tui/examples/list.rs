@@ -4,8 +4,8 @@ fn main() {
     dioxus_tui::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    cx.render(rsx! {
+fn app() -> Element {
+    rsx! {
         div {
             width: "100%",
             height: "100%",
@@ -19,10 +19,10 @@ fn app(cx: Scope) -> Element {
             ul {
                 flex_direction: "column",
                 padding_left: "3px",
-                (0..10).map(|i| rsx!(
+                for i in 0..10 {
                     "> hello {i}"
-                ))
+                }
             }
         }
-    })
+    }
 }

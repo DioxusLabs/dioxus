@@ -1,85 +1,55 @@
-use dioxus::{events::*, html::MouseEvent, prelude::*};
+//! This example shows how to listen to all events on a div and log them to the console.
+//!
+//! The primary demonstration here is the properties on the events themselves, hoping to give you some inspiration
+//! on adding interactivity to your own application.
+
+use dioxus::prelude::*;
+use std::{collections::VecDeque, fmt::Debug, rc::Rc};
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch(app);
 }
 
-#[derive(Debug)]
-enum Event {
-    MouseMove(MouseEvent),
-    MouseClick(MouseEvent),
-    MouseDoubleClick(MouseEvent),
-    MouseDown(MouseEvent),
-    MouseUp(MouseEvent),
+fn app() -> Element {
+    // Using a VecDeque so its cheap to pop old events off the front
+    let mut events = use_signal(VecDeque::new);
 
-    Wheel(WheelEvent),
-
-    KeyDown(KeyboardEvent),
-    KeyUp(KeyboardEvent),
-    KeyPress(KeyboardEvent),
-
-    FocusIn(FocusEvent),
-    FocusOut(FocusEvent),
-}
-
-const MAX_EVENTS: usize = 8;
-
-const CONTAINER_STYLE: &str = r#"
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-    "#;
-
-const RECT_STYLE: &str = r#"
-        background: deepskyblue;
-        height: 50vh;
-        width: 50vw;
-        color: white;
-        padding: 20px;
-        margin: 20px;
-        text-aligh: center;
-    "#;
-
-fn app(cx: Scope) -> Element {
-    let events = use_ref(cx, std::collections::VecDeque::new);
-
-    let log_event = move |event: Event| {
-        let mut events = events.write();
-
-        if events.len() >= MAX_EVENTS {
-            events.pop_front();
+    // All events and their data implement Debug, so we can re-cast them as Rc<dyn Debug> instead of their specific type
+    let mut log_event = move |event: Rc<dyn Debug>| {
+        // Only store the last 20 events
+        if events.read().len() >= 20 {
+            events.write().pop_front();
         }
-        events.push_back(event);
+        events.write().push_back(event);
     };
 
-    cx.render(rsx! (
-        div {
-            style: "{CONTAINER_STYLE}",
-            div {
-                style: "{RECT_STYLE}",
-                // focusing is necessary to catch keyboard events
-                tabindex: "0",
+    rsx! {
+        style { {include_str!("./assets/events.css")} }
+        div { id: "container",
+            // focusing is necessary to catch keyboard events
+            div { id: "receiver", tabindex: 0,
+                onmousemove: move |event| log_event(event.data()),
+                onclick: move |event| log_event(event.data()),
+                ondoubleclick: move |event| log_event(event.data()),
+                onmousedown: move |event| log_event(event.data()),
+                onmouseup: move |event| log_event(event.data()),
 
-                onmousemove: move |event| log_event(Event::MouseMove(event)),
-                onclick: move |event| log_event(Event::MouseClick(event)),
-                ondblclick: move |event| log_event(Event::MouseDoubleClick(event)),
-                onmousedown: move |event| log_event(Event::MouseDown(event)),
-                onmouseup: move |event| log_event(Event::MouseUp(event)),
+                onwheel: move |event| log_event(event.data()),
 
-                onwheel: move |event| log_event(Event::Wheel(event)),
+                onkeydown: move |event| log_event(event.data()),
+                onkeyup: move |event| log_event(event.data()),
+                onkeypress: move |event| log_event(event.data()),
 
-                onkeydown: move |event| log_event(Event::KeyDown(event)),
-                onkeyup: move |event| log_event(Event::KeyUp(event)),
-                onkeypress: move |event| log_event(Event::KeyPress(event)),
-
-                onfocusin: move |event| log_event(Event::FocusIn(event)),
-                onfocusout: move |event| log_event(Event::FocusOut(event)),
+                onfocusin: move |event| log_event(event.data()),
+                onfocusout: move |event| log_event(event.data()),
 
                 "Hover, click, type or scroll to see the info down below"
             }
-            div {
-                events.read().iter().map(|event| rsx!( div { "{event:?}" } ))
-            },
-        },
-    ))
+            div { id: "log",
+                for event in events.read().iter() {
+                    div { "{event:?}" }
+                }
+            }
+        }
+    }
 }

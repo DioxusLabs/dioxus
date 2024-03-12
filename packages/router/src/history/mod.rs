@@ -54,9 +54,9 @@ pub trait HistoryProvider<R: Routable> {
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
-    /// # fn Index(cx: Scope) -> Element { todo!() }
+    /// # fn Index() -> Element { None }
     /// # #[component]
-    /// # fn OtherPage(cx: Scope) -> Element { todo!() }
+    /// # fn OtherPage() -> Element { None }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]
@@ -90,10 +90,10 @@ pub trait HistoryProvider<R: Routable> {
     ///
     /// ```rust
     /// # use dioxus_router::prelude::*;
-    /// # use dioxus::prelude::*;   
+    /// # use dioxus::prelude::*;
     /// # #[component]
-    /// # fn Index(cx: Scope) -> Element { todo!() }
-    /// # fn Other(cx: Scope) -> Element { todo!() }
+    /// # fn Index() -> Element { None }
+    /// # fn Other() -> Element { None }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]
@@ -121,9 +121,9 @@ pub trait HistoryProvider<R: Routable> {
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
-    /// # fn Index(cx: Scope) -> Element { todo!() }
+    /// # fn Index() -> Element { None }
     /// # #[component]
-    /// # fn OtherPage(cx: Scope) -> Element { todo!() }
+    /// # fn OtherPage() -> Element { None }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]
@@ -153,9 +153,9 @@ pub trait HistoryProvider<R: Routable> {
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
-    /// # fn Index(cx: Scope) -> Element { todo!() }
+    /// # fn Index() -> Element { None }
     /// # #[component]
-    /// # fn OtherPage(cx: Scope) -> Element { todo!() }
+    /// # fn OtherPage() -> Element { None }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]
@@ -186,9 +186,9 @@ pub trait HistoryProvider<R: Routable> {
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
-    /// # fn Index(cx: Scope) -> Element { todo!() }
+    /// # fn Index() -> Element { None }
     /// # #[component]
-    /// # fn OtherPage(cx: Scope) -> Element { todo!() }
+    /// # fn OtherPage() -> Element { None }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]
@@ -219,9 +219,9 @@ pub trait HistoryProvider<R: Routable> {
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
-    /// # fn Index(cx: Scope) -> Element { todo!() }
+    /// # fn Index() -> Element { None }
     /// # #[component]
-    /// # fn OtherPage(cx: Scope) -> Element { todo!() }
+    /// # fn OtherPage() -> Element { None }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]
@@ -248,9 +248,9 @@ pub trait HistoryProvider<R: Routable> {
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
-    /// # fn Index(cx: Scope) -> Element { todo!() }
+    /// # fn Index() -> Element { None }
     /// # #[component]
-    /// # fn OtherPage(cx: Scope) -> Element { todo!() }
+    /// # fn OtherPage() -> Element { None }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]
@@ -290,15 +290,7 @@ pub(crate) trait AnyHistoryProvider {
     fn parse_route(&self, route: &str) -> Result<Rc<dyn Any>, String>;
 
     #[must_use]
-    fn accepts_type_id(&self, type_id: &std::any::TypeId) -> bool;
-
-    #[must_use]
     fn current_route(&self) -> Rc<dyn Any>;
-
-    #[must_use]
-    fn current_prefix(&self) -> Option<String> {
-        None
-    }
 
     #[must_use]
     fn can_go_back(&self) -> bool {
@@ -359,17 +351,9 @@ where
             .map(|route| Rc::new(route) as Rc<dyn Any>)
     }
 
-    fn accepts_type_id(&self, type_id: &std::any::TypeId) -> bool {
-        type_id == &std::any::TypeId::of::<R>()
-    }
-
     fn current_route(&self) -> Rc<dyn Any> {
         let route = self.inner.current_route();
         Rc::new(route)
-    }
-
-    fn current_prefix(&self) -> Option<String> {
-        self.inner.current_prefix()
     }
 
     fn can_go_back(&self) -> bool {

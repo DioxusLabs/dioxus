@@ -1,45 +1,43 @@
 //! Run with:
 //!
 //! ```sh
-//! dx build --features web --release
-//! cargo run --features ssr --release
+//! dx serve --platform fullstack
 //! ```
 
 use dioxus::prelude::*;
-use dioxus_fullstack::prelude::*;
-use dioxus_router::prelude::*;
 
 fn main() {
-    let config = LaunchBuilder::<FullstackRouterConfig<Route>>::router();
-    #[cfg(feature = "ssr")]
-    config
-        .incremental(
-            IncrementalRendererConfig::default()
-                .invalidate_after(std::time::Duration::from_secs(120)),
-        )
-        .launch();
+    let cfg = server_only!(dioxus::fullstack::Config::new().incremental(
+        IncrementalRendererConfig::default().invalidate_after(std::time::Duration::from_secs(120)),
+    ));
 
-    #[cfg(not(feature = "ssr"))]
-    config.launch();
+    LaunchBuilder::fullstack().with_cfg(cfg).launch(app);
+}
+
+fn app() -> Element {
+    rsx! {
+        Router::<Route> {}
+    }
 }
 
 #[derive(Clone, Routable, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 enum Route {
     #[route("/")]
     Home {},
+
     #[route("/blog/:id")]
     Blog { id: i32 },
 }
 
 #[component]
-fn Blog(cx: Scope, id: i32) -> Element {
-    render! {
+fn Blog(id: i32) -> Element {
+    rsx! {
         Link { to: Route::Home {}, "Go to counter" }
         table {
             tbody {
-                for _ in 0..*id {
+                for _ in 0..id {
                     tr {
-                        for _ in 0..*id {
+                        for _ in 0..id {
                             td { "hello world!" }
                         }
                     }
@@ -50,14 +48,14 @@ fn Blog(cx: Scope, id: i32) -> Element {
 }
 
 #[component]
-fn Home(cx: Scope) -> Element {
-    let mut count = use_state(cx, || 0);
-    let text = use_state(cx, || "...".to_string());
+fn Home() -> Element {
+    let mut count = use_signal(|| 0);
+    let text = use_signal(|| "...".to_string());
 
-    cx.render(rsx! {
+    rsx! {
         Link {
             to: Route::Blog {
-                id: *count.get()
+                id: count()
             },
             "Go to blog"
         }
@@ -80,7 +78,7 @@ fn Home(cx: Scope) -> Element {
             }
             "Server said: {text}"
         }
-    })
+    }
 }
 
 #[server(PostServerData)]

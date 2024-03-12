@@ -5,14 +5,9 @@ use std::{env, path::PathBuf, process::Command};
 fn main() {
     set_rerun();
     set_commit_info();
-    if option_env!("CFG_RELEASE").is_none() {
-        println!("cargo:rustc-env=POKE_RA_DEVS=1");
-    }
 }
 
 fn set_rerun() {
-    println!("cargo:rerun-if-env-changed=CFG_RELEASE");
-
     let mut manifest_dir = PathBuf::from(
         env::var("CARGO_MANIFEST_DIR").expect("`CARGO_MANIFEST_DIR` is always set by cargo."),
     );

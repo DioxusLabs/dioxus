@@ -36,7 +36,7 @@ mod segment;
 /// 1. Static Segments: "/static"
 /// 2. Dynamic Segments: "/:dynamic" (where dynamic has a type that is FromStr in all child Variants)
 /// 3. Catch all Segments: "/:..segments" (where segments has a type that is FromSegments in all child Variants)
-/// 4. Query Segments: "/?:query" (where query has a type that is FromQuery in all child Variants)
+/// 4. Query Segments: "/?:..query" (where query has a type that is FromQuery in all child Variants) or "/?:query&:other_query" (where query and other_query has a type that is FromQueryArgument in all child Variants)
 ///
 /// Routes are matched:
 /// 1. By there specificity this order: Query Routes ("/?:query"), Static Routes ("/route"), Dynamic Routes ("/:route"), Catch All Routes ("/:..route")
@@ -84,7 +84,7 @@ mod segment;
 ///
 /// # `#[route("path", component)]`
 ///
-/// The `#[route]` attribute is used to define a route. It takes up to 3 parameters:
+/// The `#[route]` attribute is used to define a route. It takes up to 2 parameters:
 /// - `path`: The path to the enum variant (relative to the parent nest)
 /// - (optional) `component`: The component to render when the route is matched. If not specified, the name of the variant is used
 ///
@@ -162,7 +162,7 @@ mod segment;
 ///
 /// # `#[layout(component)]`
 ///
-/// The `#[layout]` attribute is used to define a layout. It takes 2 parameters:
+/// The `#[layout]` attribute is used to define a layout. It takes 1 parameter:
 /// - `component`: The component to render when the route is matched. If not specified, the name of the variant is used
 ///
 /// The layout component allows you to wrap all children of the layout in a component. The child routes are rendered in the Outlet of the layout component. The layout component must take all dynamic parameters of the nests it is nested in.
@@ -213,6 +213,7 @@ pub fn routable(input: TokenStream) -> TokenStream {
     let parse_impl = route_enum.parse_impl();
     let display_impl = route_enum.impl_display();
     let routable_impl = route_enum.routable_impl();
+    let component_impl = route_enum.component_impl();
 
     (quote! {
         #error_type
@@ -220,6 +221,8 @@ pub fn routable(input: TokenStream) -> TokenStream {
         #display_impl
 
         #routable_impl
+
+        #component_impl
 
         #parse_impl
     })
@@ -556,6 +559,7 @@ impl RouteEnum {
             #(#type_defs)*
 
             #[allow(non_camel_case_types)]
+            #[allow(clippy::derive_partial_eq_without_eq)]
             #[derive(Debug, PartialEq)]
             pub enum #match_error_name {
                 #(#error_variants),*
@@ -589,11 +593,29 @@ impl RouteEnum {
                     #(#site_map,)*
                 ];
 
-                fn render<'a>(&self, cx: &'a dioxus::prelude::ScopeState, level: usize) -> dioxus::prelude::Element<'a> {
+                fn render(&self, level: usize) -> ::dioxus::prelude::Element {
                     let myself = self.clone();
                     match (level, myself) {
                         #(#matches)*
                         _ => None
+                    }
+                }
+            }
+        }
+    }
+
+    fn component_impl(&self) -> TokenStream2 {
+        let name = &self.name;
+        let props = quote! { ::std::rc::Rc<::std::cell::Cell<dioxus_router::prelude::RouterConfig<#name>>> };
+
+        quote! {
+            impl dioxus_core::ComponentFunction<#props> for #name {
+                fn rebuild(&self, props: #props) -> dioxus_core::Element {
+                    let initial_route = self.clone();
+                    rsx! {
+                        dioxus_router::prelude::Router::<#name> {
+                            config: move || props.take().initial_route(initial_route)
+                        }
                     }
                 }
             }

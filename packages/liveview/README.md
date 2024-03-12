@@ -26,8 +26,6 @@
 The current backend frameworks supported include:
 
 - Axum
-- Warp
-- Salvo
 
 Dioxus-LiveView exports some primitives to wire up an app into an existing backend framework.
 
