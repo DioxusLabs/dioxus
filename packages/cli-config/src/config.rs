@@ -301,8 +301,10 @@ pub struct WebProxyConfig {
 pub struct WebWatcherConfig {
     #[serde(default = "watch_path_default")]
     pub watch_path: Vec<PathBuf>,
+
     #[serde(default)]
     pub reload_html: bool,
+
     #[serde(default = "true_bool")]
     pub index_on_404: bool,
 }

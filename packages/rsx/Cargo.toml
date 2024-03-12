@@ -13,13 +13,13 @@ keywords = ["dom", "ui", "gui", "react"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-proc-macro2 = { version = "1.0", features = ["span-locations"] }
+quote = { workspace = true }
+proc-macro2 = { workspace = true, features = ["span-locations"] }
 dioxus-core = { workspace = true, optional = true }
-syn = { version = "2.0", features = ["full", "extra-traits"] }
-quote = { version = "1.0" }
-serde = { version = "1.0", features = ["derive"], optional = true }
+syn = { workspace = true, features = ["full", "extra-traits"] }
+serde = { workspace = true, features = ["derive"], optional = true }
 internment = { version = "0.7.0", optional = true }
-krates = { version = "0.12.6", optional = true }
+krates = { version = "0.16.6", optional = true }
 tracing = { workspace = true }
 
 [features]

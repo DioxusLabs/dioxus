@@ -1,5 +1,4 @@
-use crate::assets::AssetConfigDropGuard;
-use crate::server::fullstack;
+use crate::{assets::AssetConfigDropGuard, server::fullstack};
 use dioxus_cli_config::Platform;
 
 use super::*;
@@ -58,7 +57,7 @@ impl Build {
         let build_result = match platform {
             Platform::Web => {
                 // `rust_flags` are used by fullstack's client build.
-                crate::builder::build(&crate_config, false, self.build.skip_assets, rust_flags)?
+                crate::builder::build(&crate_config, self.build.skip_assets, rust_flags)?
             }
             Platform::Desktop => {
                 // Since desktop platform doesn't use `rust_flags`, this
@@ -83,7 +82,6 @@ impl Build {
                     };
                     crate::builder::build(
                         &web_config,
-                        false,
                         self.build.skip_assets,
                         Some(client_rust_flags),
                     )?;

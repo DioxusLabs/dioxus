@@ -7,35 +7,6 @@ use dioxus_cli::*;
 
 use Commands::*;
 
-fn get_bin(bin: Option<String>) -> Result<PathBuf> {
-    let metadata = cargo_metadata::MetadataCommand::new()
-        .exec()
-        .map_err(Error::CargoMetadata)?;
-    let package = if let Some(bin) = bin {
-        metadata
-            .workspace_packages()
-            .into_iter()
-            .find(|p| p.name == bin)
-            .ok_or(Error::CargoError(format!("no such package: {}", bin)))?
-    } else {
-        metadata
-            .root_package()
-            .ok_or(Error::CargoError("no root package?".to_string()))?
-    };
-
-    let crate_dir = package
-        .manifest_path
-        .parent()
-        .ok_or(Error::CargoError("couldn't take parent dir".to_string()))?;
-
-    Ok(crate_dir.into())
-}
-
-/// Simplifies error messages that use the same pattern.
-fn error_wrapper(message: &str) -> String {
-    format!("🚫 {message}:")
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
@@ -47,7 +18,7 @@ async fn main() -> anyhow::Result<()> {
             .translate()
             .context(error_wrapper("Translation of HTML into RSX failed")),
 
-        Create(opts) => opts
+        New(opts) => opts
             .create()
             .context(error_wrapper("Creating new project failed")),
 
@@ -74,12 +45,6 @@ async fn main() -> anyhow::Result<()> {
             .await
             .context(error_wrapper("Error checking RSX")),
 
-        Version(opt) => {
-            let version = opt.version();
-            println!("{}", version);
-
-            Ok(())
-        }
         action => {
             let bin = get_bin(args.bin)?;
             let _dioxus_config = DioxusConfig::load(Some(bin.clone()))
@@ -118,4 +83,33 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     }
+}
+
+fn get_bin(bin: Option<String>) -> Result<PathBuf> {
+    let metadata = cargo_metadata::MetadataCommand::new()
+        .exec()
+        .map_err(Error::CargoMetadata)?;
+    let package = if let Some(bin) = bin {
+        metadata
+            .workspace_packages()
+            .into_iter()
+            .find(|p| p.name == bin)
+            .ok_or(Error::CargoError(format!("no such package: {}", bin)))?
+    } else {
+        metadata
+            .root_package()
+            .ok_or(Error::CargoError("no root package?".to_string()))?
+    };
+
+    let crate_dir = package
+        .manifest_path
+        .parent()
+        .ok_or(Error::CargoError("couldn't take parent dir".to_string()))?;
+
+    Ok(crate_dir.into())
+}
+
+/// Simplifies error messages that use the same pattern.
+fn error_wrapper(message: &str) -> String {
+    format!("🚫 {message}:")
 }

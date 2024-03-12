@@ -29,8 +29,17 @@ pub struct FileMapBuildResult<Ctx: HotReloadingContext> {
 
 pub struct FileMap<Ctx: HotReloadingContext> {
     pub map: HashMap<PathBuf, (String, Option<Template>)>,
+
     in_workspace: HashMap<PathBuf, Option<PathBuf>>,
+
     phantom: std::marker::PhantomData<Ctx>,
+}
+
+struct CachedSynFile {
+    raw: String,
+    file: syn::File,
+    path: PathBuf,
+    template: Option<Template>,
 }
 
 impl<Ctx: HotReloadingContext> FileMap<Ctx> {
@@ -106,34 +115,40 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
         let mut file = File::open(file_path)?;
         let mut src = String::new();
         file.read_to_string(&mut src)?;
-        if let Ok(syntax) = syn::parse_file(&src) {
-            let in_workspace = self.child_in_workspace(crate_dir)?;
-            if let Some((old_src, template_slot)) = self.map.get_mut(file_path) {
-                if let Ok(old) = syn::parse_file(old_src) {
-                    match find_rsx(&syntax, &old) {
-                        DiffResult::CodeChanged => {
-                            self.map.insert(file_path.to_path_buf(), (src, None));
-                        }
-                        DiffResult::RsxChanged(changed) => {
-                            let mut messages: Vec<Template> = Vec::new();
-                            for (old, new) in changed.into_iter() {
-                                let old_start = old.span().start();
 
-                                if let (Ok(old_call_body), Ok(new_call_body)) = (
-                                    syn::parse2::<CallBody>(old.tokens),
-                                    syn::parse2::<CallBody>(new),
-                                ) {
-                                    // if the file!() macro is invoked in a workspace, the path is relative to the workspace root, otherwise it's relative to the crate root
-                                    // we need to check if the file is in a workspace or not and strip the prefix accordingly
-                                    let prefix = if let Some(workspace) = &in_workspace {
-                                        workspace
-                                    } else {
-                                        crate_dir
-                                    };
-                                    if let Ok(file) = file_path.strip_prefix(prefix) {
-                                        let line = old_start.line;
-                                        let column = old_start.column + 1;
-                                        let location = file.display().to_string()
+        // If we can't parse the contents we want to pass it off to the build system to tell the user that there's a syntax error
+        let Ok(syntax) = syn::parse_file(&src) else {
+            return Ok(UpdateResult::NeedsRebuild);
+        };
+
+        let in_workspace = self.child_in_workspace(crate_dir)?;
+
+        if let Some((old_src, template_slot)) = self.map.get_mut(file_path) {
+            if let Ok(old) = syn::parse_file(old_src) {
+                match find_rsx(&syntax, &old) {
+                    DiffResult::CodeChanged => {
+                        self.map.insert(file_path.to_path_buf(), (src, None));
+                    }
+                    DiffResult::RsxChanged(changed) => {
+                        let mut messages: Vec<Template> = Vec::new();
+                        for (old, new) in changed.into_iter() {
+                            let old_start = old.span().start();
+
+                            if let (Ok(old_call_body), Ok(new_call_body)) = (
+                                syn::parse2::<CallBody>(old.tokens),
+                                syn::parse2::<CallBody>(new),
+                            ) {
+                                // if the file!() macro is invoked in a workspace, the path is relative to the workspace root, otherwise it's relative to the crate root
+                                // we need to check if the file is in a workspace or not and strip the prefix accordingly
+                                let prefix = if let Some(workspace) = &in_workspace {
+                                    workspace
+                                } else {
+                                    crate_dir
+                                };
+                                if let Ok(file) = file_path.strip_prefix(prefix) {
+                                    let line = old_start.line;
+                                    let column = old_start.column + 1;
+                                    let location = file.display().to_string()
                                         + ":"
                                         + &line.to_string()
                                         + ":"
@@ -141,45 +156,42 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
                                         // the byte index doesn't matter, but dioxus needs it
                                         + ":0";
 
-                                        if let Some(template) = new_call_body
-                                            .update_template::<Ctx>(
-                                                Some(old_call_body),
-                                                Box::leak(location.into_boxed_str()),
-                                            )
-                                        {
-                                            // dioxus cannot handle empty templates
-                                            if template.roots.is_empty() {
-                                                return Ok(UpdateResult::NeedsRebuild);
-                                            } else {
-                                                // if the template is the same, don't send it
-                                                if let Some(old_template) = template_slot {
-                                                    if old_template == &template {
-                                                        continue;
-                                                    }
-                                                }
-                                                *template_slot = Some(template);
-                                                messages.push(template);
-                                            }
-                                        } else {
+                                    if let Some(template) = new_call_body.update_template::<Ctx>(
+                                        Some(old_call_body),
+                                        Box::leak(location.into_boxed_str()),
+                                    ) {
+                                        // dioxus cannot handle empty templates
+                                        if template.roots.is_empty() {
                                             return Ok(UpdateResult::NeedsRebuild);
+                                        } else {
+                                            // if the template is the same, don't send it
+                                            if let Some(old_template) = template_slot {
+                                                if old_template == &template {
+                                                    continue;
+                                                }
+                                            }
+                                            *template_slot = Some(template);
+                                            messages.push(template);
                                         }
+                                    } else {
+                                        return Ok(UpdateResult::NeedsRebuild);
                                     }
                                 }
                             }
-                            return Ok(UpdateResult::UpdatedRsx(messages));
                         }
+                        return Ok(UpdateResult::UpdatedRsx(messages));
                     }
                 }
-            } else {
-                // if this is a new file, rebuild the project
-                let FileMapBuildResult { map, mut errors } =
-                    FileMap::create(crate_dir.to_path_buf())?;
-                if let Some(err) = errors.pop() {
-                    return Err(err);
-                }
-                *self = map;
             }
+        } else {
+            // if this is a new file, rebuild the project
+            let FileMapBuildResult { map, mut errors } = FileMap::create(crate_dir.to_path_buf())?;
+            if let Some(err) = errors.pop() {
+                return Err(err);
+            }
+            *self = map;
         }
+
         Ok(UpdateResult::NeedsRebuild)
     }
 

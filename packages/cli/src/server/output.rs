@@ -1,9 +1,7 @@
 use crate::server::Diagnostic;
 use colored::Colorize;
-use dioxus_cli_config::crate_root;
-use dioxus_cli_config::CrateConfig;
-use std::path::PathBuf;
-use std::process::Command;
+use dioxus_cli_config::{crate_root, CrateConfig};
+use std::{path::PathBuf, process::Command};
 
 #[derive(Debug, Default)]
 pub struct PrettierOptions {

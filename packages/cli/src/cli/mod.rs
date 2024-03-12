@@ -10,7 +10,6 @@ pub mod init;
 pub mod plugin;
 pub mod serve;
 pub mod translate;
-pub mod version;
 
 use crate::{
     cfg::{ConfigOptsBuild, ConfigOptsServe},
@@ -57,10 +56,11 @@ pub enum Commands {
     /// Build, watch & serve the Rust WASM app and all of its assets.
     Serve(serve::Serve),
 
-    /// Create a new project for Dioxus.
-    Create(create::Create),
+    /// Create a new project for Dioxus.a
+    New(create::Create),
 
-    /// Init a new project for Dioxus
+    /// Init a new project for Dioxus in an existing directory.
+    /// Will attempt to keep your project in a good state
     Init(init::Init),
 
     /// Clean output artifacts.
@@ -68,10 +68,6 @@ pub enum Commands {
 
     /// Bundle the Rust desktop app and all of its assets.
     Bundle(bundle::Bundle),
-
-    /// Print the version of this extension
-    #[clap(name = "version")]
-    Version(version::Version),
 
     /// Format some rsx
     #[clap(name = "fmt")]
@@ -97,11 +93,10 @@ impl Display for Commands {
             Commands::Build(_) => write!(f, "build"),
             Commands::Translate(_) => write!(f, "translate"),
             Commands::Serve(_) => write!(f, "serve"),
-            Commands::Create(_) => write!(f, "create"),
+            Commands::New(_) => write!(f, "create"),
             Commands::Init(_) => write!(f, "init"),
             Commands::Clean(_) => write!(f, "clean"),
             Commands::Config(_) => write!(f, "config"),
-            Commands::Version(_) => write!(f, "version"),
             Commands::Autoformat(_) => write!(f, "fmt"),
             Commands::Check(_) => write!(f, "check"),
             Commands::Bundle(_) => write!(f, "bundle"),

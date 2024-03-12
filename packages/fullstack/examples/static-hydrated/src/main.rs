@@ -36,8 +36,9 @@ async fn main() {
 }
 
 // Hydrate the page
-#[cfg(all(feature = "web", not(feature = "server")))]
+#[cfg(not(feature = "server"))]
 fn main() {
+    #[cfg(all(feature = "web", not(feature = "server")))]
     dioxus_web::launch_with_props(
         dioxus_fullstack::router::RouteWithCfg::<Route>,
         dioxus_fullstack::prelude::get_root_props_from_document()

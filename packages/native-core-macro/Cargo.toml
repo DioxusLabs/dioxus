@@ -13,8 +13,8 @@ authors = ["Jonathan Kelley", "Evan Almloff"]
 proc-macro = true
 
 [dependencies]
-syn = { version = "2.0", features = ["extra-traits", "full"] }
-quote = "1.0"
+syn = { workspace = true, features = ["extra-traits", "full"] }
+quote = { workspace = true }
 
 [dev-dependencies]
 smallvec = "1.6"
