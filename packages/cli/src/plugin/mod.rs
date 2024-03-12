@@ -4,13 +4,10 @@ use std::{
     sync::Mutex,
 };
 
+use crate::tools::{app_path, clone_repo};
+use dioxus_cli_config::CrateConfig;
 use mlua::{Lua, Table};
 use serde_json::json;
-
-use crate::{
-    tools::{app_path, clone_repo},
-    CrateConfig,
-};
 
 use self::{
     interface::{
@@ -184,8 +181,8 @@ impl PluginManager {
         let args = lua.create_table()?;
         args.set("name", crate_config.dioxus_config.application.name.clone())?;
         args.set("platform", platform)?;
-        args.set("out_dir", crate_config.out_dir.to_str().unwrap())?;
-        args.set("asset_dir", crate_config.asset_dir.to_str().unwrap())?;
+        args.set("out_dir", crate_config.out_dir().to_str().unwrap())?;
+        args.set("asset_dir", crate_config.asset_dir().to_str().unwrap())?;
 
         for i in 1..(manager.len()? as i32 + 1) {
             let info = manager.get::<i32, PluginInfo>(i)?;
@@ -208,8 +205,8 @@ impl PluginManager {
         let args = lua.create_table()?;
         args.set("name", crate_config.dioxus_config.application.name.clone())?;
         args.set("platform", platform)?;
-        args.set("out_dir", crate_config.out_dir.to_str().unwrap())?;
-        args.set("asset_dir", crate_config.asset_dir.to_str().unwrap())?;
+        args.set("out_dir", crate_config.out_dir().to_str().unwrap())?;
+        args.set("asset_dir", crate_config.asset_dir().to_str().unwrap())?;
 
         for i in 1..(manager.len()? as i32 + 1) {
             let info = manager.get::<i32, PluginInfo>(i)?;

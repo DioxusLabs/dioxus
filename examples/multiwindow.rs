@@ -1,27 +1,28 @@
+//! Multiwindow example
+//!
+//! This exmaple shows how to implement a simple multiwindow application using dioxus.
+//! This works by spawning a new window when the user clicks a button. We have to build a new virtualdom which has its
+//! own context, root elements, etc.
+
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch_desktop(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let window = dioxus_desktop::use_window(cx);
+fn app() -> Element {
+    let onclick = move |_| {
+        let dom = VirtualDom::new(popup);
+        dioxus::desktop::window().new_window(dom, Default::default());
+    };
 
-    cx.render(rsx! {
-        div {
-            button {
-                onclick: move |_| {
-                    let dom = VirtualDom::new(popup);
-                    window.new_window(dom, Default::default());
-                },
-                "New Window"
-            }
-        }
-    })
+    rsx! {
+        button { onclick, "New Window" }
+    }
 }
 
-fn popup(cx: Scope) -> Element {
-    cx.render(rsx! {
-        div { "This is a popup!" }
-    })
+fn popup() -> Element {
+    rsx! {
+        div { "This is a popup window!" }
+    }
 }

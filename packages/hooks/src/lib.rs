@@ -1,7 +1,6 @@
 #![doc = include_str!("../README.md")]
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
-#![cfg_attr(feature = "nightly-features", feature(debug_refcell))]
 
 #[macro_export]
 /// A helper macro for using hooks and properties in async environments.
@@ -12,17 +11,17 @@
 /// ```
 /// # use dioxus::prelude::*;
 /// #
-/// # #[derive(Props, PartialEq)]
+/// # #[derive(Props, PartialEq, Clone)]
 /// # struct Props {
 /// #    prop: String,
 /// # }
-/// # fn Component(cx: Scope<Props>) -> Element {
+/// # fn Component(props: Props) -> Element {
 ///
-/// let (data) = use_ref(cx, || {});
+/// let (data) = use_signal(|| {});
 ///
 /// let handle_thing = move |_| {
-///     to_owned![data, cx.props.prop];
-///     cx.spawn(async move {
+///     to_owned![data, props.prop];
+///     spawn(async move {
 ///         // do stuff
 ///     });
 /// };
@@ -54,26 +53,17 @@ macro_rules! to_owned {
         $(to_owned![$($rest)*])?
     };
 }
+mod dependency;
+pub use dependency::*;
 
-pub mod computed;
+mod use_callback;
+pub use use_callback::*;
 
 mod use_on_destroy;
 pub use use_on_destroy::*;
 
-mod use_const;
-pub use use_const::*;
-
 mod use_context;
 pub use use_context::*;
-
-mod use_state;
-pub use use_state::{use_state, UseState};
-
-mod use_ref;
-pub use use_ref::*;
-
-mod use_shared_state;
-pub use use_shared_state::*;
 
 mod use_coroutine;
 pub use use_coroutine::*;
@@ -81,16 +71,26 @@ pub use use_coroutine::*;
 mod use_future;
 pub use use_future::*;
 
+// mod use_sorted;
+// pub use use_sorted::*;
+
+mod use_resource;
+pub use use_resource::*;
+
 mod use_effect;
 pub use use_effect::*;
-
-mod use_callback;
-pub use use_callback::*;
 
 mod use_memo;
 pub use use_memo::*;
 
-mod use_on_create;
-pub use use_on_create::*;
+// mod use_on_create;
+// pub use use_on_create::*;
+
 mod use_root_context;
 pub use use_root_context::*;
+
+mod use_hook_did_run;
+pub use use_hook_did_run::*;
+
+mod use_signal;
+pub use use_signal::*;

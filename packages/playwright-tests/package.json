@@ -1,0 +1,17 @@
+{
+  "name": "dioxus",
+  "version": "1.0.0",
+  "description": "<p align=\"center\">   <img src=\"./notes/header.svg\"> </p>",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "example": "examples"
+  },
+  "scripts": {},
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@playwright/test": "^1.41.2"
+  }
+}

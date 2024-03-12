@@ -34,8 +34,8 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    cx.render(rsx!{
+fn app() -> Element {
+    rsx!{
         div {
             "hello world!"
         }

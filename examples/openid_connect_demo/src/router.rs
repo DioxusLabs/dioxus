@@ -1,6 +1,5 @@
 use crate::views::{header::AuthHeader, home::Home, login::Login, not_found::NotFound};
 use dioxus::prelude::*;
-use dioxus_router::prelude::*;
 
 #[derive(Routable, Clone)]
 pub enum Route {

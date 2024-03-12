@@ -57,7 +57,7 @@ fn tui_update(c: &mut Criterion) {
     }
 }
 
-#[derive(Props, PartialEq)]
+#[derive(Props, PartialEq, Clone)]
 struct BoxProps {
     x: usize,
     y: usize,
@@ -65,17 +65,17 @@ struct BoxProps {
     alpha: f32,
 }
 #[allow(non_snake_case)]
-fn Box(cx: Scope<BoxProps>) -> Element {
-    let count = use_state(cx, || 0);
+fn Box(props: BoxProps) -> Element {
+    let count = use_signal(|| 0);
 
-    let x = cx.props.x * 2;
-    let y = cx.props.y * 2;
-    let hue = cx.props.hue;
-    let display_hue = cx.props.hue as u32 / 10;
-    let count = count.get();
-    let alpha = cx.props.alpha + (count % 100) as f32;
+    let x = props.x * 2;
+    let y = props.y * 2;
+    let hue = props.hue;
+    let display_hue = props.hue as u32 / 10;
+    let count = count();
+    let alpha = props.alpha + (count % 100) as f32;
 
-    cx.render(rsx! {
+    rsx! {
         div {
             left: "{x}%",
             top: "{y}%",
@@ -85,27 +85,27 @@ fn Box(cx: Scope<BoxProps>) -> Element {
             align_items: "center",
             p{"{display_hue:03}"}
         }
-    })
+    }
 }
 
-#[derive(Props, PartialEq)]
+#[derive(Props, PartialEq, Clone)]
 struct GridProps {
     size: usize,
     update_count: usize,
 }
 #[allow(non_snake_case)]
-fn Grid(cx: Scope<GridProps>) -> Element {
-    let size = cx.props.size;
-    let count = use_state(cx, || 0);
-    let counts = use_ref(cx, || vec![0; size * size]);
+fn Grid(props: GridProps) -> Element {
+    let size = props.size;
+    let mut count = use_signal(|| 0);
+    let mut counts = use_signal(|| vec![0; size * size]);
 
-    let ctx: TuiContext = cx.consume_context().unwrap();
-    if *count.get() + cx.props.update_count >= (size * size) {
+    let ctx: TuiContext = consume_context();
+    if count() + props.update_count >= (size * size) {
         ctx.quit();
     } else {
-        for _ in 0..cx.props.update_count {
+        for _ in 0..props.update_count {
             counts.with_mut(|c| {
-                let i = *count.current();
+                let i = count();
                 c[i] += 1;
                 c[i] %= 360;
             });
@@ -116,50 +116,40 @@ fn Grid(cx: Scope<GridProps>) -> Element {
         }
     }
 
-    render! {
+    rsx! {
         div{
             width: "100%",
             height: "100%",
             flex_direction: "column",
-            (0..size).map(|x|
-                    {
-                    rsx! {
-                        div{
-                            width: "100%",
-                            height: "100%",
-                            flex_direction: "row",
-                            (0..size).map(|y|
-                                {
-                                    let alpha = y as f32*100.0/size as f32 + counts.read()[x*size + y] as f32;
-                                    let key = format!("{}-{}", x, y);
-                                    rsx! {
-                                        Box{
-                                            x: x,
-                                            y: y,
-                                            alpha: 100.0,
-                                            hue: alpha,
-                                            key: "{key}",
-                                        }
-                                    }
-                                }
-                            )
+            for x in 0..size {
+                div {
+                    width: "100%",
+                    height: "100%",
+                    flex_direction: "row",
+                    for y in 0..size {
+                        Box {
+                            key: "{x}-{y}",
+                            x: x,
+                            y: y,
+                            alpha: 100.0,
+                            hue: y as f32*100.0/size as f32 + counts.read()[x*size + y] as f32,
                         }
                     }
                 }
-            )
+            }
         }
     }
 }
 
-fn app(cx: Scope<GridProps>) -> Element {
-    cx.render(rsx! {
+fn app(props: GridProps) -> Element {
+    rsx! {
         div{
             width: "100%",
             height: "100%",
             Grid{
-                size: cx.props.size,
-                update_count: cx.props.update_count,
+                size: props.size,
+                update_count: props.update_count,
             }
         }
-    })
+    }
 }

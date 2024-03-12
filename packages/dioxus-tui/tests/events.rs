@@ -32,15 +32,16 @@ impl Future for PollN {
 fn key_down() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
-    fn app(cx: Scope) -> Element {
-        let render_count = use_state(cx, || 0);
-        let tui_ctx: TuiContext = cx.consume_context().unwrap();
-        let render_count_handle = render_count.clone();
-        cx.spawn(async move {
+    fn app() -> Element {
+        let render_count = use_signal(|| 0);
+        let mut render_count_handle = render_count;
+        let tui_ctx: TuiContext = consume_context();
+
+        spawn(async move {
             PollN::new(3).await;
-            render_count_handle.modify(|x| *x + 1);
+            render_count_handle.with_mut(|x| *x + 1);
         });
-        if *render_count.get() > 2 {
+        if render_count() > 2 {
             panic!("Event was not received");
         }
         // focus the element
@@ -56,16 +57,16 @@ fn key_down() {
             kind: crossterm::event::KeyEventKind::Press,
             state: crossterm::event::KeyEventState::NONE,
         }));
-        cx.render(rsx! {
+        rsx! {
             div {
                 width: "100%",
                 height: "100%",
                 onkeydown: move |evt| {
                     assert_eq!(evt.data.code(), Code::KeyA);
                     tui_ctx.quit();
-                },
+                }
             }
-        })
+        }
     }
 }
 
@@ -73,15 +74,15 @@ fn key_down() {
 fn mouse_down() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
-    fn app(cx: Scope) -> Element {
-        let render_count = use_state(cx, || 0);
-        let tui_ctx: TuiContext = cx.consume_context().unwrap();
-        let render_count_handle = render_count.clone();
-        cx.spawn(async move {
+    fn app() -> Element {
+        let render_count = use_signal(|| 0);
+        let tui_ctx: TuiContext = consume_context();
+        let mut render_count_handle = render_count;
+        spawn(async move {
             PollN::new(2).await;
-            render_count_handle.modify(|x| *x + 1);
+            render_count_handle.with_mut(|x| *x + 1);
         });
-        if *render_count.get() > 2 {
+        if render_count() > 2 {
             panic!("Event was not received");
         }
         tui_ctx.inject_event(Event::Mouse(MouseEvent {
@@ -90,16 +91,18 @@ fn mouse_down() {
             kind: crossterm::event::MouseEventKind::Down(MouseButton::Left),
             modifiers: KeyModifiers::NONE,
         }));
-        cx.render(rsx! {
+        rsx! {
             div {
                 width: "100%",
                 height: "100%",
                 onmousedown: move |evt| {
-                    assert!(evt.data.held_buttons().contains(dioxus_html::input_data::MouseButton::Primary));
+                    assert!(
+                        evt.data.held_buttons().contains(dioxus_html::input_data::MouseButton::Primary)
+                    );
                     tui_ctx.quit();
-                },
+                }
             }
-        })
+        }
     }
 }
 
@@ -107,15 +110,15 @@ fn mouse_down() {
 fn mouse_up() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
-    fn app(cx: Scope) -> Element {
-        let render_count = use_state(cx, || 0);
-        let tui_ctx: TuiContext = cx.consume_context().unwrap();
-        let render_count_handle = render_count.clone();
-        cx.spawn(async move {
+    fn app() -> Element {
+        let render_count = use_signal(|| 0);
+        let tui_ctx: TuiContext = consume_context();
+        let mut render_count_handle = render_count;
+        spawn(async move {
             PollN::new(3).await;
-            render_count_handle.modify(|x| *x + 1);
+            render_count_handle.with_mut(|x| *x + 1);
         });
-        if *render_count.get() > 2 {
+        if render_count() > 2 {
             panic!("Event was not received");
         }
         tui_ctx.inject_event(Event::Mouse(MouseEvent {
@@ -130,15 +133,15 @@ fn mouse_up() {
             kind: crossterm::event::MouseEventKind::Up(MouseButton::Left),
             modifiers: KeyModifiers::NONE,
         }));
-        cx.render(rsx! {
+        rsx! {
             div {
                 width: "100%",
                 height: "100%",
                 onmouseup: move |_| {
                     tui_ctx.quit();
-                },
+                }
             }
-        })
+        }
     }
 }
 
@@ -146,15 +149,15 @@ fn mouse_up() {
 fn mouse_enter() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
-    fn app(cx: Scope) -> Element {
-        let render_count = use_state(cx, || 0);
-        let tui_ctx: TuiContext = cx.consume_context().unwrap();
-        let render_count_handle = render_count.clone();
-        cx.spawn(async move {
+    fn app() -> Element {
+        let render_count = use_signal(|| 0);
+        let mut render_count_handle = render_count;
+        let tui_ctx: TuiContext = consume_context();
+        spawn(async move {
             PollN::new(3).await;
-            render_count_handle.modify(|x| *x + 1);
+            render_count_handle.with_mut(|x| *x + 1);
         });
-        if *render_count.get() > 2 {
+        if render_count() > 2 {
             panic!("Event was not received");
         }
         tui_ctx.inject_event(Event::Mouse(MouseEvent {
@@ -169,15 +172,15 @@ fn mouse_enter() {
             kind: crossterm::event::MouseEventKind::Moved,
             modifiers: KeyModifiers::NONE,
         }));
-        cx.render(rsx! {
+        rsx! {
             div {
                 width: "50%",
                 height: "50%",
                 onmouseenter: move |_| {
                     tui_ctx.quit();
-                },
+                }
             }
-        })
+        }
     }
 }
 
@@ -185,15 +188,15 @@ fn mouse_enter() {
 fn mouse_exit() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
-    fn app(cx: Scope) -> Element {
-        let render_count = use_state(cx, || 0);
-        let tui_ctx: TuiContext = cx.consume_context().unwrap();
-        let render_count_handle = render_count.clone();
-        cx.spawn(async move {
+    fn app() -> Element {
+        let render_count = use_signal(|| 0);
+        let tui_ctx: TuiContext = consume_context();
+        let mut render_count_handle = render_count;
+        spawn(async move {
             PollN::new(3).await;
-            render_count_handle.modify(|x| *x + 1);
+            render_count_handle.with_mut(|x| *x + 1);
         });
-        if *render_count.get() > 2 {
+        if render_count() > 2 {
             panic!("Event was not received");
         }
         tui_ctx.inject_event(Event::Mouse(MouseEvent {
@@ -208,15 +211,15 @@ fn mouse_exit() {
             kind: crossterm::event::MouseEventKind::Moved,
             modifiers: KeyModifiers::NONE,
         }));
-        cx.render(rsx! {
+        rsx! {
             div {
                 width: "50%",
                 height: "50%",
                 onmouseenter: move |_| {
                     tui_ctx.quit();
-                },
+                }
             }
-        })
+        }
     }
 }
 
@@ -224,15 +227,15 @@ fn mouse_exit() {
 fn mouse_move() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
-    fn app(cx: Scope) -> Element {
-        let render_count = use_state(cx, || 0);
-        let tui_ctx: TuiContext = cx.consume_context().unwrap();
-        let render_count_handle = render_count.clone();
-        cx.spawn(async move {
+    fn app() -> Element {
+        let render_count = use_signal(|| 0);
+        let tui_ctx: TuiContext = consume_context();
+        let mut render_count_handle = render_count;
+        spawn(async move {
             PollN::new(3).await;
-            render_count_handle.modify(|x| *x + 1);
+            render_count_handle.with_mut(|x| *x + 1);
         });
-        if *render_count.get() > 2 {
+        if render_count() > 2 {
             panic!("Event was not received");
         }
         tui_ctx.inject_event(Event::Mouse(MouseEvent {
@@ -247,15 +250,15 @@ fn mouse_move() {
             kind: crossterm::event::MouseEventKind::Moved,
             modifiers: KeyModifiers::NONE,
         }));
-        cx.render(rsx! {
+        rsx! {
             div {
                 width: "100%",
                 height: "100%",
-                onmousemove: move |_|{
+                onmousemove: move |_| {
                     tui_ctx.quit();
-                },
+                }
             }
-        })
+        }
     }
 }
 
@@ -263,15 +266,15 @@ fn mouse_move() {
 fn wheel() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
-    fn app(cx: Scope) -> Element {
-        let render_count = use_state(cx, || 0);
-        let tui_ctx: TuiContext = cx.consume_context().unwrap();
-        let render_count_handle = render_count.clone();
-        cx.spawn(async move {
+    fn app() -> Element {
+        let render_count = use_signal(|| 0);
+        let tui_ctx: TuiContext = consume_context();
+        let mut render_count_handle = render_count;
+        spawn(async move {
             PollN::new(3).await;
-            render_count_handle.modify(|x| *x + 1);
+            render_count_handle.with_mut(|x| *x + 1);
         });
-        if *render_count.get() > 2 {
+        if render_count() > 2 {
             panic!("Event was not received");
         }
         tui_ctx.inject_event(Event::Mouse(MouseEvent {
@@ -286,16 +289,16 @@ fn wheel() {
             kind: crossterm::event::MouseEventKind::ScrollDown,
             modifiers: KeyModifiers::NONE,
         }));
-        cx.render(rsx! {
+        rsx! {
             div {
                 width: "100%",
                 height: "100%",
                 onwheel: move |evt| {
                     assert!(evt.data.delta().strip_units().y > 0.0);
                     tui_ctx.quit();
-                },
+                }
             }
-        })
+        }
     }
 }
 
@@ -303,15 +306,15 @@ fn wheel() {
 fn click() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
-    fn app(cx: Scope) -> Element {
-        let render_count = use_state(cx, || 0);
-        let tui_ctx: TuiContext = cx.consume_context().unwrap();
-        let render_count_handle = render_count.clone();
-        cx.spawn(async move {
+    fn app() -> Element {
+        let render_count = use_signal(|| 0);
+        let tui_ctx: TuiContext = consume_context();
+        let mut render_count_handle = render_count;
+        spawn(async move {
             PollN::new(3).await;
-            render_count_handle.modify(|x| *x + 1);
+            render_count_handle.with_mut(|x| *x + 1);
         });
-        if *render_count.get() > 2 {
+        if render_count() > 2 {
             panic!("Event was not received");
         }
         tui_ctx.inject_event(Event::Mouse(MouseEvent {
@@ -326,15 +329,15 @@ fn click() {
             kind: crossterm::event::MouseEventKind::Up(MouseButton::Left),
             modifiers: KeyModifiers::NONE,
         }));
-        cx.render(rsx! {
+        rsx! {
             div {
                 width: "100%",
                 height: "100%",
-                onclick: move |_|{
+                onclick: move |_| {
                     tui_ctx.quit();
-                },
+                }
             }
-        })
+        }
     }
 }
 
@@ -342,15 +345,15 @@ fn click() {
 fn context_menu() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
-    fn app(cx: Scope) -> Element {
-        let render_count = use_state(cx, || 0);
-        let tui_ctx: TuiContext = cx.consume_context().unwrap();
-        let render_count_handle = render_count.clone();
-        cx.spawn(async move {
+    fn app() -> Element {
+        let render_count = use_signal(|| 0);
+        let tui_ctx: TuiContext = consume_context();
+        let mut render_count_handle = render_count;
+        spawn(async move {
             PollN::new(3).await;
-            render_count_handle.modify(|x| *x + 1);
+            render_count_handle.with_mut(|x| *x + 1);
         });
-        if *render_count.get() > 2 {
+        if render_count() > 2 {
             panic!("Event was not received");
         }
         tui_ctx.inject_event(Event::Mouse(MouseEvent {
@@ -365,14 +368,14 @@ fn context_menu() {
             kind: crossterm::event::MouseEventKind::Up(MouseButton::Right),
             modifiers: KeyModifiers::NONE,
         }));
-        cx.render(rsx! {
+        rsx! {
             div {
                 width: "100%",
                 height: "100%",
-                oncontextmenu: move |_|{
+                oncontextmenu: move |_| {
                     tui_ctx.quit();
-                },
+                }
             }
-        })
+        }
     }
 }

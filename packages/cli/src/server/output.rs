@@ -1,6 +1,7 @@
 use crate::server::Diagnostic;
-use crate::CrateConfig;
 use colored::Colorize;
+use dioxus_cli_config::crate_root;
+use dioxus_cli_config::CrateConfig;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -22,17 +23,20 @@ pub fn print_console_info(
     options: PrettierOptions,
     web_info: Option<WebServerInfo>,
 ) {
-    if let Ok(native_clearseq) = Command::new(if cfg!(target_os = "windows") {
-        "cls"
-    } else {
-        "clear"
-    })
-    .output()
-    {
-        print!("{}", String::from_utf8_lossy(&native_clearseq.stdout));
-    } else {
-        // Try ANSI-Escape characters
-        print!("\x1b[2J\x1b[H");
+    // Don't clear the screen if the user has set the DIOXUS_LOG environment variable to "trace" so that we can see the logs
+    if Some("trace") != std::env::var("DIOXUS_LOG").ok().as_deref() {
+        if let Ok(native_clearseq) = Command::new(if cfg!(target_os = "windows") {
+            "cls"
+        } else {
+            "clear"
+        })
+        .output()
+        {
+            print!("{}", String::from_utf8_lossy(&native_clearseq.stdout));
+        } else {
+            // Try ANSI-Escape characters
+            print!("\x1b[2J\x1b[H");
+        }
     }
 
     let mut profile = if config.release { "Release" } else { "Debug" }.to_string();
@@ -40,25 +44,19 @@ pub fn print_console_info(
         profile = config.custom_profile.as_ref().unwrap().to_string();
     }
     let hot_reload = if config.hot_reload { "RSX" } else { "Normal" };
-    let crate_root = crate::cargo::crate_root().unwrap();
+    let crate_root = crate_root().unwrap();
     let custom_html_file = if crate_root.join("index.html").is_file() {
         "Custom [index.html]"
     } else {
         "Default"
     };
-    let url_rewrite = if config
-        .dioxus_config
-        .web
-        .watcher
-        .index_on_404
-        .unwrap_or(false)
-    {
+    let url_rewrite = if config.dioxus_config.web.watcher.index_on_404 {
         "True"
     } else {
         "False"
     };
 
-    let proxies = config.dioxus_config.web.proxy.as_ref();
+    let proxies = &config.dioxus_config.web.proxy;
 
     if options.changed.is_empty() {
         println!(
@@ -106,12 +104,10 @@ pub fn print_console_info(
     println!();
     println!("\t> Profile : {}", profile.green());
     println!("\t> Hot Reload : {}", hot_reload.cyan());
-    if let Some(proxies) = proxies {
-        if !proxies.is_empty() {
-            println!("\t> Proxies :");
-            for proxy in proxies {
-                println!("\t\t- {}", proxy.backend.blue());
-            }
+    if !proxies.is_empty() {
+        println!("\t> Proxies :");
+        for proxy in proxies {
+            println!("\t\t- {}", proxy.backend.blue());
         }
     }
     println!("\t> Index Template : {}", custom_html_file.green());

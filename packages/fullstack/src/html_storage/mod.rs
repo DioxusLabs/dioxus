@@ -1,7 +1,8 @@
 #![allow(unused)]
+use base64::Engine;
+use std::{io::Cursor, sync::atomic::AtomicUsize};
 
-use std::sync::atomic::AtomicUsize;
-
+use base64::engine::general_purpose::STANDARD;
 use serde::{de::DeserializeOwned, Serialize};
 
 pub(crate) mod deserialize;
@@ -15,7 +16,8 @@ pub(crate) struct HTMLData {
 
 impl HTMLData {
     pub(crate) fn push<T: Serialize>(&mut self, value: &T) {
-        let serialized = postcard::to_allocvec(value).unwrap();
+        let mut serialized = Vec::new();
+        serialize::serde_to_writable(value, &mut serialized).unwrap();
         self.data.push(serialized);
     }
 
@@ -44,8 +46,9 @@ impl HTMLDataCursor {
             return None;
         }
         let mut cursor = &self.data[current];
+        let mut decoded = STANDARD.decode(cursor).unwrap();
         self.index.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        match postcard::from_bytes(cursor) {
+        match ciborium::from_reader(Cursor::new(decoded)) {
             Ok(x) => Some(x),
             Err(e) => {
                 tracing::error!("Error deserializing data: {:?}", e);
@@ -57,7 +60,7 @@ impl HTMLDataCursor {
 
 #[test]
 fn serialized_and_deserializes() {
-    use postcard::to_allocvec;
+    use ciborium::{from_reader, into_writer};
 
     #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
     struct Data {
@@ -97,7 +100,9 @@ fn serialized_and_deserializes() {
                 "original size: {}",
                 std::mem::size_of::<Data>() * data.len()
             );
-            println!("serialized size: {}", to_allocvec(&data).unwrap().len());
+            let mut bytes = Vec::new();
+            into_writer(&data, &mut bytes).unwrap();
+            println!("serialized size: {}", bytes.len());
             println!("compressed size: {}", as_string.len());
 
             let decoded: Vec<Data> = deserialize::serde_from_bytes(&as_string).unwrap();

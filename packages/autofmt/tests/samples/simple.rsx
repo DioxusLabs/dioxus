@@ -6,7 +6,7 @@ rsx! {
     div { "hello world!" }
 
     // Compression with attributes
-    div { key: "a", class: "ban", style: "color: red" }
+    div { key: "{a}", class: "ban", style: "color: red" }
 
     // Nested one level
     div { div { "nested" } }
@@ -33,7 +33,7 @@ rsx! {
     }
 
     // No children, minimal props
-    img { class: "mb-6 mx-auto h-24", src: "artemis-assets/images/friends.png", alt: "" }
+    img { class: "mb-6 mx-auto h-24", src: "artemis-assets/images/friends.png" }
 
     // One level compression
     div {

@@ -1,18 +1,23 @@
+//! Scroll elements using their MountedData
+//!
+//! Dioxus exposes a few helpful APIs around elements (mimicking the DOM APIs) to allow you to interact with elements
+//! across the renderers. This includes scrolling, reading dimensions, and more.
+//!
+//! In this example we demonstrate how to scroll to the top of the page using the `scroll_to` method on the `MountedData`
+
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch_desktop(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let header_element = use_ref(cx, || None);
+fn app() -> Element {
+    let mut header_element = use_signal(|| None);
 
-    cx.render(rsx!(
+    rsx! {
         div {
             h1 {
-                onmounted: move |cx| {
-                    header_element.set(Some(cx.inner().clone()));
-                },
+                onmounted: move |cx| header_element.set(Some(cx.data())),
                 "Scroll to top example"
             }
 
@@ -21,13 +26,13 @@ fn app(cx: Scope) -> Element {
             }
 
             button {
-                onclick: move |_| {
-                    if let Some(header) = header_element.read().as_ref() {
-                        header.scroll_to(ScrollBehavior::Smooth);
+                onclick: move |_| async move {
+                    if let Some(header) = header_element.cloned() {
+                        let _ = header.scroll_to(ScrollBehavior::Smooth).await;
                     }
                 },
                 "Scroll to top"
             }
         }
-    ))
+    }
 }

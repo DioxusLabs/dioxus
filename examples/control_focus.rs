@@ -1,44 +1,62 @@
+//! Managing focus
+//!
+//! This example shows how to manage focus in a Dioxus application. We implement a "roulette" that focuses on each input
+//! in the grid every few milliseconds until the user interacts with the inputs.
+
 use std::rc::Rc;
 
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch_desktop(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let elements: &UseRef<Vec<Rc<MountedData>>> = use_ref(cx, Vec::new);
-    let running = use_state(cx, || true);
+fn app() -> Element {
+    // Element data is stored as Rc<MountedData> so we can clone it and pass it around
+    let mut elements = use_signal(Vec::<Rc<MountedData>>::new);
+    let mut running = use_signal(|| true);
 
-    use_future!(cx, |(elements, running)| async move {
+    use_future(move || async move {
         let mut focused = 0;
-        if *running.current() {
-            loop {
-                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
-                if let Some(element) = elements.read().get(focused) {
-                    element.set_focus(true);
-                } else {
-                    focused = 0;
-                }
-                focused += 1;
+
+        loop {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+            if !running() {
+                continue;
             }
+
+            if let Some(element) = elements.with(|f| f.get(focused).cloned()) {
+                _ = element.set_focus(true).await;
+            } else {
+                focused = 0;
+            }
+
+            focused += 1;
         }
     });
 
-    cx.render(rsx!(
-        div {
-            h1 { "Input Roulette" }
+    rsx! {
+        style { {include_str!("./assets/roulette.css")} }
+        h1 { "Input Roulette" }
+        button { onclick: move |_| running.toggle(), "Toggle roulette" }
+        div { id: "roulette-grid",
+            // Restart the roulette if the user presses escape
+            onkeydown: move |event| {
+                if event.code().to_string() == "Escape" {
+                    running.set(true);
+                }
+            },
+
+            // Draw the grid of inputs
             for i in 0..100 {
                 input {
+                    r#type: "number",
                     value: "{i}",
-                    onmounted: move |cx| {
-                        elements.write().push(cx.inner().clone());
-                    },
-                    oninput: move |_| {
-                        running.set(false);
-                    }
+                    onmounted: move |cx| elements.write().push(cx.data()),
+                    oninput: move |_| running.set(false),
                 }
             }
         }
-    ))
+    }
 }

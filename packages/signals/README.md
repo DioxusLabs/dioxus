@@ -11,15 +11,15 @@ use dioxus::prelude::*;
 use dioxus_signals::*;
 
 #[component]
-fn App(cx: Scope) -> Element {
-    let signal = use_signal(cx, || "hello world".to_string());
+fn App() -> Element {
+    let signal = use_signal(|| "hello world".to_string());
 
     spawn(async move {
         // signal is Copy even though String is not copy
         print!("{signal}");
     });
 
-    render! {
+    rsx! {
         "{signal}"
     }
 }
@@ -34,20 +34,20 @@ use dioxus::prelude::*;
 use dioxus_signals::*;
 
 #[component]
-fn App(cx: Scope) -> Element {
+fn App() -> Element {
     // Because signal is never read in this component, this component will not rerun when the signal changes
-    let signal = use_signal(cx, || 0);
+    let mut signal = use_signal(|| 0);
 
-    render! {
+    rsx! {
         button {
             onclick: move |_| {
-                *signal.write() += 1;
+                signal += 1;
             },
             "Increase"
         }
         for id in 0..10 {
             Child {
-                signal: signal,
+                signal,
             }
         }
     }
@@ -58,11 +58,10 @@ struct ChildProps {
     signal: Signal<usize>,
 }
 
-#[component]
-fn Child(cx: Scope<ChildProps>) -> Element {
+fn Child(props: ChildProps) -> Element {
     // This component does read from the signal, so when the signal changes it will rerun
-    render! {
-        "{cx.props.signal}"
+    rsx! {
+        "{props.signal}"
     }
 }
 ```
@@ -74,20 +73,20 @@ use dioxus::prelude::*;
 use dioxus_signals::*;
 
 #[component]
-fn App(cx: Scope) -> Element {
+fn App() -> Element {
     // Because signal is never read in this component, this component will not rerun when the signal changes
-    use_context_provider(cx, || Signal::new(0));
-    
-    render! {
+    use_context_provider(|| Signal::new(0));
+
+    rsx! {
         Child {}
     }
 }
 
 #[component]
-fn Child(cx: Scope) -> Element {
-    let signal: Signal<i32> = *use_context(cx).unwrap();
+fn Child() -> Element {
+    let signal: Signal<i32> = use_context();
     // This component does read from the signal, so when the signal changes it will rerun
-    render! {
+    rsx! {
         "{signal}"
     }
 }
@@ -97,31 +96,31 @@ fn Child(cx: Scope) -> Element {
 
 In addition to local subscriptions in components, `dioxus-signals` provides a way to derive data with local subscriptions.
 
-The use_selector hook will only rerun when any signals inside the hook change:
+The use_memo hook will only rerun when any signals inside the hook change:
 
 ```rust
 use dioxus::prelude::*;
 use dioxus_signals::*;
 
 #[component]
-fn App(cx: Scope) -> Element {
-    let signal = use_signal(cx, || 0);
-    let doubled = use_selector(cx, || signal * 2);
+fn App() -> Element {
+    let mut signal = use_signal(|| 0);
+    let doubled = use_memo(move || signal * 2);
 
-    render! {
+    rsx! {
         button {
-            onclick: move |_| *signal.write() += 1,
+            onclick: move |_| signal += 1,
             "Increase"
         }
         Child {
-            signal: signal
+            signal: doubled
         }
     }
 }
 
 #[component]
-fn Child(cx: Scope, signal: ReadOnlySignal<usize>) -> Element {
-    render! {
+fn Child(signal: ReadOnlySignal<usize>) -> Element {
+    rsx! {
         "{signal}"
     }
 }

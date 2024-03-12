@@ -14,6 +14,9 @@ out_dir = "dist"
 # resource (static) file folder
 asset_dir = "public"
 
+# hot reload by default
+hot_reload = true
+
 [web.app]
 
 # HTML title tag content

@@ -1,10 +1,13 @@
 #![allow(unused, non_upper_case_globals, non_snake_case)]
+
+use dioxus_core::NoOpMutations;
 use std::collections::HashMap;
 use std::rc::Rc;
 
 use dioxus::prelude::*;
 use dioxus_core::ElementId;
 use dioxus_signals::*;
+use std::cell::RefCell;
 
 #[test]
 fn reading_subscribes() {
@@ -18,21 +21,21 @@ fn reading_subscribes() {
 
     let counter = Rc::new(RefCell::new(RunCounter::default()));
     let mut dom = VirtualDom::new_with_props(
-        |cx| {
-            let mut signal = use_signal(cx, || 0);
+        |props: Rc<RefCell<RunCounter>>| {
+            let mut signal = use_signal(|| 0);
 
-            println!("Parent: {:?}", cx.scope_id());
-            if cx.generation() == 1 {
+            println!("Parent: {:?}", current_scope_id());
+            if generation() == 1 {
                 signal += 1;
             }
 
-            cx.props.borrow_mut().parent += 1;
+            props.borrow_mut().parent += 1;
 
-            render! {
+            rsx! {
                 for id in 0..10 {
                     Child {
                         signal: signal,
-                        counter: cx.props.clone()
+                        counter: props.clone()
                     }
                 }
             }
@@ -52,21 +55,21 @@ fn reading_subscribes() {
         }
     }
 
-    fn Child(cx: Scope<ChildProps>) -> Element {
-        println!("Child: {:?}", cx.scope_id());
-        *cx.props
+    fn Child(props: ChildProps) -> Element {
+        println!("Child: {:?}", current_scope_id());
+        *props
             .counter
             .borrow_mut()
             .children
-            .entry(cx.scope_id())
+            .entry(current_scope_id().unwrap())
             .or_default() += 1;
 
-        render! {
-            "{cx.props.signal}"
+        rsx! {
+            "{props.signal}"
         }
     }
 
-    let _ = dom.rebuild().santize();
+    dom.rebuild_in_place();
 
     {
         let current_counter = counter.borrow();
@@ -78,8 +81,8 @@ fn reading_subscribes() {
     }
 
     dom.mark_dirty(ScopeId::ROOT);
-    dom.render_immediate();
-    dom.render_immediate();
+    dom.render_immediate(&mut NoOpMutations);
+    dom.render_immediate(&mut NoOpMutations);
 
     {
         let current_counter = counter.borrow();

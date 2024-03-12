@@ -1,0 +1,13 @@
+#navbar {
+    display: flex;
+    justify-content: flex-start;
+    gap: 1rem;
+    align-items: center;
+}
+
+#blog-list {
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+    gap: 1rem;
+}

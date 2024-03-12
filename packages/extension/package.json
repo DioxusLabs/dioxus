@@ -2,14 +2,14 @@
     "name": "dioxus",
     "displayName": "Dioxus",
     "description": "Useful tools for working with Dioxus",
-    "version": "0.0.2",
+    "version": "0.4.0",
     "publisher": "DioxusLabs",
     "private": true,
     "license": "MIT",
     "icon": "static/icon.png",
     "repository": {
         "type": "git",
-        "url": "https://github.com/DioxusLabs/cli"
+        "url": "https://github.com/DioxusLabs/dioxus"
     },
     "engines": {
         "vscode": "^1.68.1"

@@ -9,12 +9,12 @@ publish = false
 [dependencies]
 dioxus-web = { workspace = true, features = ["hydrate"], optional = true }
 dioxus = { workspace = true }
-dioxus-fullstack = { workspace = true, features = ["router"] }
-dioxus-router = { workspace = true}
+dioxus-fullstack = { workspace = true }
+dioxus-router = { workspace = true, features = ["fullstack"] }
 tokio = { workspace = true, features = ["full"], optional = true }
 serde = "1.0.159"
 
 [features]
 default = []
-ssr = ["tokio", "dioxus-fullstack/ssr"]
+server = ["tokio", "dioxus-fullstack/server"]
 web = ["dioxus-web"]

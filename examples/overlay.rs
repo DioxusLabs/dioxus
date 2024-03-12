@@ -1,34 +1,47 @@
+//! This example demonstrates how to create an overlay window with dioxus.
+//!
+//! Basically, we just create a new window with a transparent background and no decorations, size it to the screen, and
+//! then we can draw whatever we want on it. In this case, we're drawing a simple overlay with a draggable header.
+//!
+//! We also add a global shortcut to toggle the overlay on and off, so you could build a raycast-type app with this.
+
+use dioxus::desktop::{
+    tao::dpi::PhysicalPosition, use_global_shortcut, LogicalSize, WindowBuilder,
+};
 use dioxus::prelude::*;
-use dioxus_desktop::{tao::dpi::PhysicalPosition, use_window, LogicalSize, WindowBuilder};
 
 fn main() {
-    dioxus_desktop::launch_cfg(app, make_config());
+    LaunchBuilder::desktop().with_cfg(make_config()).launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let window = use_window(cx);
+fn app() -> Element {
+    let mut show_overlay = use_signal(|| true);
 
-    cx.render(rsx! {
-        div {
-            width: "100%",
-            height: "100%",
-            background_color: "red",
-            border: "1px solid black",
+    _ = use_global_shortcut("cmd+g", move || show_overlay.toggle());
 
+    rsx! {
+        if show_overlay() {
             div {
                 width: "100%",
-                height: "10px",
-                background_color: "black",
-                onmousedown: move |_| window.drag(),
-            }
+                height: "100%",
+                background_color: "red",
+                border: "1px solid black",
 
-            "This is an overlay!"
+                div {
+                    width: "100%",
+                    height: "10px",
+                    background_color: "black",
+                    onmousedown: move |_| dioxus::desktop::window().drag(),
+                }
+
+                "This is an overlay!"
+            }
         }
-    })
+    }
 }
 
-fn make_config() -> dioxus_desktop::Config {
-    dioxus_desktop::Config::default()
+fn make_config() -> dioxus::desktop::Config {
+    dioxus::desktop::Config::default()
         .with_window(make_window())
         .with_custom_head(
             r#"

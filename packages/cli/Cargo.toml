@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-cli"
-version = "0.4.1"
+version = { workspace = true }
 authors = ["Jonathan Kelley"]
 edition = "2021"
 description = "CLI tool for developing, testing, and publishing Dioxus apps"
@@ -14,38 +14,42 @@ clap = { version = "4.2", features = ["derive"] }
 thiserror = { workspace = true }
 wasm-bindgen-cli-support = "0.2"
 colored = "2.0.0"
+dioxus-cli-config = { workspace = true, features = ["cli"] }
 
 # features
 log = "0.4.14"
 fern = { version = "0.6.0", features = ["colored"] }
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
-toml = "0.5.8"
+toml = {workspace = true}
 fs_extra = "1.2.0"
-cargo_toml = "0.16.0"
-futures = "0.3.21"
+cargo_toml = "0.18.0"
+futures-util = { workspace = true }
 notify = { version = "5.0.0-pre.16", features = ["serde"] }
-html_parser  = { workspace = true }
-cargo_metadata = "0.15.0"
+html_parser = { workspace = true }
+cargo_metadata = "0.18.1"
 tokio = { version = "1.16.1", features = ["fs", "sync", "rt", "macros"] }
 atty = "0.2.14"
 chrono = "0.4.19"
-anyhow = "1.0.53"
-hyper = "0.14.17"
-hyper-rustls = "0.23.2"
+anyhow = "1"
+hyper = { workspace = true }
+hyper-util = "0.1.3"
+hyper-rustls = { workspace = true }
 indicatif = "0.17.5"
 subprocess = "0.2.9"
+rayon = "1.8.0"
 
-axum = { version = "0.5.1", features = ["ws", "headers"] }
-axum-server = { version = "0.5.1", features = ["tls-rustls"] }
-tower-http = { version = "0.2.2", features = ["full"] }
+axum = { workspace = true, features = ["ws"] }
+axum-server = { workspace = true, features = ["tls-rustls"] }
+axum-extra = { workspace = true, features = ["typed-header"] }
+tower-http = { workspace = true, features = ["full"] }
+
 headers = "0.3.7"
-
 walkdir = "2"
 
 # tools download
-dirs = "4.0.0"
-reqwest = { version = "0.11", features = [
+dirs = "5.0.1"
+reqwest = { workspace = true, features = [
     "rustls-tls",
     "stream",
     "trust-dns",
@@ -54,8 +58,7 @@ reqwest = { version = "0.11", features = [
 flate2 = "1.0.22"
 tar = "0.4.38"
 zip = "0.6.2"
-tower = "0.4.12"
-syn = { version = "2.0", features = ["full", "extra-traits"] }
+tower = { workspace = true }
 lazy_static = "1.4.0"
 
 # plugin packages
@@ -67,13 +70,18 @@ mlua = { version = "0.8.1", features = [
     "macros",
 ], optional = true }
 ctrlc = "3.2.3"
-open = "4.1.0"
-cargo-generate = "0.18"
-toml_edit = "0.19.11"
+open = "5.0.1"
+cargo-generate = "0.19.0"
+toml_edit = "0.21.0"
 
 # bundling
-tauri-bundler = { version = "=1.3.0", features = ["native-tls-vendored"] }
-tauri-utils = "=1.4.*"
+tauri-bundler = { version = "=1.4.*", features = ["native-tls-vendored"] }
+
+# formatting
+syn = { version = "2.0" }
+prettyplease = { workspace = true }
+
+manganis-cli-support = { workspace = true, features = ["webp", "html"] }
 
 dioxus-autofmt = { workspace = true }
 dioxus-check = { workspace = true }
@@ -83,6 +91,7 @@ dioxus-html = { workspace = true, features = ["hot-reload-context"] }
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-hot-reload = { workspace = true }
 interprocess-docfix = { version = "1.2.2" }
+ignore = "0.4.22"
 
 [features]
 default = []

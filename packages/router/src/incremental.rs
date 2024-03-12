@@ -3,7 +3,7 @@ use core::pin::Pin;
 use std::future::Future;
 use std::str::FromStr;
 
-use dioxus::prelude::*;
+use dioxus_lib::prelude::*;
 use dioxus_ssr::incremental::{
     IncrementalRenderer, IncrementalRendererError, RenderFreshness, WrapBody,
 };
@@ -50,7 +50,7 @@ where
                         &mut tokio::io::sink(),
                         |vdom| {
                             Box::pin(async move {
-                                let _ = vdom.rebuild();
+                                vdom.rebuild_in_place();
                                 vdom.wait_for_suspense().await;
                             })
                         },
@@ -87,14 +87,22 @@ where
     <Rt as FromStr>::Err: std::fmt::Display,
     W: tokio::io::AsyncWrite + Unpin + Send,
 {
-    #[component]
-    fn RenderPath<R>(cx: Scope, path: R) -> Element
+    #[derive(Clone)]
+    struct RootProps<Rt>(Rt);
+
+    impl<Rt> PartialEq for RootProps<Rt> {
+        fn eq(&self, _: &Self) -> bool {
+            true
+        }
+    }
+
+    fn RenderPath<R>(props: RootProps<R>) -> Element
     where
         R: Routable,
         <R as FromStr>::Err: std::fmt::Display,
     {
-        let path = path.clone();
-        render! {
+        let path = props.0;
+        rsx! {
             Router::<R> {
                 config: || RouterConfig::default().history(MemoryHistory::with_initial_path(path))
             }
@@ -104,8 +112,7 @@ where
     renderer
         .render(
             route.to_string(),
-            RenderPath,
-            RenderPathProps { path: route },
+            || VirtualDom::new_with_props(RenderPath, RootProps(route)),
             writer,
             modify_vdom,
             wrapper,

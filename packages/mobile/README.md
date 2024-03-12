@@ -49,7 +49,7 @@ We're going to completely clear out the `dependencies` it generates for us, swap
 name = "dioxus-ios-demo"
 version = "0.1.0"
 authors = ["Jonathan Kelley <jkelleyrtp@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 
 # leave the `lib` declaration
@@ -79,8 +79,8 @@ fn main() {
     dioxus_mobile::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    cx.render(rsx!{
+fn app() -> Element {
+    rsx!{
         div {
             "hello world!"
         }

@@ -3,15 +3,17 @@
 //! However, it has been adopted to fit the Dioxus Props builder pattern.
 //!
 //! For Dioxus, we make a few changes:
-//! - [ ] Automatically implement Into<Option> on the setters (IE the strip setter option)
-//! - [ ] Automatically implement a default of none for optional fields (those explicitly wrapped with Option<T>)
+//! - [x] Automatically implement Into<Option> on the setters (IE the strip setter option)
+//! - [x] Automatically implement a default of none for optional fields (those explicitly wrapped with Option<T>)
 
 use proc_macro2::TokenStream;
 
-use syn::parse::Error;
+use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
+use syn::{parse::Error, PathArguments};
 
 use quote::quote;
+use syn::{parse_quote, Type};
 
 pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
     let data = match &ast.data {
@@ -23,6 +25,10 @@ pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
                 let fields = struct_info
                     .included_fields()
                     .map(|f| struct_info.field_impl(f))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let extends = struct_info
+                    .extend_fields()
+                    .map(|f| struct_info.extends_impl(f))
                     .collect::<Result<Vec<_>, _>>()?;
                 let fields = quote!(#(#fields)*).into_iter();
                 let required_fields = struct_info
@@ -36,6 +42,7 @@ pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
                     #builder_creation
                     #conversion_helper
                     #( #fields )*
+                    #( #extends )*
                     #( #required_fields )*
                     #build_method
                 }
@@ -167,8 +174,8 @@ mod field_info {
     use proc_macro2::TokenStream;
     use quote::quote;
     use syn::spanned::Spanned;
-    use syn::Expr;
     use syn::{parse::Error, punctuated::Punctuated};
+    use syn::{parse_quote, Expr, Path};
 
     use super::util::{
         expr_to_single_string, ident_to_type, path_to_single_string, strip_raw_ident_prefix,
@@ -194,6 +201,22 @@ mod field_info {
 
                 // children field is automatically defaulted to None
                 if name == "children" {
+                    builder_attr.default = Some(
+                        syn::parse(quote!(::core::default::Default::default()).into()).unwrap(),
+                    );
+                }
+
+                // String fields automatically use impl Display
+                if field.ty == parse_quote!(::std::string::String)
+                    || field.ty == parse_quote!(std::string::String)
+                    || field.ty == parse_quote!(string::String)
+                    || field.ty == parse_quote!(String)
+                {
+                    builder_attr.from_displayable = true;
+                }
+
+                // extended field is automatically empty
+                if !builder_attr.extends.is_empty() {
                     builder_attr.default = Some(
                         syn::parse(quote!(::core::default::Default::default()).into()).unwrap(),
                     );
@@ -243,10 +266,6 @@ mod field_info {
             }
             .into()
         }
-
-        pub fn type_from_inside_option(&self, check_option_name: bool) -> Option<&syn::Type> {
-            type_from_inside_option(self.ty, check_option_name)
-        }
     }
 
     #[derive(Debug, Default, Clone)]
@@ -255,8 +274,10 @@ mod field_info {
         pub doc: Option<syn::Expr>,
         pub skip: bool,
         pub auto_into: bool,
+        pub from_displayable: bool,
         pub strip_option: bool,
         pub ignore_option: bool,
+        pub extends: Vec<Path>,
     }
 
     impl FieldBuilderAttr {
@@ -309,6 +330,17 @@ mod field_info {
                     let name = expr_to_single_string(&assign.left)
                         .ok_or_else(|| Error::new_spanned(&assign.left, "Expected identifier"))?;
                     match name.as_str() {
+                        "extends" => {
+                            if let syn::Expr::Path(path) = *assign.right {
+                                self.extends.push(path.path);
+                                Ok(())
+                            } else {
+                                Err(Error::new_spanned(
+                                    assign.right,
+                                    "Expected simple identifier",
+                                ))
+                            }
+                        }
                         "default" => {
                             self.default = Some(*assign.right);
                             Ok(())
@@ -363,6 +395,11 @@ mod field_info {
                             Ok(())
                         }
 
+                        "extend" => {
+                            self.extends.push(path.path);
+                            Ok(())
+                        }
+
                         _ => {
                             macro_rules! handle_fields {
                                 ( $( $flag:expr, $field:ident, $already:expr; )* ) => {
@@ -387,6 +424,7 @@ mod field_info {
                             handle_fields!(
                                 "skip", skip, "skipped";
                                 "into", auto_into, "calling into() on the argument";
+                                "displayable", from_displayable, "calling to_string() on the argument";
                                 "strip_option", strip_option, "putting the argument in Some(...)";
                             )
                         }
@@ -416,6 +454,10 @@ mod field_info {
                             }
                             "auto_into" => {
                                 self.auto_into = false;
+                                Ok(())
+                            }
+                            "displayable" => {
+                                self.from_displayable = false;
                                 Ok(())
                             }
                             "optional" => {
@@ -466,13 +508,16 @@ fn type_from_inside_option(ty: &syn::Type, check_option_name: bool) -> Option<&s
 }
 
 mod struct_info {
+    use convert_case::{Case, Casing};
     use proc_macro2::TokenStream;
     use quote::quote;
     use syn::parse::Error;
     use syn::punctuated::Punctuated;
-    use syn::Expr;
+    use syn::spanned::Spanned;
+    use syn::{Expr, Ident};
 
     use super::field_info::{FieldBuilderAttr, FieldInfo};
+    use super::looks_like_signal_type;
     use super::util::{
         empty_type, empty_type_tuple, expr_to_single_string, make_punctuated_single,
         modify_types_generics_hack, path_to_single_string, strip_raw_ident_prefix, type_tuple,
@@ -493,7 +538,15 @@ mod struct_info {
 
     impl<'a> StructInfo<'a> {
         pub fn included_fields(&self) -> impl Iterator<Item = &FieldInfo<'a>> {
-            self.fields.iter().filter(|f| !f.builder_attr.skip)
+            self.fields
+                .iter()
+                .filter(|f| !f.builder_attr.skip && f.builder_attr.extends.is_empty())
+        }
+
+        pub fn extend_fields(&self) -> impl Iterator<Item = &FieldInfo<'a>> {
+            self.fields
+                .iter()
+                .filter(|f| !f.builder_attr.extends.is_empty())
         }
 
         pub fn new(
@@ -526,6 +579,89 @@ mod struct_info {
             generics
         }
 
+        fn has_signal_fields(&self) -> bool {
+            self.fields.iter().any(|f| looks_like_signal_type(f.ty))
+        }
+
+        fn memoize_impl(&self) -> Result<TokenStream, Error> {
+            // First check if there are any ReadOnlySignal fields, if there are not, we can just use the partialEq impl
+            let has_signal_fields = self.has_signal_fields();
+
+            if has_signal_fields {
+                let signal_fields: Vec<_> = self
+                    .included_fields()
+                    .filter(|f| looks_like_signal_type(f.ty))
+                    .map(|f| {
+                        let name = f.name;
+                        quote!(#name)
+                    })
+                    .collect();
+
+                Ok(quote! {
+                    // First check if the fields are equal
+                    let exactly_equal = self == new;
+                    if exactly_equal {
+                        return true;
+                    }
+
+                    // If they are not, move over the signal fields and check if they are equal
+                    #(
+                        let mut #signal_fields = self.#signal_fields;
+                        self.#signal_fields = new.#signal_fields;
+                    )*
+
+                    // Then check if the fields are equal again
+                    let non_signal_fields_equal = self == new;
+
+                    // If they are not equal, we still need to rerun the component
+                    if !non_signal_fields_equal {
+                        return false;
+                    }
+
+                    trait NonPartialEq: Sized {
+                        fn compare(&self, other: &Self) -> bool;
+                    }
+
+                    impl<T> NonPartialEq for &&T {
+                        fn compare(&self, other: &Self) -> bool {
+                            false
+                        }
+                    }
+
+                    trait CanPartialEq: PartialEq {
+                        fn compare(&self, other: &Self) -> bool;
+                    }
+
+                    impl<T: PartialEq> CanPartialEq for T {
+                        fn compare(&self, other: &Self) -> bool {
+                            self == other
+                        }
+                    }
+
+                    // If they are equal, we don't need to rerun the component we can just update the existing signals
+                    #(
+                        // Try to memo the signal
+                        let field_eq = {
+                            let old_value: &_ = &*#signal_fields.peek();
+                            let new_value: &_ = &*new.#signal_fields.peek();
+                            (&old_value).compare(&&new_value)
+                        };
+                        if !field_eq {
+                            (#signal_fields).__set(new.#signal_fields.__take());
+                        }
+                        // Move the old value back
+                        self.#signal_fields = #signal_fields;
+                    )*
+
+                    true
+                })
+            } else {
+                Ok(quote! {
+                    self == new
+                })
+            }
+        }
+
         pub fn builder_creation_impl(&self) -> Result<TokenStream, Error> {
             let StructInfo {
                 ref vis,
@@ -534,13 +670,9 @@ mod struct_info {
                 ..
             } = *self;
 
-            // we're generating stuff that goes into unsafe code here
-            // we use the heuristic: are there *any* generic parameters?
-            // If so, then they might have non-static lifetimes and we can't compare two generic things that *might borrow*
-            // Therefore, we will generate code that shortcircuits the "comparison" in memoization
-            let are_there_generics = !self.generics.params.is_empty();
-
-            let (impl_generics, ty_generics, where_clause) = self.generics.split_for_impl();
+            let generics = self.generics.clone();
+            let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+            let (_, b_initial_generics, _) = self.generics.split_for_impl();
             let all_fields_param = syn::GenericParam::Type(
                 syn::Ident::new("TypedBuilderFields", proc_macro2::Span::call_site()).into(),
             );
@@ -548,7 +680,7 @@ mod struct_info {
                 g.params.insert(0, all_fields_param.clone());
             });
             let empties_tuple = type_tuple(self.included_fields().map(|_| empty_type()));
-            let generics_with_empty = modify_types_generics_hack(&ty_generics, |args| {
+            let generics_with_empty = modify_types_generics_hack(&b_initial_generics, |args| {
                 args.insert(0, syn::GenericArgument::Type(empties_tuple.clone().into()));
             });
             let phantom_generics = self.generics.params.iter().filter_map(|param| match param {
@@ -607,8 +739,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 quote!(#[doc(hidden)])
             };
 
-            let (b_generics_impl, b_generics_ty, b_generics_where_extras_predicates) =
-                b_generics.split_for_impl();
+            let (_, _, b_generics_where_extras_predicates) = b_generics.split_for_impl();
             let mut b_generics_where: syn::WhereClause = syn::parse2(quote! {
                 where TypedBuilderFields: Clone
             })?;
@@ -618,15 +749,26 @@ Finally, call `.build()` to create the instance of `{name}`.
                     .extend(predicates.predicates.clone());
             }
 
-            let can_memoize = match are_there_generics {
-                true => quote! { false  },
-                false => quote! { self == other },
-            };
+            let memoize = self.memoize_impl()?;
 
-            let is_static = match are_there_generics {
-                true => quote! { false  },
-                false => quote! { true },
-            };
+            let global_fields = self
+                .extend_fields()
+                .map(|f| {
+                    let name = f.name;
+                    let ty = f.ty;
+                    quote!(#name: #ty)
+                })
+                .chain(self.has_signal_fields().then(|| quote!(owner: Owner)));
+            let global_fields_value = self
+                .extend_fields()
+                .map(|f| {
+                    let name = f.name;
+                    quote!(#name: Vec::new())
+                })
+                .chain(
+                    self.has_signal_fields()
+                        .then(|| quote!(owner: Owner::default())),
+                );
 
             Ok(quote! {
                 impl #impl_generics #name #ty_generics #where_clause {
@@ -634,6 +776,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     #[allow(dead_code, clippy::type_complexity)]
                     #vis fn builder() -> #builder_name #generics_with_empty {
                         #builder_name {
+                            #(#global_fields_value,)*
                             fields: #empties_tuple,
                             _phantom: ::core::default::Default::default(),
                         }
@@ -644,32 +787,22 @@ Finally, call `.build()` to create the instance of `{name}`.
                 #builder_type_doc
                 #[allow(dead_code, non_camel_case_types, non_snake_case)]
                 #vis struct #builder_name #b_generics {
+                    #(#global_fields,)*
                     fields: #all_fields_param,
                     _phantom: (#( #phantom_generics ),*),
                 }
 
-                impl #b_generics_impl Clone for #builder_name #b_generics_ty #b_generics_where {
-                    fn clone(&self) -> Self {
-                        Self {
-                            fields: self.fields.clone(),
-                            _phantom: ::core::default::Default::default(),
-                        }
-                    }
-                }
-
-                impl #impl_generics ::dioxus::prelude::Properties for #name #ty_generics
+                impl #impl_generics dioxus_core::prelude::Properties for #name #ty_generics
                 #b_generics_where_extras_predicates
                 {
                     type Builder = #builder_name #generics_with_empty;
-                    const IS_STATIC: bool = #is_static;
                     fn builder() -> Self::Builder {
                         #name::builder()
                     }
-                    unsafe fn memoize(&self, other: &Self) -> bool {
-                        #can_memoize
+                    fn memoize(&mut self, new: &Self) -> bool {
+                        #memoize
                     }
                 }
-
             })
         }
 
@@ -698,18 +831,12 @@ Finally, call `.build()` to create the instance of `{name}`.
             })
         }
 
-        pub fn field_impl(&self, field: &FieldInfo) -> Result<TokenStream, Error> {
-            let FieldInfo {
-                name: field_name,
-                ty: field_type,
-                ..
-            } = field;
-            if *field_name == "key" {
-                return Err(Error::new_spanned(field_name, "Naming a prop `key` is not allowed because the name can conflict with the built in key attribute. See https://dioxuslabs.com/learn/0.4/reference/dynamic_rendering#rendering-lists for more information about keys"));
-            }
+        pub fn extends_impl(&self, field: &FieldInfo) -> Result<TokenStream, Error> {
             let StructInfo {
                 ref builder_name, ..
             } = *self;
+
+            let field_name = field.name;
 
             let descructuring = self.included_fields().map(|f| {
                 if f.ordinal == field.ordinal {
@@ -778,35 +905,174 @@ Finally, call `.build()` to create the instance of `{name}`.
                 syn::GenericArgument::Type(ty_generics_tuple.into()),
             );
             let (impl_generics, _, where_clause) = generics.split_for_impl();
+
+            let forward_extended_fields = self.extend_fields().map(|f| {
+                let name = f.name;
+                quote!(#name: self.#name)
+            });
+
+            let extends_impl = field.builder_attr.extends.iter().map(|path| {
+                let name_str = path_to_single_string(path).unwrap();
+                let camel_name = name_str.to_case(Case::UpperCamel);
+                let marker_name = Ident::new(
+                    format!("{}Extension", &camel_name).as_str(),
+                    path.span(),
+                );
+                quote! {
+                    #[allow(dead_code, non_camel_case_types, missing_docs)]
+                    impl #impl_generics dioxus_elements::extensions::#marker_name for #builder_name < #( #ty_generics ),* > #where_clause {}
+                }
+            });
+
+            Ok(quote! {
+                #[allow(dead_code, non_camel_case_types, missing_docs)]
+                impl #impl_generics dioxus_core::prelude::HasAttributes for #builder_name < #( #ty_generics ),* > #where_clause {
+                    fn push_attribute(
+                        mut self,
+                        name: &'static str,
+                        ns: Option<&'static str>,
+                        attr: impl dioxus_core::prelude::IntoAttributeValue,
+                        volatile: bool
+                    ) -> Self {
+                        let ( #(#descructuring,)* ) = self.fields;
+                        self.#field_name.push(
+                            dioxus_core::Attribute::new(
+                                name,
+                                {
+                                    use dioxus_core::prelude::IntoAttributeValue;
+                                    attr.into_value()
+                                },
+                                ns,
+                                volatile,
+                            )
+                        );
+                        #builder_name {
+                            #(#forward_extended_fields,)*
+                            fields: ( #(#reconstructing,)* ),
+                            _phantom: self._phantom,
+                        }
+                    }
+                }
+
+                #(#extends_impl)*
+            })
+        }
+
+        pub fn field_impl(&self, field: &FieldInfo) -> Result<TokenStream, Error> {
+            let FieldInfo {
+                name: field_name, ..
+            } = field;
+            if *field_name == "key" {
+                return Err(Error::new_spanned(field_name, "Naming a prop `key` is not allowed because the name can conflict with the built in key attribute. See https://dioxuslabs.com/learn/0.4/reference/dynamic_rendering#rendering-lists for more information about keys"));
+            }
+            let StructInfo {
+                ref builder_name, ..
+            } = *self;
+
+            let descructuring = self.included_fields().map(|f| {
+                if f.ordinal == field.ordinal {
+                    quote!(_)
+                } else {
+                    let name = f.name;
+                    quote!(#name)
+                }
+            });
+            let reconstructing = self.included_fields().map(|f| f.name);
+
+            let FieldInfo {
+                name: field_name,
+                ty: field_type,
+                ..
+            } = field;
+            // Add the bump lifetime to the generics
+            let mut ty_generics: Vec<syn::GenericArgument> = self
+                .generics
+                .params
+                .iter()
+                .map(|generic_param| match generic_param {
+                    syn::GenericParam::Type(type_param) => {
+                        let ident = type_param.ident.clone();
+                        syn::parse(quote!(#ident).into()).unwrap()
+                    }
+                    syn::GenericParam::Lifetime(lifetime_def) => {
+                        syn::GenericArgument::Lifetime(lifetime_def.lifetime.clone())
+                    }
+                    syn::GenericParam::Const(const_param) => {
+                        let ident = const_param.ident.clone();
+                        syn::parse(quote!(#ident).into()).unwrap()
+                    }
+                })
+                .collect();
+            let mut target_generics_tuple = empty_type_tuple();
+            let mut ty_generics_tuple = empty_type_tuple();
+            let generics = self.modify_generics(|g| {
+                let index_after_lifetime_in_generics = g
+                    .params
+                    .iter()
+                    .filter(|arg| matches!(arg, syn::GenericParam::Lifetime(_)))
+                    .count();
+                for f in self.included_fields() {
+                    if f.ordinal == field.ordinal {
+                        ty_generics_tuple.elems.push_value(empty_type());
+                        target_generics_tuple
+                            .elems
+                            .push_value(f.tuplized_type_ty_param());
+                    } else {
+                        g.params
+                            .insert(index_after_lifetime_in_generics, f.generic_ty_param());
+                        let generic_argument: syn::Type = f.type_ident();
+                        ty_generics_tuple.elems.push_value(generic_argument.clone());
+                        target_generics_tuple.elems.push_value(generic_argument);
+                    }
+                    ty_generics_tuple.elems.push_punct(Default::default());
+                    target_generics_tuple.elems.push_punct(Default::default());
+                }
+            });
+            let mut target_generics = ty_generics.clone();
+            let index_after_lifetime_in_generics = target_generics
+                .iter()
+                .filter(|arg| matches!(arg, syn::GenericArgument::Lifetime(_)))
+                .count();
+            target_generics.insert(
+                index_after_lifetime_in_generics,
+                syn::GenericArgument::Type(target_generics_tuple.into()),
+            );
+            ty_generics.insert(
+                index_after_lifetime_in_generics,
+                syn::GenericArgument::Type(ty_generics_tuple.into()),
+            );
+
+            let (impl_generics, _, where_clause) = generics.split_for_impl();
             let doc = match field.builder_attr.doc {
                 Some(ref doc) => quote!(#[doc = #doc]),
                 None => quote!(),
             };
 
-            // NOTE: both auto_into and strip_option affect `arg_type` and `arg_expr`, but the order of
-            // nesting is different so we have to do this little dance.
-            let arg_type = if field.builder_attr.strip_option {
-                field.type_from_inside_option(false).ok_or_else(|| {
-                    Error::new_spanned(
-                        field_type,
-                        "can't `strip_option` - field is not `Option<...>`",
-                    )
-                })?
-            } else {
-                field_type
-            };
-            let (arg_type, arg_expr) = if field.builder_attr.auto_into {
+            let arg_type = field_type;
+            // If the field is auto_into, we need to add a generic parameter to the builder for specialization
+            let mut marker = None;
+            let (arg_type, arg_expr) = if looks_like_signal_type(arg_type) {
+                let marker_ident = syn::Ident::new("__Marker", proc_macro2::Span::call_site());
+                marker = Some(marker_ident.clone());
                 (
-                    quote!(impl ::core::convert::Into<#arg_type>),
-                    quote!(#field_name.into()),
+                    quote!(impl dioxus_core::prelude::SuperInto<#arg_type, #marker_ident>),
+                    // If this looks like a signal type, we automatically convert it with SuperInto and use the props struct as the owner
+                    quote!(with_owner(self.owner.clone(), move || dioxus_core::prelude::SuperInto::super_into(#field_name))),
+                )
+            } else if field.builder_attr.auto_into || field.builder_attr.strip_option {
+                let marker_ident = syn::Ident::new("__Marker", proc_macro2::Span::call_site());
+                marker = Some(marker_ident.clone());
+                (
+                    quote!(impl dioxus_core::prelude::SuperInto<#arg_type, #marker_ident>),
+                    quote!(dioxus_core::prelude::SuperInto::super_into(#field_name)),
+                )
+            } else if field.builder_attr.from_displayable {
+                (
+                    quote!(impl ::core::fmt::Display),
+                    quote!(#field_name.to_string()),
                 )
             } else {
                 (quote!(#arg_type), quote!(#field_name))
-            };
-            let arg_expr = if field.builder_attr.strip_option {
-                quote!(Some(#arg_expr))
-            } else {
-                arg_expr
             };
 
             let repeated_fields_error_type_name = syn::Ident::new(
@@ -819,15 +1085,24 @@ Finally, call `.build()` to create the instance of `{name}`.
             );
             let repeated_fields_error_message = format!("Repeated field {field_name}");
 
+            let forward_fields = self
+                .extend_fields()
+                .map(|f| {
+                    let name = f.name;
+                    quote!(#name: self.#name)
+                })
+                .chain(self.has_signal_fields().then(|| quote!(owner: self.owner)));
+
             Ok(quote! {
                 #[allow(dead_code, non_camel_case_types, missing_docs)]
                 impl #impl_generics #builder_name < #( #ty_generics ),* > #where_clause {
                     #doc
                     #[allow(clippy::type_complexity)]
-                    pub fn #field_name (self, #field_name: #arg_type) -> #builder_name < #( #target_generics ),* > {
+                    pub fn #field_name < #marker > (self, #field_name: #arg_type) -> #builder_name < #( #target_generics ),* > {
                         let #field_name = (#arg_expr,);
                         let ( #(#descructuring,)* ) = self.fields;
                         #builder_name {
+                            #(#forward_fields,)*
                             fields: ( #(#reconstructing,)* ),
                             _phantom: self._phantom,
                         }
@@ -843,7 +1118,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                         note = #repeated_fields_error_message
                     )]
                     #[allow(clippy::type_complexity)]
-                    pub fn #field_name (self, _: #repeated_fields_error_type_name) -> #builder_name < #( #target_generics ),* > {
+                    pub fn #field_name< #marker > (self, _: #repeated_fields_error_type_name) -> #builder_name < #( #target_generics ),* > {
                         self
                     }
                 }
@@ -861,6 +1136,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 name: ref field_name,
                 ..
             } = field;
+            // Add a bump lifetime to the generics
             let mut builder_generics: Vec<syn::GenericArgument> = self
                 .generics
                 .params
@@ -951,7 +1227,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                         note = #early_build_error_message
                     )]
                     pub fn build(self, _: #early_build_error_type_name) -> #name #ty_generics {
-                        panic!();
+                        panic!()
                     }
                 }
             })
@@ -1000,7 +1276,8 @@ Finally, call `.build()` to create the instance of `{name}`.
             });
             let (impl_generics, _, _) = generics.split_for_impl();
 
-            let (_, ty_generics, where_clause) = self.generics.split_for_impl();
+            let (original_impl_generics, ty_generics, where_clause) =
+                self.generics.split_for_impl();
 
             let modified_ty_generics = modify_types_generics_hack(&ty_generics, |args| {
                 args.insert(
@@ -1028,7 +1305,9 @@ Finally, call `.build()` to create the instance of `{name}`.
             // reordering based on that, but for now this much simpler thing is a reasonable approach.
             let assignments = self.fields.iter().map(|field| {
                 let name = &field.name;
-                if let Some(ref default) = field.builder_attr.default {
+                if !field.builder_attr.extends.is_empty() {
+                    quote!(let #name = self.#name;)
+                } else if let Some(ref default) = field.builder_attr.default {
                     if field.builder_attr.skip {
                         quote!(let #name = #default;)
                     } else {
@@ -1046,26 +1325,85 @@ Finally, call `.build()` to create the instance of `{name}`.
                         // I’d prefer “a” or “an” to “its”, but determining which is grammatically
                         // correct is roughly impossible.
                         let doc =
-                            format!("Finalise the builder and create its [`{name}`] instance");
+                            format!("Finalize the builder and create its [`{name}`] instance");
                         quote!(#[doc = #doc])
                     }
                 }
             } else {
                 quote!()
             };
-            quote!(
-                #[allow(dead_code, non_camel_case_types, missing_docs)]
-                impl #impl_generics #builder_name #modified_ty_generics #where_clause {
-                    #doc
-                    pub fn build(self) -> #name #ty_generics {
-                        let ( #(#descructuring,)* ) = self.fields;
-                        #( #assignments )*
-                        #name {
-                            #( #field_names ),*
+
+            if self.has_signal_fields() {
+                let name = Ident::new(&format!("{}WithOwner", name), name.span());
+                let original_name = &self.name;
+                let vis = &self.vis;
+                quote! {
+                    #[doc(hidden)]
+                    #[allow(dead_code, non_camel_case_types, missing_docs)]
+                    #[derive(Clone)]
+                    #vis struct #name #ty_generics {
+                        inner: #original_name #ty_generics,
+                        owner: Owner,
+                    }
+
+                    impl #original_impl_generics PartialEq for #name #ty_generics #where_clause {
+                        fn eq(&self, other: &Self) -> bool {
+                            self.inner.eq(&other.inner)
+                        }
+                    }
+
+                    impl #original_impl_generics #name #ty_generics #where_clause {
+                        /// Create a component from the props.
+                        pub fn into_vcomponent<M: 'static>(
+                            self,
+                            render_fn: impl dioxus_core::prelude::ComponentFunction<#original_name #ty_generics, M>,
+                            component_name: &'static str,
+                        ) -> dioxus_core::VComponent {
+                            use dioxus_core::prelude::ComponentFunction;
+                            dioxus_core::VComponent::new(move |wrapper: Self| render_fn.rebuild(wrapper.inner), self, component_name)
+                        }
+                    }
+
+                    impl #original_impl_generics dioxus_core::prelude::Properties for #name #ty_generics #where_clause {
+                        type Builder = ();
+                        fn builder() -> Self::Builder {
+                            unreachable!()
+                        }
+                        fn memoize(&mut self, new: &Self) -> bool {
+                            self.inner.memoize(&new.inner)
+                        }
+                    }
+
+                    #[allow(dead_code, non_camel_case_types, missing_docs)]
+                    impl #impl_generics #builder_name #modified_ty_generics #where_clause {
+                        #doc
+                        pub fn build(self) -> #name #ty_generics {
+                            let ( #(#descructuring,)* ) = self.fields;
+                            #( #assignments )*
+                            #name {
+                                inner: #original_name {
+                                    #( #field_names ),*
+                                },
+                                owner: self.owner,
+                            }
                         }
                     }
                 }
-            )
+            } else {
+                quote!(
+                    #[allow(dead_code, non_camel_case_types, missing_docs)]
+                    impl #impl_generics #builder_name #modified_ty_generics #where_clause {
+                        #doc
+                        pub fn build(self) -> #name #ty_generics {
+                            let ( #(#descructuring,)* ) = self.fields;
+                            #( #assignments )*
+                            #name {
+                                #( #field_names ),*
+                            }
+                        }
+                    }
+                )
+            }
         }
     }
 
@@ -1189,5 +1527,49 @@ Finally, call `.build()` to create the instance of `{name}`.
                 _ => Err(Error::new_spanned(expr, "Expected (<...>=<...>)")),
             }
         }
+    }
+}
+
+fn looks_like_signal_type(ty: &Type) -> bool {
+    match ty {
+        Type::Path(ty) => {
+            if ty.qself.is_some() {
+                return false;
+            }
+
+            let path = &ty.path;
+
+            let mut path_segments_without_generics = Vec::new();
+
+            let mut generic_arg_count = 0;
+
+            for segment in &path.segments {
+                let mut segment = segment.clone();
+                match segment.arguments {
+                    PathArguments::AngleBracketed(_) => generic_arg_count += 1,
+                    PathArguments::Parenthesized(_) => {
+                        return false;
+                    }
+                    _ => {}
+                }
+                segment.arguments = syn::PathArguments::None;
+                path_segments_without_generics.push(segment);
+            }
+
+            // If there is more than the type and the send/sync generic, it doesn't look like our signal
+            if generic_arg_count > 2 {
+                return false;
+            }
+
+            let path_without_generics = syn::Path {
+                leading_colon: None,
+                segments: Punctuated::from_iter(path_segments_without_generics),
+            };
+
+            path_without_generics == parse_quote!(dioxus_core::prelude::ReadOnlySignal)
+                || path_without_generics == parse_quote!(prelude::ReadOnlySignal)
+                || path_without_generics == parse_quote!(ReadOnlySignal)
+        }
+        _ => false,
     }
 }

@@ -7,7 +7,7 @@ use std::{
 
 use anyhow::Context;
 use flate2::read::GzDecoder;
-use futures::StreamExt;
+use futures_util::StreamExt;
 use tar::Archive;
 use tokio::io::AsyncWriteExt;
 

@@ -1,13 +1,17 @@
 html {
   box-sizing: border-box;
 }
-*, *:before, *:after {
+
+*,
+*:before,
+*:after {
   box-sizing: inherit;
 }
 
 body {
   margin: 0;
   font: 100 14px 'Roboto';
+  font-family: Arial;
   overflow: hidden;
 }
 
@@ -20,18 +24,18 @@ button {
   user-select: none;
   cursor: pointer;
   outline: none;
-  
-  -webkit-tap-highlight-color: rgba(0,0,0,0);
+
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
 }
 
 button:active {
-  box-shadow: inset 0px 0px 80px 0px rgba(0,0,0,0.25);
+  box-shadow: inset 0px 0px 80px 0px rgba(0, 0, 0, 0.25);
 }
 
 #wrapper {
   /* height: 100vh; */
   height: max-content;
-  
+
   display: flex;
   align-items: center;
   justify-content: center;
@@ -47,7 +51,7 @@ button:active {
   width: 100%;
   height: 100%;
   background: black;
-  
+
   display: flex;
   flex-direction: column;
 }
@@ -61,14 +65,14 @@ button:active {
   background: #1c191c;
   line-height: 130px;
   /* font-size: 6em; */
-    font-size: 16px;
-    font-size: 4vw;
+  font-size: 16px;
+  font-size: 4vw;
 
 
   max-height: 160px;
   padding: 0 30px;
   /* height: 80px; */
-  
+
   flex: 1;
 }
 
@@ -85,7 +89,7 @@ button:active {
 
 .calculator-keypad {
   height: 400px;
-  
+
   display: flex;
 }
 
@@ -99,7 +103,7 @@ button:active {
 
 .calculator .digit-keys {
   background: #e0e0e7;
-  
+
   display: flex;
   flex-direction: row;
   flex-wrap: wrap-reverse;
@@ -109,28 +113,34 @@ button:active {
   width: 80px;
   height: 80px;
   border-top: 1px solid #777;
-  border-right: 1px solid #666;  
+  border-right: 1px solid #666;
   text-align: center;
   line-height: 80px;
 }
+
 .calculator .function-keys .calculator-key {
   font-size: 2em;
 }
+
 .calculator .function-keys .key-multiply {
   line-height: 50px;
 }
+
 .calculator .digit-keys .calculator-key {
   font-size: 2.25em;
 }
+
 .calculator .digit-keys .key-0 {
   width: 160px;
   text-align: left;
   padding-left: 32px;
 }
+
 .calculator .digit-keys .key-dot {
   padding-top: 1em;
   font-size: 0.75em;
 }
+
 .calculator .operator-keys .calculator-key {
   color: white;
   border-right: 0;
@@ -138,8 +148,9 @@ button:active {
 }
 
 .calculator .function-keys {
-  background: linear-gradient(to bottom, rgba(202,202,204,1) 0%, rgba(196,194,204,1) 100%);
+  background: linear-gradient(to bottom, rgba(202, 202, 204, 1) 0%, rgba(196, 194, 204, 1) 100%);
 }
+
 .calculator .operator-keys {
-  background:  linear-gradient(to bottom, rgba(252,156,23,1) 0%, rgba(247,126,27,1) 100%);
+  background: linear-gradient(to bottom, rgba(252, 156, 23, 1) 0%, rgba(247, 126, 27, 1) 100%);
 }

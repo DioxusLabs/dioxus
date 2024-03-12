@@ -1,26 +1,16 @@
-use dioxus::prelude::*;
-use std::{cell::RefCell, str::FromStr};
+use dioxus_lib::prelude::*;
+
+use std::{cell::RefCell, rc::Rc, str::FromStr};
 
 use crate::{prelude::Outlet, routable::Routable, router_cfg::RouterConfig};
 
 /// The config for [`Router`].
+#[derive(Clone)]
 pub struct RouterConfigFactory<R: Routable> {
     #[allow(clippy::type_complexity)]
-    config: RefCell<Option<Box<dyn FnOnce() -> RouterConfig<R>>>>,
+    config: Rc<RefCell<Option<Box<dyn FnOnce() -> RouterConfig<R>>>>>,
 }
 
-#[cfg(feature = "serde")]
-impl<R: Routable> Default for RouterConfigFactory<R>
-where
-    <R as FromStr>::Err: std::fmt::Display,
-    R: serde::Serialize + serde::de::DeserializeOwned,
-{
-    fn default() -> Self {
-        Self::from(RouterConfig::default)
-    }
-}
-
-#[cfg(not(feature = "serde"))]
 impl<R: Routable> Default for RouterConfigFactory<R>
 where
     <R as FromStr>::Err: std::fmt::Display,
@@ -33,24 +23,11 @@ where
 impl<R: Routable, F: FnOnce() -> RouterConfig<R> + 'static> From<F> for RouterConfigFactory<R> {
     fn from(value: F) -> Self {
         Self {
-            config: RefCell::new(Some(Box::new(value))),
+            config: Rc::new(RefCell::new(Some(Box::new(value)))),
         }
     }
 }
 
-#[cfg(feature = "serde")]
-/// The props for [`Router`].
-#[derive(Props)]
-pub struct RouterProps<R: Routable>
-where
-    <R as FromStr>::Err: std::fmt::Display,
-    R: serde::Serialize + serde::de::DeserializeOwned,
-{
-    #[props(default, into)]
-    config: RouterConfigFactory<R>,
-}
-
-#[cfg(not(feature = "serde"))]
 /// The props for [`Router`].
 #[derive(Props)]
 pub struct RouterProps<R: Routable>
@@ -61,7 +38,17 @@ where
     config: RouterConfigFactory<R>,
 }
 
-#[cfg(not(feature = "serde"))]
+impl<T: Routable> Clone for RouterProps<T>
+where
+    <T as FromStr>::Err: std::fmt::Display,
+{
+    fn clone(&self) -> Self {
+        Self {
+            config: self.config.clone(),
+        }
+    }
+}
+
 impl<R: Routable> Default for RouterProps<R>
 where
     <R as FromStr>::Err: std::fmt::Display,
@@ -73,20 +60,6 @@ where
     }
 }
 
-#[cfg(feature = "serde")]
-impl<R: Routable> Default for RouterProps<R>
-where
-    <R as FromStr>::Err: std::fmt::Display,
-    R: serde::Serialize + serde::de::DeserializeOwned,
-{
-    fn default() -> Self {
-        Self {
-            config: RouterConfigFactory::default(),
-        }
-    }
-}
-
-#[cfg(not(feature = "serde"))]
 impl<R: Routable> PartialEq for RouterProps<R>
 where
     <R as FromStr>::Err: std::fmt::Display,
@@ -97,69 +70,28 @@ where
     }
 }
 
-#[cfg(feature = "serde")]
-impl<R: Routable> PartialEq for RouterProps<R>
-where
-    <R as FromStr>::Err: std::fmt::Display,
-    R: serde::Serialize + serde::de::DeserializeOwned,
-{
-    fn eq(&self, _: &Self) -> bool {
-        // prevent the router from re-rendering when the initial url or config changes
-        true
-    }
-}
-
-#[cfg(not(feature = "serde"))]
 /// A component that renders the current route.
-pub fn Router<R: Routable + Clone>(cx: Scope<RouterProps<R>>) -> Element
+pub fn Router<R: Routable + Clone>(props: RouterProps<R>) -> Element
 where
     <R as FromStr>::Err: std::fmt::Display,
 {
     use crate::prelude::{outlet::OutletContext, RouterContext};
 
-    use_context_provider(cx, || {
-        RouterContext::new(
-            (cx.props
+    use_hook(|| {
+        provide_context(RouterContext::new(
+            (props
                 .config
                 .config
                 .take()
                 .expect("use_context_provider ran twice"))(),
-            cx.schedule_update_any(),
-        )
-    });
-    use_context_provider(cx, || OutletContext::<R> {
-        current_level: 0,
-        _marker: std::marker::PhantomData,
+            schedule_update_any(),
+        ));
+
+        provide_context(OutletContext::<R> {
+            current_level: 0,
+            _marker: std::marker::PhantomData,
+        });
     });
 
-    render! {
-        Outlet::<R> {}
-    }
-}
-
-#[cfg(feature = "serde")]
-/// A component that renders the current route.
-pub fn Router<R: Routable + Clone>(cx: Scope<RouterProps<R>>) -> Element
-where
-    <R as FromStr>::Err: std::fmt::Display,
-    R: serde::Serialize + serde::de::DeserializeOwned,
-{
-    use_context_provider(cx, || {
-        RouterContext::new(
-            (cx.props
-                .config
-                .config
-                .take()
-                .expect("use_context_provider ran twice"))(),
-            cx.schedule_update_any(),
-        )
-    });
-    use_context_provider(cx, || OutletContext::<R> {
-        current_level: 0,
-        _marker: std::marker::PhantomData,
-    });
-
-    render! {
-        Outlet::<R> {}
-    }
+    rsx! { Outlet::<R> {} }
 }

@@ -1,19 +1,17 @@
 use std::{
-    io::{BufRead, BufReader, Write},
+    io::Write,
     path::PathBuf,
     str::FromStr,
     sync::{Arc, Mutex},
 };
 
 use crate::HotReloadMsg;
-use dioxus_core::Template;
 use dioxus_rsx::{
     hot_reload::{FileMap, FileMapBuildResult, UpdateResult},
     HotReloadingContext,
 };
-use interprocess_docfix::local_socket::{LocalSocketListener, LocalSocketStream};
+use interprocess_docfix::local_socket::LocalSocketListener;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
-use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "file_watcher")]
 use dioxus_html::HtmlCtx;
@@ -122,7 +120,7 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
     } = cfg;
 
     if let Ok(crate_dir) = PathBuf::from_str(root_path) {
-        // try to find the gitingore file
+        // try to find the gitignore file
         let gitignore_file_path = crate_dir.join(".gitignore");
         let (gitignore, _) = ignore::gitignore::Gitignore::new(gitignore_file_path);
 
@@ -152,21 +150,20 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
         }
         let file_map = Arc::new(Mutex::new(file_map));
 
-        #[cfg(target_os = "macos")]
+        let target_dir = crate_dir.join("target");
+        let hot_reload_socket_path = target_dir.join("dioxusin");
+
+        #[cfg(unix)]
         {
             // On unix, if you force quit the application, it can leave the file socket open
             // This will cause the local socket listener to fail to open
             // We check if the file socket is already open from an old session and then delete it
-            let paths = ["./dioxusin", "./@dioxusin"];
-            for path in paths {
-                let path = PathBuf::from(path);
-                if path.exists() {
-                    let _ = std::fs::remove_file(path);
-                }
+            if hot_reload_socket_path.exists() {
+                let _ = std::fs::remove_file(hot_reload_socket_path.clone());
             }
         }
 
-        match LocalSocketListener::bind("@dioxusin") {
+        match LocalSocketListener::bind(hot_reload_socket_path) {
             Ok(local_socket_stream) => {
                 let aborted = Arc::new(Mutex::new(false));
 

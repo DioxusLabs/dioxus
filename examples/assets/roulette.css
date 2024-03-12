@@ -1,0 +1,29 @@
+#main {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+#roulette-grid {
+    margin: 10px;
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    grid-gap: 10px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+#roulette-grid>input {
+    color: white;
+    font-size: 20px;
+    width: 50px;
+}
+
+#roulette-grid>input:nth-child(odd) {
+    background-color: red;
+}
+
+#roulette-grid>input:nth-child(even) {
+    background-color: black;
+}
