@@ -1,38 +1,90 @@
-#![cfg(feature = "plugin")]
+use std::path::PathBuf;
 
-use super::*;
+// use super::*;
+use crate::lock::DioxusLock;
+use crate::plugin::get_dependency_paths;
+use crate::plugin::load_plugin;
+use crate::plugin::PLUGINS_CONFIG;
+use clap::Parser;
+use clap::Subcommand;
+use dioxus_cli_config::DioxusConfig;
+use serde::Deserialize;
 
-/// Manage plugins for dioxus cli
+#[derive(Parser, Debug, Clone, PartialEq, Deserialize)]
+pub enum PluginAdd {
+    // Git {
+    //   #[clap(short, long)]
+    //   repo: String,
+    //   #[clap(short, long)]
+    //   branch: Option<String>,
+    // }
+    Add {
+        // The path to the .wasm Plugin file
+        #[clap(short, long)]
+        path: PathBuf,
+        // Optional priority value to change the order of how plugins are loaded
+        #[clap(long)]
+        priority: Option<usize>,
+    },
+}
+
 #[derive(Clone, Debug, Deserialize, Subcommand)]
 #[clap(name = "plugin")]
 pub enum Plugin {
-    /// Return all dioxus-cli support tools.
-    List {},
-    /// Get default app install path.
-    AppPath {},
-    /// Install a new tool.
-    Add { name: String },
+    #[command(flatten)]
+    Add(PluginAdd),
+
+    // Go through each plugin and check for updates
+    // Update {
+    //   #[clap(long)]
+    //   #[serde(default)]
+    //   ignore_error: bool
+    // },
+    /// List all of the plugins installed
+    List,
 }
 
 impl Plugin {
-    pub async fn plugin(self) -> Result<()> {
+    pub async fn plugin(
+        self,
+        dx_config: &DioxusConfig,
+        crate_dir: &PathBuf,
+        dependency_paths: &[PathBuf],
+    ) -> super::Result<()> {
         match self {
-            Plugin::List {} => {
-                for item in crate::plugin::PluginManager::plugin_list() {
-                    println!("- {item}");
+            // Plugin::Update { ignore_error } => todo!(),
+            Plugin::List => {
+                let plugins = &PLUGINS_CONFIG.lock().await.plugins.plugins;
+                if plugins.is_empty() {
+                    log::warn!(
+                        "No plugins found! Run `dx config init` and then run `dx add --path /path/to/.wasm"
+                    );
+                    return Ok(());
+                };
+
+                for (name, data) in plugins.iter() {
+                    log::info!("Found Plugin: {name} | Version {}", data.version);
                 }
             }
-            Plugin::AppPath {} => {
-                let plugin_dir = crate::plugin::PluginManager::init_plugin_dir();
-                if let Some(v) = plugin_dir.to_str() {
-                    println!("{}", v);
-                } else {
-                    log::error!("Plugin path get failed.");
+            Plugin::Add(data) => match data {
+                PluginAdd::Add { path, priority } => {
+                    let mut dioxus_lock = DioxusLock::load()?;
+                    let mut plugin = load_plugin(
+                        &path,
+                        dx_config,
+                        priority,
+                        crate_dir,
+                        &mut dioxus_lock,
+                        dependency_paths,
+                    )
+                    .await?;
+
+                    // Add the plugin to the lock file
+                    dioxus_lock.add_plugin(&mut plugin).await?;
+
+                    log::info!("✔️  Successfully added {}", plugin.metadata.name);
                 }
-            }
-            Plugin::Add { name: _ } => {
-                log::info!("You can use `dx plugin app-path` to get Installation position");
-            }
+            },
         }
         Ok(())
     }

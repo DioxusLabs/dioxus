@@ -7,33 +7,24 @@ description = "Fullstack Dioxus Utilities"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
-keywords = ["ui", "gui", "react", "ssr", "fullstack"]
+keywords = ["ui", "gui", "react", "server", "fullstack"]
+resolver = "2"
 
 [dependencies]
 # server functions
-server_fn = { version = "0.5.2", default-features = false }
+server_fn = { version = "0.6.5", features = ["json", "url", "browser"], default-features = false }
 dioxus_server_macro = { workspace = true }
 
-# warp
-warp = { version = "0.3.5", features = ["compression-gzip"], optional = true }
-http-body = { version = "0.4.5", optional = true }
-http-body-util = "0.1.0-rc.2"
-
 # axum
-axum = { version = "0.6.1", features = ["ws", "macros"], optional = true }
-tower-http = { version = "0.4.0", optional = true, features = ["fs", "compression-gzip"] }
-tower = { version = "0.4.13", features = ["util"], optional = true }
-axum-macros = "0.3.7"
+axum = { workspace = true, features = ["ws", "macros"], optional = true }
+tower-http = { workspace = true, optional = true, features = ["fs", "compression-gzip"] }
 
-# salvo
-salvo = { version = "0.46.0", optional = true, features = ["serve-static", "websocket", "compression"] }
-serde = "1.0.159"
+dioxus-lib = { workspace = true }
 
 # Dioxus + SSR
-dioxus = { workspace = true }
 dioxus-ssr = { workspace = true, optional = true }
-hyper = { version = "0.14.25", optional = true }
-http = { version = "0.2.9", optional = true }
+hyper = { workspace = true, optional = true }
+http = { workspace = true, optional = true }
 
 # Web Integration
 dioxus-web = { workspace = true, features = ["hydrate"], optional = true }
@@ -41,47 +32,63 @@ dioxus-web = { workspace = true, features = ["hydrate"], optional = true }
 # Desktop Integration
 dioxus-desktop = { workspace = true, optional = true }
 
-# Router Integration
-dioxus-router = { workspace = true, optional = true }
+# Mobile Integration
+dioxus-mobile = { workspace = true, optional = true }
 
 tracing = { workspace = true }
-tracing-futures = { workspace = true }
+tracing-futures = { workspace = true, optional = true }
 once_cell = "1.17.1"
-thiserror = { workspace = true }
-tokio = { workspace = true, features = ["full"], optional = true }
 tokio-util = { version = "0.7.8", features = ["rt"], optional = true }
-object-pool = "0.5.4"
-anymap = "0.12.1"
+anymap = { version = "0.12.1", optional = true }
 
+serde = "1.0.159"
 serde_json = { version = "1.0.95", optional = true }
 tokio-stream = { version = "0.1.12", features = ["sync"], optional = true }
-futures-util = { workspace = true, optional = true }
-postcard = { version = "1.0.4", features = ["use-std"] }
+futures-util = { workspace = true }
+ciborium = "0.2.1"
 base64 = "0.21.0"
 
-pin-project = "1.1.2"
+pin-project = { version = "1.1.2", optional = true }
+thiserror = { workspace = true, optional = true }
 async-trait = "0.1.71"
 bytes = "1.4.0"
-tower-layer = "0.3.2"
+tower = { workspace = true, features = ["util"], optional = true }
+tower-layer = { version = "0.3.2", optional = true }
+web-sys = { version = "0.3.61", optional = true, features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"] }
+
+dioxus-cli-config = { workspace = true, optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tokio = { workspace = true, features = ["rt", "sync"], optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 dioxus-hot-reload = { workspace = true }
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-web-sys = { version = "0.3.61", features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"] }
+tokio = { workspace = true, features = ["rt", "sync", "rt-multi-thread"], optional = true }
 
 [features]
-default = ["hot-reload", "default-tls"]
-router = ["dioxus-router"]
-hot-reload = ["serde_json", "futures-util"]
-web = ["dioxus-web"]
+default = ["hot-reload"]
+hot-reload = ["serde_json"]
+web = ["dioxus-web", "web-sys"]
 desktop = ["dioxus-desktop"]
-warp = ["dep:warp", "ssr"]
-axum = ["dep:axum", "tower-http", "ssr"]
-salvo = ["dep:salvo", "ssr"]
-ssr = ["server_fn/ssr", "dioxus_server_macro/ssr", "tokio", "tokio-util", "dioxus-ssr", "tower", "hyper", "http", "http-body", "dioxus-router/ssr", "tokio-stream"]
+mobile = ["dioxus-mobile"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls"]
-
-[dev-dependencies]
-dioxus-fullstack = { path = ".", features = ["router"] }
+axum = ["dep:axum", "tower-http", "server", "server_fn/axum", "dioxus_server_macro/axum"]
+server = [
+    "server_fn/ssr",
+    "dioxus_server_macro/server",
+    "tokio",
+    "tokio-util",
+    "tokio-stream",
+    "dioxus-ssr",
+    "dioxus-ssr/incremental",
+    "tower",
+    "hyper",
+    "http",
+    "tower-layer",
+    "anymap",
+    "tracing-futures",
+    "pin-project",
+    "thiserror",
+    "dioxus-cli-config"
+]

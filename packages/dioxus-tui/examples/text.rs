@@ -4,15 +4,15 @@ fn main() {
     dioxus_tui::launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let alpha = use_state(cx, || 100);
+fn app() -> Element {
+    let mut alpha = use_signal(|| 100);
 
-    cx.render(rsx! {
+    rsx! {
         div {
             width: "100%",
             height: "100%",
             flex_direction: "column",
-            onwheel: move |evt| alpha.set((**alpha + evt.inner().delta().strip_units().y as i64).clamp(0, 100)),
+            onwheel: move |evt| alpha.set((alpha() + evt.delta().strip_units().y as i64).clamp(0, 100)),
 
             p {
                 background_color: "black",
@@ -109,5 +109,5 @@ fn app(cx: Scope) -> Element {
                 }
             }
         }
-    })
+    }
 }

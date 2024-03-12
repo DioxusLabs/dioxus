@@ -39,7 +39,7 @@
 //! - Allow top-level fragments
 
 fn main() {
-    dioxus_desktop::launch(App);
+    launch(app)
 }
 
 use core::{fmt, str::FromStr};
@@ -48,19 +48,20 @@ use std::fmt::Display;
 use baller::Baller;
 use dioxus::prelude::*;
 
-#[component]
-fn App(cx: Scope) -> Element {
+fn app() -> Element {
     let formatting = "formatting!";
     let formatting_tuple = ("a", "b");
     let lazy_fmt = format_args!("lazily formatted text");
-    cx.render(rsx! {
+    let asd = 123;
+
+    rsx! {
         div {
             // Elements
             div {}
             h1 {"Some text"}
             h1 {"Some text with {formatting}"}
             h1 {"Formatting basic expressions {formatting_tuple.0} and {formatting_tuple.1}"}
-            h1 {"Formatting without interpolation " formatting_tuple.0 "and" formatting_tuple.1 }
+            h1 {"Formatting without interpolation " {formatting_tuple.0} "and" {formatting_tuple.1} }
             h2 {
                 "Multiple"
                 "Text"
@@ -80,6 +81,10 @@ fn App(cx: Scope) -> Element {
                 // pass simple rust expressions in
                 class: lazy_fmt,
                 id: format_args!("attributes can be passed lazily with std::fmt::Arguments"),
+                class: "asd",
+                class: "{asd}",
+                // if statements can be used to conditionally render attributes
+                class: if formatting.contains("form") { "{asd}" },
                 div {
                     class: {
                         const WORD: &str = "expressions";
@@ -89,10 +94,10 @@ fn App(cx: Scope) -> Element {
             }
 
             // Expressions can be used in element position too:
-            rsx!(p { "More templating!" }),
+            {rsx!(p { "More templating!" })},
 
             // Iterators
-            (0..10).map(|i| rsx!(li { "{i}" })),
+            {(0..10).map(|i| rsx!(li { "{i}" }))},
 
             // Iterators within expressions
             {
@@ -112,24 +117,25 @@ fn App(cx: Scope) -> Element {
             // Conditional rendering
             // Dioxus conditional rendering is based around None/Some. We have no special syntax for conditionals.
             // You can convert a bool condition to rsx! with .then and .or
-            true.then(|| rsx!(div {})),
+            {true.then(|| rsx!(div {}))},
 
             // Alternatively, you can use the "if" syntax - but both branches must be resolve to Element
             if false {
-                rsx!(h1 {"Top text"})
+                h1 {"Top text"}
             } else {
-                rsx!(h1 {"Bottom text"})
+                h1 {"Bottom text"}
             }
 
             // Using optionals for diverging branches
-            if true {
+            // Note that since this is wrapped in curlies, it's interpreted as an expression
+            {if true {
                 Some(rsx!(h1 {"Top text"}))
             } else {
                 None
-            }
+            }}
 
             // returning "None" without a diverging branch is a bit noisy... but rare in practice
-            None as Option<()>,
+            {None as Option<()>},
 
             // can also just use empty fragments
             Fragment {}
@@ -164,13 +170,13 @@ fn App(cx: Scope) -> Element {
 
             // Can pass in props directly as an expression
             {
-                let props = TallerProps {a: "hello", children: cx.render(rsx!(()))};
+                let props = TallerProps {a: "hello", children: None };
                 rsx!(Taller { ..props })
             }
 
             // Spreading can also be overridden manually
             Taller {
-                ..TallerProps { a: "ballin!", children: cx.render(rsx!(()) )},
+                ..TallerProps { a: "ballin!", children: None },
                 a: "not ballin!"
             }
 
@@ -199,103 +205,100 @@ fn App(cx: Scope) -> Element {
 
             // helper functions
             // Anything that implements IntoVnode can be dropped directly into Rsx
-            helper(cx, "hello world!")
+            {helper("hello world!")}
 
             // Strings can be supplied directly
-            String::from("Hello world!")
+            {String::from("Hello world!")}
 
             // So can format_args
-            format_args!("Hello {}!", "world")
+            {format_args!("Hello {}!", "world")}
 
             // Or we can shell out to a helper function
-            format_dollars(10, 50)
+            {format_dollars(10, 50)}
         }
-    })
+    }
 }
 
 fn format_dollars(dollars: u32, cents: u32) -> String {
     format!("${dollars}.{cents:02}")
 }
 
-fn helper<'a>(cx: &'a ScopeState, text: &'a str) -> Element<'a> {
-    cx.render(rsx! {
+fn helper(text: &str) -> Element {
+    rsx! {
         p { "{text}" }
-    })
+    }
 }
 
 // no_case_check disables PascalCase checking if you *really* want a snake_case component.
 // This will likely be deprecated/removed in a future update that will introduce a more polished linting system,
 // something like Clippy.
 #[component(no_case_check)]
-fn lowercase_helper(cx: Scope) -> Element {
-    cx.render(rsx! {
+fn lowercase_helper() -> Element {
+    rsx! {
         "asd"
-    })
+    }
 }
 
 mod baller {
     use super::*;
-    #[derive(Props, PartialEq, Eq)]
-    pub struct BallerProps {}
 
     #[component]
     /// This component totally balls
-    pub fn Baller(_cx: Scope<BallerProps>) -> Element {
-        todo!()
+    pub fn Baller() -> Element {
+        rsx! { "ballin'" }
     }
 
     // no_case_check disables PascalCase checking if you *really* want a snake_case component.
     // This will likely be deprecated/removed in a future update that will introduce a more polished linting system,
     // something like Clippy.
     #[component(no_case_check)]
-    pub fn lowercase_component(cx: Scope) -> Element {
-        cx.render(rsx! { "look ma, no uppercase" })
+    pub fn lowercase_component() -> Element {
+        rsx! { "look ma, no uppercase" }
     }
-}
-
-#[derive(Props)]
-pub struct TallerProps<'a> {
-    /// Fields are documented and accessible in rsx!
-    a: &'static str,
-    children: Element<'a>,
 }
 
 /// Documention for this component is visible within the rsx macro
 #[component]
-pub fn Taller<'a>(cx: Scope<'a, TallerProps<'a>>) -> Element {
-    cx.render(rsx! {
-        &cx.props.children
-    })
+pub fn Taller(
+    /// Fields are documented and accessible in rsx!
+    a: &'static str,
+    children: Element,
+) -> Element {
+    rsx! { {&children} }
 }
 
-#[derive(Props, PartialEq, Eq)]
-pub struct TypedInputProps<T> {
+#[derive(Props, Clone, PartialEq, Eq)]
+pub struct TypedInputProps<T: 'static + Clone + PartialEq> {
     #[props(optional, default)]
     initial: Option<T>,
 }
 
 #[allow(non_snake_case)]
-pub fn TypedInput<T>(_: Scope<TypedInputProps<T>>) -> Element
+pub fn TypedInput<T>(props: TypedInputProps<T>) -> Element
 where
-    T: FromStr + fmt::Display,
+    T: FromStr + fmt::Display + PartialEq + Clone + 'static,
     <T as FromStr>::Err: std::fmt::Display,
 {
-    todo!()
+    if let Some(props) = props.initial {
+        return rsx! { "{props}" };
+    }
+
+    None
 }
 
 #[component]
-fn WithInline<'a>(cx: Scope<'a>, text: &'a str) -> Element {
-    cx.render(rsx! {
+fn WithInline(text: String) -> Element {
+    rsx! {
         p { "{text}" }
-    })
+    }
 }
 
 #[component]
-fn Label<T>(cx: Scope, text: T) -> Element
+fn Label<T: Clone + PartialEq + 'static>(text: T) -> Element
 where
     T: Display,
 {
-    cx.render(rsx! {
+    rsx! {
         p { "{text}" }
-    })
+    }
 }

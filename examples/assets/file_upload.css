@@ -1,0 +1,19 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 10px;
+    padding: 10px;
+    background-color: #f4f4f4;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+#drop-zone {
+    border: 2px dashed #ccc;
+    border-radius: 3px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    margin: 20px;
+    background-color: rgba(225, 124, 225, 0);
+}

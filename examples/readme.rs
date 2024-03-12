@@ -1,19 +1,22 @@
-//! Example: README.md showcase
+//! The example from the readme!
 //!
-//! The example from the README.md.
+//! This example demonstrates how to create a simple counter app with dioxus. The `Signal` type wraps inner values,
+//! making them `Copy`, allowing them to be freely used in closures and async functions. `Signal` also provides
+//! helper methods like AddAssign, SubAssign, toggle, etc, to make it easy to update the value without running
+//! into lock issues.
 
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let mut count = use_state(cx, || 0);
+fn app() -> Element {
+    let mut count = use_signal(|| 0);
 
-    cx.render(rsx! {
+    rsx! {
         h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }
-    })
+    }
 }

@@ -1,0 +1,16 @@
+body {
+    background-color: #f4f4f4;
+    font-family: 'Open Sans', sans-serif;
+    font-size: 14px;
+    line-height: 1.42857143;
+    color: #333;
+    margin: 20px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.red {
+    background-color: rgb(202, 60, 60) !important;
+}

@@ -42,27 +42,32 @@
     <span> | </span>
     <a href="https://dioxuslabs.com/learn/0.4/guide"> Guide </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/master/notes/README/ZH_CN.md"> 中文 </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/zh-cn/README.md"> 中文 </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/master/translations/pt-br/README.md"> PT-BR </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/pt-br/README.md"> PT-BR </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/master/translations/ja-jp/README.md"> 日本語 </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/ja-jp/README.md"> 日本語 </a>
+    <span> | </span>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/tr-tr"> Türkçe </a>
   </h3>
 </div>
 
 <br/>
 
+> [!WARNING]
+> Dioxus 0.5 (currently in master) contains massive breaking changes and is not compatible with Dioxus 0.4
+
 Dioxus is a portable, performant, and ergonomic framework for building cross-platform user interfaces in Rust.
 
 ```rust
-fn app(cx: Scope) -> Element {
-    let mut count = use_state(cx, || 0);
+fn app() -> Element {
+    let mut count = use_signal(|| 0);
 
-    cx.render(rsx! {
+    rsx! {
         h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }
-    })
+    }
 }
 ```
 
@@ -142,7 +147,7 @@ There's tons of options for building apps, so why would you choose Dioxus?
 
 Well, first and foremost, Dioxus prioritizes developer experience. This is reflected in a variety of features unique to Dioxus:
 
-- Autoformatting of our meta language (RSX) and accompanying VSCode extension
+- Autoformatting of our meta language (RSX) and accompanying [VSCode extension](https://marketplace.visualstudio.com/items?itemName=DioxusLabs.dioxus)
 - Hotreloading using an interpreter of RSX for both desktop and web
 - Emphasis on good docs - our guide is complete and our HTML elements are documented
 - Significant research in simplifying
@@ -161,7 +166,7 @@ So... Dioxus is great, but why won't it work for me?
 ## Contributing
 - Check out the website [section on contributing](https://dioxuslabs.com/learn/0.4/contributing).
 - Report issues on our [issue tracker](https://github.com/dioxuslabs/dioxus/issues).
-- Join the discord and ask questions!
+- [Join](https://discord.gg/XgGxMSkvUM) the discord and ask questions!
 
 
 <a href="https://github.com/dioxuslabs/dioxus/graphs/contributors">

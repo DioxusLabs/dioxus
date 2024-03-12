@@ -1,9 +1,14 @@
 #![allow(non_upper_case_globals)]
+
+use dioxus_core::prelude::IntoAttributeValue;
+use dioxus_core::HasAttributes;
+use dioxus_html_internal_macro::impl_extension_attributes;
+#[cfg(feature = "hot-reload-context")]
+use dioxus_rsx::HotReloadingContext;
+
 #[cfg(feature = "hot-reload-context")]
 use crate::{map_global_attributes, map_svg_attributes};
 use crate::{GlobalAttributes, SvgAttributes};
-#[cfg(feature = "hot-reload-context")]
-use dioxus_rsx::HotReloadingContext;
 
 pub type AttributeDiscription = (&'static str, Option<&'static str>, bool);
 
@@ -74,7 +79,26 @@ macro_rules! impl_attribute_match {
         $attr:ident $fil:ident: $vil:ident (in $ns:literal),
     ) => {
         if $attr == stringify!($fil) {
-            return Some((stringify!(fil), Some(ns)));
+            return Some((stringify!(fil), Some($ns)));
+        }
+    };
+}
+
+#[cfg(feature = "html-to-rsx")]
+macro_rules! impl_html_to_rsx_attribute_match {
+    (
+        $attr:ident $fil:ident $name:literal
+    ) => {
+        if $attr == $name {
+            return Some(stringify!($fil));
+        }
+    };
+
+    (
+        $attr:ident $fil:ident $_:tt
+    ) => {
+        if $attr == stringify!($fil) {
+            return Some(stringify!($fil));
         }
     };
 }
@@ -180,14 +204,26 @@ macro_rules! impl_element_match {
     };
 
     (
-        $el:ident $name:ident $namespace:tt {
+        $el:ident $name:ident $namespace:literal {
             $(
                 $fil:ident: $vil:ident $extra:tt,
             )*
         }
     ) => {
         if $el == stringify!($name) {
-            return Some((stringify!($name), Some(stringify!($namespace))));
+            return Some((stringify!($name), Some($namespace)));
+        }
+    };
+
+    (
+        $el:ident $name:ident [$_:literal, $namespace:tt] {
+            $(
+                $fil:ident: $vil:ident $extra:tt,
+            )*
+        }
+    ) => {
+        if $el == stringify!($name) {
+            return Some((stringify!($name), Some($namespace)));
         }
     };
 }
@@ -207,6 +243,8 @@ macro_rules! impl_element_match_attributes {
                     $attr $fil: $vil ($extra),
                 );
             )*
+
+            return impl_map_global_attributes!($el $attr $name None);
         }
     };
 
@@ -223,8 +261,39 @@ macro_rules! impl_element_match_attributes {
                     $attr $fil: $vil ($extra),
                 );
             )*
+
+            return impl_map_global_attributes!($el $attr $name $namespace);
         }
     }
+}
+
+#[cfg(feature = "hot-reload-context")]
+macro_rules! impl_map_global_attributes {
+    (
+        $el:ident $attr:ident $element:ident None
+    ) => {
+        map_global_attributes($attr)
+    };
+
+    (
+        $el:ident $attr:ident $element:ident $namespace:literal
+    ) => {
+        if $namespace == "http://www.w3.org/2000/svg" {
+            map_svg_attributes($attr)
+        } else {
+            map_global_attributes($attr)
+        }
+    };
+
+    (
+        $el:ident $attr:ident $element:ident [$name:literal, $namespace:tt]
+    ) => {
+        if $namespace == "http://www.w3.org/2000/svg" {
+            map_svg_attributes($attr)
+        } else {
+            map_global_attributes($attr)
+        }
+    };
 }
 
 macro_rules! builder_constructors {
@@ -254,7 +323,7 @@ macro_rules! builder_constructors {
                         }
                     );
                 )*
-                map_global_attributes(attribute).or_else(|| map_svg_attributes(attribute))
+                None
             }
 
             fn map_element(element: &str) -> Option<(&'static str, Option<&'static str>)> {
@@ -271,6 +340,38 @@ macro_rules! builder_constructors {
             }
         }
 
+        #[cfg(feature = "html-to-rsx")]
+        pub fn map_html_attribute_to_rsx(html: &str) -> Option<&'static str> {
+            $(
+                $(
+                    impl_html_to_rsx_attribute_match!(
+                        html $fil $extra
+                    );
+                )*
+            )*
+
+            if let Some(name) = crate::map_html_global_attributes_to_rsx(html) {
+                return Some(name);
+            }
+
+            if let Some(name) = crate::map_html_svg_attributes_to_rsx(html) {
+                return Some(name);
+            }
+
+            None
+        }
+
+        #[cfg(feature = "html-to-rsx")]
+        pub fn map_html_element_to_rsx(html: &str) -> Option<&'static str> {
+            $(
+                if html == stringify!($name) {
+                    return Some(stringify!($name));
+                }
+            )*
+
+            None
+        }
+
         $(
             impl_element!(
                 $(#[$attr])*
@@ -282,6 +383,13 @@ macro_rules! builder_constructors {
                 }
             );
         )*
+
+        pub(crate) mod extensions {
+            use super::*;
+            $(
+                impl_extension_attributes![ELEMENT $name { $($fil,)* }];
+            )*
+        }
     };
 }
 
@@ -782,6 +890,7 @@ builder_constructors! {
         decoding: ImageDecoding DEFAULT,
         height: usize DEFAULT,
         ismap: Bool DEFAULT,
+        loading: String DEFAULT,
         src: Uri DEFAULT,
         srcset: String DEFAULT, // FIXME this is much more complicated
         usemap: String DEFAULT, // FIXME should be a fragment starting with '#'
@@ -952,9 +1061,8 @@ builder_constructors! {
         src: Uri DEFAULT,
         text: String DEFAULT,
 
-        // r#async: Bool,
-        // r#type: String, // TODO could be an enum
-        r#type: String "type",
+        r#async: Bool "async",
+        r#type: String "type", // TODO could be an enum
         r#script: String "script",
     };
 
@@ -1505,10 +1613,10 @@ builder_constructors! {
     /// element.
     hatchpath "http://www.w3.org/2000/svg" {};
 
-    // /// Build a
-    // /// [`<image>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/image)
-    // /// element.
-    // image "http://www.w3.org/2000/svg" {};
+    /// Build a
+    /// [`<image>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/image)
+    /// element.
+    image "http://www.w3.org/2000/svg" {};
 
     /// Build a
     /// [`<line>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Element/line)
@@ -1635,5 +1743,200 @@ builder_constructors! {
     // /// element.
     r#use ["use", "http://www.w3.org/2000/svg"] {
         href: String DEFAULT,
+    };
+
+    // MathML elements
+
+    /// Build a
+    /// [`<annotation>`](https://w3c.github.io/mathml-core/#dfn-annotation)
+    /// element.
+    annotation "http://www.w3.org/1998/Math/MathML" {
+            encoding: String DEFAULT,
+    };
+
+    /// Build a
+    /// [`<annotation-xml>`](https://w3c.github.io/mathml-core/#dfn-annotation-xml)
+    /// element.
+    annotationXml ["annotation-xml", "http://www.w3.org/1998/Math/MathML"] {
+            encoding: String DEFAULT,
+    };
+
+    /// Build a
+    /// [`<merror>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/merror)
+    /// element.
+    merror "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<math>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/math)
+    /// element.
+    math "http://www.w3.org/1998/Math/MathML" {
+        display: String DEFAULT,
+    };
+
+    /// Build a
+    /// [`<mfrac>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mfrac)
+    /// element.
+    mfrac "http://www.w3.org/1998/Math/MathML" {
+        linethickness: usize DEFAULT,
+    };
+
+    /// Build a
+    /// [`<mi>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mi)
+    /// element.
+    mi "http://www.w3.org/1998/Math/MathML" {
+        mathvariant: String DEFAULT,
+    };
+
+    /// Build a
+    /// [`<mmultiscripts>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mmultiscripts)
+    /// element.
+    mmultiscripts "http://www.w3.org/1998/math/mathml" {};
+
+    /// Build a
+    /// [`<mn>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mn)
+    /// element.
+    mn "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<mo>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mo)
+    /// element.
+    mo "http://www.w3.org/1998/Math/MathML" {
+        fence: Bool DEFAULT,
+        largeop: Bool DEFAULT,
+        lspace: usize DEFAULT,
+        maxsize: usize DEFAULT,
+        minsize: usize DEFAULT,
+        movablelimits: Bool DEFAULT,
+        rspace: usize DEFAULT,
+        separator: Bool DEFAULT,
+        stretchy: Bool DEFAULT,
+        symmetric: Bool DEFAULT,
+    };
+
+    /// Build a
+    /// [`<mover>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mover)
+    /// element.
+    mover "http://www.w3.org/1998/Math/MathML" {
+        accent: Bool DEFAULT,
+    };
+
+    /// Build a
+    /// [`<mpadded>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mpadded)
+    /// element.
+    mpadded "http://www.w3.org/1998/Math/MathML" {
+        depth: usize DEFAULT,
+        height: usize DEFAULT,
+        lspace: usize DEFAULT,
+        voffset: usize DEFAULT,
+        width: usize DEFAULT,
+    };
+
+    /// Build a
+    /// [`<mphantom>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mphantom)
+    /// element.
+    mphantom "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<mprescripts>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mprescripts)
+    /// element.
+    mprescripts "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<mroot>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mroot)
+    /// element.
+    mroot "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<mrow>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mrow)
+    /// element.
+    mrow "http://www.w3.org/1998/Math/MathML" {
+
+    };
+
+    /// Build a
+    /// [`<ms>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/ms)
+    /// element.
+    ms "http://www.w3.org/1998/Math/MathML" {
+        lquote: String DEFAULT,
+        rquote: String DEFAULT,
+    };
+
+    /// Build a
+    /// [`<mspace>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mspace)
+    /// element.
+    mspace "http://www.w3.org/1998/Math/MathML" {
+        depth: usize DEFAULT,
+        height: usize DEFAULT,
+        width: usize DEFAULT,
+    };
+
+    /// Build a
+    /// [`<msqrt>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/msqrt)
+    /// element.
+    msqrt "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<mstyle>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mstyle)
+    /// element.
+    mstyle "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<msub>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/msub)
+    /// element.
+    msub "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<msubsup>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/msubsup)
+    /// element.
+    msubsup "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<msup>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/msup)
+    /// element.
+    msup "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<mtable>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mtable)
+    /// element.
+    mtable "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<mtd>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mtd)
+    /// element.
+    mtd "http://www.w3.org/1998/Math/MathML" {
+        columnspan: usize DEFAULT,
+        rowspan: usize DEFAULT,
+    };
+
+    /// Build a
+    /// [`<mtext>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mtext)
+    /// element.
+    mtext "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<mtr>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mtr)
+    /// element.
+    mtr "http://www.w3.org/1998/Math/MathML" {};
+
+    /// Build a
+    /// [`<munder>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/munder)
+    /// element.
+    munder "http://www.w3.org/1998/Math/MathML" {
+        accentunder: Bool DEFAULT,
+    };
+
+    /// Build a
+    /// [`<munderover>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/munderover)
+    /// element.
+    munderover "http://www.w3.org/1998/Math/MathML" {
+        accent: Bool DEFAULT,
+        accentunder: Bool DEFAULT,
+    };
+
+    /// Build a
+    /// [`<semantics>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Element/semantics)
+    /// element.
+    semantics "http://www.w3.org/1998/Math/MathML" {
+        encoding: String DEFAULT,
     };
 }

@@ -1,12 +1,11 @@
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
-use dioxus_fullstack::prelude::*;
 
-pub fn app(cx: Scope) -> Element {
-    let mut count = use_state(cx, || 0);
-    let text = use_state(cx, || "...".to_string());
+pub fn app() -> Element {
+    let mut count = use_signal(|| 0);
+    let text = use_signal(|| "...".to_string());
 
-    cx.render(rsx! {
+    rsx! {
         h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }
@@ -24,7 +23,7 @@ pub fn app(cx: Scope) -> Element {
             "Run a server function"
         }
         "Server said: {text}"
-    })
+    }
 }
 
 #[server(PostServerData)]

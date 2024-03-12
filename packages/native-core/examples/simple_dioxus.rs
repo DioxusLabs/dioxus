@@ -166,32 +166,28 @@ impl State for Border {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    fn app(cx: Scope) -> Element {
-        let count = use_state(cx, || 0);
+    fn app() -> Element {
+        let mut count = use_signal(|| 0);
 
-        use_future(cx, (count,), |(count,)| async move {
+        use_future(move || async move {
             loop {
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                count.set(*count + 1);
+                count += 1;
             }
         });
 
-        cx.render(rsx! {
-            div{
-                color: "red",
+        rsx! {
+            div { color: "red",
                 "{count}",
                 Comp {}
             }
-        })
+        }
     }
 
-    fn Comp(cx: Scope) -> Element {
-        cx.render(rsx! {
-            div{
-                border: "",
-                "hello world"
-            }
-        })
+    fn Comp() -> Element {
+        rsx! {
+            div { border: "", "hello world" }
+        }
     }
 
     // create the vdom, the real_dom, and the binding layer between them
@@ -203,9 +199,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ]);
     let mut dioxus_intigration_state = DioxusState::create(&mut rdom);
 
-    let mutations = vdom.rebuild();
     // update the structure of the real_dom tree
-    dioxus_intigration_state.apply_mutations(&mut rdom, mutations);
+    let mut writer = dioxus_intigration_state.create_mutation_writer(&mut rdom);
+    vdom.rebuild(&mut writer);
+
     let mut ctx = SendAnyMap::new();
     // set the font size to 3.3
     ctx.insert(FontSize(3.3));
@@ -222,10 +219,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 vdom.wait_for_work().await;
 
                 // get the mutations from the vdom
-                let mutations = vdom.render_immediate();
-
                 // update the structure of the real_dom tree
-                dioxus_intigration_state.apply_mutations(&mut rdom, mutations);
+                let mut writer = dioxus_intigration_state.create_mutation_writer(&mut rdom);
+                vdom.rebuild(&mut writer);
 
                 // update the state of the real_dom tree
                 let mut ctx = SendAnyMap::new();

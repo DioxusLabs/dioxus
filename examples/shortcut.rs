@@ -1,17 +1,21 @@
+//! Add global shortcuts to your app while a component is active
+//!
+//! This demo shows how to add a global shortcut to your app that toggles a signal. You could use this to implement
+//! a raycast-type app, or to add a global shortcut to your app that toggles a component on and off.
+//!
+//! These are *global* shortcuts, so they will work even if your app is not in focus.
+
+use dioxus::desktop::use_global_shortcut;
 use dioxus::prelude::*;
-use dioxus_desktop::use_global_shortcut;
 
 fn main() {
-    dioxus_desktop::launch(app);
+    launch_desktop(app);
 }
 
-fn app(cx: Scope) -> Element {
-    let toggled = use_state(cx, || false);
+fn app() -> Element {
+    let mut toggled = use_signal(|| false);
 
-    use_global_shortcut(cx, "ctrl+s", {
-        to_owned![toggled];
-        move || toggled.modify(|t| !*t)
-    });
+    _ = use_global_shortcut("ctrl+s", move || toggled.toggle());
 
-    cx.render(rsx!("toggle: {toggled.get()}"))
+    rsx!("toggle: {toggled}")
 }

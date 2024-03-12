@@ -1,0 +1,20 @@
+{
+    "rust-analyzer.check.workspace": false,
+    // "rust-analyzer.check.command": "check alsjdlaskdjljkasd",
+    "rust-analyzer.check.allTargets": false,
+    "rust-analyzer.cargo.buildScripts.enable": true,
+    "rust-analyzer.cargo.buildScripts.overrideCommand": [
+        "cargo",
+        "check",
+        "--quiet",
+        // "--package",
+        // "dioxus-core-macro",
+        "--message-format",
+        "json",
+        "--all-targets"
+    ],
+    "rust-analyzer.cargo.buildScripts.rebuildOnSave": false,
+    "rust-analyzer.cargo.buildScripts.invocationLocation": "root",
+    "rust-analyzer.cargo.buildScripts.invocationStrategy": "once",
+    // "rust-analyzer.check.command": "check --package dioxus-core-macro"
+}

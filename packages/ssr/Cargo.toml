@@ -2,7 +2,7 @@
 name = "dioxus-ssr"
 version = { workspace = true }
 authors = ["Jonathan Kelley"]
-edition = "2018"
+edition = "2021"
 description = "Dioxus render-to-string"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
@@ -10,17 +10,28 @@ keywords = ["dom", "ui", "gui", "react", "ssr"]
 
 [dependencies]
 dioxus-core = { workspace = true, features = ["serialize"] }
+dioxus-html = { workspace = true, features = ["eval"]}
+generational-box = { workspace = true }
 askama_escape = "0.10.3"
 thiserror = "1.0.23"
 rustc-hash = "1.1.0"
-lru = "0.10.0"
+lru  = { workspace = true }
 tracing = { workspace = true }
-http = "0.2.9"
-tokio = { version = "1.28", features = ["full"], optional = true }
+http = { workspace = true }
+async-trait = { workspace = true }
+serde_json = { workspace = true }
+chrono = { version = "0.4.34", optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tokio = { version = "1.28", features = ["io-util"], optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { version = "1.28", features = ["fs", "io-util"], optional = true }
 
 [dev-dependencies]
 dioxus = { workspace = true }
-thiserror = { workspace = true }
+dioxus-signals = { workspace = true }
+
 tracing = { workspace = true }
 fern = { version = "0.6.0", features = ["colored"] }
 anyhow = "1.0"
@@ -30,5 +41,5 @@ serde_json = "1.0.61"
 fs_extra = "1.2.0"
 
 [features]
-default = ["incremental"]
-incremental = ["dep:tokio"]
+default = []
+incremental = ["dep:tokio", "chrono"]

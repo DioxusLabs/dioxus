@@ -1,0 +1,24 @@
+#container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#receiver {
+    background: deepskyblue;
+    height: 30vh;
+    width: 80vw;
+    color: white;
+    padding: 20px;
+    margin: 20px;
+    text-align: center;
+}
+
+#log {
+    background: lightgray;
+    padding: 20px;
+    margin: 20px;
+    overflow-y: scroll;
+    align-items: start;
+    text-align: left;
+}

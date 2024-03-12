@@ -2,32 +2,22 @@
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
-pub mod adapters {
-    #[cfg(feature = "warp")]
-    pub mod warp_adapter;
-    #[cfg(feature = "warp")]
-    pub use warp_adapter::*;
-
-    #[cfg(feature = "axum")]
-    pub mod axum_adapter;
-    #[cfg(feature = "axum")]
-    pub use axum_adapter::*;
-
-    #[cfg(feature = "salvo")]
-    pub mod salvo_adapter;
-
-    #[cfg(feature = "salvo")]
-    pub use salvo_adapter::*;
-}
-
+mod adapters;
+#[allow(unused_imports)]
 pub use adapters::*;
 
 mod element;
 pub mod pool;
 mod query;
+use dioxus_interpreter_js::NATIVE_JS;
 use futures_util::{SinkExt, StreamExt};
 pub use pool::*;
+mod config;
 mod eval;
+mod events;
+pub use config::*;
+#[cfg(feature = "axum")]
+pub mod launch;
 
 pub trait WebsocketTx: SinkExt<String, Error = LiveViewError> {}
 impl<T> WebsocketTx for T where T: SinkExt<String, Error = LiveViewError> {}
@@ -37,62 +27,72 @@ impl<T> WebsocketRx for T where T: StreamExt<Item = Result<String, LiveViewError
 
 #[derive(Debug, thiserror::Error)]
 pub enum LiveViewError {
-    #[error("warp error")]
+    #[error("Sending to client error")]
     SendingFailed,
 }
 
-use once_cell::sync::Lazy;
+fn handle_edits_code() -> String {
+    use dioxus_interpreter_js::unified_bindings::SLEDGEHAMMER_JS;
 
-static INTERPRETER_JS: Lazy<String> = Lazy::new(|| {
-    let interpreter = dioxus_interpreter_js::INTERPRETER_JS;
     let serialize_file_uploads = r#"if (
-      target.tagName === "INPUT" &&
-      (event.type === "change" || event.type === "input")
-    ) {
-      const type = target.getAttribute("type");
-      if (type === "file") {
-        async function read_files() {
-          const files = target.files;
-          const file_contents = {};
+        target.tagName === "INPUT" &&
+        (event.type === "change" || event.type === "input")
+      ) {
+        const type = target.getAttribute("type");
+        if (type === "file") {
+          async function read_files() {
+            const files = target.files;
+            const file_contents = {};
 
-          for (let i = 0; i < files.length; i++) {
-            const file = files[i];
+            for (let i = 0; i < files.length; i++) {
+              const file = files[i];
 
-            file_contents[file.name] = Array.from(
-              new Uint8Array(await file.arrayBuffer())
-            );
+              file_contents[file.name] = Array.from(
+                new Uint8Array(await file.arrayBuffer())
+              );
+            }
+            let file_engine = {
+              files: file_contents,
+            };
+            contents.files = file_engine;
+
+            if (realId === null) {
+              return;
+            }
+            const message = window.interpreter.serializeIpcMessage("user_event", {
+              name: name,
+              element: parseInt(realId),
+              data: contents,
+              bubbles,
+            });
+            window.ipc.postMessage(message);
           }
-          let file_engine = {
-            files: file_contents,
-          };
-          contents.files = file_engine;
-
-          if (realId === null) {
-            return;
-          }
-          const message = serializeIpcMessage("user_event", {
-            name: name,
-            element: parseInt(realId),
-            data: contents,
-            bubbles,
-          });
-          window.ipc.postMessage(message);
+          read_files();
+          return;
         }
-        read_files();
-        return;
-      }
-    }"#;
+      }"#;
+    let mut interpreter = format!(
+        r#"
+    // Bring the sledgehammer code
+    {SLEDGEHAMMER_JS}
 
-    let interpreter = interpreter.replace("/*POST_EVENT_SERIALIZATION*/", serialize_file_uploads);
-    interpreter.replace("import { setAttributeInner } from \"./common.js\";", "")
-});
-
-static COMMON_JS: Lazy<String> = Lazy::new(|| {
-    let common = dioxus_interpreter_js::COMMON_JS;
-    common.replace("export", "")
-});
-
-static MAIN_JS: &str = include_str!("./main.js");
+    // And then extend it with our native bindings
+    {NATIVE_JS}
+    "#
+    )
+    .replace("/*POST_EVENT_SERIALIZATION*/", serialize_file_uploads)
+    .replace("export", "");
+    while let Some(import_start) = interpreter.find("import") {
+        let import_end = interpreter[import_start..]
+            .find(|c| c == ';' || c == '\n')
+            .map(|i| i + import_start)
+            .unwrap_or_else(|| interpreter.len());
+        interpreter.replace_range(import_start..import_end, "");
+    }
+    let main_js = include_str!("./main.js");
+    let js = format!("{interpreter}\n{main_js}");
+    js
+}
 
 /// This script that gets injected into your app connects this page to the websocket endpoint
 ///
@@ -116,7 +116,7 @@ pub fn interpreter_glue(url_or_path: &str) -> String {
     // If the url starts with a `/`, generate glue which reuses current host
     let get_ws_url = if url_or_path.starts_with('/') {
         r#"
-  let loc = window.location; 
+  let loc = window.location;
   let new_url = "";
   if (loc.protocol === "https:") {{
       new_url = "wss:";
@@ -130,20 +130,17 @@ pub fn interpreter_glue(url_or_path: &str) -> String {
         "return path;"
     };
 
-    let js = &*INTERPRETER_JS;
-    let common = &*COMMON_JS;
+    let handle_edits = handle_edits_code();
+
     format!(
         r#"
 <script>
     function __dioxusGetWsUrl(path) {{
       {get_ws_url}
     }}
-    
+
     var WS_ADDR = __dioxusGetWsUrl("{url_or_path}");
-    {js}
-    {common}
-    {MAIN_JS}
-    main();
+    {handle_edits}
 </script>
     "#
     )

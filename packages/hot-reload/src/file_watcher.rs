@@ -1,19 +1,17 @@
 use std::{
-    io::{BufRead, BufReader, Write},
+    io::Write,
     path::PathBuf,
     str::FromStr,
     sync::{Arc, Mutex},
 };
 
 use crate::HotReloadMsg;
-use dioxus_core::Template;
 use dioxus_rsx::{
     hot_reload::{FileMap, FileMapBuildResult, UpdateResult},
     HotReloadingContext,
 };
-use interprocess_docfix::local_socket::{LocalSocketListener, LocalSocketStream};
+use interprocess_docfix::local_socket::LocalSocketListener;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
-use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "file_watcher")]
 use dioxus_html::HtmlCtx;
@@ -121,223 +119,216 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
         phantom: _,
     } = cfg;
 
-    if let Ok(crate_dir) = PathBuf::from_str(root_path) {
-        // try to find the gitingore file
-        let gitignore_file_path = crate_dir.join(".gitignore");
-        let (gitignore, _) = ignore::gitignore::Gitignore::new(gitignore_file_path);
+    let Ok(crate_dir) = PathBuf::from_str(root_path) else {
+        return;
+    };
 
-        // convert the excluded paths to absolute paths
-        let excluded_paths = excluded_paths
-            .iter()
-            .map(|path| crate_dir.join(PathBuf::from(path)))
-            .collect::<Vec<_>>();
+    // try to find the gitingore file
+    let gitignore_file_path = crate_dir.join(".gitignore");
+    let (gitignore, _) = ignore::gitignore::Gitignore::new(gitignore_file_path);
 
-        let channels = Arc::new(Mutex::new(Vec::new()));
-        let FileMapBuildResult {
-            map: file_map,
-            errors,
-        } = FileMap::<Ctx>::create_with_filter(crate_dir.clone(), |path| {
-            // skip excluded paths
-            excluded_paths.iter().any(|p| path.starts_with(p)) ||
+    // convert the excluded paths to absolute paths
+    let excluded_paths = excluded_paths
+        .iter()
+        .map(|path| crate_dir.join(PathBuf::from(path)))
+        .collect::<Vec<_>>();
+
+    let channels = Arc::new(Mutex::new(Vec::new()));
+    let FileMapBuildResult {
+        map: file_map,
+        errors,
+    } = FileMap::<Ctx>::create_with_filter(crate_dir.clone(), |path| {
+        // skip excluded paths
+        excluded_paths.iter().any(|p| path.starts_with(p)) ||
                 // respect .gitignore
                 gitignore
                     .matched_path_or_any_parents(path, path.is_dir())
                     .is_ignore()
-        })
-        .unwrap();
-        for err in errors {
-            if log {
-                println!("hot reloading failed to initialize:\n{err:?}");
+    })
+    .unwrap();
+    for err in errors {
+        if log {
+            println!("hot reloading failed to initialize:\n{err:?}");
+        }
+    }
+    let file_map = Arc::new(Mutex::new(file_map));
+
+    #[cfg(target_os = "macos")]
+    {
+        // On unix, if you force quit the application, it can leave the file socket open
+        // This will cause the local socket listener to fail to open
+        // We check if the file socket is already open from an old session and then delete it
+        let paths = ["./dioxusin", "./@dioxusin"];
+        for path in paths {
+            let path = PathBuf::from(path);
+            if path.exists() {
+                let _ = std::fs::remove_file(path);
             }
         }
-        let file_map = Arc::new(Mutex::new(file_map));
+    }
 
-        #[cfg(target_os = "macos")]
-        {
-            // On unix, if you force quit the application, it can leave the file socket open
-            // This will cause the local socket listener to fail to open
-            // We check if the file socket is already open from an old session and then delete it
-            let paths = ["./dioxusin", "./@dioxusin"];
-            for path in paths {
-                let path = PathBuf::from(path);
-                if path.exists() {
-                    let _ = std::fs::remove_file(path);
+    let binding = LocalSocketListener::bind("@dioxusin");
+    let Ok(local_socket_stream) = binding else {
+        let err = binding.unwrap_err();
+        if log {
+            println!("failed to connect to hot reloading\n{err}");
+        }
+        return;
+    };
+
+    let aborted = Arc::new(Mutex::new(false));
+
+    // listen for connections
+    std::thread::spawn({
+        let file_map = file_map.clone();
+        let channels = channels.clone();
+        let aborted = aborted.clone();
+        let _ = local_socket_stream.set_nonblocking(true);
+        move || {
+            loop {
+                if let Ok(mut connection) = local_socket_stream.accept() {
+                    // send any templates than have changed before the socket connected
+                    let templates: Vec<_> = {
+                        file_map
+                            .lock()
+                            .unwrap()
+                            .map
+                            .values()
+                            .filter_map(|(_, template_slot)| *template_slot)
+                            .collect()
+                    };
+                    for template in templates {
+                        if !send_msg(HotReloadMsg::UpdateTemplate(template), &mut connection) {
+                            continue;
+                        }
+                    }
+                    channels.lock().unwrap().push(connection);
+                    if log {
+                        println!("Connected to hot reloading 🚀");
+                    }
+                }
+                if *aborted.lock().unwrap() {
+                    break;
+                }
+            }
+        }
+    });
+
+    // watch for changes
+    std::thread::spawn(move || {
+        let mut last_update_time = chrono::Local::now().timestamp();
+
+        let (tx, rx) = std::sync::mpsc::channel();
+
+        let mut watcher = RecommendedWatcher::new(tx, notify::Config::default()).unwrap();
+
+        for path in listening_paths {
+            let full_path = crate_dir.join(path);
+            if let Err(err) = watcher.watch(&full_path, RecursiveMode::Recursive) {
+                if log {
+                    println!("hot reloading failed to start watching {full_path:?}:\n{err:?}",);
                 }
             }
         }
 
-        match LocalSocketListener::bind("@dioxusin") {
-            Ok(local_socket_stream) => {
-                let aborted = Arc::new(Mutex::new(false));
-
-                // listen for connections
-                std::thread::spawn({
-                    let file_map = file_map.clone();
-                    let channels = channels.clone();
-                    let aborted = aborted.clone();
-                    let _ = local_socket_stream.set_nonblocking(true);
-                    move || {
-                        loop {
-                            if let Ok(mut connection) = local_socket_stream.accept() {
-                                // send any templates than have changed before the socket connected
-                                let templates: Vec<_> = {
-                                    file_map
-                                        .lock()
-                                        .unwrap()
-                                        .map
-                                        .values()
-                                        .filter_map(|(_, template_slot)| *template_slot)
-                                        .collect()
-                                };
-                                for template in templates {
-                                    if !send_msg(
-                                        HotReloadMsg::UpdateTemplate(template),
-                                        &mut connection,
-                                    ) {
-                                        continue;
-                                    }
-                                }
-                                channels.lock().unwrap().push(connection);
-                                if log {
-                                    println!("Connected to hot reloading 🚀");
-                                }
-                            }
-                            if *aborted.lock().unwrap() {
-                                break;
-                            }
-                        }
+        let mut rebuild = {
+            let aborted = aborted.clone();
+            let channels = channels.clone();
+            move || {
+                if let Some(rebuild_callback) = &mut rebuild_with {
+                    if log {
+                        println!("Rebuilding the application...");
                     }
-                });
+                    let shutdown = rebuild_callback();
 
-                // watch for changes
-                std::thread::spawn(move || {
-                    let mut last_update_time = chrono::Local::now().timestamp();
-
-                    let (tx, rx) = std::sync::mpsc::channel();
-
-                    let mut watcher =
-                        RecommendedWatcher::new(tx, notify::Config::default()).unwrap();
-
-                    for path in listening_paths {
-                        let full_path = crate_dir.join(path);
-                        if let Err(err) = watcher.watch(&full_path, RecursiveMode::Recursive) {
-                            if log {
-                                println!(
-                                    "hot reloading failed to start watching {full_path:?}:\n{err:?}",
-                                );
-                            }
-                        }
+                    if shutdown {
+                        *aborted.lock().unwrap() = true;
                     }
 
-                    let mut rebuild = {
-                        let aborted = aborted.clone();
-                        let channels = channels.clone();
-                        move || {
-                            if let Some(rebuild_callback) = &mut rebuild_with {
-                                if log {
-                                    println!("Rebuilding the application...");
-                                }
-                                let shutdown = rebuild_callback();
-
-                                if shutdown {
-                                    *aborted.lock().unwrap() = true;
-                                }
-
-                                for channel in &mut *channels.lock().unwrap() {
-                                    send_msg(HotReloadMsg::Shutdown, channel);
-                                }
-
-                                return shutdown;
-                            } else if log {
-                                println!(
-                                    "Rebuild needed... shutting down hot reloading.\nManually rebuild the application to view further changes."
-                                );
-                            }
-                            true
-                        }
-                    };
-
-                    for evt in rx {
-                        if chrono::Local::now().timestamp_millis() >= last_update_time {
-                            if let Ok(evt) = evt {
-                                let real_paths = evt
-                                    .paths
-                                    .iter()
-                                    .filter(|path| {
-                                        // skip non rust files
-                                        matches!(
-                                            path.extension().and_then(|p| p.to_str()),
-                                            Some("rs" | "toml" | "css" | "html" | "js")
-                                        ) &&
-                                        // skip excluded paths
-                                        !excluded_paths.iter().any(|p| path.starts_with(p)) &&
-                                        // respect .gitignore
-                                        !gitignore
-                                            .matched_path_or_any_parents(path, false)
-                                            .is_ignore()
-                                    })
-                                    .collect::<Vec<_>>();
-
-                                // Give time for the change to take effect before reading the file
-                                if !real_paths.is_empty() {
-                                    std::thread::sleep(std::time::Duration::from_millis(10));
-                                }
-
-                                let mut channels = channels.lock().unwrap();
-                                for path in real_paths {
-                                    // if this file type cannot be hot reloaded, rebuild the application
-                                    if path.extension().and_then(|p| p.to_str()) != Some("rs")
-                                        && rebuild()
-                                    {
-                                        return;
-                                    }
-                                    // find changes to the rsx in the file
-                                    match file_map
-                                        .lock()
-                                        .unwrap()
-                                        .update_rsx(path, crate_dir.as_path())
-                                    {
-                                        Ok(UpdateResult::UpdatedRsx(msgs)) => {
-                                            for msg in msgs {
-                                                let mut i = 0;
-                                                while i < channels.len() {
-                                                    let channel = &mut channels[i];
-                                                    if send_msg(
-                                                        HotReloadMsg::UpdateTemplate(msg),
-                                                        channel,
-                                                    ) {
-                                                        i += 1;
-                                                    } else {
-                                                        channels.remove(i);
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        Ok(UpdateResult::NeedsRebuild) => {
-                                            drop(channels);
-                                            if rebuild() {
-                                                return;
-                                            }
-                                            break;
-                                        }
-                                        Err(err) => {
-                                            if log {
-                                                println!(
-                                                    "hot reloading failed to update rsx:\n{err:?}"
-                                                );
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            last_update_time = chrono::Local::now().timestamp_millis();
-                        }
+                    for channel in &mut *channels.lock().unwrap() {
+                        send_msg(HotReloadMsg::Shutdown, channel);
                     }
-                });
+
+                    return shutdown;
+                } else if log {
+                    println!("Rebuild needed... shutting down hot reloading.\nManually rebuild the application to view further changes.");
+                }
+                true
             }
-            Err(error) => println!("failed to connect to hot reloading\n{error}"),
+        };
+
+        for evt in rx {
+            if chrono::Local::now().timestamp_millis() < last_update_time {
+                continue;
+            }
+            let Ok(evt) = evt else {
+                last_update_time = chrono::Local::now().timestamp_millis();
+                continue;
+            };
+            let real_paths = evt
+                .paths
+                .iter()
+                .filter(|path| {
+                    // skip non rust files
+                    matches!(
+                      path.extension().and_then(|p| p.to_str()),
+                      Some("rs" | "toml" | "css" | "html" | "js")
+                    )
+                    // skip excluded paths
+                    && !excluded_paths.iter().any(|p| path.starts_with(p))
+                    // respect .gitignore
+                    && !gitignore
+                      .matched_path_or_any_parents(path, false)
+                      .is_ignore()
+                })
+                .collect::<Vec<_>>();
+
+            // Give time for the change to take effect before reading the file
+            if !real_paths.is_empty() {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+
+            let mut channels = channels.lock().unwrap();
+            for path in real_paths {
+                // if this file type cannot be hot reloaded, rebuild the application
+                if path.extension().and_then(|p| p.to_str()) != Some("rs") && rebuild() {
+                    return;
+                }
+                // find changes to the rsx in the file
+                match file_map
+                    .lock()
+                    .unwrap()
+                    .update_rsx(path, crate_dir.as_path())
+                {
+                    Ok(UpdateResult::UpdatedRsx(msgs)) => {
+                        for msg in msgs {
+                            let mut i = 0;
+                            while i < channels.len() {
+                                let channel = &mut channels[i];
+                                if send_msg(HotReloadMsg::UpdateTemplate(msg), channel) {
+                                    i += 1;
+                                } else {
+                                    channels.remove(i);
+                                }
+                            }
+                        }
+                    }
+                    Ok(UpdateResult::NeedsRebuild) => {
+                        drop(channels);
+                        if rebuild() {
+                            return;
+                        }
+                        break;
+                    }
+                    Err(err) => {
+                        if log {
+                            println!("hot reloading failed to update rsx:\n{err:?}");
+                        }
+                    }
+                }
+            }
         }
-    }
+    });
 }
 
 fn send_msg(msg: HotReloadMsg, channel: &mut impl Write) -> bool {

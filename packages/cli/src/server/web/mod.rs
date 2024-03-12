@@ -1,3 +1,5 @@
+use crate::server::ServerReloadState;
+use crate::server::WsMessage;
 use crate::{
     builder,
     serve::Serve,
@@ -5,12 +7,13 @@ use crate::{
         output::{print_console_info, PrettierOptions, WebServerInfo},
         setup_file_watcher, HotReloadState,
     },
-    BuildResult, CrateConfig, Result, WebHttpsConfig,
+    BuildResult, Result,
 };
 use axum::{
-    body::{Full, HttpBody},
-    extract::{ws::Message, Extension, TypedHeader, WebSocketUpgrade},
+    body::Body,
+    extract::{ws::Message, Extension, WebSocketUpgrade},
     http::{
+        self,
         header::{HeaderName, HeaderValue},
         Method, Response, StatusCode,
     },
@@ -19,6 +22,8 @@ use axum::{
     Router,
 };
 use axum_server::tls_rustls::RustlsConfig;
+use dioxus_cli_config::CrateConfig;
+use dioxus_cli_config::WebHttpsConfig;
 
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;
@@ -34,25 +39,24 @@ use tower_http::{
     cors::{Any, CorsLayer},
     ServiceBuilderExt,
 };
-
-#[cfg(feature = "plugin")]
-use plugin::PluginManager;
-
 mod proxy;
 
 mod hot_reload;
 use hot_reload::*;
 
 struct WsReloadState {
-    update: broadcast::Sender<()>,
+    update: broadcast::Sender<WsMessage>,
 }
 
-pub async fn startup(port: u16, config: CrateConfig, start_browser: bool) -> Result<()> {
+pub async fn startup(
+    port: u16,
+    config: CrateConfig,
+    start_browser: bool,
+    skip_assets: bool,
+) -> Result<()> {
     // ctrl-c shutdown checker
     let _crate_config = config.clone();
     let _ = ctrlc::set_handler(move || {
-        #[cfg(feature = "plugin")]
-        let _ = PluginManager::on_serve_shutdown(&_crate_config);
         std::process::exit(0);
     });
 
@@ -79,7 +83,22 @@ pub async fn startup(port: u16, config: CrateConfig, start_browser: bool) -> Res
         false => None,
     };
 
-    serve(ip, port, config, start_browser, hot_reload_state).await?;
+    // WS Reload Watching
+    let (reload_tx, _) = broadcast::channel(100);
+
+    let reload_state =
+        ServerReloadState::new(hot_reload_state).with_reload_tx(Some(reload_tx.clone()));
+
+    serve(
+        ip,
+        port,
+        config,
+        start_browser,
+        reload_state,
+        reload_tx,
+        skip_assets,
+    )
+    .await?;
 
     Ok(())
 }
@@ -90,14 +109,16 @@ pub async fn serve(
     port: u16,
     config: CrateConfig,
     start_browser: bool,
-    hot_reload_state: Option<HotReloadState>,
+    reload_state: ServerReloadState,
+    reload_tx: Sender<WsMessage>,
+    skip_assets: bool,
 ) -> Result<()> {
-    let first_build_result = crate::builder::build(&config, true)?;
+    let first_build_result = crate::builder::build(&config, false, skip_assets, None)?;
+
+    // generate dev-index page
+    Serve::regen_dev_page(&config, first_build_result.assets.as_ref())?;
 
     log::info!("🚀 Starting development server...");
-
-    // WS Reload Watching
-    let (reload_tx, _) = broadcast::channel(100);
 
     // We got to own watcher so that it exists for the duration of serve
     // Otherwise full reload won't work.
@@ -105,14 +126,14 @@ pub async fn serve(
         {
             let config = config.clone();
             let reload_tx = reload_tx.clone();
-            move || build(&config, &reload_tx)
+            move || build(&config, &reload_tx, skip_assets)
         },
         &config,
         Some(WebServerInfo {
             ip: ip.clone(),
             port,
         }),
-        hot_reload_state.clone(),
+        reload_state.clone(),
     )
     .await?;
 
@@ -139,10 +160,10 @@ pub async fn serve(
     );
 
     // Router
-    let router = setup_router(config, ws_reload_state, hot_reload_state).await?;
+    let router = setup_router(&config, ws_reload_state, reload_state.hot_reload).await?;
 
     // Start server
-    start_server(port, router, start_browser, rustls_config).await?;
+    start_server(port, router, start_browser, rustls_config, &config).await?;
 
     Ok(())
 }
@@ -228,7 +249,7 @@ fn get_rustls_without_mkcert(web_config: &WebHttpsConfig) -> Result<(String, Str
 
 /// Sets up and returns a router
 async fn setup_router(
-    config: CrateConfig,
+    config: &CrateConfig,
     ws_reload: Arc<WsReloadState>,
     hot_reload: Option<HotReloadState>,
 ) -> Result<Router> {
@@ -262,56 +283,63 @@ async fn setup_router(
         .override_response_header(HeaderName::from_static("cross-origin-opener-policy"), coop)
         .and_then(
             move |response: Response<ServeFileSystemResponseBody>| async move {
-                let response = if file_service_config
-                    .dioxus_config
-                    .web
-                    .watcher
-                    .index_on_404
-                    .unwrap_or(false)
+                let mut response = if file_service_config.dioxus_config.web.index_on_404
                     && response.status() == StatusCode::NOT_FOUND
                 {
-                    let body = Full::from(
+                    let body = Body::from(
                         // TODO: Cache/memoize this.
-                        std::fs::read_to_string(
-                            file_service_config
-                                .crate_dir
-                                .join(file_service_config.out_dir)
-                                .join("index.html"),
-                        )
-                        .ok()
-                        .unwrap(),
-                    )
-                    .map_err(|err| match err {})
-                    .boxed();
+                        std::fs::read_to_string(file_service_config.out_dir().join("index.html"))
+                            .ok()
+                            .unwrap(),
+                    );
                     Response::builder()
                         .status(StatusCode::OK)
                         .body(body)
                         .unwrap()
                 } else {
-                    response.map(|body| body.boxed())
+                    response.into_response()
                 };
+                let headers = response.headers_mut();
+                headers.insert(
+                    http::header::CACHE_CONTROL,
+                    HeaderValue::from_static("no-cache"),
+                );
+                headers.insert(http::header::PRAGMA, HeaderValue::from_static("no-cache"));
+                headers.insert(http::header::EXPIRES, HeaderValue::from_static("0"));
                 Ok(response)
             },
         )
-        .service(ServeDir::new(config.crate_dir.join(&config.out_dir)));
+        .service(ServeDir::new(config.out_dir()));
 
     // Setup websocket
     let mut router = Router::new().route("/_dioxus/ws", get(ws_handler));
 
     // Setup proxy
-    for proxy_config in config.dioxus_config.web.proxy.unwrap_or_default() {
-        router = proxy::add_proxy(router, &proxy_config)?;
+    for proxy_config in &config.dioxus_config.web.proxy {
+        router = proxy::add_proxy(router, proxy_config)?;
     }
 
     // Route file service
     router = router.fallback(get_service(file_service).handle_error(
-        |error: std::io::Error| async move {
+        |error: std::convert::Infallible| async move {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Unhandled internal error: {}", error),
             )
         },
     ));
+
+    router = if let Some(base_path) = config.dioxus_config.web.app.base_path.clone() {
+        let base_path = format!("/{}", base_path.trim_matches('/'));
+        Router::new()
+            .route(&base_path, axum::routing::any_service(router))
+            .fallback(get(move || {
+                let base_path = base_path.clone();
+                async move { format!("Outside of the base path: {}", base_path) }
+            }))
+    } else {
+        router
+    };
 
     // Setup routes
     router = router
@@ -332,14 +360,11 @@ async fn start_server(
     router: Router,
     start_browser: bool,
     rustls: Option<RustlsConfig>,
+    _config: &CrateConfig,
 ) -> Result<()> {
-    // If plugins, call on_serve_start event
-    #[cfg(feature = "plugin")]
-    PluginManager::on_serve_start(&config)?;
-
-    // Parse address
-    let addr = format!("0.0.0.0:{}", port).parse().unwrap();
-
+    // Bind the server to `[::]` and it will LISTEN for both IPv4 and IPv6. (required IPv6 dual stack)
+    let addr = format!("[::]:{}", port).parse().unwrap();
+    
     // Open the browser
     if start_browser {
         match rustls {
@@ -356,9 +381,8 @@ async fn start_server(
                 .await?
         }
         None => {
-            axum::Server::bind(&addr)
-                .serve(router.into_make_service())
-                .await?
+            let listener = tokio::net::TcpListener::bind(&addr).await?;
+            axum::serve(listener, router.into_make_service()).await?
         }
     }
 
@@ -386,17 +410,16 @@ fn get_ip() -> Option<String> {
 /// Handle websockets
 async fn ws_handler(
     ws: WebSocketUpgrade,
-    _: Option<TypedHeader<headers::UserAgent>>,
     Extension(state): Extension<Arc<WsReloadState>>,
 ) -> impl IntoResponse {
     ws.on_upgrade(|mut socket| async move {
         let mut rx = state.update.subscribe();
         let reload_watcher = tokio::spawn(async move {
             loop {
-                rx.recv().await.unwrap();
+                let message = rx.recv().await.unwrap();
                 // ignore the error
                 if socket
-                    .send(Message::Text(String::from("reload")))
+                    .send(Message::Text(serde_json::to_string(&message).unwrap()))
                     .await
                     .is_err()
                 {
@@ -412,19 +435,19 @@ async fn ws_handler(
     })
 }
 
-fn build(config: &CrateConfig, reload_tx: &Sender<()>) -> Result<BuildResult> {
-    let result = builder::build(config, true)?;
+fn build(
+    config: &CrateConfig,
+    reload_tx: &Sender<WsMessage>,
+    skip_assets: bool,
+) -> Result<BuildResult> {
+    // Since web platform doesn't use `rust_flags`, this argument is explicitly
+    // set to `None`.
+    let result = builder::build(config, true, skip_assets, None)?;
     // change the websocket reload state to true;
     // the page will auto-reload.
-    if config
-        .dioxus_config
-        .web
-        .watcher
-        .reload_html
-        .unwrap_or(false)
-    {
-        let _ = Serve::regen_dev_page(config);
+    if config.dioxus_config.watcher.reload_html {
+        let _ = Serve::regen_dev_page(config, result.assets.as_ref());
     }
-    let _ = reload_tx.send(());
+    let _ = reload_tx.send(WsMessage::Reload);
     Ok(result)
 }

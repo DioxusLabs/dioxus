@@ -1,41 +1,44 @@
-use std::cell::RefCell;
-use std::rc::Rc;
-use std::rc::Weak;
+use crate::{
+    app::SharedContext,
+    assets::AssetHandlerRegistry,
+    edits::EditQueue,
+    file_upload::NativeFileHover,
+    ipc::UserWindowEvent,
+    query::QueryEngine,
+    shortcut::{HotKey, ShortcutHandle, ShortcutRegistryError},
+    webview::WebviewInstance,
+    AssetRequest, Config, WryEventHandler,
+};
+use dioxus_core::{
+    prelude::{current_scope_id, ScopeId},
+    VirtualDom,
+};
+use dioxus_interpreter_js::MutationState;
+use std::{
+    cell::RefCell,
+    rc::{Rc, Weak},
+};
+use tao::{
+    event::Event,
+    event_loop::EventLoopWindowTarget,
+    window::{Fullscreen as WryFullscreen, Window, WindowId},
+};
+use wry::{RequestAsyncResponder, WebView};
 
-use crate::create_new_window;
-use crate::events::IpcMessage;
-use crate::query::QueryEngine;
-use crate::shortcut::ShortcutId;
-use crate::shortcut::ShortcutRegistry;
-use crate::shortcut::ShortcutRegistryError;
-use crate::Config;
-use crate::WebviewHandler;
-use dioxus_core::ScopeState;
-use dioxus_core::VirtualDom;
-#[cfg(all(feature = "hot-reload", debug_assertions))]
-use dioxus_hot_reload::HotReloadMsg;
-use slab::Slab;
-use wry::application::accelerator::Accelerator;
-use wry::application::event::Event;
-use wry::application::event_loop::EventLoopProxy;
-use wry::application::event_loop::EventLoopWindowTarget;
 #[cfg(target_os = "ios")]
-use wry::application::platform::ios::WindowExtIOS;
-use wry::application::window::Fullscreen as WryFullscreen;
-use wry::application::window::Window;
-use wry::application::window::WindowId;
-use wry::webview::WebView;
+use tao::platform::ios::WindowExtIOS;
 
-pub type ProxyType = EventLoopProxy<UserWindowEvent>;
-
-/// Get an imperative handle to the current window
-pub fn use_window(cx: &ScopeState) -> &DesktopContext {
-    cx.use_hook(|| cx.consume_context::<DesktopContext>())
-        .as_ref()
-        .unwrap()
+/// Get an imperative handle to the current window without using a hook
+///
+/// ## Panics
+///
+/// This function will panic if it is called outside of the context of a Dioxus App.
+pub fn window() -> DesktopContext {
+    dioxus_core::prelude::consume_context()
 }
 
-pub(crate) type WebviewQueue = Rc<RefCell<Vec<WebviewHandler>>>;
+/// A handle to the [`DesktopService`] that can be passed around.
+pub type DesktopContext = Rc<DesktopService>;
 
 /// An imperative interface to the current window.
 ///
@@ -51,58 +54,63 @@ pub(crate) type WebviewQueue = Rc<RefCell<Vec<WebviewHandler>>>;
 /// ```
 pub struct DesktopService {
     /// The wry/tao proxy to the current window
-    pub webview: Rc<WebView>,
+    pub webview: WebView,
 
-    /// The proxy to the event loop
-    pub proxy: ProxyType,
+    /// The tao window itself
+    pub window: Window,
+
+    pub(crate) shared: Rc<SharedContext>,
 
     /// The receiver for queries about the current window
     pub(super) query: QueryEngine,
-
-    pub(super) pending_windows: WebviewQueue,
-
-    pub(crate) event_loop: EventLoopWindowTarget<UserWindowEvent>,
-
-    pub(crate) event_handlers: WindowEventHandlers,
-
-    pub(crate) shortcut_manager: ShortcutRegistry,
+    pub(crate) edit_queue: EditQueue,
+    pub(crate) mutation_state: RefCell<MutationState>,
+    pub(crate) asset_handlers: AssetHandlerRegistry,
+    pub(crate) file_hover: NativeFileHover,
 
     #[cfg(target_os = "ios")]
     pub(crate) views: Rc<RefCell<Vec<*mut objc::runtime::Object>>>,
 }
-
-/// A handle to the [`DesktopService`] that can be passed around.
-pub type DesktopContext = Rc<DesktopService>;
 
 /// A smart pointer to the current window.
 impl std::ops::Deref for DesktopService {
     type Target = Window;
 
     fn deref(&self) -> &Self::Target {
-        self.webview.window()
+        &self.window
     }
 }
 
 impl DesktopService {
+    // TODO Maybe turn this into a builder pattern?
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         webview: WebView,
-        proxy: ProxyType,
-        event_loop: EventLoopWindowTarget<UserWindowEvent>,
-        webviews: WebviewQueue,
-        event_handlers: WindowEventHandlers,
-        shortcut_manager: ShortcutRegistry,
+        window: Window,
+        shared: Rc<SharedContext>,
+        edit_queue: EditQueue,
+        asset_handlers: AssetHandlerRegistry,
+        file_hover: NativeFileHover,
     ) -> Self {
         Self {
-            webview: Rc::new(webview),
-            proxy,
-            event_loop,
+            window,
+            webview,
+            shared,
+            edit_queue,
+            asset_handlers,
+            file_hover,
+            mutation_state: Default::default(),
             query: Default::default(),
-            pending_windows: webviews,
-            event_handlers,
-            shortcut_manager,
             #[cfg(target_os = "ios")]
             views: Default::default(),
         }
+    }
+
+    /// Send a list of mutations to the webview
+    pub(crate) fn send_edits(&self) {
+        let mut mutations = self.mutation_state.borrow_mut();
+        let serialized_edits = mutations.export_memory();
+        self.edit_queue.add_edits(serialized_edits);
     }
 
     /// Create a new window using the props and window builder
@@ -113,35 +121,22 @@ impl DesktopService {
     ///
     /// Be careful to not create a cycle of windows, or you might leak memory.
     pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> Weak<DesktopService> {
-        let window = create_new_window(
-            cfg,
-            &self.event_loop,
-            &self.proxy,
-            dom,
-            &self.pending_windows,
-            &self.event_handlers,
-            self.shortcut_manager.clone(),
-        );
+        let window = WebviewInstance::new(cfg, dom, self.shared.clone());
 
-        let desktop_context = window
-            .dom
-            .base_scope()
-            .consume_context::<Rc<DesktopService>>()
+        let cx = window.dom.in_runtime(|| {
+            ScopeId::ROOT
+                .consume_context::<Rc<DesktopService>>()
+                .unwrap()
+        });
+
+        self.shared
+            .proxy
+            .send_event(UserWindowEvent::NewWindow)
             .unwrap();
 
-        let id = window.desktop_context.webview.window().id();
+        self.shared.pending_webviews.borrow_mut().push(window);
 
-        self.proxy
-            .send_event(UserWindowEvent(EventData::NewWindow, id))
-            .unwrap();
-
-        self.proxy
-            .send_event(UserWindowEvent(EventData::Poll, id))
-            .unwrap();
-
-        self.pending_windows.borrow_mut().push(window);
-
-        Rc::downgrade(&desktop_context)
+        Rc::downgrade(&cx)
     }
 
     /// trigger the drag-window event
@@ -153,41 +148,38 @@ impl DesktopService {
     /// onmousedown: move |_| { desktop.drag_window(); }
     /// ```
     pub fn drag(&self) {
-        let window = self.webview.window();
-
-        // if the drag_window has any errors, we don't do anything
-        if window.fullscreen().is_none() {
-            window.drag_window().unwrap();
+        if self.window.fullscreen().is_none() {
+            _ = self.window.drag_window();
         }
     }
 
     /// Toggle whether the window is maximized or not
     pub fn toggle_maximized(&self) {
-        let window = self.webview.window();
-
-        window.set_maximized(!window.is_maximized())
+        self.window.set_maximized(!self.window.is_maximized())
     }
 
-    /// close window
+    /// Close this window
     pub fn close(&self) {
         let _ = self
+            .shared
             .proxy
-            .send_event(UserWindowEvent(EventData::CloseWindow, self.id()));
+            .send_event(UserWindowEvent::CloseWindow(self.id()));
     }
 
-    /// close window
+    /// Close a particular window, given its ID
     pub fn close_window(&self, id: WindowId) {
         let _ = self
+            .shared
             .proxy
-            .send_event(UserWindowEvent(EventData::CloseWindow, id));
+            .send_event(UserWindowEvent::CloseWindow(id));
     }
 
     /// change window to fullscreen
     pub fn set_fullscreen(&self, fullscreen: bool) {
-        if let Some(handle) = self.webview.window().current_monitor() {
-            self.webview
-                .window()
-                .set_fullscreen(fullscreen.then_some(WryFullscreen::Borderless(Some(handle))));
+        if let Some(handle) = &self.window.current_monitor() {
+            self.window.set_fullscreen(
+                fullscreen.then_some(WryFullscreen::Borderless(Some(handle.clone()))),
+            );
         }
     }
 
@@ -219,13 +211,13 @@ impl DesktopService {
     pub fn create_wry_event_handler(
         &self,
         handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
-    ) -> WryEventHandlerId {
-        self.event_handlers.add(self.id(), handler)
+    ) -> WryEventHandler {
+        self.shared.event_handlers.add(self.window.id(), handler)
     }
 
     /// Remove a wry event handler created with [`DesktopContext::create_wry_event_handler`]
-    pub fn remove_wry_event_handler(&self, id: WryEventHandlerId) {
-        self.event_handlers.remove(id)
+    pub fn remove_wry_event_handler(&self, id: WryEventHandler) {
+        self.shared.event_handlers.remove(id)
     }
 
     /// Create a global shortcut
@@ -233,27 +225,55 @@ impl DesktopService {
     /// Linux: Only works on x11. See [this issue](https://github.com/tauri-apps/tao/issues/331) for more information.
     pub fn create_shortcut(
         &self,
-        accelerator: Accelerator,
+        hotkey: HotKey,
         callback: impl FnMut() + 'static,
-    ) -> Result<ShortcutId, ShortcutRegistryError> {
-        self.shortcut_manager
-            .add_shortcut(accelerator, Box::new(callback))
+    ) -> Result<ShortcutHandle, ShortcutRegistryError> {
+        self.shared
+            .shortcut_manager
+            .add_shortcut(hotkey, Box::new(callback))
     }
 
     /// Remove a global shortcut
-    pub fn remove_shortcut(&self, id: ShortcutId) {
-        self.shortcut_manager.remove_shortcut(id)
+    pub fn remove_shortcut(&self, id: ShortcutHandle) {
+        self.shared.shortcut_manager.remove_shortcut(id)
     }
 
     /// Remove all global shortcuts
     pub fn remove_all_shortcuts(&self) {
-        self.shortcut_manager.remove_all()
+        self.shared.shortcut_manager.remove_all()
+    }
+
+    /// Provide a callback to handle asset loading yourself.
+    /// If the ScopeId isn't provided, defaults to a global handler.
+    /// Note that the handler is namespaced by name, not ScopeId.
+    ///
+    /// When the component is dropped, the handler is removed.
+    ///
+    /// See [`use_asset_handle`](crate::use_asset_handle) for a convenient hook.
+    pub fn register_asset_handler(
+        &self,
+        name: String,
+        handler: Box<dyn Fn(AssetRequest, RequestAsyncResponder) + 'static>,
+        scope: Option<ScopeId>,
+    ) {
+        self.asset_handlers.register_handler(
+            name,
+            handler,
+            scope.unwrap_or(current_scope_id().unwrap_or(ScopeId(0))),
+        )
+    }
+
+    /// Removes an asset handler by its identifier.
+    ///
+    /// Returns `None` if the handler did not exist.
+    pub fn remove_asset_handler(&self, name: &str) -> Option<()> {
+        self.asset_handlers.remove_handler(name).map(|_| ())
     }
 
     /// Push an objc view to the window
     #[cfg(target_os = "ios")]
     pub fn push_view(&self, view: objc_id::ShareId<objc::runtime::Object>) {
-        let window = self.webview.window();
+        let window = &self.window;
 
         unsafe {
             use objc::runtime::Object;
@@ -273,7 +293,7 @@ impl DesktopService {
     /// Pop an objc view from the window
     #[cfg(target_os = "ios")]
     pub fn pop_view(&self) {
-        let window = self.webview.window();
+        let window = &self.window;
 
         unsafe {
             use objc::runtime::Object;
@@ -287,23 +307,6 @@ impl DesktopService {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct UserWindowEvent(pub EventData, pub WindowId);
-
-#[derive(Debug, Clone)]
-pub enum EventData {
-    Poll,
-
-    Ipc(IpcMessage),
-
-    #[cfg(all(feature = "hot-reload", debug_assertions))]
-    HotReloadEvent(HotReloadMsg),
-
-    NewWindow,
-
-    CloseWindow,
-}
-
 #[cfg(target_os = "ios")]
 fn is_main_thread() -> bool {
     use objc::runtime::{Class, BOOL, NO};
@@ -312,115 +315,4 @@ fn is_main_thread() -> bool {
     let cls = Class::get("NSThread").unwrap();
     let result: BOOL = unsafe { msg_send![cls, isMainThread] };
     result != NO
-}
-
-/// The unique identifier of a window event handler. This can be used to later remove the handler.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct WryEventHandlerId(usize);
-
-#[derive(Clone, Default)]
-pub(crate) struct WindowEventHandlers {
-    handlers: Rc<RefCell<Slab<WryWindowEventHandlerInner>>>,
-}
-
-impl WindowEventHandlers {
-    pub(crate) fn add(
-        &self,
-        window_id: WindowId,
-        handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
-    ) -> WryEventHandlerId {
-        WryEventHandlerId(
-            self.handlers
-                .borrow_mut()
-                .insert(WryWindowEventHandlerInner {
-                    window_id,
-                    handler: Box::new(handler),
-                }),
-        )
-    }
-
-    pub(crate) fn remove(&self, id: WryEventHandlerId) {
-        self.handlers.borrow_mut().try_remove(id.0);
-    }
-
-    pub(crate) fn apply_event(
-        &self,
-        event: &Event<UserWindowEvent>,
-        target: &EventLoopWindowTarget<UserWindowEvent>,
-    ) {
-        for (_, handler) in self.handlers.borrow_mut().iter_mut() {
-            handler.apply_event(event, target);
-        }
-    }
-}
-
-struct WryWindowEventHandlerInner {
-    window_id: WindowId,
-    handler: WryEventHandlerCallback,
-}
-
-type WryEventHandlerCallback =
-    Box<dyn FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static>;
-
-impl WryWindowEventHandlerInner {
-    fn apply_event(
-        &mut self,
-        event: &Event<UserWindowEvent>,
-        target: &EventLoopWindowTarget<UserWindowEvent>,
-    ) {
-        // if this event does not apply to the window this listener cares about, return
-        match event {
-            Event::WindowEvent { window_id, .. }
-            | Event::MenuEvent {
-                window_id: Some(window_id),
-                ..
-            } => {
-                if *window_id != self.window_id {
-                    return;
-                }
-            }
-            _ => (),
-        }
-        (self.handler)(event, target)
-    }
-}
-
-/// Get a closure that executes any JavaScript in the WebView context.
-pub fn use_wry_event_handler(
-    cx: &ScopeState,
-    handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
-) -> &WryEventHandler {
-    let desktop = use_window(cx);
-    cx.use_hook(move || {
-        let desktop = desktop.clone();
-
-        let id = desktop.create_wry_event_handler(handler);
-
-        WryEventHandler {
-            handlers: desktop.event_handlers.clone(),
-            id,
-        }
-    })
-}
-
-/// A wry event handler that is scoped to the current component and window. The event handler will only receive events for the window it was created for and global events.
-///
-/// This will automatically be removed when the component is unmounted.
-pub struct WryEventHandler {
-    handlers: WindowEventHandlers,
-    /// The unique identifier of the event handler.
-    pub id: WryEventHandlerId,
-}
-
-impl WryEventHandler {
-    /// Remove the event handler.
-    pub fn remove(&self) {
-        self.handlers.remove(self.id);
-    }
-}
-
-impl Drop for WryEventHandler {
-    fn drop(&mut self) {
-        self.handlers.remove(self.id);
-    }
 }

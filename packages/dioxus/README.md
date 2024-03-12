@@ -49,8 +49,8 @@ fn main() {
 // The #[component] attribute streamlines component creation.
 // It's not required, but highly recommended. For example, UpperCamelCase components will not generate a warning.
 #[component]
-fn App(cx: Scope) -> Element {
-    cx.render(rsx!("hello world!"))
+fn App() -> Element {
+    rsx!("hello world!")
 }
 ```
 
@@ -97,13 +97,12 @@ If we want to omit the boilerplate of `cx.render`, we can simply pass in
 render nodes in match statements.
 
 ```rust, ignore
-#[component[
-fn Example(cx: Scope) -> Element {
-
+#[component]
+fn Example() -> Element {
     // both of these are equivalent
-    cx.render(rsx!("hello world"))
+    rsx!("hello world");
 
-    render!("hello world!")
+    rsx!("hello world!");
 }
 ```
 
@@ -112,9 +111,9 @@ elements:
 
 ```rust, ignore
 #[component]
-fn App(cx: Scope) -> Element {
+fn App() -> Element {
     let name = "dave";
-    cx.render(rsx!(
+    rsx!(
         h1 { "Hello, {name}!" }
         div {
             class: "my-class",
@@ -127,7 +126,7 @@ fn App(cx: Scope) -> Element {
             ))
 
         }
-    ))
+    )
 }
 ```
 
@@ -141,13 +140,13 @@ In Dioxus, all properties are memoized by default!
 
 ```rust, ignore
 #[component]
-fn App(cx: Scope) -> Element {
-    cx.render(rsx!(
+fn App() -> Element {
+    rsx!(
         Header {
             title: "My App",
             color: "red",
         }
-    ))
+    )
 }
 ```
 
@@ -164,12 +163,12 @@ struct HeaderProps {
 
 #[component]
 fn Header(cx: Scope<HeaderProps>) -> Element {
-    cx.render(rsx!(
+    rsx!(
         div {
             background_color: "{cx.props.color}"
             h1 { "{cx.props.title}" }
         }
-    ))
+    )
 }
 ```
 
@@ -178,13 +177,13 @@ struct from function arguments:
 
 ```rust, ignore
 #[component]
-fn Header(cx: Scope, title: String, color: String) -> Element {
-    cx.render(rsx!(
+fn Header(title: String, color: String) -> Element {
+    rsx!(
         div {
             background_color: "{color}"
             h1 { "{title}" }
         }
-    ))
+    )
 }
 ```
 
@@ -201,13 +200,13 @@ struct HeaderProps<'a> {
 }
 
 #[component]
-fn Header<'a>(cx: Scope<'a, HeaderProps<'a>>) -> Element {
-    cx.render(rsx!(
+fn Header(props: HeaderProps) -> Element {
+    rsx!(
         div {
             background_color: "{cx.props.color}"
             h1 { "{cx.props.title}" }
         }
-    ))
+    )
 }
 ```
 
@@ -243,10 +242,10 @@ use hooks to define the state and modify it from within listeners.
 
 ```rust, ignore
 #[component]
-fn App(cx: Scope) -> Element {
-    let name = use_state(cx, || "world");
+fn App() -> Element {
+    let name = use_signal(|| "world");
 
-    render!("hello {name}!")
+    rsx!("hello {name}!")
 }
 ```
 
@@ -264,8 +263,8 @@ order. If that order is wrong, then the hook will pick the wrong state and panic
 Most hooks you'll write are simply compositions of other hooks:
 
 ```rust, ignore
-fn use_username(cx: &ScopeState, id: Uuid) -> bool {
-    let users = use_context::<Users>(cx);
+fn use_username(d: Uuid) -> bool {
+    let users = use_context::<Users>();
     users.get(&id).map(|user| user.logged_in).ok_or(false)
 }
 ```
@@ -273,7 +272,7 @@ fn use_username(cx: &ScopeState, id: Uuid) -> bool {
 To create entirely new foundational hooks, we can use the `use_hook` method on `ScopeState`.
 
 ```rust, ignore
-fn use_mut_string(cx: &ScopeState) -> &mut String {
+fn use_mut_string() -> &mut String {
     cx.use_hook(|_| "Hello".to_string())
 }
 ```
@@ -292,14 +291,14 @@ fn main() {
 }
 
 #[component]
-fn App(cx: Scope) -> Element {
-    let count = use_state(cx, || 0);
+fn App() -> Element {
+    let count = use_signal(|| 0);
 
-    cx.render(rsx!(
+    rsx!(
         div { "Count: {count}" }
         button { onclick: move |_| count.set(count + 1), "Increment" }
         button { onclick: move |_| count.set(count - 1), "Decrement" }
-    ))
+    )
 }
 ```
 

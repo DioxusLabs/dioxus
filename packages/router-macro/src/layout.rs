@@ -22,7 +22,7 @@ impl Layout {
             .flat_map(|id| nests[id.0].dynamic_segments());
 
         quote! {
-            render! {
+            rsx! {
                 #comp_name { #(#dynamic_segments: #dynamic_segments,)* }
             }
         }

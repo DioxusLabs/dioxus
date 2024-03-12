@@ -1,0 +1,36 @@
+[package]
+name = "plasmo"
+version = { workspace = true }
+authors = ["Jonathan Kelley, Evan Almloff"]
+edition = "2021"
+description = "TUI-based renderer for Dioxus"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+keywords = ["dom", "ui", "gui", "react", "terminal"]
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+dioxus-html = { workspace = true, features = ["serialize", "mounted"] }
+dioxus-native-core = { workspace = true, features = ["layout-attributes"] }
+dioxus-native-core-macro = { workspace = true }
+
+ratatui = "0.24.0"
+crossterm = "0.26.1"
+anyhow = "1.0.42"
+tokio = { workspace = true, features = ["full"] }
+futures = "0.3.19"
+taffy = "0.3.12"
+smallvec = "1.6"
+rustc-hash = { workspace = true }
+anymap = "1.0.0-beta.2"
+futures-channel = { workspace = true }
+shipyard = { version = "0.6.2", features = ["proc", "std"], default-features = false }
+once_cell = "1.17.1"
+
+[dev-dependencies]
+tokio = { version = "1" }
+criterion = "0.3.5"
+
+[features]
+default = []
+parallel = ["shipyard/parallel"]

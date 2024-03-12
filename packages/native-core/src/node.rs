@@ -201,15 +201,16 @@ impl<V: FromAnyValue> Display for OwnedAttributeValue<V> {
 }
 
 #[cfg(feature = "dioxus")]
-impl<V: FromAnyValue> From<dioxus_core::BorrowedAttributeValue<'_>> for OwnedAttributeValue<V> {
-    fn from(value: dioxus_core::BorrowedAttributeValue<'_>) -> Self {
+impl<V: FromAnyValue> From<&dioxus_core::AttributeValue> for OwnedAttributeValue<V> {
+    fn from(value: &dioxus_core::AttributeValue) -> Self {
         match value {
-            dioxus_core::BorrowedAttributeValue::Text(text) => Self::Text(text.to_string()),
-            dioxus_core::BorrowedAttributeValue::Float(float) => Self::Float(float),
-            dioxus_core::BorrowedAttributeValue::Int(int) => Self::Int(int),
-            dioxus_core::BorrowedAttributeValue::Bool(bool) => Self::Bool(bool),
-            dioxus_core::BorrowedAttributeValue::Any(any) => Self::Custom(V::from_any_value(any.as_any())),
-            dioxus_core::BorrowedAttributeValue::None => panic!("None attribute values result in removing the attribute, not converting it to a None value.")
+            dioxus_core::AttributeValue::Text(text) => Self::Text(text.clone()),
+            dioxus_core::AttributeValue::Float(float) => Self::Float(*float),
+            dioxus_core::AttributeValue::Int(int) => Self::Int(*int),
+            dioxus_core::AttributeValue::Bool(bool) => Self::Bool(*bool),
+            dioxus_core::AttributeValue::Any(any) => Self::Custom(V::from_any_value(any.as_any())),
+            dioxus_core::AttributeValue::None => panic!("None attribute values result in removing the attribute, not converting it to a None value."),
+            _ => panic!("Unsupported attribute value type"),
         }
     }
 }
