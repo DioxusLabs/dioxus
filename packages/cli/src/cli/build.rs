@@ -3,6 +3,9 @@ use crate::server::fullstack;
 use dioxus_cli_config::Platform;
 
 use super::*;
+use crate::plugin::{plugins_after_command, plugins_before_command};
+
+use crate::plugin::interface::plugins::main::types::CommandEvent::Build as BuildEvent;
 
 /// Build the Rust WASM app and all of its assets.
 #[derive(Clone, Debug, Parser)]
@@ -13,12 +16,11 @@ pub struct Build {
 }
 
 impl Build {
-    /// Note: `rust_flags` argument is only used for the fullstack platform.
-    pub fn build(
+    pub async fn build(
         self,
         bin: Option<PathBuf>,
         target_dir: Option<&std::path::Path>,
-        rust_flags: Option<String>,
+        rust_flags: Option<String>
     ) -> Result<()> {
         let mut crate_config = dioxus_cli_config::CrateConfig::new(bin)?;
         if let Some(target_dir) = target_dir {
@@ -52,8 +54,7 @@ impl Build {
 
         crate_config.set_cargo_args(self.build.cargo_args.clone());
 
-        // #[cfg(feature = "plugin")]
-        // let _ = crate::plugin::PluginManager::on_build_start(&crate_config, &platform);
+        plugins_before_command(BuildEvent).await;
 
         let build_result = match platform {
             Platform::Web => {
@@ -113,8 +114,7 @@ impl Build {
         let mut file = std::fs::File::create(crate_config.out_dir().join("index.html"))?;
         file.write_all(temp.as_bytes())?;
 
-        // #[cfg(feature = "plugin")]
-        // let _ = crate::plugin::PluginManager::on_build_finish(&crate_config, &platform);
+        plugins_after_command(BuildEvent).await;
 
         Ok(())
     }

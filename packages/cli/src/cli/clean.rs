@@ -30,6 +30,12 @@ impl Clean {
             remove_dir_all(fullstack_out_dir)?;
         }
 
+        let fullstack_out_dir = crate_config.crate_dir.join(".dioxus");
+
+        if fullstack_out_dir.is_dir() {
+            remove_dir_all(fullstack_out_dir)?;
+        }
+
         Ok(())
     }
 }

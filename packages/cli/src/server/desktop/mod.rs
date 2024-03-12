@@ -1,4 +1,4 @@
-use crate::server::Platform;
+use crate::server::ServerReloadState;
 use crate::{
     cfg::ConfigOptsServe,
     server::{
@@ -20,24 +20,19 @@ use std::{
 };
 use tokio::sync::broadcast::{self};
 
-#[cfg(feature = "plugin")]
-use crate::plugin::PluginManager;
-
-use super::HotReloadState;
+use super::{HotReloadState, Platform};
 
 pub async fn startup(config: CrateConfig, serve: &ConfigOptsServe) -> Result<()> {
     startup_with_platform::<DesktopPlatform>(config, serve).await
 }
 
-pub(crate) async fn startup_with_platform<P: Platform + Send + 'static>(
+pub(crate) async fn startup_with_platform<P: Platform + Send + Sync + 'static>(
     config: CrateConfig,
     serve_cfg: &ConfigOptsServe,
 ) -> Result<()> {
     // ctrl-c shutdown checker
     let _crate_config = config.clone();
     let _ = ctrlc::set_handler(move || {
-        #[cfg(feature = "plugin")]
-        let _ = PluginManager::on_serve_shutdown(&_crate_config);
         std::process::exit(0);
     });
 
@@ -62,16 +57,18 @@ pub(crate) async fn startup_with_platform<P: Platform + Send + 'static>(
         false => None,
     };
 
-    serve::<P>(config, serve_cfg, hot_reload_state).await?;
+    let reload_state = ServerReloadState::new(hot_reload_state);
+
+    serve::<P>(config, serve_cfg, reload_state).await?;
 
     Ok(())
 }
 
 /// Start the server without hot reload
-async fn serve<P: Platform + Send + 'static>(
+async fn serve<P: Platform + Send + Sync + 'static>(
     config: CrateConfig,
     serve: &ConfigOptsServe,
-    hot_reload_state: Option<HotReloadState>,
+    reload_state: ServerReloadState,
 ) -> Result<()> {
     let platform = RwLock::new(P::start(&config, serve)?);
 
@@ -86,11 +83,11 @@ async fn serve<P: Platform + Send + 'static>(
         },
         &config,
         None,
-        hot_reload_state.clone(),
+        reload_state.clone(),
     )
     .await?;
 
-    match hot_reload_state {
+    match reload_state.hot_reload {
         Some(hot_reload_state) => {
             // The open interprocess sockets
             start_desktop_hot_reload(hot_reload_state).await?;

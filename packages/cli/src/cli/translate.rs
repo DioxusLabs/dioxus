@@ -27,7 +27,7 @@ pub struct Translate {
 }
 
 impl Translate {
-    pub fn translate(self) -> Result<()> {
+    pub async fn translate(self) -> Result<()> {
         // Get the right input for the translation
         let contents = determine_input(self.file, self.raw)?;
 
@@ -42,7 +42,6 @@ impl Translate {
             Some(output) => std::fs::write(output, out)?,
             None => print!("{}", out),
         }
-
         Ok(())
     }
 }

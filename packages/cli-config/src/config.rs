@@ -2,6 +2,7 @@ use crate::BundleConfig;
 use crate::CargoError;
 use core::fmt::{Display, Formatter};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Debug)]
@@ -22,19 +23,16 @@ pub enum Platform {
 pub struct DioxusConfig {
     pub application: ApplicationConfig,
 
+    #[serde(default)]
+    pub watcher: WatcherConfig,
+
     pub web: WebConfig,
 
     #[serde(default)]
     pub bundle: BundleConfig,
 
-    #[cfg(feature = "cli")]
-    #[serde(default = "default_plugin")]
-    pub plugin: toml::Value,
-}
-
-#[cfg(feature = "cli")]
-fn default_plugin() -> toml::Value {
-    toml::Value::Boolean(true)
+    #[serde(default)]
+    pub plugins: PluginConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -183,13 +181,13 @@ impl Default for DioxusConfig {
 
                 sub_package: None,
             },
+            watcher: Default::default(),
             web: WebConfig {
                 app: WebAppConfig {
                     title: default_title(),
                     base_path: None,
                 },
                 proxy: vec![],
-                watcher: Default::default(),
                 resource: WebResourceConfig {
                     dev: WebDevResourceConfig {
                         style: vec![],
@@ -204,14 +202,14 @@ impl Default for DioxusConfig {
                     key_path: None,
                     cert_path: None,
                 },
+                index_on_404: false,
             },
             bundle: BundleConfig {
                 identifier: Some(format!("io.github.{name}")),
                 publisher: Some(name),
                 ..Default::default()
             },
-            #[cfg(feature = "cli")]
-            plugin: toml::Value::Table(toml::map::Map::new()),
+            plugins: Default::default(),
         }
     }
 }
@@ -265,11 +263,10 @@ pub struct WebConfig {
     #[serde(default)]
     pub proxy: Vec<WebProxyConfig>,
     #[serde(default)]
-    pub watcher: WebWatcherConfig,
-    #[serde(default)]
     pub resource: WebResourceConfig,
     #[serde(default)]
     pub https: WebHttpsConfig,
+    pub index_on_404: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -297,28 +294,11 @@ pub struct WebProxyConfig {
     pub backend: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WebWatcherConfig {
-    #[serde(default = "watch_path_default")]
-    pub watch_path: Vec<PathBuf>,
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct WatcherConfig {
+    pub watch_path: Option<Vec<PathBuf>>,
     #[serde(default)]
     pub reload_html: bool,
-    #[serde(default = "true_bool")]
-    pub index_on_404: bool,
-}
-
-impl Default for WebWatcherConfig {
-    fn default() -> Self {
-        Self {
-            watch_path: watch_path_default(),
-            reload_html: false,
-            index_on_404: true,
-        }
-    }
-}
-
-fn watch_path_default() -> Vec<PathBuf> {
-    vec![PathBuf::from("src"), PathBuf::from("examples")]
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
@@ -533,6 +513,24 @@ impl CrateConfig {
     }
 }
 
-fn true_bool() -> bool {
-    true
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct PluginConfig {
+    #[serde(flatten)]
+    pub plugins: HashMap<String, PluginConfigInfo>,
+}
+
+impl PluginConfig {
+    pub fn set_plugin_info(&mut self, plugin_name: String, plugin_info: PluginConfigInfo) {
+        self.plugins.insert(plugin_name, plugin_info);
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginConfigInfo {
+    pub version: semver::Version,
+    pub path: PathBuf,
+    // #[serde(default = "default_plugin_config")]
+    // pub config: toml::Value,
+    pub config: HashMap<String, String>,
+    pub priority: Option<usize>,
 }

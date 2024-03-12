@@ -1,328 +1,618 @@
-use std::{
-    io::{Read, Write},
-    path::PathBuf,
-    sync::Mutex,
+use crate::lock::DioxusLock;
+use crate::plugin::convert::Convert;
+// use crate::plugin::convert::Convert;
+use crate::plugin::interface::{PluginRuntimeState, PluginWorld};
+use crate::server::WsMessage;
+use cargo_toml::Manifest;
+use dioxus_cli_config::{ApplicationConfig, DioxusConfig, PluginConfigInfo};
+
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
+use tokio::sync::broadcast::Sender;
+use tokio::sync::Mutex;
+use wasmtime::component::*;
+use wasmtime::{Config, Engine, Store};
+use wasmtime_wasi::preview2::{self, DirPerms, FilePerms, ResourceTable, WasiCtx, WasiCtxBuilder};
+use wasmtime_wasi::{ambient_authority, Dir};
+
+// use self::convert::ConvertWithState;
+// use self::interface::plugins::main::toml::Toml;
+use self::interface::plugins::main::types::{
+    CommandEvent, PluginInfo, ResponseEvent, RuntimeEvent,
 };
 
-use crate::tools::{app_path, clone_repo};
-use dioxus_cli_config::CrateConfig;
-use mlua::{Lua, Table};
-use serde_json::json;
-
-use self::{
-    interface::{
-        command::PluginCommander, dirs::PluginDirs, fs::PluginFileSystem, log::PluginLogger,
-        network::PluginNetwork, os::PluginOS, path::PluginPath, PluginInfo,
-    },
-    types::PluginConfig,
-};
-
+pub mod convert;
 pub mod interface;
-mod types;
+lazy_static::lazy_static!(
+  static ref ENGINE: Engine = {
+    let mut config = Config::new();
+    config.wasm_component_model(true);
+    config.async_support(true);
+    Engine::new(&config).unwrap()
+  };
 
-lazy_static::lazy_static! {
-    static ref LUA: Mutex<Lua> = Mutex::new(Lua::new());
+  pub static ref PLUGINS: Mutex<Vec<CliPlugin>> = Default::default();
+  pub static ref PLUGINS_CONFIG: Mutex<DioxusConfig> = Default::default();
+);
+
+pub trait ChangeFold {
+    fn fold_changes(self) -> ResponseEvent;
 }
 
-pub struct PluginManager;
-
-impl PluginManager {
-    pub fn init(config: toml::Value) -> anyhow::Result<()> {
-        let config = PluginConfig::from_toml_value(config);
-
-        if !config.available {
-            return Ok(());
-        }
-
-        let lua = LUA.lock().unwrap();
-
-        let manager = lua.create_table().unwrap();
-        let name_index = lua.create_table().unwrap();
-
-        let plugin_dir = Self::init_plugin_dir();
-
-        let api = lua.create_table().unwrap();
-
-        api.set("log", PluginLogger).unwrap();
-        api.set("command", PluginCommander).unwrap();
-        api.set("network", PluginNetwork).unwrap();
-        api.set("dirs", PluginDirs).unwrap();
-        api.set("fs", PluginFileSystem).unwrap();
-        api.set("path", PluginPath).unwrap();
-        api.set("os", PluginOS).unwrap();
-
-        lua.globals().set("plugin_lib", api).unwrap();
-        lua.globals()
-            .set("library_dir", plugin_dir.to_str().unwrap())
-            .unwrap();
-        lua.globals().set("config_info", config.clone())?;
-
-        let mut index: u32 = 1;
-        let dirs = std::fs::read_dir(&plugin_dir)?;
-
-        let mut path_list = dirs
-            .filter(|v| v.is_ok())
-            .map(|v| (v.unwrap().path(), false))
-            .collect::<Vec<(PathBuf, bool)>>();
-        for i in &config.loader {
-            let path = PathBuf::from(i);
-            if !path.is_dir() {
-                // for loader dir, we need check first, because we need give a error log.
-                log::error!("Plugin loader: {:?} path is not a exists directory.", path);
+impl ChangeFold for Vec<ResponseEvent> {
+    fn fold_changes(self) -> ResponseEvent {
+        let mut option = ResponseEvent::None;
+        for change in self.into_iter() {
+            match (&mut option, change) {
+                (ResponseEvent::Rebuild, _) | (_, ResponseEvent::Rebuild) => break,
+                (ResponseEvent::Refresh(assets), ResponseEvent::Refresh(new_assets)) => {
+                    assets.extend(new_assets);
+                }
+                (a, b) if *a < b => *a = b,
+                _ => (),
             }
-            path_list.push((path, true));
         }
+        option
+    }
+}
 
-        for entry in path_list {
-            let plugin_dir = entry.0.to_path_buf();
+impl PartialEq for ResponseEvent {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Refresh(l0), Self::Refresh(r0)) => l0 == r0,
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+        }
+    }
+}
 
-            if plugin_dir.is_dir() {
-                let init_file = plugin_dir.join("init.lua");
-                if init_file.is_file() {
-                    let mut file = std::fs::File::open(init_file).unwrap();
-                    let mut buffer = String::new();
-                    file.read_to_string(&mut buffer).unwrap();
+impl Eq for ResponseEvent {}
 
-                    let current_plugin_dir = plugin_dir.to_str().unwrap().to_string();
-                    let from_loader = entry.1;
+impl Ord for ResponseEvent {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match (self, other) {
+            (ResponseEvent::Refresh(_), ResponseEvent::Refresh(_)) => std::cmp::Ordering::Equal,
+            (Self::Rebuild, Self::Rebuild) => std::cmp::Ordering::Equal,
+            (Self::Reload, Self::Reload) => std::cmp::Ordering::Equal,
+            (Self::None, Self::None) => std::cmp::Ordering::Equal,
+            (_, Self::None) => std::cmp::Ordering::Greater,
+            (Self::None, _) => std::cmp::Ordering::Less,
+            (Self::Rebuild, _) => std::cmp::Ordering::Greater,
+            (_, Self::Rebuild) => std::cmp::Ordering::Less,
+            (Self::Reload, Self::Refresh(_)) => std::cmp::Ordering::Greater,
+            (Self::Refresh(_), Self::Reload) => std::cmp::Ordering::Less,
+        }
+    }
 
-                    lua.globals()
-                        .set("_temp_plugin_dir", current_plugin_dir.clone())?;
-                    lua.globals().set("_temp_from_loader", from_loader)?;
+    fn max(self, other: Self) -> Self
+    where
+        Self: Sized,
+    {
+        std::cmp::max_by(self, other, Ord::cmp)
+    }
 
-                    let info = lua.load(&buffer).eval::<PluginInfo>();
-                    match info {
-                        Ok(mut info) => {
-                            if name_index.contains_key(info.name.clone()).unwrap_or(false)
-                                && !from_loader
-                            {
-                                // found same name plugin, intercept load
-                                log::warn!(
-                                    "Plugin {} has been intercepted. [mulit-load]",
-                                    info.name
-                                );
-                                continue;
-                            }
-                            info.inner.plugin_dir = current_plugin_dir;
-                            info.inner.from_loader = from_loader;
+    fn min(self, other: Self) -> Self
+    where
+        Self: Sized,
+    {
+        std::cmp::min_by(self, other, Ord::cmp)
+    }
 
-                            // call `on_init` if file "dcp.json" not exists
-                            let dcp_file = plugin_dir.join("dcp.json");
-                            if !dcp_file.is_file() {
-                                if let Some(func) = info.clone().on_init {
-                                    let result = func.call::<_, bool>(());
-                                    match result {
-                                        Ok(true) => {
-                                            // plugin init success, create `dcp.json` file.
-                                            let mut file = std::fs::File::create(dcp_file).unwrap();
-                                            let value = json!({
-                                                "name": info.name,
-                                                "author": info.author,
-                                                "repository": info.repository,
-                                                "version": info.version,
-                                                "generate_time": chrono::Local::now().timestamp(),
-                                            });
-                                            let buffer =
-                                                serde_json::to_string_pretty(&value).unwrap();
-                                            let buffer = buffer.as_bytes();
-                                            file.write_all(buffer).unwrap();
+    fn clamp(self, min: Self, max: Self) -> Self
+    where
+        Self: Sized,
+        Self: PartialOrd,
+    {
+        self.max(min).min(max)
+    }
+}
 
-                                            // insert plugin-info into plugin-manager
-                                            if let Ok(index) =
-                                                name_index.get::<_, u32>(info.name.clone())
-                                            {
-                                                let _ = manager.set(index, info.clone());
-                                            } else {
-                                                let _ = manager.set(index, info.clone());
-                                                index += 1;
-                                                let _ = name_index.set(info.name, index);
-                                            }
-                                        }
-                                        Ok(false) => {
-                                            log::warn!(
-                                                "Plugin init function result is `false`, init failed."
-                                            );
-                                        }
-                                        Err(e) => {
-                                            log::warn!("Plugin init failed: {e}");
-                                        }
-                                    }
-                                }
-                            } else if let Ok(index) = name_index.get::<_, u32>(info.name.clone()) {
-                                let _ = manager.set(index, info.clone());
-                            } else {
-                                let _ = manager.set(index, info.clone());
-                                index += 1;
-                                let _ = name_index.set(info.name, index);
-                            }
-                        }
-                        Err(_e) => {
-                            let dir_name = plugin_dir.file_name().unwrap().to_str().unwrap();
-                            log::error!("Plugin '{dir_name}' load failed.");
-                        }
+impl PartialOrd for ResponseEvent {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+/// Calls the global plugins with the function given
+/// It will return a Vec of the results of the function
+macro_rules! call_plugins {
+    ($func:ident $event:expr) => {{
+        let mut successful = vec![];
+        for plugin in $crate::plugin::PLUGINS.lock().await.iter_mut() {
+            let Ok(success) = plugin.$func($event).await else {
+                log::warn!(
+                    "Could not call {} {:?} on: {}!",
+                    stringify!($func),
+                    $event,
+                    plugin.metadata.name
+                );
+                continue;
+            };
+            log::info!(
+                "Called {} {:?} on: {}",
+                stringify!($func),
+                $event,
+                plugin.metadata.name
+            );
+            successful.push(success);
+        }
+        let successful = successful.into_iter().flatten().collect::<Vec<_>>();
+        successful
+    }};
+}
+
+pub async fn plugins_before_command(compile_event: CommandEvent) {
+    call_plugins!(before_command_event compile_event);
+}
+pub async fn plugins_after_command(compile_event: CommandEvent) {
+    call_plugins!(after_command_event compile_event);
+}
+pub async fn plugins_before_runtime(runtime_event: RuntimeEvent) -> ResponseEvent {
+    call_plugins!(before_runtime_event runtime_event).fold_changes()
+}
+pub async fn plugins_after_runtime(runtime_event: RuntimeEvent) -> ResponseEvent {
+    call_plugins!(after_runtime_event runtime_event).fold_changes()
+}
+
+pub(crate) fn handle_change(
+    change: ResponseEvent,
+    reload_tx: &Option<Sender<WsMessage>>,
+    needs_full_rebuild: &mut bool,
+) {
+    match change {
+        ResponseEvent::Rebuild if reload_tx.is_some() => {
+            if let Err(err) = reload_tx.as_ref().unwrap().send(WsMessage::Reload) {
+                log::error!("Failed to send reload message: {}", err);
+            }
+        }
+        ResponseEvent::Refresh(assets) if reload_tx.is_some() => {
+            if let Err(err) = reload_tx
+                .as_ref()
+                .unwrap()
+                .send(WsMessage::RefreshAssets { urls: assets })
+            {
+                log::error!("Failed to send refresh asset message: {}", err);
+            }
+        }
+        ResponseEvent::Rebuild => *needs_full_rebuild = true,
+        _ => (),
+    }
+}
+
+pub async fn plugins_watched_paths_changed(
+    paths: &[PathBuf],
+    crate_dir: &PathBuf,
+) -> ResponseEvent {
+    if crate::plugin::PLUGINS.lock().await.is_empty() {
+        return ResponseEvent::None;
+    }
+
+    let paths: Vec<String> = paths
+        .iter()
+        .filter_map(|f| match f.strip_prefix(crate_dir) {
+            Ok(val) => val.to_str().map(|f| f.to_string()),
+            Err(_) => {
+                log::warn!(
+                    "Path won't be available to plugins: {}! Plugins can only access paths under {}, Skipping..",
+                    f.display(),
+                    crate_dir.display(),
+                );
+                None
+            }
+        })
+        .collect();
+    call_plugins!(on_watched_paths_change & paths).fold_changes()
+}
+
+/// Returns a sorted list of plugins that are loaded in order
+/// of priority from the dioxus config
+async fn load_plugins(
+    config: &DioxusConfig,
+    crate_dir: &PathBuf,
+    dioxus_lock: &mut DioxusLock,
+    dependency_paths: &[PathBuf],
+) -> wasmtime::Result<Vec<CliPlugin>> {
+    let mut sorted_plugins: Vec<&PluginConfigInfo> = config.plugins.plugins.values().collect();
+    // Have some leeway to have some plugins execute before the default priority plugins
+    sorted_plugins.sort_by_key(|f| f.priority.unwrap_or(10));
+    let mut plugins = Vec::with_capacity(sorted_plugins.len());
+
+    for plugin in sorted_plugins.into_iter() {
+        let plugin = load_plugin(
+            &plugin.path,
+            config,
+            plugin.priority,
+            crate_dir,
+            dioxus_lock,
+            dependency_paths,
+        )
+        .await?;
+        plugins.push(plugin);
+    }
+
+    dioxus_lock.initialize_new_plugins(&mut plugins).await?;
+
+    Ok(plugins)
+}
+
+enum PackageSource {
+    Version(String, String),
+    Path(String),
+}
+
+pub fn get_dependency_paths(crate_dir: &PathBuf) -> crate::Result<Vec<PathBuf>> {
+    let mut out = Vec::new();
+    let toml_path = crate_dir.join("Cargo.toml");
+
+    let registry_path = std::fs::read_dir(
+        PathBuf::from(
+            std::env::var("CARGO_HOME")
+                .expect("Cargo Home environment variable should exist if cargo installed"),
+        )
+        .join("registry/src"),
+    )?
+    .find_map(|entry| {
+        entry.ok().filter(|e| {
+            e.file_name()
+                .to_str()
+                .filter(|f| f.starts_with("index.crates.io"))
+                .is_some()
+        })
+    })
+    .map(|e| e.path());
+
+    if let None = registry_path {
+        log::warn!("Could not find registry path for dependencies, skipping..");
+        return Ok(out);
+    }
+
+    let registry_path = registry_path.unwrap();
+
+    if let Ok(mut manifest) = Manifest::<Manifest>::from_path_with_metadata(&toml_path) {
+        if let Err(err) = manifest.complete_from_path_and_workspace::<u8>(&toml_path, None) {
+            log::warn!("Could not complete cargo manifest: {err}");
+            return Ok(out);
+        };
+        for (name, dependency) in manifest.dependencies.into_iter() {
+            let source = match dependency {
+                cargo_toml::Dependency::Simple(version) => {
+                    PackageSource::Version(name.clone(), version)
+                }
+                cargo_toml::Dependency::Inherited(_) => {
+                    log::warn!("Could not get path for dependency: {name}, inheritted crate from workspace");
+                    continue;
+                }
+                cargo_toml::Dependency::Detailed(detail) => {
+                    if let Some(version) = detail.version {
+                        PackageSource::Version(name.clone(), version)
+                    } else if let Some(_git) = detail.git {
+                        log::warn!("Git dependencies not supported yet!");
+                        continue;
+                    } else if let Some(path) = detail.path {
+                        PackageSource::Path(path)
+                    } else {
+                        log::warn!("Could not get path for dependency: {name}, too complex path");
+                        continue;
                     }
                 }
-            }
+            };
+            let source_path = match source {
+                PackageSource::Version(name, version) => {
+                    let source_name = format!("{name}-{version}");
+                    registry_path.join(source_name)
+                }
+                PackageSource::Path(path) => crate_dir.join(path),
+            };
+
+            log::info!("Found source dir for {name}: {}", source_path.display());
+
+            out.push(source_path);
         }
+    }
+    Ok(out)
+}
 
-        lua.globals().set("manager", manager).unwrap();
+pub async fn init_plugins(
+    config: &DioxusConfig,
+    crate_dir: &PathBuf,
+    dependency_paths: &[PathBuf],
+) -> crate::Result<()> {
+    let mut dioxus_lock = DioxusLock::load()?;
+    let plugins = load_plugins(config, crate_dir, &mut dioxus_lock, dependency_paths).await?;
+    *PLUGINS.lock().await = plugins;
+    *PLUGINS_CONFIG.lock().await = config.clone();
+    Ok(())
+}
 
-        Ok(())
+pub async fn save_plugin_config(bin: PathBuf) -> crate::Result<()> {
+    let crate_root = dioxus_cli_config::crate_root()?.join(bin);
+
+    let toml_path = crate_root.join("Dioxus.toml");
+
+    let toml_string = std::fs::read_to_string(&toml_path)?;
+    let mut diox_doc: toml_edit::Document = match toml_string.parse() {
+        Ok(doc) => doc,
+        Err(err) => {
+            return Err(crate::Error::Unique(format!(
+                "Could not parse Dioxus toml! {}",
+                err
+            )));
+        }
+    };
+
+    let watcher_info = toml::Value::try_from(&PLUGINS_CONFIG.lock().await.watcher)
+        .expect("Invalid Watcher Config!");
+    diox_doc["watcher"] = watcher_info.convert();
+
+    let plugin_info =
+        toml::Value::try_from(&PLUGINS_CONFIG.lock().await.plugins).expect("Invalid Plugin Info!");
+    diox_doc["plugins"] = plugin_info.convert();
+
+    let mut dioxus_lock = DioxusLock::load()?;
+    dioxus_lock.save(Some(PLUGINS.lock().await.as_ref()))?;
+
+    std::fs::write(toml_path, diox_doc.to_string())?;
+    log::info!("✔️  Successfully saved config");
+    Ok(())
+}
+
+async fn wasi_context(
+    crate_dir: &PathBuf,
+    config: &ApplicationConfig,
+    dependency_paths: &[PathBuf],
+) -> crate::Result<WasiCtx> {
+    let mut ctx = WasiCtxBuilder::new();
+
+    // Give the plugins access to the terminal as well as crate files
+    let mut ctx_pointer = ctx
+        .inherit_stderr()
+        .inherit_stdin()
+        .inherit_stdio()
+        .inherit_stdout()
+        .preopened_dir(
+            Dir::open_ambient_dir(crate_dir, ambient_authority())?,
+            DirPerms::all(),
+            FilePerms::all(),
+            ".",
+        );
+
+    // If the application has these directories they might be seperate from the crate root
+    if !config.out_dir.is_dir() {
+        tokio::fs::create_dir(&config.out_dir).await?;
     }
 
-    pub fn on_build_start(crate_config: &CrateConfig, platform: &str) -> anyhow::Result<()> {
-        let lua = LUA.lock().unwrap();
+    ctx_pointer = ctx_pointer.preopened_dir(
+        Dir::open_ambient_dir(&config.out_dir, ambient_authority())?,
+        DirPerms::all(),
+        FilePerms::all(),
+        "./dist",
+    );
 
-        if !lua.globals().contains_key("manager")? {
-            return Ok(());
-        }
-        let manager = lua.globals().get::<_, Table>("manager")?;
-
-        let args = lua.create_table()?;
-        args.set("name", crate_config.dioxus_config.application.name.clone())?;
-        args.set("platform", platform)?;
-        args.set("out_dir", crate_config.out_dir().to_str().unwrap())?;
-        args.set("asset_dir", crate_config.asset_dir().to_str().unwrap())?;
-
-        for i in 1..(manager.len()? as i32 + 1) {
-            let info = manager.get::<i32, PluginInfo>(i)?;
-            if let Some(func) = info.build.on_start {
-                func.call::<Table, ()>(args.clone())?;
-            }
-        }
-
-        Ok(())
+    if !config.asset_dir.is_dir() {
+        tokio::fs::create_dir(&config.asset_dir).await?;
     }
 
-    pub fn on_build_finish(crate_config: &CrateConfig, platform: &str) -> anyhow::Result<()> {
-        let lua = LUA.lock().unwrap();
+    ctx_pointer = ctx_pointer.preopened_dir(
+        Dir::open_ambient_dir(&config.asset_dir, ambient_authority())?,
+        DirPerms::all(),
+        FilePerms::all(),
+        "./assets",
+    );
 
-        if !lua.globals().contains_key("manager")? {
-            return Ok(());
-        }
-        let manager = lua.globals().get::<_, Table>("manager")?;
-
-        let args = lua.create_table()?;
-        args.set("name", crate_config.dioxus_config.application.name.clone())?;
-        args.set("platform", platform)?;
-        args.set("out_dir", crate_config.out_dir().to_str().unwrap())?;
-        args.set("asset_dir", crate_config.asset_dir().to_str().unwrap())?;
-
-        for i in 1..(manager.len()? as i32 + 1) {
-            let info = manager.get::<i32, PluginInfo>(i)?;
-            if let Some(func) = info.build.on_finish {
-                func.call::<Table, ()>(args.clone())?;
-            }
-        }
-
-        Ok(())
+    for path in dependency_paths {
+        let Some(dep_name) = path.file_name() else {
+            log::warn!(
+                "Invalid path to add as plugin dependency: {}, skipping..",
+                path.display()
+            );
+            continue;
+        };
+        ctx_pointer = ctx_pointer.preopened_dir(
+            Dir::open_ambient_dir(path, ambient_authority())?,
+            DirPerms::all(),
+            FilePerms::all(),
+            PathBuf::from("/deps")
+                .join(dep_name)
+                .to_str()
+                .unwrap_or("/deps/unknown"), // TODO Check if this is possible
+        )
     }
 
-    pub fn on_serve_start(crate_config: &CrateConfig) -> anyhow::Result<()> {
-        let lua = LUA.lock().unwrap();
+    Ok(ctx_pointer.build())
+}
 
-        if !lua.globals().contains_key("manager")? {
-            return Ok(());
-        }
-        let manager = lua.globals().get::<_, Table>("manager")?;
+pub async fn load_plugin(
+    path: impl AsRef<Path>,
+    config: &DioxusConfig,
+    priority: Option<usize>,
+    crate_dir: &PathBuf,
+    dioxus_lock: &mut DioxusLock,
+    dependency_paths: &[PathBuf],
+) -> crate::Result<CliPlugin> {
+    let path = path.as_ref();
+    let component = Component::from_file(&ENGINE, path)?;
 
-        let args = lua.create_table()?;
-        args.set("name", crate_config.dioxus_config.application.name.clone())?;
+    let mut linker = Linker::new(&ENGINE);
+    preview2::command::add_to_linker(&mut linker)?;
+    PluginWorld::add_to_linker(&mut linker, |state: &mut PluginRuntimeState| state)?;
 
-        for i in 1..(manager.len()? as i32 + 1) {
-            let info = manager.get::<i32, PluginInfo>(i)?;
-            if let Some(func) = info.serve.on_start {
-                func.call::<Table, ()>(args.clone())?;
-            }
-        }
+    let ctx = wasi_context(crate_dir, &config.application, dependency_paths).await?;
+    let table = ResourceTable::new();
 
-        Ok(())
+    let mut store = Store::new(
+        &ENGINE,
+        PluginRuntimeState {
+            table,
+            ctx,
+            // tomls: Slab::new(),
+            metadata: PluginInfo {
+                name: "".into(),
+                version: "".into(),
+            },
+            map: std::collections::HashMap::new(),
+        },
+    );
+
+    let (bindings, instance) =
+        PluginWorld::instantiate_async(&mut store, &component, &linker).await?;
+
+    let metadata = bindings
+        .plugins_main_definitions()
+        .call_metadata(&mut store)
+        .await?;
+
+    if let Some(existing) = dioxus_lock.plugins.remove(&metadata.name) {
+        store.data_mut().map = existing.map.into_iter().map(|(a, b)| (a, b.0)).collect();
     }
 
-    pub fn on_serve_rebuild(timestamp: i64, files: Vec<PathBuf>) -> anyhow::Result<()> {
-        let lua = LUA.lock().unwrap();
+    let Ok(version) = semver::Version::from_str(&metadata.version) else {
+        log::warn!(
+            "Couldn't parse version from plugin: {} >> {}",
+            metadata.name,
+            metadata.version
+        );
+        return Err(crate::Error::CustomError(
+            "couldn't parse plugin version".into(),
+        ));
+    };
 
-        let manager = lua.globals().get::<_, Table>("manager")?;
-
-        let args = lua.create_table()?;
-        args.set("timestamp", timestamp)?;
-        let files: Vec<String> = files
-            .iter()
-            .map(|v| v.to_str().unwrap().to_string())
-            .collect();
-        args.set("changed_files", files)?;
-
-        for i in 1..(manager.len()? as i32 + 1) {
-            let info = manager.get::<i32, PluginInfo>(i)?;
-            if let Some(func) = info.serve.on_rebuild {
-                func.call::<Table, ()>(args.clone())?;
-            }
-        }
-
-        Ok(())
+    let config = &mut PLUGINS_CONFIG.lock().await.plugins.plugins;
+    if let None = config.get(&metadata.name) {
+        config.insert(
+            metadata.name.clone(),
+            PluginConfigInfo {
+                version,
+                path: path.to_path_buf(),
+                config: HashMap::new(),
+                priority,
+            },
+        );
     }
 
-    pub fn on_serve_shutdown(crate_config: &CrateConfig) -> anyhow::Result<()> {
-        let lua = LUA.lock().unwrap();
+    store.data_mut().metadata = metadata.clone();
 
-        if !lua.globals().contains_key("manager")? {
-            return Ok(());
-        }
-        let manager = lua.globals().get::<_, Table>("manager")?;
+    Ok(CliPlugin {
+        bindings,
+        instance,
+        store,
+        metadata,
+    })
+}
 
-        let args = lua.create_table()?;
-        args.set("name", crate_config.dioxus_config.application.name.clone())?;
+pub struct CliPlugin {
+    pub bindings: PluginWorld,
+    pub instance: Instance,
+    pub store: Store<PluginRuntimeState>,
+    pub metadata: PluginInfo,
+}
 
-        for i in 1..(manager.len()? as i32 + 1) {
-            let info = manager.get::<i32, PluginInfo>(i)?;
-            if let Some(func) = info.serve.on_shutdown {
-                func.call::<Table, ()>(args.clone())?;
-            }
-        }
+impl AsMut<PluginRuntimeState> for CliPlugin {
+    fn as_mut(&mut self) -> &mut PluginRuntimeState {
+        self.store.data_mut()
+    }
+}
 
-        Ok(())
+impl CliPlugin {
+    // pub async fn get_default_config(&mut self) -> wasmtime::Result<toml::Value> {
+    //     let default_config = self
+    //         .bindings
+    //         .plugins_main_definitions()
+    //         .call_get_default_config(&mut self.store)
+    //         .await?;
+    //     let t = self
+    //         .store
+    //         .data_mut()
+    //         .get_toml(default_config)
+    //         .convert_with_state(self.store.data_mut())
+    //         .await;
+    //     Ok(t)
+    // }
+
+    // pub async fn apply_config(
+    //     &mut self,
+    //     config: Resource<Toml>,
+    // ) -> wasmtime::Result<Result<(), ()>> {
+    //     self.bindings
+    //         .plugins_main_definitions()
+    //         .call_apply_config(&mut self.store, config)
+    //         .await
+    // }
+
+    pub async fn register(&mut self) -> wasmtime::Result<Result<(), ()>> {
+        self.bindings
+            .plugins_main_definitions()
+            .call_register(&mut self.store)
+            .await
+    }
+    pub async fn before_command_event(
+        &mut self,
+        event: CommandEvent,
+    ) -> wasmtime::Result<Result<(), ()>> {
+        self.bindings
+            .plugins_main_definitions()
+            .call_before_command_event(&mut self.store, event)
+            .await
+    }
+    pub async fn after_command_event(
+        &mut self,
+        event: CommandEvent,
+    ) -> wasmtime::Result<Result<(), ()>> {
+        self.bindings
+            .plugins_main_definitions()
+            .call_after_command_event(&mut self.store, event)
+            .await
+    }
+    pub async fn before_runtime_event(
+        &mut self,
+        event: RuntimeEvent,
+    ) -> wasmtime::Result<Result<ResponseEvent, ()>> {
+        self.bindings
+            .plugins_main_definitions()
+            .call_before_runtime_event(&mut self.store, event)
+            .await
+    }
+    pub async fn after_runtime_event(
+        &mut self,
+        event: RuntimeEvent,
+    ) -> wasmtime::Result<Result<ResponseEvent, ()>> {
+        self.bindings
+            .plugins_main_definitions()
+            .call_after_runtime_event(&mut self.store, event)
+            .await
     }
 
-    pub fn init_plugin_dir() -> PathBuf {
-        let app_path = app_path();
-        let plugin_path = app_path.join("plugins");
-        if !plugin_path.is_dir() {
-            log::info!("📖 Start to init plugin library ...");
-            let url = "https://github.com/DioxusLabs/cli-plugin-library";
-            if let Err(err) = clone_repo(&plugin_path, url) {
-                log::error!("Failed to init plugin dir, error caused by {}. ", err);
-            }
-        }
-        plugin_path
+    pub async fn on_watched_paths_change(
+        &mut self,
+        paths: &[String],
+    ) -> wasmtime::Result<Result<ResponseEvent, ()>> {
+        self.bindings
+            .plugins_main_definitions()
+            .call_on_watched_paths_change(&mut self.store, paths)
+            .await
     }
 
-    pub fn plugin_list() -> Vec<String> {
-        let mut res = vec![];
+    // pub fn clone_handle(&mut self, handle: &Resource<Toml>) -> Resource<Toml> {
+    //     self.store.data_mut().clone_handle(handle)
+    // }
 
-        if let Ok(lua) = LUA.lock() {
-            let list = lua
-                .load(mlua::chunk!(
-                    local list = {}
-                    for key, value in ipairs(manager) do
-                        table.insert(list, {name = value.name, loader = value.inner.from_loader})
-                    end
-                    return list
-                ))
-                .eval::<Vec<Table>>()
-                .unwrap_or_default();
-            for i in list {
-                let name = i.get::<_, String>("name").unwrap();
-                let loader = i.get::<_, bool>("loader").unwrap();
+    // pub async fn get(&mut self, value: Resource<Toml>) -> toml::Value {
+    //     self.store
+    //         .data_mut()
+    //         .get_toml(value)
+    //         .convert_with_state(self.store.data_mut())
+    //         .await
+    // }
 
-                let text = if loader {
-                    format!("{name} [:loader]")
-                } else {
-                    name
-                };
-                res.push(text);
-            }
-        }
+    // pub async fn insert_toml(&mut self, value: toml::Value) -> Resource<Toml> {
+    //     let value = value.convert_with_state(self.store.data_mut()).await;
+    //     self.store.data_mut().new_toml(value)
+    // }
 
-        res
-    }
+    // pub async fn set(&mut self, handle: Resource<Toml>, value: toml::Value) {
+    //     // Should probably check if there is a Toml in the store
+    //     // that is the same as the one we are putting in, currently will just add it to the
+    //     // table
+    //     let value = value.convert_with_state(self.store.data_mut()).await;
+    //     self.store.data_mut().set_toml(handle, value);
+    // }
 }
