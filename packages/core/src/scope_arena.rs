@@ -72,7 +72,10 @@ impl VirtualDom {
         if let Some(task) = context.last_suspendable_task.take() {
             if matches!(new_nodes, RenderReturn::Aborted(_)) {
                 tracing::trace!("Suspending {:?} on {:?}", scope_id, task);
-                self.runtime.suspended_tasks.borrow_mut().insert(task);
+                self.runtime.tasks.borrow().get(task.0).unwrap().suspend();
+                self.runtime
+                    .suspended_tasks
+                    .set(self.runtime.suspended_tasks.get() + 1);
             }
         }
 

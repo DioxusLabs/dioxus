@@ -83,6 +83,39 @@ impl Task {
 impl Runtime {
     /// Start a new future on the same thread as the rest of the VirtualDom.
     ///
+    /// **You should generally use `spawn` instead of this method unless you specifically need to need to run a task during suspense**
+    ///
+    /// This future will not contribute to suspense resolving but it will run during suspense.
+    ///
+    /// Because this future runs during suspense, you need to be careful to work with hydration. It is not recommended to do any async IO work in this future, as it can easily cause hydration issues. However, you can use isomorphic tasks to do work that can be consistently replicated on the server and client like logging or responding to state changes.
+    ///
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// // ❌ Do not do requests in isomorphic tasks. It may resolve at a different time on the server and client, causing hydration issues.
+    /// let mut state = use_signal(|| None);
+    /// spawn_isomorphic(async move {
+    ///     state.set(Some(reqwest::get("https://api.example.com").await));
+    /// });
+    ///
+    /// // ✅ You may wait for a signal to change and then log it
+    /// let mut state = use_signal(|| 0);
+    /// spawn_isomorphic(async move {
+    ///     loop {
+    ///         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    ///         println!("State is {state}");
+    ///     }
+    /// });
+    /// ```
+    pub fn spawn_isomorphic(
+        &self,
+        scope: ScopeId,
+        task: impl Future<Output = ()> + 'static,
+    ) -> Task {
+        self.spawn_task_of_type(scope, task, TaskType::Isomorphic)
+    }
+
+    /// Start a new future on the same thread as the rest of the VirtualDom.
+    ///
     /// This future will not contribute to suspense resolving, so you should primarily use this for reacting to changes
     /// and long running tasks.
     ///
@@ -91,6 +124,15 @@ impl Runtime {
     /// Spawning a future onto the root scope will cause it to be dropped when the root component is dropped - which
     /// will only occur when the VirtualDom itself has been dropped.
     pub fn spawn(&self, scope: ScopeId, task: impl Future<Output = ()> + 'static) -> Task {
+        self.spawn_task_of_type(scope, task, TaskType::ClientOnly)
+    }
+
+    fn spawn_task_of_type(
+        &self,
+        scope: ScopeId,
+        task: impl Future<Output = ()> + 'static,
+        ty: TaskType,
+    ) -> Task {
         // Insert the task, temporarily holding a borrow on the tasks map
         let (task, task_id) = {
             let mut tasks = self.tasks.borrow_mut();
@@ -107,6 +149,7 @@ impl Runtime {
                     id: task_id,
                     tx: self.sender.clone(),
                 })),
+                ty: Cell::new(ty),
             });
 
             entry.insert(task.clone());
@@ -186,8 +229,20 @@ impl Runtime {
     ///
     /// This does not abort the task, so you'll want to wrap it in an abort handle if that's important to you
     pub(crate) fn remove_task(&self, id: Task) -> Option<Rc<LocalTask>> {
-        self.suspended_tasks.borrow_mut().remove(&id);
-        self.tasks.borrow_mut().try_remove(id.0)
+        let task = self.tasks.borrow_mut().try_remove(id.0);
+        if let Some(task) = &task {
+            if task.suspended() {
+                self.suspended_tasks.set(self.suspended_tasks.get() - 1);
+            }
+        }
+        task
+    }
+
+    /// Check if a task should be run during suspense
+    pub(crate) fn task_runs_during_suspense(&self, task: Task) -> bool {
+        let borrow = self.tasks.borrow();
+        let task: Option<&LocalTask> = borrow.get(task.0).map(|t| &**t);
+        matches!(task, Some(LocalTask { ty, .. }) if ty.get().runs_during_suspense())
     }
 }
 
@@ -197,7 +252,31 @@ pub(crate) struct LocalTask {
     parent: Option<Task>,
     task: RefCell<Pin<Box<dyn Future<Output = ()> + 'static>>>,
     waker: Waker,
+    ty: Cell<TaskType>,
     active: Cell<bool>,
+}
+
+impl LocalTask {
+    pub(crate) fn suspend(&self) {
+        self.ty.set(TaskType::Suspended);
+    }
+
+    pub(crate) fn suspended(&self) -> bool {
+        matches!(self.ty.get(), TaskType::Suspended)
+    }
+}
+
+#[derive(Clone, Copy)]
+enum TaskType {
+    ClientOnly,
+    Suspended,
+    Isomorphic,
+}
+
+impl TaskType {
+    fn runs_during_suspense(self) -> bool {
+        matches!(self, TaskType::Isomorphic | TaskType::Suspended)
+    }
 }
 
 /// The type of message that can be sent to the scheduler.

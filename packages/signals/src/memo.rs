@@ -14,31 +14,6 @@ use futures_util::StreamExt;
 use generational_box::UnsyncStorage;
 use once_cell::sync::OnceCell;
 
-/// A thread local that can only be read from the thread it was created on.
-pub struct ThreadLocal<T> {
-    value: T,
-    owner: std::thread::ThreadId,
-}
-
-impl<T> ThreadLocal<T> {
-    /// Create a new thread local.
-    pub fn new(value: T) -> Self {
-        ThreadLocal {
-            value,
-            owner: std::thread::current().id(),
-        }
-    }
-
-    /// Get the value of the thread local.
-    pub fn get(&self) -> Option<&T> {
-        (self.owner == std::thread::current().id()).then_some(&self.value)
-    }
-}
-
-// SAFETY: This is safe because the thread local can only be read from the thread it was created on.
-unsafe impl<T> Send for ThreadLocal<T> {}
-unsafe impl<T> Sync for ThreadLocal<T> {}
-
 struct UpdateInformation<T> {
     dirty: Arc<AtomicBool>,
     callback: RefCell<Box<dyn FnMut() -> T>>,
@@ -70,25 +45,12 @@ impl<T: 'static> Memo<T> {
         let (tx, mut rx) = futures_channel::mpsc::unbounded();
 
         let myself: Rc<OnceCell<Memo<T>>> = Rc::new(OnceCell::new());
-        let thread_local = ThreadLocal::new(myself.clone());
 
         let callback = {
             let dirty = dirty.clone();
-            move || match thread_local.get() {
-                Some(memo) => match memo.get() {
-                    Some(memo) => {
-                        memo.recompute();
-                    }
-                    None => {
-                        tracing::error!("Memo was not initialized in the same thread it was created in. This is likely a bug in dioxus");
-                        dirty.store(true, std::sync::atomic::Ordering::Relaxed);
-                        let _ = tx.unbounded_send(());
-                    }
-                },
-                None => {
-                    dirty.store(true, std::sync::atomic::Ordering::Relaxed);
-                    let _ = tx.unbounded_send(());
-                }
+            move || {
+                dirty.store(true, std::sync::atomic::Ordering::Relaxed);
+                let _ = tx.unbounded_send(());
             }
         };
         let rc = ReactiveContext::new_with_callback(
@@ -113,7 +75,7 @@ impl<T: 'static> Memo<T> {
         };
         let _ = myself.set(memo);
 
-        spawn(async move {
+        spawn_isomorphic(async move {
             while rx.next().await.is_some() {
                 // Remove any pending updates
                 while rx.try_next().is_ok() {}

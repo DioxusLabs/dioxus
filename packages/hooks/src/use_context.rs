@@ -15,6 +15,9 @@ pub fn try_use_context<T: 'static + Clone>() -> Option<T> {
 ///
 /// Does not regenerate the value if the value is changed at the parent.
 /// ```rust
+/// # use dioxus::prelude::*;
+/// # #[derive(Clone, Copy, PartialEq, Debug)]
+/// # enum Theme { Dark, Light }
 /// fn Parent() -> Element {
 ///     use_context_provider(|| Theme::Dark);
 ///     rsx! { Child {} }
@@ -38,6 +41,7 @@ pub fn use_context<T: 'static + Clone>() -> T {
 /// drilling, using a context provider with a Signal inside is a good way to provide global/shared
 /// state in your app:
 /// ```rust
+/// # use dioxus::prelude::*;
 ///fn app() -> Element {
 ///    use_context_provider(|| Signal::new(0));
 ///    rsx! { Child {} }
@@ -45,7 +49,7 @@ pub fn use_context<T: 'static + Clone>() -> T {
 /// // This component does read from the signal, so when the signal changes it will rerun
 ///#[component]
 ///fn Child() -> Element {
-///     let signal: Signal<i32> = use_context();
+///     let mut signal: Signal<i32> = use_context();
 ///     rsx! {
 ///         button { onclick: move |_| signal += 1, "increment context" }
 ///         p {"{signal}"}
