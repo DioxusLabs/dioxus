@@ -1,5 +1,3 @@
-use rustc_hash::FxHashSet;
-
 use crate::{
     innerlude::{LocalTask, SchedulerMsg},
     render_signal::RenderSignal,
@@ -30,7 +28,7 @@ pub struct Runtime {
     pub(crate) tasks: RefCell<slab::Slab<Rc<LocalTask>>>,
 
     // Currently suspended tasks
-    pub(crate) suspended_tasks: RefCell<FxHashSet<Task>>,
+    pub(crate) suspended_tasks: Cell<usize>,
 
     pub(crate) rendering: Cell<bool>,
 

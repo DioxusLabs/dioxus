@@ -227,6 +227,37 @@ impl Scope {
         .expect("Runtime to exist")
     }
 
+    /// Start a new future on the same thread as the rest of the VirtualDom.
+    ///
+    /// **You should generally use `spawn` instead of this method unless you specifically need to need to run a task during suspense**
+    ///
+    /// This future will not contribute to suspense resolving but it will run during suspense.
+    ///
+    /// Because this future runs during suspense, you need to be careful to work with hydration. It is not recommended to do any async IO work in this future, as it can easily cause hydration issues. However, you can use isomorphic tasks to do work that can be consistently replicated on the server and client like logging or responding to state changes.
+    ///
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// // ❌ Do not do requests in isomorphic tasks. It may resolve at a different time on the server and client, causing hydration issues.
+    /// let mut state = use_signal(|| None);
+    /// spawn_isomorphic(async move {
+    ///     state.set(Some(reqwest::get("https://api.example.com").await));
+    /// });
+    ///
+    /// // ✅ You may wait for a signal to change and then log it
+    /// let mut state = use_signal(|| 0);
+    /// spawn_isomorphic(async move {
+    ///     loop {
+    ///         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    ///         println!("State is {state}");
+    ///     }
+    /// });
+    /// ```
+    pub fn spawn_isomorphic(&self, fut: impl Future<Output = ()> + 'static) -> Task {
+        let id = Runtime::with(|rt| rt.spawn_isomorphic(self.id, fut)).expect("Runtime to exist");
+        self.spawned_tasks.borrow_mut().insert(id);
+        id
+    }
+
     /// Spawns the future but does not return the [`TaskId`]
     pub fn spawn(&self, fut: impl Future<Output = ()> + 'static) -> Task {
         let id = Runtime::with(|rt| rt.spawn(self.id, fut)).expect("Runtime to exist");

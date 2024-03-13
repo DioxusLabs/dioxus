@@ -15,16 +15,28 @@ use std::{cell::Cell, future::Future, rc::Rc};
 /// Similar to `use_future` but `use_resource` returns a value.
 /// See [`Resource`] for more details.
 /// ```rust
-///fn app() -> Element {
-///    let country = use_signal(|| WeatherLocation {
-///        city: "Berlin".to_string(),
-///        country: "Germany".to_string(),
-///        coordinates: (52.5244, 13.4105)
-///    });
+/// # use dioxus::prelude::*;
+/// # #[derive(Clone)]
+/// # struct WeatherLocation {
+/// #     city: String,
+/// #     country: String,
+/// #     coordinates: (f64, f64),
+/// # }
+/// # async fn get_weather(location: &WeatherLocation) -> Result<String, String> {
+/// #     Ok("Sunny".to_string())
+/// # }
+/// # #[component]
+/// # fn WeatherElement (weather: String ) -> Element { rsx! { p { "The weather is {weather}" } } }
+/// fn app() -> Element {
+///     let country = use_signal(|| WeatherLocation {
+///         city: "Berlin".to_string(),
+///         country: "Germany".to_string(),
+///         coordinates: (52.5244, 13.4105)
+///     });
 ///
 ///    // Because the resource's future subscribes to `country` by reading it (`country.read()`),
 ///    // every time `country` changes the resource's future will run again and thus provide a new value.
-///    let current_weather = use_resource(move || async move { get_weather(&country.read().clone()).await });
+///    let current_weather = use_resource(move || async move { get_weather(&country()).await });
 ///    
 ///    rsx! {
 ///        // the value of the resource can be polled to
@@ -32,9 +44,9 @@ use std::{cell::Cell, future::Future, rc::Rc};
 ///        // finished (Some(Ok(_)), errored Some(Err(_)),
 ///        // or is still running (None)
 ///        match current_weather.value() {
-///            Some(Ok(weather)) => WeatherElement { weather },
-///            Some(Err(e)) => p { "Loading weather failed, {e}" }
-///            None =>  p { "Loading..." }
+///            Some(Ok(weather)) => rsx! { WeatherElement { weather } },
+///            Some(Err(e)) => rsx! { p { "Loading weather failed, {e}" } },
+///            None =>  rsx! { p { "Loading..." } }
 ///        }
 ///    }
 ///}
@@ -106,6 +118,13 @@ pub struct Resource<T: 'static> {
     state: Signal<UseResourceState>,
     callback: UseCallback<Task>,
 }
+
+impl<T> Clone for Resource<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl<T> Copy for Resource<T> {}
 
 /// A signal that represents the state of the resource
 // we might add more states (panicked, etc)

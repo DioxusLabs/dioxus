@@ -9,6 +9,7 @@ use dioxus_signals::*;
 /// effects will always run after first mount and then whenever the signal values change
 /// If the use_effect call was skipped due to an early return, the effect will no longer activate.
 /// ```rust
+/// # use dioxus::prelude::*;
 /// fn app() -> Element {
 ///     let mut count = use_signal(|| 0);
 ///     //the effect runs again each time count changes
