@@ -2,14 +2,12 @@ use crate::{cfg::ConfigOptsServe, BuildResult, Result};
 use dioxus_cli_config::CrateConfig;
 
 use cargo_metadata::diagnostic::Diagnostic;
-use dioxus_core::Template;
 use dioxus_hot_reload::HotReloadMsg;
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;
-use fs_extra::{dir::CopyOptions, file};
+use fs_extra::dir::CopyOptions;
 use notify::{RecommendedWatcher, Watcher};
 use std::{
-    ops::ControlFlow,
     path::PathBuf,
     sync::{Arc, Mutex},
 };
@@ -44,7 +42,7 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
     // file watcher: check file change
     let mut allow_watch_path = config.dioxus_config.web.watcher.watch_path.clone();
 
-    // Extend the watch path to include the assets directory
+    // Extend the watch path to include the assets directory - this is so we can hotreload CSS and other assets
     allow_watch_path.push(config.dioxus_config.application.asset_dir.clone());
 
     // Create the file watcher
@@ -168,28 +166,26 @@ fn hotreload_files(
 
         // If the file was not hotreloaded, continue
         if is_potentially_reloadable.is_none() {
-            println!("Not hotreloaded: {:?}", path);
             continue;
         }
 
         // If the file was hotreloaded, update the file map in place
         match rsx_file_map.update_rsx(path, &config.crate_dir) {
             Ok(UpdateResult::UpdatedRsx(msgs)) => {
-                println!("Updated: {:?}", msgs);
-
                 messages.extend(
                     msgs.into_iter()
                         .map(|msg| HotReloadMsg::UpdateTemplate(msg)),
                 );
             }
 
+            // If the file was not updated, we need to do a full rebuild
             Ok(UpdateResult::NeedsRebuild) => {
-                println!("Needs rebuild: {:?}", path);
+                log::trace!("Needs full rebuild because file changed: {:?}", path);
                 *needs_full_rebuild = true;
             }
 
+            // Not necessarily a fatal error, but we should log it
             Err(err) => log::error!("{}", err),
-            // Err(err) => log::error!("{}", err),
         }
     }
 

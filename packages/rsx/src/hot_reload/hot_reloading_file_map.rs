@@ -9,11 +9,7 @@ pub use proc_macro2::TokenStream;
 pub use std::collections::HashMap;
 pub use std::sync::Mutex;
 pub use std::time::SystemTime;
-use std::{
-    collections::HashSet,
-    hash::Hash,
-    path::{Display, PathBuf},
-};
+use std::{collections::HashSet, path::PathBuf};
 pub use std::{fs, io, path::Path};
 pub use std::{fs::File, io::Read};
 pub use syn::__private::ToTokens;
@@ -65,21 +61,30 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
 
     /// Create a new FileMap from a crate directory
     pub fn create_with_filter(
-        path: PathBuf,
+        crate_dir: PathBuf,
         mut filter: impl FnMut(&Path) -> bool,
     ) -> io::Result<FileMapBuildResult<Ctx>> {
-        let FileMapSearchResult { map, errors } = find_rs_files(path, &mut filter);
+        let FileMapSearchResult { map, errors } = find_rs_files(crate_dir.clone(), &mut filter);
 
-        let file_map_build_result = FileMapBuildResult {
-            errors,
-            map: Self {
-                map,
-                in_workspace: HashMap::new(),
-                phantom: std::marker::PhantomData,
-            },
+        let mut map = Self {
+            map,
+            in_workspace: HashMap::new(),
+            phantom: std::marker::PhantomData,
         };
 
-        Ok(file_map_build_result)
+        map.load_assets(crate_dir.as_path());
+
+        Ok(FileMapBuildResult { errors, map })
+    }
+
+    /// Start watching assets for changes
+    ///
+    /// This just diffs every file against itself and populates the tracked assets as it goes
+    pub fn load_assets(&mut self, crate_dir: &Path) {
+        let keys = self.map.keys().cloned().collect::<Vec<_>>();
+        for file in keys {
+            _ = self.update_rsx(file.as_path(), crate_dir);
+        }
     }
 
     /// Try to update the rsx in a file
@@ -129,7 +134,6 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
             // If the changes were some code, we should insert the file into the map and rebuild
             // todo: not sure we even need to put the cached file into the map, but whatever
             DiffResult::CodeChanged(_) => {
-                println!("code changed");
                 let cached_file = CachedSynFile {
                     raw: src.clone(),
                     path: file_path.to_path_buf(),
@@ -141,8 +145,6 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
                 return Ok(UpdateResult::NeedsRebuild);
             }
         };
-
-        println!("instances: {:?}", instances);
 
         let mut messages: Vec<Template> = Vec::new();
 
@@ -355,6 +357,9 @@ fn find_rs_files(root: PathBuf, filter: &mut impl FnMut(&Path) -> bool) -> FileM
                         templates: HashMap::new(),
                         tracked_assets: HashSet::new(),
                     };
+
+                    // track assets while we're here
+
                     files.insert(root, cached_file);
                 }
                 Err(err) => {

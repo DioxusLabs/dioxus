@@ -220,10 +220,13 @@ impl Default for DioxusConfig {
 pub struct ApplicationConfig {
     #[serde(default = "default_name")]
     pub name: String,
+
     #[serde(default = "default_platform")]
     pub default_platform: Platform,
+
     #[serde(default = "out_dir_default")]
     pub out_dir: PathBuf,
+
     #[serde(default = "asset_dir_default")]
     pub asset_dir: PathBuf,
 
