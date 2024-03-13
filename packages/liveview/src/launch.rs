@@ -9,22 +9,23 @@ pub fn launch(
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
     platform_config: Config,
 ) {
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(async move {
-            platform_config
-                .with_virtual_dom(move || {
-                    let mut virtual_dom = VirtualDom::new(root);
+    #[cfg(feature = "multi-threaded")]
+    let mut builder = tokio::runtime::Builder::new_multi_thread();
+    #[cfg(not(feature = "multi-threaded"))]
+    let mut builder = tokio::runtime::Builder::new_current_thread();
 
-                    for context in &contexts {
-                        virtual_dom.insert_any_root_context(context());
-                    }
+    builder.enable_all().build().unwrap().block_on(async move {
+        platform_config
+            .with_virtual_dom(move || {
+                let mut virtual_dom = VirtualDom::new(root);
 
-                    virtual_dom
-                })
-                .launch()
-                .await;
-        });
+                for context in &contexts {
+                    virtual_dom.insert_any_root_context(context());
+                }
+
+                virtual_dom
+            })
+            .launch()
+            .await;
+    });
 }
