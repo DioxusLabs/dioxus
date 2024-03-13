@@ -41,8 +41,9 @@ tower = { workspace = true }
 dioxus = { workspace = true }
 
 [features]
-default = ["hot-reload"]
+default = ["hot-reload", "multi-thread"]
 axum = ["dep:axum"]
+multi-thread = ["tokio/rt-multi-thread"]
 hot-reload = ["dioxus-hot-reload"]
 
 [[example]]
