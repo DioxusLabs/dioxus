@@ -6,7 +6,7 @@ use crate::{
     },
     BuildResult, Result,
 };
-use dioxus_cli_config::{CrateConfig, ExecutableType};
+use dioxus_cli_config::CrateConfig;
 use dioxus_hot_reload::HotReloadMsg;
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;

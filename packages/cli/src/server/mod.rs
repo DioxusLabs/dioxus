@@ -207,8 +207,6 @@ fn hotreload_files(
         return;
     }
 
-    println!("Hot reloading: {:?}", messages);
-
     for msg in messages {
         let _ = hot_reload.messages.send(msg);
     }
@@ -237,7 +235,7 @@ fn hotreload_file(
 
     // If the extension is a backup file, or a hidden file, ignore it completely (no rebuilds)
     if is_backup_file(path) {
-        println!("Ignoring backup file: {:?}", path);
+        log::trace!("Ignoring backup file: {:?}", path);
         return None;
     }
 

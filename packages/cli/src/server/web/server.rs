@@ -1,16 +1,5 @@
-use std::{fs, io, process::Command, sync::Arc};
-
-use crate::{
-    builder,
-    serve::Serve,
-    server::{
-        output::{print_console_info, PrettierOptions, WebServerInfo},
-        setup_file_watcher, HotReloadState,
-    },
-    BuildResult, Result,
-};
-use tower::ServiceBuilder;
-
+use super::{hot_reload::*, WsReloadState};
+use crate::{server::HotReloadState, Result};
 use axum::{
     body::Body,
     extract::{
@@ -28,8 +17,8 @@ use axum::{
 };
 use axum_server::tls_rustls::RustlsConfig;
 use dioxus_cli_config::{CrateConfig, WebHttpsConfig};
-
-use super::{hot_reload::*, WsReloadState};
+use std::{fs, io, process::Command, sync::Arc};
+use tower::ServiceBuilder;
 use tower_http::{
     cors::{Any, CorsLayer},
     services::fs::{ServeDir, ServeFileSystemResponseBody},
