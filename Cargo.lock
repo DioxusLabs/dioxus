@@ -1184,7 +1184,7 @@ dependencies = [
  "clap 4.4.18",
  "console",
  "dialoguer",
- "env_logger",
+ "env_logger 0.10.2",
  "fs-err",
  "git2",
  "gix-config",
@@ -2192,7 +2192,7 @@ dependencies = [
  "dioxus-ssr",
  "dioxus-tui",
  "dioxus-web",
- "env_logger",
+ "env_logger 0.10.2",
  "futures-util",
  "rand 0.8.5",
  "serde",
@@ -2250,6 +2250,7 @@ dependencies = [
  "dioxus-html",
  "dioxus-rsx",
  "dirs",
+ "env_logger 0.11.3",
  "fern",
  "flate2",
  "fs_extra",
@@ -2995,6 +2996,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "env_filter"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a009aa4810eb158359dda09d0c87378e4bbb89b5a801f016885a4707ba24f7ea"
+dependencies = [
+ "log",
+ "regex",
+]
+
+[[package]]
 name = "env_logger"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3005,6 +3016,19 @@ dependencies = [
  "log",
  "regex",
  "termcolor",
+]
+
+[[package]]
+name = "env_logger"
+version = "0.11.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38b35839ba51819680ba087cd351788c9a3c476841207e0b8cee0b04722343b9"
+dependencies = [
+ "anstream",
+ "anstyle",
+ "env_filter",
+ "humantime",
+ "log",
 ]
 
 [[package]]
@@ -5592,9 +5616,9 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.20"
+version = "0.4.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b5e6163cb8c49088c2c36f57875e58ccd8c87c7427f7fbd50ea6710b2f3f2e8f"
+checksum = "90ed8c1e510134f979dbc4f070f87d4313098b704861a105fe34231c70a3901c"
 dependencies = [
  "value-bag",
 ]
@@ -7063,7 +7087,7 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "865724d4dbe39d9f3dd3b52b88d859d66bcb2d6a0acfd5ea68a65fb66d4bdc1c"
 dependencies = [
- "env_logger",
+ "env_logger 0.10.2",
  "log",
 ]
 

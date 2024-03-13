@@ -20,7 +20,7 @@ pub use syn::__private::ToTokens;
 use syn::spanned::Spanned;
 
 use super::{
-    hot_reload_diff::{find_rsx, DiffResult},
+    hot_reload_diff::{diff_rsx, DiffResult},
     ChangedRsx,
 };
 
@@ -118,7 +118,7 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
         // And collect out its errors instead of giving up to a full rebuild
         let old = syn::parse_file(&*old_cached.raw).map_err(|_e| HotreloadError::Parse)?;
 
-        let instances = match find_rsx(&syntax, &old) {
+        let instances = match diff_rsx(&syntax, &old) {
             // If the changes were just some rsx, we can just update the template
             //
             // However... if the changes involved code in the rsx itself, this should actually be a CodeChanged
@@ -128,7 +128,8 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
 
             // If the changes were some code, we should insert the file into the map and rebuild
             // todo: not sure we even need to put the cached file into the map, but whatever
-            DiffResult::CodeChanged => {
+            DiffResult::CodeChanged(_) => {
+                println!("code changed");
                 let cached_file = CachedSynFile {
                     raw: src.clone(),
                     path: file_path.to_path_buf(),
@@ -282,22 +283,22 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
 
     fn child_in_workspace(&mut self, crate_dir: &Path) -> io::Result<Option<PathBuf>> {
         if let Some(in_workspace) = self.in_workspace.get(crate_dir) {
-            Ok(in_workspace.clone())
-        } else {
-            let mut cmd = Cmd::new();
-            let manafest_path = crate_dir.join("Cargo.toml");
-            cmd.manifest_path(&manafest_path);
-            let cmd: MetadataCommand = cmd.into();
-            let metadata = cmd
-                .exec()
-                .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
-
-            let in_workspace = metadata.workspace_root != crate_dir;
-            let workspace_path = in_workspace.then(|| metadata.workspace_root.into());
-            self.in_workspace
-                .insert(crate_dir.to_path_buf(), workspace_path.clone());
-            Ok(workspace_path)
+            return Ok(in_workspace.clone());
         }
+
+        let mut cmd = Cmd::new();
+        let manafest_path = crate_dir.join("Cargo.toml");
+        cmd.manifest_path(&manafest_path);
+        let cmd: MetadataCommand = cmd.into();
+        let metadata = cmd
+            .exec()
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?;
+
+        let in_workspace = metadata.workspace_root != crate_dir;
+        let workspace_path = in_workspace.then(|| metadata.workspace_root.into());
+        self.in_workspace
+            .insert(crate_dir.to_path_buf(), workspace_path.clone());
+        Ok(workspace_path)
     }
 }
 

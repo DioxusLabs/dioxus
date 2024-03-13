@@ -9,6 +9,7 @@ use dioxus_rsx::hot_reload::*;
 use fs_extra::{dir::CopyOptions, file};
 use notify::{RecommendedWatcher, Watcher};
 use std::{
+    ops::ControlFlow,
     path::PathBuf,
     sync::{Arc, Mutex},
 };
@@ -22,7 +23,10 @@ pub mod web;
 
 #[derive(Clone)]
 pub struct HotReloadState {
+    /// Pending hotreload updates to be sent to all connected clients
     pub messages: broadcast::Sender<HotReloadMsg>,
+
+    /// The file map that tracks the state of the projecta
     pub file_map: Arc<Mutex<FileMap<HtmlCtx>>>,
 }
 
@@ -99,8 +103,8 @@ fn watch_event<F>(
         return;
     }
 
-    // By default we want to opt into a full rebuild, but hotreloading will actually set this force us
-    let mut needs_full_rebuild = true;
+    // By default we want to not do a full rebuild, and instead let the hot reload system invalidate it
+    let mut needs_full_rebuild = false;
 
     if let Some(hot_reload) = &hot_reload {
         hotreload_files(hot_reload, &mut needs_full_rebuild, &event, &config);
@@ -152,83 +156,23 @@ fn hotreload_files(
     let mut rsx_file_map = hot_reload.file_map.lock().unwrap();
     let mut messages: Vec<HotReloadMsg> = Vec::new();
 
-    // In hot reload mode, we only need to rebuild if non-rsx code is changed
-    *needs_full_rebuild = false;
-
     for path in &event.paths {
-        // for various assets that might be linked in, we just try to hotreloading them forcefully
-        // That is, unless they appear in an include! macro, in which case we need to a full rebuild....
-        let Some(ext) = path.extension().and_then(|v| v.to_str()) else {
-            continue;
-        };
+        // Attempt to hotreload this file
+        let is_potentially_reloadable = hotreload_file(
+            path,
+            config,
+            &rsx_file_map,
+            &mut messages,
+            needs_full_rebuild,
+        );
 
-        // Workaround for notify and vscode-like editor:
-        // when edit & save a file in vscode, there will be two notifications,
-        // the first one is a file with empty content.
-        // filter the empty file notification to avoid false rebuild during hot-reload
-        if let Ok(metadata) = fs::metadata(path) {
-            if metadata.len() == 0 {
-                continue;
-            }
+        // If the file was not hotreloaded, continue
+        if is_potentially_reloadable.is_none() {
+            println!("Not hotreloaded: {:?}", path);
+            continue;
         }
 
-        match ext {
-            // Attempt hot reload
-            "rs" => {}
-
-            // Anything with a .file is also ignored
-            _ if path.file_stem().is_none() || ext.ends_with("~") => {}
-
-            // Anything else is a maybe important file that needs to be rebuilt
-            _ => {
-                // If it happens to be a file in the asset directory, there's a chance we can hotreload it.
-                // Only css is currently supported for hotreload
-                if ext == "css" {
-                    let asset_dir = config
-                        .crate_dir
-                        .join(&config.dioxus_config.application.asset_dir);
-
-                    if path.starts_with(&asset_dir) {
-                        let local_path: PathBuf = path
-                            .file_name()
-                            .unwrap()
-                            .to_str()
-                            .unwrap()
-                            .to_string()
-                            .parse()
-                            .unwrap();
-
-                        println!(
-                            "maybe tracking asset: {:?}, {:#?}",
-                            local_path,
-                            rsx_file_map.tracked_assets()
-                        );
-
-                        if let Some(f) = rsx_file_map.is_tracking_asset(&local_path) {
-                            println!(
-                                "Hot reloading asset - it's tracked by the rsx!: {:?}",
-                                local_path
-                            );
-
-                            // copy the asset over tothe output directory
-                            let output_dir = config.out_dir();
-                            fs_extra::copy_items(
-                                &[path],
-                                output_dir,
-                                &CopyOptions::new().overwrite(true),
-                            )
-                            .unwrap();
-
-                            messages.push(HotReloadMsg::UpdateAsset(local_path));
-                            continue;
-                        }
-                    }
-                }
-
-                *needs_full_rebuild = true;
-            }
-        };
-
+        // If the file was hotreloaded, update the file map in place
         match rsx_file_map.update_rsx(path, &config.crate_dir) {
             Ok(UpdateResult::UpdatedRsx(msgs)) => {
                 println!("Updated: {:?}", msgs);
@@ -237,14 +181,15 @@ fn hotreload_files(
                     msgs.into_iter()
                         .map(|msg| HotReloadMsg::UpdateTemplate(msg)),
                 );
-                *needs_full_rebuild = false;
             }
+
             Ok(UpdateResult::NeedsRebuild) => {
+                println!("Needs rebuild: {:?}", path);
                 *needs_full_rebuild = true;
             }
-            Err(err) => {
-                log::error!("{}", err);
-            }
+
+            Err(err) => log::error!("{}", err),
+            // Err(err) => log::error!("{}", err),
         }
     }
 
@@ -273,6 +218,96 @@ fn hotreload_files(
     }
 }
 
+fn hotreload_file(
+    path: &PathBuf,
+    config: &CrateConfig,
+    rsx_file_map: &std::sync::MutexGuard<'_, FileMap<HtmlCtx>>,
+    messages: &mut Vec<HotReloadMsg>,
+    needs_full_rebuild: &mut bool,
+) -> Option<()> {
+    // for various assets that might be linked in, we just try to hotreloading them forcefully
+    // That is, unless they appear in an include! macro, in which case we need to a full rebuild....
+    let ext = path.extension().and_then(|v| v.to_str())?;
+
+    // Workaround for notify and vscode-like editor:
+    // when edit & save a file in vscode, there will be two notifications,
+    // the first one is a file with empty content.
+    // filter the empty file notification to avoid false rebuild during hot-reload
+    if let Ok(metadata) = fs::metadata(path) {
+        if metadata.len() == 0 {
+            return None;
+        }
+    }
+
+    // If the extension is a backup file, or a hidden file, ignore it completely (no rebuilds)
+    if is_backup_file(path) {
+        println!("Ignoring backup file: {:?}", path);
+        return None;
+    }
+
+    // Attempt to hotreload css in the asset directory
+    // Currently no other assets are hotreloaded, but in theory we could hotreload pngs/jpegs, etc
+    //
+    // All potential hotreloadable mime types:
+    // "bin" |"css" | "csv" | "html" | "ico" | "js" | "json" | "jsonld" | "mjs" | "rtf" | "svg" | "mp4"
+    if ext == "css" {
+        let asset_dir = config
+            .crate_dir
+            .join(&config.dioxus_config.application.asset_dir);
+
+        // Only if the CSS is in the asset directory, and we're tracking it, do we hotreload it
+        // Otherwise, we need to do a full rebuild since the user might be doing an include_str! on it
+        if attempt_css_reload(path, asset_dir, rsx_file_map, config, messages).is_none() {
+            *needs_full_rebuild = true;
+        }
+
+        return None;
+    }
+
+    // If the file is not rsx or css and we've already not needed a full rebuild, return
+    if ext != "rs" && ext != "css" {
+        *needs_full_rebuild = true;
+        return None;
+    }
+
+    Some(())
+}
+
+fn attempt_css_reload(
+    path: &PathBuf,
+    asset_dir: PathBuf,
+    rsx_file_map: &std::sync::MutexGuard<'_, FileMap<HtmlCtx>>,
+    config: &CrateConfig,
+    messages: &mut Vec<HotReloadMsg>,
+) -> Option<()> {
+    // If the path is not in the asset directory, return
+    if !path.starts_with(&asset_dir) {
+        return None;
+    }
+
+    // Get the local path of the asset (ie var.css or some_dir/var.css as long as the dir is under the asset dir)
+    let local_path = local_path_of_asset(path)?;
+
+    // Make sure we're actually tracking this asset...
+    _ = rsx_file_map.is_tracking_asset(&local_path)?;
+
+    // copy the asset over to the output directory
+    // todo this whole css hotreloading shouldbe less hacky and more robust
+    _ = fs_extra::copy_items(
+        &[path],
+        config.out_dir(),
+        &CopyOptions::new().overwrite(true),
+    );
+
+    messages.push(HotReloadMsg::UpdateAsset(local_path));
+
+    Some(())
+}
+
+fn local_path_of_asset(path: &PathBuf) -> Option<PathBuf> {
+    path.file_name()?.to_str()?.to_string().parse().ok()
+}
+
 pub(crate) trait Platform {
     fn start(config: &CrateConfig, serve: &ConfigOptsServe) -> Result<Self>
     where
@@ -280,15 +315,38 @@ pub(crate) trait Platform {
     fn rebuild(&mut self, config: &CrateConfig) -> Result<BuildResult>;
 }
 
-// Some("bin") => "application/octet-stream",
-// Some("css") => "text/css",
-// Some("csv") => "text/csv",
-// Some("html") => "text/html",
-// Some("ico") => "image/vnd.microsoft.icon",
-// Some("js") => "text/javascript",
-// Some("json") => "application/json",
-// Some("jsonld") => "application/ld+json",
-// Some("mjs") => "text/javascript",
-// Some("rtf") => "application/rtf",
-// Some("svg") => "image/svg+xml",
-// Some("mp4") => "video/mp4",
+fn is_backup_file(path: &PathBuf) -> bool {
+    // If there's a tilde at the end of the file, it's a backup file
+    if let Some(name) = path.file_name() {
+        if let Some(name) = name.to_str() {
+            if name.ends_with('~') {
+                return true;
+            }
+        }
+    }
+
+    // if the file is hidden, it's a backup file
+    if let Some(name) = path.file_name() {
+        if let Some(name) = name.to_str() {
+            if name.starts_with('.') {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+#[test]
+fn test_is_backup_file() {
+    assert!(is_backup_file(&PathBuf::from("examples/test.rs~")));
+    assert!(is_backup_file(&PathBuf::from("examples/.back")));
+    assert!(is_backup_file(&PathBuf::from("test.rs~")));
+    assert!(is_backup_file(&PathBuf::from(".back")));
+
+    assert!(!is_backup_file(&PathBuf::from("val.rs")));
+    assert!(!is_backup_file(&PathBuf::from(
+        "/Users/jonkelley/Development/Tinkering/basic_05_example/src/lib.rs"
+    )));
+    assert!(!is_backup_file(&PathBuf::from("exmaples/val.rs")));
+}

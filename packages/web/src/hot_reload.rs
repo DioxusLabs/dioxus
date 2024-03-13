@@ -40,28 +40,26 @@ pub(crate) fn init() -> UnboundedReceiver<Template> {
                 let val: &'static serde_json::Value = Box::leak(Box::new(val));
                 let template: Template = Template::deserialize(val).unwrap();
                 tx.unbounded_send(template).unwrap();
+            } else {
+                // it might be triggering a reload of assets
+                // invalidate all the stylesheets on the page
+                let links = web_sys::window()
+                    .unwrap()
+                    .document()
+                    .unwrap()
+                    .query_selector_all("link[rel=stylesheet]")
+                    .unwrap();
+
+                console::log_1(&links.clone().into());
+
+                for x in 0..links.length() {
+                    console::log_1(&x.clone().into());
+
+                    let link: Element = links.get(x).unwrap().unchecked_into();
+                    let href = link.get_attribute("href").unwrap();
+                    _ = link.set_attribute("href", &format!("{}?{}", href, js_sys::Math::random()));
+                }
             }
-        }
-
-        // it might be triggering a reload of assets
-        // invalidate all the stylesheets on the page
-        let links = web_sys::window()
-            .unwrap()
-            .document()
-            .unwrap()
-            .query_selector_all("link[rel=stylesheet]")
-            .unwrap();
-
-        console::log_1(&links.clone().into());
-
-        for x in 0..links.length() {
-            use wasm_bindgen::JsCast;
-            use web_sys::Element;
-            console::log_1(&x.clone().into());
-
-            let link: Element = links.get(x).unwrap().unchecked_into();
-            let href = link.get_attribute("href").unwrap();
-            link.set_attribute("href", &format!("{}?{}", href, js_sys::Math::random()));
         }
     }) as Box<dyn FnMut(MessageEvent)>);
 
