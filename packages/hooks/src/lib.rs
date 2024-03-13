@@ -53,8 +53,6 @@ macro_rules! to_owned {
         $(to_owned![$($rest)*])?
     };
 }
-mod dependency;
-pub use dependency::*;
 
 mod use_callback;
 pub use use_callback::*;

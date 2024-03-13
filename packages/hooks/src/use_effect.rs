@@ -2,6 +2,9 @@ use dioxus_core::prelude::*;
 use dioxus_signals::ReactiveContext;
 use futures_util::StreamExt;
 
+use crate::use_signal;
+use dioxus_signals::*;
+
 /// `use_effect` will subscribe to any changes in the signal values it captures
 /// effects will always run after first mount and then whenever the signal values change
 /// If the use_effect call was skipped due to an early return, the effect will no longer activate.
@@ -19,15 +22,15 @@ use futures_util::StreamExt;
 /// }
 /// ```
 #[track_caller]
-pub fn use_effect(mut callback: impl FnMut() + 'static) {
+pub fn use_effect(mut callback: impl FnMut() + 'static) -> Effect {
     // let mut run_effect = use_hook(|| CopyValue::new(true));
     // use_hook_did_run(move |did_run| run_effect.set(did_run));
 
     let location = std::panic::Location::caller();
 
     use_hook(|| {
+        let (rc, mut changed) = ReactiveContext::new_with_origin(location);
         spawn(async move {
-            let (rc, mut changed) = ReactiveContext::new_with_origin(location);
             loop {
                 // Run the effect
                 rc.run_in(&mut callback);
@@ -39,5 +42,60 @@ pub fn use_effect(mut callback: impl FnMut() + 'static) {
                 wait_for_next_render().await;
             }
         });
-    });
+        Effect { rc }
+    })
+}
+
+/// A handle to an effect.
+#[derive(Clone, Copy)]
+pub struct Effect {
+    rc: ReactiveContext,
+}
+
+impl Effect {
+    /// Adds an explicit dependency to the effect. If the dependency changes, the effect's closure will rerun.
+    ///
+    /// Signals will automatically be added as dependencies, so you don't need to call this method for them.
+    ///
+    /// NOTE: You must follow the rules of hooks when calling this method.
+    ///
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// # async fn sleep(delay: u32) {}
+    ///
+    /// #[component]
+    /// fn Comp(delay: u32) -> Element {
+    ///     // Because the resource subscribes to `delay` by adding it as a dependency, the effect's closure will rerun every time `delay` changes.
+    ///     let current_weather = use_resource(move || async move {
+    ///         sleep(delay).await;
+    ///         "Sunny"
+    ///     })
+    ///     .use_dependencies((&delay,));
+    ///
+    ///     rsx! {
+    ///         // the value of the resource can be polled to
+    ///         // conditionally render elements based off if it's future
+    ///         // finished (Some(Ok(_)), errored Some(Err(_)),
+    ///         // or is still running (None)
+    ///         match &*current_weather.read_unchecked() {
+    ///             Some(weather) => rsx! { "{weather}" },
+    ///             None =>  rsx! { p { "Loading..." } }
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    pub fn use_dependencies(mut self, dependency: impl Dependency) -> Self {
+        let mut dependencies_signal = use_signal(|| dependency.out());
+        let changed = { dependency.changed(&*dependencies_signal.read()) };
+        if changed {
+            dependencies_signal.set(dependency.out());
+            self.mark_dirty();
+        }
+        self
+    }
+
+    /// Marks the effect as dirty, causing it to rerun on the next render.
+    pub fn mark_dirty(&mut self) {
+        self.rc.mark_dirty();
+    }
 }

@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 
-use crate::{dependency, use_callback, use_signal, UseCallback};
+use crate::{use_callback, use_signal, UseCallback};
 use dioxus_core::prelude::*;
 use dioxus_core::{
     prelude::{spawn, use_hook},
@@ -156,11 +156,12 @@ impl<T> Resource<T> {
     ///     }
     /// }
     /// ```
-    pub fn use_dependencies(self, dependency: impl dependency::Dependency) -> Self {
+    pub fn use_dependencies(mut self, dependency: impl Dependency) -> Self {
         let mut dependencies_signal = use_signal(|| dependency.out());
         let changed = { dependency.changed(&*dependencies_signal.read()) };
         if changed {
             dependencies_signal.set(dependency.out());
+            self.restart();
         }
         self
     }
