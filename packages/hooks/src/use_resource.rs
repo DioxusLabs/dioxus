@@ -23,7 +23,7 @@ use std::{cell::Cell, future::Future, rc::Rc};
 ///    });
 ///
 ///    // Because the resource's future subscribes to `country` by reading it (`country.read()`),
-///    // everytime `country` changes the resource's future will run again and thus provide a new value.
+///    // every time `country` changes the resource's future will run again and thus provide a new value.
 ///    let current_weather = use_resource(move || async move { get_weather(&country.read().clone()).await });
 ///    
 ///    rsx! {
@@ -144,16 +144,7 @@ impl<T> Resource<T> {
     ///     })
     ///     .use_dependencies((&delay,));
     ///
-    ///     rsx! {
-    ///         // the value of the resource can be polled to
-    ///         // conditionally render elements based off if it's future
-    ///         // finished (Some(Ok(_)), errored Some(Err(_)),
-    ///         // or is still running (None)
-    ///         match &*current_weather.read_unchecked() {
-    ///             Some(weather) => rsx! { "{weather}" },
-    ///             None =>  rsx! { p { "Loading..." } }
-    ///         }
-    ///     }
+    ///     todo!()
     /// }
     /// ```
     pub fn use_dependencies(mut self, dependency: impl Dependency) -> Self {

@@ -166,8 +166,8 @@ impl<T: 'static> Memo<T> {
     ///
     /// #[component]
     /// fn Comp(count: u32) -> Element {
-    ///     // Because the resource subscribes to `delay` by adding it as a dependency, the memo will rerun every time `count` changes.
-    ///     let new_count = use_memo(move || async move {
+    ///     // Because the memo subscribes to `count` by adding it as a dependency, the memo will rerun every time `count` changes.
+    ///     let new_count = use_memo(move || {
     ///         count + 1
     ///     })
     ///     .use_dependencies((&count,));

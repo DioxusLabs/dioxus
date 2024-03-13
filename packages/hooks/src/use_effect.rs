@@ -65,23 +65,13 @@ impl Effect {
     ///
     /// #[component]
     /// fn Comp(delay: u32) -> Element {
-    ///     // Because the resource subscribes to `delay` by adding it as a dependency, the effect's closure will rerun every time `delay` changes.
-    ///     let current_weather = use_resource(move || async move {
-    ///         sleep(delay).await;
-    ///         "Sunny"
+    ///     // Because the effect subscribes to `delay` by adding it as a dependency, the effect's closure will rerun every time `delay` changes.
+    ///     use_effect(move || {
+    ///         println!("It is safe to manually manipulate the dom here");
     ///     })
     ///     .use_dependencies((&delay,));
     ///
-    ///     rsx! {
-    ///         // the value of the resource can be polled to
-    ///         // conditionally render elements based off if it's future
-    ///         // finished (Some(Ok(_)), errored Some(Err(_)),
-    ///         // or is still running (None)
-    ///         match &*current_weather.read_unchecked() {
-    ///             Some(weather) => rsx! { "{weather}" },
-    ///             None =>  rsx! { p { "Loading..." } }
-    ///         }
-    ///     }
+    ///     todo!()
     /// }
     /// ```
     pub fn use_dependencies(mut self, dependency: impl Dependency) -> Self {
