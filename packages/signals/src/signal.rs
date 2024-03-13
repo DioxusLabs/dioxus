@@ -162,6 +162,127 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     pub fn id(&self) -> generational_box::GenerationalBoxId {
         self.inner.id()
     }
+
+    /// **This pattern is no longer recommended. Prefer [`peek`](Signal::peek) or creating new signals instead.**
+    ///
+    /// This function is the equivalent of the [write_silent](https://docs.rs/dioxus/latest/dioxus/prelude/struct.UseRef.html#method.write_silent) method on use_ref.
+    ///
+    /// ## What you should use instead
+    ///
+    /// ### Reading and Writing to data in the same scope
+    ///
+    /// Reading and writing to the same signal in the same scope will cause that scope to rerun forever:
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// let mut signal = use_signal(|| 0);
+    /// // This makes the scope rerun whenever we write to the signal
+    /// println!("{}", *signal.read());
+    /// // This will rerun the scope because we read the signal earlier in the same scope
+    /// *signal.write() += 1;
+    /// ```
+    ///
+    /// You may have used the write_silent method to avoid this infinite loop with use_ref like this:
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// let signal = use_signal(|| 0);
+    /// // This makes the scope rerun whenever we write to the signal
+    /// println!("{}", *signal.read());
+    /// // Write silent will not rerun any subscribers
+    /// *signal.write_silent() += 1;
+    /// ```
+    ///
+    /// Instead you can use the [`peek`](Signal::peek) and [`write`](Signal::write) methods instead. The peek method will not subscribe to the current scope which will avoid an infinite loop if you are reading and writing to the same signal in the same scope.
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// let mut signal = use_signal(|| 0);
+    /// // Peek will read the value but not subscribe to the current scope
+    /// println!("{}", *signal.peek());
+    /// // Write will update any subscribers which does not include the current scope
+    /// *signal.write() += 1;
+    /// ```
+    ///
+    /// ### Reading and Writing to different data
+    ///
+    ///
+    ///
+    /// ## Why is this pattern no longer recommended?
+    ///
+    /// This pattern is no longer recommended because it is very easy to allow your state and UI to grow out of sync. `write_silent` globally opts out of automatic state updates which can be difficult to reason about.
+    ///
+    ///
+    /// Lets take a look at an example:
+    /// main.rs:
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # fn Child() -> Element { todo!() }
+    /// fn app() -> Element {
+    ///     let signal = use_context_provider(|| Signal::new(0));
+    ///     
+    ///     // We want to log the value of the signal whenever the app component reruns
+    ///     println!("{}", *signal.read());
+    ///     
+    ///     rsx! {
+    ///         button {
+    ///             // If we don't want to rerun the app component when the button is clicked, we can use write_silent
+    ///             onclick: move |_| *signal.write_silent() += 1,
+    ///             "Increment"
+    ///         }
+    ///         Child {}
+    ///     }
+    /// }
+    /// ```
+    /// child.rs:
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// fn Child() -> Element {
+    ///     let signal: Signal<i32> = use_context();
+    ///     
+    ///     // It is difficult to tell that changing the button to use write_silent in the main.rs file will cause UI to be out of sync in a completely different file
+    ///     rsx! {
+    ///         "{signal}"
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// Instead [`peek`](Signal::peek) locally opts out of automatic state updates explicitly for a specific read which is easier to reason about.
+    ///
+    /// Here is the same example using peek:
+    /// main.rs:
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # fn Child() -> Element { todo!() }
+    /// fn app() -> Element {
+    ///     let mut signal = use_context_provider(|| Signal::new(0));
+    ///     
+    ///     // We want to log the value of the signal whenever the app component reruns, but we don't want to rerun the app component when the signal is updated so we use peek instead of read
+    ///     println!("{}", *signal.peek());
+    ///     
+    ///     rsx! {
+    ///         button {
+    ///             // We can use write like normal and update the child component automatically
+    ///             onclick: move |_| *signal.write() += 1,
+    ///             "Increment"
+    ///         }
+    ///         Child {}
+    ///     }
+    /// }
+    /// ```
+    /// child.rs:
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// fn Child() -> Element {
+    ///     let signal: Signal<i32> = use_context();
+    ///     
+    ///     rsx! {
+    ///         "{signal}"
+    ///     }
+    /// }
+    /// ```
+    #[track_caller]
+    #[deprecated = "This pattern is no longer recommended. Prefer `peek` or creating new signals instead."]
+    pub fn write_silent(&self) -> S::Mut<'static, T> {
+        S::map_mut(self.inner.write_unchecked(), |inner| &mut inner.value)
+    }
 }
 
 impl<T, S: Storage<SignalData<T>>> Readable for Signal<T, S> {
