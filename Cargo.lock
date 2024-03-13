@@ -2178,7 +2178,7 @@ version = "0.5.0-alpha.0"
 dependencies = [
  "criterion 0.3.6",
  "dioxus-config-macro",
- "dioxus-core",
+ "dioxus-core 0.5.0-alpha.0",
  "dioxus-core-macro",
  "dioxus-desktop",
  "dioxus-fullstack",
@@ -2245,7 +2245,7 @@ dependencies = [
  "dioxus-autofmt",
  "dioxus-check",
  "dioxus-cli-config",
- "dioxus-core",
+ "dioxus-core 0.5.0-alpha.0",
  "dioxus-hot-reload",
  "dioxus-html",
  "dioxus-rsx",
@@ -2336,6 +2336,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-core"
+version = "0.5.0-alpha.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f39bef0484998f724622964f04468ddfde7fd550f5f0f1aef9394306e9caba44"
+dependencies = [
+ "futures-channel",
+ "futures-util",
+ "longest-increasing-subsequence",
+ "rustc-hash",
+ "slab",
+ "tracing",
+]
+
+[[package]]
 name = "dioxus-core-macro"
 version = "0.5.0-alpha.0"
 dependencies = [
@@ -2365,7 +2379,7 @@ dependencies = [
  "core-foundation",
  "dioxus",
  "dioxus-cli-config",
- "dioxus-core",
+ "dioxus-core 0.5.0-alpha.0",
  "dioxus-hooks",
  "dioxus-hot-reload",
  "dioxus-html",
@@ -2466,7 +2480,7 @@ name = "dioxus-hooks"
 version = "0.5.0-alpha.0"
 dependencies = [
  "dioxus",
- "dioxus-core",
+ "dioxus-core 0.5.0-alpha.0",
  "dioxus-debug-cell",
  "dioxus-signals",
  "futures-channel",
@@ -2484,7 +2498,7 @@ name = "dioxus-hot-reload"
 version = "0.5.0-alpha.0"
 dependencies = [
  "chrono",
- "dioxus-core",
+ "dioxus-core 0.5.0-alpha.0",
  "dioxus-html",
  "dioxus-rsx",
  "execute",
@@ -2501,7 +2515,7 @@ name = "dioxus-html"
 version = "0.5.0-alpha.0"
 dependencies = [
  "async-trait",
- "dioxus-core",
+ "dioxus-core 0.5.0-alpha.0",
  "dioxus-html-internal-macro",
  "dioxus-rsx",
  "enumset",
@@ -2534,7 +2548,7 @@ dependencies = [
 name = "dioxus-interpreter-js"
 version = "0.5.0-alpha.0"
 dependencies = [
- "dioxus-core",
+ "dioxus-core 0.5.0-alpha.0",
  "dioxus-html",
  "js-sys",
  "md5",
@@ -2550,7 +2564,7 @@ name = "dioxus-lib"
 version = "0.5.0-alpha.0"
 dependencies = [
  "dioxus-config-macro",
- "dioxus-core",
+ "dioxus-core 0.5.0-alpha.0",
  "dioxus-core-macro",
  "dioxus-hooks",
  "dioxus-html",
@@ -2565,7 +2579,7 @@ dependencies = [
  "axum",
  "dioxus",
  "dioxus-cli-config",
- "dioxus-core",
+ "dioxus-core 0.5.0-alpha.0",
  "dioxus-hot-reload",
  "dioxus-html",
  "dioxus-interpreter-js",
@@ -2599,7 +2613,7 @@ dependencies = [
  "anymap 1.0.0-beta.2",
  "dashmap",
  "dioxus",
- "dioxus-core",
+ "dioxus-core 0.5.0-alpha.0",
  "dioxus-native-core",
  "dioxus-native-core-macro",
  "keyboard-types",
@@ -2708,7 +2722,7 @@ dependencies = [
 name = "dioxus-rsx"
 version = "0.5.0-alpha.0"
 dependencies = [
- "dioxus-core",
+ "dioxus-core 0.5.0-alpha.0",
  "internment",
  "krates",
  "proc-macro2",
@@ -2723,7 +2737,7 @@ name = "dioxus-signals"
 version = "0.5.0-alpha.0"
 dependencies = [
  "dioxus",
- "dioxus-core",
+ "dioxus-core 0.5.0-alpha.0",
  "futures-channel",
  "futures-util",
  "generational-box",
@@ -2747,7 +2761,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "dioxus",
- "dioxus-core",
+ "dioxus-core 0.5.0-alpha.0",
  "dioxus-html",
  "dioxus-signals",
  "fern",
@@ -2778,7 +2792,7 @@ dependencies = [
  "criterion 0.3.6",
  "crossterm 0.26.1",
  "dioxus",
- "dioxus-core",
+ "dioxus-core 0.5.0-alpha.0",
  "dioxus-hot-reload",
  "dioxus-html",
  "dioxus-native-core",
@@ -2796,7 +2810,7 @@ dependencies = [
  "async-trait",
  "console_error_panic_hook",
  "dioxus",
- "dioxus-core",
+ "dioxus-core 0.5.0-alpha.0",
  "dioxus-html",
  "dioxus-interpreter-js",
  "dioxus-ssr",
@@ -5702,10 +5716,11 @@ dependencies = [
 
 [[package]]
 name = "manganis"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c10916db4ed51967d92545eb5629ce1e1cc05c74da2cd2aab6ab6c57c2e838b6"
+checksum = "a42db80aa639f70d6bf1d2ef93612d2ffbb33f6ea17d473b91bfeb3f67bc24bc"
 dependencies = [
+ "dioxus-core 0.5.0-alpha.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "manganis-macro",
 ]
 
@@ -5738,9 +5753,9 @@ dependencies = [
 
 [[package]]
 name = "manganis-common"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82ee0f9002a9f5d7e3b662e55562996c60401bae16da23f3790c52e0823216ea"
+checksum = "176dfb4bb5592b0d130176add9893af527ab565fc1bcf58ece88acd6276688d1"
 dependencies = [
  "anyhow",
  "base64",
@@ -5754,9 +5769,9 @@ dependencies = [
 
 [[package]]
 name = "manganis-macro"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da50cc6074480dc6c255a09c9d48dd4a379e6162feb5d308ec33d5ba9da4e579"
+checksum = "ab2c2e11190c2f3d6133cffda5c955b463a7e90b7ba866e71e7dfa65fa97ddfc"
 dependencies = [
  "manganis-common",
  "proc-macro2",

@@ -100,8 +100,10 @@ thiserror = "1.0.40"
 prettyplease = { package = "prettier-please", version = "0.2", features = [
     "verbatim",
 ] }
-manganis-cli-support = { version = "0.2.0", features = ["webp", "html"] }
-manganis = { version = "0.2.0" }
+manganis-cli-support = { version = "0.2.1", features = [
+    "html",
+] }
+manganis = { version = "0.2.1" }
 
 interprocess = { version = "1.2.1" }
 # interprocess = { git = "https://github.com/kotauskas/interprocess" }
