@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::ToTokens;
-use syn::{Expr, File, Item, Macro};
+use syn::{Expr, File, Item, Macro, Stmt, TraitItem};
 
 #[derive(Debug)]
 pub enum DiffResult {
@@ -218,7 +218,7 @@ fn find_rsx_trait(
     }
     for (new_item, old_item) in new_item.items.iter().zip(old_item.items.iter()) {
         if match (new_item, old_item) {
-            (syn::TraitItem::Const(new_item), syn::TraitItem::Const(old_item)) => {
+            (TraitItem::Const(new_item), TraitItem::Const(old_item)) => {
                 if let (Some((_, new_expr)), Some((_, old_expr))) =
                     (&new_item.default, &old_item.default)
                 {
@@ -227,7 +227,7 @@ fn find_rsx_trait(
                     true
                 }
             }
-            (syn::TraitItem::Fn(new_item), syn::TraitItem::Fn(old_item)) => {
+            (TraitItem::Fn(new_item), TraitItem::Fn(old_item)) => {
                 match (&new_item.default, &old_item.default) {
                     (Some(new_block), Some(old_block)) => {
                         find_rsx_block(new_block, old_block, rsx_calls)
@@ -236,13 +236,9 @@ fn find_rsx_trait(
                     _ => true,
                 }
             }
-            (syn::TraitItem::Type(new_item), syn::TraitItem::Type(old_item)) => {
-                old_item != new_item
-            }
-            (syn::TraitItem::Macro(new_item), syn::TraitItem::Macro(old_item)) => {
-                old_item != new_item
-            }
-            (syn::TraitItem::Verbatim(stream), syn::TraitItem::Verbatim(stream2)) => {
+            (TraitItem::Type(new_item), TraitItem::Type(old_item)) => old_item != new_item,
+            (TraitItem::Macro(new_item), TraitItem::Macro(old_item)) => old_item != new_item,
+            (TraitItem::Verbatim(stream), TraitItem::Verbatim(stream2)) => {
                 stream.to_string() != stream2.to_string()
             }
             _ => true,
@@ -280,17 +276,13 @@ fn find_rsx_block(
     new_block.brace_token != old_block.brace_token
 }
 
-fn find_rsx_stmt(
-    new_stmt: &syn::Stmt,
-    old_stmt: &syn::Stmt,
-    rsx_calls: &mut Vec<ChangedRsx>,
-) -> bool {
+fn find_rsx_stmt(new_stmt: &Stmt, old_stmt: &Stmt, rsx_calls: &mut Vec<ChangedRsx>) -> bool {
     match (new_stmt, old_stmt) {
-        (syn::Stmt::Local(new_local), syn::Stmt::Local(old_local)) => {
+        (Stmt::Local(new_local), Stmt::Local(old_local)) => {
             (match (&new_local.init, &old_local.init) {
                 (Some(new_local), Some(old_local)) => {
                     find_rsx_expr(&new_local.expr, &old_local.expr, rsx_calls)
-                        || new_local != old_local
+                        || new_local.diverge != old_local.diverge
                 }
                 (None, None) => false,
                 _ => true,
@@ -299,13 +291,13 @@ fn find_rsx_stmt(
                 || new_local.pat != old_local.pat
                 || new_local.semi_token != old_local.semi_token)
         }
-        (syn::Stmt::Item(new_item), syn::Stmt::Item(old_item)) => {
+        (Stmt::Item(new_item), Stmt::Item(old_item)) => {
             find_rsx_item(new_item, old_item, rsx_calls)
         }
-        (syn::Stmt::Expr(new_expr, _), syn::Stmt::Expr(old_expr, _)) => {
+        (Stmt::Expr(new_expr, _), Stmt::Expr(old_expr, _)) => {
             find_rsx_expr(new_expr, old_expr, rsx_calls)
         }
-        (syn::Stmt::Macro(new_macro), syn::Stmt::Macro(old_macro)) => {
+        (Stmt::Macro(new_macro), Stmt::Macro(old_macro)) => {
             find_rsx_macro(&new_macro.mac, &old_macro.mac, rsx_calls)
                 || new_macro.attrs != old_macro.attrs
                 || new_macro.semi_token != old_macro.semi_token

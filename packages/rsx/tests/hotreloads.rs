@@ -1,4 +1,4 @@
-use dioxus_rsx::hot_reload::diff_rsx;
+use dioxus_rsx::hot_reload::{diff_rsx, DiffResult};
 use syn::File;
 
 fn load_files(old: &str, new: &str) -> (File, File) {
@@ -10,10 +10,34 @@ fn load_files(old: &str, new: &str) -> (File, File) {
 #[test]
 fn hotreloads() {
     let (old, new) = load_files(
-        include_str!("./valid_samples/old.expr.rsx"),
-        include_str!("./valid_samples/new.expr.rsx"),
+        include_str!("./valid/expr.old.rsx"),
+        include_str!("./valid/expr.new.rsx"),
+    );
+
+    assert!(matches!(
+        diff_rsx(&new, &old),
+        DiffResult::RsxChanged { .. }
+    ));
+
+    let (old, new) = load_files(
+        include_str!("./valid/let.old.rsx"),
+        include_str!("./valid/let.new.rsx"),
+    );
+
+    assert!(matches!(
+        diff_rsx(&new, &old),
+        DiffResult::RsxChanged { .. }
+    ));
+}
+
+#[test]
+fn doesnt_hotreload() {
+    let (old, new) = load_files(
+        include_str!("./invalid/changedexpr.old.rsx"),
+        include_str!("./invalid/changedexpr.new.rsx"),
     );
 
     let res = diff_rsx(&new, &old);
-    dbg!(res);
+    dbg!(&res);
+    assert!(matches!(res, DiffResult::CodeChanged(_)));
 }

@@ -2,20 +2,19 @@
 //!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
-use crate::innerlude::{DirtyTasks, ScopeOrder};
 use crate::Task;
 use crate::{
     any_props::AnyProps,
     arena::ElementId,
     innerlude::{
-        ElementRef, ErrorBoundary, NoOpMutations, SchedulerMsg, ScopeState, VNodeMount, VProps,
-        WriteMutations,
+        DirtyTasks, ElementRef, ErrorBoundary, NoOpMutations, SchedulerMsg, ScopeOrder, ScopeState,
+        VNodeMount, VProps, WriteMutations,
     },
     nodes::RenderReturn,
     nodes::{Template, TemplateId},
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
-    AttributeValue, ComponentFunction, Element, Event, Mutations,
+    AttributeValue, ComponentFunction, Element, Event, Mutations, VNode,
 };
 use futures_util::StreamExt;
 use rustc_hash::FxHashMap;
@@ -538,10 +537,29 @@ impl VirtualDom {
         // iterating a slab is very inefficient, but this is a rare operation that will only happen during development so it's fine
         let mut dirty = Vec::new();
         for (id, scope) in self.scopes.iter() {
+            // Recurse into the dynamic nodes of the existing mounted node to see if the template is alive in the tree
+            fn check_node_for_templates(node: &VNode, template: Template) -> bool {
+                let this_template_name = node.template.get().name.rsplit_once(':').unwrap().0;
+
+                if this_template_name == template.name.rsplit_once(':').unwrap().0 {
+                    return true;
+                }
+
+                for dynamic in node.dynamic_nodes.iter() {
+                    if let crate::DynamicNode::Fragment(nodes) = dynamic {
+                        for node in nodes {
+                            if check_node_for_templates(node, template) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+
+                false
+            }
+
             if let Some(RenderReturn::Ready(sync)) = scope.try_root_node() {
-                if sync.template.get().name.rsplit_once(':').unwrap().0
-                    == template.name.rsplit_once(':').unwrap().0
-                {
+                if check_node_for_templates(&sync, template) {
                     dirty.push(ScopeId(id));
                 }
             }
