@@ -2,6 +2,7 @@ use crate::{cfg::ConfigOptsServe, BuildResult, Result};
 use dioxus_cli_config::CrateConfig;
 
 use cargo_metadata::diagnostic::Diagnostic;
+use dioxus_core::Template;
 use dioxus_hot_reload::HotReloadMsg;
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;
@@ -25,7 +26,20 @@ pub struct HotReloadState {
     pub messages: broadcast::Sender<HotReloadMsg>,
 
     /// The file map that tracks the state of the projecta
-    pub file_map: Arc<Mutex<FileMap<HtmlCtx>>>,
+    pub file_map: SharedFileMap,
+}
+type SharedFileMap = Arc<Mutex<FileMap<HtmlCtx>>>;
+
+impl HotReloadState {
+    pub fn all_templates(&self) -> Vec<Template> {
+        self.file_map
+            .lock()
+            .unwrap()
+            .map
+            .values()
+            .flat_map(|v| v.templates.values().copied())
+            .collect()
+    }
 }
 
 /// Sets up a file watcher.

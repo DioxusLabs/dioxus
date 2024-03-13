@@ -184,6 +184,7 @@ impl Driver for DioxusRenderer {
                     dioxus_hot_reload::HotReloadMsg::Shutdown => {
                         std::process::exit(0);
                     }
+                    _ => {}
                 }
             }
         });

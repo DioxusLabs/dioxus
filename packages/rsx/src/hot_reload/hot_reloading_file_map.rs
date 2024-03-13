@@ -243,8 +243,6 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
             collect_assetlike_attrs(node, &mut asset_urls);
         }
 
-        println!("asset urls: {:?}", asset_urls);
-
         asset_urls
     }
 

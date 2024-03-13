@@ -21,7 +21,7 @@ pub enum HotReloadMsg {
     /// A template has been updated
     UpdateTemplate(Template),
 
-    /// A template has been updated
+    /// An asset discovered by rsx! has been updated
     UpdateAsset(PathBuf),
 
     /// The program needs to be recompiled, and the client should shut down

@@ -27,20 +27,9 @@ async fn hotreload_loop(mut socket: WebSocket, state: HotReloadState) -> anyhow:
     log::info!("🔥 Hot Reload WebSocket connected");
 
     // update any rsx calls that changed before the websocket connected.
-    log::info!("🔮 Finding updates since last compile...");
-
-    let templates = state
-        .file_map
-        .lock()
-        .unwrap()
-        .map
-        .values()
-        .flat_map(|v| v.templates.values().copied())
-        .collect::<Vec<_>>();
-
-    println!("previously changed: {:?}", templates);
-
-    for template in templates {
+    // These templates will be sent down immediately so the page is in sync with the hotreloaded version
+    // The compiled version will be different from the one we actually want to present
+    for template in state.all_templates() {
         socket
             .send(Message::Text(serde_json::to_string(&template).unwrap()))
             .await?;
@@ -65,16 +54,17 @@ async fn hotreload_loop(mut socket: WebSocket, state: HotReloadState) -> anyhow:
 
             let Ok(msg) = msg else { break };
 
-            println!("msg: {:?}", msg);
-
             match msg {
                 HotReloadMsg::UpdateTemplate(template) => {
                     Message::Text(serde_json::to_string(&template).unwrap())
                 }
                 HotReloadMsg::UpdateAsset(asset) => {
-                    Message::Text(format!("asset: {}", asset.display()))
+                    Message::Text(format!("reload-asset: {}", asset.display()))
                 }
-                HotReloadMsg::Shutdown => todo!(),
+                HotReloadMsg::Shutdown => {
+                    log::info!("🔥 Hot Reload WebSocket shutting down");
+                    break;
+                }
             }
         };
 

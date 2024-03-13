@@ -277,6 +277,9 @@ impl App {
             dioxus_hot_reload::HotReloadMsg::Shutdown => {
                 self.control_flow = ControlFlow::Exit;
             }
+
+            // todo: enable asset hotreloading in desktop
+            dioxus_hot_reload::HotReloadMsg::UpdateAsset(_) => {}
         }
     }
 
