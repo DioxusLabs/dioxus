@@ -1249,20 +1249,6 @@ dependencies = [
 
 [[package]]
 name = "cargo_metadata"
-version = "0.15.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eee4243f1f26fc7a42710e7439c149e2b10b05472f88090acce52632f231a73a"
-dependencies = [
- "camino",
- "cargo-platform",
- "semver",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "cargo_metadata"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7daec1a2a2129eeba1644b220b4647ec537b0b5d4bfd6876fcc5a540056b592"
@@ -1345,15 +1331,6 @@ dependencies = [
  "byteorder",
  "fnv",
  "uuid",
-]
-
-[[package]]
-name = "cfg-expr"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0bbc13bf6290a6b202cc3efb36f7ec2b739a80634215630c8053a313edf6abef"
-dependencies = [
- "smallvec",
 ]
 
 [[package]]
@@ -2246,7 +2223,7 @@ dependencies = [
  "pretty_assertions",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.51",
 ]
 
 [[package]]
@@ -2284,7 +2261,7 @@ dependencies = [
  "hyper-util",
  "ignore",
  "indicatif",
- "interprocess-docfix",
+ "interprocess",
  "lazy_static",
  "log",
  "manganis-cli-support",
@@ -2511,7 +2488,7 @@ dependencies = [
  "dioxus-rsx",
  "execute",
  "ignore",
- "interprocess-docfix",
+ "interprocess",
  "notify",
  "once_cell",
  "serde",
@@ -5028,10 +5005,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "interprocess-docfix"
-version = "1.2.2"
+name = "interprocess"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b84ee245c606aeb0841649a9288e3eae8c61b853a8cd5c0e14450e96d53d28f"
+checksum = "81f2533f3be42fffe3b5e63b71aeca416c1c3bc33e4e27be018521e76b1f38fb"
 dependencies = [
  "blocking",
  "cfg-if",
@@ -5290,12 +5267,12 @@ dependencies = [
 
 [[package]]
 name = "krates"
-version = "0.12.6"
+version = "0.16.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "942c43a6cba1c201dfe81a943c89fa5c9140b34993e0c027f542c80b92e319a7"
+checksum = "320d34cfe880f2c6243b4cfff8aab3e34eab6325d0a26729f23356418fbdc809"
 dependencies = [
- "cargo_metadata 0.15.4",
- "cfg-expr 0.12.0",
+ "cargo_metadata 0.18.1",
+ "cfg-expr",
  "petgraph",
  "semver",
 ]
@@ -6499,9 +6476,9 @@ checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 
 [[package]]
 name = "owo-colors"
-version = "3.5.0"
+version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1b04fb49957986fdce4d6ee7a65027d55d4b6d2265e5848bbb507b58ccfdb6f"
+checksum = "caff54706df99d2a78a5a4e3455ff45448d81ef1bb63c22cd14052ca0e993a3f"
 dependencies = [
  "supports-color",
 ]
@@ -8960,11 +8937,11 @@ checksum = "81cdd64d312baedb58e21336b31bc043b77e01cc99033ce76ef539f78e965ebc"
 
 [[package]]
 name = "supports-color"
-version = "1.3.1"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ba6faf2ca7ee42fdd458f4347ae0a9bd6bcc445ad7cb57ad82b383f18870d6f"
+checksum = "d6398cde53adc3c4557306a96ce67b302968513830a77a95b2b17305d9719a89"
 dependencies = [
- "atty",
+ "is-terminal",
  "is_ci",
 ]
 
@@ -9035,7 +9012,7 @@ version = "6.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a2d580ff6a20c55dfb86be5f9c238f67835d0e81cbdea8bf5680e0897320331"
 dependencies = [
- "cfg-expr 0.15.7",
+ "cfg-expr",
  "heck 0.4.1",
  "pkg-config",
  "toml 0.8.10",

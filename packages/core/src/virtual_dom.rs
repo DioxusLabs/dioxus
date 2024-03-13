@@ -534,6 +534,7 @@ impl VirtualDom {
     #[instrument(skip(self), level = "trace", name = "VirtualDom::replace_template")]
     pub fn replace_template(&mut self, template: Template) {
         self.register_template_first_byte_index(template);
+
         // iterating a slab is very inefficient, but this is a rare operation that will only happen during development so it's fine
         let mut dirty = Vec::new();
         for (id, scope) in self.scopes.iter() {
@@ -545,6 +546,7 @@ impl VirtualDom {
                 }
             }
         }
+
         for dirty in dirty {
             self.mark_dirty(dirty);
         }

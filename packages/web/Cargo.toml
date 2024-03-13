@@ -24,7 +24,11 @@ wasm-bindgen-futures = "0.4.29"
 tracing = { workspace = true }
 rustc-hash = { workspace = true }
 console_error_panic_hook = { version = "0.1.7", optional = true }
-futures-util = { workspace = true, features = ["std", "async-await", "async-await-macro"] }
+futures-util = { workspace = true, features = [
+    "std",
+    "async-await",
+    "async-await-macro",
+] }
 futures-channel = { workspace = true }
 serde_json = { version = "1.0" }
 serde = { version = "1.0" }
@@ -43,35 +47,23 @@ features = [
     "Text",
     "Window",
     "DataTransfer",
-    "console"
+    "console",
+    "NodeList",
 ]
 
 [features]
 default = ["panic_hook", "mounted", "file_engine", "hot_reload", "eval"]
 panic_hook = ["console_error_panic_hook"]
-hydrate = [
-    "web-sys/Comment",
-]
-mounted = [
-    "web-sys/Element",
-    "dioxus-html/mounted"
-]
+hydrate = ["web-sys/Comment"]
+mounted = ["web-sys/Element", "dioxus-html/mounted"]
 file_engine = [
     "web-sys/File",
     "web-sys/FileList",
     "web-sys/FileReader",
-    "async-trait"
+    "async-trait",
 ]
-hot_reload = [
-    "web-sys/MessageEvent",
-    "web-sys/WebSocket",
-    "web-sys/Location",
-]
-eval = [
-    "dioxus-html/eval",
-    "serde-wasm-bindgen",
-    "async-trait"
-]
+hot_reload = ["web-sys/MessageEvent", "web-sys/WebSocket", "web-sys/Location"]
+eval = ["dioxus-html/eval", "serde-wasm-bindgen", "async-trait"]
 
 [dev-dependencies]
 dioxus = { workspace = true }

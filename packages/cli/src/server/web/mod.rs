@@ -52,7 +52,7 @@ pub async fn serve(
 
     // Since web platform doesn't use `rust_flags`, this argument is explicitly
     // set to `None`.
-    let first_build_result = crate::builder::build(&config, skip_assets, None)?;
+    let first_build_result = crate::builder::build_web(&config, skip_assets, None)?;
 
     // generate dev-index page
     Serve::regen_dev_page(&config, first_build_result.assets.as_ref())?;
@@ -173,7 +173,7 @@ fn build(
 ) -> Result<BuildResult> {
     // Since web platform doesn't use `rust_flags`, this argument is explicitly
     // set to `None`.
-    let result = std::panic::catch_unwind(|| builder::build(config, skip_assets, None))
+    let result = std::panic::catch_unwind(|| builder::build_web(config, skip_assets, None))
         .map_err(|e| anyhow::anyhow!("Build failed: {e:?}"))?;
 
     // change the websocket reload state to true;

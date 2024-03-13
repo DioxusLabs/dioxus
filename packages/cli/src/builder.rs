@@ -64,7 +64,7 @@ impl ExecWithRustFlagsSetter for subprocess::Exec {
 
 /// Build client (WASM).
 /// Note: `rust_flags` argument is only used for the fullstack platform.
-pub fn build(
+pub fn build_web(
     config: &CrateConfig,
     skip_assets: bool,
     rust_flags: Option<String>,

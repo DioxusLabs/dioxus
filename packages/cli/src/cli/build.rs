@@ -57,7 +57,7 @@ impl Build {
         let build_result = match platform {
             Platform::Web => {
                 // `rust_flags` are used by fullstack's client build.
-                crate::builder::build(&crate_config, self.build.skip_assets, rust_flags)?
+                crate::builder::build_web(&crate_config, self.build.skip_assets, rust_flags)?
             }
             Platform::Desktop => {
                 // Since desktop platform doesn't use `rust_flags`, this
@@ -80,7 +80,7 @@ impl Build {
                         }
                         None => web_config.features = Some(vec![web_feature]),
                     };
-                    crate::builder::build(
+                    crate::builder::build_web(
                         &web_config,
                         self.build.skip_assets,
                         Some(client_rust_flags),

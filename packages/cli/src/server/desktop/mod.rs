@@ -138,7 +138,7 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
                                         .unwrap()
                                         .map
                                         .values()
-                                        .filter_map(|(_, template_slot)| *template_slot)
+                                        .flat_map(|v| v.templates.values().copied())
                                         .collect()
                                 };
                                 for template in templates {

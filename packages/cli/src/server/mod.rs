@@ -6,6 +6,7 @@ use dioxus_core::Template;
 use dioxus_hot_reload::HotReloadMsg;
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;
+use fs_extra::{dir::CopyOptions, file};
 use notify::{RecommendedWatcher, Watcher};
 use std::{
     path::PathBuf,
@@ -157,17 +158,9 @@ fn hotreload_files(
     for path in &event.paths {
         // for various assets that might be linked in, we just try to hotreloading them forcefully
         // That is, unless they appear in an include! macro, in which case we need to a full rebuild....
-
-        // if this is not a rust file, rebuild the whole project
-        let path_extension = path.extension().and_then(|p| p.to_str());
-
-        if path_extension != Some("rs") {
-            *needs_full_rebuild = true;
-            if path_extension == Some("rs~") {
-                *needs_full_rebuild = false;
-            }
+        let Some(ext) = path.extension().and_then(|v| v.to_str()) else {
             continue;
-        }
+        };
 
         // Workaround for notify and vscode-like editor:
         // when edit & save a file in vscode, there will be two notifications,
@@ -179,8 +172,67 @@ fn hotreload_files(
             }
         }
 
+        match ext {
+            // Attempt hot reload
+            "rs" => {}
+
+            // Anything with a .file is also ignored
+            _ if path.file_stem().is_none() || ext.ends_with("~") => {}
+
+            // Anything else is a maybe important file that needs to be rebuilt
+            _ => {
+                // If it happens to be a file in the asset directory, there's a chance we can hotreload it.
+                // Only css is currently supported for hotreload
+                if ext == "css" {
+                    let asset_dir = config
+                        .crate_dir
+                        .join(&config.dioxus_config.application.asset_dir);
+
+                    if path.starts_with(&asset_dir) {
+                        let local_path: PathBuf = path
+                            .file_name()
+                            .unwrap()
+                            .to_str()
+                            .unwrap()
+                            .to_string()
+                            .parse()
+                            .unwrap();
+
+                        println!(
+                            "maybe tracking asset: {:?}, {:#?}",
+                            local_path,
+                            rsx_file_map.tracked_assets()
+                        );
+
+                        if let Some(f) = rsx_file_map.is_tracking_asset(&local_path) {
+                            println!(
+                                "Hot reloading asset - it's tracked by the rsx!: {:?}",
+                                local_path
+                            );
+
+                            // copy the asset over tothe output directory
+                            let output_dir = config.out_dir();
+                            fs_extra::copy_items(
+                                &[path],
+                                output_dir,
+                                &CopyOptions::new().overwrite(true),
+                            )
+                            .unwrap();
+
+                            messages.push(HotReloadMsg::UpdateAsset(local_path));
+                            continue;
+                        }
+                    }
+                }
+
+                *needs_full_rebuild = true;
+            }
+        };
+
         match rsx_file_map.update_rsx(path, &config.crate_dir) {
             Ok(UpdateResult::UpdatedRsx(msgs)) => {
+                println!("Updated: {:?}", msgs);
+
                 messages.extend(
                     msgs.into_iter()
                         .map(|msg| HotReloadMsg::UpdateTemplate(msg)),
@@ -196,6 +248,8 @@ fn hotreload_files(
         }
     }
 
+    // If full rebuild, extend the file map with the new file map
+    // This will wipe away any previous cached changed templates
     if *needs_full_rebuild {
         // Reset the file map to the new state of the project
         let FileMapBuildResult {
@@ -208,10 +262,14 @@ fn hotreload_files(
         }
 
         *rsx_file_map = new_file_map;
-    } else {
-        for msg in messages {
-            let _ = hot_reload.messages.send(msg);
-        }
+
+        return;
+    }
+
+    println!("Hot reloading: {:?}", messages);
+
+    for msg in messages {
+        let _ = hot_reload.messages.send(msg);
     }
 }
 

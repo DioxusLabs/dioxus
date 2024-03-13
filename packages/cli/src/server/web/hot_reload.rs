@@ -8,6 +8,7 @@ use axum::{
     Extension,
 };
 use dioxus_hot_reload::HotReloadMsg;
+use futures_util::{pin_mut, FutureExt};
 
 pub async fn hot_reload_handler(
     ws: WebSocketUpgrade,
@@ -34,8 +35,10 @@ async fn hotreload_loop(mut socket: WebSocket, state: HotReloadState) -> anyhow:
         .unwrap()
         .map
         .values()
-        .filter_map(|(_, template_slot)| *template_slot)
+        .flat_map(|v| v.templates.values().copied())
         .collect::<Vec<_>>();
+
+    println!("previously changed: {:?}", templates);
 
     for template in templates {
         socket
@@ -46,16 +49,37 @@ async fn hotreload_loop(mut socket: WebSocket, state: HotReloadState) -> anyhow:
     let mut rx = state.messages.subscribe();
 
     loop {
-        if let Ok(msg) = rx.recv().await {
-            let msg = match msg {
+        let msg = {
+            // Poll both the receiver and the socket
+            //
+            // This shuts us down if the connection is closed.
+            let mut _socket = socket.recv().fuse();
+            let mut _rx = rx.recv().fuse();
+
+            pin_mut!(_socket, _rx);
+
+            let msg = futures_util::select! {
+                msg = _rx => msg,
+                _ = _socket => break,
+            };
+
+            let Ok(msg) = msg else { break };
+
+            println!("msg: {:?}", msg);
+
+            match msg {
                 HotReloadMsg::UpdateTemplate(template) => {
                     Message::Text(serde_json::to_string(&template).unwrap())
                 }
-                HotReloadMsg::UpdateAsset(_) => todo!(),
+                HotReloadMsg::UpdateAsset(asset) => {
+                    Message::Text(format!("asset: {}", asset.display()))
+                }
                 HotReloadMsg::Shutdown => todo!(),
-            };
+            }
+        };
 
-            socket.send(msg).await?;
-        }
+        socket.send(msg).await?;
     }
+
+    Ok(())
 }

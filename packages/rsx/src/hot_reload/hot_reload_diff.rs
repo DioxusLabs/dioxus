@@ -3,8 +3,22 @@ use quote::ToTokens;
 use syn::{File, Macro};
 
 pub enum DiffResult {
+    /// Non-rsx was changed in the file
     CodeChanged,
-    RsxChanged(Vec<(Macro, TokenStream)>),
+
+    /// Rsx was changed in the file
+    ///
+    /// Contains a list of macro invocations that were changed
+    RsxChanged { rsx_calls: Vec<ChangedRsx> },
+}
+
+#[derive(Debug)]
+pub struct ChangedRsx {
+    /// The macro that was changed
+    pub old: Macro,
+
+    /// The new tokens for the macro
+    pub new: TokenStream,
 }
 
 /// Find any rsx calls in the given file and return a list of all the rsx calls that have changed.
@@ -24,6 +38,7 @@ pub fn find_rsx(new: &File, old: &File) -> DiffResult {
         );
         return DiffResult::CodeChanged;
     }
+
     for (new, old) in new.items.iter().zip(old.items.iter()) {
         if find_rsx_item(new, old, &mut rsx_calls) {
             tracing::trace!(
@@ -34,15 +49,12 @@ pub fn find_rsx(new: &File, old: &File) -> DiffResult {
             return DiffResult::CodeChanged;
         }
     }
+
     tracing::trace!("found hot reload-able changes {:#?}", rsx_calls);
-    DiffResult::RsxChanged(rsx_calls)
+    DiffResult::RsxChanged { rsx_calls }
 }
 
-fn find_rsx_item(
-    new: &syn::Item,
-    old: &syn::Item,
-    rsx_calls: &mut Vec<(Macro, TokenStream)>,
-) -> bool {
+fn find_rsx_item(new: &syn::Item, old: &syn::Item, rsx_calls: &mut Vec<ChangedRsx>) -> bool {
     match (new, old) {
         (syn::Item::Const(new_item), syn::Item::Const(old_item)) => {
             find_rsx_expr(&new_item.expr, &old_item.expr, rsx_calls)
@@ -190,7 +202,7 @@ fn find_rsx_item(
 fn find_rsx_trait(
     new_item: &syn::ItemTrait,
     old_item: &syn::ItemTrait,
-    rsx_calls: &mut Vec<(Macro, TokenStream)>,
+    rsx_calls: &mut Vec<ChangedRsx>,
 ) -> bool {
     if new_item.items.len() != old_item.items.len() {
         return true;
@@ -243,7 +255,7 @@ fn find_rsx_trait(
 fn find_rsx_block(
     new_block: &syn::Block,
     old_block: &syn::Block,
-    rsx_calls: &mut Vec<(Macro, TokenStream)>,
+    rsx_calls: &mut Vec<ChangedRsx>,
 ) -> bool {
     if new_block.stmts.len() != old_block.stmts.len() {
         return true;
@@ -259,7 +271,7 @@ fn find_rsx_block(
 fn find_rsx_stmt(
     new_stmt: &syn::Stmt,
     old_stmt: &syn::Stmt,
-    rsx_calls: &mut Vec<(Macro, TokenStream)>,
+    rsx_calls: &mut Vec<ChangedRsx>,
 ) -> bool {
     match (new_stmt, old_stmt) {
         (syn::Stmt::Local(new_local), syn::Stmt::Local(old_local)) => {
@@ -293,7 +305,7 @@ fn find_rsx_stmt(
 fn find_rsx_expr(
     new_expr: &syn::Expr,
     old_expr: &syn::Expr,
-    rsx_calls: &mut Vec<(Macro, TokenStream)>,
+    rsx_calls: &mut Vec<ChangedRsx>,
 ) -> bool {
     match (new_expr, old_expr) {
         (syn::Expr::Array(new_expr), syn::Expr::Array(old_expr)) => {
@@ -631,7 +643,7 @@ fn find_rsx_expr(
 fn find_rsx_macro(
     new_mac: &syn::Macro,
     old_mac: &syn::Macro,
-    rsx_calls: &mut Vec<(Macro, TokenStream)>,
+    rsx_calls: &mut Vec<ChangedRsx>,
 ) -> bool {
     if matches!(
         new_mac
@@ -648,7 +660,10 @@ fn find_rsx_macro(
             .as_deref(),
         Some("rsx" | "render")
     ) {
-        rsx_calls.push((old_mac.clone(), new_mac.tokens.clone()));
+        rsx_calls.push(ChangedRsx {
+            old: old_mac.clone(),
+            new: new_mac.tokens.clone(),
+        });
         false
     } else {
         new_mac != old_mac
