@@ -42,14 +42,14 @@ pub trait Writable: Readable {
         self.try_write_unchecked().map(Self::downcast_lifetime_mut)
     }
 
-    /// Try to get a mutable reference to the value without checking the lifetime.
+    /// Try to get a mutable reference to the value without checking the lifetime. This will update any subscribers.
     ///
     /// NOTE: This method is completely safe because borrow checking is done at runtime.
     fn try_write_unchecked(
         &self,
     ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError>;
 
-    /// Tet a mutable reference to the value without checking the lifetime.
+    /// Get a mutable reference to the value without checking the lifetime. This will update any subscribers.
     ///
     /// NOTE: This method is completely safe because borrow checking is done at runtime.
     fn write_unchecked(&self) -> WritableRef<'static, Self> {
