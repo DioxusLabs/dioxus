@@ -102,6 +102,23 @@ pub fn print_console_info(
     println!();
 
     println!("    > Hot Reload Mode: {}", hot_reload.cyan());
+
+    println!(
+        "    > Watching: [ {} ]",
+        config
+            .dioxus_config
+            .web
+            .watcher
+            .watch_path
+            .iter()
+            .cloned()
+            .chain(Some(config.dioxus_config.application.asset_dir.clone()))
+            .map(|f| f.display().to_string())
+            .collect::<Vec<String>>()
+            .join(", ")
+            .cyan()
+    );
+
     if !proxies.is_empty() {
         println!("    > Proxies :");
         for proxy in proxies {
