@@ -15,6 +15,7 @@ use std::{
     io::Read,
     panic,
     path::PathBuf,
+    process::Command,
     time::Duration,
 };
 use wasm_bindgen_cli_support::Bindgen;
@@ -98,16 +99,17 @@ pub fn build_web(
     // [1] Build the .wasm module
     log::info!("🚅 Running build command...");
 
-    let wasm_check_command = std::process::Command::new("rustup")
-        .args(["show"])
-        .output()?;
-
-    let wasm_check_output = String::from_utf8(wasm_check_command.stdout).unwrap();
-    if !wasm_check_output.contains("wasm32-unknown-unknown") {
-        log::info!("wasm32-unknown-unknown target not detected, installing..");
-        let _ = std::process::Command::new("rustup")
-            .args(["target", "add", "wasm32-unknown-unknown"])
-            .output()?;
+    // If the user has rustup, we can check if the wasm32-unknown-unknown target is installed
+    // Otherwise we can just assume it is installed - which i snot great...
+    // Eventually we can poke at the errors and let the user know they need to install the target
+    if let Ok(wasm_check_command) = Command::new("rustup").args(["show"]).output() {
+        let wasm_check_output = String::from_utf8(wasm_check_command.stdout).unwrap();
+        if !wasm_check_output.contains("wasm32-unknown-unknown") {
+            log::info!("wasm32-unknown-unknown target not detected, installing..");
+            let _ = Command::new("rustup")
+                .args(["target", "add", "wasm32-unknown-unknown"])
+                .output()?;
+        }
     }
 
     let cmd = subprocess::Exec::cmd("cargo")
@@ -332,6 +334,12 @@ pub fn build_desktop(
     let _guard = dioxus_cli_config::__private::save_config(config);
     let _manganis_support = ManganisSupportGuard::default();
     let _guard = AssetConfigDropGuard::new();
+
+    // set the asset dir via cli args
+    env::set_var(
+        "DIOXUS_ASSET_DIR",
+        config.asset_dir().canonicalize().unwrap(),
+    );
 
     let mut cmd = subprocess::Exec::cmd("cargo")
         .set_rust_flags(rust_flags)

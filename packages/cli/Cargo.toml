@@ -10,7 +10,7 @@ keywords = ["react", "gui", "cli", "dioxus", "wasm"]
 
 [dependencies]
 # cli core
-clap = { version = "4.2", features = ["derive"] }
+clap = { version = "4.2", features = ["derive", "cargo"] }
 thiserror = { workspace = true }
 wasm-bindgen-cli-support = "0.2"
 colored = "2.0.0"

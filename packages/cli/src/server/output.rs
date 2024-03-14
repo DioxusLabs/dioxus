@@ -46,7 +46,7 @@ pub fn print_console_info(
     let custom_html_file = if crate_root.join("index.html").is_file() {
         "Custom [index.html]"
     } else {
-        "Default"
+        "None"
     };
     let url_rewrite = if config.dioxus_config.web.watcher.index_on_404 {
         "True"
@@ -58,9 +58,9 @@ pub fn print_console_info(
 
     if options.changed.is_empty() {
         println!(
-            "{} @ v{} [{}] \n",
+            "{} @ v{} [{}]",
             "Dioxus".bold().green(),
-            crate::DIOXUS_CLI_VERSION,
+            clap::crate_version!(),
             chrono::Local::now().format("%H:%M:%S").to_string().dimmed()
         );
     } else {
@@ -79,40 +79,50 @@ pub fn print_console_info(
     if let Some(WebServerInfo { ip, port }) = web_info {
         if config.dioxus_config.web.https.enabled == Some(true) {
             println!(
-                "\t> Local : {}",
+                "    > Local address: {}",
                 format!("https://localhost:{}/", port).blue()
             );
             println!(
-                "\t> Network : {}",
+                "    > Network address: {}",
                 format!("https://{}:{}/", ip, port).blue()
             );
-            println!("\t> HTTPS : {}", "Enabled".to_string().green());
+            println!("    > HTTPS: {}", "Enabled".to_string().green());
         } else {
             println!(
-                "\t> Local : {}",
+                "    > Local address: {}",
                 format!("http://localhost:{}/", port).blue()
             );
             println!(
-                "\t> Network : {}",
+                "    > Network address: {}",
                 format!("http://{}:{}/", ip, port).blue()
             );
-            println!("\t> HTTPS : {}", "Disabled".to_string().red());
+            println!("    > HTTPS status: {}", "Disabled".to_string().red());
         }
     }
     println!();
-    println!("\t> Profile : {}", profile.green());
-    println!("\t> Hot Reload : {}", hot_reload.cyan());
+
+    println!("    > Hot Reload Mode: {}", hot_reload.cyan());
     if !proxies.is_empty() {
-        println!("\t> Proxies :");
+        println!("    > Proxies :");
         for proxy in proxies {
-            println!("\t\t- {}", proxy.backend.blue());
+            println!("    - {}", proxy.backend.blue());
         }
     }
-    println!("\t> Index Template : {}", custom_html_file.green());
-    println!("\t> URL Rewrite [index_on_404] : {}", url_rewrite.purple());
+    println!("    > Custom index.html: {}", custom_html_file.green());
+    println!("    > Serve index.html on 404: {}", url_rewrite.purple());
     println!();
     println!(
-        "\t> Build Time Use : {} millis",
+        "    > Build Features: [ {} ]",
+        config
+            .features
+            .clone()
+            .unwrap_or_default()
+            .join(", ")
+            .green()
+    );
+    println!("    > Build Profile: {}", profile.green());
+    println!(
+        "    > Build took: {} millis",
         options.elapsed_time.to_string().green().bold()
     );
     println!();

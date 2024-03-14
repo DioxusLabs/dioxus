@@ -7,12 +7,17 @@ use std::path::PathBuf;
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Debug)]
 #[cfg_attr(feature = "cli", derive(clap::ValueEnum))]
 pub enum Platform {
+    /// Targeting the web platform using WASM
     #[cfg_attr(feature = "cli", clap(name = "web"))]
     #[serde(rename = "web")]
     Web,
+
+    /// Targeting the desktop platform using Tao/Wry-based webview
     #[cfg_attr(feature = "cli", clap(name = "desktop"))]
     #[serde(rename = "desktop")]
     Desktop,
+
+    /// Targeting the server platform using Axum and Dioxus-Fullstack
     #[cfg_attr(feature = "cli", clap(name = "fullstack"))]
     #[serde(rename = "fullstack")]
     Fullstack,
@@ -534,6 +539,34 @@ impl CrateConfig {
 
     pub fn set_cargo_args(&mut self, cargo_args: Vec<String>) -> &mut Self {
         self.cargo_args = cargo_args;
+        self
+    }
+
+    pub fn add_features(&mut self, feature: Vec<String>) -> &mut Self {
+        if let Some(features) = &mut self.features {
+            features.extend(feature);
+        } else {
+            self.features = Some(feature);
+        }
+        self
+    }
+
+    #[cfg(feature = "cli")]
+    pub fn extend_with_platform(&mut self, platform: Platform) -> &mut Self {
+        let manifest = &self.manifest;
+        let features = match platform {
+            Platform::Web if manifest.features.contains_key("web") => {
+                vec!["web".to_string()]
+            }
+            Platform::Desktop if manifest.features.contains_key("desktop") => {
+                vec!["desktop".to_string()]
+            }
+            _ => {
+                // fullstack has its own feature insertion - we use a different featureset for the client and server
+                vec![]
+            }
+        };
+        self.add_features(features);
         self
     }
 }

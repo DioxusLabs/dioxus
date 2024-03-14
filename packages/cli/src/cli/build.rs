@@ -50,6 +50,7 @@ impl Build {
         }
 
         crate_config.set_cargo_args(self.build.cargo_args.clone());
+        crate_config.extend_with_platform(platform);
 
         // #[cfg(feature = "plugin")]
         // let _ = crate::plugin::PluginManager::on_build_start(&crate_config, &platform);

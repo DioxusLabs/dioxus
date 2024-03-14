@@ -60,6 +60,7 @@ impl Serve {
         }
 
         let platform = platform.unwrap_or(crate_config.dioxus_config.application.default_platform);
+        crate_config.extend_with_platform(platform);
 
         // start the develop server
         use server::{desktop, fullstack, web};
