@@ -109,14 +109,19 @@ impl<Ctx: HotReloadingContext> Config<Ctx> {
 }
 
 /// Initialize the hot reloading listener
+///
+/// This is designed to be called by hot_reload_Init!() which will pass in information about the project
+///
+/// Notes:
+/// - We don't wannt to watch the
 pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
     let Config {
+        mut rebuild_with,
         root_path,
         listening_paths,
         log,
-        mut rebuild_with,
         excluded_paths,
-        phantom: _,
+        ..
     } = cfg;
 
     let Ok(crate_dir) = PathBuf::from_str(root_path) else {
@@ -146,11 +151,13 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                 .is_ignore()
     })
     .unwrap();
+
     for err in errors {
         if log {
             println!("hot reloading failed to initialize:\n{err:?}");
         }
     }
+
     let file_map = Arc::new(Mutex::new(file_map));
 
     let target_dir = crate_dir.join("target");
@@ -221,8 +228,42 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
 
         let mut watcher = RecommendedWatcher::new(tx, notify::Config::default()).unwrap();
 
-        for path in listening_paths {
-            let full_path = crate_dir.join(path);
+        let mut listening_pathbufs = vec![];
+
+        // We're attempting to watch the root path... which contains a target directory...
+        // And on some platforms the target directory is really really large and can cause the watcher to crash
+        // since it runs out of file handles
+        // So we're going to iterate through its children and watch them instead of the root path, skipping the target
+        // directory.
+        //
+        // In reality, this whole approach of doing embedded file watching is kinda hairy since you want full knowledge
+        // of where rust code is. We could just use the filemap we generated above as an indication of where the rust
+        // code is in this project and deduce the subfolders under the root path from that.
+        //
+        // FIXME: use a more robust system here for embedded discovery
+        //
+        // https://github.com/DioxusLabs/dioxus/issues/1914
+        if listening_paths == &[""] {
+            for entry in std::fs::read_dir(&crate_dir)
+                .expect("failed to read rust crate directory. Are you running with cargo?")
+            {
+                let entry = entry.expect("failed to read directory entry");
+                let path = entry.path();
+                if path.is_dir() {
+                    if path == target_dir {
+                        continue;
+                    }
+                    listening_pathbufs.push(path);
+                }
+            }
+        } else {
+            for path in listening_paths {
+                let full_path = crate_dir.join(path);
+                listening_pathbufs.push(full_path);
+            }
+        }
+
+        for full_path in listening_pathbufs {
             if let Err(err) = watcher.watch(&full_path, RecursiveMode::Recursive) {
                 if log {
                     println!("hot reloading failed to start watching {full_path:?}:\n{err:?}",);
@@ -295,11 +336,12 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                     return;
                 }
                 // find changes to the rsx in the file
-                match file_map
+                let changes = file_map
                     .lock()
                     .unwrap()
-                    .update_rsx(path, crate_dir.as_path())
-                {
+                    .update_rsx(path, crate_dir.as_path());
+
+                match changes {
                     Ok(UpdateResult::UpdatedRsx(msgs)) => {
                         for msg in msgs {
                             let mut i = 0;
