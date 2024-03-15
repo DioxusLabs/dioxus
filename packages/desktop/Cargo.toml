@@ -26,7 +26,7 @@ serde = "1.0.136"
 serde_json = "1.0.79"
 thiserror = { workspace = true }
 tracing = { workspace = true }
-wry = { version = "0.35.0", default-features = false, features = [
+wry = { version = "0.37.0", default-features = false, features = [
     "os-webview",
     "protocol",
     "file-drop",
@@ -49,7 +49,7 @@ dioxus-hooks = { workspace = true }
 futures-util = { workspace = true }
 urlencoding = "2.1.2"
 async-trait = "0.1.68"
-tao = { version = "0.24.0", features = ["rwh_05"] }
+tao = { version = "0.26.1", features = ["rwh_05"] }
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
 global-hotkey = "0.5.0"
