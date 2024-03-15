@@ -20,6 +20,14 @@ fn app() -> Element {
             },
             DemoC { x: 1 }
         }
+
+        ErrorBoundary {
+            handle_error: |error: CapturedError| rsx! {
+                h1 { "Another error occurred" }
+                pre { "{error:#?}" }
+            },
+            ComponentPanic {}
+        }
     }
 }
 
@@ -39,4 +47,9 @@ fn DemoC(x: i32) -> Element {
             "Click to throw an error"
         }
     }
+}
+
+#[component]
+fn ComponentPanic() -> Element {
+    panic!("This component panics")
 }

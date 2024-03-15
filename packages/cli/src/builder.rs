@@ -335,12 +335,6 @@ pub fn build_desktop(
     let _manganis_support = ManganisSupportGuard::default();
     let _guard = AssetConfigDropGuard::new();
 
-    // set the asset dir via cli args
-    env::set_var(
-        "DIOXUS_ASSET_DIR",
-        config.asset_dir().canonicalize().unwrap(),
-    );
-
     let mut cmd = subprocess::Exec::cmd("cargo")
         .set_rust_flags(rust_flags)
         .env("CARGO_TARGET_DIR", &config.target_dir)

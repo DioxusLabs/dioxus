@@ -243,7 +243,7 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
         // FIXME: use a more robust system here for embedded discovery
         //
         // https://github.com/DioxusLabs/dioxus/issues/1914
-        if listening_paths == &[""] {
+        if listening_paths == [""] {
             for entry in std::fs::read_dir(&crate_dir)
                 .expect("failed to read rust crate directory. Are you running with cargo?")
             {
