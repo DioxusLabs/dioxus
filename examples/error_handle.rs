@@ -49,6 +49,7 @@ fn DemoC(x: i32) -> Element {
     }
 }
 
+#[component]
 fn ComponentPanic() -> Element {
     panic!("This component panics")
 }
