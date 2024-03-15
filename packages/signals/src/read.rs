@@ -57,14 +57,14 @@ pub trait Readable {
             .map(Self::Storage::downcast_lifetime_ref)
     }
 
-    /// Try to get a reference to the value without checking the lifetime.
+    /// Try to get a reference to the value without checking the lifetime. This will subscribe the current scope to the signal.
     ///
     /// NOTE: This method is completely safe because borrow checking is done at runtime.
     fn try_read_unchecked(
         &self,
     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>;
 
-    /// Tet a reference to the value without checking the lifetime.
+    /// Get a reference to the value without checking the lifetime. This will subscribe the current scope to the signal.
     ///
     /// NOTE: This method is completely safe because borrow checking is done at runtime.
     fn read_unchecked(&self) -> ReadableRef<'static, Self> {

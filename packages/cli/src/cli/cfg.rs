@@ -85,8 +85,8 @@ pub struct ConfigOptsServe {
     #[clap(default_value_t = 8080)]
     pub port: u16,
 
-    /// Open the app in the default browser [default: false]
-    #[clap(long)]
+    /// Open the app in the default browser [default: true]
+    #[clap(long, default_value_t = true)]
     #[serde(default)]
     pub open: bool,
 
@@ -178,7 +178,7 @@ pub struct ConfigOptsBundle {
 
     /// Build platform: support Web & Desktop [default: "default_platform"]
     #[clap(long)]
-    pub platform: Option<String>,
+    pub platform: Option<Platform>,
 
     /// Space separated list of features to activate
     #[clap(long)]

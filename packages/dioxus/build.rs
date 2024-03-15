@@ -7,7 +7,7 @@ fn main() {
 
         let liveview_renderers = ["liveview", "axum"];
         let fullstack_renderers = ["axum"];
-        let client_renderers = ["desktop", "mobile", "web", "tui"];
+        let client_renderers = ["desktop", "mobile", "web"];
         let client_renderer_selected = client_renderers
             .iter()
             .any(|renderer| feature_enabled(renderer));
