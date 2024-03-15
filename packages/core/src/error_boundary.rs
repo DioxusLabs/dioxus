@@ -13,6 +13,20 @@ use std::{
     rc::Rc,
 };
 
+/// A panic in a component that was caught by an error boundary.
+///
+/// NOTE: WASM currently does not support caching unwinds, so this struct will not be created in WASM.
+pub struct CapturedPanic {
+    /// The error that was caught
+    pub error: Box<dyn Any + 'static>,
+}
+
+impl Debug for CapturedPanic {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CapturedPanic").finish()
+    }
+}
+
 /// Provide an error boundary to catch errors from child components
 pub fn use_error_boundary() -> ErrorBoundary {
     use_hook(|| provide_context(ErrorBoundary::new()))
@@ -201,7 +215,7 @@ pub trait Throw<S = ()>: Sized {
     }
 }
 
-fn throw_error<T>(e: impl Debug + 'static) -> Option<T> {
+pub(crate) fn throw_error<T>(e: impl Debug + 'static) -> Option<T> {
     if let Some(cx) = try_consume_context::<ErrorBoundary>() {
         match current_scope_id() {
             Some(id) => cx.insert_error(id, Box::new(e), Backtrace::capture()),
