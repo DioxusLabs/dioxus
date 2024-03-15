@@ -106,10 +106,6 @@ pub use dioxus_desktop as mobile;
 #[cfg_attr(docsrs, doc(cfg(feature = "liveview")))]
 pub use dioxus_liveview as liveview;
 
-#[cfg(feature = "tui")]
-#[cfg_attr(docsrs, doc(cfg(feature = "tui")))]
-pub use dioxus_tui as tui;
-
 #[cfg(feature = "ssr")]
 #[cfg_attr(docsrs, doc(cfg(feature = "ssr")))]
 pub use dioxus_ssr as ssr;
