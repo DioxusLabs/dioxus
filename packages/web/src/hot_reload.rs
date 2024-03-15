@@ -53,7 +53,7 @@ pub(crate) fn init() -> UnboundedReceiver<Template> {
                 console::log_1(&links.clone().into());
 
                 for x in 0..links.length() {
-                    console::log_1(&x.clone().into());
+                    console::log_1(&x.into());
 
                     let link: Element = links.get(x).unwrap().unchecked_into();
                     let href = link.get_attribute("href").unwrap();

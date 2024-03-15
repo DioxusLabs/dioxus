@@ -119,7 +119,7 @@ fn watch_event<F>(
     let mut needs_full_rebuild = false;
 
     if let Some(hot_reload) = &hot_reload {
-        hotreload_files(hot_reload, &mut needs_full_rebuild, &event, &config);
+        hotreload_files(hot_reload, &mut needs_full_rebuild, &event, config);
     }
 
     if needs_full_rebuild {
@@ -142,7 +142,7 @@ fn full_rebuild<F>(
 
             #[allow(clippy::redundant_clone)]
             print_console_info(
-                &config,
+                config,
                 PrettierOptions {
                     changed: event.paths.clone(),
                     warnings: res.warnings,
@@ -186,10 +186,7 @@ fn hotreload_files(
         // If the file was hotreloaded, update the file map in place
         match rsx_file_map.update_rsx(path, &config.crate_dir) {
             Ok(UpdateResult::UpdatedRsx(msgs)) => {
-                messages.extend(
-                    msgs.into_iter()
-                        .map(|msg| HotReloadMsg::UpdateTemplate(msg)),
-                );
+                messages.extend(msgs.into_iter().map(HotReloadMsg::UpdateTemplate));
             }
 
             // If the file was not updated, we need to do a full rebuild
@@ -227,7 +224,7 @@ fn hotreload_files(
 }
 
 fn hotreload_file(
-    path: &PathBuf,
+    path: &Path,
     config: &CrateConfig,
     rsx_file_map: &std::sync::MutexGuard<'_, FileMap<HtmlCtx>>,
     messages: &mut Vec<HotReloadMsg>,
@@ -282,14 +279,14 @@ fn hotreload_file(
 }
 
 fn attempt_css_reload(
-    path: &PathBuf,
+    path: &Path,
     asset_dir: PathBuf,
     rsx_file_map: &std::sync::MutexGuard<'_, FileMap<HtmlCtx>>,
     config: &CrateConfig,
     messages: &mut Vec<HotReloadMsg>,
 ) -> Option<()> {
     // If the path is not in the asset directory, return
-    if !path.starts_with(&asset_dir) {
+    if !path.starts_with(asset_dir) {
         return None;
     }
 
@@ -312,7 +309,7 @@ fn attempt_css_reload(
     Some(())
 }
 
-fn local_path_of_asset(path: &PathBuf) -> Option<PathBuf> {
+fn local_path_of_asset(path: &Path) -> Option<PathBuf> {
     path.file_name()?.to_str()?.to_string().parse().ok()
 }
 
@@ -323,7 +320,7 @@ pub(crate) trait Platform {
     fn rebuild(&mut self, config: &CrateConfig) -> Result<BuildResult>;
 }
 
-fn is_backup_file(path: &PathBuf) -> bool {
+fn is_backup_file(path: &Path) -> bool {
     // If there's a tilde at the end of the file, it's a backup file
     if let Some(name) = path.file_name() {
         if let Some(name) = name.to_str() {

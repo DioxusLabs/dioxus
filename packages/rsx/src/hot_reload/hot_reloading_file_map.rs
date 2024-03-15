@@ -121,7 +121,7 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
         // If the cached file is not a valid rsx file, rebuild the project, forcing errors
         // TODO: in theory the error is simply in the RsxCallbody. We could attempt to parse it using partial expansion
         // And collect out its errors instead of giving up to a full rebuild
-        let old = syn::parse_file(&*old_cached.raw).map_err(|_e| HotreloadError::Parse)?;
+        let old = syn::parse_file(&old_cached.raw).map_err(|_e| HotreloadError::Parse)?;
 
         let instances = match diff_rsx(&syntax, &old) {
             // If the changes were just some rsx, we can just update the template
@@ -199,7 +199,7 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
             };
 
             // update the cached file
-            old_cached.templates.insert(template.name, template.clone());
+            old_cached.templates.insert(template.name, template);
 
             // Track any new assets
             old_cached
@@ -214,26 +214,21 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
 
     fn populate_assets(template: Template) -> HashSet<PathBuf> {
         fn collect_assetlike_attrs(node: &TemplateNode, asset_urls: &mut HashSet<PathBuf>) {
-            match node {
-                TemplateNode::Element {
-                    attrs, children, ..
-                } => {
-                    for attr in attrs.iter() {
-                        match attr {
-                            TemplateAttribute::Static { name, value, .. } => {
-                                if *name == "src" || *name == "href" {
-                                    asset_urls.insert(PathBuf::from(*value));
-                                }
-                            }
-                            _ => {}
+            if let TemplateNode::Element {
+                attrs, children, ..
+            } = node
+            {
+                for attr in attrs.iter() {
+                    if let TemplateAttribute::Static { name, value, .. } = attr {
+                        if *name == "src" || *name == "href" {
+                            asset_urls.insert(PathBuf::from(*value));
                         }
                     }
-
-                    for child in children.iter() {
-                        collect_assetlike_attrs(child, asset_urls);
-                    }
                 }
-                _ => {}
+
+                for child in children.iter() {
+                    collect_assetlike_attrs(child, asset_urls);
+                }
             }
         }
 
