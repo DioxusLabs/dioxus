@@ -33,8 +33,10 @@ pub fn connect(mut callback: impl FnMut(HotReloadMsg) + Send + 'static) {
     std::thread::spawn(move || {
         let path = PathBuf::from("./").join("target").join("dioxusin");
 
-        let socket =
-            LocalSocketStream::connect(path).expect("Could not connect to hot reloading server.");
+        // There might be a socket since the we're not running under the hot reloading server
+        let Ok(socket) = LocalSocketStream::connect(path) else {
+            return;
+        };
 
         let mut buf_reader = BufReader::new(socket);
 
@@ -47,9 +49,12 @@ pub fn connect(mut callback: impl FnMut(HotReloadMsg) + Send + 'static) {
                 }
             }
 
-            let template = serde_json::from_str(Box::leak(buf.into_boxed_str())).expect(
-                "Could not parse hot reloading message - make sure your client is up to date",
-            );
+            let Ok(template) = serde_json::from_str(Box::leak(buf.into_boxed_str())) else {
+                eprintln!(
+                    "Could not parse hot reloading message - make sure your client is up to date"
+                );
+                continue;
+            };
 
             callback(template);
         }
