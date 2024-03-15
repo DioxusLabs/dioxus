@@ -23,10 +23,6 @@ members = [
     "packages/autofmt",
     "packages/check",
     "packages/rsx",
-    "packages/dioxus-tui",
-    "packages/plasmo",
-    "packages/native-core",
-    "packages/native-core-macro",
     "packages/rsx-rosetta",
     "packages/generational-box",
     "packages/signals",
@@ -74,10 +70,6 @@ dioxus-liveview = { path = "packages/liveview", version = "0.5.0-alpha.0" }
 dioxus-autofmt = { path = "packages/autofmt", version = "0.5.0-alpha.0" }
 dioxus-check = { path = "packages/check", version = "0.5.0-alpha.0" }
 dioxus-rsx = { path = "packages/rsx", version = "0.5.0-alpha.0" }
-dioxus-tui = { path = "packages/dioxus-tui", version = "0.5.0-alpha.0" }
-plasmo = { path = "packages/plasmo", version = "0.5.0-alpha.0" }
-dioxus-native-core = { path = "packages/native-core", version = "0.5.0-alpha.0" }
-dioxus-native-core-macro = { path = "packages/native-core-macro", version = "0.5.0-alpha.0" }
 rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.5.0-alpha.0" }
 dioxus-signals = { path = "packages/signals", version = "0.5.0-alpha.0" }
 dioxus-cli-config = { path = "packages/cli-config", version = "0.5.0-alpha.0" }
