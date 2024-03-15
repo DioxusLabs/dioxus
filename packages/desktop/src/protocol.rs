@@ -221,7 +221,10 @@ fn get_asset_root() -> Option<PathBuf> {
     // If running under cargo, there's no bundle!
     // There might be a smarter/more resilient way of doing this
     if std::env::var_os("CARGO").is_some() {
-        return None;
+        return dioxus_cli_config::CURRENT_CONFIG
+            .as_ref()
+            .map(|c| c.out_dir())
+            .ok();
     }
 
     #[cfg(target_os = "macos")]

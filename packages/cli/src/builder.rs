@@ -3,10 +3,9 @@ use crate::{
     error::{Error, Result},
     tools::Tool,
 };
+use anyhow::Context;
 use cargo_metadata::{diagnostic::Diagnostic, Message};
-use dioxus_cli_config::crate_root;
-use dioxus_cli_config::CrateConfig;
-use dioxus_cli_config::ExecutableType;
+use dioxus_cli_config::{crate_root, CrateConfig, ExecutableType};
 use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 use manganis_cli_support::{AssetManifest, ManganisSupportGuard};
@@ -16,6 +15,7 @@ use std::{
     io::Read,
     panic,
     path::PathBuf,
+    process::Command,
     time::Duration,
 };
 use wasm_bindgen_cli_support::Bindgen;
@@ -65,9 +65,8 @@ impl ExecWithRustFlagsSetter for subprocess::Exec {
 
 /// Build client (WASM).
 /// Note: `rust_flags` argument is only used for the fullstack platform.
-pub fn build(
+pub fn build_web(
     config: &CrateConfig,
-    _: bool,
     skip_assets: bool,
     rust_flags: Option<String>,
 ) -> Result<BuildResult> {
@@ -100,15 +99,17 @@ pub fn build(
     // [1] Build the .wasm module
     log::info!("🚅 Running build command...");
 
-    let wasm_check_command = std::process::Command::new("rustup")
-        .args(["show"])
-        .output()?;
-    let wasm_check_output = String::from_utf8(wasm_check_command.stdout).unwrap();
-    if !wasm_check_output.contains("wasm32-unknown-unknown") {
-        log::info!("wasm32-unknown-unknown target not detected, installing..");
-        let _ = std::process::Command::new("rustup")
-            .args(["target", "add", "wasm32-unknown-unknown"])
-            .output()?;
+    // If the user has rustup, we can check if the wasm32-unknown-unknown target is installed
+    // Otherwise we can just assume it is installed - which i snot great...
+    // Eventually we can poke at the errors and let the user know they need to install the target
+    if let Ok(wasm_check_command) = Command::new("rustup").args(["show"]).output() {
+        let wasm_check_output = String::from_utf8(wasm_check_command.stdout).unwrap();
+        if !wasm_check_output.contains("wasm32-unknown-unknown") {
+            log::info!("wasm32-unknown-unknown target not detected, installing..");
+            let _ = Command::new("rustup")
+                .args(["target", "add", "wasm32-unknown-unknown"])
+                .output()?;
+        }
     }
 
     let cmd = subprocess::Exec::cmd("cargo")
@@ -163,9 +164,10 @@ pub fn build(
     let input_path = warning_messages
         .output_location
         .as_ref()
-        .unwrap()
+        .context("No output location found")?
         .with_extension("wasm");
 
+    log::info!("Running wasm-bindgen");
     let bindgen_result = panic::catch_unwind(move || {
         // [3] Bindgen the final binary for use easy linking
         let mut bindgen_builder = Bindgen::new();
@@ -183,11 +185,13 @@ pub fn build(
             .generate(&bindgen_outdir)
             .unwrap();
     });
+
     if bindgen_result.is_err() {
         return Err(Error::BuildFailed("Bindgen build failed! \nThis is probably due to the Bindgen version, dioxus-cli using `0.2.81` Bindgen crate.".to_string()));
     }
 
     // check binaryen:wasm-opt tool
+    log::info!("Running optimization with wasm-opt...");
     let dioxus_tools = dioxus_config.application.tools.clone();
     if dioxus_tools.contains_key("binaryen") {
         let info = dioxus_tools.get("binaryen").unwrap();
@@ -221,6 +225,8 @@ pub fn build(
                 "Binaryen tool not found, you can use `dx tool add binaryen` to install it."
             );
         }
+    } else {
+        log::info!("Skipping optimization with wasm-opt, binaryen tool not found.");
     }
 
     // [5][OPTIONAL] If tailwind is enabled and installed we run it to generate the CSS
@@ -271,6 +277,8 @@ pub fn build(
         content_only: false,
         depth: 0,
     };
+
+    log::info!("Copying public assets to the output directory...");
     if asset_dir.is_dir() {
         for entry in std::fs::read_dir(config.asset_dir())?.flatten() {
             let path = entry.path();
@@ -294,6 +302,7 @@ pub fn build(
         }
     }
 
+    log::info!("Processing assets");
     let assets = if !skip_assets {
         let assets = asset_manifest(executable.executable(), config);
         process_assets(config, &assets)?;
@@ -325,6 +334,12 @@ pub fn build_desktop(
     let _guard = dioxus_cli_config::__private::save_config(config);
     let _manganis_support = ManganisSupportGuard::default();
     let _guard = AssetConfigDropGuard::new();
+
+    // set the asset dir via cli args
+    env::set_var(
+        "DIOXUS_ASSET_DIR",
+        config.asset_dir().canonicalize().unwrap(),
+    );
 
     let mut cmd = subprocess::Exec::cmd("cargo")
         .set_rust_flags(rust_flags)

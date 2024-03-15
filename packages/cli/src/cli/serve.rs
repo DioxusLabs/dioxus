@@ -60,25 +60,16 @@ impl Serve {
         }
 
         let platform = platform.unwrap_or(crate_config.dioxus_config.application.default_platform);
+        crate_config.extend_with_platform(platform);
 
+        // start the develop server
+        use server::{desktop, fullstack, web};
         match platform {
-            Platform::Web => {
-                // start the develop server
-                server::web::startup(
-                    self.serve.port,
-                    crate_config.clone(),
-                    self.serve.open,
-                    self.serve.skip_assets,
-                )
-                .await?;
-            }
-            Platform::Desktop => {
-                server::desktop::startup(crate_config.clone(), &serve_cfg).await?;
-            }
-            Platform::Fullstack => {
-                server::fullstack::startup(crate_config.clone(), &serve_cfg).await?;
-            }
+            Platform::Web => web::startup(crate_config.clone(), &serve_cfg).await?,
+            Platform::Desktop => desktop::startup(crate_config.clone(), &serve_cfg).await?,
+            Platform::Fullstack => fullstack::startup(crate_config.clone(), &serve_cfg).await?,
         }
+
         Ok(())
     }
 

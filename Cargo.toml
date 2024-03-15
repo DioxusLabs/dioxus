@@ -44,7 +44,7 @@ members = [
     "packages/playwright-tests/web",
     "packages/playwright-tests/fullstack",
 ]
-exclude = ["examples/mobile_demo", "examples/openid_connect_demo",]
+exclude = ["examples/mobile_demo", "examples/openid_connect_demo"]
 
 [workspace.package]
 version = "0.5.0-alpha.0"
@@ -56,27 +56,27 @@ dioxus-lib = { path = "packages/dioxus-lib", version = "0.5.0-alpha.0" }
 dioxus-core = { path = "packages/core", version = "0.5.0-alpha.0" }
 dioxus-core-macro = { path = "packages/core-macro", version = "0.5.0-alpha.0" }
 dioxus-config-macro = { path = "packages/config-macro", version = "0.5.0-alpha.0" }
-dioxus-router = { path = "packages/router", version = "0.5.0-alpha.0"  }
+dioxus-router = { path = "packages/router", version = "0.5.0-alpha.0" }
 dioxus-router-macro = { path = "packages/router-macro", version = "0.5.0-alpha.0" }
-dioxus-html = { path = "packages/html", version = "0.5.0-alpha.0"  }
-dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.5.0-alpha.0"  }
+dioxus-html = { path = "packages/html", version = "0.5.0-alpha.0" }
+dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.5.0-alpha.0" }
 dioxus-hooks = { path = "packages/hooks", version = "0.5.0-alpha.0" }
 dioxus-web = { path = "packages/web", version = "0.5.0-alpha.0" }
 dioxus-ssr = { path = "packages/ssr", version = "0.5.0-alpha.0", default-features = false }
 dioxus-desktop = { path = "packages/desktop", version = "0.5.0-alpha.0" }
-dioxus-mobile = { path = "packages/mobile", version = "0.5.0-alpha.0"  }
+dioxus-mobile = { path = "packages/mobile", version = "0.5.0-alpha.0" }
 dioxus-interpreter-js = { path = "packages/interpreter", version = "0.5.0-alpha.0" }
-dioxus-liveview = { path = "packages/liveview", version = "0.5.0-alpha.0"  }
-dioxus-autofmt = { path = "packages/autofmt", version = "0.5.0-alpha.0"  }
-dioxus-check = { path = "packages/check", version = "0.5.0-alpha.0"  }
-dioxus-rsx = { path = "packages/rsx", version = "0.5.0-alpha.0"  }
+dioxus-liveview = { path = "packages/liveview", version = "0.5.0-alpha.0" }
+dioxus-autofmt = { path = "packages/autofmt", version = "0.5.0-alpha.0" }
+dioxus-check = { path = "packages/check", version = "0.5.0-alpha.0" }
+dioxus-rsx = { path = "packages/rsx", version = "0.5.0-alpha.0" }
 rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.5.0-alpha.0" }
 dioxus-signals = { path = "packages/signals", version = "0.5.0-alpha.0" }
 dioxus-cli-config = { path = "packages/cli-config", version = "0.5.0-alpha.0" }
 generational-box = { path = "packages/generational-box", version = "0.5.0-alpha.0" }
 dioxus-hot-reload = { path = "packages/hot-reload", version = "0.5.0-alpha.0" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.5.0-alpha.0" }
-dioxus_server_macro = { path = "packages/server-macro", version = "0.5.0-alpha.0", default-features = false}
+dioxus_server_macro = { path = "packages/server-macro", version = "0.5.0-alpha.0", default-features = false }
 dioxus-ext = { path = "packages/extension", version = "0.4.0" }
 tracing = "0.1.37"
 tracing-futures = "0.2.5"
@@ -97,10 +97,13 @@ manganis-cli-support = { version = "0.2.1", features = [
 ] }
 manganis = { version = "0.2.1" }
 
+interprocess = { version = "1.2.1" }
+# interprocess = { git = "https://github.com/kotauskas/interprocess" }
+
 lru = "0.12.2"
 async-trait = "0.1.77"
 axum = "0.7.0"
-axum-server = {version = "0.6.0", default-features = false}
+axum-server = { version = "0.6.0", default-features = false }
 tower = "0.4.13"
 http = "1.0.0"
 tower-http = "0.5.1"
@@ -108,10 +111,24 @@ hyper = "1.0.0"
 hyper-rustls = "0.26.0"
 serde_json = "1.0.61"
 serde = "1.0.61"
+syn = "2.0"
+quote = "1.0"
+proc-macro2 = "1.0"
 axum_session = "0.12.1"
 axum_session_auth = "0.12.1"
 axum-extra = "0.9.2"
 reqwest = "0.11.24"
+owo-colors = "4.0.0"
+
+# Enable a small amount of optimization in debug mode
+[profile.cli-dev]
+inherits = "dev"
+opt-level = 1
+
+# Enable high optimizations for dependencies (incl. Bevy), but not for our code:
+[profile.cli-dev.package."*"]
+opt-level = 3
+
 
 # This is a "virtual package"
 # It is not meant to be published, but is used so "cargo run --example XYZ" works properly
@@ -130,9 +147,9 @@ rust-version = "1.60.0"
 publish = false
 
 [dependencies]
-manganis = { workspace = true, optional = true}
-reqwest = { version = "0.11.9", features = ["json"], optional = true}
-http-range = {version = "0.1.5", optional = true }
+manganis = { workspace = true, optional = true }
+reqwest = { version = "0.11.9", features = ["json"], optional = true }
+http-range = { version = "0.1.5", optional = true }
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["router"] }
@@ -146,7 +163,13 @@ form_urlencoded = "1.2.0"
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 getrandom = { version = "0.2.12", features = ["js"] }
-tokio = { version = "1.16.1", default-features = false, features = ["sync", "macros", "io-util", "rt", "time"] }
+tokio = { version = "1.16.1", default-features = false, features = [
+    "sync",
+    "macros",
+    "io-util",
+    "rt",
+    "time",
+] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tokio = { version = "1.16.1", features = ["full"] }

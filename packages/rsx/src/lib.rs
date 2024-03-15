@@ -74,6 +74,7 @@ impl CallBody {
             roots: &self.roots,
             location: None,
         };
+
         renderer.update_template::<Ctx>(template, location)
     }
 

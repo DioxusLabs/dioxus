@@ -2,7 +2,7 @@ use super::*;
 use cargo_generate::{GenerateArgs, TemplatePath};
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
-#[clap(name = "create")]
+#[clap(name = "new")]
 pub struct Create {
     /// Template path
     #[clap(default_value = "gh:dioxuslabs/dioxus-template", long)]

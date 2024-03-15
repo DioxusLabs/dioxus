@@ -63,6 +63,7 @@ where
     }
 }
 
+#[cfg(feature = "web")]
 #[inline]
 fn kick_future<F, T>(user_fut: F)
 where

@@ -1,20 +1,18 @@
-use crate::server::Platform;
 use crate::{
     cfg::ConfigOptsServe,
     server::{
         output::{print_console_info, PrettierOptions},
-        setup_file_watcher,
+        setup_file_watcher, Platform,
     },
     BuildResult, Result,
 };
 use dioxus_cli_config::CrateConfig;
-
 use dioxus_hot_reload::HotReloadMsg;
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;
-use interprocess_docfix::local_socket::LocalSocketListener;
-use std::fs::create_dir_all;
+use interprocess::local_socket::LocalSocketListener;
 use std::{
+    fs::create_dir_all,
     process::{Child, Command},
     sync::{Arc, Mutex, RwLock},
 };
@@ -33,13 +31,7 @@ pub(crate) async fn startup_with_platform<P: Platform + Send + 'static>(
     config: CrateConfig,
     serve_cfg: &ConfigOptsServe,
 ) -> Result<()> {
-    // ctrl-c shutdown checker
-    let _crate_config = config.clone();
-    let _ = ctrlc::set_handler(move || {
-        #[cfg(feature = "plugin")]
-        let _ = PluginManager::on_serve_shutdown(&_crate_config);
-        std::process::exit(0);
-    });
+    set_ctrl_c(&config);
 
     let hot_reload_state = match config.hot_reload {
         true => {
@@ -65,6 +57,16 @@ pub(crate) async fn startup_with_platform<P: Platform + Send + 'static>(
     serve::<P>(config, serve_cfg, hot_reload_state).await?;
 
     Ok(())
+}
+
+fn set_ctrl_c(config: &CrateConfig) {
+    // ctrl-c shutdown checker
+    let _crate_config = config.clone();
+    let _ = ctrlc::set_handler(move || {
+        #[cfg(feature = "plugin")]
+        let _ = PluginManager::on_serve_shutdown(&_crate_config);
+        std::process::exit(0);
+    });
 }
 
 /// Start the server without hot reload
@@ -136,7 +138,7 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
                                         .unwrap()
                                         .map
                                         .values()
-                                        .filter_map(|(_, template_slot)| *template_slot)
+                                        .flat_map(|v| v.templates.values().copied())
                                         .collect()
                                 };
                                 for template in templates {
@@ -169,12 +171,13 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
 
             let mut hot_reload_rx = hot_reload_state.messages.subscribe();
 
-            while let Ok(template) = hot_reload_rx.recv().await {
+            while let Ok(msg) = hot_reload_rx.recv().await {
                 let channels = &mut *channels.lock().unwrap();
                 let mut i = 0;
+
                 while i < channels.len() {
                     let channel = &mut channels[i];
-                    if send_msg(HotReloadMsg::UpdateTemplate(template), channel) {
+                    if send_msg(msg.clone(), channel) {
                         i += 1;
                     } else {
                         channels.remove(i);
