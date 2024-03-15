@@ -277,6 +277,12 @@ impl App {
             dioxus_hot_reload::HotReloadMsg::Shutdown => {
                 self.control_flow = ControlFlow::Exit;
             }
+
+            dioxus_hot_reload::HotReloadMsg::UpdateAsset(_) => {
+                for webview in self.webviews.values_mut() {
+                    webview.kick_stylsheets();
+                }
+            }
         }
     }
 

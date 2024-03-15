@@ -23,7 +23,7 @@ pub fn server_only(input: TokenStream) -> TokenStream {
 
 #[proc_macro]
 pub fn client(input: TokenStream) -> TokenStream {
-    if cfg!(any(feature = "desktop", feature = "web", feature = "tui")) {
+    if cfg!(any(feature = "desktop", feature = "web")) {
         let input = TokenStream2::from(input);
         quote! {
             #input
@@ -99,21 +99,6 @@ pub fn ssr(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn liveview(input: TokenStream) -> TokenStream {
     if cfg!(feature = "liveview") {
-        let input = TokenStream2::from(input);
-        quote! {
-            #input
-        }
-    } else {
-        quote! {
-            || {}
-        }
-    }
-    .into()
-}
-
-#[proc_macro]
-pub fn tui(input: TokenStream) -> TokenStream {
-    if cfg!(feature = "tui") {
         let input = TokenStream2::from(input);
         quote! {
             #input

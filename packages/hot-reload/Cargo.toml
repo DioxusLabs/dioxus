@@ -14,7 +14,7 @@ dioxus-rsx = { workspace = true }
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-html = { workspace = true, optional = true }
 
-interprocess-docfix = { version = "1.2.2" }
+interprocess = { workspace = true }
 notify = { version = "5.0.0", optional = true }
 chrono = { version = "0.4.24", default-features = false, features = ["clock"], optional = true }
 serde_json = "1.0.91"

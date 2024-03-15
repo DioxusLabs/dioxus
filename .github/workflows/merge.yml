@@ -48,7 +48,6 @@ jobs:
         with:
           cache-all-crates: "true"
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - uses: ilammy/setup-nasm@v1
 
       - name: cargo doc
         run: cargo doc --no-deps --workspace --all-features

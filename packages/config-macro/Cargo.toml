@@ -14,7 +14,7 @@ proc-macro = true
 
 [dependencies]
 proc-macro2 = { version = "1.0" }
-quote = "1.0"
+quote = { workspace = true }
 
 [features]
 default = []
@@ -24,4 +24,3 @@ mobile = []
 web = []
 ssr = []
 liveview = []
-tui = []

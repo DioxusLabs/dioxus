@@ -82,6 +82,9 @@ impl Bundle {
         }
 
         crate_config.set_cargo_args(self.build.cargo_args);
+        if let Some(platform) = self.build.platform {
+            crate_config.extend_with_platform(platform);
+        }
 
         // build the desktop app
         // Since the `bundle()` function is only run for the desktop platform,

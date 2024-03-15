@@ -10,7 +10,7 @@ keywords = ["react", "gui", "cli", "dioxus", "wasm"]
 
 [dependencies]
 # cli core
-clap = { version = "4.2", features = ["derive"] }
+clap = { version = "4.2", features = ["derive", "cargo"] }
 thiserror = { workspace = true }
 wasm-bindgen-cli-support = "0.2"
 colored = "2.0.0"
@@ -21,10 +21,10 @@ log = "0.4.14"
 fern = { version = "0.6.0", features = ["colored"] }
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
-toml = {workspace = true}
+toml = { workspace = true }
 fs_extra = "1.2.0"
 cargo_toml = "0.18.0"
-futures-util = { workspace = true }
+futures-util = { workspace = true, features = ["async-await-macro"] }
 notify = { version = "5.0.0-pre.16", features = ["serde"] }
 html_parser = { workspace = true }
 cargo_metadata = "0.18.1"
@@ -78,7 +78,7 @@ toml_edit = "0.21.0"
 tauri-bundler = { version = "=1.4.*", features = ["native-tls-vendored"] }
 
 # formatting
-syn = { version = "2.0" }
+syn = { workspace = true }
 prettyplease = { workspace = true }
 
 manganis-cli-support = { workspace = true, features = ["webp", "html"] }
@@ -90,8 +90,10 @@ dioxus-rsx = { workspace = true }
 dioxus-html = { workspace = true, features = ["hot-reload-context"] }
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-hot-reload = { workspace = true }
-interprocess-docfix = { version = "1.2.2" }
+interprocess = { workspace = true }
+# interprocess-docfix = { version = "1.2.2" }
 ignore = "0.4.22"
+env_logger = "0.11.3"
 
 [features]
 default = []

@@ -80,17 +80,6 @@ impl LaunchBuilder {
         }
     }
 
-    #[cfg(feature = "tui")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "tui")))]
-    /// Launch your tui application
-    pub fn tui() -> LaunchBuilder<dioxus_tui::Config, UnsendContext> {
-        LaunchBuilder {
-            launch_fn: dioxus_tui::launch::launch,
-            contexts: Vec::new(),
-            platform_config: None,
-        }
-    }
-
     /// Provide a custom launch function for your application.
     ///
     /// Useful for third party renderers to tap into the launch builder API without having to reimplement it.
@@ -184,24 +173,11 @@ mod current_platform {
     ))]
     pub use dioxus_liveview::launch::*;
 
-    #[cfg(all(
-        feature = "tui",
-        not(any(
-            feature = "liveview",
-            feature = "web",
-            feature = "desktop",
-            feature = "mobile",
-            feature = "fullstack"
-        ))
-    ))]
-    pub use dioxus_tui::launch::*;
-
     #[cfg(not(any(
         feature = "liveview",
         feature = "desktop",
         feature = "mobile",
         feature = "web",
-        feature = "tui",
         feature = "fullstack"
     )))]
     pub type Config = ();
@@ -211,7 +187,6 @@ mod current_platform {
         feature = "desktop",
         feature = "mobile",
         feature = "web",
-        feature = "tui",
         feature = "fullstack"
     )))]
     pub fn launch(
@@ -250,11 +225,4 @@ pub fn launch_desktop(app: fn() -> Element) {
 /// Launch your fullstack application without any additional configuration. See [`LaunchBuilder`] for more options.
 pub fn launch_fullstack(app: fn() -> Element) {
     LaunchBuilder::fullstack().launch(app)
-}
-
-#[cfg(feature = "tui")]
-#[cfg_attr(docsrs, doc(cfg(feature = "tui")))]
-/// Launch your tui application without any additional configuration. See [`LaunchBuilder`] for more options.
-pub fn launch_tui(app: fn() -> Element) {
-    LaunchBuilder::tui().launch(app)
 }

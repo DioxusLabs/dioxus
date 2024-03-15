@@ -221,4 +221,12 @@ impl WebviewInstance {
             self.desktop_context.send_edits();
         }
     }
+
+    pub fn kick_stylsheets(&self) {
+        // run eval in the webview to kick the stylesheets by appending a query string
+        // we should do something less clunky than this
+        _ = self.desktop_context
+            .webview
+            .evaluate_script("document.querySelectorAll('link[rel=\"stylesheet\"]').forEach((el) => el.href = el.href + \"?\" + Math.random());");
+    }
 }
