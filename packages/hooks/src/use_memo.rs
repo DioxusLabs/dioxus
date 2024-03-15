@@ -19,6 +19,24 @@ use dioxus_signals::{Memo, Signal};
 ///     rsx! { "{double}" }
 /// }
 /// ```
+///
+/// ## With non-reactive dependencies
+/// To add non-reactive dependencies, you can use the `use_reactive` hook.
+///
+/// Signals will automatically be added as dependencies, so you don't need to call this method for them.
+///
+/// ```rust
+/// # use dioxus::prelude::*;
+/// # async fn sleep(delay: u32) {}
+///
+/// #[component]
+/// fn Comp(count: u32) -> Element {
+///     // Because the memo subscribes to `count` by adding it as a dependency, the memo will rerun every time `count` changes.
+///     let new_count = use_memo(use_reactive((&count, |(count,)| count + 1)));
+///
+///     todo!()
+/// }
+/// ```
 #[track_caller]
 pub fn use_memo<R: PartialEq>(f: impl FnMut() -> R + 'static) -> Memo<R> {
     let callback = use_callback(f);

@@ -51,8 +51,26 @@ use std::{cell::Cell, future::Future, rc::Rc};
 ///    }
 ///}
 /// ```
+///
+/// ## With non-reactive dependencies
+/// To add non-reactive dependencies, you can use the `use_reactive` hook.
+///
+/// Signals will automatically be added as dependencies, so you don't need to call this method for them.
+///
+/// ```rust
+/// # use dioxus::prelude::*;
+/// # async fn sleep(delay: u32) {}
+///
+/// #[component]
+/// fn Comp(count: u32) -> Element {
+///     // Because the memo subscribes to `count` by adding it as a dependency, the memo will rerun every time `count` changes.
+///     let new_count = use_resource(use_reactive((&count, |(count,)| async move {count + 1} )));
+///
+///     todo!()
+/// }
+/// ```
 #[must_use = "Consider using `cx.spawn` to run a future without reading its value"]
-pub fn use_resource<T, F>(future: impl Fn() -> F + 'static) -> Resource<T>
+pub fn use_resource<T, F>(mut future: impl FnMut() -> F + 'static) -> Resource<T>
 where
     T: 'static,
     F: Future<Output = T> + 'static,
@@ -66,10 +84,9 @@ where
 
     let cb = use_callback(move || {
         // Create the user's task
-        #[allow(clippy::redundant_closure)]
-        let fut = rc.run_in(|| future());
+        let fut = rc.run_in(&mut future);
 
-        // Spawn a wrapper task that polls the innner future and watch its dependencies
+        // Spawn a wrapper task that polls the inner future and watch its dependencies
         spawn(async move {
             // move the future here and pin it so we can poll it
             let fut = fut;
@@ -144,38 +161,6 @@ pub enum UseResourceState {
 }
 
 impl<T> Resource<T> {
-    /// Adds an explicit dependency to the resource. If the dependency changes, the resource's future will rerun.
-    ///
-    /// Signals will automatically be added as dependencies, so you don't need to call this method for them.
-    ///
-    /// NOTE: You must follow the rules of hooks when calling this method.
-    ///
-    /// ```rust
-    /// # use dioxus::prelude::*;
-    /// # async fn sleep(delay: u32) {}
-    ///
-    /// #[component]
-    /// fn Comp(delay: u32) -> Element {
-    ///     // Because the resource subscribes to `delay` by adding it as a dependency, the resource's future will rerun every time `delay` changes.
-    ///     let current_weather = use_resource(move || async move {
-    ///         sleep(delay).await;
-    ///         "Sunny"
-    ///     })
-    ///     .use_dependencies((&delay,));
-    ///
-    ///     todo!()
-    /// }
-    /// ```
-    pub fn use_dependencies(mut self, dependency: impl Dependency) -> Self {
-        let mut dependencies_signal = use_signal(|| dependency.out());
-        let changed = { dependency.changed(&*dependencies_signal.read()) };
-        if changed {
-            dependencies_signal.set(dependency.out());
-            self.restart();
-        }
-        self
-    }
-
     /// Restart the resource's future.
     ///
     /// Will not cancel the previous future, but will ignore any values that it

@@ -1,6 +1,6 @@
 use crate::write::Writable;
 use crate::{read::Readable, ReactiveContext, ReadableRef, Signal};
-use crate::{CopyValue, Dependency, ReadOnlySignal};
+use crate::{CopyValue, ReadOnlySignal};
 use std::rc::Rc;
 use std::{
     cell::RefCell,
@@ -114,40 +114,6 @@ impl<T: 'static> Memo<T> {
     /// Get the id of the signal.
     pub fn id(&self) -> generational_box::GenerationalBoxId {
         self.inner.id()
-    }
-
-    /// Adds an explicit dependency to the memo. If the dependency changes, the memo will rerun.
-    ///
-    /// Signals will automatically be added as dependencies, so you don't need to call this method for them.
-    ///
-    /// NOTE: You must follow the rules of hooks when calling this method.
-    ///
-    /// ```rust
-    /// # use dioxus::prelude::*;
-    /// # async fn sleep(delay: u32) {}
-    ///
-    /// #[component]
-    /// fn Comp(count: u32) -> Element {
-    ///     // Because the memo subscribes to `count` by adding it as a dependency, the memo will rerun every time `count` changes.
-    ///     let new_count = use_memo(move || {
-    ///         count + 1
-    ///     })
-    ///     .use_dependencies((&count,));
-    ///
-    ///     todo!()
-    /// }
-    /// ```
-    pub fn use_dependencies(self, dependency: impl Dependency) -> Self
-    where
-        T: PartialEq,
-    {
-        let mut dependencies_signal = use_hook(|| CopyValue::new(dependency.out()));
-        let changed = { dependency.changed(&*dependencies_signal.read()) };
-        if changed {
-            dependencies_signal.set(dependency.out());
-            self.recompute();
-        }
-        self
     }
 }
 

@@ -26,9 +26,18 @@ fn app() -> Element {
 fn Child(non_reactive_prop: i32) -> Element {
     let mut signal = use_signal(|| 0);
 
-    // You can manually specify the dependencies with `use_dependencies` for values that are not reactive like props
-    let computed =
-        use_memo(move || non_reactive_prop + signal()).use_dependencies((&non_reactive_prop,));
+    // You can manually specify the dependencies with `use_reactive` for values that are not reactive like props
+    let computed = use_memo(use_reactive!(
+        |(non_reactive_prop,)| non_reactive_prop + signal()
+    ));
+    use_effect(use_reactive!(|(non_reactive_prop,)| println!(
+        "{}",
+        non_reactive_prop + signal()
+    )));
+    let fut = use_resource(use_reactive!(|(non_reactive_prop,)| async move {
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        non_reactive_prop + signal()
+    }));
 
     rsx! {
         button {
@@ -37,5 +46,7 @@ fn Child(non_reactive_prop: i32) -> Element {
         }
 
         "Sum: {computed}"
+
+        "{fut():?}"
     }
 }
