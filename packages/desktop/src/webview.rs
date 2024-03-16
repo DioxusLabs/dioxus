@@ -221,6 +221,7 @@ impl WebviewInstance {
         }
     }
 
+    #[allow(unused)]
     pub fn kick_stylsheets(&self) {
         // run eval in the webview to kick the stylesheets by appending a query string
         // we should do something less clunky than this
