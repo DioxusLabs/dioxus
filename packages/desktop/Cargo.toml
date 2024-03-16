@@ -18,7 +18,6 @@ dioxus-html = { workspace = true, features = [
     "eval",
 ] }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
-dioxus-hot-reload = { workspace = true, optional = true }
 dioxus-cli-config = { workspace = true }
 generational-box = { workspace = true }
 
@@ -26,7 +25,7 @@ serde = "1.0.136"
 serde_json = "1.0.79"
 thiserror = { workspace = true }
 tracing = { workspace = true }
-wry = { version = "0.35.0", default-features = false, features = [
+wry = { version = "0.37.0", default-features = false, features = [
     "os-webview",
     "protocol",
     "file-drop",
@@ -49,12 +48,14 @@ dioxus-hooks = { workspace = true }
 futures-util = { workspace = true }
 urlencoding = "2.1.2"
 async-trait = "0.1.68"
-tao = { version = "0.24.0", features = ["rwh_05"] }
+tao = { version = "0.26.1", features = ["rwh_05"] }
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
 global-hotkey = "0.5.0"
 rfd = "0.12"
 muda = "0.11.3"
+# hotreload only works on desktop platforms.... mobile is still wip
+dioxus-hot-reload = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc = "0.2.7"
@@ -65,7 +66,7 @@ core-foundation = "0.9.3"
 objc = "0.2.7"
 
 [features]
-default = ["tokio_runtime", "hot-reload", "wry/objc-exception"]
+default = ["tokio_runtime", "wry/objc-exception", "hot-reload"]
 tokio_runtime = ["tokio"]
 fullscreen = ["wry/fullscreen"]
 transparent = ["wry/transparent"]

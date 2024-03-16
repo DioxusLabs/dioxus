@@ -226,3 +226,10 @@ pub fn launch_desktop(app: fn() -> Element) {
 pub fn launch_fullstack(app: fn() -> Element) {
     LaunchBuilder::fullstack().launch(app)
 }
+
+#[cfg(feature = "mobile")]
+#[cfg_attr(docsrs, doc(cfg(feature = "mobile")))]
+/// Launch your mobile application without any additional configuration. See [`LaunchBuilder`] for more options.
+pub fn launch_mobile(app: fn() -> Element) {
+    LaunchBuilder::mobile().launch(app)
+}

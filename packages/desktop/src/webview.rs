@@ -129,7 +129,6 @@ impl WebviewInstance {
         webview = webview
             .with_transparent(cfg.window.window.transparent)
             .with_url("dioxus://index.html/")
-            .unwrap()
             .with_ipc_handler(ipc_handler)
             .with_navigation_handler(|var| var.contains("dioxus")) // prevent all navigations
             .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler)
@@ -222,6 +221,7 @@ impl WebviewInstance {
         }
     }
 
+    #[allow(unused)]
     pub fn kick_stylsheets(&self) {
         // run eval in the webview to kick the stylesheets by appending a query string
         // we should do something less clunky than this

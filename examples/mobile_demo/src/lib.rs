@@ -1,8 +1,9 @@
 use anyhow::Result;
-use dioxus::desktop::Config;
+use dioxus::mobile::Config;
 use dioxus::prelude::*;
+
 #[cfg(target_os = "android")]
-use wry::android_binding;
+use dioxus::mobile::wry::android_binding;
 
 #[cfg(target_os = "android")]
 fn init_logging() {
@@ -49,17 +50,19 @@ pub fn main() -> Result<()> {
 
     // Right now we're going through dioxus-desktop but we'd like to go through dioxus-mobile
     // That will seed the index.html with some fixes that prevent the page from scrolling/zooming etc
-    LaunchBuilder::new().cfg(
-        // Note that we have to disable the viewport goofiness of the browser.
-        // Dioxus_mobile should do this for us
-        Config::default().with_custom_index(include_str!("index.html").to_string()),
-    );
+    LaunchBuilder::mobile()
+        .with_cfg(
+            // Note that we have to disable the viewport goofiness of the browser.
+            // Dioxus_mobile should do this for us
+            Config::default().with_custom_index(include_str!("index.html").to_string()),
+        )
+        .launch(app);
 
     Ok(())
 }
 
 fn app() -> Element {
-    let items = cx.use_hook(|| vec![1, 2, 3]);
+    let mut items = use_signal(|| vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
 
     log::debug!("Hello from the app");
 
@@ -74,10 +77,7 @@ fn app() -> Element {
                 border: "1px solid black",
                 button {
                     onclick: move |_| {
-                        println!("Clicked!");
                         items.push(items.len());
-                        cx.needs_update_any(ScopeId::ROOT);
-                        println!("Requested update");
                     },
                     "Add item"
                 }
