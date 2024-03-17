@@ -53,8 +53,6 @@ macro_rules! to_owned {
         $(to_owned![$($rest)*])?
     };
 }
-mod dependency;
-pub use dependency::*;
 
 mod use_callback;
 pub use use_callback::*;
@@ -70,6 +68,9 @@ pub use use_coroutine::*;
 
 mod use_future;
 pub use use_future::*;
+
+mod use_reactive;
+pub use use_reactive::*;
 
 // mod use_sorted;
 // pub use use_sorted::*;
