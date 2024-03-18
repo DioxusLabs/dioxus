@@ -28,6 +28,16 @@ fn hotreloads() {
         diff_rsx(&new, &old),
         DiffResult::RsxChanged { .. }
     ));
+
+    let (old, new) = load_files(
+        include_str!("./valid/combo.old.rsx"),
+        include_str!("./valid/combo.new.rsx"),
+    );
+
+    assert!(matches!(
+        diff_rsx(&new, &old),
+        DiffResult::RsxChanged { .. }
+    ));
 }
 
 #[test]

@@ -453,7 +453,8 @@ impl<'a> DynamicContext<'a> {
         }
     }
 
-    fn render_static_node(&mut self, root: &'a BodyNode) -> TokenStream2 {
+    /// Render a portion of an rsx callbody to a token stream
+    pub fn render_static_node(&mut self, root: &'a BodyNode) -> TokenStream2 {
         match root {
             BodyNode::Element(el) => {
                 let el_name = &el.name;
@@ -499,20 +500,10 @@ impl<'a> DynamicContext<'a> {
                     }
 
                     _ => {
-                        // If this attribute is dynamic, but it already exists in the template, we can reuse the index
-                        if let Some(attribute_index) = self
-                            .attr_paths
-                            .iter()
-                            .position(|path| path == &self.current_path)
-                        {
-                            self.dynamic_attributes[attribute_index].push(attr);
-                            quote! {}
-                        } else {
-                            let ct = self.dynamic_attributes.len();
-                            self.dynamic_attributes.push(vec![attr]);
-                            self.attr_paths.push(self.current_path.clone());
-                            quote! { dioxus_core::TemplateAttribute::Dynamic { id: #ct }, }
-                        }
+                        let ct = self.dynamic_attributes.len();
+                        self.dynamic_attributes.push(vec![attr]);
+                        self.attr_paths.push(self.current_path.clone());
+                        quote! { dioxus_core::TemplateAttribute::Dynamic { id: #ct }, }
                     }
                 });
 
@@ -525,7 +516,6 @@ impl<'a> DynamicContext<'a> {
                     out
                 });
 
-                let _opt = el.children.len() == 1;
                 let children = quote! { #(#children),* };
 
                 let ns = ns(quote!(NAME_SPACE));
