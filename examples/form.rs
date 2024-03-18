@@ -103,6 +103,26 @@ fn app() -> Element {
                         id: "start"
                     }
 
+                    // CHekcboxes
+                    label { r#for: "cbox", "Color" }
+                    div {
+                        label { r#for: "cbox-red", "red" }
+                        input { r#type: "checkbox", checked: true, name: "cbox", value: "red", id: "cbox-red" }
+                    }
+                    div {
+                        label { r#for: "cbox-blue", "blue" }
+                        input { r#type: "checkbox", name: "cbox", value: "blue", id: "cbox-blue" }
+                    }
+                    div {
+                        label { r#for: "cbox-green", "green" }
+                        input { r#type: "checkbox", name: "cbox", value: "green", id: "cbox-green" }
+                    }
+                    div {
+                        label { r#for: "cbox-yellow", "yellow" }
+                        input { r#type: "checkbox", name: "cbox", value: "yellow", id: "cbox-yellow" }
+                    }
+
+
                     // Buttons will submit your form by default.
                     button { r#type: "submit", value: "Submit", "Submit the form" }
                 }
