@@ -18,6 +18,19 @@ impl Parse for ComponentBody {
 
 impl ToTokens for ComponentBody {
     fn to_tokens(&self, tokens: &mut TokenStream) {
+        // https://github.com/DioxusLabs/dioxus/issues/1938
+        // If there's only one input and the input is `props: Props`, we don't need to generate a props struct
+        // Just attach the non_snake_case attribute to the function
+        // eventually we'll dump this metadata into devtooling that lets us find all these components
+        if self.is_explicit_props_ident() {
+            let comp_fn = &self.item_fn;
+            tokens.append_all(quote! {
+                #[allow(non_snake_case)]
+                #comp_fn
+            });
+            return;
+        }
+
         let comp_fn = self.comp_fn();
 
         // If there's no props declared, we simply omit the props argument
@@ -195,6 +208,18 @@ impl ComponentBody {
         }
 
         props_docs
+    }
+
+    fn is_explicit_props_ident(&self) -> bool {
+        if self.item_fn.sig.inputs.len() == 1 {
+            if let FnArg::Typed(PatType { pat, .. }) = &self.item_fn.sig.inputs[0] {
+                if let Pat::Ident(ident) = pat.as_ref() {
+                    return ident.ident == "props";
+                }
+            }
+        }
+
+        false
     }
 }
 
