@@ -1,4 +1,3 @@
-use dioxus::dioxus_core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
 
 /// Make sure that rsx! is parsing templates and their attributes properly
