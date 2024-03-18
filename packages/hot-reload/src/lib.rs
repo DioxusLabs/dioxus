@@ -43,14 +43,10 @@ pub fn connect(mut callback: impl FnMut(HotReloadMsg) + Send + 'static) {
                 break;
             }
 
+            // It's likely we're running under just cargo and not dx
             path = match path.parent() {
                 Some(parent) => parent.to_path_buf(),
-                None => {
-                    return eprintln!(
-                        "could not find hot reloading server for crate at {}",
-                        env!("CARGO_MANIFEST_DIR")
-                    )
-                }
+                None => return,
             };
         }
 
