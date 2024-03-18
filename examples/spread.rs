@@ -14,7 +14,7 @@ fn main() {
 
 fn app() -> Element {
     rsx! {
-        spreadable_component {
+        SpreadableComponent {
             width: "10px",
             extra_data: "hello{1}",
             extra_data2: "hello{2}",
@@ -34,7 +34,8 @@ struct Props {
     extra_data2: String,
 }
 
-fn spreadable_component(props: Props) -> Element {
+#[component]
+fn SpreadableComponent(props: Props) -> Element {
     rsx! {
         audio { ..props.attributes, "1: {props.extra_data}\n2: {props.extra_data2}" }
     }

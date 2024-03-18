@@ -29,7 +29,7 @@ dioxus = { workspace = true }
 pretty_assertions = "1.3.0"
 rand = "0.8.5"
 dioxus-ssr = { workspace = true }
-reqwest.workspace = true
+reqwest = { workspace = true}
 
 [features]
 default = []
