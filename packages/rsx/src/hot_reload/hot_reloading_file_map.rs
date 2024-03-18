@@ -9,7 +9,7 @@ pub use proc_macro2::TokenStream;
 pub use std::collections::HashMap;
 pub use std::sync::Mutex;
 pub use std::time::SystemTime;
-use std::{collections::HashSet, path::PathBuf};
+use std::{collections::HashSet, ffi::OsStr, path::PathBuf};
 pub use std::{fs, io, path::Path};
 pub use std::{fs::File, io::Read};
 pub use syn::__private::ToTokens;
@@ -55,8 +55,14 @@ pub struct CachedSynFile {
 
 impl<Ctx: HotReloadingContext> FileMap<Ctx> {
     /// Create a new FileMap from a crate directory
+    ///
+    /// TODO: this should be created with a gitignore filter
     pub fn create(path: PathBuf) -> io::Result<FileMapBuildResult<Ctx>> {
-        Self::create_with_filter(path, |_| false)
+        Self::create_with_filter(path, |p| {
+            // skip some stuff we know is large by default
+            p.file_name() == Some(OsStr::new("target"))
+                || p.file_name() == Some(OsStr::new("node_modules"))
+        })
     }
 
     /// Create a new FileMap from a crate directory
@@ -352,7 +358,6 @@ fn find_rs_files(root: PathBuf, filter: &mut impl FnMut(&Path) -> bool) -> FileM
                     };
 
                     // track assets while we're here
-
                     files.insert(root, cached_file);
                 }
                 Err(err) => {

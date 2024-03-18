@@ -60,8 +60,9 @@ fn app() -> Element {
 
                     label { r#for: "full-name", "Full Name" }
                     input { r#type: "text", name: "full-name" }
+                    input { r#type: "text", name: "full-name" }
 
-                    label { r#for: "email", "Email" }
+                    label { r#for: "email", "Email (matching <name>@example.com)" }
                     input { r#type: "email", pattern: ".+@example\\.com", size: "30", required: "true", id: "email", name: "email" }
 
                     label { r#for: "password", "Password" }

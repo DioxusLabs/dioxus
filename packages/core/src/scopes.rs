@@ -13,6 +13,7 @@ use std::{cell::Ref, rc::Rc};
 pub struct ScopeId(pub usize);
 
 impl std::fmt::Debug for ScopeId {
+    #[allow(unused_mut)]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut builder = f.debug_tuple("ScopeId");
         let mut builder = builder.field(&self.0);

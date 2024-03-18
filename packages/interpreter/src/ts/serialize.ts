@@ -5,7 +5,7 @@ import { retriveSelectValue, retriveValues } from "./form";
 export type AppTouchEvent = TouchEvent;
 
 export type SerializedEvent = {
-  values?: { [key: string]: FormDataEntryValue };
+  values?: { [key: string]: FormDataEntryValue[] };
   value?: string;
   [key: string]: any;
 };

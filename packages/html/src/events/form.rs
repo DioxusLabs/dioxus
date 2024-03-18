@@ -1,10 +1,46 @@
 use crate::file_data::FileEngine;
 use crate::file_data::HasFileData;
-use std::{collections::HashMap, fmt::Debug};
+use std::{collections::HashMap, fmt::Debug, ops::Deref};
 
 use dioxus_core::Event;
 
 pub type FormEvent = Event<FormData>;
+
+/// A form value that may either be a list of values or a single value
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct FormValue(pub Vec<String>);
+
+impl Deref for FormValue {
+    type Target = [String];
+
+    fn deref(&self) -> &Self::Target {
+        self.as_slice()
+    }
+}
+
+impl FormValue {
+    /// Convenient way to represent Value as slice
+    pub fn as_slice(&self) -> &[String] {
+        &self.0
+    }
+
+    /// Return the first value, panicking if there are none
+    pub fn as_value(&self) -> String {
+        self.0.first().unwrap().clone()
+    }
+
+    /// Convert into Vec<String>
+    pub fn to_vec(self) -> Vec<String> {
+        self.0.clone()
+    }
+}
+
+impl PartialEq<str> for FormValue {
+    fn eq(&self, other: &str) -> bool {
+        self.0.len() == 1 && self.0.first().map(|s| s.as_str()) == Some(other)
+    }
+}
 
 /* DOMEvent:  Send + SyncTarget relatedTarget */
 pub struct FormData {
@@ -65,7 +101,7 @@ impl FormData {
     /// Collect all the named form values from the containing form.
     ///
     /// Every input must be named!
-    pub fn values(&self) -> HashMap<String, String> {
+    pub fn values(&self) -> HashMap<String, FormValue> {
         self.inner.values()
     }
 
@@ -95,7 +131,7 @@ pub trait HasFormData: HasFileData + std::any::Any {
         true
     }
 
-    fn values(&self) -> HashMap<String, String> {
+    fn values(&self) -> HashMap<String, FormValue> {
         Default::default()
     }
 
@@ -135,7 +171,7 @@ pub struct SerializedFormData {
     value: String,
 
     #[serde(default)]
-    values: HashMap<String, String>,
+    values: HashMap<String, FormValue>,
 
     #[serde(default)]
     valid: bool,
@@ -149,7 +185,7 @@ impl SerializedFormData {
     /// Create a new serialized form data object
     pub fn new(
         value: String,
-        values: HashMap<String, String>,
+        values: HashMap<String, FormValue>,
         files: Option<crate::file_data::SerializedFileEngine>,
     ) -> Self {
         Self {
@@ -200,7 +236,7 @@ impl HasFormData for SerializedFormData {
         self.value.clone()
     }
 
-    fn values(&self) -> HashMap<String, String> {
+    fn values(&self) -> HashMap<String, FormValue> {
         self.values.clone()
     }
 
