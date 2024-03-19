@@ -27,12 +27,13 @@ impl Writer<'_> {
         // If the expr is multiline, we want to collect all of its lines together and write them out properly
         // This involves unshifting the first line if it's aligned
         let first_line = &self.src[start.line - 1];
-        write!(self.out, "{}", &first_line[start.column - 1..].trim_start())?;
+        write!(self.out, "{}", &first_line[start.column..].trim_start())?;
 
         let prev_block_indent_level = self.out.indent.count_indents(first_line);
 
         for (id, line) in self.src[start.line..end.line].iter().enumerate() {
             writeln!(self.out)?;
+
             // check if this is the last line
             let line = {
                 if id == (end.line - start.line) - 1 {
