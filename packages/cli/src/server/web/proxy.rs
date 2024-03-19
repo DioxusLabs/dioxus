@@ -65,16 +65,43 @@ pub fn add_proxy(mut router: Router, proxy: &WebProxyConfig) -> Result<Router> {
 
     let client = ProxyClient::new(url);
 
+    let method_router = any(move |mut req: Request<MyBody>| async move {
+        // Prevent request loops
+        if req.headers().get("x-proxied-by-dioxus").is_some() {
+            return Err((
+                StatusCode::NOT_FOUND,
+                "API is sharing a loopback with the dev server. Try setting a different port on the API config."
+                    .to_string(),
+            ));
+        }
+
+        req.headers_mut().insert(
+            "x-proxied-by-dioxus",
+            "true".parse().expect("header value is valid"),
+        );
+
+        client
+            .send(req)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+    });
+
+    // api/*path
     router = router.route(
-        // Always remove trailing /'s so that the exact route
-        // matches.
-        &format!("/*{}", trimmed_path.trim_end_matches('/')),
-        any(move |req: Request<MyBody>| async move {
-            client
-                .send(req)
-                .await
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
-        }),
+        &format!("/{}/*path", trimmed_path.trim_end_matches('/')),
+        method_router.clone(),
+    );
+
+    // /api/
+    router = router.route(
+        &format!("/{}/", trimmed_path.trim_end_matches('/')),
+        method_router.clone(),
+    );
+
+    // /api
+    router = router.route(
+        &format!("/{}", trimmed_path.trim_end_matches('/')),
+        method_router,
     );
 
     Ok(router)

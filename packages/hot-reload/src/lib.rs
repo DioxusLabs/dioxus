@@ -71,9 +71,6 @@ pub fn connect(mut callback: impl FnMut(HotReloadMsg) + Send + 'static) {
             }
 
             let Ok(template) = serde_json::from_str(Box::leak(buf.into_boxed_str())) else {
-                eprintln!(
-                    "Could not parse hot reloading message - make sure your client is up to date"
-                );
                 continue;
             };
 
