@@ -1,6 +1,6 @@
 use std::{ops::Deref, rc::Rc};
 
-use crate::{read::Readable, ReadableRef};
+use crate::{read::Readable, read_impls, ReadableRef};
 use dioxus_core::prelude::*;
 use generational_box::{AnyStorage, UnsyncStorage};
 
@@ -88,3 +88,5 @@ where
         Readable::deref_impl(self)
     }
 }
+
+read_impls!(MappedSignal<T, S: AnyStorage>);

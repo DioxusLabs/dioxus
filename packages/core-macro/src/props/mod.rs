@@ -516,12 +516,12 @@ mod struct_info {
     use syn::spanned::Spanned;
     use syn::{Expr, Ident};
 
-    use super::child_owned_type;
     use super::field_info::{FieldBuilderAttr, FieldInfo};
     use super::util::{
         empty_type, empty_type_tuple, expr_to_single_string, make_punctuated_single,
         modify_types_generics_hack, path_to_single_string, strip_raw_ident_prefix, type_tuple,
     };
+    use super::{child_owned_type, looks_like_event_handler_type, looks_like_signal_type};
 
     #[derive(Debug)]
     pub struct StructInfo<'a> {
@@ -586,18 +586,69 @@ mod struct_info {
 
         fn memoize_impl(&self) -> Result<TokenStream, Error> {
             // First check if there are any ReadOnlySignal fields, if there are not, we can just use the partialEq impl
-            let has_child_owned_fields = self.has_child_owned_fields();
+            let signal_fields: Vec<_> = self
+                .included_fields()
+                .filter(|f| looks_like_signal_type(f.ty))
+                .map(|f| {
+                    let name = f.name;
+                    quote!(#name)
+                })
+                .collect();
 
-            if has_child_owned_fields {
-                let signal_fields: Vec<_> = self
-                    .included_fields()
-                    .filter(|f| child_owned_type(f.ty))
-                    .map(|f| {
-                        let name = f.name;
-                        quote!(#name)
-                    })
-                    .collect();
+            let move_signal_fields = quote! {
+                trait NonPartialEq: Sized {
+                    fn compare(&self, other: &Self) -> bool;
+                }
 
+                impl<T> NonPartialEq for &&T {
+                    fn compare(&self, other: &Self) -> bool {
+                        false
+                    }
+                }
+
+                trait CanPartialEq: PartialEq {
+                    fn compare(&self, other: &Self) -> bool;
+                }
+
+                impl<T: PartialEq> CanPartialEq for T {
+                    fn compare(&self, other: &Self) -> bool {
+                        self == other
+                    }
+                }
+
+                // If they are equal, we don't need to rerun the component we can just update the existing signals
+                #(
+                    // Try to memo the signal
+                    let field_eq = {
+                        let old_value: &_ = &*#signal_fields.peek();
+                        let new_value: &_ = &*new.#signal_fields.peek();
+                        (&old_value).compare(&&new_value)
+                    };
+                    if !field_eq {
+                        (#signal_fields).__set(new.#signal_fields.__take());
+                    }
+                    // Move the old value back
+                    self.#signal_fields = #signal_fields;
+                )*
+            };
+
+            let event_handlers_fields: Vec<_> = self
+                .included_fields()
+                .filter(|f| looks_like_event_handler_type(f.ty))
+                .map(|f| {
+                    let name = f.name;
+                    quote!(#name)
+                })
+                .collect();
+
+            let move_event_handlers = quote! {
+                #(
+                    // Update the event handlers
+                    self.#event_handlers_fields.__set(new.#event_handlers_fields.__take());
+                )*
+            };
+
+            if !signal_fields.is_empty() {
                 Ok(quote! {
                     // First check if the fields are equal
                     let exactly_equal = self == new;
@@ -619,46 +670,18 @@ mod struct_info {
                         return false;
                     }
 
-                    trait NonPartialEq: Sized {
-                        fn compare(&self, other: &Self) -> bool;
-                    }
-
-                    impl<T> NonPartialEq for &&T {
-                        fn compare(&self, other: &Self) -> bool {
-                            false
-                        }
-                    }
-
-                    trait CanPartialEq: PartialEq {
-                        fn compare(&self, other: &Self) -> bool;
-                    }
-
-                    impl<T: PartialEq> CanPartialEq for T {
-                        fn compare(&self, other: &Self) -> bool {
-                            self == other
-                        }
-                    }
-
-                    // If they are equal, we don't need to rerun the component we can just update the existing signals
-                    #(
-                        // Try to memo the signal
-                        let field_eq = {
-                            let old_value: &_ = &*#signal_fields.peek();
-                            let new_value: &_ = &*new.#signal_fields.peek();
-                            (&old_value).compare(&&new_value)
-                        };
-                        if !field_eq {
-                            (#signal_fields).__set(new.#signal_fields.__take());
-                        }
-                        // Move the old value back
-                        self.#signal_fields = #signal_fields;
-                    )*
+                    #move_signal_fields
+                    #move_event_handlers
 
                     true
                 })
             } else {
                 Ok(quote! {
-                    self == new
+                    let equal = self == new;
+                    if equal {
+                        #move_event_handlers
+                    }
+                    equal
                 })
             }
         }
