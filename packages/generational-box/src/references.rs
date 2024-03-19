@@ -68,7 +68,7 @@ pub struct GenerationalRefMut<W> {
     pub(crate) borrow: GenerationalRefMutBorrowInfo,
 }
 
-impl<T: 'static, R: DerefMut<Target = T>> GenerationalRefMut<R> {
+impl<T, R: DerefMut<Target = T>> GenerationalRefMut<R> {
     pub(crate) fn new(
         inner: R,
         #[cfg(any(debug_assertions, feature = "debug_borrows"))]
@@ -82,7 +82,7 @@ impl<T: 'static, R: DerefMut<Target = T>> GenerationalRefMut<R> {
     }
 }
 
-impl<T: ?Sized + 'static, W: DerefMut<Target = T>> Deref for GenerationalRefMut<W> {
+impl<T: ?Sized, W: DerefMut<Target = T>> Deref for GenerationalRefMut<W> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -90,7 +90,7 @@ impl<T: ?Sized + 'static, W: DerefMut<Target = T>> Deref for GenerationalRefMut<
     }
 }
 
-impl<T: ?Sized + 'static, W: DerefMut<Target = T>> DerefMut for GenerationalRefMut<W> {
+impl<T: ?Sized, W: DerefMut<Target = T>> DerefMut for GenerationalRefMut<W> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.inner.deref_mut()
     }

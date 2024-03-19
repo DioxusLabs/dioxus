@@ -1,8 +1,7 @@
-use crate::{global_context::current_scope_id, Runtime, ScopeId};
-use std::{
-    cell::{Cell, RefCell},
-    rc::Rc,
-};
+use generational_box::{GenerationalBox, UnsyncStorage};
+
+use crate::{generational_box::current_owner, global_context::current_scope_id, Runtime, ScopeId};
+use std::{cell::Cell, rc::Rc};
 
 /// A wrapper around some generic data that handles the event's state
 ///
@@ -165,41 +164,33 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
 /// ```
 pub struct EventHandler<T = ()> {
     pub(crate) origin: ScopeId,
-    pub(super) callback: Rc<RefCell<Option<ExternalListenerCallback<T>>>>,
+    pub(super) callback: GenerationalBox<Option<ExternalListenerCallback<T>>>,
 }
+
+impl<T> Copy for EventHandler<T> {}
 
 impl<T> Clone for EventHandler<T> {
     fn clone(&self) -> Self {
-        Self {
-            origin: self.origin,
-            callback: self.callback.clone(),
-        }
+        *self
     }
 }
 
-impl<T> PartialEq for EventHandler<T> {
+impl<T: 'static> PartialEq for EventHandler<T> {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.callback, &other.callback)
-    }
-}
-
-impl<T> Default for EventHandler<T> {
-    fn default() -> Self {
-        Self {
-            origin: ScopeId::ROOT,
-            callback: Default::default(),
-        }
+        self.callback.ptr_eq(&other.callback)
     }
 }
 
 type ExternalListenerCallback<T> = Box<dyn FnMut(T)>;
 
-impl<T> EventHandler<T> {
+impl<T: 'static> EventHandler<T> {
     /// Create a new [`EventHandler`] from an [`FnMut`]
+    #[track_caller]
     pub fn new(mut f: impl FnMut(T) + 'static) -> EventHandler<T> {
-        let callback = Rc::new(RefCell::new(Some(Box::new(move |event: T| {
+        let owner = current_owner::<UnsyncStorage>();
+        let callback = owner.insert(Some(Box::new(move |event: T| {
             f(event);
-        }) as Box<dyn FnMut(T)>)));
+        }) as Box<dyn FnMut(T)>));
         EventHandler {
             callback,
             origin: current_scope_id().expect("to be in a dioxus runtime"),
@@ -210,7 +201,7 @@ impl<T> EventHandler<T> {
     ///
     /// This borrows the event using a RefCell. Recursively calling a listener will cause a panic.
     pub fn call(&self, event: T) {
-        if let Some(callback) = self.callback.borrow_mut().as_mut() {
+        if let Some(callback) = self.callback.write().as_mut() {
             Runtime::with(|rt| rt.scope_stack.borrow_mut().push(self.origin));
             callback(event);
             Runtime::with(|rt| rt.scope_stack.borrow_mut().pop());
@@ -221,6 +212,6 @@ impl<T> EventHandler<T> {
     ///
     /// This will force any future calls to "call" to not doing anything
     pub fn release(&self) {
-        self.callback.replace(None);
+        self.callback.set(None);
     }
 }

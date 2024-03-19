@@ -1,3 +1,4 @@
+use crate::{default_impl, fmt_impls, write_impls};
 use crate::{
     read::Readable, write::Writable, CopyValue, GlobalMemo, GlobalSignal, ReactiveContext,
     ReadableRef,
@@ -382,6 +383,8 @@ impl<T: 'static, S: Storage<SignalData<T>>> PartialEq for Signal<T, S> {
     }
 }
 
+impl<T: 'static, S: Storage<SignalData<T>>> Eq for Signal<T, S> {}
+
 /// Allow calling a signal with signal() syntax
 ///
 /// Currently only limited to copy types, though could probably specialize for string/arc/rc
@@ -488,3 +491,15 @@ impl<T: 'static, S: Storage<SignalData<T>>> Drop for SignalSubscriberDrop<T, S> 
         self.signal.update_subscribers();
     }
 }
+
+fmt_impls!(Signal<T, S: Storage<SignalData<T>>>);
+default_impl!(Signal<T, S: Storage<SignalData<T>>>);
+write_impls!(Signal<T, S: Storage<SignalData<T>>>);
+
+impl<T: 'static, S: Storage<SignalData<T>>> Clone for Signal<T, S> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T: 'static, S: Storage<SignalData<T>>> Copy for Signal<T, S> {}

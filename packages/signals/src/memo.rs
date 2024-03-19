@@ -1,3 +1,4 @@
+use crate::read_impls;
 use crate::write::Writable;
 use crate::{read::Readable, ReactiveContext, ReadableRef, Signal};
 use crate::{CopyValue, ReadOnlySignal};
@@ -191,3 +192,13 @@ where
         Readable::deref_impl(self)
     }
 }
+
+read_impls!(Memo<T> where T: PartialEq);
+
+impl<T: 'static> Clone for Memo<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T: 'static> Copy for Memo<T> {}

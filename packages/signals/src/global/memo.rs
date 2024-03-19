@@ -1,3 +1,4 @@
+use crate::read_impls;
 use crate::{read::Readable, Memo, ReadableRef};
 use dioxus_core::prelude::ScopeId;
 use generational_box::UnsyncStorage;
@@ -68,12 +69,6 @@ impl<T: PartialEq + 'static> Readable for GlobalMemo<T> {
     }
 }
 
-impl<T: PartialEq + 'static> PartialEq for GlobalMemo<T> {
-    fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self, other)
-    }
-}
-
 /// Allow calling a signal with memo() syntax
 ///
 /// Currently only limited to copy types, though could probably specialize for string/arc/rc
@@ -84,3 +79,5 @@ impl<T: PartialEq + Clone + 'static> Deref for GlobalMemo<T> {
         Readable::deref_impl(self)
     }
 }
+
+read_impls!(GlobalMemo<T> where T: PartialEq);
