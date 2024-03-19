@@ -1982,8 +1982,8 @@ name = "dioxus-autofmt"
 version = "0.5.0-alpha.2"
 dependencies = [
  "dioxus-rsx",
- "prettier-please",
  "pretty_assertions",
+ "prettyplease",
  "proc-macro2",
  "quote",
  "serde",
@@ -2045,7 +2045,7 @@ dependencies = [
  "mlua",
  "notify",
  "open",
- "prettier-please",
+ "prettyplease",
  "rayon",
  "reqwest",
  "rsx-rosetta",
@@ -6669,16 +6669,6 @@ name = "precomputed-hash"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "925383efa346730478fb4838dbe9137d2a47675ad789c546d150a6e1dd4ab31c"
-
-[[package]]
-name = "prettier-please"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22020dfcf177fcc7bf5deaf7440af371400c67c0de14c399938d8ed4fb4645d3"
-dependencies = [
- "proc-macro2",
- "syn 2.0.52",
-]
 
 [[package]]
 name = "pretty_assertions"

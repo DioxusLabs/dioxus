@@ -1,4 +1,4 @@
-use crate::{ifmt_to_string, writer::Location, Writer};
+use crate::{ifmt_to_string, prettier_please::unparse_expr, writer::Location, Writer};
 use dioxus_rsx::*;
 use quote::ToTokens;
 use std::fmt::{Result, Write};
@@ -164,7 +164,7 @@ impl Writer<'_> {
             let name = &field.name;
             match &field.content {
                 ContentField::ManExpr(exp) => {
-                    let out = prettyplease::unparse_expr(exp);
+                    let out = unparse_expr(exp);
                     let mut lines = out.split('\n').peekable();
                     let first = lines.next().unwrap();
                     write!(self.out, "{name}: {first}")?;
@@ -186,7 +186,7 @@ impl Writer<'_> {
                     write!(self.out, "{}", e.to_token_stream())?;
                 }
                 ContentField::OnHandlerRaw(exp) => {
-                    let out = prettyplease::unparse_expr(exp);
+                    let out = unparse_expr(exp);
                     let mut lines = out.split('\n').peekable();
                     let first = lines.next().unwrap();
                     write!(self.out, "{name}: {first}")?;
@@ -228,7 +228,7 @@ impl Writer<'_> {
                 ContentField::Formatted(s) => ifmt_to_string(s).len() ,
                 ContentField::Shorthand(e) => e.to_token_stream().to_string().len(),
                 ContentField::OnHandlerRaw(exp) | ContentField::ManExpr(exp) => {
-                    let formatted = prettyplease::unparse_expr(exp);
+                    let formatted = unparse_expr(exp);
                     let len = if formatted.contains('\n') {
                         10000
                     } else {
@@ -242,7 +242,7 @@ impl Writer<'_> {
 
         match manual_props {
             Some(p) => {
-                let content = prettyplease::unparse_expr(p);
+                let content = unparse_expr(p);
                 if content.len() + attr_len > 80 {
                     return 100000;
                 }
@@ -264,7 +264,7 @@ impl Writer<'_> {
         We want to normalize the expr to the appropriate indent level.
         */
 
-        let formatted = prettyplease::unparse_expr(exp);
+        let formatted = unparse_expr(exp);
 
         let mut lines = formatted.lines();
 

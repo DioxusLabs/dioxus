@@ -45,4 +45,5 @@ twoway![
     tiny,
     tinynoopt,
     trailing_expr,
+    many_exprs,
 ];

@@ -1,3 +1,4 @@
+use crate::prettier_please::unparse_expr;
 use dioxus_rsx::{AttributeType, BodyNode, ElementAttrValue, ForLoop, IfChain};
 use proc_macro2::{LineColumn, Span};
 use quote::ToTokens;
@@ -5,7 +6,7 @@ use std::{
     collections::{HashMap, VecDeque},
     fmt::{Result, Write},
 };
-use syn::{spanned::Spanned, Expr};
+use syn::{spanned::Spanned, token::Brace, Expr};
 
 use crate::buffer::Buffer;
 use crate::ifmt_to_string;
@@ -61,8 +62,26 @@ impl<'a> Writer<'a> {
         Some(self.out.buf)
     }
 
+    pub fn write_attr_comments(&mut self, brace: &Brace, attr_span: Span) -> Result {
+        // There's a chance this line actually shares the same line as the previous
+        // Only write comments if the comments actually belong to this line
+        //
+        // to do this, we check if the attr span starts on the same line as the brace
+        // if it doesn't, we write the comments
+        let brace_line = brace.span.span().start().line;
+        let attr_line = attr_span.start().line;
+
+        if brace_line != attr_line {
+            self.write_comments(attr_span)?;
+        }
+
+        Ok(())
+    }
+
     pub fn write_comments(&mut self, child: Span) -> Result {
         // collect all comments upwards
+        // make sure we don't collect the comments of the node that we're currently under.
+
         let start = child.start();
         let line_start = start.line - 1;
 
@@ -149,7 +168,7 @@ impl<'a> Writer<'a> {
                 let len = if let std::collections::hash_map::Entry::Vacant(e) =
                     self.cached_formats.entry(location)
                 {
-                    let formatted = prettyplease::unparse_expr(tokens);
+                    let formatted = unparse_expr(tokens);
                     let len = if formatted.contains('\n') {
                         10000
                     } else {
@@ -207,7 +226,7 @@ impl<'a> Writer<'a> {
     pub fn retrieve_formatted_expr(&mut self, expr: &Expr) -> &str {
         self.cached_formats
             .entry(Location::new(expr.span().start()))
-            .or_insert_with(|| prettyplease::unparse_expr(expr))
+            .or_insert_with(|| unparse_expr(expr))
             .as_str()
     }
 
@@ -216,7 +235,7 @@ impl<'a> Writer<'a> {
             self.out,
             "for {} in {} {{",
             forloop.pat.clone().into_token_stream(),
-            prettyplease::unparse_expr(&forloop.expr)
+            unparse_expr(&forloop.expr)
         )?;
 
         if forloop.body.is_empty() {
@@ -249,7 +268,7 @@ impl<'a> Writer<'a> {
                 self.out,
                 "{} {} {{",
                 if_token.to_token_stream(),
-                prettyplease::unparse_expr(cond)
+                unparse_expr(cond)
             )?;
 
             self.write_body_indented(then_branch)?;
