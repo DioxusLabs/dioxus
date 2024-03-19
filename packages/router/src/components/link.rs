@@ -268,13 +268,13 @@ pub fn Link(props: LinkProps) -> Element {
             router.push_any(router.resolve_into_routable(to.clone()));
         }
 
-        if let Some(handler) = onclick.clone() {
+        if let Some(handler) = onclick {
             handler.call(event);
         }
     };
 
     let onmounted = move |event| {
-        if let Some(handler) = props.onmounted.clone() {
+        if let Some(handler) = props.onmounted {
             handler.call(event);
         }
     };

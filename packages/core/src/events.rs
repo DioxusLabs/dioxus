@@ -167,6 +167,12 @@ pub struct EventHandler<T = ()> {
     pub(super) callback: GenerationalBox<Option<ExternalListenerCallback<T>>>,
 }
 
+impl<F: FnMut(T) + 'static, T: 'static> From<F> for EventHandler<T> {
+    fn from(f: F) -> Self {
+        EventHandler::new(f)
+    }
+}
+
 impl<T> Copy for EventHandler<T> {}
 
 impl<T> Clone for EventHandler<T> {
