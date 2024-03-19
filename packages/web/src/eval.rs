@@ -1,4 +1,3 @@
-use core::panic;
 use dioxus_html::prelude::{EvalError, EvalProvider, Evaluator};
 use futures_util::StreamExt;
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
