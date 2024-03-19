@@ -1,5 +1,5 @@
 use crate::{
-    config::{Config, WindowCloseBehavior},
+    config::{Config, WindowCloseBehaviour},
     element::DesktopElement,
     event_handlers::WindowEventHandlers,
     file_upload::{DesktopFileDragEvent, DesktopFileUploadForm, FileDialogRequest},
@@ -33,7 +33,7 @@ pub(crate) struct App {
     // Stuff we need mutable access to
     pub(crate) control_flow: ControlFlow,
     pub(crate) is_visible_before_start: bool,
-    pub(crate) window_behavior: WindowCloseBehavior,
+    pub(crate) window_behavior: WindowCloseBehaviour,
     pub(crate) webviews: HashMap<WindowId, WebviewInstance>,
 
     /// This single blob of state is shared between all the windows so they have access to the runtime state
@@ -126,7 +126,7 @@ impl App {
     }
 
     pub fn handle_close_requested(&mut self, id: WindowId) {
-        use WindowCloseBehavior::*;
+        use WindowCloseBehaviour::*;
 
         match self.window_behavior {
             LastWindowExitsApp => {
@@ -154,7 +154,7 @@ impl App {
 
         if matches!(
             self.window_behavior,
-            WindowCloseBehavior::LastWindowExitsApp
+            WindowCloseBehaviour::LastWindowExitsApp
         ) && self.webviews.is_empty()
         {
             self.control_flow = ControlFlow::Exit

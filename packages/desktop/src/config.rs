@@ -7,7 +7,7 @@ use crate::menubar::{default_menu_bar, DioxusMenu};
 
 /// The behaviour of the application when the last window is closed.
 #[derive(Copy, Clone, Eq, PartialEq)]
-pub enum WindowCloseBehavior {
+pub enum WindowCloseBehaviour {
     /// Default behaviour, closing the last window exits the app
     LastWindowExitsApp,
     /// Closing the last window will not actually close it, just hide it
@@ -29,7 +29,7 @@ pub struct Config {
     pub(crate) custom_index: Option<String>,
     pub(crate) root_name: String,
     pub(crate) background_color: Option<(u8, u8, u8, u8)>,
-    pub(crate) last_window_close_behavior: WindowCloseBehavior,
+    pub(crate) last_window_close_behavior: WindowCloseBehaviour,
 }
 
 pub(crate) type WryProtocol = (
@@ -60,7 +60,7 @@ impl Config {
             custom_index: None,
             root_name: "main".to_string(),
             background_color: None,
-            last_window_close_behavior: WindowCloseBehavior::LastWindowExitsApp,
+            last_window_close_behavior: WindowCloseBehaviour::LastWindowExitsApp,
         }
     }
 
@@ -99,7 +99,7 @@ impl Config {
     }
 
     /// Sets the behaviour of the application when the last window is closed.
-    pub fn with_close_behaviour(mut self, behaviour: WindowCloseBehavior) -> Self {
+    pub fn with_close_behaviour(mut self, behaviour: WindowCloseBehaviour) -> Self {
         self.last_window_close_behavior = behaviour;
         self
     }
