@@ -6,7 +6,7 @@ use syn::{Expr, File, Item};
 /// This creates a new temporary file, parses the expression into it, and then formats the file.
 /// This is a bit of a hack, but dtonlay doesn't want to support this very simple usecase, forcing us to clone the expr
 pub fn unparse_expr(expr: &Expr) -> String {
-    let file = wrapped(&expr);
+    let file = wrapped(expr);
     let wrapped = unparse(&file);
     unwrapped(wrapped)
 }
