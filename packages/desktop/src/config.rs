@@ -3,9 +3,11 @@ use std::path::PathBuf;
 use tao::window::{Icon, WindowBuilder};
 use wry::http::{Request as HttpRequest, Response as HttpResponse};
 
+use crate::menubar::{default_menu_bar, DioxusMenu};
+
 /// The behaviour of the application when the last window is closed.
 #[derive(Copy, Clone, Eq, PartialEq)]
-pub enum WindowCloseBehaviour {
+pub enum WindowCloseBehavior {
     /// Default behaviour, closing the last window exits the app
     LastWindowExitsApp,
     /// Closing the last window will not actually close it, just hide it
@@ -17,6 +19,7 @@ pub enum WindowCloseBehaviour {
 /// The configuration for the desktop application.
 pub struct Config {
     pub(crate) window: WindowBuilder,
+    pub(crate) menu: Option<DioxusMenu>,
     pub(crate) protocols: Vec<WryProtocol>,
     pub(crate) pre_rendered: Option<String>,
     pub(crate) disable_context_menu: bool,
@@ -26,8 +29,7 @@ pub struct Config {
     pub(crate) custom_index: Option<String>,
     pub(crate) root_name: String,
     pub(crate) background_color: Option<(u8, u8, u8, u8)>,
-    pub(crate) last_window_close_behaviour: WindowCloseBehaviour,
-    pub(crate) enable_default_menu_bar: bool,
+    pub(crate) last_window_close_behavior: WindowCloseBehavior,
 }
 
 pub(crate) type WryProtocol = (
@@ -48,6 +50,7 @@ impl Config {
 
         Self {
             window,
+            menu: Some(default_menu_bar()),
             protocols: Vec::new(),
             pre_rendered: None,
             disable_context_menu: !cfg!(debug_assertions),
@@ -57,17 +60,8 @@ impl Config {
             custom_index: None,
             root_name: "main".to_string(),
             background_color: None,
-            last_window_close_behaviour: WindowCloseBehaviour::LastWindowExitsApp,
-            enable_default_menu_bar: true,
+            last_window_close_behavior: WindowCloseBehavior::LastWindowExitsApp,
         }
-    }
-
-    /// Set whether the default menu bar should be enabled.
-    ///
-    /// > Note: `enable` is `true` by default. To disable the default menu bar pass `false`.
-    pub fn with_default_menu_bar(mut self, enable: bool) -> Self {
-        self.enable_default_menu_bar = enable;
-        self
     }
 
     /// set the directory from which assets will be searched in release mode
@@ -105,8 +99,8 @@ impl Config {
     }
 
     /// Sets the behaviour of the application when the last window is closed.
-    pub fn with_close_behaviour(mut self, behaviour: WindowCloseBehaviour) -> Self {
-        self.last_window_close_behaviour = behaviour;
+    pub fn with_close_behaviour(mut self, behaviour: WindowCloseBehavior) -> Self {
+        self.last_window_close_behavior = behaviour;
         self
     }
 
@@ -146,7 +140,7 @@ impl Config {
 
     /// Set the name of the element that Dioxus will use as the root.
     ///
-    /// This is akint to calling React.render() on the element with the specified name.
+    /// This is akin to calling React.render() on the element with the specified name.
     pub fn with_root_name(mut self, name: impl Into<String>) -> Self {
         self.root_name = name.into();
         self
@@ -157,6 +151,18 @@ impl Config {
     /// Accepts a color in RGBA format
     pub fn with_background_color(mut self, color: (u8, u8, u8, u8)) -> Self {
         self.background_color = Some(color);
+        self
+    }
+
+    /// Sets the menu the window will use. This will override the default menu bar.
+    ///
+    /// > Note: A default menu bar will be enabled unless the menu is overridden or set to `None`.
+    #[allow(unused)]
+    pub fn with_menu(mut self, menu: impl Into<Option<DioxusMenu>>) -> Self {
+        #[cfg(not(any(target_os = "ios", target_os = "android")))]
+        {
+            self.menu = menu.into();
+        }
         self
     }
 }

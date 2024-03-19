@@ -151,7 +151,7 @@ mod current_platform {
     pub use dioxus_desktop::launch::*;
 
     #[cfg(all(feature = "mobile", not(feature = "fullstack")))]
-    pub use dioxus_desktop::launch::*;
+    pub use dioxus_mobile::launch::*;
 
     #[cfg(feature = "fullstack")]
     pub use dioxus_fullstack::launch::*;

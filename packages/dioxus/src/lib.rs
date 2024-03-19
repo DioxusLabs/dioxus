@@ -63,7 +63,10 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
     pub use dioxus_elements::{prelude::*, GlobalAttributes, SvgAttributes};
 
-    #[cfg(all(not(target_arch = "wasm32"), feature = "hot-reload"))]
+    #[cfg(all(
+        not(any(target_arch = "wasm32", target_os = "ios", target_os = "android")),
+        feature = "hot-reload"
+    ))]
     #[cfg_attr(docsrs, doc(cfg(feature = "hot-reload")))]
     pub use dioxus_hot_reload::{self, hot_reload_init};
 
@@ -100,7 +103,7 @@ pub use dioxus_desktop as desktop;
 
 #[cfg(feature = "mobile")]
 #[cfg_attr(docsrs, doc(cfg(feature = "mobile")))]
-pub use dioxus_desktop as mobile;
+pub use dioxus_mobile as mobile;
 
 #[cfg(feature = "liveview")]
 #[cfg_attr(docsrs, doc(cfg(feature = "liveview")))]

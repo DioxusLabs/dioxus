@@ -20,14 +20,14 @@ dioxus-signals = { workspace = true, optional = true }
 dioxus-router = { workspace = true, optional = true }
 dioxus-web = { workspace = true, optional = true }
 dioxus-mobile = { workspace = true, optional = true }
-dioxus-desktop = { workspace = true, optional = true }
+dioxus-desktop = { workspace = true, default-features = true, optional = true }
 dioxus-fullstack = { workspace = true, optional = true }
 dioxus-liveview = { workspace = true, optional = true }
 dioxus-ssr ={ workspace = true, optional = true }
 
 serde = { version = "1.0.136", optional = true }
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+[target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "android")))'.dependencies]
 dioxus-hot-reload = { workspace = true, optional = true }
 
 [features]
@@ -44,7 +44,7 @@ router = ["dioxus-router"]
 # Platforms
 fullstack = ["dioxus-fullstack", "dioxus-config-macro/fullstack", "serde", "dioxus-router?/fullstack"]
 desktop = ["dioxus-desktop", "dioxus-fullstack?/desktop", "dioxus-config-macro/desktop"]
-mobile = ["dioxus-mobile", "dioxus-desktop", "dioxus-fullstack?/mobile", "dioxus-config-macro/mobile"]
+mobile = ["dioxus-mobile", "dioxus-fullstack?/mobile", "dioxus-config-macro/mobile"]
 web = ["dioxus-web", "dioxus-fullstack?/web", "dioxus-config-macro/web", "dioxus-router?/web"]
 ssr = ["dioxus-ssr", "dioxus-router?/ssr", "dioxus-config-macro/ssr"]
 liveview = ["dioxus-liveview", "dioxus-config-macro/liveview", "dioxus-router?/liveview"]

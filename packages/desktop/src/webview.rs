@@ -1,3 +1,4 @@
+use crate::menubar::DioxusMenu;
 use crate::{
     app::SharedContext, assets::AssetHandlerRegistry, edits::EditQueue, eval::DesktopEvalProvider,
     file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, waker::tao_waker, Config,
@@ -6,7 +7,7 @@ use crate::{
 use dioxus_core::{ScopeId, VirtualDom};
 use dioxus_html::prelude::EvalProvider;
 use futures_util::{pin_mut, FutureExt};
-use std::{any::Any, rc::Rc, task::Waker};
+use std::{rc::Rc, task::Waker};
 use wry::{RequestAsyncResponder, WebContext, WebViewBuilder};
 
 pub(crate) struct WebviewInstance {
@@ -19,11 +20,11 @@ pub(crate) struct WebviewInstance {
     _web_context: WebContext,
 
     // Same with the menu.
-    // Currently it's a box<dyn any> because 1) we don't touch it and 2) we support a number of platforms
+    // Currently it's a DioxusMenu because 1) we don't touch it and 2) we support a number of platforms
     // like ios where muda does not give us a menu type. It sucks but alas.
     //
     // This would be a good thing for someone looking to contribute to fix.
-    _menu: Option<Box<dyn Any>>,
+    _menu: Option<DioxusMenu>,
 }
 
 impl WebviewInstance {
@@ -165,9 +166,11 @@ impl WebviewInstance {
 
         let webview = webview.build().unwrap();
 
-        // TODO: allow users to specify their own menubars, again :/
         let menu = if cfg!(not(any(target_os = "android", target_os = "ios"))) {
-            crate::menubar::build_menu(&window, cfg.enable_default_menu_bar)
+            if let Some(menu) = &cfg.menu {
+                crate::menubar::init_menu_bar(menu, &window);
+            }
+            cfg.menu
         } else {
             None
         };
@@ -221,7 +224,7 @@ impl WebviewInstance {
         }
     }
 
-    #[allow(unused)]
+    #[cfg(all(feature = "hot-reload", debug_assertions))]
     pub fn kick_stylsheets(&self) {
         // run eval in the webview to kick the stylesheets by appending a query string
         // we should do something less clunky than this
