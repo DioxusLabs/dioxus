@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ops::Deref};
+use std::collections::HashMap;
 
 use dioxus::html::geometry::euclid::Vector3D;
 use dioxus::prelude::*;
@@ -453,10 +453,10 @@ fn test_form_input() -> Element {
 
         // And then the value the form gives us should also match
         values.with_mut(|x| {
-            assert_eq!(x.get("username").unwrap().deref(), "hello");
-            assert_eq!(x.get("full-name").unwrap().deref(), "lorem");
-            assert_eq!(x.get("password").unwrap().deref(), "ipsum");
-            assert_eq!(x.get("color").unwrap().deref(), "red");
+            assert_eq!(x.get("username").unwrap(), "hello");
+            assert_eq!(x.get("full-name").unwrap(), "lorem");
+            assert_eq!(x.get("password").unwrap(), "ipsum");
+            assert_eq!(x.get("color").unwrap(), "red");
         });
         RECEIVED_EVENTS.with_mut(|x| *x += 1);
     };
@@ -500,10 +500,10 @@ fn test_form_submit() -> Element {
     let set_values = move |ev: FormEvent| {
         values.set(ev.values());
         values.with_mut(|x| {
-            assert_eq!(x.get("username").unwrap().deref(), "goodbye");
-            assert_eq!(x.get("full-name").unwrap().deref(), "lorem");
-            assert_eq!(x.get("password").unwrap().deref(), "ipsum");
-            assert_eq!(x.get("color").unwrap().deref(), "red");
+            assert_eq!(x.get("username").unwrap(), "goodbye");
+            assert_eq!(x.get("full-name").unwrap(), "lorem");
+            assert_eq!(x.get("password").unwrap(), "ipsum");
+            assert_eq!(x.get("color").unwrap(), "red");
         });
         RECEIVED_EVENTS.with_mut(|x| *x += 1);
     };

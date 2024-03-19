@@ -4,7 +4,7 @@ use dioxus_html::{
     point_interaction::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
-    DragData, FileEngine, FormData, HasDragData, HasFileData, HasFormData, HasImageData,
+    DragData, FileEngine, FormData, FormValue, HasDragData, HasFileData, HasFormData, HasImageData,
     HasMouseData, HtmlEventConverter, ImageData, MountedData, PlatformEventData, ScrollData,
 };
 use js_sys::Array;
@@ -384,15 +384,11 @@ impl HasFormData for WebFormData {
         .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener")
     }
 
-    fn values(&self) -> HashMap<String, String> {
+    fn values(&self) -> HashMap<String, FormValue> {
         let mut values = HashMap::new();
 
-        fn insert_value(map: &mut HashMap<String, String>, key: String, new_value: String) {
-            if let Some(value) = map.get(&key) {
-                map.insert(key, format!("{},{}", value, new_value));
-            } else {
-                map.insert(key, new_value);
-            }
+        fn insert_value(map: &mut HashMap<String, FormValue>, key: String, new_value: String) {
+            map.entry(key.clone()).or_default().0.push(new_value);
         }
 
         // try to fill in form values
@@ -414,8 +410,8 @@ impl HasFormData for WebFormData {
             }
         } else if let Some(select) = self.element.dyn_ref::<web_sys::HtmlSelectElement>() {
             // try to fill in select element values
-            let options = get_select_data(select).join(",");
-            values.insert("options".to_string(), options);
+            let options = get_select_data(select);
+            values.insert("options".to_string(), FormValue(options));
         }
 
         values

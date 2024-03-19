@@ -2,7 +2,11 @@ use std::process::Command;
 
 fn main() {
     // If any TS changes, re-run the build script
-    println!("cargo:rerun-if-changed=src/ts/*.ts");
+    println!("cargo:rerun-if-changed=src/ts/form.ts");
+    println!("cargo:rerun-if-changed=src/ts/core.ts");
+    println!("cargo:rerun-if-changed=src/ts/serialize.ts");
+    println!("cargo:rerun-if-changed=src/ts/set_attribute.ts");
+    println!("cargo:rerun-if-changed=src/ts/common.ts");
 
     // Compute the hash of the ts files
     let hash = hash_ts_files();
