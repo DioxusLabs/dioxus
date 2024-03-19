@@ -188,7 +188,7 @@ impl<T> Clone for EventHandler<T> {
 }
 
 impl<T: 'static> PartialEq for EventHandler<T> {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, _: &Self) -> bool {
         true
     }
 }
