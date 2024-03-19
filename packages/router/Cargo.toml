@@ -40,9 +40,9 @@ fullstack = ["dioxus-fullstack"]
 
 [dev-dependencies]
 axum = { workspace = true, features = ["ws"] }
-dioxus = { workspace = true, features = ["router" ]}
+dioxus = { workspace = true, features = ["router"] }
 # dioxus-liveview = { workspace = true, features = ["axum"] }
-dioxus-ssr = { path = "../ssr" }
+dioxus-ssr = { workspace = true }
 criterion = { version = "0.5", features = ["async_tokio", "html_reports"] }
 
 [[example]]
@@ -54,12 +54,12 @@ name = "incremental"
 required-features = ["ssr"]
 harness = false
 
-# [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
-# dioxus-desktop = { path = "../desktop" }
 
+# you need to comment this out when publishing since cargo workspaces is not smart enough to wipe this when dropping
+# dev-dependncey crates
 [target.'cfg(target_family = "wasm")'.dev-dependencies]
 console_error_panic_hook = "0.1.7"
-dioxus-router = { path = ".", features = ["web"] }
+dioxus-router = { workspace = true, features = ["web"] }
 # dioxus-web = { workspace = true }
 gloo = "0.8.0"
 wasm-bindgen-test = "0.3.33"

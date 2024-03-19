@@ -14,16 +14,39 @@ fn app() -> Element {
         }
     });
 
-    let mut local_state = use_signal(|| 0);
+    rsx! {
+        "Parent count: {signal}"
+        Child {
+            non_reactive_prop: signal()
+        }
+    }
+}
 
-    let computed = use_memo_with_dependencies((&local_state(),), move |(local_state,)| {
-        local_state * 2 + signal.cloned()
-    });
+#[component]
+fn Child(non_reactive_prop: i32) -> Element {
+    let mut signal = use_signal(|| 0);
 
-    println!("Running app");
+    // You can manually specify the dependencies with `use_reactive` for values that are not reactive like props
+    let computed = use_memo(use_reactive!(
+        |(non_reactive_prop,)| non_reactive_prop + signal()
+    ));
+    use_effect(use_reactive!(|(non_reactive_prop,)| println!(
+        "{}",
+        non_reactive_prop + signal()
+    )));
+    let fut = use_resource(use_reactive!(|(non_reactive_prop,)| async move {
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        non_reactive_prop + signal()
+    }));
 
     rsx! {
-        button { onclick: move |_| local_state.set(local_state() + 1), "Add one" }
-        div { "{computed}" }
+        button {
+            onclick: move |_| signal += 1,
+            "Child count: {signal}"
+        }
+
+        "Sum: {computed}"
+
+        "{fut():?}"
     }
 }

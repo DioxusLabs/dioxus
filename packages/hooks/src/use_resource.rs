@@ -35,7 +35,7 @@ use std::{cell::Cell, future::Future, rc::Rc};
 ///     });
 ///
 ///    // Because the resource's future subscribes to `country` by reading it (`country.read()`),
-///    // everytime `country` changes the resource's future will run again and thus provide a new value.
+///    // every time `country` changes the resource's future will run again and thus provide a new value.
 ///    let current_weather = use_resource(move || async move { get_weather(&country()).await });
 ///    
 ///    rsx! {
@@ -51,8 +51,26 @@ use std::{cell::Cell, future::Future, rc::Rc};
 ///    }
 ///}
 /// ```
+///
+/// ## With non-reactive dependencies
+/// To add non-reactive dependencies, you can use the `use_reactive` hook.
+///
+/// Signals will automatically be added as dependencies, so you don't need to call this method for them.
+///
+/// ```rust
+/// # use dioxus::prelude::*;
+/// # async fn sleep(delay: u32) {}
+///
+/// #[component]
+/// fn Comp(count: u32) -> Element {
+///     // Because the memo subscribes to `count` by adding it as a dependency, the memo will rerun every time `count` changes.
+///     let new_count = use_resource(use_reactive((&count, |(count,)| async move {count + 1} )));
+///
+///     todo!()
+/// }
+/// ```
 #[must_use = "Consider using `cx.spawn` to run a future without reading its value"]
-pub fn use_resource<T, F>(future: impl Fn() -> F + 'static) -> Resource<T>
+pub fn use_resource<T, F>(mut future: impl FnMut() -> F + 'static) -> Resource<T>
 where
     T: 'static,
     F: Future<Output = T> + 'static,
@@ -66,10 +84,9 @@ where
 
     let cb = use_callback(move || {
         // Create the user's task
-        #[allow(clippy::redundant_closure)]
-        let fut = rc.run_in(|| future());
+        let fut = rc.run_in(&mut future);
 
-        // Spawn a wrapper task that polls the innner future and watch its dependencies
+        // Spawn a wrapper task that polls the inner future and watch its dependencies
         spawn(async move {
             // move the future here and pin it so we can poll it
             let fut = fut;

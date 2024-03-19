@@ -79,7 +79,12 @@ impl App {
         app.set_global_hotkey_handler();
 
         // Allow hotreloading to work - but only in debug mode
-        #[cfg(all(feature = "hot-reload", debug_assertions))]
+        #[cfg(all(
+            feature = "hot-reload",
+            debug_assertions,
+            not(target_os = "android"),
+            not(target_os = "ios")
+        ))]
         app.connect_hotreload();
 
         (event_loop, app)
@@ -97,7 +102,12 @@ impl App {
         self.shared.shortcut_manager.call_handlers(event);
     }
 
-    #[cfg(all(feature = "hot-reload", debug_assertions))]
+    #[cfg(all(
+        feature = "hot-reload",
+        debug_assertions,
+        not(target_os = "android"),
+        not(target_os = "ios")
+    ))]
     pub fn connect_hotreload(&self) {
         dioxus_hot_reload::connect({
             let proxy = self.shared.proxy.clone();
@@ -263,7 +273,12 @@ impl App {
         view.desktop_context.send_edits();
     }
 
-    #[cfg(all(feature = "hot-reload", debug_assertions))]
+    #[cfg(all(
+        feature = "hot-reload",
+        debug_assertions,
+        not(target_os = "android"),
+        not(target_os = "ios")
+    ))]
     pub fn handle_hot_reload_msg(&mut self, msg: dioxus_hot_reload::HotReloadMsg) {
         match msg {
             dioxus_hot_reload::HotReloadMsg::UpdateTemplate(template) => {

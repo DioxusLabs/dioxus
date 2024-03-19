@@ -17,6 +17,7 @@ mod component;
 mod element;
 mod expr;
 mod indent;
+mod prettier_please;
 mod writer;
 
 pub use indent::{IndentOptions, IndentType};

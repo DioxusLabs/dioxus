@@ -36,7 +36,12 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, desktop_config: Conf
                 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
                 UserWindowEvent::GlobalHotKeyEvent(evnt) => app.handle_global_hotkey(evnt),
 
-                #[cfg(all(feature = "hot-reload", debug_assertions))]
+                #[cfg(all(
+                    feature = "hot-reload",
+                    debug_assertions,
+                    not(target_os = "android"),
+                    not(target_os = "ios")
+                ))]
                 UserWindowEvent::HotReloadEvent(msg) => app.handle_hot_reload_msg(msg),
 
                 UserWindowEvent::Ipc { id, msg } => match msg.method() {

@@ -1,4 +1,4 @@
-use crate::{ifmt_to_string, Writer};
+use crate::{ifmt_to_string, prettier_please::unparse_expr, Writer};
 use dioxus_rsx::*;
 use proc_macro2::Span;
 use quote::ToTokens;
@@ -112,7 +112,7 @@ impl Writer<'_> {
             ShortOptimization::Oneliner => {
                 write!(self.out, " ")?;
 
-                self.write_attributes(attributes, key, true)?;
+                self.write_attributes(brace, attributes, key, true)?;
 
                 if !children.is_empty() && (!attributes.is_empty() || key.is_some()) {
                     write!(self.out, ", ")?;
@@ -132,7 +132,7 @@ impl Writer<'_> {
                 if !attributes.is_empty() || key.is_some() {
                     write!(self.out, " ")?;
                 }
-                self.write_attributes(attributes, key, true)?;
+                self.write_attributes(brace, attributes, key, true)?;
 
                 if !children.is_empty() && (!attributes.is_empty() || key.is_some()) {
                     write!(self.out, ",")?;
@@ -145,7 +145,7 @@ impl Writer<'_> {
             }
 
             ShortOptimization::NoOpt => {
-                self.write_attributes(attributes, key, false)?;
+                self.write_attributes(brace, attributes, key, false)?;
 
                 if !children.is_empty() && (!attributes.is_empty() || key.is_some()) {
                     write!(self.out, ",")?;
@@ -166,6 +166,7 @@ impl Writer<'_> {
 
     fn write_attributes(
         &mut self,
+        brace: &Brace,
         attributes: &[AttributeType],
         key: &Option<IfmtInput>,
         sameline: bool,
@@ -187,9 +188,11 @@ impl Writer<'_> {
 
         while let Some(attr) = attr_iter.next() {
             self.out.indent_level += 1;
+
             if !sameline {
-                self.write_comments(attr.start())?;
+                self.write_attr_comments(brace, attr.start())?;
             }
+
             self.out.indent_level -= 1;
 
             if !sameline {
@@ -229,7 +232,7 @@ impl Writer<'_> {
                 write!(
                     self.out,
                     "if {condition} {{ ",
-                    condition = prettyplease::unparse_expr(condition),
+                    condition = unparse_expr(condition),
                 )?;
                 self.write_attribute_value(value)?;
                 write!(self.out, " }}")?;
@@ -241,7 +244,7 @@ impl Writer<'_> {
                 write!(self.out, "{value}",)?;
             }
             ElementAttrValue::AttrExpr(value) => {
-                let out = prettyplease::unparse_expr(value);
+                let out = unparse_expr(value);
                 let mut lines = out.split('\n').peekable();
                 let first = lines.next().unwrap();
 
@@ -308,7 +311,7 @@ impl Writer<'_> {
 
     fn write_spread_attribute(&mut self, attr: &Expr) -> Result {
         write!(self.out, "..")?;
-        write!(self.out, "{}", prettyplease::unparse_expr(attr))?;
+        write!(self.out, "{}", unparse_expr(attr))?;
 
         Ok(())
     }

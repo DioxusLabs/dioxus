@@ -130,7 +130,6 @@ impl WebviewInstance {
         webview = webview
             .with_transparent(cfg.window.window.transparent)
             .with_url("dioxus://index.html/")
-            .unwrap()
             .with_ipc_handler(ipc_handler)
             .with_navigation_handler(|var| var.contains("dioxus")) // prevent all navigations
             .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler)

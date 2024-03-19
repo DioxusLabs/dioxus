@@ -2,7 +2,7 @@
 
 type FormValues = {
   valid?: boolean;
-  values: { [key: string]: FormDataEntryValue };
+  values: { [key: string]: FormDataEntryValue[] };
 }
 
 export function retriveValues(event: Event, target: HTMLElement): FormValues {
@@ -33,12 +33,12 @@ export function retriveValues(event: Event, target: HTMLElement): FormValues {
 // We encode select multiple as a comma separated list which breaks... when there's commas in the values
 export function retrieveFormValues(form: HTMLFormElement): FormValues {
   const formData = new FormData(form);
-  const contents: { [key: string]: FormDataEntryValue } = {};
+  const contents: { [key: string]: FormDataEntryValue[] } = {};
   formData.forEach((value, key) => {
     if (contents[key]) {
-      contents[key] += "," + value;
+      contents[key].push(value);
     } else {
-      contents[key] = value;
+      contents[key] = [value];
     }
   });
   return {

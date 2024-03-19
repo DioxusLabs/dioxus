@@ -1,7 +1,11 @@
+use dioxus_signals::{Readable, Writable};
+
+use crate::use_signal;
+
 /// A dependency is a trait that can be used to determine if a effect or selector should be re-run.
 pub trait Dependency: Sized + Clone {
     /// The output of the dependency
-    type Out: Clone + PartialEq;
+    type Out: Clone + PartialEq + 'static;
     /// Returns the output of the dependency.
     fn out(&self) -> Self::Out;
     /// Returns true if the dependency has changed.
@@ -16,10 +20,10 @@ impl Dependency for () {
 }
 
 /// A dependency is a trait that can be used to determine if a effect or selector should be re-run.
-pub trait Dep: 'static + PartialEq + Clone {}
-impl<T> Dep for T where T: 'static + PartialEq + Clone {}
+pub trait DependencyElement: 'static + PartialEq + Clone {}
+impl<T> DependencyElement for T where T: 'static + PartialEq + Clone {}
 
-impl<A: Dep> Dependency for &A {
+impl<A: DependencyElement> Dependency for &A {
     type Out = A;
     fn out(&self) -> Self::Out {
         (*self).clone()
@@ -33,7 +37,7 @@ macro_rules! impl_dep {
         impl< $($el),* > Dependency for ($(&$el,)*)
         where
             $(
-                $el: Dep
+                $el: DependencyElement
             ),*
         {
             type Out = ($($el,)*);
@@ -65,3 +69,57 @@ impl_dep!(A = a1 a2, B = b1 b2, C = c1 c2, D = d1 d2, E = e1 e2,);
 impl_dep!(A = a1 a2, B = b1 b2, C = c1 c2, D = d1 d2, E = e1 e2, F = f1 f2,);
 impl_dep!(A = a1 a2, B = b1 b2, C = c1 c2, D = d1 d2, E = e1 e2, F = f1 f2, G = g1 g2,);
 impl_dep!(A = a1 a2, B = b1 b2, C = c1 c2, D = d1 d2, E = e1 e2, F = f1 f2, G = g1 g2, H = h1 h2,);
+
+/// Takes some non-reactive data, and a closure and returns a closure that will subscribe to that non-reactive data as if it were reactive.
+///
+/// # Example
+///
+/// ```rust
+/// use dioxus::prelude::*;
+///
+/// let data = 5;
+///
+/// use_effect(use_reactive((&data,), |(data,)| {
+///     println!("Data changed: {}", data);
+/// }));
+/// ```
+pub fn use_reactive<O, D: Dependency>(
+    non_reactive_data: D,
+    mut closure: impl FnMut(D::Out) -> O + 'static,
+) -> impl FnMut() -> O + 'static {
+    let mut first_run = false;
+    let mut last_state = use_signal(|| {
+        first_run = true;
+        non_reactive_data.out()
+    });
+    if !first_run && non_reactive_data.changed(&*last_state.peek()) {
+        last_state.set(non_reactive_data.out());
+    }
+    move || closure(last_state())
+}
+
+/// A helper macro for `use_reactive` that merges uses the closure syntax to elaborate the dependency array
+///
+/// Takes some non-reactive data, and a closure and returns a closure that will subscribe to that non-reactive data as if it were reactive.
+///
+/// # Example
+///
+/// ```rust
+/// use dioxus::prelude::*;
+///
+/// let data = 5;
+///
+/// use_effect(use_reactive!(|data| {
+///     println!("Data changed: {}", data);
+/// }));
+/// ```
+#[macro_export]
+macro_rules! use_reactive {
+    (|| $($rest:tt)*) => { use_reactive( (), move |_| $($rest)* ) };
+    (| $($args:tt),* | $($rest:tt)*) => {
+        use_reactive(
+            ($(&$args),*),
+            move |($($args),*)| $($rest)*
+        )
+    };
+}
