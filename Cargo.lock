@@ -2153,6 +2153,7 @@ name = "dioxus-desktop"
 version = "0.5.0-alpha.2"
 dependencies = [
  "async-trait",
+ "cocoa",
  "core-foundation",
  "dioxus",
  "dioxus-cli-config",
