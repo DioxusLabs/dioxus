@@ -111,6 +111,7 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
         .exec()
         .unwrap();
     let target_dir = metadata.target_directory.as_std_path();
+
     let _ = create_dir_all(target_dir); // `_all` is for good measure and future-proofness.
     let path = target_dir.join("dioxusin");
     clear_paths(&path);
@@ -141,6 +142,7 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
                                         .flat_map(|v| v.templates.values().copied())
                                         .collect()
                                 };
+
                                 for template in templates {
                                     if !send_msg(
                                         HotReloadMsg::UpdateTemplate(template),
@@ -282,7 +284,29 @@ impl DesktopPlatform {
         config: &CrateConfig,
         rust_flags: Option<String>,
     ) -> Result<BuildResult> {
-        self.currently_running_child.0.kill()?;
+        // Gracefully shtudown the desktop app
+        // It might have a receiver to do some cleanup stuff
+        let pid = self.currently_running_child.0.id();
+
+        // on unix, we can send a signal to the process to shut down
+        #[cfg(unix)]
+        {
+            _ = Command::new("kill")
+                .args(["-s", "TERM", &pid.to_string()])
+                .spawn();
+        }
+
+        // on windows, use the `taskkill` command
+        #[cfg(windows)]
+        {
+            _ = Command::new("taskkill")
+                .args(["/F", "/PID", &pid.to_string()])
+                .spawn();
+        }
+
+        // Todo: add a timeout here to kill the process if it doesn't shut down within a reasonable time
+        self.currently_running_child.0.wait()?;
+
         let (child, result) = start_desktop(config, self.skip_assets, rust_flags)?;
         self.currently_running_child = child;
         Ok(result)

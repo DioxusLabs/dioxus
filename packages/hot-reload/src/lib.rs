@@ -29,32 +29,40 @@ pub enum HotReloadMsg {
 }
 
 /// Connect to the hot reloading listener. The callback provided will be called every time a template change is detected
-pub fn connect(mut callback: impl FnMut(HotReloadMsg) + Send + 'static) {
-    std::thread::spawn(move || {
-        // get the cargo manifest directory, where the target dir lives
-        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+pub fn connect(callback: impl FnMut(HotReloadMsg) + Send + 'static) {
+    let Ok(_manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") else {
+        return;
+    };
 
-        // walk the path until we a find a socket named `dioxusin` inside that folder's target directory
-        loop {
-            let maybe = path.join("target").join("dioxusin");
+    // get the cargo manifest directory, where the target dir lives
+    let mut path = PathBuf::from(_manifest_dir);
 
-            if maybe.exists() {
-                path = maybe;
-                break;
-            }
+    // walk the path until we a find a socket named `dioxusin` inside that folder's target directory
+    loop {
+        let maybe = path.join("target").join("dioxusin");
 
-            // It's likely we're running under just cargo and not dx
-            path = match path.parent() {
-                Some(parent) => parent.to_path_buf(),
-                None => return,
-            };
+        if maybe.exists() {
+            path = maybe;
+            break;
         }
 
+        // It's likely we're running under just cargo and not dx
+        path = match path.parent() {
+            Some(parent) => parent.to_path_buf(),
+            None => return,
+        };
+    }
+
+    connect_at(path, callback);
+}
+
+pub fn connect_at(socket: PathBuf, mut callback: impl FnMut(HotReloadMsg) + Send + 'static) {
+    std::thread::spawn(move || {
         // There might be a socket since the we're not running under the hot reloading server
-        let Ok(socket) = LocalSocketStream::connect(path.clone()) else {
+        let Ok(socket) = LocalSocketStream::connect(socket.clone()) else {
             println!(
                 "could not find hot reloading server at {:?}, make sure it's running",
-                path
+                socket
             );
             return;
         };

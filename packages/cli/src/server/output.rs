@@ -112,7 +112,7 @@ pub fn print_console_info(
             .watch_path
             .iter()
             .cloned()
-            .chain(Some(config.dioxus_config.application.asset_dir.clone()))
+            .chain(["Cargo.toml", "Dioxus.toml"].iter().map(PathBuf::from))
             .map(|f| f.display().to_string())
             .collect::<Vec<String>>()
             .join(", ")

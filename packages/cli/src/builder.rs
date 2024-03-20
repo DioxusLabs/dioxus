@@ -335,43 +335,14 @@ pub fn build_desktop(
     let _manganis_support = ManganisSupportGuard::default();
     let _guard = AssetConfigDropGuard::new();
 
-    let mut cmd = subprocess::Exec::cmd("cargo")
+    let cmd = subprocess::Exec::cmd("cargo")
         .set_rust_flags(rust_flags)
         .env("CARGO_TARGET_DIR", &config.target_dir)
         .cwd(&config.crate_dir)
         .arg("build")
         .arg("--message-format=json-render-diagnostics");
 
-    if config.release {
-        cmd = cmd.arg("--release");
-    }
-    if config.verbose {
-        cmd = cmd.arg("--verbose");
-    } else {
-        cmd = cmd.arg("--quiet");
-    }
-
-    if config.custom_profile.is_some() {
-        let custom_profile = config.custom_profile.as_ref().unwrap();
-        cmd = cmd.arg("--profile").arg(custom_profile);
-    }
-
-    if config.features.is_some() {
-        let features_str = config.features.as_ref().unwrap().join(" ");
-        cmd = cmd.arg("--features").arg(features_str);
-    }
-
-    if let Some(target) = &config.target {
-        cmd = cmd.arg("--target").arg(target);
-    }
-
-    cmd = cmd.args(&config.cargo_args);
-
-    let cmd = match &config.executable {
-        ExecutableType::Binary(name) => cmd.arg("--bin").arg(name),
-        ExecutableType::Lib(name) => cmd.arg("--lib").arg(name),
-        ExecutableType::Example(name) => cmd.arg("--example").arg(name),
-    };
+    let cmd = apply_config_build_flags(config, cmd);
 
     let warning_messages = prettier_build(cmd)?;
 
@@ -448,6 +419,44 @@ pub fn build_desktop(
         elapsed_time: t_start.elapsed().as_millis(),
         assets,
     })
+}
+
+/// Apply the build flags to the command
+///
+/// This is factored out so it can be used in both `build` and `run`
+fn apply_config_build_flags(config: &CrateConfig, mut cmd: subprocess::Exec) -> subprocess::Exec {
+    if config.release {
+        cmd = cmd.arg("--release");
+    }
+    if config.verbose {
+        cmd = cmd.arg("--verbose");
+    } else {
+        cmd = cmd.arg("--quiet");
+    }
+
+    if config.custom_profile.is_some() {
+        let custom_profile = config.custom_profile.as_ref().unwrap();
+        cmd = cmd.arg("--profile").arg(custom_profile);
+    }
+
+    if config.features.is_some() {
+        let features_str = config.features.as_ref().unwrap().join(" ");
+        cmd = cmd.arg("--features").arg(features_str);
+    }
+
+    if let Some(target) = &config.target {
+        cmd = cmd.arg("--target").arg(target);
+    }
+
+    cmd = cmd.args(&config.cargo_args);
+
+    let cmd = match &config.executable {
+        ExecutableType::Binary(name) => cmd.arg("--bin").arg(name),
+        ExecutableType::Lib(name) => cmd.arg("--lib").arg(name),
+        ExecutableType::Example(name) => cmd.arg("--example").arg(name),
+    };
+
+    cmd
 }
 
 struct CargoBuildResult {

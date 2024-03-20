@@ -56,8 +56,13 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
     // file watcher: check file change
     let mut allow_watch_path = config.dioxus_config.web.watcher.watch_path.clone();
 
-    // Extend the watch path to include the assets directory - this is so we can hotreload CSS and other assets
+    // Extend the watch path to include the assets directory - this is so we can hotreload CSS and other assets by default
     allow_watch_path.push(config.dioxus_config.application.asset_dir.clone());
+
+    // Extend the watch path to include Cargo.toml and Dioxus.toml
+    allow_watch_path.push("Cargo.toml".to_string().into());
+    allow_watch_path.push("Dioxus.toml".to_string().into());
+    allow_watch_path.dedup();
 
     // Create the file watcher
     let mut watcher = notify::recommended_watcher({
@@ -66,7 +71,6 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
             let Ok(e) = info else {
                 return;
             };
-
             watch_event(
                 e,
                 &mut last_update_time,
