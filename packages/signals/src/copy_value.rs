@@ -121,12 +121,14 @@ impl<T: 'static, S: Storage<T>> Readable for CopyValue<T, S> {
     type Target = T;
     type Storage = S;
 
+    #[track_caller]
     fn try_read_unchecked(
         &self,
     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
         self.value.try_read()
     }
 
+    #[track_caller]
     fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
         self.value.read()
     }

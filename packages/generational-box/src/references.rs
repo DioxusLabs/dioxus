@@ -65,7 +65,7 @@ impl Drop for GenerationalRefBorrowInfo {
 pub struct GenerationalRefMut<W> {
     pub(crate) inner: W,
     #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-    pub(crate) borrow: GenerationalRefMutBorrowInfo,
+    pub(crate) borrow: GenerationalRefBorrowMutGuard,
 }
 
 impl<T, R: DerefMut<Target = T>> GenerationalRefMut<R> {
@@ -77,7 +77,7 @@ impl<T, R: DerefMut<Target = T>> GenerationalRefMut<R> {
         Self {
             inner,
             #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-            borrow,
+            borrow: borrow.into(),
         }
     }
 }
@@ -105,8 +105,24 @@ pub struct GenerationalRefMutBorrowInfo {
 }
 
 #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-impl Drop for GenerationalRefMutBorrowInfo {
+pub(crate) struct GenerationalRefBorrowMutGuard {
+    borrow_info: GenerationalRefMutBorrowInfo,
+}
+
+#[cfg(any(debug_assertions, feature = "debug_borrows"))]
+impl From<GenerationalRefMutBorrowInfo> for GenerationalRefBorrowMutGuard {
+    fn from(borrow_info: GenerationalRefMutBorrowInfo) -> Self {
+        Self { borrow_info }
+    }
+}
+
+#[cfg(any(debug_assertions, feature = "debug_borrows"))]
+impl Drop for GenerationalRefBorrowMutGuard {
     fn drop(&mut self) {
-        self.borrowed_from.borrowed_mut_at.write().take();
+        self.borrow_info
+            .borrowed_from
+            .borrowed_mut_at
+            .write()
+            .take();
     }
 }

@@ -67,6 +67,7 @@ pub trait Readable {
     /// Get a reference to the value without checking the lifetime. This will subscribe the current scope to the signal.
     ///
     /// NOTE: This method is completely safe because borrow checking is done at runtime.
+    #[track_caller]
     fn read_unchecked(&self) -> ReadableRef<'static, Self> {
         self.try_read_unchecked().unwrap()
     }

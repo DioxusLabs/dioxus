@@ -12,7 +12,6 @@ pub struct UnsyncStorage(RefCell<Option<Box<dyn std::any::Any>>>);
 impl<T: 'static> Storage<T> for UnsyncStorage {
     fn try_read(
         &'static self,
-
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         at: crate::GenerationalRefBorrowInfo,
     ) -> Result<Self::Ref<'static, T>, error::BorrowError> {
@@ -26,20 +25,17 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
             error::BorrowError::AlreadyBorrowedMut(error::AlreadyBorrowedMutError {})
         })?;
 
-        Ref::filter_map(borrow, |any| any.as_ref()?.downcast_ref())
-            .map_err(|_| {
-                error::BorrowError::Dropped(error::ValueDroppedError {
-                    #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-                    created_at: at.created_at,
-                })
-            })
-            .map(|guard| {
-                GenerationalRef::new(
-                    guard,
-                    #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-                    at,
-                )
-            })
+        match Ref::filter_map(borrow, |any| any.as_ref()?.downcast_ref()) {
+            Ok(guard) => Ok(GenerationalRef::new(
+                guard,
+                #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+                at,
+            )),
+            Err(_) => Err(error::BorrowError::Dropped(error::ValueDroppedError {
+                #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+                created_at: at.created_at,
+            })),
+        }
     }
 
     fn try_write(
@@ -136,10 +132,7 @@ impl AnyStorage for UnsyncStorage {
             .map(|inner| GenerationalRefMut {
                 inner,
                 #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-                borrow: crate::GenerationalRefMutBorrowInfo {
-                    borrowed_from: borrow.borrowed_from,
-                    created_at: borrow.created_at,
-                },
+                borrow,
             })
     }
 
