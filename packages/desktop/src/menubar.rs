@@ -93,6 +93,16 @@ mod desktop_platforms {
             .append_items(&[&MenuItem::new("Toggle Developer Tools", true, None)])
             .unwrap();
 
+        // By default we float the window on top in dev mode, but let the user disable it
+        help_menu
+            .append_items(&[&MenuItem::with_id(
+                "dioxus-float-top",
+                "Float on Top (dev mode only)",
+                true,
+                None,
+            )])
+            .unwrap();
+
         menu.append_items(&[&window_menu, &edit_menu, &help_menu])
             .unwrap();
 

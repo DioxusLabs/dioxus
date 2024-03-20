@@ -54,6 +54,20 @@ impl WebviewInstance {
 
         let window = window.build(&shared.target).unwrap();
 
+        // https://developer.apple.com/documentation/appkit/nswindowcollectionbehavior/nswindowcollectionbehaviormanaged
+        #[cfg(target_os = "macos")]
+        {
+            use cocoa::appkit::NSWindowCollectionBehavior;
+            use cocoa::base::id;
+            use objc::{msg_send, sel, sel_impl};
+            use tao::platform::macos::WindowExtMacOS;
+
+            unsafe {
+                let window: id = window.ns_window() as id;
+                let _: () = msg_send![window, setCollectionBehavior: NSWindowCollectionBehavior::NSWindowCollectionBehaviorManaged];
+            }
+        }
+
         let mut web_context = WebContext::new(cfg.data_dir.clone());
         let edit_queue = EditQueue::default();
         let file_hover = NativeFileHover::default();
@@ -131,7 +145,18 @@ impl WebviewInstance {
             .with_transparent(cfg.window.window.transparent)
             .with_url("dioxus://index.html/")
             .with_ipc_handler(ipc_handler)
-            .with_navigation_handler(|var| var.contains("dioxus")) // prevent all navigations
+            .with_navigation_handler(|var| {
+                // We don't want to allow any navigation
+                // We only want to serve the index file and assets
+                if var.starts_with("dioxus://") || var.starts_with("http://dioxus.") {
+                    true
+                } else {
+                    if var.starts_with("http://") || var.starts_with("https://") {
+                        _ = webbrowser::open(&var);
+                    }
+                    false
+                }
+            }) // prevent all navigations
             .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler)
             .with_web_context(&mut web_context)
             .with_file_drop_handler(file_drop_handler);
@@ -228,8 +253,9 @@ impl WebviewInstance {
     pub fn kick_stylsheets(&self) {
         // run eval in the webview to kick the stylesheets by appending a query string
         // we should do something less clunky than this
-        _ = self.desktop_context
+        _ = self
+            .desktop_context
             .webview
-            .evaluate_script("document.querySelectorAll('link[rel=\"stylesheet\"]').forEach((el) => el.href = el.href + \"?\" + Math.random());");
+            .evaluate_script("window.interpreter.kickAllStylesheetsOnPage()");
     }
 }

@@ -18,6 +18,7 @@ use std::{
     sync::Arc,
 };
 use tao::{
+    dpi::{PhysicalPosition, PhysicalSize},
     event::Event,
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
     window::WindowId,
@@ -35,6 +36,7 @@ pub(crate) struct App {
     pub(crate) is_visible_before_start: bool,
     pub(crate) window_behavior: WindowCloseBehaviour,
     pub(crate) webviews: HashMap<WindowId, WebviewInstance>,
+    pub(crate) float_all: bool,
 
     /// This single blob of state is shared between all the windows so they have access to the runtime state
     ///
@@ -61,6 +63,7 @@ impl App {
             webviews: HashMap::new(),
             control_flow: ControlFlow::Wait,
             unmounted_dom: Cell::new(Some(virtual_dom)),
+            float_all: cfg!(debug_assertions),
             cfg: Cell::new(Some(cfg)),
             shared: Rc::new(SharedContext {
                 event_handlers: WindowEventHandlers::default(),
@@ -78,6 +81,10 @@ impl App {
         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
         app.set_global_hotkey_handler();
 
+        // Wire up the menubar receiver - this way any component can key into the menubar actions
+        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+        app.set_menubar_receiver();
+
         // Allow hotreloading to work - but only in debug mode
         #[cfg(all(
             feature = "hot-reload",
@@ -86,6 +93,10 @@ impl App {
             not(target_os = "ios")
         ))]
         app.connect_hotreload();
+
+        #[cfg(debug_assertions)]
+        #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+        app.connect_preserve_window_state_handler();
 
         (event_loop, app)
     }
@@ -102,6 +113,20 @@ impl App {
         self.shared.shortcut_manager.call_handlers(event);
     }
 
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    pub fn handle_menu_event(&mut self, event: muda::MenuEvent) {
+        if event.id() == "dioxus-float-top" {
+            for webview in self.webviews.values() {
+                webview
+                    .desktop_context
+                    .window
+                    .set_always_on_top(self.float_all);
+            }
+        }
+
+        self.float_all = !self.float_all;
+    }
+
     #[cfg(all(
         feature = "hot-reload",
         debug_assertions,
@@ -109,7 +134,11 @@ impl App {
         not(target_os = "ios")
     ))]
     pub fn connect_hotreload(&self) {
-        dioxus_hot_reload::connect({
+        let Ok(cfg) = dioxus_cli_config::CURRENT_CONFIG.as_ref() else {
+            return;
+        };
+
+        dioxus_hot_reload::connect_at(cfg.target_dir.join("dioxusin"), {
             let proxy = self.shared.proxy.clone();
             move |template| {
                 let _ = proxy.send_event(UserWindowEvent::HotReloadEvent(template));
@@ -168,6 +197,10 @@ impl App {
         self.is_visible_before_start = cfg.window.window.visible;
 
         let webview = WebviewInstance::new(cfg, virtual_dom, self.shared.clone());
+
+        // And then attempt to resume from state
+        #[cfg(debug_assertions)]
+        self.resume_from_state(&webview);
 
         let id = webview.desktop_context.window.id();
         self.webviews.insert(id, webview);
@@ -356,6 +389,117 @@ impl App {
             _ = receiver.send_event(UserWindowEvent::GlobalHotKeyEvent(t));
         }));
     }
+
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    fn set_menubar_receiver(&self) {
+        let receiver = self.shared.proxy.clone();
+
+        // The event loop becomes the menu receiver
+        // This means we don't need to poll the receiver on every tick - we just get the events as they come in
+        // This is a bit more efficient than the previous implementation, but if someone else sets a handler, the
+        // receiver will become inert.
+        muda::MenuEvent::set_event_handler(Some(move |t| {
+            // todo: should we unset the event handler when the app shuts down?
+            _ = receiver.send_event(UserWindowEvent::MudaMenuEvent(t));
+        }));
+    }
+
+    /// Do our best to preserve state about the window when the event loop is destroyed
+    ///
+    /// This will attempt to save the window position, size, and monitor into the environment before
+    /// closing. This way, when the app is restarted, it can attempt to restore the window to the same
+    /// position and size it was in before, making a better DX.
+    pub(crate) fn handle_loop_destroyed(&self) {
+        #[cfg(debug_assertions)]
+        self.persist_window_state();
+    }
+
+    #[cfg(debug_assertions)]
+    fn persist_window_state(&self) {
+        if let Some(webview) = self.webviews.values().next() {
+            let window = &webview.desktop_context.window;
+
+            let monitor = window.current_monitor().unwrap();
+            let position = window.outer_position().unwrap();
+            let size = window.outer_size();
+
+            let x = position.x;
+            let y = position.y;
+
+            // This is to work around a bug in how tao handles inner_size on macOS
+            // We *want* to use inner_size, but that's currently broken, so we use outer_size instead and then an adjustment
+            //
+            // https://github.com/tauri-apps/tao/issues/889
+            let adjustment = match window.is_decorated() {
+                true if cfg!(target_os = "macos") => 56,
+                _ => 0,
+            };
+
+            let state = PreservedWindowState {
+                x,
+                y,
+                width: size.width.max(200),
+                height: size.height.saturating_sub(adjustment).max(200),
+                monitor: monitor.name().unwrap().to_string(),
+            };
+
+            if let Ok(state) = serde_json::to_string(&state) {
+                // Write this to the target dir so we can pick back up in resume_from_state
+                if let Ok(cfg) = dioxus_cli_config::CURRENT_CONFIG.as_ref() {
+                    let path = cfg.target_dir.join("window_state.json");
+                    _ = std::fs::write(path, state);
+                }
+            }
+        }
+    }
+
+    // Write this to the target dir so we can pick back up
+    #[cfg(debug_assertions)]
+    fn resume_from_state(&mut self, webview: &WebviewInstance) {
+        if let Ok(cfg) = dioxus_cli_config::CURRENT_CONFIG.as_ref() {
+            let path = cfg.target_dir.join("window_state.json");
+            if let Ok(state) = std::fs::read_to_string(path) {
+                if let Ok(state) = serde_json::from_str::<PreservedWindowState>(&state) {
+                    let window = &webview.desktop_context.window;
+                    let position = (state.x, state.y);
+                    let size = (state.width, state.height);
+                    window.set_outer_position(PhysicalPosition::new(position.0, position.1));
+                    window.set_inner_size(PhysicalSize::new(size.0, size.1));
+                }
+            }
+        }
+    }
+
+    /// Wire up a receiver to sigkill that lets us preserve the window state
+    /// Whenever sigkill is sent, we shut down the app and save the window state
+    #[cfg(debug_assertions)]
+    fn connect_preserve_window_state_handler(&self) {
+        // Wire up the trap
+        let target = self.shared.proxy.clone();
+        std::thread::spawn(move || {
+            use signal_hook::consts::{SIGINT, SIGTERM};
+            let sigkill = signal_hook::iterator::Signals::new([SIGTERM, SIGINT]);
+            if let Ok(mut sigkill) = sigkill {
+                for _ in sigkill.forever() {
+                    if target.send_event(UserWindowEvent::Shutdown).is_err() {
+                        std::process::exit(0);
+                    }
+
+                    // give it a moment for the event to be processed
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                }
+            }
+        });
+    }
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct PreservedWindowState {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+    monitor: String,
 }
 
 /// Different hide implementations per platform

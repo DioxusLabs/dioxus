@@ -20,6 +20,7 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, desktop_config: Conf
 
         match window_event {
             Event::NewEvents(StartCause::Init) => app.handle_start_cause_init(),
+            Event::LoopDestroyed => app.handle_loop_destroyed(),
             Event::WindowEvent {
                 event, window_id, ..
             } => match event {
@@ -32,9 +33,13 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, desktop_config: Conf
                 UserWindowEvent::Poll(id) => app.poll_vdom(id),
                 UserWindowEvent::NewWindow => app.handle_new_window(),
                 UserWindowEvent::CloseWindow(id) => app.handle_close_msg(id),
+                UserWindowEvent::Shutdown => app.control_flow = tao::event_loop::ControlFlow::Exit,
 
                 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
                 UserWindowEvent::GlobalHotKeyEvent(evnt) => app.handle_global_hotkey(evnt),
+
+                #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+                UserWindowEvent::MudaMenuEvent(evnt) => app.handle_menu_event(evnt),
 
                 #[cfg(all(
                     feature = "hot-reload",

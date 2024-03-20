@@ -1,11 +1,15 @@
 use serde::{Deserialize, Serialize};
 use tao::window::WindowId;
 
+#[non_exhaustive]
 #[derive(Debug, Clone)]
 pub enum UserWindowEvent {
     /// A global hotkey event
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     GlobalHotKeyEvent(global_hotkey::GlobalHotKeyEvent),
+
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    MudaMenuEvent(muda::MenuEvent),
 
     /// Poll the virtualdom
     Poll(WindowId),
@@ -27,6 +31,9 @@ pub enum UserWindowEvent {
 
     /// Close a given window (could be any window!)
     CloseWindow(WindowId),
+
+    /// Gracefully shutdown the entire app
+    Shutdown,
 }
 
 /// A message struct that manages the communication between the webview and the eventloop code

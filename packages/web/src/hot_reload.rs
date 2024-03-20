@@ -50,14 +50,12 @@ pub(crate) fn init() -> UnboundedReceiver<Template> {
                     .query_selector_all("link[rel=stylesheet]")
                     .unwrap();
 
-                console::log_1(&links.clone().into());
+                let noise = js_sys::Math::random();
 
                 for x in 0..links.length() {
-                    console::log_1(&x.into());
-
                     let link: Element = links.get(x).unwrap().unchecked_into();
                     let href = link.get_attribute("href").unwrap();
-                    _ = link.set_attribute("href", &format!("{}?{}", href, js_sys::Math::random()));
+                    _ = link.set_attribute("href", &format!("{}?{}", href, noise));
                 }
             }
         }

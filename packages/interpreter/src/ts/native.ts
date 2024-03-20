@@ -21,6 +21,7 @@ export class NativeInterpreter extends JSChannel_ {
   intercept_link_redirects: boolean;
   ipc: any;
   editsPath: string;
+  kickStylesheets: boolean;
 
   // eventually we want to remove liveview and build it into the server-side-events of fullstack
   // however, for now we need to support it since SSE in fullstack doesn't exist yet
@@ -29,6 +30,7 @@ export class NativeInterpreter extends JSChannel_ {
   constructor(editsPath: string) {
     super();
     this.editsPath = editsPath;
+    this.kickStylesheets = false;
   }
 
   initialize(root: HTMLElement): void {
@@ -272,13 +274,29 @@ export class NativeInterpreter extends JSChannel_ {
           // @ts-ignore
           this.run_from_bytes(bytes);
         } else {
-          // @ts-ignore
-          requestAnimationFrame(() => this.run_from_bytes(bytes));
+          requestAnimationFrame(() => {
+            // @ts-ignore
+            this.run_from_bytes(bytes)
+          });
         }
         this.waitForRequest(headless);
       });
   }
 
+
+  kickAllStylesheetsOnPage() {
+    // If this function is being called and we have not explicitly set kickStylesheets to true, then we should
+    // force kick the stylesheets, regardless if they have a dioxus attribute or not
+    // This happens when any hotreload happens.
+    let stylesheets = document.querySelectorAll("link[rel=stylesheet]");
+    for (let i = 0; i < stylesheets.length; i++) {
+      let sheet = stylesheets[i] as HTMLLinkElement;
+      // Using `cache: reload` will force the browser to re-fetch the stylesheet and bust the cache
+      fetch(sheet.href, { cache: "reload" }).then(() => {
+        sheet.href = sheet.href + "?" + Math.random();
+      });
+    }
+  }
 
   //  A liveview only function
   // Desktop will intercept the event before it hits this
