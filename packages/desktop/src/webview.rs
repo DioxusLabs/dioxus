@@ -149,12 +149,12 @@ impl WebviewInstance {
                 // We don't want to allow any navigation
                 // We only want to serve the index file and assets
                 if var.starts_with("dioxus://") || var.starts_with("http://dioxus.") {
-                    return true;
+                    true
                 } else {
                     if var.starts_with("http://") || var.starts_with("https://") {
                         _ = webbrowser::open(&var);
                     }
-                    return false;
+                    false
                 }
             }) // prevent all navigations
             .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler)
