@@ -449,10 +449,10 @@ impl App {
 
             if let Ok(state) = serde_json::to_string(&state) {
                 // Write this to the target dir so we can pick back up in resume_from_state
-                dioxus_cli_config::CURRENT_CONFIG.as_ref().map(|cfg| {
+                if let Ok(cfg) = dioxus_cli_config::CURRENT_CONFIG.as_ref() {
                     let path = cfg.target_dir.join("window_state.json");
                     _ = std::fs::write(path, state);
-                });
+                }
             }
         }
     }
@@ -462,12 +462,11 @@ impl App {
     fn resume_from_state(&mut self, webview: &WebviewInstance) {
         if let Ok(cfg) = dioxus_cli_config::CURRENT_CONFIG.as_ref() {
             let path = cfg.target_dir.join("window_state.json");
-            if let Some(state) = std::fs::read_to_string(path).ok() {
+            if let Ok(state) = std::fs::read_to_string(path) {
                 if let Ok(state) = serde_json::from_str::<PreservedWindowState>(&state) {
                     let window = &webview.desktop_context.window;
                     let position = (state.x, state.y);
                     let size = (state.width, state.height);
-                    let monitor = state.monitor.as_str();
                     window.set_outer_position(PhysicalPosition::new(position.0, position.1));
                     window.set_inner_size(PhysicalSize::new(size.0, size.1));
                 }
@@ -483,10 +482,12 @@ impl App {
         let target = self.shared.proxy.clone();
         std::thread::spawn(move || {
             use signal_hook::consts::{SIGINT, SIGTERM};
-            let mut sigkill = signal_hook::iterator::Signals::new(&[SIGTERM, SIGINT]);
+            let sigkill = signal_hook::iterator::Signals::new([SIGTERM, SIGINT]);
             if let Ok(mut sigkill) = sigkill {
                 for _ in sigkill.forever() {
-                    target.send_event(UserWindowEvent::Shutdown);
+                    if target.send_event(UserWindowEvent::Shutdown).is_err() {
+                        std::process::exit(0);
+                    }
 
                     // give it a moment for the event to be processed
                     std::thread::sleep(std::time::Duration::from_secs(1));
