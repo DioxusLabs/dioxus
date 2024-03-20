@@ -64,6 +64,7 @@ use axum::{
     Router,
 };
 use dioxus_lib::prelude::VirtualDom;
+use futures_util::Future;
 use http::header::*;
 
 use std::sync::Arc;
@@ -149,7 +150,12 @@ pub trait DioxusRouterExt<S> {
     ///     unimplemented!()
     /// }
     /// ```
-    fn serve_static_assets(self, assets_path: impl Into<std::path::PathBuf>) -> Self;
+    fn serve_static_assets(
+        self,
+        assets_path: impl Into<std::path::PathBuf>,
+    ) -> impl Future<Output = Self> + Send + Sync
+    where
+        Self: Sized;
 
     /// Serves the Dioxus application. This will serve a complete server side rendered application.
     /// This will serve static assets, server render the application, register server functions, and intigrate with hot reloading.
@@ -182,7 +188,9 @@ pub trait DioxusRouterExt<S> {
         self,
         cfg: impl Into<ServeConfig>,
         build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
-    ) -> Self;
+    ) -> impl Future<Output = Self> + Send + Sync
+    where
+        Self: Sized;
 }
 
 impl<S> DioxusRouterExt<S> for Router<S>
@@ -206,59 +214,75 @@ where
         self
     }
 
-    fn serve_static_assets(mut self, assets_path: impl Into<std::path::PathBuf>) -> Self {
+    fn serve_static_assets(
+        mut self,
+        assets_path: impl Into<std::path::PathBuf>,
+    ) -> impl Future<Output = Self> + Send + Sync {
         use tower_http::services::{ServeDir, ServeFile};
 
         let assets_path = assets_path.into();
-
-        // Serve all files in dist folder except index.html
-        let dir = std::fs::read_dir(&assets_path).unwrap_or_else(|e| {
-            panic!(
-                "Couldn't read assets directory at {:?}: {}",
-                &assets_path, e
-            )
-        });
-
-        for entry in dir.flatten() {
-            let path = entry.path();
-            if path.ends_with("index.html") {
-                continue;
+        async move {
+            #[cfg(not(debug_assertions))]
+            if let Err(err) = crate::assets::pre_compress_files(assets_path.clone()).await {
+                tracing::error!("Failed to pre-compress static assets: {}", err);
             }
-            let route = path
-                .strip_prefix(&assets_path)
-                .unwrap()
-                .iter()
-                .map(|segment| {
-                    segment.to_str().unwrap_or_else(|| {
-                        panic!("Failed to convert path segment {:?} to string", segment)
+
+            // Serve all files in dist folder except index.html
+            let dir = std::fs::read_dir(&assets_path).unwrap_or_else(|e| {
+                panic!(
+                    "Couldn't read assets directory at {:?}: {}",
+                    &assets_path, e
+                )
+            });
+
+            for entry in dir.flatten() {
+                let path = entry.path();
+                if path.ends_with("index.html") {
+                    continue;
+                }
+                let route = path
+                    .strip_prefix(&assets_path)
+                    .unwrap()
+                    .iter()
+                    .map(|segment| {
+                        segment.to_str().unwrap_or_else(|| {
+                            panic!("Failed to convert path segment {:?} to string", segment)
+                        })
                     })
-                })
-                .collect::<Vec<_>>()
-                .join("/");
-            let route = format!("/{}", route);
-            if path.is_dir() {
-                self = self.nest_service(&route, ServeDir::new(path));
-            } else {
-                self = self.nest_service(&route, ServeFile::new(path));
+                    .collect::<Vec<_>>()
+                    .join("/");
+                let route = format!("/{}", route);
+                if path.is_dir() {
+                    self = self.nest_service(&route, ServeDir::new(path).precompressed_gzip());
+                } else {
+                    self = self.nest_service(&route, ServeFile::new(path).precompressed_gzip());
+                }
             }
-        }
 
-        self
+            self
+        }
     }
 
     fn serve_dioxus_application(
         self,
         cfg: impl Into<ServeConfig>,
         build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
-    ) -> Self {
+    ) -> impl Future<Output = Self> + Send + Sync {
         let cfg = cfg.into();
-        let ssr_state = SSRState::new(&cfg);
+        async move {
+            let ssr_state = SSRState::new(&cfg);
 
-        // Add server functions and render index.html
-        self.serve_static_assets(cfg.assets_path.clone())
-            .connect_hot_reload()
-            .register_server_fns()
-            .fallback(get(render_handler).with_state((cfg, Arc::new(build_virtual_dom), ssr_state)))
+            // Add server functions and render index.html
+            self.serve_static_assets(cfg.assets_path.clone())
+                .await
+                .connect_hot_reload()
+                .register_server_fns()
+                .fallback(get(render_handler).with_state((
+                    cfg,
+                    Arc::new(build_virtual_dom),
+                    ssr_state,
+                )))
+        }
     }
 
     fn connect_hot_reload(self) -> Self {
@@ -469,7 +493,6 @@ async fn handle_server_fns_inner(
         if let Some(mut service) =
             server_fn::axum::get_server_fn_service(&path_string)
         {
-
             let server_context = DioxusServerContext::new(Arc::new(tokio::sync::RwLock::new(parts)));
             additional_context();
 
@@ -484,7 +507,6 @@ async fn handle_server_fns_inner(
 
             // actually run the server fn
             let mut res = service.run(req).await;
-
 
             // it it accepts text/html (i.e., is a plain form post) and doesn't already have a
             // Location set, then redirect to Referer

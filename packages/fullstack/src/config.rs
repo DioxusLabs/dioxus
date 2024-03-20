@@ -133,18 +133,14 @@ impl Config {
             #[cfg(not(any(feature = "desktop", feature = "mobile")))]
             let router = router
                 .serve_static_assets(cfg.assets_path.clone())
+                .await
                 .connect_hot_reload()
                 .fallback(get(render_handler).with_state((
                     cfg,
                     Arc::new(build_virtual_dom),
                     ssr_state,
                 )));
-            let router = router
-                .layer(
-                    ServiceBuilder::new()
-                        .layer(tower_http::compression::CompressionLayer::new().gzip(true)),
-                )
-                .into_make_service();
+            let router = router.into_make_service();
             let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
             axum::serve(listener, router).await.unwrap();
         }
