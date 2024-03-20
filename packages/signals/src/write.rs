@@ -52,6 +52,7 @@ pub trait Writable: Readable {
     /// Get a mutable reference to the value without checking the lifetime. This will update any subscribers.
     ///
     /// NOTE: This method is completely safe because borrow checking is done at runtime.
+    #[track_caller]
     fn write_unchecked(&self) -> WritableRef<'static, Self> {
         self.try_write_unchecked().unwrap()
     }
@@ -114,11 +115,13 @@ pub trait Writable: Readable {
 /// An extension trait for Writable<Option<T>> that provides some convenience methods.
 pub trait WritableOptionExt<T: 'static>: Writable<Target = Option<T>> {
     /// Gets the value out of the Option, or inserts the given value if the Option is empty.
+    #[track_caller]
     fn get_or_insert(&mut self, default: T) -> WritableRef<'_, Self, T> {
         self.get_or_insert_with(|| default)
     }
 
     /// Gets the value out of the Option, or inserts the value returned by the given function if the Option is empty.
+    #[track_caller]
     fn get_or_insert_with(&mut self, default: impl FnOnce() -> T) -> WritableRef<'_, Self, T> {
         let is_none = self.read().is_none();
         if is_none {
