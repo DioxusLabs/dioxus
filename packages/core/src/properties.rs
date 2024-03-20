@@ -170,6 +170,17 @@ impl<'a> SuperFrom<Arguments<'a>, OptionArgumentsFromMarker> for Option<String> 
     }
 }
 
+#[doc(hidden)]
+pub struct OptionHandlerMarker;
+
+impl<G: 'static, F: FnMut(G) + 'static> SuperFrom<F, OptionHandlerMarker>
+    for Option<EventHandler<G>>
+{
+    fn super_from(input: F) -> Self {
+        Some(EventHandler::new(input))
+    }
+}
+
 #[test]
 #[allow(unused)]
 fn from_props_compiles() {

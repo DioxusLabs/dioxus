@@ -24,9 +24,7 @@ enum Route {
 
 #[component]
 fn Homepage() -> Element {
-    rsx! {
-        h1 { "Welcome home" }
-    }
+    rsx! { h1 { "Welcome home" } }
 }
 
 #[component]
@@ -52,6 +50,7 @@ fn Nav() -> Element {
                     to: Route::Blog {
                         id: "Brownies".to_string(),
                     },
+                    onclick: move |_| { println!("Clicked on Brownies") },
                     "Learn Brownies"
                 }
             }
