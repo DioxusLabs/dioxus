@@ -1,8 +1,7 @@
-use crate::{global_context::current_scope_id, Runtime, ScopeId};
-use std::{
-    cell::{Cell, RefCell},
-    rc::Rc,
-};
+use generational_box::{GenerationalBox, UnsyncStorage};
+
+use crate::{generational_box::current_owner, global_context::current_scope_id, Runtime, ScopeId};
+use std::{cell::Cell, rc::Rc};
 
 /// A wrapper around some generic data that handles the event's state
 ///
@@ -165,41 +164,45 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
 /// ```
 pub struct EventHandler<T = ()> {
     pub(crate) origin: ScopeId,
-    pub(super) callback: Rc<RefCell<Option<ExternalListenerCallback<T>>>>,
+    pub(super) callback: GenerationalBox<Option<ExternalListenerCallback<T>>>,
 }
+
+impl<T: 'static> Default for EventHandler<T> {
+    fn default() -> Self {
+        EventHandler::new(|_| {})
+    }
+}
+
+impl<F: FnMut(T) + 'static, T: 'static> From<F> for EventHandler<T> {
+    fn from(f: F) -> Self {
+        EventHandler::new(f)
+    }
+}
+
+impl<T> Copy for EventHandler<T> {}
 
 impl<T> Clone for EventHandler<T> {
     fn clone(&self) -> Self {
-        Self {
-            origin: self.origin,
-            callback: self.callback.clone(),
-        }
+        *self
     }
 }
 
-impl<T> PartialEq for EventHandler<T> {
-    fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.callback, &other.callback)
-    }
-}
-
-impl<T> Default for EventHandler<T> {
-    fn default() -> Self {
-        Self {
-            origin: ScopeId::ROOT,
-            callback: Default::default(),
-        }
+impl<T: 'static> PartialEq for EventHandler<T> {
+    fn eq(&self, _: &Self) -> bool {
+        true
     }
 }
 
 type ExternalListenerCallback<T> = Box<dyn FnMut(T)>;
 
-impl<T> EventHandler<T> {
+impl<T: 'static> EventHandler<T> {
     /// Create a new [`EventHandler`] from an [`FnMut`]
+    #[track_caller]
     pub fn new(mut f: impl FnMut(T) + 'static) -> EventHandler<T> {
-        let callback = Rc::new(RefCell::new(Some(Box::new(move |event: T| {
+        let owner = current_owner::<UnsyncStorage>();
+        let callback = owner.insert(Some(Box::new(move |event: T| {
             f(event);
-        }) as Box<dyn FnMut(T)>)));
+        }) as Box<dyn FnMut(T)>));
         EventHandler {
             callback,
             origin: current_scope_id().expect("to be in a dioxus runtime"),
@@ -210,7 +213,7 @@ impl<T> EventHandler<T> {
     ///
     /// This borrows the event using a RefCell. Recursively calling a listener will cause a panic.
     pub fn call(&self, event: T) {
-        if let Some(callback) = self.callback.borrow_mut().as_mut() {
+        if let Some(callback) = self.callback.write().as_mut() {
             Runtime::with(|rt| rt.scope_stack.borrow_mut().push(self.origin));
             callback(event);
             Runtime::with(|rt| rt.scope_stack.borrow_mut().pop());
@@ -221,6 +224,54 @@ impl<T> EventHandler<T> {
     ///
     /// This will force any future calls to "call" to not doing anything
     pub fn release(&self) {
-        self.callback.replace(None);
+        self.callback.set(None);
+    }
+
+    #[doc(hidden)]
+    /// This should only be used by the `rsx!` macro.
+    pub fn __set(&mut self, value: impl FnMut(T) + 'static) {
+        self.callback.set(Some(Box::new(value)));
+    }
+
+    #[doc(hidden)]
+    /// This should only be used by the `rsx!` macro.
+    pub fn __take(&self) -> ExternalListenerCallback<T> {
+        self.callback
+            .manually_drop()
+            .expect("Signal has already been dropped")
+            .expect("EventHandler was manually dropped")
+    }
+}
+
+impl<T: 'static> std::ops::Deref for EventHandler<T> {
+    type Target = dyn Fn(T) + 'static;
+
+    fn deref(&self) -> &Self::Target {
+        // https://github.com/dtolnay/case-studies/tree/master/callable-types
+
+        // First we create a closure that captures something with the Same in memory layout as Self (MaybeUninit<Self>).
+        let uninit_callable = std::mem::MaybeUninit::<Self>::uninit();
+        // Then move that value into the closure. We assume that the closure now has a in memory layout of Self.
+        let uninit_closure = move |t| Self::call(unsafe { &*uninit_callable.as_ptr() }, t);
+
+        // Check that the size of the closure is the same as the size of Self in case the compiler changed the layout of the closure.
+        let size_of_closure = std::mem::size_of_val(&uninit_closure);
+        assert_eq!(size_of_closure, std::mem::size_of::<Self>());
+
+        // Then cast the lifetime of the closure to the lifetime of &self.
+        fn cast_lifetime<'a, T>(_a: &T, b: &'a T) -> &'a T {
+            b
+        }
+        let reference_to_closure = cast_lifetime(
+            {
+                // The real closure that we will never use.
+                &uninit_closure
+            },
+            // We transmute self into a reference to the closure. This is safe because we know that the closure has the same memory layout as Self so &Closure == &Self.
+            unsafe { std::mem::transmute(self) },
+        );
+
+        // Cast the closure to a trait object.
+        reference_to_closure as &_
     }
 }

@@ -213,15 +213,10 @@ pub enum ContentField {
     Shorthand(Ident),
     ManExpr(Expr),
     Formatted(IfmtInput),
-    OnHandlerRaw(Expr),
 }
 
 impl ContentField {
-    fn new_from_name(name: &Ident, input: ParseStream) -> Result<Self> {
-        if name.to_string().starts_with("on") {
-            return Ok(ContentField::OnHandlerRaw(input.parse()?));
-        }
-
+    fn new(input: ParseStream) -> Result<Self> {
         if input.peek(LitStr) {
             let forked = input.fork();
             let t: LitStr = forked.parse()?;
@@ -243,16 +238,10 @@ impl ContentField {
 impl ToTokens for ContentField {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
-            ContentField::Shorthand(i) if i.to_string().starts_with("on") => {
-                tokens.append_all(quote! { EventHandler::new(#i) })
-            }
             ContentField::Shorthand(i) => tokens.append_all(quote! { #i }),
             ContentField::ManExpr(e) => e.to_tokens(tokens),
             ContentField::Formatted(s) => tokens.append_all(quote! {
                 #s
-            }),
-            ContentField::OnHandlerRaw(e) => tokens.append_all(quote! {
-                EventHandler::new(#e)
             }),
         }
     }
@@ -270,7 +259,7 @@ impl Parse for ComponentField {
             });
         };
 
-        let content = ContentField::new_from_name(&name, input)?;
+        let content = ContentField::new(input)?;
 
         if input.peek(LitStr) || input.peek(Ident) {
             missing_trailing_comma!(content.span());

@@ -2,6 +2,7 @@ use crate::{read::Readable, ReadableRef, Signal, SignalData};
 use dioxus_core::IntoDynNode;
 use std::ops::Deref;
 
+use crate::{default_impl, read_impls};
 use dioxus_core::{prelude::IntoAttributeValue, ScopeId};
 use generational_box::{Storage, UnsyncStorage};
 
@@ -128,3 +129,20 @@ impl<T: Clone, S: Storage<SignalData<T>> + 'static> Deref for ReadOnlySignal<T, 
         Readable::deref_impl(self)
     }
 }
+
+read_impls!(
+    ReadOnlySignal<T, S> where
+        S: Storage<SignalData<T>>
+);
+default_impl!(
+    ReadOnlySignal<T, S> where
+    S: Storage<SignalData<T>>
+);
+
+impl<T: 'static, S: Storage<SignalData<T>>> Clone for ReadOnlySignal<T, S> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T: 'static, S: Storage<SignalData<T>>> Copy for ReadOnlySignal<T, S> {}

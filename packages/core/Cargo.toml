@@ -21,6 +21,7 @@ futures-channel = { workspace = true }
 tracing = { workspace = true }
 serde = { version = "1", features = ["derive"], optional = true }
 tracing-subscriber = "0.3.18"
+generational-box = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
