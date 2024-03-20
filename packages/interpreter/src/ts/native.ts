@@ -276,13 +276,7 @@ export class NativeInterpreter extends JSChannel_ {
         } else {
           requestAnimationFrame(() => {
             // @ts-ignore
-            this.run_from_bytes(bytes);
-
-            // If we're hotreloading, we want to try and kick the stylesheets so they're not stale after templates change
-            if (this.kickStylesheets) {
-              this.kickAllStylesheetsOnPage();
-              this.kickStylesheets = false;
-            }
+            this.run_from_bytes(bytes)
           });
         }
         this.waitForRequest(headless);
@@ -294,22 +288,13 @@ export class NativeInterpreter extends JSChannel_ {
     // If this function is being called and we have not explicitly set kickStylesheets to true, then we should
     // force kick the stylesheets, regardless if they have a dioxus attribute or not
     // This happens when any hotreload happens.
-    const forceKicked = (this.kickStylesheets === false);
-
     let stylesheets = document.querySelectorAll("link[rel=stylesheet]");
-
     for (let i = 0; i < stylesheets.length; i++) {
       let sheet = stylesheets[i] as HTMLLinkElement;
-
-      if (forceKicked) {
-        sheet.setAttribute("data-dioxus-kick", "true");
-      }
-
-      // templates won't have the kick attribute, meaning only they need to be kicked
-      // This lets us skip templates that haven't changed
-      if (!sheet.hasAttribute("data-dioxus-kick") || forceKicked) {
+      // Using `cache: reload` will force the browser to re-fetch the stylesheet and bust the cache
+      fetch(sheet.href, { cache: "reload" }).then(() => {
         sheet.href = sheet.href + "?" + Math.random();
-      }
+      });
     }
   }
 

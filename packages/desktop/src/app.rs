@@ -319,10 +319,6 @@ impl App {
                     webview.dom.replace_template(template);
                     webview.poll_vdom();
                 }
-
-                for webview in self.webviews.values_mut() {
-                    webview.kick_stylsheets(false);
-                }
             }
             dioxus_hot_reload::HotReloadMsg::Shutdown => {
                 self.control_flow = ControlFlow::Exit;
@@ -330,7 +326,7 @@ impl App {
 
             dioxus_hot_reload::HotReloadMsg::UpdateAsset(_) => {
                 for webview in self.webviews.values_mut() {
-                    webview.kick_stylsheets(true);
+                    webview.kick_stylsheets();
                 }
             }
         }

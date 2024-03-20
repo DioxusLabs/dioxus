@@ -225,20 +225,12 @@ impl WebviewInstance {
     }
 
     #[cfg(all(feature = "hot-reload", debug_assertions))]
-    pub fn kick_stylsheets(&self, now: bool) {
-        if now {
-            // run eval in the webview to kick the stylesheets by appending a query string
-            // we should do something less clunky than this
-            _ = self
-                .desktop_context
-                .webview
-                .evaluate_script("window.interpreter.kickAllStylesheetsOnPage()");
-        } else {
-            // Just set the flag to kick the stylesheets on the next render
-            _ = self
-                .desktop_context
-                .webview
-                .evaluate_script("window.interpreter.kickStylesheets = true");
-        }
+    pub fn kick_stylsheets(&self) {
+        // run eval in the webview to kick the stylesheets by appending a query string
+        // we should do something less clunky than this
+        _ = self
+            .desktop_context
+            .webview
+            .evaluate_script("window.interpreter.kickAllStylesheetsOnPage()");
     }
 }
