@@ -765,7 +765,7 @@ Finally, call `.build()` to create the instance of `{name}`.
 
             let (_, _, b_generics_where_extras_predicates) = b_generics.split_for_impl();
             let mut b_generics_where: syn::WhereClause = syn::parse2(quote! {
-                where TypedBuilderFields: Clone
+                where Self: Clone
             })?;
             if let Some(predicates) = b_generics_where_extras_predicates {
                 b_generics_where
@@ -817,7 +817,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 }
 
                 impl #impl_generics dioxus_core::prelude::Properties for #name #ty_generics
-                #b_generics_where_extras_predicates
+                #b_generics_where
                 {
                     type Builder = #builder_name #generics_with_empty;
                     fn builder() -> Self::Builder {
@@ -1364,11 +1364,13 @@ Finally, call `.build()` to create the instance of `{name}`.
                 let name = Ident::new(&format!("{}WithOwner", name), name.span());
                 let original_name = &self.name;
                 let vis = &self.vis;
+                let generics_with_bounds = &self.generics;
+
                 quote! {
                     #[doc(hidden)]
                     #[allow(dead_code, non_camel_case_types, missing_docs)]
                     #[derive(Clone)]
-                    #vis struct #name #ty_generics {
+                    #vis struct #name #generics_with_bounds {
                         inner: #original_name #ty_generics,
                         owner: Owner,
                     }
