@@ -51,7 +51,7 @@ pub struct GenerationalBox<T, S: 'static = UnsyncStorage> {
     _marker: PhantomData<T>,
 }
 
-impl<T: 'static, S: AnyStorage> Debug for GenerationalBox<T, S> {
+impl<T, S: AnyStorage> Debug for GenerationalBox<T, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         #[cfg(any(debug_assertions, feature = "check_generation"))]
         f.write_fmt(format_args!(
@@ -65,7 +65,7 @@ impl<T: 'static, S: AnyStorage> Debug for GenerationalBox<T, S> {
     }
 }
 
-impl<T: 'static, S: Storage<T>> GenerationalBox<T, S> {
+impl<T, S: Storage<T>> GenerationalBox<T, S> {
     #[inline(always)]
     pub(crate) fn validate(&self) -> bool {
         #[cfg(any(debug_assertions, feature = "check_generation"))]
@@ -196,7 +196,7 @@ impl<T: 'static, S: Storage<T>> GenerationalBox<T, S> {
     }
 }
 
-impl<T, S: 'static> Copy for GenerationalBox<T, S> {}
+impl<T, S> Copy for GenerationalBox<T, S> {}
 
 impl<T, S> Clone for GenerationalBox<T, S> {
     fn clone(&self) -> Self {
@@ -362,7 +362,7 @@ impl<S> MemoryLocation<S> {
         }
     }
 
-    fn replace_with_caller<T: 'static>(
+    fn replace_with_caller<T>(
         &mut self,
         value: T,
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]

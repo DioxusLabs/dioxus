@@ -185,17 +185,6 @@ impl Writer<'_> {
                 ContentField::Shorthand(e) => {
                     write!(self.out, "{}", e.to_token_stream())?;
                 }
-                ContentField::OnHandlerRaw(exp) => {
-                    let out = unparse_expr(exp);
-                    let mut lines = out.split('\n').peekable();
-                    let first = lines.next().unwrap();
-                    write!(self.out, "{name}: {first}")?;
-                    for line in lines {
-                        self.out.new_line()?;
-                        self.out.indented_tab()?;
-                        write!(self.out, "{line}")?;
-                    }
-                }
             }
 
             if field_iter.peek().is_some() || manual_props.is_some() {
@@ -227,7 +216,7 @@ impl Writer<'_> {
             .map(|field| match &field.content {
                 ContentField::Formatted(s) => ifmt_to_string(s).len() ,
                 ContentField::Shorthand(e) => e.to_token_stream().to_string().len(),
-                ContentField::OnHandlerRaw(exp) | ContentField::ManExpr(exp) => {
+                ContentField::ManExpr(exp) => {
                     let formatted = unparse_expr(exp);
                     let len = if formatted.contains('\n') {
                         10000

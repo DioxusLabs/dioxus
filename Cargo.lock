@@ -2112,6 +2112,7 @@ dependencies = [
  "dioxus-ssr",
  "futures-channel",
  "futures-util",
+ "generational-box",
  "longest-increasing-subsequence",
  "pretty_assertions",
  "rand 0.8.5",

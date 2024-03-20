@@ -6,6 +6,7 @@ use generational_box::UnsyncStorage;
 use std::ops::Deref;
 
 use super::get_global_context;
+use crate::read_impls;
 use crate::Signal;
 
 /// A signal that can be accessed from anywhere in the application and created in a static
@@ -118,12 +119,6 @@ impl<T: 'static> Writable for GlobalSignal<T> {
     }
 }
 
-impl<T: 'static> PartialEq for GlobalSignal<T> {
-    fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(self, other)
-    }
-}
-
 /// Allow calling a signal with signal() syntax
 ///
 /// Currently only limited to copy types, though could probably specialize for string/arc/rc
@@ -134,3 +129,5 @@ impl<T: Clone + 'static> Deref for GlobalSignal<T> {
         Readable::deref_impl(self)
     }
 }
+
+read_impls!(GlobalSignal<T>);

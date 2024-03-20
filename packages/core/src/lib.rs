@@ -10,6 +10,7 @@ mod dirty_scope;
 mod error_boundary;
 mod events;
 mod fragment;
+mod generational_box;
 mod global_context;
 mod mutations;
 mod nodes;
@@ -29,6 +30,7 @@ pub(crate) mod innerlude {
     pub use crate::error_boundary::*;
     pub use crate::events::*;
     pub use crate::fragment::*;
+    pub use crate::generational_box::*;
     pub use crate::global_context::*;
     pub use crate::mutations::*;
     pub use crate::nodes::*;
@@ -88,13 +90,13 @@ pub use crate::innerlude::{
 /// This includes types like [`Element`], and [`Component`].
 pub mod prelude {
     pub use crate::innerlude::{
-        consume_context, consume_context_from_scope, current_scope_id, fc_to_builder, generation,
-        has_context, needs_update, needs_update_any, parent_scope, provide_context,
-        provide_root_context, remove_future, schedule_update, schedule_update_any, spawn,
-        spawn_forever, spawn_isomorphic, suspend, try_consume_context, use_after_render,
+        consume_context, consume_context_from_scope, current_owner, current_scope_id,
+        fc_to_builder, generation, has_context, needs_update, needs_update_any, parent_scope,
+        provide_context, provide_root_context, remove_future, schedule_update, schedule_update_any,
+        spawn, spawn_forever, spawn_isomorphic, suspend, try_consume_context, use_after_render,
         use_before_render, use_drop, use_error_boundary, use_hook, use_hook_with_cleanup,
-        wait_for_next_render, AnyValue, Attribute, Component, ComponentFunction, Element,
-        ErrorBoundary, Event, EventHandler, Fragment, HasAttributes, IntoAttributeValue,
+        wait_for_next_render, with_owner, AnyValue, Attribute, Component, ComponentFunction,
+        Element, ErrorBoundary, Event, EventHandler, Fragment, HasAttributes, IntoAttributeValue,
         IntoDynNode, OptionStringFromMarker, Properties, Runtime, RuntimeGuard, ScopeId,
         ScopeState, SuperFrom, SuperInto, Task, Template, TemplateAttribute, TemplateNode, Throw,
         VNode, VNodeInner, VirtualDom,

@@ -1,106 +1,18 @@
-use generational_box::AnyStorage;
 use generational_box::GenerationalBoxId;
-use generational_box::SyncStorage;
 use generational_box::UnsyncStorage;
-use std::any::Any;
-use std::any::TypeId;
-use std::cell::RefCell;
 use std::ops::Deref;
 
 use dioxus_core::prelude::*;
 use dioxus_core::ScopeId;
 
-use generational_box::{GenerationalBox, Owner, Storage};
+use generational_box::{GenerationalBox, Storage};
 
+use crate::read_impls;
+use crate::Readable;
 use crate::ReadableRef;
 use crate::Writable;
 use crate::WritableRef;
-use crate::{ReactiveContext, Readable};
-
-/// Run a closure with the given owner.
-pub fn with_owner<S: AnyStorage, F: FnOnce() -> R, R>(owner: Owner<S>, f: F) -> R {
-    let old_owner = set_owner(Some(owner));
-    let result = f();
-    set_owner(old_owner);
-    result
-}
-
-/// Set the owner for the current thread.
-fn set_owner<S: AnyStorage>(owner: Option<Owner<S>>) -> Option<Owner<S>> {
-    let id = TypeId::of::<S>();
-    if id == TypeId::of::<SyncStorage>() {
-        SYNC_OWNER.with(|cell| {
-            std::mem::replace(
-                &mut *cell.borrow_mut(),
-                owner.map(|owner| {
-                    *(Box::new(owner) as Box<dyn Any>)
-                        .downcast::<Owner<SyncStorage>>()
-                        .unwrap()
-                }),
-            )
-            .map(|owner| *(Box::new(owner) as Box<dyn Any>).downcast().unwrap())
-        })
-    } else {
-        UNSYNC_OWNER.with(|cell| {
-            std::mem::replace(
-                &mut *cell.borrow_mut(),
-                owner.map(|owner| {
-                    *(Box::new(owner) as Box<dyn Any>)
-                        .downcast::<Owner<UnsyncStorage>>()
-                        .unwrap()
-                }),
-            )
-            .map(|owner| *(Box::new(owner) as Box<dyn Any>).downcast().unwrap())
-        })
-    }
-}
-
-thread_local! {
-    static SYNC_OWNER: RefCell<Option<Owner<SyncStorage>>> = const { RefCell::new(None) };
-    static UNSYNC_OWNER: RefCell<Option<Owner<UnsyncStorage>>> = const { RefCell::new(None) };
-}
-
-fn current_owner<S: Storage<T>, T>() -> Owner<S> {
-    let id = TypeId::of::<S>();
-    let override_owner = if id == TypeId::of::<SyncStorage>() {
-        SYNC_OWNER.with(|cell| {
-            let owner = cell.borrow();
-
-            owner.clone().map(|owner| {
-                *(Box::new(owner) as Box<dyn Any>)
-                    .downcast::<Owner<S>>()
-                    .unwrap()
-            })
-        })
-    } else {
-        UNSYNC_OWNER.with(|cell| {
-            cell.borrow().clone().map(|owner| {
-                *(Box::new(owner) as Box<dyn Any>)
-                    .downcast::<Owner<S>>()
-                    .unwrap()
-            })
-        })
-    };
-    if let Some(owner) = override_owner {
-        return owner;
-    }
-
-    // Otherwise get the owner from the current reactive context.
-    match ReactiveContext::current() {
-        Some(current_reactive_context) => owner_in_scope(current_reactive_context.origin_scope()),
-        None => owner_in_scope(current_scope_id().expect("in a virtual dom")),
-    }
-}
-
-fn owner_in_scope<S: Storage<T>, T>(scope: ScopeId) -> Owner<S> {
-    match scope.has_context() {
-        Some(rt) => rt,
-        None => {
-            let owner = S::owner();
-            scope.provide_context(owner)
-        }
-    }
-}
+use crate::{default_impl, write_impls};
 
 /// CopyValue is a wrapper around a value to make the value mutable and Copy.
 ///
@@ -181,7 +93,7 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
     /// Create a new CopyValue. The value will be stored in the given scope. When the specified scope is dropped, the value will be dropped.
     #[track_caller]
     pub fn new_maybe_sync_in_scope(value: T, scope: ScopeId) -> Self {
-        let owner = owner_in_scope(scope);
+        let owner = scope.owner();
 
         Self {
             value: owner.insert(value),
@@ -270,3 +182,15 @@ impl<T: Copy, S: Storage<T>> Deref for CopyValue<T, S> {
         Readable::deref_impl(self)
     }
 }
+
+impl<T, S: Storage<T>> Clone for CopyValue<T, S> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T, S: Storage<T>> Copy for CopyValue<T, S> {}
+
+read_impls!(CopyValue<T, S: Storage<T>>);
+default_impl!(CopyValue<T, S: Storage<T>>);
+write_impls!(CopyValue<T, S: Storage<T>>);
