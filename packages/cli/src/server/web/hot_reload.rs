@@ -49,7 +49,14 @@ async fn hotreload_loop(mut socket: WebSocket, state: HotReloadState) -> anyhow:
 
             let msg = futures_util::select! {
                 msg = _rx => msg,
-                _ = _socket => break,
+                e = _socket => {
+                    if let Some(Err(e)) = e {
+                        log::info!("🔥 Hot Reload WebSocket disconnected: {}", e);
+                        break;
+                    } else {
+                        continue;
+                    }
+                },
             };
 
             let Ok(msg) = msg else { break };

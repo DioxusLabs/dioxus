@@ -30,12 +30,15 @@ pub enum HotReloadMsg {
 
 /// Connect to the hot reloading listener. The callback provided will be called every time a template change is detected
 pub fn connect(callback: impl FnMut(HotReloadMsg) + Send + 'static) {
-    let Ok(_manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") else {
-        return;
-    };
+    // FIXME: this is falling back onto the current directory when not running under cargo, which is how the CLI runs this.
+    // This needs to be fixed.
+    let _manifest_dir = std::env::var("CARGO_MANIFEST_DIR");
 
     // get the cargo manifest directory, where the target dir lives
-    let mut path = PathBuf::from(_manifest_dir);
+    let mut path = match _manifest_dir {
+        Ok(manifest_dir) => PathBuf::from(manifest_dir),
+        Err(_) => std::env::current_dir().unwrap(),
+    };
 
     // walk the path until we a find a socket named `dioxusin` inside that folder's target directory
     loop {
@@ -52,6 +55,8 @@ pub fn connect(callback: impl FnMut(HotReloadMsg) + Send + 'static) {
             None => return,
         };
     }
+
+    println!("connecting to {:?}", path);
 
     connect_at(path, callback);
 }

@@ -441,6 +441,7 @@ pub async fn hot_reload_handler(ws: axum::extract::WebSocketUpgrade) -> impl Int
 
         let mut rx =
             tokio_stream::wrappers::WatchStream::from_changes(state.message_receiver.clone());
+
         while let Some(change) = rx.next().await {
             if let Some(template) = change {
                 let template = { serde_json::to_string(&template).unwrap() };
@@ -449,6 +450,8 @@ pub async fn hot_reload_handler(ws: axum::extract::WebSocketUpgrade) -> impl Int
                 };
             }
         }
+
+        println!("😳 Hot Reload WebSocket disconnected");
     })
 }
 
