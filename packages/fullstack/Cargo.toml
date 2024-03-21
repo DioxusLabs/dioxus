@@ -17,7 +17,8 @@ dioxus_server_macro = { workspace = true }
 
 # axum
 axum = { workspace = true, features = ["ws", "macros"], optional = true }
-tower-http = { workspace = true, optional = true, features = ["fs", "compression-gzip"] }
+tower-http = { workspace = true, optional = true, features = ["fs"] }
+async-compression = { version = "0.4.6", features = ["gzip", "tokio"], optional = true }
 
 dioxus-lib = { workspace = true }
 
@@ -73,7 +74,7 @@ desktop = ["dioxus-desktop"]
 mobile = ["dioxus-mobile"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls"]
-axum = ["dep:axum", "tower-http", "server", "server_fn/axum", "dioxus_server_macro/axum"]
+axum = ["dep:axum", "tower-http", "server", "server_fn/axum", "dioxus_server_macro/axum", "async-compression"]
 server = [
     "server_fn/ssr",
     "dioxus_server_macro/server",

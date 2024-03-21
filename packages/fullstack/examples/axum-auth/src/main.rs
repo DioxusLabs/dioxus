@@ -52,6 +52,7 @@ fn main() {
                     .serve_dioxus_application(ServeConfig::builder().build(), || {
                         VirtualDom::new(app)
                     })
+                    .await
                     .layer(
                         axum_session_auth::AuthSessionLayer::<
                             crate::auth::User,

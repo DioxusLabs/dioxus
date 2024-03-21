@@ -5,7 +5,7 @@ use futures_channel::mpsc::UnboundedReceiver;
 use generational_box::SyncStorage;
 use std::{cell::RefCell, hash::Hash};
 
-use crate::{CopyValue, Readable, Writable};
+use crate::{CopyValue, Writable};
 
 /// A context for signal reads and writes to be directed to
 ///
@@ -26,6 +26,7 @@ impl std::fmt::Display for ReactiveContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         #[cfg(debug_assertions)]
         {
+            use crate::Readable;
             if let Ok(read) = self.inner.try_read() {
                 return write!(f, "ReactiveContext created at {}", read.origin);
             }
@@ -58,7 +59,7 @@ impl ReactiveContext {
     pub fn new_with_callback(
         callback: impl FnMut() + Send + Sync + 'static,
         scope: ScopeId,
-        origin: &'static std::panic::Location<'static>,
+        #[allow(unused)] origin: &'static std::panic::Location<'static>,
     ) -> Self {
         let inner = Inner {
             self_: None,
