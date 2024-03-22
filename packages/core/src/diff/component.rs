@@ -83,9 +83,6 @@ impl VNode {
             return;
         }
 
-        // First, move over the props from the old to the new, dropping old props in the process
-        dom.scopes[scope_id.0].props = new.props.duplicate();
-
         // Now run the component and diff it
         let new = dom.run_scope(scope_id);
         dom.diff_scope(to, scope_id, new);

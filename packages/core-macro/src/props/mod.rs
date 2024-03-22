@@ -648,38 +648,45 @@ mod struct_info {
                 )*
             };
 
+            // If there are signals, we automatically try to memoize the signals
             if !signal_fields.is_empty() {
                 Ok(quote! {
-                    // First check if the fields are equal
+                    // First check if the fields are equal. This will compare the signal fields by pointer
                     let exactly_equal = self == new;
                     if exactly_equal {
+                        // If they are return early, they can be memoized without any changes
                         return true;
                     }
 
-                    // If they are not, move over the signal fields and check if they are equal
+                    // If they are not, move the signal fields into self and check if they are equal now that the signal fields are equal
                     #(
                         let mut #signal_fields = self.#signal_fields;
                         self.#signal_fields = new.#signal_fields;
                     )*
 
-                    // Then check if the fields are equal again
+                    // Then check if the fields are equal now that we know the signal fields are equal
+                    // NOTE: we don't compare other fields individually because we want to let users opt-out of memoization for certain fields by implementing PartialEq themselves
                     let non_signal_fields_equal = self == new;
 
-                    // If they are not equal, we still need to rerun the component
+                    // If they are not equal, we need to move over all the fields to self
                     if !non_signal_fields_equal {
-                        return false;
+                        *self = new.clone();
                     }
-
+                    // Move any signal and event fields into their old container.
+                    // We update signals and event handlers in place so that they are always up to date even if they were moved into a future in a previous render
                     #move_signal_fields
                     #move_event_handlers
 
-                    true
+                    non_signal_fields_equal
                 })
             } else {
                 Ok(quote! {
                     let equal = self == new;
-                    if equal {
-                        #move_event_handlers
+                    // Move any signal and event fields into their old container.
+                    #move_event_handlers
+                    // If they are not equal, we need to move over all the fields to self
+                    if !equal {
+                        *self = new.clone();
                     }
                     equal
                 })
