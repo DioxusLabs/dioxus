@@ -641,6 +641,15 @@ mod struct_info {
                 })
                 .collect();
 
+            let regular_fields: Vec<_> = self
+                .included_fields()
+                .filter(|f| !looks_like_signal_type(f.ty) && !looks_like_event_handler_type(f.ty))
+                .map(|f| {
+                    let name = f.name;
+                    quote!(#name)
+                })
+                .collect();
+
             let move_event_handlers = quote! {
                 #(
                     // Update the event handlers
@@ -668,9 +677,12 @@ mod struct_info {
                     // NOTE: we don't compare other fields individually because we want to let users opt-out of memoization for certain fields by implementing PartialEq themselves
                     let non_signal_fields_equal = self == new;
 
-                    // If they are not equal, we need to move over all the fields to self
+                    // If they are not equal, we need to move over all the fields that are not event handlers or signals to self
                     if !non_signal_fields_equal {
-                        *self = new.clone();
+                        let new_clone = new.clone();
+                        #(
+                            self.#regular_fields = new_clone.#regular_fields;
+                        )*
                     }
                     // Move any signal and event fields into their old container.
                     // We update signals and event handlers in place so that they are always up to date even if they were moved into a future in a previous render
@@ -684,9 +696,12 @@ mod struct_info {
                     let equal = self == new;
                     // Move any signal and event fields into their old container.
                     #move_event_handlers
-                    // If they are not equal, we need to move over all the fields to self
+                    // If they are not equal, we need to move over all the fields that are not event handlers to self
                     if !equal {
-                        *self = new.clone();
+                        let new_clone = new.clone();
+                        #(
+                            self.#regular_fields = new_clone.#regular_fields;
+                        )*
                     }
                     equal
                 })

@@ -1,4 +1,6 @@
 use dioxus::prelude::*;
+use dioxus_core::ElementId;
+use std::rc::Rc;
 
 thread_local! {
     static DROP_COUNT: std::cell::RefCell<usize> = const { std::cell::RefCell::new(0) };
@@ -6,11 +8,19 @@ thread_local! {
 
 #[test]
 fn values_memoize_in_place() {
+    set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
     let mut dom = VirtualDom::new(app);
 
-    dom.rebuild_in_place();
+    let mutations = dom.rebuild_to_vec();
+    println!("{:#?}", mutations);
     dom.mark_dirty(ScopeId::ROOT);
     for _ in 0..20 {
+        dom.handle_event(
+            "click",
+            Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())),
+            ElementId(1),
+            true,
+        );
         dom.render_immediate(&mut dioxus_core::NoOpMutations);
     }
     dom.render_immediate(&mut dioxus_core::NoOpMutations);
@@ -57,7 +67,10 @@ fn TakesEventHandler(click: EventHandler<usize>, children: usize) -> Element {
     }
 
     rsx! {
-        button { "{children}" }
+        button {
+            onclick: move |_| click(children),
+            "{children}"
+        }
     }
 }
 
