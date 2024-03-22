@@ -11,7 +11,7 @@ pub(crate) type BoxedAnyProps = Box<dyn AnyProps>;
 pub(crate) trait AnyProps: 'static {
     /// Render the component with the internal props.
     fn render(&self) -> RenderReturn;
-    /// Check if the props are the same as the type erased props of another component.
+    /// Make the old props equal to the new type erased props. Return if the props were equal and should be memoized.
     fn memoize(&mut self, other: &dyn Any) -> bool;
     /// Get the props as a type erased `dyn Any`.
     fn props(&self) -> &dyn Any;
