@@ -37,6 +37,7 @@ pub fn check_file(path: PathBuf, file_content: &str) -> IssueReport {
     )
 }
 
+#[allow(unused)]
 #[derive(Debug, Clone)]
 enum Node {
     If(IfInfo),

@@ -5,7 +5,7 @@ async fn memo_updates() {
     use dioxus::prelude::*;
 
     thread_local! {
-        static VEC_SIGNAL: RefCell<Option<Signal<Vec<usize>, SyncStorage>>> = RefCell::new(None);
+        static VEC_SIGNAL: RefCell<Option<Signal<Vec<usize>, SyncStorage>>> = const { RefCell::new(None) };
     }
 
     fn app() -> Element {
