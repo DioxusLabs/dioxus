@@ -51,11 +51,11 @@ async fn hotreload_loop(mut socket: WebSocket, state: HotReloadState) -> anyhow:
                 msg = _rx => msg,
                 e = _socket => {
                     if let Some(Err(e)) = e {
-                        log::info!("🔥 Hot Reload WebSocket disconnected: {}", e);
-                        break;
+                        log::info!("🔥 Hot Reload WebSocket Error: {}", e);
                     } else {
-                        continue;
+                        log::info!("🔥 Hot Reload WebSocket Closed");
                     }
+                    break;
                 },
             };
 
