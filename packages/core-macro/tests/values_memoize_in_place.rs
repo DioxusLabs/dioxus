@@ -44,6 +44,12 @@ fn app() -> Element {
             },
             children: count() / 2
         }
+        TakesEventHandler {
+            click: move |num| {
+                println!("num2 is {num}");
+            },
+            children: count()
+        }
         TakesSignal { sig: count(), children: count() / 2 }
     }
 }
