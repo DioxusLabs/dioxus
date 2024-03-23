@@ -72,10 +72,7 @@ pub struct CallBody {
 impl CallBody {
     /// Render the template with a manually set file location. This should be used when multiple rsx! calls are used in the same macro
     pub fn render_with_location(&self, location: String) -> TokenStream2 {
-        let body = TemplateRenderer {
-            roots: &self.roots,
-            location: Some(location),
-        };
+        let body = TemplateRenderer::new(&self.roots, Some(location));
 
         // Empty templates just are placeholders for "none"
         if self.roots.is_empty() {
@@ -97,10 +94,7 @@ impl CallBody {
         template: Option<CallBody>,
         location: &'static str,
     ) -> Option<Template> {
-        let mut renderer: TemplateRenderer = TemplateRenderer {
-            roots: &self.roots,
-            location: None,
-        };
+        let mut renderer = TemplateRenderer::new(&self.roots, None);
 
         renderer.update_template::<Ctx>(template, location)
     }
@@ -126,10 +120,7 @@ impl Parse for CallBody {
 
 impl ToTokens for CallBody {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
-        let body: TemplateRenderer = TemplateRenderer {
-            roots: &self.roots,
-            location: None,
-        };
+        let body = TemplateRenderer::new(&self.roots, None);
 
         // Empty templates just are placeholders for "none"
         if self.roots.is_empty() {

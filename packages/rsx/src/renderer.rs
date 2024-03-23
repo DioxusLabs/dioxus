@@ -1,59 +1,16 @@
 use crate::*;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
-use syn::{
-    parse::{Parse, ParseStream},
-    Result, Token,
-};
 
 pub struct TemplateRenderer<'a> {
     pub roots: &'a [BodyNode],
-    pub location: Option<String>,
+    location: Option<String>,
 }
 
 impl<'a> TemplateRenderer<'a> {
-    #[cfg(feature = "hot_reload")]
-    pub fn update_template<Ctx: HotReloadingContext>(
-        &mut self,
-        previous_call: Option<CallBody>,
-        location: &'static str,
-    ) -> Option<Template> {
-        use mapping::DynamicMapping;
-
-        use crate::context::DynamicContext;
-
-        let mut mapping = previous_call.map(|call| DynamicMapping::from(call.roots));
-
-        let mut context = DynamicContext::default();
-
-        let mut roots = Vec::new();
-
-        for (idx, root) in self.roots.iter().enumerate() {
-            context.current_path.push(idx as u8);
-            roots.push(context.update_node::<Ctx>(root, &mut mapping)?);
-            context.current_path.pop();
-        }
-
-        Some(Template {
-            name: location,
-            roots: intern(roots.as_slice()),
-            node_paths: intern(
-                context
-                    .node_paths
-                    .into_iter()
-                    .map(|path| intern(path.as_slice()))
-                    .collect::<Vec<_>>()
-                    .as_slice(),
-            ),
-            attr_paths: intern(
-                context
-                    .attr_paths
-                    .into_iter()
-                    .map(|path| intern(path.as_slice()))
-                    .collect::<Vec<_>>()
-                    .as_slice(),
-            ),
-        })
+    /// Create a new template renderer, filling in the templates
+    pub fn new(roots: &'a [BodyNode], location: Option<String>) -> Self {
+        Self { roots, location }
     }
 }
 
@@ -126,7 +83,6 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
             };
 
             // spit out all the sub-templates
-
             {
                 // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
                 let __vnodes = dioxus_core::VNode::new(

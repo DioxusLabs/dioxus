@@ -157,10 +157,7 @@ impl ToTokens for BodyNode {
                     pat, expr, body, ..
                 } = exp;
 
-                let renderer: TemplateRenderer = TemplateRenderer {
-                    roots: body,
-                    location: None,
-                };
+                let renderer = TemplateRenderer::new(body, None);
 
                 // Signals expose an issue with temporary lifetimes
                 // We need to directly render out the nodes first to collapse their lifetime to <'a>
@@ -187,10 +184,7 @@ impl ToTokens for BodyNode {
                         else_branch,
                     } = chain;
 
-                    let mut renderer: TemplateRenderer = TemplateRenderer {
-                        roots: then_branch,
-                        location: None,
-                    };
+                    let mut renderer = TemplateRenderer::new(&then_branch, None);
 
                     body.append_all(quote! { #if_token #cond { Some({#renderer}) } });
 
@@ -198,7 +192,7 @@ impl ToTokens for BodyNode {
                         body.append_all(quote! { else });
                         elif = Some(next);
                     } else if let Some(else_branch) = else_branch {
-                        renderer.roots = else_branch;
+                        let mut renderer = TemplateRenderer::new(&else_branch, None);
                         body.append_all(quote! { else { Some({#renderer}) } });
                         terminated = true;
                         break;

@@ -68,6 +68,16 @@ impl AttributeType {
             }
         }
     }
+
+    pub fn is_static_str_literal(&self) -> bool {
+        match self {
+            AttributeType::Named(n) => match &n.attr.value {
+                ElementAttrValue::AttrLiteral(input) => input.is_static(),
+                _ => false,
+            },
+            AttributeType::Spread(_) => false,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
