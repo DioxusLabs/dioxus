@@ -117,16 +117,13 @@ impl CallBody {
         // Create a list of new roots that we'll spit out
         let mut roots = Vec::new();
 
-        // Try to create a mapping from the previous template to the new template
-        // If there's no mapping, that's fine... we're just creating new nodes
-        let mut mapping = template.map(|call| mapping::DynamicMapping::new(call.roots));
-
-        let mut context = DynamicContext::default();
+        // Create a context that will be used to update the template
+        let mut context = DynamicContext::new_with_old(template);
 
         // Populate the dynamic context with our own roots
         for (idx, root) in self.roots.iter().enumerate() {
             context.current_path.push(idx as u8);
-            roots.push(context.update_node::<Ctx>(root, &mut mapping)?);
+            roots.push(context.update_node::<Ctx>(root)?);
             context.current_path.pop();
         }
 

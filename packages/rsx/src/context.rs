@@ -6,7 +6,6 @@ use syn::{
     parse::{Parse, ParseStream},
     Result, Token,
 };
-use tracing::Instrument;
 
 /// As we create the dynamic nodes, we want to keep track of them in a linear fashion
 /// We'll use the size of the vecs to determine the index of the dynamic node in the final output
@@ -17,9 +16,21 @@ pub struct DynamicContext<'a> {
     pub current_path: Vec<u8>,
     pub node_paths: Vec<Vec<u8>>,
     pub attr_paths: Vec<Vec<u8>>,
+
+    // The mapping is used to map the old template to the new template
+    // Not having a mapping means that we're just creating new nodes
+    pub mapping: Option<DynamicMapping>,
 }
 
 impl<'a> DynamicContext<'a> {
+    pub fn new_with_old(template: Option<CallBody>) -> Self {
+        let mapping = template.map(|call| mapping::DynamicMapping::new(call.roots));
+        Self {
+            mapping,
+            ..Self::default()
+        }
+    }
+
     /// Render a portion of an rsx callbody to a token stream
     pub fn render_static_node(&mut self, root: &'a BodyNode) -> TokenStream2 {
         match root {
@@ -156,12 +167,11 @@ impl<'a> DynamicContext<'a> {
     pub fn update_node<Ctx: HotReloadingContext>(
         &mut self,
         root: &'a BodyNode,
-        mapping: &mut Option<DynamicMapping>,
     ) -> Option<TemplateNode> {
         match root {
             // The user is moving a static node around in the template
             // Check this is a bit more complex but we can likely handle it
-            BodyNode::Element(el) => self.update_element::<Ctx>(el, mapping),
+            BodyNode::Element(el) => self.update_element::<Ctx>(el),
 
             BodyNode::Text(text) if text.is_static() => {
                 let text = text.source.as_ref().unwrap();
@@ -175,7 +185,7 @@ impl<'a> DynamicContext<'a> {
             | BodyNode::Text(_)
             | BodyNode::ForLoop(_)
             | BodyNode::IfChain(_)
-            | BodyNode::Component(_) => self.update_dynamic_node(root, mapping),
+            | BodyNode::Component(_) => self.update_dynamic_node(root),
         }
     }
 
@@ -184,15 +194,11 @@ impl<'a> DynamicContext<'a> {
     /// If the change between the old and new template results in a mapping that doesn't exist, then we need to bail out.
     /// Basically if we *had* a mapping of `[0, 1]` and the new template is `[1, 2]`, then we need to bail out, since
     /// the new mapping doesn't exist in the original.
-    fn update_dynamic_node(
-        &mut self,
-        root: &'a BodyNode,
-        mapping: &mut Option<DynamicMapping>,
-    ) -> Option<TemplateNode> {
-        let idx = match mapping {
+    fn update_dynamic_node(&mut self, root: &'a BodyNode) -> Option<TemplateNode> {
+        let idx = match self.mapping {
             //    Bail out if the mapping doesn't exist
             //    The user put it new code in the template, and that code is not hotreloadable
-            Some(mapping) => mapping.get_node_idx(root)?,
+            Some(ref mut mapping) => mapping.get_node_idx(root)?,
             None => self.dynamic_nodes.len(),
         };
 
@@ -216,7 +222,6 @@ impl<'a> DynamicContext<'a> {
     fn update_element<Ctx: HotReloadingContext>(
         &mut self,
         el: &'a Element,
-        mapping: &mut Option<DynamicMapping>,
     ) -> Option<TemplateNode> {
         let element_name_rust = el.name.to_string();
         let mut static_attrs = Vec::new();
@@ -243,7 +248,7 @@ impl<'a> DynamicContext<'a> {
                 }
 
                 _ => {
-                    let idx = match mapping {
+                    let idx = match self.mapping.as_mut() {
                         Some(mapping) => mapping.get_attribute_idx(attr)?,
                         None => self.dynamic_attributes.len(),
                     };
@@ -262,7 +267,7 @@ impl<'a> DynamicContext<'a> {
 
         for (idx, root) in el.children.iter().enumerate() {
             self.current_path.push(idx as u8);
-            children.push(self.update_node::<Ctx>(root, mapping)?);
+            children.push(self.update_node::<Ctx>(root)?);
             self.current_path.pop();
         }
 
