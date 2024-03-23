@@ -11,6 +11,8 @@
 //! - [ ] Keys
 //! - [ ] Properties spreading with with `..` syntax
 
+use self::renderer::TemplateRenderer;
+
 use super::*;
 
 use proc_macro2::TokenStream as TokenStream2;

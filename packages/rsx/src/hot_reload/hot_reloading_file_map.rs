@@ -226,7 +226,7 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
             {
                 for attr in attrs.iter() {
                     if let TemplateAttribute::Static { name, value, .. } = attr {
-                        if *name == "src" || *name == "href" {
+                        if *name == "src" || *name == "href" || *name == "src" {
                             asset_urls.insert(PathBuf::from(*value));
                         }
                     }
@@ -303,7 +303,7 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
     }
 }
 
-fn template_location(old_start: proc_macro2::LineColumn, file: &Path) -> String {
+pub fn template_location(old_start: proc_macro2::LineColumn, file: &Path) -> String {
     let line = old_start.line;
     let column = old_start.column + 1;
     let location = file.display().to_string()

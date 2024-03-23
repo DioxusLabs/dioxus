@@ -1,53 +1,49 @@
 use dioxus_rsx::hot_reload::{diff_rsx, DiffResult};
 use syn::File;
 
+macro_rules! assert_rsx_changed {
+    (
+        $( #[doc = $doc:expr] )*
+        $name:ident
+    ) => {
+        $( #[doc = $doc] )*
+        #[test]
+        fn $name() {
+            let old = include_str!(concat!("./valid/", stringify!($name), ".old.rsx"));
+            let new = include_str!(concat!("./valid/", stringify!($name), ".new.rsx"));
+            let (old, new) = load_files(old, new);
+            assert!(matches!( diff_rsx(&new, &old), DiffResult::RsxChanged { .. }));
+        }
+    };
+}
+
+macro_rules! assert_code_changed {
+    (
+        $( #[doc = $doc:expr] )*
+        $name:ident
+    ) => {
+        $( #[doc = $doc] )*
+        #[test]
+        fn $name() {
+            let old = include_str!(concat!("./invalid/", stringify!($name), ".old.rsx"));
+            let new = include_str!(concat!("./invalid/", stringify!($name), ".new.rsx"));
+            let (old, new) = load_files(old, new);
+            assert!(matches!(diff_rsx(&new, &old), DiffResult::CodeChanged(_) ));
+        }
+    };
+}
+
 fn load_files(old: &str, new: &str) -> (File, File) {
     let old = syn::parse_file(old).unwrap();
     let new = syn::parse_file(new).unwrap();
     (old, new)
 }
 
-#[test]
-fn hotreloads() {
-    let (old, new) = load_files(
-        include_str!("./valid/expr.old.rsx"),
-        include_str!("./valid/expr.new.rsx"),
-    );
+assert_rsx_changed![combo];
+assert_rsx_changed![expr];
+assert_rsx_changed![for_];
+assert_rsx_changed![if_];
+assert_rsx_changed![let_];
+assert_rsx_changed![nested];
 
-    assert!(matches!(
-        diff_rsx(&new, &old),
-        DiffResult::RsxChanged { .. }
-    ));
-
-    let (old, new) = load_files(
-        include_str!("./valid/let.old.rsx"),
-        include_str!("./valid/let.new.rsx"),
-    );
-
-    assert!(matches!(
-        diff_rsx(&new, &old),
-        DiffResult::RsxChanged { .. }
-    ));
-
-    let (old, new) = load_files(
-        include_str!("./valid/combo.old.rsx"),
-        include_str!("./valid/combo.new.rsx"),
-    );
-
-    assert!(matches!(
-        diff_rsx(&new, &old),
-        DiffResult::RsxChanged { .. }
-    ));
-}
-
-#[test]
-fn doesnt_hotreload() {
-    let (old, new) = load_files(
-        include_str!("./invalid/changedexpr.old.rsx"),
-        include_str!("./invalid/changedexpr.new.rsx"),
-    );
-
-    let res = diff_rsx(&new, &old);
-    dbg!(&res);
-    assert!(matches!(res, DiffResult::CodeChanged(_)));
-}
+assert_code_changed![changedexpr];
