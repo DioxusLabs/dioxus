@@ -25,7 +25,6 @@ mod node;
 mod util;
 
 pub(crate) mod context;
-pub(crate) mod mapping;
 pub(crate) mod renderer;
 mod sub_templates;
 
