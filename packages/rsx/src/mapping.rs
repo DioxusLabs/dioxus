@@ -17,8 +17,11 @@ use syn::{
 #[derive(Default, Debug)]
 pub struct DynamicMapping {
     attribute_to_idx: HashMap<AttributeType, Vec<usize>>,
+
     last_attribute_idx: usize,
+
     node_to_idx: HashMap<BodyNode, Vec<usize>>,
+
     last_element_idx: usize,
 }
 
@@ -48,7 +51,7 @@ impl DynamicMapping {
                 }
             }
 
-            // We skip
+            // We skip static nodes since they already exist in the template
             BodyNode::Text(text) if text.is_static() => {}
 
             BodyNode::RawExpr(_)
@@ -83,46 +86,5 @@ impl DynamicMapping {
 
     pub(crate) fn get_node_idx(&mut self, node: &BodyNode) -> Option<usize> {
         self.node_to_idx.get_mut(node).and_then(|idxs| idxs.pop())
-    }
-}
-
-impl<'a> TemplateRenderer<'a> {
-    pub fn update_template<Ctx: HotReloadingContext>(
-        &mut self,
-        previous_call: Option<CallBody>,
-        location: &'static str,
-    ) -> Option<Template> {
-        let mut mapping = previous_call.map(|call| DynamicMapping::new(call.roots));
-
-        let mut context = DynamicContext::default();
-
-        let mut roots = Vec::new();
-
-        for (idx, root) in self.roots.iter().enumerate() {
-            context.current_path.push(idx as u8);
-            roots.push(context.update_node::<Ctx>(root, &mut mapping)?);
-            context.current_path.pop();
-        }
-
-        Some(Template {
-            name: location,
-            roots: intern(roots.as_slice()),
-            node_paths: intern(
-                context
-                    .node_paths
-                    .into_iter()
-                    .map(|path| intern(path.as_slice()))
-                    .collect::<Vec<_>>()
-                    .as_slice(),
-            ),
-            attr_paths: intern(
-                context
-                    .attr_paths
-                    .into_iter()
-                    .map(|path| intern(path.as_slice()))
-                    .collect::<Vec<_>>()
-                    .as_slice(),
-            ),
-        })
     }
 }

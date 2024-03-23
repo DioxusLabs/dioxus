@@ -17,10 +17,12 @@
 #[macro_use]
 mod errors;
 mod attribute;
+mod callbody;
 mod component;
 mod element;
 mod ifmt;
 mod node;
+mod util;
 
 pub(crate) mod context;
 pub(crate) mod mapping;
@@ -62,7 +64,6 @@ use syn::{
 ///
 /// Every callbody should be valid, so you can use it to build a template.
 /// To generate the code used to render the template, use the ToTokens impl on the Callbody, or with the `render_with_location` method.
-///
 #[derive(Default, Debug)]
 pub struct CallBody {
     pub roots: Vec<BodyNode>,
@@ -81,13 +82,32 @@ impl CallBody {
         quote! { Some({ #body }) }
     }
 
-    /// This will try to create a new template from the current body and the previous body. This will return None if the rsx has some dynamic part that has changed.
+    /// This will try to create a new template from the current body and the previous body. This will return None if the
+    /// rsx has some dynamic part that has changed.
     ///
     /// The previous_location is the location of the previous template at the time the template was originally compiled.
+    /// It's up to you the implementor to trace the template location back to the original source code. Generally you
+    /// can simply just match the location from the syn::File type to the template map living in the renderer.
+    ///
+    /// When you implement hotreloading, you're likely just going to parse the source code into the Syn::File type, which
+    /// should make retrieving the template location easy.
     ///
     /// ## Note:
+    ///
     ///  - This function intentionally leaks memory to create a static template.
     ///  - Keeping the template static allows us to simplify the core of dioxus and leaking memory in dev mode is less of an issue.
+    ///
+    /// ## Longer note about sub templates:
+    ///
+    ///    Sub templates when expanded in rustc use the same file/lin/col information as the parent template. This can
+    ///    be annoying when you're trying to get a location for a sub template and it's pretending that it's its parent.
+    ///    The new implementation of this aggregates all subtemplates into the TemplateRenderer and then assigns them
+    ///    unique IDs based on the byte index of the template, working around this issue.
+    ///
+    /// ## TODO:
+    ///
+    ///    A longer term goal would be to provide some sort of diagnostics to the user as to why the template was not
+    ///    updated, giving them an option to revert to the previous template as to not require a full rebuild.
     #[cfg(feature = "hot_reload")]
     pub fn update_template<Ctx: HotReloadingContext>(
         &self,
@@ -97,13 +117,13 @@ impl CallBody {
         // Create a list of new roots that we'll spit out
         let mut roots = Vec::new();
 
-        //
-        let mut context = DynamicContext::default();
-
         // Try to create a mapping from the previous template to the new template
         // If there's no mapping, that's fine... we're just creating new nodes
         let mut mapping = template.map(|call| mapping::DynamicMapping::new(call.roots));
 
+        let mut context = DynamicContext::default();
+
+        // Populate the dynamic context with our own roots
         for (idx, root) in self.roots.iter().enumerate() {
             context.current_path.push(idx as u8);
             roots.push(context.update_node::<Ctx>(root, &mut mapping)?);
@@ -166,6 +186,8 @@ impl ToTokens for CallBody {
 
 #[cfg(feature = "hot_reload")]
 // interns a object into a static object, resusing the value if it already exists
-fn intern<T: Eq + Hash + Send + Sync + ?Sized + 'static>(s: impl Into<Intern<T>>) -> &'static T {
+pub(crate) fn intern<T: Eq + Hash + Send + Sync + ?Sized + 'static>(
+    s: impl Into<Intern<T>>,
+) -> &'static T {
     s.into().as_ref()
 }
