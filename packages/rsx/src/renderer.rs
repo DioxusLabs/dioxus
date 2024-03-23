@@ -126,6 +126,9 @@ impl<'a> TemplateRenderer<'a> {
     /// Render the dynamic nodes of the context out to the Boxed array
     ///
     /// This is basically the allocation step of the rsx!{} macro
+    ///
+    /// We do it like this in a linear block rather than recursion to be able to handle the location
+    /// information of the nodes after they've been processed by the dynamic context.
     fn render_dynamic_nodes(&mut self, context: &DynamicContext<'a>) -> TokenStream2 {
         let mut roots = vec![];
 
