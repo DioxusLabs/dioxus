@@ -9,7 +9,7 @@ pub use proc_macro2::TokenStream;
 pub use std::collections::HashMap;
 pub use std::sync::Mutex;
 pub use std::time::SystemTime;
-use std::{collections::HashSet, ffi::OsStr, path::PathBuf};
+use std::{collections::HashSet, ffi::OsStr, marker::PhantomData, path::PathBuf};
 pub use std::{fs, io, path::Path};
 pub use std::{fs::File, io::Read};
 pub use syn::__private::ToTokens;
@@ -40,7 +40,7 @@ pub struct FileMap<Ctx: HotReloadingContext> {
 
     in_workspace: HashMap<PathBuf, Option<PathBuf>>,
 
-    phantom: std::marker::PhantomData<Ctx>,
+    phantom: PhantomData<Ctx>,
 }
 
 /// A cached file that has been parsed
@@ -75,7 +75,7 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
         let mut map = Self {
             map,
             in_workspace: HashMap::new(),
-            phantom: std::marker::PhantomData,
+            phantom: PhantomData,
         };
 
         map.load_assets(crate_dir.as_path());

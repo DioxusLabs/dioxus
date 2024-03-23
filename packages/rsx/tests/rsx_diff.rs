@@ -1,5 +1,31 @@
 use dioxus_core::{Template, TemplateAttribute, TemplateNode};
+use dioxus_rsx::{CallBody, HotReloadingContext};
 use quote::quote;
+
+struct Mock;
+
+impl HotReloadingContext for Mock {
+    fn map_attribute(
+        element_name_rust: &str,
+        attribute_name_rust: &str,
+    ) -> Option<(&'static str, Option<&'static str>)> {
+        match element_name_rust {
+            "svg" => match attribute_name_rust {
+                "width" => Some(("width", Some("style"))),
+                "height" => Some(("height", Some("style"))),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    fn map_element(element_name_rust: &str) -> Option<(&'static str, Option<&'static str>)> {
+        match element_name_rust {
+            "svg" => Some(("svg", Some("svg"))),
+            _ => None,
+        }
+    }
+}
 
 #[test]
 fn create_template() {
@@ -9,37 +35,10 @@ fn create_template() {
             height: "100px",
             "width2": 100,
             "height2": "100px",
-            p {
-                "hello world"
-            }
+            p { "hello world" }
             {(0..10).map(|i| rsx!{"{i}"})}
         }
     };
-
-    struct Mock;
-
-    impl HotReloadingContext for Mock {
-        fn map_attribute(
-            element_name_rust: &str,
-            attribute_name_rust: &str,
-        ) -> Option<(&'static str, Option<&'static str>)> {
-            match element_name_rust {
-                "svg" => match attribute_name_rust {
-                    "width" => Some(("width", Some("style"))),
-                    "height" => Some(("height", Some("style"))),
-                    _ => None,
-                },
-                _ => None,
-            }
-        }
-
-        fn map_element(element_name_rust: &str) -> Option<(&'static str, Option<&'static str>)> {
-            match element_name_rust {
-                "svg" => Some(("svg", Some("svg"))),
-                _ => None,
-            }
-        }
-    }
 
     let call_body: CallBody = syn::parse2(input).unwrap();
 
@@ -86,34 +85,6 @@ fn create_template() {
     )
 }
 
-use dioxus_rsx::{CallBody, HotReloadingContext};
-
-#[derive(Debug)]
-struct Mock;
-
-impl HotReloadingContext for Mock {
-    fn map_attribute(
-        element_name_rust: &str,
-        attribute_name_rust: &str,
-    ) -> Option<(&'static str, Option<&'static str>)> {
-        match element_name_rust {
-            "svg" => match attribute_name_rust {
-                "width" => Some(("width", Some("style"))),
-                "height" => Some(("height", Some("style"))),
-                _ => None,
-            },
-            _ => None,
-        }
-    }
-
-    fn map_element(element_name_rust: &str) -> Option<(&'static str, Option<&'static str>)> {
-        match element_name_rust {
-            "svg" => Some(("svg", Some("svg"))),
-            _ => None,
-        }
-    }
-}
-
 #[test]
 fn diff_template() {
     #[allow(unused, non_snake_case)]
@@ -127,13 +98,11 @@ fn diff_template() {
             height: "100px",
             "width2": 100,
             "height2": "100px",
-            p {
-                "hello world"
-            }
+            p { "hello world" }
             {(0..10).map(|i| rsx!{"{i}"})},
             {(0..10).map(|i| rsx!{"{i}"})},
             {(0..11).map(|i| rsx!{"{i}"})},
-            Comp{}
+            Comp {}
         }
     };
 
@@ -149,7 +118,7 @@ fn diff_template() {
             height: "100px",
             "height2": "100px",
             width: 100,
-            Comp{}
+            Comp {}
             {(0..11).map(|i| rsx!{"{i}"})},
             {(0..10).map(|i| rsx!{"{i}"})},
             {(0..10).map(|i| rsx!{"{i}"})},

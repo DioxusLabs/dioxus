@@ -15,7 +15,7 @@ use syn::{
 /// If you move a div around in the template, the mapping will need to be updated to reflect the new location, however
 /// the original div itself will not change (in identity, its contents could change).
 #[derive(Default, Debug)]
-pub(crate) struct DynamicMapping {
+pub struct DynamicMapping {
     attribute_to_idx: HashMap<AttributeType, Vec<usize>>,
     last_attribute_idx: usize,
     node_to_idx: HashMap<BodyNode, Vec<usize>>,
@@ -87,14 +87,11 @@ impl DynamicMapping {
 }
 
 impl<'a> TemplateRenderer<'a> {
-    #[cfg(feature = "hot_reload")]
     pub fn update_template<Ctx: HotReloadingContext>(
         &mut self,
         previous_call: Option<CallBody>,
         location: &'static str,
     ) -> Option<Template> {
-        use mapping::DynamicMapping;
-
         let mut mapping = previous_call.map(|call| DynamicMapping::new(call.roots));
 
         let mut context = DynamicContext::default();

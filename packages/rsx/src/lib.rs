@@ -25,9 +25,6 @@ mod node;
 pub(crate) mod context;
 pub(crate) mod mapping;
 pub(crate) mod renderer;
-
-use std::{fmt::Debug, hash::Hash};
-
 mod sub_templates;
 
 // Re-export the namespaces into each other
@@ -48,7 +45,8 @@ pub use hot_reload::HotReloadingContext;
 #[cfg(feature = "hot_reload")]
 use internment::Intern;
 
-// imports
+use std::{fmt::Debug, hash::Hash};
+
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
 use renderer::TemplateRenderer;
@@ -57,13 +55,14 @@ use syn::{
     Result, Token,
 };
 
-#[cfg(feature = "hot_reload")]
-// interns a object into a static object, resusing the value if it already exists
-fn intern<T: Eq + Hash + Send + Sync + ?Sized + 'static>(s: impl Into<Intern<T>>) -> &'static T {
-    s.into().as_ref()
-}
-
-/// Fundametnally, every CallBody is a template
+/// The Callbody is the contents of the rsx! macro
+///
+/// It is a list of BodyNodes, which are the different parts of the template.
+/// The Callbody contains no information about how the template will be rendered, only information about the parsed tokens.
+///
+/// Every callbody should be valid, so you can use it to build a template.
+/// To generate the code used to render the template, use the ToTokens impl on the Callbody, or with the `render_with_location` method.
+///
 #[derive(Default, Debug)]
 pub struct CallBody {
     pub roots: Vec<BodyNode>,
@@ -72,31 +71,65 @@ pub struct CallBody {
 impl CallBody {
     /// Render the template with a manually set file location. This should be used when multiple rsx! calls are used in the same macro
     pub fn render_with_location(&self, location: String) -> TokenStream2 {
-        let body = TemplateRenderer::new(&self.roots, Some(location));
-
         // Empty templates just are placeholders for "none"
         if self.roots.is_empty() {
             return quote! { None };
         }
 
-        quote! {
-            Some({ #body })
-        }
+        let body = TemplateRenderer::as_tokens(&self.roots, Some(location));
+
+        quote! { Some({ #body }) }
     }
 
-    #[cfg(feature = "hot_reload")]
     /// This will try to create a new template from the current body and the previous body. This will return None if the rsx has some dynamic part that has changed.
-    /// This function intentionally leaks memory to create a static template.
-    /// Keeping the template static allows us to simplify the core of dioxus and leaking memory in dev mode is less of an issue.
-    /// the previous_location is the location of the previous template at the time the template was originally compiled.
+    ///
+    /// The previous_location is the location of the previous template at the time the template was originally compiled.
+    ///
+    /// ## Note:
+    ///  - This function intentionally leaks memory to create a static template.
+    ///  - Keeping the template static allows us to simplify the core of dioxus and leaking memory in dev mode is less of an issue.
+    #[cfg(feature = "hot_reload")]
     pub fn update_template<Ctx: HotReloadingContext>(
         &self,
         template: Option<CallBody>,
         location: &'static str,
     ) -> Option<Template> {
-        let mut renderer = TemplateRenderer::new(&self.roots, None);
+        // Create a list of new roots that we'll spit out
+        let mut roots = Vec::new();
 
-        renderer.update_template::<Ctx>(template, location)
+        //
+        let mut context = DynamicContext::default();
+
+        // Try to create a mapping from the previous template to the new template
+        // If there's no mapping, that's fine... we're just creating new nodes
+        let mut mapping = template.map(|call| mapping::DynamicMapping::new(call.roots));
+
+        for (idx, root) in self.roots.iter().enumerate() {
+            context.current_path.push(idx as u8);
+            roots.push(context.update_node::<Ctx>(root, &mut mapping)?);
+            context.current_path.pop();
+        }
+
+        Some(Template {
+            name: location,
+            roots: intern(roots.as_slice()),
+            node_paths: intern(
+                context
+                    .node_paths
+                    .into_iter()
+                    .map(|path| intern(path.as_slice()))
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+            ),
+            attr_paths: intern(
+                context
+                    .attr_paths
+                    .into_iter()
+                    .map(|path| intern(path.as_slice()))
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+            ),
+        })
     }
 }
 
@@ -120,15 +153,19 @@ impl Parse for CallBody {
 
 impl ToTokens for CallBody {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
-        let body = TemplateRenderer::new(&self.roots, None);
-
         // Empty templates just are placeholders for "none"
-        if self.roots.is_empty() {
-            return out_tokens.append_all(quote! { None });
+        match self.roots.is_empty() {
+            true => out_tokens.append_all(quote! { None }),
+            false => {
+                let body = TemplateRenderer::as_tokens(&self.roots, None);
+                out_tokens.append_all(quote! { Some({ #body }) })
+            }
         }
-
-        out_tokens.append_all(quote! {
-            Some({ #body })
-        })
     }
+}
+
+#[cfg(feature = "hot_reload")]
+// interns a object into a static object, resusing the value if it already exists
+fn intern<T: Eq + Hash + Send + Sync + ?Sized + 'static>(s: impl Into<Intern<T>>) -> &'static T {
+    s.into().as_ref()
 }

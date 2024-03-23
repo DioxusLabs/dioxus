@@ -181,7 +181,7 @@ impl Component {
             toks.append_all(quote! {#field})
         }
         if !self.children.is_empty() {
-            let renderer = TemplateRenderer::new(&self.children, None);
+            let renderer = TemplateRenderer::as_tokens(&self.children, None);
             toks.append_all(quote! { .children( Some({ #renderer }) ) });
         }
         toks.append_all(quote! { .build() });

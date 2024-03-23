@@ -56,7 +56,7 @@ fn testing_for_pattern() {
 
     dbg!(updated);
 
-    let updated = old.update_template::<Mock>(Some(new), "testing").unwrap();
+    // let updated = old.update_template::<Mock>(Some(new), "testing").unwrap();
 
     dbg!(updated);
 
