@@ -47,11 +47,10 @@ pub use hot_reload::HotReloadingContext;
 #[cfg(feature = "hot_reload")]
 use internment::Intern;
 
-use std::{fmt::Debug, hash::Hash};
-
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
 use renderer::TemplateRenderer;
+use std::{fmt::Debug, hash::Hash};
 use syn::{
     parse::{Parse, ParseStream},
     Result, Token,
@@ -114,19 +113,16 @@ impl CallBody {
         template: Option<CallBody>,
         location: &'static str,
     ) -> Option<Template> {
-        // Create a list of new roots that we'll spit out
-        let mut roots = Vec::new();
-
         // Create a context that will be used to update the template
         let mut context = DynamicContext::new_with_old(template);
 
-        // Populate the dynamic context with our own roots
-        for (idx, root) in self.roots.iter().enumerate() {
-            context.current_path.push(idx as u8);
-            roots.push(context.update_node::<Ctx>(root)?);
-            context.current_path.pop();
-        }
+        // Force the template node to generate us TemplateNodes
+        let roots = context.populate_by_updating::<Ctx>(&self.roots)?;
 
+        // We've received the dioxus-core TemplateNodess, and need to assemble them into a Template
+        // We could just use them directly, but we want to intern them to do our best to avoid
+        // egregious memory leaks. We're sitll leaking memory, but at least we can blame it on
+        // the `Intern` crate and not just the fact that we call Box::leak.
         Some(Template {
             name: location,
             roots: intern(roots.as_slice()),

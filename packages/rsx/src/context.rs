@@ -31,6 +31,32 @@ impl<'a> DynamicContext<'a> {
         }
     }
 
+    /// Populate the dynamic context with our own roots
+    ///
+    /// This will call update_node on each root, attempting to build us a list of TemplateNodes that
+    /// we can render out.
+    ///
+    /// These TemplateNodes are the same one used in Dioxus core! We just serialize them out and then
+    /// they'll get picked up after codegen for compilation. Cool stuff.
+    ///
+    /// If updating fails (IE the root is a dynamic node that has changed), then we return None.
+    pub fn populate_by_updating<Ctx: HotReloadingContext>(
+        &mut self,
+        roots: &'a [BodyNode],
+    ) -> Option<Vec<TemplateNode>> {
+        // Create a list of new roots that we'll spit out
+        let mut roots_ = Vec::new();
+
+        // Populate the dynamic context with our own roots
+        for (idx, root) in roots.iter().enumerate() {
+            self.current_path.push(idx as u8);
+            roots_.push(self.update_node::<Ctx>(root)?);
+            self.current_path.pop();
+        }
+
+        Some(roots_)
+    }
+
     /// Render a portion of an rsx callbody to a token stream
     pub fn render_static_node(&mut self, root: &'a BodyNode) -> TokenStream2 {
         match root {
