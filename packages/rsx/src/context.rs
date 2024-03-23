@@ -1,11 +1,7 @@
 use crate::mapping::DynamicMapping;
 use crate::*;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens, TokenStreamExt};
-use syn::{
-    parse::{Parse, ParseStream},
-    Result, Token,
-};
+use quote::quote;
 
 /// As we create the dynamic nodes, we want to keep track of them in a linear fashion
 /// We'll use the size of the vecs to determine the index of the dynamic node in the final output
@@ -13,13 +9,34 @@ use syn::{
 pub struct DynamicContext<'a> {
     pub dynamic_nodes: Vec<&'a BodyNode>,
     pub dynamic_attributes: Vec<Vec<&'a AttributeType>>,
+
     pub current_path: Vec<u8>,
     pub node_paths: Vec<Vec<u8>>,
     pub attr_paths: Vec<Vec<u8>>,
 
-    // The mapping is used to map the old template to the new template
-    // Not having a mapping means that we're just creating new nodes
+    /// The mapping is used to map the old template to the new template
+    /// Not having a mapping means that we're just creating new nodes
+    ///
+    /// The mapping is only required for us to track dynamic nodes. Static nodes just get written
+    /// out, meaning the only way we can fail to hotreload is if a dynamic node modified
     pub mapping: Option<DynamicMapping>,
+
+    /// The subtemplates that we've discovered that need to be updated
+    /// These will be collected just by recursing the body nodes of various items like for/if/components etc
+    ///
+    /// The locations of these templates will be the same location as the original template, with
+    /// the addition of the dynamic node index that the template belongs to.
+    ///
+    /// rsx! {                        <-------- this is the location of the template "file.rs:123:0:0"
+    ///     div {
+    ///         for i in 0..10 {      <-------- dyn_node(0)
+    ///             "hi"              <-------- template with location  "file.rs:123:0:1" (original name, but with the dynamic node index)
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// We only track this when the template changes
+    pub discovered_templates: Vec<Template>,
 }
 
 impl<'a> DynamicContext<'a> {
@@ -67,23 +84,29 @@ impl<'a> DynamicContext<'a> {
                 quote! { dioxus_core::TemplateNode::Text{ text: #text } }
             }
 
+            BodyNode::ForLoop(for_loop) => self.render_for_loop(root, for_loop),
+
             BodyNode::RawExpr(_)
             | BodyNode::Text(_)
-            | BodyNode::ForLoop(_)
             | BodyNode::IfChain(_)
             | BodyNode::Component(_) => self.render_dynamic_node(root),
         }
+    }
+
+    /// Render a for loop to a token stream
+    ///
+    /// This is basically just rendering a dynamic node, but with some extra bookkepping to track the
+    /// contents of the for loop in case we want to hot reload it
+    fn render_for_loop(&mut self, root: &'a BodyNode, for_loop: &ForLoop) -> TokenStream2 {
+        self.render_dynamic_node(root)
     }
 
     fn render_dynamic_node(&mut self, root: &'a BodyNode) -> TokenStream2 {
         let ct = self.dynamic_nodes.len();
         self.dynamic_nodes.push(root);
         self.node_paths.push(self.current_path.clone());
-
         match root {
-            BodyNode::Text(_) => {
-                quote! { dioxus_core::TemplateNode::DynamicText { id: #ct } }
-            }
+            BodyNode::Text(_) => quote! { dioxus_core::TemplateNode::DynamicText { id: #ct } },
             _ => quote! { dioxus_core::TemplateNode::Dynamic { id: #ct } },
         }
     }
@@ -162,7 +185,8 @@ impl<'a> DynamicContext<'a> {
         let name = match (el_name, name) {
             (ElementName::Ident(_), ElementAttrName::BuiltIn(_)) => quote! { #el_name::#name.0 },
             _ => {
-                let as_string = name.to_string(); //hmmmm I think we could just totokens this, but the to_string might be inserting quotes
+                //hmmmm I think we could just totokens this, but the to_string might be inserting quotes
+                let as_string = name.to_string();
                 quote! { #as_string }
             }
         };
@@ -179,7 +203,8 @@ impl<'a> DynamicContext<'a> {
         }
     }
 
-    /// If the attr is dynamic
+    /// If the attr is dynamic, we save it to the tracked attributes list
+    /// This will let us use this context at a later point in time to update the template
     fn render_dynamic_attr(&mut self, attr: &'a AttributeType) -> TokenStream2 {
         let ct = self.dynamic_attributes.len();
 
@@ -249,56 +274,29 @@ impl<'a> DynamicContext<'a> {
         &mut self,
         el: &'a Element,
     ) -> Option<TemplateNode> {
-        let element_name_rust = el.name.to_string();
+        let rust_name = el.name.to_string();
         let mut static_attrs = Vec::new();
+
         for attr in &el.merged_attributes {
-            match &attr {
-                AttributeType::Named(ElementAttrNamed {
-                    attr:
-                        ElementAttr {
-                            value: ElementAttrValue::AttrLiteral(value),
-                            name,
-                        },
-                    ..
-                }) if value.is_static() => {
-                    let value = value.source.as_ref().unwrap();
-                    let attribute_name_rust = name.to_string();
-                    let (name, namespace) =
-                        Ctx::map_attribute(&element_name_rust, &attribute_name_rust)
-                            .unwrap_or((intern(attribute_name_rust.as_str()), None));
-                    static_attrs.push(TemplateAttribute::Static {
-                        name,
-                        namespace,
-                        value: intern(value.value().as_str()),
-                    })
-                }
+            let static_attribute = match attr.as_static_str_literal() {
+                // For static attributes, we don't need to pull in any mapping or anything
+                // We can just build them directly
+                Some((name, value)) => Self::make_static_attribute::<Ctx>(value, name, &rust_name),
 
-                _ => {
-                    let idx = match self.mapping.as_mut() {
-                        Some(mapping) => mapping.get_attribute_idx(attr)?,
-                        None => self.dynamic_attributes.len(),
-                    };
-                    self.dynamic_attributes.push(vec![attr]);
-
-                    if self.attr_paths.len() <= idx {
-                        self.attr_paths.resize_with(idx + 1, Vec::new);
-                    }
-                    self.attr_paths[idx] = self.current_path.clone();
-                    static_attrs.push(TemplateAttribute::Dynamic { id: idx })
+                // For dynamic attributes, we need to check the mapping to see if that mapping exists
+                None => {
+                    let id = self.update_dynamic_attribute(attr)?;
+                    TemplateAttribute::Dynamic { id }
                 }
-            }
+            };
+
+            static_attrs.push(static_attribute);
         }
 
-        let mut children = Vec::new();
+        let children = self.populate_by_updating::<Ctx>(el.children.as_slice())?;
 
-        for (idx, root) in el.children.iter().enumerate() {
-            self.current_path.push(idx as u8);
-            children.push(self.update_node::<Ctx>(root)?);
-            self.current_path.pop();
-        }
-
-        let (tag, namespace) = Ctx::map_element(&element_name_rust)
-            .unwrap_or((intern(element_name_rust.as_str()), None));
+        let (tag, namespace) =
+            Ctx::map_element(&rust_name).unwrap_or((intern(rust_name.as_str()), None));
 
         Some(TemplateNode::Element {
             tag,
@@ -306,5 +304,38 @@ impl<'a> DynamicContext<'a> {
             attrs: intern(static_attrs.into_boxed_slice()),
             children: intern(children.as_slice()),
         })
+    }
+
+    fn update_dynamic_attribute(&mut self, attr: &'a AttributeType) -> Option<usize> {
+        let idx = match self.mapping.as_mut() {
+            Some(mapping) => mapping.get_attribute_idx(attr)?,
+            None => self.dynamic_attributes.len(),
+        };
+        self.dynamic_attributes.push(vec![attr]);
+        if self.attr_paths.len() <= idx {
+            self.attr_paths.resize_with(idx + 1, Vec::new);
+        }
+        self.attr_paths[idx] = self.current_path.clone();
+
+        Some(idx)
+    }
+
+    fn make_static_attribute<Ctx: HotReloadingContext>(
+        value: &IfmtInput,
+        name: &ElementAttrName,
+        element_name_rust: &String,
+    ) -> TemplateAttribute {
+        let value = value.source.as_ref().unwrap();
+        let attribute_name_rust = name.to_string();
+        let (name, namespace) = Ctx::map_attribute(element_name_rust, &attribute_name_rust)
+            .unwrap_or((intern(attribute_name_rust.as_str()), None));
+
+        let static_attr = TemplateAttribute::Static {
+            name,
+            namespace,
+            value: intern(value.value().as_str()),
+        };
+
+        static_attr
     }
 }

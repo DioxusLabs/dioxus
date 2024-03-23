@@ -1,3 +1,7 @@
+use super::{
+    hot_reload_diff::{diff_rsx, DiffResult},
+    ChangedRsx,
+};
 use crate::{CallBody, HotReloadingContext};
 use dioxus_core::{
     prelude::{TemplateAttribute, TemplateNode},
@@ -12,13 +16,7 @@ pub use std::time::SystemTime;
 use std::{collections::HashSet, ffi::OsStr, marker::PhantomData, path::PathBuf};
 pub use std::{fs, io, path::Path};
 pub use std::{fs::File, io::Read};
-pub use syn::__private::ToTokens;
 use syn::spanned::Spanned;
-
-use super::{
-    hot_reload_diff::{diff_rsx, DiffResult},
-    ChangedRsx,
-};
 
 pub enum UpdateResult {
     UpdatedRsx(Vec<Template>),

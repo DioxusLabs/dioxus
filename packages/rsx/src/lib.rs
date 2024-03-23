@@ -110,11 +110,11 @@ impl CallBody {
     #[cfg(feature = "hot_reload")]
     pub fn update_template<Ctx: HotReloadingContext>(
         &self,
-        template: Option<CallBody>,
+        old: Option<CallBody>,
         location: &'static str,
     ) -> Option<Template> {
         // Create a context that will be used to update the template
-        let mut context = DynamicContext::new_with_old(template);
+        let mut context = DynamicContext::new_with_old(old);
 
         // Force the template node to generate us TemplateNodes
         let roots = context.populate_by_updating::<Ctx>(&self.roots)?;

@@ -41,48 +41,8 @@ fn create_template() {
     };
 
     let call_body: CallBody = syn::parse2(input).unwrap();
-
-    let template = call_body.update_template::<Mock>(None, "testing").unwrap();
-
-    dbg!(template);
-
-    assert_eq!(
-        template,
-        Template {
-            name: "testing",
-            roots: &[TemplateNode::Element {
-                tag: "svg",
-                namespace: Some("svg"),
-                attrs: &[
-                    TemplateAttribute::Dynamic { id: 0 },
-                    TemplateAttribute::Static {
-                        name: "height",
-                        namespace: Some("style"),
-                        value: "100px",
-                    },
-                    TemplateAttribute::Dynamic { id: 1 },
-                    TemplateAttribute::Static {
-                        name: "height2",
-                        namespace: None,
-                        value: "100px",
-                    },
-                ],
-                children: &[
-                    TemplateNode::Element {
-                        tag: "p",
-                        namespace: None,
-                        attrs: &[],
-                        children: &[TemplateNode::Text {
-                            text: "hello world",
-                        }],
-                    },
-                    TemplateNode::Dynamic { id: 0 }
-                ],
-            }],
-            node_paths: &[&[0, 1,],],
-            attr_paths: &[&[0,], &[0,],],
-        },
-    )
+    let new_template = call_body.update_template::<Mock>(None, "testing").unwrap();
+    insta::assert_debug_snapshot!(new_template);
 }
 
 #[test]
@@ -107,9 +67,8 @@ fn diff_template() {
     };
 
     let call_body1: CallBody = syn::parse2(input).unwrap();
-
-    let template = call_body1.update_template::<Mock>(None, "testing").unwrap();
-    dbg!(template);
+    let created_template = call_body1.update_template::<Mock>(None, "testing").unwrap();
+    insta::assert_debug_snapshot!(created_template);
 
     // scrambling the attributes should not cause a full rebuild
     let input = quote! {
@@ -129,51 +88,26 @@ fn diff_template() {
     };
 
     let call_body2: CallBody = syn::parse2(input).unwrap();
-
-    let template = call_body2
+    let new_template = call_body2
         .update_template::<Mock>(Some(call_body1), "testing")
         .unwrap();
 
-    dbg!(template);
+    insta::assert_debug_snapshot!(new_template);
+}
 
-    assert_eq!(
-        template,
-        Template {
-            name: "testing",
-            roots: &[TemplateNode::Element {
-                tag: "div",
-                namespace: None,
-                attrs: &[
-                    TemplateAttribute::Dynamic { id: 1 },
-                    TemplateAttribute::Static {
-                        name: "height",
-                        namespace: None,
-                        value: "100px",
-                    },
-                    TemplateAttribute::Static {
-                        name: "height2",
-                        namespace: None,
-                        value: "100px",
-                    },
-                    TemplateAttribute::Dynamic { id: 0 },
-                ],
-                children: &[
-                    TemplateNode::Dynamic { id: 3 },
-                    TemplateNode::Dynamic { id: 2 },
-                    TemplateNode::Dynamic { id: 1 },
-                    TemplateNode::Dynamic { id: 0 },
-                    TemplateNode::Element {
-                        tag: "p",
-                        namespace: None,
-                        attrs: &[],
-                        children: &[TemplateNode::Text {
-                            text: "hello world",
-                        }],
-                    },
-                ],
-            }],
-            node_paths: &[&[0, 3], &[0, 2], &[0, 1], &[0, 0]],
-            attr_paths: &[&[0], &[0]]
-        },
-    )
+#[test]
+fn changing_forloops_is_okay() {
+    let input = quote! {
+        div {
+            for i in 0..10 {
+                div { "123" }
+                "asdasd"
+            }
+        }
+    };
+
+    let call_body: CallBody = syn::parse2(input).unwrap();
+    let new_template = call_body.update_template::<Mock>(None, "testing").unwrap();
+
+    dbg!(new_template);
 }

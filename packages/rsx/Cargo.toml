@@ -27,3 +27,7 @@ default = ["html", "hot_reload"]
 hot_reload = ["krates", "internment", "dioxus-core"]
 serde = ["dep:serde"]
 html = []
+
+
+[dev-dependencies]
+insta = "1.36.1"

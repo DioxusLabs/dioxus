@@ -114,6 +114,19 @@ axum-extra = "0.9.2"
 reqwest = "0.11.24"
 owo-colors = "4.0.0"
 
+[workspace.dev-dependencies]
+isnta = "1.36.1"
+
+# speed up some macros by optimizing them
+[profile.dev.package.insta]
+opt-level = 3
+
+[profile.dev.package.similar]
+opt-level = 3
+
+[profile.dev.package.dioxus-core-macro]
+opt-level = 3
+
 # Enable a small amount of optimization in debug mode
 [profile.cli-dev]
 inherits = "dev"

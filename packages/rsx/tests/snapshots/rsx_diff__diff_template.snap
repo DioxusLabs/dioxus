@@ -1,0 +1,85 @@
+---
+source: packages/rsx/tests/rsx_diff.rs
+expression: created_template
+---
+Template {
+    name: "testing",
+    roots: [
+        Element {
+            tag: "svg",
+            namespace: Some(
+                "svg",
+            ),
+            attrs: [
+                Dynamic {
+                    id: 0,
+                },
+                Static {
+                    name: "height",
+                    value: "100px",
+                    namespace: Some(
+                        "style",
+                    ),
+                },
+                Dynamic {
+                    id: 1,
+                },
+                Static {
+                    name: "height2",
+                    value: "100px",
+                    namespace: None,
+                },
+            ],
+            children: [
+                Element {
+                    tag: "p",
+                    namespace: None,
+                    attrs: [],
+                    children: [
+                        Text {
+                            text: "hello world",
+                        },
+                    ],
+                },
+                Dynamic {
+                    id: 0,
+                },
+                Dynamic {
+                    id: 1,
+                },
+                Dynamic {
+                    id: 2,
+                },
+                Dynamic {
+                    id: 3,
+                },
+            ],
+        },
+    ],
+    node_paths: [
+        [
+            0,
+            1,
+        ],
+        [
+            0,
+            2,
+        ],
+        [
+            0,
+            3,
+        ],
+        [
+            0,
+            4,
+        ],
+    ],
+    attr_paths: [
+        [
+            0,
+        ],
+        [
+            0,
+        ],
+    ],
+}
