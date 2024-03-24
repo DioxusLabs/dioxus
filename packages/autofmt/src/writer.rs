@@ -262,6 +262,7 @@ impl<'a> Writer<'a> {
                 then_branch,
                 else_if_branch,
                 else_branch,
+                ..
             } = chain;
 
             write!(

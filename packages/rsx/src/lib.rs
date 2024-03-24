@@ -21,6 +21,7 @@ mod callbody;
 mod component;
 mod element;
 mod ifmt;
+mod location;
 mod node;
 mod util;
 
@@ -115,13 +116,15 @@ impl CallBody {
         // Create a context that will be used to update the template
         let mut context = DynamicContext::new_with_old(old);
 
-        // Force the template node to generate us TemplateNodes
+        // Force the template node to generate us TemplateNodes, and fill in the location information
         let roots = context.populate_by_updating::<Ctx>(&self.roots)?;
 
         // We've received the dioxus-core TemplateNodess, and need to assemble them into a Template
         // We could just use them directly, but we want to intern them to do our best to avoid
         // egregious memory leaks. We're sitll leaking memory, but at least we can blame it on
         // the `Intern` crate and not just the fact that we call Box::leak.
+        //
+        // We should also note that order of these nodes could be all scrambeled
         Some(Template {
             name: location,
             roots: intern(roots.as_slice()),
@@ -159,7 +162,7 @@ impl Parse for CallBody {
             roots.push(node);
         }
 
-        Ok(Self { roots })
+        Ok(CallBody { roots })
     }
 }
 

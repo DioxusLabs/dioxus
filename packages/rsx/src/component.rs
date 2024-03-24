@@ -11,7 +11,7 @@
 //! - [ ] Keys
 //! - [ ] Properties spreading with with `..` syntax
 
-use self::renderer::TemplateRenderer;
+use self::{location::CallerLocation, renderer::TemplateRenderer};
 
 use super::*;
 
@@ -34,6 +34,7 @@ pub struct Component {
     pub children: Vec<BodyNode>,
     pub manual_props: Option<Expr>,
     pub brace: syn::token::Brace,
+    pub location: CallerLocation,
 }
 
 impl Parse for Component {
@@ -90,6 +91,7 @@ impl Parse for Component {
         }
 
         Ok(Self {
+            location: CallerLocation::default(),
             name,
             prop_gen_args,
             fields,
@@ -103,12 +105,6 @@ impl Parse for Component {
 
 impl ToTokens for Component {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        tokens.append_all(self.render(None))
-    }
-}
-
-impl Component {
-    pub(crate) fn render(&self, location: Option<String>) -> TokenStream2 {
         let Self {
             name,
             prop_gen_args,
@@ -119,11 +115,11 @@ impl Component {
             .manual_props
             .as_ref()
             .map(|props| self.collect_manual_props(props))
-            .unwrap_or_else(|| self.collect_props(location));
+            .unwrap_or_else(|| self.collect_props());
 
         let fn_name = self.fn_name();
 
-        quote! {
+        tokens.append_all(quote! {
             dioxus_core::DynamicNode::Component({
                 use dioxus_core::prelude::Properties;
                 (#builder).into_vcomponent(
@@ -131,9 +127,11 @@ impl Component {
                     #fn_name
                 )
             })
-        }
+        })
     }
+}
 
+impl Component {
     fn validate_component_path(path: &syn::Path) -> Result<()> {
         // ensure path segments doesn't have PathArguments, only the last
         // segment is allowed to have one.
@@ -174,7 +172,7 @@ impl Component {
         quote! {{ #toks }}
     }
 
-    fn collect_props(&self, location: Option<String>) -> TokenStream2 {
+    fn collect_props(&self) -> TokenStream2 {
         let name = &self.name;
 
         let mut toks = match &self.prop_gen_args {
@@ -185,7 +183,7 @@ impl Component {
             toks.append_all(quote! {#field})
         }
         if !self.children.is_empty() {
-            let renderer = TemplateRenderer::as_tokens(&self.children, location);
+            let renderer = TemplateRenderer::as_tokens(&self.children, None);
             toks.append_all(quote! { .children( Some({ #renderer }) ) });
         }
         toks.append_all(quote! { .build() });

@@ -26,7 +26,20 @@
 //! However core would need to be redesigned to support this strategy, and I'm not sure if it's worth the effort.
 //! It's just conceptually easier to have the sub-templates be a part of the template they are rendered in, and then
 //! deal with the complicated rsx diffing logic in the rsx crate itself.
-
-pub struct SubTemplates {}
-
-impl SubTemplates {}
+//!
+//! /// The subtemplates that we've discovered that need to be updated
+//! /// These will be collected just by recursing the body nodes of various items like for/if/components etc
+//! ///
+//! /// The locations of these templates will be the same location as the original template, with
+//! /// the addition of the dynamic node index that the template belongs to.
+//! ///
+//! /// rsx! {                        <-------- this is the location of the template "file.rs:123:0:0"
+//! ///     div {
+//! ///         for i in 0..10 {      <-------- dyn_node(0)
+//! ///             "hi"              <-------- template with location  "file.rs:123:0:1" (original name, but with the dynamic node index)
+//! ///         }
+//! ///     }
+//! /// }
+//! ///
+//! /// We only track this when the template changes
+//! pub discovered_templates: Vec<Template>,

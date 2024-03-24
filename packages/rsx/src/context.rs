@@ -14,23 +14,6 @@ pub struct DynamicContext<'a> {
     pub node_paths: Vec<Vec<u8>>,
     pub attr_paths: Vec<Vec<u8>>,
 
-    /// The subtemplates that we've discovered that need to be updated
-    /// These will be collected just by recursing the body nodes of various items like for/if/components etc
-    ///
-    /// The locations of these templates will be the same location as the original template, with
-    /// the addition of the dynamic node index that the template belongs to.
-    ///
-    /// rsx! {                        <-------- this is the location of the template "file.rs:123:0:0"
-    ///     div {
-    ///         for i in 0..10 {      <-------- dyn_node(0)
-    ///             "hi"              <-------- template with location  "file.rs:123:0:1" (original name, but with the dynamic node index)
-    ///         }
-    ///     }
-    /// }
-    ///
-    /// We only track this when the template changes
-    pub discovered_templates: Vec<Template>,
-
     /// Mapping variables used to map the old template to the new template
     ///
     /// This tracks whether or not we're tracking some nodes or attributes
@@ -88,14 +71,16 @@ impl<'a> DynamicContext<'a> {
         Some(roots_)
     }
 
-    /// Render a portion of an rsx callbody to a token stream
+    /// Render a portion of an rsx callbody to a TemplateNode call
+    ///
+    /// We're assembling the templatenodes
     pub fn render_static_node(&mut self, root: &'a BodyNode) -> TokenStream2 {
         match root {
             BodyNode::Element(el) => self.render_static_element(el),
 
             BodyNode::Text(text) if text.is_static() => {
                 let text = text.to_static().unwrap();
-                quote! { dioxus_core::TemplateNode::Text{ text: #text } }
+                quote! { dioxus_core::TemplateNode::Text { text: #text } }
             }
 
             BodyNode::ForLoop(for_loop) => self.render_for_loop(root, for_loop),
@@ -111,7 +96,7 @@ impl<'a> DynamicContext<'a> {
     ///
     /// This is basically just rendering a dynamic node, but with some extra bookkepping to track the
     /// contents of the for loop in case we want to hot reload it
-    fn render_for_loop(&mut self, root: &'a BodyNode, for_loop: &ForLoop) -> TokenStream2 {
+    fn render_for_loop(&mut self, root: &'a BodyNode, _for_loop: &ForLoop) -> TokenStream2 {
         self.render_dynamic_node(root)
     }
 
@@ -289,22 +274,28 @@ impl<'a> DynamicContext<'a> {
         el: &'a Element,
     ) -> Option<TemplateNode> {
         let rust_name = el.name.to_string();
-        let mut static_attrs = Vec::new();
+
+        let mut static_attr_array = Vec::new();
 
         for attr in &el.merged_attributes {
-            let static_attribute = match attr.as_static_str_literal() {
+            let template_attr = match attr.as_static_str_literal() {
                 // For static attributes, we don't need to pull in any mapping or anything
                 // We can just build them directly
                 Some((name, value)) => Self::make_static_attribute::<Ctx>(value, name, &rust_name),
 
                 // For dynamic attributes, we need to check the mapping to see if that mapping exists
+                // todo: one day we could generate new dynamic attributes on the fly if they're a literal,
+                // or something sufficiently serializable
+                //  (ie `checked`` being a bool and bools being interpretable)
+                //
+                // For now, just give up if that attribute doesn't exist in the mapping
                 None => {
                     let id = self.update_dynamic_attribute(attr)?;
                     TemplateAttribute::Dynamic { id }
                 }
             };
 
-            static_attrs.push(static_attribute);
+            static_attr_array.push(template_attr);
         }
 
         let children = self.populate_by_updating::<Ctx>(el.children.as_slice())?;
@@ -315,7 +306,7 @@ impl<'a> DynamicContext<'a> {
         Some(TemplateNode::Element {
             tag,
             namespace,
-            attrs: intern(static_attrs.into_boxed_slice()),
+            attrs: intern(static_attr_array.into_boxed_slice()),
             children: intern(children.as_slice()),
         })
     }
@@ -325,10 +316,12 @@ impl<'a> DynamicContext<'a> {
             true => self.tracked_attribute_idx(attr)?,
             false => self.dynamic_attributes.len(),
         };
+
         self.dynamic_attributes.push(vec![attr]);
         if self.attr_paths.len() <= idx {
             self.attr_paths.resize_with(idx + 1, Vec::new);
         }
+
         self.attr_paths[idx] = self.current_path.clone();
 
         Some(idx)
@@ -362,7 +355,9 @@ impl<'a> DynamicContext<'a> {
 
     /// Track a BodyNode
     ///
-    /// This will save the any dynamic nodes that we find
+    /// This will save the any dynamic nodes that we find.
+    /// We need to be careful around saving if/for/components since we want to hotreload their contents
+    /// provided that their rust portions haven't changed.
     pub(crate) fn track_node(&mut self, node: BodyNode) {
         match node {
             // If the node is a static element, we just want to merge its attributes into the dynamic mapping
