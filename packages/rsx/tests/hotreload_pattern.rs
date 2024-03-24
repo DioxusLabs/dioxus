@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use dioxus_rsx::{
     hot_reload::{diff_rsx, template_location, ChangedRsx, DiffResult},
     CallBody, HotReloadingContext,
@@ -49,16 +51,16 @@ fn testing_for_pattern() {
         }
     };
 
-    let mut old: CallBody = syn::parse2(old).unwrap();
-    let mut new: CallBody = syn::parse2(new).unwrap();
+    let old: CallBody = syn::parse2(old).unwrap();
+    let new: CallBody = syn::parse2(new).unwrap();
 
-    let updated = old.update_template::<Mock>(None, "testing").unwrap();
+    let updated = old.update_template::<Mock>(Some(new), "testing");
 
-    dbg!(updated);
+    // currently, modifying a for loop is not hot reloadable
+    // We want to change this...
+    assert!(updated.is_none());
 
     // let updated = old.update_template::<Mock>(Some(new), "testing").unwrap();
-
-    dbg!(updated);
 
     // let old = include_str!(concat!("./valid/for_.old.rsx"));
     // let new = include_str!(concat!("./valid/for_.new.rsx"));

@@ -330,7 +330,7 @@ impl<'a> DynamicContext<'a> {
     fn make_static_attribute<Ctx: HotReloadingContext>(
         value: &IfmtInput,
         name: &ElementAttrName,
-        element_name_rust: &String,
+        element_name_rust: &str,
     ) -> TemplateAttribute {
         let value = value.source.as_ref().unwrap();
         let attribute_name_rust = name.to_string();

@@ -224,7 +224,7 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
             {
                 for attr in attrs.iter() {
                     if let TemplateAttribute::Static { name, value, .. } = attr {
-                        if *name == "src" || *name == "href" || *name == "src" {
+                        if *name == "src" || *name == "href" {
                             asset_urls.insert(PathBuf::from(*value));
                         }
                     }

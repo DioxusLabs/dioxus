@@ -65,7 +65,7 @@ impl<'a> TemplateRenderer<'a> {
     }
 
     fn get_template_id_tokens(&self) -> TokenStream2 {
-        let name = match self.location {
+        match self.location {
             Some(ref loc) => quote! { #loc },
             None => {
                 // Get the root:column:id tag we'll use as the ID of the template
@@ -83,8 +83,7 @@ impl<'a> TemplateRenderer<'a> {
                     )
                 }
             }
-        };
-        name
+        }
     }
 
     fn get_root_col_id(&self) -> String {

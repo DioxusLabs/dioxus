@@ -281,52 +281,50 @@ impl Parse for IfChain {
 
 impl ToTokens for IfChain {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        {
-            let mut body = TokenStream2::new();
-            let mut terminated = false;
+        let mut body = TokenStream2::new();
+        let mut terminated = false;
 
-            let mut elif = Some(self);
+        let mut elif = Some(self);
 
-            while let Some(chain) = elif {
-                let IfChain {
-                    if_token,
-                    cond,
-                    then_branch,
-                    else_if_branch,
-                    else_branch,
-                    ..
-                } = chain;
+        while let Some(chain) = elif {
+            let IfChain {
+                if_token,
+                cond,
+                then_branch,
+                else_if_branch,
+                else_branch,
+                ..
+            } = chain;
 
-                let renderer = TemplateRenderer::as_tokens(&then_branch, None);
+            let renderer = TemplateRenderer::as_tokens(then_branch, None);
 
-                body.append_all(quote! { #if_token #cond { Some({#renderer}) } });
+            body.append_all(quote! { #if_token #cond { Some({#renderer}) } });
 
-                if let Some(next) = else_if_branch {
-                    body.append_all(quote! { else });
-                    elif = Some(next);
-                } else if let Some(else_branch) = else_branch {
-                    let renderer = TemplateRenderer::as_tokens(&else_branch, None);
-                    body.append_all(quote! { else { Some({#renderer}) } });
-                    terminated = true;
-                    break;
-                } else {
-                    elif = None;
-                }
+            if let Some(next) = else_if_branch {
+                body.append_all(quote! { else });
+                elif = Some(next);
+            } else if let Some(else_branch) = else_branch {
+                let renderer = TemplateRenderer::as_tokens(else_branch, None);
+                body.append_all(quote! { else { Some({#renderer}) } });
+                terminated = true;
+                break;
+            } else {
+                elif = None;
             }
-
-            if !terminated {
-                body.append_all(quote! {
-                    else { None }
-                });
-            }
-
-            tokens.append_all(quote! {
-                {
-                    let ___nodes = (#body).into_dyn_node();
-                    ___nodes
-                }
-            })
         }
+
+        if !terminated {
+            body.append_all(quote! {
+                else { None }
+            });
+        }
+
+        tokens.append_all(quote! {
+            {
+                let ___nodes = (#body).into_dyn_node();
+                ___nodes
+            }
+        })
     }
 }
 
