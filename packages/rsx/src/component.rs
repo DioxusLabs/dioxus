@@ -11,6 +11,8 @@
 //! - [ ] Keys
 //! - [ ] Properties spreading with with `..` syntax
 
+use self::{location::CallerLocation, renderer::TemplateRenderer};
+
 use super::*;
 
 use proc_macro2::TokenStream as TokenStream2;
@@ -32,6 +34,7 @@ pub struct Component {
     pub children: Vec<BodyNode>,
     pub manual_props: Option<Expr>,
     pub brace: syn::token::Brace,
+    pub location: CallerLocation,
 }
 
 impl Parse for Component {
@@ -88,6 +91,7 @@ impl Parse for Component {
         }
 
         Ok(Self {
+            location: CallerLocation::default(),
             name,
             prop_gen_args,
             fields,
@@ -179,20 +183,10 @@ impl Component {
             toks.append_all(quote! {#field})
         }
         if !self.children.is_empty() {
-            let renderer: TemplateRenderer = TemplateRenderer {
-                roots: &self.children,
-                location: None,
-            };
-
-            toks.append_all(quote! {
-                .children(
-                    Some({ #renderer })
-                )
-            });
+            let renderer = TemplateRenderer::as_tokens(&self.children, None);
+            toks.append_all(quote! { .children( Some({ #renderer }) ) });
         }
-        toks.append_all(quote! {
-            .build()
-        });
+        toks.append_all(quote! { .build() });
         toks
     }
 

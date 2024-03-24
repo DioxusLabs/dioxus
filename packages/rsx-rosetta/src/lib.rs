@@ -143,6 +143,7 @@ pub fn collect_svgs(children: &mut [BodyNode], out: &mut Vec<BodyNode>) {
                     manual_props: None,
                     key: None,
                     brace: Default::default(),
+                    location: Default::default(),
                 });
 
                 std::mem::swap(child, &mut new_comp);

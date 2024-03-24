@@ -1,3 +1,7 @@
+use super::{
+    hot_reload_diff::{diff_rsx, DiffResult},
+    ChangedRsx,
+};
 use crate::{CallBody, HotReloadingContext};
 use dioxus_core::{
     prelude::{TemplateAttribute, TemplateNode},
@@ -9,16 +13,10 @@ pub use proc_macro2::TokenStream;
 pub use std::collections::HashMap;
 pub use std::sync::Mutex;
 pub use std::time::SystemTime;
-use std::{collections::HashSet, ffi::OsStr, path::PathBuf};
+use std::{collections::HashSet, ffi::OsStr, marker::PhantomData, path::PathBuf};
 pub use std::{fs, io, path::Path};
 pub use std::{fs::File, io::Read};
-pub use syn::__private::ToTokens;
 use syn::spanned::Spanned;
-
-use super::{
-    hot_reload_diff::{diff_rsx, DiffResult},
-    ChangedRsx,
-};
 
 pub enum UpdateResult {
     UpdatedRsx(Vec<Template>),
@@ -40,7 +38,7 @@ pub struct FileMap<Ctx: HotReloadingContext> {
 
     in_workspace: HashMap<PathBuf, Option<PathBuf>>,
 
-    phantom: std::marker::PhantomData<Ctx>,
+    phantom: PhantomData<Ctx>,
 }
 
 /// A cached file that has been parsed
@@ -75,7 +73,7 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
         let mut map = Self {
             map,
             in_workspace: HashMap::new(),
-            phantom: std::marker::PhantomData,
+            phantom: PhantomData,
         };
 
         map.load_assets(crate_dir.as_path());
@@ -303,7 +301,7 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
     }
 }
 
-fn template_location(old_start: proc_macro2::LineColumn, file: &Path) -> String {
+pub fn template_location(old_start: proc_macro2::LineColumn, file: &Path) -> String {
     let line = old_start.line;
     let column = old_start.column + 1;
     let location = file.display().to_string()

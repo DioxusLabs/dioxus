@@ -8,7 +8,10 @@ use syn::{parse_quote, spanned::Spanned, Expr, ExprIf, Ident, LitStr};
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum AttributeType {
+    /// An attribute that is known
     Named(ElementAttrNamed),
+
+    /// An attribute that's being spread in via the `..` syntax
     Spread(Expr),
 }
 
@@ -67,6 +70,24 @@ impl AttributeType {
                 }
             }
         }
+    }
+
+    pub fn as_static_str_literal(&self) -> Option<(&ElementAttrName, &IfmtInput)> {
+        match self {
+            AttributeType::Named(ElementAttrNamed {
+                attr:
+                    ElementAttr {
+                        value: ElementAttrValue::AttrLiteral(value),
+                        name,
+                    },
+                ..
+            }) if value.is_static() => Some((name, value)),
+            _ => None,
+        }
+    }
+
+    pub fn is_static_str_literal(&self) -> bool {
+        self.as_static_str_literal().is_some()
     }
 }
 
