@@ -17,7 +17,6 @@
 #[macro_use]
 mod errors;
 mod attribute;
-mod callbody;
 mod component;
 mod element;
 mod ifmt;
