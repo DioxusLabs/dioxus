@@ -73,10 +73,8 @@ export class NativeInterpreter extends JSChannel_ {
             bubbles: event.bubbles,
           });
           this.ipc.postMessage(message);
+          event.preventDefault();
         }
-
-        // Prevent default regardless - we don't want file dialogs and we don't want the browser to navigate
-        event.preventDefault();
       }
     });
 
