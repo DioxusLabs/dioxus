@@ -39,7 +39,7 @@ pub(crate) async fn startup_with_platform<P: Platform + Send + 'static>(
                 FileMap::<HtmlCtx>::create(config.crate_dir.clone()).unwrap();
 
             for err in errors {
-                log::error!("{}", err);
+                tracing::error!("{}", err);
             }
 
             let file_map = Arc::new(Mutex::new(map));
@@ -77,7 +77,7 @@ async fn serve<P: Platform + Send + 'static>(
 ) -> Result<()> {
     let platform = RwLock::new(P::start(&config, serve)?);
 
-    log::info!("🚀 Starting development server...");
+    tracing::info!("🚀 Starting development server...");
 
     // We got to own watcher so that it exists for the duration of serve
     // Otherwise full reload won't work.
@@ -258,7 +258,7 @@ impl DesktopPlatform {
     ) -> Result<Self> {
         let (child, first_build_result) = start_desktop(config, serve.skip_assets, rust_flags)?;
 
-        log::info!("🚀 Starting development server...");
+        tracing::info!("🚀 Starting development server...");
 
         // Print serve info
         print_console_info(
