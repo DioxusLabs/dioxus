@@ -168,12 +168,12 @@ pub fn build_web(
         .with_extension("wasm");
 
     log::info!("Running wasm-bindgen");
-    let bindgen_result = panic::catch_unwind(move || {
+    let run_wasm_bindgen = || {
         // [3] Bindgen the final binary for use easy linking
         let mut bindgen_builder = Bindgen::new();
 
         bindgen_builder
-            .input_path(input_path)
+            .input_path(&input_path)
             .web(true)
             .unwrap()
             .debug(true)
@@ -184,11 +184,17 @@ pub fn build_web(
             .out_name(&dioxus_config.application.name)
             .generate(&bindgen_outdir)
             .unwrap();
-    });
+    };
+    let bindgen_result = panic::catch_unwind(run_wasm_bindgen);
 
-    if bindgen_result.is_err() {
-        return Err(Error::BuildFailed("Bindgen build failed! \nThis is probably due to the Bindgen version, dioxus-cli using `0.2.81` Bindgen crate.".to_string()));
+    // WASM bindgen requires the exact version of the bindgen schema to match the version the CLI was built with
+    // If we get an error, we can try to recover by pinning the user's wasm-bindgen version to the version we used
+    if let Err(err) = bindgen_result {
+        log::error!("Bindgen build failed: {:?}", err);
+        update_wasm_bindgen_version()?;
     }
+
+    run_wasm_bindgen();
 
     // check binaryen:wasm-opt tool
     log::info!("Running optimization with wasm-opt...");
@@ -317,6 +323,37 @@ pub fn build_web(
         elapsed_time: t_start.elapsed().as_millis(),
         assets,
     })
+}
+
+// Attempt to automatically recover from a bindgen failure by updating the wasm-bindgen version
+fn update_wasm_bindgen_version() -> Result<()> {
+    let cli_bindgen_version = wasm_bindgen_shared::version();
+    log::info!("Attempting to recover from bindgen failure by setting the wasm-bindgen version to {cli_bindgen_version}...");
+
+    let output = Command::new("cargo")
+        .args(&[
+            "update",
+            "-p",
+            "wasm-bindgen",
+            "--precise",
+            &cli_bindgen_version,
+        ])
+        .output();
+    let mut error_message = None;
+    if let Ok(output) = output {
+        if output.status.success() {
+            log::info!("Successfully updated wasm-bindgen to {cli_bindgen_version}");
+            return Ok(());
+        } else {
+            error_message = Some(output);
+        }
+    }
+
+    if let Some(output) = error_message {
+        log::error!("Failed to update wasm-bindgen: {:#?}", output);
+    }
+
+    Err(Error::BuildFailed(format!("WASM bindgen build failed!\nThis is probably due to the Bindgen version, dioxus-cli is using `{cli_bindgen_version}` which is not compatible with your crate.\nPlease reinstall the dioxus cli to fix this issue.\nYou can reinstall the dioxus cli by running `cargo install dioxus-cli --force` and then rebuild your project")))
 }
 
 /// Note: `rust_flags` argument is only used for the fullstack platform
