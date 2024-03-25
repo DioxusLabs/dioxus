@@ -50,7 +50,7 @@ async fn main() -> anyhow::Result<()> {
             let _dioxus_config = DioxusConfig::load(Some(bin.clone()))
                 .context("Failed to load Dioxus config because")?
                 .unwrap_or_else(|| {
-                    log::info!("You appear to be creating a Dioxus project from scratch; we will use the default config");
+                    tracing::info!("You appear to be creating a Dioxus project from scratch; we will use the default config");
                     DioxusConfig::default()
                 });
 

@@ -68,7 +68,7 @@ impl PluginManager {
             let path = PathBuf::from(i);
             if !path.is_dir() {
                 // for loader dir, we need check first, because we need give a error log.
-                log::error!("Plugin loader: {:?} path is not a exists directory.", path);
+                tracing::error!("Plugin loader: {:?} path is not a exists directory.", path);
             }
             path_list.push((path, true));
         }
@@ -97,7 +97,7 @@ impl PluginManager {
                                 && !from_loader
                             {
                                 // found same name plugin, intercept load
-                                log::warn!(
+                                tracing::warn!(
                                     "Plugin {} has been intercepted. [mulit-load]",
                                     info.name
                                 );
@@ -139,12 +139,12 @@ impl PluginManager {
                                             }
                                         }
                                         Ok(false) => {
-                                            log::warn!(
+                                            tracing::warn!(
                                                 "Plugin init function result is `false`, init failed."
                                             );
                                         }
                                         Err(e) => {
-                                            log::warn!("Plugin init failed: {e}");
+                                            tracing::warn!("Plugin init failed: {e}");
                                         }
                                     }
                                 }
@@ -158,7 +158,7 @@ impl PluginManager {
                         }
                         Err(_e) => {
                             let dir_name = plugin_dir.file_name().unwrap().to_str().unwrap();
-                            log::error!("Plugin '{dir_name}' load failed.");
+                            tracing::error!("Plugin '{dir_name}' load failed.");
                         }
                     }
                 }
@@ -287,10 +287,10 @@ impl PluginManager {
         let app_path = app_path();
         let plugin_path = app_path.join("plugins");
         if !plugin_path.is_dir() {
-            log::info!("📖 Start to init plugin library ...");
+            tracing::info!("📖 Start to init plugin library ...");
             let url = "https://github.com/DioxusLabs/cli-plugin-library";
             if let Err(err) = clone_repo(&plugin_path, url) {
-                log::error!("Failed to init plugin dir, error caused by {}. ", err);
+                tracing::error!("Failed to init plugin dir, error caused by {}. ", err);
             }
         }
         plugin_path

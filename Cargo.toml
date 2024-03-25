@@ -77,7 +77,6 @@ generational-box = { path = "packages/generational-box", version = "0.5.0-alpha.
 dioxus-hot-reload = { path = "packages/hot-reload", version = "0.5.0-alpha.2" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.5.0-alpha.2" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.5.0-alpha.2", default-features = false }
-dioxus-ext = { path = "packages/extension", version = "0.4.0" }
 tracing = "0.1.37"
 tracing-futures = "0.2.5"
 toml = "0.8"
@@ -119,9 +118,6 @@ isnta = "1.36.1"
 
 # speed up some macros by optimizing them
 [profile.dev.package.insta]
-opt-level = 3
-
-[profile.dev.package.similar]
 opt-level = 3
 
 [profile.dev.package.dioxus-core-macro]

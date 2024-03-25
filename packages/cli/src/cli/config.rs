@@ -37,7 +37,7 @@ impl Config {
             } => {
                 let conf_path = crate_root.join("Dioxus.toml");
                 if conf_path.is_file() && !force {
-                    log::warn!(
+                    tracing::warn!(
                         "config file `Dioxus.toml` already exist, use `--force` to overwrite it."
                     );
                     return Ok(());
@@ -47,7 +47,7 @@ impl Config {
                     .replace("{{project-name}}", &name)
                     .replace("{{default-platform}}", &platform);
                 file.write_all(content.as_bytes())?;
-                log::info!("🚩 Init config file completed.");
+                tracing::info!("🚩 Init config file completed.");
             }
             Config::FormatPrint {} => {
                 println!(
@@ -60,7 +60,7 @@ impl Config {
                 let mut file = File::create(html_path)?;
                 let content = include_str!("../assets/index.html");
                 file.write_all(content.as_bytes())?;
-                log::info!("🚩 Create custom html file done.");
+                tracing::info!("🚩 Create custom html file done.");
             }
         }
         Ok(())
