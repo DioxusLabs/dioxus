@@ -192,9 +192,8 @@ pub fn build_web(
     if let Err(err) = bindgen_result {
         log::error!("Bindgen build failed: {:?}", err);
         update_wasm_bindgen_version()?;
+        run_wasm_bindgen();
     }
-
-    run_wasm_bindgen();
 
     // check binaryen:wasm-opt tool
     log::info!("Running optimization with wasm-opt...");
