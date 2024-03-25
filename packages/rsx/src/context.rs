@@ -32,7 +32,7 @@ pub struct DynamicContext<'a> {
 }
 
 impl<'a> DynamicContext<'a> {
-    pub fn new_with_old(template: Option<CallBody>) -> Self {
+    pub fn new(template: Option<CallBody>) -> Self {
         let mut new = Self::default();
 
         if let Some(call) = template {
@@ -248,7 +248,7 @@ impl<'a> DynamicContext<'a> {
         let idx = match self.has_tracked_nodes() {
             //    Bail out if the mapping doesn't exist
             //    The user put it new code in the template, and that code is not hotreloadable
-            true => self.tracked_node_idx(root)?,
+            true => self.pop_tracked_node_idx(root)?,
             false => self.dynamic_nodes.len(),
         };
 
@@ -313,7 +313,7 @@ impl<'a> DynamicContext<'a> {
 
     fn update_dynamic_attribute(&mut self, attr: &'a AttributeType) -> Option<usize> {
         let idx = match self.has_tracked_nodes() {
-            true => self.tracked_attribute_idx(attr)?,
+            true => self.pop_tracked_attribute_idx(attr)?,
             false => self.dynamic_attributes.len(),
         };
 
@@ -404,13 +404,59 @@ impl<'a> DynamicContext<'a> {
         idx
     }
 
-    pub(crate) fn tracked_attribute_idx(&mut self, attr: &AttributeType) -> Option<usize> {
+    pub(crate) fn pop_tracked_attribute_idx(&mut self, attr: &AttributeType) -> Option<usize> {
         self.attribute_to_idx
             .get_mut(attr)
             .and_then(|idxs| idxs.pop())
     }
 
-    pub(crate) fn tracked_node_idx(&mut self, node: &BodyNode) -> Option<usize> {
+    /// Get the Node's dynamic index in the rendered VNode that's currently living in the VirtualDom
+    ///
+    /// IE DynamicAttribute { id } if this tracked node matches the tokens
+    ///
+    /// Untracks this dynamic node
+    pub(crate) fn pop_tracked_node_idx(&mut self, node: &BodyNode) -> Option<usize> {
         self.node_to_idx.get_mut(node).and_then(|idxs| idxs.pop())
     }
+}
+
+#[test]
+fn tracking_works_properly() {
+    let input: CallBody = syn::parse2(quote! {
+        div {
+            for i in 0..10 {
+                div { "123" }
+                "asasd"
+            }
+            for i in 0..10 {
+                div { "123" }
+                "asasd"
+            }
+        }
+    })
+    .unwrap();
+
+    let for_loop: ForLoop = syn::parse2(quote! {
+        for i in 0..10 {
+            div { "123" }
+            "asasd"
+        }
+    })
+    .unwrap();
+
+    let mut context = DynamicContext::new(Some(input));
+
+    // dbg!(context.node_to_idx);
+
+    let for_loop_body = BodyNode::ForLoop(for_loop);
+    let idx = context.pop_tracked_node_idx(&for_loop_body);
+
+    // Will return the last tracked node (since we're reading from the end)
+    assert_eq!(idx, Some(1));
+
+    let idx = context.pop_tracked_node_idx(&for_loop_body);
+    assert_eq!(idx, Some(0));
+
+    let idx = context.pop_tracked_node_idx(&for_loop_body);
+    assert_eq!(idx, None);
 }

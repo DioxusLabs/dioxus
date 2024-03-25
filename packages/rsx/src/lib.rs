@@ -113,7 +113,7 @@ impl CallBody {
         location: &'static str,
     ) -> Option<Template> {
         // Create a context that will be used to update the template
-        let mut context = DynamicContext::new_with_old(old);
+        let mut context = DynamicContext::new(old);
 
         // Force the template node to generate us TemplateNodes, and fill in the location information
         let roots = context.populate_by_updating::<Ctx>(&self.roots)?;

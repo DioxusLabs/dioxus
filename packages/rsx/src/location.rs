@@ -5,4 +5,5 @@
 #[derive(PartialEq, Eq, Clone, Debug, Hash, Default)]
 pub struct CallerLocation {
     inner: Option<String>,
+    idx: usize,
 }

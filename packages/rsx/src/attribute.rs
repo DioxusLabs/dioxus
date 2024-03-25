@@ -212,15 +212,20 @@ pub struct ElementAttr {
 pub enum ElementAttrValue {
     /// attribute,
     Shorthand(Ident),
+
     /// attribute: "value"
     AttrLiteral(IfmtInput),
+
+    /// Unterminated expression - full expressions are handled by AttrExpr
     /// attribute: if bool { "value" }
     AttrOptionalExpr {
         condition: Expr,
         value: Box<ElementAttrValue>,
     },
+
     /// attribute: true
     AttrExpr(Expr),
+
     /// onclick: move |_| {}
     EventTokens(Expr),
 }

@@ -36,6 +36,26 @@ impl BodyNode {
         matches!(self, BodyNode::Text { .. })
     }
 
+    /// Check if this node is hotreloadable with the other node
+    ///
+    /// For `if` statements, we can't hotreload the condition, but we can hotreload the body
+    /// For `for` loops, can't hoteload the for loop itself, but we can hotreload the body
+    /// For `components`, might eventually be able to hotreload some props, but we can hotreload the body
+    /// For `elements`, we can do a lot of hotreloading
+    /// For `text`, we can hotreload the text if its unformatted - and potentially even formatting one day
+    /// For `raw_expr`, we can't hotreload the expression
+    pub fn is_hotreloadable_with(&self, other: &BodyNode) -> bool {
+        match (self, other) {
+            (BodyNode::Element(a), BodyNode::Element(b)) => a == b,
+            (BodyNode::Text(a), BodyNode::Text(b)) => a == b,
+            (BodyNode::RawExpr(a), BodyNode::RawExpr(b)) => a == b,
+            (BodyNode::Component(a), BodyNode::Component(b)) => a == b,
+            (BodyNode::ForLoop(a), BodyNode::ForLoop(b)) => a == b,
+            (BodyNode::IfChain(a), BodyNode::IfChain(b)) => a == b,
+            _ => false,
+        }
+    }
+
     pub fn span(&self) -> Span {
         match self {
             BodyNode::Element(el) => el.name.span(),

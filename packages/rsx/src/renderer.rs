@@ -31,7 +31,7 @@ impl<'a> TemplateRenderer<'a> {
         let name = self.get_template_id_tokens();
 
         // Render the static nodes, generating the mapping of dynamic
-        // This will modify the bodynodes in place - sorry about that
+        // This will modify the bodynodes, filling in location information for any sub templates
         let roots = self.render_body_nodes(&mut context);
 
         let dynamic_nodes = &context.dynamic_nodes;
