@@ -302,8 +302,8 @@ pub fn build_web(
         }
     }
 
-    log::info!("Processing assets");
     let assets = if !skip_assets {
+        log::info!("Processing assets");
         let assets = asset_manifest(executable.executable(), config);
         process_assets(config, &assets)?;
         Some(assets)
@@ -425,6 +425,7 @@ pub fn build_desktop(
     }
 
     let assets = if !skip_assets {
+        log::info!("Processing assets");
         let assets = asset_manifest(config.executable.executable(), config);
         // Collect assets
         process_assets(config, &assets)?;
