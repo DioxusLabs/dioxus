@@ -331,7 +331,7 @@ fn update_wasm_bindgen_version() -> Result<()> {
     log::info!("Attempting to recover from bindgen failure by setting the wasm-bindgen version to {cli_bindgen_version}...");
 
     let output = Command::new("cargo")
-        .args(&[
+        .args([
             "update",
             "-p",
             "wasm-bindgen",
