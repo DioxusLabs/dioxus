@@ -1,6 +1,14 @@
 <p align="center">
-  <img src="./notes/header.svg">
+  <h1 align="center">Dioxus: Web, Destkop, Mobile apps in Rust</h1>
+
+  <p align="center">
+    <img src="./notes/dioxus_splash.avif">
+    <!-- <img src="./notes/header.svg"> -->
+    <!-- <img src="~/Downloads/dioxus_splash.png"> -->
+  </p>
 </p>
+
+
 
 <div align="center">
   <!-- Crates version -->
@@ -52,14 +60,13 @@
   </h3>
 </div>
 
-<br/>
 
-> [!WARNING]
+<!-- > [!WARNING]
 > Dioxus 0.5 (currently in master) contains massive breaking changes and is not compatible with Dioxus 0.4
 
-Dioxus is a portable, performant, and ergonomic framework for building cross-platform user interfaces in Rust.
+Dioxus is a simple yet powerful framework for building cross-platform user interfaces in Rust. -->
 
-```rust
+<!-- ```rust
 fn app() -> Element {
     let mut count = use_signal(|| 0);
 
@@ -69,11 +76,9 @@ fn app() -> Element {
         button { onclick: move |_| count -= 1, "Down low!" }
     }
 }
-```
+``` -->
 
-Dioxus can be used to deliver webapps, desktop apps, static sites, mobile apps, TUI apps, liveview apps, and more. Dioxus is entirely renderer agnostic and can be used as a platform for any renderer.
-
-If you know React, then you already know Dioxus.
+Dioxus can be used to deliver webapps, desktop apps, static sites, mobile apps, TUI apps, liveview apps, and more.
 
 ## Unique features:
 - Desktop apps running natively (no Electron!) in less than 10 lines of code.
