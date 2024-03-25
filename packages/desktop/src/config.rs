@@ -7,6 +7,7 @@ use crate::menubar::{default_menu_bar, DioxusMenu};
 
 /// The behaviour of the application when the last window is closed.
 #[derive(Copy, Clone, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum WindowCloseBehaviour {
     /// Default behaviour, closing the last window exits the app
     LastWindowExitsApp,
