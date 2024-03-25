@@ -5411,8 +5411,7 @@ dependencies = [
 [[package]]
 name = "manganis"
 version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a42db80aa639f70d6bf1d2ef93612d2ffbb33f6ea17d473b91bfeb3f67bc24bc"
+source = "git+https://github.com/DioxusLabs/collect-assets?branch=more-tracing#2066de5051afadab62c66fc81f071dc9df0c005a"
 dependencies = [
  "dioxus-core 0.5.0-alpha.0",
  "manganis-macro",
@@ -5420,9 +5419,8 @@ dependencies = [
 
 [[package]]
 name = "manganis-cli-support"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0db7983cc200c1c378b25c90c84383eafc5baacbafce70e9f2417ff971fd752"
+version = "0.2.1"
+source = "git+https://github.com/DioxusLabs/collect-assets?branch=more-tracing#2066de5051afadab62c66fc81f071dc9df0c005a"
 dependencies = [
  "anyhow",
  "cargo-lock",
@@ -5448,9 +5446,8 @@ dependencies = [
 
 [[package]]
 name = "manganis-common"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "176dfb4bb5592b0d130176add9893af527ab565fc1bcf58ece88acd6276688d1"
+version = "0.2.2"
+source = "git+https://github.com/DioxusLabs/collect-assets?branch=more-tracing#2066de5051afadab62c66fc81f071dc9df0c005a"
 dependencies = [
  "anyhow",
  "base64",
@@ -5459,19 +5456,20 @@ dependencies = [
  "reqwest",
  "serde",
  "toml 0.7.8",
+ "tracing",
  "url",
 ]
 
 [[package]]
 name = "manganis-macro"
 version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab2c2e11190c2f3d6133cffda5c955b463a7e90b7ba866e71e7dfa65fa97ddfc"
+source = "git+https://github.com/DioxusLabs/collect-assets?branch=more-tracing#2066de5051afadab62c66fc81f071dc9df0c005a"
 dependencies = [
  "manganis-common",
  "proc-macro2",
  "quote",
  "syn 2.0.52",
+ "tracing-subscriber",
 ]
 
 [[package]]
