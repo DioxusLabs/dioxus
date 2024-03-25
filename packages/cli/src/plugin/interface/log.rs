@@ -1,4 +1,3 @@
-use log;
 use mlua::UserData;
 
 pub struct PluginLogger;
