@@ -72,7 +72,7 @@ dioxus-check = { path = "packages/check", version = "0.5.0-alpha.2" }
 dioxus-rsx = { path = "packages/rsx", version = "0.5.0-alpha.2" }
 rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.5.0-alpha.2" }
 dioxus-signals = { path = "packages/signals", version = "0.5.0-alpha.2" }
-dioxus-cli-config = { path = "packages/cli-config", version = "0.5.0-alpha.2" }
+dioxus-cli-config = { path = "packages/cli-config", version = "0.5.0-alpha.2", default-features = false}
 generational-box = { path = "packages/generational-box", version = "0.5.0-alpha.2" }
 dioxus-hot-reload = { path = "packages/hot-reload", version = "0.5.0-alpha.2" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.5.0-alpha.2" }
