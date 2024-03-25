@@ -14,7 +14,7 @@ clap = { version = "4.2", features = ["derive", "cargo"] }
 thiserror = { workspace = true }
 wasm-bindgen-cli-support = "0.2"
 colored = "2.0.0"
-dioxus-cli-config = { workspace = true, features = ["cli"] }
+dioxus-cli-config = { workspace = true, features = ["cli"], default-features = false }
 
 # features
 log = "0.4.14"
@@ -94,6 +94,7 @@ interprocess = { workspace = true }
 # interprocess-docfix = { version = "1.2.2" }
 ignore = "0.4.22"
 env_logger = "0.11.3"
+tracing-subscriber = "0.3.18"
 
 [features]
 default = []

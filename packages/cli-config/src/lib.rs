@@ -42,6 +42,7 @@ impl std::fmt::Display for DioxusCLINotUsed {
 
 impl std::error::Error for DioxusCLINotUsed {}
 
+#[cfg(feature = "read-config")]
 /// The current crate's configuration.
 pub static CURRENT_CONFIG: once_cell::sync::Lazy<
     Result<crate::config::CrateConfig, DioxusCLINotUsed>,
@@ -54,5 +55,6 @@ pub static CURRENT_CONFIG: once_cell::sync::Lazy<
     })
 });
 
+#[cfg(feature = "read-config")]
 /// The current crate's configuration.
 pub const CURRENT_CONFIG_JSON: Option<&str> = std::option_env!("DIOXUS_CONFIG");
