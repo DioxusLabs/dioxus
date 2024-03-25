@@ -57,7 +57,7 @@ pub async fn serve(
     // generate dev-index page
     Serve::regen_dev_page(&config, first_build_result.assets.as_ref())?;
 
-    log::info!("🚀 Starting development server...");
+    tracing::info!("🚀 Starting development server...");
 
     // WS Reload Watching
     let (reload_tx, _) = broadcast::channel(100);
@@ -205,7 +205,7 @@ fn build_hotreload_filemap(config: &CrateConfig) -> HotReloadState {
     let FileMapBuildResult { map, errors } = FileMap::create(config.crate_dir.clone()).unwrap();
 
     for err in errors {
-        log::error!("{}", err);
+        tracing::error!("{}", err);
     }
 
     HotReloadState {

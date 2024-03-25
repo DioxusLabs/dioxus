@@ -18,13 +18,13 @@ pub async fn hot_reload_handler(
         let err = hotreload_loop(socket, state).await;
 
         if let Err(err) = err {
-            log::error!("Hotreload receiver failed: {}", err);
+            tracing::error!("Hotreload receiver failed: {}", err);
         }
     })
 }
 
 async fn hotreload_loop(mut socket: WebSocket, state: HotReloadState) -> anyhow::Result<()> {
-    log::info!("🔥 Hot Reload WebSocket connected");
+    tracing::info!("🔥 Hot Reload WebSocket connected");
 
     // update any rsx calls that changed before the websocket connected.
     // These templates will be sent down immediately so the page is in sync with the hotreloaded version
@@ -51,9 +51,9 @@ async fn hotreload_loop(mut socket: WebSocket, state: HotReloadState) -> anyhow:
                 msg = _rx => msg,
                 e = _socket => {
                     if let Some(Err(e)) = e {
-                        log::info!("🔥 Hot Reload WebSocket Error: {}", e);
+                        tracing::info!("🔥 Hot Reload WebSocket Error: {}", e);
                     } else {
-                        log::info!("🔥 Hot Reload WebSocket Closed");
+                        tracing::info!("🔥 Hot Reload WebSocket Closed");
                     }
                     break;
                 },
@@ -69,7 +69,7 @@ async fn hotreload_loop(mut socket: WebSocket, state: HotReloadState) -> anyhow:
                     Message::Text(format!("reload-asset: {}", asset.display()))
                 }
                 HotReloadMsg::Shutdown => {
-                    log::info!("🔥 Hot Reload WebSocket shutting down");
+                    tracing::info!("🔥 Hot Reload WebSocket shutting down");
                     break;
                 }
             }

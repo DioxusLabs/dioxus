@@ -89,7 +89,7 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
         let mode = notify::RecursiveMode::Recursive;
 
         if let Err(err) = watcher.watch(path, mode) {
-            log::warn!("Failed to watch path: {}", err);
+            tracing::warn!("Failed to watch path: {}", err);
         }
     }
 
@@ -157,7 +157,7 @@ fn full_rebuild<F>(
         }
         Err(e) => {
             *last_update_time = chrono::Local::now().timestamp();
-            log::error!("{:?}", e);
+            tracing::error!("{:?}", e);
         }
     }
 }
@@ -195,12 +195,12 @@ fn hotreload_files(
 
             // If the file was not updated, we need to do a full rebuild
             Ok(UpdateResult::NeedsRebuild) => {
-                log::trace!("Needs full rebuild because file changed: {:?}", path);
+                tracing::trace!("Needs full rebuild because file changed: {:?}", path);
                 *needs_full_rebuild = true;
             }
 
             // Not necessarily a fatal error, but we should log it
-            Err(err) => log::error!("{}", err),
+            Err(err) => tracing::error!("{}", err),
         }
     }
 
@@ -214,7 +214,7 @@ fn hotreload_files(
         } = FileMap::<HtmlCtx>::create(config.crate_dir.clone()).unwrap();
 
         for err in errors {
-            log::error!("{}", err);
+            tracing::error!("{}", err);
         }
 
         *rsx_file_map = new_file_map;
@@ -250,7 +250,7 @@ fn hotreload_file(
 
     // If the extension is a backup file, or a hidden file, ignore it completely (no rebuilds)
     if is_backup_file(path) {
-        log::trace!("Ignoring backup file: {:?}", path);
+        tracing::trace!("Ignoring backup file: {:?}", path);
         return None;
     }
 

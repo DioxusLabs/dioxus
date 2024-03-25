@@ -97,7 +97,7 @@ pub fn build_web(
     let _guard = dioxus_cli_config::__private::save_config(config);
 
     // [1] Build the .wasm module
-    log::info!("🚅 Running build command...");
+    tracing::info!("🚅 Running build command...");
 
     // If the user has rustup, we can check if the wasm32-unknown-unknown target is installed
     // Otherwise we can just assume it is installed - which i snot great...
@@ -105,7 +105,7 @@ pub fn build_web(
     if let Ok(wasm_check_command) = Command::new("rustup").args(["show"]).output() {
         let wasm_check_output = String::from_utf8(wasm_check_command.stdout).unwrap();
         if !wasm_check_output.contains("wasm32-unknown-unknown") {
-            log::info!("wasm32-unknown-unknown target not detected, installing..");
+            tracing::info!("wasm32-unknown-unknown target not detected, installing..");
             let _ = Command::new("rustup")
                 .args(["target", "add", "wasm32-unknown-unknown"])
                 .output()?;
@@ -167,7 +167,7 @@ pub fn build_web(
         .context("No output location found")?
         .with_extension("wasm");
 
-    log::info!("Running wasm-bindgen");
+    tracing::info!("Running wasm-bindgen");
     let run_wasm_bindgen = || {
         // [3] Bindgen the final binary for use easy linking
         let mut bindgen_builder = Bindgen::new();
@@ -196,7 +196,7 @@ pub fn build_web(
     }
 
     // check binaryen:wasm-opt tool
-    log::info!("Running optimization with wasm-opt...");
+    tracing::info!("Running optimization with wasm-opt...");
     let dioxus_tools = dioxus_config.application.tools.clone();
     if dioxus_tools.contains_key("binaryen") {
         let info = dioxus_tools.get("binaryen").unwrap();
@@ -207,7 +207,7 @@ pub fn build_web(
                 if sub.contains_key("wasm_opt")
                     && sub.get("wasm_opt").unwrap().as_bool().unwrap_or(false)
                 {
-                    log::info!("Optimizing WASM size with wasm-opt...");
+                    tracing::info!("Optimizing WASM size with wasm-opt...");
                     let target_file = out_dir
                         .join("assets")
                         .join("dioxus")
@@ -226,12 +226,12 @@ pub fn build_web(
                 }
             }
         } else {
-            log::warn!(
+            tracing::warn!(
                 "Binaryen tool not found, you can use `dx tool add binaryen` to install it."
             );
         }
     } else {
-        log::info!("Skipping optimization with wasm-opt, binaryen tool not found.");
+        tracing::info!("Skipping optimization with wasm-opt, binaryen tool not found.");
     }
 
     // [5][OPTIONAL] If tailwind is enabled and installed we run it to generate the CSS
@@ -241,7 +241,7 @@ pub fn build_web(
 
         if tailwind.is_installed() {
             if let Some(sub) = info.as_table() {
-                log::info!("Building Tailwind bundle CSS file...");
+                tracing::info!("Building Tailwind bundle CSS file...");
 
                 let input_path = match sub.get("input") {
                     Some(val) => val.as_str().unwrap(),
@@ -267,7 +267,7 @@ pub fn build_web(
                 tailwind.call("tailwindcss", args)?;
             }
         } else {
-            log::warn!(
+            tracing::warn!(
                 "Tailwind tool not found, you can use `dx tool add tailwindcss` to install it."
             );
         }
@@ -283,7 +283,7 @@ pub fn build_web(
         depth: 0,
     };
 
-    log::info!("Copying public assets to the output directory...");
+    tracing::info!("Copying public assets to the output directory...");
     if asset_dir.is_dir() {
         for entry in std::fs::read_dir(config.asset_dir())?.flatten() {
             let path = entry.path();
@@ -293,7 +293,7 @@ pub fn build_web(
                 match fs_extra::dir::copy(&path, &out_dir, &copy_options) {
                     Ok(_) => {}
                     Err(_e) => {
-                        log::warn!("Error copying dir: {}", _e);
+                        tracing::warn!("Error copying dir: {}", _e);
                     }
                 }
                 for ignore in &ignore_files {
@@ -307,8 +307,8 @@ pub fn build_web(
         }
     }
 
-    log::info!("Processing assets");
     let assets = if !skip_assets {
+        tracing::info!("Processing assets");
         let assets = asset_manifest(executable.executable(), config);
         process_assets(config, &assets)?;
         Some(assets)
@@ -363,7 +363,7 @@ pub fn build_desktop(
     skip_assets: bool,
     rust_flags: Option<String>,
 ) -> Result<BuildResult> {
-    log::info!("🚅 Running build [Desktop] command...");
+    tracing::info!("🚅 Running build [Desktop] command...");
 
     let t_start = std::time::Instant::now();
     let ignore_files = build_assets(config)?;
@@ -446,7 +446,7 @@ pub fn build_desktop(
                 match fs_extra::dir::copy(&path, &config.out_dir(), &copy_options) {
                     Ok(_) => {}
                     Err(e) => {
-                        log::warn!("Error copying dir: {}", e);
+                        tracing::warn!("Error copying dir: {}", e);
                     }
                 }
                 for ignore in &ignore_files {
@@ -461,6 +461,7 @@ pub fn build_desktop(
     }
 
     let assets = if !skip_assets {
+        tracing::info!("Processing assets");
         let assets = asset_manifest(config.executable.executable(), config);
         // Collect assets
         process_assets(config, &assets)?;
@@ -471,7 +472,7 @@ pub fn build_desktop(
         None
     };
 
-    log::info!(
+    tracing::info!(
         "🚩 Build completed: [./{}]",
         config.dioxus_config.application.out_dir.clone().display()
     );
@@ -538,9 +539,9 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<CargoBuildResult> {
             }
             Message::BuildFinished(finished) => {
                 if finished.success {
-                    log::info!("👑 Build done.");
+                    tracing::info!("👑 Build done.");
                 } else {
-                    log::info!("❌ Build failed.");
+                    tracing::info!("❌ Build failed.");
                     return Err(anyhow::anyhow!("Build failed"));
                 }
             }
@@ -772,7 +773,7 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
                             if res.is_ok() {
                                 result.push(path);
                             } else {
-                                log::error!("{:?}", res);
+                                tracing::error!("{:?}", res);
                             }
                         }
                     }

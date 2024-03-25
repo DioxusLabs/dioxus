@@ -11,10 +11,7 @@ use Commands::*;
 async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
 
-    #[cfg(debug_assertions)]
-    env_logger::init();
-
-    // set_up_logging();
+    tracing_subscriber::fmt::init();
 
     match args.action {
         Translate(opts) => opts
@@ -53,7 +50,7 @@ async fn main() -> anyhow::Result<()> {
             let _dioxus_config = DioxusConfig::load(Some(bin.clone()))
                 .context("Failed to load Dioxus config because")?
                 .unwrap_or_else(|| {
-                    log::info!("You appear to be creating a Dioxus project from scratch; we will use the default config");
+                    tracing::info!("You appear to be creating a Dioxus project from scratch; we will use the default config");
                     DioxusConfig::default()
                 });
 
