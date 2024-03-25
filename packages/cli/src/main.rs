@@ -11,7 +11,10 @@ use Commands::*;
 async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
 
-    tracing_subscriber::fmt::init();
+    #[cfg(debug_assertions)]
+    env_logger::init();
+
+    // set_up_logging();
 
     match args.action {
         Translate(opts) => opts

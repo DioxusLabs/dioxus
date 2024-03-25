@@ -2062,7 +2062,6 @@ dependencies = [
  "toml_edit 0.21.1",
  "tower",
  "tower-http",
- "tracing-subscriber",
  "walkdir",
  "wasm-bindgen-cli-support",
  "zip",
