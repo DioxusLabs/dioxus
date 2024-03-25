@@ -1,6 +1,7 @@
 //! Launch helper macros for fullstack apps
 #![allow(clippy::new_without_default)]
 #![allow(unused)]
+use dioxus_config_macro::*;
 use std::any::Any;
 
 use crate::prelude::*;
@@ -126,12 +127,23 @@ impl<Cfg> LaunchBuilder<Cfg, SendContext> {
     }
 }
 
+/// A trait for converting a type into a platform-specific config.
+///
+/// A unit value will be converted into `None`, the config for the current active platform will be converted into `Some(config)`.
+pub trait TryIntoConfig<Config = Self> {
+    fn into_config(self) -> Option<Config>;
+}
+
+impl<Cfg> TryIntoConfig<Cfg> for () {
+    fn into_config(self) -> Option<Cfg> {
+        None
+    }
+}
+
 impl<Cfg: Default + 'static, ContextFn: ?Sized> LaunchBuilder<Cfg, ContextFn> {
     /// Provide a platform-specific config to the builder.
-    pub fn with_cfg(mut self, config: impl Into<Option<Cfg>>) -> Self {
-        if let Some(config) = config.into() {
-            self.platform_config = Some(config);
-        }
+    pub fn with_cfg(mut self, config: impl TryIntoConfig<Cfg>) -> Self {
+        self.platform_config = self.platform_config.or(config.into_config());
         self
     }
 
@@ -142,6 +154,25 @@ impl<Cfg: Default + 'static, ContextFn: ?Sized> LaunchBuilder<Cfg, ContextFn> {
         (self.launch_fn)(app, self.contexts, cfg)
     }
 }
+
+macro_rules! impl_try_into_config {
+    ($(::$type:ident)+ $(<$($gen:ident $(: $bound:path)?),+>)?) => {
+        impl<$($($gen: $($bound + )? 'static),+)? > TryIntoConfig<current_platform::Config> for $(::$type)+ <$($($gen),+)?> {
+            fn into_config(self) -> Option<current_platform::Config> {
+                (Box::new(self) as Box<dyn Any>).downcast().ok().map(|boxed| *boxed)
+            }
+        }
+    };
+}
+
+#[cfg(feature = "desktop")]
+impl_try_into_config!(::dioxus_desktop::Config);
+#[cfg(feature = "fullstack")]
+impl_try_into_config!(::dioxus_fullstack::Config);
+#[cfg(feature = "web")]
+impl_try_into_config!(::dioxus_web::Config);
+#[cfg(feature = "liveview")]
+impl_try_into_config!(::dioxus_liveview::Config<R: ::dioxus_liveview::LiveviewRouter>);
 
 mod current_platform {
     #[cfg(all(feature = "desktop", not(feature = "fullstack")))]
@@ -207,7 +238,7 @@ pub fn launch(app: fn() -> Element) {
 #[cfg_attr(docsrs, doc(cfg(feature = "web")))]
 /// Launch your web application without any additional configuration. See [`LaunchBuilder`] for more options.
 pub fn launch_web(app: fn() -> Element) {
-    LaunchBuilder::web().launch(app)
+    LaunchBuilder::new().launch(app)
 }
 
 #[cfg(feature = "desktop")]

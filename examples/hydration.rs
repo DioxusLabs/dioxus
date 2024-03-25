@@ -13,7 +13,7 @@ use dioxus::desktop::Config;
 use dioxus::prelude::*;
 
 fn main() {
-    LaunchBuilder::desktop()
+    LaunchBuilder::new()
         .with_cfg(Config::new().with_prerendered({
             // We build the dom a first time, then pre-render it to HTML
             let pre_rendered_dom = VirtualDom::prebuilt(app);

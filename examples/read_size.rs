@@ -9,7 +9,7 @@ use std::rc::Rc;
 use dioxus::{html::geometry::euclid::Rect, prelude::*};
 
 fn main() {
-    LaunchBuilder::desktop()
+    LaunchBuilder::new()
         .with_cfg(
             dioxus::desktop::Config::default().with_custom_head(
                 r#"
