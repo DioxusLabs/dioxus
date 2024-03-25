@@ -70,7 +70,10 @@ use http::header::*;
 use std::sync::Arc;
 
 use crate::{
-    prelude::*, render::SSRState, serve_config::ServeConfig, server_context::DioxusServerContext,
+    prelude::*,
+    render::SSRState,
+    serve_config::ServeConfig,
+    server_context::{DioxusServerContext, SERVER_CONTEXT},
 };
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
@@ -508,8 +511,14 @@ async fn handle_server_fns_inner(
                 .unwrap_or(false);
             let referrer = req.headers().get(REFERER).cloned();
 
-            // actually run the server fn
+            // set the server context
+            let prev_context = SERVER_CONTEXT.with(|ctx| ctx.replace(Box::new(server_context)));
+
+            // actually run the server fn (which may use the server context)
             let mut res = service.run(req).await;
+
+            // reset the server context
+            let server_context = SERVER_CONTEXT.with(|ctx| ctx.replace(prev_context));
 
             // it it accepts text/html (i.e., is a plain form post) and doesn't already have a
             // Location set, then redirect to Referer
