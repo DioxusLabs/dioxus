@@ -1,14 +1,16 @@
-<p align="center">
+<p>
   <!-- <h1 align="center"></h1> -->
 
   <p align="center">
-    <img src="./notes/dioxus_splash_2.avif">
+    <img src="./notes/dioxus-header-light.svg">
+    <!-- <h3 align="center">Web, desktop, mobile, liveview, TUI, and more</h3> -->
     <!-- <img src="./notes/header.svg"> -->
+    <!-- <p align="center">Build for web, desktop, mobile, liveview, TUI, and more</p> -->
+    <!-- <h3 align="center">Fullstack, typesafe, crossplatform, and blazingly fast. 🔥</h3> -->
+    <img src="./notes/dioxus_splash_4.avif">
     <!-- <img src="~/Downloads/dioxus_splash.png"> -->
+    <!-- <h1 align="center">Dioxus: one codebase, every platform</h1> -->
   </p>
-  <h1 align="center">Dioxus: one codebase, every platform</h1>
-  <p align="center">Build for web, desktop, mobile, liveview, TUI, and more</p>
-  <!-- <h3 align="center">Build for web, desktop, mobile, liveview, TUI, and more</h3> -->
 </p>
 
 
