@@ -2,7 +2,7 @@
   <a href="https://dioxuslabs.com">
     <p align="center" >
       <img src="./notes/header-light.svg" >
-      <img src="./notes/dioxus_splash_6.avif">
+      <img src="./notes/dioxus_splash_8.avif">
     </p>
   </a>
 </p>
