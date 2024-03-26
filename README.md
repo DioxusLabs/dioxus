@@ -1,23 +1,11 @@
 <p>
-  <!-- <h1 align="center"></h1> -->
-
   <a href="https://dioxuslabs.com">
     <p align="center" >
       <img src="./notes/header-light.svg" >
-      <!-- <h3 align="center">Web, desktop, mobile, liveview, TUI, and more</h3> -->
-      <!-- <img src="./notes/header.svg"> -->
-      <!-- <p align="center">Build for web, desktop, mobile, liveview, TUI, and more</p> -->
-      <!-- <h3 align="center">Fullstack, typesafe, crossplatform, and blazingly fast. 🔥</h3> -->
-      <img src="./notes/dioxus_splash_7.avif">
-      <!-- <img src="~/Downloads/dioxus_splash.png"> -->
-      <!-- <h1 align="center">Dioxus: one codebase, every platform</h1> -->
+      <img src="./notes/dioxus_splash_6.avif">
     </p>
   </a>
 </p>
-
-
-
-
 <div align="center">
   <!-- Crates version -->
   <a href="https://crates.io/crates/dioxus">
@@ -69,11 +57,6 @@
 </div>
 <br>
 
-
-<!-- > [!WARNING]
-> Dioxus 0.5 (currently in master) contains massive breaking changes and is not compatible with Dioxus 0.4
-
-Dioxus is a simple yet powerful framework for building cross-platform user interfaces in Rust. -->
 
 Build for web, desktop, and mobile, and more with a single codebase. Zero-config setup, integrated hotreloading, and signals-based state management help you ship faster and more reliably. Seamlessly add backend functionality with Server Functions and bundle with our CLI.
 
