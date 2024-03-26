@@ -73,7 +73,7 @@ fn main() {
 ```
 
 ## Contributing
-- Check out the website [section on contributing](https://dioxuslabs.com/learn/0.4/contributing).
+- Check out the website [section on contributing](https://dioxuslabs.com/learn/0.5/contributing).
 - Report issues on our [issue tracker](https://github.com/dioxuslabs/dioxus/issues).
 - [Join](https://discord.gg/XgGxMSkvUM) the discord and ask questions!
 

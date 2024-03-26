@@ -1,4 +1,4 @@
-<div style="text-align: center">
+<div>
   <h1>🌗🚀 Dioxus</h1>
   <p>
     <strong>A concurrent, functional, virtual DOM for Rust</strong>
@@ -9,8 +9,8 @@
 
 This overview provides a brief introduction to Dioxus. For a more in-depth guide, make sure to check out:
 
-- [Getting Started](https://dioxuslabs.com/learn/0.4/getting_started)
-- [Book (0.4)](https://dioxuslabs.com/learn/0.4/)
+- [Getting Started](https://dioxuslabs.com/learn/0.5/getting_started)
+- [Book (0.5)](https://dioxuslabs.com/learn/0.5)
 - [Examples](https://github.com/DioxusLabs/example-projects)
 
 # Overview and Goals
@@ -34,16 +34,15 @@ Remember: Dioxus is a library for declaring interactive user interfaces—it is 
 
 ## Brief Overview
 
-All Dioxus apps are built by composing functions that take in a `Scope` which is generic over some `Properties` and return an `Element`.
-A `Scope` holds relevant state data for the currently rendered component.
+All Dioxus apps are built by composing functions that return an `Element`. 
 
-To launch an app, we use the `launch` method for the specific renderer we want to use. In the launch function, we pass the app's `Component`.
+To launch an app, we use the `launch` method and use features in ``Cargo.toml`` to specify which renderer we want to use. In the launch function, we pass the app's root `Component`.
 
 ```rust, ignore
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(App);
+    launch(App);
 }
 
 // The #[component] attribute streamlines component creation.
@@ -71,7 +70,7 @@ let value = "123";
 rsx!(
     div {
         class: "my-class {value}",                  // <--- attribute
-        onclick: move |_| log::info!("clicked!"),   // <--- listener
+        onclick: move |_| info!("clicked!"),   // <--- listener
         h1 { "hello world" },                       // <--- child
     }
 )
@@ -89,20 +88,12 @@ rsx!(
 )
 ```
 
-Used within components, the `rsx!` macro must be rendered into an `Element` with
-the `render` function on Scope.
-
-If we want to omit the boilerplate of `cx.render`, we can simply pass in
-`cx` as the first argument of rsx. This is sometimes useful when we need to
-render nodes in match statements.
+The `rsx!` macro is what generates the `Element` that our components return.
 
 ```rust, ignore
 #[component]
 fn Example() -> Element {
-    // both of these are equivalent
-    rsx!("hello world");
-
-    rsx!("hello world!");
+    rsx!("hello world")
 }
 ```
 
@@ -162,11 +153,11 @@ struct HeaderProps {
 }
 
 #[component]
-fn Header(cx: Scope<HeaderProps>) -> Element {
+fn Header(props: HeaderProps) -> Element {
     rsx!(
         div {
-            background_color: "{cx.props.color}"
-            h1 { "{cx.props.title}" }
+            background_color: "{props.color}"
+            h1 { "{props.title}" }
         }
     )
 }
@@ -200,11 +191,11 @@ struct HeaderProps<'a> {
 }
 
 #[component]
-fn Header(props: HeaderProps) -> Element {
+fn Header<'a>(props: HeaderProps<'a>) -> Element {
     rsx!(
         div {
-            background_color: "{cx.props.color}"
-            h1 { "{cx.props.title}" }
+            background_color: "{props.color}"
+            h1 { "{props.title}" }
         }
     )
 }
@@ -234,7 +225,7 @@ but you can turn it off if you wish.
 ## Hooks
 
 While components are reusable forms of UI elements, hooks are reusable forms
-of logic. Hooks provide us a way of retrieving state from the `Scope` and using
+of logic. Hooks provide us a way of retrieving state from Dioxus' internal `Scope` and using
 it to render UI elements.
 
 By convention, all hooks are functions that should start with `use_`. We can
@@ -250,7 +241,7 @@ fn App() -> Element {
 ```
 
 Hooks are sensitive to how they are used. To use hooks, you must abide by the
-["rules of hooks" (borrowed from React)](https://reactjs.org/docs/hooks-rules.html):
+["rules of hooks"](https://dioxuslabs.com/learn/0.5/reference/hooks#rules-of-hooks):
 
 - Functions with "use\_" should not be called in callbacks
 - Functions with "use\_" should not be called out of order
@@ -269,11 +260,11 @@ fn use_username(d: Uuid) -> bool {
 }
 ```
 
-To create entirely new foundational hooks, we can use the `use_hook` method on `ScopeState`.
+To create entirely new foundational hooks, we can use the `use_hook` method.
 
 ```rust, ignore
 fn use_mut_string() -> &mut String {
-    cx.use_hook(|_| "Hello".to_string())
+    use_hook(|_| "Hello".to_string())
 }
 ```
 
@@ -287,7 +278,7 @@ Using components, templates, and hooks, we can build a simple app.
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus_desktop::launch(App);
+    launch(App);
 }
 
 #[component]
