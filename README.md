@@ -1,13 +1,13 @@
 <p>
   <!-- <h1 align="center"></h1> -->
 
-  <p align="center">
-    <img src="./notes/dioxus-header-light.svg">
+  <p align="center" >
+    <img src="./notes/dioxus-header-light.svg"  style="margin-bottom: 20px;">
     <!-- <h3 align="center">Web, desktop, mobile, liveview, TUI, and more</h3> -->
     <!-- <img src="./notes/header.svg"> -->
     <!-- <p align="center">Build for web, desktop, mobile, liveview, TUI, and more</p> -->
     <!-- <h3 align="center">Fullstack, typesafe, crossplatform, and blazingly fast. 🔥</h3> -->
-    <img src="./notes/dioxus_splash_4.avif">
+    <img src="./notes/dioxus_splash_5.avif">
     <!-- <img src="~/Downloads/dioxus_splash.png"> -->
     <!-- <h1 align="center">Dioxus: one codebase, every platform</h1> -->
   </p>
@@ -47,7 +47,7 @@
   </a>
 </div>
 
-<div align="center">
+<div align="center" style="margin-bottom: 60px; margin-top: 20px;">
   <h3>
     <a href="https://dioxuslabs.com"> Website </a>
     <span> | </span>
@@ -71,7 +71,9 @@
 
 Dioxus is a simple yet powerful framework for building cross-platform user interfaces in Rust. -->
 
-<!-- ```rust
+Dioxus is the simplest and most advanced framework for building apps in Rust. Zero-config setup, integrated hotreloading, and signals-based state management help you ship faster and more reliably. Seasmlessly add backend functionality with Server Functions and bundle with our CLI to deploy to any platform.
+
+```rust
 fn app() -> Element {
     let mut count = use_signal(|| 0);
 
@@ -81,20 +83,25 @@ fn app() -> Element {
         button { onclick: move |_| count -= 1, "Down low!" }
     }
 }
-``` -->
+```
 
-<!-- Dioxus can be used to deliver webapps, desktop apps, static sites, mobile apps, TUI apps, liveview apps, and more. -->
-
-## Unique features:
-- Desktop apps running natively (no Electron!) in less than 10 lines of code.
-- Incredibly ergonomic and powerful state management.
+## ⭐️ Unique features:
+- Cross-platform apps in three lines of code (web, desktop, mobile, server, and more)
+- Ergonomic state management combines the best of React, Solid, and Svelte
 - Comprehensive inline documentation - hover and guides for all HTML elements, listeners, and events.
 - Blazingly fast 🔥🔥 and extremely memory efficient
 - Integrated hot reloading for fast iteration
-- First-class async support with coroutines and suspense
 - And more! Read the [full release post](https://dioxuslabs.com/blog/introducing-dioxus/).
 
-## Supported Platforms
+## ⚙️ Integrated hot-reloading:
+With one command, `dx serve` and your app is running. Edit your markup and see the results in real time.
+
+<div align="center">
+  <img src="./notes/hotreload.gif">
+</div>
+
+
+## ⚒️ Supported Platforms
 <div align="center">
   <table style="width:100%">
     <tr>
@@ -151,6 +158,16 @@ fn app() -> Element {
     </tr>
   </table>
 </div>
+
+## Dioxus vs other frameworks
+
+todo
+
+### Dioxus vs Leptos
+todo
+
+### Dioxus vs Iced
+todo
 
 ## Why Dioxus?
 There's tons of options for building apps, so why would you choose Dioxus?
