@@ -1,9 +1,7 @@
 //! A shared pool of renderers for efficient server side rendering.
-use crate::render::dioxus_core::NoOpMutations;
-use crate::server_context::SERVER_CONTEXT;
-use dioxus_lib::prelude::VirtualDom;
+use crate::{render::dioxus_core::NoOpMutations, server_context::with_server_context};
 use dioxus_ssr::{
-    incremental::{IncrementalRendererConfig, RenderFreshness, WrapBody},
+    incremental::{RenderFreshness, WrapBody},
     Renderer,
 };
 use std::future::Future;
@@ -53,7 +51,7 @@ impl SsrRendererPool {
         };
         match self {
             Self::Renderer(pool) => {
-                let server_context = Box::new(server_context.clone());
+                let server_context = server_context.clone();
                 let mut renderer = pool.write().unwrap().pop().unwrap_or_else(pre_renderer);
 
                 let (tx, rx) = tokio::sync::oneshot::channel();
@@ -61,15 +59,13 @@ impl SsrRendererPool {
                 spawn_platform(move || async move {
                     let mut vdom = virtual_dom_factory();
                     let mut to = WriteBuffer { buffer: Vec::new() };
-                    // before polling the future, we need to set the context
-                    let prev_context = SERVER_CONTEXT.with(|ctx| ctx.replace(server_context));
                     // poll the future, which may call server_context()
                     tracing::info!("Rebuilding vdom");
-                    block_in_place(|| vdom.rebuild(&mut NoOpMutations));
-                    vdom.wait_for_suspense().await;
+                    with_server_context(server_context.clone(), || {
+                        block_in_place(|| vdom.rebuild(&mut NoOpMutations));
+                    });
+                    ProvideServerContext::new(vdom.wait_for_suspense(), server_context).await;
                     tracing::info!("Suspense resolved");
-                    // after polling the future, we need to restore the context
-                    SERVER_CONTEXT.with(|ctx| ctx.replace(prev_context));
 
                     if let Err(err) = wrapper.render_before_body(&mut *to) {
                         let _ = tx.send(Err(err));
@@ -120,16 +116,17 @@ impl SsrRendererPool {
                             &mut *to,
                             |vdom| {
                                 Box::pin(async move {
-                                    // before polling the future, we need to set the context
-                                    let prev_context = SERVER_CONTEXT
-                                        .with(|ctx| ctx.replace(Box::new(server_context)));
                                     // poll the future, which may call server_context()
                                     tracing::info!("Rebuilding vdom");
-                                    block_in_place(|| vdom.rebuild(&mut NoOpMutations));
-                                    vdom.wait_for_suspense().await;
+                                    with_server_context(server_context.clone(), || {
+                                        block_in_place(|| vdom.rebuild(&mut NoOpMutations));
+                                    });
+                                    ProvideServerContext::new(
+                                        vdom.wait_for_suspense(),
+                                        server_context,
+                                    )
+                                    .await;
                                     tracing::info!("Suspense resolved");
-                                    // after polling the future, we need to restore the context
-                                    SERVER_CONTEXT.with(|ctx| ctx.replace(prev_context));
                                 })
                             },
                             &wrapper,
