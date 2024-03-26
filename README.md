@@ -1,6 +1,7 @@
 <p>
   <!-- <h1 align="center"></h1> -->
 
+  <a href="https://dioxuslabs.com">
   <p align="center" >
     <img src="./notes/header-light.svg" >
     <!-- <h3 align="center">Web, desktop, mobile, liveview, TUI, and more</h3> -->
@@ -11,6 +12,7 @@
     <!-- <img src="~/Downloads/dioxus_splash.png"> -->
     <!-- <h1 align="center">Dioxus: one codebase, every platform</h1> -->
   </p>
+  </a>
 </p>
 
 
@@ -72,15 +74,15 @@
 
 Dioxus is a simple yet powerful framework for building cross-platform user interfaces in Rust. -->
 
-Dioxus is the simplest and most advanced framework for building apps in Rust. Zero-config setup, integrated hotreloading, and signals-based state management help you ship faster and more reliably. Seasmlessly add backend functionality with Server Functions and bundle with our CLI to deploy to any platform.
+Build for web, desktop, and mobile, and more with a single codebase. Zero-config setup, integrated hotreloading, and signals-based state management help you ship faster and more reliably. Seamlessly add backend functionality with Server Functions and bundle with our CLI.
 
+<br>
 
 ## ⭐️ Unique features:
 - Cross-platform apps in three lines of code (web, desktop, mobile, server, and more)
-- Ergonomic state management combines the best of React, Solid, and Svelte
-- Comprehensive inline documentation - hover and guides for all HTML elements, listeners, and events.
-- Extremely performant, powered by Rust's fastest wasm-framework [sledgehammer](https://dioxuslabs.com/blog/templates-diffing).
-- Integrated hot reloading for fast iteration
+- [Ergonomic state management](https://dioxuslabs.com/blog/release-050) combines the best of React, Solid, and Svelte
+- Extremely performant, powered by Rust's fastest wasm-framework [sledgehammer](https://dioxuslabs.com/blog/templates-diffing)
+- Integrated bundler for deploying to the web, macOS, Linux, and Windows
 - And more! Read the [take a tour of Dioxus](https://dioxuslabs.com/learn/0.5/).
 
 ## ⚙️ Integrated hot-reloading:
@@ -95,7 +97,11 @@ With one command, `dx serve` and your app is running. Edit your markup and see t
 <div align="center">
   <table style="width:100%">
     <tr>
-      <td><em>Web</em></td>
+      <td>
+      <b>Web</b>
+      <br />
+      <em>Tier 1 Support</em>
+      </td>
       <td>
         <ul>
           <li>Render directly to the DOM using WebAssembly</li>
@@ -106,7 +112,11 @@ With one command, `dx serve` and your app is running. Edit your markup and see t
       </td>
     </tr>
     <tr>
-      <td><em>Desktop</em></td>
+      <td>
+      <b>Desktop</b>
+      <br />
+      <em>Tier 1 Support</em>
+      </td>
       <td>
         <ul>
           <li>Render using Webview or - experimentally - with WGPU or Skia </li>
@@ -117,17 +127,11 @@ With one command, `dx serve` and your app is running. Edit your markup and see t
       </td>
     </tr>
     <tr>
-      <td><em>Mobile</em></td>
       <td>
-        <ul>
-          <li>Render using Webview or - experimentally - with WGPU or Skia </li>
-          <li>Support for iOS and Android </li>
-          <li><em>Significantly</em> more performant than React Native </li>
-        </ul>
+      <b>Liveview</b>
+      <br />
+      <em>Tier 1 Support</em>
       </td>
-    </tr>
-    <tr>
-      <td><em>Liveview</em></td>
       <td>
         <ul>
           <li>Render apps - or just a single component - entirely on the server</li>
@@ -137,7 +141,25 @@ With one command, `dx serve` and your app is running. Edit your markup and see t
       </td>
     </tr>
     <tr>
-      <td><em>Terminal</em></td>
+      <td>
+      <b>Mobile</b>
+      <br />
+      <em>Tier 2 Support</em>
+      </td>
+      <td>
+        <ul>
+          <li>Render using Webview or - experimentally - with WGPU or Skia </li>
+          <li>Support for iOS and Android </li>
+          <li><em>Significantly</em> more performant than React Native </li>
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <td>
+      <b>Terminal</b>
+      <br />
+      <em>Tier 2 Support</em>
+      </td>
       <td>
         <ul>
           <li>Render apps directly into your terminal, similar to <a href="https://github.com/vadimdemedes/ink"> ink.js</a></li>
