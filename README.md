@@ -2,7 +2,7 @@
   <h1 align="center">Dioxus: Web, Destkop, Mobile apps in Rust</h1>
 
   <p align="center">
-    <img src="./notes/dioxus_splash.avif">
+    <img src="./notes/dioxus_splash2.avif">
     <!-- <img src="./notes/header.svg"> -->
     <!-- <img src="~/Downloads/dioxus_splash.png"> -->
   </p>
