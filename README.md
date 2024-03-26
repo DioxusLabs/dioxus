@@ -1,7 +1,8 @@
 <p>
   <a href="https://dioxuslabs.com">
     <p align="center" >
-      <img src="./notes/header-light.svg" >
+      <img src="./notes/header-light.svg#gh-light-mode-only" >
+      <img src="./notes/header-dark.svg#gh-dark-mode-only" >
       <img src="./notes/dioxus_splash_8.avif">
     </p>
   </a>
@@ -82,12 +83,16 @@ fn app() -> Element {
 - And more! Read the [take a tour of Dioxus](https://dioxuslabs.com/learn/0.5/).
 
 ## ⚙️ Integrated hot-reloading:
-With one command, `dx serve` and your app is running. Edit your markup and see the results in real time.
+With one command, `dx serve` and your app is running. Edit your markup and styles and see the results in real time. Rust code hotreloading is coming in an upcoming release.
 
 <div align="center">
   <img src="./notes/hotreload.gif">
 </div>
 
+
+## 📦 Integrated bundler for deploying to the web, macOS, Linux, and Windows
+
+## 📖 Fantastic documentation
 
 ## ⚒️ Supported Platforms
 <div align="center">
