@@ -1,11 +1,14 @@
 <p align="center">
-  <h1 align="center">Dioxus: Web, Destkop, Mobile apps in Rust</h1>
+  <!-- <h1 align="center"></h1> -->
 
   <p align="center">
-    <img src="./notes/dioxus_splash2.avif">
+    <img src="./notes/dioxus_splash_2.avif">
     <!-- <img src="./notes/header.svg"> -->
     <!-- <img src="~/Downloads/dioxus_splash.png"> -->
   </p>
+  <h1 align="center">Dioxus: one codebase, every platform</h1>
+  <p align="center">Build for web, desktop, mobile, liveview, TUI, and more</p>
+  <!-- <h3 align="center">Build for web, desktop, mobile, liveview, TUI, and more</h3> -->
 </p>
 
 
@@ -78,7 +81,7 @@ fn app() -> Element {
 }
 ``` -->
 
-Dioxus can be used to deliver webapps, desktop apps, static sites, mobile apps, TUI apps, liveview apps, and more.
+<!-- Dioxus can be used to deliver webapps, desktop apps, static sites, mobile apps, TUI apps, liveview apps, and more. -->
 
 ## Unique features:
 - Desktop apps running natively (no Electron!) in less than 10 lines of code.
