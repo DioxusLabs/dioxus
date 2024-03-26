@@ -173,7 +173,13 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
         }
     }
 
-    let local_socket_stream = match LocalSocketListener::bind(hot_reload_socket_path) {
+    let listener = if cfg!(windows) {
+        LocalSocketListener::bind("@dioxusin")
+    } else {
+        LocalSocketListener::bind(hot_reload_socket_path)
+    };
+
+    let local_socket_stream = match listener {
         Ok(local_socket_stream) => local_socket_stream,
         Err(err) => {
             println!("failed to connect to hot reloading\n{err}");
