@@ -2,7 +2,7 @@
   <!-- <h1 align="center"></h1> -->
 
   <p align="center" >
-    <img src="./notes/dioxus-header-light.svg"  style="margin-bottom: 20px;">
+    <img src="./notes/header-light.svg"  style="margin-bottom: 20px;">
     <!-- <h3 align="center">Web, desktop, mobile, liveview, TUI, and more</h3> -->
     <!-- <img src="./notes/header.svg"> -->
     <!-- <p align="center">Build for web, desktop, mobile, liveview, TUI, and more</p> -->
