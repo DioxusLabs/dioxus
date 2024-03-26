@@ -66,7 +66,7 @@ impl Bundle {
         let mut crate_config = dioxus_cli_config::CrateConfig::new(bin)?;
 
         // change the release state.
-        crate_config.with_release(self.build.release);
+        crate_config.with_release(true);
         crate_config.with_verbose(self.build.verbose);
 
         if self.build.example.is_some() {
@@ -140,17 +140,19 @@ impl Bundle {
             }
         }
 
-        // Add all assets from collect assets to the bundle
-        {
-            let config = manganis_cli_support::Config::current();
-            let location = config.assets_serve_location().to_string();
-            let location = format!("./{}", location);
-            println!("Adding assets from {} to bundle", location);
-            if let Some(resources) = &mut bundle_settings.resources {
-                resources.push(location);
-            } else {
-                bundle_settings.resources = Some(vec![location]);
-            }
+        // Copy the assets in the dist directory to the bundle
+        let static_asset_output_dir = &crate_config.dioxus_config.application.out_dir;
+        // Make sure the dist directory is relative to the crate directory
+        let static_asset_output_dir = static_asset_output_dir
+            .strip_prefix(&crate_config.crate_dir)
+            .unwrap_or(static_asset_output_dir);
+
+        let static_asset_output_dir = static_asset_output_dir.display().to_string();
+        println!("Adding assets from {} to bundle", static_asset_output_dir);
+        if let Some(resources) = &mut bundle_settings.resources {
+            resources.push(static_asset_output_dir);
+        } else {
+            bundle_settings.resources = Some(vec![static_asset_output_dir]);
         }
 
         let mut settings = SettingsBuilder::new()
