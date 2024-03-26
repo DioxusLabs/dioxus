@@ -1,12 +1,11 @@
 use core::panic;
 use dioxus_cli_config::ExecutableType;
-use manganis_cli_support::AssetManifestExt;
 use std::{fs::create_dir_all, str::FromStr};
 
 use tauri_bundler::{BundleSettings, PackageSettings, SettingsBuilder};
 
 use super::*;
-use crate::{assets::asset_manifest, build_desktop, cfg::ConfigOptsBundle};
+use crate::{build_desktop, cfg::ConfigOptsBundle};
 
 /// Bundle the Rust desktop app and all of its assets
 #[derive(Clone, Debug, Parser)]
