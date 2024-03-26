@@ -2,7 +2,7 @@
   <!-- <h1 align="center"></h1> -->
 
   <p align="center" >
-    <img src="./notes/header-light.svg"  style="margin-bottom: 20px;">
+    <img src="./notes/header-light.svg" >
     <!-- <h3 align="center">Web, desktop, mobile, liveview, TUI, and more</h3> -->
     <!-- <img src="./notes/header.svg"> -->
     <!-- <p align="center">Build for web, desktop, mobile, liveview, TUI, and more</p> -->
@@ -47,7 +47,7 @@
   </a>
 </div>
 
-<div align="center" style="margin-bottom: 60px; margin-top: 20px;">
+<div align="center">
   <h3>
     <a href="https://dioxuslabs.com"> Website </a>
     <span> | </span>
@@ -64,6 +64,9 @@
     <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/tr-tr"> Türkçe </a>
   </h3>
 </div>
+<br>
+<br>
+<br>
 
 
 <!-- > [!WARNING]
