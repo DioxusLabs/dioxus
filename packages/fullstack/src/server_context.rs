@@ -35,7 +35,7 @@ impl Default for DioxusServerContext {
 mod server_fn_impl {
     use super::*;
     use std::sync::LockResult;
-    use std::sync::{Arc, PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
+    use std::sync::{PoisonError, RwLockReadGuard, RwLockWriteGuard};
 
     use anymap::{any::Any, Map};
     type SendSyncAnyMap = Map<dyn Any + Send + Sync + 'static>;
@@ -159,22 +159,20 @@ pub async fn extract<E: FromServerContext<I>, I>() -> Result<E, E::Rejection> {
     E::from_request(&server_context()).await
 }
 
-pub(crate) fn with_server_context<O>(
-    context: Box<DioxusServerContext>,
-    f: impl FnOnce() -> O,
-) -> (O, Box<DioxusServerContext>) {
+pub(crate) fn with_server_context<O>(context: DioxusServerContext, f: impl FnOnce() -> O) -> O {
     // before polling the future, we need to set the context
-    let prev_context = SERVER_CONTEXT.with(|ctx| ctx.replace(context));
+    let prev_context = SERVER_CONTEXT.with(|ctx| ctx.replace(Box::new(context)));
     // poll the future, which may call server_context()
     let result = f();
     // after polling the future, we need to restore the context
-    (result, SERVER_CONTEXT.with(|ctx| ctx.replace(prev_context)))
+    SERVER_CONTEXT.with(|ctx| ctx.replace(prev_context));
+    result
 }
 
 /// A future that provides the server context to the inner future
 #[pin_project::pin_project]
 pub struct ProvideServerContext<F: std::future::Future> {
-    context: Option<Box<DioxusServerContext>>,
+    context: Option<DioxusServerContext>,
     #[pin]
     f: F,
 }
@@ -183,7 +181,7 @@ impl<F: std::future::Future> ProvideServerContext<F> {
     /// Create a new future that provides the server context to the inner future
     pub fn new(f: F, context: DioxusServerContext) -> Self {
         Self {
-            context: Some(Box::new(context)),
+            context: Some(context),
             f,
         }
     }
@@ -198,7 +196,7 @@ impl<F: std::future::Future> std::future::Future for ProvideServerContext<F> {
     ) -> std::task::Poll<Self::Output> {
         let this = self.project();
         let context = this.context.take().unwrap();
-        let (result, context) = with_server_context(context, || this.f.poll(cx));
+        let result = with_server_context(context.clone(), || this.f.poll(cx));
         *this.context = Some(context);
         result
     }
