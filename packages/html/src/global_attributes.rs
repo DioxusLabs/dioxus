@@ -2276,6 +2276,9 @@ trait_methods! {
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/textLength>
     text_length: "textLength";
 
+    /// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/title>
+    title;
+
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/to>
     to: "to";
 
