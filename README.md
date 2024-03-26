@@ -74,25 +74,14 @@ Dioxus is a simple yet powerful framework for building cross-platform user inter
 
 Dioxus is the simplest and most advanced framework for building apps in Rust. Zero-config setup, integrated hotreloading, and signals-based state management help you ship faster and more reliably. Seasmlessly add backend functionality with Server Functions and bundle with our CLI to deploy to any platform.
 
-```rust
-fn app() -> Element {
-    let mut count = use_signal(|| 0);
-
-    rsx! {
-        h1 { "High-Five counter: {count}" }
-        button { onclick: move |_| count += 1, "Up high!" }
-        button { onclick: move |_| count -= 1, "Down low!" }
-    }
-}
-```
 
 ## ⭐️ Unique features:
 - Cross-platform apps in three lines of code (web, desktop, mobile, server, and more)
 - Ergonomic state management combines the best of React, Solid, and Svelte
 - Comprehensive inline documentation - hover and guides for all HTML elements, listeners, and events.
-- Blazingly fast 🔥🔥 and extremely memory efficient
+- Extremely performant, powered by Rust's fastest wasm-framework [sledgehammer](https://dioxuslabs.com/blog/templates-diffing).
 - Integrated hot reloading for fast iteration
-- And more! Read the [full release post](https://dioxuslabs.com/blog/introducing-dioxus/).
+- And more! Read the [take a tour of Dioxus](https://dioxuslabs.com/learn/0.5/).
 
 ## ⚙️ Integrated hot-reloading:
 With one command, `dx serve` and your app is running. Edit your markup and see the results in real time.
