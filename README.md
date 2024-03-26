@@ -8,7 +8,7 @@
       <!-- <img src="./notes/header.svg"> -->
       <!-- <p align="center">Build for web, desktop, mobile, liveview, TUI, and more</p> -->
       <!-- <h3 align="center">Fullstack, typesafe, crossplatform, and blazingly fast. 🔥</h3> -->
-      <img src="./notes/dioxus_splash_6.avif">
+      <img src="./notes/dioxus_splash_7.avif">
       <!-- <img src="~/Downloads/dioxus_splash.png"> -->
       <!-- <h1 align="center">Dioxus: one codebase, every platform</h1> -->
     </p>
