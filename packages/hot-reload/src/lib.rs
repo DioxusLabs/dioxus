@@ -30,41 +30,49 @@ pub enum HotReloadMsg {
 
 /// Connect to the hot reloading listener. The callback provided will be called every time a template change is detected
 pub fn connect(callback: impl FnMut(HotReloadMsg) + Send + 'static) {
-    // FIXME: this is falling back onto the current directory when not running under cargo, which is how the CLI runs this.
-    // This needs to be fixed.
-    let _manifest_dir = std::env::var("CARGO_MANIFEST_DIR");
+    if cfg!(windows) {
+        connect_at(PathBuf::from("@dioxusin"), callback);
+    } else {
+        // FIXME: this is falling back onto the current directory when not running under cargo, which is how the CLI runs this.
+        // This needs to be fixed.
+        let _manifest_dir = std::env::var("CARGO_MANIFEST_DIR");
 
-    // get the cargo manifest directory, where the target dir lives
-    let mut path = match _manifest_dir {
-        Ok(manifest_dir) => PathBuf::from(manifest_dir),
-        Err(_) => std::env::current_dir().unwrap(),
-    };
+        // get the cargo manifest directory, where the target dir lives
+        let mut path = match _manifest_dir {
+            Ok(manifest_dir) => PathBuf::from(manifest_dir),
+            Err(_) => std::env::current_dir().unwrap(),
+        };
 
-    // walk the path until we a find a socket named `dioxusin` inside that folder's target directory
-    loop {
-        let maybe = path.join("target").join("dioxusin");
+        // walk the path until we a find a socket named `dioxusin` inside that folder's target directory
+        loop {
+            let maybe = path.join("target").join("dioxusin");
 
-        if maybe.exists() {
-            path = maybe;
-            break;
+            if maybe.exists() {
+                path = maybe;
+                break;
+            }
+
+            // It's likely we're running under just cargo and not dx
+            path = match path.parent() {
+                Some(parent) => parent.to_path_buf(),
+                None => return,
+            };
         }
 
-        // It's likely we're running under just cargo and not dx
-        path = match path.parent() {
-            Some(parent) => parent.to_path_buf(),
-            None => return,
-        };
+        println!("connecting to {:?}", path);
+        connect_at(path, callback);
     }
-
-    println!("connecting to {:?}", path);
-
-    connect_at(path, callback);
 }
 
 pub fn connect_at(socket: PathBuf, mut callback: impl FnMut(HotReloadMsg) + Send + 'static) {
     std::thread::spawn(move || {
         // There might be a socket since the we're not running under the hot reloading server
-        let Ok(socket) = LocalSocketStream::connect(socket.clone()) else {
+        let stream = if cfg!(windows) {
+            LocalSocketStream::connect("@dioxusin")
+        } else {
+            LocalSocketStream::connect(socket.clone())
+        };
+        let Ok(socket) = stream else {
             println!(
                 "could not find hot reloading server at {:?}, make sure it's running",
                 socket

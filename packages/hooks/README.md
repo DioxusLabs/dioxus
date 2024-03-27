@@ -15,27 +15,26 @@
 [discord-url]: https://discord.gg/XgGxMSkvUM
 
 [Website](https://dioxuslabs.com) |
-[Guides](https://dioxuslabs.com/learn/0.4/) |
+[Guides](https://dioxuslabs.com/learn/0.5/) |
 [API Docs](https://docs.rs/dioxus-hooks/latest/dioxus_hooks) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 
 ## Overview
 
-`dioxus-hooks` includes some basic useful hooks for dioxus:
+`dioxus-hooks` includes some basic useful hooks for dioxus such as:
 
-- use_state
-- use_ref
-- use_future
+- use_signal
+- use_effect
+- use_resource
+- use_memo
 - use_coroutine
-- use_callback
 
-Unlike React, none of these hooks are foundational since they all build off the primitive `cx.use_hook`.
 
-This crate also provides a few helpful macros to get around some Rust lifetime management issues in async.
+Unlike React, none of these hooks are foundational since they all build off the primitive `use_hook`.
+
+This crate also provides a helpful macro to get around some Rust lifetime management issues in async:
 
 - `to_owned![]`
-- `use_future()`
-- `use_callback!()`
 
 ## Contributing
 

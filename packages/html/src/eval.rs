@@ -131,6 +131,7 @@ impl IntoFuture for UseEval {
 
 /// Represents an error when evaluating JavaScript
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum EvalError {
     /// The platform does not support evaluating JavaScript.
     Unsupported,

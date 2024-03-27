@@ -1,4 +1,4 @@
-<div style="text-align: center">
+<div>
   <h1>📦✨ Dioxus CLI Configuration</h1>
 </div>
 

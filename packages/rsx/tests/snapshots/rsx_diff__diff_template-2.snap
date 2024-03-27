@@ -1,0 +1,81 @@
+---
+source: packages/rsx/tests/rsx_diff.rs
+expression: new_template
+---
+Template {
+    name: "testing",
+    roots: [
+        Element {
+            tag: "div",
+            namespace: None,
+            attrs: [
+                Dynamic {
+                    id: 1,
+                },
+                Static {
+                    name: "height",
+                    value: "100px",
+                    namespace: None,
+                },
+                Static {
+                    name: "height2",
+                    value: "100px",
+                    namespace: None,
+                },
+                Dynamic {
+                    id: 0,
+                },
+            ],
+            children: [
+                Dynamic {
+                    id: 3,
+                },
+                Dynamic {
+                    id: 2,
+                },
+                Dynamic {
+                    id: 1,
+                },
+                Dynamic {
+                    id: 0,
+                },
+                Element {
+                    tag: "p",
+                    namespace: None,
+                    attrs: [],
+                    children: [
+                        Text {
+                            text: "hello world",
+                        },
+                    ],
+                },
+            ],
+        },
+    ],
+    node_paths: [
+        [
+            0,
+            3,
+        ],
+        [
+            0,
+            2,
+        ],
+        [
+            0,
+            1,
+        ],
+        [
+            0,
+            0,
+        ],
+    ],
+    attr_paths: [
+        [
+            0,
+        ],
+        [
+            0,
+        ],
+    ],
+}

@@ -15,7 +15,7 @@ pub struct StringChain {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum Segment {
+pub(crate) enum Segment {
     Attr(usize),
     Node(usize),
     PreRendered(String),

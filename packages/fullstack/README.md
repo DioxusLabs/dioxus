@@ -15,7 +15,7 @@
 [discord-url]: https://discord.gg/XgGxMSkvUM
 
 [Website](https://dioxuslabs.com) |
-[Guides](https://dioxuslabs.com/learn/0.4/) |
+[Guides](https://dioxuslabs.com/learn/0.5/) |
 [API Docs](https://docs.rs/dioxus-fullstack/latest/dioxus_sever) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 
@@ -23,41 +23,25 @@ Fullstack utilities for the [`Dioxus`](https://dioxuslabs.com) framework.
 
 # Features
 
-- Intigrations with the [Axum](https::/docs.rs/dioxus-fullstack/latest/dixous_server/axum_adapter/index.html), [Salvo](https::/docs.rs/dioxus-fullstack/latest/dixous_server/salvo_adapter/index.html), and [Warp](https::/docs.rs/dioxus-fullstack/latest/dixous_server/warp_adapter/index.html) server frameworks with utilities for serving and rendering Dioxus applications.
+- Integrates with the [Axum](https::/docs.rs/dioxus-fullstack/latest/dixous_server/axum_adapter/index.html) server framework with utilities for serving and rendering Dioxus applications.
 - [Server functions](https::/docs.rs/dioxus-fullstack/latest/dixous_server/prelude/attr.server.html) allow you to call code on the server from the client as if it were a normal function.
 - Instant RSX Hot reloading with [`dioxus-hot-reload`](https://crates.io/crates/dioxus-hot-reload).
 - Passing root props from the server to the client.
 
 # Example
 
-Full stack Dioxus in under 50 lines of code
+Full stack Dioxus in under 30 lines of code
 
 ```rust
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
-use dioxus_fullstack::prelude::*;
 
-// On the web, run our client code
-#[cfg(feature = "web")]
 fn main() {
-    dioxus_web::launch_with_props(
-        app,
-        get_root_props_from_document().unwrap_or_default(),
-        dioxus_web::Config::new().hydrate(true),
-    );
+    launch(App);
 }
 
-// On the server, run a simple warp server
-#[cfg(feature = "server")]
-#[tokio::main]
-async fn main() {
-    // Automatically handles server side rendering, hot reloading intigration, and hosting server functions
-    warp::serve(serve_dioxus_application("", ServerConfig::new(app, ())))
-        .run(([127, 0, 0, 1], 8080))
-        .await;
-}
-
-fn app() -> Element {
+#[component]
+fn App() -> Element {
     let meaning = use_signal(|| None);
 
     rsx! {
@@ -81,7 +65,7 @@ async fn get_meaning(of: String) -> Result<Option<u32>, ServerFnError> {
 
 ## Getting Started
 
-To get started with full stack Dioxus, check out our [getting started guide](https://dioxuslabs.com/docs/nightly/guide/en/getting_started/ssr.html), or the [full stack examples](https://github.com/DioxusLabs/dioxus/tree/master/packages/fullstack/examples).
+To get started with full stack Dioxus, check out our [getting started guide](https://dioxuslabs.com/learn/0.5/getting_started/fullstack), or the [full stack examples](https://github.com/DioxusLabs/dioxus/tree/master/packages/fullstack/examples).
 
 ## Contributing
 

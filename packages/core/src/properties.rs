@@ -31,7 +31,7 @@ pub trait Properties: Clone + Sized + 'static {
     /// Create a builder for this component.
     fn builder() -> Self::Builder;
 
-    /// Compare two props to see if they are memoizable.
+    /// Make the old props equal to the new props. Return if the props were equal and should be memoized.
     fn memoize(&mut self, other: &Self) -> bool;
 
     /// Create a component from the props.

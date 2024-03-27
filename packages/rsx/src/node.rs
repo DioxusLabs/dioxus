@@ -1,3 +1,5 @@
+use self::location::CallerLocation;
+
 use super::*;
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
@@ -21,11 +23,12 @@ Parse
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum BodyNode {
     Element(Element),
+    Text(IfmtInput),
+    RawExpr(Expr),
+
     Component(Component),
     ForLoop(ForLoop),
     IfChain(IfChain),
-    Text(IfmtInput),
-    RawExpr(Expr),
 }
 
 impl BodyNode {
@@ -138,92 +141,45 @@ impl Parse for BodyNode {
 
 impl ToTokens for BodyNode {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        match &self {
+        match self {
             BodyNode::Element(_) => {
                 unimplemented!("Elements are statically created in the template")
             }
-            BodyNode::Component(comp) => comp.to_tokens(tokens),
+
+            // Text is simple, just write it out
             BodyNode::Text(txt) => tokens.append_all(quote! {
                 dioxus_core::DynamicNode::Text(dioxus_core::VText::new(#txt.to_string()))
             }),
+
+            // Expressons too
             BodyNode::RawExpr(exp) => tokens.append_all(quote! {
                 {
                     let ___nodes = (#exp).into_dyn_node();
                     ___nodes
                 }
             }),
-            BodyNode::ForLoop(exp) => {
-                let ForLoop {
-                    pat, expr, body, ..
-                } = exp;
 
-                let renderer: TemplateRenderer = TemplateRenderer {
-                    roots: body,
-                    location: None,
-                };
+            // todo:
+            //
+            // Component children should also participate in hotreloading
+            // This is a *little* hard since components might not be able to take children in the
+            // first place. I'm sure there's a hacky way to allow this... but it's not quite as
+            // straightforward as a for loop.
+            //
+            // It might involve always generating a `children` field on the component and always
+            // populating it with an empty template. This might lose the typesafety of whether
+            // or not a component can even accept children - essentially allowing childrne in
+            // every component - so it'd be breaking - but it would/could work.
+            BodyNode::Component(comp) => tokens.append_all(quote! { #comp }),
 
-                // Signals expose an issue with temporary lifetimes
-                // We need to directly render out the nodes first to collapse their lifetime to <'a>
-                // And then we can return them into the dyn loop
-                tokens.append_all(quote! {
-                    {
-                        let ___nodes = (#expr).into_iter().map(|#pat| { #renderer }).into_dyn_node();
-                        ___nodes
-                    }
-                })
-            }
-            BodyNode::IfChain(chain) => {
-                let mut body = TokenStream2::new();
-                let mut terminated = false;
+            BodyNode::ForLoop(exp) => tokens.append_all(quote! { #exp }),
 
-                let mut elif = Some(chain);
-
-                while let Some(chain) = elif {
-                    let IfChain {
-                        if_token,
-                        cond,
-                        then_branch,
-                        else_if_branch,
-                        else_branch,
-                    } = chain;
-
-                    let mut renderer: TemplateRenderer = TemplateRenderer {
-                        roots: then_branch,
-                        location: None,
-                    };
-
-                    body.append_all(quote! { #if_token #cond { Some({#renderer}) } });
-
-                    if let Some(next) = else_if_branch {
-                        body.append_all(quote! { else });
-                        elif = Some(next);
-                    } else if let Some(else_branch) = else_branch {
-                        renderer.roots = else_branch;
-                        body.append_all(quote! { else { Some({#renderer}) } });
-                        terminated = true;
-                        break;
-                    } else {
-                        elif = None;
-                    }
-                }
-
-                if !terminated {
-                    body.append_all(quote! {
-                        else { None }
-                    });
-                }
-
-                tokens.append_all(quote! {
-                    {
-                        let ___nodes = (#body).into_dyn_node();
-                        ___nodes
-                    }
-                });
-            }
+            BodyNode::IfChain(chain) => tokens.append_all(quote! { #chain }),
         }
     }
 }
 
+#[non_exhaustive]
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct ForLoop {
     pub for_token: Token![for],
@@ -232,6 +188,7 @@ pub struct ForLoop {
     pub expr: Box<Expr>,
     pub body: Vec<BodyNode>,
     pub brace_token: token::Brace,
+    pub location: CallerLocation,
 }
 
 impl Parse for ForLoop {
@@ -251,11 +208,33 @@ impl Parse for ForLoop {
             in_token,
             body,
             brace_token,
+            location: CallerLocation::default(),
             expr: Box::new(expr),
         })
     }
 }
 
+impl ToTokens for ForLoop {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let ForLoop {
+            pat, expr, body, ..
+        } = self;
+
+        let renderer = TemplateRenderer::as_tokens(body, None);
+
+        // Signals expose an issue with temporary lifetimes
+        // We need to directly render out the nodes first to collapse their lifetime to <'a>
+        // And then we can return them into the dyn loop
+        tokens.append_all(quote! {
+            {
+                let ___nodes = (#expr).into_iter().map(|#pat| { #renderer }).into_dyn_node();
+                ___nodes
+            }
+        })
+    }
+}
+
+#[non_exhaustive]
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct IfChain {
     pub if_token: Token![if],
@@ -263,6 +242,7 @@ pub struct IfChain {
     pub then_branch: Vec<BodyNode>,
     pub else_if_branch: Option<Box<IfChain>>,
     pub else_branch: Option<Vec<BodyNode>>,
+    pub location: CallerLocation,
 }
 
 impl Parse for IfChain {
@@ -294,6 +274,56 @@ impl Parse for IfChain {
             then_branch,
             else_if_branch,
             else_branch,
+            location: CallerLocation::default(),
+        })
+    }
+}
+
+impl ToTokens for IfChain {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let mut body = TokenStream2::new();
+        let mut terminated = false;
+
+        let mut elif = Some(self);
+
+        while let Some(chain) = elif {
+            let IfChain {
+                if_token,
+                cond,
+                then_branch,
+                else_if_branch,
+                else_branch,
+                ..
+            } = chain;
+
+            let renderer = TemplateRenderer::as_tokens(then_branch, None);
+
+            body.append_all(quote! { #if_token #cond { Some({#renderer}) } });
+
+            if let Some(next) = else_if_branch {
+                body.append_all(quote! { else });
+                elif = Some(next);
+            } else if let Some(else_branch) = else_branch {
+                let renderer = TemplateRenderer::as_tokens(else_branch, None);
+                body.append_all(quote! { else { Some({#renderer}) } });
+                terminated = true;
+                break;
+            } else {
+                elif = None;
+            }
+        }
+
+        if !terminated {
+            body.append_all(quote! {
+                else { None }
+            });
+        }
+
+        tokens.append_all(quote! {
+            {
+                let ___nodes = (#body).into_dyn_node();
+                ___nodes
+            }
         })
     }
 }

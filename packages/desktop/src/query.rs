@@ -254,6 +254,7 @@ impl<V: DeserializeOwned> Drop for Query<V> {
 }
 
 #[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum QueryError {
     #[error("Error receiving query result.")]
     Recv,

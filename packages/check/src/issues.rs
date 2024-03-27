@@ -155,6 +155,7 @@ impl Display for IssueReport {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 #[allow(clippy::enum_variant_names)] // we'll add non-hook ones in the future
 /// Issues that might be found via static analysis of a Dioxus file.
 pub enum Issue {
