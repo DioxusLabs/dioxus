@@ -59,8 +59,7 @@
 <br>
 <br>
 
-
-Build for web, desktop, and mobile, and more with a single codebase. Zero-config setup, integrated hotreloading, and signals-based state management help you ship faster and more reliably. Seamlessly add backend functionality with Server Functions and bundle with our CLI.
+Build for web, desktop, and mobile, and more with a single codebase. Zero-config setup, integrated hotreloading, and signals-based state management. Add backend functionality with Server Functions and bundle with our CLI.
 
 ```rust
 fn app() -> Element {
