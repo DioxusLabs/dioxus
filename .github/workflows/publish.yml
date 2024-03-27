@@ -14,20 +14,20 @@
 #
 # It's intended that this workflow is run manually, and only when we're ready to release
 
-name: Publish
+name: Publish CLI
 on:
   workflow_dispatch:
     inputs:
       channel:
-        type: choice
         name: "Branch to publish"
         required: true
-        description: Choose the branch to publish.
-        options:
-          - main
-          - v0.4
-          - v0.5
-          - v0.6
+        description: Choose the version number to publish with
+        type: string
+        # options:
+        #   - main
+        #   - v0.4
+        #   - v0.5
+        #   - v0.6
 
 env:
   # make sure we have the right version
@@ -38,47 +38,48 @@ env:
   # backported automatically
   SEMVER: ${{ github.event.inputs.channel == 'main' && 'prerelease' || 'patch' }}
   PRERELEASE_TAG: ${{ github.event.inputs.channel == 'main' && '-pre' || '' }}
+  RELEASE_TAG: ${{ github.event.inputs.channel }}
 
 jobs:
   # First, run checks (clippy, tests, etc) and then publish the crates to crates.io
-  release-crates:
-    steps:
-      # Checkout the right branch, and the nightly stuff
-      - uses: actions/checkout@v4
-        ref: ${{ github.event.inputs.channel }}
-      - run: sudo apt-get update
-      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
-      - uses: dtolnay/rust-toolchain@nightly
-        with:
-          toolchain: nightly-2024-02-01
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
+  # release-crates:
+  #   steps:
+  #     # Checkout the right branch, and the nightly stuff
+  #     - uses: actions/checkout@v4
+  #       ref: ${{ github.event.inputs.channel }}
+  #     - run: sudo apt-get update
+  #     - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+  #     - uses: dtolnay/rust-toolchain@nightly
+  #       with:
+  #         toolchain: nightly-2024-02-01
+  #     - uses: Swatinem/rust-cache@v2
+  #       with:
+  #         cache-all-crates: "true"
 
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with: # speed things up a bit
-          large-packages: false
-          docker-images: false
-          swap-storage: false
+  #     - name: Free Disk Space (Ubuntu)
+  #       uses: jlumbroso/free-disk-space@v1.3.1
+  #       with: # speed things up a bit
+  #         large-packages: false
+  #         docker-images: false
+  #         swap-storage: false
 
-      # Just make sure clippy is happy before doing anything else
-      # Don't publish versions with clippy errors!
-      - name: Clippy
-        run: cargo clippy --workspace --all --examples --tests --all-features --all-targets -- -D warnings
+  #     # Just make sure clippy is happy before doing anything else
+  #     # Don't publish versions with clippy errors!
+  #     - name: Clippy
+  #       run: cargo clippy --workspace --all --examples --tests --all-features --all-targets -- -D warnings
 
-      # Build the docs here too before publishing, to ensure they're up to date
-      - name: cargo doc
-        run: RUSTDOCFLAGS="--cfg docsrs" cargo doc --no-deps --workspace --all-features
+  #     # Build the docs here too before publishing, to ensure they're up to date
+  #     - name: cargo doc
+  #       run: RUSTDOCFLAGS="--cfg docsrs" cargo doc --no-deps --workspace --all-features
 
-      - name: Publish to crates.io
-        run: |
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git config --global user.name "github-actions[bot]"
-          cargo workspaces version -y ${{ env.SEMVER }} --pre-id rc --no-git-commit
+  #     - name: Publish to crates.io
+  #       run: |
+  #         git config --global user.email "github-actions[bot]@users.noreply.github.com"
+  #         git config --global user.name "github-actions[bot]"
+  #         cargo workspaces version -y ${{ env.SEMVER }} --pre-id rc --no-git-commit
 
-          # todo: actually just publish!
-          # cargo workspaces publish -y ${{ github.event.inputs.semver }}
+  #         # todo: actually just publish!
+  #         # cargo workspaces publish -y ${{ github.event.inputs.semver }}
 
       # this will be more useful when we publish the website with updated docs
       # Build the docs.rs docs and publish them to the website under the right folder
@@ -142,7 +143,7 @@ jobs:
           bin: dx
           token: ${{ secrets.GITHUB_TOKEN }}
           target: ${{ matrix.platform.target }}
-          archive: dx-${{ matrix.platform.target }}${{ env.PRERELEASE_TAG }}
+          archive: dx-${{ matrix.platform.target }}${{ env.RELEASE_TAG }}
           checksum: sha256
           manifest_path: packages/cli/Cargo.toml
 
