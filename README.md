@@ -82,14 +82,14 @@ fn app() -> Element {
 - Integrated bundler for deploying to the web, macOS, Linux, and Windows
 - And more! Read the [take a tour of Dioxus](https://dioxuslabs.com/learn/0.5/).
 
-## ⚙️ Instant hot-reloading
+## Instant hot-reloading
 With one command, `dx serve` and your app is running. Edit your markup and styles and see the results in real time. Rust code hotreloading is not yet 1st class, but possible with [hot-lib-reloader](https://docs.rs/hot-lib-reloader/latest/hot_lib_reloader/).
 
 <div align="center">
   <img src="./notes/hotreload.gif">
 </div>
 
-## 📦 Bundler for deploying to the web and desktop
+## Bundler for deploying to the web and desktop
 
 Simply run `dx bundle` and your app will be built and bundled with maximization optimizations. On the web, take advantage of [`.avif` generation, `.wasm` compression, minification](https://dioxuslabs.com/learn/0.5/reference/assets), and more. Build webapps weighing [less than 50kb](https://github.com/ealmloff/tiny-dioxus/) and desktop/mobile apps less than 15mb.
 
@@ -98,7 +98,7 @@ Simply run `dx bundle` and your app will be built and bundled with maximization 
 </div>
 
 
-## 📖 Fantastic documentation
+## Fantastic documentation
 
 We've put a ton of effort into building clean, readable, and comprehensive documentation. All html elements and listeners are documented with MDN docs, and our docsite runs continuous integration with Dioxus itself to ensure that the docs are always up to date. Check out the [Dioxus website](https://dioxuslabs.com/learn/0.5/) for guides, references, recipes, and more. Fun fact: we use the Dioxus website as a testbed for new diouxs features - [check it out!](https://github.com/dioxusLabs/docsite)
 
@@ -106,7 +106,7 @@ We've put a ton of effort into building clean, readable, and comprehensive docum
   <img src="./notes/docs.avif">
 </div>
 
-## 💻 Emphasis on developer experience
+## Emphasis on developer experience
 
 Dioxus prioritizes developer experience, and we've put a ton of effort into end-to-end tooling. We've built a [VSCode extension](https://marketplace.visualstudio.com/items?itemName=DioxusLabs.dioxus) that autoformats your RSX code, converts HTML to RSX, and more. We've also built a very powerful [CLI](https://github.com/DioxusLabs/cli) that supports creating new apps, serving them, and cross-platform bundling, with deployment on the roadmap.
 
@@ -114,7 +114,7 @@ Dioxus prioritizes developer experience, and we've put a ton of effort into end-
   <img src="./notes/autofmt.gif">
 </div>
 
-## 📚 Community
+## Community
 
 Dioxus is a community-driven project, with a very active [Discord](https://discord.gg/XgGxMSkvUM) and [GitHub](https://github.com/DioxusLabs/dioxus/issues) community. We're always looking for help, and we're happy to answer questions and help you get started. [Our SDK](https://github.com/DioxusLabs/dioxus-std) is community-run and we even have a [GitHub organization](https://github.com/dioxus-community/) for the best Dioxus crates that receive free upgrades and support.
 
@@ -123,11 +123,11 @@ Dioxus is a community-driven project, with a very active [Discord](https://disco
 </div>
 
 
-## 🎉 Full-time core team
+## Full-time core team
 
 Dioxus has grown from a side project to a small team of fulltime engineers. Thanks to the generous support of FutureWei, Satellite.im, the GitHub Accelerator program, and several amazing individuals, we're able to work on Dioxus full-time. Our long term goal is for Dioxus to become self-sustaining by providing paid high-quality enterprise tools. If your company is interested in adopting Dioxus and would like to work with us, please reach out!
 
-## ⚒️ Supported Platforms
+## Supported Platforms
 <div align="center">
   <table style="width:100%">
     <tr>
@@ -287,14 +287,7 @@ fn Counters() -> Element {
                                     on:click=move |_| {
                                         set_counters.update(|counters| {
                                             counters.retain(|(counter_id, (signal, _))| {
-                                                // NOTE: in this example, we are creating the signals
-                                                // in the scope of the parent. This means the memory used to
-                                                // store them will not be reclaimed until the parent component
-                                                // is unmounted. Here, we're removing the signal early (i.e, before
-                                                // the DynamicList is unmounted), so we manually dispose of the signal
-                                                // to avoid leaking memory.
-                                                //
-                                                // This is only necessary in an example with nested signals like this one.
+
                                                 if counter_id == &id {
                                                     signal.dispose();
                                                 }
@@ -315,7 +308,7 @@ fn Counters() -> Element {
 }
 ```
 
-- **`Copy` state**: Dioxus 0.1 to 0.4 relied on lifetimes to relax the rules of Rust's borrow checker. This worked well for event handlers, but struggled around async. In Dioxus 0.5, we've switched to a `Copy` state model borrowed from Leptos. You can use our `Copy` state implementation in your own apps using the [generational-box](https://crates.io/crates/generational-box) crate.
+- **`Copy` state**: Dioxus 0.1 to 0.4 relied on lifetimes to relax the rules of Rust's borrow checker. This worked well for event handlers, but struggled around async. In Dioxus 0.5, we've switched to a [`Copy` state model](https://crates.io/crates/generational-box) borrowed from Leptos.
 
 - **Different scopes**: Dioxus provides renderers for web, desktop, mobile, LiveView, and more. We also maintain community libraries and a cross-platform SDK. The scope of this work is huge, meaning we've historically released at a slower cadence than Leptos. Leptos focuses on the fullstack web, with features that Dioxus doesn't have like `<Suspense />`-based streaming HTML, islands, `<Form />` components, and other web-specific features. Generally, web apps you build with Leptos will have a smaller footprint.
 
@@ -353,7 +346,7 @@ egui is a cross-platform GUI library for Rust powering tools like [Rerun.io](htt
 
 - **Customizable**: egui brings its own styling and layout solution while Dioxus expects you to use the built-in HTML and CSS. This enables dioxus apps to use any CSS library like Tailwind or Material UI.
 
-- **State management**: egui's state management is based on a single global state object. Dioxus encourages encapsulation of state by using signals and components components more reusable.
+- **State management**: egui's state management is based on a single global state object. Dioxus encourages encapsulation of state by using components and props, making components more reusable.
 
 ### Dioxus vs Iced
 
@@ -363,12 +356,15 @@ Iced is a cross-platform GUI library inspired by Elm. Iced renders natively with
 
 - **Native Feel**: Since Dioxus uses a webview as its renderer, it automatically gets native text input, paste handling, and other native features like accessibility. Iced's renderer currently doesn't implement these features, making it feel less native.
 
+- **WGPU**: Dioxus' WGPU renderer is currently quite immature and not yet reader for production use. Iced's WGPU renderer is much more mature and is being used in production. This enables certain types of apps that need GPU access to be built with Iced that can't currently be built with Dioxus.
 
 ### Dioxus vs Electron
 
 Dioxus and Electron are two entirely different projects with similar goals. Electron makes it possible for developers to build cross-platform desktop apps using web technologies like HTML, CSS, and JavaScript.
 
 - **Lightweight**: Dioxus uses the system's native WebView - or optionally, a WGPU renderer - to render the UI. This makes a typical Dioxus app about 15mb on macOS in comparison to Electron's 100mb. Electron also ships an embedded chromium instance which cannot share system resources with the host OS in the same way as Dioxus.
+
+- **Maturity**: Electron is a mature project with a large community and a lot of tooling. Dioxus is still quite young in comparison to Electron. Expect to run into features like deeplinking that require extra work to implement.
 
 
 ## Contributing
