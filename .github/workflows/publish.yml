@@ -39,6 +39,7 @@ jobs:
   release-cli:
     permissions:
       contents: write
+    runs-on: ${{ matrix.platform.os }}
     strategy:
       matrix:
         include:
@@ -54,7 +55,6 @@ jobs:
             os: ubuntu-latest
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
-    runs-on: ${{ matrix.platform.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
