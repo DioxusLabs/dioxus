@@ -142,7 +142,15 @@ impl<Cfg> TryIntoConfig<Cfg> for Cfg {
     }
 }
 
-// The unit type can be converted into a config if it's the current platform
+// The unit type can be converted into the current platform config.
+// This makes it possible to use the `desktop!`, `web!`, etc macros with the launch API.
+#[cfg(any(
+    feature = "liveview",
+    feature = "desktop",
+    feature = "mobile",
+    feature = "web",
+    feature = "fullstack"
+))]
 impl TryIntoConfig<current_platform::Config> for () {
     fn into_config(self) -> Option<current_platform::Config> {
         None
@@ -183,7 +191,7 @@ mod current_platform {
     }
     use crate::prelude::TryIntoConfig;
 
-    #[cfg(feature = "desktop")]
+    #[cfg(any(feature = "desktop", feature = "mobile"))]
     if_else_cfg! {
         if not(feature = "fullstack") {
             pub use dioxus_desktop::launch::*;
@@ -196,23 +204,8 @@ mod current_platform {
         }
     }
 
-    #[cfg(feature = "mobile")]
-    if_else_cfg! {
-        if not(any(feature = "desktop", feature = "fullstack")) {
-            pub use dioxus_web::launch::*;
-        } else {
-            impl TryIntoConfig<crate::launch::current_platform::Config> for ::dioxus_web::Config {
-                fn into_config(self) -> Option<crate::launch::current_platform::Config> {
-                    None
-                }
-            }
-        }
-    }
-
     #[cfg(feature = "fullstack")]
-    if_else_cfg! {
-        pub use dioxus_fullstack::launch::*;
-    }
+    pub use dioxus_fullstack::launch::*;
 
     #[cfg(feature = "web")]
     if_else_cfg! {
@@ -239,7 +232,7 @@ mod current_platform {
         {
             pub use dioxus_liveview::launch::*;
         } else {
-            impl TryIntoConfig<crate::launch::current_platform::Config> for ::dioxus_liveview::Config<R: ::dioxus_liveview::LiveviewRouter> {
+            impl<R: ::dioxus_liveview::LiveviewRouter> TryIntoConfig<crate::launch::current_platform::Config> for ::dioxus_liveview::Config<R> {
                 fn into_config(self) -> Option<crate::launch::current_platform::Config> {
                     None
                 }
