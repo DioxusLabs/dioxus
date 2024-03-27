@@ -96,7 +96,11 @@ interprocess = { workspace = true }
 ignore = "0.4.22"
 env_logger = "0.11.3"
 tracing-subscriber = "0.3.18"
-tracing.workspace = true
+tracing = { workspace = true }
+
+# on maco, we need to specify the vendored feature on ssl when cross compiling
+[target.'cfg(target_os = "macos")'.dependencies]
+openssl = { version = "0.10", features = ["vendored"] }
 
 [features]
 default = []
@@ -110,7 +114,7 @@ name = "dx"
 tempfile = "3.3"
 
 [package.metadata.binstall]
-pkg-url = "{ repo }/releases/download/v{ version }/dx-{ target }{ archive-suffix }"
+pkg-url = "{ repo }/releases/download/v{ version }/dx-{ target }-{ archive-suffix }"
 
 [package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
 pkg-fmt = "zip"
