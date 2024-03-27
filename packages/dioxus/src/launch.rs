@@ -127,15 +127,24 @@ impl<Cfg> LaunchBuilder<Cfg, SendContext> {
     }
 }
 
-/// A trait for converting a type into a platform-specific config.
-///
-/// A unit value will be converted into `None`, the config for the current active platform will be converted into `Some(config)`.
+/// A trait for converting a type into a platform-specific config:
+/// - A unit value will be converted into `None`
+/// - Any config will be converted into `Some(config)`
+/// - If the config is for another platform, it will be converted into `None`
 pub trait TryIntoConfig<Config = Self> {
     fn into_config(self) -> Option<Config>;
 }
 
-impl<Cfg> TryIntoConfig<Cfg> for () {
+// A config can always be converted into itself
+impl<Cfg> TryIntoConfig<Cfg> for Cfg {
     fn into_config(self) -> Option<Cfg> {
+        Some(self)
+    }
+}
+
+// The unit type can be converted into a config if it's the current platform
+impl TryIntoConfig<current_platform::Config> for () {
+    fn into_config(self) -> Option<current_platform::Config> {
         None
     }
 }
@@ -155,51 +164,88 @@ impl<Cfg: Default + 'static, ContextFn: ?Sized> LaunchBuilder<Cfg, ContextFn> {
     }
 }
 
-macro_rules! impl_try_into_config {
-    ($(::$type:ident)+ $(<$($gen:ident $(: $bound:path)?),+>)?) => {
-        impl<$($($gen: $($bound + )? 'static),+)? > TryIntoConfig<current_platform::Config> for $(::$type)+ <$($($gen),+)?> {
-            fn into_config(self) -> Option<current_platform::Config> {
-                (Box::new(self) as Box<dyn Any>).downcast().ok().map(|boxed| *boxed)
+/// Re-export the platform we expect the user wants
+/// 
+/// If multiple platforms are enabled, we use this priority (from highest to lowest):
+/// - `fullstack`
+/// - `desktop`
+/// - `mobile`
+/// - `web`
+/// - `liveview`
+mod current_platform {
+    macro_rules! if_else_cfg {
+        (if $attr:meta { $then:item } else { $else:item }) => {
+            #[cfg($attr)]
+            $then
+            #[cfg(not($attr))]
+            $else
+        };
+    }
+    use crate::prelude::TryIntoConfig;
+
+    #[cfg(feature = "desktop")]
+    if_else_cfg!{
+        if not(feature = "fullstack") {
+            pub use dioxus_desktop::launch::*;
+        } else {
+            impl TryIntoConfig<crate::launch::current_platform::Config> for ::dioxus_desktop::Config {
+                fn into_config(self) -> Option<crate::launch::current_platform::Config> {
+                    None
+                }
             }
         }
-    };
-}
-
-#[cfg(feature = "desktop")]
-impl_try_into_config!(::dioxus_desktop::Config);
-#[cfg(feature = "fullstack")]
-impl_try_into_config!(::dioxus_fullstack::Config);
-#[cfg(feature = "web")]
-impl_try_into_config!(::dioxus_web::Config);
-#[cfg(feature = "liveview")]
-impl_try_into_config!(::dioxus_liveview::Config<R: ::dioxus_liveview::LiveviewRouter>);
-
-mod current_platform {
-    #[cfg(all(feature = "desktop", not(feature = "fullstack")))]
-    pub use dioxus_desktop::launch::*;
-
-    #[cfg(all(feature = "mobile", not(feature = "fullstack")))]
-    pub use dioxus_mobile::launch::*;
+    }
+    
+    #[cfg(feature = "mobile")]
+    if_else_cfg!{
+        if not(any(feature = "desktop", feature = "fullstack")) {
+            pub use dioxus_web::launch::*;
+        } else {
+            impl TryIntoConfig<crate::launch::current_platform::Config> for ::dioxus_web::Config {
+                fn into_config(self) -> Option<crate::launch::current_platform::Config> {
+                    None
+                }
+            }
+        }
+    }
 
     #[cfg(feature = "fullstack")]
-    pub use dioxus_fullstack::launch::*;
+    if_else_cfg!{
+        pub use dioxus_fullstack::launch::*;
+    }
 
-    #[cfg(all(
-        feature = "web",
-        not(any(feature = "desktop", feature = "mobile", feature = "fullstack"))
-    ))]
-    pub use dioxus_web::launch::*;
+    #[cfg(feature = "web")]
+    if_else_cfg!{
+        if not(any(feature = "desktop", feature = "mobile", feature = "fullstack")) {
+            pub use dioxus_web::launch::*;
+        } else {
+            impl TryIntoConfig<crate::launch::current_platform::Config> for ::dioxus_web::Config {
+                fn into_config(self) -> Option<crate::launch::current_platform::Config> {
+                    None
+                }
+            }
+        }
+    }
 
-    #[cfg(all(
-        feature = "liveview",
-        not(any(
-            feature = "web",
-            feature = "desktop",
-            feature = "mobile",
-            feature = "fullstack"
-        ))
-    ))]
-    pub use dioxus_liveview::launch::*;
+    #[cfg(feature = "liveview")]
+    if_else_cfg!{
+        if 
+            not(any(
+                feature = "web",
+                feature = "desktop",
+                feature = "mobile",
+                feature = "fullstack"
+            ))
+        {
+            pub use dioxus_liveview::launch::*;
+        } else {
+            impl TryIntoConfig<crate::launch::current_platform::Config> for ::dioxus_liveview::Config<R: ::dioxus_liveview::LiveviewRouter> {
+                fn into_config(self) -> Option<crate::launch::current_platform::Config> {
+                    None
+                }
+            }
+        }
+    }
 
     #[cfg(not(any(
         feature = "liveview",

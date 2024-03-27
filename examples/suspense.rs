@@ -17,11 +17,13 @@ use dioxus::prelude::*;
 fn main() {
     LaunchBuilder::new()
         .with_cfg(
-            Config::new().with_window(
-                WindowBuilder::new()
-                    .with_title("Doggo Fetcher")
-                    .with_inner_size(LogicalSize::new(600.0, 800.0)),
-            ),
+            desktop!({
+                Config::new().with_window(
+                    WindowBuilder::new()
+                        .with_title("Doggo Fetcher")
+                        .with_inner_size(LogicalSize::new(600.0, 800.0)),
+                ),
+            })
         )
         .launch(app)
 }

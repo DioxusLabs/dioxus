@@ -13,7 +13,7 @@ use dioxus::desktop::{window, Config, WindowBuilder};
 use dioxus::prelude::*;
 
 fn main() {
-    LaunchBuilder::new()
+    LaunchBuilder::desktop()
         .with_cfg(
             Config::new().with_window(
                 WindowBuilder::new()
