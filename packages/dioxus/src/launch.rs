@@ -165,7 +165,7 @@ impl<Cfg: Default + 'static, ContextFn: ?Sized> LaunchBuilder<Cfg, ContextFn> {
 }
 
 /// Re-export the platform we expect the user wants
-/// 
+///
 /// If multiple platforms are enabled, we use this priority (from highest to lowest):
 /// - `fullstack`
 /// - `desktop`
@@ -184,7 +184,7 @@ mod current_platform {
     use crate::prelude::TryIntoConfig;
 
     #[cfg(feature = "desktop")]
-    if_else_cfg!{
+    if_else_cfg! {
         if not(feature = "fullstack") {
             pub use dioxus_desktop::launch::*;
         } else {
@@ -195,9 +195,9 @@ mod current_platform {
             }
         }
     }
-    
+
     #[cfg(feature = "mobile")]
-    if_else_cfg!{
+    if_else_cfg! {
         if not(any(feature = "desktop", feature = "fullstack")) {
             pub use dioxus_web::launch::*;
         } else {
@@ -210,12 +210,12 @@ mod current_platform {
     }
 
     #[cfg(feature = "fullstack")]
-    if_else_cfg!{
+    if_else_cfg! {
         pub use dioxus_fullstack::launch::*;
     }
 
     #[cfg(feature = "web")]
-    if_else_cfg!{
+    if_else_cfg! {
         if not(any(feature = "desktop", feature = "mobile", feature = "fullstack")) {
             pub use dioxus_web::launch::*;
         } else {
@@ -228,8 +228,8 @@ mod current_platform {
     }
 
     #[cfg(feature = "liveview")]
-    if_else_cfg!{
-        if 
+    if_else_cfg! {
+        if
             not(any(
                 feature = "web",
                 feature = "desktop",
