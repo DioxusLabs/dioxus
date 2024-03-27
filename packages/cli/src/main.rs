@@ -9,21 +9,25 @@ use dioxus_cli::*;
 
 use Commands::*;
 
+const LOG_ENV: &str = "DIOXUS_LOG";
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
 
-    let filter = EnvFilter::builder()
-        .with_default_directive(LevelFilter::ERROR.into())
-        .from_env()
-        .unwrap()
-        .add_directive("dioxus_cli=warn".parse().unwrap())
-        .add_directive("manganis-cli-support=warn".parse().unwrap());
-
-    // If RUST_LOG is set, default to env, otherwise filter to cli and manganis
-    if env::var("RUST_LOG").is_ok() {
-        tracing_subscriber::fmt().init();
+    // If {LOG_ENV} is set, default to env, otherwise filter to cli
+    // and manganis warnings and errors from other crates
+    if env::var(LOG_ENV).is_ok() {
+        let filter = EnvFilter::from_env(LOG_ENV);
+        tracing_subscriber::fmt().with_env_filter(filter).init();
     } else {
+        let filter = EnvFilter::builder()
+            .with_default_directive(LevelFilter::ERROR.into())
+            .from_env()
+            .unwrap()
+            .add_directive("dioxus_cli=warn".parse().unwrap())
+            .add_directive("manganis-cli-support=warn".parse().unwrap());
+
         tracing_subscriber::fmt().with_env_filter(filter).init();
     }
 
