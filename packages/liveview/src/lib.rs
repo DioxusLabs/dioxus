@@ -26,6 +26,7 @@ pub trait WebsocketRx: StreamExt<Item = Result<String, LiveViewError>> {}
 impl<T> WebsocketRx for T where T: StreamExt<Item = Result<String, LiveViewError>> {}
 
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum LiveViewError {
     #[error("Sending to client error")]
     SendingFailed,

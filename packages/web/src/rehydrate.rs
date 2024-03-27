@@ -5,6 +5,7 @@ use dioxus_core::WriteMutations;
 use dioxus_core::{DynamicNode, ElementId, ScopeState, TemplateNode, VNode, VirtualDom};
 
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum RehydrationError {
     VNodeNotInitialized,
 }

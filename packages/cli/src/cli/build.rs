@@ -105,6 +105,7 @@ impl Build {
                     )?
                 }
             }
+            _ => unreachable!(),
         };
 
         let temp = gen_page(&crate_config, build_result.assets.as_ref(), false);

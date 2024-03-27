@@ -163,6 +163,7 @@ impl server_fn::ServerFunctionRegistry<()> for DioxusServerFnRegistry {
 #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
 /// Errors that can occur when registering a server function.
 #[derive(thiserror::Error, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[non_exhaustive]
 pub enum ServerRegistrationFnError {
     /// The server function is already registered.
     #[error("The server function {0} is already registered")]
