@@ -2043,6 +2043,7 @@ dependencies = [
  "mlua",
  "notify",
  "open",
+ "openssl",
  "prettyplease",
  "rayon",
  "reqwest",
