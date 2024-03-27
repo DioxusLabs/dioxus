@@ -36,9 +36,7 @@ env:
   RELEASE_TAG: ${{ github.event.inputs.channel  }}
 
 jobs:
-  # Build the CLI for all platforms, uploading the artifacts to our releases page
   release-cli:
-    needs: release-crates
     permissions:
       contents: write
     strategy:
