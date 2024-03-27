@@ -18,7 +18,7 @@ dioxus-html = { workspace = true, features = [
     "eval",
 ] }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
-dioxus-cli-config = { workspace = true }
+dioxus-cli-config = { workspace = true, features = ["read-config"] }
 generational-box = { workspace = true }
 
 serde = "1.0.136"
