@@ -17,7 +17,7 @@ pub fn check_app_exits(app: fn() -> Element) {
         }
     });
 
-    LaunchBuilder::new()
+    LaunchBuilder::desktop()
         .with_cfg(Config::new().with_window(WindowBuilder::new().with_visible(true)))
         .launch(app);
 
