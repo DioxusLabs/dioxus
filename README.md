@@ -107,7 +107,7 @@ We've put a ton of effort into building clean, readable, and comprehensive docum
 
 ## Emphasis on developer experience
 
-Dioxus prioritizes developer experience, and we've put a ton of effort into end-to-end tooling. We've built a [VSCode extension](https://marketplace.visualstudio.com/items?itemName=DioxusLabs.dioxus) that autoformats your RSX code, converts HTML to RSX, and more. We've also built a very powerful [CLI](https://github.com/DioxusLabs/cli) that supports creating new apps, serving them, and cross-platform bundling, with deployment on the roadmap.
+Dioxus prioritizes developer experience, and we've put a ton of effort into end-to-end tooling. We've built a [VSCode extension](https://marketplace.visualstudio.com/items?itemName=DioxusLabs.dioxus) that autoformats your RSX code, converts HTML to RSX, and more. We've also built a very powerful [CLI](https://dioxuslabs.com/learn/0.5/CLI) that supports creating new apps, serving them, and cross-platform bundling, with deployment on the roadmap.
 
 <div align="center">
   <img src="./notes/autofmt.gif">
@@ -167,7 +167,7 @@ Dioxus has grown from a side project to a small team of fulltime engineers. Than
       </td>
       <td>
         <ul>
-          <li>Render using Webview or - experimentally - with WGPU or Freya (skia) </li>
+          <li>Render using Webview or - experimentally - with WGPU or <a href="https://freyaui.dev">Freya</a> (skia) </li>
           <li>Zero-config setup. Simply `cargo run` or `dx serve` to build your app </li>
           <li>Full support for native system access without IPC </li>
           <li>Supports macOS, Linux, and Windows. Portable <3mb binaries </li>
