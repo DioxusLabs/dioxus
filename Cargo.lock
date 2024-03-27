@@ -2038,6 +2038,7 @@ dependencies = [
  "indicatif",
  "interprocess",
  "lazy_static",
+ "log",
  "manganis-cli-support",
  "mlua",
  "notify",
