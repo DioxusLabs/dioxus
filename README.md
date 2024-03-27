@@ -57,6 +57,7 @@
   </h3>
 </div>
 <br>
+<br>
 
 
 Build for web, desktop, and mobile, and more with a single codebase. Zero-config setup, integrated hotreloading, and signals-based state management help you ship faster and more reliably. Seamlessly add backend functionality with Server Functions and bundle with our CLI.
@@ -73,7 +74,6 @@ fn app() -> Element {
 }
 ```
 
-<br>
 
 ## ⭐️ Unique features:
 - Cross-platform apps in three lines of code (web, desktop, mobile, server, and more)
