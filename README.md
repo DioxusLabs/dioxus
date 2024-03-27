@@ -1,11 +1,11 @@
 <p>
-  <a href="https://dioxuslabs.com">
     <p align="center" >
-      <img src="./notes/header-light.svg#gh-light-mode-only" >
-      <img src="./notes/header-dark.svg#gh-dark-mode-only" >
-      <img src="./notes/dioxus_splash_8.avif">
+      <a href="https://dioxuslabs.com">
+          <img src="./notes/header-light.svg#gh-light-mode-only" >
+          <img src="./notes/header-dark.svg#gh-dark-mode-only" >
+          <img src="./notes/dioxus_splash_8.avif">
+      </a>
     </p>
-  </a>
 </p>
 <div align="center">
   <!-- Crates version -->
@@ -107,7 +107,7 @@ We've put a ton of effort into building clean, readable, and comprehensive docum
 
 ## Emphasis on developer experience
 
-Dioxus prioritizes developer experience, and we've put a ton of effort into end-to-end tooling. We've built a [VSCode extension](https://marketplace.visualstudio.com/items?itemName=DioxusLabs.dioxus) that autoformats your RSX code, converts HTML to RSX, and more. We've also built a very powerful [CLI](https://github.com/DioxusLabs/cli) that supports creating new apps, serving them, and cross-platform bundling, with deployment on the roadmap.
+Dioxus prioritizes developer experience, and we've put a ton of effort into end-to-end tooling. We've built a [VSCode extension](https://marketplace.visualstudio.com/items?itemName=DioxusLabs.dioxus) that autoformats your RSX code, converts HTML to RSX, and more. We've also built a very powerful [CLI](https://dioxuslabs.com/learn/0.5/CLI) that supports creating new apps, serving them, and cross-platform bundling, with deployment on the roadmap.
 
 <div align="center">
   <img src="./notes/autofmt.gif">
@@ -124,7 +124,7 @@ Dioxus is a community-driven project, with a very active [Discord](https://disco
 
 ## Full-time core team
 
-Dioxus has grown from a side project to a small team of fulltime engineers. Thanks to the generous support of FutureWei, Satellite.im, the GitHub Accelerator program, and several amazing individuals, we're able to work on Dioxus full-time. Our long term goal is for Dioxus to become self-sustaining by providing paid high-quality enterprise tools. If your company is interested in adopting Dioxus and would like to work with us, please reach out!
+Dioxus has grown from a side project to a small team of fulltime engineers. Thanks to the generous support of FutureWei, Satellite.im, the GitHub Accelerator program, we're able to work on Dioxus full-time. Our long term goal is for Dioxus to become self-sustaining by providing paid high-quality enterprise tools. If your company is interested in adopting Dioxus and would like to work with us, please reach out!
 
 ## Supported Platforms
 <div align="center">
@@ -139,8 +139,23 @@ Dioxus has grown from a side project to a small team of fulltime engineers. Than
         <ul>
           <li>Render directly to the DOM using WebAssembly</li>
           <li>Pre-render with SSR and rehydrate on the client</li>
-          <li>Simple "hello world" at about 65kb, comparable to React</li>
+          <li>Simple "hello world" at about 50kb, comparable to React</li>
           <li>Built-in dev server and hot reloading for quick iteration</li>
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <td>
+      <b>Fullstack</b>
+      <br />
+      <em>Tier 1 Support</em>
+      </td>
+      <td>
+        <ul>
+          <li>Suspense, hydration, and server-side rendering</li>
+          <li>Quickly drop in backend functionality with server functions</li>
+          <li>Extractors, middleware, and routing integrations</li>
+          <li>Compatible with desktop and mobile!</li>
         </ul>
       </td>
     </tr>
@@ -152,9 +167,9 @@ Dioxus has grown from a side project to a small team of fulltime engineers. Than
       </td>
       <td>
         <ul>
-          <li>Render using Webview or - experimentally - with WGPU or Skia </li>
-          <li>Zero-config setup. Simply cargo-run to build your app </li>
-          <li>Full support for native system access without electron-esque IPC </li>
+          <li>Render using Webview or - experimentally - with WGPU or <a href="https://freyaui.dev">Freya</a> (skia) </li>
+          <li>Zero-config setup. Simply `cargo run` or `dx serve` to build your app </li>
+          <li>Full support for native system access without IPC </li>
           <li>Supports macOS, Linux, and Windows. Portable <3mb binaries </li>
         </ul>
       </td>
@@ -183,7 +198,7 @@ Dioxus has grown from a side project to a small team of fulltime engineers. Than
         <ul>
           <li>Render using Webview or - experimentally - with WGPU or Skia </li>
           <li>Support for iOS and Android </li>
-          <li><em>Significantly</em> more performant than React Native </li>
+          <li>Currently quite experimental, with lots of improvements coming throughout 2024 </li>
         </ul>
       </td>
     </tr>
@@ -250,7 +265,7 @@ fn Counters() -> Element {
   }
 }
 ```
-While in Leptos, you would need to track keys, use the `<For>` component, create new signals, and manually clean up memory:
+[While in Leptos, you would need to track keys, use the `<For>` component, create new signals, and manually clean up memory](https://book.leptos.dev/view/04_iteration.html#dynamic-rendering-with-the-for-component):
 ```rust
 fn Counters() -> Element {
     let initial_counters = (0..initial_length)
