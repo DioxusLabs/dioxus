@@ -145,9 +145,9 @@ pub fn print_console_info(
     println!();
 
     if options.warnings.is_empty() {
-        log::info!("{}\n", "A perfect compilation!".green().bold());
+        tracing::info!("{}\n", "A perfect compilation!".green().bold());
     } else {
-        log::warn!(
+        tracing::warn!(
             "{}",
             format!(
                 "There were {} warning messages during the build. Run `cargo check` to see them.",

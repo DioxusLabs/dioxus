@@ -13,6 +13,7 @@ keywords = ["react", "gui", "cli", "dioxus", "wasm"]
 clap = { version = "4.2", features = ["derive", "cargo"] }
 thiserror = { workspace = true }
 wasm-bindgen-cli-support = "0.2"
+wasm-bindgen-shared = "0.2"
 colored = "2.0.0"
 dioxus-cli-config = { workspace = true, features = ["cli"], default-features = false }
 
@@ -81,7 +82,7 @@ tauri-bundler = { version = "=1.4.*", features = ["native-tls-vendored"] }
 syn = { workspace = true }
 prettyplease = { workspace = true }
 
-manganis-cli-support = { workspace = true, features = ["webp", "html"] }
+manganis-cli-support = { workspace = true, features = ["html"] }
 
 dioxus-autofmt = { workspace = true }
 dioxus-check = { workspace = true }
@@ -95,6 +96,7 @@ interprocess = { workspace = true }
 ignore = "0.4.22"
 env_logger = "0.11.3"
 tracing-subscriber = "0.3.18"
+tracing.workspace = true
 
 [features]
 default = []
