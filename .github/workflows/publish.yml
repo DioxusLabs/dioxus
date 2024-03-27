@@ -42,7 +42,7 @@ jobs:
     runs-on: ${{ matrix.platform.os }}
     strategy:
       matrix:
-        include:
+        platform:
           - target: x86_64-pc-windows-msvc
             os: windows-latest
           - target: aaarch64-pc-windows-msvc
