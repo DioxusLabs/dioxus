@@ -23,11 +23,6 @@ on:
         required: true
         description: Choose the version number to publish with
         type: string
-        # options:
-        #   - main
-        #   - v0.4
-        #   - v0.5
-        #   - v0.6
 
 env:
   # make sure we have the right version
@@ -38,9 +33,69 @@ env:
   # backported automatically
   SEMVER: ${{ github.event.inputs.channel == 'main' && 'prerelease' || 'patch' }}
   PRERELEASE_TAG: ${{ github.event.inputs.channel == 'main' && '-pre' || '' }}
-  RELEASE_TAG: ${{ github.event.inputs.channel }}
+  RELEASE_TAG: ${{ github.event.inputs.channel  }}
 
 jobs:
+  # Build the CLI for all platforms, uploading the artifacts to our releases page
+  release-cli:
+    needs: release-crates
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+          - target: aaarch64-pc-windows-msvc
+            os: windows-latest
+          - target: x86_64-apple-darwin
+            os: macos-latest
+          - target: aarch64-apple-darwin
+            os: macos-latest
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+    runs-on: ${{ matrix.platform.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.75.0"
+          targets: ${{ matrix.platform.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with: # speed things up a bit
+          large-packages: false
+          docker-images: false
+          swap-storage: false
+
+      # Todo: we want `cargo install dx` to actually just use a prebuilt binary instead of building it
+      - name: Build and upload CLI binaries
+        uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          bin: dx
+          token: ${{ secrets.GITHUB_TOKEN }}
+          target: ${{ matrix.platform.target }}
+          archive: dx-${{ matrix.platform.target }}${{ env.PRERELEASE_TAG }}
+          checksum: sha256
+          manifest_path: packages/cli/Cargo.toml
+
+  # todo: these things
+  # Run benchmarks, which we'll use to display on the website
+  # release-benchmarks:
+  # Build the vscode extension, uploading the artifact to the marketplace
+  # release-extension:
+
   # First, run checks (clippy, tests, etc) and then publish the crates to crates.io
   # release-crates:
   #   steps:
@@ -91,64 +146,3 @@ jobs:
       #   id: determine_docs_folder
       #   run: echo "::set-output name=folder::$(echo ${{ github.event.inputs.channel }} | sed 's/v//g' | sed 's/\.x//g' | sed 's/main/nightly/g')"
 
-  # Build the CLI for all platforms, uploading the artifacts to our releases page
-  release-cli:
-    needs: release-crates
-    permissions:
-      contents: write
-    strategy:
-      matrix:
-        include:
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-          - target: aaarch64-pc-windows-msvc
-            os: windows-latest
-          - target: x86_64-apple-darwin
-            os: macos-latest
-          - target: aarch64-apple-darwin
-            os: macos-latest
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-    runs-on: ${{ matrix.platform.os }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        ref: ${{ github.event.inputs.channel }}
-
-      - name: Install stable
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: "1.70.0"
-          targets: ${{ matrix.platform.target }}
-
-
-      - name: Setup cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: packages/cli -> ../../target
-
-      - name: Free Disk Space
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with: # speed things up a bit
-          large-packages: false
-          docker-images: false
-          swap-storage: false
-
-      # Todo: we want `cargo install dx` to actually just use a prebuilt binary instead of building it
-      - name: Build and upload CLI binaries
-        uses: taiki-e/upload-rust-binary-action@v1
-        with:
-          bin: dx
-          token: ${{ secrets.GITHUB_TOKEN }}
-          target: ${{ matrix.platform.target }}
-          archive: dx-${{ matrix.platform.target }}${{ env.RELEASE_TAG }}
-          checksum: sha256
-          manifest_path: packages/cli/Cargo.toml
-
-  # todo: these things
-  # Run benchmarks, which we'll use to display on the website
-  # release-benchmarks:
-  # Build the vscode extension, uploading the artifact to the marketplace
-  # release-extension:
