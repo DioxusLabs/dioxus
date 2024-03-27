@@ -100,7 +100,7 @@ tracing = { workspace = true }
 
 # on maco, we need to specify the vendored feature on ssl when cross compiling
 [target.'cfg(target_os = "macos")'.dependencies]
-openssl = { version = "0.10", features = ["vendored"], optional = true }
+openssl = { version = "0.10", features = ["vendored"] }
 
 [features]
 default = []
