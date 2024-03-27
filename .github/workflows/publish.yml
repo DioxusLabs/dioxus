@@ -59,6 +59,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install openssl on macos
+        if: matrix.platform.os == 'macos-latest'
+        run: brew install openssl
+
       - name: Install stable
         uses: dtolnay/rust-toolchain@master
         with:
