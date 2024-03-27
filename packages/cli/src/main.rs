@@ -1,5 +1,7 @@
 use dioxus_cli_config::DioxusConfig;
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
+use tracing::level_filters::LevelFilter;
+use tracing_subscriber::EnvFilter;
 
 use anyhow::Context;
 use clap::Parser;
@@ -11,7 +13,19 @@ use Commands::*;
 async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
 
-    tracing_subscriber::fmt::init();
+    let filter = EnvFilter::builder()
+        .with_default_directive(LevelFilter::ERROR.into())
+        .from_env()
+        .unwrap()
+        .add_directive("dioxus_cli=warn".parse().unwrap())
+        .add_directive("manganis-cli-support=warn".parse().unwrap());
+
+    // If RUST_LOG is set, default to env, otherwise filter to cli and manganis
+    if env::var("RUST_LOG").is_ok() {
+        tracing_subscriber::fmt().init();
+    } else {
+        tracing_subscriber::fmt().with_env_filter(filter).init();
+    }
 
     match args.action {
         Translate(opts) => opts
