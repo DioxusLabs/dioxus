@@ -21,7 +21,7 @@ on:
       channel:
         name: "Branch to publish"
         required: true
-        description: Choose the version number to publish with
+        description: Choose the version number to publish with. Must be a tag (ie v0.4.0)
         type: string
 
 env:
@@ -31,9 +31,9 @@ env:
   # this means the version in git will always be one minor bump ahead of the actual release - basically meaning once
   # we release a version, it's fair game to merge breaking changes to main since all semver-compatible changes will be
   # backported automatically
-  SEMVER: ${{ github.event.inputs.channel == 'main' && 'prerelease' || 'patch' }}
-  PRERELEASE_TAG: ${{ github.event.inputs.channel == 'main' && '-pre' || '' }}
-  RELEASE_TAG: ${{ github.event.inputs.channel  }}
+  # SEMVER: ${{ github.event.inputs.channel == 'main' && 'prerelease' || 'patch' }}
+  # PRERELEASE_TAG: ${{ github.event.inputs.channel == 'main' && '-pre' || '' }}
+  RELEASE_TAG: ${{ github.event.inputs.channel }}
 
 jobs:
   release-cli:
@@ -84,9 +84,11 @@ jobs:
           bin: dx
           token: ${{ secrets.GITHUB_TOKEN }}
           target: ${{ matrix.platform.target }}
-          archive: dx-${{ matrix.platform.target }}${{ env.PRERELEASE_TAG }}
+          archive: dx-${{ matrix.platform.target }}${{ env.RELEASE_TAG }}
           checksum: sha256
           manifest_path: packages/cli/Cargo.toml
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+
 
   # todo: these things
   # Run benchmarks, which we'll use to display on the website
