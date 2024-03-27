@@ -92,7 +92,7 @@ thiserror = "1.0.40"
 prettyplease = { version = "0.2.16", features = ["verbatim"] }
 manganis-cli-support = { version = "0.2.1", features = ["html"] }
 manganis = { version = "0.2.1" }
-interprocess = { version = "1.2.1" }
+interprocess = { version = "1.2.2", package = "interprocess-docfix" }
 
 lru = "0.12.2"
 async-trait = "0.1.77"
