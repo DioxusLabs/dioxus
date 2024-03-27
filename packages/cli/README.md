@@ -1,4 +1,4 @@
-<div style="text-align: center">
+<div>
   <h1>📦✨ Dioxus CLI</h1>
   <p><strong>Tooling to supercharge Dioxus projects</strong></p>
 </div>
@@ -28,9 +28,9 @@ This will download the CLI from the master branch,
 and install it in Cargo's global binary directory (`~/.cargo/bin/` by default).
 
 ### Install from local folder
-
+Note: The CLI will fail to build projects in debug profile. This is currently under investigation.
 ```shell
-cargo install --path . --debug
+cargo install --path . --release
 ```
 
 ## Get started
@@ -68,4 +68,4 @@ title = "Hello"
 [web.resource.dev]
 ```
 
-The full anatomy of `Dioxus.toml` is shown on the [Dioxus website](https://dioxuslabs.com/learn/0.4/CLI/configure).
+The full anatomy of `Dioxus.toml` is shown on the [Dioxus website](https://dioxuslabs.com/learn/0.5/CLI/configure).

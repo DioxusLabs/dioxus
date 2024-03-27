@@ -13,8 +13,12 @@ keywords = ["react", "gui", "cli", "dioxus", "wasm"]
 clap = { version = "4.2", features = ["derive", "cargo"] }
 thiserror = { workspace = true }
 wasm-bindgen-cli-support = "0.2"
+wasm-bindgen-shared = "0.2"
 colored = "2.0.0"
-dioxus-cli-config = { workspace = true, features = ["cli"] }
+dioxus-cli-config = { workspace = true, features = ["cli"], default-features = false }
+
+# features
+log = "0.4.14"
 fern = { version = "0.6.0", features = ["colored"] }
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
@@ -91,8 +95,13 @@ interprocess = { workspace = true }
 # interprocess-docfix = { version = "1.2.2" }
 ignore = "0.4.22"
 env_logger = "0.11.3"
+
 tracing-subscriber = { version = "0.3.18", features = ["std", "env-filter"] }
-tracing.workspace = true
+tracing = { workspace = true }
+
+# on maco, we need to specify the vendored feature on ssl when cross compiling
+[target.'cfg(target_os = "macos")'.dependencies]
+openssl = { version = "0.10", features = ["vendored"] }
 
 [features]
 default = []
@@ -106,7 +115,7 @@ name = "dx"
 tempfile = "3.3"
 
 [package.metadata.binstall]
-pkg-url = "{ repo }/releases/download/v{ version }/dx-{ target }{ archive-suffix }"
+pkg-url = "{ repo }/releases/download/v{ version }/dx-{ target }-{ archive-suffix }"
 
 [package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
 pkg-fmt = "zip"

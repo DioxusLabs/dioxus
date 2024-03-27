@@ -68,6 +68,7 @@ impl Serve {
             Platform::Web => web::startup(crate_config.clone(), &serve_cfg).await?,
             Platform::Desktop => desktop::startup(crate_config.clone(), &serve_cfg).await?,
             Platform::Fullstack => fullstack::startup(crate_config.clone(), &serve_cfg).await?,
+            _ => unreachable!(),
         }
 
         Ok(())

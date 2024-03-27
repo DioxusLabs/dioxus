@@ -272,6 +272,7 @@ impl DerefMut for WriteBuffer {
 
 /// An error that can occur while rendering a route or retrieving a cached route.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum IncrementalRendererError {
     /// An formatting error occurred while rendering a route.
     #[error("RenderError: {0}")]

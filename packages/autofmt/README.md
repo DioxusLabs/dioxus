@@ -15,7 +15,7 @@
 [discord-url]: https://discord.gg/XgGxMSkvUM
 
 [Website](https://dioxuslabs.com) |
-[Guides](https://dioxuslabs.com/learn/0.4/) |
+[Guides](https://dioxuslabs.com/learn/0.5) |
 [API Docs](https://docs.rs/dioxus-autofmt/latest/dioxus_autofmt) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 

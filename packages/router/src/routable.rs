@@ -343,6 +343,7 @@ impl SiteMapSegment {
 
 /// The type of a route segment.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum SegmentType {
     /// A static route segment.
     Static(&'static str),
