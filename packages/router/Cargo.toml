@@ -35,7 +35,7 @@ default = []
 ssr = ["dioxus-ssr/incremental", "tokio", "dioxus-fullstack?/server"]
 liveview = ["dioxus-liveview", "tokio", "dep:serde", "serde_json"]
 wasm_test = []
-web = ["gloo", "web-sys", "wasm-bindgen", "gloo-utils", "js-sys"]
+web = ["gloo", "web-sys", "wasm-bindgen", "gloo-utils", "js-sys", "dioxus-router-macro/web"]
 fullstack = ["dioxus-fullstack"]
 
 [dev-dependencies]
@@ -53,7 +53,6 @@ required-features = ["ssr"]
 name = "incremental"
 required-features = ["ssr"]
 harness = false
-
 
 # you need to comment this out when publishing since cargo workspaces is not smart enough to wipe this when dropping
 # dev-dependncey crates

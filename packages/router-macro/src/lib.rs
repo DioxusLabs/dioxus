@@ -437,7 +437,45 @@ impl RouteEnum {
             site_map,
         };
 
+        // If we're on the web, only the URL history is preserved between navigation. We need to warn the user that the segment is not present in the URL.
+        if cfg!(feature = "web") {
+            for variant in &data.variants {
+                for field in &variant.fields {
+                    if !myself.field_present_in_url(field.ident.as_ref().unwrap()) {
+                        return Err(syn::Error::new_spanned(
+                            field.ident.as_ref().unwrap(),
+                            format!("The `{}` field must be present in the url for the web history. You can include the field in the url by using the `#[route(\"/:{}\")]` attribute on the enum variant.", field.ident.as_ref().unwrap(), field.ident.as_ref().unwrap()),
+                        ));
+                    }
+                }
+            }
+        }
+
         Ok(myself)
+    }
+
+    fn field_present_in_url(&self, field: &Ident) -> bool {
+        let mut from_route = false;
+
+        for nest in &self.nests {
+            if nest.dynamic_segments_names().any(|i| &i == field) {
+                from_route = true
+            }
+        }
+        for route in &self.routes {
+            for segment in &route.segments {
+                if segment.name().as_ref() == Some(field) {
+                    from_route = true
+                }
+            }
+            if let Some(query) = &route.query {
+                if query.contains_ident(field) {
+                    from_route = true
+                }
+            }
+        }
+
+        from_route
     }
 
     fn impl_display(&self) -> TokenStream2 {
