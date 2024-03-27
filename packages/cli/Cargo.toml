@@ -13,6 +13,7 @@ keywords = ["react", "gui", "cli", "dioxus", "wasm"]
 clap = { version = "4.2", features = ["derive", "cargo"] }
 thiserror = { workspace = true }
 wasm-bindgen-cli-support = "0.2"
+wasm-bindgen-shared = "0.2"
 colored = "2.0.0"
 dioxus-cli-config = { workspace = true, features = ["cli"] }
 fern = { version = "0.6.0", features = ["colored"] }
