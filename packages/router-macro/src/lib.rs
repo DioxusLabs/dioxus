@@ -62,7 +62,6 @@ mod segment;
 ///                 user_id: usize,
 ///                 dynamic: usize,
 ///                 query: String,
-///                 extra: String,
 ///             },
 ///             #[route("/hello_world")]
 ///             // You can opt out of the layout by using the `!` prefix
