@@ -40,7 +40,7 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/example-projects"> Examples </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/learn/0.4/guide"> Guide </a>
+    <a href="https://dioxuslabs.com/learn/0.5/guide"> Guide </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/master/translations/zh-cn/README.md"> 中文 </a>
     <span> | </span>
@@ -54,11 +54,7 @@
 
 <br/>
 
-> [!WARNING]
-> Dioxus 0.5 (şuan 'master' reposunda) uyumluluk kıran değişiklilere sahip ve Dioxus 0.4 ile uyumlu değil.
-
-
->Çevirmen Notu (Translator Note): Teknik terimleri orijinal haliyle kullanıp, olabildiğince açıklamaya çalıştım ki hem tecrübeli hem de yeni başlayan arkadaşlar için daha kolay olsun diye. Hatalar varsa affola.
+> Çevirmen Notu (Translator Note): Teknik terimleri orijinal haliyle kullanıp, olabildiğince açıklamaya çalıştım ki hem tecrübeli hem de yeni başlayan arkadaşlar için daha kolay olsun diye. Hatalar varsa affola.
 
 Dioxus, Rust ile geliştirebileceğiniz, uyumlu, performanslı ve ergonomik bir frameworktür (geliştirme yapıları).
 
@@ -79,15 +75,17 @@ Dioxus web, masaüstü, statik site, mobil uygulama, TUI(Termial User Interface(
 Eğer React biliyorsanız, Dioxus'u zaten biliyorsunuzdur.
 
 ## Nevi Şahsına Münhasır Özellikler:
+
 - Masaüstü uygulamaları 10 satır koddan daha az yazılarak doğrudan çalıştırılabilir (Electron kullanmadan).
 - İnanılmaz derecede ergonomic ve güçlü durum yönetimine sahiptir.
-- Kod dahilinde kapsayıcı döküman - fareyi üzerine getirdiğinizde bütün HTML elementleri, listeners (takipçileri) ve events (olayları) için bilgi edinebilirsiniz. 
+- Kod dahilinde kapsayıcı döküman - fareyi üzerine getirdiğinizde bütün HTML elementleri, listeners (takipçileri) ve events (olayları) için bilgi edinebilirsiniz.
 - Çok hızlı 🔥🔥 ve epey hafıza verimlidir.
 - Hot-Reload (Derlemek zorunda olmadan değişikleri görme) sayesinde daha hızlı geliştirme imkanı sağlar.
 - Coroutine(Eş zamanlı gibi hissettiren ama aslında sırayla yapılan işlemler) ve suspense(Yükleme bitene kadar halihazırda var olanı gösteren yapı) ile birinci sınıf asenkron desteği sunar.
 - Daha fazlası için göz at: [Tam Sürüm Notu](https://dioxuslabs.com/blog/introducing-dioxus/).
 
 ## Desteklenen Platformlar
+
 <div align="center">
   <table style="width:100%">
     <tr>
@@ -146,6 +144,7 @@ Eğer React biliyorsanız, Dioxus'u zaten biliyorsunuzdur.
 </div>
 
 ## Neden Dioxus?
+
 Uygulama geliştirmek için birsürü seçenek var, neden Dioxusu seçesin ?
 
 Baktığımızda öncelikli olarak Dioxus geliştirici deneyimini önceliğinde tutar. Bu durum Dioxus üzerinde eşsiz birçok özellikte görülür:
@@ -161,22 +160,23 @@ Dioxus ayrıca eklentilere müsait bir platform.
 - Komponentleri ve hatta özel elementleri geliştirip paylaşabilirsiniz.
 
 Yani... Dioxus güzel de, benim neden işime yaramıyor ?
+
 - Gelişimi halen devam etmekte, APIlar değişim göstermekte, bir şeyler bozulabilir.(Bunu yapmamaya çalışsak bile)
 - No-std(standart kütüphanesiz) bir ortamda çalıştırmanız gerekiyor.
 - React tarzı hook modeli(diğer yapılara ve özelliklere erişmenizi sağlayan) ile arayüz geliştirmeyi sevmiyor olabilirsiniz.
 
-
 ## Katkı (Contributing)
-- Websitemizi ziyaret edebilirsiniz. [Katkı kısmı](https://dioxuslabs.com/learn/0.4/contributing).
+
+- Websitemizi ziyaret edebilirsiniz. [Katkı kısmı](https://dioxuslabs.com/learn/0.5/contributing).
 - Sorunlarınızı raporlayabilirsiniz. [Sorun takipçisi](https://github.com/dioxuslabs/dioxus/issues).
 - [Katıl](https://discord.gg/XgGxMSkvUM) Discord'a ve sorularını sor!
-
 
 <a href="https://github.com/dioxuslabs/dioxus/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=dioxuslabs/dioxus&max=30&columns=10" />
 </a>
 
 ## Lisans
+
 Bu proje [MIT license] ile lisanslanmıştır.
 
 [mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT

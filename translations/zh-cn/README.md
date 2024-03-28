@@ -40,7 +40,7 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/example-projects"> 代码示例 </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/learn/0.4/guide"> 开发指南 </a>
+    <a href="https://dioxuslabs.com/learn/0.5/guide"> 开发指南 </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/master/README.md"> English </a>
     <span> | </span>
@@ -66,20 +66,22 @@ fn app() -> Element {
 }
 ```
 
-Dioxus 可用于生成 网页前端、桌面应用、静态网站、移动端应用、TUI程序、 liveview程序等多类平台应用，Dioxus完全与渲染器无关，可以作用于任何渲染平台。
+Dioxus 可用于生成 网页前端、桌面应用、静态网站、移动端应用、TUI 程序、 liveview 程序等多类平台应用，Dioxus 完全与渲染器无关，可以作用于任何渲染平台。
 
 如果你能够熟悉使用 React 框架，那 Dioxus 对你来说将非常简单。
 
 ## 独特的特性:
-- 只需不到10行代码就能原生运行桌面程序（并非 Electron 的封装）
+
+- 只需不到 10 行代码就能原生运行桌面程序（并非 Electron 的封装）
 - 符合人体工程学的设计以及拥有强大的状态管理
 - 全面的内联文档 - 包含所有 HTML 元素、监听器 和 事件 指南。
-- 极快的运行效率🔥🔥和极高的内存效率
+- 极快的运行效率 🔥🔥 和极高的内存效率
 - 智能项目热重载以便快速迭代
-- 使用协程和Suspense来进行一流的异步支持
+- 使用协程和 Suspense 来进行一流的异步支持
 - 更多内容请查看 [版本发布信息](https://dioxuslabs.com/blog/introducing-dioxus/).
 
 ## 已支持的平台
+
 <div align="center">
   <table style="width:100%">
     <tr>
@@ -137,11 +139,11 @@ Dioxus 可用于生成 网页前端、桌面应用、静态网站、移动端应
   </table>
 </div>
 
-## 为什么选择Dioxus?
+## 为什么选择 Dioxus?
 
 目前有非常多的应用开发选择，为什么偏偏要选择 Dioxus 呢？
 
-首先，Dioxus将开发者的体验放在首位。这体现在 Dioxus 特有的各种功能上。
+首先，Dioxus 将开发者的体验放在首位。这体现在 Dioxus 特有的各种功能上。
 
 - 自动格式化 RSX 格式代码，并拥有 VSCode 插件作为支持。
 - 热加载基于 RSX 代码解析器，同时支持桌面程序和网页程序。
@@ -153,15 +155,15 @@ Dioxus 也是一个可扩展化的平台。
 - 构建并分享开发者自定义的组件代码。
 
 Dioxus 那么优秀，但什么时候它不适合我呢？
-- 它还没有完全成熟。api仍在变化，可能会出现故障（尽管我们试图避免）
+
+- 它还没有完全成熟。api 仍在变化，可能会出现故障（尽管我们试图避免）
 - 您需要运行在 no-std 的环境之中。
 - 你不喜欢使用 React-like 的方式构建 UI 项目。
 
-
 ## 贡献代码
+
 - 在我们的 [问题追踪](https://github.com/dioxuslabs/dioxus/issues) 中汇报你遇到的问题。
 - [加入](https://discord.gg/XgGxMSkvUM)我们的 Discord 与我们交流。
-
 
 <a href="https://github.com/dioxuslabs/dioxus/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=dioxuslabs/dioxus&max=30&columns=10" />

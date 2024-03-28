@@ -25,7 +25,7 @@
 
 This requires that webview is installed on the target system. WebView is installed by default on macOS and iOS devices, but might not come preinstalled on Windows or Linux devices. To fix these issues, follow the [instructions in the guide](guide-url).
 
-[guide-url]: https://dioxuslabs.com/learn/0.5/getting_started/desktop
+[guide-url]: https://dioxuslabs.com/learn/0.5/getting_started
 
 ## Features
 

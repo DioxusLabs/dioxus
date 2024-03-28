@@ -45,7 +45,7 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/example-projects"> Examples </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/learn/0.4/guide"> Guide </a>
+    <a href="https://dioxuslabs.com/learn/0.5/guide"> Guide </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/zh-cn/README.md"> 中文 </a>
     <span> | </span>
@@ -73,8 +73,8 @@ fn app() -> Element {
 }
 ```
 
-
 ## ⭐️ Unique features:
+
 - Cross-platform apps in three lines of code (web, desktop, mobile, server, and more)
 - [Ergonomic state management](https://dioxuslabs.com/blog/release-050) combines the best of React, Solid, and Svelte
 - Extremely performant, powered by Rust's fastest wasm-framework [sledgehammer](https://dioxuslabs.com/blog/templates-diffing)
@@ -82,6 +82,7 @@ fn app() -> Element {
 - And more! Read the [take a tour of Dioxus](https://dioxuslabs.com/learn/0.5/).
 
 ## Instant hot-reloading
+
 With one command, `dx serve` and your app is running. Edit your markup and styles and see the results in real time. Rust code hotreloading is not yet 1st class, but possible with [hot-lib-reloader](https://docs.rs/hot-lib-reloader/latest/hot_lib_reloader/).
 
 <div align="center">
@@ -95,7 +96,6 @@ Simply run `dx bundle` and your app will be built and bundled with maximization 
 <div align="center">
   <img src="./notes/bundle.gif">
 </div>
-
 
 ## Fantastic documentation
 
@@ -121,12 +121,12 @@ Dioxus is a community-driven project, with a very active [Discord](https://disco
   <img src="./notes/dioxus-community.avif">
 </div>
 
-
 ## Full-time core team
 
 Dioxus has grown from a side project to a small team of fulltime engineers. Thanks to the generous support of FutureWei, Satellite.im, the GitHub Accelerator program, we're able to work on Dioxus full-time. Our long term goal is for Dioxus to become self-sustaining by providing paid high-quality enterprise tools. If your company is interested in adopting Dioxus and would like to work with us, please reach out!
 
 ## Supported Platforms
+
 <div align="center">
   <table style="width:100%">
     <tr>
@@ -225,7 +225,7 @@ The examples in the top level of this repository can be run with `cargo run --ex
 
 ## Dioxus vs other frameworks
 
-We love all frameworks and enjoy watching innovation in the Rust ecosystem. In fact, many of our projects are shared with other frameworks. For example, our flex-box library [Taffy](https://github.com/DioxusLabs/taffy) is used by [Bevy](https://bevyengine.org/), [Zed](https://zed.dev/), [Lapce](https://lapce.dev/), [Iced](https://github.com/iced-rs/iced),  and many more.
+We love all frameworks and enjoy watching innovation in the Rust ecosystem. In fact, many of our projects are shared with other frameworks. For example, our flex-box library [Taffy](https://github.com/DioxusLabs/taffy) is used by [Bevy](https://bevyengine.org/), [Zed](https://zed.dev/), [Lapce](https://lapce.dev/), [Iced](https://github.com/iced-rs/iced), and many more.
 
 Dioxus places an emphasis on a few key points that make it different from other frameworks:
 
@@ -233,7 +233,6 @@ Dioxus places an emphasis on a few key points that make it different from other 
 - **HTML and CSS**: we lean completely into HTML and CSS, quirks and all.
 - **Renderer-agnostic**: you can swap out the renderer for any platform you want thanks to [our fast VirtualDOM](https://dioxuslabs.com/blog/templates-diffing).
 - **Collaborative**: whenever possible, we spin out crates like [Taffy](https://github.com/DioxusLabs/taffy), [magnanis](https://github.com/DioxusLabs/collect-assets), [include_mdbook](https://github.com/DioxusLabs/include_mdbook), and [blitz](http://github.com/dioxusLabs/blitz) so the ecosystem can grow together.
-
 
 ### Dioxus vs Tauri
 
@@ -252,6 +251,7 @@ Leptos is a library for building fullstack web-apps, similar to SolidJS and Soli
 - **Reactivity model**: Leptos uses signals for its underlying reactivity, while Dioxus opts for a VirtualDom and re-renders. While in theory signals are more efficient, in practice, Dioxus' VirtualDom performs little-to-no actual diffing (thanks to our [block-dom inspired templates](https://dioxuslabs.com/blog/templates-diffing)) and is [actually faster than Leptos](https://krausest.github.io/js-framework-benchmark/2024/table_chrome_123.0.6312.59.html).
 
 - **Control flow**: Because Leptos uses signals for reactivity, you are constrained to Leptos' primitives for things like `for` loops and `if` statements. If you get this wrong, your app will lose reactivity, leading to hard to debug UI issues. With Dioxus, you can use iterators, regular Rust `for` loops and `if` statements, and your app will still be reactive. In practice, a Dioxus component to insert counters into a list might look like this:
+
 ```rust
 fn Counters() -> Element {
   let mut counters = use_signal(|| vec![0; initial_length]);
@@ -269,7 +269,9 @@ fn Counters() -> Element {
   }
 }
 ```
+
 [While in Leptos, you would need to track keys, use the `<For>` component, create new signals, and manually clean up memory](https://book.leptos.dev/view/04_iteration.html#dynamic-rendering-with-the-for-component):
+
 ```rust
 fn Counters() -> Element {
     let initial_counters = (0..initial_length)
@@ -331,6 +333,7 @@ fn Counters() -> Element {
 - **Different scopes**: Dioxus provides renderers for web, desktop, mobile, LiveView, and more. We also maintain community libraries and a cross-platform SDK. The scope of this work is huge, meaning we've historically released at a slower cadence than Leptos. Leptos focuses on the fullstack web, with features that Dioxus doesn't have like `<Suspense />`-based streaming HTML, islands, `<Form />` components, and other web-specific features. Generally, web apps you build with Leptos will have a smaller footprint.
 
 - **Different DSLs**: While both frameworks target the web, Dioxus uses its own custom Rust-like DSL for building UIs while Leptos uses a more HTML-like syntax. We chose this to retain compatibility with IDE features like codefolding and syntax highlighting. Generally, Dioxus leans into more "magic" with its DSL. For example, dioxus will automatically format strings for you while Leptos requires you to use closures and `format!` or `format_args!`.
+
 ```rust
 // dioxus
 rsx! {
@@ -384,18 +387,18 @@ Dioxus and Electron are two entirely different projects with similar goals. Elec
 
 - **Maturity**: Electron is a mature project with a large community and a lot of tooling. Dioxus is still quite young in comparison to Electron. Expect to run into features like deeplinking that require extra work to implement.
 
-
 ## Contributing
-- Check out the website [section on contributing](https://dioxuslabs.com/learn/0.4/contributing).
+
+- Check out the website [section on contributing](https://dioxuslabs.com/learn/0.5/contributing).
 - Report issues on our [issue tracker](https://github.com/dioxuslabs/dioxus/issues).
 - [Join](https://discord.gg/XgGxMSkvUM) the discord and ask questions!
-
 
 <a href="https://github.com/dioxuslabs/dioxus/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=dioxuslabs/dioxus&max=30&columns=10" />
 </a>
 
 ## License
+
 This project is licensed under the [MIT license].
 
 [mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT

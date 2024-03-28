@@ -15,7 +15,7 @@
 [discord-url]: https://discord.gg/XgGxMSkvUM
 
 [Website](https://dioxuslabs.com) |
-[Guides](https://dioxuslabs.com/learn/0.4/) |
+[Guides](https://dioxuslabs.com/learn/0.5/) |
 [API Docs](https://docs.rs/dioxus-mobile/latest/dioxus_mobile) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 
@@ -29,7 +29,7 @@ Dioxus Mobile supports both iOS and Android. However, Android support is still q
 
 Getting set up with mobile can but quite challenging. The tooling here isn't great (yet) and might take some hacking around to get things working. macOS M1 is broadly unexplored and might not work for you.
 
-You can read [our guide](https://dioxuslabs.com/learn/0.5/getting_started/mobile) on mobile development with Dioxus to get started.
+You can read [our guide](https://dioxuslabs.com/learn/0.5/getting_started) on mobile development with Dioxus to get started.
 
 ## Contributing
 
