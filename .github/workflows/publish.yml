@@ -18,8 +18,13 @@ name: Publish CLI
 on:
   workflow_dispatch:
     inputs:
+      post:
+        name: "Release Post"
+        required: true
+        description: Choose the release post to publish with. Must be a tag (eg v0.4.0)
+        type: string
       channel:
-        name: "Branch to publish"
+        name: "CLI Binary Version"
         required: true
         description: Choose the version number to publish with. Must be a tag (ie v0.4.0)
         type: string
@@ -34,6 +39,7 @@ env:
   # SEMVER: ${{ github.event.inputs.channel == 'main' && 'prerelease' || 'patch' }}
   # PRERELEASE_TAG: ${{ github.event.inputs.channel == 'main' && '-pre' || '' }}
   RELEASE_TAG: ${{ github.event.inputs.channel }}
+  RELEASE_POST: ${{ github.event.inputs.post }}
 
 jobs:
   release-cli:
@@ -88,10 +94,10 @@ jobs:
           bin: dx
           token: ${{ secrets.GITHUB_TOKEN }}
           target: ${{ matrix.platform.target }}
-          archive: $bin-$target
+          archive: $bin-$target-v${{ env.RELEASE_TAG }}
           checksum: sha256
           manifest_path: packages/cli/Cargo.toml
-          ref: refs/tags/${{ env.RELEASE_TAG }}
+          ref: refs/tags/${{ env.RELEASE_POST }}
 
 
   # todo: these things
