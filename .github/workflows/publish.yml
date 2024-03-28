@@ -94,7 +94,7 @@ jobs:
           bin: dx
           token: ${{ secrets.GITHUB_TOKEN }}
           target: ${{ matrix.platform.target }}
-          archive: $bin-$target-v${{ env.RELEASE_TAG }}
+          archive: $bin-$target-${{ env.RELEASE_TAG }}
           checksum: sha256
           manifest_path: packages/cli/Cargo.toml
           ref: refs/tags/${{ env.RELEASE_POST }}
