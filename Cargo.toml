@@ -77,7 +77,7 @@ generational-box = { path = "packages/generational-box", version = "0.5.0-alpha.
 dioxus-hot-reload = { path = "packages/hot-reload", version = "0.5.0-alpha.2" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.5.0-alpha.2" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.5.0-alpha.2", default-features = false }
-dioxus-ext = { path = "packages/extension", version = "0.4.0" }
+dioxus-ext = { path = "packages/extension" }
 tracing = "0.1.37"
 tracing-futures = "0.2.5"
 toml = "0.8"
@@ -175,7 +175,7 @@ tokio = { version = "1.16.1", default-features = false, features = [
     "macros",
     "io-util",
     "rt",
-    "time",
+    "time"
 ] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
@@ -184,14 +184,15 @@ tokio = { version = "1.16.1", features = ["full"] }
 # To make most examples faster to compile, we split out assets and http-related stuff
 # This trims off like 270 dependencies, leading to a significant speedup in compilation time
 [features]
+default = ["dioxus/desktop"]
 liveview = ["dioxus/liveview"]
 fullstack = ["dioxus/fullstack"]
 axum = ["dioxus/axum"]
 server = ["dioxus/axum"]
-default = ["dioxus/desktop"]
 web = ["dioxus/web"]
 collect-assets = ["manganis"]
 http = ["reqwest", "http-range"]
+
 
 [[example]]
 name = "login_form"
