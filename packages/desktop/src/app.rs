@@ -63,7 +63,7 @@ impl App {
             webviews: HashMap::new(),
             control_flow: ControlFlow::Wait,
             unmounted_dom: Cell::new(Some(virtual_dom)),
-            float_all: cfg!(debug_assertions),
+            float_all: !cfg!(debug_assertions),
             cfg: Cell::new(Some(cfg)),
             shared: Rc::new(SharedContext {
                 event_handlers: WindowEventHandlers::default(),

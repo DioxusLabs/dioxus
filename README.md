@@ -219,6 +219,10 @@ Dioxus has grown from a side project to a small team of fulltime engineers. Than
   </table>
 </div>
 
+## Running the examples
+
+The examples in the top level of this repository can be run with `cargo run --example <example>`. However, we encourage you to download the dioxus-cli and run the examples with `dx serve` since many examples also support web. When running for web, you either need to modify the Cargo.toml to disable the default desktop feature, or use
+
 ## Dioxus vs other frameworks
 
 We love all frameworks and enjoy watching innovation in the Rust ecosystem. In fact, many of our projects are shared with other frameworks. For example, our flex-box library [Taffy](https://github.com/DioxusLabs/taffy) is used by [Bevy](https://bevyengine.org/), [Zed](https://zed.dev/), [Lapce](https://lapce.dev/), [Iced](https://github.com/iced-rs/iced),  and many more.
