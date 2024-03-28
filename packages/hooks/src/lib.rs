@@ -3,7 +3,7 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
 #[macro_export]
-/// A helper macro for using hooks and properties in async environments.
+/// A helper macro for cloning multiple values at once
 ///
 /// # Usage
 ///

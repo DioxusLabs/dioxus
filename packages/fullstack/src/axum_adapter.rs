@@ -30,16 +30,13 @@
 //! }
 //!
 //! fn app() -> Element {
-//!     let text = use_signal(|| "...".to_string());
+//!     let mut text = use_signal(|| "...".to_string());
 //!
 //!     rsx! {
 //!         button {
-//!             onclick: move |_| {
-//!                 to_owned![text];
-//!                 async move {
-//!                     if let Ok(data) = get_server_data().await {
-//!                         text.set(data);
-//!                     }
+//!             onclick: move |_| async move {
+//!                 if let Ok(data) = get_server_data().await {
+//!                     text.set(data);
 //!                 }
 //!             },
 //!             "Run a server function"

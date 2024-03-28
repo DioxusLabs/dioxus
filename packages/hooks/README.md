@@ -32,10 +32,6 @@
 
 Unlike React, none of these hooks are foundational since they all build off the primitive `use_hook`.
 
-This crate also provides a helpful macro to get around some Rust lifetime management issues in async:
-
-- `to_owned![]`
-
 ## Contributing
 
 - Report issues on our [issue tracker](https://github.com/dioxuslabs/dioxus/issues).

@@ -196,24 +196,19 @@ pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
 ///
 /// fn child_component() -> Element {
 ///     let original_scroll_position = use_signal(|| 0.0);
-///     use_effect((), move |_| {
-///         to_owned![original_scroll_position];
-///         async move {
-///             let window = web_sys::window().unwrap();
-///             let document = window.document().unwrap();
-///             let element = document.get_element_by_id("my_element").unwrap();
-///             element.scroll_into_view();
-///             original_scroll_position.set(window.scroll_y().unwrap());
-///         }
+///
+///     use_effect(move |_| async move {
+///         let window = web_sys::window().unwrap();
+///         let document = window.document().unwrap();
+///         let element = document.get_element_by_id("my_element").unwrap();
+///         element.scroll_into_view();
+///         original_scroll_position.set(window.scroll_y().unwrap());
 ///     });
 ///
-///     use_drop({
-///         to_owned![original_scroll_position];
+///     use_drop(move || {
 ///         /// restore scroll to the top of the page
-///         move || {
-///             let window = web_sys::window().unwrap();
-///             window.scroll_with_x_and_y(*original_scroll_position.current(), 0.0);
-///         }
+///         let window = web_sys::window().unwrap();
+///         window.scroll_with_x_and_y(*original_scroll_position.current(), 0.0);
 ///     });
 ///
 ///     rsx!{

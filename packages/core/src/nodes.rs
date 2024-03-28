@@ -20,11 +20,7 @@ pub type TemplateId = &'static str;
 
 /// The actual state of the component's most recent computation
 ///
-/// Because Dioxus accepts components in the form of `async fn() -> Result<VNode>`, we need to support both
-/// sync and async versions.
-///
-/// Dioxus will do its best to immediately resolve any async components into a regular Element, but as an implementor
-/// you might need to handle the case where there's no node immediately ready.
+/// If the component returned early (e.g. `return None`), this will be Aborted(None)
 pub enum RenderReturn {
     /// A currently-available element
     Ready(VNode),
