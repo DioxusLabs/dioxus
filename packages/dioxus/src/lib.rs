@@ -9,6 +9,8 @@ pub use dioxus_core;
 #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
 mod launch;
 
+#[cfg(feature = "launch")]
+#[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
 pub use launch::launch;
 
 #[cfg(feature = "hooks")]
