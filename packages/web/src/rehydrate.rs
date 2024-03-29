@@ -118,7 +118,6 @@ impl WebsysDom {
                     ids.push(id.0 as u32);
                 }
             }
-            _ => {}
         }
         Ok(())
     }
