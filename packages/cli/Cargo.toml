@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-cli"
-version = "0.5.3"
+version = "0.5.4"
 # version = { workspace = true }
 authors = ["Jonathan Kelley"]
 edition = "2021"
@@ -117,7 +117,7 @@ tempfile = "3.3"
 
 [package.metadata.binstall]
 # temporarily, we're going to use the 0.5.0 download page for all binaries
-pkg-url = "{ repo }/releases/download/v{ version }/dx-{ target }-v{ version }{ archive-suffix }"
+pkg-url = "{ repo }/releases/download/v0.5.0/dx-{ target }-v{ version }{ archive-suffix }"
 
 # pkg-url = "{ repo }/releases/download/v{ version }/dx-{ target }{ archive-suffix }"
 pkg-fmt = "tgz"
