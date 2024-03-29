@@ -544,7 +544,7 @@ impl VNode {
         let entry = dom.mounts.vacant_entry();
         let mount = MountId(entry.key());
         self.mount.set(mount);
-        tracing::info!(?self, ?mount, "creating template");
+        tracing::trace!(?self, ?mount, "creating template");
         entry.insert(VNodeMount {
             node: self.clone_mounted(),
             parent,
