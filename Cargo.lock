@@ -2002,7 +2002,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-cli"
-version = "0.5.0"
+version = "0.5.4"
 dependencies = [
  "anyhow",
  "atty",
