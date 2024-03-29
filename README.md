@@ -332,7 +332,7 @@ fn Counters() -> Element {
 
 - **Different scopes**: Dioxus provides renderers for web, desktop, mobile, LiveView, and more. We also maintain community libraries and a cross-platform SDK. The scope of this work is huge, meaning we've historically released at a slower cadence than Leptos. Leptos focuses on the fullstack web, with features that Dioxus doesn't have like `<Suspense />`-based streaming HTML, islands, `<Form />` components, and other web-specific features. Generally, web apps you build with Leptos will have a smaller footprint.
 
-- **Different DSLs**: While both frameworks target the web, Dioxus uses its own custom Rust-like DSL for building UIs while Leptos uses a more HTML-like syntax. We chose this to retain compatibility with IDE features like codefolding and syntax highlighting. Generally, Dioxus leans into more "magic" with its DSL. For example, dioxus will automatically format strings for you while Leptos requires you to use closures and `format!` or `format_args!`.
+- **Different DSLs**: While both frameworks target the web, Dioxus uses its own custom Rust-like DSL for building UIs while Leptos uses a more HTML-like syntax. We chose this to retain compatibility with IDE features like codefolding and syntax highlighting. Generally, Dioxus leans into more "magic" with its DSL. For example, dioxus will automatically format strings for you while Leptos can split up strings into static and dynamic segments.
 
 ```rust
 // dioxus
@@ -344,7 +344,7 @@ rsx! {
 view! {
   <div class="my-class" enabled={true}>
     "Hello "
-    {move || name()}
+    {name}
   </div>
 }
 ```
