@@ -49,7 +49,7 @@ pub fn clone_repo(dir: &Path, url: &str) -> anyhow::Result<()> {
     let res = cmd.arg("clone").arg(url).arg(dir_name).output();
     if let Err(err) = res {
         if ErrorKind::NotFound == err.kind() {
-            log::warn!("Git program not found. Hint: Install git or check $PATH.");
+            tracing::warn!("Git program not found. Hint: Install git or check $PATH.");
             return Err(err.into());
         }
     }
@@ -216,7 +216,7 @@ impl Tool {
             let chunk = chunk_res.context("error reading chunk from download")?;
             let _ = file.write(chunk.as_ref()).await;
         }
-        // log::info!("temp file path: {:?}", temp_out);
+        // tracing::info!("temp file path: {:?}", temp_out);
         Ok(temp_out)
     }
 

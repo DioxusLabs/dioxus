@@ -82,7 +82,7 @@ fn assets_head() -> Option<String> {
     ))]
     {
         let head = crate::protocol::get_asset_root_or_default();
-        let head = head.join("__assets_head.html");
+        let head = head.join("dist").join("__assets_head.html");
         match std::fs::read_to_string(&head) {
             Ok(s) => Some(s),
             Err(err) => {
@@ -142,7 +142,9 @@ pub(super) fn desktop_handler(
     // Else, try to serve a file from the filesystem.
     match serve_from_fs(path) {
         Ok(res) => responder.respond(res),
-        Err(e) => tracing::error!("Error serving request from filesystem {}", e),
+        Err(e) => {
+            tracing::error!("Error serving request from filesystem {}", e);
+        }
     }
 }
 
@@ -152,7 +154,13 @@ fn serve_from_fs(path: PathBuf) -> Result<Response<Vec<u8>>> {
 
     // If we can't find it, make it absolute and try again
     if !asset.exists() {
-        asset = PathBuf::from("/").join(path);
+        asset = PathBuf::from("/").join(&path);
+    }
+
+    // If we can't find it, add the dist directory and try again
+    // When bundling we currently copy the whole dist directory to the output directory instead of the individual files because of a limitation of cargo bundle2
+    if !asset.exists() {
+        asset = get_asset_root_or_default().join("dist").join(&path);
     }
 
     if !asset.exists() {

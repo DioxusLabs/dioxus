@@ -6,6 +6,7 @@ use std::path::PathBuf;
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Debug)]
 #[cfg_attr(feature = "cli", derive(clap::ValueEnum))]
+#[non_exhaustive]
 pub enum Platform {
     /// Targeting the web platform using WASM
     #[cfg_attr(feature = "cli", clap(name = "web"))]
@@ -57,6 +58,7 @@ impl std::fmt::Display for LoadDioxusConfigError {
 impl std::error::Error for LoadDioxusConfigError {}
 
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum CrateConfigError {
     Cargo(CargoError),
     Io(std::io::Error),

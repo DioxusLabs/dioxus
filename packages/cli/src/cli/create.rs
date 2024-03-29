@@ -32,9 +32,9 @@ pub fn post_create(path: &PathBuf) -> Result<()> {
     let cmd = cmd.arg("fmt").current_dir(path);
     let output = cmd.output().expect("failed to execute process");
     if !output.status.success() {
-        log::error!("cargo fmt failed");
-        log::error!("stdout: {}", String::from_utf8_lossy(&output.stdout));
-        log::error!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+        tracing::error!("cargo fmt failed");
+        tracing::error!("stdout: {}", String::from_utf8_lossy(&output.stdout));
+        tracing::error!("stderr: {}", String::from_utf8_lossy(&output.stderr));
     }
 
     // then format the toml
@@ -64,7 +64,7 @@ pub fn post_create(path: &PathBuf) -> Result<()> {
     let mut file = std::fs::File::create(readme_path)?;
     file.write_all(new_readme.as_bytes())?;
 
-    log::info!("Generated project at {}", path.display());
+    tracing::info!("Generated project at {}", path.display());
 
     Ok(())
 }

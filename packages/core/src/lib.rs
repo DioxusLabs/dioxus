@@ -46,33 +46,6 @@ pub(crate) mod innerlude {
     pub type Element = Option<VNode>;
 
     /// A [`Component`] is a function that takes [`Properties`] and returns an [`Element`].
-    ///
-    /// Components can be used in other components with two syntax options:
-    /// - lowercase as a function call with named arguments (rust style)
-    /// - uppercase as an element (react style)
-    ///
-    /// ## Rust-Style
-    ///
-    /// ```rust, ignore
-    /// fn example(cx: Props) -> Element {
-    ///     // ...
-    /// }
-    ///
-    /// rsx!(
-    ///     example()
-    /// )
-    /// ```
-    ///
-    /// ## React-Style
-    /// ```rust, ignore
-    /// fn Example(cx: Props) -> Element {
-    ///     // ...
-    /// }
-    ///
-    /// rsx!(
-    ///     Example {}
-    /// )
-    /// ```
     pub type Component<P = ()> = fn(P) -> Element;
 }
 

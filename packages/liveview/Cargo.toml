@@ -3,7 +3,7 @@ name = "dioxus-liveview"
 version = { workspace = true }
 edition = "2021"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com/learn/0.4/getting_started/liveview"
+homepage = "https://dioxuslabs.com/learn/0.5/getting_started"
 keywords = ["dom", "ui", "gui", "react", "liveview"]
 description = "Build server-side apps with Dioxus"
 authors = ["Jonathan Kelley", "Evan Almloff"]
@@ -27,7 +27,7 @@ rustc-hash = { workspace = true }
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
 dioxus-hot-reload = { workspace = true, optional = true }
-dioxus-cli-config = { workspace = true }
+dioxus-cli-config = { workspace = true, features = ["read-config"] }
 generational-box = { workspace = true }
 
 # axum

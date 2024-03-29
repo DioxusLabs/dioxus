@@ -14,7 +14,7 @@ use interprocess::local_socket::LocalSocketListener;
 use std::{
     fs::create_dir_all,
     process::{Child, Command},
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, RwLock},
 };
 use tokio::sync::broadcast::{self};
 
@@ -39,7 +39,7 @@ pub(crate) async fn startup_with_platform<P: Platform + Send + 'static>(
                 FileMap::<HtmlCtx>::create(config.crate_dir.clone()).unwrap();
 
             for err in errors {
-                log::error!("{}", err);
+                tracing::error!("{}", err);
             }
 
             let file_map = Arc::new(Mutex::new(map));
@@ -75,9 +75,25 @@ async fn serve<P: Platform + Send + 'static>(
     serve: &ConfigOptsServe,
     hot_reload_state: Option<HotReloadState>,
 ) -> Result<()> {
+    let hot_reload: tokio::task::JoinHandle<Result<()>> = tokio::spawn({
+        let hot_reload_state = hot_reload_state.clone();
+        async move {
+            match hot_reload_state {
+                Some(hot_reload_state) => {
+                    // The open interprocess sockets
+                    start_desktop_hot_reload(hot_reload_state).await?;
+                }
+                None => {
+                    std::future::pending::<()>().await;
+                }
+            }
+            Ok(())
+        }
+    });
+
     let platform = RwLock::new(P::start(&config, serve)?);
 
-    log::info!("🚀 Starting development server...");
+    tracing::info!("🚀 Starting development server...");
 
     // We got to own watcher so that it exists for the duration of serve
     // Otherwise full reload won't work.
@@ -88,19 +104,11 @@ async fn serve<P: Platform + Send + 'static>(
         },
         &config,
         None,
-        hot_reload_state.clone(),
+        hot_reload_state,
     )
     .await?;
 
-    match hot_reload_state {
-        Some(hot_reload_state) => {
-            // The open interprocess sockets
-            start_desktop_hot_reload(hot_reload_state).await?;
-        }
-        None => {
-            std::future::pending::<()>().await;
-        }
-    }
+    hot_reload.await.unwrap()?;
 
     Ok(())
 }
@@ -115,7 +123,12 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
     let _ = create_dir_all(target_dir); // `_all` is for good measure and future-proofness.
     let path = target_dir.join("dioxusin");
     clear_paths(&path);
-    match LocalSocketListener::bind(path) {
+    let listener = if cfg!(windows) {
+        LocalSocketListener::bind("@dioxusin")
+    } else {
+        LocalSocketListener::bind(path)
+    };
+    match listener {
         Ok(local_socket_stream) => {
             let aborted = Arc::new(Mutex::new(false));
             // States
@@ -258,7 +271,7 @@ impl DesktopPlatform {
     ) -> Result<Self> {
         let (child, first_build_result) = start_desktop(config, serve.skip_assets, rust_flags)?;
 
-        log::info!("🚀 Starting development server...");
+        tracing::info!("🚀 Starting development server...");
 
         // Print serve info
         print_console_info(

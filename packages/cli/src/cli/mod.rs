@@ -56,7 +56,7 @@ pub enum Commands {
     /// Build, watch & serve the Rust WASM app and all of its assets.
     Serve(serve::Serve),
 
-    /// Create a new project for Dioxus.a
+    /// Create a new project for Dioxus.
     New(create::Create),
 
     /// Init a new project for Dioxus in an existing directory.

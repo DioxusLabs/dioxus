@@ -15,14 +15,14 @@ use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
 use dioxus::prelude::*;
 
 fn main() {
-    LaunchBuilder::desktop()
-        .with_cfg(
+    LaunchBuilder::new()
+        .with_cfg(desktop! {
             Config::new().with_window(
                 WindowBuilder::new()
                     .with_title("Doggo Fetcher")
                     .with_inner_size(LogicalSize::new(600.0, 800.0)),
-            ),
-        )
+            )
+        })
         .launch(app)
 }
 

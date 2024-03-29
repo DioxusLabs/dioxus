@@ -88,28 +88,36 @@ mod desktop_platforms {
             ])
             .unwrap();
 
-        let help_menu = Submenu::new("Help", true);
-        help_menu
-            .append_items(&[&MenuItem::new("Toggle Developer Tools", true, None)])
-            .unwrap();
+        menu.append_items(&[&window_menu, &edit_menu]).unwrap();
 
-        // By default we float the window on top in dev mode, but let the user disable it
-        help_menu
-            .append_items(&[&MenuItem::with_id(
-                "dioxus-float-top",
-                "Float on Top (dev mode only)",
-                true,
-                None,
-            )])
-            .unwrap();
+        if cfg!(debug_assertions) {
+            let help_menu = Submenu::new("Help", true);
 
-        menu.append_items(&[&window_menu, &edit_menu, &help_menu])
-            .unwrap();
+            help_menu
+                .append_items(&[&MenuItem::new("Toggle Developer Tools", true, None)])
+                .unwrap();
+
+            // By default we float the window on top in dev mode, but let the user disable it
+            help_menu
+                .append_items(&[&MenuItem::with_id(
+                    "dioxus-float-top",
+                    "Float on Top (dev mode only)",
+                    true,
+                    None,
+                )])
+                .unwrap();
+
+            _ = menu.append_items(&[&help_menu]);
+
+            #[cfg(target_os = "macos")]
+            {
+                help_menu.set_as_help_menu_for_nsapp();
+            }
+        }
 
         #[cfg(target_os = "macos")]
         {
             window_menu.set_as_windows_menu_for_nsapp();
-            help_menu.set_as_help_menu_for_nsapp();
         }
 
         menu

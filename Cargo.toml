@@ -47,37 +47,37 @@ members = [
 exclude = ["examples/mobile_demo", "examples/openid_connect_demo"]
 
 [workspace.package]
-version = "0.5.0-alpha.2"
+version = "0.5.0"
 
 # dependencies that are shared across packages
 [workspace.dependencies]
-dioxus = { path = "packages/dioxus", version = "0.5.0-alpha.2" }
-dioxus-lib = { path = "packages/dioxus-lib", version = "0.5.0-alpha.2" }
-dioxus-core = { path = "packages/core", version = "0.5.0-alpha.2" }
-dioxus-core-macro = { path = "packages/core-macro", version = "0.5.0-alpha.2" }
-dioxus-config-macro = { path = "packages/config-macro", version = "0.5.0-alpha.2" }
-dioxus-router = { path = "packages/router", version = "0.5.0-alpha.2" }
-dioxus-router-macro = { path = "packages/router-macro", version = "0.5.0-alpha.2" }
-dioxus-html = { path = "packages/html", version = "0.5.0-alpha.2" }
-dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.5.0-alpha.2" }
-dioxus-hooks = { path = "packages/hooks", version = "0.5.0-alpha.2" }
-dioxus-web = { path = "packages/web", version = "0.5.0-alpha.2" }
-dioxus-ssr = { path = "packages/ssr", version = "0.5.0-alpha.2", default-features = false }
-dioxus-desktop = { path = "packages/desktop", version = "0.5.0-alpha.2", default-features = false }
-dioxus-mobile = { path = "packages/mobile", version = "0.5.0-alpha.2" }
-dioxus-interpreter-js = { path = "packages/interpreter", version = "0.5.0-alpha.2" }
-dioxus-liveview = { path = "packages/liveview", version = "0.5.0-alpha.2" }
-dioxus-autofmt = { path = "packages/autofmt", version = "0.5.0-alpha.2" }
-dioxus-check = { path = "packages/check", version = "0.5.0-alpha.2" }
-dioxus-rsx = { path = "packages/rsx", version = "0.5.0-alpha.2" }
-rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.5.0-alpha.2" }
-dioxus-signals = { path = "packages/signals", version = "0.5.0-alpha.2" }
-dioxus-cli-config = { path = "packages/cli-config", version = "0.5.0-alpha.2" }
-generational-box = { path = "packages/generational-box", version = "0.5.0-alpha.2" }
-dioxus-hot-reload = { path = "packages/hot-reload", version = "0.5.0-alpha.2" }
-dioxus-fullstack = { path = "packages/fullstack", version = "0.5.0-alpha.2" }
-dioxus_server_macro = { path = "packages/server-macro", version = "0.5.0-alpha.2", default-features = false }
-dioxus-ext = { path = "packages/extension", version = "0.4.0" }
+dioxus = { path = "packages/dioxus", version = "0.5.0" }
+dioxus-lib = { path = "packages/dioxus-lib", version = "0.5.0" }
+dioxus-core = { path = "packages/core", version = "0.5.0" }
+dioxus-core-macro = { path = "packages/core-macro", version = "0.5.0" }
+dioxus-config-macro = { path = "packages/config-macro", version = "0.5.0" }
+dioxus-router = { path = "packages/router", version = "0.5.0" }
+dioxus-router-macro = { path = "packages/router-macro", version = "0.5.0" }
+dioxus-html = { path = "packages/html", version = "0.5.0" }
+dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.5.0" }
+dioxus-hooks = { path = "packages/hooks", version = "0.5.0" }
+dioxus-web = { path = "packages/web", version = "0.5.0" }
+dioxus-ssr = { path = "packages/ssr", version = "0.5.0", default-features = false }
+dioxus-desktop = { path = "packages/desktop", version = "0.5.0", default-features = false }
+dioxus-mobile = { path = "packages/mobile", version = "0.5.0" }
+dioxus-interpreter-js = { path = "packages/interpreter", version = "0.5.0" }
+dioxus-liveview = { path = "packages/liveview", version = "0.5.0" }
+dioxus-autofmt = { path = "packages/autofmt", version = "0.5.0" }
+dioxus-check = { path = "packages/check", version = "0.5.0" }
+dioxus-rsx = { path = "packages/rsx", version = "0.5.0" }
+rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.5.0" }
+dioxus-signals = { path = "packages/signals", version = "0.5.0" }
+dioxus-cli-config = { path = "packages/cli-config", version = "0.5.0", default-features = false}
+generational-box = { path = "packages/generational-box", version = "0.5.0" }
+dioxus-hot-reload = { path = "packages/hot-reload", version = "0.5.0" }
+dioxus-fullstack = { path = "packages/fullstack", version = "0.5.0" }
+dioxus_server_macro = { path = "packages/server-macro", version = "0.5.0", default-features = false }
+dioxus-ext = { path = "packages/extension" }
 tracing = "0.1.37"
 tracing-futures = "0.2.5"
 toml = "0.8"
@@ -92,7 +92,7 @@ thiserror = "1.0.40"
 prettyplease = { version = "0.2.16", features = ["verbatim"] }
 manganis-cli-support = { version = "0.2.1", features = ["html"] }
 manganis = { version = "0.2.1" }
-interprocess = { version = "1.2.1" }
+interprocess = { version = "1.2.2", package = "interprocess-docfix" }
 
 lru = "0.12.2"
 async-trait = "0.1.77"
@@ -175,7 +175,7 @@ tokio = { version = "1.16.1", default-features = false, features = [
     "macros",
     "io-util",
     "rt",
-    "time",
+    "time"
 ] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
@@ -184,14 +184,15 @@ tokio = { version = "1.16.1", features = ["full"] }
 # To make most examples faster to compile, we split out assets and http-related stuff
 # This trims off like 270 dependencies, leading to a significant speedup in compilation time
 [features]
+default = ["dioxus/desktop"]
 liveview = ["dioxus/liveview"]
 fullstack = ["dioxus/fullstack"]
 axum = ["dioxus/axum"]
 server = ["dioxus/axum"]
-default = ["dioxus/desktop"]
 web = ["dioxus/web"]
 collect-assets = ["manganis"]
 http = ["reqwest", "http-range"]
+
 
 [[example]]
 name = "login_form"

@@ -1,5 +1,7 @@
 use dioxus_cli_config::DioxusConfig;
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
+use tracing::level_filters::LevelFilter;
+use tracing_subscriber::EnvFilter;
 
 use anyhow::Context;
 use clap::Parser;
@@ -7,14 +9,27 @@ use dioxus_cli::*;
 
 use Commands::*;
 
+const LOG_ENV: &str = "DIOXUS_LOG";
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
 
-    #[cfg(debug_assertions)]
-    env_logger::init();
+    // If {LOG_ENV} is set, default to env, otherwise filter to cli
+    // and manganis warnings and errors from other crates
+    if env::var(LOG_ENV).is_ok() {
+        let filter = EnvFilter::from_env(LOG_ENV);
+        tracing_subscriber::fmt().with_env_filter(filter).init();
+    } else {
+        let filter = EnvFilter::builder()
+            .with_default_directive(LevelFilter::ERROR.into())
+            .from_env()
+            .unwrap()
+            .add_directive("dioxus_cli=warn".parse().unwrap())
+            .add_directive("manganis-cli-support=warn".parse().unwrap());
 
-    // set_up_logging();
+        tracing_subscriber::fmt().with_env_filter(filter).init();
+    }
 
     match args.action {
         Translate(opts) => opts
@@ -53,7 +68,7 @@ async fn main() -> anyhow::Result<()> {
             let _dioxus_config = DioxusConfig::load(Some(bin.clone()))
                 .context("Failed to load Dioxus config because")?
                 .unwrap_or_else(|| {
-                    log::info!("You appear to be creating a Dioxus project from scratch; we will use the default config");
+                    tracing::info!("You appear to be creating a Dioxus project from scratch; we will use the default config");
                     DioxusConfig::default()
                 });
 

@@ -110,7 +110,7 @@ impl<R, S: Storage<SignalData<bool>>> Copy for Comparer<R, S> {}
 /// use dioxus::prelude::*;
 /// use dioxus_signals::*;
 ///
-/// fn App(cx: Scope) -> Element {
+/// fn App() -> Element {
 ///     let mut count = use_signal(cx, || 0);
 ///     let comparer = use_comparer(cx, move || count.value());
 ///
@@ -129,7 +129,7 @@ impl<R, S: Storage<SignalData<bool>>> Copy for Comparer<R, S> {}
 /// }
 ///
 /// #[component]
-/// fn Child(cx: Scope, active: ReadOnlySignal<bool>) -> Element {
+/// fn Child(active: ReadOnlySignal<bool>) -> Element {
 ///     if *active() {
 ///         render! { "Active" }
 ///     } else {

@@ -6,7 +6,7 @@ edition = "2021"
 description = "WebView renderer for Dioxus"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com/learn/0.4/getting_started/desktop"
+homepage = "https://dioxuslabs.com/learn/0.5/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
@@ -18,7 +18,7 @@ dioxus-html = { workspace = true, features = [
     "eval",
 ] }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
-dioxus-cli-config = { workspace = true }
+dioxus-cli-config = { workspace = true, features = ["read-config"] }
 generational-box = { workspace = true }
 
 serde = "1.0.136"
@@ -49,6 +49,8 @@ futures-util = { workspace = true }
 urlencoding = "2.1.2"
 async-trait = "0.1.68"
 tao = { version = "0.26.1", features = ["rwh_05"] }
+
+[target.'cfg(unix)'.dependencies]
 signal-hook = "0.3.17"
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]

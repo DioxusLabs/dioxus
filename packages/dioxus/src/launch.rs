@@ -1,6 +1,7 @@
 //! Launch helper macros for fullstack apps
 #![allow(clippy::new_without_default)]
 #![allow(unused)]
+use dioxus_config_macro::*;
 use std::any::Any;
 
 use crate::prelude::*;
@@ -11,7 +12,7 @@ pub struct LaunchBuilder<Cfg: 'static = (), ContextFn: ?Sized = ValidContext> {
     launch_fn: LaunchFn<Cfg, ContextFn>,
     contexts: Vec<Box<ContextFn>>,
 
-    platform_config: Option<Box<dyn Any>>,
+    platform_config: Option<Cfg>,
 }
 
 pub type LaunchFn<Cfg, Context> = fn(fn() -> Element, Vec<Box<Context>>, Cfg);
@@ -126,52 +127,118 @@ impl<Cfg> LaunchBuilder<Cfg, SendContext> {
     }
 }
 
+/// A trait for converting a type into a platform-specific config:
+/// - A unit value will be converted into `None`
+/// - Any config will be converted into `Some(config)`
+/// - If the config is for another platform, it will be converted into `None`
+pub trait TryIntoConfig<Config = Self> {
+    fn into_config(self) -> Option<Config>;
+}
+
+// A config can always be converted into itself
+impl<Cfg> TryIntoConfig<Cfg> for Cfg {
+    fn into_config(self) -> Option<Cfg> {
+        Some(self)
+    }
+}
+
+// The unit type can be converted into the current platform config.
+// This makes it possible to use the `desktop!`, `web!`, etc macros with the launch API.
+#[cfg(any(
+    feature = "liveview",
+    feature = "desktop",
+    feature = "mobile",
+    feature = "web",
+    feature = "fullstack"
+))]
+impl TryIntoConfig<current_platform::Config> for () {
+    fn into_config(self) -> Option<current_platform::Config> {
+        None
+    }
+}
+
 impl<Cfg: Default + 'static, ContextFn: ?Sized> LaunchBuilder<Cfg, ContextFn> {
     /// Provide a platform-specific config to the builder.
-    pub fn with_cfg<CG: 'static>(mut self, config: impl Into<Option<CG>>) -> Self {
-        if let Some(config) = config.into() {
-            self.platform_config = Some(Box::new(config));
-        }
+    pub fn with_cfg(mut self, config: impl TryIntoConfig<Cfg>) -> Self {
+        self.platform_config = self.platform_config.or(config.into_config());
         self
     }
 
     /// Launch your application.
     pub fn launch(self, app: fn() -> Element) {
-        let cfg: Box<Cfg> = self
-            .platform_config
-            .and_then(|c| c.downcast().ok())
-            .unwrap_or_default();
+        let cfg = self.platform_config.unwrap_or_default();
 
-        (self.launch_fn)(app, self.contexts, *cfg)
+        (self.launch_fn)(app, self.contexts, cfg)
     }
 }
 
+/// Re-export the platform we expect the user wants
+///
+/// If multiple platforms are enabled, we use this priority (from highest to lowest):
+/// - `fullstack`
+/// - `desktop`
+/// - `mobile`
+/// - `web`
+/// - `liveview`
 mod current_platform {
-    #[cfg(all(feature = "desktop", not(feature = "fullstack")))]
-    pub use dioxus_desktop::launch::*;
+    macro_rules! if_else_cfg {
+        (if $attr:meta { $then:item } else { $else:item }) => {
+            #[cfg($attr)]
+            $then
+            #[cfg(not($attr))]
+            $else
+        };
+    }
+    use crate::prelude::TryIntoConfig;
 
-    #[cfg(all(feature = "mobile", not(feature = "fullstack")))]
-    pub use dioxus_mobile::launch::*;
+    #[cfg(any(feature = "desktop", feature = "mobile"))]
+    if_else_cfg! {
+        if not(feature = "fullstack") {
+            pub use dioxus_desktop::launch::*;
+        } else {
+            impl TryIntoConfig<crate::launch::current_platform::Config> for ::dioxus_desktop::Config {
+                fn into_config(self) -> Option<crate::launch::current_platform::Config> {
+                    None
+                }
+            }
+        }
+    }
 
     #[cfg(feature = "fullstack")]
     pub use dioxus_fullstack::launch::*;
 
-    #[cfg(all(
-        feature = "web",
-        not(any(feature = "desktop", feature = "mobile", feature = "fullstack"))
-    ))]
-    pub use dioxus_web::launch::*;
+    #[cfg(feature = "web")]
+    if_else_cfg! {
+        if not(any(feature = "desktop", feature = "mobile", feature = "fullstack")) {
+            pub use dioxus_web::launch::*;
+        } else {
+            impl TryIntoConfig<crate::launch::current_platform::Config> for ::dioxus_web::Config {
+                fn into_config(self) -> Option<crate::launch::current_platform::Config> {
+                    None
+                }
+            }
+        }
+    }
 
-    #[cfg(all(
-        feature = "liveview",
-        not(any(
-            feature = "web",
-            feature = "desktop",
-            feature = "mobile",
-            feature = "fullstack"
-        ))
-    ))]
-    pub use dioxus_liveview::launch::*;
+    #[cfg(feature = "liveview")]
+    if_else_cfg! {
+        if
+            not(any(
+                feature = "web",
+                feature = "desktop",
+                feature = "mobile",
+                feature = "fullstack"
+            ))
+        {
+            pub use dioxus_liveview::launch::*;
+        } else {
+            impl<R: ::dioxus_liveview::LiveviewRouter> TryIntoConfig<crate::launch::current_platform::Config> for ::dioxus_liveview::Config<R> {
+                fn into_config(self) -> Option<crate::launch::current_platform::Config> {
+                    None
+                }
+            }
+        }
+    }
 
     #[cfg(not(any(
         feature = "liveview",
@@ -210,7 +277,7 @@ pub fn launch(app: fn() -> Element) {
 #[cfg_attr(docsrs, doc(cfg(feature = "web")))]
 /// Launch your web application without any additional configuration. See [`LaunchBuilder`] for more options.
 pub fn launch_web(app: fn() -> Element) {
-    LaunchBuilder::web().launch(app)
+    LaunchBuilder::new().launch(app)
 }
 
 #[cfg(feature = "desktop")]

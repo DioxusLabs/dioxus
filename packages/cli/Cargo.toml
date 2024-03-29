@@ -1,6 +1,7 @@
 [package]
 name = "dioxus-cli"
-version = { workspace = true }
+version = "0.5.4"
+# version = { workspace = true }
 authors = ["Jonathan Kelley"]
 edition = "2021"
 description = "CLI tool for developing, testing, and publishing Dioxus apps"
@@ -13,8 +14,9 @@ keywords = ["react", "gui", "cli", "dioxus", "wasm"]
 clap = { version = "4.2", features = ["derive", "cargo"] }
 thiserror = { workspace = true }
 wasm-bindgen-cli-support = "0.2"
+wasm-bindgen-shared = "0.2"
 colored = "2.0.0"
-dioxus-cli-config = { workspace = true, features = ["cli"] }
+dioxus-cli-config = { workspace = true, features = ["cli"], default-features = false }
 
 # features
 log = "0.4.14"
@@ -81,7 +83,7 @@ tauri-bundler = { version = "=1.4.*", features = ["native-tls-vendored"] }
 syn = { workspace = true }
 prettyplease = { workspace = true }
 
-manganis-cli-support = { workspace = true, features = ["webp", "html"] }
+manganis-cli-support = { workspace = true, features = ["html"] }
 
 dioxus-autofmt = { workspace = true }
 dioxus-check = { workspace = true }
@@ -95,6 +97,13 @@ interprocess = { workspace = true }
 ignore = "0.4.22"
 env_logger = "0.11.3"
 
+tracing-subscriber = { version = "0.3.18", features = ["std", "env-filter"] }
+tracing = { workspace = true }
+
+# on maco, we need to specify the vendored feature on ssl when cross compiling
+[target.'cfg(target_os = "macos")'.dependencies]
+openssl = { version = "0.10", features = ["vendored"] }
+
 [features]
 default = []
 plugin = ["mlua"]
@@ -107,7 +116,11 @@ name = "dx"
 tempfile = "3.3"
 
 [package.metadata.binstall]
-pkg-url = "{ repo }/releases/download/v{ version }/dx-{ target }{ archive-suffix }"
+# temporarily, we're going to use the 0.5.0 download page for all binaries
+pkg-url = "{ repo }/releases/download/v0.5.0/dx-{ target }-v{ version }{ archive-suffix }"
+
+# pkg-url = "{ repo }/releases/download/v{ version }/dx-{ target }{ archive-suffix }"
+pkg-fmt = "tgz"
 
 [package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
 pkg-fmt = "zip"

@@ -76,13 +76,12 @@ fn main() {
 }
 //
 fn app() -> Element {
-    let user_name = use_signal(|| "?".to_string());
-    let permissions = use_signal(|| "?".to_string());
+    let mut user_name = use_signal(|| "?".to_string());
+    let mut permissions = use_signal(|| "?".to_string());
 
     rsx! {
         div {
-            button {
-                onclick: move |_| {
+            button { onclick: move |_| {
                     async move {
                         login().await.unwrap();
                     }
@@ -92,12 +91,9 @@ fn app() -> Element {
         }
         div {
             button {
-                onclick: move |_| {
-                    to_owned![user_name];
-                    async move {
-                        if let Ok(data) = get_user_name().await {
-                            user_name.set(data);
-                        }
+                onclick: move |_| async move {
+                    if let Ok(data) = get_user_name().await {
+                        user_name.set(data);
                     }
                 },
                 "Get User Name"
@@ -106,12 +102,9 @@ fn app() -> Element {
         }
         div {
             button {
-                onclick: move |_| {
-                    to_owned![permissions];
-                    async move {
-                        if let Ok(data) = get_permissions().await {
-                            permissions.set(data);
-                        }
+                onclick: move |_| async move {
+                    if let Ok(data) = get_permissions().await {
+                        permissions.set(data);
                     }
                 },
                 "Get Permissions"

@@ -114,6 +114,7 @@ pub type MountedResult<T> = Result<T, MountedError>;
 
 #[derive(Debug)]
 /// The error type for the MountedData
+#[non_exhaustive]
 pub enum MountedError {
     /// The renderer does not support the requested operation
     NotSupported,

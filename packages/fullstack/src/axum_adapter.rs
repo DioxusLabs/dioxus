@@ -30,16 +30,13 @@
 //! }
 //!
 //! fn app() -> Element {
-//!     let text = use_signal(|| "...".to_string());
+//!     let mut text = use_signal(|| "...".to_string());
 //!
 //!     rsx! {
 //!         button {
-//!             onclick: move |_| {
-//!                 to_owned![text];
-//!                 async move {
-//!                     if let Ok(data) = get_server_data().await {
-//!                         text.set(data);
-//!                     }
+//!             onclick: move |_| async move {
+//!                 if let Ok(data) = get_server_data().await {
+//!                     text.set(data);
 //!                 }
 //!             },
 //!             "Run a server function"
@@ -60,8 +57,6 @@ use axum::{
     extract::State,
     http::{Request, Response, StatusCode},
     response::IntoResponse,
-    routing::{get, post},
-    Router,
 };
 use dioxus_lib::prelude::VirtualDom;
 use futures_util::Future;
@@ -69,9 +64,7 @@ use http::header::*;
 
 use std::sync::Arc;
 
-use crate::{
-    prelude::*, render::SSRState, serve_config::ServeConfig, server_context::DioxusServerContext,
-};
+use crate::prelude::*;
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
 pub trait DioxusRouterExt<S> {
@@ -508,8 +501,8 @@ async fn handle_server_fns_inner(
                 .unwrap_or(false);
             let referrer = req.headers().get(REFERER).cloned();
 
-            // actually run the server fn
-            let mut res = service.run(req).await;
+            // actually run the server fn (which may use the server context)
+            let mut res = ProvideServerContext::new(service.run(req), server_context.clone()).await;
 
             // it it accepts text/html (i.e., is a plain form post) and doesn't already have a
             // Location set, then redirect to Referer

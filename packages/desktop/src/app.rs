@@ -63,7 +63,7 @@ impl App {
             webviews: HashMap::new(),
             control_flow: ControlFlow::Wait,
             unmounted_dom: Cell::new(Some(virtual_dom)),
-            float_all: cfg!(debug_assertions),
+            float_all: !cfg!(debug_assertions),
             cfg: Cell::new(Some(cfg)),
             shared: Rc::new(SharedContext {
                 event_handlers: WindowEventHandlers::default(),
@@ -474,22 +474,26 @@ impl App {
     /// Whenever sigkill is sent, we shut down the app and save the window state
     #[cfg(debug_assertions)]
     fn connect_preserve_window_state_handler(&self) {
-        // Wire up the trap
-        let target = self.shared.proxy.clone();
-        std::thread::spawn(move || {
-            use signal_hook::consts::{SIGINT, SIGTERM};
-            let sigkill = signal_hook::iterator::Signals::new([SIGTERM, SIGINT]);
-            if let Ok(mut sigkill) = sigkill {
-                for _ in sigkill.forever() {
-                    if target.send_event(UserWindowEvent::Shutdown).is_err() {
-                        std::process::exit(0);
-                    }
+        // TODO: make this work on windows
+        #[cfg(unix)]
+        {
+            // Wire up the trap
+            let target = self.shared.proxy.clone();
+            std::thread::spawn(move || {
+                use signal_hook::consts::{SIGINT, SIGTERM};
+                let sigkill = signal_hook::iterator::Signals::new([SIGTERM, SIGINT]);
+                if let Ok(mut sigkill) = sigkill {
+                    for _ in sigkill.forever() {
+                        if target.send_event(UserWindowEvent::Shutdown).is_err() {
+                            std::process::exit(0);
+                        }
 
-                    // give it a moment for the event to be processed
-                    std::thread::sleep(std::time::Duration::from_secs(1));
+                        // give it a moment for the event to be processed
+                        std::thread::sleep(std::time::Duration::from_secs(1));
+                    }
                 }
-            }
-        });
+            });
+        }
     }
 }
 

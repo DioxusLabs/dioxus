@@ -15,13 +15,13 @@
 [discord-url]: https://discord.gg/XgGxMSkvUM
 
 [Website](https://dioxuslabs.com) |
-[Guides](https://dioxuslabs.com/learn/0.4/) |
+[Guides](https://dioxuslabs.com/learn/0.5) |
 [API Docs](https://docs.rs/dioxus-check) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 
 ## Overview
 
-`dioxus-check` analyzes Dioxus source code and reports errors and warnings. Primarily, it enforces the [Rules of Hooks](https://dioxuslabs.com/learn/0.4/reference/hooks#rules-of-hooks).
+`dioxus-check` analyzes Dioxus source code and reports errors and warnings. Primarily, it enforces the [Rules of Hooks](https://dioxuslabs.com/learn/0.5/reference/hooks#rules-of-hooks).
 
 ## Contributing
 

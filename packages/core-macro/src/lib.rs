@@ -104,7 +104,7 @@ pub fn component(_args: TokenStream, input: TokenStream) -> TokenStream {
 /// ```rust,ignore
 /// #[inline_props]
 /// fn app(bob: String) -> Element {
-///     rsx!("hello, {bob}"))
+///     rsx! { "hello, {bob}") }
 /// }
 ///
 /// // is equivalent to
@@ -114,8 +114,8 @@ pub fn component(_args: TokenStream, input: TokenStream) -> TokenStream {
 ///     bob: String,
 /// }
 ///
-/// fn app(cx: Scope<AppProps>) -> Element {
-///     rsx!("hello, {bob}"))
+/// fn app(props: AppProps) -> Element {
+///     rsx! { "hello, {bob}") }
 /// }
 /// ```
 #[proc_macro_attribute]

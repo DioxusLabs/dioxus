@@ -27,11 +27,11 @@ impl Plugin {
                 if let Some(v) = plugin_dir.to_str() {
                     println!("{}", v);
                 } else {
-                    log::error!("Plugin path get failed.");
+                    tracing::error!("Plugin path get failed.");
                 }
             }
             Plugin::Add { name: _ } => {
-                log::info!("You can use `dx plugin app-path` to get Installation position");
+                tracing::info!("You can use `dx plugin app-path` to get Installation position");
             }
         }
         Ok(())
