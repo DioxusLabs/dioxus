@@ -1,3 +1,4 @@
+.dioxus
 /target
 /packages/playwright-tests/web/dist
 /packages/playwright-tests/fullstack/dist

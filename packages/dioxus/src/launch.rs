@@ -182,11 +182,15 @@ impl<Cfg: Default + 'static, ContextFn: ?Sized> LaunchBuilder<Cfg, ContextFn> {
 /// - `liveview`
 mod current_platform {
     macro_rules! if_else_cfg {
-        (if $attr:meta { $then:item } else { $else:item }) => {
-            #[cfg($attr)]
-            $then
-            #[cfg(not($attr))]
-            $else
+        (if $attr:meta { $($then:item)* } else { $($else:item)* }) => {
+            $(
+                #[cfg($attr)]
+                $then
+            )*
+            $(
+                #[cfg(not($attr))]
+                $else
+            )*
         };
     }
     use crate::prelude::TryIntoConfig;
@@ -194,7 +198,10 @@ mod current_platform {
     #[cfg(any(feature = "desktop", feature = "mobile"))]
     if_else_cfg! {
         if not(feature = "fullstack") {
+            #[cfg(feature = "desktop")]
             pub use dioxus_desktop::launch::*;
+            #[cfg(not(feature = "desktop"))]
+            pub use dioxus_mobile::launch::*;
         } else {
             impl TryIntoConfig<crate::launch::current_platform::Config> for ::dioxus_desktop::Config {
                 fn into_config(self) -> Option<crate::launch::current_platform::Config> {
