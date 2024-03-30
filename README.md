@@ -270,62 +270,29 @@ fn Counters() -> Element {
 }
 ```
 
-[While in Leptos, you would need to track keys, use the `<For>` component, create new signals, and manually clean up memory](https://book.leptos.dev/view/04_iteration.html#dynamic-rendering-with-the-for-component):
+[While in Leptos you would use the `<For>` component.](https://book.leptos.dev/view/04_iteration.html#dynamic-rendering-with-the-for-component):
 
 ```rust
 fn Counters() -> Element {
-    let initial_counters = (0..initial_length)
-        .map(|id| (id, create_signal(id + 1)))
-        .collect::<Vec<_>>();
-
-    let (counters, set_counters) = create_signal(initial_counters);
-
-    let add_counter = move |_| {
-        let sig = create_signal(next_counter_id + 1);
-        set_counters.update(move |counters| counters.push((next_counter_id, sig)));
-        next_counter_id += 1;
-    };
+    let counters = RwSignal::new(vec![0; 10]);
 
     view! {
-        <div>
-            <button on:click=add_counter>
-                "Add Counter"
-            </button>
-            <ul>
-                <For
-                    each=counters
-                    key=|counter| counter.0
-                    children=move |(id, (count, set_count))| {
-                        view! {
-                            <li>
-                                <button
-                                    on:click=move |_| set_count.update(|n| *n += 1)
-                                >
-                                    {count}
-                                </button>
-                                <button
-                                    on:click=move |_| {
-                                        set_counters.update(|counters| {
-                                            counters.retain(|(counter_id, (signal, _))| {
-
-                                                if counter_id == &id {
-                                                    signal.dispose();
-                                                }
-                                                counter_id != &id
-                                            })
-                                        });
-                                    }
-                                >
-                                    "Remove"
-                                </button>
-                            </li>
-                        }
-                    }
-                />
-            </ul>
-        </div>
+        <button on:click=move |_| counters.update(|n| n.push(n.len()))>"Add Counter"</button>
+        <For
+            each=move || 0..counters.with(Vec::len)
+            key=|idx| *idx
+            let:idx
+        >
+            <li>
+                <button on:click=move |_| counters.update(|n| n[idx] += 1)>
+                    {Memo::new(move |_| counters.with(|n| n[idx]))}
+                </button>
+                <button on:click=move |_| counters.update(|n| { n.remove(idx); })>
+                    "Remove"
+                </button>
+            </li>
+        </For>
     }
-}
 ```
 
 - **`Copy` state**: Dioxus 0.1 to 0.4 relied on lifetimes to relax the rules of Rust's borrow checker. This worked well for event handlers, but struggled around async. In Dioxus 0.5, we've switched to a [`Copy` state model](https://crates.io/crates/generational-box) borrowed from Leptos.
