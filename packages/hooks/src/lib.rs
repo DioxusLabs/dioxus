@@ -84,9 +84,6 @@ pub use use_effect::*;
 mod use_memo;
 pub use use_memo::*;
 
-// mod use_on_create;
-// pub use use_on_create::*;
-
 mod use_root_context;
 pub use use_root_context::*;
 
