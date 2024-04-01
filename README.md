@@ -285,7 +285,7 @@ fn Counters() -> impl IntoView {
         >
             <li>
                 <button on:click=move |_| counters.update(|n| n[idx] += 1)>
-                    {move |_| counters.with(|n| n[idx])}
+                    {Memo::new(move |_| counters.with(|n| n[idx]))}
                 </button>
                 <button on:click=move |_| counters.update(|n| { n.remove(idx); })>
                     "Remove"
