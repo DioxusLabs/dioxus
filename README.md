@@ -257,7 +257,7 @@ fn Counters() -> Element {
   let mut counters = use_signal(|| vec![0; initial_length]);
 
   rsx! {
-    button { onclick: move |_| counters.push(counters.len()); "Add Counter" }
+    button { onclick: move |_| counters.push(counters.len()), "Add Counter" }
     ul {
       for idx in 0..counters.len() {
         li {
