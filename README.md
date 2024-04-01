@@ -273,7 +273,7 @@ fn Counters() -> Element {
 [While in Leptos you would use the `<For>` component.](https://book.leptos.dev/view/04_iteration.html#dynamic-rendering-with-the-for-component):
 
 ```rust
-fn Counters() -> Element {
+fn Counters() -> impl IntoView {
     let counters = RwSignal::new(vec![0; 10]);
 
     view! {
