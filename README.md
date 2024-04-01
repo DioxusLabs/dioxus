@@ -254,19 +254,19 @@ Leptos is a library for building fullstack web-apps, similar to SolidJS and Soli
 
 ```rust
 fn Counters() -> Element {
-  let mut counters = use_signal(|| vec![0; initial_length]);
+    let mut counters = use_signal(|| vec![0; 10]);
 
-  rsx! {
-    button { onclick: move |_| counters.push(counters.len()); "Add Counter" }
-    ul {
-      for idx in 0..counters.len() {
-        li {
-          button { onclick: move |_| counters[idx] += 1; "{counters[idx]}" }
-          button { onclick: move |_| { counters.write().remove(idx); } "Remove" }
+    rsx! {
+        button { onclick: move |_| counters.push(counters.len()), "Add Counter" }
+        ul {
+            for idx in 0..counters.len() {
+                li {
+                    button { onclick: move |_| counters.write()[idx] += 1, "{counters.index(idx)}" }
+                    button { onclick: move |_| { counters.remove(idx); }, "Remove" }
+                }
+            }
         }
-      }
     }
-  }
 }
 ```
 
@@ -293,6 +293,7 @@ fn Counters() -> Element {
             </li>
         </For>
     }
+}
 ```
 
 - **`Copy` state**: Dioxus 0.1 to 0.4 relied on lifetimes to relax the rules of Rust's borrow checker. This worked well for event handlers, but struggled around async. In Dioxus 0.5, we've switched to a [`Copy` state model](https://crates.io/crates/generational-box) borrowed from Leptos.
