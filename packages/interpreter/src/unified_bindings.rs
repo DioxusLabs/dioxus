@@ -113,7 +113,7 @@ mod js {
                         break;
                 }
             } else if (ns == "style") {
-                node.style.removeProperty(name);
+                node.style.removeProperty(field);
             } else {
                 node.removeAttributeNS(ns, field);
             }
