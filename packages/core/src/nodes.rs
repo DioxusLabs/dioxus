@@ -167,36 +167,58 @@ impl VNode {
 
     /// Create a template with no nodes that will be skipped over during diffing
     pub fn empty() -> Element {
+        use std::cell::OnceCell;
+        // We can reuse all placeholders across the same thread to save memory
+        thread_local! {
+            static EMPTY_VNODE: OnceCell<Rc<VNodeInner>> = const { OnceCell::new() };
+        }
+        let vnode = EMPTY_VNODE.with(|cell| {
+            cell.get_or_init(move || {
+                Rc::new(VNodeInner {
+                    key: None,
+                    dynamic_nodes: Box::new([]),
+                    dynamic_attrs: Box::new([]),
+                    template: Cell::new(Template {
+                        name: "packages/core/nodes.rs:180:0:0",
+                        roots: &[],
+                        node_paths: &[],
+                        attr_paths: &[],
+                    }),
+                })
+            })
+            .clone()
+        });
         Some(Self {
-            vnode: Rc::new(VNodeInner {
-                key: None,
-                dynamic_nodes: Box::new([]),
-                dynamic_attrs: Box::new([]),
-                template: Cell::new(Template {
-                    name: "packages/core/nodes.rs:180:0:0",
-                    roots: &[],
-                    node_paths: &[],
-                    attr_paths: &[],
-                }),
-            }),
+            vnode,
             mount: Default::default(),
         })
     }
 
     /// Create a template with a single placeholder node
     pub fn placeholder() -> Self {
+        use std::cell::OnceCell;
+        // We can reuse all placeholders across the same thread to save memory
+        thread_local! {
+            static PLACEHOLDER_VNODE: OnceCell<Rc<VNodeInner>> = const { OnceCell::new() };
+        }
+        let vnode = PLACEHOLDER_VNODE.with(|cell| {
+            cell.get_or_init(move || {
+                Rc::new(VNodeInner {
+                    key: None,
+                    dynamic_nodes: Box::new([DynamicNode::Placeholder(Default::default())]),
+                    dynamic_attrs: Box::new([]),
+                    template: Cell::new(Template {
+                        name: "packages/core/nodes.rs:198:0:0",
+                        roots: &[TemplateNode::Dynamic { id: 0 }],
+                        node_paths: &[&[]],
+                        attr_paths: &[],
+                    }),
+                })
+            })
+            .clone()
+        });
         Self {
-            vnode: Rc::new(VNodeInner {
-                key: None,
-                dynamic_nodes: Box::new([DynamicNode::Placeholder(Default::default())]),
-                dynamic_attrs: Box::new([]),
-                template: Cell::new(Template {
-                    name: "packages/core/nodes.rs:198:0:0",
-                    roots: &[TemplateNode::Dynamic { id: 0 }],
-                    node_paths: &[&[]],
-                    attr_paths: &[],
-                }),
-            }),
+            vnode,
             mount: Default::default(),
         }
     }
