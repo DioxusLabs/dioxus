@@ -265,14 +265,6 @@ impl Scope {
         id
     }
 
-    /// Spawn a future that Dioxus won't clean up when this component is unmounted
-    ///
-    /// This is good for tasks that need to be run after the component has been dropped.
-    pub fn spawn_forever(&self, fut: impl Future<Output = ()> + 'static) -> Task {
-        // The root scope will never be unmounted so we can just add the task at the top of the app
-        Runtime::with(|rt| rt.spawn(self.id, fut)).expect("Runtime to exist")
-    }
-
     /// Mark this component as suspended on a specific task and then return None
     pub fn suspend(&self, task: Task) -> Option<Element> {
         self.last_suspendable_task.set(Some(task));

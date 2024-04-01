@@ -93,8 +93,10 @@ pub fn spawn(fut: impl Future<Output = ()> + 'static) -> Task {
 /// Spawn a future that Dioxus won't clean up when this component is unmounted
 ///
 /// This is good for tasks that need to be run after the component has been dropped.
+///
+/// **This will run the task in the root scope. Any calls to global methods inside the future (including `context`) will be run in the root scope.**
 pub fn spawn_forever(fut: impl Future<Output = ()> + 'static) -> Option<Task> {
-    Runtime::with_current_scope(|cx| cx.spawn_forever(fut))
+    Runtime::with_scope(ScopeId::ROOT, |cx| cx.spawn(fut))
 }
 
 /// Informs the scheduler that this task is no longer needed and should be removed.
