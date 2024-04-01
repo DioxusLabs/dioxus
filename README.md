@@ -273,7 +273,7 @@ fn Counters() -> Element {
 [While in Leptos you would use the `<For>` component.](https://book.leptos.dev/view/04_iteration.html#dynamic-rendering-with-the-for-component):
 
 ```rust
-fn Counters() -> Element {
+fn Counters() -> impl IntoView {
     let counters = RwSignal::new(vec![0; 10]);
 
     view! {
@@ -285,7 +285,7 @@ fn Counters() -> Element {
         >
             <li>
                 <button on:click=move |_| counters.update(|n| n[idx] += 1)>
-                    {Memo::new(move |_| counters.with(|n| n[idx]))}
+                    {move |_| counters.with(|n| n[idx])}
                 </button>
                 <button on:click=move |_| counters.update(|n| { n.remove(idx); })>
                     "Remove"
