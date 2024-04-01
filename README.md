@@ -261,8 +261,8 @@ fn Counters() -> Element {
     ul {
       for idx in 0..counters.len() {
         li {
-          button { onclick: move |_| counters[idx] += 1; "{counters[idx]}" }
-          button { onclick: move |_| { counters.write().remove(idx); } "Remove" }
+          button { onclick: move |_| counters.write()[idx] += 1, "{counters.read()[idx]}" }
+          button { onclick: move |_| { counters.write().remove(idx); }, "Remove" }
         }
       }
     }
