@@ -37,6 +37,7 @@ pub(crate) struct App {
     pub(crate) window_behavior: WindowCloseBehaviour,
     pub(crate) webviews: HashMap<WindowId, WebviewInstance>,
     pub(crate) float_all: bool,
+    pub(crate) show_devtools: bool,
 
     /// This single blob of state is shared between all the windows so they have access to the runtime state
     ///
@@ -64,6 +65,7 @@ impl App {
             control_flow: ControlFlow::Wait,
             unmounted_dom: Cell::new(Some(virtual_dom)),
             float_all: !cfg!(debug_assertions),
+            show_devtools: false,
             cfg: Cell::new(Some(cfg)),
             shared: Rc::new(SharedContext {
                 event_handlers: WindowEventHandlers::default(),
@@ -115,16 +117,29 @@ impl App {
 
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     pub fn handle_menu_event(&mut self, event: muda::MenuEvent) {
-        if event.id() == "dioxus-float-top" {
-            for webview in self.webviews.values() {
-                webview
-                    .desktop_context
-                    .window
-                    .set_always_on_top(self.float_all);
+        match event.id().0.as_str() {
+            "dioxus-float-top" => {
+                for webview in self.webviews.values() {
+                    webview
+                        .desktop_context
+                        .window
+                        .set_always_on_top(self.float_all);
+                }
+                self.float_all = !self.float_all;
             }
+            "dioxus-toggle-dev-tools" => {
+                self.show_devtools = !self.show_devtools;
+                for webview in self.webviews.values() {
+                    let wv = &webview.desktop_context.webview;
+                    if self.show_devtools {
+                        wv.open_devtools();
+                    } else {
+                        wv.close_devtools();
+                    }
+                }
+            }
+            _ => (),
         }
-
-        self.float_all = !self.float_all;
     }
 
     #[cfg(all(
