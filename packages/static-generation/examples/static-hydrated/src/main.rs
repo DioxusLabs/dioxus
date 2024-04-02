@@ -10,13 +10,11 @@ use dioxus::prelude::*;
 
 // Generate all routes and output them to the static path
 fn main() {
-    launch(app);
-}
-
-fn app() -> Element {
-    rsx! {
-        Router::<Route> {}
-    }
+    launch(|| {
+        rsx! {
+            Router::<Route> {}
+        }
+    });
 }
 
 #[derive(Clone, Routable, Debug, PartialEq)]
