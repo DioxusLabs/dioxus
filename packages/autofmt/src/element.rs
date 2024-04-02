@@ -71,12 +71,13 @@ impl Writer<'_> {
         let children_len = self.is_short_children(children);
         let is_small_children = children_len.is_some();
 
-        // if we have few attributes and a lot of children, place the attrs on top
+        // if we have one long attribute and a lot of children, place the attrs on top
         if is_short_attr_list && !is_small_children {
             opt_level = ShortOptimization::PropsOnTop;
         }
 
         // even if the attr is long, it should be put on one line
+        // However if we have childrne we need to just spread them out for readability
         if !is_short_attr_list && attributes.len() <= 1 {
             if children.is_empty() {
                 opt_level = ShortOptimization::Oneliner;
@@ -303,8 +304,12 @@ impl Writer<'_> {
 
     fn write_named_attribute(&mut self, attr: &ElementAttrNamed) -> Result {
         self.write_attribute_name(&attr.attr.name)?;
-        write!(self.out, ": ")?;
-        self.write_attribute_value(&attr.attr.value)?;
+
+        // if the attribute is a shorthand, we don't need to write the colon, just the name
+        if !attr.attr.can_be_shorthand() {
+            write!(self.out, ": ")?;
+            self.write_attribute_value(&attr.attr.value)?;
+        }
 
         Ok(())
     }
@@ -352,11 +357,39 @@ impl Writer<'_> {
             return Some(0);
         }
 
+        // Any comments push us over the limit automatically
+        if self.children_have_comments(children) {
+            return None;
+        }
+
+        match children {
+            [BodyNode::Text(ref text)] => Some(ifmt_to_string(text).len()),
+
+            // TODO: let rawexprs to be inlined
+            [BodyNode::RawExpr(ref expr)] => get_expr_length(expr),
+
+            // TODO: let rawexprs to be inlined
+            [BodyNode::Component(ref comp)] if comp.fields.is_empty() => Some(
+                comp.name
+                    .segments
+                    .iter()
+                    .map(|s| s.ident.to_string().len() + 2)
+                    .sum::<usize>(),
+            ),
+
+            // Feedback on discord indicates folks don't like combining multiple children on the same line
+            // We used to do a lot of math to figure out if we should expand out the line, but folks just
+            // don't like it.
+            _ => None,
+        }
+    }
+
+    fn children_have_comments(&self, children: &[BodyNode]) -> bool {
         for child in children {
             if self.current_span_is_primary(child.span()) {
                 'line: for line in self.src[..child.span().start().line - 1].iter().rev() {
                     match (line.trim().starts_with("//"), line.is_empty()) {
-                        (true, _) => return None,
+                        (true, _) => return true,
                         (_, true) => continue 'line,
                         _ => break 'line,
                     }
@@ -364,62 +397,7 @@ impl Writer<'_> {
             }
         }
 
-        match children {
-            [BodyNode::Text(ref text)] => Some(ifmt_to_string(text).len()),
-            [BodyNode::Component(ref comp)] => {
-                let attr_len = self.field_len(&comp.fields, &comp.manual_props);
-
-                if attr_len > 80 {
-                    None
-                } else if comp.children.is_empty() {
-                    Some(attr_len)
-                } else {
-                    None
-                }
-            }
-            // TODO: let rawexprs to be inlined
-            [BodyNode::RawExpr(ref expr)] => get_expr_length(expr),
-            [BodyNode::Element(ref el)] => {
-                let attr_len = self.is_short_attrs(&el.attributes);
-
-                if el.children.is_empty() && attr_len < 80 {
-                    return Some(el.name.to_string().len());
-                }
-
-                if el.children.len() == 1 {
-                    if let BodyNode::Text(ref text) = el.children[0] {
-                        let value = ifmt_to_string(text);
-
-                        if value.len() + el.name.to_string().len() + attr_len < 80 {
-                            return Some(value.len() + el.name.to_string().len() + attr_len);
-                        }
-                    }
-                }
-
-                None
-            }
-            // todo, allow non-elements to be on the same line
-            items => {
-                let mut total_count = 0;
-
-                for item in items {
-                    match item {
-                        BodyNode::Component(_) | BodyNode::Element(_) => return None,
-                        BodyNode::Text(text) => {
-                            total_count += ifmt_to_string(text).len();
-                        }
-                        BodyNode::RawExpr(expr) => match get_expr_length(expr) {
-                            Some(len) => total_count += len,
-                            None => return None,
-                        },
-                        BodyNode::ForLoop(_forloop) => return None,
-                        BodyNode::IfChain(_chain) => return None,
-                    }
-                }
-
-                Some(total_count)
-            }
-        }
+        false
     }
 
     /// empty everything except for some comments

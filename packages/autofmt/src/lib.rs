@@ -141,21 +141,14 @@ pub fn write_block_out(body: CallBody) -> Option<String> {
 }
 
 fn write_body(buf: &mut Writer, body: &CallBody) {
-    let is_short = buf.is_short_children(&body.roots).is_some();
-    let is_empty = buf.is_empty_children(&body.roots);
-    if (is_short && !buf.out.indent.split_line_attributes()) || is_empty {
-        // write all the indents with spaces and commas between
-        for idx in 0..body.roots.len() - 1 {
-            let ident = &body.roots[idx];
-            buf.write_ident(ident).unwrap();
-            write!(&mut buf.out.buf, ", ").unwrap();
+    match body.roots.len() {
+        0 => {}
+        1 if matches!(body.roots[0], BodyNode::Text(_)) => {
+            write!(buf.out, " ").unwrap();
+            buf.write_ident(&body.roots[0]).unwrap();
+            write!(buf.out, " ").unwrap();
         }
-
-        // write the last ident without a comma
-        let ident = &body.roots[body.roots.len() - 1];
-        buf.write_ident(ident).unwrap();
-    } else {
-        buf.write_body_indented(&body.roots).unwrap();
+        _ => buf.write_body_indented(&body.roots).unwrap(),
     }
 }
 

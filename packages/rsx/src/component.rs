@@ -296,3 +296,23 @@ fn normalize_path(name: &mut syn::Path) -> Option<AngleBracketedGenericArguments
         _ => None,
     }
 }
+
+impl ComponentField {
+    pub fn can_be_shorthand(&self) -> bool {
+        // If it's a shorthand...
+        if matches!(self.content, ContentField::Shorthand(_)) {
+            return true;
+        }
+
+        // If it's in the form of attr: attr, return true
+        if let ContentField::ManExpr(expr) = &self.content {
+            if let Expr::Path(path) = expr {
+                if path.path.segments.len() == 1 && &path.path.segments[0].ident == &self.name {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+}

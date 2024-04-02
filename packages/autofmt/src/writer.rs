@@ -188,6 +188,11 @@ impl<'a> Writer<'a> {
     pub(crate) fn is_short_attrs(&mut self, attributes: &[AttributeType]) -> usize {
         let mut total = 0;
 
+        // No more than 3 attributes before breaking the line
+        if attributes.len() > 3 {
+            return 100000;
+        }
+
         for attr in attributes {
             if self.current_span_is_primary(attr.start()) {
                 'line: for line in self.src[..attr.start().start().line - 1].iter().rev() {
@@ -209,7 +214,13 @@ impl<'a> Writer<'a> {
                         dioxus_rsx::ElementAttrName::Custom(name) => name.value().len() + 2,
                     };
                     total += name_len;
-                    total += self.attr_value_len(&attr.attr.value);
+
+                    //
+                    if attr.attr.value.is_shorthand() {
+                        total += 2;
+                    } else {
+                        total += self.attr_value_len(&attr.attr.value);
+                    }
                 }
                 AttributeType::Spread(expr) => {
                     let expr_len = self.retrieve_formatted_expr(expr).len();
