@@ -263,31 +263,7 @@ impl dioxus_ssr::incremental::WrapBody for FullstackRenderer {
         #[cfg(all(debug_assertions, feature = "hot-reload"))]
         {
             // In debug mode, we need to add a script to the page that will reload the page if the websocket disconnects to make full recompile hot reloads work
-            let disconnect_js = r#"(function () {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const url = protocol + '//' + window.location.host + '/_dioxus/disconnect';
-    const poll_interval = 1000;
-    const reload_upon_connect = () => {
-        console.log('Disconnected from server. Attempting to reconnect...');
-        window.setTimeout(
-            () => {
-                // Try to reconnect to the websocket
-                const ws = new WebSocket(url);
-                ws.onopen = () => {
-                    // If we reconnect, reload the page
-                    window.location.reload();
-                }
-                // Otherwise, try again in a second
-                reload_upon_connect();
-            },
-            poll_interval);
-    };
-
-    // on initial page load connect to the disconnect ws
-    const ws = new WebSocket(url);
-    // if we disconnect, start polling
-    ws.onclose = reload_upon_connect;
-})()"#;
+            let disconnect_js = include_str!("../../cli/src/assets/autoreload.js");
 
             to.write_all(r#"<script>"#.as_bytes())?;
             to.write_all(disconnect_js.as_bytes())?;
