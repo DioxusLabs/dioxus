@@ -17,10 +17,18 @@ pub struct LaunchBuilder<Cfg: 'static = (), ContextFn: ?Sized = ValidContext> {
 
 pub type LaunchFn<Cfg, Context> = fn(fn() -> Element, Vec<Box<Context>>, Cfg);
 
-#[cfg(any(feature = "fullstack", feature = "liveview"))]
+#[cfg(any(
+    feature = "fullstack",
+    feature = "static-generation",
+    feature = "liveview"
+))]
 type ValidContext = SendContext;
 
-#[cfg(not(any(feature = "fullstack", feature = "liveview")))]
+#[cfg(not(any(
+    feature = "fullstack",
+    feature = "static-generation",
+    feature = "liveview"
+)))]
 type ValidContext = UnsendContext;
 
 type SendContext = dyn Fn() -> Box<dyn Any> + Send + Sync + 'static;

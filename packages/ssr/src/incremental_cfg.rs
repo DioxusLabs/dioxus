@@ -29,14 +29,21 @@ pub struct DefaultRenderer {
 
 impl Default for DefaultRenderer {
     fn default() -> Self {
-        let before = r#"<!DOCTYPE html>
+        let title = dioxus_cli_config::CURRENT_CONFIG
+            .as_ref()
+            .map(|c| c.dioxus_config.application.name.clone())
+            .unwrap_or("Dioxus Application".into());
+        let before = format!(
+            r#"<!DOCTYPE html>
         <html lang="en">
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Dioxus Application</title>
+            <title>{}</title>
         </head>
-        <body>"#;
+        <body>"#,
+            title
+        );
         let after = r#"</body>
         </html>"#;
         Self {
@@ -130,8 +137,9 @@ impl IncrementalRendererConfig {
             ssr_renderer: crate::Renderer::new(),
             map_path: self.map_path.unwrap_or_else(move || {
                 Arc::new(move |route: &str| {
+                    let (before_query, _) = route.split_once('?').unwrap_or((route, ""));
                     let mut path = static_dir.clone();
-                    for segment in route.split('/') {
+                    for segment in before_query.split('/') {
                         path.push(segment);
                     }
                     path

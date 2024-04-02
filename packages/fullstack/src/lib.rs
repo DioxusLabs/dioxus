@@ -8,10 +8,6 @@ pub use once_cell;
 
 mod html_storage;
 
-#[cfg(feature = "static-site-generation")]
-#[cfg_attr(docsrs, doc(cfg(feature = "static-site-generation")))]
-mod static_generation;
-
 #[cfg(feature = "axum")]
 mod assets;
 #[cfg(feature = "axum")]
@@ -75,10 +71,6 @@ pub mod prelude {
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     pub use dioxus_ssr::incremental::{IncrementalRenderer, IncrementalRendererConfig};
-
-    #[cfg(feature = "static-site-generation")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "static-site-generation")))]
-    pub use crate::static_generation::*;
 
     pub use dioxus_server_macro::*;
     pub use server_fn::{self, ServerFn as _, ServerFnError};

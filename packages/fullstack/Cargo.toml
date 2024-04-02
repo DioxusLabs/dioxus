@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-fullstack"
-authors = ["Jonathan Kelley, Evan Almloff"]
+authors = ["Jonathan Kelley", "Evan Almloff"]
 version = { workspace = true }
 edition = "2021"
 description = "Fullstack Dioxus Utilities"

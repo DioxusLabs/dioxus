@@ -2,7 +2,6 @@ use super::cache::Segment;
 use crate::cache::StringCache;
 use dioxus_core::RenderReturn;
 
-use dioxus_core::Attribute;
 use dioxus_core::{prelude::*, AttributeValue, DynamicNode};
 use std::collections::HashMap;
 use std::fmt::Write;

@@ -1,10 +1,6 @@
 #![allow(non_snake_case)]
 
-use std::{
-    ops::{Deref, DerefMut},
-    path::PathBuf,
-    time::Duration,
-};
+use std::{path::PathBuf, time::Duration};
 
 /// Information about the freshness of a rendered response
 #[derive(Debug, Clone, Copy)]
@@ -57,31 +53,6 @@ impl RenderFreshness {
                 http::HeaderValue::from_str(&format!("max-age={}", max_age)).unwrap(),
             );
         }
-    }
-}
-
-struct WriteBuffer {
-    buffer: Vec<u8>,
-}
-
-impl std::fmt::Write for WriteBuffer {
-    fn write_str(&mut self, s: &str) -> std::fmt::Result {
-        self.buffer.extend_from_slice(s.as_bytes());
-        Ok(())
-    }
-}
-
-impl Deref for WriteBuffer {
-    type Target = Vec<u8>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.buffer
-    }
-}
-
-impl DerefMut for WriteBuffer {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.buffer
     }
 }
 
