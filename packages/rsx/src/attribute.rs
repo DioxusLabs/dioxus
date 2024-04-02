@@ -216,12 +216,10 @@ impl ElementAttr {
         }
 
         // If it's in the form of attr: attr, return true
-        if let ElementAttrValue::AttrExpr(expr) = &self.value {
-            if let Expr::Path(path) = expr {
-                if let ElementAttrName::BuiltIn(name) = &self.name {
-                    if path.path.segments.len() == 1 && &path.path.segments[0].ident == name {
-                        return true;
-                    }
+        if let ElementAttrValue::AttrExpr(Expr::Path(path)) = &self.value {
+            if let ElementAttrName::BuiltIn(name) = &self.name {
+                if path.path.segments.len() == 1 && &path.path.segments[0].ident == name {
+                    return true;
                 }
             }
         }

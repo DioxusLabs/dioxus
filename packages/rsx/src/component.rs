@@ -305,11 +305,9 @@ impl ComponentField {
         }
 
         // If it's in the form of attr: attr, return true
-        if let ContentField::ManExpr(expr) = &self.content {
-            if let Expr::Path(path) = expr {
-                if path.path.segments.len() == 1 && &path.path.segments[0].ident == &self.name {
-                    return true;
-                }
+        if let ContentField::ManExpr(Expr::Path(path)) = &self.content {
+            if path.path.segments.len() == 1 && path.path.segments[0].ident == self.name {
+                return true;
             }
         }
 

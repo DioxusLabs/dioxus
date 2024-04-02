@@ -337,10 +337,6 @@ impl Writer<'_> {
         beginning.is_empty()
     }
 
-    pub fn is_empty_children(&self, children: &[BodyNode]) -> bool {
-        children.is_empty()
-    }
-
     // check if the children are short enough to be on the same line
     // We don't have the notion of current line depth - each line tries to be < 80 total
     // returns the total line length if it's short
