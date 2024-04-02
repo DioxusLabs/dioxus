@@ -4,9 +4,8 @@ use std::fmt::Write;
 use crate::renderer::{str_truthy, BOOL_ATTRS};
 
 #[derive(Debug)]
-pub struct StringCache {
+pub(crate) struct StringCache {
     pub segments: Vec<Segment>,
-    pub template: Template,
 }
 
 #[derive(Default)]
@@ -56,7 +55,6 @@ impl StringCache {
 
         Ok(Self {
             segments: chain.segments,
-            template: template.template.get(),
         })
     }
 
