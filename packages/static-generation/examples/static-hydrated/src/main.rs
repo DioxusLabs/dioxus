@@ -2,31 +2,15 @@
 //!
 //! ```sh
 //! dx build --features web --release
-//! cargo run --features server
+//! cargo run --features ssg
 //! ```
 
 #![allow(unused)]
 use dioxus::prelude::*;
-use serde::{Deserialize, Serialize};
 
-// Generate all routes and output them to the docs path
-#[cfg(feature = "server")]
-#[tokio::main]
-async fn main() {
-    let mut renderer = IncrementalRenderer::builder().build();
-
-    generate_static_site(app, &mut renderer, &FullstackHTMLTemplate::default())
-        .await
-        .unwrap();
-}
-
-// Hydrate the page
-#[cfg(not(feature = "server"))]
+// Generate all routes and output them to the static path
 fn main() {
-    #[cfg(all(feature = "web", not(feature = "server")))]
-    LaunchBuilder::web()
-        .with_cfg(dioxus::web::Config::default().hydrate(true))
-        .launch(app);
+    launch(app);
 }
 
 fn app() -> Element {
@@ -35,7 +19,7 @@ fn app() -> Element {
     }
 }
 
-#[derive(Clone, Routable, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Routable, Debug, PartialEq)]
 enum Route {
     #[route("/")]
     Home {},

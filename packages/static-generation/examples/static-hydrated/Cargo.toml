@@ -7,11 +7,9 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus = { workspace = true, features = ["fullstack", "router"] }
-tokio = { workspace = true, features = ["full"], optional = true }
-serde = "1.0.159"
+dioxus = { workspace = true, features = ["hydrated-static-site-generation", "router"] }
 
 [features]
 default = []
-server = ["tokio", "dioxus/axum"]
+ssg = ["dioxus/static-generation"]
 web = ["dioxus/web"]

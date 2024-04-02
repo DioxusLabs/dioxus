@@ -186,6 +186,7 @@ impl<Cfg: Default + 'static, ContextFn: ?Sized> LaunchBuilder<Cfg, ContextFn> {
 /// - `fullstack`
 /// - `desktop`
 /// - `mobile`
+/// - `static-generation`
 /// - `web`
 /// - `liveview`
 mod current_platform {
@@ -203,6 +204,9 @@ mod current_platform {
     }
     use crate::prelude::TryIntoConfig;
 
+    #[cfg(feature = "fullstack")]
+    pub use dioxus_fullstack::launch::*;
+
     #[cfg(any(feature = "desktop", feature = "mobile"))]
     if_else_cfg! {
         if not(feature = "fullstack") {
@@ -219,12 +223,22 @@ mod current_platform {
         }
     }
 
-    #[cfg(feature = "fullstack")]
-    pub use dioxus_fullstack::launch::*;
+    #[cfg(feature = "static-generation")]
+    if_else_cfg! {
+        if all(not(feature = "fullstack"), not(feature = "desktop"), not(feature = "mobile")) {
+            pub use dioxus_static_site_generation::launch::*;
+        } else {
+            impl TryIntoConfig<crate::launch::current_platform::Config> for ::dioxus_static_site_generation::Config {
+                fn into_config(self) -> Option<crate::launch::current_platform::Config> {
+                    None
+                }
+            }
+        }
+    }
 
     #[cfg(feature = "web")]
     if_else_cfg! {
-        if not(any(feature = "desktop", feature = "mobile", feature = "fullstack")) {
+        if not(any(feature = "desktop", feature = "mobile", feature = "fullstack", feature = "static-generation")) {
             pub use dioxus_web::launch::*;
         } else {
             impl TryIntoConfig<crate::launch::current_platform::Config> for ::dioxus_web::Config {
@@ -242,7 +256,8 @@ mod current_platform {
                 feature = "web",
                 feature = "desktop",
                 feature = "mobile",
-                feature = "fullstack"
+                feature = "fullstack",
+                feature = "static-generation"
             ))
         {
             pub use dioxus_liveview::launch::*;
@@ -260,7 +275,8 @@ mod current_platform {
         feature = "desktop",
         feature = "mobile",
         feature = "web",
-        feature = "fullstack"
+        feature = "fullstack",
+        feature = "static-generation"
     )))]
     pub type Config = ();
 
@@ -269,7 +285,8 @@ mod current_platform {
         feature = "desktop",
         feature = "mobile",
         feature = "web",
-        feature = "fullstack"
+        feature = "fullstack",
+        feature = "static-generation"
     )))]
     pub fn launch(
         root: fn() -> dioxus_core::Element,

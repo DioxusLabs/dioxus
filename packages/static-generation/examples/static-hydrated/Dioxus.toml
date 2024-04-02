@@ -1,14 +1,14 @@
 [application]
 
 # App (Project) Name
-name = "Dioxus"
+name = "Staticly Generated Dioxus App"
 
 # Dioxus App Default Platform
 # desktop, web, mobile, ssr
 default_platform = "web"
 
 # `build` & `serve` dist path
-out_dir = "docs"
+out_dir = "dist"
 
 # resource (public) file folder
 asset_dir = "public"

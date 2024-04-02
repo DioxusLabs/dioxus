@@ -18,7 +18,7 @@ pub struct Config {
     pub(crate) map_path: Option<Box<dyn Fn(&str) -> PathBuf + Send + Sync + 'static>>,
 
     #[cfg(feature = "site-generation")]
-    root_id: Option<&'static str>,
+    pub(crate) root_id: Option<&'static str>,
 
     #[cfg(feature = "web")]
     #[allow(unused)]
@@ -80,7 +80,10 @@ impl Config {
 
     /// Set the id of the root element in the index.html file to place the prerendered content into. (defaults to main)
     pub fn root_id(mut self, root_id: &'static str) -> Self {
-        self.root_id = Some(root_id);
+        #[cfg(feature = "site-generation")]
+        {
+            self.root_id = Some(root_id);
+        }
         self
     }
 

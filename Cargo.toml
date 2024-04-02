@@ -35,7 +35,7 @@ members = [
     "packages/fullstack/examples/axum-streaming",
     "packages/fullstack/examples/axum-desktop",
     "packages/fullstack/examples/axum-auth",
-    "packages/fullstack/examples/static-hydrated",
+    "packages/static-generation/examples/static-hydrated",
     # Full project examples
     "examples/tailwind",
     "examples/PWA-example",
