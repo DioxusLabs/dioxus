@@ -355,6 +355,40 @@ pub enum SegmentType {
     Child,
 }
 
+impl SegmentType {
+    /// Try to convert this segment into a static segment.
+    pub fn to_static(&self) -> Option<&'static str> {
+        match self {
+            SegmentType::Static(s) => Some(*s),
+            _ => None,
+        }
+    }
+
+    /// Try to convert this segment into a dynamic segment.
+    pub fn to_dynamic(&self) -> Option<&'static str> {
+        match self {
+            SegmentType::Dynamic(s) => Some(*s),
+            _ => None,
+        }
+    }
+
+    /// Try to convert this segment into a catch all segment.
+    pub fn to_catch_all(&self) -> Option<&'static str> {
+        match self {
+            SegmentType::CatchAll(s) => Some(*s),
+            _ => None,
+        }
+    }
+
+    /// Try to convert this segment into a child segment.
+    pub fn to_child(&self) -> Option<()> {
+        match self {
+            SegmentType::Child => Some(()),
+            _ => None,
+        }
+    }
+}
+
 impl Display for SegmentType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {

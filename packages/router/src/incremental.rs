@@ -3,12 +3,8 @@ use core::pin::Pin;
 use std::future::Future;
 use std::str::FromStr;
 
-use dioxus_lib::prelude::*;
-use dioxus_ssr::incremental::{
-    IncrementalRenderer, IncrementalRendererError, RenderFreshness, WrapBody,
-};
-
 use crate::prelude::*;
+use dioxus_lib::prelude::*;
 
 /// Pre-cache all static routes.
 pub async fn pre_cache_static_routes<Rt, R: WrapBody + Send + Sync>(
@@ -19,51 +15,20 @@ where
     Rt: Routable,
     <Rt as FromStr>::Err: std::fmt::Display,
 {
-    for route in Rt::SITE_MAP
-        .iter()
-        .flat_map(|seg| seg.flatten().into_iter())
-    {
-        // check if this is a static segment
-        let mut is_static = true;
-        let mut full_path = String::new();
-        for segment in &route {
-            match segment {
-                SegmentType::Child => {}
-                SegmentType::Static(s) => {
-                    full_path += "/";
-                    full_path += s;
-                }
-                _ => {
-                    // skip routes with any dynamic segments
-                    is_static = false;
-                    break;
-                }
-            }
-        }
-
-        if is_static {
-            match Rt::from_str(&full_path) {
-                Ok(route) => {
-                    render_route(
-                        renderer,
-                        route,
-                        &mut tokio::io::sink(),
-                        |vdom| {
-                            Box::pin(async move {
-                                vdom.rebuild_in_place();
-                                vdom.wait_for_suspense().await;
-                            })
-                        },
-                        wrapper,
-                    )
-                    .await?;
-                }
-                Err(e) => {
-                    tracing::info!("@ route: {}", full_path);
-                    tracing::error!("Error pre-caching static route: {}", e);
-                }
-            }
-        }
+    for route in Rt::static_routes() {
+        render_route(
+            renderer,
+            route,
+            &mut tokio::io::sink(),
+            |vdom| {
+                Box::pin(async move {
+                    vdom.rebuild_in_place();
+                    vdom.wait_for_suspense().await;
+                })
+            },
+            wrapper,
+        )
+        .await?;
     }
 
     Ok(())
@@ -118,4 +83,107 @@ where
             wrapper,
         )
         .await
+}
+
+#[cfg(all(feature = "ssr", feature = "fullstack"))]
+fn server_context_for_route(route: &str) -> dioxus_fullstack::prelude::DioxusServerContext {
+    use dioxus_fullstack::prelude::*;
+    use std::sync::Arc;
+    let request = http::Request::builder().uri(route).body(()).unwrap();
+    let (parts, _) = request.into_parts();
+    let server_context = DioxusServerContext::new(Arc::new(tokio::sync::RwLock::new(parts)));
+    server_context
+}
+
+/// Try to extract the site map by finding the root router that a component renders.
+fn extract_site_map(app: fn() -> Element) -> Option<&'static [SiteMapSegment]> {
+    let mut vdom = VirtualDom::new(app);
+
+    vdom.rebuild_in_place();
+
+    vdom.in_runtime(|| ScopeId::ROOT.in_runtime(|| root_router().map(|r| r.site_map())))
+}
+
+#[cfg(all(feature = "ssr", feature = "fullstack"))]
+/// Generate a static site from any fullstack app that uses the router.
+pub async fn generate_static_site<R: WrapBody + Send + Sync>(
+    app: fn() -> Element,
+    renderer: &mut IncrementalRenderer,
+    wrapper: &R,
+) -> Result<(), IncrementalRendererError> {
+    use dioxus_fullstack::prelude::ProvideServerContext;
+    use tokio::task::block_in_place;
+    
+    let site_map = extract_site_map(app).expect("Failed to find a router in the application");
+    let flat_site_map = site_map.iter().flat_map(SiteMapSegment::flatten);
+
+    for route in flat_site_map {
+        let Some(static_route) = route
+            .iter()
+            .map(SegmentType::to_static)
+            .collect::<Option<Vec<_>>>()
+        else {
+            continue;
+        };
+        let url = format!("/{}", static_route.join("/"));
+
+        let context = server_context_for_route(&url);
+        let future = async {
+            renderer
+                .render(
+                    url,
+                    || VirtualDom::new(app),
+                    &mut tokio::io::sink(),
+                    |vdom| {
+                        Box::pin(async move {
+                            block_in_place(|| vdom.rebuild_in_place());
+                            vdom.wait_for_suspense().await;
+                        })
+                    },
+                    wrapper,
+                )
+                .await
+        };
+        ProvideServerContext::new(future, context).await?;
+    }
+
+    Ok(())
+}
+
+#[test]
+fn extract_site_map_works() {
+    use dioxus::prelude::*;
+
+    #[derive(Clone, Routable, Debug, PartialEq)]
+    enum Route {
+        #[route("/")]
+        Home {},
+        #[route("/about")]
+        About {},
+    }
+
+    fn Home() -> Element {
+        rsx! { "Home" }
+    }
+
+    fn About() -> Element {
+        rsx! { "About" }
+    }
+
+    fn app() -> Element {
+        rsx! {
+            div {
+                Other {}
+            }
+        }
+    }
+
+    fn Other() -> Element {
+        rsx! {
+            Router::<Route> {}
+        }
+    }
+
+    let site_map = extract_site_map(app);
+    assert_eq!(site_map, Some(Route::SITE_MAP));
 }
