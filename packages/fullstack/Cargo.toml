@@ -75,6 +75,7 @@ mobile = ["dioxus-mobile"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls"]
 axum = ["dep:axum", "tower-http", "server", "server_fn/axum", "dioxus_server_macro/axum", "async-compression"]
+static-site-generation = []
 server = [
     "server_fn/ssr",
     "dioxus_server_macro/server",

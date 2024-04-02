@@ -1,5 +1,5 @@
 //! A shared pool of renderers for efficient server side rendering.
-use crate::{render::dioxus_core::NoOpMutations, server_context::with_server_context};
+use crate::render::dioxus_core::NoOpMutations;
 use dioxus_ssr::{
     incremental::{RenderFreshness, WrapBody},
     Renderer,
@@ -45,7 +45,7 @@ impl SsrRendererPool {
         virtual_dom_factory: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
         server_context: &DioxusServerContext,
     ) -> Result<(RenderFreshness, String), dioxus_ssr::incremental::IncrementalRendererError> {
-        let wrapper = FullstackRenderer {
+        let wrapper = FullstackHTMLTemplate {
             cfg: cfg.clone(),
             server_context: server_context.clone(),
         };
@@ -210,12 +210,32 @@ impl SSRState {
     }
 }
 
-struct FullstackRenderer {
+/// The template that wraps the body of the HTML for a fullstack page. This template contains the data needed to hydrate server functions that were run on the server.
+pub struct FullstackHTMLTemplate {
     cfg: ServeConfig,
     server_context: DioxusServerContext,
 }
 
-impl dioxus_ssr::incremental::WrapBody for FullstackRenderer {
+impl Default for FullstackHTMLTemplate {
+    fn default() -> Self {
+        Self {
+            cfg: ServeConfig::default(),
+            server_context: DioxusServerContext::default(),
+        }
+    }
+}
+
+impl FullstackHTMLTemplate {
+    /// Create a new [`FullstackHTMLTemplate`].
+    pub fn new(cfg: &ServeConfig, server_context: &DioxusServerContext) -> Self {
+        Self {
+            cfg: cfg.clone(),
+            server_context: server_context.clone(),
+        }
+    }
+}
+
+impl dioxus_ssr::incremental::WrapBody for FullstackHTMLTemplate {
     fn render_before_body<R: std::io::Write>(
         &self,
         to: &mut R,
@@ -231,11 +251,6 @@ impl dioxus_ssr::incremental::WrapBody for FullstackRenderer {
         &self,
         to: &mut R,
     ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
-        // serialize the props
-        // TODO: restore props serialization
-        // crate::html_storage::serialize::encode_props_in_element(&self.cfg.props, to).map_err(
-        //     |err| dioxus_ssr::incremental::IncrementalRendererError::Other(Box::new(err)),
-        // )?;
         // serialize the server state
         crate::html_storage::serialize::encode_in_element(
             &*self.server_context.html_data().map_err(|_| {

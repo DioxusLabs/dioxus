@@ -113,8 +113,9 @@ pub async fn generate_static_site<R: WrapBody + Send + Sync>(
 ) -> Result<(), IncrementalRendererError> {
     use dioxus_fullstack::prelude::ProvideServerContext;
     use tokio::task::block_in_place;
-    
-    let site_map = extract_site_map(app).expect("Failed to find a router in the application");
+
+    let site_map = block_in_place(|| extract_site_map(app))
+        .expect("Failed to find a router in the application");
     let flat_site_map = site_map.iter().flat_map(SiteMapSegment::flatten);
 
     for route in flat_site_map {

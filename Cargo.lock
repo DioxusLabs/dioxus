@@ -2586,6 +2586,7 @@ dependencies = [
  "dioxus-ssr",
  "gloo",
  "gloo-utils 0.1.7",
+ "http 1.1.0",
  "js-sys",
  "serde",
  "serde_json",
@@ -8613,9 +8614,6 @@ name = "static-hydrated"
 version = "0.1.0"
 dependencies = [
  "dioxus",
- "dioxus-fullstack",
- "dioxus-router",
- "dioxus-web",
  "serde",
  "tokio",
 ]

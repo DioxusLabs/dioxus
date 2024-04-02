@@ -7,30 +7,15 @@
 
 #![allow(unused)]
 use dioxus::prelude::*;
-use dioxus_fullstack::{launch, prelude::*};
 use serde::{Deserialize, Serialize};
 
 // Generate all routes and output them to the docs path
 #[cfg(feature = "server")]
 #[tokio::main]
 async fn main() {
-    let wrapper = DefaultRenderer {
-        before_body: r#"<!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width,
-        initial-scale=1.0">
-        <title>Dioxus Application</title>
-    </head>
-    <body>"#
-            .to_string(),
-        after_body: r#"</body>
-    </html>"#
-            .to_string(),
-    };
     let mut renderer = IncrementalRenderer::builder().build();
-    pre_cache_static_routes::<Route, _>(&mut renderer, &wrapper)
+
+    generate_static_site(app, &mut renderer, &FullstackHTMLTemplate::default())
         .await
         .unwrap();
 }
@@ -39,12 +24,15 @@ async fn main() {
 #[cfg(not(feature = "server"))]
 fn main() {
     #[cfg(all(feature = "web", not(feature = "server")))]
-    dioxus_web::launch_with_props(
-        dioxus_fullstack::router::RouteWithCfg::<Route>,
-        dioxus_fullstack::prelude::get_root_props_from_document()
-            .expect("Failed to get root props from document"),
-        dioxus_web::Config::default().hydrate(true),
-    );
+    LaunchBuilder::web()
+        .with_cfg(dioxus::web::Config::default().hydrate(true))
+        .launch(app);
+}
+
+fn app() -> Element {
+    rsx! {
+        Router::<Route> {}
+    }
 }
 
 #[derive(Clone, Routable, Debug, PartialEq, Serialize, Deserialize)]
