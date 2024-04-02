@@ -56,7 +56,9 @@ fn deeply_nested() {
     div {
         div { class: "asd",
             div { class: "asd",
-                div { class: "asd", div { class: "asd" } }
+                div { class: "asd",
+                    div { class: "asd" }
+                }
             }
         }
     }"#;
