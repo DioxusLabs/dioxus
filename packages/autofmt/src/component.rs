@@ -91,8 +91,11 @@ impl Writer<'_> {
                     write!(self.out, ", ")?;
                 }
 
-                for child in children {
+                for (id, child) in children.iter().enumerate() {
                     self.write_ident(child)?;
+                    if id != children.len() - 1 && children.len() > 1 {
+                        write!(self.out, ", ")?;
+                    }
                 }
 
                 write!(self.out, " ")?;
@@ -163,6 +166,10 @@ impl Writer<'_> {
 
             let name = &field.name;
             match &field.content {
+                ContentField::ManExpr(_exp) if field.can_be_shorthand() => {
+                    write!(self.out, "{name}")?;
+                }
+
                 ContentField::ManExpr(exp) => {
                     let out = unparse_expr(exp);
                     let mut lines = out.split('\n').peekable();
