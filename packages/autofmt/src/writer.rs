@@ -244,10 +244,11 @@ impl<'a> Writer<'a> {
     fn write_for_loop(&mut self, forloop: &ForLoop) -> std::fmt::Result {
         write!(
             self.out,
-            "for {} in {} {{",
+            "for {} in ",
             forloop.pat.clone().into_token_stream(),
-            unparse_expr(&forloop.expr)
         )?;
+
+        self.write_inline_expr(&forloop.expr)?;
 
         if forloop.body.is_empty() {
             write!(self.out, "}}")?;
@@ -276,12 +277,9 @@ impl<'a> Writer<'a> {
                 ..
             } = chain;
 
-            write!(
-                self.out,
-                "{} {} {{",
-                if_token.to_token_stream(),
-                unparse_expr(cond)
-            )?;
+            write!(self.out, "{} ", if_token.to_token_stream(),)?;
+
+            self.write_inline_expr(cond)?;
 
             self.write_body_indented(then_branch)?;
 
@@ -304,6 +302,31 @@ impl<'a> Writer<'a> {
 
         self.out.tabbed_line()?;
         write!(self.out, "}}")?;
+
+        Ok(())
+    }
+
+    /// An expression within a for or if block that might need to be spread out across several lines
+    fn write_inline_expr(&mut self, expr: &Expr) -> std::fmt::Result {
+        let unparsed = unparse_expr(expr);
+        let mut lines = unparsed.lines();
+        let first_line = lines.next().unwrap();
+        write!(self.out, "{first_line}")?;
+
+        let mut was_multiline = false;
+
+        for line in lines {
+            was_multiline = true;
+            self.out.tabbed_line()?;
+            write!(self.out, "{line}")?;
+        }
+
+        if was_multiline {
+            self.out.tabbed_line()?;
+            write!(self.out, "{{")?;
+        } else {
+            write!(self.out, " {{")?;
+        }
 
         Ok(())
     }

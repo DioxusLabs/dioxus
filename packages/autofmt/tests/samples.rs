@@ -49,4 +49,5 @@ twoway![
     shorthand,
     docsite,
     letsome,
+    fat_exprs,
 ];
