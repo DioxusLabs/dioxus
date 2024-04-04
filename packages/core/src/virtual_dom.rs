@@ -361,6 +361,11 @@ impl VirtualDom {
         self
     }
 
+    /// Provide a context to the root scope
+    pub fn provide_root_context<T: Clone + 'static>(&self, context: T) {
+        self.base_scope().state().provide_context(context);
+    }
+
     /// Build the virtualdom with a global context inserted into the base scope
     ///
     /// This method is useful for when you want to provide a context in your app without knowing its type
