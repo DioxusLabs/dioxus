@@ -157,7 +157,7 @@ impl Drop for VNode {
             for attrs in self.vnode.dynamic_attrs.iter() {
                 for attr in attrs.iter() {
                     if let AttributeValue::Listener(listener) = &attr.value {
-                        listener.callback.manually_drop();
+                        listener.callback.recycle();
                     }
                 }
             }
