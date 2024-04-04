@@ -22,6 +22,7 @@ export class NativeInterpreter extends JSChannel_ {
   ipc: any;
   editsPath: string;
   kickStylesheets: boolean;
+  queuedBytes: ArrayBuffer[] = [];
 
   // eventually we want to remove liveview and build it into the server-side-events of fullstack
   // however, for now we need to support it since SSE in fullstack doesn't exist yet
@@ -263,6 +264,21 @@ export class NativeInterpreter extends JSChannel_ {
     }
   }
 
+  enqueueBytes(bytes: ArrayBuffer) {
+    this.queuedBytes.push(bytes);
+  }
+
+  flushQueuedBytes() {
+    // drain the queuedBytes
+    const byteArray = this.queuedBytes;
+    this.queuedBytes = [];
+
+    for (let bytes of byteArray) {
+      // @ts-ignore
+      this.run_from_bytes(bytes);
+    }
+  }
+
   waitForRequest(headless: boolean) {
     fetch(new Request(this.editsPath))
       .then(response => response.arrayBuffer())
@@ -272,9 +288,9 @@ export class NativeInterpreter extends JSChannel_ {
           // @ts-ignore
           this.run_from_bytes(bytes);
         } else {
+          this.enqueueBytes(bytes);
           requestAnimationFrame(() => {
-            // @ts-ignore
-            this.run_from_bytes(bytes)
+            this.flushQueuedBytes();
           });
         }
         this.waitForRequest(headless);
