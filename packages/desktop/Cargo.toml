@@ -70,7 +70,7 @@ core-foundation = "0.9.3"
 objc = "0.2.7"
 
 [features]
-default = ["tokio_runtime", "wry/objc-exception", "hot-reload"]
+default = ["tokio_runtime", "wry/objc-exception", "hot-reload", "devtools"]
 tokio_runtime = ["tokio"]
 fullscreen = ["wry/fullscreen"]
 transparent = ["wry/transparent"]
