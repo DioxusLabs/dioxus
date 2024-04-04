@@ -197,7 +197,7 @@ impl Renderer {
                     // then write any listeners
                     for name in accumulated_listeners.drain(..) {
                         write!(buf, ",{}:", &name[2..])?;
-                        write!(buf, "{}", dioxus_html::event_bubbles(name) as u8)?;
+                        write!(buf, "{}", dioxus_html::event_bubbles(&name[2..]) as u8)?;
                     }
                 }
 
