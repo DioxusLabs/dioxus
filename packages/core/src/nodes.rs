@@ -738,15 +738,15 @@ impl AttributeValue {
     ///
     /// The callback must be confined to the lifetime of the ScopeState
     pub fn listener<T: 'static>(mut callback: impl FnMut(Event<T>) + 'static) -> AttributeValue {
-        let event_handler = EventHandler::new(move |event: Event<dyn Any>| {
+        // TODO: maybe don't use the copy-variant of EventHandler here?
+        // Maybe, create an Owned variant so we are less likely to run into leaks
+        AttributeValue::Listener(EventHandler::new(move |event: Event<dyn Any>| {
             let data = event.data.downcast::<T>().unwrap();
             callback(Event {
                 propagates: event.propagates,
                 data,
             });
-        });
-
-        AttributeValue::Listener(event_handler)
+        }))
     }
 
     /// Create a new [`AttributeValue`] with a value that implements [`AnyValue`]
