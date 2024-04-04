@@ -3,7 +3,6 @@
 
 use parking_lot::Mutex;
 use std::{
-    any::Any,
     fmt::Debug,
     marker::PhantomData,
     ops::{Deref, DerefMut},
