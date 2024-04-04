@@ -1,6 +1,5 @@
-use generational_box::{GenerationalBox, UnsyncStorage};
-
-use crate::{generational_box::current_owner, global_context::current_scope_id, Runtime, ScopeId};
+use crate::{global_context::current_scope_id, Runtime, ScopeId};
+use generational_box::GenerationalBox;
 use std::{cell::Cell, rc::Rc};
 
 /// A wrapper around some generic data that handles the event's state

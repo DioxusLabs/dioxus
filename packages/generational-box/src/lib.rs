@@ -68,24 +68,14 @@ impl<T, S: AnyStorage> Debug for GenerationalBox<T, S> {
 impl<T, S: Storage<T>> GenerationalBox<T, S> {
     /// Create a new generational box by leaking a value into the storage. This is useful for creating
     /// a box that needs to be manually dropped with no owners.
+    #[track_caller]
     pub fn leak(value: T) -> Self {
         let mut location = S::claim();
-        let key = location.replace_with_caller(
+        location.replace_with_caller(
             value,
-            #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-            std::panic::Location::caller(),
-        );
-        Self {
-            raw: location,
-            #[cfg(any(debug_assertions, feature = "check_generation"))]
-            generation: location
-                .0
-                .generation
-                .load(std::sync::atomic::Ordering::Relaxed),
             #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-            created_at: std::panic::Location::caller(),
-            _marker: PhantomData,
-        }
+            std::panic::Location::caller(),
+        )
     }
 
     #[inline(always)]
