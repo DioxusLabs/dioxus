@@ -3,6 +3,7 @@
 
 use parking_lot::Mutex;
 use std::{
+    any::Any,
     fmt::Debug,
     marker::PhantomData,
     ops::{Deref, DerefMut},
@@ -189,6 +190,7 @@ impl<T, S: Storage<T>> GenerationalBox<T, S> {
     /// Drop the value out of the generational box and invalidate the generational box. This will return the value if the value was taken.
     pub fn manually_drop(&self) -> Option<T> {
         if self.validate() {
+            <S as AnyStorage>::recycle(&self.raw);
             Storage::take(&self.raw.0.data)
         } else {
             None
