@@ -29,15 +29,13 @@ async fn memo_updates() {
         if generation() < 2 {
             vec.push(len);
         }
+
         // The memo should always be up to date
         assert_eq!(vec.len(), len_memo());
 
         rsx! {
             for i in 0..len {
-                Child {
-                    index: i,
-                    vec,
-                }
+                Child { index: i, vec }
             }
         }
     }
@@ -57,10 +55,9 @@ async fn memo_updates() {
     dom.rebuild_in_place();
     let mut signal = VEC_SIGNAL.with(|cell| (*cell.borrow()).unwrap());
     // Wait for the signal to update
-    for _ in 0..3 {
+    for _ in 0..2 {
         dom.wait_for_work().await;
         dom.render_immediate(&mut dioxus::dioxus_core::NoOpMutations);
-        println!("Signal: {signal:?}");
     }
     assert_eq!(signal(), vec![0, 1, 2, 3, 4, 5]);
     // Remove each element from the vec
