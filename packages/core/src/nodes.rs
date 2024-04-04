@@ -142,6 +142,29 @@ impl Clone for VNode {
     }
 }
 
+impl Drop for VNode {
+    fn drop(&mut self) {
+        // FIXME:
+        // TODO:
+        //
+        // We have to add this drop *here* becase we can't add a drop impl to AttributeValue and
+        // keep semver compatibility. Adding a drop impl means you can't destructure the value, which
+        // we need to do for enums.
+        //
+        // if dropping this will drop the last vnode (rc count is 1), then we need to drop the listeners
+        // in this template
+        if Rc::strong_count(&self.vnode) == 1 {
+            for attrs in self.vnode.dynamic_attrs.iter() {
+                for attr in attrs.iter() {
+                    if let AttributeValue::Listener(listener) = &attr.value {
+                        listener.callback.manually_drop();
+                    }
+                }
+            }
+        }
+    }
+}
+
 impl PartialEq for VNode {
     fn eq(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.vnode, &other.vnode)
@@ -714,14 +737,14 @@ impl AttributeValue {
     ///
     /// The callback must be confined to the lifetime of the ScopeState
     pub fn listener<T: 'static>(mut callback: impl FnMut(Event<T>) + 'static) -> AttributeValue {
+        // TODO: maybe don't use the copy-variant of EventHandler here?
+        // Maybe, create an Owned variant so we are less likely to run into leaks
         AttributeValue::Listener(EventHandler::new(move |event: Event<dyn Any>| {
             let data = event.data.downcast::<T>().unwrap();
-            // if let Ok(data) = event.data.downcast::<T>() {
             callback(Event {
                 propagates: event.propagates,
                 data,
             });
-            // }
         }))
     }
 

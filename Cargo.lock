@@ -2453,6 +2453,7 @@ dependencies = [
  "serde_json",
  "serde_repr",
  "tokio",
+ "tracing",
  "wasm-bindgen",
  "web-sys",
 ]
