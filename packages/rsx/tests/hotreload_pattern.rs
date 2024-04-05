@@ -2,9 +2,10 @@
 
 use dioxus_rsx::{
     hot_reload::{diff_rsx, template_location, ChangedRsx, DiffResult},
+    tracked::hotreload_callbody,
     CallBody, HotReloadingContext,
 };
-use quote::quote;
+use quote::{quote, ToTokens};
 use syn::{parse::Parse, spanned::Spanned, File};
 
 #[derive(Debug)]
@@ -32,59 +33,160 @@ impl HotReloadingContext for Mock {
         }
     }
 }
+
 #[test]
-fn testing_for_pattern() {
+fn simple_for_loop() {
     let old = quote! {
         div {
             for item in vec![1, 2, 3] {
-                div { "123" }
                 div { "asasddasdasd" }
             }
         }
     };
 
-    let new = quote! {
+    let new_valid = quote! {
+        div {
+            for item in vec![1, 2, 3] {
+                div { "asasddasdasd" }
+                div { "123" }
+            }
+        }
+    };
+
+    let new_invalid = quote! {
+        div {
+            for item in vec![1, 2, 3, 4] {
+                div { "asasddasdasd" }
+                div { "123" }
+            }
+        }
+    };
+
+    let location = "testing";
+    let old: CallBody = syn::parse2(old).unwrap();
+    let new_valid: CallBody = syn::parse2(new_valid).unwrap();
+    let new_invalid: CallBody = syn::parse2(new_invalid).unwrap();
+
+    assert!(hotreload_callbody::<Mock>(&old, &new_valid, location).is_some());
+    assert!(hotreload_callbody::<Mock>(&old, &new_invalid, location).is_none());
+}
+
+#[test]
+fn multiple_for_loops() {
+    let old = quote! {
         div {
             for item in vec![1, 2, 3] {
                 div { "asasddasdasd" }
             }
+            for item in vec![4, 5, 6] {
+                div { "asasddasdasd" }
+            }
         }
     };
 
+    // do a little reorder, still valid just different
+    let new_valid = quote! {
+        div {
+            for item in vec![4, 5, 6] {
+                span { "asasddasdasd" }
+                span { "123" }
+            }
+            for item in vec![1, 2, 3] {
+                div { "asasddasdasd" }
+                div { "123" }
+            }
+        }
+    };
+
+    let new_invalid = quote! {
+        div {
+            for item in vec![1, 2, 3, 4] {
+                div { "asasddasdasd" }
+                div { "123" }
+            }
+            for item in vec![4, 5, 6] {
+                span { "asasddasdasd" }
+                span { "123" }
+            }
+        }
+    };
+
+    // just remove an entire for loop
+    let new_valid_removed = quote! {
+        div {
+            for item in vec![4, 5, 6] {
+                span { "asasddasdasd" }
+                span { "123" }
+            }
+        }
+    };
+
+    let new_invalid_new_dynamic_internal = quote! {
+        div {
+            for item in vec![1, 2, 3] {
+                div { "asasddasdasd" }
+                div { "123" }
+            }
+            for item in vec![4, 5, 6] {
+                span { "asasddasdasd" }
+
+                // this is a new dynamic node, and thus can't be hot reloaded
+                // Eventualy we might be able to do a format like this, but not right now
+                span { "123 {item}" }
+            }
+        }
+    };
+
+    let new_invlaid_added = quote! {
+        div {
+            for item in vec![1, 2, 3] {
+                div { "asasddasdasd" }
+                div { "123" }
+            }
+            for item in vec![4, 5, 6] {
+                span { "asasddasdasd" }
+                span { "123" }
+            }
+
+            for item in vec![7, 8, 9] {
+                span { "asasddasdasd" }
+                span { "123" }
+            }
+        }
+    };
+
+    let location = "testing";
     let old: CallBody = syn::parse2(old).unwrap();
-    let new: CallBody = syn::parse2(new).unwrap();
+    let new_valid: CallBody = syn::parse2(new_valid).unwrap();
+    let new_invalid: CallBody = syn::parse2(new_invalid).unwrap();
+    let new_valid_removed: CallBody = syn::parse2(new_valid_removed).unwrap();
+    let new_invalid_new_dynamic_internal: CallBody =
+        syn::parse2(new_invalid_new_dynamic_internal).unwrap();
+    let new_invlaid_added: CallBody = syn::parse2(new_invlaid_added).unwrap();
 
-    let updated = old.update_template::<Mock>(Some(new), "testing");
+    let valid = hotreload_callbody::<Mock>(&old, &new_valid, location);
+    assert!(valid.is_some());
+    let templates = valid.unwrap();
+    assert_eq!(templates.len(), 1);
+    let template = &templates[0];
+    // It's an inversion, so we should get them in reverse
+    assert_eq!(template.node_paths, &[&[0, 1], &[0, 0]]);
 
-    // currently, modifying a for loop is not hot reloadable
-    // We want to change this...
-    assert!(updated.is_none());
+    assert!(hotreload_callbody::<Mock>(&old, &new_invalid, location).is_none());
+    assert!(
+        hotreload_callbody::<Mock>(&old, &new_invalid_new_dynamic_internal, location).is_none()
+    );
 
-    // let updated = old.update_template::<Mock>(Some(new), "testing").unwrap();
+    let removed = hotreload_callbody::<Mock>(&old, &new_valid_removed, location);
+    assert!(removed.is_some());
+    let templates = removed.unwrap();
+    assert_eq!(templates.len(), 1);
+    let template = &templates[0];
 
-    // let old = include_str!(concat!("./valid/for_.old.rsx"));
-    // let new = include_str!(concat!("./valid/for_.new.rsx"));
-    // let (old, new) = load_files(old, new);
+    // We just completely removed the dynamic node, so it should be a "dud" path and then the placement
+    assert_eq!(template.node_paths, &[&[], &[0u8, 0] as &[u8]]);
 
-    // let DiffResult::RsxChanged { rsx_calls } = diff_rsx(&new, &old) else {
-    //     panic!("Expected a rsx call to be changed")
-    // };
-
-    // for calls in rsx_calls {
-    //     let ChangedRsx { old, new } = calls;
-
-    //     let old_start = old.span().start();
-
-    //     let old_call_body = syn::parse2::<CallBody>(old.tokens).unwrap();
-    //     let new_call_body = syn::parse2::<CallBody>(new).unwrap();
-
-    //     let leaked_location = Box::leak(template_location(old_start, file).into_boxed_str());
-
-    //     let hotreloadable_template =
-    //         new_call_body.update_template::<Ctx>(Some(old_call_body), leaked_location);
-
-    //     dbg!(hotreloadable_template);
-    // }
-
-    // dbg!(rsx_calls);
+    // Adding a new dynamic node should not be hot reloadable
+    let added = hotreload_callbody::<Mock>(&old, &new_invlaid_added, location);
+    assert!(added.is_none());
 }

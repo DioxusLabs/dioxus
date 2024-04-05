@@ -6,7 +6,7 @@ use quote::quote;
 
 /// As we create the dynamic nodes, we want to keep track of them in a linear fashion
 /// We'll use the size of the vecs to determine the index of the dynamic node in the final output
-#[derive(Default, Debug)]
+#[derive(Default, Debug, PartialEq)]
 pub struct DynamicContext<'a> {
     pub dynamic_nodes: Vec<&'a BodyNode>,
     pub dynamic_attributes: Vec<Vec<&'a AttributeType>>,
@@ -32,9 +32,17 @@ pub struct DynamicContext<'a> {
 }
 
 impl<'a> DynamicContext<'a> {
+    pub fn from_body<Ctx: HotReloadingContext>(roots: &'a [BodyNode]) -> Self {
+        let mut s = Self::default();
+        s.populate_all_by_updating::<Ctx>(roots);
+        s
+    }
+
+    /// NOTE: this now panics if you pass in a `None` -
     pub fn new(template: Option<CallBody>) -> Self {
         let mut new = Self::default();
 
+        // If there's an old template, we're going to use it for overrides
         if let Some(call) = template {
             for node in call.roots {
                 new.track_node(node);
@@ -69,6 +77,28 @@ impl<'a> DynamicContext<'a> {
         }
 
         Some(roots_)
+    }
+
+    pub fn populate_all_by_updating<Ctx: HotReloadingContext>(
+        &mut self,
+        roots: &'a [BodyNode],
+    ) -> Option<Vec<Vec<TemplateNode>>> {
+        // Create a list of new roots that we'll spit out
+        let mut roots_ = Vec::new();
+
+        // Populate the dynamic context with our own roots
+        for (idx, root) in roots.iter().enumerate() {
+            self.current_path.push(idx as u8);
+            roots_.push(self.update_node::<Ctx>(root)?);
+            self.current_path.pop();
+        }
+
+        let mut all_templates = vec![roots_];
+
+        // Now walk the the all_templates nodes and run the same dynamic context algorithm on them
+        // This should bubble up internal templates
+
+        Some(all_templates)
     }
 
     /// Render a portion of an rsx callbody to a TemplateNode call
@@ -229,11 +259,13 @@ impl<'a> DynamicContext<'a> {
                 Some(TemplateNode::Text { text })
             }
 
+            // See if we can update the for loop
+            BodyNode::ForLoop(forloop) => self.update_dynamic_node(root),
+
             // The user is moving a dynamic node around in the template
             // We *might* be able to handle it, but you never really know
             BodyNode::RawExpr(_)
             | BodyNode::Text(_)
-            | BodyNode::ForLoop(_)
             | BodyNode::IfChain(_)
             | BodyNode::Component(_) => self.update_dynamic_node(root),
         }

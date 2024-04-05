@@ -14,9 +14,36 @@ fn main() {
 fn app() -> Element {
     let mut count = use_signal(|| 0);
 
-    rsx! {
+    let out = rsx! {
         h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }
     }
+    .unwrap();
+
+    dbg!(out.template.get().name);
+
+    Some(out)
+}
+
+#[test]
+fn nested_is() {
+    let out = rsx! {
+        div { "hhi" }
+        div {
+            for i in 0..2 {
+                div { "hi {i}" }
+            }
+
+            for i in 0..3 {
+                div { "hi {i}" }
+            }
+        }
+    }
+    .unwrap();
+
+    dbg!(out.template.get().name);
+
+    dbg!(&out.dynamic_nodes[0]);
+    dbg!(&out.dynamic_nodes[1]);
 }
