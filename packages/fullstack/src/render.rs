@@ -263,7 +263,38 @@ impl dioxus_ssr::incremental::WrapBody for FullstackRenderer {
         #[cfg(all(debug_assertions, feature = "hot-reload"))]
         {
             // In debug mode, we need to add a script to the page that will reload the page if the websocket disconnects to make full recompile hot reloads work
-            let disconnect_js = include_str!("../../cli/src/assets/autoreload.js");
+            // This is copied from the Dioxus-CLI package at ../packages/cli
+            let disconnect_js = r#"(function () {
+              var protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+              var url = protocol + "//" + window.location.host + "/_dioxus/ws";
+              var poll_interval = 8080;
+            
+              var reload_upon_connect = (event) => {
+                // Firefox will send a 1001 code when the connection is closed because the page is reloaded
+                // Only firefox will trigger the onclose event when the page is reloaded manually: https://stackoverflow.com/questions/10965720/should-websocket-onclose-be-triggered-by-user-navigation-or-refresh
+                // We should not reload the page in this case
+                if (event.code === 1001) {
+                  return;
+                }
+                window.setTimeout(() => {
+                  var ws = new WebSocket(url);
+                  ws.onopen = () => window.location.reload();
+                  ws.onclose = reload_upon_connect;
+                }, poll_interval);
+              };
+            
+              var ws = new WebSocket(url);
+            
+              ws.onmessage = (ev) => {
+                console.log("Received message: ", ev, ev.data);
+            
+                if (ev.data == "reload") {
+                  window.location.reload();
+                }
+              };
+            
+              ws.onclose = reload_upon_connect;
+            })();"#;
 
             to.write_all(r#"<script>"#.as_bytes())?;
             to.write_all(disconnect_js.as_bytes())?;
