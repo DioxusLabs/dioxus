@@ -348,7 +348,10 @@ pub fn event_bubbles(evt: &str) -> bool {
         "transitionend" => true,
         "toggle" => true,
         "mounted" => false,
-        _ => true,
+        _ => {
+            tracing::warn!("Unknown event name: {evt}");
+            true
+        }
     }
 }
 

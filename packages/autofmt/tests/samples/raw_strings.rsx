@@ -1,6 +1,11 @@
 rsx! {
     // Raw text strings
-    button { r#"Click me"#, r##"Click me"##, r######"Click me"######, r#"dynamic {1}"# }
+    button {
+        r#"Click me"#
+        r##"Click me"##
+        r######"Click me"######
+        r#"dynamic {1}"#
+    }
 
     // Raw attribute strings
     div {

@@ -1,6 +1,5 @@
 use super::cache::Segment;
 use crate::cache::StringCache;
-use dioxus_core::RenderReturn;
 
 use dioxus_core::{prelude::*, AttributeValue, DynamicNode};
 use std::collections::HashMap;
@@ -54,12 +53,9 @@ impl Renderer {
         dom: &VirtualDom,
         scope: ScopeId,
     ) -> std::fmt::Result {
-        // We should never ever run into async or errored nodes in SSR
-        // Error boundaries and suspense boundaries will convert these to sync
-        if let RenderReturn::Ready(node) = dom.get_scope(scope).unwrap().root_node() {
-            self.dynamic_node_id = 0;
-            self.render_template(buf, dom, node)?
-        };
+        let node = dom.get_scope(scope).unwrap().root_node();
+        self.dynamic_node_id = 0;
+        self.render_template(buf, dom, node)?;
 
         Ok(())
     }
@@ -121,14 +117,7 @@ impl Renderer {
                         } else {
                             let scope = node.mounted_scope(*idx, template, dom).unwrap();
                             let node = scope.root_node();
-                            match node {
-                                RenderReturn::Ready(node) => {
-                                    self.render_template(buf, dom, node)?
-                                }
-                                _ => todo!(
-                                    "generally, scopes should be sync, only if being traversed"
-                                ),
-                            }
+                            self.render_template(buf, dom, node)?
                         }
                     }
                     DynamicNode::Text(text) => {
@@ -208,7 +197,7 @@ impl Renderer {
                     // then write any listeners
                     for name in accumulated_listeners.drain(..) {
                         write!(buf, ",{}:", &name[2..])?;
-                        write!(buf, "{}", dioxus_html::event_bubbles(name) as u8)?;
+                        write!(buf, "{}", dioxus_html::event_bubbles(&name[2..]) as u8)?;
                     }
                 }
 

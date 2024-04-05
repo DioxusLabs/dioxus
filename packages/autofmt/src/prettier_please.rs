@@ -13,14 +13,20 @@ pub fn unparse_expr(expr: &Expr) -> String {
 
 // Split off the fn main and then cut the tabs off the front
 fn unwrapped(raw: String) -> String {
-    raw.strip_prefix("fn main() {\n")
+    let mut o = raw
+        .strip_prefix("fn main() {\n")
         .unwrap()
         .strip_suffix("}\n")
         .unwrap()
         .lines()
         .map(|line| line.strip_prefix("    ").unwrap()) // todo: set this to tab level
         .collect::<Vec<_>>()
-        .join("\n")
+        .join("\n");
+
+    // remove the semicolon
+    o.pop();
+
+    o
 }
 
 fn wrapped(expr: &Expr) -> File {
@@ -31,7 +37,7 @@ fn wrapped(expr: &Expr) -> File {
             //
             Item::Verbatim(quote::quote! {
                 fn main() {
-                    #expr
+                    #expr;
                 }
             }),
         ],
@@ -42,7 +48,7 @@ fn wrapped(expr: &Expr) -> File {
 fn unparses_raw() {
     let expr = syn::parse_str("1 + 1").unwrap();
     let unparsed = unparse(&wrapped(&expr));
-    assert_eq!(unparsed, "fn main() {\n    1 + 1\n}\n");
+    assert_eq!(unparsed, "fn main() {\n    1 + 1;\n}\n");
 }
 
 #[test]
@@ -50,6 +56,13 @@ fn unparses_completely() {
     let expr = syn::parse_str("1 + 1").unwrap();
     let unparsed = unparse_expr(&expr);
     assert_eq!(unparsed, "1 + 1");
+}
+
+#[test]
+fn unparses_let_guard() {
+    let expr = syn::parse_str("let Some(url) = &link.location").unwrap();
+    let unparsed = unparse_expr(&expr);
+    assert_eq!(unparsed, "let Some(url) = &link.location");
 }
 
 #[test]

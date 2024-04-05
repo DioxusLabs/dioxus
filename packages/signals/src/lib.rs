@@ -26,7 +26,10 @@ mod global;
 pub use global::*;
 
 mod impls;
-pub use generational_box::{AnyStorage, Owner, Storage, SyncStorage, UnsyncStorage};
+
+pub use generational_box::{
+    AnyStorage, BorrowError, BorrowMutError, Owner, Storage, SyncStorage, UnsyncStorage,
+};
 
 mod read;
 pub use read::*;

@@ -361,6 +361,11 @@ impl VirtualDom {
         self
     }
 
+    /// Provide a context to the root scope
+    pub fn provide_root_context<T: Clone + 'static>(&self, context: T) {
+        self.base_scope().state().provide_context(context);
+    }
+
     /// Build the virtualdom with a global context inserted into the base scope
     ///
     /// This method is useful for when you want to provide a context in your app without knowing its type
@@ -512,12 +517,17 @@ impl VirtualDom {
         // We choose not to poll the deadline since we complete pretty quickly anyways
         while let Some(task) = self.pop_task() {
             // Then poll any tasks that might be pending
-            let tasks = task.tasks_queued.into_inner();
-            for task in tasks {
+            let mut tasks = task.tasks_queued.into_inner();
+            while let Some(task) = tasks.pop() {
                 let _ = self.runtime.handle_task_wakeup(task);
+
                 // Running that task, may mark a scope higher up as dirty. If it does, return from the function early
                 self.queue_events();
                 if self.has_dirty_scopes() {
+                    // requeue any remaining tasks
+                    for task in tasks {
+                        self.mark_task_dirty(task);
+                    }
                     return;
                 }
             }
@@ -633,10 +643,14 @@ impl VirtualDom {
         while let Some(work) = self.pop_work() {
             {
                 let _runtime = RuntimeGuard::new(self.runtime.clone());
+
                 // Then, poll any tasks that might be pending in the scope
                 for task in work.tasks {
                     let _ = self.runtime.handle_task_wakeup(task);
                 }
+
+                self.queue_events();
+
                 // If the scope is dirty, run the scope and get the mutations
                 if work.rerun_scope {
                     let new_nodes = self.run_scope(work.scope.id);
@@ -718,6 +732,9 @@ impl VirtualDom {
                         let _ = self.runtime.handle_task_wakeup(task);
                     }
                 }
+
+                self.queue_events();
+
                 // If the scope is dirty, run the scope and get the mutations
                 if work.rerun_scope {
                     let new_nodes = self.run_scope(work.scope.id);

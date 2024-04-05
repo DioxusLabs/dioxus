@@ -142,6 +142,29 @@ impl Clone for VNode {
     }
 }
 
+impl Drop for VNode {
+    fn drop(&mut self) {
+        // FIXME:
+        // TODO:
+        //
+        // We have to add this drop *here* becase we can't add a drop impl to AttributeValue and
+        // keep semver compatibility. Adding a drop impl means you can't destructure the value, which
+        // we need to do for enums.
+        //
+        // if dropping this will drop the last vnode (rc count is 1), then we need to drop the listeners
+        // in this template
+        if Rc::strong_count(&self.vnode) == 1 {
+            for attrs in self.vnode.dynamic_attrs.iter() {
+                for attr in attrs.iter() {
+                    if let AttributeValue::Listener(listener) = &attr.value {
+                        listener.callback.recycle();
+                    }
+                }
+            }
+        }
+    }
+}
+
 impl PartialEq for VNode {
     fn eq(&self, other: &Self) -> bool {
         Rc::ptr_eq(&self.vnode, &other.vnode)
@@ -167,36 +190,58 @@ impl VNode {
 
     /// Create a template with no nodes that will be skipped over during diffing
     pub fn empty() -> Element {
+        use std::cell::OnceCell;
+        // We can reuse all placeholders across the same thread to save memory
+        thread_local! {
+            static EMPTY_VNODE: OnceCell<Rc<VNodeInner>> = const { OnceCell::new() };
+        }
+        let vnode = EMPTY_VNODE.with(|cell| {
+            cell.get_or_init(move || {
+                Rc::new(VNodeInner {
+                    key: None,
+                    dynamic_nodes: Box::new([]),
+                    dynamic_attrs: Box::new([]),
+                    template: Cell::new(Template {
+                        name: "packages/core/nodes.rs:180:0:0",
+                        roots: &[],
+                        node_paths: &[],
+                        attr_paths: &[],
+                    }),
+                })
+            })
+            .clone()
+        });
         Some(Self {
-            vnode: Rc::new(VNodeInner {
-                key: None,
-                dynamic_nodes: Box::new([]),
-                dynamic_attrs: Box::new([]),
-                template: Cell::new(Template {
-                    name: "packages/core/nodes.rs:180:0:0",
-                    roots: &[],
-                    node_paths: &[],
-                    attr_paths: &[],
-                }),
-            }),
+            vnode,
             mount: Default::default(),
         })
     }
 
     /// Create a template with a single placeholder node
     pub fn placeholder() -> Self {
+        use std::cell::OnceCell;
+        // We can reuse all placeholders across the same thread to save memory
+        thread_local! {
+            static PLACEHOLDER_VNODE: OnceCell<Rc<VNodeInner>> = const { OnceCell::new() };
+        }
+        let vnode = PLACEHOLDER_VNODE.with(|cell| {
+            cell.get_or_init(move || {
+                Rc::new(VNodeInner {
+                    key: None,
+                    dynamic_nodes: Box::new([DynamicNode::Placeholder(Default::default())]),
+                    dynamic_attrs: Box::new([]),
+                    template: Cell::new(Template {
+                        name: "packages/core/nodes.rs:198:0:0",
+                        roots: &[TemplateNode::Dynamic { id: 0 }],
+                        node_paths: &[&[]],
+                        attr_paths: &[],
+                    }),
+                })
+            })
+            .clone()
+        });
         Self {
-            vnode: Rc::new(VNodeInner {
-                key: None,
-                dynamic_nodes: Box::new([DynamicNode::Placeholder(Default::default())]),
-                dynamic_attrs: Box::new([]),
-                template: Cell::new(Template {
-                    name: "packages/core/nodes.rs:198:0:0",
-                    roots: &[TemplateNode::Dynamic { id: 0 }],
-                    node_paths: &[&[]],
-                    attr_paths: &[],
-                }),
-            }),
+            vnode,
             mount: Default::default(),
         }
     }
@@ -692,14 +737,14 @@ impl AttributeValue {
     ///
     /// The callback must be confined to the lifetime of the ScopeState
     pub fn listener<T: 'static>(mut callback: impl FnMut(Event<T>) + 'static) -> AttributeValue {
+        // TODO: maybe don't use the copy-variant of EventHandler here?
+        // Maybe, create an Owned variant so we are less likely to run into leaks
         AttributeValue::Listener(EventHandler::new(move |event: Event<dyn Any>| {
             let data = event.data.downcast::<T>().unwrap();
-            // if let Ok(data) = event.data.downcast::<T>() {
             callback(Event {
                 propagates: event.propagates,
                 data,
             });
-            // }
         }))
     }
 

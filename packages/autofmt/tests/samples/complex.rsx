@@ -48,5 +48,9 @@ rsx! {
         }
     }
 
-    div { "asdbascasdbasd", "asbdasbdabsd", {asbdabsdbasdbas} }
+    div {
+        "asdbascasdbasd"
+        "asbdasbdabsd"
+        {asbdabsdbasdbas}
+    }
 }
