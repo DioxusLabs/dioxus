@@ -18,7 +18,6 @@ async fn main() -> anyhow::Result<()> {
     // and manganis warnings and errors from other crates
     let mut filter = EnvFilter::new("error,dx=info,dioxus-cli=info,manganis-cli-support=info");
     if env::var(LOG_ENV).is_ok() {
-        println!("RAN");
         filter = EnvFilter::from_env(LOG_ENV);
     }
     tracing_subscriber::fmt().with_env_filter(filter).init();
