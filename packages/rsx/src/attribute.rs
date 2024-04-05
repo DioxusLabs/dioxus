@@ -208,6 +208,26 @@ pub struct ElementAttr {
     pub value: ElementAttrValue,
 }
 
+impl ElementAttr {
+    pub fn can_be_shorthand(&self) -> bool {
+        // If it's a shorthand...
+        if matches!(self.value, ElementAttrValue::Shorthand(_)) {
+            return true;
+        }
+
+        // If it's in the form of attr: attr, return true
+        if let ElementAttrValue::AttrExpr(Expr::Path(path)) = &self.value {
+            if let ElementAttrName::BuiltIn(name) = &self.name {
+                if path.path.segments.len() == 1 && &path.path.segments[0].ident == name {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+}
+
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum ElementAttrValue {
     /// attribute,
@@ -274,6 +294,10 @@ impl ToTokens for ElementAttrValue {
 }
 
 impl ElementAttrValue {
+    pub fn is_shorthand(&self) -> bool {
+        matches!(self, ElementAttrValue::Shorthand(_))
+    }
+
     fn to_str_expr(&self) -> Option<TokenStream2> {
         match self {
             ElementAttrValue::AttrLiteral(lit) => Some(quote!(#lit.to_string())),

@@ -1,3 +1,5 @@
 fn app() -> Element {
-    rsx! { div { "hello world" } }
+    rsx! {
+        div { "hello world" }
+    }
 }

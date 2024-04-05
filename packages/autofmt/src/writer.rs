@@ -188,6 +188,11 @@ impl<'a> Writer<'a> {
     pub(crate) fn is_short_attrs(&mut self, attributes: &[AttributeType]) -> usize {
         let mut total = 0;
 
+        // No more than 3 attributes before breaking the line
+        if attributes.len() > 3 {
+            return 100000;
+        }
+
         for attr in attributes {
             if self.current_span_is_primary(attr.start()) {
                 'line: for line in self.src[..attr.start().start().line - 1].iter().rev() {
@@ -209,7 +214,13 @@ impl<'a> Writer<'a> {
                         dioxus_rsx::ElementAttrName::Custom(name) => name.value().len() + 2,
                     };
                     total += name_len;
-                    total += self.attr_value_len(&attr.attr.value);
+
+                    //
+                    if attr.attr.value.is_shorthand() {
+                        total += 2;
+                    } else {
+                        total += self.attr_value_len(&attr.attr.value);
+                    }
                 }
                 AttributeType::Spread(expr) => {
                     let expr_len = self.retrieve_formatted_expr(expr).len();
@@ -233,10 +244,11 @@ impl<'a> Writer<'a> {
     fn write_for_loop(&mut self, forloop: &ForLoop) -> std::fmt::Result {
         write!(
             self.out,
-            "for {} in {} {{",
+            "for {} in ",
             forloop.pat.clone().into_token_stream(),
-            unparse_expr(&forloop.expr)
         )?;
+
+        self.write_inline_expr(&forloop.expr)?;
 
         if forloop.body.is_empty() {
             write!(self.out, "}}")?;
@@ -265,12 +277,9 @@ impl<'a> Writer<'a> {
                 ..
             } = chain;
 
-            write!(
-                self.out,
-                "{} {} {{",
-                if_token.to_token_stream(),
-                unparse_expr(cond)
-            )?;
+            write!(self.out, "{} ", if_token.to_token_stream(),)?;
+
+            self.write_inline_expr(cond)?;
 
             self.write_body_indented(then_branch)?;
 
@@ -293,6 +302,31 @@ impl<'a> Writer<'a> {
 
         self.out.tabbed_line()?;
         write!(self.out, "}}")?;
+
+        Ok(())
+    }
+
+    /// An expression within a for or if block that might need to be spread out across several lines
+    fn write_inline_expr(&mut self, expr: &Expr) -> std::fmt::Result {
+        let unparsed = unparse_expr(expr);
+        let mut lines = unparsed.lines();
+        let first_line = lines.next().unwrap();
+        write!(self.out, "{first_line}")?;
+
+        let mut was_multiline = false;
+
+        for line in lines {
+            was_multiline = true;
+            self.out.tabbed_line()?;
+            write!(self.out, "{line}")?;
+        }
+
+        if was_multiline {
+            self.out.tabbed_line()?;
+            write!(self.out, "{{")?;
+        } else {
+            write!(self.out, " {{")?;
+        }
 
         Ok(())
     }

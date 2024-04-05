@@ -113,7 +113,11 @@ impl WebsysDom {
                     ids,
                     to_mount,
                 )?,
-            _ => {}
+            TemplateNode::Text { .. } => {
+                if let Some(id) = root_id {
+                    ids.push(id.0 as u32);
+                }
+            }
         }
         Ok(())
     }

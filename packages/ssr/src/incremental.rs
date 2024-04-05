@@ -2,7 +2,6 @@
 
 #![allow(non_snake_case)]
 
-use crate::fs_cache::ValidCachedPath;
 use chrono::offset::Utc;
 use chrono::DateTime;
 use dioxus_core::VirtualDom;

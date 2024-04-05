@@ -254,76 +254,44 @@ Leptos is a library for building fullstack web-apps, similar to SolidJS and Soli
 
 ```rust
 fn Counters() -> Element {
-  let mut counters = use_signal(|| vec![0; initial_length]);
+    let mut counters = use_signal(|| vec![0; 10]);
 
-  rsx! {
-    button { onclick: move |_| counters.push(counters.len()); "Add Counter" }
-    ul {
-      for idx in 0..counters.len() {
-        li {
-          button { onclick: move |_| counters[idx] += 1; "{counters[idx]}" }
-          button { onclick: move |_| { counters.write().remove(idx); } "Remove" }
+    rsx! {
+        button { onclick: move |_| counters.push(counters.len()), "Add Counter" }
+        ul {
+            for idx in 0..counters.len() {
+                li {
+                    button { onclick: move |_| counters.write()[idx] += 1, "{counters.index(idx)}" }
+                    button { onclick: move |_| { counters.remove(idx); }, "Remove" }
+                }
+            }
         }
-      }
     }
-  }
 }
 ```
 
-[While in Leptos, you would need to track keys, use the `<For>` component, create new signals, and manually clean up memory](https://book.leptos.dev/view/04_iteration.html#dynamic-rendering-with-the-for-component):
+[While in Leptos you would use the `<For>` component.](https://book.leptos.dev/view/04_iteration.html#dynamic-rendering-with-the-for-component):
 
 ```rust
-fn Counters() -> Element {
-    let initial_counters = (0..initial_length)
-        .map(|id| (id, create_signal(id + 1)))
-        .collect::<Vec<_>>();
-
-    let (counters, set_counters) = create_signal(initial_counters);
-
-    let add_counter = move |_| {
-        let sig = create_signal(next_counter_id + 1);
-        set_counters.update(move |counters| counters.push((next_counter_id, sig)));
-        next_counter_id += 1;
-    };
+fn Counters() -> impl IntoView {
+    let counters = RwSignal::new(vec![0; 10]);
 
     view! {
-        <div>
-            <button on:click=add_counter>
-                "Add Counter"
-            </button>
-            <ul>
-                <For
-                    each=counters
-                    key=|counter| counter.0
-                    children=move |(id, (count, set_count))| {
-                        view! {
-                            <li>
-                                <button
-                                    on:click=move |_| set_count.update(|n| *n += 1)
-                                >
-                                    {count}
-                                </button>
-                                <button
-                                    on:click=move |_| {
-                                        set_counters.update(|counters| {
-                                            counters.retain(|(counter_id, (signal, _))| {
-
-                                                if counter_id == &id {
-                                                    signal.dispose();
-                                                }
-                                                counter_id != &id
-                                            })
-                                        });
-                                    }
-                                >
-                                    "Remove"
-                                </button>
-                            </li>
-                        }
-                    }
-                />
-            </ul>
-        </div>
+        <button on:click=move |_| counters.update(|n| n.push(n.len()))>"Add Counter"</button>
+        <For
+            each=move || 0..counters.with(Vec::len)
+            key=|idx| *idx
+            let:idx
+        >
+            <li>
+                <button on:click=move |_| counters.update(|n| n[idx] += 1)>
+                    {Memo::new(move |_| counters.with(|n| n[idx]))}
+                </button>
+                <button on:click=move |_| counters.update(|n| { n.remove(idx); })>
+                    "Remove"
+                </button>
+            </li>
+        </For>
     }
 }
 ```
@@ -332,7 +300,7 @@ fn Counters() -> Element {
 
 - **Different scopes**: Dioxus provides renderers for web, desktop, mobile, LiveView, and more. We also maintain community libraries and a cross-platform SDK. The scope of this work is huge, meaning we've historically released at a slower cadence than Leptos. Leptos focuses on the fullstack web, with features that Dioxus doesn't have like `<Suspense />`-based streaming HTML, islands, `<Form />` components, and other web-specific features. Generally, web apps you build with Leptos will have a smaller footprint.
 
-- **Different DSLs**: While both frameworks target the web, Dioxus uses its own custom Rust-like DSL for building UIs while Leptos uses a more HTML-like syntax. We chose this to retain compatibility with IDE features like codefolding and syntax highlighting. Generally, Dioxus leans into more "magic" with its DSL. For example, dioxus will automatically format strings for you while Leptos requires you to use closures and `format!` or `format_args!`.
+- **Different DSLs**: While both frameworks target the web, Dioxus uses its own custom Rust-like DSL for building UIs while Leptos uses a more HTML-like syntax. We chose this to retain compatibility with IDE features like codefolding and syntax highlighting. Generally, Dioxus leans into more "magic" with its DSL. For example, dioxus will automatically format strings for you while Leptos can split up strings into static and dynamic segments.
 
 ```rust
 // dioxus
@@ -344,7 +312,7 @@ rsx! {
 view! {
   <div class="my-class" enabled={true}>
     "Hello "
-    {move || name()}
+    {name}
   </div>
 }
 ```

@@ -10,7 +10,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    // Create a future that will resolve once the javascript has been succesffully executed.
+    // Create a future that will resolve once the javascript has been successfully executed.
     let future = use_resource(move || async move {
         // Wait a little bit just to give the appearance of a loading screen
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;

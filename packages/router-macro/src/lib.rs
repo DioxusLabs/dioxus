@@ -462,14 +462,25 @@ impl RouteEnum {
             }
         }
         for route in &self.routes {
-            for segment in &route.segments {
-                if segment.name().as_ref() == Some(field) {
-                    from_route = true
+            match &route.ty {
+                RouteType::Child(child) => {
+                    if let Some(child) = child.ident.as_ref() {
+                        if child == "child" {
+                            from_route = true
+                        }
+                    }
                 }
-            }
-            if let Some(query) = &route.query {
-                if query.contains_ident(field) {
-                    from_route = true
+                RouteType::Leaf { .. } => {
+                    for segment in &route.segments {
+                        if segment.name().as_ref() == Some(field) {
+                            from_route = true
+                        }
+                    }
+                    if let Some(query) = &route.query {
+                        if query.contains_ident(field) {
+                            from_route = true
+                        }
+                    }
                 }
             }
         }

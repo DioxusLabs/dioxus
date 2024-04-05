@@ -1,6 +1,5 @@
-use generational_box::{GenerationalBox, UnsyncStorage};
-
-use crate::{generational_box::current_owner, global_context::current_scope_id, Runtime, ScopeId};
+use crate::{global_context::current_scope_id, Runtime, ScopeId};
+use generational_box::GenerationalBox;
 use std::{cell::Cell, rc::Rc};
 
 /// A wrapper around some generic data that handles the event's state
@@ -199,8 +198,7 @@ impl<T: 'static> EventHandler<T> {
     /// Create a new [`EventHandler`] from an [`FnMut`]
     #[track_caller]
     pub fn new(mut f: impl FnMut(T) + 'static) -> EventHandler<T> {
-        let owner = current_owner::<UnsyncStorage>();
-        let callback = owner.insert(Some(Box::new(move |event: T| {
+        let callback = GenerationalBox::leak(Some(Box::new(move |event: T| {
             f(event);
         }) as Box<dyn FnMut(T)>));
         EventHandler {

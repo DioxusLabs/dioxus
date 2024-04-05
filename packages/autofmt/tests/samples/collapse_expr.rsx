@@ -1,4 +1,7 @@
 fn itworks() {
-    rsx!( "{name}", "{name}", "{name}" )
+    rsx! {
+        "{name}"
+        "{name}"
+        "{name}"
+    }
 }
-

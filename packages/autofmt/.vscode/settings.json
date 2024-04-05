@@ -1,0 +1,7 @@
+{
+    // dont let our extension kick on the rsx files - we're fixing it!
+    "dioxus.formatOnSave": "disabled",
+    // enable this when modifying tab-based indentation
+    // When inside .rsx files, dont automatically use spaces
+    // "files.autoSave": "off"
+}

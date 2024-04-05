@@ -55,7 +55,7 @@ signal-hook = "0.3.17"
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
 global-hotkey = "0.5.0"
-rfd = "0.12"
+rfd = "0.14"
 muda = "0.11.3"
 # hotreload only works on desktop platforms.... mobile is still wip
 dioxus-hot-reload = { workspace = true, optional = true }
@@ -70,7 +70,7 @@ core-foundation = "0.9.3"
 objc = "0.2.7"
 
 [features]
-default = ["tokio_runtime", "wry/objc-exception", "hot-reload"]
+default = ["tokio_runtime", "wry/objc-exception", "hot-reload", "devtools"]
 tokio_runtime = ["tokio"]
 fullscreen = ["wry/fullscreen"]
 transparent = ["wry/transparent"]

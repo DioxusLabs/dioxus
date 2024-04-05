@@ -285,7 +285,7 @@ where
                 "/_dioxus",
                 Router::new()
                     .route(
-                        "/disconnect",
+                        "/ws",
                         get(|ws: axum::extract::WebSocketUpgrade| async {
                             ws.on_upgrade(|mut ws| async move {
                                 use axum::extract::ws::Message;

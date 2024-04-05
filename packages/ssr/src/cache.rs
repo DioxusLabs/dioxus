@@ -4,9 +4,8 @@ use std::fmt::Write;
 use crate::renderer::{str_truthy, BOOL_ATTRS};
 
 #[derive(Debug)]
-pub struct StringCache {
+pub(crate) struct StringCache {
     pub segments: Vec<Segment>,
-    pub template: Template,
 }
 
 #[derive(Default)]
@@ -56,7 +55,6 @@ impl StringCache {
 
         Ok(Self {
             segments: chain.segments,
-            template: template.template.get(),
         })
     }
 
@@ -156,11 +154,20 @@ impl StringCache {
                 cur_path.pop();
             }
             TemplateNode::Text { text } => {
+                // write the id if we are prerendering and this is a root node that may need to be removed in the future
+                if prerender && is_root {
+                    write!(chain, "<!--node-id")?;
+                    chain.segments.push(Segment::RootNodeMarker);
+                    write!(chain, "-->")?;
+                }
                 write!(
                     chain,
                     "{}",
                     askama_escape::escape(text, askama_escape::Html)
                 )?;
+                if prerender && is_root {
+                    write!(chain, "<!--#-->")?;
+                }
             }
             TemplateNode::Dynamic { id: idx } | TemplateNode::DynamicText { id: idx } => {
                 chain.segments.push(Segment::Node(*idx))

@@ -263,31 +263,38 @@ impl dioxus_ssr::incremental::WrapBody for FullstackRenderer {
         #[cfg(all(debug_assertions, feature = "hot-reload"))]
         {
             // In debug mode, we need to add a script to the page that will reload the page if the websocket disconnects to make full recompile hot reloads work
+            // This is copied from the Dioxus-CLI package at ../packages/cli
             let disconnect_js = r#"(function () {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const url = protocol + '//' + window.location.host + '/_dioxus/disconnect';
-    const poll_interval = 1000;
-    const reload_upon_connect = () => {
-        console.log('Disconnected from server. Attempting to reconnect...');
-        window.setTimeout(
-            () => {
-                // Try to reconnect to the websocket
-                const ws = new WebSocket(url);
-                ws.onopen = () => {
-                    // If we reconnect, reload the page
-                    window.location.reload();
+              var protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+              var url = protocol + "//" + window.location.host + "/_dioxus/ws";
+              var poll_interval = 8080;
+            
+              var reload_upon_connect = (event) => {
+                // Firefox will send a 1001 code when the connection is closed because the page is reloaded
+                // Only firefox will trigger the onclose event when the page is reloaded manually: https://stackoverflow.com/questions/10965720/should-websocket-onclose-be-triggered-by-user-navigation-or-refresh
+                // We should not reload the page in this case
+                if (event.code === 1001) {
+                  return;
                 }
-                // Otherwise, try again in a second
-                reload_upon_connect();
-            },
-            poll_interval);
-    };
-
-    // on initial page load connect to the disconnect ws
-    const ws = new WebSocket(url);
-    // if we disconnect, start polling
-    ws.onclose = reload_upon_connect;
-})()"#;
+                window.setTimeout(() => {
+                  var ws = new WebSocket(url);
+                  ws.onopen = () => window.location.reload();
+                  ws.onclose = reload_upon_connect;
+                }, poll_interval);
+              };
+            
+              var ws = new WebSocket(url);
+            
+              ws.onmessage = (ev) => {
+                console.log("Received message: ", ev, ev.data);
+            
+                if (ev.data == "reload") {
+                  window.location.reload();
+                }
+              };
+            
+              ws.onclose = reload_upon_connect;
+            })();"#;
 
             to.write_all(r#"<script>"#.as_bytes())?;
             to.write_all(disconnect_js.as_bytes())?;
