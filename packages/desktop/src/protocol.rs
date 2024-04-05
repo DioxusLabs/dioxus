@@ -86,7 +86,7 @@ fn assets_head() -> Option<String> {
         match std::fs::read_to_string(&head) {
             Ok(s) => Some(s),
             Err(err) => {
-                tracing::error!("Failed to read {head:?}: {err}");
+                tracing::warn!("Assets cannot be preloaded (failed to read {head:?}): {err}.");
                 None
             }
         }
