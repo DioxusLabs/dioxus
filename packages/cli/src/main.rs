@@ -1,6 +1,5 @@
 use dioxus_cli_config::DioxusConfig;
 use std::{env, path::PathBuf};
-use tracing::level_filters::LevelFilter;
 use tracing_subscriber::EnvFilter;
 
 use anyhow::Context;
@@ -17,19 +16,12 @@ async fn main() -> anyhow::Result<()> {
 
     // If {LOG_ENV} is set, default to env, otherwise filter to cli
     // and manganis warnings and errors from other crates
+    let mut filter = EnvFilter::new("error,dx=info,dioxus-cli=info,manganis-cli-support=info");
     if env::var(LOG_ENV).is_ok() {
-        let filter = EnvFilter::from_env(LOG_ENV);
-        tracing_subscriber::fmt().with_env_filter(filter).init();
-    } else {
-        let filter = EnvFilter::builder()
-            .with_default_directive(LevelFilter::ERROR.into())
-            .from_env()
-            .unwrap()
-            .add_directive("dioxus_cli=warn".parse().unwrap())
-            .add_directive("manganis-cli-support=warn".parse().unwrap());
-
-        tracing_subscriber::fmt().with_env_filter(filter).init();
+        println!("RAN");
+        filter = EnvFilter::from_env(LOG_ENV);
     }
+    tracing_subscriber::fmt().with_env_filter(filter).init();
 
     match args.action {
         Translate(opts) => opts
