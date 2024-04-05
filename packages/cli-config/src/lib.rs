@@ -50,7 +50,7 @@ pub static CURRENT_CONFIG: once_cell::sync::Lazy<
     CURRENT_CONFIG_JSON
         .and_then(|config| serde_json::from_str(config).ok())
         .ok_or_else(|| {
-            tracing::error!("A library is trying to access the crate's configuration, but the dioxus CLI was not used to build the application.");
+            tracing::warn!("A library is trying to access the crate's configuration, but the dioxus CLI was not used to build the application.");
             DioxusCLINotUsed
     })
 });
