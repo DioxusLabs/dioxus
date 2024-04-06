@@ -1,7 +1,24 @@
-use dioxus_core::{prelude::Template, TemplateAttribute, TemplateNode};
+//! This module contains hotreloading logic for rsx.
+//!
+//! There's a few details that I wish we could've gotten right but we can revisit later:
+//! - Empty rsx! blocks are written as `None` - it would be nice to be able to hot reload them
+//! - The byte index of the template is not the same as the byte index of the original template
+//!   this forces us to make up IDs on the fly. We should just find an ID naming scheme, but that
+//!   struggles when you have nested rsx! calls since file:line:col is the same for all expanded rsx!
+//! - There's lots of linear scans
+//! - Expanding an if chain is not possible - only its contents can be hot reloaded
+//! - Components that don't start with children can't be hotreloaded - IE going from `Comp {}` to `Comp { "foo" }`
+//!   is not possible. We could in theory allow this by seeding all Components with a `children` field.
+//! - Cross-templates hot reloading is not possible - multiple templates don't share the dynamic nodes.
+//!   This would require changes in core to work, I imagine.
+//! - Hotreloading of formatted strings is currently not possible - we can't hot reload the formatting.
+//!   This might be fixable!
+//! - Hotreloading of literals is technically possible, but not currently implemented and would likely
+//!   require changes to core to work.
 
-use crate::{intern, ElementAttrName, IfmtInput};
+use crate::{intern, Component, ElementAttrName, ForLoop, IfChain, IfmtInput};
 use crate::{BodyNode, CallBody, DynamicContext, HotReloadingContext};
+use dioxus_core::{prelude::Template, TemplateAttribute, TemplateNode};
 
 /// The mapping of a node relative to the root of its containing template
 ///
@@ -207,39 +224,24 @@ fn hotreload_dynamic_nodes<Ctx: HotReloadingContext>(
                 // Nothing special for raw expressions - if an expresison changed we couldn't find it anyway
                 (BodyNode::RawExpr(a), BodyNode::RawExpr(b)) => a == b,
 
-                (BodyNode::Component(a), BodyNode::Component(b)) => a == b,
-                (BodyNode::IfChain(a), BodyNode::IfChain(b)) => a == b,
-
                 // If we found a matching forloop, its body might not be the same
                 // the bodies don't need to be the same but the pats/exprs do
                 (BodyNode::ForLoop(a), BodyNode::ForLoop(b)) => {
-                    let matches = a.pat == b.pat && a.expr == b.expr;
+                    hotreload_forloop::<Ctx>(a, b, location, old_idx, templates)?
+                }
 
-                    // While we're here, lets try and reload its template contents too, if it's reloadable
-                    // Note that there might be duplicates of the expressions.
-                    //
-                    // Currently if you shuffle for loops around that have the same expression, it will
-                    // likely not be reloaded. This is because we don't know if the order of the expressions
-                    // is the same or not. We should try to do a more complex analysis of the contents
-                    // of the for loops to see if they're the same, but for now, we don't
-                    //
-                    if matches {
-                        // We unfortunately cannot currently hot reload for loops that didn't have
-                        // a body. Usually this is unlikely, but dioxus-core would need to be changed
-                        // to allow templates with no roots
-                        let Some(first_root) = a.body.first() else {
-                            return None;
-                        };
+                // Basically stealing the same logic as the for loop
+                (BodyNode::Component(a), BodyNode::Component(b)) => {
+                    hotreload_component_body::<Ctx>(a, b, location, old_idx, templates)?
+                }
 
-                        // We need to use the old location info to find the new location info
-                        //
-                        // This is just the file+line+col+byte index from the original
-                        // If no byte index is present, we'll just use the idx of the node
-                        let new_location = make_new_location(location, old_idx + 1, first_root);
-                        hotreload_bodynodes::<Ctx>(&a.body, &b.body, new_location, templates)?;
-                    }
-
-                    matches
+                // Basically stealing the same logic as the for loop, but with multiple nestings
+                // We only support supports conditions
+                (BodyNode::IfChain(a), BodyNode::IfChain(b)) => {
+                    // Cheating hack: read the docs on hotreloading if chains as to why we do this
+                    let location_idx = (old_idx + 1) * 1000;
+                    dbg!(location_idx, old_idx);
+                    hotreload_ifchain::<Ctx>(a, b, location, location_idx, templates)?
                 }
 
                 // Any other pairing is not a match and we should keep looking
@@ -269,6 +271,103 @@ fn hotreload_dynamic_nodes<Ctx: HotReloadingContext>(
     }
 
     Some(node_paths)
+}
+
+fn hotreload_forloop<Ctx: HotReloadingContext>(
+    a: &ForLoop,
+    b: &ForLoop,
+    location: &'static str,
+    old_idx: usize,
+    templates: &mut Vec<Template>,
+) -> Option<bool> {
+    let matches = a.pat == b.pat && a.expr == b.expr;
+    if matches {
+        // We unfortunately cannot currently hot reload for loops that didn't have
+        // a body. Usually this is unlikely, but dioxus-core would need to be changed
+        // to allow templates with no roots
+        let first_root = a.body.first()?;
+
+        // We need to use the old location info to find the new location info
+        //
+        // This is just the file+line+col+byte index from the original
+        // If no byte index is present, we'll just use the idx of the node
+        let new_location = make_new_location(location, old_idx + 1, first_root);
+        hotreload_bodynodes::<Ctx>(&a.body, &b.body, new_location, templates)?;
+    }
+    Some(matches)
+}
+
+fn hotreload_component_body<Ctx: HotReloadingContext>(
+    a: &Component,
+    b: &Component,
+    location: &'static str,
+    old_idx: usize,
+    templates: &mut Vec<Template>,
+) -> Option<bool> {
+    let matches = a.name == b.name
+        && a.prop_gen_args == b.prop_gen_args
+        && a.key == b.key
+        && a.fields == b.fields
+        && a.manual_props == b.manual_props;
+
+    if matches {
+        let first_root = a.children.first()?;
+
+        let new_location = make_new_location(location, old_idx + 1, first_root);
+        hotreload_bodynodes::<Ctx>(&a.children, &b.children, new_location, templates)?;
+    }
+
+    Some(matches)
+}
+
+/// Hot reload an if chain
+///
+/// This is somewhat complicated because we need to recurse into each conditional. Plus, each branch
+/// can't share the same "location" when not running under the compiler since the location is the
+/// file+line+col+byte index of the original. When running under the compiler, we can use the byte index
+/// to uniquely identify the template, but we can't do that without it.
+///
+/// To cheat a bit, we're just going to add a fixed number to the template ID to push it out of the
+/// typical range of dynamic nodes. So an `if` chain with an ID of say 5, will have an ID of `5001`, `5002`, etc.
+///
+/// Again, byte indicies take care of this problem when running under the compiler, but, we have to cheat
+fn hotreload_ifchain<Ctx: HotReloadingContext>(
+    a: &IfChain,
+    b: &IfChain,
+    location: &'static str,
+    local_idx: usize,
+    templates: &mut Vec<Template>,
+) -> Option<bool> {
+    let matches = a.cond == b.cond;
+
+    if matches {
+        // The first location is 5001
+        let first_root = a.then_branch.first()?;
+        let new_location = make_new_location(location, local_idx + 1, first_root);
+        hotreload_bodynodes::<Ctx>(&a.then_branch, &b.then_branch, new_location, templates)?;
+
+        // Now, recurse into the else if branches
+        match (a.else_if_branch.as_ref(), b.else_if_branch.as_ref()) {
+            (Some(left), Some(right)) => {
+                hotreload_ifchain::<Ctx>(left, right, location, local_idx + 2, templates)?;
+            }
+            (None, None) => {}
+            _ => return None,
+        }
+
+        // Finally, write out the else branch
+        match (a.else_branch.as_ref(), b.else_branch.as_ref()) {
+            (Some(left), Some(right)) => {
+                let first_root = a.then_branch.first()?;
+                let new_location = make_new_location(location, local_idx + 2, first_root);
+                hotreload_bodynodes::<Ctx>(&left, &right, new_location, templates)?;
+            }
+            (None, None) => {}
+            _ => return None,
+        }
+    }
+
+    Some(matches)
 }
 
 /// Take two dynamic contexts and return a mapping of dynamic attributes from the original to the new.

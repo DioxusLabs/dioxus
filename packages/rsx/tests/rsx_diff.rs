@@ -143,3 +143,36 @@ fn changing_forloops_is_okay() {
 
     dbg!(new_template);
 }
+
+#[test]
+fn removing_node() {
+    #[allow(unused, non_snake_case)]
+    fn Comp() -> dioxus_core::Element {
+        None
+    }
+
+    let input = quote! {
+        svg {
+            Comp {}
+            {(0..10).map(|i| rsx!{"{i}"})},
+        }
+    };
+
+    let call_body1: CallBody = syn::parse2(input).unwrap();
+    let created_template = call_body1.update_template::<Mock>(None, "testing").unwrap();
+    // insta::assert_debug_snapshot!(created_template);
+
+    // scrambling the attributes should not cause a full rebuild
+    let input = quote! {
+        div {
+            {(0..10).map(|i| rsx!{"{i}"})},
+        }
+    };
+
+    let call_body2: CallBody = syn::parse2(input).unwrap();
+    let new_template = call_body2
+        .update_template::<Mock>(Some(call_body1), "testing")
+        .unwrap();
+
+    dbg!(new_template);
+}

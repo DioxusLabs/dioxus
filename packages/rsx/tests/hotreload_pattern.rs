@@ -1,12 +1,14 @@
 #![allow(unused)]
 
+use dioxus_core::prelude::Template;
 use dioxus_rsx::{
     hot_reload::{diff_rsx, template_location, ChangedRsx, DiffResult},
     tracked::{callbody_to_template, hotreload_callbody},
     CallBody, HotReloadingContext,
 };
+use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
-use syn::{parse::Parse, spanned::Spanned, File};
+use syn::{parse::Parse, spanned::Spanned, token::Token, File};
 
 #[derive(Debug)]
 struct Mock;
@@ -32,6 +34,31 @@ impl HotReloadingContext for Mock {
             _ => None,
         }
     }
+}
+
+fn boilerplate(old: TokenStream, new: TokenStream) -> Option<Vec<Template>> {
+    let old: CallBody = syn::parse2(old).unwrap();
+    let new: CallBody = syn::parse2(new).unwrap();
+
+    let location = "file:line:col:0";
+    hotreload_callbody::<Mock>(&old, &new, location)
+}
+
+fn base_stream() -> TokenStream {
+    quote! {
+        div {
+            for item in vec![1, 2, 3] {
+                div { "asasddasdasd" }
+            }
+            for item in vec![4, 5, 6] {
+                div { "asasddasdasd" }
+            }
+        }
+    }
+}
+
+fn base() -> CallBody {
+    syn::parse2(base_stream()).unwrap()
 }
 
 #[test]
@@ -62,7 +89,7 @@ fn simple_for_loop() {
         }
     };
 
-    let location = "testing";
+    let location = "file:line:col:0";
     let old: CallBody = syn::parse2(old).unwrap();
     let new_valid: CallBody = syn::parse2(new_valid).unwrap();
     let new_invalid: CallBody = syn::parse2(new_invalid).unwrap();
@@ -72,20 +99,9 @@ fn simple_for_loop() {
 }
 
 #[test]
-fn multiple_for_loops() {
-    let old = quote! {
-        div {
-            for item in vec![1, 2, 3] {
-                div { "asasddasdasd" }
-            }
-            for item in vec![4, 5, 6] {
-                div { "asasddasdasd" }
-            }
-        }
-    };
-
-    // do a little reorder, still valid just different
-    let new_valid_reorder = quote! {
+fn valid_reorder() {
+    let old = base();
+    let new_valid = quote! {
         div {
             for item in vec![4, 5, 6] {
                 span { "asasddasdasd" }
@@ -98,20 +114,27 @@ fn multiple_for_loops() {
         }
     };
 
-    // Same order, just different contents
-    let new_valid_internal = quote! {
-        div {
-            for item in vec![1, 2, 3] {
-                div { "asasddasdasd" }
-                div { "123" }
-            }
-            for item in vec![4, 5, 6] {
-                span { "asasddasdasd" }
-                span { "456" }
-            }
-        }
-    };
+    let location = "file:line:col:0";
+    let new: CallBody = syn::parse2(new_valid).unwrap();
 
+    let valid = hotreload_callbody::<Mock>(&old, &new, location);
+    assert!(valid.is_some());
+    let templates = valid.unwrap();
+
+    // Currently we return all the templates, even if they didn't change
+    assert_eq!(templates.len(), 3);
+
+    let template = &templates[2];
+
+    // It's an inversion, so we should get them in reverse
+    assert_eq!(template.node_paths, &[&[0, 1], &[0, 0]]);
+
+    // And the byte index should be the original template
+    assert_eq!(template.name, "file:line:col:0");
+}
+
+#[test]
+fn invalid_cases() {
     let new_invalid = quote! {
         div {
             for item in vec![1, 2, 3, 4] {
@@ -170,27 +193,13 @@ fn multiple_for_loops() {
     };
 
     let location = "file:line:col:0";
-    let old: CallBody = syn::parse2(old).unwrap();
-    let new_valid_reorder: CallBody = syn::parse2(new_valid_reorder).unwrap();
+    let old = base();
+
     let new_invalid: CallBody = syn::parse2(new_invalid).unwrap();
     let new_valid_removed: CallBody = syn::parse2(new_valid_removed).unwrap();
     let new_invalid_new_dynamic_internal: CallBody =
         syn::parse2(new_invalid_new_dynamic_internal).unwrap();
     let new_invlaid_added: CallBody = syn::parse2(new_invlaid_added).unwrap();
-
-    // The reorder case
-    {
-        let valid = hotreload_callbody::<Mock>(&old, &new_valid_reorder, location);
-        assert!(valid.is_some());
-        let templates = valid.unwrap();
-        assert_eq!(templates.len(), 1);
-        let template = &templates[0];
-        // It's an inversion, so we should get them in reverse
-        assert_eq!(template.node_paths, &[&[0, 1], &[0, 0]]);
-
-        // And the byte index should be the original template
-        assert_eq!(template.name, "file:line:col:0");
-    }
 
     assert!(hotreload_callbody::<Mock>(&old, &new_invalid, location).is_none());
     assert!(
@@ -200,8 +209,10 @@ fn multiple_for_loops() {
     let removed = hotreload_callbody::<Mock>(&old, &new_valid_removed, location);
     assert!(removed.is_some());
     let templates = removed.unwrap();
-    assert_eq!(templates.len(), 1);
-    let template = &templates[0];
+
+    // we don't get the removed template back
+    assert_eq!(templates.len(), 2);
+    let template = &templates[1];
 
     // We just completely removed the dynamic node, so it should be a "dud" path and then the placement
     assert_eq!(template.node_paths, &[&[], &[0u8, 0] as &[u8]]);
@@ -232,11 +243,7 @@ fn new_names() {
         }
     };
 
-    let location = "file:line:col:0";
-    let old: CallBody = syn::parse2(old).unwrap();
-    let new_valid_internal: CallBody = syn::parse2(new_valid_internal).unwrap();
-
-    let templates = hotreload_callbody::<Mock>(&old, &new_valid_internal, location).unwrap();
+    let templates = boilerplate(old, new_valid_internal).unwrap();
 
     // Getting back all the templates even though some might not have changed
     // This is currently just a symptom of us not checking if anything has changed, but has no bearing
@@ -269,6 +276,10 @@ fn attributes_reload() {
             class: "{class}"
         }
     };
+
+    let templates = boilerplate(old, new_valid_internal).unwrap();
+
+    dbg!(templates);
 }
 
 #[test]
@@ -299,8 +310,6 @@ fn template_generates() {
 
     let old: CallBody = syn::parse2(old).unwrap();
     let template = callbody_to_template::<Mock>(&old, "file:line:col:0");
-
-    dbg!(template);
 }
 
 #[test]
@@ -346,4 +355,160 @@ fn diffs_complex() {
 
     let location = "file:line:col:0";
     let templates = hotreload_callbody::<Mock>(&old, &new, location).unwrap();
+}
+
+#[test]
+fn remove_node() {
+    let changed = boilerplate(
+        quote! {
+            svg {
+                Comp {}
+                {(0..10).map(|i| rsx!{"{i}"})},
+            }
+        },
+        quote! {
+            div {
+                {(0..10).map(|i| rsx!{"{i}"})},
+            }
+        },
+    )
+    .unwrap();
+
+    dbg!(changed);
+}
+
+#[test]
+fn if_chains() {
+    let changed = boilerplate(
+        quote! {
+            if cond {
+                "foo"
+            }
+        },
+        quote! {
+            if cond {
+                "baz"
+            }
+        },
+    )
+    .unwrap();
+
+    let very_complex_chain = boilerplate(
+        quote! {
+            if cond {
+                if second_cond {
+                    "foo"
+                }
+            } else if othercond {
+                "bar"
+            } else {
+                "baz"
+            }
+        },
+        quote! {
+            if cond {
+                if second_cond {
+                    span { "asasddasdasd 789" }
+                }
+            } else if othercond {
+                span { "asasddasdasd 123" }
+            } else {
+                span { "asasddasdas 456" }
+            }
+        },
+    )
+    .unwrap();
+
+    dbg!(very_complex_chain);
+}
+
+#[test]
+fn component_bodies() {
+    let changed = boilerplate(
+        quote! {
+            Comp {
+                "foo"
+            }
+        },
+        quote! {
+            Comp {
+                "baz"
+            }
+        },
+    )
+    .unwrap();
+
+    dbg!(changed);
+}
+
+/// Everything reloads!
+#[test]
+fn kitch_sink_of_reloadability() {
+    let changed = boilerplate(
+        quote! {
+            div {
+                for i in 0..10 {
+                    div { "123" }
+                    Comp {
+                        "foo"
+                    }
+                    if cond {
+                        "foo"
+                    }
+                }
+            }
+        },
+        quote! {
+            div {
+                "hi!"
+                for i in 0..10 {
+                    div { "456" }
+                    Comp { "bar" }
+                    if cond {
+                        "baz"
+                    }
+                }
+            }
+        },
+    )
+    .unwrap();
+
+    dbg!(changed);
+}
+
+/// Moving nodes inbetween multiple rsx! calls currently doesn't work
+/// Sad. Needs changes to core to work, and is technically flawed?
+#[test]
+fn entire_kitchen_sink() {
+    let changed = boilerplate(
+        quote! {
+            div {
+                for i in 0..10 {
+                    div { "123" }
+                }
+                Comp {
+                    "foo"
+                }
+                if cond {
+                    "foo"
+                }
+            }
+        },
+        quote! {
+            div {
+                "hi!"
+                Comp {
+                    for i in 0..10 {
+                        div { "456" }
+                    }
+                    "bar"
+                    if cond {
+                        "baz"
+                    }
+                }
+            }
+        },
+    );
+
+    assert!(changed.is_none());
 }
