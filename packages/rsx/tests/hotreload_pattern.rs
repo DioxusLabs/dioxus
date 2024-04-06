@@ -282,10 +282,68 @@ fn template_generates() {
             p { "hello world" }
             {(0..10).map(|i| rsx!{"{i}"})}
         }
+        div {
+            width: 120,
+            div {
+                height: "100px",
+                "width2": 130,
+                "height2": "100px",
+                for i in 0..10 {
+                    div {
+                        "asdasd"
+                    }
+                }
+            }
+        }
     };
 
     let old: CallBody = syn::parse2(old).unwrap();
     let template = callbody_to_template::<Mock>(&old, "file:line:col:0");
 
     dbg!(template);
+}
+
+#[test]
+fn diffs_complex() {
+    #[allow(unused, non_snake_case)]
+    fn Comp() -> dioxus_core::Element {
+        None
+    }
+
+    let old = quote! {
+        svg {
+            width: 100,
+            height: "100px",
+            "width2": 100,
+            "height2": "100px",
+            p { "hello world" }
+            {(0..10).map(|i| rsx!{"{i}"})},
+            {(0..10).map(|i| rsx!{"{i}"})},
+            {(0..11).map(|i| rsx!{"{i}"})},
+            Comp {}
+        }
+    };
+
+    // scrambling the attributes should not cause a full rebuild
+    let new = quote! {
+        div {
+            "width2": 100,
+            height: "100px",
+            "height2": "100px",
+            width: 100,
+            Comp {}
+            {(0..11).map(|i| rsx!{"{i}"})},
+            {(0..10).map(|i| rsx!{"{i}"})},
+            {(0..10).map(|i| rsx!{"{i}"})},
+            p {
+                "hello world"
+            }
+        }
+    };
+
+    let old: CallBody = syn::parse2(old).unwrap();
+    let new: CallBody = syn::parse2(new).unwrap();
+
+    let location = "file:line:col:0";
+    let templates = hotreload_callbody::<Mock>(&old, &new, location).unwrap();
 }

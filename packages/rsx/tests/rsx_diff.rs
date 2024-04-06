@@ -122,6 +122,8 @@ fn diff_template() {
         .update_template::<Mock>(Some(call_body1), "testing")
         .unwrap();
 
+    dbg!(new_template);
+
     insta::assert_debug_snapshot!(new_template);
 }
 

@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
 use dioxus_core::{prelude::Template, TemplateAttribute, TemplateNode};
 
-use crate::{intern, node, ElementAttrName, IfmtInput};
-use crate::{location, BodyNode, CallBody, DynamicContext, HotReloadingContext};
+use crate::{intern, ElementAttrName, IfmtInput};
+use crate::{BodyNode, CallBody, DynamicContext, HotReloadingContext};
 
 /// The mapping of a node relative to the root of its containing template
 ///
@@ -64,14 +62,14 @@ pub fn hotreload_callbody<Ctx: HotReloadingContext>(
 /// This encourages the hotreloader to hot onto DynamicContexts directly instead of the CallBody since
 /// you can preserve more information about the nodes as they've changed over time.
 pub fn hotreload_bodynodes<Ctx: HotReloadingContext>(
-    old_: &[BodyNode],
-    new_: &[BodyNode],
+    old_body: &[BodyNode],
+    new_body: &[BodyNode],
     location: &'static str,
     templates: &mut Vec<Template>,
 ) -> Option<()> {
     // Create a context that will be used to update the template
-    let old = &DynamicContext::from_body::<Ctx>(&old_);
-    let new = &DynamicContext::from_body::<Ctx>(&new_);
+    let old = &DynamicContext::from_body::<Ctx>(&old_body);
+    let new = &DynamicContext::from_body::<Ctx>(&new_body);
 
     // Quickly run through dynamic attributes first attempting to invalidate them
     let new_attribute_paths = hotreload_attributes::<Ctx>(old, new)?;
@@ -80,7 +78,7 @@ pub fn hotreload_bodynodes<Ctx: HotReloadingContext>(
     let new_node_paths = hotreload_dynamic_nodes::<Ctx>(old, new, location, templates)?;
 
     // Create the new template nodes from the dynamic context, but with the new mapping
-    let roots = render_dynamic_context::<Ctx>(new, new_, &new_node_paths, &new_attribute_paths);
+    let roots = render_dynamic_context::<Ctx>(new, new_body, &new_node_paths, &new_attribute_paths);
 
     // Now we can assemble a template
     templates.push(Template {
@@ -103,39 +101,6 @@ pub fn hotreload_bodynodes<Ctx: HotReloadingContext>(
     });
 
     Some(())
-}
-
-/// Take two dynamic contexts and return a mapping of dynamic attributes from the original to the new.
-///
-/// IE if we shuffle attributes around we should be able to hot reload them.
-/// Same thing with dropping dynamic attributes.
-///
-/// ```rust
-/// rsx! {
-///     div { id: "{id}", class: "{class}", "Hi" }
-/// }
-///
-/// rsx! {
-///     div { class: "{class}", id: "{id}", "Hi" }
-/// }
-/// ```
-fn hotreload_attributes<Ctx: HotReloadingContext>(
-    old: &DynamicContext<'_>,
-    new: &DynamicContext<'_>,
-) -> Option<Vec<AttributePath>> {
-    // Build a map of old attributes to their indexes
-    // We can use the hash directly here but in theory we could support going from `class: "abc {def}"` to `class: "abc"`
-    // This will require not running the format, but we basically need prop reloading to get that working
-    //
-    // Note that we might have duplicate attributes! We use a stack just to make sure we don't lose them
-    // let mut old_attr_map = HashMap::new();
-    // for (idx, old_attrs) in old.dynamic_attributes.iter().enumerate() {
-    //     for attr in old_attrs {
-    //         old_attr_map.entry(attr).or_insert_with(Vec::new).push(idx);
-    //     }
-    // }
-
-    Some(vec![])
 }
 
 /// Take two dynamic contexts and return a new node_paths field for the final template.
@@ -306,30 +271,62 @@ fn hotreload_dynamic_nodes<Ctx: HotReloadingContext>(
     Some(node_paths)
 }
 
-/// Create a new location for a node
+/// Take two dynamic contexts and return a mapping of dynamic attributes from the original to the new.
 ///
-/// Uses
-fn make_new_location(base: &'static str, old_idx: usize, old_node: &BodyNode) -> &'static str {
-    // trim off the last byte index
-    let base = base.rsplit_once(':').unwrap().0;
-
-    // add the byte index of the first root
-    let mut byte_index = old_node.byte_index();
-
-    // This will cause collisions with nested rsx! calls but that's not an issue for testing
+/// IE if we shuffle attributes around we should be able to hot reload them.
+/// Same thing with dropping dynamic attributes.
+///
+/// ```rust
+/// rsx! {
+///     div { id: "{id}", class: "{class}", "Hi" }
+/// }
+///
+/// rsx! {
+///     div { class: "{class}", id: "{id}", "Hi" }
+/// }
+/// ```
+fn hotreload_attributes<Ctx: HotReloadingContext>(
+    old: &DynamicContext<'_>,
+    new: &DynamicContext<'_>,
+) -> Option<Vec<AttributePath>> {
+    // Build a map of old attributes to their indexes
+    // We can use the hash directly here but in theory we could support going from `class: "abc {def}"` to `class: "abc"`
+    // This will require not running the format, but we basically need prop reloading to get that working
     //
-    // The byte index will guarntee uniqueness
-    //
-    // Use a different byte index if we're not running in the compiler
-    // Only the compiler will have a byte index
-    if byte_index == "0" {
-        byte_index = old_idx.to_string();
+    // Note that we might have duplicate attributes! We use a stack just to make sure we don't lose them
+    let mut new_attrs = new
+        .dynamic_attributes
+        .iter()
+        .map(|f| Some(f))
+        .collect::<Vec<_>>();
+
+    // Now we can run through the dynamic nodes and see if we can hot reload them
+    let mut attr_paths = vec![];
+
+    for old_attr in old.dynamic_attributes.iter() {
+        for (new_idx, maybe_new_attr) in new_attrs.iter_mut().enumerate() {
+            let Some(new_attr) = maybe_new_attr else {
+                continue;
+            };
+
+            if new_attr.as_slice() == old_attr.as_slice() {
+                // We found a match! Get this dynamic node's path and push it into the output
+                attr_paths.push(new.attr_paths[new_idx].clone());
+
+                // And then mark the original node as `None` so it's skipped on the next scan
+                _ = maybe_new_attr.take();
+
+                break;
+            }
+        }
     }
 
-    let out = format!("{base}:{byte_index}");
+    // If there's any lingering new attrs, they can't be hot reloaded
+    if new_attrs.iter().any(|n| n.is_some()) {
+        return None;
+    }
 
-    // now leak it
-    Box::leak(out.into_boxed_str())
+    Some(attr_paths)
 }
 
 pub fn callbody_to_template<Ctx: HotReloadingContext>(
@@ -366,7 +363,11 @@ pub fn callbody_to_template<Ctx: HotReloadingContext>(
 /// Use all the context we have to write out the template nodes
 ///
 /// This involves descendding throughout the bodynodes, hitting dynamic bits, and finding the corresponding
-/// nodes in the context
+/// nodes in the context.
+///
+/// For dynamic attributes, we currently have a naive approach of just finding the old attribute in
+/// the old template. Eventually we might want to be more sophisticated about this to do things like
+/// hotreloading formatted segments.
 fn render_dynamic_context<Ctx: HotReloadingContext>(
     ctx: &DynamicContext,
     new: &[BodyNode],
@@ -397,40 +398,53 @@ fn render_template_node<Ctx: HotReloadingContext>(
 ) -> TemplateNode {
     match node {
         // The user is moving a static node around in the template
-        // Check this is a bit more complex but we can likely handle it
         BodyNode::Element(el) => {
-            let mut children = Vec::new();
-            let mut static_attr_array = Vec::new();
             let rust_name = el.name.to_string();
 
-            for attr in &el.merged_attributes {
-                let template_attr = match attr.as_static_str_literal() {
-                    // For static attributes, we don't need to pull in any mapping or anything
-                    // We can just build them directly
+            // Build an iterator that will yield attributes at the current path
+            // This is mostly to preserve the order of the attributes
+            // We will interleave these dynamic nodes into the merged attributes as we write those out
+            // We could just dump all the dynamic attributes after the static ones, making this simpler,
+            // but all our tests are designed to preserve the order of the attributes, so we'll do that
+            //
+            // The `rev` is just to match the old behavior of attributes being pushed and popped rather than
+            // linear inserted.
+            let mut attr_iter = attr_paths
+                .iter()
+                .enumerate()
+                .rev()
+                .filter(|(_idx, path)| *path == &cur_path)
+                .map(|(idx, _)| idx);
+
+            // Write the attributes by interleaving static and dynamic
+            let static_attr_array = el
+                .merged_attributes
+                .iter()
+                .map(|attr| match attr.as_static_str_literal() {
                     Some((name, value)) => make_static_attribute::<Ctx>(value, name, &rust_name),
+                    None => TemplateAttribute::Dynamic {
+                        id: attr_iter.next().expect("Attributes should be in order"),
+                    },
+                })
+                .collect::<Vec<_>>();
 
-                    None => {
-                        // Hmmmmmm, we need to pull in the right dynamic attribute
-                        // todo!()
-                        TemplateAttribute::Dynamic { id: 0 }
-                    }
-                };
-
-                static_attr_array.push(template_attr);
-            }
-
-            for (child_idx, item) in el.children.iter().enumerate() {
-                let mut cur_path = cur_path.clone();
-                cur_path.push(child_idx as u8);
-
-                children.push(render_template_node::<Ctx>(
-                    ctx,
-                    item,
-                    node_paths,
-                    attr_paths,
-                    cur_path.clone(),
-                ));
-            }
+            // Write out the children with the current path + the child index
+            let children = el
+                .children
+                .iter()
+                .enumerate()
+                .map(|(idx, child)| {
+                    let mut new_cur_path = cur_path.clone();
+                    new_cur_path.push(idx as u8);
+                    render_template_node::<Ctx>(
+                        ctx,
+                        child,
+                        node_paths,
+                        attr_paths,
+                        new_cur_path.clone(),
+                    )
+                })
+                .collect::<Vec<_>>();
 
             let (tag, namespace) =
                 Ctx::map_element(&rust_name).unwrap_or((intern(rust_name.as_str()), None));
@@ -486,4 +500,30 @@ fn make_static_attribute<Ctx: HotReloadingContext>(
     };
 
     static_attr
+}
+
+/// Create a new location for a node
+///
+/// Uses
+fn make_new_location(base: &'static str, old_idx: usize, old_node: &BodyNode) -> &'static str {
+    // trim off the last byte index
+    let base = base.rsplit_once(':').unwrap().0;
+
+    // add the byte index of the first root
+    let mut byte_index = old_node.byte_index();
+
+    // This will cause collisions with nested rsx! calls but that's not an issue for testing
+    //
+    // The byte index will guarntee uniqueness
+    //
+    // Use a different byte index if we're not running in the compiler
+    // Only the compiler will have a byte index
+    if byte_index == "0" {
+        byte_index = old_idx.to_string();
+    }
+
+    let out = format!("{base}:{byte_index}");
+
+    // now leak it
+    Box::leak(out.into_boxed_str())
 }
