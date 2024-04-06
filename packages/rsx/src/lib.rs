@@ -17,6 +17,7 @@
 #[macro_use]
 mod errors;
 mod attribute;
+mod build_template;
 mod component;
 mod element;
 mod ifmt;

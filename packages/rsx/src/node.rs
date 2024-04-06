@@ -36,6 +36,19 @@ impl BodyNode {
         matches!(self, BodyNode::Text { .. })
     }
 
+    /// Uses the debug imlpementation of spawn to get the byte index of the first root
+    pub fn byte_index(&self) -> String {
+        // This gets the byte index of the first root's span - basically a unique identifier
+        // We're not supposed to be abusing the debug implementation of Tokens, but it's a good way
+        // to break up nested rsx! calls
+        let first_root_span = format!("{:?}", self.span());
+        first_root_span
+            .rsplit_once("..")
+            .and_then(|(_, after)| after.split_once(')').map(|(before, _)| before))
+            .unwrap_or_default()
+            .to_string()
+    }
+
     pub fn span(&self) -> Span {
         match self {
             BodyNode::Element(el) => el.name.span(),

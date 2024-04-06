@@ -88,14 +88,7 @@ impl<'a> TemplateRenderer<'a> {
 
     fn get_root_col_id(&self) -> String {
         let root_col = match self.roots.first() {
-            Some(first_root) => {
-                let first_root_span = format!("{:?}", first_root.span());
-                first_root_span
-                    .rsplit_once("..")
-                    .and_then(|(_, after)| after.split_once(')').map(|(before, _)| before))
-                    .unwrap_or_default()
-                    .to_string()
-            }
+            Some(first_root) => first_root.byte_index(),
             _ => "0".to_string(),
         };
         root_col
