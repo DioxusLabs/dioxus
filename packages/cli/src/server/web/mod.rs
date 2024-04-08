@@ -12,9 +12,8 @@ use dioxus_cli_config::CrateConfig;
 use dioxus_rsx::hot_reload::*;
 use std::{
     net::{SocketAddr, UdpSocket},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
-use tokio::sync::broadcast;
 
 mod proxy;
 mod server;
@@ -23,20 +22,12 @@ use server::*;
 
 use super::HotReloadState;
 
-pub struct WsReloadState {
-    update: broadcast::Sender<()>,
-}
-
 pub async fn startup(config: CrateConfig, serve_cfg: &ConfigOptsServe) -> Result<()> {
     set_ctrlc_handler(&config);
 
     let ip = get_ip().unwrap_or(String::from("0.0.0.0"));
 
-    let mut hot_reload_state = None;
-
-    if config.hot_reload {
-        hot_reload_state = Some(build_hotreload_filemap(&config));
-    }
+    let hot_reload_state = build_hotreload_filemap(&config);
 
     serve(ip, config, hot_reload_state, serve_cfg).await
 }
@@ -45,7 +36,7 @@ pub async fn startup(config: CrateConfig, serve_cfg: &ConfigOptsServe) -> Result
 pub async fn serve(
     ip: String,
     config: CrateConfig,
-    hot_reload_state: Option<HotReloadState>,
+    hot_reload_state: HotReloadState,
     opts: &ConfigOptsServe,
 ) -> Result<()> {
     let skip_assets = opts.skip_assets;
@@ -60,16 +51,13 @@ pub async fn serve(
 
     tracing::info!("🚀 Starting development server...");
 
-    // WS Reload Watching
-    let (reload_tx, _) = broadcast::channel(100);
-
     // We got to own watcher so that it exists for the duration of serve
     // Otherwise full reload won't work.
     let _watcher = setup_file_watcher(
         {
             let config = config.clone();
-            let reload_tx = reload_tx.clone();
-            move || build(&config, &reload_tx, skip_assets)
+            let hot_reload_state = hot_reload_state.clone();
+            move || build(&config, &hot_reload_state, skip_assets)
         },
         &config,
         Some(WebServerInfo {
@@ -79,10 +67,6 @@ pub async fn serve(
         hot_reload_state.clone(),
     )
     .await?;
-
-    let ws_reload_state = Arc::new(WsReloadState {
-        update: reload_tx.clone(),
-    });
 
     // HTTPS
     // Before console info so it can stop if mkcert isn't installed or fails
@@ -103,7 +87,7 @@ pub async fn serve(
     );
 
     // Router
-    let router = setup_router(config.clone(), ws_reload_state, hot_reload_state).await?;
+    let router = setup_router(config.clone(), hot_reload_state).await?;
 
     // Start server
     start_server(port, router, opts.open, rustls_config, &config).await?;
@@ -169,7 +153,7 @@ fn get_ip() -> Option<String> {
 
 fn build(
     config: &CrateConfig,
-    reload_tx: &broadcast::Sender<()>,
+    hot_reload_state: &HotReloadState,
     skip_assets: bool,
 ) -> Result<BuildResult> {
     // Since web platform doesn't use `rust_flags`, this argument is explicitly
@@ -185,7 +169,7 @@ fn build(
         }
     }
 
-    let _ = reload_tx.send(());
+    hot_reload_state.receiver.reload();
 
     result
 }
@@ -203,14 +187,17 @@ fn set_ctrlc_handler(config: &CrateConfig) {
 }
 
 fn build_hotreload_filemap(config: &CrateConfig) -> HotReloadState {
-    let FileMapBuildResult { map, errors } = FileMap::create(config.crate_dir.clone()).unwrap();
-
-    for err in errors {
-        tracing::error!("{}", err);
-    }
-
     HotReloadState {
-        file_map: Arc::new(Mutex::new(map)).clone(),
+        file_map: config.hot_reload.then(|| {
+            let FileMapBuildResult { map, errors } =
+                FileMap::create(config.crate_dir.clone()).unwrap();
+
+            for err in errors {
+                tracing::error!("{}", err);
+            }
+
+            Arc::new(Mutex::new(map))
+        }),
         receiver: Default::default(),
     }
 }

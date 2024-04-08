@@ -1,3 +1,4 @@
+use crate::server::SharedFileMap;
 use crate::{
     cfg::ConfigOptsServe,
     server::{
@@ -32,7 +33,7 @@ pub(crate) async fn startup_with_platform<P: Platform + Send + 'static>(
 ) -> Result<()> {
     set_ctrl_c(&config);
 
-    let hot_reload_state = match config.hot_reload {
+    let file_map = match config.hot_reload {
         true => {
             let FileMapBuildResult { map, errors } =
                 FileMap::<HtmlCtx>::create(config.crate_dir.clone()).unwrap();
@@ -43,12 +44,14 @@ pub(crate) async fn startup_with_platform<P: Platform + Send + 'static>(
 
             let file_map = Arc::new(Mutex::new(map));
 
-            Some(HotReloadState {
-                receiver: Default::default(),
-                file_map: file_map.clone(),
-            })
+            Some(file_map.clone())
         }
         false => None,
+    };
+
+    let hot_reload_state = HotReloadState {
+        receiver: Default::default(),
+        file_map,
     };
 
     serve::<P>(config, serve_cfg, hot_reload_state).await?;
@@ -70,15 +73,15 @@ fn set_ctrl_c(config: &CrateConfig) {
 async fn serve<P: Platform + Send + 'static>(
     config: CrateConfig,
     serve: &ConfigOptsServe,
-    hot_reload_state: Option<HotReloadState>,
+    hot_reload_state: HotReloadState,
 ) -> Result<()> {
     let hot_reload: tokio::task::JoinHandle<Result<()>> = tokio::spawn({
         let hot_reload_state = hot_reload_state.clone();
         async move {
-            match hot_reload_state {
-                Some(hot_reload_state) => {
+            match hot_reload_state.file_map.clone() {
+                Some(file_map) => {
                     // The open interprocess sockets
-                    start_desktop_hot_reload(hot_reload_state).await?;
+                    start_desktop_hot_reload(hot_reload_state, file_map).await?;
                 }
                 None => {
                     std::future::pending::<()>().await;
@@ -110,7 +113,10 @@ async fn serve<P: Platform + Send + 'static>(
     Ok(())
 }
 
-async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()> {
+async fn start_desktop_hot_reload(
+    hot_reload_state: HotReloadState,
+    file_map: SharedFileMap,
+) -> Result<()> {
     let metadata = cargo_metadata::MetadataCommand::new()
         .no_deps()
         .exec()
@@ -134,7 +140,6 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
 
             // listen for connections
             std::thread::spawn({
-                let file_map = hot_reload_state.file_map.clone();
                 let channels = channels.clone();
                 let aborted = aborted.clone();
                 move || {

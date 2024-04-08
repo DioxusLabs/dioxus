@@ -270,7 +270,7 @@ impl dioxus_ssr::incremental::WrapBody for FullstackHTMLTemplate {
         #[cfg(all(debug_assertions, feature = "hot-reload"))]
         {
             // In debug mode, we need to add a script to the page that will reload the page if the websocket disconnects to make full recompile hot reloads work
-            let disconnect_js = include_str!("../../cli/src/assets/autoreload.js");
+            let disconnect_js = dioxus_hot_reload::RECONNECT_SCRIPT;
 
             to.write_all(r#"<script>"#.as_bytes())?;
             to.write_all(disconnect_js.as_bytes())?;

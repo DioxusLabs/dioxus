@@ -127,7 +127,7 @@ pub trait DioxusRouterExt<S> {
         Self: Sized;
 
     /// Serves the Dioxus application. This will serve a complete server side rendered application.
-    /// This will serve static assets, server render the application, register server functions, and intigrate with hot reloading.
+    /// This will serve static assets, server render the application, register server functions, and integrate with hot reloading.
     ///
     /// # Example
     /// ```rust
@@ -245,8 +245,13 @@ where
             let mut server = self.serve_static_assets(cfg.assets_path.clone()).await;
             #[cfg(all(debug_assertions, feature = "hot-reload"))]
             {
+                use crate::hot_reload::spawn_hot_reload;
+                use axum::Extension;
                 use dioxus_hot_reload::HotReloadRouterExt;
-                server = server.connect_hot_reload();
+
+                let ws_reload = spawn_hot_reload().await;
+
+                server = server.connect_hot_reload().layer(Extension(ws_reload));
             }
             server
                 .register_server_fns()

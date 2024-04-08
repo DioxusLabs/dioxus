@@ -53,21 +53,33 @@ where
         self.nest(
             "/_dioxus",
             Router::new()
-                .route(
-                    "/ws",
-                    get(|ws: axum::extract::WebSocketUpgrade| async {
-                        ws.on_upgrade(|mut ws| async move {
-                            let _ = ws.send(Message::Text("connected".into())).await;
-                            loop {
-                                if ws.recv().await.is_none() {
-                                    break;
-                                }
-                            }
-                        })
-                    }),
-                )
+                .route("/ws", get(ws_handler))
                 .route("/hot_reload", get(hot_reload_handler)),
         )
+    }
+}
+
+/// Handle websockets
+async fn ws_handler(
+    ws: WebSocketUpgrade,
+    Extension(state): Extension<HotReloadReceiver>,
+) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| ws_reload_handler(socket, state))
+}
+
+async fn ws_reload_handler(mut socket: WebSocket, state: HotReloadReceiver) {
+    let mut rx = state.reload.subscribe();
+
+    loop {
+        rx.recv().await.unwrap();
+
+        let _ = socket.send(Message::Text(String::from("reload"))).await;
+
+        // ignore the error
+        println!("forcing reload");
+
+        // flush the errors after recompling
+        rx = rx.resubscribe();
     }
 }
 
@@ -77,6 +89,9 @@ pub struct HotReloadReceiver {
     /// Hot reloading messages sent from the client
     // NOTE: We use a send broadcast channel to allow clones
     messages: broadcast::Sender<HotReloadMsg>,
+
+    /// Rebuilds sent from the client
+    reload: broadcast::Sender<()>,
 
     /// Any template updates that have happened since the last full render
     template_updates: SharedTemplateUpdates,
@@ -93,6 +108,7 @@ impl Default for HotReloadReceiver {
     fn default() -> Self {
         Self {
             messages: broadcast::channel(100).0,
+            reload: broadcast::channel(100).0,
             template_updates: Default::default(),
         }
     }
@@ -127,6 +143,11 @@ impl HotReloadReceiver {
     pub fn subscribe(&self) -> broadcast::Receiver<HotReloadMsg> {
         self.messages.subscribe()
     }
+
+    /// Reload the website
+    pub fn reload(&self) {
+        self.reload.send(()).unwrap();
+    }
 }
 
 pub async fn hot_reload_handler(
@@ -148,6 +169,8 @@ async fn hotreload_loop(
 ) -> Result<(), axum::Error> {
     tracing::info!("🔥 Hot Reload WebSocket connected");
 
+    let mut rx = state.messages.subscribe();
+
     // update any rsx calls that changed before the websocket connected.
     // These templates will be sent down immediately so the page is in sync with the hotreloaded version
     // The compiled version will be different from the one we actually want to present
@@ -156,8 +179,6 @@ async fn hotreload_loop(
             .send(Message::Text(serde_json::to_string(&template).unwrap()))
             .await?;
     }
-
-    let mut rx = state.messages.subscribe();
 
     loop {
         let msg = {
@@ -201,4 +222,16 @@ async fn hotreload_loop(
     }
 
     Ok(())
+}
+
+/// Connect to the hot reloading messages that the CLI sends in the desktop and fullstack platforms
+pub fn connect_hot_reload() -> HotReloadReceiver {
+    let hot_reload_state = HotReloadReceiver::default();
+
+    crate::connect({
+        let hot_reload_state = hot_reload_state.clone();
+        move |msg| hot_reload_state.send_message(msg)
+    });
+
+    hot_reload_state
 }
