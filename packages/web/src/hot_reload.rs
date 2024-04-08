@@ -3,7 +3,7 @@
 use futures_channel::mpsc::UnboundedReceiver;
 
 use dioxus_core::Template;
-use web_sys::{console, Element};
+use web_sys::{Element};
 
 pub(crate) fn init() -> UnboundedReceiver<Template> {
     use wasm_bindgen::closure::Closure;
