@@ -30,8 +30,6 @@ pub(crate) fn init() -> UnboundedReceiver<Template> {
 
     // change the rsx when new data is received
     let cl = Closure::wrap(Box::new(move |e: MessageEvent| {
-        console::log_1(&e.clone().into());
-
         if let Ok(text) = e.data().dyn_into::<js_sys::JsString>() {
             let string: String = text.into();
 
