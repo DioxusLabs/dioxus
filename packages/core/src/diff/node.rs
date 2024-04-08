@@ -367,7 +367,9 @@ impl VNode {
                             std::cmp::Ordering::Equal => {
                                 let old = old_attributes_iter.next().unwrap();
                                 let new = new_attributes_iter.next().unwrap();
-                                if old.value != new.value {
+                                // Volatile attributes are attributes that the browser may override so we always update them
+                                let volatile = old.volatile;
+                                if volatile || old.value != new.value {
                                     self.write_attribute(
                                         path,
                                         new,
