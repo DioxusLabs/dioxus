@@ -477,6 +477,68 @@ impl<T: ?Sized, S: AnyStorage> DerefMut for Write<'_, T, S> {
     }
 }
 
+#[allow(unused)]
+const SIGNAL_READ_WRITE_SAME_SCOPE_HELP: &str = r#"This issue is caused by reading and writing to the same signal in a reactive scope. Components, effects, memos, and resources each have their own a reactive scopes. Reactive scopes rerun when any signal you read inside of them are changed. If you read and write to the same signal in the same scope, the write will cause the scope to rerun and trigger the write again. This can cause an infinite loop.
+
+You can fix the issue by either:
+1) Splitting up your state and Writing, reading to different signals:
+
+For example, you could change this broken code:
+
+#[derive(Clone, Copy)]
+struct Counts {
+    count1: i32,
+    count2: i32,
+}
+
+fn app() -> Element {
+    let mut counts = use_signal(|| Counts { count1: 0, count2: 0 });
+    
+    use_effect(move || {
+        // This effect both reads and writes to counts
+        counts.write().count1 = counts().count2;
+    })
+}
+
+Into this working code:
+
+fn app() -> Element {
+    let mut count1 = use_signal(|| 0);
+    let mut count2 = use_signal(|| 0);
+
+    use_effect(move || {
+        count1.write(count2());
+    });
+}
+2) Reading and Writing to the same signal in different scopes:
+
+For example, you could change this broken code:
+
+fn app() -> Element {
+    let mut count = use_signal(|| 0);
+
+    use_effect(move || {
+        // This effect both reads and writes to count
+        println!("{}", count());
+        count.write(count());
+    });
+}
+
+
+To this working code:
+
+fn app() -> Element {
+    let mut count = use_signal(|| 0);
+
+    use_effect(move || {
+        count.write(count());
+    });
+    use_effect(move || {
+        println!("{}", count());
+    });
+}
+"#;
+
 struct SignalSubscriberDrop<T: 'static, S: Storage<SignalData<T>>> {
     signal: Signal<T, S>,
     #[cfg(debug_assertions)]
@@ -508,7 +570,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Drop for SignalSubscriberDrop<T, S> 
                             if reactive_context == *subscriber {
                                 let origin = self.origin;
                                 tracing::warn!(
-                                    "Write on signal at {origin} finished in {reactive_context} which is also subscribed to the signal. This will likely cause an infinite loop. When the write finishes, {reactive_context} will rerun which may cause the write to be rerun again. Consider separating the subscriptions by splitting the state into multiple signals or only reading the part of the signal that you need in a memo.",
+                                    "Write on signal at {origin} finished in {reactive_context} which is also subscribed to the signal. This will likely cause an infinite loop. When the write finishes, {reactive_context} will rerun which may cause the write to be rerun again.\nHINT:\n{SIGNAL_READ_WRITE_SAME_SCOPE_HELP}",
                                 );
                             }
                         }
