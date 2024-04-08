@@ -32,6 +32,7 @@ use crate::Task;
 use crate::VirtualDom;
 use std::borrow::Borrow;
 use std::cell::RefCell;
+use std::collections::VecDeque;
 use std::hash::Hash;
 
 #[derive(Debug, Clone, Copy, Eq)]
@@ -138,7 +139,7 @@ impl VirtualDom {
                         Some(Work {
                             scope,
                             rerun_scope: true,
-                            tasks: Vec::new(),
+                            tasks: Default::default(),
                         })
                     }
                     std::cmp::Ordering::Greater => {
@@ -165,7 +166,7 @@ impl VirtualDom {
                 Some(Work {
                     scope,
                     rerun_scope: true,
-                    tasks: Vec::new(),
+                    tasks: Default::default(),
                 })
             }
             (None, Some(_)) => {
@@ -185,27 +186,27 @@ impl VirtualDom {
 pub struct Work {
     pub scope: ScopeOrder,
     pub rerun_scope: bool,
-    pub tasks: Vec<Task>,
+    pub tasks: VecDeque<Task>,
 }
 
 #[derive(Debug, Clone, Eq)]
 pub(crate) struct DirtyTasks {
     pub order: ScopeOrder,
-    pub tasks_queued: RefCell<Vec<Task>>,
+    pub tasks_queued: RefCell<VecDeque<Task>>,
 }
 
 impl From<ScopeOrder> for DirtyTasks {
     fn from(order: ScopeOrder) -> Self {
         Self {
             order,
-            tasks_queued: Vec::new().into(),
+            tasks_queued: VecDeque::new().into(),
         }
     }
 }
 
 impl DirtyTasks {
     pub fn queue_task(&self, task: Task) {
-        self.tasks_queued.borrow_mut().push(task);
+        self.tasks_queued.borrow_mut().push_back(task);
     }
 }
 

@@ -518,7 +518,7 @@ impl VirtualDom {
         while let Some(task) = self.pop_task() {
             // Then poll any tasks that might be pending
             let mut tasks = task.tasks_queued.into_inner();
-            while let Some(task) = tasks.pop() {
+            while let Some(task) = tasks.pop_front() {
                 let _ = self.runtime.handle_task_wakeup(task);
 
                 // Running that task, may mark a scope higher up as dirty. If it does, return from the function early
@@ -702,7 +702,7 @@ impl VirtualDom {
                     while let Some(task) = self.pop_task() {
                         // Then poll any tasks that might be pending
                         let mut tasks = task.tasks_queued.into_inner();
-                        while let Some(task) = tasks.pop() {
+                        while let Some(task) = tasks.pop_front() {
                             if self.runtime.task_runs_during_suspense(task) {
                                 let _ = self.runtime.handle_task_wakeup(task);
                                 // Running that task, may mark a scope higher up as dirty. If it does, return from the function early
