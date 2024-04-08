@@ -10,7 +10,6 @@ use crate::{
 };
 use dioxus_cli_config::CrateConfig;
 use dioxus_rsx::hot_reload::*;
-use serde::de;
 use std::{
     net::{SocketAddr, UdpSocket},
     sync::{Arc, Mutex},

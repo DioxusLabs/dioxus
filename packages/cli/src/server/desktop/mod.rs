@@ -16,7 +16,6 @@ use std::{
     process::{Child, Command},
     sync::{Arc, RwLock},
 };
-use tokio::sync::broadcast::{self};
 
 #[cfg(feature = "plugin")]
 use crate::plugin::PluginManager;

@@ -17,7 +17,7 @@ use axum::{
 };
 use axum_server::tls_rustls::RustlsConfig;
 use dioxus_cli_config::{CrateConfig, WebHttpsConfig};
-use dioxus_hot_reload::{hot_reload_handler, HotReloadRouterExt};
+use dioxus_hot_reload::{HotReloadRouterExt};
 use std::{fs, io, process::Command, sync::Arc};
 use tower::ServiceBuilder;
 use tower_http::{
