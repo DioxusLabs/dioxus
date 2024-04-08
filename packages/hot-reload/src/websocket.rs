@@ -29,13 +29,14 @@ pub trait HotReloadRouterExt<S> {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     hot_reload_init!();
     ///     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
+    ///     let ws_reload = HotReloadReceiver::default();
     ///     axum::Server::bind(&addr)
     ///         .serve(
     ///             axum::Router::new()
     ///                 // Connect to hot reloading in debug mode
     ///                 .connect_hot_reload()
+    ///                 .layer(Extension(ws_reload))
     ///                 .into_make_service(),
     ///         )
     ///         .await
@@ -225,12 +226,15 @@ async fn hotreload_loop(
 }
 
 /// Connect to the hot reloading messages that the CLI sends in the desktop and fullstack platforms
-pub fn connect_hot_reload() -> HotReloadReceiver {
+pub fn forward_cli_hot_reload() -> HotReloadReceiver {
     let hot_reload_state = HotReloadReceiver::default();
 
-    crate::connect({
+    // Hot reloading can be expensive to start so we spawn a new thread
+    std::thread::spawn({
         let hot_reload_state = hot_reload_state.clone();
-        move |msg| hot_reload_state.send_message(msg)
+        move || {
+            crate::connect({ move |msg| hot_reload_state.send_message(msg) });
+        }
     });
 
     hot_reload_state

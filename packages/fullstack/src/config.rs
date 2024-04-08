@@ -126,7 +126,6 @@ impl Config {
         {
             use crate::axum_adapter::{render_handler, DioxusRouterExt};
             use axum::routing::get;
-            use dioxus_hot_reload::HotReloadRouterExt;
             use tower::ServiceBuilder;
 
             let ssr_state = SSRState::new(&cfg);
