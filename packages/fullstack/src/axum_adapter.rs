@@ -160,29 +160,6 @@ pub trait DioxusRouterExt<S> {
     ) -> impl Future<Output = Self> + Send + Sync
     where
         Self: Sized;
-
-    /// Register the web RSX hot reloading endpoint. This will enable hot reloading for your application in debug mode when you call [`dioxus_hot_reload::hot_reload_init`].
-    ///
-    /// # Example
-    /// ```rust
-    /// #![allow(non_snake_case)]
-    /// use dioxus_fullstack::prelude::*;
-    ///
-    /// #[tokio::main]
-    /// async fn main() {
-    ///     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
-    ///     axum::Server::bind(&addr)
-    ///         .serve(
-    ///             axum::Router::new()
-    ///                 // Connect to hot reloading in debug mode
-    ///                 .connect_hot_reload()
-    ///                 .into_make_service(),
-    ///         )
-    ///         .await
-    ///         .unwrap();
-    /// }
-    /// ```
-    fn connect_hot_reload(self) -> Self;
 }
 
 impl<S> DioxusRouterExt<S> for Router<S>
@@ -265,27 +242,23 @@ where
             let ssr_state = SSRState::new(&cfg);
 
             // Add server functions and render index.html
-            let mut server = self.serve_static_assets(cfg.assets_path.clone()).await;
-            server.register_server_fns().connect_hot_reload().fallback(
-                get(render_handler).with_state((cfg, Arc::new(build_virtual_dom), ssr_state)),
-            )
+            let mut server = self
+                .serve_static_assets(cfg.assets_path.clone())
+                .await
+                .register_server_fns();
+
+            #[cfg(all(feature = "hot-reload", debug_assertions))]
+            {
+                use dioxus_hot_reload::HotReloadRouterExt;
+                server = server.forward_cli_hot_reloading();
+            }
+
+            server.fallback(get(render_handler).with_state((
+                cfg,
+                Arc::new(build_virtual_dom),
+                ssr_state,
+            )))
         }
-    }
-
-    fn connect_hot_reload(mut self) -> Self {
-        #[cfg(all(debug_assertions, feature = "hot-reload"))]
-        {
-            use axum::Extension;
-            use dioxus_hot_reload::{forward_cli_hot_reload, HotReloadReceiver};
-
-            static HOT_RELOAD_STATE: once_cell::sync::Lazy<HotReloadReceiver> =
-                once_cell::sync::Lazy::new(forward_cli_hot_reload);
-            let hot_reload_state: HotReloadReceiver = HOT_RELOAD_STATE.clone();
-
-            self = dioxus_hot_reload::HotReloadRouterExt::connect_hot_reload(self)
-                .layer(Extension(hot_reload_state));
-        }
-        self
     }
 }
 

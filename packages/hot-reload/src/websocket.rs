@@ -44,6 +44,30 @@ pub trait HotReloadRouterExt<S> {
     /// }
     /// ```
     fn connect_hot_reload(self) -> Self;
+
+    /// Like [`connect_hot_reload`] but connects to the hot reloading messages that the CLI sends in the desktop and fullstack platforms
+    ///
+    /// # Example
+    /// ```rust
+    /// #![allow(non_snake_case)]
+    /// use dioxus_fullstack::prelude::*;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
+    ///     let ws_reload = HotReloadReceiver::default();
+    ///     axum::Server::bind(&addr)
+    ///         .serve(
+    ///             axum::Router::new()
+    ///                 // Connect to hot reloading in debug mode
+    ///                 .forward_cli_hot_reload()
+    ///                 .into_make_service(),
+    ///         )
+    ///         .await
+    ///         .unwrap();
+    /// }
+    /// ```
+    fn forward_cli_hot_reloading(self) -> Self;
 }
 
 impl<S> HotReloadRouterExt<S> for Router<S>
@@ -57,6 +81,18 @@ where
                 .route("/ws", get(ws_handler))
                 .route("/hot_reload", get(hot_reload_handler)),
         )
+    }
+
+    fn forward_cli_hot_reloading(mut self) -> Self {
+        use axum::Extension;
+
+        static HOT_RELOAD_STATE: once_cell::sync::Lazy<HotReloadReceiver> =
+            once_cell::sync::Lazy::new(forward_cli_hot_reload);
+        let hot_reload_state: HotReloadReceiver = HOT_RELOAD_STATE.clone();
+
+        self = self.connect_hot_reload().layer(Extension(hot_reload_state));
+
+        self
     }
 }
 
@@ -225,8 +261,7 @@ async fn hotreload_loop(
     Ok(())
 }
 
-/// Connect to the hot reloading messages that the CLI sends in the desktop and fullstack platforms
-pub fn forward_cli_hot_reload() -> HotReloadReceiver {
+pub(crate) fn forward_cli_hot_reload() -> HotReloadReceiver {
     let hot_reload_state = HotReloadReceiver::default();
 
     // Hot reloading can be expensive to start so we spawn a new thread
