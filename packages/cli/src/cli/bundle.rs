@@ -86,6 +86,10 @@ impl Bundle {
             crate_config.extend_with_platform(platform);
         }
 
+        if let Some(features) = self.build.features {
+            crate_config.set_features(features);
+        }
+
         // build the desktop app
         // Since the `bundle()` function is only run for the desktop platform,
         // the `rust_flags` argument is set to `None`.
