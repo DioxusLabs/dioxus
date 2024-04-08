@@ -345,6 +345,8 @@ impl<T: 'static, S: Storage<SignalData<T>>> Writable for Signal<T, S> {
     fn try_write_unchecked(
         &self,
     ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError> {
+        #[cfg(debug_assertions)]
+        let origin = std::panic::Location::caller();
         self.inner.try_write_unchecked().map(|inner| {
             let borrow = S::map_mut(inner, |v| &mut v.value);
             Write {
@@ -352,7 +354,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Writable for Signal<T, S> {
                 drop_signal: Box::new(SignalSubscriberDrop {
                     signal: *self,
                     #[cfg(debug_assertions)]
-                    origin: std::panic::Location::caller(),
+                    origin,
                 }),
             }
         })
@@ -484,10 +486,36 @@ struct SignalSubscriberDrop<T: 'static, S: Storage<SignalData<T>>> {
 impl<T: 'static, S: Storage<SignalData<T>>> Drop for SignalSubscriberDrop<T, S> {
     fn drop(&mut self) {
         #[cfg(debug_assertions)]
-        tracing::trace!(
-            "Write on signal at {:?} finished, updating subscribers",
-            self.origin
-        );
+        {
+            tracing::trace!(
+                "Write on signal at {} finished, updating subscribers",
+                self.origin
+            );
+
+            // Check if the write happened during a render. If it did, we should warn the user that this is generally a bad practice.
+            if dioxus_core::vdom_is_rendering() {
+                tracing::warn!(
+                    "Write on signal at {} happened while a component was running. Writing to signals during a render can cause infinite rerenders when you read the same signal in the component. Consider writing to the signal in an effect, future, or event handler if possible.",
+                    self.origin
+                );
+            }
+
+            // Check if the write happened during a scope that the signal is also subscribed to. If it did, this will probably cause an infinite loop.
+            if let Some(reactive_context) = ReactiveContext::current() {
+                if let Ok(inner) = self.signal.inner.try_read() {
+                    if let Ok(subscribers) = inner.subscribers.lock() {
+                        for subscriber in subscribers.iter() {
+                            if reactive_context == *subscriber {
+                                let origin = self.origin;
+                                tracing::warn!(
+                                    "Write on signal at {origin} finished in {reactive_context} which is also subscribed to the signal. This will likely cause an infinite loop. When the write finishes, {reactive_context} will rerun which may cause the write to be rerun again. Consider separating the subscriptions by splitting the state into multiple signals or only reading the part of the signal that you need in a memo.",
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
         self.signal.update_subscribers();
     }
 }
