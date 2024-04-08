@@ -2422,17 +2422,22 @@ dependencies = [
 name = "dioxus-hot-reload"
 version = "0.5.1"
 dependencies = [
+ "axum",
  "chrono",
  "dioxus-core 0.5.1",
  "dioxus-html",
  "dioxus-rsx",
  "execute",
+ "futures-util",
  "ignore",
  "interprocess-docfix",
  "notify",
  "once_cell",
  "serde",
  "serde_json",
+ "tokio",
+ "tokio-stream",
+ "tracing",
 ]
 
 [[package]]

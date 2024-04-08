@@ -4,23 +4,25 @@ use crate::{
     serve::Serve,
     server::{
         output::{print_console_info, PrettierOptions, WebServerInfo},
-        setup_file_watcher, HotReloadState,
+        setup_file_watcher,
     },
     BuildResult, Result,
 };
 use dioxus_cli_config::CrateConfig;
 use dioxus_rsx::hot_reload::*;
+use serde::de;
 use std::{
     net::{SocketAddr, UdpSocket},
     sync::{Arc, Mutex},
 };
 use tokio::sync::broadcast;
 
-mod hot_reload;
 mod proxy;
 mod server;
 
 use server::*;
+
+use super::HotReloadState;
 
 pub struct WsReloadState {
     update: broadcast::Sender<()>,
@@ -209,7 +211,7 @@ fn build_hotreload_filemap(config: &CrateConfig) -> HotReloadState {
     }
 
     HotReloadState {
-        messages: broadcast::channel(100).0.clone(),
         file_map: Arc::new(Mutex::new(map)).clone(),
+        receiver: Default::default(),
     }
 }

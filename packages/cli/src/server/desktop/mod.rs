@@ -44,10 +44,8 @@ pub(crate) async fn startup_with_platform<P: Platform + Send + 'static>(
 
             let file_map = Arc::new(Mutex::new(map));
 
-            let hot_reload_tx = broadcast::channel(100).0;
-
             Some(HotReloadState {
-                messages: hot_reload_tx.clone(),
+                receiver: Default::default(),
                 file_map: file_map.clone(),
             })
         }
@@ -184,7 +182,7 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
                 }
             });
 
-            let mut hot_reload_rx = hot_reload_state.messages.subscribe();
+            let mut hot_reload_rx = hot_reload_state.receiver.subscribe();
 
             while let Ok(msg) = hot_reload_rx.recv().await {
                 let channels = &mut *channels.lock().unwrap();

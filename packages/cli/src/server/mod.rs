@@ -2,17 +2,12 @@ use crate::{cfg::ConfigOptsServe, BuildResult, Result};
 use dioxus_cli_config::CrateConfig;
 
 use cargo_metadata::diagnostic::Diagnostic;
-use dioxus_core::Template;
-use dioxus_hot_reload::HotReloadMsg;
+use dioxus_hot_reload::{HotReloadMsg, HotReloadReceiver};
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;
 use fs_extra::dir::CopyOptions;
 use notify::{RecommendedWatcher, Watcher};
-use std::{
-    path::PathBuf,
-    sync::{Arc, Mutex},
-};
-use tokio::sync::broadcast::{self};
+use std::{path::PathBuf, sync::Arc};
 
 mod output;
 use output::*;
@@ -22,25 +17,14 @@ pub mod web;
 
 #[derive(Clone)]
 pub struct HotReloadState {
-    /// Pending hotreload updates to be sent to all connected clients
-    pub messages: broadcast::Sender<HotReloadMsg>,
+    /// The receiver for hot reload messages
+    pub receiver: HotReloadReceiver,
 
     /// The file map that tracks the state of the projecta
     pub file_map: SharedFileMap,
 }
-type SharedFileMap = Arc<Mutex<FileMap<HtmlCtx>>>;
 
-impl HotReloadState {
-    pub fn all_templates(&self) -> Vec<Template> {
-        self.file_map
-            .lock()
-            .unwrap()
-            .map
-            .values()
-            .flat_map(|v| v.templates.values().copied())
-            .collect()
-    }
-}
+type SharedFileMap = Arc<Mutex<FileMap<HtmlCtx>>>;
 
 /// Sets up a file watcher.
 ///
@@ -223,7 +207,7 @@ fn hotreload_files(
     }
 
     for msg in messages {
-        let _ = hot_reload.messages.send(msg);
+        hot_reload.receiver.send_message(msg);
     }
 }
 
@@ -301,7 +285,7 @@ fn attempt_css_reload(
     _ = rsx_file_map.is_tracking_asset(&local_path)?;
 
     // copy the asset over to the output directory
-    // todo this whole css hotreloading shouldbe less hacky and more robust
+    // todo this whole css hotreloading should be less hacky and more robust
     _ = fs_extra::copy_items(
         &[path],
         config.out_dir(),

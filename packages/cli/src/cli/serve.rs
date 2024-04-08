@@ -3,7 +3,7 @@ use manganis_cli_support::AssetManifest;
 
 use super::*;
 use cargo_toml::Dependency::{Detailed, Inherited, Simple};
-use std::{fs::create_dir_all, io::Write, path::PathBuf};
+use std::{fs::create_dir_all, io::Write};
 
 /// Run the WASM project on dev-server
 #[derive(Clone, Debug, Parser)]

@@ -1,4 +1,4 @@
-use super::{hot_reload::*, WsReloadState};
+use super::WsReloadState;
 use crate::{server::HotReloadState, Result};
 use axum::{
     body::Body,
@@ -17,6 +17,7 @@ use axum::{
 };
 use axum_server::tls_rustls::RustlsConfig;
 use dioxus_cli_config::{CrateConfig, WebHttpsConfig};
+use dioxus_hot_reload::{hot_reload_handler, HotReloadRouterExt};
 use std::{fs, io, process::Command, sync::Arc};
 use tower::ServiceBuilder;
 use tower_http::{
@@ -94,7 +95,7 @@ pub async fn setup_router(
 
     // Setup routes
     router = router
-        .route("/_dioxus/hot_reload", get(hot_reload_handler))
+        .connect_hot_reload()
         .layer(cors)
         .layer(Extension(ws_reload));
 
