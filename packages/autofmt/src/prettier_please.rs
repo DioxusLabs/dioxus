@@ -37,7 +37,7 @@ impl Writer<'_> {
 
                         *_expr = syn::Stmt::Expr(
                             syn::parse_quote!(dioxus_autofmt_block__________),
-                            None,
+                            i.semi_token,
                         );
 
                         // Save this formatted block for later, when we apply it to the original expr

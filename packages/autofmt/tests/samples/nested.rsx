@@ -29,6 +29,16 @@ fn App() -> Element {
                         "womh"
                     }
                 },
+                onclick: move |_| {
+                    rsx! {
+                        div { class: "max-w-lg lg:max-w-2xl mx-auto mb-16 text-center",
+                            "gomg"
+                            "hi!!"
+                            "womh"
+                        }
+                    };
+                    println!("hi")
+                },
                 "hi"
             }
             ContentList { header, content: &BLOG_POSTS, readmore: true }
