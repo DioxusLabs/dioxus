@@ -516,6 +516,8 @@ mod struct_info {
     use syn::spanned::Spanned;
     use syn::{Expr, Ident};
 
+    use crate::props::strip_option;
+
     use super::field_info::{FieldBuilderAttr, FieldInfo};
     use super::util::{
         empty_type, empty_type_tuple, expr_to_single_string, make_punctuated_single,
@@ -635,10 +637,6 @@ mod struct_info {
             let event_handlers_fields: Vec<_> = self
                 .included_fields()
                 .filter(|f| looks_like_event_handler_type(f.ty))
-                .map(|f| {
-                    let name = f.name;
-                    quote!(#name)
-                })
                 .collect();
 
             let regular_fields: Vec<_> = self
@@ -650,12 +648,24 @@ mod struct_info {
                 })
                 .collect();
 
-            let move_event_handlers = quote! {
-                #(
-                    // Update the event handlers
-                    self.#event_handlers_fields.__set(new.#event_handlers_fields.__take());
-                )*
-            };
+            let move_event_handlers: TokenStream = event_handlers_fields.iter().map(|field| {
+                // If this is an optional event handler, we need to check if it's None before we try to update it
+                let optional = strip_option(field.ty).is_some();
+                let name = field.name;
+                if optional {
+                    quote! {
+                        // If the event handler is None, we don't need to update it
+                        if let (Some(old_handler), Some(new_handler)) = (self.#name.as_mut(), new.#name.as_ref()) {
+                            old_handler.__set(new_handler.__take());
+                        }
+                    }
+                } else {
+                    quote! {
+                        // Update the event handlers
+                        self.#name.__set(new.#name.__take());
+                    }
+                }
+            }).collect();
 
             // If there are signals, we automatically try to memoize the signals
             if !signal_fields.is_empty() {
@@ -1622,8 +1632,8 @@ fn extract_base_type_without_single_generic(ty: &Type) -> Option<syn::Path> {
     Some(path_without_generics)
 }
 
-/// Remove the Option wrapper from a type
-fn remove_option_wrapper(type_: Type) -> Type {
+/// Returns the type inside the Option wrapper if it exists
+fn strip_option(type_: &Type) -> Option<Type> {
     if let Type::Path(ty) = &type_ {
         let mut segments_iter = ty.path.segments.iter().peekable();
         // Strip any leading std||core::option:: prefix
@@ -1640,18 +1650,23 @@ fn remove_option_wrapper(type_: Type) -> Type {
         }
         // The last segment should be Option
         let Some(option_segment) = segments_iter.next() else {
-            return type_;
+            return None;
         };
         if option_segment.ident == "Option" && segments_iter.next().is_none() {
             // It should have a single generic argument
             if let PathArguments::AngleBracketed(generic_arg) = &option_segment.arguments {
                 if let Some(syn::GenericArgument::Type(ty)) = generic_arg.args.first() {
-                    return ty.clone();
+                    return Some(ty.clone());
                 }
             }
         }
     }
-    type_
+    None
+}
+
+/// Remove the Option wrapper from a type
+fn remove_option_wrapper(type_: Type) -> Type {
+    strip_option(&type_).unwrap_or(type_)
 }
 
 /// Check if a type should be owned by the child component after conversion
@@ -1696,11 +1711,15 @@ fn test_looks_like_type() {
     )));
 
     assert!(looks_like_event_handler_type(&parse_quote!(
-        Option<EventHandler<i32>>
+        Option<EventHandler>
     )));
     assert!(looks_like_event_handler_type(&parse_quote!(
         std::option::Option<EventHandler<i32>>
     )));
+    assert!(looks_like_event_handler_type(&parse_quote!(
+        Option<EventHandler<MouseEvent>>
+    )));
+
     assert!(looks_like_event_handler_type(&parse_quote!(
         EventHandler<i32>
     )));
