@@ -611,6 +611,12 @@ impl RouteEnum {
                 #(#error_variants),*
             }
 
+            impl std::fmt::Debug for #match_error_name {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(f, "{}({})", stringify!(#match_error_name), self)
+                }
+            }
+
             impl std::fmt::Display for #match_error_name {
                 fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                     match self {
