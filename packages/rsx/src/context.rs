@@ -251,7 +251,7 @@ impl<'a> DynamicContext<'a> {
         }
 
         // And then set the path of this node to the current path (which we're hitting during traversal)
-        self.node_paths[idx] = self.current_path.clone();
+        self.node_paths[idx].clone_from(&self.current_path);
 
         Some(match root {
             BodyNode::Text(_) => TemplateNode::DynamicText { id: idx },
@@ -309,7 +309,7 @@ impl<'a> DynamicContext<'a> {
             self.attr_paths.resize_with(idx + 1, Vec::new);
         }
 
-        self.attr_paths[idx] = self.current_path.clone();
+        self.attr_paths[idx].clone_from(&self.current_path);
 
         Some(idx)
     }

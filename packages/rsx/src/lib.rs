@@ -79,7 +79,7 @@ impl CallBody {
 
         let body = TemplateRenderer::as_tokens(&self.roots, Some(location));
 
-        quote! { Some({ #body }) }
+        quote! { { #body } }
     }
 }
 
@@ -108,7 +108,7 @@ impl ToTokens for CallBody {
             true => out_tokens.append_all(quote! { None }),
             false => {
                 let body = TemplateRenderer::as_tokens(&self.roots, None);
-                out_tokens.append_all(quote! { Some({ #body }) })
+                out_tokens.append_all(quote! { { #body } })
             }
         }
     }

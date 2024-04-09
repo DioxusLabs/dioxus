@@ -34,6 +34,11 @@ impl<'a> TemplateRenderer<'a> {
     }
 
     fn render(mut self) -> TokenStream2 {
+        // If there are no roots, this is an empty template, so just return None
+        if self.roots.is_empty() {
+            return quote! { Option::<dioxus_core::VNode>::None };
+        }
+
         // Create a new dynamic context that tracks the state of all the dynamic nodes
         // We have no old template, to seed it with, so it'll just be used for rendering
         let mut context = DynamicContext::default();
@@ -67,7 +72,7 @@ impl<'a> TemplateRenderer<'a> {
         let node_paths = context.node_paths.iter().map(|it| quote!(&[#(#it),*]));
         let attr_paths = context.attr_paths.iter().map(|it| quote!(&[#(#it),*]));
 
-        quote! {
+        let vnode = quote! {
             static TEMPLATE: dioxus_core::Template = dioxus_core::Template {
                 name: #name,
                 roots: #roots,
@@ -85,7 +90,9 @@ impl<'a> TemplateRenderer<'a> {
                 );
                 __vnodes
             }
-        }
+        };
+
+        quote! { Some({ #vnode }) }
     }
 
     fn get_template_id_tokens(&self) -> TokenStream2 {

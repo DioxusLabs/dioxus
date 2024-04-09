@@ -58,7 +58,7 @@ pub fn suspend(task: Task) -> Element {
 
 /// Start a new future on the same thread as the rest of the VirtualDom.
 ///
-/// **You should generally use `spawn` instead of this method unless you specifically need to need to run a task during suspense**
+/// **You should generally use `spawn` instead of this method unless you specifically need to run a task during suspense**
 ///
 /// This future will not contribute to suspense resolving but it will run during suspense.
 ///
