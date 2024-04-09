@@ -11,6 +11,10 @@ pub fn collect_from_file<'a>(file: &'a File, macros: &mut Vec<CollectedMacro<'a>
     MacroCollector::visit_file(&mut MacroCollector { macros }, file);
 }
 
+pub fn collect_from_expr<'a>(expr: &'a syn::Expr, macros: &mut Vec<CollectedMacro<'a>>) {
+    MacroCollector::visit_expr(&mut MacroCollector { macros }, expr);
+}
+
 struct MacroCollector<'a, 'b> {
     macros: &'a mut Vec<CollectedMacro<'b>>,
 }
