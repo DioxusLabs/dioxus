@@ -2681,14 +2681,19 @@ dependencies = [
 name = "dioxus-static-site-generation"
 version = "0.5.1"
 dependencies = [
+ "axum",
  "dioxus",
+ "dioxus-cli-config",
  "dioxus-fullstack",
+ "dioxus-hot-reload",
  "dioxus-lib",
  "dioxus-router",
  "dioxus-ssr",
  "dioxus-web",
  "http 1.1.0",
  "tokio",
+ "tower-http",
+ "tracing",
 ]
 
 [[package]]
@@ -8636,6 +8641,7 @@ name = "static-hydrated"
 version = "0.1.0"
 dependencies = [
  "dioxus",
+ "tracing-subscriber",
 ]
 
 [[package]]

@@ -2,7 +2,7 @@
 //!
 //! ```sh
 //! dx build --features web --release
-//! cargo run --features ssg
+//! cargo run --features server
 //! ```
 
 #![allow(unused)]
@@ -10,6 +10,11 @@ use dioxus::prelude::*;
 
 // Generate all routes and output them to the static path
 fn main() {
+    #[cfg(feature = "server")]
+    {
+        tracing_subscriber::fmt::init();
+    }
+
     launch(|| {
         rsx! {
             Router::<Route> {}

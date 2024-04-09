@@ -63,7 +63,7 @@ dioxus-cli-config = { workspace = true, features = ["read-config"], optional = t
 tokio = { workspace = true, features = ["rt", "sync"], optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-dioxus-hot-reload = { workspace = true }
+dioxus-hot-reload = { workspace = true, features = ["serve"] }
 tokio = { workspace = true, features = ["rt", "sync", "rt-multi-thread"], optional = true }
 
 [features]

@@ -4,20 +4,20 @@ use std::path::PathBuf;
 
 /// Settings for a staticly generated site that may be hydrated in the browser
 pub struct Config {
-    #[cfg(feature = "site-generation")]
+    #[cfg(feature = "server")]
     pub(crate) output_dir: PathBuf,
 
-    #[cfg(feature = "site-generation")]
+    #[cfg(feature = "server")]
     pub(crate) index_html: Option<String>,
 
-    #[cfg(feature = "site-generation")]
+    #[cfg(feature = "server")]
     pub(crate) index_path: Option<PathBuf>,
 
-    #[cfg(feature = "site-generation")]
+    #[cfg(feature = "server")]
     #[allow(clippy::type_complexity)]
     pub(crate) map_path: Option<Box<dyn Fn(&str) -> PathBuf + Send + Sync + 'static>>,
 
-    #[cfg(feature = "site-generation")]
+    #[cfg(feature = "server")]
     pub(crate) root_id: Option<&'static str>,
 
     #[cfg(feature = "web")]
@@ -29,15 +29,15 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            #[cfg(feature = "site-generation")]
+            #[cfg(feature = "server")]
             output_dir: PathBuf::from("./static"),
-            #[cfg(feature = "site-generation")]
+            #[cfg(feature = "server")]
             index_html: None,
-            #[cfg(feature = "site-generation")]
+            #[cfg(feature = "server")]
             index_path: None,
-            #[cfg(feature = "site-generation")]
+            #[cfg(feature = "server")]
             map_path: None,
-            #[cfg(feature = "site-generation")]
+            #[cfg(feature = "server")]
             root_id: None,
             #[cfg(feature = "web")]
             web_cfg: dioxus_web::Config::default(),
@@ -58,7 +58,7 @@ impl Config {
     /// This method will only effect static site generation.
     #[allow(unused)]
     pub fn map_path<F: Fn(&str) -> PathBuf + Send + Sync + 'static>(mut self, map_path: F) -> Self {
-        #[cfg(feature = "site-generation")]
+        #[cfg(feature = "server")]
         {
             self.map_path = Some(Box::new(map_path));
         }
@@ -71,7 +71,7 @@ impl Config {
     /// This method will only effect static site generation.
     #[allow(unused)]
     pub fn output_dir(mut self, output_dir: PathBuf) -> Self {
-        #[cfg(feature = "site-generation")]
+        #[cfg(feature = "server")]
         {
             self.output_dir = output_dir;
         }
@@ -80,7 +80,7 @@ impl Config {
 
     /// Set the id of the root element in the index.html file to place the prerendered content into. (defaults to main)
     pub fn root_id(mut self, root_id: &'static str) -> Self {
-        #[cfg(feature = "site-generation")]
+        #[cfg(feature = "server")]
         {
             self.root_id = Some(root_id);
         }
@@ -92,7 +92,7 @@ impl Config {
     /// This method will only effect static site generation.
     #[allow(unused)]
     pub fn index_html(mut self, index_html: String) -> Self {
-        #[cfg(feature = "site-generation")]
+        #[cfg(feature = "server")]
         {
             self.index_html = Some(index_html);
         }
@@ -104,7 +104,7 @@ impl Config {
     /// This method will only effect static site generation.
     #[allow(unused)]
     pub fn index_path(mut self, index_path: PathBuf) -> Self {
-        #[cfg(feature = "site-generation")]
+        #[cfg(feature = "server")]
         {
             self.index_path = Some(index_path);
         }
@@ -121,7 +121,7 @@ impl Config {
     }
 }
 
-#[cfg(feature = "site-generation")]
+#[cfg(feature = "server")]
 impl Config {
     pub(crate) fn fullstack_template(
         &self,
@@ -145,7 +145,8 @@ impl Config {
 
     pub(crate) fn create_renderer(&mut self) -> dioxus_ssr::incremental::IncrementalRenderer {
         let mut builder = dioxus_ssr::incremental::IncrementalRenderer::builder()
-            .static_dir(self.output_dir.clone());
+            .static_dir(self.output_dir.clone())
+            .pre_render(true);
         if let Some(map_path) = self.map_path.take() {
             builder = builder.map_path(map_path);
         }

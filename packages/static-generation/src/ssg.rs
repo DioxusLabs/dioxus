@@ -1,5 +1,7 @@
 use dioxus_lib::prelude::*;
 use dioxus_router::prelude::*;
+use std::fs;
+use std::path::Path;
 
 use crate::Config;
 
@@ -30,6 +32,9 @@ pub async fn generate_static_site(
 ) -> Result<(), IncrementalRendererError> {
     use tokio::task::block_in_place;
 
+    // Create the static output dir
+    std::fs::create_dir_all(&config.output_dir)?;
+
     let mut renderer = config.create_renderer();
 
     let site_map = block_in_place(|| extract_site_map(app))
@@ -49,6 +54,38 @@ pub async fn generate_static_site(
         prerender_route(app, url, &mut renderer, &config).await?;
     }
 
+    // Copy over the web output dir into the static output dir
+    let assets_path = dioxus_cli_config::CURRENT_CONFIG
+        .as_ref()
+        .map(|c| c.dioxus_config.application.out_dir.clone())
+        .unwrap_or("./dist".into());
+
+    copy_static_files(&assets_path, &config.output_dir)?;
+
+    Ok(())
+}
+
+fn copy_static_files(src: &Path, dst: &Path) -> Result<(), std::io::Error> {
+    let index_path = src.join("index.html");
+    let mut queue = vec![src.to_path_buf()];
+    while let Some(path) = queue.pop() {
+        if path == index_path {
+            continue;
+        }
+        if path.is_dir() {
+            for entry in fs::read_dir(&path).into_iter().flatten().flatten() {
+                let path = entry.path();
+                queue.push(path);
+            }
+        } else {
+            let output_location = dst.join(path.strip_prefix(&src).unwrap());
+            let parent = output_location.parent().unwrap();
+            if !parent.exists() {
+                std::fs::create_dir_all(parent)?;
+            }
+            fs::copy(&path, output_location)?;
+        }
+    }
     Ok(())
 }
 

@@ -22,6 +22,11 @@ pub enum Platform {
     #[cfg_attr(feature = "cli", clap(name = "fullstack"))]
     #[serde(rename = "fullstack")]
     Fullstack,
+
+    /// Targeting the static generation platform using SSR and Dioxus-Fullstack
+    #[cfg_attr(feature = "cli", clap(name = "fullstack"))]
+    #[serde(rename = "static-generation")]
+    StaticGeneration,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

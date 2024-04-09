@@ -7,9 +7,10 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus = { workspace = true, features = ["hydrated-static-site-generation", "router"] }
+dioxus = { workspace = true, features = ["static-generation", "router"] }
+tracing-subscriber = "0.3.18"
 
 [features]
 default = []
-ssg = ["dioxus/static-generation"]
+server = ["dioxus/axum"]
 web = ["dioxus/web"]

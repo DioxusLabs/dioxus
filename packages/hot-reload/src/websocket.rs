@@ -268,7 +268,7 @@ pub(crate) fn forward_cli_hot_reload() -> HotReloadReceiver {
     std::thread::spawn({
         let hot_reload_state = hot_reload_state.clone();
         move || {
-            crate::connect({ move |msg| hot_reload_state.send_message(msg) });
+            crate::connect(move |msg| hot_reload_state.send_message(msg));
         }
     });
 

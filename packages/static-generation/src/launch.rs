@@ -21,16 +21,40 @@ pub fn launch(
         vdom
     };
 
-    #[cfg(all(feature = "site-generation", not(target_arch = "wasm32")))]
+    #[cfg(feature = "server")]
     tokio::runtime::Runtime::new()
         .unwrap()
         .block_on(async move {
+            use axum::routing::get;
+            use axum::Router;
+            use dioxus_hot_reload::HotReloadRouterExt;
+            use tower_http::services::ServeDir;
+
+            let path = platform_config.output_dir.clone();
             crate::ssg::generate_static_site(root, platform_config)
                 .await
                 .unwrap();
+
+            // Serve the program if we are running with cargo
+            if std::env::var_os("CARGO").is_some() || std::env::var_os("DIOXUS_ACTIVE").is_some() {
+                println!(
+                    "Serving static files from {} at http://127.0.0.1:8080",
+                    path.display()
+                );
+                let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
+
+                let router = axum::Router::new()
+                    .forward_cli_hot_reloading()
+                    .nest_service("/", ServeDir::new(path));
+
+                let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+                axum::serve(listener, router.into_make_service())
+                    .await
+                    .unwrap();
+            }
         });
 
-    #[cfg(not(feature = "site-generation"))]
+    #[cfg(not(feature = "server"))]
     {
         #[cfg(feature = "web")]
         {
