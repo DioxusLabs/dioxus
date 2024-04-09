@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::*;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
@@ -13,22 +11,6 @@ pub struct DynamicContext<'a> {
     pub current_path: Vec<u8>,
     pub node_paths: Vec<Vec<u8>>,
     pub attr_paths: Vec<Vec<u8>>,
-
-    /// Mapping variables used to map the old template to the new template
-    ///
-    /// This tracks whether or not we're tracking some nodes or attributes
-    /// If we're tracking, then we'll attempt to use the old mapping
-    is_tracking: bool,
-
-    /// The mapping of node to its index in the dynamic_nodes list
-    /// We use the fact that BodyNode is Hash/PartialEq to track the nodes when we run into them
-    node_to_idx: HashMap<BodyNode, Vec<usize>>,
-    last_element_idx: usize,
-
-    /// The mapping of attribute to its index in the dynamic_attributes list
-    /// We use the fact that AttributeType is Hash/PartialEq to track the attributes when we run into them
-    attribute_to_idx: HashMap<AttributeType, Vec<usize>>,
-    last_attribute_idx: usize,
 }
 
 impl<'a> DynamicContext<'a> {
@@ -36,21 +18,6 @@ impl<'a> DynamicContext<'a> {
         let mut s = Self::default();
         s.populate_all_by_updating::<Ctx>(roots);
         s
-    }
-
-    /// NOTE: this now panics if you pass in a `None` -
-    pub fn new(template: Option<CallBody>) -> Self {
-        let mut new = Self::default();
-
-        // If there's an old template, we're going to use it for overrides
-        if let Some(call) = template {
-            for node in call.roots {
-                new.track_node(node);
-            }
-            new.is_tracking = true;
-        }
-
-        new
     }
 
     /// Populate the dynamic context with our own roots
@@ -273,12 +240,7 @@ impl<'a> DynamicContext<'a> {
     /// Basically if we *had* a mapping of `[0, 1]` and the new template is `[1, 2]`, then we need to bail out, since
     /// the new mapping doesn't exist in the original.
     fn update_dynamic_node(&mut self, root: &'a BodyNode) -> Option<TemplateNode> {
-        let idx = match self.has_tracked_nodes() {
-            //    Bail out if the mapping doesn't exist
-            //    The user put it new code in the template, and that code is not hotreloadable
-            true => self.pop_tracked_node_idx(root)?,
-            false => self.dynamic_nodes.len(),
-        };
+        let idx = self.dynamic_nodes.len();
 
         // Put the node in the dynamic nodes list
         self.dynamic_nodes.push(root);
@@ -340,10 +302,7 @@ impl<'a> DynamicContext<'a> {
     }
 
     fn update_dynamic_attribute(&mut self, attr: &'a AttributeType) -> Option<usize> {
-        let idx = match self.has_tracked_nodes() {
-            true => self.pop_tracked_attribute_idx(attr)?,
-            false => self.dynamic_attributes.len(),
-        };
+        let idx = self.dynamic_attributes.len();
 
         self.dynamic_attributes.push(vec![attr]);
         if self.attr_paths.len() <= idx {
@@ -372,79 +331,6 @@ impl<'a> DynamicContext<'a> {
         };
 
         static_attr
-    }
-
-    /// Check if we're tracking any nodes
-    ///
-    /// If we're tracking, then we'll attempt to use the old mapping
-    fn has_tracked_nodes(&self) -> bool {
-        self.is_tracking
-    }
-
-    /// Track a BodyNode
-    ///
-    /// This will save the any dynamic nodes that we find.
-    /// We need to be careful around saving if/for/components since we want to hotreload their contents
-    /// provided that their rust portions haven't changed.
-    pub(crate) fn track_node(&mut self, node: BodyNode) {
-        match node {
-            // If the node is a static element, we just want to merge its attributes into the dynamic mapping
-            BodyNode::Element(el) => self.track_element(el),
-
-            // We skip static nodes since they'll get written out by the template during the diffing phase
-            BodyNode::Text(text) if text.is_static() => {}
-
-            BodyNode::RawExpr(_)
-            | BodyNode::Text(_)
-            | BodyNode::ForLoop(_)
-            | BodyNode::IfChain(_)
-            | BodyNode::Component(_) => {
-                self.track_dynamic_node(node);
-            }
-        }
-    }
-
-    fn track_element(&mut self, el: Element) {
-        for attr in el.merged_attributes {
-            // If the attribute is a static string literal, we don't need to insert it since the attribute
-            // will be written out during the diffing phase (since it's static)
-            if !attr.is_static_str_literal() {
-                self.track_attribute(attr);
-            }
-        }
-
-        for child in el.children {
-            self.track_node(child);
-        }
-    }
-
-    pub(crate) fn track_attribute(&mut self, attr: AttributeType) -> usize {
-        let idx = self.last_attribute_idx;
-        self.last_attribute_idx += 1;
-        self.attribute_to_idx.entry(attr).or_default().push(idx);
-        idx
-    }
-
-    pub(crate) fn track_dynamic_node(&mut self, node: BodyNode) -> usize {
-        let idx = self.last_element_idx;
-        self.last_element_idx += 1;
-        self.node_to_idx.entry(node).or_default().push(idx);
-        idx
-    }
-
-    pub(crate) fn pop_tracked_attribute_idx(&mut self, attr: &AttributeType) -> Option<usize> {
-        self.attribute_to_idx
-            .get_mut(attr)
-            .and_then(|idxs| idxs.pop())
-    }
-
-    /// Get the Node's dynamic index in the rendered VNode that's currently living in the VirtualDom
-    ///
-    /// IE DynamicAttribute { id } if this tracked node matches the tokens
-    ///
-    /// Untracks this dynamic node
-    pub(crate) fn pop_tracked_node_idx(&mut self, node: &BodyNode) -> Option<usize> {
-        self.node_to_idx.get_mut(node).and_then(|idxs| idxs.pop())
     }
 }
 

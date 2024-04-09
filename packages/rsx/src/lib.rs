@@ -42,7 +42,7 @@ pub use node::*;
 pub mod hot_reload;
 
 #[cfg(feature = "hot_reload")]
-use dioxus_core::{Template, TemplateAttribute, TemplateNode};
+use dioxus_core::{TemplateAttribute, TemplateNode};
 #[cfg(feature = "hot_reload")]
 pub use hot_reload::HotReloadingContext;
 #[cfg(feature = "hot_reload")]
@@ -80,76 +80,6 @@ impl CallBody {
         let body = TemplateRenderer::as_tokens(&self.roots, Some(location));
 
         quote! { Some({ #body }) }
-    }
-
-    /// This will try to create a new template from the current body and the previous body. This will return None if the
-    /// rsx has some dynamic part that has changed.
-    ///
-    /// The previous_location is the location of the previous template at the time the template was originally compiled.
-    /// It's up to you the implementor to trace the template location back to the original source code. Generally you
-    /// can simply just match the location from the syn::File type to the template map living in the renderer.
-    ///
-    /// When you implement hotreloading, you're likely just going to parse the source code into the Syn::File type, which
-    /// should make retrieving the template location easy.
-    ///
-    /// ## Note:
-    ///
-    ///  - This function intentionally leaks memory to create a static template.
-    ///  - Keeping the template static allows us to simplify the core of dioxus and leaking memory in dev mode is less of an issue.
-    ///
-    /// ## Longer note about sub templates:
-    ///
-    ///    Sub templates when expanded in rustc use the same file/lin/col information as the parent template. This can
-    ///    be annoying when you're trying to get a location for a sub template and it's pretending that it's its parent.
-    ///    The new implementation of this aggregates all subtemplates into the TemplateRenderer and then assigns them
-    ///    unique IDs based on the byte index of the template, working around this issue.
-    ///
-    /// ## TODO:
-    ///
-    ///    A longer term goal would be to provide some sort of diagnostics to the user as to why the template was not
-    ///    updated, giving them an option to revert to the previous template as to not require a full rebuild.
-    #[deprecated(
-        since = "0.5.2",
-        note = "Use updated_templates instead to get all nested templates"
-    )]
-    #[cfg(feature = "hot_reload")]
-    pub fn update_template<Ctx: HotReloadingContext>(
-        &self,
-        old: Option<CallBody>,
-        location: &'static str,
-    ) -> Option<Template> {
-        // Create a context that will be used to update the template
-        let mut context = DynamicContext::new(old);
-
-        // Force the template node to generate us TemplateNodes, and fill in the location information
-        let roots = context.populate_by_updating::<Ctx>(&self.roots)?;
-
-        // We've received the dioxus-core TemplateNodess, and need to assemble them into a Template
-        // We could just use them directly, but we want to intern them to do our best to avoid
-        // egregious memory leaks. We're sitll leaking memory, but at least we can blame it on
-        // the `Intern` crate and not just the fact that we call Box::leak.
-        //
-        // We should also note that order of these nodes could be all scrambeled
-        Some(Template {
-            name: location,
-            roots: intern(roots.as_slice()),
-            node_paths: intern(
-                context
-                    .node_paths
-                    .into_iter()
-                    .map(|path| intern(path.as_slice()))
-                    .collect::<Vec<_>>()
-                    .as_slice(),
-            ),
-            attr_paths: intern(
-                context
-                    .attr_paths
-                    .into_iter()
-                    .map(|path| intern(path.as_slice()))
-                    .collect::<Vec<_>>()
-                    .as_slice(),
-            ),
-        })
     }
 }
 
