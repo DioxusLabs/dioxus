@@ -82,8 +82,24 @@ fn App() -> Element {
                                     "so22mething nested?"
                                 }
                             }
-                        }
+                        },
+                        {rsx! {
+                            div2 {
+                                h12 { "hi" }
+                                "so22mething nested?"
+                            }
+                        }}
                     }
+                }
+            },
+            div {
+                onclick: move |_| {
+                    let val = rsx! {
+                        div {
+                            h1 { "hi" }
+                            "something nested?"
+                        }
+                    };
                 }
             }
         }

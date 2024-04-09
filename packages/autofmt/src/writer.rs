@@ -163,24 +163,12 @@ impl<'a> Writer<'a> {
             ElementAttrValue::AttrExpr(expr) => expr.span().line_length(),
             ElementAttrValue::Shorthand(expr) => expr.span().line_length(),
             ElementAttrValue::EventTokens(tokens) => {
-                let location = Location::new(tokens.span().start());
-
-                let len = if let std::collections::hash_map::Entry::Vacant(e) =
-                    self.cached_formats.entry(location)
-                {
-                    let formatted = unparse_expr(tokens);
-                    let len = if formatted.contains('\n') {
-                        10000
-                    } else {
-                        formatted.len()
-                    };
-                    e.insert(formatted);
-                    len
+                let as_str = self.retrieve_formatted_expr(tokens);
+                if as_str.contains('\n') {
+                    100000
                 } else {
-                    self.cached_formats[&location].len()
-                };
-
-                len
+                    as_str.len()
+                }
             }
         }
     }
@@ -235,10 +223,14 @@ impl<'a> Writer<'a> {
     }
 
     pub fn retrieve_formatted_expr(&mut self, expr: &Expr) -> &str {
-        self.cached_formats
-            .entry(Location::new(expr.span().start()))
-            .or_insert_with(|| unparse_expr(expr))
-            .as_str()
+        let loc = Location::new(expr.span().start());
+
+        if !self.cached_formats.contains_key(&loc) {
+            let formatted = self.unparse_expr(expr);
+            self.cached_formats.insert(loc, formatted);
+        }
+
+        self.cached_formats.get(&loc).unwrap().as_str()
     }
 
     fn write_for_loop(&mut self, forloop: &ForLoop) -> std::fmt::Result {

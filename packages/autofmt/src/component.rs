@@ -262,7 +262,7 @@ impl Writer<'_> {
         We want to normalize the expr to the appropriate indent level.
         */
 
-        let formatted = unparse_expr(exp);
+        let formatted = self.unparse_expr(exp);
 
         let mut lines = formatted.lines();
 
