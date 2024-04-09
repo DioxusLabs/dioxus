@@ -1622,6 +1622,38 @@ fn extract_base_type_without_single_generic(ty: &Type) -> Option<syn::Path> {
     Some(path_without_generics)
 }
 
+/// Remove the Option wrapper from a type
+fn remove_option_wrapper(type_: Type) -> Type {
+    if let Type::Path(ty) = &type_ {
+        let mut segments_iter = ty.path.segments.iter().peekable();
+        // Strip any leading std||core::option:: prefix
+        let allowed_segments: &[&[&str]] = &[&["std", "core"], &["option"]];
+        let mut allowed_segments_iter = allowed_segments.iter();
+        while let Some(segment) = segments_iter.peek() {
+            let Some(allowed_segments) = allowed_segments_iter.next() else {
+                break;
+            };
+            if !allowed_segments.contains(&segment.ident.to_string().as_str()) {
+                break;
+            }
+            segments_iter.next();
+        }
+        // The last segment should be Option
+        let Some(option_segment) = segments_iter.next() else {
+            return type_;
+        };
+        if option_segment.ident == "Option" && segments_iter.next().is_none() {
+            // It should have a single generic argument
+            if let PathArguments::AngleBracketed(generic_arg) = &option_segment.arguments {
+                if let Some(syn::GenericArgument::Type(ty)) = generic_arg.args.first() {
+                    return ty.clone();
+                }
+            }
+        }
+    }
+    type_
+}
+
 /// Check if a type should be owned by the child component after conversion
 fn child_owned_type(ty: &Type) -> bool {
     looks_like_signal_type(ty) || looks_like_event_handler_type(ty)
@@ -1639,13 +1671,50 @@ fn looks_like_signal_type(ty: &Type) -> bool {
 }
 
 fn looks_like_event_handler_type(ty: &Type) -> bool {
-    match extract_base_type_without_single_generic(ty) {
+    let type_without_option = remove_option_wrapper(ty.clone());
+    match extract_base_type_without_single_generic(&type_without_option) {
         Some(path_without_generics) => {
             path_without_generics == parse_quote!(dioxus_core::prelude::EventHandler)
                 || path_without_generics == parse_quote!(prelude::EventHandler)
                 || path_without_generics == parse_quote!(EventHandler)
-                || path_without_generics == parse_quote!(Option<EventHandler>)
         }
         None => false,
     }
+}
+
+#[test]
+fn test_looks_like_type() {
+    assert!(!looks_like_signal_type(&parse_quote!(
+        Option<ReadOnlySignal<i32>>
+    )));
+    assert!(looks_like_signal_type(&parse_quote!(ReadOnlySignal<i32>)));
+    assert!(looks_like_signal_type(
+        &parse_quote!(ReadOnlySignal<i32, SyncStorage>)
+    ));
+    assert!(looks_like_signal_type(&parse_quote!(
+        ReadOnlySignal<Option<i32>, UnsyncStorage>
+    )));
+
+    assert!(looks_like_event_handler_type(&parse_quote!(
+        Option<EventHandler<i32>>
+    )));
+    assert!(looks_like_event_handler_type(&parse_quote!(
+        std::option::Option<EventHandler<i32>>
+    )));
+    assert!(looks_like_event_handler_type(&parse_quote!(
+        EventHandler<i32>
+    )));
+    assert!(looks_like_event_handler_type(&parse_quote!(EventHandler)));
+}
+
+#[test]
+fn test_remove_option_wrapper() {
+    let type_without_option = remove_option_wrapper(parse_quote!(Option<i32>));
+    assert_eq!(type_without_option, parse_quote!(i32));
+
+    let type_without_option = remove_option_wrapper(parse_quote!(Option<Option<i32>>));
+    assert_eq!(type_without_option, parse_quote!(Option<i32>));
+
+    let type_without_option = remove_option_wrapper(parse_quote!(Option<Option<Option<i32>>>));
+    assert_eq!(type_without_option, parse_quote!(Option<Option<i32>>));
 }
