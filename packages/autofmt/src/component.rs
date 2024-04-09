@@ -171,7 +171,7 @@ impl Writer<'_> {
                 }
 
                 ContentField::ManExpr(exp) => {
-                    let out = unparse_expr(exp);
+                    let out = self.unparse_expr(exp);
                     let mut lines = out.split('\n').peekable();
                     let first = lines.next().unwrap();
                     write!(self.out, "{name}: {first}")?;
@@ -181,6 +181,7 @@ impl Writer<'_> {
                         write!(self.out, "{line}")?;
                     }
                 }
+
                 ContentField::Formatted(s) => {
                     write!(
                         self.out,
@@ -260,7 +261,7 @@ impl Writer<'_> {
         We want to normalize the expr to the appropriate indent level.
         */
 
-        let formatted = unparse_expr(exp);
+        let formatted = self.unparse_expr(exp);
 
         let mut lines = formatted.lines();
 

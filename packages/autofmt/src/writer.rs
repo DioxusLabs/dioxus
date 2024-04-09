@@ -1,4 +1,3 @@
-use crate::prettier_please::unparse_expr;
 use dioxus_rsx::{AttributeType, BodyNode, ElementAttrValue, ForLoop, IfChain};
 use proc_macro2::{LineColumn, Span};
 use quote::ToTokens;
@@ -160,27 +159,22 @@ impl<'a> Writer<'a> {
                 condition_len + value_len + 6
             }
             ElementAttrValue::AttrLiteral(lit) => ifmt_to_string(lit).len(),
-            ElementAttrValue::AttrExpr(expr) => expr.span().line_length(),
             ElementAttrValue::Shorthand(expr) => expr.span().line_length(),
-            ElementAttrValue::EventTokens(tokens) => {
-                let location = Location::new(tokens.span().start());
-
-                let len = if let std::collections::hash_map::Entry::Vacant(e) =
-                    self.cached_formats.entry(location)
-                {
-                    let formatted = unparse_expr(tokens);
-                    let len = if formatted.contains('\n') {
-                        10000
-                    } else {
-                        formatted.len()
-                    };
-                    e.insert(formatted);
-                    len
+            ElementAttrValue::AttrExpr(expr) => {
+                let out = self.retrieve_formatted_expr(expr);
+                if out.contains('\n') {
+                    100000
                 } else {
-                    self.cached_formats[&location].len()
-                };
-
-                len
+                    out.len()
+                }
+            }
+            ElementAttrValue::EventTokens(tokens) => {
+                let as_str = self.retrieve_formatted_expr(tokens);
+                if as_str.contains('\n') {
+                    100000
+                } else {
+                    as_str.len()
+                }
             }
         }
     }
@@ -234,11 +228,16 @@ impl<'a> Writer<'a> {
         total
     }
 
+    #[allow(clippy::map_entry)]
     pub fn retrieve_formatted_expr(&mut self, expr: &Expr) -> &str {
-        self.cached_formats
-            .entry(Location::new(expr.span().start()))
-            .or_insert_with(|| unparse_expr(expr))
-            .as_str()
+        let loc = Location::new(expr.span().start());
+
+        if !self.cached_formats.contains_key(&loc) {
+            let formatted = self.unparse_expr(expr);
+            self.cached_formats.insert(loc, formatted);
+        }
+
+        self.cached_formats.get(&loc).unwrap().as_str()
     }
 
     fn write_for_loop(&mut self, forloop: &ForLoop) -> std::fmt::Result {
@@ -308,7 +307,7 @@ impl<'a> Writer<'a> {
 
     /// An expression within a for or if block that might need to be spread out across several lines
     fn write_inline_expr(&mut self, expr: &Expr) -> std::fmt::Result {
-        let unparsed = unparse_expr(expr);
+        let unparsed = self.unparse_expr(expr);
         let mut lines = unparsed.lines();
         let first_line = lines.next().unwrap();
         write!(self.out, "{first_line}")?;
