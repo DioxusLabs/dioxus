@@ -10,6 +10,40 @@ fn App() -> Element {
                 h1 { "hi" }
                 h1 { "hi" }
             },
+            blah: rsx! {
+                h1 { "hi" }
+            },
+            blah: rsx! {
+                h1 { "hi" }
+            },
+            blah: rsx! {
+                h1 { "hi" }
+            },
+            blah: rsx! {
+                h1 { "hi" }
+                Component {
+                    header: rsx! {
+                        Component {
+                            header: rsx! {
+                                div { "hi" }
+                                h3 { "hi" }
+                                p { "hi" }
+                                Component {
+                                    onrender: move |_| {
+                                        count += 1;
+                                        rsx! {
+                                            div {
+                                                h1 { "hi" }
+                                                "something nested?"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             onrender: move |_| {
                 count += 1;
                 rsx! {
@@ -17,13 +51,20 @@ fn App() -> Element {
                         h1 { "hi" }
                         "something nested?"
                     }
-                    div {
-                        h2 { "hi" }
-                        "something nested?"
-                    }
-                    div {
-                        h3 { "hi" }
-                        "something nested?"
+                    Component2 {
+                        header2: rsx! {
+                            h1 { "hi1" }
+                            h1 { "hi2" }
+                        },
+                        onrender2: move |_| {
+                            count2 += 1;
+                            rsx! {
+                                div2 {
+                                    h12 { "hi" }
+                                    "so22mething nested?"
+                                }
+                            }
+                        }
                     }
                 }
             }
