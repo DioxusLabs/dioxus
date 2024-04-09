@@ -19,6 +19,7 @@ fn App() -> Element {
             blah: rsx! {
                 h1 { "hi" }
             },
+            blah: rsx! { "hi" },
             blah: rsx! {
                 h1 { "hi" }
                 Component {
@@ -31,6 +32,23 @@ fn App() -> Element {
                                 Component {
                                     onrender: move |_| {
                                         count += 1;
+                                        let abc = rsx! {
+                                            div {
+                                                h1 { "hi" }
+                                                "something nested?"
+                                                Component {
+                                                    onrender: move |_| {
+                                                        count2 += 1;
+                                                        rsx! {
+                                                            div2 {
+                                                                h12 { "hi" }
+                                                                "so22mething nested?"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        };
                                         rsx! {
                                             div {
                                                 h1 { "hi" }

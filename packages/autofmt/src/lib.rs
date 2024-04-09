@@ -9,7 +9,7 @@ use collect_macros::byte_offset;
 use dioxus_rsx::{BodyNode, CallBody, IfmtInput};
 use proc_macro2::LineColumn;
 use quote::ToTokens;
-use syn::{ExprMacro, Macro, MacroDelimiter};
+use syn::{ExprMacro, MacroDelimiter};
 
 mod buffer;
 mod collect_macros;
@@ -67,25 +67,7 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
     let mut writer = Writer::new(contents);
     writer.out.indent = indent;
 
-    /*
-
-    strategy for printing nested macros:
-    - nested macros can't effect the indentation of the parent
-    - walk into the child until there's no nested macros and then format that
-    - bounce that up to the parent which uses its own indentation
-     */
-
     // Don't parse nested macros
-    collect_blocks(&macros, &mut writer, &mut formatted_blocks);
-
-    formatted_blocks
-}
-
-pub fn collect_blocks(
-    macros: &[&syn::Macro],
-    writer: &mut Writer<'_>,
-    formatted_blocks: &mut Vec<FormattedBlock>,
-) {
     let mut end_span = LineColumn { column: 0, line: 0 };
     for item in macros {
         let macro_path = &item.path.segments[0].ident;
@@ -104,7 +86,7 @@ pub fn collect_blocks(
             .indent
             .count_indents(writer.src[rsx_start.line - 1]);
 
-        write_body(writer, &body);
+        write_body(&mut writer, &body);
 
         // writing idents leaves the final line ended at the end of the last ident
         if writer.out.buf.contains('\n') {
@@ -123,8 +105,8 @@ pub fn collect_blocks(
 
         std::mem::swap(&mut formatted, &mut writer.out.buf);
 
-        let start = byte_offset(writer.raw_src, span.start()) + 1;
-        let end = byte_offset(writer.raw_src, span.end()) - 1;
+        let start = byte_offset(contents, span.start()) + 1;
+        let end = byte_offset(contents, span.end()) - 1;
 
         // Rustfmt will remove the space between the macro and the opening paren if the macro is a single expression
         let body_is_solo_expr = body.roots.len() == 1
@@ -136,7 +118,7 @@ pub fn collect_blocks(
 
         end_span = span.end();
 
-        if writer.raw_src[start..end] == formatted {
+        if contents[start..end] == formatted {
             continue;
         }
 
@@ -146,6 +128,8 @@ pub fn collect_blocks(
             end,
         });
     }
+
+    formatted_blocks
 }
 
 pub fn write_block_out(body: CallBody) -> Option<String> {
@@ -168,8 +152,8 @@ fn write_body(buf: &mut Writer, body: &CallBody) {
     }
 }
 
-pub fn fmt_block_from_expr(raw: &str, mac: Macro) -> Option<String> {
-    let body = syn::parse2::<CallBody>(mac.tokens).unwrap();
+pub fn fmt_block_from_expr(raw: &str, expr: ExprMacro) -> Option<String> {
+    let body = syn::parse2::<CallBody>(expr.mac.tokens).unwrap();
 
     let mut buf = Writer::new(raw);
 

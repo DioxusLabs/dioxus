@@ -1,5 +1,4 @@
 use prettyplease::unparse;
-use quote::ToTokens;
 use syn::{visit_mut::VisitMut, Expr, File, Item};
 
 use crate::Writer;
@@ -27,8 +26,14 @@ impl Writer<'_> {
                         // we'll use information about the macro to replace it with another formatted block
                         // once we've written out the unparsed expr from prettyplease, we can replace
                         // this dummy block with the actual formatted block
-                        let formatted =
-                            crate::fmt_block_from_expr(self.writer.raw_src, i.mac.clone()).unwrap();
+                        let formatted = crate::fmt_block_from_expr(
+                            self.writer.raw_src,
+                            syn::ExprMacro {
+                                attrs: i.attrs.clone(),
+                                mac: i.mac.clone(),
+                            },
+                        )
+                        .unwrap();
 
                         *_expr = syn::Stmt::Expr(
                             syn::parse_quote!(dioxus_autofmt_block__________),
@@ -58,8 +63,14 @@ impl Writer<'_> {
                         // we'll use information about the macro to replace it with another formatted block
                         // once we've written out the unparsed expr from prettyplease, we can replace
                         // this dummy block with the actual formatted block
-                        let formatted =
-                            crate::fmt_block_from_expr(self.writer.raw_src, i.mac.clone()).unwrap();
+                        let formatted = crate::fmt_block_from_expr(
+                            self.writer.raw_src,
+                            syn::ExprMacro {
+                                attrs: i.attrs.clone(),
+                                mac: i.mac.clone(),
+                            },
+                        )
+                        .unwrap();
 
                         *_expr = syn::parse_quote!(dioxus_autofmt_block__________);
 
@@ -85,15 +96,17 @@ impl Writer<'_> {
         // now unparsed with the modified expression
         let mut unparsed = unparse_expr(&modified_expr);
 
-        let mut formats = replacer.formatted_stack.drain(..);
-
         // walk each line looking for the dioxus_autofmt_block__________ token
         // if we find it, replace it with the formatted block
         // if there's indentation we want to presreve it
 
         // now we can replace the macros with the formatted blocks
-        for formatted in formats {
-            let fmted = format!("rsx! {{{formatted}\n}}");
+        for formatted in replacer.formatted_stack.drain(..) {
+            let fmted = if formatted.contains('\n') {
+                format!("rsx! {{{formatted}\n}}")
+            } else {
+                format!("rsx! {{{formatted}}}")
+            };
             let mut out_fmt = String::new();
             let mut whitespace = 0;
 
