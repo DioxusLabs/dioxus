@@ -1644,6 +1644,7 @@ fn looks_like_event_handler_type(ty: &Type) -> bool {
             path_without_generics == parse_quote!(dioxus_core::prelude::EventHandler)
                 || path_without_generics == parse_quote!(prelude::EventHandler)
                 || path_without_generics == parse_quote!(EventHandler)
+                || path_without_generics == parse_quote!(Option<EventHandler>)
         }
         None => false,
     }
