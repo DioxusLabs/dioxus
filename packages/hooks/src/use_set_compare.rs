@@ -7,8 +7,8 @@
 /// use dioxus_signals::*;
 ///
 /// fn App() -> Element {
-///     let mut count = use_signal(cx, || 0);
-///     let compare = use_set_compare(cx, move || count.value());
+///     let mut count = use_signal(|| 0);
+///     let compare = use_set_compare(move || count.value());
 ///
 ///     render! {
 ///         for i in 0..10 {
