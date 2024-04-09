@@ -2252,8 +2252,6 @@ dependencies = [
 name = "dioxus-core"
 version = "0.5.2"
 dependencies = [
- "dioxus",
- "dioxus-ssr",
  "futures-channel",
  "futures-util",
  "generational-box",

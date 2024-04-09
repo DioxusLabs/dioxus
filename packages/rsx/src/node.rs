@@ -36,19 +36,6 @@ impl BodyNode {
         matches!(self, BodyNode::Text { .. })
     }
 
-    /// Uses the debug imlpementation of spawn to get the byte index of the first root
-    pub fn byte_index(&self) -> String {
-        // This gets the byte index of the first root's span - basically a unique identifier
-        // We're not supposed to be abusing the debug implementation of Tokens, but it's a good way
-        // to break up nested rsx! calls
-        let first_root_span = format!("{:?}", self.span());
-        first_root_span
-            .rsplit_once("..")
-            .and_then(|(_, after)| after.split_once(')').map(|(before, _)| before))
-            .unwrap_or_default()
-            .to_string()
-    }
-
     pub fn span(&self) -> Span {
         match self {
             BodyNode::Element(el) => el.name.span(),
@@ -57,6 +44,23 @@ impl BodyNode {
             BodyNode::RawExpr(exp) => exp.span(),
             BodyNode::ForLoop(fl) => fl.for_token.span(),
             BodyNode::IfChain(f) => f.if_token.span(),
+        }
+    }
+
+    pub(crate) fn set_location_idx(&self, idx: usize) {
+        match self {
+            BodyNode::IfChain(chain) => {
+                chain.location.idx.set(idx);
+            }
+            BodyNode::ForLoop(floop) => {
+                floop.location.idx.set(idx);
+            }
+            BodyNode::Component(comp) => {
+                comp.location.idx.set(idx);
+            }
+            BodyNode::Element(_) => {}
+            BodyNode::Text(_) => {}
+            BodyNode::RawExpr(_) => {}
         }
     }
 }
@@ -233,7 +237,7 @@ impl ToTokens for ForLoop {
             pat, expr, body, ..
         } = self;
 
-        let renderer = TemplateRenderer::as_tokens(body, None);
+        let renderer = TemplateRenderer::as_tokens_with_idx(body, self.location.idx.get());
 
         // Signals expose an issue with temporary lifetimes
         // We need to directly render out the nodes first to collapse their lifetime to <'a>
@@ -299,6 +303,9 @@ impl ToTokens for IfChain {
 
         let mut elif = Some(self);
 
+        let base_idx = self.location.idx.get() * 1000;
+        let mut cur_idx = base_idx + 1;
+
         while let Some(chain) = elif {
             let IfChain {
                 if_token,
@@ -309,15 +316,16 @@ impl ToTokens for IfChain {
                 ..
             } = chain;
 
-            let renderer = TemplateRenderer::as_tokens(then_branch, None);
-
+            let renderer = TemplateRenderer::as_tokens_with_idx(then_branch, cur_idx);
             body.append_all(quote! { #if_token #cond { Some({#renderer}) } });
+
+            cur_idx += 1;
 
             if let Some(next) = else_if_branch {
                 body.append_all(quote! { else });
                 elif = Some(next);
             } else if let Some(else_branch) = else_branch {
-                let renderer = TemplateRenderer::as_tokens(else_branch, None);
+                let renderer = TemplateRenderer::as_tokens_with_idx(else_branch, cur_idx);
                 body.append_all(quote! { else { Some({#renderer}) } });
                 terminated = true;
                 break;

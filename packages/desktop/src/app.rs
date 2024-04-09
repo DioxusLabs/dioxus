@@ -330,6 +330,8 @@ impl App {
     pub fn handle_hot_reload_msg(&mut self, msg: dioxus_hot_reload::HotReloadMsg) {
         match msg {
             dioxus_hot_reload::HotReloadMsg::UpdateTemplate(template) => {
+                println!("updating template in desktop {:?}", template);
+
                 for webview in self.webviews.values_mut() {
                     webview.dom.replace_template(template);
                     webview.poll_vdom();

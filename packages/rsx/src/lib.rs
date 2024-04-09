@@ -151,28 +151,6 @@ impl CallBody {
             ),
         })
     }
-
-    /// Directly convert this callbody to a template
-    pub fn to_template(&self, location: &'static str) -> Option<Template> {
-        todo!()
-    }
-
-    /// Get the updated templates for this call body
-    ///
-    /// This will descend into child templates and return them as well.
-    pub fn updated_templates<Ctx: HotReloadingContext>(
-        &self,
-        old: CallBody,
-        location: &'static str,
-    ) -> Option<Vec<Template>> {
-        // Create a context that will be used to update the template
-        let mut context = DynamicContext::new(Some(old));
-
-        // Force the template node to generate us TemplateNodes, and fill in the location information
-        let roots = context.populate_all_by_updating::<Ctx>(&self.roots)?;
-
-        todo!()
-    }
 }
 
 impl Parse for CallBody {

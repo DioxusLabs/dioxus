@@ -4,7 +4,7 @@ use quote::quote;
 
 pub struct TemplateRenderer<'a> {
     pub roots: &'a [BodyNode],
-    location: Option<String>,
+    location: Option<TokenStream2>,
 }
 
 impl<'a> TemplateRenderer<'a> {
@@ -12,6 +12,24 @@ impl<'a> TemplateRenderer<'a> {
     ///
     /// This will cascade location information down the tree if it already hasn't been set
     pub fn as_tokens(roots: &'a [BodyNode], location: Option<String>) -> TokenStream2 {
+        let location = location.map(|loc| quote! { #loc });
+
+        TemplateRenderer::render(Self { roots, location })
+    }
+
+    pub fn as_tokens_with_idx(roots: &'a [BodyNode], idx: usize) -> TokenStream2 {
+        let location = Some(quote! {
+            concat!(
+                file!(),
+                ":",
+                line!(),
+                ":",
+                column!(),
+                ":",
+                #idx
+            )
+        });
+
         TemplateRenderer::render(Self { roots, location })
     }
 
@@ -33,6 +51,12 @@ impl<'a> TemplateRenderer<'a> {
         // Render the static nodes, generating the mapping of dynamic
         // This will modify the bodynodes, filling in location information for any sub templates
         let roots = self.render_body_nodes(&mut context);
+
+        // run through the dynamic nodes and set their location based on the idx of that node
+        for (idx, node) in context.dynamic_nodes.iter_mut().enumerate() {
+            // We use +1 since :0 is the base of the template
+            node.set_location_idx(idx + 1);
+        }
 
         let dynamic_nodes = &context.dynamic_nodes;
         let dyn_attr_printer = context
@@ -66,10 +90,10 @@ impl<'a> TemplateRenderer<'a> {
 
     fn get_template_id_tokens(&self) -> TokenStream2 {
         match self.location {
-            Some(ref loc) => quote! { #loc },
+            Some(ref loc) => loc.clone(),
             None => {
-                // Get the root:column:id tag we'll use as the ID of the template
-                let root_col = self.get_root_col_id();
+                // // Get the root:column:id tag we'll use as the ID of the template
+                // let root_col = self.get_root_col_id();
 
                 quote! {
                     concat!(
@@ -79,19 +103,11 @@ impl<'a> TemplateRenderer<'a> {
                         ":",
                         column!(),
                         ":",
-                        #root_col
+                        "0"
                     )
                 }
             }
         }
-    }
-
-    fn get_root_col_id(&self) -> String {
-        let root_col = match self.roots.first() {
-            Some(first_root) => first_root.byte_index(),
-            _ => "0".to_string(),
-        };
-        root_col
     }
 
     fn implicit_key(&self) -> Option<IfmtInput> {

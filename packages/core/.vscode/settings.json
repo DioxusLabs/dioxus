@@ -1,3 +1,3 @@
 {
-    "rust-analyzer.checkOnSave.allTargets": false
+    // "rust-analyzer.checkOnSave.allTargets": false
 }

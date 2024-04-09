@@ -190,6 +190,8 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
                 let channels = &mut *channels.lock().unwrap();
                 let mut i = 0;
 
+                println!("sending message: {:?}", msg);
+
                 while i < channels.len() {
                     let channel = &mut channels[i];
                     if send_msg(msg.clone(), channel) {

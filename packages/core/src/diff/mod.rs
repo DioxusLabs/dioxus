@@ -107,32 +107,25 @@ impl VirtualDom {
         to: &mut impl WriteMutations,
         mut template: Template,
     ) {
-        let (path, byte_index) = template.name.rsplit_once(':').unwrap();
-
-        let byte_index = byte_index.parse::<usize>().unwrap();
         // First, check if we've already seen this template
-        if self
-            .templates
-            .get(&path)
-            .filter(|set| set.contains_key(&byte_index))
-            .is_none()
-        {
-            // if hot reloading is enabled, then we need to check for a template that has overriten this one
-            #[cfg(debug_assertions)]
-            if let Some(mut new_template) = self
-                .templates
-                .get_mut(path)
-                .and_then(|map| map.remove(&usize::MAX))
-            {
-                // the byte index of the hot reloaded template could be different
-                new_template.name = template.name;
-                template = new_template;
-            }
+        if self.templates.get(&template.name).is_none() {
+            self.templates.insert(template.name, template);
+            // // if hot reloading is enabled, then we need to check for a template that has overriten this one
+            // #[cfg(debug_assertions)]
+            // if let Some(mut new_template) = self
+            //     .templates
+            //     .get_mut(path)
+            //     .and_then(|map| map.remove(&usize::MAX))
+            // {
+            //     // the byte index of the hot reloaded template could be different
+            //     new_template.name = template.name;
+            //     template = new_template;
+            // }
 
-            self.templates
-                .entry(path)
-                .or_default()
-                .insert(byte_index, template);
+            // self.templates
+            //     .entry(path)
+            //     .or_default()
+            //     .insert(byte_index, template);
 
             // If it's all dynamic nodes, then we don't need to register it
             if !template.is_completely_dynamic() {
@@ -141,33 +134,36 @@ impl VirtualDom {
         }
     }
 
-    /// Insert a new template into the VirtualDom's template registry
-    pub(crate) fn register_template_first_byte_index(&mut self, mut template: Template) {
-        // First, make sure we mark the template as seen, regardless if we process it
-        let (path, _) = template.name.rsplit_once(':').unwrap();
-        if let Some((_, old_template)) = self
-            .templates
-            .entry(path)
-            .or_default()
-            .iter_mut()
-            .min_by_key(|(byte_index, _)| **byte_index)
-        {
-            // the byte index of the hot reloaded template could be different
-            template.name = old_template.name;
-            *old_template = template;
-        } else {
-            // This is a template without any current instances
-            self.templates
-                .entry(path)
-                .or_default()
-                .insert(usize::MAX, template);
-        }
+    // / Insert a new template into the VirtualDom's template registry
+    // pub(crate) fn register_template_first_byte_index(&mut self, mut template: Template) {
+    // First, make sure we mark the template as seen, regardless if we process it
 
-        // If it's all dynamic nodes, then we don't need to register it
-        if !template.is_completely_dynamic() {
-            self.queued_templates.push(template);
-        }
-    }
+    // self.templates.entry(template.name).or_insert(template);
+
+    // let (path, _) = template.name.rsplit_once(':').unwrap();
+    // if let Some((_, old_template)) = self
+    //     .templates
+    //     .entry(path)
+    //     .or_default()
+    //     .iter_mut()
+    //     .min_by_key(|(byte_index, _)| **byte_index)
+    // {
+    //     // the byte index of the hot reloaded template could be different
+    //     template.name = old_template.name;
+    //     *old_template = template;
+    // } else {
+    //     // This is a template without any current instances
+    //     self.templates
+    //         .entry(path)
+    //         .or_default()
+    //         .insert(usize::MAX, template);
+    // }
+
+    // If it's all dynamic nodes, then we don't need to register it
+    //     if !template.is_completely_dynamic() {
+    //         self.queued_templates.push(template);
+    //     }
+    // }
 }
 
 /// We can apply various optimizations to dynamic nodes that are the single child of their parent.

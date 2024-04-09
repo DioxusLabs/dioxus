@@ -238,10 +238,7 @@ fn hotreload_dynamic_nodes<Ctx: HotReloadingContext>(
                 // Basically stealing the same logic as the for loop, but with multiple nestings
                 // We only support supports conditions
                 (BodyNode::IfChain(a), BodyNode::IfChain(b)) => {
-                    // Cheating hack: read the docs on hotreloading if chains as to why we do this
-                    let location_idx = (old_idx + 1) * 1000;
-                    dbg!(location_idx, old_idx);
-                    hotreload_ifchain::<Ctx>(a, b, location, location_idx, templates)?
+                    hotreload_ifchain::<Ctx>(a, b, location, old_idx, templates)?
                 }
 
                 // Any other pairing is not a match and we should keep looking
@@ -285,13 +282,13 @@ fn hotreload_forloop<Ctx: HotReloadingContext>(
         // We unfortunately cannot currently hot reload for loops that didn't have
         // a body. Usually this is unlikely, but dioxus-core would need to be changed
         // to allow templates with no roots
-        let first_root = a.body.first()?;
+        let _ = a.body.first()?;
 
         // We need to use the old location info to find the new location info
         //
         // This is just the file+line+col+byte index from the original
         // If no byte index is present, we'll just use the idx of the node
-        let new_location = make_new_location(location, old_idx + 1, first_root);
+        let new_location = make_new_location(location, old_idx + 1);
         hotreload_bodynodes::<Ctx>(&a.body, &b.body, new_location, templates)?;
     }
     Some(matches)
@@ -311,9 +308,7 @@ fn hotreload_component_body<Ctx: HotReloadingContext>(
         && a.manual_props == b.manual_props;
 
     if matches {
-        let first_root = a.children.first()?;
-
-        let new_location = make_new_location(location, old_idx + 1, first_root);
+        let new_location = make_new_location(location, old_idx + 1);
         hotreload_bodynodes::<Ctx>(&a.children, &b.children, new_location, templates)?;
     }
 
@@ -341,29 +336,43 @@ fn hotreload_ifchain<Ctx: HotReloadingContext>(
     let matches = a.cond == b.cond;
 
     if matches {
-        // The first location is 5001
-        let first_root = a.then_branch.first()?;
-        let new_location = make_new_location(location, local_idx + 1, first_root);
-        hotreload_bodynodes::<Ctx>(&a.then_branch, &b.then_branch, new_location, templates)?;
+        let mut cur_idx = (local_idx + 1) * 1000 + 1;
+        let (mut elif_a, mut elif_b) = (Some(a), Some(b));
 
-        // Now, recurse into the else if branches
-        match (a.else_if_branch.as_ref(), b.else_if_branch.as_ref()) {
-            (Some(left), Some(right)) => {
-                hotreload_ifchain::<Ctx>(left, right, location, local_idx + 2, templates)?;
+        loop {
+            // No point in continuing if we've hit the end of the chain
+            if elif_a.is_none() && elif_b.is_none() {
+                break;
             }
-            (None, None) => {}
-            _ => return None,
-        }
 
-        // Finally, write out the else branch
-        match (a.else_branch.as_ref(), b.else_branch.as_ref()) {
-            (Some(left), Some(right)) => {
-                let first_root = a.then_branch.first()?;
-                let new_location = make_new_location(location, local_idx + 2, first_root);
-                hotreload_bodynodes::<Ctx>(&left, &right, new_location, templates)?;
+            // We assume both exist branches exist
+            let (a, b) = (elif_a.take()?, elif_b.take()?);
+
+            // Write the `then` branch
+            let new_location = make_new_location(location, cur_idx);
+            hotreload_bodynodes::<Ctx>(&a.then_branch, &b.then_branch, new_location, templates)?;
+            cur_idx += 1;
+
+            // If there's an elseif branch, we set that as the next branch
+            // Otherwise we continue to the else branch - which we assume both branches have
+            if let (Some(left), Some(right)) =
+                (a.else_if_branch.as_ref(), b.else_if_branch.as_ref())
+            {
+                elif_a = Some(left.as_ref());
+                elif_b = Some(right.as_ref());
+                continue;
             }
-            (None, None) => {}
-            _ => return None,
+
+            // No else branches, that's fine
+            if a.else_branch.is_none() && b.else_branch.is_none() {
+                break;
+            }
+
+            // Write out the else branch and then we're done
+            let (left, right) = (a.else_branch.as_ref()?, b.else_branch.as_ref()?);
+            let new_location = make_new_location(location, cur_idx);
+            hotreload_bodynodes::<Ctx>(&left, &right, new_location, templates)?;
+            break;
         }
     }
 
@@ -602,27 +611,9 @@ fn make_static_attribute<Ctx: HotReloadingContext>(
 }
 
 /// Create a new location for a node
-///
-/// Uses
-fn make_new_location(base: &'static str, old_idx: usize, old_node: &BodyNode) -> &'static str {
-    // trim off the last byte index
+fn make_new_location(base: &'static str, old_idx: usize) -> &'static str {
     let base = base.rsplit_once(':').unwrap().0;
-
-    // add the byte index of the first root
-    let mut byte_index = old_node.byte_index();
-
-    // This will cause collisions with nested rsx! calls but that's not an issue for testing
-    //
-    // The byte index will guarntee uniqueness
-    //
-    // Use a different byte index if we're not running in the compiler
-    // Only the compiler will have a byte index
-    if byte_index == "0" {
-        byte_index = old_idx.to_string();
-    }
-
+    let byte_index = old_idx.to_string();
     let out = format!("{base}:{byte_index}");
-
-    // now leak it
     Box::leak(out.into_boxed_str())
 }

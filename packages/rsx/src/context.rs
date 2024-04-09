@@ -93,12 +93,10 @@ impl<'a> DynamicContext<'a> {
             self.current_path.pop();
         }
 
-        let mut all_templates = vec![roots_];
-
         // Now walk the the all_templates nodes and run the same dynamic context algorithm on them
         // This should bubble up internal templates
 
-        Some(all_templates)
+        Some(vec![roots_])
     }
 
     /// Render a portion of an rsx callbody to a TemplateNode call
@@ -259,12 +257,10 @@ impl<'a> DynamicContext<'a> {
                 Some(TemplateNode::Text { text })
             }
 
-            // See if we can update the for loop
-            BodyNode::ForLoop(forloop) => self.update_dynamic_node(root),
-
             // The user is moving a dynamic node around in the template
             // We *might* be able to handle it, but you never really know
             BodyNode::RawExpr(_)
+            | BodyNode::ForLoop(_)
             | BodyNode::Text(_)
             | BodyNode::IfChain(_)
             | BodyNode::Component(_) => self.update_dynamic_node(root),

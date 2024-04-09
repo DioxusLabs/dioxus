@@ -512,3 +512,82 @@ fn entire_kitchen_sink() {
 
     assert!(changed.is_none());
 }
+
+#[test]
+fn tokenstreams_and_locations() {
+    let changed = boilerplate(
+        quote! {
+            div { "hhi" }
+            div {
+                {rsx! { "hi again!" }},
+                for i in 0..2 {
+                    "first"
+                    div { "hi {i}" }
+                }
+
+                for i in 0..3 {
+                    "Second"
+                    div { "hi {i}" }
+                }
+
+                if false {
+                    div { "hi again!?" }
+                } else if true {
+                    div { "its cool?" }
+                } else {
+                    div { "not nice !" }
+                }
+            }
+        },
+        quote! {
+            div { "hhi" }
+            div {
+                {rsx! { "hi again!" }},
+                for i in 0..2 {
+                    "first"
+                    div { "hi {i}" }
+                }
+
+                for i in 0..3 {
+                    "Second"
+                    div { "hi {i}" }
+                }
+
+                if false {
+                    div { "hi again?" }
+                } else if true {
+                    div { "cool?" }
+                } else {
+                    div { "nice !" }
+                }
+            }
+
+        },
+    );
+
+    dbg!(changed);
+}
+
+#[test]
+fn ide_testcase() {
+    let changed = boilerplate(
+        quote! {
+            div {
+                div { "hi!!!123 in!stant relo123a1123dasasdasdasdasd" }
+                for x in 0..5 {
+                    h3 { "For loop contents" }
+                }
+            }
+        },
+        quote! {
+            div {
+                div { "hi!!!123 in!stant relo123a1123dasasdasdasdasd" }
+                for x in 0..5 {
+                    h3 { "For loop contents" }
+                }
+            }
+        },
+    );
+
+    dbg!(changed);
+}

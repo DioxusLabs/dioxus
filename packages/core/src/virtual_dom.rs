@@ -188,8 +188,8 @@ pub struct VirtualDom {
     pub(crate) dirty_scopes: BTreeSet<ScopeOrder>,
     pub(crate) dirty_tasks: BTreeSet<DirtyTasks>,
 
-    // Maps a template path to a map of byte indexes to templates
-    pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template>>,
+    // A map of overridden templates?
+    pub(crate) templates: FxHashMap<TemplateId, Template>,
 
     // Templates changes that are queued for the next render
     pub(crate) queued_templates: Vec<Template>,
@@ -542,7 +542,8 @@ impl VirtualDom {
     /// This will only replace the parent template, not any nested templates.
     #[instrument(skip(self), level = "trace", name = "VirtualDom::replace_template")]
     pub fn replace_template(&mut self, template: Template) {
-        self.register_template_first_byte_index(template);
+        self.queued_templates.push(template);
+        self.templates.insert(template.name, template);
 
         // iterating a slab is very inefficient, but this is a rare operation that will only happen during development so it's fine
         let mut dirty = Vec::new();

@@ -26,11 +26,11 @@ generational-box = { workspace = true }
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
 tracing-fluent-assertions = "0.3.0"
-dioxus = { workspace = true }
+# dioxus = { workspace = true }
 pretty_assertions = "1.3.0"
 rand = "0.8.5"
-dioxus-ssr = { workspace = true }
-reqwest = { workspace = true}
+# dioxus-ssr = { workspace = true }
+reqwest = { workspace = true }
 
 [features]
 default = []

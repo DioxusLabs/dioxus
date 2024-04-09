@@ -97,9 +97,7 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
         file_path: &Path,
         crate_dir: &Path,
     ) -> Result<UpdateResult, HotreloadError> {
-        let mut file = File::open(file_path)?;
-        let mut src = String::new();
-        file.read_to_string(&mut src)?;
+        let src = std::fs::read_to_string(file_path)?;
 
         // If we can't parse the contents we want to pass it off to the build system to tell the user that there's a syntax error
         let syntax = syn::parse_file(&src).map_err(|_err| HotreloadError::Parse)?;
@@ -179,38 +177,43 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
             // TODO: we could consider arena allocating the templates and dropping them when the connection is closed
             let leaked_location = Box::leak(template_location(old_start, file).into_boxed_str());
 
-            // Retuns Some(template) if the template is hotreloadable
-            // dynamic changes are not hot reloadable and force a rebuild
-            let hotreloadable_template =
-                new_call_body.update_template::<Ctx>(Some(old_call_body), leaked_location);
+            // Returns a list of templates that are hotreloadable
+            let templates = crate::tracked::hotreload_callbody::<Ctx>(
+                &old_call_body,
+                &new_call_body,
+                leaked_location,
+            );
 
             // if the template is not hotreloadable, we need to do a full rebuild
-            let Some(template) = hotreloadable_template else {
+            let Some(templates) = templates else {
                 return Ok(UpdateResult::NeedsRebuild);
             };
 
-            // dioxus cannot handle empty templates...
-            // todo: I think it can? or we just skip them nowa
-            if template.roots.is_empty() {
-                continue;
-            }
-
-            // if the template is the same, don't send it
-            if let Some(old_template) = old_cached.templates.get(template.name) {
-                if old_template == &template {
+            for template in templates {
+                // dioxus cannot handle empty templates...
+                // todo: I think it can? or we just skip them nowa
+                if template.roots.is_empty() {
                     continue;
                 }
-            };
 
-            // update the cached file
-            old_cached.templates.insert(template.name, template);
+                // if the template is the same, don't send it
+                if let Some(old_template) = old_cached.templates.get(template.name) {
+                    if old_template == &template {
+                        continue;
+                    }
+                };
 
-            // Track any new assets
-            old_cached
-                .tracked_assets
-                .extend(Self::populate_assets(template));
+                // Update the most recent idea of the template
+                // This lets us know if the template has changed so we don't need to send it
+                old_cached.templates.insert(template.name, template);
 
-            messages.push(template);
+                // Track any new assets
+                old_cached
+                    .tracked_assets
+                    .extend(Self::populate_assets(template));
+
+                messages.push(template);
+            }
         }
 
         Ok(UpdateResult::UpdatedRsx(messages))
