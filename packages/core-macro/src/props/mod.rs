@@ -967,6 +967,11 @@ Finally, call `.build()` to create the instance of `{name}`.
                 quote!(#name: self.#name)
             });
 
+            let forward_owner = self
+                .has_child_owned_fields()
+                .then(|| quote!(owner: self.owner))
+                .into_iter();
+
             let extends_impl = field.builder_attr.extends.iter().map(|path| {
                 let name_str = path_to_single_string(path).unwrap();
                 let camel_name = name_str.to_case(Case::UpperCamel);
@@ -1004,6 +1009,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                         );
                         #builder_name {
                             #(#forward_extended_fields,)*
+                            #(#forward_owner,)*
                             fields: ( #(#reconstructing,)* ),
                             _phantom: self._phantom,
                         }
