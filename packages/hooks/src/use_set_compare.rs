@@ -14,7 +14,7 @@ use dioxus_signals::{ReadOnlySignal, SetCompare};
 ///     let mut count = use_signal(|| 0);
 ///     let compare = use_set_compare(move || count());
 ///
-///     render! {
+///     rsx! {
 ///         for i in 0..10 {
 ///             // Child will only re-render when i == count
 ///             Child { compare, i }
@@ -32,9 +32,9 @@ use dioxus_signals::{ReadOnlySignal, SetCompare};
 /// fn Child(i: usize, compare: SetCompare<usize>) -> Element {
 ///     let active = use_set_compare_equal(i, compare);
 ///     if active() {
-///         render! { "Active" }
+///         rsx! { "Active" }
 ///     } else {
-///         render! { "Inactive" }
+///         rsx! { "Inactive" }
 ///     }
 /// }
 /// ```

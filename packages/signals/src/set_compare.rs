@@ -35,7 +35,7 @@ impl<R: Eq + Hash, S: Storage<SignalData<bool>>> SetCompare<R, S> {
             CopyValue::new(FxHashMap::default());
         let mut previous = CopyValue::new(None);
 
-        let recompute = move || {
+        let mut recompute = move || {
             let subscribers = subscribers.read();
             let mut previous = previous.write();
 
@@ -55,11 +55,13 @@ impl<R: Eq + Hash, S: Storage<SignalData<bool>>> SetCompare<R, S> {
         };
         let (rc, mut changed) = ReactiveContext::new();
         spawn(async move {
-            // Recompute the value
-            rc.run_in(recompute);
+            loop {
+                // Recompute the value
+                rc.run_in(&mut recompute);
 
-            // Wait for context to change
-            let _ = changed.next().await;
+                // Wait for context to change
+                let _ = changed.next().await;
+            }
         });
 
         SetCompare { subscribers }
