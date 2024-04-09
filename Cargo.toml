@@ -50,7 +50,7 @@ members = [
 exclude = ["examples/mobile_demo", "examples/openid_connect_demo"]
 
 [workspace.package]
-version = "0.5.1"
+version = "0.5.2"
 
 # dependencies that are shared across packages
 [workspace.dependencies]
@@ -141,7 +141,7 @@ opt-level = 3
 # It is not meant to be published, but is used so "cargo run --example XYZ" works properly
 [package]
 name = "dioxus-examples"
-version = "0.5.1"
+version = "0.5.2"
 authors = ["Jonathan Kelley"]
 edition = "2021"
 description = "Top level crate for the Dioxus repository"

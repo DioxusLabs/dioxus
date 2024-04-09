@@ -84,8 +84,6 @@ where
     }
 
     fn forward_cli_hot_reloading(mut self) -> Self {
-        use axum::Extension;
-
         static HOT_RELOAD_STATE: once_cell::sync::Lazy<HotReloadReceiver> =
             once_cell::sync::Lazy::new(forward_cli_hot_reload);
         let hot_reload_state: HotReloadReceiver = HOT_RELOAD_STATE.clone();

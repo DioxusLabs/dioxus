@@ -1,6 +1,3 @@
-// Dioxus-CLI
-// https://github.com/DioxusLabs/dioxus/tree/master/packages/cli
-
 (function () {
   var protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   var url = protocol + "//" + window.location.host + "/_dioxus/ws";

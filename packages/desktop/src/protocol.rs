@@ -86,7 +86,7 @@ fn assets_head() -> Option<String> {
         match std::fs::read_to_string(&head) {
             Ok(s) => Some(s),
             Err(err) => {
-                tracing::error!("Failed to read {head:?}: {err}");
+                tracing::warn!("Assets built with manganis cannot be preloaded (failed to read {head:?}). This warning may occur when you build a desktop application without the dioxus CLI. If you do not use manganis, you can ignore this warning: {err}.");
                 None
             }
         }
