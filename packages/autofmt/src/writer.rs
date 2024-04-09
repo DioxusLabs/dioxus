@@ -1,4 +1,4 @@
-use dioxus_rsx::{AttributeType, BodyNode, ElementAttrValue, ForLoop, IfChain};
+use dioxus_rsx::{AttributeType, BodyNode, ElementAttrValue, ForLoop, IfChain, IfmtInput};
 use proc_macro2::{LineColumn, Span};
 use quote::ToTokens;
 use std::{
@@ -328,6 +328,13 @@ impl<'a> Writer<'a> {
         }
 
         Ok(())
+    }
+
+    pub(crate) fn key_len(&self, key: Option<&IfmtInput>) -> usize {
+        match key {
+            Some(key) => ifmt_to_string(key).len() + 5,
+            None => 0,
+        }
     }
 }
 
