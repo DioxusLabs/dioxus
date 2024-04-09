@@ -11,8 +11,8 @@ fn server_context_for_route(route: &str) -> dioxus_fullstack::prelude::DioxusSer
     use std::sync::Arc;
     let request = http::Request::builder().uri(route).body(()).unwrap();
     let (parts, _) = request.into_parts();
-    let server_context = DioxusServerContext::new(Arc::new(tokio::sync::RwLock::new(parts)));
-    server_context
+
+    DioxusServerContext::new(Arc::new(tokio::sync::RwLock::new(parts)))
 }
 
 /// Try to extract the site map by finding the root router that a component renders.
@@ -85,7 +85,7 @@ fn copy_static_files(src: &Path, dst: &Path) -> Result<(), std::io::Error> {
                 queue.push(path);
             }
         } else {
-            let output_location = dst.join(path.strip_prefix(&src).unwrap());
+            let output_location = dst.join(path.strip_prefix(src).unwrap());
             let parent = output_location.parent().unwrap();
             if !parent.exists() {
                 std::fs::create_dir_all(parent)?;
@@ -128,7 +128,6 @@ async fn prerender_route(
 #[test]
 fn extract_site_map_works() {
     use dioxus::prelude::*;
-    use dioxus_router::prelude::*;
 
     #[derive(Clone, Routable, Debug, PartialEq)]
     enum Route {

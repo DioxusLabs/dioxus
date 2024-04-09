@@ -61,7 +61,9 @@ pub fn launch(
                     )
                 } else {
                     router.fallback_service(serve_dir.fallback(get(|| async move {
-                        format!("The requested path does not exist").into_response()
+                        "The requested path does not exist"
+                            .to_string()
+                            .into_response()
                     })))
                 };
 
