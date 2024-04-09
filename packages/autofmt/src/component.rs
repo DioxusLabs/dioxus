@@ -171,7 +171,6 @@ impl Writer<'_> {
                 }
 
                 ContentField::ManExpr(exp) => {
-                    // println!("attemping format of {exp:?}");
                     let out = self.unparse_expr(exp);
                     let mut lines = out.split('\n').peekable();
                     let first = lines.next().unwrap();

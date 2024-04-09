@@ -146,24 +146,6 @@ impl Writer<'_> {
 /// This creates a new temporary file, parses the expression into it, and then formats the file.
 /// This is a bit of a hack, but dtonlay doesn't want to support this very simple usecase, forcing us to clone the expr
 pub fn unparse_expr(expr: &Expr) -> String {
-    /*
-    collect macros from this expression and then cut them out, format them, then bring them back in
-    rsx! {
-        Component {
-            header: {
-                let a = 123;
-                let b = 456;
-                rsx! {
-                    h1 { "hi {a}" }
-                    h1 { "hi {b}" }
-                }
-            }
-        }
-    }
-    */
-
-    // collect macros from this expression
-
     let file = wrapped(expr);
     let wrapped = unparse(&file);
     unwrapped(wrapped)
