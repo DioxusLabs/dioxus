@@ -222,6 +222,7 @@ impl<'a> Writer<'a> {
         total
     }
 
+    #[allow(clippy::map_entry)]
     pub fn retrieve_formatted_expr(&mut self, expr: &Expr) -> &str {
         let loc = Location::new(expr.span().start());
 
