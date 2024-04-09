@@ -23,7 +23,7 @@ use dioxus_core::{prelude::Template, TemplateAttribute, TemplateNode};
 /// The mapping of a node relative to the root of its containing template
 ///
 /// IE [0, 1] would be the location of the h3 node in this template:
-/// ```rust
+/// ```rust, ignore
 /// rsx! {
 ///     div {
 ///         h1 { "title" }
@@ -37,7 +37,7 @@ type NodePath = Vec<u8>;
 /// Order doesn't matter for attributes, you can render them in any order on a given node.a
 ///
 /// IE [0, 1] would be the location of the `class` attribute on this template:
-/// ```rust
+/// ```rust, ignore
 /// rsx! {
 ///     div {
 ///         h1 { "title" }

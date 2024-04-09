@@ -3,7 +3,7 @@
 use dioxus_core::prelude::Template;
 use dioxus_rsx::{
     hot_reload::{diff_rsx, template_location, ChangedRsx, DiffResult},
-    tracked::{callbody_to_template, hotreload_callbody},
+    tracked::HotreloadingResults,
     CallBody, HotReloadingContext,
 };
 use proc_macro2::TokenStream;
@@ -42,6 +42,23 @@ fn boilerplate(old: TokenStream, new: TokenStream) -> Option<Vec<Template>> {
 
     let location = "file:line:col:0";
     hotreload_callbody::<Mock>(&old, &new, location)
+}
+
+fn hotreload_callbody<Ctx: HotReloadingContext>(
+    old: &CallBody,
+    new: &CallBody,
+    location: &'static str,
+) -> Option<Vec<Template>> {
+    let results = HotreloadingResults::new::<Ctx>(old, new, location)?;
+    Some(results.templates)
+}
+
+fn callbody_to_template<Ctx: HotReloadingContext>(
+    old: &CallBody,
+    location: &'static str,
+) -> Option<Template> {
+    let results = HotreloadingResults::new::<Ctx>(old, old, location)?;
+    Some(results.templates.first().unwrap().clone())
 }
 
 fn base_stream() -> TokenStream {

@@ -180,7 +180,8 @@ impl Component {
             toks.append_all(quote! {#field})
         }
         if !self.children.is_empty() {
-            let renderer = TemplateRenderer::as_tokens(&self.children, None);
+            let renderer =
+                TemplateRenderer::as_tokens_with_idx(&self.children, self.location.idx.get());
             toks.append_all(quote! { .children( { #renderer } ) });
         }
         toks.append_all(quote! { .build() });
