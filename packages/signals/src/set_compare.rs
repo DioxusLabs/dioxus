@@ -82,6 +82,12 @@ impl<R: Eq + Hash, S: Storage<SignalData<bool>>> SetCompare<R, S> {
     }
 }
 
+impl<R: 'static, S: Storage<SignalData<bool>>> PartialEq for SetCompare<R, S> {
+    fn eq(&self, other: &Self) -> bool {
+        self.subscribers == other.subscribers
+    }
+}
+
 impl<R, S: Storage<SignalData<bool>>> Clone for SetCompare<R, S> {
     fn clone(&self) -> Self {
         *self
