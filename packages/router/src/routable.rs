@@ -107,17 +107,64 @@ fn full_circle() {
     assert_eq!(String::from_route_segment(route).unwrap(), route);
 }
 
-/// Something that can be converted to route segments.
+/// Something that can be converted to route segments. This trait must be implemented for all types that are used as spread arguments in a route (`#[route("/:..segment")]`).
+///
+/// This trait is automatically implemented for any type can turn into a borrowed iterator over items that implement Display.
+///
+/// ```rust
+/// # use dioxus::prelude::*;
+/// # #[component]
+/// # fn SpreadRoute(segment: MyType) -> Element { None }
+///
+/// // You can implement ToRouteSegments and FromRouteSegments for your custom type
+/// #[derive(Clone, PartialEq)]
+/// struct MyType;
+///
+/// impl ToRouteSegments for MyType {
+///     fn display_route_segments(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+///         write!(f, "mytype")
+///     }
+/// }
+///
+/// struct Error;
+///
+/// impl std::fmt::Display for Error {
+///     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+///         write!(f, "error")
+///     }
+/// }
+///
+/// impl FromRouteSegments for MyType {
+///     type Err = Error;
+///
+///     fn from_route_segments(segments: &[&str]) -> Result<Self, Self::Err> {
+///         match segments {
+///             &["mytype"] => Ok(MyType),
+///             _ => Err(Error),
+///         }
+///     }
+/// }
+///
+/// // Then you can use the custom type in your router
+/// #[derive(Routable, Clone)]
+/// enum Route {
+///     #[route("/:..segment")]
+///     SpreadRoute { segment: MyType },
+/// }
+/// ```
 pub trait ToRouteSegments {
-    /// Display the route segments.
-    fn display_route_segments(self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
+    /// Display the route segments with each route segment separated by a `/`. This should not start with a `/`.
+    ///
+    /// NOTE: The implementation of this method must be parsable by the `FromRouteSegments` trait if you split the route segments with `/`.
+    fn display_route_segments(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
 }
 
+// Implement ToRouteSegments for any type that can turn &self into an iterator of &T where T: Display
 impl<I, T: Display> ToRouteSegments for I
 where
-    I: IntoIterator<Item = T>,
+    for<'a> &'a I: IntoIterator<Item = &'a T>,
 {
-    fn display_route_segments(self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn display_route_segments(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for segment in self {
             write!(f, "/")?;
             let segment = segment.to_string();
@@ -148,11 +195,56 @@ fn to_route_segments() {
 }
 
 /// Something that can be created from route segments.
+///
+/// # Example
+/// ```rust
+/// # use dioxus::prelude::*;
+/// # #[component]
+/// # fn SpreadRoute(segment: MyType) -> Element { None }
+///
+/// // You can implement FromRouteSegments and ToRouteSegments for your custom type
+/// #[derive(Clone, PartialEq)]
+/// struct MyType;
+///
+/// struct Error;
+///
+/// impl std::fmt::Display for Error {
+///     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+///         write!(f, "error")
+///     }
+/// }
+///
+/// impl FromRouteSegments for MyType {
+///     type Err = Error;
+///
+///     fn from_route_segments(segments: &[&str]) -> Result<Self, Self::Err> {
+///         match segments {
+///             &["mytype"] => Ok(MyType),
+///             _ => Err(Error),
+///         }
+///     }
+/// }
+///
+/// impl ToRouteSegments for MyType {
+///     fn display_route_segments(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+///         write!(f, "mytype")
+///     }
+/// }
+///
+/// // Then you can use the custom type in your router
+/// #[derive(Routable, Clone)]
+/// enum Route {
+///     #[route("/:..segment")]
+///     SpreadRoute { segment: MyType },
+/// }
+/// ```
 pub trait FromRouteSegments: Sized {
     /// The error that can occur when parsing route segments.
-    type Err;
+    type Err: std::fmt::Display;
 
     /// Create an instance of `Self` from route segments.
+    ///
+    /// NOTE: This method must parse the output of `ToRouteSegments::display_route_segments` into the type `Self`.
     fn from_route_segments(segments: &[&str]) -> Result<Self, Self::Err>;
 }
 
