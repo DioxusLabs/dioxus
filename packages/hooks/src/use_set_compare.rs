@@ -13,7 +13,7 @@
 ///     render! {
 ///         for i in 0..10 {
 ///             // Child will only re-render when i == count
-///             Child { active: compare.equal(i) }
+///             Child { compare, i }
 ///         }
 ///         button {
 ///             // This will only rerender the child with the old and new value of i == count
@@ -25,7 +25,8 @@
 /// }
 ///
 /// #[component]
-/// fn Child(active: ReadOnlySignal<bool>) -> Element {
+/// fn Child(count: ReadOnlySignal<usize>, compare: SetCompare<usize>) -> Element {
+///     let active = use_equal(count, compare);
 ///     if *active() {
 ///         render! { "Active" }
 ///     } else {
@@ -36,4 +37,13 @@
 #[must_use]
 pub fn use_set_compare<R: Eq + Hash>(f: impl FnMut() -> R + 'static) -> SetCompare<R> {
     use_hook(move || SetCompare::new(f))
+}
+
+/// A hook that returns true if the value is equal to the value in the set compare.
+#[must_use]
+pub fn use_set_compare_equal<R: Eq + Hash>(
+    value: R,
+    compare: SetCompare<R>,
+) -> ReadOnlySignal<bool> {
+    use_hook(move || second.equal(value))
 }

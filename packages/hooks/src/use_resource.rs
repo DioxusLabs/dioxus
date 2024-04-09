@@ -2,10 +2,6 @@
 
 use crate::{use_callback, use_signal, UseCallback};
 use dioxus_core::prelude::*;
-use dioxus_core::{
-    prelude::{spawn, use_hook},
-    Task,
-};
 use dioxus_signals::*;
 use futures_util::{future, pin_mut, FutureExt, StreamExt};
 use std::ops::Deref;
