@@ -2692,6 +2692,7 @@ dependencies = [
  "dioxus-web",
  "http 1.1.0",
  "tokio",
+ "tower",
  "tower-http",
  "tracing",
 ]
@@ -3690,6 +3691,15 @@ dependencies = [
  "openssl-probe",
  "openssl-sys",
  "url",
+]
+
+[[package]]
+name = "github-pages-static-generation"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
+ "tower",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -7616,6 +7626,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "router-static-generation"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "rsa"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8253,6 +8271,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32fea41aca09ee824cc9724996433064c89f7777e60762749a4170a14abbfa21"
 
 [[package]]
+name = "simple-static-generation"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "simple_logger"
 version = "4.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8635,14 +8661,6 @@ name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
-
-[[package]]
-name = "static-hydrated"
-version = "0.1.0"
-dependencies = [
- "dioxus",
- "tracing-subscriber",
-]
 
 [[package]]
 name = "static_assertions"

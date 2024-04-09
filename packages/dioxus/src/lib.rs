@@ -101,6 +101,10 @@ pub use dioxus_router as router;
 #[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]
 pub use dioxus_fullstack as fullstack;
 
+#[cfg(feature = "static-generation")]
+#[cfg_attr(docsrs, doc(cfg(feature = "static-generation")))]
+pub use dioxus_static_site_generation as static_site_generation;
+
 #[cfg(feature = "desktop")]
 #[cfg_attr(docsrs, doc(cfg(feature = "desktop")))]
 pub use dioxus_desktop as desktop;

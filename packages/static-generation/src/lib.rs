@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 mod config;
 pub use config::*;
 pub mod launch;

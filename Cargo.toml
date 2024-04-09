@@ -35,7 +35,9 @@ members = [
     "packages/fullstack/examples/axum-streaming",
     "packages/fullstack/examples/axum-desktop",
     "packages/fullstack/examples/axum-auth",
-    "packages/static-generation/examples/static-hydrated",
+    "packages/static-generation/examples/simple",
+    "packages/static-generation/examples/router",
+    "packages/static-generation/examples/github-pages",
     # Full project examples
     "examples/tailwind",
     "examples/PWA-example",
@@ -101,7 +103,7 @@ axum = "0.7.0"
 axum-server = { version = "0.6.0", default-features = false }
 tower = "0.4.13"
 http = "1.0.0"
-tower-http = "0.5.1"
+tower-http = "0.5.2"
 hyper = "1.0.0"
 hyper-rustls = "0.26.0"
 serde_json = "1.0.61"

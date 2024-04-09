@@ -1,5 +1,6 @@
 use dioxus_lib::prelude::*;
 use dioxus_router::prelude::*;
+use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
@@ -37,20 +38,26 @@ pub async fn generate_static_site(
 
     let mut renderer = config.create_renderer();
 
-    let site_map = block_in_place(|| extract_site_map(app))
-        .expect("Failed to find a router in the application");
-    let flat_site_map = site_map.iter().flat_map(SiteMapSegment::flatten);
+    let mut routes_to_render: HashSet<String> = config.additional_routes.iter().cloned().collect();
+    if let Some(site_map) = block_in_place(|| extract_site_map(app)) {
+        let flat_site_map = site_map.iter().flat_map(SiteMapSegment::flatten);
+        for route in flat_site_map {
+            let Some(static_route) = route
+                .iter()
+                .map(SegmentType::to_static)
+                .collect::<Option<Vec<_>>>()
+            else {
+                continue;
+            };
+            let url = format!("/{}", static_route.join("/"));
 
-    for route in flat_site_map {
-        let Some(static_route) = route
-            .iter()
-            .map(SegmentType::to_static)
-            .collect::<Option<Vec<_>>>()
-        else {
-            continue;
-        };
-        let url = format!("/{}", static_route.join("/"));
+            routes_to_render.insert(url);
+        }
+    } else {
+        tracing::trace!("No site map found, rendering the additional routes");
+    }
 
+    for url in routes_to_render {
         prerender_route(app, url, &mut renderer, &config).await?;
     }
 

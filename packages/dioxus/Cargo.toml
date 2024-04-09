@@ -49,7 +49,7 @@ mobile = ["dioxus-mobile", "dioxus-fullstack?/mobile", "dioxus-config-macro/mobi
 web = ["dioxus-web", "dioxus-fullstack?/web", "dioxus-static-site-generation?/web", "dioxus-config-macro/web", "dioxus-router?/web"]
 ssr = ["dioxus-ssr", "dioxus-router?/ssr", "dioxus-config-macro/ssr"]
 liveview = ["dioxus-liveview", "dioxus-config-macro/liveview", "dioxus-router?/liveview"]
-static-generation = ["dioxus-static-site-generation"]
+static-generation = ["dioxus-static-site-generation", "dioxus-config-macro/static-generation"]
 axum = ["dioxus-fullstack?/axum", "dioxus-fullstack?/server", "dioxus-static-site-generation?/server", "ssr", "dioxus-liveview?/axum"]
 
 # This feature just disables the no-renderer-enabled warning

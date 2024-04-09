@@ -20,6 +20,12 @@ pub struct Config {
     #[cfg(feature = "server")]
     pub(crate) root_id: Option<&'static str>,
 
+    #[cfg(feature = "server")]
+    pub(crate) additional_routes: Vec<String>,
+
+    #[cfg(feature = "server")]
+    pub(crate) github_pages: bool,
+
     #[cfg(feature = "web")]
     #[allow(unused)]
     pub(crate) web_cfg: dioxus_web::Config,
@@ -39,6 +45,10 @@ impl Default for Config {
             map_path: None,
             #[cfg(feature = "server")]
             root_id: None,
+            #[cfg(feature = "server")]
+            additional_routes: vec!["/".to_string()],
+            #[cfg(feature = "server")]
+            github_pages: false,
             #[cfg(feature = "web")]
             web_cfg: dioxus_web::Config::default(),
         }
@@ -79,6 +89,7 @@ impl Config {
     }
 
     /// Set the id of the root element in the index.html file to place the prerendered content into. (defaults to main)
+    #[allow(unused)]
     pub fn root_id(mut self, root_id: &'static str) -> Self {
         #[cfg(feature = "server")]
         {
@@ -109,6 +120,29 @@ impl Config {
             self.index_path = Some(index_path);
         }
         self
+    }
+
+    /// Sets a list of static routes that will be pre-rendered and served in addition to the static routes in the router.
+    #[allow(unused)]
+    pub fn additional_routes(mut self, mut routes: Vec<String>) -> Self {
+        #[cfg(feature = "server")]
+        {
+            self.additional_routes.append(&mut routes);
+        }
+        self
+    }
+
+    /// A preset for github pages. This will output your files in the `/docs` directory and set up a `404.html` file.
+    pub fn github_pages(self) -> Self {
+        #[allow(unused_mut)]
+        let mut myself = self
+            .additional_routes(vec!["/404".into()])
+            .output_dir(PathBuf::from("./docs"));
+        #[cfg(feature = "server")]
+        {
+            myself.github_pages = true;
+        }
+        myself
     }
 
     /// Set the web config.

@@ -1,20 +1,10 @@
-//! Run with:
-//!
-//! ```sh
-//! dx build --features web --release
-//! cargo run --features server
-//! ```
+//! Static generation works out of the box with the router. Just add a router anywhere in your app and it will generate any static routes for you!
 
 #![allow(unused)]
 use dioxus::prelude::*;
 
 // Generate all routes and output them to the static path
 fn main() {
-    #[cfg(feature = "server")]
-    {
-        tracing_subscriber::fmt::init();
-    }
-
     launch(|| {
         rsx! {
             Router::<Route> {}
@@ -40,7 +30,7 @@ fn Blog() -> Element {
                 for _ in 0..100 {
                     tr {
                         for _ in 0..100 {
-                            td { "hello world!" }
+                            td { "hello!" }
                         }
                     }
                 }
@@ -52,7 +42,6 @@ fn Blog() -> Element {
 #[component]
 fn Home() -> Element {
     let mut count = use_signal(|| 0);
-    let text = use_signal(|| "...".to_string());
 
     rsx! {
         Link { to: Route::Blog {}, "Go to blog" }
