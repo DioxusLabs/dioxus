@@ -178,7 +178,7 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
             let leaked_location = Box::leak(template_location(old_start, file).into_boxed_str());
 
             // Returns a list of templates that are hotreloadable
-            let templates = crate::tracked::hotreload_callbody::<Ctx>(
+            let templates = crate::tracked::HotreloadingResults::new::<Ctx>(
                 &old_call_body,
                 &new_call_body,
                 leaked_location,
@@ -189,7 +189,7 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
                 return Ok(UpdateResult::NeedsRebuild);
             };
 
-            for template in templates {
+            for template in templates.templates {
                 // dioxus cannot handle empty templates...
                 // todo: I think it can? or we just skip them nowa
                 if template.roots.is_empty() {
