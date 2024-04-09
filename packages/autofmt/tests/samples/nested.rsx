@@ -5,6 +5,34 @@ fn App() -> Element {
     let mut text = use_signal(|| "...".to_string());
 
     rsx! {
+        div {
+            div { "hi" }
+            div {
+                header: rsx! {
+                    div { class: "max-w-lg lg:max-w-2xl mx-auto mb-16 text-center",
+                        "gomg"
+                        "hi!!"
+                        "womh"
+                    }
+                },
+                header: rsx! {
+                    div { class: "max-w-lg lg:max-w-2xl mx-auto mb-16 text-center",
+                        "gomg"
+                        "hi!!"
+                        "womh"
+                    }
+                },
+                header: rsx! {
+                    div { class: "max-w-lg lg:max-w-2xl mx-auto mb-16 text-center",
+                        "gomg"
+                        // "hi!!"
+                        "womh"
+                    }
+                },
+                "hi"
+            }
+            ContentList { header, content: &BLOG_POSTS, readmore: true }
+        }
         Component {
             header: rsx! {
                 h1 { "hi" }

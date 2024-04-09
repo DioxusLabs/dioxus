@@ -160,8 +160,15 @@ impl<'a> Writer<'a> {
                 condition_len + value_len + 6
             }
             ElementAttrValue::AttrLiteral(lit) => ifmt_to_string(lit).len(),
-            ElementAttrValue::AttrExpr(expr) => expr.span().line_length(),
             ElementAttrValue::Shorthand(expr) => expr.span().line_length(),
+            ElementAttrValue::AttrExpr(expr) => {
+                let out = self.retrieve_formatted_expr(expr);
+                if out.contains('\n') {
+                    100000
+                } else {
+                    out.len()
+                }
+            }
             ElementAttrValue::EventTokens(tokens) => {
                 let as_str = self.retrieve_formatted_expr(tokens);
                 if as_str.contains('\n') {
@@ -301,7 +308,7 @@ impl<'a> Writer<'a> {
 
     /// An expression within a for or if block that might need to be spread out across several lines
     fn write_inline_expr(&mut self, expr: &Expr) -> std::fmt::Result {
-        let unparsed = unparse_expr(expr);
+        let unparsed = self.unparse_expr(expr);
         let mut lines = unparsed.lines();
         let first_line = lines.next().unwrap();
         write!(self.out, "{first_line}")?;
