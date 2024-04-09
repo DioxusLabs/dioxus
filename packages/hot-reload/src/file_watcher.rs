@@ -348,7 +348,10 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                     .update_rsx(path, crate_dir.as_path());
 
                 match changes {
-                    Ok(UpdateResult::UpdatedRsx(msgs)) => {
+                    Ok(UpdateResult::UpdatedRsx {
+                        changed_strings,
+                        templates: msgs,
+                    }) => {
                         for msg in msgs {
                             let mut i = 0;
                             while i < channels.len() {

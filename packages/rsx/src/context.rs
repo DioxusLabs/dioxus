@@ -73,8 +73,8 @@ impl<'a> DynamicContext<'a> {
         match root {
             BodyNode::Element(el) => self.render_static_element(el),
 
-            BodyNode::Text(text) if text.is_static() => {
-                let text = text.to_static().unwrap();
+            BodyNode::Text(text) if text.input.is_static() => {
+                let text = text.input.to_static().unwrap();
                 quote! { dioxus_core::TemplateNode::Text { text: #text } }
             }
 
@@ -218,8 +218,8 @@ impl<'a> DynamicContext<'a> {
             // Check this is a bit more complex but we can likely handle it
             BodyNode::Element(el) => self.update_element::<Ctx>(el),
 
-            BodyNode::Text(text) if text.is_static() => {
-                let text = text.source.as_ref().unwrap();
+            BodyNode::Text(text) if text.input.is_static() => {
+                let text = text.input.source.as_ref().unwrap();
                 let text = intern(text.value().as_str());
                 Some(TemplateNode::Text { text })
             }

@@ -1,26 +1,40 @@
 //! This module contains hotreloading logic for rsx.
 //!
 //! There's a few details that I wish we could've gotten right but we can revisit later:
+//!
 //! - Empty rsx! blocks are written as `None` - it would be nice to be able to hot reload them
+//!
 //! - The byte index of the template is not the same as the byte index of the original template
 //!   this forces us to make up IDs on the fly. We should just find an ID naming scheme, but that
 //!   struggles when you have nested rsx! calls since file:line:col is the same for all expanded rsx!
+//!
 //! - There's lots of linear scans
+//!
 //! - Expanding an if chain is not possible - only its contents can be hot reloaded
+//!
 //! - Components that don't start with children can't be hotreloaded - IE going from `Comp {}` to `Comp { "foo" }`
 //!   is not possible. We could in theory allow this by seeding all Components with a `children` field.
+//!
 //! - Cross-templates hot reloading is not possible - multiple templates don't share the dynamic nodes.
 //!   This would require changes in core to work, I imagine.
+//!
 //! - Hotreloading of formatted strings is currently not possible - we can't hot reload the formatting.
 //!   This might be fixable!
+//!
 //! - Hotreloading of literals is technically possible, but not currently implemented and would likely
 //!   require changes to core to work.
 
 use std::collections::HashMap;
 
-use crate::{intern, Component, ElementAttrName, ForLoop, IfChain, IfmtInput};
+use crate::{
+    intern, AttributeType, Component, ComponentField, ContentField, ElementAttrName, ForLoop,
+    IfChain, IfmtInput, TextNode,
+};
 use crate::{BodyNode, CallBody, DynamicContext, HotReloadingContext};
-use dioxus_core::{prelude::Template, TemplateAttribute, TemplateNode};
+use dioxus_core::{
+    prelude::{FmtSegment, FmtedSegments, Template},
+    TemplateAttribute, TemplateNode,
+};
 
 /// The mapping of a node relative to the root of its containing template
 ///
@@ -59,32 +73,32 @@ type DynamicNodeIdx = usize;
 pub struct HotreloadingResults {
     pub templates: Vec<Template>,
 
-    pub changed_strings: HashMap<DynamicNodeIdx, IfmtInput>,
+    pub changed_strings: HashMap<String, FmtedSegments>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-struct TemplateDiff {
-    template: Template,
+// #[derive(Debug, PartialEq, Eq, Clone)]
+// struct TemplateDiff {
+//     template: Template,
 
-    /// The IDX to the dynamic text node
-    changed_segments: HashMap<DynamicNodeIdx, FormattedSegment>,
-}
+//     /// The IDX to the dynamic text node
+//     changed_segments: HashMap<DynamicNodeIdx, FormattedSegment>,
+// }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-struct FormattedSegment {
-    segment: Vec<FormattedSegmentType>,
-}
+// #[derive(Debug, PartialEq, Eq, Clone)]
+// struct FormattedSegment {
+//     segment: Vec<FormattedSegmentType>,
+// }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-enum FormattedSegmentType {
-    /// A literal string
-    Literal(String),
+// #[derive(Debug, PartialEq, Eq, Clone)]
+// enum FormattedSegmentType {
+//     /// A literal string
+//     Literal(String),
 
-    /// A formatted string
-    /// The dyamic pieces of the formatted String
-    /// IE  "asdasd {something} {else}" would have two pieces - `something` and `else`
-    Formatted(String),
-}
+//     /// A formatted string
+//     /// The dyamic pieces of the formatted String
+//     /// IE  "asdasd {something} {else}" would have two pieces - `something` and `else`
+//     Formatted(String),
+// }
 
 impl HotreloadingResults {
     pub fn new<Ctx: HotReloadingContext>(
@@ -336,11 +350,15 @@ impl HotreloadingResults {
 
     fn hotreload_text_segment<Ctx: HotReloadingContext>(
         &mut self,
-        a: &IfmtInput,
-        b: &IfmtInput,
+        a: &TextNode,
+        b: &TextNode,
         location: &'static str,
         old_idx: usize,
     ) -> Option<bool> {
+        self.hotreload_ifmt(&a.input, &b.input)
+    }
+
+    fn hotreload_ifmt(&mut self, a: &IfmtInput, b: &IfmtInput) -> Option<bool> {
         if a.is_static() && b.is_static() {
             return Some(a == b);
         }
@@ -352,7 +370,53 @@ impl HotreloadingResults {
             }
         }
 
-        self.changed_strings.insert(old_idx, b.clone());
+        // Collect all the formatted segments from the original
+        let mut out = vec![];
+
+        // the original list of formatted segments
+        let mut fmted = a
+            .segments
+            .iter()
+            .flat_map(|f| match f {
+                crate::Segment::Literal(_) => None,
+                crate::Segment::Formatted(f) => Some(f),
+            })
+            .cloned()
+            .map(|f| Some(f))
+            .collect::<Vec<_>>();
+
+        for segment in b.segments.iter() {
+            match segment {
+                crate::Segment::Literal(lit) => {
+                    // create a &'static str by leaking the string
+                    let lit = Box::leak(lit.clone().into_boxed_str());
+                    out.push(FmtSegment::Literal { value: lit });
+                }
+                crate::Segment::Formatted(fmt) => {
+                    // Find the formatted segment in the original
+                    // Set it to None when we find it so we don't re-render it on accident
+                    let idx = fmted
+                        .iter_mut()
+                        .position(|_s| {
+                            if let Some(s) = _s {
+                                if s == fmt {
+                                    *_s = None;
+                                    return true;
+                                }
+                            }
+
+                            false
+                        })
+                        .unwrap();
+
+                    out.push(FmtSegment::Dynamic { id: idx });
+                }
+            }
+        }
+
+        let key = "__FMTBLOCK".to_string();
+
+        self.changed_strings.insert(key, FmtedSegments::new(out));
 
         Some(true)
     }
@@ -393,7 +457,7 @@ impl HotreloadingResults {
         let matches = a.name == b.name
             && a.prop_gen_args == b.prop_gen_args
             && a.key == b.key
-            && a.fields == b.fields
+            // && a.fields == b.fields
             && a.manual_props == b.manual_props
             // todo: always just pass in dummy children so we can hotreload them
             // either both empty or both non-empty
@@ -401,11 +465,47 @@ impl HotreloadingResults {
                 || a.children.is_empty() && b.children.is_empty());
 
         if matches {
+            self.hotreload_component_fields::<Ctx>(a, b, location, old_idx, templates)?;
+
             let new_location = make_new_location(location, old_idx + 1);
             self.hotreload_bodynodes::<Ctx>(&a.children, &b.children, new_location, templates)?;
         }
 
         Some(matches)
+    }
+
+    fn hotreload_component_fields<Ctx: HotReloadingContext>(
+        &mut self,
+        a: &Component,
+        b: &Component,
+        location: &'static str,
+        old_idx: usize,
+        templates: &mut Vec<Template>,
+    ) -> Option<()> {
+        // make sure both are the same length
+        if a.fields.len() != b.fields.len() {
+            return None;
+        }
+
+        // Walk the attributes looking for literals
+        // Those will have plumbing in the hotreloading code
+        // All others just get diffed via tokens
+        for (idx, (old_attr, new_attr)) in a.fields.iter().zip(b.fields.iter()).enumerate() {
+            match (&old_attr.content, &new_attr.content) {
+                (_, _) if old_attr.name != new_attr.name => return None,
+                (ContentField::Formatted(left), ContentField::Formatted(right)) => {
+                    // try to hotreload this formatted string
+                    _ = self.hotreload_ifmt(&left, &right);
+                }
+                _ => {
+                    if old_attr != new_attr {
+                        return None;
+                    }
+                }
+            }
+        }
+
+        Some(())
     }
 
     /// Hot reload an if chain
@@ -675,8 +775,8 @@ impl HotreloadingResults {
                 }
             }
 
-            BodyNode::Text(text) if text.is_static() => {
-                let text = text.source.as_ref().unwrap();
+            BodyNode::Text(text) if text.input.is_static() => {
+                let text = text.input.source.as_ref().unwrap();
                 let text = intern(text.value().as_str());
                 TemplateNode::Text { text }
             }

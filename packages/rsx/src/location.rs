@@ -8,6 +8,7 @@ use std::{cell::Cell, hash::Hash};
 pub struct CallerLocation {
     inner: Option<String>,
     pub idx: Cell<usize>,
+    pub hotreload: Cell<bool>,
 }
 impl CallerLocation {
     pub fn set_idx(&self, idx: usize) {

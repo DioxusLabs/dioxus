@@ -3,7 +3,7 @@
 use dioxus_core::prelude::Template;
 use dioxus_rsx::{
     hot_reload::{diff_rsx, template_location, ChangedRsx, DiffResult},
-    tracked::HotreloadingResults,
+    hotreload::HotreloadingResults,
     CallBody, HotReloadingContext,
 };
 use proc_macro2::TokenStream;

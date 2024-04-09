@@ -156,6 +156,7 @@ impl App {
         dioxus_hot_reload::connect_at(cfg.target_dir.join("dioxusin"), {
             let proxy = self.shared.proxy.clone();
             move |template| {
+                println!("Proxying message {template:?}");
                 let _ = proxy.send_event(UserWindowEvent::HotReloadEvent(template));
             }
         });
@@ -328,23 +329,53 @@ impl App {
         not(target_os = "ios")
     ))]
     pub fn handle_hot_reload_msg(&mut self, msg: dioxus_hot_reload::HotReloadMsg) {
-        match msg {
-            dioxus_hot_reload::HotReloadMsg::UpdateTemplate(template) => {
-                println!("updating template in desktop {:?}", template);
+        use dioxus_core::prelude::{FmtedSegments, ScopeId};
+        use dioxus_signals::{Signal, Writable};
 
+        println!("hotreloading {msg:?}");
+
+        match msg {
+            dioxus_hot_reload::HotReloadMsg::Update {
+                assets,
+                templates,
+                changed_strings,
+            } => {
                 for webview in self.webviews.values_mut() {
-                    webview.dom.replace_template(template);
+                    for template in templates.iter() {
+                        println!("updating template in desktop {:?}", template);
+                        webview.dom.replace_template(*template);
+                    }
+
+                    // if there's a signal runtime, we're gonna try updating the signals using the IDs
+                    // as the name for the global signal
+
+                    webview.dom.runtime().on_scope(ScopeId::ROOT, || {
+                        // dioxus_signals::GlobalSignal;
+                        use dioxus_signals::get_global_context;
+
+                        let ctx = get_global_context();
+
+                        for (id, segments) in changed_strings.iter() {
+                            println!("updating signal in desktop {:?} with {:?}", id, segments);
+
+                            let mut sig: Signal<FmtedSegments> = ctx.get_signal_with_key(&id);
+                            sig.set(segments.clone());
+                        }
+
+                        // dioxus_core::prelude::needs_update();
+                    });
+
                     webview.poll_vdom();
+                }
+
+                if !assets.is_empty() {
+                    for webview in self.webviews.values_mut() {
+                        webview.kick_stylsheets();
+                    }
                 }
             }
             dioxus_hot_reload::HotReloadMsg::Shutdown => {
                 self.control_flow = ControlFlow::Exit;
-            }
-
-            dioxus_hot_reload::HotReloadMsg::UpdateAsset(_) => {
-                for webview in self.webviews.values_mut() {
-                    webview.kick_stylsheets();
-                }
             }
         }
     }

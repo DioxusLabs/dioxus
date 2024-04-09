@@ -156,13 +156,16 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
                                         .collect()
                                 };
 
-                                for template in templates {
-                                    if !send_msg(
-                                        HotReloadMsg::UpdateTemplate(template),
-                                        &mut connection,
-                                    ) {
-                                        continue;
-                                    }
+                                if !send_msg(
+                                    HotReloadMsg::Update {
+                                        templates,
+                                        changed_strings: Default::default(),
+                                        assets: Default::default(),
+                                    },
+                                    &mut connection,
+                                ) {
+                                    panic!("failed to serialize hot reload message at root");
+                                    continue;
                                 }
                                 channels.lock().unwrap().push(connection);
                                 println!("Connected to hot reloading 🚀");
@@ -190,13 +193,14 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
                 let channels = &mut *channels.lock().unwrap();
                 let mut i = 0;
 
-                println!("sending message: {:?}", msg);
+                println!("sending message: {:?} to {}", msg, channels.len());
 
                 while i < channels.len() {
                     let channel = &mut channels[i];
                     if send_msg(msg.clone(), channel) {
                         i += 1;
                     } else {
+                        panic!("failed to serialize hot reload message");
                         channels.remove(i);
                     }
                 }
@@ -221,16 +225,21 @@ fn clear_paths(file_socket_path: &std::path::Path) {
 }
 
 fn send_msg(msg: HotReloadMsg, channel: &mut impl std::io::Write) -> bool {
-    if let Ok(msg) = serde_json::to_string(&msg) {
-        if channel.write_all(msg.as_bytes()).is_err() {
-            return false;
+    match serde_json::to_string(&msg) {
+        Ok(msg) => {
+            dbg!(&msg);
+            if channel.write_all(msg.as_bytes()).is_err() {
+                return false;
+            }
+            if channel.write_all(&[b'\n']).is_err() {
+                return false;
+            }
+            true
         }
-        if channel.write_all(&[b'\n']).is_err() {
-            return false;
+        Err(e) => {
+            println!("failed to serialize hot reload message: {e:?}");
+            false
         }
-        true
-    } else {
-        false
     }
 }
 

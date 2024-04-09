@@ -452,3 +452,18 @@ impl ElementAttr {
         )
     }
 }
+
+pub(crate) fn is_if_chain_terminated(chain: &ExprIf) -> bool {
+    let mut current = chain;
+    loop {
+        if let Some((_, else_block)) = &current.else_branch {
+            if let Expr::If(else_if) = else_block.as_ref() {
+                current = else_if;
+            } else {
+                return true;
+            }
+        } else {
+            return false;
+        }
+    }
+}

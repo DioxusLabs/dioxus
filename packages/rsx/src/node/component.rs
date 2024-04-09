@@ -232,9 +232,38 @@ impl ToTokens for ContentField {
         match self {
             ContentField::Shorthand(i) => tokens.append_all(quote! { #i }),
             ContentField::ManExpr(e) => e.to_tokens(tokens),
-            ContentField::Formatted(s) => tokens.append_all(quote! {
-                #s
-            }),
+            ContentField::Formatted(txt) => {
+                // place down the signal stuff
+
+                let segments = txt.as_htotreloaded();
+
+                let rendered_segments = txt.segments.iter().filter_map(|s| match s {
+                    Segment::Literal(lit) => None,
+                    Segment::Formatted(fmt) => {
+                        // just render as a format_args! call
+                        Some(quote! {
+                            format!("{}", #fmt)
+                        })
+                    }
+                });
+
+                tokens.append_all(quote! {
+                    {
+                        // Create a signal of the formatted segments
+                        // htotreloading will find this via its location and then update the signal
+                        static __SIGNAL: GlobalSignal<FmtedSegments> = GlobalSignal::with_key(|| #segments, "__FMTBLOCK");
+
+                        // render the signal and subscribe the component to its changes
+                        __SIGNAL.with(|s| s.render_with(
+                            vec![ #(#rendered_segments),* ]
+                        ))
+                    }
+                })
+
+                // tokens.append_all(quote! {
+                //     #s
+                // })
+            }
         }
     }
 }

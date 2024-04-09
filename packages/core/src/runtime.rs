@@ -101,7 +101,8 @@ impl Runtime {
     /// Call this function with the current scope set to the given scope
     ///
     /// Useful in a limited number of scenarios
-    pub fn on_scope<O>(&self, id: ScopeId, f: impl FnOnce() -> O) -> O {
+    pub fn on_scope<O>(self: &Rc<Self>, id: ScopeId, f: impl FnOnce() -> O) -> O {
+        let _runtime_guard = RuntimeGuard::new(self.clone());
         {
             self.scope_stack.borrow_mut().push(id);
         }

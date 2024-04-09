@@ -366,7 +366,7 @@ pub struct Template {
 }
 
 #[cfg(feature = "serialize")]
-fn deserialize_string_leaky<'a, 'de, D>(deserializer: D) -> Result<&'a str, D::Error>
+pub fn deserialize_string_leaky<'a, 'de, D>(deserializer: D) -> Result<&'a str, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -392,7 +392,7 @@ where
 }
 
 #[cfg(feature = "serialize")]
-fn deserialize_leaky<'a, 'de, T: serde::Deserialize<'de>, D>(
+pub fn deserialize_leaky<'a, 'de, T: serde::Deserialize<'de>, D>(
     deserializer: D,
 ) -> Result<&'a [T], D::Error>
 where

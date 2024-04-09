@@ -28,7 +28,7 @@ pub use text_node::*;
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum BodyNode {
     Element(Element),
-    Text(IfmtInput),
+    Text(TextNode),
     RawExpr(Expr),
 
     Component(Component),
@@ -45,7 +45,7 @@ impl BodyNode {
         match self {
             BodyNode::Element(el) => el.name.span(),
             BodyNode::Component(component) => component.name.span(),
-            BodyNode::Text(text) => text.source.span(),
+            BodyNode::Text(text) => text.input.source.span(),
             BodyNode::RawExpr(exp) => exp.span(),
             BodyNode::ForLoop(fl) => fl.for_token.span(),
             BodyNode::IfChain(f) => f.if_token.span(),
@@ -63,8 +63,10 @@ impl BodyNode {
             BodyNode::Component(comp) => {
                 comp.location.idx.set(idx);
             }
+            BodyNode::Text(text) => {
+                text.location.idx.set(idx);
+            }
             BodyNode::Element(_) => {}
-            BodyNode::Text(_) => {}
             BodyNode::RawExpr(_) => {}
         }
     }
@@ -170,6 +172,7 @@ impl ToTokens for BodyNode {
 
             // Text is simple, just write it out
             BodyNode::Text(txt) => {
+                let txt = &txt.input;
                 if txt.is_static() {
                     tokens.append_all(quote! {
                         dioxus_core::DynamicNode::Text(dioxus_core::VText::new(#txt.to_string()))
@@ -177,14 +180,28 @@ impl ToTokens for BodyNode {
                 } else {
                     // If the text is dynamic, we actually create a signal of the formatted segments
                     // Crazy, right?
+                    let segments = txt.as_htotreloaded();
 
-                    // let location = template_location(txt.span().start());
-                    // let id = location.idx.get();
+                    let rendered_segments = txt.segments.iter().filter_map(|s| match s {
+                        Segment::Literal(lit) => None,
+                        Segment::Formatted(fmt) => {
+                            // just render as a format_args! call
+                            Some(quote! {
+                                format!("{}", #fmt)
+                            })
+                        }
+                    });
+
                     tokens.append_all(quote! {
                         dioxus_core::DynamicNode::Text(dioxus_core::VText::new({
-                            static THIS_ATTR_SIGNAL: dioxus_core::Signal<FmttedSegement> = dioxus_core::Signal::new(vec![]);
-                            THIS_ATTR_SIGNAL.set(vec![]);
-                            #txt
+                            // Create a signal of the formatted segments
+                            // htotreloading will find this via its location and then update the signal
+                            static __SIGNAL: GlobalSignal<FmtedSegments> = GlobalSignal::with_key(|| #segments, "__FMTBLOCK");
+
+                            // render the signal and subscribe the component to its changes
+                            __SIGNAL.with(|s| s.render_with(
+                                vec![ #(#rendered_segments),* ]
+                            ))
                         }))
                     })
                 }
@@ -218,160 +235,7 @@ impl ToTokens for BodyNode {
     }
 }
 
-#[non_exhaustive]
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
-pub struct ForLoop {
-    pub for_token: Token![for],
-    pub pat: Pat,
-    pub in_token: Token![in],
-    pub expr: Box<Expr>,
-    pub body: Vec<BodyNode>,
-    pub brace_token: token::Brace,
-    pub location: CallerLocation,
-}
-
-impl Parse for ForLoop {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let for_token: Token![for] = input.parse()?;
-
-        let pat = Pat::parse_single(input)?;
-
-        let in_token: Token![in] = input.parse()?;
-        let expr: Expr = input.call(Expr::parse_without_eager_brace)?;
-
-        let (brace_token, body) = parse_buffer_as_braced_children(input)?;
-
-        Ok(Self {
-            for_token,
-            pat,
-            in_token,
-            body,
-            brace_token,
-            location: CallerLocation::default(),
-            expr: Box::new(expr),
-        })
-    }
-}
-
-impl ToTokens for ForLoop {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let ForLoop {
-            pat, expr, body, ..
-        } = self;
-
-        let renderer = TemplateRenderer::as_tokens_with_idx(body, self.location.idx.get());
-
-        // Signals expose an issue with temporary lifetimes
-        // We need to directly render out the nodes first to collapse their lifetime to <'a>
-        // And then we can return them into the dyn loop
-        tokens.append_all(quote! {
-            {
-                let ___nodes = (#expr).into_iter().map(|#pat| { #renderer }).into_dyn_node();
-                ___nodes
-            }
-        })
-    }
-}
-
-#[non_exhaustive]
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
-pub struct IfChain {
-    pub if_token: Token![if],
-    pub cond: Box<Expr>,
-    pub then_branch: Vec<BodyNode>,
-    pub else_if_branch: Option<Box<IfChain>>,
-    pub else_branch: Option<Vec<BodyNode>>,
-    pub location: CallerLocation,
-}
-
-impl Parse for IfChain {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let if_token: Token![if] = input.parse()?;
-
-        // stolen from ExprIf
-        let cond = Box::new(input.call(Expr::parse_without_eager_brace)?);
-
-        let (_, then_branch) = parse_buffer_as_braced_children(input)?;
-
-        let mut else_branch = None;
-        let mut else_if_branch = None;
-
-        // if the next token is `else`, set the else branch as the next if chain
-        if input.peek(Token![else]) {
-            input.parse::<Token![else]>()?;
-            if input.peek(Token![if]) {
-                else_if_branch = Some(Box::new(input.parse::<IfChain>()?));
-            } else {
-                let (_, else_branch_nodes) = parse_buffer_as_braced_children(input)?;
-                else_branch = Some(else_branch_nodes);
-            }
-        }
-
-        Ok(Self {
-            cond,
-            if_token,
-            then_branch,
-            else_if_branch,
-            else_branch,
-            location: CallerLocation::default(),
-        })
-    }
-}
-
-impl ToTokens for IfChain {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let mut body = TokenStream2::new();
-        let mut terminated = false;
-
-        let mut elif = Some(self);
-
-        let base_idx = self.location.idx.get() * 1000;
-        let mut cur_idx = base_idx + 1;
-
-        while let Some(chain) = elif {
-            let IfChain {
-                if_token,
-                cond,
-                then_branch,
-                else_if_branch,
-                else_branch,
-                ..
-            } = chain;
-
-            let renderer = TemplateRenderer::as_tokens_with_idx(then_branch, cur_idx);
-            body.append_all(quote! { #if_token #cond { {#renderer} } });
-
-            cur_idx += 1;
-
-            if let Some(next) = else_if_branch {
-                body.append_all(quote! { else });
-                elif = Some(next);
-            } else if let Some(else_branch) = else_branch {
-                let renderer = TemplateRenderer::as_tokens_with_idx(else_branch, cur_idx);
-                body.append_all(quote! { else { {#renderer} } });
-                terminated = true;
-                break;
-            } else {
-                elif = None;
-            }
-        }
-
-        if !terminated {
-            body.append_all(quote! {
-                else { None }
-            });
-        }
-
-        tokens.append_all(quote! {
-            {
-                let ___nodes = (#body).into_dyn_node();
-                ___nodes
-            }
-        })
-    }
-}
-
-fn parse_buffer_as_braced_children(
+pub(crate) fn parse_buffer_as_braced_children(
     input: &syn::parse::ParseBuffer<'_>,
 ) -> Result<(Brace, Vec<BodyNode>)> {
     let content;
@@ -381,19 +245,4 @@ fn parse_buffer_as_braced_children(
         then_branch.push(content.parse()?);
     }
     Ok((brace_token, then_branch))
-}
-
-pub(crate) fn is_if_chain_terminated(chain: &ExprIf) -> bool {
-    let mut current = chain;
-    loop {
-        if let Some((_, else_block)) = &current.else_branch {
-            if let Expr::If(else_if) = else_block.as_ref() {
-                current = else_if;
-            } else {
-                return true;
-            }
-        } else {
-            return false;
-        }
-    }
 }

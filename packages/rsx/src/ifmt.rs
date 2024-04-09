@@ -1,22 +1,17 @@
-use std::str::FromStr;
-
+use crate::location::CallerLocation;
 use proc_macro2::{Span, TokenStream};
-
 use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
+use std::str::FromStr;
 use syn::{
     parse::{Parse, ParseStream},
     *,
 };
 
-pub fn format_args_f_impl(input: IfmtInput) -> Result<TokenStream> {
-    Ok(input.into_token_stream())
-}
-
-#[allow(dead_code)] // dumb compiler does not see the struct being used...
 #[derive(Debug, PartialEq, Eq, Clone, Hash, Default)]
 pub struct IfmtInput {
     pub source: Option<LitStr>,
     pub segments: Vec<Segment>,
+    pub location: CallerLocation,
 }
 
 impl IfmtInput {
@@ -24,6 +19,7 @@ impl IfmtInput {
         Self {
             source: None,
             segments: vec![Segment::Literal(input.to_string())],
+            location: Default::default(),
         }
     }
 
@@ -51,9 +47,7 @@ impl IfmtInput {
             .iter()
             .all(|seg| matches!(seg, Segment::Literal(_)))
     }
-}
 
-impl IfmtInput {
     pub fn to_static(&self) -> Option<String> {
         self.segments
             .iter()
@@ -64,6 +58,31 @@ impl IfmtInput {
                     None
                 }
             })
+    }
+
+    pub fn as_htotreloaded(&self) -> TokenStream {
+        let mut idx = 0_usize;
+        let segments = self.segments.iter().map(|s| match s {
+            Segment::Literal(lit) => quote! {
+                FmtSegment::Literal { value: #lit }
+            },
+            Segment::Formatted(_fmt) => {
+                // increment idx for the dynamic segment so we maintain the mapping
+                let _idx = idx;
+                idx += 1;
+                quote! {
+                    FmtSegment::Dynamic { id: #_idx }
+                }
+            }
+        });
+
+        quote! {
+            FmtedSegments::new(
+                // The static segments with idxs for locations
+                vec![ #(#segments),* ],
+            )
+        }
+        .to_token_stream()
     }
 
     /// Try to convert this into a single _.to_string() call if possible
@@ -164,12 +183,15 @@ impl FromStr for IfmtInput {
                 current_literal.push(c);
             }
         }
+
         if !current_literal.is_empty() {
             segments.push(Segment::Literal(current_literal));
         }
+
         Ok(Self {
             segments,
             source: None,
+            location: Default::default(),
         })
     }
 }

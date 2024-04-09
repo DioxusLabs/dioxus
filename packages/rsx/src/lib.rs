@@ -16,10 +16,10 @@
 
 #[macro_use]
 mod errors;
+pub mod hotreload;
 mod ifmt;
 mod location;
 mod node;
-pub mod tracked;
 
 pub(crate) mod context;
 pub(crate) mod renderer;
@@ -71,6 +71,22 @@ impl CallBody {
         let body = TemplateRenderer::as_tokens(&self.roots, Some(location));
 
         quote! { { #body } }
+    }
+
+    ///
+    pub fn set_locations_as_hotreload(&self) {
+        let mut rootstack = self.roots.iter().collect::<Vec<_>>();
+
+        while let Some(root) = rootstack.pop() {
+            match root {
+                BodyNode::Element(_) => todo!(),
+                BodyNode::Text(_) => todo!(),
+                BodyNode::RawExpr(_) => todo!(),
+                BodyNode::Component(_) => todo!(),
+                BodyNode::ForLoop(_) => todo!(),
+                BodyNode::IfChain(_) => todo!(),
+            }
+        }
     }
 }
 

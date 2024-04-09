@@ -1,9 +1,9 @@
-use crate::write::Writable;
 use crate::{read::Readable, ReadableRef};
+use crate::{write::Writable, GlobalSignalContextKey};
 use crate::{WritableRef, Write};
 use dioxus_core::prelude::ScopeId;
 use generational_box::UnsyncStorage;
-use std::ops::Deref;
+use std::{ops::Deref, panic::Location};
 
 use super::get_global_context;
 use crate::read_impls;
@@ -12,18 +12,38 @@ use crate::Signal;
 /// A signal that can be accessed from anywhere in the application and created in a static
 pub struct GlobalSignal<T> {
     initializer: fn() -> T,
+    key: Option<&'static str>,
 }
 
 impl<T: 'static> GlobalSignal<T> {
     /// Create a new global signal with the given initializer.
+    #[track_caller]
     pub const fn new(initializer: fn() -> T) -> GlobalSignal<T> {
-        GlobalSignal { initializer }
+        GlobalSignal {
+            initializer,
+            key: None,
+        }
+    }
+
+    pub const fn with_key(initializer: fn() -> T, key: &'static str) -> GlobalSignal<T> {
+        GlobalSignal {
+            initializer,
+            key: Some(key),
+        }
+    }
+
+    fn key(&self) -> GlobalSignalContextKey {
+        match self.key {
+            Some(key) => GlobalSignalContextKey::Key(key),
+            None => GlobalSignalContextKey::Ptr(self as *const _ as *const ()),
+        }
     }
 
     /// Get the signal that backs this global.
     pub fn signal(&self) -> Signal<T> {
-        let key = self as *const _ as *const ();
+        let key = self.key();
         let context = get_global_context();
+
         let read = context.signal.borrow();
 
         match read.get(&key) {

@@ -359,7 +359,7 @@ impl Writer<'_> {
         }
 
         match children {
-            [BodyNode::Text(ref text)] => Some(ifmt_to_string(text).len()),
+            [BodyNode::Text(ref text)] => Some(ifmt_to_string(&text.input).len()),
 
             // TODO: let rawexprs to be inlined
             [BodyNode::RawExpr(ref expr)] => get_expr_length(expr),

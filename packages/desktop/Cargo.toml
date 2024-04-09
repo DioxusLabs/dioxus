@@ -17,6 +17,7 @@ dioxus-html = { workspace = true, features = [
     "mounted",
     "eval",
 ] }
+dioxus-signals = { workspace = true }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
 dioxus-cli-config = { workspace = true, features = ["read-config"] }
 generational-box = { workspace = true }

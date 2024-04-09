@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{CallBody, HotReloadingContext};
 use dioxus_core::{
-    prelude::{TemplateAttribute, TemplateNode},
+    prelude::{FmtedSegments, TemplateAttribute, TemplateNode},
     Template,
 };
 use krates::cm::MetadataCommand;
@@ -19,7 +19,10 @@ pub use std::{fs::File, io::Read};
 use syn::spanned::Spanned;
 
 pub enum UpdateResult {
-    UpdatedRsx(Vec<Template>),
+    UpdatedRsx {
+        templates: Vec<Template>,
+        changed_strings: HashMap<String, FmtedSegments>,
+    },
 
     NeedsRebuild,
 }
@@ -148,7 +151,8 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
             }
         };
 
-        let mut messages: Vec<Template> = Vec::new();
+        let mut template_list: Vec<Template> = Vec::new();
+        let mut changed_strings: HashMap<String, FmtedSegments> = HashMap::new();
 
         for calls in instances.into_iter() {
             let ChangedRsx { old, new } = calls;
@@ -178,18 +182,19 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
             let leaked_location = Box::leak(template_location(old_start, file).into_boxed_str());
 
             // Returns a list of templates that are hotreloadable
-            let templates = crate::tracked::HotreloadingResults::new::<Ctx>(
+            let templates = crate::hotreload::HotreloadingResults::new::<Ctx>(
                 &old_call_body,
                 &new_call_body,
                 leaked_location,
             );
 
             // if the template is not hotreloadable, we need to do a full rebuild
-            let Some(templates) = templates else {
+            let Some(results) = templates else {
                 return Ok(UpdateResult::NeedsRebuild);
             };
 
-            for template in templates.templates {
+            // Load the templates
+            for template in results.templates {
                 // dioxus cannot handle empty templates...
                 // todo: I think it can? or we just skip them nowa
                 if template.roots.is_empty() {
@@ -212,11 +217,19 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
                     .tracked_assets
                     .extend(Self::populate_assets(template));
 
-                messages.push(template);
+                template_list.push(template);
+            }
+
+            // And then any formatted strings
+            for (key, value) in results.changed_strings {
+                changed_strings.insert(key, value);
             }
         }
 
-        Ok(UpdateResult::UpdatedRsx(messages))
+        Ok(UpdateResult::UpdatedRsx {
+            templates: template_list,
+            changed_strings,
+        })
     }
 
     fn populate_assets(template: Template) -> HashSet<PathBuf> {

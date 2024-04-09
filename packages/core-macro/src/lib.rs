@@ -16,8 +16,8 @@ use dioxus_rsx as rsx;
 #[proc_macro]
 pub fn format_args_f(input: TokenStream) -> TokenStream {
     use rsx::*;
-    format_args_f_impl(parse_macro_input!(input as IfmtInput))
-        .unwrap_or_else(|err| err.to_compile_error())
+    parse_macro_input!(input as IfmtInput)
+        .into_token_stream()
         .into()
 }
 

@@ -6,7 +6,7 @@ use convert_case::{Case, Casing};
 use dioxus_html::{map_html_attribute_to_rsx, map_html_element_to_rsx};
 use dioxus_rsx::{
     AttributeType, BodyNode, CallBody, Component, Element, ElementAttr, ElementAttrNamed,
-    ElementName, IfmtInput,
+    ElementName, IfmtInput, TextNode,
 };
 pub use html_parser::{Dom, Node};
 use proc_macro2::{Ident, Span};
@@ -24,7 +24,10 @@ pub fn rsx_from_html(dom: &Dom) -> CallBody {
 /// If the node is a comment, it will be ignored since RSX doesn't support comments
 pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
     match node {
-        Node::Text(text) => Some(BodyNode::Text(ifmt_from_text(text))),
+        Node::Text(text) => Some(BodyNode::Text(TextNode {
+            input: ifmt_from_text(text),
+            location: Default::default(),
+        })),
         Node::Element(el) => {
             let el_name = if let Some(name) = map_html_element_to_rsx(&el.name) {
                 ElementName::Ident(Ident::new(name, Span::call_site()))
@@ -163,5 +166,6 @@ fn ifmt_from_text(text: &str) -> IfmtInput {
     IfmtInput {
         source: Some(LitStr::new(text, Span::call_site())),
         segments: vec![],
+        location: Default::default(),
     }
 }

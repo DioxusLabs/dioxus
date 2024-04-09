@@ -61,18 +61,20 @@ async fn hotreload_loop(mut socket: WebSocket, state: HotReloadState) -> anyhow:
 
             let Ok(msg) = msg else { break };
 
-            match msg {
-                HotReloadMsg::UpdateTemplate(template) => {
-                    Message::Text(serde_json::to_string(&template).unwrap())
-                }
-                HotReloadMsg::UpdateAsset(asset) => {
-                    Message::Text(format!("reload-asset: {}", asset.display()))
-                }
-                HotReloadMsg::Shutdown => {
-                    tracing::info!("🔥 Hot Reload WebSocket shutting down");
-                    break;
-                }
-            }
+            todo!()
+
+            // match msg {
+            //     HotReloadMsg::Update(template) => {
+            //         Message::Text(serde_json::to_string(&template).unwrap())
+            //     }
+            //     HotReloadMsg::UpdateAsset(asset) => {
+            //         Message::Text(format!("reload-asset: {}", asset.display()))
+            //     }
+            //     HotReloadMsg::Shutdown => {
+            //         tracing::info!("🔥 Hot Reload WebSocket shutting down");
+            //         break;
+            //     }
+            // }
         };
 
         socket.send(msg).await?;

@@ -22,47 +22,6 @@ pub struct Element {
     pub brace: syn::token::Brace,
 }
 
-impl Element {
-    /// Create a new element with the given name, attributes and children
-    pub fn new(
-        key: Option<IfmtInput>,
-        name: ElementName,
-        attributes: Vec<AttributeType>,
-        children: Vec<BodyNode>,
-        brace: syn::token::Brace,
-    ) -> Self {
-        // Deduplicate any attributes that can be combined
-        // For example, if there are two `class` attributes, combine them into one
-        let mut merged_attributes: Vec<AttributeType> = Vec::new();
-        for attr in &attributes {
-            let attr_index = merged_attributes
-                .iter()
-                .position(|a| a.matches_attr_name(attr));
-
-            if let Some(old_attr_index) = attr_index {
-                let old_attr = &mut merged_attributes[old_attr_index];
-
-                if let Some(combined) = old_attr.try_combine(attr) {
-                    *old_attr = combined;
-                }
-
-                continue;
-            }
-
-            merged_attributes.push(attr.clone());
-        }
-
-        Self {
-            name,
-            key,
-            attributes,
-            merged_attributes,
-            children,
-            brace,
-        }
-    }
-}
-
 impl Parse for Element {
     fn parse(stream: ParseStream) -> Result<Self> {
         let el_name = ElementName::parse(stream)?;
@@ -255,7 +214,34 @@ Like so:
             }
         }
 
-        Ok(Self::new(key, el_name, attributes, children, brace))
+        // Now merge the attributes into the cache
+        let mut merged_attributes: Vec<AttributeType> = Vec::new();
+        for attr in &attributes {
+            let attr_index = merged_attributes
+                .iter()
+                .position(|a| a.matches_attr_name(attr));
+
+            if let Some(old_attr_index) = attr_index {
+                let old_attr = &mut merged_attributes[old_attr_index];
+
+                if let Some(combined) = old_attr.try_combine(attr) {
+                    *old_attr = combined;
+                }
+
+                continue;
+            }
+
+            merged_attributes.push(attr.clone());
+        }
+
+        Ok(Element {
+            name: el_name,
+            key,
+            attributes,
+            merged_attributes,
+            children,
+            brace,
+        })
     }
 }
 

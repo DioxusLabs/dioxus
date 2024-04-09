@@ -189,8 +189,15 @@ fn hotreload_files(
 
         // If the file was hotreloaded, update the file map in place
         match rsx_file_map.update_rsx(path, &config.crate_dir) {
-            Ok(UpdateResult::UpdatedRsx(msgs)) => {
-                messages.extend(msgs.into_iter().map(HotReloadMsg::UpdateTemplate));
+            Ok(UpdateResult::UpdatedRsx {
+                templates,
+                changed_strings,
+            }) => {
+                messages.push(HotReloadMsg::Update {
+                    templates,
+                    changed_strings,
+                    assets: vec![],
+                });
             }
 
             // If the file was not updated, we need to do a full rebuild
@@ -308,7 +315,11 @@ fn attempt_css_reload(
         &CopyOptions::new().overwrite(true),
     );
 
-    messages.push(HotReloadMsg::UpdateAsset(local_path));
+    messages.push(HotReloadMsg::Update {
+        templates: Default::default(),
+        changed_strings: Default::default(),
+        assets: vec![local_path],
+    });
 
     Some(())
 }

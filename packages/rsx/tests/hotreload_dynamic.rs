@@ -6,7 +6,7 @@
 use dioxus_core::prelude::Template;
 use dioxus_rsx::{
     hot_reload::{diff_rsx, template_location, ChangedRsx, DiffResult, Empty},
-    tracked::HotreloadingResults,
+    hotreload::HotreloadingResults,
     CallBody, HotReloadingContext,
 };
 use proc_macro2::TokenStream;
@@ -30,37 +30,69 @@ fn hotreload_callbody<Ctx: HotReloadingContext>(
     Some(results)
 }
 
-#[test]
-fn tokens_generate_for_formatted_string() {
-    let old = quote! {
-        div { "asdasd {something}" }
-    };
-
-    let old: CallBody = syn::parse2(old).unwrap();
+fn prettyprint(tokens: TokenStream) -> String {
+    let old: CallBody = syn::parse2(tokens).unwrap();
     let as_file: syn::File = syn::parse_quote!(
         fn main() {
             #old
         }
     );
+    prettyplease::unparse(&as_file)
+}
 
-    println!("{}", prettyplease::unparse(&as_file));
+#[test]
+fn tokens_generate_for_formatted_string() {
+    let old = quote! {
+        div { "asdasd {something} homm {other} else" }
+    };
+
+    println!("{}", prettyprint(old));
 }
 
 #[test]
 fn formatted_strings() {
     let old = quote! {
         div {
-            "asdasd {something}"
+            "one {two} three {four} five {six}"
         }
     };
 
     let new_valid = quote! {
         div {
-            "asdasd {something} else"
+            "one {two} three {four} five {six} seven!"
         }
     };
 
     // The new template has a different formatting but can be hotreloaded
-    let changed = boilerplate(old, new_valid).unwrap();
+    let changed = boilerplate(old.clone(), new_valid).unwrap();
+    dbg!(changed);
+
+    let valid_mixed = quote! {
+        div {
+            "one {two} {four} {six} changeda"
+        }
+    };
+
+    let changed_mixed = boilerplate(old, valid_mixed).unwrap();
+    dbg!(changed_mixed);
+}
+
+#[test]
+fn formatted_props() {
+    let old = quote! {
+        Component {
+            class: "abc {hidden}"
+        }
+    };
+
+    let new_valid = quote! {
+        Component {
+            class: "abc {hidden} def"
+        }
+    };
+
+    println!("{}", prettyprint(old.clone()));
+    // The new template has a different formatting but can be hotreloaded
+    let changed = boilerplate(old.clone(), new_valid).unwrap();
     dbg!(changed);
 }

@@ -50,7 +50,7 @@ impl<'a> Writer<'a> {
         match node {
             BodyNode::Element(el) => self.write_element(el),
             BodyNode::Component(component) => self.write_component(component),
-            BodyNode::Text(text) => self.out.write_text(text),
+            BodyNode::Text(text) => self.out.write_text(&text.input),
             BodyNode::RawExpr(exp) => self.write_raw_expr(exp.span()),
             BodyNode::ForLoop(forloop) => self.write_for_loop(forloop),
             BodyNode::IfChain(ifchain) => self.write_if_chain(ifchain),
