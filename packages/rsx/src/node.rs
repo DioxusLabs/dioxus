@@ -3,13 +3,12 @@ use self::location::CallerLocation;
 use super::*;
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::quote;
 use syn::{
     braced,
-    parse::{Parse, ParseStream},
     spanned::Spanned,
     token::{self, Brace},
-    Expr, ExprIf, LitStr, Pat, Result,
+    Expr, ExprIf, LitStr, Pat,
 };
 
 /*
@@ -298,14 +297,14 @@ impl ToTokens for IfChain {
 
             let renderer = TemplateRenderer::as_tokens(then_branch, None);
 
-            body.append_all(quote! { #if_token #cond { Some({#renderer}) } });
+            body.append_all(quote! { #if_token #cond { {#renderer} } });
 
             if let Some(next) = else_if_branch {
                 body.append_all(quote! { else });
                 elif = Some(next);
             } else if let Some(else_branch) = else_branch {
                 let renderer = TemplateRenderer::as_tokens(else_branch, None);
-                body.append_all(quote! { else { Some({#renderer}) } });
+                body.append_all(quote! { else { {#renderer} } });
                 terminated = true;
                 break;
             } else {

@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 use super::*;
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::quote;
 use syn::{parse_quote, spanned::Spanned, Expr, ExprIf, Ident, LitStr};
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
