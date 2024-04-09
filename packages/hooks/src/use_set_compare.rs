@@ -1,14 +1,18 @@
+use std::hash::Hash;
+
+use dioxus_core::prelude::*;
+use dioxus_signals::{ReadOnlySignal, SetCompare};
+
 /// Creates a new SetCompare which efficiently tracks when a value changes to check if it is equal to a set of values.
 ///
 /// Generally, you shouldn't need to use this hook. Instead you can use [`crate::use_memo`]. If you have many values that you need to compare to a single value, this hook will change updates from O(n) to O(1) where n is the number of values you are comparing to.
 ///
 /// ```rust
 /// use dioxus::prelude::*;
-/// use dioxus_signals::*;
 ///
 /// fn App() -> Element {
 ///     let mut count = use_signal(|| 0);
-///     let compare = use_set_compare(move || count.value());
+///     let compare = use_set_compare(move || count());
 ///
 ///     render! {
 ///         for i in 0..10 {
@@ -25,9 +29,9 @@
 /// }
 ///
 /// #[component]
-/// fn Child(count: ReadOnlySignal<usize>, compare: SetCompare<usize>) -> Element {
-///     let active = use_equal(count, compare);
-///     if *active() {
+/// fn Child(i: usize, compare: SetCompare<usize>) -> Element {
+///     let active = use_set_compare_equal(i, compare);
+///     if active() {
 ///         render! { "Active" }
 ///     } else {
 ///         render! { "Inactive" }
@@ -43,7 +47,7 @@ pub fn use_set_compare<R: Eq + Hash>(f: impl FnMut() -> R + 'static) -> SetCompa
 #[must_use]
 pub fn use_set_compare_equal<R: Eq + Hash>(
     value: R,
-    compare: SetCompare<R>,
+    mut compare: SetCompare<R>,
 ) -> ReadOnlySignal<bool> {
-    use_hook(move || second.equal(value))
+    use_hook(move || compare.equal(value))
 }
