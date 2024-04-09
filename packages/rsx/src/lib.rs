@@ -16,25 +16,16 @@
 
 #[macro_use]
 mod errors;
-mod attribute;
-mod build_template;
-mod component;
-mod element;
 mod ifmt;
 mod location;
 mod node;
 pub mod tracked;
-mod util;
 
 pub(crate) mod context;
 pub(crate) mod renderer;
-mod sub_templates;
 
 // Re-export the namespaces into each other
-pub use attribute::*;
-pub use component::*;
 pub use context::DynamicContext;
-pub use element::*;
 pub use ifmt::*;
 pub use node::*;
 

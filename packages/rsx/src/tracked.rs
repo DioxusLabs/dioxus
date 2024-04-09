@@ -16,6 +16,8 @@
 //! - Hotreloading of literals is technically possible, but not currently implemented and would likely
 //!   require changes to core to work.
 
+use std::collections::HashMap;
+
 use crate::{intern, Component, ElementAttrName, ForLoop, IfChain, IfmtInput};
 use crate::{BodyNode, CallBody, DynamicContext, HotReloadingContext};
 use dioxus_core::{prelude::Template, TemplateAttribute, TemplateNode};
@@ -47,12 +49,41 @@ type NodePath = Vec<u8>;
 /// ```
 type AttributePath = Vec<u8>;
 
+type DynamicNodeIdx = usize;
+
 /// A result of hot reloading
 ///
 /// This contains information about what has changed so the hotreloader can apply the right changes
 #[non_exhaustive]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct HotreloadingResults {
     pub templates: Vec<Template>,
+
+    pub changed_strings: HashMap<DynamicNodeIdx, IfmtInput>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+struct TemplateDiff {
+    template: Template,
+
+    /// The IDX to the dynamic text node
+    changed_segments: HashMap<DynamicNodeIdx, FormattedSegment>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+struct FormattedSegment {
+    segment: Vec<FormattedSegmentType>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+enum FormattedSegmentType {
+    /// A literal string
+    Literal(String),
+
+    /// A formatted string
+    /// The dyamic pieces of the formatted String
+    /// IE  "asdasd {something} {else}" would have two pieces - `something` and `else`
+    Formatted(String),
 }
 
 impl HotreloadingResults {
@@ -63,6 +94,7 @@ impl HotreloadingResults {
     ) -> Option<Self> {
         let mut s = Self {
             templates: Default::default(),
+            changed_strings: Default::default(),
         };
         let templates = s.hotreload_callbody::<Ctx>(old, new, location)?;
         s.templates = templates;
@@ -249,7 +281,9 @@ impl HotreloadingResults {
                     // Text nodes can be dynamic nodes assuming they're formatted
                     // Eventually we might enable hotreloading of formatted text nodes too, but for now
                     // just check if the ifmt input is the same
-                    (BodyNode::Text(a), BodyNode::Text(b)) => a == b,
+                    (BodyNode::Text(a), BodyNode::Text(b)) => {
+                        self.hotreload_text_segment::<Ctx>(a, b, location, old_idx)?
+                    }
 
                     // Nothing special for raw expressions - if an expresison changed we couldn't find it anyway
                     (BodyNode::RawExpr(a), BodyNode::RawExpr(b)) => a == b,
@@ -300,6 +334,29 @@ impl HotreloadingResults {
         Some(node_paths)
     }
 
+    fn hotreload_text_segment<Ctx: HotReloadingContext>(
+        &mut self,
+        a: &IfmtInput,
+        b: &IfmtInput,
+        location: &'static str,
+        old_idx: usize,
+    ) -> Option<bool> {
+        if a.is_static() && b.is_static() {
+            return Some(a == b);
+        }
+
+        // Make sure all the dynamic segments of b show up in a
+        for segment in b.segments.iter() {
+            if segment.is_formatted() && !a.segments.contains(segment) {
+                return None;
+            }
+        }
+
+        self.changed_strings.insert(old_idx, b.clone());
+
+        Some(true)
+    }
+
     fn hotreload_forloop<Ctx: HotReloadingContext>(
         &mut self,
         a: &ForLoop,
@@ -337,7 +394,11 @@ impl HotreloadingResults {
             && a.prop_gen_args == b.prop_gen_args
             && a.key == b.key
             && a.fields == b.fields
-            && a.manual_props == b.manual_props;
+            && a.manual_props == b.manual_props
+            // todo: always just pass in dummy children so we can hotreload them
+            // either both empty or both non-empty
+            && (!a.children.is_empty() && !b.children.is_empty()
+                || a.children.is_empty() && b.children.is_empty());
 
         if matches {
             let new_location = make_new_location(location, old_idx + 1);
@@ -351,13 +412,14 @@ impl HotreloadingResults {
     ///
     /// This is somewhat complicated because we need to recurse into each conditional. Plus, each branch
     /// can't share the same "location" when not running under the compiler since the location is the
-    /// file+line+col+byte index of the original. When running under the compiler, we can use the byte index
+    /// file+line+col+index of the original. When running under the compiler, we can use the index
     /// to uniquely identify the template, but we can't do that without it.
     ///
     /// To cheat a bit, we're just going to add a fixed number to the template ID to push it out of the
     /// typical range of dynamic nodes. So an `if` chain with an ID of say 5, will have an ID of `5001`, `5002`, etc.
     ///
-    /// Again, byte indicies take care of this problem when running under the compiler, but, we have to cheat
+    /// todo: I'd like to share the idx logic with the DynamicContext itself so we have stable IDs
+    ///       between hotreloading and non-hotreloading.
     fn hotreload_ifchain<Ctx: HotReloadingContext>(
         &mut self,
         a: &IfChain,

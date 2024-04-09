@@ -234,6 +234,16 @@ pub enum Segment {
     Formatted(FormattedSegment),
 }
 
+impl Segment {
+    pub fn is_literal(&self) -> bool {
+        matches!(self, Segment::Literal(_))
+    }
+
+    pub fn is_formatted(&self) -> bool {
+        matches!(self, Segment::Formatted(_))
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct FormattedSegment {
     format_args: String,

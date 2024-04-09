@@ -2615,6 +2615,7 @@ dependencies = [
  "insta",
  "internment",
  "krates",
+ "prettyplease",
  "proc-macro2",
  "quote",
  "serde",

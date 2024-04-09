@@ -11,14 +11,20 @@ use syn::{
     Expr, ExprIf, LitStr, Pat,
 };
 
-/*
-Parse
--> div {}
--> Component {}
--> component()
--> "text {with_args}"
--> {(0..10).map(|f| rsx!("asd"))}  // <--- notice the curly braces
-*/
+mod attribute;
+mod component;
+mod element;
+mod forloop;
+mod ifchain;
+mod text_node;
+
+pub use attribute::*;
+pub use component::*;
+pub use element::*;
+pub use forloop::*;
+pub use ifchain::*;
+pub use text_node::*;
+
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum BodyNode {
     Element(Element),
@@ -163,9 +169,26 @@ impl ToTokens for BodyNode {
             }
 
             // Text is simple, just write it out
-            BodyNode::Text(txt) => tokens.append_all(quote! {
-                dioxus_core::DynamicNode::Text(dioxus_core::VText::new(#txt.to_string()))
-            }),
+            BodyNode::Text(txt) => {
+                if txt.is_static() {
+                    tokens.append_all(quote! {
+                        dioxus_core::DynamicNode::Text(dioxus_core::VText::new(#txt.to_string()))
+                    })
+                } else {
+                    // If the text is dynamic, we actually create a signal of the formatted segments
+                    // Crazy, right?
+
+                    // let location = template_location(txt.span().start());
+                    // let id = location.idx.get();
+                    tokens.append_all(quote! {
+                        dioxus_core::DynamicNode::Text(dioxus_core::VText::new({
+                            static THIS_ATTR_SIGNAL: dioxus_core::Signal<FmttedSegement> = dioxus_core::Signal::new(vec![]);
+                            THIS_ATTR_SIGNAL.set(vec![]);
+                            #txt
+                        }))
+                    })
+                }
+            }
 
             // Expressons too
             BodyNode::RawExpr(exp) => tokens.append_all(quote! {
