@@ -52,7 +52,7 @@ pub fn render(tokens: TokenStream) -> TokenStream {
 /// * Verifies the validity of your component.
 ///
 /// # Examples
-/// 
+///
 /// * Without props:
 /// ```rust
 /// #[component]
@@ -65,7 +65,19 @@ pub fn render(tokens: TokenStream) -> TokenStream {
 /// ```rust
 /// #[component]
 /// fn Greet(person: String) -> Element {
-///    rsx! { "hello, {person}" }
+///    rsx! { "hello, " {person} }
+/// }
+///
+/// // is roughly equivalent to
+///
+/// #[derive(PartialEq, Clone, Props)]
+/// struct GreetProps {
+///     person: String,
+/// }
+///
+/// #[component]
+/// fn Greet(GreetProps { person }: GreetProps) -> Element {
+///     rsx! { "hello, " {person} }
 /// }
 /// ```
 #[proc_macro_attribute]
