@@ -1655,9 +1655,7 @@ fn strip_option(type_: &Type) -> Option<Type> {
             segments_iter.next();
         }
         // The last segment should be Option
-        let Some(option_segment) = segments_iter.next() else {
-            return None;
-        };
+        let option_segment = segments_iter.next()?;
         if option_segment.ident == "Option" && segments_iter.next().is_none() {
             // It should have a single generic argument
             if let PathArguments::AngleBracketed(generic_arg) = &option_segment.arguments {
