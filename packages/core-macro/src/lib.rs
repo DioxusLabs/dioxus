@@ -47,41 +47,25 @@ pub fn render(tokens: TokenStream) -> TokenStream {
     rsx(tokens)
 }
 
-/// Streamlines component creation.
-/// This is the recommended way of creating components,
-/// though you might want lower-level control with more advanced uses.
-///
-/// # Arguments
-/// * `no_case_check` - Doesn't enforce `PascalCase` on your component names.
-/// **This will be removed/deprecated in a future update in favor of a more complete Clippy-backed linting system.**
-/// The reasoning behind this is that Clippy allows more robust and powerful lints, whereas
-/// macros are extremely limited.
-///
-/// # Features
-/// This attribute:
-/// * Enforces that your component uses `PascalCase`.
-/// No warnings are generated for the `PascalCase`
-/// function name, but everything else will still raise a warning if it's incorrectly `PascalCase`.
-/// Does not disable warnings anywhere else, so if you, for example,
-/// accidentally don't use `snake_case`
-/// for a variable name in the function, the compiler will still warn you.
-/// * Automatically uses `#[inline_props]` if there's more than 1 parameter in the function.
+/// * Silences warnings for the `PascalCase` function name.
+/// * Seamlessly creates a props struct if there's more than 1 parameter in the function.
 /// * Verifies the validity of your component.
 ///
 /// # Examples
+/// 
 /// * Without props:
-/// ```rust,ignore
+/// ```rust
 /// #[component]
-/// fn GreetBob() -> Element {
-///     rsx! { "hello, bob" }
+/// fn Greet() -> Element {
+///     rsx! { "hello, someone" }
 /// }
 /// ```
 ///
 /// * With props:
-/// ```rust,ignore
+/// ```rust
 /// #[component]
-/// fn GreetBob(bob: String) -> Element {
-///    rsx! { "hello, {bob}" }
+/// fn Greet(person: String) -> Element {
+///    rsx! { "hello, {person}" }
 /// }
 /// ```
 #[proc_macro_attribute]
