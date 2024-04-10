@@ -22,7 +22,7 @@ impl ToTokens for ComponentBody {
         // If there's only one input and the input is `props: Props`, we don't need to generate a props struct
         // Just attach the non_snake_case attribute to the function
         // eventually we'll dump this metadata into devtooling that lets us find all these components
-        // 
+        //
         // Components can also use the struct pattern to "inline" their props.
         // Freya uses this a bunch (because it's clean),
         // e.g. `fn Navbar(NavbarProps { title }: NavbarProps)` was previously being incorrectly parsed
@@ -268,7 +268,7 @@ fn prefer_camel_case_for_fn_ident(item_fn: &ItemFn) -> ItemFn {
     let block = &item_fn.block;
 
     clone.attrs.push(parse_quote! { #[allow(non_snake_case)] });
-    
+
     clone.block = parse_quote! {
         {
             { struct #ident {} }
