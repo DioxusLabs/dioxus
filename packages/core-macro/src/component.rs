@@ -22,12 +22,13 @@ impl ToTokens for ComponentBody {
         // If there's only one input and the input is `props: Props`, we don't need to generate a props struct
         // Just attach the non_snake_case attribute to the function
         // eventually we'll dump this metadata into devtooling that lets us find all these components
-        if self.is_explicit_props_ident() {
+        // 
+        // Components can also use the struct pattern to "inline" their props.
+        // Freya uses this a bunch (because it's clean),
+        // e.g. `fn Navbar(NavbarProps { title }: NavbarProps)` was previously being incorrectly parsed
+        if self.is_explicit_props_ident() || self.has_struct_parameter_pattern() {
             let comp_fn = &self.item_fn;
-            tokens.append_all(quote! {
-                #[allow(non_snake_case)]
-                #comp_fn
-            });
+            tokens.append_all(allow_snake_case_for_fn_ident(comp_fn).into_token_stream());
             return;
         }
 
@@ -53,8 +54,6 @@ impl ToTokens for ComponentBody {
 
         tokens.append_all(quote! {
             #props_struct
-
-            #[allow(non_snake_case)]
             #comp_fn
         });
     }
@@ -75,9 +74,9 @@ impl ComponentBody {
             ident: fn_ident,
             generics,
             output: fn_output,
-            asyncness,
             ..
         } = sig;
+
         let Generics { where_clause, .. } = generics;
         let (_, ty_generics, _) = generics.split_for_impl();
 
@@ -86,8 +85,6 @@ impl ComponentBody {
 
         // We pull in the field names from the original function signature, but need to strip off the mutability
         let struct_field_names = inputs.iter().filter_map(rebind_mutability);
-
-        let props_docs = self.props_docs(inputs.iter().skip(1).collect());
 
         // Don't generate the props argument if there are no inputs
         // This means we need to skip adding the argument to the function signature, and also skip the expanded struct
@@ -100,12 +97,15 @@ impl ComponentBody {
             false => quote! { let #struct_ident { #(#struct_field_names),* } = __props; },
         };
 
+        // The extra nest is for the snake case warning to kick back in
         parse_quote! {
             #(#attrs)*
-            #(#props_docs)*
-            #asyncness #vis fn #fn_ident #generics (#props_ident) #fn_output #where_clause {
-                #expanded_struct
-                #block
+            #[allow(non_snake_case)]
+            #vis fn #fn_ident #generics (#props_ident) #fn_output #where_clause {
+                {
+                    #expanded_struct
+                    #block
+                }
             }
         }
     }
@@ -139,80 +139,9 @@ impl ComponentBody {
         }
     }
 
-    /// Convert a list of function arguments into a list of doc attributes for the props struct
-    ///
-    /// This lets us generate set of attributes that we can apply to the props struct to give it a nice docstring.
-    fn props_docs(&self, inputs: Vec<&FnArg>) -> Vec<Attribute> {
-        let fn_ident = &self.item_fn.sig.ident;
-
-        if inputs.len() <= 1 {
-            return Vec::new();
-        }
-
-        let arg_docs = inputs
-            .iter()
-            .filter_map(|f| build_doc_fields(f))
-            .collect::<Vec<_>>();
-
-        let mut props_docs = Vec::with_capacity(5);
-        let props_def_link = fn_ident.to_string() + "Props";
-        let header =
-            format!("# Props\n*For details, see the [props struct definition]({props_def_link}).*");
-
-        props_docs.push(parse_quote! {
-            #[doc = #header]
-        });
-
-        for arg in arg_docs {
-            let DocField {
-                arg_name,
-                arg_type,
-                deprecation,
-                input_arg_doc,
-            } = arg;
-
-            let arg_name = arg_name.into_token_stream().to_string();
-            let arg_type = crate::utils::format_type_string(arg_type);
-
-            let input_arg_doc = keep_up_to_n_consecutive_chars(input_arg_doc.trim(), 2, '\n')
-                .replace("\n\n", "</p><p>");
-            let prop_def_link = format!("{props_def_link}::{arg_name}");
-            let mut arg_doc = format!("- [`{arg_name}`]({prop_def_link}) : `{arg_type}`");
-
-            if let Some(deprecation) = deprecation {
-                arg_doc.push_str("<p>👎 Deprecated");
-
-                if let Some(since) = deprecation.since {
-                    arg_doc.push_str(&format!(" since {since}"));
-                }
-
-                if let Some(note) = deprecation.note {
-                    let note = keep_up_to_n_consecutive_chars(&note, 1, '\n').replace('\n', " ");
-                    let note = keep_up_to_n_consecutive_chars(&note, 1, '\t').replace('\t', " ");
-
-                    arg_doc.push_str(&format!(": {note}"));
-                }
-
-                arg_doc.push_str("</p>");
-
-                if !input_arg_doc.is_empty() {
-                    arg_doc.push_str("<hr/>");
-                }
-            }
-
-            if !input_arg_doc.is_empty() {
-                arg_doc.push_str(&format!("<p>{input_arg_doc}</p>"));
-            }
-
-            props_docs.push(parse_quote! { #[doc = #arg_doc] });
-        }
-
-        props_docs
-    }
-
     fn is_explicit_props_ident(&self) -> bool {
-        if self.item_fn.sig.inputs.len() == 1 {
-            if let FnArg::Typed(PatType { pat, .. }) = &self.item_fn.sig.inputs[0] {
+        if let Some(first_input) = self.item_fn.sig.inputs.first() {
+            if let FnArg::Typed(PatType { pat, .. }) = &first_input {
                 if let Pat::Ident(ident) = pat.as_ref() {
                     return ident.ident == "props";
                 }
@@ -221,65 +150,18 @@ impl ComponentBody {
 
         false
     }
-}
 
-struct DocField<'a> {
-    arg_name: &'a Pat,
-    arg_type: &'a Type,
-    deprecation: Option<crate::utils::DeprecatedAttribute>,
-    input_arg_doc: String,
-}
-
-fn build_doc_fields(f: &FnArg) -> Option<DocField> {
-    let FnArg::Typed(pt) = f else { unreachable!() };
-
-    let arg_doc = pt
-        .attrs
-        .iter()
-        .filter_map(|attr| {
-            // TODO: Error reporting
-            // Check if the path of the attribute is "doc"
-            if !is_attr_doc(attr) {
-                return None;
-            };
-
-            let Meta::NameValue(meta_name_value) = &attr.meta else {
-                return None;
-            };
-
-            let Expr::Lit(doc_lit) = &meta_name_value.value else {
-                return None;
-            };
-
-            let Lit::Str(doc_lit_str) = &doc_lit.lit else {
-                return None;
-            };
-
-            Some(doc_lit_str.value())
-        })
-        .fold(String::new(), |mut doc, next_doc_line| {
-            doc.push('\n');
-            doc.push_str(&next_doc_line);
-            doc
-        });
-
-    Some(DocField {
-        arg_name: &pt.pat,
-        arg_type: &pt.ty,
-        deprecation: pt.attrs.iter().find_map(|attr| {
-            if attr.path() != &parse_quote!(deprecated) {
-                return None;
+    fn has_struct_parameter_pattern(&self) -> bool {
+        if let Some(first_input) = self.item_fn.sig.inputs.first() {
+            if let FnArg::Typed(PatType { pat, .. }) = &first_input {
+                if matches!(pat.as_ref(), Pat::Struct(_)) {
+                    return true;
+                }
             }
+        }
 
-            let res = crate::utils::DeprecatedAttribute::from_meta(&attr.meta);
-
-            match res {
-                Err(e) => panic!("{}", e.to_string()),
-                Ok(v) => Some(v),
-            }
-        }),
-        input_arg_doc: arg_doc,
-    })
+        false
+    }
 }
 
 fn validate_component_fn_signature(item_fn: &ItemFn) -> Result<()> {
@@ -378,35 +260,19 @@ fn rebind_mutability(f: &FnArg) -> Option<TokenStream> {
     Some(quote!(mut  #pat))
 }
 
-/// Checks if the attribute is a `#[doc]` attribute.
-fn is_attr_doc(attr: &Attribute) -> bool {
-    attr.path() == &parse_quote!(doc)
-}
+/// Takes a function and returns a clone of it where a non snake case identifier is accepted,
+/// but non snake case identifiers in the function body are not.
+fn allow_snake_case_for_fn_ident(item_fn: &ItemFn) -> ItemFn {
+    let mut clone = item_fn.clone();
+    let block = &item_fn.block;
 
-fn keep_up_to_n_consecutive_chars(
-    input: &str,
-    n_of_consecutive_chars_allowed: usize,
-    target_char: char,
-) -> String {
-    let mut output = String::new();
-    let mut prev_char: Option<char> = None;
-    let mut consecutive_count = 0;
-
-    for c in input.chars() {
-        match prev_char {
-            Some(prev) if c == target_char && prev == target_char => {
-                if consecutive_count < n_of_consecutive_chars_allowed {
-                    output.push(c);
-                    consecutive_count += 1;
-                }
-            }
-            _ => {
-                output.push(c);
-                prev_char = Some(c);
-                consecutive_count = 1;
-            }
+    clone.attrs.push(parse_quote! { #[allow(non_snake_case)] });
+    
+    clone.block = parse_quote! {
+        {
+            #block
         }
-    }
+    };
 
-    output
+    clone
 }
