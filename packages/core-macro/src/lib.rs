@@ -47,7 +47,7 @@ pub fn render(tokens: TokenStream) -> TokenStream {
     rsx(tokens)
 }
 
-/// * Silences warnings for the `PascalCase` function name.
+/// * Makes the compiler prefer an `UpperCamelCase` function identifier.
 /// * Seamlessly creates a props struct if there's more than 1 parameter in the function.
 /// * Verifies the validity of your component.
 ///
