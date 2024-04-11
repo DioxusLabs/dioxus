@@ -108,9 +108,11 @@ pub fn remove_future(id: Task) {
 
 /// Store a value between renders. The foundational hook for all other hooks.
 ///
-/// Accepts an `initializer` closure, which is run on the first use of the hook (typically the initial render). The return value of this closure is stored for the lifetime of the component, and a mutable reference to it is provided on every render as the return value of `use_hook`.
+/// Accepts an `initializer` closure, which is run on the first use of the hook (typically the initial render).
+/// `use_hook` will return a clone of the value on every render.
 ///
-/// When the component is unmounted (removed from the UI), the value is dropped. This means you can return a custom type and provide cleanup code by implementing the [`Drop`] trait
+/// In order to clean up resources you would need to implement the [`Drop`] trait for an inner value stored in a RC or similar (Signals for instance),
+/// as these only drop their inner value once all references have been dropped, which only happens when the component is dropped.
 ///
 /// # Example
 ///
@@ -120,6 +122,31 @@ pub fn remove_future(id: Task) {
 /// // prints a greeting on the initial render
 /// pub fn use_hello_world() {
 ///     use_hook(|| println!("Hello, world!"));
+/// }
+/// ```
+///
+/// # Custom Hook Example
+///
+/// ```
+/// use dioxus_core::use_hook;
+///
+/// struct InnerCustomState(usize);
+///
+/// impl Drop for InnerCustomState {
+///     fn drop(&mut self){
+///         println!("Component has been dropped.");
+///     }
+/// }
+///
+/// #[derive(Clone, Copy)]
+/// struct CustomState {
+///     inner: Signal<InnerCustomState>
+/// }
+///
+/// pub fn use_custom_state() -> CustomState {
+///     use_hook(|| CustomState {
+///         inner: Signal::new(InnerCustomState)
+///     })
 /// }
 /// ```
 pub fn use_hook<State: Clone + 'static>(initializer: impl FnOnce() -> State) -> State {
