@@ -11,7 +11,7 @@ pub struct ComponentBody {
 impl Parse for ComponentBody {
     fn parse(input: ParseStream) -> Result<Self> {
         let item_fn: ItemFn = input.parse()?;
-        validate_component_fn_signature(&item_fn)?;
+        validate_component_fn(&item_fn)?;
         Ok(Self { item_fn })
     }
 }
@@ -41,7 +41,7 @@ impl ToTokens for ComponentBody {
             // No props declared, so we don't need to generate a props struct
             true => quote! {},
 
-            // Props declared, so we generate a props struct and thatn also attach the doc attributes to it
+            // Props declared, so we generate a props struct and then also attach the doc attributes to it
             false => {
                 let doc = format!("Properties for the [`{}`] component.", &comp_fn.sig.ident);
                 let props_struct = self.props_struct();
@@ -78,33 +78,26 @@ impl ComponentBody {
         } = sig;
 
         let Generics { where_clause, .. } = generics;
-        let (_, ty_generics, _) = generics.split_for_impl();
 
         // We generate a struct with the same name as the component but called `Props`
         let struct_ident = Ident::new(&format!("{fn_ident}Props"), fn_ident.span());
 
         // We pull in the field names from the original function signature, but need to strip off the mutability
         let struct_field_names = inputs.iter().filter_map(rebind_mutability);
-
-        // Don't generate the props argument if there are no inputs
-        // This means we need to skip adding the argument to the function signature, and also skip the expanded struct
-        let props_ident = match inputs.is_empty() {
-            true => quote! {},
-            false => quote! { mut __props: #struct_ident #ty_generics },
-        };
-        let expanded_struct = match inputs.is_empty() {
-            true => quote! {},
-            false => quote! { let #struct_ident { #(#struct_field_names),* } = __props; },
+        
+        let inlined_props_argument = if inputs.is_empty() {
+            quote! {}
+        } else {
+            quote! { #struct_ident { #(#struct_field_names),* }: #struct_ident }
         };
 
         // The extra nest is for the snake case warning to kick back in
         parse_quote! {
             #(#attrs)*
             #[allow(non_snake_case)]
-            #vis fn #fn_ident #generics (#props_ident) #fn_output #where_clause {
+            #vis fn #fn_ident #generics (#inlined_props_argument) #fn_output #where_clause {
                 {
                     { struct #fn_ident {} }
-                    #expanded_struct
                     #block
                 }
             }
@@ -161,7 +154,7 @@ impl ComponentBody {
     }
 }
 
-fn validate_component_fn_signature(item_fn: &ItemFn) -> Result<()> {
+fn validate_component_fn(item_fn: &ItemFn) -> Result<()> {
     // Do some validation....
     // 1. Ensure the component returns *something*
     if item_fn.sig.output == ReturnType::Default {
@@ -254,7 +247,7 @@ fn rebind_mutability(f: &FnArg) -> Option<TokenStream> {
         pat_ident.mutability = None;
     }
 
-    Some(quote!(mut  #pat))
+    Some(quote!(mut #pat))
 }
 
 /// Takes a function and returns a clone of it where an `UpperCamelCase` identifier is preferred by the compiler.
