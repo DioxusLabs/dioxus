@@ -281,7 +281,7 @@ impl Scope {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```rust
     /// use dioxus_core::use_hook;
     ///
     /// // prints a greeting on the initial render
@@ -292,7 +292,7 @@ impl Scope {
     ///
     /// # Custom Hook Example
     ///
-    /// ```
+    /// ```rust
     /// use dioxus_core::use_hook;
     ///
     /// struct InnerCustomState(usize);
