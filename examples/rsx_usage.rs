@@ -197,12 +197,6 @@ fn app() -> Element {
             Label { text: "hello geneirc world!" }
             Label { text: 99.9 }
 
-            // Lowercase components work too, as long as they are access using a path
-            baller::lowercase_component {}
-
-            // For in-scope lowercase components, use the `self` keyword
-            self::lowercase_helper {}
-
             // helper functions
             // Anything that implements IntoVnode can be dropped directly into Rsx
             {helper("hello world!")}
