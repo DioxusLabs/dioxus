@@ -282,7 +282,7 @@ impl Scope {
     /// # Example
     ///
     /// ```rust
-    /// use dioxus_core::use_hook;
+    /// use dioxus::prelude::*;
     ///
     /// // prints a greeting on the initial render
     /// pub fn use_hello_world() {
@@ -293,9 +293,9 @@ impl Scope {
     /// # Custom Hook Example
     ///
     /// ```rust
-    /// use dioxus_core::use_hook;
+    /// use dioxus::prelude::*;
     ///
-    /// struct InnerCustomState(usize);
+    /// pub struct InnerCustomState(usize);
     ///
     /// impl Drop for InnerCustomState {
     ///     fn drop(&mut self){
@@ -304,7 +304,7 @@ impl Scope {
     /// }
     ///
     /// #[derive(Clone, Copy)]
-    /// struct CustomState {
+    /// pub struct CustomState {
     ///     inner: Signal<InnerCustomState>
     /// }
     ///

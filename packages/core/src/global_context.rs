@@ -117,7 +117,7 @@ pub fn remove_future(id: Task) {
 /// # Example
 ///
 /// ```rust
-/// use dioxus_core::use_hook;
+/// use dioxus::prelude::*;
 ///
 /// // prints a greeting on the initial render
 /// pub fn use_hello_world() {
@@ -128,9 +128,9 @@ pub fn remove_future(id: Task) {
 /// # Custom Hook Example
 ///
 /// ```rust
-/// use dioxus_core::use_hook;
+/// use dioxus::prelude::*;
 ///
-/// struct InnerCustomState(usize);
+/// pub struct InnerCustomState(usize);
 ///
 /// impl Drop for InnerCustomState {
 ///     fn drop(&mut self){
@@ -139,7 +139,7 @@ pub fn remove_future(id: Task) {
 /// }
 ///
 /// #[derive(Clone, Copy)]
-/// struct CustomState {
+/// pub struct CustomState {
 ///     inner: Signal<InnerCustomState>
 /// }
 ///
