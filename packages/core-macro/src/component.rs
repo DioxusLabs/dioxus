@@ -141,11 +141,9 @@ impl ComponentBody {
     }
 
     fn is_explicit_props_ident(&self) -> bool {
-        if let Some(first_input) = self.item_fn.sig.inputs.first() {
-            if let FnArg::Typed(PatType { pat, .. }) = &first_input {
-                if let Pat::Ident(ident) = pat.as_ref() {
-                    return ident.ident == "props";
-                }
+        if let Some(FnArg::Typed(PatType { pat, .. })) = self.item_fn.sig.inputs.first() {
+            if let Pat::Ident(ident) = pat.as_ref() {
+                return ident.ident == "props";
             }
         }
 
@@ -153,11 +151,9 @@ impl ComponentBody {
     }
 
     fn has_struct_parameter_pattern(&self) -> bool {
-        if let Some(first_input) = self.item_fn.sig.inputs.first() {
-            if let FnArg::Typed(PatType { pat, .. }) = &first_input {
-                if matches!(pat.as_ref(), Pat::Struct(_)) {
-                    return true;
-                }
+        if let Some(FnArg::Typed(PatType { pat, .. })) = self.item_fn.sig.inputs.first() {
+            if matches!(pat.as_ref(), Pat::Struct(_)) {
+                return true;
             }
         }
 
