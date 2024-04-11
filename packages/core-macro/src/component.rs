@@ -78,17 +78,18 @@ impl ComponentBody {
         } = sig;
 
         let Generics { where_clause, .. } = generics;
+        let (_, impl_generics, _) = generics.split_for_impl();
 
         // We generate a struct with the same name as the component but called `Props`
         let struct_ident = Ident::new(&format!("{fn_ident}Props"), fn_ident.span());
 
         // We pull in the field names from the original function signature, but need to strip off the mutability
         let struct_field_names = inputs.iter().filter_map(rebind_mutability);
-        
+
         let inlined_props_argument = if inputs.is_empty() {
             quote! {}
         } else {
-            quote! { #struct_ident { #(#struct_field_names),* }: #struct_ident }
+            quote! { #struct_ident { #(#struct_field_names),* }: #struct_ident #impl_generics }
         };
 
         // The extra nest is for the snake case warning to kick back in
