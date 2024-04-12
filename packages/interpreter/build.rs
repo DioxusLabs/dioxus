@@ -7,6 +7,7 @@ fn main() {
     println!("cargo:rerun-if-changed=src/ts/serialize.ts");
     println!("cargo:rerun-if-changed=src/ts/set_attribute.ts");
     println!("cargo:rerun-if-changed=src/ts/common.ts");
+    println!("cargo:rerun-if-changed=src/ts/eval.ts");
 
     // Compute the hash of the ts files
     let hash = hash_ts_files();
@@ -22,6 +23,7 @@ fn main() {
     gen_bindings("common", "common");
     gen_bindings("native", "native");
     gen_bindings("core", "core");
+    gen_bindings("eval", "eval");
 
     std::fs::write("src/js/hash.txt", hash.to_string()).unwrap();
 }
@@ -34,6 +36,7 @@ fn hash_ts_files() -> u128 {
         include_str!("src/ts/common.ts"),
         include_str!("src/ts/native.ts"),
         include_str!("src/ts/core.ts"),
+        include_str!("src/ts/eval.ts"),
     ];
 
     // Let's make the dumbest hasher by summing the bytes of the files

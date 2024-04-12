@@ -19,7 +19,7 @@ class Channel {
         this.pending.push(data);
     }
 
-    recv(): Promise<any> {
+    async recv(): Promise<any> {
         return new Promise((resolve, _reject) => {
             // If data already exists, resolve immediately
             if (this.pending.length > 0) {
@@ -33,48 +33,31 @@ class Channel {
 }
 
 export class Dioxus {
-    sender: Channel;
-    receiver: Channel;
-    sendCallback: (data: any) => void;
-    returnCallback: (data: any) => void;
+    js_to_rust: Channel;
+    rust_to_js: Channel;
 
-    constructor(sendCallback, returnCallback) {
-      this.sendCallback = sendCallback;
-      this.returnCallback = returnCallback;
-      this.promiseResolve = null;
-      this.received = [];
+    constructor() {
+      this.js_to_rust = new Channel();
+      this.rust_to_js = new Channel();
     }
   
     // Receive message from Rust
-    recv() {
-      return new Promise((resolve, _reject) => {
-        // If data already exists, resolve immediately
-        let data = this.received.shift();
-        if (data) {
-          resolve(data);
-          return;
-        }
-  
-        // Otherwise set a resolve callback
-        this.promiseResolve = resolve;
-      });
+    async recv() {
+      return await this.rust_to_js.recv();
     }
   
     // Send message to rust.
-    send(data) {
-      this.sendCallback(data);
+    send(data: any) {
+      this.js_to_rust.send(data)
     }
   
-    // Internal rust send
-    rustSend(data) {
-      // If a promise is waiting for data, resolve it, and clear the resolve callback
-      if (this.promiseResolve) {
-        this.promiseResolve(data);
-        this.promiseResolve = null;
-        return;
-      }
-  
-      // Otherwise add the data to a queue
-      this.received.push(data);
+    // Send data from rust to javascript
+    rustSend(data: any) {
+      this.rust_to_js.send(data)
+    }
+
+    // Receive data sent from javascript in rust
+    async rustRecv(): Promise<any> {
+      return await this.js_to_rust.recv();
     }
   }
