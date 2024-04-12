@@ -4,6 +4,8 @@ use js_sys::Function;
 use serde_json::Value;
 use std::{rc::Rc, str::FromStr};
 use wasm_bindgen::prelude::*;
+use std::future::Future;
+use std::pin::Pin;
 use dioxus_interpreter_js::eval::DioxusChannel;
 
 /// Provides the WebEvalProvider through [`cx.provide_context`].
@@ -31,6 +33,7 @@ const PROMISE_WRAPPER: &str = r#"
 /// Represents a web-target's JavaScript evaluator.
 struct WebEvaluator {
     channels: DioxusChannel,
+    next_future: Option<Pin<Box<dyn Future<Output = Result<serde_json::Value, EvalError>>>>>, 
     result: Option<Result<serde_json::Value, EvalError>>,
 }
 
@@ -70,6 +73,7 @@ impl WebEvaluator {
         GenerationalBox::leak(Box::new(Self {
             channels,
             result: Some(result),
+            next_future: None,
         })) 
     }
 }
@@ -103,14 +107,23 @@ impl Evaluator for WebEvaluator {
         &mut self,
         context: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<serde_json::Value, EvalError>> {
-        use futures_util::Future;
-        let fut = self.channels.rust_recv();
-        let pinned = std::pin::pin!(fut);
-        let res = pinned.poll(context);
-        res.map(|data| {
-            serde_wasm_bindgen::from_value::<serde_json::Value>(data).map_err(|err|{
-                EvalError::Communication(err.to_string())
-            })
-        })
+        if self.next_future.is_none() {
+            let channels: DioxusChannel = self.channels.clone().into();
+            let pinned = Box::pin(async move {
+                let fut = channels.rust_recv();
+                let data = fut.await;
+                serde_wasm_bindgen::from_value::<serde_json::Value>(data).map_err(|err|{
+                    EvalError::Communication(err.to_string())
+                })
+            }); 
+            self.next_future = Some(pinned);
+        }
+        let fut = self.next_future.as_mut().unwrap();
+        let mut pinned = std::pin::pin!(fut);
+        let result = pinned.as_mut().poll(context);
+        if result.is_ready() {
+            self.next_future = None;
+        }
+        result
     }
 }
