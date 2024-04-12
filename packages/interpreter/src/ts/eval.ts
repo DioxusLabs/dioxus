@@ -32,7 +32,7 @@ class Channel {
     }
 }
 
-export class Dioxus {
+export class DioxusChannel {
     js_to_rust: Channel;
     rust_to_js: Channel;
 

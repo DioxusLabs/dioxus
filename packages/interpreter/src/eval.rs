@@ -3,7 +3,7 @@ pub const EVAL_JS: &str = include_str!("./js/eval.js");
 
 
 #[cfg(feature = "webonly")]
-#[wasm_bindgen::prelude::wasm_bindgen]
+#[wasm_bindgen::prelude::wasm_bindgen(module = "/src/js/eval.js")]
 extern "C" {
     pub type DioxusChannel;
 
