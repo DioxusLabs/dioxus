@@ -528,7 +528,7 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<CargoBuildResult> {
                 }
             }
             Message::CompilerArtifact(artifact) => {
-                pb.set_message(format!("⚙️ Compiling {} ", artifact.package_id));
+                pb.set_message(format!("⚙ Compiling {} ", artifact.package_id));
                 pb.tick();
                 if let Some(executable) = artifact.executable {
                     output_location = Some(executable.into());
@@ -539,9 +539,9 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<CargoBuildResult> {
             }
             Message::BuildFinished(finished) => {
                 if finished.success {
-                    tracing::info!("👑 Build done.");
+                    pb.finish_with_message("👑 Build done.");
                 } else {
-                    tracing::info!("❌ Build failed.");
+                    pb.finish_with_message("❌ Build failed.");
                     return Err(anyhow::anyhow!("Build failed"));
                 }
             }
