@@ -43,7 +43,7 @@ use std::{cell::Cell, future::Future, rc::Rc};
 ///        // conditionally render elements based off if it's future
 ///        // finished (Some(Ok(_)), errored Some(Err(_)),
 ///        // or is still running (None)
-///        match current_weather.value() {
+///        match *current_weather.value().read() {
 ///            Some(Ok(weather)) => rsx! { WeatherElement { weather } },
 ///            Some(Err(e)) => rsx! { p { "Loading weather failed, {e}" } },
 ///            None =>  rsx! { p { "Loading..." } }
