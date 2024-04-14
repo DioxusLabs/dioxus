@@ -953,6 +953,12 @@ impl IntoAttributeValue for AttributeValue {
     }
 }
 
+impl IntoAttributeValue for Cow<'static, str> {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Text(self)
+    }
+}
+
 impl IntoAttributeValue for &'static str {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Text(self.into())
