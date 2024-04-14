@@ -55,13 +55,13 @@ fn attrs_cycle() {
             AssignId { path: &[0], id: ElementId(3) },
             SetAttribute {
                 name: "class",
-                value: dioxus_core::AttributeValue::Text("3".to_string()),
+                value: dioxus_core::AttributeValue::Text("3".into()),
                 id: ElementId(3),
                 ns: None
             },
             SetAttribute {
                 name: "id",
-                value: dioxus_core::AttributeValue::Text("3".to_string()),
+                value: dioxus_core::AttributeValue::Text("3".into()),
                 id: ElementId(3),
                 ns: None
             },
