@@ -1,4 +1,7 @@
-use std::process::Command;
+use std::{
+    hash::{DefaultHasher, Hasher},
+    process::Command,
+};
 
 fn main() {
     // If any TS changes, re-run the build script
@@ -8,6 +11,7 @@ fn main() {
     println!("cargo:rerun-if-changed=src/ts/set_attribute.ts");
     println!("cargo:rerun-if-changed=src/ts/common.ts");
     println!("cargo:rerun-if-changed=src/ts/eval.ts");
+    println!("cargo:rerun-if-changed=src/ts/native_eval.ts");
 
     // Compute the hash of the ts files
     let hash = hash_ts_files();
@@ -24,35 +28,29 @@ fn main() {
     gen_bindings("native", "native");
     gen_bindings("core", "core");
     gen_bindings("eval", "eval");
+    gen_bindings("native_eval", "native_eval");
 
     std::fs::write("src/js/hash.txt", hash.to_string()).unwrap();
 }
 
 /// Hashes the contents of a directory
-fn hash_ts_files() -> u128 {
-    let mut out = 0;
-
+fn hash_ts_files() -> u64 {
     let files = [
         include_str!("src/ts/common.ts"),
         include_str!("src/ts/native.ts"),
         include_str!("src/ts/core.ts"),
         include_str!("src/ts/eval.ts"),
+        include_str!("src/ts/native_eval.ts"),
     ];
 
-    // Let's make the dumbest hasher by summing the bytes of the files
-    // The location is multiplied by the byte value to make sure that the order of the bytes matters
-    let mut idx = 0;
+    let mut hash = DefaultHasher::new();
     for file in files {
         // windows + git does a weird thing with line endings, so we need to normalize them
         for line in file.lines() {
-            idx += 1;
-            for byte in line.bytes() {
-                idx += 1;
-                out += (byte as u128) * (idx as u128);
-            }
+            hash.write(line.as_bytes());
         }
     }
-    out
+    hash.finish()
 }
 
 // okay...... so tsc might fail if the user doesn't have it installed

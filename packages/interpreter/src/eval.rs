@@ -1,5 +1,5 @@
 /// Code for the Dioxus channel used to communicate between the dioxus and javascript code
-pub const EVAL_JS: &str = include_str!("./js/eval.js");
+pub const NATIVE_EVAL_JS: &str = include_str!("./js/native_eval.js");
 
 #[cfg(feature = "webonly")]
 #[wasm_bindgen::prelude::wasm_bindgen]
@@ -46,10 +46,4 @@ extern "C" {
 
     #[wasm_bindgen(method, js_name = "rustRecv")]
     pub async fn rust_recv(this: &WeakDioxusChannel) -> wasm_bindgen::JsValue;
-
-    #[wasm_bindgen(method)]
-    pub fn send(this: &WeakDioxusChannel, value: wasm_bindgen::JsValue);
-
-    #[wasm_bindgen(method)]
-    pub async fn recv(this: &WeakDioxusChannel) -> wasm_bindgen::JsValue;
 }

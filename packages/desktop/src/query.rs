@@ -7,45 +7,6 @@ use slab::Slab;
 use std::{cell::RefCell, rc::Rc};
 use thiserror::Error;
 
-/*
-todo:
-- write this in the interpreter itself rather than in blobs of inline javascript...
-- it could also be simpler, probably?
-*/
-const DIOXUS_CODE: &str = r#"
-let dioxus = {
-    recv: function () {
-        return new Promise((resolve, _reject) => {
-            // Ever 50 ms check for new data
-            let timeout = setTimeout(() => {
-                let __msg = null;
-                while (true) {
-                    let __data = _message_queue.shift();
-                    if (__data) {
-                        __msg = __data;
-                        break;
-                    }
-                }
-                clearTimeout(timeout);
-                resolve(__msg);
-            }, 50);
-        });
-    },
-
-    send: function (value) {
-        window.ipc.postMessage(
-            JSON.stringify({
-                "method":"query",
-                "params": {
-                    "id": _request_id,
-                    "data": value,
-                    "returned_value": false
-                }
-            })
-        );
-    }
-}"#;
-
 /// Tracks what query ids are currently active
 pub(crate) struct SharedSlab<T = ()> {
     pub slab: Rc<RefCell<Slab<T>>>,
@@ -73,8 +34,6 @@ pub(crate) struct QueryEntry {
     pub owner: Option<Owner>,
 }
 
-const QUEUE_NAME: &str = "__msg_queues";
-
 /// Handles sending and receiving arbitrary queries from the webview. Queries can be resolved non-sequentially, so we use ids to track them.
 #[derive(Clone, Default)]
 pub(crate) struct QueryEngine {
@@ -100,18 +59,8 @@ impl QueryEngine {
         // We embed the return of the eval in a function so we can send it back to the main thread
         if let Err(err) = context.webview.evaluate_script(&format!(
             r#"(function(){{
-                (async (resolve, _reject) => {{
-                    {DIOXUS_CODE}
-                    if (!window.{QUEUE_NAME}) {{
-                        window.{QUEUE_NAME} = [];
-                    }}
-
-                    let _request_id = {request_id};
-
-                    if (!window.{QUEUE_NAME}[{request_id}]) {{
-                        window.{QUEUE_NAME}[{request_id}] = [];
-                    }}
-                    let _message_queue = window.{QUEUE_NAME}[{request_id}];
+                (async function() {{
+                    let dioxus = window.createQuery({request_id});
 
                     {script}
                 }})().then((result)=>{{
@@ -120,7 +69,7 @@ impl QueryEngine {
                         "params": {{
                             "id": {request_id},
                             "data": result,
-                            "returned_value": true
+                            "method": "return"
                         }}
                     }};
                     window.ipc.postMessage(
@@ -133,7 +82,6 @@ impl QueryEngine {
         }
 
         Query {
-            slab: self.active_requests.clone(),
             id: request_id,
             receiver: rx,
             return_receiver: Some(return_rx),
@@ -144,19 +92,21 @@ impl QueryEngine {
 
     /// Send a query channel message to the correct query
     pub fn send(&self, data: QueryResult) {
-        let QueryResult {
-            id,
-            data,
-            returned_value,
-        } = data;
+        let QueryResult { id, data, method } = data;
         let mut slab = self.active_requests.slab.borrow_mut();
         if let Some(entry) = slab.get_mut(id) {
-            if returned_value {
-                if let Some(sender) = entry.return_sender.take() {
-                    let _ = sender.send(data);
+            match method {
+                QueryMethod::Return => {
+                    if let Some(sender) = entry.return_sender.take() {
+                        let _ = sender.send(data);
+                    }
                 }
-            } else {
-                let _ = entry.channel_sender.unbounded_send(data);
+                QueryMethod::Drop => {
+                    slab.remove(id);
+                }
+                QueryMethod::Send => {
+                    let _ = entry.channel_sender.unbounded_send(data);
+                }
             }
         }
     }
@@ -164,7 +114,6 @@ impl QueryEngine {
 
 pub(crate) struct Query<V: DeserializeOwned> {
     desktop: DesktopContext,
-    slab: SharedSlab<QueryEntry>,
     receiver: futures_channel::mpsc::UnboundedReceiver<Value>,
     return_receiver: Option<futures_channel::oneshot::Receiver<Value>>,
     pub id: usize,
@@ -183,18 +132,7 @@ impl<V: DeserializeOwned> Query<V> {
         let queue_id = self.id;
 
         let data = message.to_string();
-        let script = format!(
-            r#"
-            if (!window.{QUEUE_NAME}) {{
-                window.{QUEUE_NAME} = [];
-            }}
-
-            if (!window.{QUEUE_NAME}[{queue_id}]) {{
-                window.{QUEUE_NAME}[{queue_id}] = [];
-            }}
-            window.{QUEUE_NAME}[{queue_id}].push({data});
-            "#
-        );
+        let script = format!(r#"window.getQuery({queue_id}).send({data});"#);
 
         self.desktop
             .webview
@@ -234,25 +172,6 @@ impl<V: DeserializeOwned> Query<V> {
     }
 }
 
-impl<V: DeserializeOwned> Drop for Query<V> {
-    fn drop(&mut self) {
-        self.slab.slab.borrow_mut().remove(self.id);
-        let queue_id = self.id;
-
-        _ = self.desktop.webview.evaluate_script(&format!(
-            r#"
-            if (!window.{QUEUE_NAME}) {{
-                window.{QUEUE_NAME} = [];
-            }}
-
-            if (window.{QUEUE_NAME}[{queue_id}]) {{
-                window.{QUEUE_NAME}[{queue_id}] = [];
-            }}
-            "#
-        ));
-    }
-}
-
 #[derive(Error, Debug)]
 #[non_exhaustive]
 pub enum QueryError {
@@ -269,7 +188,17 @@ pub enum QueryError {
 #[derive(Clone, Debug, Deserialize)]
 pub(crate) struct QueryResult {
     id: usize,
-    data: Value,
     #[serde(default)]
-    returned_value: bool,
+    data: Value,
+    method: QueryMethod,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+enum QueryMethod {
+    #[serde(rename = "return")]
+    Return,
+    #[serde(rename = "drop")]
+    Drop,
+    #[serde(rename = "send")]
+    Send,
 }
