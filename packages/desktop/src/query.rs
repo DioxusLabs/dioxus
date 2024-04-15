@@ -30,7 +30,7 @@ impl<T> Default for SharedSlab<T> {
 
 pub(crate) struct QueryEntry {
     channel_sender: futures_channel::mpsc::UnboundedSender<Value>,
-    return_sender: Option<futures_channel::oneshot::Sender<Value>>,
+    return_sender: Option<futures_channel::oneshot::Sender<Result<Value, String>>>,
     pub owner: Option<Owner>,
 }
 
@@ -60,23 +60,39 @@ impl QueryEngine {
         if let Err(err) = context.webview.evaluate_script(&format!(
             r#"(function(){{
                 let dioxus = window.createQuery({request_id});
-                (async function() {{
-                    {script}
-                }})().then((result)=>{{
+                try {{
+                    const AsyncFunction = async function () {{}}.constructor;
+                    let promise = (new AsyncFunction("dioxus", {script:?}))(dioxus);
+                    promise.then((result)=>{{
+                        let returned_value = {{
+                            "method": "query",
+                            "params": {{
+                                "id": {request_id},
+                                "data": {{
+                                    "data": result,
+                                    "method": "return"
+                                }}
+                            }}
+                        }};
+                        window.ipc.postMessage(
+                            JSON.stringify(returned_value)
+                        );
+                    }});
+                }} catch (err) {{
                     let returned_value = {{
                         "method": "query",
                         "params": {{
                             "id": {request_id},
                             "data": {{
-                                "data": result,
-                                "method": "return"
+                                "data": `${{err}}`,
+                                "method": "return_error"
                             }}
                         }}
                     }};
                     window.ipc.postMessage(
                         JSON.stringify(returned_value)
                     );
-                }})
+                }}
             }})();"#
         )) {
             tracing::warn!("Query error: {err}");
@@ -99,7 +115,12 @@ impl QueryEngine {
             match data {
                 QueryResultData::Return { data } => {
                     if let Some(sender) = entry.return_sender.take() {
-                        let _ = sender.send(data.unwrap_or_default());
+                        let _ = sender.send(Ok(data.unwrap_or_default()));
+                    }
+                }
+                QueryResultData::ReturnError { data } => {
+                    if let Some(sender) = entry.return_sender.take() {
+                        let _ = sender.send(Err(data.to_string()));
                     }
                 }
                 QueryResultData::Drop => {
@@ -116,7 +137,7 @@ impl QueryEngine {
 pub(crate) struct Query<V: DeserializeOwned> {
     desktop: DesktopContext,
     receiver: futures_channel::mpsc::UnboundedReceiver<Value>,
-    return_receiver: Option<futures_channel::oneshot::Receiver<Value>>,
+    return_receiver: Option<futures_channel::oneshot::Receiver<Result<Value, String>>>,
     pub id: usize,
     phantom: std::marker::PhantomData<V>,
 }
@@ -150,13 +171,17 @@ impl<V: DeserializeOwned> Query<V> {
     ) -> std::task::Poll<Result<Value, QueryError>> {
         self.receiver
             .poll_next_unpin(cx)
-            .map(|result| result.ok_or(QueryError::Recv))
+            .map(|result| result.ok_or(QueryError::Recv(String::from("Receive channel closed"))))
     }
 
     /// Receive the result of the query
     pub async fn result(&mut self) -> Result<Value, QueryError> {
         match self.return_receiver.take() {
-            Some(receiver) => receiver.await.map_err(|_| QueryError::Recv),
+            Some(receiver) => match receiver.await {
+                Ok(Ok(data)) => Ok(data),
+                Ok(Err(err)) => Err(QueryError::Recv(err)),
+                Err(err) => Err(QueryError::Recv(err.to_string())),
+            },
             None => Err(QueryError::Finished),
         }
     }
@@ -167,7 +192,11 @@ impl<V: DeserializeOwned> Query<V> {
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<Value, QueryError>> {
         match self.return_receiver.as_mut() {
-            Some(receiver) => receiver.poll_unpin(cx).map_err(|_| QueryError::Recv),
+            Some(receiver) => receiver.poll_unpin(cx).map(|result| match result {
+                Ok(Ok(data)) => Ok(data),
+                Ok(Err(err)) => Err(QueryError::Recv(err)),
+                Err(err) => Err(QueryError::Recv(err.to_string())),
+            }),
             None => std::task::Poll::Ready(Err(QueryError::Finished)),
         }
     }
@@ -176,8 +205,8 @@ impl<V: DeserializeOwned> Query<V> {
 #[derive(Error, Debug)]
 #[non_exhaustive]
 pub enum QueryError {
-    #[error("Error receiving query result.")]
-    Recv,
+    #[error("Error receiving query result: {0}")]
+    Recv(String),
     #[error("Error sending message to query: {0}")]
     Send(String),
     #[error("Error deserializing query result: {0}")]
@@ -197,6 +226,8 @@ pub(crate) struct QueryResult {
 enum QueryResultData {
     #[serde(rename = "return")]
     Return { data: Option<Value> },
+    #[serde(rename = "return_error")]
+    ReturnError { data: Value },
     #[serde(rename = "send")]
     Send { data: Value },
     #[serde(rename = "drop")]
