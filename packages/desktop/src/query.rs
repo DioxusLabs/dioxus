@@ -60,31 +60,13 @@ impl QueryEngine {
         if let Err(err) = context.webview.evaluate_script(&format!(
             r#"(function(){{
                 let dioxus = window.createQuery({request_id});
-                try {{
-                    const AsyncFunction = async function () {{}}.constructor;
-                    let promise = (new AsyncFunction("dioxus", {script:?}))(dioxus);
-                    promise.then((result)=>{{
-                        let returned_value = {{
-                            "method": "query",
-                            "params": {{
-                                "id": {request_id},
-                                "data": {{
-                                    "data": result,
-                                    "method": "return"
-                                }}
-                            }}
-                        }};
-                        window.ipc.postMessage(
-                            JSON.stringify(returned_value)
-                        );
-                    }});
-                }} catch (err) {{
+                let post_error = function(err) {{
                     let returned_value = {{
                         "method": "query",
                         "params": {{
                             "id": {request_id},
                             "data": {{
-                                "data": `${{err}}`,
+                                "data": err,
                                 "method": "return_error"
                             }}
                         }}
@@ -92,6 +74,29 @@ impl QueryEngine {
                     window.ipc.postMessage(
                         JSON.stringify(returned_value)
                     );
+                }};
+                try {{
+                    const AsyncFunction = async function () {{}}.constructor;
+                    let promise = (new AsyncFunction("dioxus", {script:?}))(dioxus);
+                    promise
+                        .then((result)=>{{
+                            let returned_value = {{
+                                "method": "query",
+                                "params": {{
+                                    "id": {request_id},
+                                    "data": {{
+                                        "data": result,
+                                        "method": "return"
+                                    }}
+                                }}
+                            }};
+                            window.ipc.postMessage(
+                                JSON.stringify(returned_value)
+                            );
+                        }})
+                        .catch(err => post_error(`Error running JS: ${{err}}`));
+                }} catch (error) {{
+                    post_error(`Invalid JS: ${{error}}`);
                 }}
             }})();"#
         )) {
