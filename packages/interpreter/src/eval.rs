@@ -19,25 +19,25 @@ impl JSOwner {
 #[cfg(feature = "webonly")]
 #[wasm_bindgen::prelude::wasm_bindgen(module = "/src/js/eval.js")]
 extern "C" {
-    pub type DioxusChannel;
+    pub type WebDioxusChannel;
 
     #[wasm_bindgen(constructor)]
-    pub fn new(owner: JSOwner) -> DioxusChannel;
+    pub fn new(owner: JSOwner) -> WebDioxusChannel;
 
     #[wasm_bindgen(method, js_name = "rustSend")]
-    pub fn rust_send(this: &DioxusChannel, value: wasm_bindgen::JsValue);
+    pub fn rust_send(this: &WebDioxusChannel, value: wasm_bindgen::JsValue);
 
     #[wasm_bindgen(method, js_name = "rustRecv")]
-    pub async fn rust_recv(this: &DioxusChannel) -> wasm_bindgen::JsValue;
+    pub async fn rust_recv(this: &WebDioxusChannel) -> wasm_bindgen::JsValue;
 
     #[wasm_bindgen(method)]
-    pub fn send(this: &DioxusChannel, value: wasm_bindgen::JsValue);
+    pub fn send(this: &WebDioxusChannel, value: wasm_bindgen::JsValue);
 
     #[wasm_bindgen(method)]
-    pub async fn recv(this: &DioxusChannel) -> wasm_bindgen::JsValue;
+    pub async fn recv(this: &WebDioxusChannel) -> wasm_bindgen::JsValue;
 
     #[wasm_bindgen(method)]
-    pub fn weak(this: &DioxusChannel) -> WeakDioxusChannel;
+    pub fn weak(this: &WebDioxusChannel) -> WeakDioxusChannel;
 
     pub type WeakDioxusChannel;
 

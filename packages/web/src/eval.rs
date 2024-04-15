@@ -1,5 +1,5 @@
 use dioxus_html::prelude::{EvalError, EvalProvider, Evaluator};
-use dioxus_interpreter_js::eval::{DioxusChannel, JSOwner, WeakDioxusChannel};
+use dioxus_interpreter_js::eval::{JSOwner, WeakDioxusChannel, WebDioxusChannel};
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 use js_sys::Function;
 use serde_json::Value;
@@ -47,7 +47,7 @@ impl WebEvaluator {
         let generational_box = owner.invalid();
 
         // add the drop handler to DioxusChannel so that it gets dropped when the channel is dropped in js
-        let channels = DioxusChannel::new(JSOwner::new(owner));
+        let channels = WebDioxusChannel::new(JSOwner::new(owner));
 
         // The Rust side of the channel is a weak reference to the DioxusChannel
         let weak_channels = channels.weak();
@@ -120,7 +120,7 @@ impl Evaluator for WebEvaluator {
         context: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<serde_json::Value, EvalError>> {
         if self.next_future.is_none() {
-            let channels: DioxusChannel = self.channels.clone().into();
+            let channels: WebDioxusChannel = self.channels.clone().into();
             let pinned = Box::pin(async move {
                 let fut = channels.rust_recv();
                 let data = fut.await;
