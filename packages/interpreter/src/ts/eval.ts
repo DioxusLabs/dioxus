@@ -32,15 +32,62 @@ class Channel {
     }
 }
 
+export class WeakDioxusChannel { 
+    inner: WeakRef<DioxusChannel>;
+
+    constructor(channel: DioxusChannel) {
+        this.inner = new WeakRef(channel);
+    }
+
+    // Receive message from Rust
+     async recv() {
+      let channel = this.inner.deref();
+      if (channel) {
+        return await channel.recv();
+      }
+    }
+  
+    // Send message to rust.
+    send(data: any) {
+      let channel = this.inner.deref();
+      if (channel) {
+        channel.send(data)
+      }
+    }
+  
+    // Send data from rust to javascript
+    rustSend(data: any) {
+      let channel = this.inner.deref();
+      if (channel) {
+        channel.rustSend(data)
+      }
+    }
+
+    // Receive data sent from javascript in rust
+    async rustRecv(): Promise<any> {
+      let channel = this.inner.deref();
+      if (channel) {
+        return await channel.rustRecv();
+      }
+    }
+}
+
 export class DioxusChannel {
     js_to_rust: Channel;
     rust_to_js: Channel;
+    owner: any;
 
-    constructor() {
+    constructor(owner: any) {
+      this.owner = owner;
       this.js_to_rust = new Channel();
       this.rust_to_js = new Channel();
     }
-  
+
+    // Return a weak reference to this channel
+    weak(): WeakDioxusChannel {
+      return new WeakDioxusChannel(this);
+    }
+
     // Receive message from Rust
     async recv() {
       return await this.rust_to_js.recv();

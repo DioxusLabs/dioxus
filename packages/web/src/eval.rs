@@ -1,12 +1,12 @@
 use dioxus_html::prelude::{EvalError, EvalProvider, Evaluator};
-use generational_box::{GenerationalBox};
+use dioxus_interpreter_js::eval::{DioxusChannel, JSOwner, WeakDioxusChannel};
+use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 use js_sys::Function;
 use serde_json::Value;
-use std::{rc::Rc, str::FromStr};
-use wasm_bindgen::prelude::*;
 use std::future::Future;
 use std::pin::Pin;
-use dioxus_interpreter_js::eval::DioxusChannel;
+use std::{rc::Rc, str::FromStr};
+use wasm_bindgen::prelude::*;
 
 /// Provides the WebEvalProvider through [`cx.provide_context`].
 pub fn init_eval() {
@@ -28,24 +28,35 @@ const PROMISE_WRAPPER: &str = r#"
         {JS_CODE}
         resolve(null);
     });
-    "#;
+"#;
+
+type NextPoll = Pin<Box<dyn Future<Output = Result<serde_json::Value, EvalError>>>>;
 
 /// Represents a web-target's JavaScript evaluator.
 struct WebEvaluator {
-    channels: DioxusChannel,
-    next_future: Option<Pin<Box<dyn Future<Output = Result<serde_json::Value, EvalError>>>>>, 
+    channels: WeakDioxusChannel,
+    next_future: Option<NextPoll>,
     result: Option<Result<serde_json::Value, EvalError>>,
 }
 
 impl WebEvaluator {
     /// Creates a new evaluator for web-based targets.
     fn create(js: String) -> GenerationalBox<Box<dyn Evaluator>> {
-        let channels = DioxusChannel::new();
+        let owner = UnsyncStorage::owner();
+
+        let generational_box = owner.invalid();
+
+        // add the drop handler to DioxusChannel so that it gets dropped when the channel is dropped in js
+        let channels = DioxusChannel::new(JSOwner::new(owner));
+
+        // The Rust side of the channel is a weak reference to the DioxusChannel
+        let weak_channels = channels.weak();
 
         // Wrap the evaluated JS in a promise so that wasm can continue running (send/receive data from js)
         let code = PROMISE_WRAPPER.replace("{JS_CODE}", &js);
 
-        let result = match Function::new_with_args("dioxus", &code).call1(&JsValue::NULL, &channels) {
+        let result = match Function::new_with_args("dioxus", &code).call1(&JsValue::NULL, &channels)
+        {
             Ok(result) => {
                 if let Ok(stringified) = js_sys::JSON::stringify(&result) {
                     if !stringified.is_undefined() && stringified.is_valid_utf16() {
@@ -69,12 +80,13 @@ impl WebEvaluator {
             )),
         };
 
-        // TODO: use weak refs in JS to detect when the channel is dropped?
-        GenerationalBox::leak(Box::new(Self {
-            channels,
+        generational_box.set(Box::new(Self {
+            channels: weak_channels,
             result: Some(result),
             next_future: None,
-        })) 
+        }) as Box<dyn Evaluator>);
+
+        generational_box
     }
 }
 
@@ -112,10 +124,9 @@ impl Evaluator for WebEvaluator {
             let pinned = Box::pin(async move {
                 let fut = channels.rust_recv();
                 let data = fut.await;
-                serde_wasm_bindgen::from_value::<serde_json::Value>(data).map_err(|err|{
-                    EvalError::Communication(err.to_string())
-                })
-            }); 
+                serde_wasm_bindgen::from_value::<serde_json::Value>(data)
+                    .map_err(|err| EvalError::Communication(err.to_string()))
+            });
             self.next_future = Some(pinned);
         }
         let fut = self.next_future.as_mut().unwrap();
