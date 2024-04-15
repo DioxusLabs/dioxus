@@ -26,30 +26,32 @@ use std::{cell::Cell, future::Future, rc::Rc};
 /// #     Ok("Sunny".to_string())
 /// # }
 /// # #[component]
-/// # fn WeatherElement (weather: String ) -> Element { rsx! { p { "The weather is {weather}" } } }
+/// # fn WeatherElement(weather: String) -> Element {
+/// #     rsx! { p { "The weather is {weather}" } }
+/// # }
 /// fn app() -> Element {
 ///     let country = use_signal(|| WeatherLocation {
 ///         city: "Berlin".to_string(),
 ///         country: "Germany".to_string(),
-///         coordinates: (52.5244, 13.4105)
+///         coordinates: (52.5244, 13.4105),
 ///     });
+///     ///
+///     // Because the resource's future subscribes to `country` by reading it (`country.read()`),
+///     // every time `country` changes the resource's future will run again and thus provide a new value.
+///     let current_weather = use_resource(move || async move { get_weather(&country()).await });
 ///
-///    // Because the resource's future subscribes to `country` by reading it (`country.read()`),
-///    // every time `country` changes the resource's future will run again and thus provide a new value.
-///    let current_weather = use_resource(move || async move { get_weather(&country()).await });
-///    
-///    rsx! {
-///        // the value of the resource can be polled to
-///        // conditionally render elements based off if it's future
-///        // finished (Some(Ok(_)), errored Some(Err(_)),
-///        // or is still running (None)
-///        match current_weather.value() {
-///            Some(Ok(weather)) => rsx! { WeatherElement { weather } },
-///            Some(Err(e)) => rsx! { p { "Loading weather failed, {e}" } },
-///            None =>  rsx! { p { "Loading..." } }
-///        }
-///    }
-///}
+///     rsx! {
+///         // the value of the resource can be polled to
+///         // conditionally render elements based off if it's future
+///         // finished (Some(Ok(_)), errored Some(Err(_)),
+///         // or is still running (None)
+///         match &*current_weather.read() {
+///             Some(Ok(weather)) => rsx! { WeatherElement { weather } },
+///             Some(Err(e)) => rsx! { p { "Loading weather failed, {e}" } },
+///             None =>  rsx! { p { "Loading..." } }
+///         }
+///     }
+/// }
 /// ```
 ///
 /// ## With non-reactive dependencies
