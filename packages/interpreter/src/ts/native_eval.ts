@@ -1,5 +1,6 @@
 import { Channel, DioxusChannel, WeakDioxusChannel } from "./eval";
 
+// In dioxus desktop, eval needs to use the window object to store global state because we evaluate separate snippets of javascript in the browser
 declare global {
   interface Window {
     __msg_queues: WeakDioxusChannel[];
@@ -11,6 +12,7 @@ declare global {
   }
 }
 
+// A message that can be sent to the desktop renderer about a query
 class QueryParams {
   id: number;
   method: "drop" | "send" | "return";
@@ -24,6 +26,7 @@ class QueryParams {
 }
 
 window.__msg_queues = window.__msg_queues || [];
+// In dioxus desktop, eval is copy so we cannot run a drop handler. Instead, the drop handler is run after the channel is garbage collected in the javascript side
 window.finalizationRegistry =
   window.finalizationRegistry ||
   new FinalizationRegistry(({ id }) => {
@@ -36,10 +39,12 @@ window.finalizationRegistry =
     );
   });
 
+// Get a query from the global state
 window.getQuery = function (request_id: number): WeakDioxusChannel {
   return window.__msg_queues[request_id];
 };
 
+// Create a new query (and insert it into the global state)
 window.createQuery = function (request_id: number): NativeDioxusChannel {
   return new NativeDioxusChannel(request_id);
 };
