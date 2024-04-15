@@ -1,7 +1,5 @@
-use std::{
-    hash::{DefaultHasher, Hasher},
-    process::Command,
-};
+use std::collections::hash_map::DefaultHasher;
+use std::{hash::Hasher, process::Command};
 
 fn main() {
     // If any TS changes, re-run the build script
