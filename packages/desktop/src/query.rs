@@ -64,11 +64,13 @@ impl QueryEngine {
                     {script}
                 }})().then((result)=>{{
                     let returned_value = {{
-                        "method":"query",
+                        "method": "query",
                         "params": {{
                             "id": {request_id},
-                            "data": result,
-                            "method": "return"
+                            "data": {{
+                                "data": result,
+                                "method": "return"
+                            }}
                         }}
                     }};
                     window.ipc.postMessage(
@@ -91,19 +93,19 @@ impl QueryEngine {
 
     /// Send a query channel message to the correct query
     pub fn send(&self, data: QueryResult) {
-        let QueryResult { id, data, method } = data;
+        let QueryResult { id, data } = data;
         let mut slab = self.active_requests.slab.borrow_mut();
         if let Some(entry) = slab.get_mut(id) {
-            match method {
-                QueryMethod::Return => {
+            match data {
+                QueryResultData::Return { data } => {
                     if let Some(sender) = entry.return_sender.take() {
-                        let _ = sender.send(data);
+                        let _ = sender.send(data.unwrap_or_default());
                     }
                 }
-                QueryMethod::Drop => {
+                QueryResultData::Drop => {
                     slab.remove(id);
                 }
-                QueryMethod::Send => {
+                QueryResultData::Send { data } => {
                     let _ = entry.channel_sender.unbounded_send(data);
                 }
             }
@@ -187,17 +189,16 @@ pub enum QueryError {
 #[derive(Clone, Debug, Deserialize)]
 pub(crate) struct QueryResult {
     id: usize,
-    #[serde(default)]
-    data: Value,
-    method: QueryMethod,
+    data: QueryResultData,
 }
 
 #[derive(Clone, Debug, Deserialize)]
-enum QueryMethod {
+#[serde(tag = "method")]
+enum QueryResultData {
     #[serde(rename = "return")]
-    Return,
+    Return { data: Option<Value> },
+    #[serde(rename = "send")]
+    Send { data: Value },
     #[serde(rename = "drop")]
     Drop,
-    #[serde(rename = "send")]
-    Send,
 }

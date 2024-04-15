@@ -15,13 +15,11 @@ declare global {
 // A message that can be sent to the desktop renderer about a query
 class QueryParams {
   id: number;
-  method: "drop" | "send" | "return";
-  data?: any;
+  data: { method: "drop" | "send"; data?: any };
 
-  constructor(id: number, method: "drop" | "send" | "return", data?: any) {
+  constructor(id: number, method: "drop" | "send", data?: any) {
     this.id = id;
-    this.method = method;
-    this.data = data;
+    this.data = { method, data };
   }
 }
 

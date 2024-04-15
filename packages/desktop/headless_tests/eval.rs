@@ -31,11 +31,7 @@ fn app() -> Element {
 
     // Make sure returning no value resolves the future
     use_future(|| async {
-        let eval = eval(
-            r#"
-        return;
-        "#,
-        );
+        let eval = eval(r#"return;"#);
 
         eval.await.unwrap();
         EVALS_RETURNED.with_mut(|x| *x += 1);
