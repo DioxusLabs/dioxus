@@ -3,7 +3,6 @@ use generational_box::UnsyncStorage;
 use std::ops::Deref;
 
 use dioxus_core::prelude::*;
-use dioxus_core::ScopeId;
 
 use generational_box::{GenerationalBox, Storage};
 
