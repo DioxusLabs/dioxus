@@ -25,10 +25,9 @@ fn app() -> Element {
         );
         for i in 0..100 {
             eval.send(serde_json::Value::from(i)).unwrap();
-            if let Ok(value) = eval.recv().await {
-                assert_eq!(value, serde_json::Value::from(i * 2));
-                EVALS_RECEIVED.with_mut(|x| *x += 1);
-            }
+            let value = eval.recv().await.unwrap();
+            assert_eq!(value, serde_json::Value::from(i * 2));
+            EVALS_RECEIVED.with_mut(|x| *x += 1);
         }
     });
 
