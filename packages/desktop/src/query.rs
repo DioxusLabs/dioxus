@@ -101,7 +101,7 @@ impl QueryEngine {
                     }
                 }
                 QueryMethod::Drop => {
-                    // slab.remove(id);
+                    slab.remove(id);
                 }
                 QueryMethod::Send => {
                     let _ = entry.channel_sender.unbounded_send(data);
