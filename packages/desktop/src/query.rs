@@ -59,9 +59,8 @@ impl QueryEngine {
         // We embed the return of the eval in a function so we can send it back to the main thread
         if let Err(err) = context.webview.evaluate_script(&format!(
             r#"(function(){{
+                let dioxus = window.createQuery({request_id});
                 (async function() {{
-                    let dioxus = window.createQuery({request_id});
-
                     {script}
                 }})().then((result)=>{{
                     let returned_value = {{
@@ -102,7 +101,7 @@ impl QueryEngine {
                     }
                 }
                 QueryMethod::Drop => {
-                    slab.remove(id);
+                    // slab.remove(id);
                 }
                 QueryMethod::Send => {
                     let _ = entry.channel_sender.unbounded_send(data);
@@ -132,7 +131,7 @@ impl<V: DeserializeOwned> Query<V> {
         let queue_id = self.id;
 
         let data = message.to_string();
-        let script = format!(r#"window.getQuery({queue_id}).send({data});"#);
+        let script = format!(r#"window.getQuery({queue_id}).rustSend({data});"#);
 
         self.desktop
             .webview

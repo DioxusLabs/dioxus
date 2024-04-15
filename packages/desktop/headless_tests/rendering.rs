@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use dioxus_core::Element;
 use dioxus_desktop::DesktopContext;
 
 #[path = "./utils.rs"]
@@ -18,7 +17,7 @@ fn use_inner_html(id: &'static str) -> Option<String> {
 
             let res = eval(&format!(
                 r#"let element = document.getElementById('{}');
-                    return element.innerHTML"#,
+                return element.innerHTML"#,
                 id
             ))
             .await

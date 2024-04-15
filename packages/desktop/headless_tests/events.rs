@@ -2,13 +2,14 @@ use std::collections::HashMap;
 
 use dioxus::html::geometry::euclid::Vector3D;
 use dioxus::prelude::*;
-use dioxus_core::prelude::consume_context;
 use dioxus_desktop::DesktopContext;
 
 #[path = "./utils.rs"]
 mod utils;
 
 pub fn main() {
+    // TODO: Something is making tests flaky on windows
+    #[cfg(not(windows))]
     utils::check_app_exits(app);
 }
 

@@ -96,3 +96,8 @@ harness = false
 name = "check_rendering"
 path = "headless_tests/rendering.rs"
 harness = false
+
+[[test]]
+name = "check_eval"
+path = "headless_tests/eval.rs"
+harness = false
