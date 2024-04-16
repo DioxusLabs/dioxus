@@ -392,9 +392,7 @@ where
 }
 
 #[cfg(feature = "serialize")]
-fn deserialize_leaky<'a, 'de, T, D>(
-    deserializer: D,
-) -> Result<&'a [T], D::Error>
+fn deserialize_leaky<'a, 'de, T, D>(deserializer: D) -> Result<&'a [T], D::Error>
 where
     T: serde::Deserialize<'de>,
     D: serde::Deserializer<'de>,
