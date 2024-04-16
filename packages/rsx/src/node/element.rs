@@ -9,9 +9,7 @@ use syn::{
     LitStr, Token,
 };
 
-// =======================================
-// Parse the VNode::Element type
-// =======================================
+/// Parse the VNode::Element type
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct Element {
     pub name: ElementName,

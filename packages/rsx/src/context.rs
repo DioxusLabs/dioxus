@@ -11,6 +11,7 @@ pub struct DynamicContext<'a> {
     pub current_path: Vec<u8>,
     pub node_paths: Vec<Vec<u8>>,
     pub attr_paths: Vec<Vec<u8>>,
+    dynamic_idx: usize,
 }
 
 impl<'a> DynamicContext<'a> {
@@ -44,6 +45,13 @@ impl<'a> DynamicContext<'a> {
         }
 
         Some(roots_)
+    }
+
+    /// Get the next dynamic index
+    fn next_dynamic_idx(&mut self) -> usize {
+        let idx = self.dynamic_idx;
+        self.dynamic_idx += 1;
+        idx
     }
 
     pub fn populate_all_by_updating<Ctx: HotReloadingContext>(

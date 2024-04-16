@@ -16,10 +16,12 @@
 
 #[macro_use]
 mod errors;
+mod body;
 pub mod hotreload;
 mod ifmt;
 mod location;
 mod node;
+mod rsx_parser;
 
 pub(crate) mod context;
 pub(crate) mod renderer;

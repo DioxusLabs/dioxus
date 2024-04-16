@@ -12,6 +12,7 @@ use syn::{
 };
 
 mod attribute;
+mod body;
 mod component;
 mod element;
 mod forloop;
@@ -19,6 +20,7 @@ mod ifchain;
 mod text_node;
 
 pub use attribute::*;
+pub use body::*;
 pub use component::*;
 pub use element::*;
 pub use forloop::*;
@@ -30,7 +32,6 @@ pub enum BodyNode {
     Element(Element),
     Text(TextNode),
     RawExpr(Expr),
-
     Component(Component),
     ForLoop(ForLoop),
     IfChain(IfChain),
@@ -39,6 +40,14 @@ pub enum BodyNode {
 impl BodyNode {
     pub fn is_litstr(&self) -> bool {
         matches!(self, BodyNode::Text { .. })
+    }
+
+    pub fn children(&self) -> &[BodyNode] {
+        match self {
+            BodyNode::Element(el) => &el.children,
+            BodyNode::Component(comp) => &comp.children,
+            _ => panic!("Children not available for this node"),
+        }
     }
 
     pub fn span(&self) -> Span {
@@ -181,6 +190,7 @@ impl ToTokens for BodyNode {
                     // If the text is dynamic, we actually create a signal of the formatted segments
                     // Crazy, right?
                     let segments = txt.as_htotreloaded();
+                    let idx = txt.location.idx.get() + 1;
 
                     let rendered_segments = txt.segments.iter().filter_map(|s| match s {
                         Segment::Literal(lit) => None,
@@ -196,7 +206,17 @@ impl ToTokens for BodyNode {
                         dioxus_core::DynamicNode::Text(dioxus_core::VText::new({
                             // Create a signal of the formatted segments
                             // htotreloading will find this via its location and then update the signal
-                            static __SIGNAL: GlobalSignal<FmtedSegments> = GlobalSignal::with_key(|| #segments, "__FMTBLOCK");
+                            static __SIGNAL: GlobalSignal<FmtedSegments> = GlobalSignal::with_key(|| #segments, {
+                                concat!(
+                                    file!(),
+                                    ":",
+                                    line!(),
+                                    ":",
+                                    column!(),
+                                    ":",
+                                    #idx
+                                )
+                            });
 
                             // render the signal and subscribe the component to its changes
                             __SIGNAL.with(|s| s.render_with(
@@ -237,12 +257,13 @@ impl ToTokens for BodyNode {
 
 pub(crate) fn parse_buffer_as_braced_children(
     input: &syn::parse::ParseBuffer<'_>,
-) -> Result<(Brace, Vec<BodyNode>)> {
+) -> Result<(Brace, Body)> {
     let content;
     let brace_token = braced!(content in input);
-    let mut then_branch = vec![];
-    while !content.is_empty() {
-        then_branch.push(content.parse()?);
-    }
-    Ok((brace_token, then_branch))
+    // let mut then_branch = vec![];
+    // while !content.is_empty() {
+    //     then_branch.push(content.parse()?);
+    // }
+    todo!()
+    // Ok((brace_token, then_branch))
 }

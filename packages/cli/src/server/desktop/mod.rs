@@ -200,7 +200,7 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
                     if send_msg(msg.clone(), channel) {
                         i += 1;
                     } else {
-                        panic!("failed to serialize hot reload message");
+                        // panic!("failed to serialize hot reload message");
                         channels.remove(i);
                     }
                 }

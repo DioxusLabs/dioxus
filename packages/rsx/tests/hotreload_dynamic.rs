@@ -95,4 +95,8 @@ fn formatted_props() {
     // The new template has a different formatting but can be hotreloaded
     let changed = boilerplate(old.clone(), new_valid).unwrap();
     dbg!(changed);
+
+    // static BLAH: &'static str = "asdasd";
+
+    // let v = concat!(BLAH, "asdasd");
 }

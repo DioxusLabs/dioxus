@@ -6,6 +6,13 @@ use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
 use syn::{parse_quote, spanned::Spanned, Expr, ExprIf, Ident, LitStr};
 
+/// A list of fields in the form of
+///
+/// `name: value`
+///
+///
+pub struct Fields {}
+
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum AttributeType {
     /// An attribute that is known

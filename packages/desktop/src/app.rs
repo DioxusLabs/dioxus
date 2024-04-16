@@ -358,8 +358,11 @@ impl App {
                         for (id, segments) in changed_strings.iter() {
                             println!("updating signal in desktop {:?} with {:?}", id, segments);
 
-                            let mut sig: Signal<FmtedSegments> = ctx.get_signal_with_key(&id);
-                            sig.set(segments.clone());
+                            if let Some(mut signal) = ctx.get_signal_with_key(id) {
+                                signal.set(segments.clone());
+                            }
+                            // let mut sig: Signal<FmtedSegments> = ctx.get_signal_with_key(&id);
+                            // sig.set(segments.clone());
                         }
 
                         // dioxus_core::prelude::needs_update();

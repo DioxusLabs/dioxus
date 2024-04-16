@@ -5,9 +5,9 @@ use super::*;
 pub struct IfChain {
     pub if_token: Token![if],
     pub cond: Box<Expr>,
-    pub then_branch: Vec<BodyNode>,
+    pub then_branch: Body,
     pub else_if_branch: Option<Box<IfChain>>,
-    pub else_branch: Option<Vec<BodyNode>>,
+    pub else_branch: Option<Body>,
     pub location: CallerLocation,
 }
 

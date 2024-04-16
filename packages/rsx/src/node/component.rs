@@ -11,7 +11,7 @@
 //! - [ ] Keys
 //! - [ ] Properties spreading with with `..` syntax
 
-use self::location::CallerLocation;
+use self::{body::Body, location::CallerLocation};
 
 use super::*;
 
@@ -28,10 +28,10 @@ pub struct Component {
     pub prop_gen_args: Option<AngleBracketedGenericArguments>,
     pub key: Option<IfmtInput>,
     pub fields: Vec<ComponentField>,
-    pub children: Vec<BodyNode>,
     pub manual_props: Option<Expr>,
     pub brace: syn::token::Brace,
     pub location: CallerLocation,
+    pub children: Body,
 }
 
 impl Parse for Component {
@@ -49,6 +49,8 @@ impl Parse for Component {
         let mut children = Vec::new();
         let mut manual_props = None;
         let mut key = None;
+
+        // Parse fields until we get to the children
 
         while !content.is_empty() {
             // if we splat into a component then we're merging properties
@@ -108,11 +110,11 @@ impl ToTokens for Component {
             ..
         } = self;
 
-        let builder = self
-            .manual_props
-            .as_ref()
-            .map(|props| self.collect_manual_props(props))
-            .unwrap_or_else(|| self.collect_props());
+        let builder = self.collect_props();
+        // .manual_props
+        // .as_ref()
+        // .map(|props| self.collect_manual_props(props))
+        // .unwrap_or_else(|| self.collect_props());
 
         let fn_name = self.fn_name();
 
@@ -157,16 +159,17 @@ impl Component {
     }
 
     fn collect_manual_props(&self, manual_props: &Expr) -> TokenStream2 {
-        let mut toks = quote! { let mut __manual_props = #manual_props; };
-        for field in &self.fields {
-            if field.name == "key" {
-                continue;
-            }
-            let ComponentField { name, content } = field;
-            toks.append_all(quote! { __manual_props.#name = #content; });
-        }
-        toks.append_all(quote! { __manual_props });
-        quote! {{ #toks }}
+        todo!()
+        // let mut toks = quote! { let mut __manual_props = #manual_props; };
+        // for field in &self.fields {
+        //     if field.name == "key" {
+        //         continue;
+        //     }
+        //     let ComponentField { name, content } = field;
+        //     toks.append_all(quote! { __manual_props.#name = #content; });
+        // }
+        // toks.append_all(quote! { __manual_props });
+        // quote! {{ #toks }}
     }
 
     fn collect_props(&self) -> TokenStream2 {
@@ -176,8 +179,56 @@ impl Component {
             Some(gen_args) => quote! { fc_to_builder(#name #gen_args) },
             None => quote! { fc_to_builder(#name) },
         };
-        for field in &self.fields {
-            toks.append_all(quote! {#field})
+        for (idx, field) in self.fields.iter().enumerate() {
+            let ComponentField { name, content, .. } = field;
+
+            let content = match content {
+                ContentField::Shorthand(i) => quote! { #i },
+                ContentField::ManExpr(e) => quote! { #e },
+                ContentField::Formatted(txt) => {
+                    // place down the signal stuff
+
+                    let segments = txt.as_htotreloaded();
+
+                    let rendered_segments = txt.segments.iter().filter_map(|s| match s {
+                        Segment::Literal(lit) => None,
+                        Segment::Formatted(fmt) => {
+                            // just render as a format_args! call
+                            Some(quote! {
+                                format!("{}", #fmt)
+                            })
+                        }
+                    });
+
+                    let old_idx = self.location.idx.get();
+                    let cur_idx = (old_idx) * 100000 + 1 + idx;
+
+                    quote! {
+                        {
+                            // Create a signal of the formatted segments
+                            // htotreloading will find this via its location and then update the signal
+                            static __SIGNAL: GlobalSignal<FmtedSegments> = GlobalSignal::with_key(|| #segments, {
+                                concat!(
+                                    file!(),
+                                    ":",
+                                    line!(),
+                                    ":",
+                                    column!(),
+                                    ":",
+                                    #cur_idx
+                                )
+                            });
+
+                            // render the signal and subscribe the component to its changes
+                            __SIGNAL.with(|s| s.render_with(
+                                vec![ #(#rendered_segments),* ]
+                            ))
+                        }
+                    }
+                }
+            };
+
+            toks.append_all(quote! { .#name(#content) });
         }
         if !self.children.is_empty() {
             let renderer =
@@ -227,47 +278,6 @@ impl ContentField {
     }
 }
 
-impl ToTokens for ContentField {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        match self {
-            ContentField::Shorthand(i) => tokens.append_all(quote! { #i }),
-            ContentField::ManExpr(e) => e.to_tokens(tokens),
-            ContentField::Formatted(txt) => {
-                // place down the signal stuff
-
-                let segments = txt.as_htotreloaded();
-
-                let rendered_segments = txt.segments.iter().filter_map(|s| match s {
-                    Segment::Literal(lit) => None,
-                    Segment::Formatted(fmt) => {
-                        // just render as a format_args! call
-                        Some(quote! {
-                            format!("{}", #fmt)
-                        })
-                    }
-                });
-
-                tokens.append_all(quote! {
-                    {
-                        // Create a signal of the formatted segments
-                        // htotreloading will find this via its location and then update the signal
-                        static __SIGNAL: GlobalSignal<FmtedSegments> = GlobalSignal::with_key(|| #segments, "__FMTBLOCK");
-
-                        // render the signal and subscribe the component to its changes
-                        __SIGNAL.with(|s| s.render_with(
-                            vec![ #(#rendered_segments),* ]
-                        ))
-                    }
-                })
-
-                // tokens.append_all(quote! {
-                //     #s
-                // })
-            }
-        }
-    }
-}
-
 impl Parse for ComponentField {
     fn parse(input: ParseStream) -> Result<Self> {
         let name = Ident::parse_any(input)?;
@@ -283,17 +293,11 @@ impl Parse for ComponentField {
         let content = ContentField::new(input)?;
 
         if input.peek(LitStr) || input.peek(Ident) {
-            missing_trailing_comma!(content.span());
+            // missing_trailing_comma!(content.span());
+            todo!("missing_trailing_comma")
         }
 
         Ok(Self { name, content })
-    }
-}
-
-impl ToTokens for ComponentField {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let ComponentField { name, content, .. } = self;
-        tokens.append_all(quote! { .#name(#content) })
     }
 }
 

@@ -4,6 +4,7 @@ use quote::quote;
 
 pub struct TemplateRenderer<'a> {
     pub roots: &'a [BodyNode],
+    parent_idx: usize,
     location: Option<TokenStream2>,
 }
 
@@ -14,7 +15,11 @@ impl<'a> TemplateRenderer<'a> {
     pub fn as_tokens(roots: &'a [BodyNode], location: Option<String>) -> TokenStream2 {
         let location = location.map(|loc| quote! { #loc });
 
-        TemplateRenderer::render(Self { roots, location })
+        TemplateRenderer::render(Self {
+            roots,
+            location,
+            parent_idx: 0,
+        })
     }
 
     pub fn as_tokens_with_idx(roots: &'a [BodyNode], idx: usize) -> TokenStream2 {
@@ -30,7 +35,11 @@ impl<'a> TemplateRenderer<'a> {
             )
         });
 
-        TemplateRenderer::render(Self { roots, location })
+        TemplateRenderer::render(Self {
+            roots,
+            location,
+            parent_idx: idx,
+        })
     }
 
     fn render(mut self) -> TokenStream2 {

@@ -355,10 +355,16 @@ impl HotreloadingResults {
         location: &'static str,
         old_idx: usize,
     ) -> Option<bool> {
-        self.hotreload_ifmt(&a.input, &b.input)
+        let location = make_new_location(location, old_idx + 1);
+        self.hotreload_ifmt(&a.input, &b.input, location)
     }
 
-    fn hotreload_ifmt(&mut self, a: &IfmtInput, b: &IfmtInput) -> Option<bool> {
+    fn hotreload_ifmt(
+        &mut self,
+        a: &IfmtInput,
+        b: &IfmtInput,
+        location: &'static str,
+    ) -> Option<bool> {
         if a.is_static() && b.is_static() {
             return Some(a == b);
         }
@@ -414,9 +420,8 @@ impl HotreloadingResults {
             }
         }
 
-        let key = "__FMTBLOCK".to_string();
-
-        self.changed_strings.insert(key, FmtedSegments::new(out));
+        self.changed_strings
+            .insert(location.to_string(), FmtedSegments::new(out));
 
         Some(true)
     }
@@ -490,12 +495,14 @@ impl HotreloadingResults {
         // Walk the attributes looking for literals
         // Those will have plumbing in the hotreloading code
         // All others just get diffed via tokens
+        let cur_idx = (old_idx + 1) * 100000 + 1;
         for (idx, (old_attr, new_attr)) in a.fields.iter().zip(b.fields.iter()).enumerate() {
             match (&old_attr.content, &new_attr.content) {
                 (_, _) if old_attr.name != new_attr.name => return None,
                 (ContentField::Formatted(left), ContentField::Formatted(right)) => {
                     // try to hotreload this formatted string
-                    _ = self.hotreload_ifmt(&left, &right);
+                    let new_location = make_new_location(location, cur_idx + idx);
+                    _ = self.hotreload_ifmt(&left, &right, new_location);
                 }
                 _ => {
                     if old_attr != new_attr {

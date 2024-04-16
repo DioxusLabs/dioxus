@@ -21,16 +21,17 @@ pub enum GlobalSignalContextKey {
 }
 
 impl GlobalSignalContext {
-    pub fn get_signal_with_key<T>(&self, key: &str) -> Signal<T> {
+    pub fn get_signal_with_key<T>(&self, key: &str) -> Option<Signal<T>> {
         // temporarily pretend it's a static str
         // todo: maybe don't do this! use a string for a key or something
         let _key = unsafe { std::mem::transmute::<&str, &'static str>(key) };
+
+        dbg!(self.signal.borrow().keys().collect::<Vec<_>>());
 
         self.signal
             .borrow()
             .get(&GlobalSignalContextKey::Key(_key))
             .map(|f| f.downcast_ref::<Signal<T>>().unwrap().clone())
-            .unwrap()
     }
 }
 
