@@ -128,14 +128,18 @@ pub trait FromHashFragment {
     fn from_hash_fragment(hash: &str) -> Self;
 }
 
-impl<T> FromHashFragment for T where T: FromStr + Default, T::Err: std::fmt::Display {
+impl<T> FromHashFragment for T
+where
+    T: FromStr + Default,
+    T::Err: std::fmt::Display,
+{
     fn from_hash_fragment(hash: &str) -> Self {
         match T::from_str(hash) {
             Ok(value) => value,
             Err(err) => {
                 tracing::error!("Failed to parse hash fragment: {}", err);
                 Default::default()
-            },
+            }
         }
     }
 }

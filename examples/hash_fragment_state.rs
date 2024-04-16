@@ -1,7 +1,7 @@
 //! This example shows how to use the hash segment to store state in the url.
 //!
 //! You can set up two way data binding between the url hash and signals.
-//! 
+//!
 //! Run this example on desktop with  
 //! ```sh
 //! dx serve --example hash_fragment_state --features=ciborium,base64
@@ -13,10 +13,10 @@
 
 use std::{fmt::Display, str::FromStr};
 
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
 
 fn main() {
     launch(|| {
@@ -71,8 +71,11 @@ impl FromStr for State {
     type Err = StateParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let decompressed = STANDARD.decode(s.as_bytes()).map_err(StateParseError::DecodeError)?;
-        let parsed = ciborium::from_reader(std::io::Cursor::new(decompressed)).map_err(StateParseError::CiboriumError)?;
+        let decompressed = STANDARD
+            .decode(s.as_bytes())
+            .map_err(StateParseError::DecodeError)?;
+        let parsed = ciborium::from_reader(std::io::Cursor::new(decompressed))
+            .map_err(StateParseError::CiboriumError)?;
         Ok(parsed)
     }
 }

@@ -1,7 +1,7 @@
 //! This example shows how to access and use query segments present in an url on the web.
 //!
 //! The enum router makes it easy to use your route as state in your app. This example shows how to use the router to encode search text into the url and decode it back into a string.
-//! 
+//!
 //! Run this example on desktop with  
 //! ```sh
 //! dx serve --example query_segment_search
@@ -66,14 +66,22 @@ fn Home() -> Element {
 // Instead of accepting String and usize directly, we use ReadOnlySignal to make the parameters `Copy` and let us subscribe to them automatically inside the meme
 #[component]
 fn Search(query: ReadOnlySignal<String>, word_count: ReadOnlySignal<usize>) -> Element {
-    const ITEMS: &[&str] = &["hello", "world", "hello world", "hello dioxus", "hello dioxus-router"];
+    const ITEMS: &[&str] = &[
+        "hello",
+        "world",
+        "hello world",
+        "hello dioxus",
+        "hello dioxus-router",
+    ];
 
     // Find all results that contain the query and the right number of words
     // This memo will automatically rerun when the query or word count changes because we read the signals inside the closure
     let results = use_memo(move || {
         ITEMS
             .iter()
-            .filter(|item| item.contains(&*query.read()) && item.split_whitespace().count() >= word_count())
+            .filter(|item| {
+                item.contains(&*query.read()) && item.split_whitespace().count() >= word_count()
+            })
             .collect::<Vec<_>>()
     });
 
