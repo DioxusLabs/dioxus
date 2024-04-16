@@ -197,7 +197,7 @@ fn module_loader(root_id: &str, headless: bool) -> String {
     // And then extend it with our native bindings
     {NATIVE_JS}
 
-    // The native interprerter extends the sledgehammer interpreter with a few extra methods that we use for IPC
+    // The native interpreter extends the sledgehammer interpreter with a few extra methods that we use for IPC
     window.interpreter = new NativeInterpreter("{EDITS_PATH}");
 
     // Wait for the page to load before sending the initialize message
