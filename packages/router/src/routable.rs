@@ -58,7 +58,7 @@ where
     type Err = <T as FromStr>::Err;
 
     fn from_query_argument(argument: &str) -> Result<Self, Self::Err> {
-        match T::from_str(&argument) {
+        match T::from_str(argument) {
             Ok(result) => Ok(result),
             Err(err) => {
                 tracing::error!("Failed to parse query argument: {}", err);

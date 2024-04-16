@@ -46,7 +46,7 @@ impl Display for State {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut serialized = Vec::new();
         if ciborium::into_writer(self, &mut serialized).is_ok() {
-            write!(f, "{}", STANDARD.encode(serialized).to_string())?;
+            write!(f, "{}", STANDARD.encode(serialized))?;
         }
         Ok(())
     }
