@@ -3,7 +3,7 @@ use syn::{Ident, Type};
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
 
-use crate::query::{FullQuerySegment, QueryArgument, QuerySegment};
+use crate::{hash::HashFragment, query::QuerySegment};
 
 #[derive(Debug, Clone)]
 pub enum RouteSegment {
@@ -24,7 +24,12 @@ impl RouteSegment {
     pub fn write_segment(&self) -> TokenStream2 {
         match self {
             Self::Static(segment) => quote! { write!(f, "/{}", #segment)?; },
-            Self::Dynamic(ident, _) => quote! { write!(f, "/{}", #ident)?; },
+            Self::Dynamic(ident, _) => quote! {
+                {
+                    let as_string = #ident.to_string();
+                    write!(f, "/{}", dioxus_router::exports::urlencoding::encode(&as_string))?;
+                }
+            },
             Self::CatchAll(ident, _) => quote! { #ident.display_route_segments(f)?; },
         }
     }
@@ -130,14 +135,37 @@ pub fn static_segment_idx(idx: usize) -> Ident {
 
 pub fn parse_route_segments<'a>(
     route_span: Span,
-    mut fields: impl Iterator<Item = (&'a Ident, &'a Type)>,
+    mut fields: impl Iterator<Item = (&'a Ident, &'a Type)> + Clone,
     route: &str,
-) -> syn::Result<(Vec<RouteSegment>, Option<QuerySegment>)> {
+) -> syn::Result<(
+    Vec<RouteSegment>,
+    Option<QuerySegment>,
+    Option<HashFragment>,
+)> {
     let mut route_segments = Vec::new();
 
-    let (route_string, query) = match route.rsplit_once('?') {
-        Some((route, query)) => (route, Some(query)),
+    let (route_string, hash) = match route.rsplit_once('#') {
+        Some((route, hash)) => (
+            route,
+            Some(HashFragment::parse_from_str(
+                route_span,
+                fields.clone(),
+                hash,
+            )?),
+        ),
         None => (route, None),
+    };
+
+    let (route_string, query) = match route_string.rsplit_once('?') {
+        Some((route, query)) => (
+            route,
+            Some(QuerySegment::parse_from_str(
+                route_span,
+                fields.clone(),
+                query,
+            )?),
+        ),
+        None => (route_string, None),
     };
     let mut iterator = route_string.split('/');
 
@@ -198,66 +226,7 @@ pub fn parse_route_segments<'a>(
         }
     }
 
-    // check if the route has a query string
-    let parsed_query = match query {
-        Some(query) => {
-            if let Some(query) = query.strip_prefix(":..") {
-                let query_ident = Ident::new(query, Span::call_site());
-                let field = fields.find(|(name, _)| *name == &query_ident);
-
-                let ty = if let Some((_, ty)) = field {
-                    ty.clone()
-                } else {
-                    return Err(syn::Error::new(
-                        route_span,
-                        format!("Could not find a field with the name '{}'", query_ident),
-                    ));
-                };
-
-                Some(QuerySegment::Single(FullQuerySegment {
-                    ident: query_ident,
-                    ty,
-                }))
-            } else {
-                let mut query_arguments = Vec::new();
-                for segment in query.split('&') {
-                    if segment.is_empty() {
-                        return Err(syn::Error::new(
-                            route_span,
-                            "Query segments should be non-empty",
-                        ));
-                    }
-                    if let Some(query_argument) = segment.strip_prefix(':') {
-                        let query_ident = Ident::new(query_argument, Span::call_site());
-                        let field = fields.find(|(name, _)| *name == &query_ident);
-
-                        let ty = if let Some((_, ty)) = field {
-                            ty.clone()
-                        } else {
-                            return Err(syn::Error::new(
-                                route_span,
-                                format!("Could not find a field with the name '{}'", query_ident),
-                            ));
-                        };
-
-                        query_arguments.push(QueryArgument {
-                            ident: query_ident,
-                            ty,
-                        });
-                    } else {
-                        return Err(syn::Error::new(
-                            route_span,
-                            "Query segments should be a : followed by the name of the query argument",
-                        ));
-                    }
-                }
-                Some(QuerySegment::Segments(query_arguments))
-            }
-        }
-        None => None,
-    };
-
-    Ok((route_segments, parsed_query))
+    Ok((route_segments, query, hash))
 }
 
 pub(crate) fn create_error_type(

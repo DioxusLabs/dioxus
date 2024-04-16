@@ -16,6 +16,7 @@ use proc_macro2::TokenStream as TokenStream2;
 
 use crate::{layout::LayoutId, route_tree::RouteTree};
 
+mod hash;
 mod layout;
 mod nest;
 mod query;
@@ -481,6 +482,11 @@ impl RouteEnum {
                             from_route = true
                         }
                     }
+                    if let Some(hash) = &route.hash {
+                        if hash.contains_ident(field) {
+                            from_route = true
+                        }
+                    }
                 }
             }
         }
@@ -534,9 +540,10 @@ impl RouteEnum {
 
                 fn from_str(s: &str) -> Result<Self, Self::Err> {
                     let route = s;
-                    let (route, _hash) = route.split_once('#').unwrap_or((route, ""));
+                    let (route, hash) = route.split_once('#').unwrap_or((route, ""));
                     let (route, query) = route.split_once('?').unwrap_or((route, ""));
                     let query = dioxus_router::exports::urlencoding::decode(query).unwrap_or(query.into());
+                    let hash = dioxus_router::exports::urlencoding::decode(hash).unwrap_or(hash.into());
                     let mut segments = route.split('/').map(|s| dioxus_router::exports::urlencoding::decode(s).unwrap_or(s.into()));
                     // skip the first empty segment
                     if s.starts_with('/') {
