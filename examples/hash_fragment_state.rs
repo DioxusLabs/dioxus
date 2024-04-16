@@ -1,11 +1,22 @@
 //! This example shows how to use the hash segment to store state in the url.
 //!
 //! You can set up two way data binding between the url hash and signals.
+//! 
+//! Run this example on desktop with  
+//! ```sh
+//! dx serve --example hash_fragment_state --features=ciborium,base64
+//! ```
+//! Or on web with
+//! ```sh
+//! dx serve --platform web --features web --example hash_fragment_state --features=ciborium,base64 -- --no-default-features
+//! ```
 
 use std::{fmt::Display, str::FromStr};
 
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
 
 fn main() {
     launch(|| {
@@ -24,20 +35,45 @@ enum Route {
     },
 }
 
+// You can use a custom type with the hash segment as long as it implements Display, FromStr and Default
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 struct State {
     counters: Vec<usize>,
 }
 
+// Display the state in a way that can be parsed by FromStr
 impl Display for State {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", serde_json::to_string(self).unwrap())
+        let mut serialized = Vec::new();
+        if ciborium::into_writer(self, &mut serialized).is_ok() {
+            write!(f, "{}", STANDARD.encode(serialized).to_string())?;
+        }
+        Ok(())
     }
 }
 
-impl FromHashFragment for State {
-    fn from_hash_fragment(hash: &str) -> Self {
-        serde_json::from_str(hash).unwrap_or_default()
+enum StateParseError {
+    DecodeError(base64::DecodeError),
+    CiboriumError(ciborium::de::Error<std::io::Error>),
+}
+
+impl std::fmt::Display for StateParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DecodeError(err) => write!(f, "Failed to decode base64: {}", err),
+            Self::CiboriumError(err) => write!(f, "Failed to deserialize: {}", err),
+        }
+    }
+}
+
+// Parse the state from a string that was created by Display
+impl FromStr for State {
+    type Err = StateParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let decompressed = STANDARD.decode(s.as_bytes()).map_err(StateParseError::DecodeError)?;
+        let parsed = ciborium::from_reader(std::io::Cursor::new(decompressed)).map_err(StateParseError::CiboriumError)?;
+        Ok(parsed)
     }
 }
 
