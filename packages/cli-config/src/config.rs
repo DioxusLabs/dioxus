@@ -211,7 +211,7 @@ impl Default for DioxusConfig {
                     key_path: None,
                     cert_path: None,
                 },
-                precompress: true,
+                pre_compress: true,
             },
             bundle: BundleConfig {
                 identifier: Some(format!("io.github.{name}")),
@@ -281,9 +281,9 @@ pub struct WebConfig {
     pub resource: WebResourceConfig,
     #[serde(default)]
     pub https: WebHttpsConfig,
-    /// Whether to enable precompression of assets and wasm during a web build
+    /// Whether to enable pre-compression of assets and wasm during a web build
     #[serde(default = "true_bool")]
-    pub precompress: bool,
+    pub pre_compress: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

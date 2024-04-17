@@ -69,15 +69,15 @@ pub fn copy_assets_dir(config: &CrateConfig, platform: Platform) -> anyhow::Resu
     let asset_dir = config.asset_dir();
 
     if asset_dir.is_dir() {
-        // Only precompress the assets from the web build. Desktop assets are not served, so they don't need to be precompressed
-        let precompress = platform == Platform::Web && config.dioxus_config.web.precompress;
+        // Only pre-compress the assets from the web build. Desktop assets are not served, so they don't need to be pre_compressed
+        let pre_compress = platform == Platform::Web && config.dioxus_config.web.pre_compress;
 
-        copy_dir_to(asset_dir, out_dir, precompress)?;
+        copy_dir_to(asset_dir, out_dir, pre_compress)?;
     }
     Ok(())
 }
 
-fn copy_dir_to(src_dir: PathBuf, dest_dir: PathBuf, precompress: bool) -> std::io::Result<()> {
+fn copy_dir_to(src_dir: PathBuf, dest_dir: PathBuf, pre_compress: bool) -> std::io::Result<()> {
     let entries = std::fs::read_dir(&src_dir)?;
     let mut children: Vec<std::thread::JoinHandle<std::io::Result<()>>> = Vec::new();
 
@@ -88,7 +88,8 @@ fn copy_dir_to(src_dir: PathBuf, dest_dir: PathBuf, precompress: bool) -> std::i
         children.push(std::thread::spawn(move || {
             if entry.file_type()?.is_dir() {
                 // If the file is a directory, recursively copy it into the output directory
-                if let Err(err) = copy_dir_to(entry_path.clone(), output_file_location, precompress)
+                if let Err(err) =
+                    copy_dir_to(entry_path.clone(), output_file_location, pre_compress)
                 {
                     tracing::error!(
                         "Failed to pre-compress directory {}: {}",
@@ -103,7 +104,7 @@ fn copy_dir_to(src_dir: PathBuf, dest_dir: PathBuf, precompress: bool) -> std::i
                 std::fs::copy(&entry_path, &output_file_location)?;
 
                 // Then pre-compress the file if needed
-                if precompress {
+                if pre_compress {
                     if let Err(err) = pre_compress_file(&entry_path.clone()) {
                         tracing::error!(
                             "Failed to pre-compress static assets {}: {}",
@@ -123,7 +124,7 @@ fn copy_dir_to(src_dir: PathBuf, dest_dir: PathBuf, precompress: bool) -> std::i
     Ok(())
 }
 
-/// Precompress a file with brotli
+/// pre-compress a file with brotli
 pub(crate) fn pre_compress_file(path: &Path) -> std::io::Result<()> {
     let new_extension = match path.extension() {
         Some(ext) => {
@@ -145,7 +146,7 @@ pub(crate) fn pre_compress_file(path: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Precompress all files in a folder
+/// pre-compress all files in a folder
 pub(crate) fn pre_compress_folder(path: &Path) -> std::io::Result<()> {
     let walk_dir = WalkDir::new(path);
     for entry in walk_dir.into_iter().filter_map(|e| e.ok()) {

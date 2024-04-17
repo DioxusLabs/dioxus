@@ -236,8 +236,8 @@ pub fn build_web(
         tracing::info!("Skipping optimization with wasm-opt, binaryen tool not found.");
     }
 
-    // If precompressing is enabled, we can precompress the wasm-bindgen output
-    if config.dioxus_config.web.precompress {
+    // If pre-compressing is enabled, we can pre_compress the wasm-bindgen output
+    if config.dioxus_config.web.pre_compress {
         pre_compress_folder(&bindgen_outdir)?;
     }
 
