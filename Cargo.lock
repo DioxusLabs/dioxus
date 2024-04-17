@@ -2489,6 +2489,7 @@ dependencies = [
 name = "dioxus-lib"
 version = "0.5.2"
 dependencies = [
+ "dioxus",
  "dioxus-config-macro",
  "dioxus-core 0.5.2",
  "dioxus-core-macro",
@@ -2604,6 +2605,7 @@ dependencies = [
 name = "dioxus-router-macro"
 version = "0.5.2"
 dependencies = [
+ "dioxus",
  "proc-macro2",
  "quote",
  "slab",

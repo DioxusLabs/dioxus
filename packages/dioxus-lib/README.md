@@ -1,12 +1,9 @@
 <div>
-  <h1>🌗🚀 Dioxus</h1>
+  <h1>🌗🚀 Dioxus (lib)</h1>
   <p>
     <strong>A concurrent, functional, virtual DOM for Rust</strong>
   </p>
 </div>
-
-> This crate implements dioxus-lib which is a renderer-free version of Dioxus. This crate is intended to be used by library authors who need a stable core verison of dioxus withuot pulling in renderer-related dependencies on accident.
-
 # Resources
 
 This overview provides a brief introduction to Dioxus. For a more in-depth guide, make sure to check out:
@@ -38,9 +35,9 @@ Remember: Dioxus is a library for declaring interactive user interfaces—it is 
 
 All Dioxus apps are built by composing functions that return an `Element`.
 
-To launch an app, we use the `launch` method and use features in ``Cargo.toml`` to specify which renderer we want to use. In the launch function, we pass the app's root `Component`.
+To launch an app, we use the `launch` method and use features in `Cargo.toml` to specify which renderer we want to use. In the launch function, we pass the app's root `Component`.
 
-```rust
+```rust, no_run
 use dioxus::prelude::*;
 
 fn main() {
