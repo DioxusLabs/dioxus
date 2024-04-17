@@ -310,7 +310,7 @@ impl Scope {
     ///
     /// pub fn use_custom_state() -> CustomState {
     ///     use_hook(|| CustomState {
-    ///         inner: Signal::new(InnerCustomState)
+    ///         inner: Signal::new(InnerCustomState(0))
     ///     })
     /// }
     /// ```

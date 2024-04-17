@@ -66,6 +66,9 @@ tokio = { workspace = true, features = ["rt", "sync"], optional = true }
 dioxus-hot-reload = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync", "rt-multi-thread"], optional = true }
 
+[dev-dependencies]
+dioxus = { workspace = true, features = ["fullstack"] }
+
 [features]
 default = ["hot-reload"]
 hot-reload = ["serde_json"]
