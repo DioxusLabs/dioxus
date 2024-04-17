@@ -200,7 +200,6 @@ impl<T, S: Storage<T>> GenerationalBox<T, S> {
 
     /// Recycle the generationalbox, dropping the value.
     pub fn recycle(&self) {
-        _ = Storage::take(&self.raw.0.data);
         <S as AnyStorage>::recycle(&self.raw);
     }
 
@@ -208,7 +207,9 @@ impl<T, S: Storage<T>> GenerationalBox<T, S> {
     /// This will return the value if the value was taken.
     pub fn manually_drop(&self) -> Option<T> {
         if self.validate() {
-            Storage::take(&self.raw.0.data)
+            let value = Storage::take(&self.raw.0.data)?;
+            <S as AnyStorage>::recycle(&self.raw);
+            Some(value)
         } else {
             None
         }
