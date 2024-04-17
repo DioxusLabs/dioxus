@@ -101,12 +101,6 @@ args = [
   "--tests",
   "--examples",
   "--workspace",
-  "--exclude",
-  "dioxus-router",
-  "--exclude",
-  "dioxus-desktop",
-  "--exclude",
-  "dioxus-mobile",
 ]
 private = true
 
