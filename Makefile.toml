@@ -88,7 +88,7 @@ command = "cargo"
 args = ["build"]
 
 [tasks.test-flow]
-dependencies = ["test"]
+dependencies = ["test", "docs"]
 private = true
 
 [tasks.test]
@@ -101,12 +101,21 @@ args = [
   "--tests",
   "--examples",
   "--workspace",
-  "--exclude",
-  "dioxus-router",
+  # These tests run on Ubuntu without a screen. Desktop tests that require a screen fail, so we skip them
   "--exclude",
   "dioxus-desktop",
   "--exclude",
   "dioxus-mobile",
+]
+private = true
+
+[tasks.docs]
+dependencies = ["build"]
+command = "cargo"
+args = [
+  "test",
+  "--doc",
+  "--workspace",
 ]
 private = true
 
