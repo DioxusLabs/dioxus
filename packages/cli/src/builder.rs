@@ -237,7 +237,7 @@ pub fn build_web(
     }
 
     // If pre-compressing is enabled, we can pre_compress the wasm-bindgen output
-    if config.dioxus_config.web.pre_compress {
+    if config.should_pre_compress_web_assets() {
         pre_compress_folder(&bindgen_outdir)?;
     }
 

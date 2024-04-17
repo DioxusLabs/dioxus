@@ -70,7 +70,7 @@ pub fn copy_assets_dir(config: &CrateConfig, platform: Platform) -> anyhow::Resu
 
     if asset_dir.is_dir() {
         // Only pre-compress the assets from the web build. Desktop assets are not served, so they don't need to be pre_compressed
-        let pre_compress = platform == Platform::Web && config.dioxus_config.web.pre_compress;
+        let pre_compress = platform == Platform::Web && config.should_pre_compress_web_assets();
 
         copy_dir_to(asset_dir, out_dir, pre_compress)?;
     }
