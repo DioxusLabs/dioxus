@@ -137,7 +137,7 @@ pub(crate) fn pre_compress_file(path: &Path) -> std::io::Result<()> {
         }
         None => OsString::from("br"),
     };
-    let file = std::fs::File::open(&path)?;
+    let file = std::fs::File::open(path)?;
     let mut stream = std::io::BufReader::new(file);
     let output = path.with_extension(new_extension);
     let mut buffer = std::fs::File::create(output)?;
@@ -152,7 +152,7 @@ pub(crate) fn pre_compress_folder(path: &Path) -> std::io::Result<()> {
     for entry in walk_dir.into_iter().filter_map(|e| e.ok()) {
         let entry_path = entry.path();
         if entry_path.is_file() {
-            pre_compress_file(&entry_path)?;
+            pre_compress_file(entry_path)?;
         }
     }
     Ok(())
