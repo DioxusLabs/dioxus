@@ -137,7 +137,7 @@ fn TodoHeader(mut todos: Signal<HashMap<u32, TodoItem>>) -> Element {
                 value: "{draft}",
                 autofocus: "true",
                 oninput: move |evt| draft.set(evt.value()),
-                onkeydown: onkeydown
+                onkeydown
             }
         }
     }

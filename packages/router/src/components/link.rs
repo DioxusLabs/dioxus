@@ -280,11 +280,11 @@ pub fn Link(props: LinkProps) -> Element {
     rsx! {
         a {
             onclick: action,
-            href: href,
+            href,
             onmounted: onmounted,
-            prevent_default: prevent_default,
-            class: class,
-            rel: rel,
+            prevent_default,
+            class,
+            rel,
             target: tag_target,
             ..attributes,
             {children}
