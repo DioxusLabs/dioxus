@@ -101,6 +101,11 @@ args = [
   "--tests",
   "--examples",
   "--workspace",
+  # These tests run on Ubuntu without a screen. Desktop tests that require a screen fail, so we skip them
+  "--exclude",
+  "dioxus-desktop",
+  "--exclude",
+  "dioxus-mobile",
 ]
 private = true
 
