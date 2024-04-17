@@ -83,7 +83,7 @@ fn app() -> Element {
                 // Since we store the todos in a signal too, we also need to send down the todo list
                 ul { class: "todo-list",
                     for id in filtered_todos() {
-                        TodoEntry { id, todos }
+                        TodoEntry { key: "{id}", id, todos }
                     }
                 }
 
