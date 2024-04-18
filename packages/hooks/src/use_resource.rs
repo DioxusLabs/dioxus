@@ -57,12 +57,12 @@ use std::{cell::Cell, future::Future, rc::Rc};
 ///
 /// ```rust
 /// # use dioxus::prelude::*;
-/// # async fn sleep(delay: u32) {}
+/// # async fn future(n: i32) -> i32 { n }
 ///
 /// #[component]
 /// fn Comp(count: u32) -> Element {
-///     // Because the memo subscribes to `count` by adding it as a dependency, the memo will rerun every time `count` changes.
-///     let new_count = use_resource(use_reactive((&count,), |(count,)| async move {count + 1} ));
+///     // Because the resource subscribes to `count` by adding it as a dependency, the resource will recalculate every time `count` changes.
+///     let new_count = use_resource(use_reactive((&count,), |(count,)| future(count)));
 ///
 ///     todo!()
 /// }

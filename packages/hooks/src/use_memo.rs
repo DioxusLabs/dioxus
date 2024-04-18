@@ -27,7 +27,6 @@ use dioxus_signals::{Memo, Signal};
 ///
 /// ```rust
 /// # use dioxus::prelude::*;
-/// # async fn sleep(delay: u32) {}
 ///
 /// #[component]
 /// fn Comp(count: u32) -> Element {
