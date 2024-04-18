@@ -16,38 +16,68 @@ impl LiveviewElement {
     }
 }
 
+macro_rules! scripted_getter {
+    ($meth_name:ident, $script:literal, $output_type:path) => {
+        fn $meth_name(
+            &self,
+        ) -> std::pin::Pin<
+            Box<dyn futures_util::Future<Output = dioxus_html::MountedResult<$output_type>>>,
+        > {
+            let script = format!($script, self.id.0);
+
+            let fut = self
+                .query
+                .new_query::<Option<$output_type>>(&script)
+                .resolve();
+            Box::pin(async move {
+                match fut.await {
+                    Ok(Some(res)) => Ok(res),
+                    Ok(None) => MountedResult::Err(dioxus_html::MountedError::OperationFailed(
+                        Box::new(DesktopQueryError::FailedToQuery),
+                    )),
+                    Err(err) => MountedResult::Err(dioxus_html::MountedError::OperationFailed(
+                        Box::new(err),
+                    )),
+                }
+            })
+        }
+    };
+}
+
 impl RenderedElementBacking for LiveviewElement {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
-    fn get_client_rect(
-        &self,
-    ) -> std::pin::Pin<
-        Box<
-            dyn futures_util::Future<
-                Output = dioxus_html::MountedResult<dioxus_html::geometry::euclid::Rect<f64, f64>>,
-            >,
-        >,
-    > {
-        let script = format!("return window.interpreter.getClientRect({});", self.id.0);
+    scripted_getter!(
+        get_scroll_height,
+        "return window.interpreter.getScrollHeight({});",
+        i32
+    );
 
-        let fut = self
-            .query
-            .new_query::<Option<Rect<f64, f64>>>(&script)
-            .resolve();
-        Box::pin(async move {
-            match fut.await {
-                Ok(Some(rect)) => Ok(rect),
-                Ok(None) => MountedResult::Err(dioxus_html::MountedError::OperationFailed(
-                    Box::new(DesktopQueryError::FailedToQuery),
-                )),
-                Err(err) => {
-                    MountedResult::Err(dioxus_html::MountedError::OperationFailed(Box::new(err)))
-                }
-            }
-        })
-    }
+    scripted_getter!(
+        get_scroll_left,
+        "return window.interpreter.getScrollLeft({});",
+        i32
+    );
+
+    scripted_getter!(
+        get_scroll_top,
+        "return window.interpreter.getScrollTop({});",
+        i32
+    );
+
+    scripted_getter!(
+        get_scroll_width,
+        "return window.interpreter.getScrollWidth({});",
+        i32
+    );
+
+    scripted_getter!(
+        get_client_rect,
+        "return window.interpreter.getClientRect({});",
+        dioxus_html::geometry::euclid::Rect<f64, f64>
+    );
 
     fn scroll_to(
         &self,

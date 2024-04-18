@@ -423,6 +423,38 @@ impl From<&web_sys::Element> for MountedData {
 
 #[cfg(feature = "mounted")]
 impl crate::RenderedElementBacking for web_sys::Element {
+    fn get_scroll_height(
+        &self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::MountedResult<i32>>>> {
+        let height = self.scroll_height();
+        let result = Ok(height);
+        Box::pin(async { result })
+    }
+
+    fn get_scroll_left(
+        &self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::MountedResult<i32>>>> {
+        let left = self.scroll_left();
+        let result = Ok(left);
+        Box::pin(async { result })
+    }
+
+    fn get_scroll_top(
+        &self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::MountedResult<i32>>>> {
+        let top = self.scroll_top();
+        let result = Ok(top);
+        Box::pin(async { result })
+    }
+
+    fn get_scroll_width(
+        &self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::MountedResult<i32>>>> {
+        let width = self.scroll_width();
+        let result = Ok(width);
+        Box::pin(async { result })
+    }
+
     fn get_client_rect(
         &self,
     ) -> std::pin::Pin<

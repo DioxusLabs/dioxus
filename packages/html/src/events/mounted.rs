@@ -16,6 +16,30 @@ pub trait RenderedElementBacking: std::any::Any {
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
 
+    /// Get the height of an element's content, including content not visible on the screen due to overflow
+    #[allow(clippy::type_complexity)]
+    fn get_scroll_height(&self) -> Pin<Box<dyn Future<Output = MountedResult<i32>>>> {
+        Box::pin(async { Err(MountedError::NotSupported) })
+    }
+
+    /// Get the number of pixels that an element's content is scrolled horizontally
+    #[allow(clippy::type_complexity)]
+    fn get_scroll_left(&self) -> Pin<Box<dyn Future<Output = MountedResult<i32>>>> {
+        Box::pin(async { Err(MountedError::NotSupported) })
+    }
+
+    /// Get the number of pixels that an element's content is scrolled vertically
+    #[allow(clippy::type_complexity)]
+    fn get_scroll_top(&self) -> Pin<Box<dyn Future<Output = MountedResult<i32>>>> {
+        Box::pin(async { Err(MountedError::NotSupported) })
+    }
+
+    /// Get the width of an element's content, including content not visible on the screen due to overflow
+    #[allow(clippy::type_complexity)]
+    fn get_scroll_width(&self) -> Pin<Box<dyn Future<Output = MountedResult<i32>>>> {
+        Box::pin(async { Err(MountedError::NotSupported) })
+    }
+
     /// Get the bounding rectangle of the element relative to the viewport (this does not include the scroll position)
     #[allow(clippy::type_complexity)]
     fn get_client_rect(&self) -> Pin<Box<dyn Future<Output = MountedResult<Rect<f64, f64>>>>> {
@@ -72,6 +96,26 @@ impl MountedData {
         Self {
             inner: Box::new(registry),
         }
+    }
+
+    /// Get the height of an element's content, including content not visible on the screen due to overflow
+    pub async fn get_scroll_height(&self) -> MountedResult<i32> {
+        self.inner.get_scroll_height().await
+    }
+
+    /// Get the number of pixels that an element's content is scrolled horizontally
+    pub async fn get_scroll_left(&self) -> MountedResult<i32> {
+        self.inner.get_scroll_left().await
+    }
+
+    /// Get the number of pixels that an element's content is scrolled vertically
+    pub async fn get_scroll_top(&self) -> MountedResult<i32> {
+        self.inner.get_scroll_top().await
+    }
+
+    /// Get the width of an element's content, including content not visible on the screen due to overflow
+    pub async fn get_scroll_width(&self) -> MountedResult<i32> {
+        self.inner.get_scroll_width().await
     }
 
     /// Get the bounding rectangle of the element relative to the viewport (this does not include the scroll position)
