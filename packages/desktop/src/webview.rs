@@ -239,9 +239,9 @@ impl WebviewInstance {
         loop {
             // If we're waiting for a render, wait for it to finish before we continue
             if self.is_waiting_for_render {
-                let fut = self.desktop_context.edit_queue.wait_for_edits_flushed();
-                pin_mut!(fut);
-                match fut.poll_unpin(&mut cx) {
+                let edits_flushed_poll =
+                    self.desktop_context.edit_queue.poll_edits_flushed(&mut cx);
+                match edits_flushed_poll {
                     std::task::Poll::Ready(_) => {}
                     std::task::Poll::Pending => return,
                 }
