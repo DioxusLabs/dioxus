@@ -21,7 +21,7 @@ Dioxus SSR provides utilities to render Dioxus components to valid HTML. Once re
 let app: Component = |cx| rsx!(div {"hello world!"});
 
 let mut vdom = VirtualDom::new(app);
-let _ = vdom.rebuild();
+vdom.rebuild_in_place();
 
 let text = dioxus_ssr::render(&vdom);
 assert_eq!(text, "<div>hello world!</div>")
@@ -45,7 +45,7 @@ let content = dioxus_ssr::render_element(rsx!{
 
 ```rust, ignore
 let mut vdom = VirtualDom::new(app);
-let _ = vdom.rebuild();
+vdom.rebuild_in_place();
 
 let content = dioxus_ssr::render(&vdom);
 ```
@@ -63,7 +63,7 @@ To enable pre-rendering, simply set the pre-rendering flag to true.
 ```rust, ignore
 let mut vdom = VirtualDom::new(App);
 
-let _ = vdom.rebuild();
+vdom.rebuild_in_place();
 
 let mut renderer = dioxus_ssr::Renderer::new();
 renderer.pre_render = true;

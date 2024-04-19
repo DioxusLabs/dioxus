@@ -18,7 +18,7 @@ pub fn check_app_exits(app: fn() -> Element) {
     });
 
     LaunchBuilder::desktop()
-        .with_cfg(Config::new().with_window(WindowBuilder::new().with_visible(true)))
+        .with_cfg(Config::new().with_window(WindowBuilder::new().with_visible(false)))
         .launch(app);
 
     // Stop deadman's switch

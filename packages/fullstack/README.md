@@ -32,7 +32,7 @@ Fullstack utilities for the [`Dioxus`](https://dioxuslabs.com) framework.
 
 Full stack Dioxus in under 30 lines of code
 
-```rust
+```rust, no_run
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
 
@@ -42,7 +42,7 @@ fn main() {
 
 #[component]
 fn App() -> Element {
-    let meaning = use_signal(|| None);
+    let mut meaning = use_signal(|| None);
 
     rsx! {
         h1 { "Meaning of life: {meaning:?}" }
