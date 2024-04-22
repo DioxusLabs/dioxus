@@ -106,7 +106,9 @@ fn handle_edits_code() -> String {
 /// If you enter a relative path, the web client automatically prefixes the host address in
 /// `window.location` when creating a web socket to LiveView.
 ///
-/// ```
+/// ```rust
+/// use dioxus_liveview::interpreter_glue;
+///
 /// // Creates websocket connection to same host as current page
 /// interpreter_glue("/api/liveview");
 ///

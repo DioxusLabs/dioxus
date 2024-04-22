@@ -73,7 +73,12 @@ pub fn GoBackButton(props: HistoryButtonProps) -> Element {
     let disabled = !router.can_go_back();
 
     rsx! {
-        button { disabled: "{disabled}", prevent_default: "onclick", onclick: move |_| router.go_back(), {children} }
+        button {
+            disabled: "{disabled}",
+            prevent_default: "onclick",
+            onclick: move |_| router.go_back(),
+            {children}
+        }
     }
 }
 
@@ -114,7 +119,7 @@ pub fn GoBackButton(props: HistoryButtonProps) -> Element {
 /// }
 /// #
 /// # let mut vdom = VirtualDom::new(App);
-/// # let _ = vdom.rebuild();
+/// # vdom.rebuild_in_place();
 /// # assert_eq!(
 /// #     dioxus_ssr::render(&vdom),
 /// #     r#"<button disabled="true" dioxus-prevent-default="onclick">go forward</button>"#
@@ -139,6 +144,11 @@ pub fn GoForwardButton(props: HistoryButtonProps) -> Element {
     let disabled = !router.can_go_forward();
 
     rsx! {
-        button { disabled: "{disabled}", prevent_default: "onclick", onclick: move |_| router.go_forward(), {children} }
+        button {
+            disabled: "{disabled}",
+            prevent_default: "onclick",
+            onclick: move |_| router.go_forward(),
+            {children}
+        }
     }
 }
