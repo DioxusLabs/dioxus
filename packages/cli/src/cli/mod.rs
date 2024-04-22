@@ -40,40 +40,40 @@ pub struct Cli {
     #[clap(short)]
     pub v: bool,
 
-    /// Specify bin target
+    /// Specify a binary target.
     #[clap(global = true, long)]
     pub bin: Option<String>,
 }
 
 #[derive(Parser)]
 pub enum Commands {
-    /// Build the Rust WASM app and all of its assets.
+    /// Build the Dioxus project and all of its assets.
     Build(build::Build),
 
-    /// Translate some source file into Dioxus code.
+    /// Translate a source file into Dioxus code.
     Translate(translate::Translate),
 
-    /// Build, watch & serve the Rust WASM app and all of its assets.
+    /// Build, watch & serve the Dioxus project and all of its assets.
     Serve(serve::Serve),
 
     /// Create a new project for Dioxus.
     New(create::Create),
 
     /// Init a new project for Dioxus in an existing directory.
-    /// Will attempt to keep your project in a good state
+    /// Will attempt to keep your project in a good state.
     Init(init::Init),
 
     /// Clean output artifacts.
     Clean(clean::Clean),
 
-    /// Bundle the Rust desktop app and all of its assets.
+    /// Bundle the Dioxus app into a shippable object.
     Bundle(bundle::Bundle),
 
-    /// Format some rsx
+    /// Automatically format RSX.
     #[clap(name = "fmt")]
     Autoformat(autoformat::Autoformat),
 
-    /// Check the Rust files in the project for issues.
+    /// Check the project for any issues.
     #[clap(name = "check")]
     Check(check::Check),
 
