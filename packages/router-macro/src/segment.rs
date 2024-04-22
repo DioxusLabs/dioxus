@@ -130,7 +130,7 @@ pub fn static_segment_idx(idx: usize) -> Ident {
 
 pub fn parse_route_segments<'a>(
     route_span: Span,
-    mut fields: impl Iterator<Item = (&'a Ident, &'a Type)>,
+    fields: impl Iterator<Item = (&'a Ident, &'a Type)> + Clone,
     route: &str,
 ) -> syn::Result<(Vec<RouteSegment>, Option<QuerySegment>)> {
     let mut route_segments = Vec::new();
@@ -163,7 +163,7 @@ pub fn parse_route_segments<'a>(
                 segment.to_string()
             };
 
-            let field = fields.find(|(name, _)| **name == ident);
+            let field = fields.clone().find(|(name, _)| **name == ident);
 
             let ty = if let Some(field) = field {
                 field.1.clone()
@@ -203,7 +203,7 @@ pub fn parse_route_segments<'a>(
         Some(query) => {
             if let Some(query) = query.strip_prefix(":..") {
                 let query_ident = Ident::new(query, Span::call_site());
-                let field = fields.find(|(name, _)| *name == &query_ident);
+                let field = fields.clone().find(|(name, _)| *name == &query_ident);
 
                 let ty = if let Some((_, ty)) = field {
                     ty.clone()
@@ -229,7 +229,7 @@ pub fn parse_route_segments<'a>(
                     }
                     if let Some(query_argument) = segment.strip_prefix(':') {
                         let query_ident = Ident::new(query_argument, Span::call_site());
-                        let field = fields.find(|(name, _)| *name == &query_ident);
+                        let field = fields.clone().find(|(name, _)| *name == &query_ident);
 
                         let ty = if let Some((_, ty)) = field {
                             ty.clone()
