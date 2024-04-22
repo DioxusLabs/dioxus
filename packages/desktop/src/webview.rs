@@ -15,9 +15,6 @@ pub(crate) struct WebviewInstance {
     pub desktop_context: DesktopContext,
     pub waker: Waker,
 
-    // If this webview is currently waiting for an edit to be flushed. We don't run the virtual dom while this is true to avoid running effects before the dom has been updated
-    pub(crate) is_waiting_for_render: bool,
-
     // Wry assumes the webcontext is alive for the lifetime of the webview.
     // We need to keep the webcontext alive, otherwise the webview will crash
     _web_context: WebContext,
@@ -224,7 +221,6 @@ impl WebviewInstance {
             waker: tao_waker(shared.proxy.clone(), desktop_context.window.id()),
             desktop_context,
             dom,
-            is_waiting_for_render: false,
             _menu: menu,
             _web_context: web_context,
         }
@@ -238,13 +234,9 @@ impl WebviewInstance {
         // It will return Pending when it needs to be polled again - nothing is ready
         loop {
             // If we're waiting for a render, wait for it to finish before we continue
-            if self.is_waiting_for_render {
-                let edits_flushed_poll =
-                    self.desktop_context.edit_queue.poll_edits_flushed(&mut cx);
-                match edits_flushed_poll {
-                    std::task::Poll::Ready(_) => {}
-                    std::task::Poll::Pending => return,
-                }
+            let edits_flushed_poll = self.desktop_context.edit_queue.poll_edits_flushed(&mut cx);
+            if edits_flushed_poll.is_pending() {
+                return;
             }
 
             {
@@ -260,7 +252,6 @@ impl WebviewInstance {
             self.dom
                 .render_immediate(&mut *self.desktop_context.mutation_state.borrow_mut());
             self.desktop_context.send_edits();
-            self.is_waiting_for_render = true;
         }
     }
 

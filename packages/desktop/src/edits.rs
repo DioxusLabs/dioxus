@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::{cell::RefCell, collections::VecDeque, rc::Rc, task::Waker};
 
 /// This handles communication between the requests that the webview makes and the interpreter. The interpreter constantly makes long running requests to the webview to get any edits that should be made to the DOM almost like server side events.
@@ -9,23 +10,26 @@ pub(crate) struct EditQueue {
     // Stores any futures waiting for edits to be applied to the webview
     // NOTE: We don't use a Notify here because we need polling the notify to be cancel safe
     waiting_for_edits_flushed: Rc<RefCell<Vec<Waker>>>,
+    // If this webview is currently waiting for an edit to be flushed. We don't run the virtual dom while this is true to avoid running effects before the dom has been updated
+    edits_in_progress: Rc<Cell<bool>>,
 }
 
 impl EditQueue {
     pub fn handle_request(&self, responder: wry::RequestAsyncResponder) {
         let mut queue = self.queue.borrow_mut();
-        for waker in self.waiting_for_edits_flushed.borrow_mut().drain(..) {
-            waker.wake();
-        }
         if let Some(bytes) = queue.pop_back() {
             responder.respond(wry::http::Response::new(bytes));
         } else {
+            // There are now no edits that need to be applied to the webview
+            self.edits_finished();
             *self.responder.borrow_mut() = Some(responder);
         }
     }
 
     pub fn add_edits(&self, edits: Vec<u8>) {
         let mut responder = self.responder.borrow_mut();
+        // There are pending edits that need to be applied to the webview before we run futures
+        self.start_edits();
         if let Some(responder) = responder.take() {
             responder.respond(wry::http::Response::new(edits));
         } else {
@@ -33,13 +37,24 @@ impl EditQueue {
         }
     }
 
-    fn edits_queued(&self) -> bool {
-        self.queue.borrow().len() > 0
+    fn start_edits(&self) {
+        self.edits_in_progress.set(true);
+    }
+
+    fn edits_finished(&self) {
+        for waker in self.waiting_for_edits_flushed.borrow_mut().drain(..) {
+            waker.wake();
+        }
+        self.edits_in_progress.set(false);
+    }
+
+    fn edits_in_progress(&self) -> bool {
+        self.edits_in_progress.get()
     }
 
     /// Wait until all pending edits have been rendered in the webview
     pub fn poll_edits_flushed(&self, cx: &mut std::task::Context<'_>) -> std::task::Poll<()> {
-        if self.edits_queued() {
+        if self.edits_in_progress() {
             let waker = cx.waker();
             self.waiting_for_edits_flushed
                 .borrow_mut()
