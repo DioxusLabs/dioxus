@@ -1,5 +1,5 @@
 use crate::{
-    innerlude::{throw_error, CapturedPanic},
+    innerlude::{throw_error, CapturedPanic, RenderError},
     nodes::RenderReturn,
     ComponentFunction,
 };
@@ -78,12 +78,18 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> AnyProp
         }));
 
         match res {
-            Ok(Some(e)) => RenderReturn::Ready(e),
-            Ok(None) => RenderReturn::default(),
+            Ok(Ok(e)) => RenderReturn {
+                node: e,
+                state: ComponentState::Running,
+            },
+            Ok(Err(err)) => match err {
+                RenderError::Aborted(e) => {}
+                RenderError::Suspended(suspended) => {}
+            },
             Err(err) => {
                 let component_name = self.name;
                 tracing::error!("Error while rendering component `{component_name}`: {err:?}");
-                throw_error::<()>(CapturedPanic { error: err });
+                throw_error(CapturedPanic { error: err });
                 RenderReturn::default()
             }
         }

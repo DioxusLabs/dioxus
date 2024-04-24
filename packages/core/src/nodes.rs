@@ -1,11 +1,11 @@
-use crate::innerlude::VProps;
+use crate::innerlude::{RenderError, VProps};
 use crate::{any_props::BoxedAnyProps, innerlude::ScopeState};
 use crate::{arena::ElementId, Element, Event};
 use crate::{
     innerlude::{ElementRef, EventHandler, MountId},
     properties::ComponentFunction,
 };
-use crate::{Properties, VirtualDom};
+use crate::{CapturedError, Properties, Task, VirtualDom};
 use core::panic;
 use std::ops::Deref;
 use std::rc::Rc;
@@ -21,38 +21,52 @@ pub type TemplateId = &'static str;
 /// The actual state of the component's most recent computation
 ///
 /// If the component returned early (e.g. `return None`), this will be Aborted(None)
-pub enum RenderReturn {
-    /// A currently-available element
-    Ready(VNode),
+pub struct RenderReturn {
+    /// The node that was rendered
+    pub(crate) node: Element,
+}
 
-    /// The component aborted rendering early. It might've thrown an error.
-    ///
-    /// In its place we've produced a placeholder to locate its spot in the dom when it recovers.
-    Aborted(VNode),
+impl Into<Element> for RenderReturn {
+    fn into(self) -> Element {
+        self.node
+    }
+}
+
+impl From<Element> for RenderReturn {
+    fn from(node: Element) -> Self {
+        RenderReturn { node }
+    }
 }
 
 impl Clone for RenderReturn {
     fn clone(&self) -> Self {
-        match self {
-            RenderReturn::Ready(node) => RenderReturn::Ready(node.clone_mounted()),
-            RenderReturn::Aborted(node) => RenderReturn::Aborted(node.clone_mounted()),
+        match self.node {
+            Ok(node) => RenderReturn {
+                node: Ok(node.clone_mounted()),
+            },
+            Err(RenderError::Aborted(err)) => RenderReturn {
+                node: Err(RenderError::Aborted(err.clone_mounted())),
+            },
+            Err(RenderError::Suspended(fut)) => RenderReturn {
+                node: Err(RenderError::Suspended(fut.clone_mounted())),
+            },
         }
     }
 }
 
 impl Default for RenderReturn {
     fn default() -> Self {
-        RenderReturn::Aborted(VNode::placeholder())
+        RenderReturn {
+            node: Ok(VNode::placeholder()),
+        }
     }
 }
 
 impl Deref for RenderReturn {
-    type Target = VNode;
+    type Target = Element;
 
     fn deref(&self) -> &Self::Target {
-        match self {
-            RenderReturn::Ready(node) | RenderReturn::Aborted(node) => node,
-        }
+        &self.node
     }
 }
 
@@ -142,6 +156,36 @@ impl Clone for VNode {
     }
 }
 
+impl Default for VNode {
+    fn default() -> Self {
+        use std::cell::OnceCell;
+        // We can reuse all placeholders across the same thread to save memory
+        thread_local! {
+            static EMPTY_VNODE: OnceCell<Rc<VNodeInner>> = const { OnceCell::new() };
+        }
+        let vnode = EMPTY_VNODE.with(|cell| {
+            cell.get_or_init(move || {
+                Rc::new(VNodeInner {
+                    key: None,
+                    dynamic_nodes: Box::new([]),
+                    dynamic_attrs: Box::new([]),
+                    template: Cell::new(Template {
+                        name: "packages/core/nodes.rs:180:0:0",
+                        roots: &[],
+                        node_paths: &[],
+                        attr_paths: &[],
+                    }),
+                })
+            })
+            .clone()
+        });
+        Self {
+            vnode,
+            mount: Default::default(),
+        }
+    }
+}
+
 impl Drop for VNode {
     fn drop(&mut self) {
         // FIXME:
@@ -190,31 +234,7 @@ impl VNode {
 
     /// Create a template with no nodes that will be skipped over during diffing
     pub fn empty() -> Element {
-        use std::cell::OnceCell;
-        // We can reuse all placeholders across the same thread to save memory
-        thread_local! {
-            static EMPTY_VNODE: OnceCell<Rc<VNodeInner>> = const { OnceCell::new() };
-        }
-        let vnode = EMPTY_VNODE.with(|cell| {
-            cell.get_or_init(move || {
-                Rc::new(VNodeInner {
-                    key: None,
-                    dynamic_nodes: Box::new([]),
-                    dynamic_attrs: Box::new([]),
-                    template: Cell::new(Template {
-                        name: "packages/core/nodes.rs:180:0:0",
-                        roots: &[],
-                        node_paths: &[],
-                        attr_paths: &[],
-                    }),
-                })
-            })
-            .clone()
-        });
-        Some(Self {
-            vnode,
-            mount: Default::default(),
-        })
+        Ok(Self::default())
     }
 
     /// Create a template with a single placeholder node
@@ -858,7 +878,7 @@ impl<T: IntoDynNode> IntoDynNode for Option<T> {
 impl IntoDynNode for &Element {
     fn into_dyn_node(self) -> DynamicNode {
         match self.as_ref() {
-            Some(val) => val.clone().into_dyn_node(),
+            Ok(val) => val.clone().into_dyn_node(),
             _ => DynamicNode::default(),
         }
     }
@@ -908,7 +928,7 @@ impl IntoVNode for &VNode {
 impl IntoVNode for Element {
     fn into_vnode(self) -> VNode {
         match self {
-            Some(val) => val.into_vnode(),
+            Ok(val) => val.into_vnode(),
             _ => VNode::empty().unwrap(),
         }
     }
@@ -916,7 +936,7 @@ impl IntoVNode for Element {
 impl IntoVNode for &Element {
     fn into_vnode(self) -> VNode {
         match self {
-            Some(val) => val.into_vnode(),
+            Ok(val) => val.into_vnode(),
             _ => VNode::empty().unwrap(),
         }
     }

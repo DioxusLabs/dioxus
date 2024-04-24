@@ -1,4 +1,4 @@
-use crate::{runtime::Runtime, Element, ScopeId, Task};
+use crate::{innerlude::SuspendedFuture, runtime::Runtime, Element, ScopeId, Task};
 use futures_util::Future;
 use std::sync::Arc;
 
@@ -52,8 +52,9 @@ pub fn provide_root_context<T: 'static + Clone>(value: T) -> T {
 
 /// Suspended the current component on a specific task and then return None
 pub fn suspend(task: Task) -> Element {
-    Runtime::with_current_scope(|cx| cx.suspend(task));
-    None
+    Err(crate::innerlude::RenderError::Suspended(
+        SuspendedFuture::new(task),
+    ))
 }
 
 /// Start a new future on the same thread as the rest of the VirtualDom.

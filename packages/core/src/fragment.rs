@@ -88,7 +88,7 @@ impl<const A: bool> FragmentBuilder<A> {
 impl Properties for FragmentProps {
     type Builder = FragmentBuilder<false>;
     fn builder() -> Self::Builder {
-        FragmentBuilder(None)
+        FragmentBuilder(Ok(Default::default()))
     }
     fn memoize(&mut self, _other: &Self) -> bool {
         false

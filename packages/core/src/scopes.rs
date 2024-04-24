@@ -1,6 +1,4 @@
-use crate::{
-    any_props::BoxedAnyProps, nodes::RenderReturn, runtime::Runtime, scope_context::Scope,
-};
+use crate::{any_props::BoxedAnyProps, runtime::Runtime, scope_context::Scope, VNode};
 use std::{cell::Ref, rc::Rc};
 
 /// A component's unique identifier.
@@ -51,7 +49,7 @@ impl ScopeId {
 pub struct ScopeState {
     pub(crate) runtime: Rc<Runtime>,
     pub(crate) context_id: ScopeId,
-    pub(crate) last_rendered_node: Option<RenderReturn>,
+    pub(crate) last_rendered_node: Option<VNode>,
     pub(crate) props: BoxedAnyProps,
 }
 
@@ -67,7 +65,7 @@ impl ScopeState {
     /// This is useful for traversing the tree outside of the VirtualDom, such as in a custom renderer or in SSR.
     ///
     /// Panics if the tree has not been built yet.
-    pub fn root_node(&self) -> &RenderReturn {
+    pub fn root_node(&self) -> &VNode {
         self.try_root_node()
             .expect("The tree has not been built yet. Make sure to call rebuild on the tree before accessing its nodes.")
     }
@@ -77,7 +75,7 @@ impl ScopeState {
     /// This is useful for traversing the tree outside of the VirtualDom, such as in a custom renderer or in SSR.
     ///
     /// Returns [`None`] if the tree has not been built yet.
-    pub fn try_root_node(&self) -> Option<&RenderReturn> {
+    pub fn try_root_node(&self) -> Option<&VNode> {
         self.last_rendered_node.as_ref()
     }
 

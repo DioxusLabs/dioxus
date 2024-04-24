@@ -15,11 +15,13 @@ mod global_context;
 mod mutations;
 mod nodes;
 mod properties;
+mod render_error;
 mod render_signal;
 mod runtime;
 mod scope_arena;
 mod scope_context;
 mod scopes;
+mod suspense;
 mod tasks;
 mod virtual_dom;
 
@@ -35,15 +37,17 @@ pub(crate) mod innerlude {
     pub use crate::mutations::*;
     pub use crate::nodes::*;
     pub use crate::properties::*;
+    pub use crate::render_error::*;
     pub use crate::runtime::{Runtime, RuntimeGuard};
     pub use crate::scopes::*;
+    pub use crate::suspense::*;
     pub use crate::tasks::*;
     pub use crate::virtual_dom::*;
 
     /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`Scope`] or [`ScopeState`].
     ///
     /// An Errored [`Element`] will propagate the error to the nearest error boundary.
-    pub type Element = Option<VNode>;
+    pub type Element = Result<VNode, RenderError>;
 
     /// A [`Component`] is a function that takes [`Properties`] and returns an [`Element`].
     pub type Component<P = ()> = fn(P) -> Element;
@@ -53,9 +57,8 @@ pub use crate::innerlude::{
     fc_to_builder, generation, schedule_update, schedule_update_any, use_hook, vdom_is_rendering,
     AnyValue, Attribute, AttributeValue, CapturedError, Component, ComponentFunction, DynamicNode,
     Element, ElementId, Event, Fragment, HasAttributes, IntoDynNode, Mutation, Mutations,
-    NoOpMutations, Properties, RenderReturn, Runtime, ScopeId, ScopeState, Task, Template,
-    TemplateAttribute, TemplateNode, VComponent, VNode, VNodeInner, VPlaceholder, VText,
-    VirtualDom, WriteMutations,
+    NoOpMutations, Properties, Runtime, ScopeId, ScopeState, Task, Template, TemplateAttribute,
+    TemplateNode, VComponent, VNode, VNodeInner, VPlaceholder, VText, VirtualDom, WriteMutations,
 };
 
 /// The purpose of this module is to alleviate imports of many common types
@@ -71,7 +74,7 @@ pub mod prelude {
         wait_for_next_render, with_owner, AnyValue, Attribute, Component, ComponentFunction,
         Element, ErrorBoundary, Event, EventHandler, Fragment, HasAttributes, IntoAttributeValue,
         IntoDynNode, OptionStringFromMarker, Properties, Runtime, RuntimeGuard, ScopeId,
-        ScopeState, SuperFrom, SuperInto, Task, Template, TemplateAttribute, TemplateNode, Throw,
-        VNode, VNodeInner, VirtualDom,
+        ScopeState, SuperFrom, SuperInto, Task, Template, TemplateAttribute, TemplateNode, VNode,
+        VNodeInner, VirtualDom,
     };
 }

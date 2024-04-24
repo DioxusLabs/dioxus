@@ -1,8 +1,8 @@
-use crate::innerlude::ScopeOrder;
+use crate::innerlude::{throw_error, RenderError, RenderReturn, ScopeOrder};
+use crate::VNode;
 use crate::{
     any_props::{AnyProps, BoxedAnyProps},
     innerlude::ScopeState,
-    nodes::RenderReturn,
     scope_context::Scope,
     scopes::ScopeId,
     virtual_dom::VirtualDom,
@@ -30,7 +30,7 @@ impl VirtualDom {
         scope
     }
 
-    pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> RenderReturn {
+    pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> VNode {
         debug_assert!(
             crate::Runtime::current().is_some(),
             "Must be in a dioxus runtime"
@@ -69,15 +69,23 @@ impl VirtualDom {
         self.dirty_scopes
             .remove(&ScopeOrder::new(context.height, scope_id));
 
-        if let Some(task) = context.last_suspendable_task.take() {
-            if matches!(new_nodes, RenderReturn::Aborted(_)) {
+        let new_nodes = match new_nodes.into() {
+            Ok(node) => node,
+            Err(RenderError::Aborted(e)) => {
+                throw_error(e);
+                VNode::placeholder()
+            }
+            Err(RenderError::Suspended(e)) => {
+                let task = e.task();
                 tracing::trace!("Suspending {:?} on {:?}", scope_id, task);
                 self.runtime.tasks.borrow().get(task.0).unwrap().suspend();
                 self.runtime
                     .suspended_tasks
                     .set(self.runtime.suspended_tasks.get() + 1);
+
+                VNode::placeholder()
             }
-        }
+        };
 
         self.runtime.scope_stack.borrow_mut().pop();
 

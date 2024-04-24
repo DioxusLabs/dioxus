@@ -568,7 +568,7 @@ impl VirtualDom {
                 false
             }
 
-            if let Some(RenderReturn::Ready(sync)) = scope.try_root_node() {
+            if let Some(sync) = scope.try_root_node() {
                 if check_node_for_templates(sync, template) {
                     dirty.push(ScopeId(id));
                 }
