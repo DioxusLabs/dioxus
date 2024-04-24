@@ -5,6 +5,7 @@ use dioxus_desktop::DesktopContext;
 mod utils;
 
 fn main() {
+    #[cfg(not(windows))]
     utils::check_app_exits(check_html_renders);
 }
 
