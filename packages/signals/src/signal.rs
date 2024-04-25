@@ -155,7 +155,8 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
             // We cannot hold the subscribers lock while calling mark_dirty, because mark_dirty can run user code which may cause a new subscriber to be added. If we hold the lock, we will deadlock.
             let mut subscribers = std::mem::take(&mut *inner.subscribers.lock().unwrap());
             subscribers.retain(|reactive_context| reactive_context.mark_dirty());
-            *inner.subscribers.lock().unwrap() = subscribers;
+            // Extend the subscribers list instead of overwriting it in case a subscriber is added while reactive contexts are marked dirty
+            inner.subscribers.lock().unwrap().extend(subscribers);
         }
     }
 
