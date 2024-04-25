@@ -163,7 +163,8 @@ impl AnyStorage for UnsyncStorage {
     }
 
     fn recycle(location: &MemoryLocation<Self>) {
+        let location = *location;
         location.drop();
-        UNSYNC_RUNTIME.with(|runtime| runtime.borrow_mut().push(*location));
+        UNSYNC_RUNTIME.with(|runtime| runtime.borrow_mut().push(location));
     }
 }

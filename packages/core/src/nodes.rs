@@ -761,7 +761,7 @@ impl std::fmt::Debug for AttributeValue {
             Self::Float(arg0) => f.debug_tuple("Float").field(arg0).finish(),
             Self::Int(arg0) => f.debug_tuple("Int").field(arg0).finish(),
             Self::Bool(arg0) => f.debug_tuple("Bool").field(arg0).finish(),
-            Self::Listener(_) => f.debug_tuple("Listener").finish(),
+            Self::Listener(listener) => f.debug_tuple("Listener").field(listener).finish(),
             Self::Any(_) => f.debug_tuple("Any").finish(),
             Self::None => write!(f, "None"),
         }
