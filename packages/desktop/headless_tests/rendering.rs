@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use dioxus_core::Element;
 use dioxus_desktop::DesktopContext;
 
 #[path = "./utils.rs"]
@@ -53,26 +52,17 @@ fn check_html_renders() -> Element {
     }
 
     let dyn_value = 0;
-    let dyn_element = rsx! {
-        div {
-            dangerous_inner_html: "<p>hello world</p>",
-        }
-    };
+    let dyn_element = rsx! { div { dangerous_inner_html: "<p>hello world</p>" } };
 
     rsx! {
-        div {
-            id: "main_div",
+        div { id: "main_div",
             div {
                 width: "100px",
                 height: "100px",
                 color: "rgb({dyn_value}, {dyn_value}, {dyn_value})",
                 id: 5,
-                input {
-                    "type": "checkbox",
-                },
-                h1 {
-                    "text"
-                }
+                input { "type": "checkbox" }
+                h1 { "text" }
                 {dyn_element}
             }
         }

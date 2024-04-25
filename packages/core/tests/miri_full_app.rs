@@ -1,4 +1,3 @@
-use crate::dioxus_elements::SerializedMouseData;
 use dioxus::prelude::*;
 use dioxus_core::ElementId;
 use dioxus_elements::SerializedHtmlEventConverter;
