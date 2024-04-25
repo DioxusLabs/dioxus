@@ -66,7 +66,7 @@ async fn spawn_forever_persists() {
     #[component]
     fn Child() -> Element {
         spawn_forever(async move {
-            loop {
+            for _ in 0..10 {
                 POLL_COUNT.fetch_add(1, Ordering::Relaxed);
                 tokio::time::sleep(Duration::from_millis(50)).await;
             }
@@ -82,7 +82,9 @@ async fn spawn_forever_persists() {
 
     tokio::select! {
         _ = dom.wait_for_work() => {}
-        _ = tokio::time::sleep(Duration::from_millis(500)) => {}
+        // We intentionally wait a bit longer than 50ms*10 to make sure the test has time to finish
+        // Without the extra time, the test can fail on windows
+        _ = tokio::time::sleep(Duration::from_millis(1000)) => {}
     };
 
     // By the time the tasks are finished, we should've accumulated ticks from two tasks

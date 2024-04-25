@@ -2,7 +2,7 @@
 //!
 //! This example showcases how to control event bubbling from child to parents.
 //!
-//! Both web and desktop support bubbling and bubble cancelation.
+//! Both web and desktop support bubbling and bubble cancellation.
 
 use dioxus::prelude::*;
 

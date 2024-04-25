@@ -191,7 +191,7 @@ pub fn parse_route_segments<'a>(
                 segment.to_string()
             };
 
-            let field = fields.find(|(name, _)| **name == ident);
+            let field = fields.clone().find(|(name, _)| **name == ident);
 
             let ty = if let Some(field) = field {
                 field.1.clone()

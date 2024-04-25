@@ -220,7 +220,7 @@ pub fn get_rustls_with_mkcert(web_config: &WebHttpsConfig) -> Result<(String, St
         Err(e) => {
             match e.kind() {
                 io::ErrorKind::NotFound => tracing::error!("mkcert is not installed. See https://github.com/FiloSottile/mkcert#installation for installation instructions."),
-                e => tracing::error!("an error occured while generating mkcert certificates: {}", e.to_string()),
+                e => tracing::error!("an error occurred while generating mkcert certificates: {}", e.to_string()),
             };
             return Err("failed to generate mkcert certificates".into());
         }

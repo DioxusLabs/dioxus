@@ -145,7 +145,7 @@ pub fn remove_future(id: Task) {
 ///
 /// pub fn use_custom_state() -> CustomState {
 ///     use_hook(|| CustomState {
-///         inner: Signal::new(InnerCustomState)
+///         inner: Signal::new(InnerCustomState(0))
 ///     })
 /// }
 /// ```
