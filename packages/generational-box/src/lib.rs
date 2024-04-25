@@ -376,11 +376,7 @@ impl<S> MemoryLocation<S> {
         S: AnyStorage,
     {
         self.0.data.manually_drop();
-        self.increment_generation();
-    }
 
-    /// Increment the generation of the location. This should be called before the value is recycled.
-    fn increment_generation(&self) {
         #[cfg(any(debug_assertions, feature = "check_generation"))]
         {
             let new_generation = self.0.generation.load(std::sync::atomic::Ordering::Relaxed) + 1;
@@ -434,7 +430,7 @@ impl<S: AnyStorage> LocationKey<S> {
     fn drop(self) {
         // If this is the same box we own, we can just drop it
         if self.exists() {
-            self.location.drop();
+            S::recycle(&self.location);
         }
     }
 }
