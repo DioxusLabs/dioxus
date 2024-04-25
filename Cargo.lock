@@ -2335,6 +2335,8 @@ dependencies = [
 name = "dioxus-examples"
 version = "0.5.2"
 dependencies = [
+ "base64 0.21.7",
+ "ciborium",
  "dioxus",
  "dioxus-ssr",
  "form_urlencoded",

@@ -76,7 +76,6 @@ impl RouterContext {
         mark_dirty: Arc<dyn Fn(ScopeId) + Sync + Send>,
     ) -> Self
     where
-        R: Clone,
         <R as std::str::FromStr>::Err: std::fmt::Display,
     {
         let subscriber_update = mark_dirty.clone();
