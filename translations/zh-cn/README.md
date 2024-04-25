@@ -1,7 +1,12 @@
-<p align="center">
-  <img src="../../notes/header.svg">
+<p>
+    <p align="center" >
+      <img src="./notes/header-light.svg#gh-light-mode-only" >
+      <img src="./notes/header-dark.svg#gh-dark-mode-only" >
+      <a href="https://dioxuslabs.com">
+          <img src="./notes/dioxus_splash_8.avif">
+      </a>
+    </p>
 </p>
-
 <div align="center">
   <!-- Crates version -->
   <a href="https://crates.io/crates/dioxus">
@@ -38,21 +43,23 @@
   <h3>
     <a href="https://dioxuslabs.com"> 官方网站 </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/example-projects"> 代码示例 </a>
+    <a href="https://github.com/DioxusLabs/example-projects"> 示例 </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/learn/0.5/guide"> 开发指南 </a>
+    <a href="https://dioxuslabs.com/learn/0.5/guide"> 指南 </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/master/README.md"> English </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/README.md"> English </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/master/translations/pt-br/README.md"> PT-BR </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/pt-br/README.md"> PT-BR </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/master/translations/ja-jp/README.md"> 日本語 </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/ja-jp/README.md"> 日本語 </a>
+    <span> | </span>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/tr-tr"> Türkçe </a>
   </h3>
 </div>
+<br>
+<br>
 
-<br/>
-
-Dioxus 是一个可移植的、高性能的、符合人体工程学的框架，使用 Rust 语言构建跨平台的用户界面。
+使用单个代码库构建Web、桌面和移动应用，以及更多。零配置启动、集成的热重载和基于信号的状态管理。使用服务器功能添加后端功能，并使用我们的CLI进行捆绑。
 
 ```rust
 fn app() -> Element {
@@ -62,117 +69,293 @@ fn app() -> Element {
         h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }
-    })
+    }
 }
 ```
 
-Dioxus 可用于生成 网页前端、桌面应用、静态网站、移动端应用、TUI 程序、 liveview 程序等多类平台应用，Dioxus 完全与渲染器无关，可以作用于任何渲染平台。
 
-如果你能够熟悉使用 React 框架，那 Dioxus 对你来说将非常简单。
+## ⭐️ 独特功能：
 
-## 独特的特性:
+- 三行代码即可实现跨平台应用（Web、桌面、移动、服务器等）
+- [人体工程学的状态管理](https://dioxuslabs.com/blog/release-050)，结合了React、Solid和Svelte的优点
+- 非常高效，由Rust最快的wasm框架 [sledgehammer](https://dioxuslabs.com/blog/templates-diffing) 提供支持
+- 集成的捆绑包，可部署到Web、macOS、Linux和Windows
+- 还有更多！阅读 [Dioxus漫游之旅](https://dioxuslabs.com/learn/0.5/)。
 
-- 只需不到 10 行代码就能原生运行桌面程序（并非 Electron 的封装）
-- 符合人体工程学的设计以及拥有强大的状态管理
-- 全面的内联文档 - 包含所有 HTML 元素、监听器 和 事件 指南。
-- 极快的运行效率 🔥🔥 和极高的内存效率
-- 智能项目热重载以便快速迭代
-- 使用协程和 Suspense 来进行一流的异步支持
-- 更多内容请查看 [版本发布信息](https://dioxuslabs.com/blog/introducing-dioxus/).
+## 瞬时热重载
 
-## 已支持的平台
+使用一个命令 `dx serve`，您的应用程序即可运行。编辑您的标记和样式，并实时查看结果。目前Rust代码热重载尚未达到一流水平，但也许可以使用 [hot-lib-reloader](https://docs.rs/hot-lib-reloader/latest/hot_lib_reloader/) 实现。
+
+<div align="center">
+  <img src="./notes/hotreload.gif">
+</div>
+
+## 用于Web和桌面部署的捆绑包
+
+只需运行 `dx bundle`，您的应用程序将被构建和捆绑，并进行最大化的优化。在Web上，利用 [`.avif` 生成，`.wasm` 压缩，代码缩小](https://dioxuslabs.com/learn/0.5/reference/assets)，等等。构建的Web应用程序大小 [不到50kb](https://github.com/ealmloff/tiny-dioxus/)，桌面/移动应用程序小于15mb。
+
+<div align="center">
+  <img src="./notes/bundle.gif">
+</div>
+
+## 出色的文档
+
+我们花费了大量精力构建清晰、易读和全面的文档。所有HTML元素和监听器都使用MDN文档进行了记录，并且我们的文档站点通过Dioxus本身进行持续集成，以确保文档始终保持最新。查看 [Dioxus网站](https://dioxuslabs.com/learn/0.5/) 获取指南、参考资料、示例和更多信息。有趣的事实：我们将Dioxus网站用作新特性的测试平台 - [来看看吧！](https://github.com/dioxusLabs/docsite)
+
+<div align="center">
+  <img src="./notes/docs.avif">
+</div>
+
+## 开发者体验的重点
+
+Dioxus优先考虑开发者体验，我们为端到端工具链付出了大量努力。我们构建了一个 [VSCode扩展](https://marketplace.visualstudio.com/items?itemName=DioxusLabs.dioxus)，可以自动格式化您的RSX代码，将HTML转换为RSX等等。我们还建立了一个非常强大的 [CLI](https://dioxuslabs.com/learn/0.5/CLI)，支持创建新应用程序、提供服务和跨平台捆绑，并且部署正在路上。
+
+<div align="center">
+  <img src="./notes/autofmt.gif">
+</div>
+
+## 社区
+
+Dioxus是一个社区驱动的项目，拥有非常活跃的 [Discord](https://discord.gg/XgGxMSkvUM) 和 [GitHub](https://github.com/DioxusLabs/dioxus/issues) 社区。我们一直在寻求帮助，乐意回答问题并帮助您入门。 [我们的SDK](https://github.com/DioxusLabs/dioxus-std) 由社区运行，我们甚至有一个 [GitHub组织](https://github.com/dioxus-community/)，用于最好的Dioxus crates，这些crate可以获得免费升级和支持。
+
+<div align="center">
+  <img src="./notes/dioxus-community.avif">
+</div>
+
+## 全职核心团队
+
+Dioxus已经从一个副业项目发展成为一个由全职工程师组成的小团队。由于FutrueWei、Satellite.im和GitHub Accelerator项目的慷慨支持，我们能够全职工作在Dioxus上。我们的长期目标是通过提供高质量的付费企业工具使Dioxus自我维持。如果您的公司有兴趣采用Dioxus，并希望与我们合作，请联系我们！
+
+## 支持的平台
 
 <div align="center">
   <table style="width:100%">
     <tr>
-      <td><em>网站项目</em></td>
+      <td>
+      <b>Web</b>
+      <br />
+      <em>一级支持</em>
+      </td>
       <td>
         <ul>
-          <li>使用 WebAssembly 直接对 DOM 进行渲染</li>
-          <li>为 SSR 提供预渲染或作为客户端使用</li>
-          <li>简单的 "Hello World" 仅仅 65kb, 媲美 React 框架</li>
-          <li>内置开发服务和热重载支持，方便项目快速迭代</li>
+          <li>使用WebAssembly直接渲染到DOM</li>
+          <li>在服务器端预渲染，然后在客户端重新hydrate</li>
+          <li>简单的 "hello world" 约为50kb，与React相当</li>
+          <li>内置的开发服务器和热重载以进行快速迭代</li>
         </ul>
       </td>
     </tr>
     <tr>
-      <td><em>桌面应用</em></td>
+      <td>
+      <b>Fullstack</b>
+      <br />
+      <em>一级支持</em>
+      </td>
       <td>
         <ul>
-          <li>使用 Webview 进行渲染 或 使用 WGPU 和 Skia（试验性的）</li>
-          <li>无多余配置，简单的使用 `cargo build` 即可快速构建</li>
-          <li>对原生系统的全面支持</li>
-          <li>支持 Macos、Linux、Windows 等系统，极小的二进制文件</li>
+          <li>Suspense、hydration 和服务器端渲染</li>
+          <li>快速添加后端功能与服务器功能</li>
+          <li>提取器、中间件和路由集成</li>
+          <li>兼容桌面和移动设备！</li>
         </ul>
       </td>
     </tr>
     <tr>
-      <td><em>移动端应用</em></td>
+      <td>
+      <b>桌面</b>
+      <br />
+      <em>一级支持</em>
+      </td>
       <td>
         <ul>
-          <li>使用 Webview 进行渲染 或 使用 WGPU 和 Skia（试验性的）</li>
-          <li>支持 IOS 和 安卓系统</li>
-          <li><em>显著的</em> 性能强于 React Native 框架 </li>
+          <li>使用Webview渲染，或者实验性地使用WGPU或 <a href="https://freyaui.dev">Freya</a>（skia） </li>
+          <li>零配置设置。只需 `cargo run` 或 `dx serve` 即可构建您的应用程序 </li>
+          <li>完全支持无IPC的本机系统访问 </li>
+          <li>支持macOS、Linux和Windows。便携式 <3mb 二进制文件 </li>
         </ul>
       </td>
     </tr>
     <tr>
-      <td><em>Liveview</em></td>
+      <td>
+      <b>Liveview</b>
+      <br />
+      <em>一级支持</em>
+      </td>
       <td>
         <ul>
-          <li>完全使用服务器渲染应用程序或单个组件</li>
-          <li>与受欢迎的后端框架进行融合（Axum、Wrap）</li>
-          <li>及低的延迟,可以同时支持10000个以上的终端程序</li>
+          <li>完全在服务器上渲染应用程序 - 或仅渲染一个组件</li>
+          <li>与流行的Rust框架（如Axum和Warp）集成</li>
+          <li>极低的延迟和支持10,000个以上的同时应用程序</li>
         </ul>
       </td>
     </tr>
     <tr>
-      <td><em>终端程序</em></td>
+      <td>
+      <b>移动</b>
+      <br />
+      <em>二级支持</em>
+      </td>
       <td>
         <ul>
-          <li>在终端程序中渲染，类似于： <a href="https://github.com/vadimdemedes/ink"> ink.js</a></li>
-          <li>支持 CSS 相关模型（类似于浏览器内的）</li>
-          <li>内置类似文字输入，按钮和焦点系统的小组件</li>
+          <li>使用Webview渲染，或者实验性地使用WGPU或Skia </li>
+          <li>支持iOS和Android </li>
+          <li>目前还处于相当实验性阶段，2024年将有大量改进 </li>
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <td>
+      <b>终端</b>
+      <br />
+      <em>二级支持</em>
+      </td>
+      <td>
+        <ul>
+          <li>直接将应用程序渲染到终端，类似于 <a href="https://github.com/vadimdemedes/ink"> ink.js</a></li>
+          <li>由浏览器的熟悉的flexbox和CSS模型提供支持</li>
+          <li>内置小部件，如文本输入、按钮和焦点系统</li>
         </ul>
       </td>
     </tr>
   </table>
 </div>
 
-## 为什么选择 Dioxus?
+## 运行示例
 
-目前有非常多的应用开发选择，为什么偏偏要选择 Dioxus 呢？
+该存储库顶层的示例可以通过 `cargo run --example <example>` 运行。但是，我们建议您下载dioxus-cli并使用 `dx serve` 运行示例，因为许多示例还支持web。在运行web时，您可以修改Cargo.toml以禁用默认的desktop功能，或者使用
 
-首先，Dioxus 将开发者的体验放在首位。这体现在 Dioxus 特有的各种功能上。
+## Dioxus与其他框架
 
-- 自动格式化 RSX 格式代码，并拥有 VSCode 插件作为支持。
-- 热加载基于 RSX 代码解析器，同时支持桌面程序和网页程序。
-- 强调文档的重要性--我们的指南是完整的，并且我们对所有 HTML 元素都提供文档支持。
+我们喜欢Rust生态系统中的所有框架，并享受着Rust生态系统中的创新。事实上，我们的许多项目都与其他框架共享。例如，我们的flex-box库 [Taffy](https://github.com/DioxusLabs/taffy) 被 [Bevy](https://bevyengine.org/)、[Zed](https://zed.dev/)、[Lapce](https://lapce.dev/)、[Iced](https://github.com/iced-rs/iced) 等项目使用。
 
-Dioxus 也是一个可扩展化的平台。
+Dioxus侧重于几个与其他框架不同的重点，这些重点使其与其他框架不同：
 
-- 通过实现一个非常简单的优化堆栈机，轻松构建新的渲染器。
-- 构建并分享开发者自定义的组件代码。
+- **类似React**：我们依赖于组件、props和hooks等概念来构建UI，我们的状态管理更接近于Svelte而不是SolidJS。
+- **HTML和CSS**：我们完全依赖HTML和CSS，包括怪癖和全部。
+- **渲染器不可知**：您可以根据需要将渲染器替换为任何平台，感谢我们的快速VirtualDOM。
+- **合作**：只要有可能，我们就会拆分出像[Taffy](https://github.com/DioxusLabs/taffy)、[magnanis](https://github.com/DioxusLabs/collect-assets)、[include_mdbook](https://github.com/DioxusLabs/include_mdbook)和[blitz](http://github.com/dioxusLabs/blitz)这样的crate，以便生态系统能够共同成长。
 
-Dioxus 那么优秀，但什么时候它不适合我呢？
+### Dioxus与Tauri
 
-- 它还没有完全成熟。api 仍在变化，可能会出现故障（尽管我们试图避免）
-- 您需要运行在 no-std 的环境之中。
-- 你不喜欢使用 React-like 的方式构建 UI 项目。
+Tauri是一个用于构建桌面（和即将到来的移动）应用程序的框架，其中前端使用诸如React、Vue、Svelte等的基于web的框架编写。每当需要进行本机工作时，您可以编写Rust函数并从前端调用它们。
 
-## 贡献代码
+- **纯Rust**：Tauri的架构将您的UI限制为JavaScript或WebAssembly。使用Dioxus，您的Rust代码在用户的计算机上本地运行，使您可以执行诸如生成线程、访问文件系统等操作，而无需任何IPC。这大大简化了应用程序的架构，并使其更易于构建。您可以使用Dioxus-Web作为前端构建Tauri应用程序。
 
-- 在我们的 [问题追踪](https://github.com/dioxuslabs/dioxus/issues) 中汇报你遇到的问题。
-- [加入](https://discord.gg/XgGxMSkvUM)我们的 Discord 与我们交流。
+- **不同的范围**：Tauri需要支持JavaScript及其复杂的构建工具链，从而限制了您可以使用的范围。由于Dioxus专注于Rust，我们能够提供额外的实用工具，如服务器函数、高级捆绑和本机渲染器。
+
+- **共享DNA**：虽然Tauri和Dioxus是独立的项目，但它们确实共享库，如Tao和Wry：由Tauri团队维护的窗口和webview库。
+
+### Dioxus与Leptos
+
+Leptos是用于构建全栈web应用程序的库，类似于SolidJS和SolidStart。两个库在web上有着相似的目标，但有几个关键区别：
+
+- **响应模型**：Leptos使用信号作为其基础的响应性，而Dioxus选择使用VirtualDom和重新渲染。虽然从理论上讲，信号更高效，但实际上，由于我们的[block-dom](https://dioxuslabs.com/blog/templates-diffing)模板并没有进行实际的diffing，而是直接重新渲染了UI，Dioxus的VirtualDom的表现与Leptos相比几乎没有什么差异，并且[实际上比Leptos更快](https://krausest.github.io/js-framework-benchmark/2024/table_chrome_123.0.6312.59.html)。
+
+- **控制流**：因为Leptos使用信号来实现响应性，所以您只能使用Leptos的原语来进行 `for` 循环和 `if` 语句。如果您搞错了这一点，您的应用程序将失去响应性，导致难以调试的UI问题。使用Dioxus，您可以使用迭代器、常规的Rust `for` 循环和 `if` 语句，您的应用程序仍然是响应式的。在实践中，一个向列表中插入计数器的Dioxus组件可能如下所示：
+
+```rust
+fn Counters() -> Element {
+    let mut counters = use_signal(|| vec![0; 10]);
+
+    rsx! {
+        button { onclick: move |_| counters.push(counters.len()), "Add Counter" }
+        ul {
+            for idx in 0..counters.len() {
+                li {
+                    button { onclick: move |_| counters.write()[idx] += 1, "{counters.index(idx)}" }
+                    button { onclick: move |_| { counters.remove(idx); }, "Remove" }
+                }
+            }
+        }
+    }
+}
+```
+
+[在Leptos中，您将使用`<For>`组件。](https://book.leptos.dev/view/04_iteration.html#dynamic-rendering-with-the-for-component):
+
+```rust
+fn Counters() -> impl IntoView {
+    let counters = RwSignal::new(vec![0; 10]);
+
+    view! {
+        <button on:click=move |_| counters.update(|n| n.push(n.len()))>"Add Counter"</button>
+        <For
+            each=move || 0..counters.with(Vec::len)
+            key=|idx| *idx
+            let:idx
+        >
+            <li>
+                <button on:click=move |_| counters.update(|n| n[idx] += 1)>
+                    {Memo::new(move |_| counters.with(|n| n[idx]))}
+                </button>
+                <button on:click=move |_| counters.update(|n| { n.remove(idx); })>
+                    "Remove"
+                </button>
+            </li>
+        </For>
+    }
+}
+```
+
+- **`Copy` 状态**: Dioxus 0.1 到 0.4 版本依赖于生命周期来放宽 Rust 的借用检查规则。这对于事件处理程序效果很好，但在异步方面表现不佳。在 Dioxus 0.5 中，我们已经转向了从 Leptos 借鉴来的 [`Copy` 状态模型](https://crates.io/crates/generational-box)。
+
+- **不同的范围**: Dioxus 提供了用于 web、桌面、移动、LiveView 等的渲染器。我们还维护着社区库和跨平台 SDK。这项工作的范围很大，意味着我们的发布速度历来比 Leptos 慢。Leptos 专注于全栈 web，具有 Dioxus 没有的功能，如基于 `<Suspense />` 的流式 HTML、islands、`<Form />` 组件和其他特定于 web 的功能。通常情况下，您使用 Leptos 构建的 web 应用程序将占用较小的空间。
+
+- **不同的 DSL**: 虽然两个框架都针对 web，但 Dioxus 使用自己的定制 Rust 风格的 DSL 来构建 UI，而 Leptos 使用更类似 HTML 的语法。我们选择了这样做以保留与代码折叠和语法高亮等 IDE 功能的兼容性。通常情况下，Dioxus 倾向于在其 DSL 中使用更多的 "魔法"。例如，dioxus 将自动为您格式化字符串，而 Leptos 可以将字符串拆分为静态和动态段。
+
+### Dioxus vs Yew
+
+Yew 是用于构建单页面 web 应用程序的框架，最初是 Dioxus 的灵感来源。不幸的是，Yew 的架构不支持我们想要的各种功能，因此 Dioxus 应运而生。
+
+- **单页面应用程序**: Yew 专门设计用于单页面 web 应用程序，并与 web 平台紧密相关联。Dioxus 是全栈和跨平台的，适用于构建 web、桌面、移动和服务器应用程序。
+
+- **开发工具**: Dioxus 提供了许多实用工具，如自动格式化、热重载和打包工具。
+
+- **持续支持**: Dioxus 在日常基础上积极维护，不断添加新功能和修复错误。
+
+### Dioxus vs egui
+
+egui 是 Rust 的跨平台 GUI 库，支持像 [Rerun.io](https://www.rerun.io) 这样的工具。
+
+- **Immediate vs Retained**: egui 被设计为在每一帧上重新呈现。这适用于游戏和其他交互式应用程序，但它不会在帧之间保留样式和布局状态。Dioxus 是一个保留的 UI 框架，意味着 UI 只构建一次，然后在帧之间进行修改。这使得 Dioxus 可以使用本地 web 技术，如 HTML 和 CSS，具有更好的电池寿命和性能。
+
+- **可定制性**: egui 带有自己的样式和布局解决方案，而 Dioxus 期望您使用内置的 HTML 和 CSS。这使得 dioxus 应用程序可以使用任何 CSS 库，如 Tailwind 或 Material UI。
+
+- **状态管理**: egui 的状态管理基于单个全局状态对象。Dioxus 鼓励通过使用组件和属性封装状态，使组件更可重用。
+
+### Dioxus vs Iced
+
+Iced 是受 Elm 启发的跨平台 GUI 库。Iced 使用 WGPU 进行本机渲染，并支持使用 DOM 节点的 web。
+
+- **Elm 状态管理**: Iced 使用 Elm 的状态管理模型，该模型基于消息传递和减速器。这与 Dioxus 的状态管理模型完全不同，有时可能相当冗长。
+
+- **本地感觉**: 由于 Dioxus 使用 webview 作为其渲染器，因此它自动获得本地文本输入、粘贴处理和其他本地功能，如可访问性。Iced 的渲染器目前不实现这些功能，使其感觉不太本地。
+
+- **WGPU**: Dioxus 的 WGPU 渲染器目前还不太成熟，尚未准备好供生产使用。Iced 的 WGPU 渲染器要成熟得多，并且正在生产中使用。这使得某些需要 GPU 访问的应用程序可以使用 Iced 构建，而目前无法使用 Dioxus 构建。
+
+### Dioxus vs Electron
+
+Dioxus 和 Electron 是两个完全不同的项目，目标相似。Electron 使开发人员能够使用 HTML、CSS 和 JavaScript 等 web 技术构建跨平台桌面应用程序。
+
+- **轻量级**: Dioxus 使用系统的本地 WebView - 或者选择性地，一个 WGPU 渲染器 - 来渲染 UI。这使得典型的 Dioxus 应用程序在 macOS 上约为 15mb，而 Electron 则为 100mb。Electron 还提供了一个嵌入式的 chromium 实例，无法像 Dioxus 那样与主机操作系统共享系统资源。
+
+- **成熟度**: Electron 是一个成熟的项目，拥有庞大的社区和大量的工具。相比之下，Dioxus 相对于 Electron 来说还很年轻。期望遇到需要额外工作来实现的功能，如 deeplinking 等特性。
+
+## 贡献
+
+- 查看网站上有关[贡献的部分](https://dioxuslabs.com/learn/0.5/contributing)。
+- 在我们的 [问题跟踪器](https://github.com/dioxuslabs/dioxus/issues) 上报告问题。
+- [加入](https://discord.gg/XgGxMSkvUM) discord 并提出问题！
 
 <a href="https://github.com/dioxuslabs/dioxus/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=dioxuslabs/dioxus&max=30&columns=10" />
 </a>
 
-## 开源协议
+## 许可证
 
-本项目使用 [MIT license].
+此项目根据 [MIT 许可证] 许可。
 
-[mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
+[mit 许可证]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
 
-除非您另有明确声明，否则有意提交的任何贡献将被授权为 MIT 协议，没有任何附加条款或条件。
+除非您明确说明，否则您提交的任何贡献都将由您自己有意提交，以 MIT 许可证许可，不附加任何其他条款或条件。
+

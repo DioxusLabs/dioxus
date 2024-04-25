@@ -128,7 +128,8 @@ where
     fn route_from_location(&self) -> R {
         let location = self.window.location();
         let path = location.pathname().unwrap_or_else(|_| "/".into())
-            + &location.search().unwrap_or("".into());
+            + &location.search().unwrap_or("".into())
+            + &location.hash().unwrap_or("".into());
         let path = match self.prefix {
             None => path,
             Some(ref prefix) => {

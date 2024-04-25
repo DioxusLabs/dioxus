@@ -2335,6 +2335,8 @@ dependencies = [
 name = "dioxus-examples"
 version = "0.5.2"
 dependencies = [
+ "base64 0.21.7",
+ "ciborium",
  "dioxus",
  "dioxus-ssr",
  "form_urlencoded",
@@ -8088,9 +8090,9 @@ dependencies = [
 
 [[package]]
 name = "server_fn_macro"
-version = "0.6.9"
+version = "0.6.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "adfdd051ef905fdb3da20942b0c52d536158d7489a724e14cc2fd47323e7ca91"
+checksum = "064dd9b256e78bf2886774f265cc34d2aefdd05b430c58c78a69eceef21b5e60"
 dependencies = [
  "const_format",
  "convert_case 0.6.0",
