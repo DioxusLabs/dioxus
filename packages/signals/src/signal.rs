@@ -346,6 +346,8 @@ impl<T: 'static, S: Storage<SignalData<T>>> Writable for Signal<T, S> {
     fn try_write_unchecked(
         &self,
     ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError> {
+        #[cfg(debug_assertions)]
+        let origin = std::panic::Location::caller();
         self.inner.try_write_unchecked().map(|inner| {
             let borrow = S::map_mut(inner, |v| &mut v.value);
             Write {
@@ -353,7 +355,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Writable for Signal<T, S> {
                 drop_signal: Box::new(SignalSubscriberDrop {
                     signal: *self,
                     #[cfg(debug_assertions)]
-                    origin: std::panic::Location::caller(),
+                    origin,
                 }),
             }
         })
@@ -476,6 +478,68 @@ impl<T: ?Sized, S: AnyStorage> DerefMut for Write<'_, T, S> {
     }
 }
 
+#[allow(unused)]
+const SIGNAL_READ_WRITE_SAME_SCOPE_HELP: &str = r#"This issue is caused by reading and writing to the same signal in a reactive scope. Components, effects, memos, and resources each have their own a reactive scopes. Reactive scopes rerun when any signal you read inside of them are changed. If you read and write to the same signal in the same scope, the write will cause the scope to rerun and trigger the write again. This can cause an infinite loop.
+
+You can fix the issue by either:
+1) Splitting up your state and Writing, reading to different signals:
+
+For example, you could change this broken code:
+
+#[derive(Clone, Copy)]
+struct Counts {
+    count1: i32,
+    count2: i32,
+}
+
+fn app() -> Element {
+    let mut counts = use_signal(|| Counts { count1: 0, count2: 0 });
+    
+    use_effect(move || {
+        // This effect both reads and writes to counts
+        counts.write().count1 = counts().count2;
+    })
+}
+
+Into this working code:
+
+fn app() -> Element {
+    let mut count1 = use_signal(|| 0);
+    let mut count2 = use_signal(|| 0);
+
+    use_effect(move || {
+        count1.write(count2());
+    });
+}
+2) Reading and Writing to the same signal in different scopes:
+
+For example, you could change this broken code:
+
+fn app() -> Element {
+    let mut count = use_signal(|| 0);
+
+    use_effect(move || {
+        // This effect both reads and writes to count
+        println!("{}", count());
+        count.write(count());
+    });
+}
+
+
+To this working code:
+
+fn app() -> Element {
+    let mut count = use_signal(|| 0);
+
+    use_effect(move || {
+        count.write(count());
+    });
+    use_effect(move || {
+        println!("{}", count());
+    });
+}
+"#;
+
 struct SignalSubscriberDrop<T: 'static, S: Storage<SignalData<T>>> {
     signal: Signal<T, S>,
     #[cfg(debug_assertions)]
@@ -485,10 +549,36 @@ struct SignalSubscriberDrop<T: 'static, S: Storage<SignalData<T>>> {
 impl<T: 'static, S: Storage<SignalData<T>>> Drop for SignalSubscriberDrop<T, S> {
     fn drop(&mut self) {
         #[cfg(debug_assertions)]
-        tracing::trace!(
-            "Write on signal at {:?} finished, updating subscribers",
-            self.origin
-        );
+        {
+            tracing::trace!(
+                "Write on signal at {} finished, updating subscribers",
+                self.origin
+            );
+
+            // Check if the write happened during a render. If it did, we should warn the user that this is generally a bad practice.
+            if dioxus_core::vdom_is_rendering() {
+                tracing::warn!(
+                    "Write on signal at {} happened while a component was running. Writing to signals during a render can cause infinite rerenders when you read the same signal in the component. Consider writing to the signal in an effect, future, or event handler if possible.",
+                    self.origin
+                );
+            }
+
+            // Check if the write happened during a scope that the signal is also subscribed to. If it did, this will probably cause an infinite loop.
+            if let Some(reactive_context) = ReactiveContext::current() {
+                if let Ok(inner) = self.signal.inner.try_read() {
+                    if let Ok(subscribers) = inner.subscribers.lock() {
+                        for subscriber in subscribers.iter() {
+                            if reactive_context == *subscriber {
+                                let origin = self.origin;
+                                tracing::warn!(
+                                    "Write on signal at {origin} finished in {reactive_context} which is also subscribed to the signal. This will likely cause an infinite loop. When the write finishes, {reactive_context} will rerun which may cause the write to be rerun again.\nHINT:\n{SIGNAL_READ_WRITE_SAME_SCOPE_HELP}",
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
         self.signal.update_subscribers();
     }
 }
