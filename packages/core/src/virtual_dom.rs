@@ -534,6 +534,17 @@ impl VirtualDom {
                 }
             }
         }
+
+        // At this point, we have finished running all tasks that are pending and we haven't found any scopes to rerun. This means it is safe to run our lowest priority work: effects
+        let mut effects = self.pop_effect();
+        while let Some(effect) = effects {
+            effect.run();
+            self.queue_events();
+            if self.has_dirty_scopes() {
+                return;
+            }
+            effects = self.pop_effect();
+        }
     }
 
     /// Replace a template at runtime. This will re-render all components that use this template.

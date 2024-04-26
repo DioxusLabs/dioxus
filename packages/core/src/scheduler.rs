@@ -1,3 +1,4 @@
+use crate::innerlude::Effect;
 /// # Dioxus uses a scheduler to run queued work in the correct order.
 ///
 /// ## Goals
@@ -151,6 +152,19 @@ impl VirtualDom {
         }
 
         Some(task)
+    }
+
+    /// Take any effects from the highest scope. This should only be called if there is no pending scope reruns or tasks
+    pub(crate) fn pop_effect(&mut self) -> Option<Effect> {
+        let mut pending_effects = self.runtime.pending_effects.borrow_mut();
+        let mut effect = pending_effects.pop_first()?;
+
+        // If the scope doesn't exist for whatever reason, then we should skip it
+        while !self.scopes.contains(effect.order.id.0) {
+            effect = pending_effects.pop_first()?;
+        }
+
+        Some(effect)
     }
 
     /// Take any work from the highest scope. This may include rerunning the scope and/or running tasks

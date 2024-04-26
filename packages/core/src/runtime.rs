@@ -41,9 +41,6 @@ pub struct Runtime {
 
     // The effects that need to be run after the next render
     pub(crate) pending_effects: RefCell<BTreeSet<Effect>>,
-
-    // The effects that are ready to run
-    pub(crate) ready_effects: RefCell<BTreeSet<Effect>>,
 }
 
 impl Runtime {
@@ -58,7 +55,6 @@ impl Runtime {
             tasks: Default::default(),
             suspended_tasks: Default::default(),
             pending_effects: Default::default(),
-            ready_effects: Default::default(),
         })
     }
 
@@ -163,19 +159,8 @@ impl Runtime {
 
     /// Finish a render. This will mark all effects as ready to run and send the render signal.
     pub(crate) fn finish_render(&self) {
-        // Now that the render is done, add all pending effects to the ready effects list
-        let mut ready = self.ready_effects.borrow_mut();
-        let mut pending = self.pending_effects.borrow_mut();
-        if ready.is_empty() {
-            std::mem::swap(&mut ready, &mut pending);
-        } else {
-            while let Some(effect) = ready.pop_first() {
-                ready.insert(effect);
-            }
-        }
-
         // If there are new effects we can run, send a message to the scheduler to run them (after the renderer has applied the mutations)
-        if !pending.is_empty() {
+        if !self.pending_effects.borrow().is_empty() {
             self.sender
                 .unbounded_send(SchedulerMsg::EffectQueued)
                 .expect("Scheduler should exist");
