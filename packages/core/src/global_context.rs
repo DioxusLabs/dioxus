@@ -90,6 +90,11 @@ pub fn spawn(fut: impl Future<Output = ()> + 'static) -> Task {
     Runtime::with_current_scope(|cx| cx.spawn(fut)).expect("to be in a dioxus runtime")
 }
 
+/// Queue an effect to run after the next render
+pub fn queue_effect(f: impl FnOnce() + 'static) {
+    Runtime::with_current_scope(|cx| cx.queue_effect(f)).expect("to be in a dioxus runtime")
+}
+
 /// Spawn a future that Dioxus won't clean up when this component is unmounted
 ///
 /// This is good for tasks that need to be run after the component has been dropped.

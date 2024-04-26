@@ -187,7 +187,6 @@ pub struct VirtualDom {
 
     pub(crate) dirty_scopes: BTreeSet<ScopeOrder>,
     pub(crate) dirty_tasks: BTreeSet<DirtyTasks>,
-    pub(crate) queued_effects: BTreeSet<DirtyTasks>,
 
     // Maps a template path to a map of byte indexes to templates
     pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template>>,
@@ -315,7 +314,6 @@ impl VirtualDom {
             scopes: Default::default(),
             dirty_scopes: Default::default(),
             dirty_tasks: Default::default(),
-            queued_effects: Default::default(),
             templates: Default::default(),
             queued_templates: Default::default(),
             elements: Default::default(),
@@ -483,6 +481,7 @@ impl VirtualDom {
                 // The task may be marked dirty at the same time as the scope that owns the task is dropped.
                 self.mark_task_dirty(id);
             }
+            SchedulerMsg::EffectQueued => {}
         };
     }
 
@@ -493,6 +492,7 @@ impl VirtualDom {
             match msg {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
                 SchedulerMsg::TaskNotified(task) => self.mark_task_dirty(task),
+                SchedulerMsg::EffectQueued => {}
             }
         }
     }
@@ -635,7 +635,7 @@ impl VirtualDom {
 
         // Process any events that might be pending in the queue
         // Signals marked with .write() need a chance to be handled by the effect driver
-        // This also processes futures which might progress into immediates
+        // This also processes futures which might progress into immediately rerunning a scope
         self.process_events();
 
         // Next, diff any dirty scopes
@@ -660,7 +660,7 @@ impl VirtualDom {
             }
         }
 
-        self.runtime.render_signal.send();
+        self.runtime.finish_render();
     }
 
     /// [`Self::render_immediate`] to a vector of mutations for testing purposes
