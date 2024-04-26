@@ -112,7 +112,6 @@ mod test {
 
     use super::*;
 
-    use axum::Router;
     use axum_server::{Handle, Server};
 
     async fn setup_servers(mut config: WebProxyConfig) -> String {
