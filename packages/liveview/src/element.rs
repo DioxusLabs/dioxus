@@ -76,7 +76,7 @@ impl RenderedElementBacking for LiveviewElement {
     scripted_getter!(
         get_client_rect,
         "return window.interpreter.getClientRect({});",
-        dioxus_html::geometry::euclid::Rect<f64, f64>
+        Rect<f64, f64>
     );
 
     fn scroll_to(
