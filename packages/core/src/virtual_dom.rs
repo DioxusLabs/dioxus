@@ -187,6 +187,7 @@ pub struct VirtualDom {
 
     pub(crate) dirty_scopes: BTreeSet<ScopeOrder>,
     pub(crate) dirty_tasks: BTreeSet<DirtyTasks>,
+    pub(crate) queued_effects: BTreeSet<DirtyTasks>,
 
     // Maps a template path to a map of byte indexes to templates
     pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template>>,
@@ -314,6 +315,7 @@ impl VirtualDom {
             scopes: Default::default(),
             dirty_scopes: Default::default(),
             dirty_tasks: Default::default(),
+            queued_effects: Default::default(),
             templates: Default::default(),
             queued_templates: Default::default(),
             elements: Default::default(),

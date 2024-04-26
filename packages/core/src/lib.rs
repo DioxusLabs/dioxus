@@ -6,7 +6,6 @@
 mod any_props;
 mod arena;
 mod diff;
-mod dirty_scope;
 mod error_boundary;
 mod events;
 mod fragment;
@@ -20,13 +19,15 @@ mod runtime;
 mod scope_arena;
 mod scope_context;
 mod scopes;
+mod effect;
+mod scheduler;
 mod tasks;
 mod virtual_dom;
 
 pub(crate) mod innerlude {
     pub(crate) use crate::any_props::*;
     pub use crate::arena::*;
-    pub use crate::dirty_scope::*;
+    pub use crate::scheduler::*;
     pub use crate::error_boundary::*;
     pub use crate::events::*;
     pub use crate::fragment::*;
