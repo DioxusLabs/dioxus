@@ -18,7 +18,7 @@ fn use_inner_html(id: &'static str) -> Option<String> {
 
             let res = eval(&format!(
                 r#"let element = document.getElementById('{}');
-                    return element.innerHTML"#,
+                return element.innerHTML"#,
                 id
             ))
             .await

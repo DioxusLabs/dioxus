@@ -1,8 +1,10 @@
 use dioxus_html::prelude::{EvalError, EvalProvider, Evaluator};
-use futures_util::StreamExt;
+use dioxus_interpreter_js::eval::{JSOwner, WeakDioxusChannel, WebDioxusChannel};
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 use js_sys::Function;
 use serde_json::Value;
+use std::future::Future;
+use std::pin::Pin;
 use std::{rc::Rc, str::FromStr};
 use wasm_bindgen::prelude::*;
 
@@ -26,42 +28,35 @@ const PROMISE_WRAPPER: &str = r#"
         {JS_CODE}
         resolve(null);
     });
-    "#;
+"#;
+
+type NextPoll = Pin<Box<dyn Future<Output = Result<serde_json::Value, EvalError>>>>;
 
 /// Represents a web-target's JavaScript evaluator.
 struct WebEvaluator {
-    dioxus: Dioxus,
-    channel_receiver: futures_channel::mpsc::UnboundedReceiver<serde_json::Value>,
+    channels: WeakDioxusChannel,
+    next_future: Option<NextPoll>,
     result: Option<Result<serde_json::Value, EvalError>>,
 }
 
 impl WebEvaluator {
     /// Creates a new evaluator for web-based targets.
     fn create(js: String) -> GenerationalBox<Box<dyn Evaluator>> {
-        let (mut channel_sender, channel_receiver) = futures_channel::mpsc::unbounded();
         let owner = UnsyncStorage::owner();
-        let invalid = owner.invalid();
 
-        // This Rc cloning mess hurts but it seems to work..
-        let recv_value = Closure::<dyn FnMut(JsValue)>::new(move |data| {
-            // Drop the owner when the sender is dropped.
-            let _ = &owner;
-            match serde_wasm_bindgen::from_value::<serde_json::Value>(data) {
-                Ok(data) => _ = channel_sender.start_send(data),
-                Err(e) => {
-                    // Can't really do much here.
-                    tracing::error!("failed to serialize JsValue to serde_json::Value (eval communication) - {}", e);
-                }
-            }
-        });
+        let generational_box = owner.invalid();
 
-        let dioxus = Dioxus::new(recv_value.as_ref().unchecked_ref());
-        recv_value.forget();
+        // add the drop handler to DioxusChannel so that it gets dropped when the channel is dropped in js
+        let channels = WebDioxusChannel::new(JSOwner::new(owner));
+
+        // The Rust side of the channel is a weak reference to the DioxusChannel
+        let weak_channels = channels.weak();
 
         // Wrap the evaluated JS in a promise so that wasm can continue running (send/receive data from js)
         let code = PROMISE_WRAPPER.replace("{JS_CODE}", &js);
 
-        let result = match Function::new_with_args("dioxus", &code).call1(&JsValue::NULL, &dioxus) {
+        let result = match Function::new_with_args("dioxus", &code).call1(&JsValue::NULL, &channels)
+        {
             Ok(result) => {
                 if let Ok(stringified) = js_sys::JSON::stringify(&result) {
                     if !stringified.is_undefined() && stringified.is_valid_utf16() {
@@ -85,13 +80,13 @@ impl WebEvaluator {
             )),
         };
 
-        invalid.set(Box::new(Self {
-            dioxus,
-            channel_receiver,
+        generational_box.set(Box::new(Self {
+            channels: weak_channels,
             result: Some(result),
-        }) as Box<dyn Evaluator + 'static>);
+            next_future: None,
+        }) as Box<dyn Evaluator>);
 
-        invalid
+        generational_box
     }
 }
 
@@ -115,7 +110,7 @@ impl Evaluator for WebEvaluator {
             Err(e) => return Err(EvalError::Communication(e.to_string())),
         };
 
-        self.dioxus.rustSend(data);
+        self.channels.rust_send(data);
         Ok(())
     }
 
@@ -124,21 +119,22 @@ impl Evaluator for WebEvaluator {
         &mut self,
         context: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<serde_json::Value, EvalError>> {
-        self.channel_receiver.poll_next_unpin(context).map(|poll| {
-            poll.ok_or_else(|| {
-                EvalError::Communication("failed to receive data from js".to_string())
-            })
-        })
+        if self.next_future.is_none() {
+            let channels: WebDioxusChannel = self.channels.clone().into();
+            let pinned = Box::pin(async move {
+                let fut = channels.rust_recv();
+                let data = fut.await;
+                serde_wasm_bindgen::from_value::<serde_json::Value>(data)
+                    .map_err(|err| EvalError::Communication(err.to_string()))
+            });
+            self.next_future = Some(pinned);
+        }
+        let fut = self.next_future.as_mut().unwrap();
+        let mut pinned = std::pin::pin!(fut);
+        let result = pinned.as_mut().poll(context);
+        if result.is_ready() {
+            self.next_future = None;
+        }
+        result
     }
-}
-
-#[wasm_bindgen(module = "/src/eval.js")]
-extern "C" {
-    pub type Dioxus;
-
-    #[wasm_bindgen(constructor)]
-    pub fn new(recv_callback: &Function) -> Dioxus;
-
-    #[wasm_bindgen(method)]
-    pub fn rustSend(this: &Dioxus, data: JsValue);
 }
