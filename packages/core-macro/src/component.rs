@@ -28,7 +28,7 @@ impl ToTokens for ComponentBody {
         // e.g. `fn Navbar(NavbarProps { title }: NavbarProps)` was previously being incorrectly parsed
         if self.is_explicit_props_ident() || self.has_struct_parameter_pattern() {
             let comp_fn = &self.item_fn;
-            tokens.append_all(prefer_camel_case_for_fn_ident(comp_fn).into_token_stream());
+            tokens.append_all(allow_camel_case_for_fn_ident(comp_fn).into_token_stream());
             return;
         }
 
@@ -98,7 +98,6 @@ impl ComponentBody {
             #[allow(non_snake_case)]
             #vis fn #fn_ident #generics (#inlined_props_argument) #fn_output #where_clause {
                 {
-                    { struct #fn_ident {} }
                     #block
                 }
             }
@@ -251,17 +250,15 @@ fn rebind_mutability(f: &FnArg) -> Option<TokenStream> {
     Some(quote!(mut #pat))
 }
 
-/// Takes a function and returns a clone of it where an `UpperCamelCase` identifier is preferred by the compiler.
-fn prefer_camel_case_for_fn_ident(item_fn: &ItemFn) -> ItemFn {
+/// Takes a function and returns a clone of it where an `UpperCamelCase` identifier is allowed by the compiler.
+fn allow_camel_case_for_fn_ident(item_fn: &ItemFn) -> ItemFn {
     let mut clone = item_fn.clone();
-    let ident = &item_fn.sig.ident;
     let block = &item_fn.block;
 
     clone.attrs.push(parse_quote! { #[allow(non_snake_case)] });
 
     clone.block = parse_quote! {
         {
-            { struct #ident {} }
             #block
         }
     };
