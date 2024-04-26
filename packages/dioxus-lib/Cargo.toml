@@ -19,6 +19,9 @@ dioxus-hooks = { workspace = true, optional = true }
 dioxus-rsx = { workspace = true, optional = true }
 dioxus-signals = { workspace = true, optional = true }
 
+[dev-dependencies]
+dioxus = { workspace = true }
+
 [features]
 default = ["macro", "html", "signals", "hooks"]
 signals = ["dioxus-signals"]

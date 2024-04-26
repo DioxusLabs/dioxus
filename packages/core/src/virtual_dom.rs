@@ -138,7 +138,7 @@ use tracing::instrument;
 ///
 /// let dom = VirtualDom::new(app);
 ///
-/// real_dom.apply(dom.rebuild());
+/// dom.rebuild(real_dom.apply());
 ///
 /// loop {
 ///     select! {
@@ -258,7 +258,7 @@ impl VirtualDom {
     ///
     /// ```rust, ignore
     /// let mut dom = VirtualDom::new_with_props(Example, SomeProps { name: "jane" });
-    /// let mutations = dom.rebuild();
+    /// dom.rebuild_in_place();
     /// ```
     pub fn new_with_props<P: Clone + 'static, M: 'static>(
         root: impl ComponentFunction<P, M>,
@@ -302,7 +302,7 @@ impl VirtualDom {
     ///
     /// ```rust, ignore
     /// let mut dom = VirtualDom::new_from_root(VComponent::new(Example, SomeProps { name: "jane" }, "Example"));
-    /// let mutations = dom.rebuild();
+    /// dom.rebuild(to_writer);
     /// ```
     #[instrument(skip(root), level = "trace", name = "VirtualDom::new")]
     pub(crate) fn new_with_component(root: impl AnyProps + 'static) -> Self {
@@ -611,9 +611,7 @@ impl VirtualDom {
     /// static app: Component = |cx|  rsx!{ "hello world" };
     ///
     /// let mut dom = VirtualDom::new();
-    /// let edits = dom.rebuild();
-    ///
-    /// apply_edits(edits);
+    /// dom.rebuild(to_writer);
     /// ```
     #[instrument(skip(self, to), level = "trace", name = "VirtualDom::rebuild")]
     pub fn rebuild(&mut self, to: &mut impl WriteMutations) {

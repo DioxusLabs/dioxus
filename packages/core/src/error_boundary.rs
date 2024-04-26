@@ -344,7 +344,8 @@ impl Properties for ErrorBoundaryProps {
     fn builder() -> Self::Builder {
         ErrorBoundaryProps::builder()
     }
-    fn memoize(&mut self, _: &Self) -> bool {
+    fn memoize(&mut self, other: &Self) -> bool {
+        *self = other.clone();
         false
     }
 }

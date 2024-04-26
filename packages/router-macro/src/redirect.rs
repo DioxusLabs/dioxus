@@ -3,6 +3,7 @@ use quote::{format_ident, quote};
 use syn::LitStr;
 
 use crate::{
+    hash::HashFragment,
     nest::NestId,
     query::QuerySegment,
     segment::{create_error_type, parse_route_segments, RouteSegment},
@@ -14,6 +15,7 @@ pub(crate) struct Redirect {
     pub nests: Vec<NestId>,
     pub segments: Vec<RouteSegment>,
     pub query: Option<QuerySegment>,
+    pub hash: Option<HashFragment>,
     pub function: syn::ExprClosure,
     pub index: usize,
 }
@@ -36,6 +38,13 @@ impl Redirect {
     pub fn parse_query(&self) -> TokenStream {
         match &self.query {
             Some(query) => query.parse(),
+            None => quote! {},
+        }
+    }
+
+    pub fn parse_hash(&self) -> TokenStream {
+        match &self.hash {
+            Some(hash) => hash.parse(),
             None => quote! {},
         }
     }
@@ -73,7 +82,7 @@ impl Redirect {
             }
         }
 
-        let (segments, query) = parse_route_segments(
+        let (segments, query, hash) = parse_route_segments(
             path.span(),
             #[allow(clippy::map_identity)]
             closure_arguments.iter().map(|(name, ty)| (name, ty)),
@@ -85,6 +94,7 @@ impl Redirect {
             nests: active_nests,
             segments,
             query,
+            hash,
             function,
             index,
         })

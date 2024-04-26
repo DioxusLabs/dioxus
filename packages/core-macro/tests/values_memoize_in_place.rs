@@ -2,12 +2,41 @@ use dioxus::prelude::*;
 use dioxus_core::ElementId;
 use std::rc::Rc;
 
-thread_local! {
-    static DROP_COUNT: std::cell::RefCell<usize> = const { std::cell::RefCell::new(0) };
-}
-
 #[test]
 fn values_memoize_in_place() {
+    thread_local! {
+        static DROP_COUNT: std::cell::RefCell<usize> = const { std::cell::RefCell::new(0) };
+    }
+
+    struct CountsDrop;
+
+    impl Drop for CountsDrop {
+        fn drop(&mut self) {
+            DROP_COUNT.with(|c| *c.borrow_mut() += 1);
+        }
+    }
+
+    fn app() -> Element {
+        let mut count = use_signal(|| 0);
+        let x = CountsDrop;
+
+        if generation() < 15 {
+            count += 1;
+        }
+
+        rsx! {
+            TakesEventHandler {
+                click: move |num| {
+                    // Force the closure to own the drop counter
+                    let _ = &x;
+                    println!("num is {num}");
+                },
+                children: count() / 2
+            }
+            TakesSignal { sig: count(), children: count() / 2 }
+        }
+    }
+
     set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
     let mut dom = VirtualDom::new(app);
 
@@ -29,33 +58,42 @@ fn values_memoize_in_place() {
     assert_eq!(drop_count, 15);
 }
 
-struct CountsDrop;
+// We move over event handlers in place. Make sure we do that in a way that doesn't destroy the original event handler
+#[test]
+fn cloning_event_handler_components_work() {
+    fn app() -> Element {
+        let rsx_with_event_handler_component = rsx! {
+            TakesEventHandler {
+                click: move |evt| {
+                    println!("Clicked {evt:?}!");
+                }
+            }
+        };
 
-impl Drop for CountsDrop {
-    fn drop(&mut self) {
-        DROP_COUNT.with(|c| *c.borrow_mut() += 1);
-    }
-}
-
-fn app() -> Element {
-    let mut count = use_signal(|| 0);
-    let x = CountsDrop;
-
-    if generation() < 15 {
-        count += 1;
-    }
-
-    rsx! {
-        TakesEventHandler {
-            click: move |num| {
-                // Force the closure to own the drop counter
-                let _ = &x;
-                println!("num is {num}");
-            },
-            children: count() / 2
+        rsx! {
+            {rsx_with_event_handler_component.clone()}
+            {rsx_with_event_handler_component.clone()}
+            {rsx_with_event_handler_component.clone()}
+            {rsx_with_event_handler_component}
         }
-        TakesSignal { sig: count(), children: count() / 2 }
     }
+
+    set_event_converter(Box::new(dioxus::html::SerializedHtmlEventConverter));
+    let mut dom = VirtualDom::new(app);
+
+    let mutations = dom.rebuild_to_vec();
+    println!("{:#?}", mutations);
+    dom.mark_dirty(ScopeId::ROOT);
+    for _ in 0..20 {
+        dom.handle_event(
+            "click",
+            Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())),
+            ElementId(1),
+            true,
+        );
+        dom.render_immediate(&mut dioxus_core::NoOpMutations);
+    }
+    dom.render_immediate(&mut dioxus_core::NoOpMutations);
 }
 
 #[component]
