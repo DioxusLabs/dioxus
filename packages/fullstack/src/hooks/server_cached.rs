@@ -12,9 +12,9 @@ use serde::{de::DeserializeOwned, Serialize};
 /// use dioxus_fullstack::prelude::*;
 ///
 /// fn app() -> Element {
-///    let state1 = server_cached(|| from_server(|| {
+///    let state1 = server_cached(|| {
 ///       1234
-///    }));
+///    });
 ///
 ///    None
 /// }

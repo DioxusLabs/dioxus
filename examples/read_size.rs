@@ -1,6 +1,6 @@
 //! Read the size of elements using the MountedData struct.
 //!
-//! Whenever an Element is finally mounted to the Dom, its data is avaiable to be read.
+//! Whenever an Element is finally mounted to the Dom, its data is available to be read.
 //! These fields can typically only be read asynchronously, since various renderers need to release the main thread to
 //! perform layout and painting.
 

@@ -158,6 +158,8 @@ publish = false
 manganis = { workspace = true, optional = true }
 reqwest = { version = "0.11.9", features = ["json"], optional = true }
 http-range = { version = "0.1.5", optional = true }
+ciborium = { version = "0.2.1", optional = true }
+base64 = { version = "0.21.0", optional = true }
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["router"] }
@@ -194,7 +196,6 @@ web = ["dioxus/web"]
 collect-assets = ["manganis"]
 http = ["reqwest", "http-range"]
 
-
 [[example]]
 name = "login_form"
 required-features = ["http"]
@@ -218,3 +219,7 @@ required-features = ["http"]
 [[example]]
 name = "image_generator_openai"
 required-features = ["http"]
+
+[[example]]
+name = "hash_fragment_state"
+required-features = ["ciborium", "base64"]

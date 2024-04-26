@@ -20,6 +20,9 @@ quote = { workspace = true }
 proc-macro2 = { workspace = true }
 slab = { workspace = true }
 
+[dev-dependencies]
+dioxus = { workspace = true, features = ["router"] }
+
 [features]
 default = []
 web = []
