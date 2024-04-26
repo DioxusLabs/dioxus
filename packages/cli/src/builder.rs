@@ -45,8 +45,16 @@ impl ExecWithRustFlagsSetter for subprocess::Exec {
     /// `rust_flags` is not `None`.
     fn set_rust_flags(self, rust_flags: Option<String>) -> Self {
         if let Some(rust_flags) = rust_flags {
-            // this used to attempt to read env var and append to it, but cargo will look for RUSTFLAGS
-            // in a mutally exclusive fashion. We need to use cargo rustc and then attach the args manually
+            // This used to attempt to read env var and append to it, but cargo will look for RUSTFLAGS
+            // in a mutally exclusive fashion. We need to use cargo rustc and then attach the args manually.
+            //
+            // Right now the solution is to use `cargo rustc` but these args will only be passed to
+            // the final executable, not the dependencies. I don't think our flags need to
+            // project anything into deps, but this is something to keep in mind.
+            //
+            // https://stackoverflow.com/questions/38040327/how-to-pass-rustc-flags-to-cargo
+            // https://doc.rust-lang.org/cargo/reference/config.html#command-line-overrides
+            // https://doc.rust-lang.org/cargo/reference/config.html#buildrustflags
             let args = rust_flags.split_whitespace().collect::<Vec<_>>();
             self.arg("--").args(&args)
         } else {
