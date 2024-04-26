@@ -135,7 +135,7 @@ pub fn static_segment_idx(idx: usize) -> Ident {
 
 pub fn parse_route_segments<'a>(
     route_span: Span,
-    mut fields: impl Iterator<Item = (&'a Ident, &'a Type)> + Clone,
+    fields: impl Iterator<Item = (&'a Ident, &'a Type)> + Clone,
     route: &str,
 ) -> syn::Result<(
     Vec<RouteSegment>,
