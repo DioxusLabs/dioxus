@@ -392,9 +392,7 @@ where
 }
 
 #[cfg(feature = "serialize")]
-fn deserialize_leaky<'a, 'de, T: serde::Deserialize<'de>, D>(
-    deserializer: D,
-) -> Result<&'a [T], D::Error>
+fn deserialize_leaky<'a, 'de, T, D>(deserializer: D) -> Result<&'a [T], D::Error>
 where
     T: serde::Deserialize<'de>,
     D: serde::Deserializer<'de>,
@@ -739,7 +737,7 @@ impl AttributeValue {
     pub fn listener<T: 'static>(mut callback: impl FnMut(Event<T>) + 'static) -> AttributeValue {
         // TODO: maybe don't use the copy-variant of EventHandler here?
         // Maybe, create an Owned variant so we are less likely to run into leaks
-        AttributeValue::Listener(EventHandler::new(move |event: Event<dyn Any>| {
+        AttributeValue::Listener(EventHandler::leak(move |event: Event<dyn Any>| {
             let data = event.data.downcast::<T>().unwrap();
             callback(Event {
                 propagates: event.propagates,
@@ -763,7 +761,7 @@ impl std::fmt::Debug for AttributeValue {
             Self::Float(arg0) => f.debug_tuple("Float").field(arg0).finish(),
             Self::Int(arg0) => f.debug_tuple("Int").field(arg0).finish(),
             Self::Bool(arg0) => f.debug_tuple("Bool").field(arg0).finish(),
-            Self::Listener(_) => f.debug_tuple("Listener").finish(),
+            Self::Listener(listener) => f.debug_tuple("Listener").field(listener).finish(),
             Self::Any(_) => f.debug_tuple("Any").finish(),
             Self::None => write!(f, "None"),
         }

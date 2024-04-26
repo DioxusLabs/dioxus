@@ -63,7 +63,7 @@ file_engine = [
     "async-trait",
 ]
 hot_reload = ["web-sys/MessageEvent", "web-sys/WebSocket", "web-sys/Location"]
-eval = ["dioxus-html/eval", "serde-wasm-bindgen", "async-trait"]
+eval = ["dioxus-html/eval", "dioxus-interpreter-js/eval", "serde-wasm-bindgen", "async-trait"]
 
 [dev-dependencies]
 dioxus = { workspace = true }

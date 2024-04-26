@@ -83,7 +83,9 @@ tauri-bundler = { version = "=1.4.*", features = ["native-tls-vendored"] }
 syn = { workspace = true }
 prettyplease = { workspace = true }
 
+# Assets
 manganis-cli-support = { workspace = true, features = ["html"] }
+brotli = "5.0.0"
 
 dioxus-autofmt = { workspace = true }
 dioxus-check = { workspace = true }
