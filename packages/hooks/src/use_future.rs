@@ -1,8 +1,7 @@
 #![allow(missing_docs)]
 use crate::{use_callback, use_hook_did_run, use_signal, UseCallback};
-use dioxus_core::{prelude::*, Task};
+use dioxus_core::prelude::*;
 use dioxus_signals::*;
-use dioxus_signals::{Readable, Writable};
 use std::future::Future;
 use std::ops::Deref;
 
