@@ -29,7 +29,7 @@ pub fn derive_typed_builder(input: TokenStream) -> TokenStream {
     }
 }
 
-/// The rsx! macro makes it easy for developers to write jsx-style markup in their components.
+/// The `rsx!` macro makes it easy for developers to write jsx-style markup in their components.
 #[proc_macro]
 pub fn rsx(tokens: TokenStream) -> TokenStream {
     match syn::parse::<rsx::CallBody>(tokens) {
@@ -38,16 +38,14 @@ pub fn rsx(tokens: TokenStream) -> TokenStream {
     }
 }
 
-/// The rsx! macro makes it easy for developers to write jsx-style markup in their components.
-///
-/// The render macro automatically renders rsx - making it unhygienic.
+/// This macro has been deprecated in favor of [`rsx`].
 #[deprecated(note = "Use `rsx!` instead.")]
 #[proc_macro]
 pub fn render(tokens: TokenStream) -> TokenStream {
     rsx(tokens)
 }
 
-/// * Makes the compiler prefer an `UpperCamelCase` function identifier.
+/// * Makes the compiler allow an `UpperCamelCase` function identifier.
 /// * Seamlessly creates a props struct if there's more than 1 parameter in the function.
 /// * Verifies the validity of your component.
 ///
@@ -55,6 +53,7 @@ pub fn render(tokens: TokenStream) -> TokenStream {
 ///
 /// * Without props:
 /// ```rust
+/// # use dioxus::prelude::*;
 /// #[component]
 /// fn Greet() -> Element {
 ///     rsx! { "hello, someone" }
@@ -63,19 +62,20 @@ pub fn render(tokens: TokenStream) -> TokenStream {
 ///
 /// * With props:
 /// ```rust
+/// # use dioxus::prelude::*;
 /// #[component]
 /// fn Greet(person: String) -> Element {
 ///    rsx! { "hello, " {person} }
 /// }
-///
-/// // is roughly equivalent to
-///
+/// ```
+/// Which is roughly equivalent to:
+/// ```rust
+/// # use dioxus::prelude::*;
 /// #[derive(PartialEq, Clone, Props)]
 /// struct GreetProps {
 ///     person: String,
 /// }
 ///
-/// #[component]
 /// fn Greet(GreetProps { person }: GreetProps) -> Element {
 ///     rsx! { "hello, " {person} }
 /// }
@@ -87,32 +87,7 @@ pub fn component(_args: TokenStream, input: TokenStream) -> TokenStream {
         .into()
 }
 
-/// Derive props for a component within the component definition.
-///
-/// This macro provides a simple transformation from `Scope<{}>` to `Scope<P>`,
-/// removing some boilerplate when defining props.
-///
-/// You don't *need* to use this macro at all, but it can be helpful in cases where
-/// you would be repeating a lot of the usual Rust boilerplate.
-///
-/// # Example
-/// ```rust,ignore
-/// #[inline_props]
-/// fn app(bob: String) -> Element {
-///     rsx! { "hello, {bob}") }
-/// }
-///
-/// // is equivalent to
-///
-/// #[derive(PartialEq, Props)]
-/// struct AppProps {
-///     bob: String,
-/// }
-///
-/// fn app(props: AppProps) -> Element {
-///     rsx! { "hello, {bob}") }
-/// }
-/// ```
+/// This macro has been deprecated in favor of [`component`].
 #[proc_macro_attribute]
 #[deprecated(note = "Use `#[component]` instead.")]
 pub fn inline_props(args: TokenStream, input: TokenStream) -> TokenStream {
