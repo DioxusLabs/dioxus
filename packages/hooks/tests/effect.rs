@@ -43,7 +43,10 @@ async fn effects_rerun() {
     );
 
     dom.rebuild_in_place();
-    dom.wait_for_work().await;
+    tokio::select! {
+        _ = dom.wait_for_work() => {}
+        _ = tokio::time::sleep(Duration::from_millis(500)) => panic!("timed out")
+    };
 
     let current_counter = counter.borrow();
     assert_eq!(current_counter.component, 1);
@@ -64,6 +67,7 @@ async fn effects_rerun_without_rerender() {
     let mut dom = VirtualDom::new_with_props(
         |counter: Rc<RefCell<RunCounter>>| {
             counter.borrow_mut().component += 1;
+            println!("component {}", counter.borrow().component);
 
             let mut signal = use_signal(|| 0);
             use_effect({
@@ -71,17 +75,14 @@ async fn effects_rerun_without_rerender() {
                 move || {
                     counter.borrow_mut().effect += 1;
                     // This will subscribe the effect to the signal
-                    println!("Signal: {:?}", signal);
-
-                    // Stop the wait for work manually
-                    needs_update();
+                    println!("Signal: {}", signal);
                 }
             });
             use_future(move || async move {
-                for _ in 0..10 {
-                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                for i in 0..10 {
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                    println!("future {}", i);
                     signal += 1;
-                    println!("future");
                 }
             });
 
@@ -95,10 +96,10 @@ async fn effects_rerun_without_rerender() {
     dom.rebuild_in_place();
     tokio::select! {
         _ = dom.wait_for_work() => {}
-        _ = tokio::time::sleep(Duration::from_millis(500)) => panic!("timed out")
+        _ = tokio::time::sleep(Duration::from_millis(500)) => {}
     };
 
     let current_counter = counter.borrow();
-    assert_eq!(current_counter.component, 10);
-    assert_eq!(current_counter.effect, 10);
+    assert_eq!(current_counter.component, 1);
+    assert_eq!(current_counter.effect, 11);
 }

@@ -2,6 +2,7 @@ use crate::innerlude::ScopeOrder;
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::VecDeque;
+use crate::Runtime;
 
 /// Effects will always run after all changes to the DOM have been applied.
 ///
@@ -28,11 +29,13 @@ impl Effect {
         self.effect.borrow_mut().push_back(Box::new(f));
     }
 
-    pub fn run(&self) {
+    pub(crate) fn run(&self, runtime: &Runtime) {
+        runtime.rendering.set(false);
         let mut effect = self.effect.borrow_mut();
         while let Some(f) = effect.pop_front() {
             f();
         }
+        runtime.rendering.set(true);
     }
 }
 
