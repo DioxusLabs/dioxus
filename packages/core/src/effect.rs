@@ -1,8 +1,8 @@
 use crate::innerlude::ScopeOrder;
+use crate::Runtime;
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::VecDeque;
-use crate::Runtime;
 
 /// Effects will always run after all changes to the DOM have been applied.
 ///
