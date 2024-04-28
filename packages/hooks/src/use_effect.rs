@@ -53,7 +53,6 @@ pub fn use_effect(callback: impl FnMut() + 'static) -> Effect {
         // 2) The effect is rerun due to an async read at any time
         // 3) The effect is rerun in the same tick that the component is rerun: we need to wait for the component to rerun before we can run the effect again
         let queue_effect_for_next_render = move || {
-            let rc = rc.clone();
             queue_effect(move || rc.run_in(&*callback));
         };
 

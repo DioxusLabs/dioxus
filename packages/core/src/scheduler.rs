@@ -5,7 +5,7 @@
 //! 1. Running queued work after it could be dropped. Related issues (https://github.com/DioxusLabs/dioxus/pull/1993)
 //!
 //! User code often assumes that this property is true. For example, if this code reruns the child component after signal is changed to None, it will panic
-//! ```rust
+//! ```rust, ignore
 //! fn ParentComponent() -> Element {
 //!     let signal: Signal<Option<i32>> = use_signal(None);
 //!
@@ -26,7 +26,7 @@
 //! 2. Running effects before the dom is updated. Related issues (https://github.com/DioxusLabs/dioxus/issues/2307)
 //!
 //! Effects can be used to run code that accesses the DOM directly. They should only run when the DOM is in an updated state. If they are run with an out of date version of the DOM, unexpected behavior can occur.
-//! ```rust
+//! ```rust, ignore
 //! fn EffectComponent() -> Element {
 //!     let id = use_signal(0);
 //!     use_effect(move || {
@@ -43,7 +43,7 @@
 //! 3. Observing out of date state. Related issues (https://github.com/DioxusLabs/dioxus/issues/1935)
 //!
 //! Where ever possible, updates should happen in an order that makes it impossible to observe an out of date state.
-//! ```rust
+//! ```rust, ignore
 //! fn OutOfDateComponent() -> Element {
 //!     let id = use_signal(0);
 //!     // When you read memo, it should **always** be two times the value of id
