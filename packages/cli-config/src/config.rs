@@ -109,6 +109,7 @@ impl std::error::Error for CrateConfigError {}
 impl DioxusConfig {
     #[cfg(feature = "cli")]
     /// Load the dioxus config from a path
+    #[tracing::instrument]
     pub fn load(bin: Option<PathBuf>) -> Result<Option<DioxusConfig>, CrateConfigError> {
         let crate_dir = crate::cargo::crate_root();
 
@@ -125,6 +126,7 @@ impl DioxusConfig {
         let crate_dir = crate_dir.as_path();
 
         let Some(dioxus_conf_file) = acquire_dioxus_toml(crate_dir) else {
+            tracing::warn!(?crate_dir, "no dioxus config found for");
             return Ok(None);
         };
 
@@ -158,20 +160,15 @@ impl DioxusConfig {
 }
 
 #[cfg(feature = "cli")]
+#[tracing::instrument]
 fn acquire_dioxus_toml(dir: &std::path::Path) -> Option<PathBuf> {
-    // prefer uppercase
-    let uppercase_conf = dir.join("Dioxus.toml");
-    if uppercase_conf.is_file() {
-        return Some(uppercase_conf);
-    }
+    use tracing::trace;
 
-    // lowercase is fine too
-    let lowercase_conf = dir.join("dioxus.toml");
-    if lowercase_conf.is_file() {
-        return Some(lowercase_conf);
-    }
-
-    None
+    ["Dioxus.toml", "dioxus.toml"]
+        .into_iter()
+        .map(|file| dir.join(file))
+        .inspect(|path| trace!("checking [{path:?}]"))
+        .find(|path| path.is_file())
 }
 
 impl Default for DioxusConfig {
