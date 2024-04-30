@@ -16,8 +16,8 @@ pub struct Element {
     pub key: Option<IfmtInput>,
     pub attributes: Vec<AttributeType>,
     pub merged_attributes: Vec<AttributeType>,
-    pub children: Vec<BodyNode>,
     pub brace: syn::token::Brace,
+    pub children: Vec<BodyNode>,
 }
 
 impl Parse for Element {

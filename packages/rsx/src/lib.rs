@@ -21,7 +21,7 @@ pub mod hotreload;
 mod ifmt;
 mod location;
 mod node;
-mod rsx_parser;
+// mod rsx_parser;
 
 pub(crate) mod context;
 pub(crate) mod renderer;
@@ -74,22 +74,6 @@ impl CallBody {
 
         quote! { { #body } }
     }
-
-    ///
-    pub fn set_locations_as_hotreload(&self) {
-        let mut rootstack = self.roots.iter().collect::<Vec<_>>();
-
-        while let Some(root) = rootstack.pop() {
-            match root {
-                BodyNode::Element(_) => todo!(),
-                BodyNode::Text(_) => todo!(),
-                BodyNode::RawExpr(_) => todo!(),
-                BodyNode::Component(_) => todo!(),
-                BodyNode::ForLoop(_) => todo!(),
-                BodyNode::IfChain(_) => todo!(),
-            }
-        }
-    }
 }
 
 impl Parse for CallBody {
@@ -112,14 +96,12 @@ impl Parse for CallBody {
 
 impl ToTokens for CallBody {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
-        // Empty templates just are placeholders for "none"
-        match self.roots.is_empty() {
-            true => out_tokens.append_all(quote! { None }),
-            false => {
-                let body = TemplateRenderer::as_tokens(&self.roots, None);
-                out_tokens.append_all(quote! { { #body } })
-            }
+        if self.roots.is_empty() {
+            return out_tokens.append_all(quote! { None });
         }
+
+        let body = TemplateRenderer::as_tokens(&self.roots, None);
+        out_tokens.append_all(quote! { { #body } })
     }
 }
 

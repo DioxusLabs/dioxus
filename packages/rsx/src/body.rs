@@ -5,11 +5,12 @@
 //!
 //! However, thre are multiple *templates* inside a callbody - due to how core clones templates and
 //! just generally rationalize the concept of a template, nested bodies like for loops and if statements
-//! and component childrne are all templates, contained within the same Callbody.
+//! and component children are all templates, contained within the same Callbody.
 //!
 //! This gets confusing fast since there's lots of IDs bouncing around.
 //!
 //! The IDs at play:
+//!
 //! - The id of the template itself so we can find it and apply it to the dom.
 //!   This is challenging since all calls to file/line/col/id are relative to the macro invocation,
 //!   so they will have to share the same base ID and we need to give each template a new ID.
@@ -20,29 +21,14 @@
 //! - The unique ID of a hotreloadable literal. This ID is unique to the Callbody, not necessarily the
 //!   template it lives in.
 //!
+//! We solve this by parsing the structure completely and then doing a second pass that fills in IDs
+//! by walking the structure.
 //!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
-//!
+//! This means you can't query the ID of any node "in a vacuum" - these are assigned once - but at
+//! least theyre stable enough for the purposes of hotreloading
 
 use crate::*;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
 
 type NodePath = Vec<u8>;
 type AttributePath = Vec<u8>;
@@ -57,169 +43,13 @@ type AttributePath = Vec<u8>;
 ///
 /// It's a lot of work, but it's all saved via caching.
 pub struct Callbody2 {
-    /// The list of all the templates found in this rsx! call in the order they were found via dfs
-    /// This guarantees that the first template is the root template and this rendering order makes sense
-    ///
-    /// IE
-    /// rsx! {
-    ///     /* ...0 */
-    ///    for { /* ...1  */ }
-    ///    Component { /* ...2 */ }
-    ///    if {
-    ///       /* ...3 */
-    ///       for { /* ...4 */ }
-    ///    }
-    /// }
-    templates: Vec<TemplateContext>,
-}
-
-/// A single template with its internal representation
-struct TemplateContext {
-    id: usize,
-    roots: Vec<BodyNode>,
-    template: Vec<TemplateNode>,
-    node_paths: Vec<NodePath>,
-    attr_paths: Vec<AttributePath>,
-}
-
-impl Callbody2 {
-    pub fn new(roots: Vec<BodyNode>) -> Option<Self> {
-        let mut s = Self {
-            templates: vec![], // roots,
-                               // current_path: vec![],
-                               // node_paths: vec![],
-                               // attr_paths: vec![],
-                               // template: vec![],
-                               // dynamic_idx: 0,
-        };
-
-        // s.template = s.fill()?;
-
-        Some(s)
-    }
-
-    /// Fill the dynamic context with the callbody
-    ///
-    /// This will cascade location information down the tree if it already hasn't been set
-    ///
-    fn fill(&mut self) -> Option<Vec<TemplateNode>> {
-        todo!()
-    }
-
-    /// Produce a dioxus template ID for this callbody
-    ///
-    /// This follows the file:line:column:id format
-    ///
-    fn location_with_idx(&self, idx: usize) -> TokenStream2 {
-        quote! {
-            concat!( file!(), ":", line!(), ":", column!(), ":", #idx )
-        }
-    }
-
-    // /// Get the implicit key of this set of nodes
-    // ///
-    // /// todo: throw some warnings or something if there's an implicit key but it's defined incorrectly
-    // fn implicit_key(&self) -> Option<IfmtInput> {
-    //     match self.roots.first() {
-    //         Some(BodyNode::Element(el)) if self.roots.len() == 1 => el.key.clone(),
-    //         Some(BodyNode::Component(comp)) if self.roots.len() == 1 => comp.key().cloned(),
-    //         _ => None,
-    //     }
-    // }
-
-    // /// Find the current node by traversing the children arrays
-    // /// This is not great performance wise (cache locality and all that), but it's not a big deal
-    // /// since rendering is not that common
-    // fn find_dynamic_node(&self, idx: usize) -> &BodyNode {
-    //     let path = self.node_paths[idx].clone();
-    //     let mut cur_node = &self.roots[path[0] as usize];
-    //     for id in path.iter().skip(1) {
-    //         cur_node = &cur_node.children()[*id as usize];
-    //     }
-    //     cur_node
-    // }
-
-    // /// Convert the list of nodepaths into actual calls to create the dynamic nodes.
-    // ///
-    // /// This is stuff like converting `Component {}` to a vcomponent::new call
-    // fn render_dynamic_node(&self, idx: usize, tokens: &mut TokenStream2) {
-    //     let node = self.find_dynamic_node(idx);
-    //     todo!()
-    // }
-
-    // /// Render dynamic attributes
-    // fn render_dynamic_attributes(&self, idx: usize, tokens: &mut TokenStream2) {
-    //     let node = self.find_dynamic_node(idx);
-    //     todo!()
-    // }
-
-    /// Render this callbody to a tokenstream
-    ///
-    /// todo: change the syntax here so we're rendering *into* the tokenstream instead of returning it
-    ///       this has the benefit of not having to allocate a new token stream
-    fn render(&self) -> TokenStream2 {
-        // If there are no roots, this is an empty template, so just return None
-        if self.roots.is_empty() {
-            return quote! { Option::<dioxus_core::VNode>::None };
-        }
-
-        // If we have an implicit key, then we need to write its tokens
-        let key_tokens = match self.implicit_key() {
-            Some(tok) => quote! { Some( #tok.to_string() ) },
-            None => quote! { None },
-        };
-
-        // Get the tokens we'll use as the ID of the template
-        let name = self.location_with_idx(0);
-
-        todo!()
-        // // Render the static nodes, generating the mapping of dynamic
-        // // This will modify the bodynodes, filling in location information for any sub templates
-        // let roots = self.render_body_nodes(&mut context);
-
-        // // run through the dynamic nodes and set their location based on the idx of that node
-        // for (idx, node) in self.dynamic_nodes.iter_mut().enumerate() {
-        //     // We use +1 since :0 is the base of the template
-        //     node.set_location_idx(idx + 1);
-        // }
-
-        // let dynamic_nodes = &self.dynamic_nodes;
-        // let dyn_attr_printer = self
-        //     .dynamic_attributes
-        //     .iter()
-        //     .map(|attrs| AttributeType::merge_quote(attrs));
-
-        // let node_paths = self.node_paths.iter().map(|it| quote!(&[#(#it),*]));
-        // let attr_paths = self.attr_paths.iter().map(|it| quote!(&[#(#it),*]));
-
-        // let vnode = quote! {
-        //     static TEMPLATE: dioxus_core::Template = dioxus_core::Template {
-        //         name: #name,
-        //         roots: #roots,
-        //         node_paths: &[ #(#node_paths),* ],
-        //         attr_paths: &[ #(#attr_paths),* ],
-        //     };
-
-        //     {
-        //         // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
-        //         let __vnodes = dioxus_core::VNode::new(
-        //             #key_tokens,
-        //             TEMPLATE,
-        //             Box::new([ #( #dynamic_nodes),* ]),
-        //             Box::new([ #(#dyn_attr_printer),* ]),
-        //         );
-        //         __vnodes
-        //     }
-        // };
-
-        // quote! { Some({ #vnode }) }
-    }
+    body: Vec<BodyNode>,
 }
 
 impl Parse for Callbody2 {
-    /// Parse the nodes of the callbody and then fill in all the location information we need to generate
-    /// template IDs and dynamic node IDs
+    /// Parse the nodes of the callbody as `Body`.
     fn parse(input: ParseStream) -> Result<Self> {
+        // let body: Body = input.parse()?;
         let mut roots = Vec::new();
 
         while !input.is_empty() {
@@ -232,12 +62,110 @@ impl Parse for Callbody2 {
             roots.push(node);
         }
 
-        Ok(Self::new(roots).unwrap())
+        todo!()
+        // Ok(Self::new(body).unwrap())
     }
 }
 
+/// Our ToTokens impl here just defers to rendering a template out like any other `Body`.
+/// This is because the parsing phase filled in all the additional metadata we need
 impl ToTokens for Callbody2 {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        self.render().to_tokens(tokens);
+        todo!()
+        // self.body.to_tokens(tokens)
     }
 }
+
+/// A traverser for the entirety of the callbody
+/// We'll create new ones on the fly but pass down some fields that need to be shared among the whole
+/// callbody as we go
+struct Traverser {
+    cur_path: Vec<usize>,
+    template_idx: usize,
+    attr_idx: usize,
+    dyn_node_idx: usize,
+}
+
+impl Traverser {
+    /// Get an ID for the next dynamic attribute
+    fn next_attr(&mut self) -> usize {
+        self.attr_idx += 1;
+        self.attr_idx - 1
+    }
+
+    /// Get an ID for the next dynamic node
+    fn next_dyn_node(&mut self) -> usize {
+        self.dyn_node_idx += 1;
+        self.dyn_node_idx - 1
+    }
+}
+
+// fn fill(
+//     body: &mut Body,
+//     nodes: &mut [BodyNode],
+//     state: &mut Traverser,
+// ) -> Option<Vec<TemplateNode>> {
+//     let mut template_nodes = vec![];
+
+//     for (idx, node) in nodes.iter_mut().enumerate() {
+//         state.cur_path.push(idx);
+
+//         // Create a new template node for us to stitch onto
+//         let template_node = match node {
+//             BodyNode::Text(_) => todo!(),
+//             BodyNode::RawExpr(_) => todo!(),
+
+//             // Handle the element by walking its attributes and then descending into its children
+//             BodyNode::Element(el) => {
+//                 // run through the attributes
+//                 for attr in el.merged_attributes.iter() {
+//                     todo!();
+//                     // cur_body.attr_paths.push(value)
+//                 }
+
+//                 // run through the children
+//                 let child_template_roots = fill(body, &mut el.children, state)?;
+
+//                 todo!()
+//                 // Build the template node
+//                 // TemplateNode::Element {
+//                 //     tag,
+//                 //     namespace,
+//                 //     attrs: intern(static_attr_array.into_boxed_slice()),
+//                 //     children: intern(child_template_roots.as_slice()),
+//                 // }
+//             }
+
+//             BodyNode::Component(_) => {
+//                 // create a new traverser for the component children but using some of our traverser
+//                 // as a seed
+//                 let id = state.next_dyn_node();
+
+//                 // And then just return a dynamic node
+//                 TemplateNode::Dynamic { id }
+//             }
+
+//             BodyNode::ForLoop(_) => {
+//                 // create a new traverser for the forloop contents using our traverser as a seed
+//                 // as a seed
+//                 let id = state.next_dyn_node();
+
+//                 //
+//                 TemplateNode::Dynamic { id }
+//             }
+
+//             BodyNode::IfChain(_) => {
+//                 // create a new traverser for each of the ifchain branches using our traverser as
+//                 // a seed
+//                 let id = state.next_dyn_node();
+
+//                 TemplateNode::Dynamic { id }
+//             }
+//         };
+//         template_nodes.push(template_node);
+
+//         _ = state.cur_path.pop();
+//     }
+
+//     Some(template_nodes)
+// }

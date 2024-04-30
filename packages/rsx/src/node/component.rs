@@ -11,7 +11,7 @@
 //! - [ ] Keys
 //! - [ ] Properties spreading with with `..` syntax
 
-use self::{body::Body, location::CallerLocation};
+use self::location::CallerLocation;
 
 use super::*;
 
@@ -31,7 +31,7 @@ pub struct Component {
     pub manual_props: Option<Expr>,
     pub brace: syn::token::Brace,
     pub location: CallerLocation,
-    pub children: Body,
+    pub children: Vec<BodyNode>,
 }
 
 impl Parse for Component {

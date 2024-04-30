@@ -6,7 +6,7 @@ pub struct ForLoop {
     pub pat: Pat,
     pub in_token: Token![in],
     pub expr: Box<Expr>,
-    pub body: Body,
+    pub body: Vec<BodyNode>,
     pub location: CallerLocation,
 }
 
@@ -18,10 +18,7 @@ impl Parse for ForLoop {
         let in_token: Token![in] = input.parse()?;
         let expr: Expr = input.call(Expr::parse_without_eager_brace)?;
 
-        let content;
-        braced!(content in input);
-
-        let body = content.parse()?;
+        let (_brace_token, body) = parse_buffer_as_braced_children(input)?;
 
         Ok(Self {
             for_token,
@@ -30,22 +27,6 @@ impl Parse for ForLoop {
             body,
             expr: Box::new(expr),
             location: CallerLocation::default(),
-        })
-    }
-}
-
-impl ToTokens for ForLoop {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let ForLoop {
-            pat, expr, body, ..
-        } = self;
-
-        // the temporary is important so we create a lifetime binding
-        tokens.append_all(quote! {
-            {
-                let ___nodes = (#expr).into_iter().map(|#pat| { #body }).into_dyn_node();
-                ___nodes
-            }
         })
     }
 }

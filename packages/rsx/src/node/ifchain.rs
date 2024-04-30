@@ -5,9 +5,9 @@ use super::*;
 pub struct IfChain {
     pub if_token: Token![if],
     pub cond: Box<Expr>,
-    pub then_branch: Body,
+    pub then_branch: Vec<BodyNode>,
     pub else_if_branch: Option<Box<IfChain>>,
-    pub else_branch: Option<Body>,
+    pub else_branch: Option<Vec<BodyNode>>,
     pub location: CallerLocation,
 }
 
@@ -41,59 +41,6 @@ impl Parse for IfChain {
             else_if_branch,
             else_branch,
             location: CallerLocation::default(),
-        })
-    }
-}
-
-impl ToTokens for IfChain {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let mut body = TokenStream2::new();
-        let mut terminated = false;
-
-        let mut elif = Some(self);
-
-        let base_idx = self.location.idx.get() * 1000;
-        let mut cur_idx = base_idx + 1;
-
-        while let Some(chain) = elif {
-            let IfChain {
-                if_token,
-                cond,
-                then_branch,
-                else_if_branch,
-                else_branch,
-                ..
-            } = chain;
-
-            let renderer = TemplateRenderer::as_tokens_with_idx(then_branch, cur_idx);
-            body.append_all(quote! { #if_token #cond { {#renderer} } });
-
-            cur_idx += 1;
-
-            if let Some(next) = else_if_branch {
-                body.append_all(quote! { else });
-                elif = Some(next);
-            } else if let Some(else_branch) = else_branch {
-                let renderer = TemplateRenderer::as_tokens_with_idx(else_branch, cur_idx);
-                body.append_all(quote! { else { {#renderer} } });
-                terminated = true;
-                break;
-            } else {
-                elif = None;
-            }
-        }
-
-        if !terminated {
-            body.append_all(quote! {
-                else { None }
-            });
-        }
-
-        tokens.append_all(quote! {
-            {
-                let ___nodes = (#body).into_dyn_node();
-                ___nodes
-            }
         })
     }
 }

@@ -10,6 +10,7 @@ pub struct CallerLocation {
     pub idx: Cell<usize>,
     pub hotreload: Cell<bool>,
 }
+
 impl CallerLocation {
     pub fn set_idx(&self, idx: usize) {
         self.idx.set(idx);

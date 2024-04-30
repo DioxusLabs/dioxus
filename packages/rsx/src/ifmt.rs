@@ -318,6 +318,7 @@ impl ToTokens for FormattedSegmentType {
 impl Parse for IfmtInput {
     fn parse(input: ParseStream) -> Result<Self> {
         let input: LitStr = input.parse()?;
+        println!("raw span: {:?}", input.span());
         let input_str = input.value();
         let mut ifmt = IfmtInput::from_str(&input_str)?;
         ifmt.source = Some(input);

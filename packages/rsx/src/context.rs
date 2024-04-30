@@ -2,6 +2,11 @@ use crate::*;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 
+/// An understanding of a set of Tokens that provides the mapping required for:
+/// - hotreload diffing
+/// - converting to a Template
+/// - converting to Tokens
+///
 /// As we create the dynamic nodes, we want to keep track of them in a linear fashion
 /// We'll use the size of the vecs to determine the index of the dynamic node in the final output
 #[derive(Default, Debug, PartialEq)]
@@ -30,7 +35,7 @@ impl<'a> DynamicContext<'a> {
     /// they'll get picked up after codegen for compilation. Cool stuff.
     ///
     /// If updating fails (IE the root is a dynamic node that has changed), then we return None.
-    pub fn populate_by_updating<Ctx: HotReloadingContext>(
+    pub fn fill<Ctx: HotReloadingContext>(
         &mut self,
         roots: &'a [BodyNode],
     ) -> Option<Vec<TemplateNode>> {
@@ -296,7 +301,7 @@ impl<'a> DynamicContext<'a> {
             static_attr_array.push(template_attr);
         }
 
-        let children = self.populate_by_updating::<Ctx>(el.children.as_slice())?;
+        let children = self.fill::<Ctx>(el.children.as_slice())?;
 
         let (tag, namespace) =
             Ctx::map_element(&rust_name).unwrap_or((intern(rust_name.as_str()), None));

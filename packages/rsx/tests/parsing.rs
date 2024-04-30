@@ -1,4 +1,5 @@
 use dioxus_rsx::{CallBody, DynamicContext};
+use proc_macro2::TokenStream;
 use syn::Item;
 
 #[test]
@@ -41,4 +42,40 @@ fn parse_from_str(contents: &str) -> CallBody {
     };
 
     call.mac.parse_body().unwrap()
+}
+
+/// are spans just byte offsets? can't we just use the byte offset relative to the root?
+#[test]
+fn how_do_spans_work_again() {
+    fn print_spans(item: TokenStream) {
+        let new_invalid: CallBody = syn::parse2(item).unwrap();
+        let root = &new_invalid.roots[0];
+        let hi = &new_invalid.roots[0].children()[0];
+        let goodbye = &new_invalid.roots[0].children()[1];
+
+        dbg!(root.span(), hi.span(), goodbye.span());
+
+        // dbg!(second.span());
+        // dbg!(first);
+        // let third = new_invalid.roots[0].children().first().unwrap();
+        // dbg!(third.span());
+        // let last = new_invalid.roots.last().unwrap().children().last().unwrap();
+        // dbg!(last.span());
+        println!();
+    }
+
+    for _ in 0..5 {
+        print_spans(quote::quote! {
+            div {
+                div {}
+                for item in items {}
+                // something-cool {}
+                // if true {
+                //     div {}
+                // }
+                "hi!"
+                "goodbye!"
+            }
+        });
+    }
 }

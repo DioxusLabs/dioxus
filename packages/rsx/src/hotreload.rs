@@ -76,30 +76,6 @@ pub struct HotreloadingResults {
     pub changed_strings: HashMap<String, FmtedSegments>,
 }
 
-// #[derive(Debug, PartialEq, Eq, Clone)]
-// struct TemplateDiff {
-//     template: Template,
-
-//     /// The IDX to the dynamic text node
-//     changed_segments: HashMap<DynamicNodeIdx, FormattedSegment>,
-// }
-
-// #[derive(Debug, PartialEq, Eq, Clone)]
-// struct FormattedSegment {
-//     segment: Vec<FormattedSegmentType>,
-// }
-
-// #[derive(Debug, PartialEq, Eq, Clone)]
-// enum FormattedSegmentType {
-//     /// A literal string
-//     Literal(String),
-
-//     /// A formatted string
-//     /// The dyamic pieces of the formatted String
-//     /// IE  "asdasd {something} {else}" would have two pieces - `something` and `else`
-//     Formatted(String),
-// }
-
 impl HotreloadingResults {
     pub fn new<Ctx: HotReloadingContext>(
         old: &CallBody,
@@ -110,8 +86,7 @@ impl HotreloadingResults {
             templates: Default::default(),
             changed_strings: Default::default(),
         };
-        let templates = s.hotreload_callbody::<Ctx>(old, new, location)?;
-        s.templates = templates;
+        s.templates = s.hotreload_callbody::<Ctx>(old, new, location)?;
         Some(s)
     }
 
@@ -130,7 +105,7 @@ impl HotreloadingResults {
         location: &'static str,
     ) -> Option<Vec<Template>> {
         let mut templates = vec![];
-        self.hotreload_bodynodes::<Ctx>(&old.roots, &new.roots, location, &mut templates)?;
+        self.hotreload_body::<Ctx>(&old.roots, &new.roots, location, &mut templates)?;
         Some(templates)
     }
 
@@ -147,7 +122,7 @@ impl HotreloadingResults {
     ///
     /// This encourages the hotreloader to hot onto DynamicContexts directly instead of the CallBody since
     /// you can preserve more information about the nodes as they've changed over time.
-    pub fn hotreload_bodynodes<Ctx: HotReloadingContext>(
+    pub fn hotreload_body<Ctx: HotReloadingContext>(
         &mut self,
         old_body: &[BodyNode],
         new_body: &[BodyNode],
@@ -446,7 +421,7 @@ impl HotreloadingResults {
             // This is just the file+line+col+byte index from the original
             // If no byte index is present, we'll just use the idx of the node
             let new_location = make_new_location(location, old_idx + 1);
-            self.hotreload_bodynodes::<Ctx>(&a.body, &b.body, new_location, templates)?;
+            self.hotreload_body::<Ctx>(&a.body, &b.body, new_location, templates)?;
         }
         Some(matches)
     }
@@ -473,7 +448,7 @@ impl HotreloadingResults {
             self.hotreload_component_fields::<Ctx>(a, b, location, old_idx, templates)?;
 
             let new_location = make_new_location(location, old_idx + 1);
-            self.hotreload_bodynodes::<Ctx>(&a.children, &b.children, new_location, templates)?;
+            self.hotreload_body::<Ctx>(&a.children, &b.children, new_location, templates)?;
         }
 
         Some(matches)
@@ -552,7 +527,7 @@ impl HotreloadingResults {
 
                 // Write the `then` branch
                 let new_location = make_new_location(location, cur_idx);
-                self.hotreload_bodynodes::<Ctx>(
+                self.hotreload_body::<Ctx>(
                     &a.then_branch,
                     &b.then_branch,
                     new_location,
@@ -578,7 +553,7 @@ impl HotreloadingResults {
                 // Write out the else branch and then we're done
                 let (left, right) = (a.else_branch.as_ref()?, b.else_branch.as_ref()?);
                 let new_location = make_new_location(location, cur_idx);
-                self.hotreload_bodynodes::<Ctx>(&left, &right, new_location, templates)?;
+                self.hotreload_body::<Ctx>(&left, &right, new_location, templates)?;
                 break;
             }
         }
