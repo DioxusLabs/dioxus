@@ -62,8 +62,8 @@ pub async fn setup_router(
         .and_then(move |response| async move { Ok(no_cache(file_service_config, response)) })
         .service(ServeDir::new(config.out_dir()));
 
-    // Setup websocket
-    let mut router = Router::new().route("/_dioxus/ws", get(ws_handler));
+    // Setup router
+    let mut router = Router::new();
 
     // Setup proxy
     for proxy_config in config.dioxus_config.web.proxy {
@@ -81,9 +81,16 @@ pub async fn setup_router(
     ));
 
     router = if let Some(base_path) = config.dioxus_config.web.app.base_path.clone() {
-        let base_path = format!("/{}", base_path.trim_matches('/'));
+        // NB. The trailing `/` is required for Dioxus Routers to match on root paths. Without it,
+        // navigating to e.g. `/base/path/` results in the below fallback being hit, and users
+        // receiving a message that `/base/path/` is "Outside of the base path: /base/path".
+        // Navigating to e.g. `/base/path` results in the below fallback  _not_ being hit, but a
+        // panic getting thrown from `WebHistory::route_from_location`. Interestingly, the
+        // `RouteParseError` passed into the panic reports that attempts were made to match on no
+        // routes at all.
+        let base_path = format!("/{}/", base_path.trim_matches('/'));
         Router::new()
-            .route(&base_path, axum::routing::any_service(router))
+            .nest(&base_path, router)
             .fallback(get(move || {
                 let base_path = base_path.clone();
                 async move { format!("Outside of the base path: {}", base_path) }
@@ -91,6 +98,9 @@ pub async fn setup_router(
     } else {
         router
     };
+
+    // Setup websocket
+    router = router.route("/_dioxus/ws", get(ws_handler));
 
     // Setup routes
     router = router

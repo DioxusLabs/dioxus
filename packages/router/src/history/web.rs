@@ -74,7 +74,9 @@ impl<R: Routable> WebHistory<R> {
         let myself = Self::new_inner(prefix, do_scroll_restoration);
 
         let current_route = myself.current_route();
-        let current_url = current_route.to_string();
+        let current_route_str = current_route.to_string();
+        let prefix_str = myself.prefix.as_deref().unwrap_or("");
+        let current_url = format!("{prefix_str}{current_route_str}");
         let state = myself.create_state(current_route);
         let _ = replace_state_with_url(&myself.history, &state, Some(&current_url));
 

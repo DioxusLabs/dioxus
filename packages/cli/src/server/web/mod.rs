@@ -116,21 +116,26 @@ async fn start_server(
     router: axum::Router,
     start_browser: bool,
     rustls: Option<axum_server::tls_rustls::RustlsConfig>,
-    _config: &CrateConfig,
+    config: &CrateConfig,
 ) -> Result<()> {
     // If plugins, call on_serve_start event
     #[cfg(feature = "plugin")]
-    crate::plugin::PluginManager::on_serve_start(_config)?;
+    crate::plugin::PluginManager::on_serve_start(config)?;
 
     // Bind the server to `[::]` and it will LISTEN for both IPv4 and IPv6. (required IPv6 dual stack)
     let addr: SocketAddr = format!("0.0.0.0:{}", port).parse().unwrap();
 
     // Open the browser
     if start_browser {
-        match rustls {
-            Some(_) => _ = open::that(format!("https://localhost:{port}")),
-            None => _ = open::that(format!("http://localhost:{port}")),
-        }
+        let protocol = match rustls {
+            Some(_) => "https",
+            None => "http",
+        };
+        let base_path = match config.dioxus_config.web.app.base_path.as_deref() {
+            Some(base_path) => format!("/{}/", base_path.trim_matches('/')),
+            None => "".to_owned(),
+        };
+        _ = open::that(format!("{protocol}://localhost:{port}{base_path}"));
     }
 
     let svc = router.into_make_service();
