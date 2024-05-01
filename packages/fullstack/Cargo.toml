@@ -18,7 +18,6 @@ dioxus_server_macro = { workspace = true }
 # axum
 axum = { workspace = true, features = ["ws", "macros"], optional = true }
 tower-http = { workspace = true, optional = true, features = ["fs"] }
-async-compression = { version = "0.4.6", features = ["gzip", "tokio"], optional = true }
 
 dioxus-lib = { workspace = true }
 
@@ -66,15 +65,18 @@ tokio = { workspace = true, features = ["rt", "sync"], optional = true }
 dioxus-hot-reload = { workspace = true, features = ["serve"] }
 tokio = { workspace = true, features = ["rt", "sync", "rt-multi-thread"], optional = true }
 
+[dev-dependencies]
+dioxus = { workspace = true, features = ["fullstack"] }
+
 [features]
 default = ["hot-reload"]
 hot-reload = ["serde_json", "dioxus-hot-reload/serve"]
 web = ["dioxus-web", "web-sys"]
-desktop = ["dioxus-desktop"]
+desktop = ["dioxus-desktop", "server_fn/reqwest", "dioxus_server_macro/reqwest"] 
 mobile = ["dioxus-mobile"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls"]
-axum = ["dep:axum", "tower-http", "server", "server_fn/axum", "dioxus_server_macro/axum", "async-compression"]
+axum = ["dep:axum", "tower-http", "server", "server_fn/axum", "dioxus_server_macro/axum"]
 static-site-generation = []
 server = [
     "server_fn/ssr",

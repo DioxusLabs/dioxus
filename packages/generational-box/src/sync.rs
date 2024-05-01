@@ -100,8 +100,9 @@ impl AnyStorage for SyncStorage {
     }
 
     fn recycle(location: &MemoryLocation<Self>) {
+        let location = *location;
         location.drop();
-        sync_runtime().lock().push(*location);
+        sync_runtime().lock().push(location);
     }
 }
 

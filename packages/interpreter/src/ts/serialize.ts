@@ -194,12 +194,17 @@ function serializeAnimationEvent(event: AnimationEvent): SerializedEvent {
 }
 
 function serializeDragEvent(event: DragEvent): SerializedEvent {
-  //     let files = [];
-  //     if (event.dataTransfer && event.dataTransfer.files) {
-  //       files = ["a", "b", "c"];
-  //       // files = await serializeFileList(event.dataTransfer.files);
-  //     }
-  //     return { mouse: get_mouse_data(event), files };
+  let files = undefined;
+  // On desktop if there is file data, we insert it from wry. We just add a placeholder to let the rust side of dioxus know there's files
+  if (
+    event.dataTransfer &&
+    event.dataTransfer.files &&
+    event.dataTransfer.files.length > 0
+  ) {
+    files = {
+      files: { placeholder: [] },
+    };
+  }
   return {
     mouse: {
       alt_key: event.altKey,
@@ -208,10 +213,6 @@ function serializeDragEvent(event: DragEvent): SerializedEvent {
       shift_key: event.shiftKey,
       ...serializeMouseEvent(event),
     },
-    files: {
-      files: {
-        "a": [1, 2, 3],
-      }
-    },
+    files,
   };
 }

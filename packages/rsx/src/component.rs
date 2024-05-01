@@ -11,18 +11,15 @@
 //! - [ ] Keys
 //! - [ ] Properties spreading with with `..` syntax
 
-use self::{location::CallerLocation, renderer::TemplateRenderer};
+use self::location::CallerLocation;
 
 use super::*;
 
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::quote;
 use syn::{
-    ext::IdentExt,
-    parse::{Parse, ParseBuffer, ParseStream},
-    spanned::Spanned,
-    token::Brace,
-    AngleBracketedGenericArguments, Error, Expr, Ident, LitStr, PathArguments, Result, Token,
+    ext::IdentExt, parse::ParseBuffer, spanned::Spanned, token::Brace,
+    AngleBracketedGenericArguments, Error, Expr, Ident, LitStr, PathArguments, Token,
 };
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
@@ -184,7 +181,7 @@ impl Component {
         }
         if !self.children.is_empty() {
             let renderer = TemplateRenderer::as_tokens(&self.children, None);
-            toks.append_all(quote! { .children( Some({ #renderer }) ) });
+            toks.append_all(quote! { .children( { #renderer } ) });
         }
         toks.append_all(quote! { .build() });
         toks

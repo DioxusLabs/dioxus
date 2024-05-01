@@ -33,7 +33,8 @@ impl VNode {
                     if template != self.template.get() {
                         let mount_id = self.mount.get();
                         let parent = dom.mounts[mount_id.0].parent;
-                        return self.replace([new], parent, dom, to);
+                        self.replace([new], parent, dom, to);
+                        return;
                     }
                 }
             }
@@ -200,7 +201,7 @@ impl VNode {
 
         // Clean up any attributes that have claimed a static node as dynamic for mount/unmounts
         // Will not generate mutations!
-        self.reclaim_attributes(mount, dom, to);
+        self.reclaim_attributes(mount, dom);
 
         // Remove the nested dynamic nodes
         // We don't generate mutations for these, as they will be removed by the parent (in the next line)
@@ -314,17 +315,8 @@ impl VNode {
         !std::ptr::eq(self_node_name, other_node_name)
     }
 
-    pub(super) fn reclaim_attributes(
-        &self,
-        mount: MountId,
-        dom: &mut VirtualDom,
-        _to: &mut impl WriteMutations,
-    ) {
-        let mut id = None;
-
+    pub(super) fn reclaim_attributes(&self, mount: MountId, dom: &mut VirtualDom) {
         for (idx, path) in self.template.get().attr_paths.iter().enumerate() {
-            let _attr = &self.dynamic_attrs[idx];
-
             // We clean up the roots in the next step, so don't worry about them here
             if path.len() <= 1 {
                 continue;
@@ -333,10 +325,7 @@ impl VNode {
             let next_id = dom.mounts[mount.0].mounted_attributes[idx];
 
             // only reclaim the new element if it's different from the previous one
-            if id != Some(next_id) {
-                dom.reclaim(next_id);
-                id = Some(next_id);
-            }
+            _ = dom.try_reclaim(next_id);
         }
     }
 
@@ -367,7 +356,9 @@ impl VNode {
                             std::cmp::Ordering::Equal => {
                                 let old = old_attributes_iter.next().unwrap();
                                 let new = new_attributes_iter.next().unwrap();
-                                if old.value != new.value {
+                                // Volatile attributes are attributes that the browser may override so we always update them
+                                let volatile = old.volatile;
+                                if volatile || old.value != new.value {
                                     self.write_attribute(
                                         path,
                                         new,

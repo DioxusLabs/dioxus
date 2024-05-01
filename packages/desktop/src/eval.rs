@@ -3,7 +3,7 @@ use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 
 use crate::{query::Query, DesktopContext};
 
-/// Reprents the desktop-target's provider of evaluators.
+/// Represents the desktop-target's provider of evaluators.
 pub struct DesktopEvalProvider {
     pub(crate) desktop_ctx: DesktopContext,
 }

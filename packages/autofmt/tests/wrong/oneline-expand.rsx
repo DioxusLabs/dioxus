@@ -5,8 +5,7 @@ fn main() {
             onclick: move |_| {
                 timer
                     .with_mut(|t| {
-                        t
-                            .started_at = if t.started_at.is_none() {
+                        t.started_at = if t.started_at.is_none() {
                             Some(Instant::now())
                         } else {
                             None

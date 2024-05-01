@@ -216,6 +216,7 @@ impl Default for DioxusConfig {
                     key_path: None,
                     cert_path: None,
                 },
+                pre_compress: true,
             },
             bundle: BundleConfig {
                 identifier: Some(format!("io.github.{name}")),
@@ -285,6 +286,9 @@ pub struct WebConfig {
     pub resource: WebResourceConfig,
     #[serde(default)]
     pub https: WebHttpsConfig,
+    /// Whether to enable pre-compression of assets and wasm during a web build in release mode
+    #[serde(default = "true_bool")]
+    pub pre_compress: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -575,6 +579,11 @@ impl CrateConfig {
         };
         self.add_features(features);
         self
+    }
+
+    /// Check if assets should be pre_compressed. This will only be true in release mode if the user has enabled pre_compress in the web config.
+    pub fn should_pre_compress_web_assets(&self) -> bool {
+        self.dioxus_config.web.pre_compress && self.release
     }
 }
 

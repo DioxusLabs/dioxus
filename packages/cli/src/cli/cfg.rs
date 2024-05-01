@@ -117,8 +117,14 @@ pub struct ConfigOptsServe {
     #[clap(long, value_enum)]
     pub platform: Option<Platform>,
 
-    /// Build with hot reloading rsx. Will not work with release builds. [default: false]
+    /// Build with hot reloading rsx. Will not work with release builds. [default: true]
     #[clap(long)]
+    #[clap(default_missing_value("true"),
+        default_value("true"),
+        num_args(0..=1),
+        require_equals(true),
+        action = clap::ArgAction::Set,
+    )]
     #[clap(group = "release-incompatible")]
     #[serde(default)]
     pub hot_reload: bool,

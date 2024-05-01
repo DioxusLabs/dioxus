@@ -258,6 +258,12 @@ impl HasFileData for SerializedFormData {
     }
 }
 
+impl HasFileData for FormData {
+    fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
+        self.inner.files()
+    }
+}
+
 #[cfg(feature = "serialize")]
 impl serde::Serialize for FormData {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {

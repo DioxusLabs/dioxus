@@ -32,7 +32,7 @@ use dioxus_signals::{Memo, Signal};
 /// #[component]
 /// fn Comp(count: u32) -> Element {
 ///     // Because the memo subscribes to `count` by adding it as a dependency, the memo will rerun every time `count` changes.
-///     let new_count = use_memo(use_reactive((&count, |(count,)| count + 1)));
+///     let new_count = use_memo(use_reactive((&count,), |(count,)| count + 1));
 ///
 ///     todo!()
 /// }

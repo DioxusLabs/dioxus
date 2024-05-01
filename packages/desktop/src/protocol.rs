@@ -1,4 +1,5 @@
 use crate::{assets::*, edits::EditQueue};
+use dioxus_interpreter_js::eval::NATIVE_EVAL_JS;
 use dioxus_interpreter_js::unified_bindings::SLEDGEHAMMER_JS;
 use dioxus_interpreter_js::NATIVE_JS;
 use std::path::{Path, PathBuf};
@@ -81,8 +82,14 @@ fn assets_head() -> Option<String> {
         target_os = "openbsd"
     ))]
     {
-        let head = crate::protocol::get_asset_root_or_default();
-        let head = head.join("dist").join("__assets_head.html");
+        let root = crate::protocol::get_asset_root_or_default();
+        let assets_head_path = "__assets_head.html";
+        let mut head = root.join(assets_head_path);
+        // If we can't find it, add the dist directory and try again
+        // When bundling we currently copy the whole dist directory to the output directory instead of the individual files because of a limitation of cargo bundle2
+        if !head.exists() {
+            head = root.join("dist").join(assets_head_path);
+        }
         match std::fs::read_to_string(&head) {
             Ok(s) => Some(s),
             Err(err) => {
@@ -190,7 +197,7 @@ fn module_loader(root_id: &str, headless: bool) -> String {
     // And then extend it with our native bindings
     {NATIVE_JS}
 
-    // The nativeinterprerter extends the sledgehammer interpreter with a few extra methods that we use for IPC
+    // The native interpreter extends the sledgehammer interpreter with a few extra methods that we use for IPC
     window.interpreter = new NativeInterpreter("{EDITS_PATH}");
 
     // Wait for the page to load before sending the initialize message
@@ -202,6 +209,10 @@ fn module_loader(root_id: &str, headless: bool) -> String {
         }}
         window.interpreter.waitForRequest({headless});
     }}
+</script>
+<script type="module">
+    // Include the code for eval
+    {NATIVE_EVAL_JS}
 </script>
 "#
     )
