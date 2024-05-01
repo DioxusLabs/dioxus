@@ -15,9 +15,11 @@
 //!         tokio::runtime::Runtime::new()
 //!             .unwrap()
 //!             .block_on(async move {
-//!                 let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
-//!                 axum::Server::bind(&addr)
-//!                     .serve(
+//!                 let listener = tokio::net::TcpListener::bind("127.0.0.01:8080")
+//!                     .await
+//!                     .unwrap();
+//!                 axum::serve(
+//!                         listener,
 //!                         axum::Router::new()
 //!                             // Server side render the application, serve static assets, and register server functions
 //!                             .serve_dioxus_application("", ServerConfig::new(app, ()))

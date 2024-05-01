@@ -26,13 +26,16 @@ pub trait HotReloadRouterExt<S> {
     /// ```rust
     /// #![allow(non_snake_case)]
     /// use dioxus_hot_reload::{HotReloadReceiver, HotReloadRouterExt};
+    /// use axum::Extension;
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
+    ///     let listener = tokio::net::TcpListener::bind("127.0.0.01:8080")
+    ///         .await
+    ///         .unwrap();
     ///     let ws_reload = HotReloadReceiver::default();
-    ///     axum::Server::bind(&addr)
-    ///         .serve(
+    ///     axum::serve(
+    ///             listener,
     ///             axum::Router::new()
     ///                 // Connect to hot reloading in debug mode
     ///                 .connect_hot_reload()
@@ -54,10 +57,12 @@ pub trait HotReloadRouterExt<S> {
     ///
     /// #[tokio::main]
     /// async fn main() {
-    ///     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
+    ///     let listener = tokio::net::TcpListener::bind("127.0.0.01:8080")
+    ///         .await
+    ///         .unwrap();
     ///     let ws_reload = HotReloadReceiver::default();
-    ///     axum::Server::bind(&addr)
-    ///         .serve(
+    ///     axum::serve(
+    ///             listener,
     ///             axum::Router::new()
     ///                 // Connect to hot reloading in debug mode
     ///                 .forward_cli_hot_reload()
