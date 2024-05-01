@@ -25,7 +25,7 @@ pub trait HotReloadRouterExt<S> {
     /// # Example
     /// ```rust
     /// #![allow(non_snake_case)]
-    /// use dioxus_fullstack::prelude::*;
+    /// use dioxus_hot_reload::{HotReloadReceiver, HotReloadRouterExt};
     ///
     /// #[tokio::main]
     /// async fn main() {
@@ -50,7 +50,7 @@ pub trait HotReloadRouterExt<S> {
     /// # Example
     /// ```rust
     /// #![allow(non_snake_case)]
-    /// use dioxus_fullstack::prelude::*;
+    /// use dioxus_hot_reload::{HotReloadReceiver, HotReloadRouterExt};
     ///
     /// #[tokio::main]
     /// async fn main() {
