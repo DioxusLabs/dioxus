@@ -9,8 +9,6 @@ pub use once_cell;
 mod html_storage;
 
 #[cfg(feature = "axum")]
-mod assets;
-#[cfg(feature = "axum")]
 #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
 mod axum_adapter;
 
