@@ -21,6 +21,10 @@ proc-macro2 = { workspace = true }
 quote = { workspace = true }
 syn = { workspace = true, features = ["full"] }
 convert_case = "0.5.0"
+oxc_parser = "0.12.5"
+oxc_allocator = "0.12.5"
+oxc_span = "0.12.5"
+oxc_ast = {version = "0.12.5", features = ["serialize"]}
 
 # [features]
 # default = ["html"]
@@ -29,3 +33,4 @@ convert_case = "0.5.0"
 
 [dev-dependencies]
 pretty_assertions = "1.2.1"
+serde_json = { workspace = true }
