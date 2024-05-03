@@ -6,6 +6,7 @@ use serde::Deserialize;
 mod utils;
 
 pub fn main() {
+    #[cfg(not(windows))]
     utils::check_app_exits(app);
 }
 
