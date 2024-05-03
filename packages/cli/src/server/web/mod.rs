@@ -132,7 +132,7 @@ async fn start_server(
             None => "http",
         };
         let base_path = match config.dioxus_config.web.app.base_path.as_deref() {
-            Some(base_path) => format!("/{}/", base_path.trim_matches('/')),
+            Some(base_path) => format!("/{}", base_path.trim_matches('/')),
             None => "".to_owned(),
         };
         _ = open::that(format!("{protocol}://localhost:{port}{base_path}"));

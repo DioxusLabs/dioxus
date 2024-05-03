@@ -88,7 +88,7 @@ pub async fn setup_router(
         // panic getting thrown from `WebHistory::route_from_location`. Interestingly, the
         // `RouteParseError` passed into the panic reports that attempts were made to match on no
         // routes at all.
-        let base_path = format!("/{}/", base_path.trim_matches('/'));
+        let base_path = format!("/{}", base_path.trim_matches('/'));
         Router::new()
             .nest(&base_path, router)
             .fallback(get(move || {

@@ -132,17 +132,15 @@ where
         let path = location.pathname().unwrap_or_else(|_| "/".into())
             + &location.search().unwrap_or("".into())
             + &location.hash().unwrap_or("".into());
-        let path = match self.prefix {
-            None => path,
-            Some(ref prefix) => {
-                if path.starts_with(prefix) {
-                    path[prefix.len()..].to_string()
-                } else {
-                    path
-                }
-            }
+        let mut path = match self.prefix {
+            None => &path,
+            Some(ref prefix) => path.strip_prefix(prefix).unwrap_or(prefix),
         };
-        R::from_str(&path).unwrap_or_else(|err| panic!("{}", err))
+        // If the path is empty, parse the root route instead
+        if path.is_empty() {
+            path = "/"
+        }
+        R::from_str(path).unwrap_or_else(|err| panic!("{}", err))
     }
 
     fn full_path(&self, state: &R) -> String {
