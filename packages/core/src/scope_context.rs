@@ -265,6 +265,11 @@ impl Scope {
         id
     }
 
+    /// Queue an effect to run after the next render
+    pub fn queue_effect(&self, f: impl FnOnce() + 'static) {
+        Runtime::with(|rt| rt.queue_effect(self.id, f)).expect("Runtime to exist");
+    }
+
     /// Mark this component as suspended on a specific task and then return None
     pub fn suspend(&self, task: Task) -> Option<Element> {
         self.last_suspendable_task.set(Some(task));

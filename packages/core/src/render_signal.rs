@@ -1,4 +1,4 @@
-//! In dioxus, effects are run using normal async functions after a render. [RenderSignalFuture] is a future that resolves after a render has passed.
+//! TODO: We no longer run effects with async tasks. Effects are now their own type of task. We should remove this next breaking release.
 
 use std::cell::RefCell;
 use std::future::Future;
