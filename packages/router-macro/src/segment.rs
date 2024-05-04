@@ -34,6 +34,19 @@ impl RouteSegment {
         }
     }
 
+    pub fn write_segment_allow_empty(&self) -> TokenStream2 {
+        match self {
+            Self::Static(segment) => {
+                if segment.is_empty() {
+                    return quote! {};
+                }
+                quote! { write!(f, "/{}", #segment)?; }
+            }
+            Self::Dynamic(ident, _) => quote! { write!(f, "/{}", #ident)?; },
+            Self::CatchAll(ident, _) => quote! { #ident.display_route_segments(f)?; },
+        }
+    }
+
     pub fn error_name(&self, idx: usize) -> Ident {
         match self {
             Self::Static(_) => static_segment_idx(idx),

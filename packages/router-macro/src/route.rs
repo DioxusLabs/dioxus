@@ -198,7 +198,7 @@ impl Route {
             }
             RouteType::Leaf { .. } => {
                 let write_nests = self.nests.iter().map(|id| nests[id.0].write());
-                let write_segments = self.segments.iter().map(|s| s.write_segment());
+                let write_segments = self.segments.iter().map(|s| s.write_segment_allow_empty());
                 quote! {
                     Self::#name { #(#dynamic_segments,)* } => {
                         #(#write_nests)*
