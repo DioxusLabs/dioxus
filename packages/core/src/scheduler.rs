@@ -1,32 +1,81 @@
-//! Dioxus resolves scopes in a specific order to avoid unexpected behavior. All tasks are resolved in the order of height. Scopes that are higher up in the tree are resolved first.
-//! When a scope that is higher up in the tree is rerendered, it may drop scopes lower in the tree along with their tasks.
+//! # Dioxus uses a scheduler to run queued work in the correct order.
 //!
-//! ```rust
-//! use dioxus::prelude::*;
+//! ## Goals
+//! We try to prevent three different situations:
+//! 1. Running queued work after it could be dropped. Related issues (https://github.com/DioxusLabs/dioxus/pull/1993)
 //!
-//! fn app() -> Element {
-//!     let vec = use_signal(|| vec![0; 10]);
+//! User code often assumes that this property is true. For example, if this code reruns the child component after signal is changed to None, it will panic
+//! ```rust, ignore
+//! fn ParentComponent() -> Element {
+//!     let signal: Signal<Option<i32>> = use_signal(None);
+//!
 //!     rsx! {
-//!         // If the length of the vec shrinks we need to make sure that the children are dropped along with their tasks the new state of the vec is read
-//!         for idx in 0..vec.len() {
-//!             Child { idx, vec }
+//!         if signal.read().is_some() {
+//!             ChildComponent { signal }
 //!         }
 //!     }
 //! }
 //!
 //! #[component]
-//! fn Child(vec: Signal<Vec<usize>>, idx: usize) -> Element {
-//!     use_hook(move || {
-//!         spawn(async move {
-//!             // If we let this task run after the child is dropped, it will panic.
-//!             println!("Task {}", vec.read()[idx]);
-//!         });
-//!     });
-//!
-//!     rsx! {}
+//! fn ChildComponent(signal: Signal<Option<i32>>) -> Element {
+//!     // It feels safe to assume that signal is some because the parent component checked that it was some
+//!     rsx! { "{signal.read().unwrap()}" }
 //! }
 //! ```
+//!
+//! 2. Running effects before the dom is updated. Related issues (https://github.com/DioxusLabs/dioxus/issues/2307)
+//!
+//! Effects can be used to run code that accesses the DOM directly. They should only run when the DOM is in an updated state. If they are run with an out of date version of the DOM, unexpected behavior can occur.
+//! ```rust, ignore
+//! fn EffectComponent() -> Element {
+//!     let id = use_signal(0);
+//!     use_effect(move || {
+//!         let id = id.read();
+//!         // This will panic if the id is not written to the DOM before the effect is run
+//!         eval(format!(r#"document.getElementById("{id}").innerHTML = "Hello World";"#));
+//!     });
+//!
+//!     rsx! {
+//!         div { id: "{id}" }
+//!     }
+//! }
+//!
+//! 3. Observing out of date state. Related issues (https://github.com/DioxusLabs/dioxus/issues/1935)
+//!
+//! Where ever possible, updates should happen in an order that makes it impossible to observe an out of date state.
+//! ```rust, ignore
+//! fn OutOfDateComponent() -> Element {
+//!     let id = use_signal(0);
+//!     // When you read memo, it should **always** be two times the value of id
+//!     let memo = use_memo(move || id() * 2);
+//!     assert_eq!(memo(), id() * 2);
+//!
+//!     // This should be true even if you update the value of id in the middle of the component
+//!     id += 1;
+//!     assert_eq!(memo(), id() * 2);
+//!
+//!     rsx! {
+//!         div { id: "{id}" }
+//!     }
+//! }
+//! ```
+//!
+//! ## Implementation
+//!
+//! There are three different types of queued work that can be run by the virtualdom:
+//! 1. Dirty Scopes:
+//!    Description: When a scope is marked dirty, a rerun of the scope will be scheduled. This will cause the scope to rerun and update the DOM if any changes are detected during the diffing phase.
+//!    Priority: These are the highest priority tasks. Dirty scopes will be rerun in order from the scope closest to the root to the scope furthest from the root. We follow this order to ensure that if a higher component reruns and drops a lower component, the lower component will not be run after it should be dropped.
+//!
+//! 2. Tasks:
+//!    Description: Futures spawned in the dioxus runtime each have an unique task id. When the waker for that future is called, the task is rerun.
+//!    Priority: These are the second highest priority tasks. They are run after all other dirty scopes have been resolved because those dirty scopes may cause children (and the tasks those children own) to drop which should cancel the futures.
+//!
+//! 3. Effects:
+//!    Description: Effects should always run after all changes to the DOM have been applied.
+//!    Priority: These are the lowest priority tasks in the scheduler. They are run after all other dirty scopes and futures have been resolved. Other tasks may cause components to rerun, which would update the DOM. These effects should only run after the DOM has been updated.
 
+use crate::innerlude::Effect;
 use crate::ScopeId;
 use crate::Task;
 use crate::VirtualDom;
@@ -104,6 +153,19 @@ impl VirtualDom {
         }
 
         Some(task)
+    }
+
+    /// Take any effects from the highest scope. This should only be called if there is no pending scope reruns or tasks
+    pub(crate) fn pop_effect(&mut self) -> Option<Effect> {
+        let mut pending_effects = self.runtime.pending_effects.borrow_mut();
+        let mut effect = pending_effects.pop_first()?;
+
+        // If the scope doesn't exist for whatever reason, then we should skip it
+        while !self.scopes.contains(effect.order.id.0) {
+            effect = pending_effects.pop_first()?;
+        }
+
+        Some(effect)
     }
 
     /// Take any work from the highest scope. This may include rerunning the scope and/or running tasks
