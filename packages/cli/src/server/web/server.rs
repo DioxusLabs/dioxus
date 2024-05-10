@@ -81,7 +81,7 @@ pub async fn setup_router(
     ));
 
     router = if let Some(base_path) = config.dioxus_config.web.app.base_path.clone() {
-        let base_path = format!("/{}", base_path.trim_matches('/'));
+        let base_path = format!("/{}/", base_path.trim_matches('/'));
         Router::new()
             .nest(&base_path, router)
             .fallback(get(move || {
