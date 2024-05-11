@@ -1,8 +1,4 @@
-use crate::{
-    innerlude::{throw_error, CapturedPanic, RenderError},
-    nodes::RenderReturn,
-    ComponentFunction,
-};
+use crate::{innerlude::CapturedPanic, nodes::RenderReturn, ComponentFunction};
 use std::{any::Any, panic::AssertUnwindSafe};
 
 pub(crate) type BoxedAnyProps = Box<dyn AnyProps>;
@@ -78,19 +74,14 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> AnyProp
         }));
 
         match res {
-            Ok(Ok(e)) => RenderReturn {
-                node: e,
-                state: ComponentState::Running,
-            },
-            Ok(Err(err)) => match err {
-                RenderError::Aborted(e) => {}
-                RenderError::Suspended(suspended) => {}
-            },
+            Ok(node) => RenderReturn { node },
             Err(err) => {
                 let component_name = self.name;
                 tracing::error!("Error while rendering component `{component_name}`: {err:?}");
-                throw_error(CapturedPanic { error: err });
-                RenderReturn::default()
+                let panic = CapturedPanic { error: err };
+                RenderReturn {
+                    node: Err(panic.into()),
+                }
             }
         }
     }

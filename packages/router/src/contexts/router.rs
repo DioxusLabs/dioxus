@@ -76,7 +76,6 @@ impl RouterContext {
         mark_dirty: Arc<dyn Fn(ScopeId) + Sync + Send>,
     ) -> Self
     where
-        R: Clone,
         <R as std::str::FromStr>::Err: std::fmt::Display,
     {
         let subscriber_update = mark_dirty.clone();
@@ -282,12 +281,15 @@ impl RouterContext {
         write_inner.update_subscribers();
     }
 
-    pub(crate) fn render_error(&self) -> Element {
+    pub(crate) fn render_error(&self) -> Option<Element> {
         let inner_read = self.inner.write_unchecked();
-        inner_read
-            .unresolved_error
-            .as_ref()
-            .and_then(|_| (inner_read.failure_external_navigation)())
+        match inner_read.unresolved_error.as_ref() {
+            Some(error) => {
+                tracing::warn!("Failed to render: {error:?}");
+                Some((inner_read.failure_external_navigation)())
+            }
+            None => None,
+        }
     }
 
     fn change_route(&self) -> Option<ExternalNavigationFailure> {

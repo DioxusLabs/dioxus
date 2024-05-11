@@ -1,4 +1,4 @@
-use crate::innerlude::{throw_error, RenderError, RenderReturn, ScopeOrder};
+use crate::innerlude::{throw_error, RenderError, ScopeOrder};
 use crate::VNode;
 use crate::{
     any_props::{AnyProps, BoxedAnyProps},
@@ -69,11 +69,9 @@ impl VirtualDom {
         self.dirty_scopes
             .remove(&ScopeOrder::new(context.height, scope_id));
 
-        let new_nodes = match new_nodes.into() {
-            Ok(node) => node,
+        match &new_nodes.node {
             Err(RenderError::Aborted(e)) => {
-                throw_error(e);
-                VNode::placeholder()
+                throw_error(e.clone());
             }
             Err(RenderError::Suspended(e)) => {
                 let task = e.task();
@@ -82,13 +80,12 @@ impl VirtualDom {
                 self.runtime
                     .suspended_tasks
                     .set(self.runtime.suspended_tasks.get() + 1);
-
-                VNode::placeholder()
             }
-        };
+            Ok(_) => {}
+        }
 
         self.runtime.scope_stack.borrow_mut().pop();
 
-        new_nodes
+        new_nodes.into()
     }
 }

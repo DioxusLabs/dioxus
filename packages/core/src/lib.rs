@@ -47,7 +47,7 @@ pub(crate) mod innerlude {
     /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`Scope`] or [`ScopeState`].
     ///
     /// An Errored [`Element`] will propagate the error to the nearest error boundary.
-    pub type Element = Result<VNode, RenderError>;
+    pub type Element = std::result::Result<VNode, RenderError>;
 
     /// A [`Component`] is a function that takes [`Properties`] and returns an [`Element`].
     pub type Component<P = ()> = fn(P) -> Element;
@@ -57,8 +57,9 @@ pub use crate::innerlude::{
     fc_to_builder, generation, schedule_update, schedule_update_any, use_hook, vdom_is_rendering,
     AnyValue, Attribute, AttributeValue, CapturedError, Component, ComponentFunction, DynamicNode,
     Element, ElementId, Event, Fragment, HasAttributes, IntoDynNode, Mutation, Mutations,
-    NoOpMutations, Properties, Runtime, ScopeId, ScopeState, Task, Template, TemplateAttribute,
-    TemplateNode, VComponent, VNode, VNodeInner, VPlaceholder, VText, VirtualDom, WriteMutations,
+    NoOpMutations, Ok, Properties, Result, Runtime, ScopeId, ScopeState, Task, Template,
+    TemplateAttribute, TemplateNode, VComponent, VNode, VNodeInner, VPlaceholder, VText,
+    VirtualDom, WriteMutations,
 };
 
 /// The purpose of this module is to alleviate imports of many common types
@@ -69,12 +70,12 @@ pub mod prelude {
         consume_context, consume_context_from_scope, current_owner, current_scope_id,
         fc_to_builder, generation, has_context, needs_update, needs_update_any, parent_scope,
         provide_context, provide_root_context, remove_future, schedule_update, schedule_update_any,
-        spawn, spawn_forever, spawn_isomorphic, suspend, try_consume_context, use_after_render,
-        use_before_render, use_drop, use_error_boundary, use_hook, use_hook_with_cleanup,
-        wait_for_next_render, with_owner, AnyValue, Attribute, Component, ComponentFunction,
-        Element, ErrorBoundary, Event, EventHandler, Fragment, HasAttributes, IntoAttributeValue,
-        IntoDynNode, OptionStringFromMarker, Properties, Runtime, RuntimeGuard, ScopeId,
-        ScopeState, SuperFrom, SuperInto, Task, Template, TemplateAttribute, TemplateNode, VNode,
-        VNodeInner, VirtualDom,
+        spawn, spawn_forever, spawn_isomorphic, suspend, throw_error, try_consume_context,
+        use_after_render, use_before_render, use_drop, use_error_boundary, use_hook,
+        use_hook_with_cleanup, wait_for_next_render, with_owner, AnyValue, Attribute,
+        CapturedError, Component, ComponentFunction, Context, Element, ErrorBoundary, Event,
+        EventHandler, Fragment, HasAttributes, IntoAttributeValue, IntoDynNode,
+        OptionStringFromMarker, Properties, Runtime, RuntimeGuard, ScopeId, ScopeState, SuperFrom,
+        SuperInto, Task, Template, TemplateAttribute, TemplateNode, VNode, VNodeInner, VirtualDom,
     };
 }

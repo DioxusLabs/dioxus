@@ -66,7 +66,7 @@ pub fn GoBackButton(props: HistoryButtonProps) -> Element {
             error!("{msg}, will be inactive");
             #[cfg(debug_assertions)]
             panic!("{}", msg);
-            return None;
+            return Ok(VNode::placeholder());
         }
     };
 
@@ -137,7 +137,7 @@ pub fn GoForwardButton(props: HistoryButtonProps) -> Element {
             error!("{msg}, will be inactive");
             #[cfg(debug_assertions)]
             panic!("{}", msg);
-            return None;
+            return Ok(VNode::placeholder());
         }
     };
 

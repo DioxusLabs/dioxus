@@ -5,7 +5,7 @@ use crate::{
     innerlude::{ElementRef, EventHandler, MountId},
     properties::ComponentFunction,
 };
-use crate::{CapturedError, Properties, Task, VirtualDom};
+use crate::{Properties, VirtualDom};
 use core::panic;
 use std::ops::Deref;
 use std::rc::Rc;
@@ -26,9 +26,13 @@ pub struct RenderReturn {
     pub(crate) node: Element,
 }
 
-impl Into<Element> for RenderReturn {
-    fn into(self) -> Element {
-        self.node
+impl From<RenderReturn> for VNode {
+    fn from(val: RenderReturn) -> Self {
+        match val.node {
+            Ok(node) => node,
+            Err(RenderError::Aborted(e)) => e.render,
+            Err(RenderError::Suspended(fut)) => fut.placeholder,
+        }
     }
 }
 
@@ -40,7 +44,7 @@ impl From<Element> for RenderReturn {
 
 impl Clone for RenderReturn {
     fn clone(&self) -> Self {
-        match self.node {
+        match &self.node {
             Ok(node) => RenderReturn {
                 node: Ok(node.clone_mounted()),
             },
@@ -63,10 +67,14 @@ impl Default for RenderReturn {
 }
 
 impl Deref for RenderReturn {
-    type Target = Element;
+    type Target = VNode;
 
     fn deref(&self) -> &Self::Target {
-        &self.node
+        match &self.node {
+            Ok(node) => node,
+            Err(RenderError::Aborted(err)) => &err.render,
+            Err(RenderError::Suspended(fut)) => &fut.placeholder,
+        }
     }
 }
 
@@ -158,31 +166,7 @@ impl Clone for VNode {
 
 impl Default for VNode {
     fn default() -> Self {
-        use std::cell::OnceCell;
-        // We can reuse all placeholders across the same thread to save memory
-        thread_local! {
-            static EMPTY_VNODE: OnceCell<Rc<VNodeInner>> = const { OnceCell::new() };
-        }
-        let vnode = EMPTY_VNODE.with(|cell| {
-            cell.get_or_init(move || {
-                Rc::new(VNodeInner {
-                    key: None,
-                    dynamic_nodes: Box::new([]),
-                    dynamic_attrs: Box::new([]),
-                    template: Cell::new(Template {
-                        name: "packages/core/nodes.rs:180:0:0",
-                        roots: &[],
-                        node_paths: &[],
-                        attr_paths: &[],
-                    }),
-                })
-            })
-            .clone()
-        });
-        Self {
-            vnode,
-            mount: Default::default(),
-        }
+        Self::placeholder()
     }
 }
 
@@ -412,9 +396,7 @@ where
 }
 
 #[cfg(feature = "serialize")]
-fn deserialize_leaky<'a, 'de, T: serde::Deserialize<'de>, D>(
-    deserializer: D,
-) -> Result<&'a [T], D::Error>
+fn deserialize_leaky<'a, 'de, T, D>(deserializer: D) -> Result<&'a [T], D::Error>
 where
     T: serde::Deserialize<'de>,
     D: serde::Deserializer<'de>,

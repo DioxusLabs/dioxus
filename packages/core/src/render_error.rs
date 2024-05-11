@@ -1,8 +1,4 @@
-use std::{
-    backtrace::Backtrace,
-    fmt::{Debug, Display},
-    rc::Rc,
-};
+use std::fmt::{Debug, Display};
 
 use crate::innerlude::*;
 
@@ -48,15 +44,4 @@ impl<E: std::error::Error + 'static> From<E> for RenderError {
     fn from(e: E) -> Self {
         Self::Aborted(CapturedError::from(e))
     }
-}
-
-/// An extension for Result<T, RenderError> types with helpful methods for rendering a placeholder or adding context to errors
-trait RenderErrorExt {
-    fn render_with_placeholder<T>(self, placeholder: T) -> Result<T, RenderError>
-    where
-        T: Into<VNode>;
-
-    fn context<T>(self, context: T) -> Result<T, RenderError>
-    where
-        T: Display;
 }

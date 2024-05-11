@@ -3,7 +3,6 @@ use std::ops::{Deref, DerefMut};
 use crate::{
     any_props::AnyProps,
     innerlude::{ElementRef, MountId, ScopeOrder, VComponent, WriteMutations},
-    nodes::RenderReturn,
     nodes::VNode,
     scopes::ScopeId,
     virtual_dom::VirtualDom,
@@ -14,7 +13,7 @@ impl VirtualDom {
         &mut self,
         to: &mut impl WriteMutations,
         scope: ScopeId,
-        new_nodes: RenderReturn,
+        new_nodes: VNode,
     ) {
         self.runtime.scope_stack.borrow_mut().push(scope);
         let scope_state = &mut self.scopes[scope.0];
@@ -37,7 +36,7 @@ impl VirtualDom {
         &mut self,
         to: &mut impl WriteMutations,
         scope: ScopeId,
-        new_node: RenderReturn,
+        new_node: VNode,
         parent: Option<ElementRef>,
     ) -> usize {
         self.runtime.scope_stack.borrow_mut().push(scope);

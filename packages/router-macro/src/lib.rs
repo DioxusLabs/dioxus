@@ -686,7 +686,7 @@ impl RouteEnum {
                     let myself = self.clone();
                     match (level, myself) {
                         #(#matches)*
-                        _ => None
+                        _ => std::result::Result::Ok(VNode::placeholder())
                     }
                 }
             }

@@ -1,6 +1,6 @@
 use crate::{
-    innerlude::{SchedulerMsg, SuspendedFuture},
-    Element, Runtime, ScopeId, Task, VNode,
+    innerlude::{throw_into, CapturedError, SchedulerMsg, SuspendedFuture},
+    Element, Runtime, ScopeId, Task,
 };
 use rustc_hash::FxHashSet;
 use std::{
@@ -437,5 +437,25 @@ impl ScopeId {
         Runtime::current()
             .expect("to be in a dioxus runtime")
             .on_scope(self, f)
+    }
+
+    /// Throw a [`CapturedError`] into a scope. The error will bubble up to the nearest [`ErrorBoundary`] or the root of the app.
+    ///
+    /// # Examples
+    /// ```rust, no_run
+    /// fn Component() -> Element {
+    ///     let request = spawn(async move {
+    ///         match reqwest::get("https://api.example.com").await {
+    ///             Ok(_) => todo!(),
+    ///             // You can explicitly throw an error into a scope with throw_error
+    ///             Err(err) => ScopeId::ROOT.throw_error(err)
+    ///         }
+    ///     });
+    ///
+    ///     todo!()
+    /// }
+    /// ```
+    pub fn throw_error(self, error: impl Into<CapturedError> + 'static) {
+        throw_into(error, self)
     }
 }

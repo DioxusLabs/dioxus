@@ -202,7 +202,11 @@ mod field_info {
                 // children field is automatically defaulted to None
                 if name == "children" {
                     builder_attr.default = Some(
-                        syn::parse(quote!(::core::default::Default::default()).into()).unwrap(),
+                        syn::parse(
+                            quote!(dioxus_core::Element::Ok(dioxus_core::VNode::placeholder()))
+                                .into(),
+                        )
+                        .unwrap(),
                     );
                 }
 

@@ -246,6 +246,7 @@ mod wheel;
 pub use animation::*;
 pub use clipboard::*;
 pub use composition::*;
+use dioxus_core::prelude::throw_error;
 pub use drag::*;
 pub use focus::*;
 pub use form::*;
@@ -361,6 +362,7 @@ pub trait EventReturn<P>: Sized {
 }
 
 impl EventReturn<()> for () {}
+
 #[doc(hidden)]
 pub struct AsyncMarker;
 
@@ -371,5 +373,31 @@ where
     #[inline]
     fn spawn(self) {
         dioxus_core::prelude::spawn(self);
+    }
+}
+
+#[doc(hidden)]
+pub struct AsyncResultMarker;
+
+impl<T> EventReturn<AsyncResultMarker> for T
+where
+    T: std::future::Future<Output = dioxus_core::Result<()>> + 'static,
+{
+    #[inline]
+    fn spawn(self) {
+        dioxus_core::prelude::spawn(async move {
+            if let Err(err) = self.await {
+                throw_error(err)
+            }
+        });
+    }
+}
+
+impl EventReturn<()> for dioxus_core::Result<()> {
+    #[inline]
+    fn spawn(self) {
+        if let Err(err) = self {
+            throw_error(err)
+        }
     }
 }

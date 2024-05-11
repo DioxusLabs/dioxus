@@ -10,7 +10,6 @@ use crate::{
         DirtyTasks, ElementRef, ErrorBoundary, NoOpMutations, SchedulerMsg, ScopeOrder, ScopeState,
         VNodeMount, VProps, WriteMutations,
     },
-    nodes::RenderReturn,
     nodes::{Template, TemplateId},
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,

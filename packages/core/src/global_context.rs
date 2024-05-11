@@ -1,4 +1,4 @@
-use crate::{innerlude::SuspendedFuture, runtime::Runtime, Element, ScopeId, Task};
+use crate::{innerlude::SuspendedFuture, runtime::Runtime, CapturedError, Element, ScopeId, Task};
 use futures_util::Future;
 use std::sync::Arc;
 
@@ -11,6 +11,28 @@ pub fn current_scope_id() -> Option<ScopeId> {
 /// Check if the virtual dom is currently inside of the body of a component
 pub fn vdom_is_rendering() -> bool {
     Runtime::with(|rt| rt.rendering.get()).unwrap_or_default()
+}
+
+/// Throw a [`CapturedError`] into the current scope. The error will bubble up to the nearest [`ErrorBoundary`] or the root of the app.
+///
+/// # Examples
+/// ```rust, no_run
+/// fn Component() -> Element {
+///     let request = spawn(async move {
+///         match reqwest::get("https://api.example.com").await {
+///             Ok(_) => todo!(),
+///             // You can explicitly throw an error into a scope with throw_error
+///             Err(err) => ScopeId::ROOT.throw_error(err)
+///         }
+///     });
+///
+///     todo!()
+/// }
+/// ```
+pub fn throw_error(error: impl Into<CapturedError> + 'static) {
+    current_scope_id()
+        .expect("to be in a dioxus runtime")
+        .throw_error(error)
 }
 
 /// Consume context from the current scope
