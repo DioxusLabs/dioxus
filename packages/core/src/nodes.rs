@@ -841,13 +841,11 @@ impl IntoDynNode for VNode {
         DynamicNode::Fragment(vec![self])
     }
 }
-
 impl IntoDynNode for DynamicNode {
     fn into_dyn_node(self) -> DynamicNode {
         self
     }
 }
-
 impl<T: IntoDynNode> IntoDynNode for Option<T> {
     fn into_dyn_node(self) -> DynamicNode {
         match self {
@@ -856,16 +854,30 @@ impl<T: IntoDynNode> IntoDynNode for Option<T> {
         }
     }
 }
-
 impl IntoDynNode for &Element {
     fn into_dyn_node(self) -> DynamicNode {
         match self.as_ref() {
-            Ok(val) => val.clone().into_dyn_node(),
+            Ok(val) => val.into_dyn_node(),
             _ => DynamicNode::default(),
         }
     }
 }
-
+impl IntoDynNode for Element {
+    fn into_dyn_node(self) -> DynamicNode {
+        match self {
+            Ok(val) => val.into_dyn_node(),
+            _ => DynamicNode::default(),
+        }
+    }
+}
+impl IntoDynNode for &Option<VNode> {
+    fn into_dyn_node(self) -> DynamicNode {
+        match self.as_ref() {
+            Some(val) => val.clone().into_dyn_node(),
+            _ => DynamicNode::default(),
+        }
+    }
+}
 impl IntoDynNode for &str {
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Text(VText {
@@ -873,13 +885,11 @@ impl IntoDynNode for &str {
         })
     }
 }
-
 impl IntoDynNode for String {
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Text(VText { value: self })
     }
 }
-
 impl IntoDynNode for Arguments<'_> {
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Text(VText {
@@ -887,7 +897,6 @@ impl IntoDynNode for Arguments<'_> {
         })
     }
 }
-
 impl IntoDynNode for &VNode {
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Fragment(vec![self.clone()])
@@ -919,6 +928,38 @@ impl IntoVNode for &Element {
     fn into_vnode(self) -> VNode {
         match self {
             Ok(val) => val.into_vnode(),
+            _ => VNode::empty().unwrap(),
+        }
+    }
+}
+impl IntoVNode for Option<VNode> {
+    fn into_vnode(self) -> VNode {
+        match self {
+            Some(val) => val.into_vnode(),
+            _ => VNode::empty().unwrap(),
+        }
+    }
+}
+impl IntoVNode for &Option<VNode> {
+    fn into_vnode(self) -> VNode {
+        match self.as_ref() {
+            Some(val) => val.clone().into_vnode(),
+            _ => VNode::empty().unwrap(),
+        }
+    }
+}
+impl IntoVNode for Option<Element> {
+    fn into_vnode(self) -> VNode {
+        match self {
+            Some(val) => val.into_vnode(),
+            _ => VNode::empty().unwrap(),
+        }
+    }
+}
+impl IntoVNode for &Option<Element> {
+    fn into_vnode(self) -> VNode {
+        match self.as_ref() {
+            Some(val) => val.clone().into_vnode(),
             _ => VNode::empty().unwrap(),
         }
     }
