@@ -1,7 +1,7 @@
 use super::*;
 use cargo_generate::{GenerateArgs, TemplatePath};
 
-static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
+pub(crate) static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 #[clap(name = "new")]
@@ -34,6 +34,7 @@ impl Create {
                 subfolder: self.subtemplate,
                 ..Default::default()
             },
+            define: self.option,
             ..Default::default()
         };
         if self.yes {
@@ -43,9 +44,8 @@ impl Create {
                 );
             }
             args.silent = true;
-        };
+        }
         args.name = self.name;
-        args.define = self.option;
         let path = cargo_generate::generate(args)?;
         post_create(&path)
     }
