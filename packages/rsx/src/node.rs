@@ -314,7 +314,7 @@ impl ToTokens for IfChain {
 
         if !terminated {
             body.append_all(quote! {
-                else { None }
+                else { ::std::result::Result::<dioxus_core::VNode, dioxus_core::prelude::RenderError>::Ok(dioxus_core::VNode::placeholder()) }
             });
         }
 
