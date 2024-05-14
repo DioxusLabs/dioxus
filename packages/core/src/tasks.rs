@@ -1,4 +1,4 @@
-use crate::innerlude::{remove_future, spawn, Runtime};
+use crate::innerlude::{remove_future, spawn, Runtime, SuspenseBoundary};
 use crate::ScopeId;
 use futures_util::task::ArcWake;
 use std::sync::Arc;
@@ -149,7 +149,7 @@ impl Runtime {
                     id: task_id,
                     tx: self.sender.clone(),
                 })),
-                ty: Cell::new(ty),
+                ty: RefCell::new(ty),
             });
 
             entry.insert(task.clone());
@@ -230,9 +230,13 @@ impl Runtime {
     /// This does not abort the task, so you'll want to wrap it in an abort handle if that's important to you
     pub(crate) fn remove_task(&self, id: Task) -> Option<Rc<LocalTask>> {
         let task = self.tasks.borrow_mut().try_remove(id.0);
+        // If the task is suspended, we need to remove it from the boundary and decrease the suspended tasks count
         if let Some(task) = &task {
-            if task.suspended() {
+            if let TaskType::Suspended { boundary } = &*task.ty.borrow() {
                 self.suspended_tasks.set(self.suspended_tasks.get() - 1);
+                if let Some(boundary) = boundary {
+                    boundary.remove_suspended_task(id);
+                }
             }
         }
         task
@@ -242,7 +246,7 @@ impl Runtime {
     pub(crate) fn task_runs_during_suspense(&self, task: Task) -> bool {
         let borrow = self.tasks.borrow();
         let task: Option<&LocalTask> = borrow.get(task.0).map(|t| &**t);
-        matches!(task, Some(LocalTask { ty, .. }) if ty.get().runs_during_suspense())
+        matches!(task, Some(LocalTask { ty, .. }) if ty.borrow().runs_during_suspense())
     }
 }
 
@@ -252,30 +256,29 @@ pub(crate) struct LocalTask {
     parent: Option<Task>,
     task: RefCell<Pin<Box<dyn Future<Output = ()> + 'static>>>,
     waker: Waker,
-    ty: Cell<TaskType>,
+    ty: RefCell<TaskType>,
     active: Cell<bool>,
 }
 
 impl LocalTask {
-    pub(crate) fn suspend(&self) {
-        self.ty.set(TaskType::Suspended);
-    }
-
-    pub(crate) fn suspended(&self) -> bool {
-        matches!(self.ty.get(), TaskType::Suspended)
+    /// Suspend the task, returns true if the task was already suspended
+    pub(crate) fn suspend(&self, boundary: Option<SuspenseBoundary>) -> bool {
+        // Make this a suspended task so it runs during suspense
+        let old_type = self.ty.replace(TaskType::Suspended { boundary });
+        matches!(old_type, TaskType::Suspended { .. })
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum TaskType {
     ClientOnly,
-    Suspended,
+    Suspended { boundary: Option<SuspenseBoundary> },
     Isomorphic,
 }
 
 impl TaskType {
-    fn runs_during_suspense(self) -> bool {
-        matches!(self, TaskType::Isomorphic | TaskType::Suspended)
+    fn runs_during_suspense(&self) -> bool {
+        matches!(self, TaskType::Isomorphic | TaskType::Suspended { .. })
     }
 }
 

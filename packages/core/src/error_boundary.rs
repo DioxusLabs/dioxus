@@ -45,9 +45,9 @@ pub struct ErrorBoundary {
 }
 
 /// A boundary that will capture any errors from child components
-pub struct ErrorBoundaryInner {
+pub(crate) struct ErrorBoundaryInner {
     errors: RefCell<Vec<CapturedError>>,
-    _id: ScopeId,
+    id: ScopeId,
 }
 
 impl Debug for ErrorBoundaryInner {
@@ -59,7 +59,7 @@ impl Debug for ErrorBoundaryInner {
 }
 
 /// A trait for any type that can be downcast to a concrete type and implements Debug. This is automatically implemented for all types that implement Any + Debug.
-pub trait AnyError {
+pub(crate) trait AnyError {
     fn as_any(&self) -> &dyn Any;
     fn as_error(&self) -> &dyn Error;
 }
@@ -373,7 +373,7 @@ impl Default for ErrorBoundaryInner {
     fn default() -> Self {
         Self {
             errors: RefCell::new(Vec::new()),
-            _id: current_scope_id()
+            id: current_scope_id()
                 .expect("Cannot create an error boundary outside of a component's scope."),
         }
     }
@@ -390,7 +390,7 @@ impl ErrorBoundary {
         Self {
             inner: Rc::new(ErrorBoundaryInner {
                 errors: RefCell::new(Vec::new()),
-                _id: scope,
+                id: scope,
             }),
         }
     }
@@ -398,8 +398,8 @@ impl ErrorBoundary {
     /// Push an error into this Error Boundary
     pub fn insert_error(&self, error: CapturedError) {
         self.inner.errors.borrow_mut().push(error);
-        if self.inner._id != ScopeId::ROOT {
-            self.inner._id.needs_update();
+        if self.inner.id != ScopeId::ROOT {
+            self.inner.id.needs_update();
         }
     }
 

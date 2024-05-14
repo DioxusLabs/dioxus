@@ -165,6 +165,7 @@ impl<T> Resource<T> {
     /// generates.
     pub fn restart(&mut self) {
         self.task.write().cancel();
+        self.state.set(UseResourceState::Pending);
         let new_task = self.callback.call();
         self.task.set(new_task);
     }
@@ -224,9 +225,11 @@ impl<T> Resource<T> {
 
     /// Suspend the resource's future and only continue rendering when the future is ready
     pub fn suspend(&self) -> std::result::Result<MappedSignal<T>, RenderError> {
-        match self.value.read().is_some() {
-            true => Ok(self.value.map(|v| v.as_ref().unwrap())),
-            false => Err(RenderError::Suspended(SuspendedFuture::new(self.task()))),
+        match self.state.cloned() {
+            UseResourceState::Stopped | UseResourceState::Paused | UseResourceState::Pending => {
+                Err(RenderError::Suspended(SuspendedFuture::new(self.task())))
+            }
+            _ => Ok(self.value.map(|v| v.as_ref().unwrap())),
         }
     }
 }

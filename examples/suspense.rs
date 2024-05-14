@@ -39,7 +39,26 @@ fn app() -> Element {
             }
 
             h3 { "Illustrious Dog Photo" }
-            Doggo {}
+            SuspenseBoundary {
+                Doggo {}
+                Doggo {}
+            }
+        }
+    }
+}
+
+#[component]
+fn SuspenseBoundary(children: Element) -> Element {
+    let boundary = use_suspense_boundary();
+    println!("{:?}", boundary.suspended_futures());
+    rsx! {
+        div {
+            display: if boundary.suspended_futures().is_empty() { "block" } else { "none" },
+            {children}
+        }
+        div {
+            display: if boundary.suspended_futures().is_empty() { "none" } else { "block" },
+            "loading..."
         }
     }
 }
@@ -49,6 +68,7 @@ fn app() -> Element {
 /// actually renders the data.
 #[component]
 fn Doggo() -> Element {
+    println!("Rendering doggo");
     let mut resource = use_resource(move || async move {
         #[derive(serde::Deserialize)]
         struct DogApi {

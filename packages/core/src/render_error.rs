@@ -2,6 +2,7 @@ use std::fmt::{Debug, Display};
 
 use crate::innerlude::*;
 
+/// An error that can occur while rendering a component
 #[derive(Clone, PartialEq, Debug)]
 pub enum RenderError {
     /// The render function returned early

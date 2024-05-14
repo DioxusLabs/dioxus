@@ -1,4 +1,6 @@
-use crate::innerlude::{throw_error, RenderError, RenderReturn, ScopeOrder};
+use crate::innerlude::{
+    throw_error, try_consume_context, RenderError, RenderReturn, ScopeOrder, SuspenseBoundary,
+};
 use crate::{
     any_props::{AnyProps, BoxedAnyProps},
     innerlude::ScopeState,
@@ -71,11 +73,25 @@ impl VirtualDom {
             }
             Err(RenderError::Suspended(e)) => {
                 let task = e.task();
-                tracing::trace!("Suspending {:?} on {:?}", scope_id, task);
-                self.runtime.tasks.borrow().get(task.0).unwrap().suspend();
-                self.runtime
-                    .suspended_tasks
-                    .set(self.runtime.suspended_tasks.get() + 1);
+                // Insert the task into the nearest suspense boundary if it exists
+                let boundary = try_consume_context::<SuspenseBoundary>();
+                let already_suspended = self
+                    .runtime
+                    .tasks
+                    .borrow()
+                    .get(task.0)
+                    .unwrap()
+                    .suspend(boundary.clone());
+                if !already_suspended {
+                    tracing::trace!("Suspending {:?} on {:?}", scope_id, task);
+                    // Add this task to the suspended tasks list of the boundary
+                    if let Some(boundary) = &boundary {
+                        boundary.add_suspended_task(e.clone());
+                    }
+                    self.runtime
+                        .suspended_tasks
+                        .set(self.runtime.suspended_tasks.get() + 1);
+                }
             }
             Ok(_) => {
                 // If the render was successful, we can move the render generation forward by one
