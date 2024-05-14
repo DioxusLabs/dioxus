@@ -50,7 +50,6 @@ fn app() -> Element {
 #[component]
 fn SuspenseBoundary(children: Element) -> Element {
     let boundary = use_suspense_boundary();
-    println!("{:?}", boundary.suspended_futures());
     rsx! {
         div {
             display: if boundary.suspended_futures().is_empty() { "block" } else { "none" },
@@ -58,7 +57,11 @@ fn SuspenseBoundary(children: Element) -> Element {
         }
         div {
             display: if boundary.suspended_futures().is_empty() { "none" } else { "block" },
-            "loading..."
+            if let Some(placeholder) = boundary.suspense_placeholder() {
+                {placeholder}
+            } else {
+                "loading..."
+            }
         }
     }
 }
@@ -68,12 +71,13 @@ fn SuspenseBoundary(children: Element) -> Element {
 /// actually renders the data.
 #[component]
 fn Doggo() -> Element {
-    println!("Rendering doggo");
     let mut resource = use_resource(move || async move {
         #[derive(serde::Deserialize)]
         struct DogApi {
             message: String,
         }
+
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
         reqwest::get("https://dog.ceo/api/breeds/image/random/")
             .await
@@ -83,13 +87,38 @@ fn Doggo() -> Element {
     });
 
     // You can suspend the future and only continue rendering when it's ready
-    let value = resource.suspend()?;
+    let value = resource.suspend().with_loading_placeholder(|| {
+        rsx! {
+            "Loading doggos"
+            LoadingDots {}
+        }
+    })?;
 
     match value.read_unchecked().as_ref() {
         Ok(resp) => rsx! {
             button { onclick: move |_| resource.restart(), "Click to fetch another doggo" }
             div { img { max_width: "500px", max_height: "500px", src: "{resp.message}" } }
         },
-        Err(_) => rsx! { div { "loading dogs failed" } },
+        Err(_) => rsx! {
+            div { "loading dogs failed" }
+            button {
+                onclick: move |_| resource.restart(),
+                "retry"
+            }
+        },
+    }
+}
+
+fn LoadingDots() -> Element {
+    let mut state = use_signal(move || 0);
+    use_future(move || async move {
+        loop {
+            state.set((state() + 1) % 4);
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        }
+    });
+    let dots = ".".repeat(state());
+    rsx! {
+        {dots}
     }
 }

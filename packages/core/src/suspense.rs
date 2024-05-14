@@ -19,8 +19,12 @@ impl SuspendedFuture {
         }
     }
 
-    pub fn suspense_placeholder(self) -> VNode {
-        self.placeholder.clone()
+    pub fn suspense_placeholder(&self) -> Option<VNode> {
+        if self.placeholder == VNode::placeholder() {
+            None
+        } else {
+            Some(self.placeholder.clone())
+        }
     }
 
     pub fn with_placeholder(mut self, placeholder: VNode) -> Self {
@@ -78,6 +82,15 @@ impl SuspenseBoundary {
         Ref::map(self.inner.suspended_tasks.borrow(), |tasks| {
             tasks.as_slice()
         })
+    }
+
+    /// Get the first suspended task with a loading placeholder
+    pub fn suspense_placeholder(&self) -> Option<VNode> {
+        self.inner
+            .suspended_tasks
+            .borrow()
+            .iter()
+            .find_map(|task| task.suspense_placeholder())
     }
 }
 
