@@ -109,6 +109,7 @@ fn Doggo() -> Element {
     }
 }
 
+#[component]
 fn LoadingDots() -> Element {
     let mut state = use_signal(move || 0);
     use_future(move || async move {
