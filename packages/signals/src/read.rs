@@ -242,3 +242,33 @@ where
     R: Readable<Target = Option<T>>,
 {
 }
+
+/// An extension trait for Readable<Option<T>> that provides some convenience methods.
+pub trait ReadableResultExt<T: 'static, E: 'static>: Readable<Target = Result<T, E>> {
+    /// Unwraps the inner value and clones it.
+    #[track_caller]
+    fn unwrap(&self) -> T
+    where
+        T: Clone,
+    {
+        self.as_ref()
+            .unwrap_or_else(|_| panic!("Tried to unwrap a Result that was an error"))
+            .clone()
+    }
+
+    /// Attempts to read the inner value of the Option.
+    #[track_caller]
+    fn as_ref(&self) -> Result<ReadableRef<Self, T>, ReadableRef<Self, E>> {
+        <Self::Storage as AnyStorage>::try_map(self.read(), |v| v.as_ref().ok()).ok_or(
+            <Self::Storage as AnyStorage>::map(self.read(), |v| v.as_ref().err().unwrap()),
+        )
+    }
+}
+
+impl<T, E, R> ReadableResultExt<T, E> for R
+where
+    T: 'static,
+    E: 'static,
+    R: Readable<Target = Result<T, E>>,
+{
+}

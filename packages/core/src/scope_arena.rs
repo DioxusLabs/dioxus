@@ -1,5 +1,4 @@
-use crate::innerlude::{throw_error, RenderError, ScopeOrder};
-use crate::VNode;
+use crate::innerlude::{throw_error, RenderError, RenderReturn, ScopeOrder};
 use crate::{
     any_props::{AnyProps, BoxedAnyProps},
     innerlude::ScopeState,
@@ -30,7 +29,7 @@ impl VirtualDom {
         scope
     }
 
-    pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> VNode {
+    pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> RenderReturn {
         debug_assert!(
             crate::Runtime::current().is_some(),
             "Must be in a dioxus runtime"
@@ -62,9 +61,6 @@ impl VirtualDom {
             post_run();
         }
 
-        // And move the render generation forward by one
-        context.render_count.set(context.render_count.get() + 1);
-
         // remove this scope from dirty scopes
         self.dirty_scopes
             .remove(&ScopeOrder::new(context.height, scope_id));
@@ -81,11 +77,14 @@ impl VirtualDom {
                     .suspended_tasks
                     .set(self.runtime.suspended_tasks.get() + 1);
             }
-            Ok(_) => {}
+            Ok(_) => {
+                // If the render was successful, we can move the render generation forward by one
+                context.render_count.set(context.render_count.get() + 1);
+            }
         }
 
         self.runtime.scope_stack.borrow_mut().pop();
 
-        new_nodes.into()
+        new_nodes
     }
 }

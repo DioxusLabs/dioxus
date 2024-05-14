@@ -5,7 +5,7 @@ use crate::{
 use std::{
     any::{Any, TypeId},
     backtrace::Backtrace,
-    cell::RefCell,
+    cell::{Ref, RefCell},
     error::Error,
     fmt::{Debug, Display},
     rc::Rc,
@@ -46,14 +46,14 @@ pub struct ErrorBoundary {
 
 /// A boundary that will capture any errors from child components
 pub struct ErrorBoundaryInner {
-    error: RefCell<Option<CapturedError>>,
+    errors: RefCell<Vec<CapturedError>>,
     _id: ScopeId,
 }
 
 impl Debug for ErrorBoundaryInner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ErrorBoundaryInner")
-            .field("error", &self.error)
+            .field("error", &self.errors)
             .finish()
     }
 }
@@ -327,14 +327,13 @@ impl CapturedError {
         }
     }
 
-    /// Get a VNode representation of the error
-    pub fn visualize(&self) -> Element {
-        std::result::Result::Ok(self.render.clone())
-    }
-
-    /// Check if there is a custom visualization for this error
-    pub fn has_visual_error(&self) -> bool {
-        self.render != VNode::placeholder()
+    /// Get a VNode representation of the error if the error provides one
+    pub fn visualize(&self) -> Option<Element> {
+        if self.render == VNode::placeholder() {
+            None
+        } else {
+            Some(std::result::Result::Ok(self.render.clone()))
+        }
     }
 }
 
@@ -373,7 +372,7 @@ impl CapturedError {
 impl Default for ErrorBoundaryInner {
     fn default() -> Self {
         Self {
-            error: RefCell::new(None),
+            errors: RefCell::new(Vec::new()),
             _id: current_scope_id()
                 .expect("Cannot create an error boundary outside of a component's scope."),
         }
@@ -390,7 +389,7 @@ impl ErrorBoundary {
     pub(crate) fn new_in_scope(scope: ScopeId) -> Self {
         Self {
             inner: Rc::new(ErrorBoundaryInner {
-                error: RefCell::new(None),
+                errors: RefCell::new(Vec::new()),
                 _id: scope,
             }),
         }
@@ -398,15 +397,20 @@ impl ErrorBoundary {
 
     /// Push an error into this Error Boundary
     pub fn insert_error(&self, error: CapturedError) {
-        self.inner.error.replace(Some(error));
+        self.inner.errors.borrow_mut().push(error);
         if self.inner._id != ScopeId::ROOT {
             self.inner._id.needs_update();
         }
     }
 
-    /// Take any error that has been captured by this error boundary
-    pub fn take_error(&self) -> Option<CapturedError> {
-        self.inner.error.take()
+    /// Clear all errors from this Error Boundary
+    pub fn clear_errors(&self) {
+        self.inner.errors.borrow_mut().clear();
+    }
+
+    /// Return any errors that have been captured by this error boundary
+    pub fn errors(&self) -> Ref<[CapturedError]> {
+        Ref::map(self.inner.errors.borrow(), |errors| errors.as_slice())
     }
 }
 
@@ -422,26 +426,27 @@ pub(crate) fn throw_into(error: impl Into<CapturedError>, scope: ScopeId) {
     }
 }
 
+#[allow(clippy::type_complexity)]
 #[derive(Clone)]
-pub struct ErrorHandler(Rc<dyn Fn(CapturedError) -> Element>);
-impl<F: Fn(CapturedError) -> Element + 'static> From<F> for ErrorHandler {
+pub struct ErrorHandler(Rc<dyn Fn(&[CapturedError]) -> Element>);
+impl<F: Fn(&[CapturedError]) -> Element + 'static> From<F> for ErrorHandler {
     fn from(value: F) -> Self {
         Self(Rc::new(value))
     }
 }
 
-fn default_handler(error: CapturedError) -> Element {
+fn default_handler(errors: &[CapturedError]) -> Element {
     static TEMPLATE: Template = Template {
         name: "error_handle.rs:42:5:884",
         roots: &[TemplateNode::Element {
-            tag: "pre",
+            tag: "div",
             namespace: None,
             attrs: &[TemplateAttribute::Static {
                 name: "color",
                 namespace: Some("style"),
                 value: "red",
             }],
-            children: &[TemplateNode::DynamicText { id: 0usize }],
+            children: &[TemplateNode::Dynamic { id: 0usize }],
         }],
         node_paths: &[&[0u8, 0u8]],
         attr_paths: &[],
@@ -449,7 +454,28 @@ fn default_handler(error: CapturedError) -> Element {
     std::result::Result::Ok(VNode::new(
         None,
         TEMPLATE,
-        Box::new([error.to_string().into_dyn_node()]),
+        Box::new([errors
+            .iter()
+            .map(|e| {
+                static TEMPLATE: Template = Template {
+                    name: "error_handle.rs:43:5:884",
+                    roots: &[TemplateNode::Element {
+                        tag: "pre",
+                        namespace: None,
+                        attrs: &[],
+                        children: &[TemplateNode::DynamicText { id: 0usize }],
+                    }],
+                    node_paths: &[&[0u8, 0u8]],
+                    attr_paths: &[],
+                };
+                VNode::new(
+                    None,
+                    TEMPLATE,
+                    Box::new([e.to_string().into_dyn_node()]),
+                    Default::default(),
+                )
+            })
+            .into_dyn_node()]),
         Default::default(),
     ))
 }
@@ -609,9 +635,9 @@ impl<
 #[allow(non_upper_case_globals, non_snake_case)]
 pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
     let error_boundary = use_error_boundary();
-    match error_boundary.take_error() {
-        Some(error) => (props.handle_error.0)(error),
-        None => std::result::Result::Ok({
+    let errors = error_boundary.errors();
+    match &*errors {
+        [] => std::result::Result::Ok({
             static TEMPLATE: Template = Template {
                 name: "examples/error_handle.rs:81:17:2342",
                 roots: &[TemplateNode::Dynamic { id: 0usize }],
@@ -625,5 +651,6 @@ pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
                 Default::default(),
             )
         }),
+        errors => (props.handle_error.0)(errors),
     }
 }

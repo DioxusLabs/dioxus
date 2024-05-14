@@ -11,7 +11,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    launch(|| rsx! {Router::<Route>{}});
+    launch(|| rsx! { Router::<Route> {} });
 }
 
 /// You can use an ErrorBoundary to catch errors in children and display a warning
@@ -19,7 +19,7 @@ fn Simple() -> Element {
     rsx! {
         GoBackButton { "Home" }
         ErrorBoundary {
-            handle_error: |error: CapturedError| rsx! {
+            handle_error: |error: &[CapturedError]| rsx! {
                 h1 { "An error occurred" }
                 pre { "{error:#?}" }
             },
@@ -52,12 +52,17 @@ fn Show() -> Element {
         GoBackButton { "Home" }
         div {
             ErrorBoundary {
-                handle_error: |error: CapturedError| {
-                    if error.has_visual_error() {
-                        error.visualize()
-                    } else {
-                        rsx!{
-                            "Encountered an unknown error: {error}"
+                handle_error: |errors: &[CapturedError]| {
+                    rsx! {
+                        for error in errors {
+                            if let Some(error) = error.visualize() {
+                                {error}
+                            } else {
+                                pre {
+                                    color: "red",
+                                    "{error}"
+                                }
+                            }
                         }
                     }
                 },
@@ -104,9 +109,9 @@ fn Panic() -> Element {
     rsx! {
         GoBackButton { "Home" }
         ErrorBoundary {
-            handle_error: |error: CapturedError| rsx! {
+            handle_error: |errors: &[CapturedError]| rsx! {
                 h1 { "Another error occurred" }
-                pre { "{error:#?}" }
+                pre { "{errors:#?}" }
             },
             ComponentPanic {}
         }

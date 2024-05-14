@@ -323,7 +323,7 @@ impl VirtualDom {
 
         // Unlike react, we provide a default error boundary that just renders the error as a string
         root.state()
-            .provide_context(Rc::new(ErrorBoundary::new_in_scope(ScopeId::ROOT)));
+            .provide_context(ErrorBoundary::new_in_scope(ScopeId::ROOT));
 
         // the root element is always given element ID 0 since it's the container for the entire tree
         dom.elements.insert(None);
@@ -619,7 +619,7 @@ impl VirtualDom {
         let new_nodes = self.run_scope(ScopeId::ROOT);
 
         // Rebuilding implies we append the created elements to the root
-        let m = self.create_scope(to, ScopeId::ROOT, new_nodes, None);
+        let m = self.create_scope(to, ScopeId::ROOT, new_nodes.into(), None);
 
         to.append_children(ElementId(0), m);
     }
@@ -651,8 +651,10 @@ impl VirtualDom {
                 // If the scope is dirty, run the scope and get the mutations
                 if work.rerun_scope {
                     let new_nodes = self.run_scope(work.scope.id);
-
-                    self.diff_scope(to, work.scope.id, new_nodes);
+                    // if the render was successful, diff the new node
+                    if new_nodes.node.is_ok() {
+                        self.diff_scope(to, work.scope.id, new_nodes.into());
+                    }
                 }
             }
         }
@@ -736,7 +738,10 @@ impl VirtualDom {
                 if work.rerun_scope {
                     let new_nodes = self.run_scope(work.scope.id);
 
-                    self.diff_scope(&mut NoOpMutations, work.scope.id, new_nodes);
+                    // if the render was successful, diff the new node
+                    if new_nodes.node.is_ok() {
+                        self.diff_scope(&mut NoOpMutations, work.scope.id, new_nodes.into());
+                    }
                 }
             }
         }

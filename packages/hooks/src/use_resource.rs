@@ -221,6 +221,14 @@ impl<T> Resource<T> {
     pub fn value(&self) -> ReadOnlySignal<Option<T>> {
         self.value.into()
     }
+
+    /// Suspend the resource's future and only continue rendering when the future is ready
+    pub fn suspend(&self) -> std::result::Result<MappedSignal<T>, RenderError> {
+        match self.value.read().is_some() {
+            true => Ok(self.value.map(|v| v.as_ref().unwrap())),
+            false => Err(RenderError::Suspended(SuspendedFuture::new(self.task()))),
+        }
+    }
 }
 
 impl<T> From<Resource<T>> for ReadOnlySignal<Option<T>> {

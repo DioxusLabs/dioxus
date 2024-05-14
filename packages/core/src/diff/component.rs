@@ -84,7 +84,10 @@ impl VNode {
 
         // Now run the component and diff it
         let new = dom.run_scope(scope_id);
-        dom.diff_scope(to, scope_id, new);
+        // If the render was successful, diff the new node
+        if new.node.is_ok() {
+            dom.diff_scope(to, scope_id, new.into());
+        }
 
         let height = dom.runtime.get_state(scope_id).unwrap().height;
         dom.dirty_scopes.remove(&ScopeOrder::new(height, scope_id));
@@ -127,6 +130,6 @@ impl VNode {
 
         let new = dom.run_scope(scope);
 
-        dom.create_scope(to, scope, new, parent)
+        dom.create_scope(to, scope, new.into(), parent)
     }
 }

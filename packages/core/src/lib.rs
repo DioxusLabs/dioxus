@@ -75,7 +75,8 @@ pub mod prelude {
         use_hook_with_cleanup, wait_for_next_render, with_owner, AnyValue, Attribute,
         CapturedError, Component, ComponentFunction, Context, Element, ErrorBoundary, Event,
         EventHandler, Fragment, HasAttributes, IntoAttributeValue, IntoDynNode,
-        OptionStringFromMarker, Properties, Runtime, RuntimeGuard, ScopeId, ScopeState, SuperFrom,
-        SuperInto, Task, Template, TemplateAttribute, TemplateNode, VNode, VNodeInner, VirtualDom,
+        OptionStringFromMarker, Properties, RenderError, Runtime, RuntimeGuard, ScopeId,
+        ScopeState, SuperFrom, SuperInto, SuspendedFuture, Task, Template, TemplateAttribute,
+        TemplateNode, VNode, VNodeInner, VirtualDom,
     };
 }

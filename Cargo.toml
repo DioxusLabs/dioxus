@@ -114,9 +114,6 @@ axum-extra = "0.9.2"
 reqwest = "0.11.24"
 owo-colors = "4.0.0"
 
-[workspace.dev-dependencies]
-isnta = "1.36.1"
-
 # speed up some macros by optimizing them
 [profile.dev.package.insta]
 opt-level = 3
