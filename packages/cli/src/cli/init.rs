@@ -29,20 +29,18 @@ impl Init {
         let name = std::env::current_dir()?
             .file_name()
             .map(|f| f.to_str().unwrap().to_string());
-        let mut args = GenerateArgs {
+        let args = GenerateArgs {
+            define: self.option,
+            init: true,
+            name,
+            silent: self.yes,
             template_path: TemplatePath {
                 auto_path: Some(self.template),
                 subfolder: self.subtemplate,
                 ..Default::default()
             },
-            name,
-            init: true,
-            define: self.option,
             ..Default::default()
         };
-        if self.yes {
-            args.silent = true;
-        }
         let path = cargo_generate::generate(args)?;
         create::post_create(&path)
     }
