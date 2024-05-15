@@ -52,6 +52,10 @@ impl ReactiveContext {
     ) -> (Self, UnboundedReceiver<()>) {
         let (tx, rx) = futures_channel::mpsc::unbounded();
         let callback = move || {
+            // If there is already an update queued, we don't need to queue another
+            if !tx.is_empty() {
+                return;
+            }
             let _ = tx.unbounded_send(());
         };
         let _self = Self::new_with_callback(callback, current_scope_id().unwrap(), origin);

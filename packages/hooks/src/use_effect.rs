@@ -1,3 +1,5 @@
+use std::{cell::Cell, rc::Rc};
+
 use dioxus_core::prelude::*;
 use dioxus_signals::ReactiveContext;
 use futures_util::StreamExt;
@@ -48,12 +50,24 @@ pub fn use_effect(callback: impl FnMut() + 'static) -> Effect {
     use_hook(|| {
         // Inside the effect, we track any reads so that we can rerun the effect if a value the effect reads changes
         let (rc, mut changed) = ReactiveContext::new_with_origin(location);
+
+        // Deduplicate queued effects
+        let effect_queued = Rc::new(Cell::new(false));
+
         // Spawn a task that will run the effect when:
         // 1) The component is first run
         // 2) The effect is rerun due to an async read at any time
         // 3) The effect is rerun in the same tick that the component is rerun: we need to wait for the component to rerun before we can run the effect again
         let queue_effect_for_next_render = move || {
-            queue_effect(move || rc.run_in(&*callback));
+            if effect_queued.get() {
+                return;
+            }
+            effect_queued.set(true);
+            let effect_queued = effect_queued.clone();
+            queue_effect(move || {
+                rc.run_in(&*callback);
+                effect_queued.set(false);
+            });
         };
 
         queue_effect_for_next_render();
