@@ -28,24 +28,20 @@ pub struct Create {
 
 impl Create {
     pub fn create(self) -> Result<()> {
-        let mut args = GenerateArgs {
+        let args = GenerateArgs {
+            define: self.option,
+            name: self.name,
+            silent: self.yes,
             template_path: TemplatePath {
                 auto_path: Some(self.template),
                 subfolder: self.subtemplate,
                 ..Default::default()
             },
-            define: self.option,
             ..Default::default()
         };
-        if self.yes {
-            if self.name.is_none() {
-                return Err(
-                    "You have to provide the project's name when using `--yes` option.".into(),
-                );
-            }
-            args.silent = true;
+        if self.yes && args.name.is_none() {
+            return Err("You have to provide the project's name when using `--yes` option.".into());
         }
-        args.name = self.name;
         let path = cargo_generate::generate(args)?;
         post_create(&path)
     }
