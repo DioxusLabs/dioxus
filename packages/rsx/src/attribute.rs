@@ -173,6 +173,7 @@ impl ElementAttrNamed {
         quote! {
             {
                 #[allow(dead_code)]
+                #[doc(hidden)]
                 mod __completions {
                     // Autocomplete as an attribute
                     pub use super::dioxus_elements::#el::*;
