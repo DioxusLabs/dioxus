@@ -1,6 +1,6 @@
 use core::panic;
 use dioxus_cli_config::ExecutableType;
-use std::{fs::create_dir_all, str::FromStr};
+use std::{env::current_dir, fs::create_dir_all, str::FromStr};
 
 use tauri_bundler::{BundleSettings, PackageSettings, SettingsBuilder};
 
@@ -153,10 +153,31 @@ impl Bundle {
 
         let static_asset_output_dir = static_asset_output_dir.display().to_string();
         println!("Adding assets from {} to bundle", static_asset_output_dir);
-        if let Some(resources) = &mut bundle_settings.resources {
-            resources.push(static_asset_output_dir);
-        } else {
-            bundle_settings.resources = Some(vec![static_asset_output_dir]);
+
+        // Don't copy the executable or the old bundle directory
+        let ignored_files = [
+            crate_config.out_dir().join("bundle"),
+            crate_config.out_dir().join(name),
+        ];
+
+        for entry in std::fs::read_dir(&static_asset_output_dir)?.flatten() {
+            let path = entry.path().canonicalize()?;
+            if ignored_files.iter().any(|f| path.starts_with(f)) {
+                continue;
+            }
+
+            // Tauri bundle will add a __root__ prefix if the input path is absolute even though the output path is relative?
+            // We strip the prefix here to make sure the input path is relative so that the bundler puts the output path in the right place
+            let path = path
+                .strip_prefix(&current_dir()?)
+                .unwrap()
+                .display()
+                .to_string();
+            if let Some(resources) = &mut bundle_settings.resources_map {
+                resources.insert(path, "".to_string());
+            } else {
+                bundle_settings.resources_map = Some([(path, "".to_string())].into());
+            }
         }
 
         let mut settings = SettingsBuilder::new()
