@@ -8,7 +8,6 @@ use dioxus_rsx::HotReloadingContext;
 
 #[cfg(feature = "hot-reload-context")]
 use crate::{map_global_attributes, map_svg_attributes};
-use crate::{GlobalAttributes, SvgAttributes};
 
 pub type AttributeDiscription = (&'static str, Option<&'static str>, bool);
 
@@ -115,9 +114,11 @@ macro_rules! impl_element {
     ) => {
         #[allow(non_camel_case_types)]
         $(#[$attr])*
-        pub struct $name;
+        pub mod $name {
+            #[allow(unused)]
+            use super::*;
+            pub use crate::attribute_groups::global_attributes::*;
 
-        impl $name {
             pub const TAG_NAME: &'static str = stringify!($name);
             pub const NAME_SPACE: Option<&'static str> = None;
 
@@ -128,8 +129,6 @@ macro_rules! impl_element {
                 );
             )*
         }
-
-        impl GlobalAttributes for $name {}
     };
 
     (
@@ -141,13 +140,12 @@ macro_rules! impl_element {
             )*
         }
     ) => {
-        #[allow(non_camel_case_types)]
         $(#[$attr])*
-        pub struct $name;
+        pub mod $name {
+            #[allow(unused)]
+            use super::*;
+            pub use crate::attribute_groups::svg_attributes::*;
 
-        impl SvgAttributes for $name {}
-
-        impl $name {
             pub const TAG_NAME: &'static str = stringify!($name);
             pub const NAME_SPACE: Option<&'static str> = Some($namespace);
 
@@ -171,11 +169,11 @@ macro_rules! impl_element {
     ) => {
         #[allow(non_camel_case_types)]
         $(#[$attr])*
-        pub struct $element;
+        pub mod $element {
+            #[allow(unused)]
+            use super::*;
+            pub use crate::attribute_groups::svg_attributes::*;
 
-        impl SvgAttributes for $element {}
-
-        impl $element {
             pub const TAG_NAME: &'static str = $name;
             pub const NAME_SPACE: Option<&'static str> = Some($namespace);
 
@@ -384,10 +382,22 @@ macro_rules! builder_constructors {
             );
         )*
 
+        /// This module contains helpers for rust analyzer autocompletion
+        pub mod completions {
+            /// This helper tells rust analyzer that it should autocomplete the element name with braces.
+            #[allow(non_camel_case_types)]
+            pub enum CompleteWithBraces {
+                $(
+                    $(#[$attr])*
+                    $name {}
+                ),*
+            }
+        }
+
         pub(crate) mod extensions {
             use super::*;
             $(
-                impl_extension_attributes![ELEMENT $name { $($fil,)* }];
+                impl_extension_attributes![$name { $($fil,)* }];
             )*
         }
     };

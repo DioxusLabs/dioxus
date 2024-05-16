@@ -6,6 +6,7 @@ use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
 use syn::{
     braced,
+    parse::ParseBuffer,
     spanned::Spanned,
     token::{self, Brace},
     Expr, ExprIf, LitStr, Pat,
@@ -45,10 +46,16 @@ impl BodyNode {
             BodyNode::IfChain(f) => f.if_token.span(),
         }
     }
-}
 
-impl Parse for BodyNode {
-    fn parse(stream: ParseStream) -> Result<Self> {
+    pub(crate) fn parse_with_options(
+        stream: ParseStream,
+        partial_completions: bool,
+    ) -> Result<Self> {
+        // Make sure the next token is a brace if we're not in partial completion mode
+        fn peek_brace(stream: &ParseBuffer, partial_completions: bool) -> bool {
+            partial_completions || stream.peek(token::Brace)
+        }
+
         if stream.peek(LitStr) {
             return Ok(BodyNode::Text(stream.parse()?));
         }
@@ -56,7 +63,7 @@ impl Parse for BodyNode {
         // if this is a dash-separated path, it's a web component (custom element)
         let body_stream = stream.fork();
         if let Ok(ElementName::Custom(name)) = body_stream.parse::<ElementName>() {
-            if name.value().contains('-') && body_stream.peek(token::Brace) {
+            if name.value().contains('-') && peek_brace(&body_stream, partial_completions) {
                 return Ok(BodyNode::Element(stream.parse::<Element>()?));
             }
         }
@@ -77,11 +84,14 @@ impl Parse for BodyNode {
 
                 let first_char = el_name.chars().next().unwrap();
 
-                if body_stream.peek(token::Brace)
+                if peek_brace(&body_stream, partial_completions)
                     && first_char.is_ascii_lowercase()
                     && !el_name.contains('_')
                 {
-                    return Ok(BodyNode::Element(stream.parse::<Element>()?));
+                    return Ok(BodyNode::Element(Element::parse_with_options(
+                        stream,
+                        partial_completions,
+                    )?));
                 }
             }
 
@@ -99,7 +109,7 @@ impl Parse for BodyNode {
             // crate::component{}
             // Input::<InputProps<'_, i32> {}
             // crate::Input::<InputProps<'_, i32> {}
-            if body_stream.peek(token::Brace) {
+            if peek_brace(&body_stream, partial_completions) {
                 return Ok(BodyNode::Component(stream.parse()?));
             }
         }
@@ -138,6 +148,12 @@ impl Parse for BodyNode {
     }
 }
 
+impl Parse for BodyNode {
+    fn parse(stream: ParseStream) -> Result<Self> {
+        Self::parse_with_options(stream, true)
+    }
+}
+
 impl ToTokens for BodyNode {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
@@ -153,6 +169,7 @@ impl ToTokens for BodyNode {
             // Expressons too
             BodyNode::RawExpr(exp) => tokens.append_all(quote! {
                 {
+                    #[allow(clippy::let_and_return)]
                     let ___nodes = (#exp).into_dyn_node();
                     ___nodes
                 }
@@ -226,6 +243,7 @@ impl ToTokens for ForLoop {
         // And then we can return them into the dyn loop
         tokens.append_all(quote! {
             {
+                #[allow(clippy::let_and_return)]
                 let ___nodes = (#expr).into_iter().map(|#pat| { #renderer }).into_dyn_node();
                 ___nodes
             }
@@ -320,6 +338,7 @@ impl ToTokens for IfChain {
 
         tokens.append_all(quote! {
             {
+                #[allow(clippy::let_and_return)]
                 let ___nodes = (#body).into_dyn_node();
                 ___nodes
             }

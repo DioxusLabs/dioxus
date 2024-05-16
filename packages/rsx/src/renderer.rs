@@ -58,6 +58,7 @@ impl<'a> TemplateRenderer<'a> {
 
             {
                 // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
+                #[allow(clippy::let_and_return)]
                 let __vnodes = dioxus_core::VNode::new(
                     #key_tokens,
                     TEMPLATE,
@@ -97,6 +98,14 @@ impl<'a> TemplateRenderer<'a> {
         let root_col = match self.roots.first() {
             Some(first_root) => {
                 let first_root_span = format!("{:?}", first_root.span());
+
+                // Rust analyzer will not autocomplete properly if we change the name every time you type a character
+                // If it looks like we are running in rust analyzer, we'll just use a placeholder location
+                let looks_like_rust_analyzer = first_root_span.contains("SpanData");
+                if looks_like_rust_analyzer {
+                    return "0".to_string();
+                }
+
                 first_root_span
                     .rsplit_once("..")
                     .and_then(|(_, after)| after.split_once(')').map(|(before, _)| before))

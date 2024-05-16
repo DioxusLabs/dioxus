@@ -52,6 +52,10 @@ impl Writer<'_> {
             ..
         } = el;
 
+        let brace = brace
+            .as_ref()
+            .expect("braces should always be present in strict mode");
+
         /*
             1. Write the tag
             2. Write the key

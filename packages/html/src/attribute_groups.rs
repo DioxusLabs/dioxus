@@ -7,7 +7,7 @@ use dioxus_html_internal_macro::impl_extension_attributes;
 use crate::AttributeDiscription;
 
 #[cfg(feature = "hot-reload-context")]
-macro_rules! trait_method_mapping {
+macro_rules! mod_method_mapping {
     (
         $matching:ident;
         $(#[$attr:meta])*
@@ -68,11 +68,11 @@ macro_rules! html_to_rsx_attribute_mapping {
     };
 }
 
-macro_rules! trait_methods {
+macro_rules! mod_methods {
     (
         @base
-        $(#[$trait_attr:meta])*
-        $trait:ident;
+        $(#[$mod_attr:meta])*
+        $mod:ident;
         $fn:ident;
         $fn_html_to_rsx:ident;
         $(
@@ -80,18 +80,19 @@ macro_rules! trait_methods {
             $name:ident $(: $($arg:literal),*)*;
         )+
     ) => {
-        $(#[$trait_attr])*
-        pub trait $trait {
+        $(#[$mod_attr])*
+        pub mod $mod {
+            use super::*;
             $(
                 $(#[$attr])*
-                const $name: AttributeDiscription = trait_methods! { $name $(: $($arg),*)*; };
+                pub const $name: AttributeDiscription = mod_methods! { $name $(: $($arg),*)*; };
             )*
         }
 
         #[cfg(feature = "hot-reload-context")]
         pub(crate) fn $fn(attr: &str) -> Option<(&'static str, Option<&'static str>)> {
             $(
-                trait_method_mapping! {
+                mod_method_mapping! {
                     attr;
                     $name$(: $($arg),*)*;
                 }
@@ -111,7 +112,7 @@ macro_rules! trait_methods {
             None
         }
 
-        impl_extension_attributes![GLOBAL $trait { $($name,)* }];
+        impl_extension_attributes![$mod { $($name,)* }];
     };
 
     // Rename the incoming ident and apply a custom namespace
@@ -124,10 +125,10 @@ macro_rules! trait_methods {
     ( $name:ident; ) => { (stringify!($name), None, false) };
 }
 
-trait_methods! {
+mod_methods! {
     @base
 
-    GlobalAttributes;
+    global_attributes;
     map_global_attributes;
     map_html_global_attributes_to_rsx;
 
@@ -1640,9 +1641,9 @@ trait_methods! {
     aria_setsize: "aria-setsize";
 }
 
-trait_methods! {
+mod_methods! {
     @base
-    SvgAttributes;
+    svg_attributes;
     map_svg_attributes;
     map_html_svg_attributes_to_rsx;
 
