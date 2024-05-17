@@ -20,15 +20,43 @@ Parse
 -> "text {with_args}"
 -> {(0..10).map(|f| rsx!("asd"))}  // <--- notice the curly braces
 */
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+#[derive(Clone, Debug)]
 pub enum BodyNode {
     Element(Element),
     Text(IfmtInput),
-    RawExpr(Expr),
-
+    RawExpr(TokenStream2),
     Component(Component),
     ForLoop(ForLoop),
     IfChain(IfChain),
+}
+
+impl PartialEq for BodyNode {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Element(l), Self::Element(r)) => l == r,
+            (Self::Text(l), Self::Text(r)) => l == r,
+            (Self::RawExpr(l), Self::RawExpr(r)) => l.to_string() == r.to_string(),
+            (Self::Component(l), Self::Component(r)) => l == r,
+            (Self::ForLoop(l), Self::ForLoop(r)) => l == r,
+            (Self::IfChain(l), Self::IfChain(r)) => l == r,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for BodyNode {}
+
+impl Hash for BodyNode {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Self::Element(el) => el.hash(state),
+            Self::Text(text) => text.hash(state),
+            Self::RawExpr(exp) => exp.to_string().hash(state),
+            Self::Component(comp) => comp.hash(state),
+            Self::ForLoop(for_loop) => for_loop.hash(state),
+            Self::IfChain(if_chain) => if_chain.hash(state),
+        }
+    }
 }
 
 impl BodyNode {
@@ -134,11 +162,26 @@ impl BodyNode {
         // }
         // ```
         if stream.peek(Token![match]) {
-            return Ok(BodyNode::RawExpr(stream.parse::<Expr>()?));
+            return Ok(BodyNode::RawExpr(stream.parse::<Expr>()?.to_token_stream()));
         }
 
         if stream.peek(token::Brace) {
-            return Ok(BodyNode::RawExpr(stream.parse::<Expr>()?));
+            // If we are in strict mode, make sure thing inside the braces is actually a valid expression
+            let combined = if !partial_completions {
+                stream.parse::<Expr>()?.to_token_stream()
+            } else {
+                // otherwise, just take whatever is inside the braces. It might be invalid, but we still want to spit it out so we get completions
+                let content;
+                let brace = braced!(content in stream);
+                let content: TokenStream2 = content.parse()?;
+                let mut combined = TokenStream2::new();
+                brace.surround(&mut combined, |inside_brace| {
+                    inside_brace.append_all(content);
+                });
+                combined
+            };
+
+            return Ok(BodyNode::RawExpr(combined));
         }
 
         Err(syn::Error::new(
