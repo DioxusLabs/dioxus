@@ -53,22 +53,24 @@ impl CliSettings {
     /// Save the current structure to the global settings toml.
     /// This does not save to project-level settings.
     pub fn save(self) -> Result<Self, CrateConfigError> {
-        let path = Self::get_settings_path()
-            .ok_or_else(|| {
-                CrateConfigError::Io(Error::new(
-                    ErrorKind::NotFound,
-                    "failed to get settings path",
-                ))
-            })
-            .inspect_err(|_| error!("failed to get settings path"))?;
+        let path = Self::get_settings_path().ok_or_else(|| {
+            error!("failed to get settings path");
+            CrateConfigError::Io(Error::new(
+                ErrorKind::NotFound,
+                "failed to get settings path",
+            ))
+        })?;
 
         let data = toml::to_string_pretty(&self).map_err(|e| {
             error!(?self, "failed to parse config into toml");
             CrateConfigError::Io(Error::new(ErrorKind::Other, e.to_string()))
         })?;
 
-        fs::write(path.clone(), data.clone())
-            .inspect_err(move |_| error!(?data, ?path, "failed to save global cli settings"))?;
+        let result = fs::write(path.clone(), data.clone());
+        if let Err(e) = result {
+            error!(?data, ?path, "failed to save global cli settings");
+            return Err(CrateConfigError::Io(e));
+        }
 
         Ok(self)
     }
