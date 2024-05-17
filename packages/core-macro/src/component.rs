@@ -233,6 +233,24 @@ impl ComponentBody {
         let completions_mod = Ident::new(&format!("{}_completions", comp_fn), comp_fn.span());
 
         let vis = &self.item_fn.vis;
+        // We generate a list of required fields for the component so that rust analyzer can fill in the fields with a hint
+        let required_fields = self
+            .item_fn
+            .sig
+            .inputs
+            .iter()
+            .filter_map(|f| {
+                if let FnArg::Typed(pt) = f {
+                    if let Pat::Ident(ident) = &*pt.pat {
+                        if ident.ident == "props" {
+                            return None;
+                        }
+                    }
+                }
+
+                Some(make_prop_struct_field(f, vis))
+            })
+            .collect::<Vec<_>>();
 
         quote! {
             #[allow(non_snake_case)]
@@ -242,7 +260,9 @@ impl ComponentBody {
                 #[allow(non_camel_case_types)]
                 /// This enum is generated to help autocomplete the braces after the component. It does nothing
                 pub enum Component {
-                    #comp_fn {}
+                    #comp_fn {
+                        #(#required_fields),*
+                    }
                 }
             }
 

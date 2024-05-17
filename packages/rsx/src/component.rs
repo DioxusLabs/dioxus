@@ -21,6 +21,7 @@ use syn::{
     ext::IdentExt, spanned::Spanned, token::Brace, AngleBracketedGenericArguments, Error, Expr,
     Ident, LitStr, PathArguments, Token,
 };
+use tracing::span;
 
 #[derive(Clone, Debug)]
 pub struct Component {
@@ -146,6 +147,7 @@ impl ToTokens for Component {
 
         let fn_name = self.fn_name();
 
+        let completion_hints = self.completion_hints();
         let errors = self.errors();
 
         let component_node = quote_spanned! { name.span() =>
@@ -159,11 +161,12 @@ impl ToTokens for Component {
             })
         };
 
-        let component = if errors.is_empty() {
+        let component = if errors.is_empty() && completion_hints.is_empty() {
             component_node
         } else {
             quote_spanned! {
                 name.span() => {
+                    #completion_hints
                     #errors
                     #component_node
                 }
@@ -281,6 +284,32 @@ impl Component {
 
     fn fn_name(&self) -> String {
         self.name.segments.last().unwrap().ident.to_string()
+    }
+
+    /// We can add hints for rust analyzer to provide better hints for the component fields.
+    pub(crate) fn completion_hints(&self) -> TokenStream2 {
+        // If we have fields, we can't add any completion hints because completing the builder like a struct will create issues with optional fields
+        if !self.fields.is_empty() {
+            return quote! {};
+        }
+
+        let name = &self.name;
+        let braces = self
+            .brace
+            .as_ref()
+            .map(|b| {
+                let mut tokens = TokenStream2::new();
+                b.surround(&mut tokens, |_| {});
+                tokens
+            })
+            .unwrap_or_default();
+
+        quote! {
+            #[allow(dead_code)]
+            {
+                #name #braces
+            };
+        }
     }
 
     /// If this element is only partially complete, return the errors that occurred during parsing
