@@ -74,8 +74,16 @@ fn partial_parse_components() {
         }
     });
 
-    // Complete failure
+    // Incomlete exprs
     dbged(quote! {
-        some::cool::$
+        div {
+            {some.}
+        }
     });
+
+    // // Complete failure
+    // dbged(quote! {
+    //     some::cool::$
+    // });
 }
+

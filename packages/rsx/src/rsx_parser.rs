@@ -1,8 +1,9 @@
+use proc_macro2::{TokenStream, TokenTree};
 use proc_macro2_diagnostics::Diagnostic;
 // use rstml::*;
 use syn::{
     braced,
-    parse::discouraged::Speculative,
+    parse::{discouraged::Speculative, ParseBuffer},
     punctuated::Punctuated,
     spanned::Spanned,
     token::{self, Brace, Colon, PathSep},
@@ -40,14 +41,20 @@ pub struct ParsedRsx {
     // The state of the parsed roots will be as good as we can get it, but we guarantee to emit diagnostics
     // This lets us properly expand the roots but also ensure the compile errors
     pub diagnostics: Vec<Diagnostic>,
+
+    /// Hints that we're generating so the macro has better support for autocompletion with RA
+    ///
+    /// When we write these out, they'll be placed in a separate location and then we forward the
+    /// cursor span to those tokens. This is a cute approach for providing autocompletion hints while
+    /// also still generating proper code.
+    ///
+    /// We're bubbling these up into the top-level parser to make testing easier.
+    pub completion_hints: Vec<()>,
 }
 
 impl syn::parse::Parse for ParsedRsx {
     fn parse(input: ParseStream) -> Result<Self> {
-        let mut parser = ParsedRsx {
-            roots: vec![],
-            diagnostics: vec![],
-        };
+        let mut parser = ParsedRsx::new();
 
         parser.parse_callbody(input);
 
@@ -60,11 +67,20 @@ impl syn::parse::Parse for ParsedRsx {
 /// We do our best to expand recursively if we can, but when processing linearly, we occasionally will
 /// need to bail even though there is probably a *better* recoverable state to end up in.
 impl ParsedRsx {
-    fn parse_callbody(&mut self, input: ParseStream) {
-        let nodes = self.parse_body_like(false, input);
-        self.roots = nodes;
+    fn new() -> Self {
+        ParsedRsx {
+            roots: vec![],
+            diagnostics: vec![],
+            completion_hints: vec![],
+        }
+    }
 
-        // If there's errors...
+    fn parse_callbody(&mut self, input: ParseStream) {
+        self.roots = self.parse_body_like(false, input);
+
+        println!("is empty {}", input.is_empty());
+
+        // If there's errors, handle them
         if !self.diagnostics.is_empty() {}
     }
 
@@ -136,9 +152,23 @@ impl ParsedRsx {
                 continue;
             }
 
-            // Raw expressions need to be wrapped in braces
+            // Raw expressions need to be wrapped in braces, but they don't need to be complete
             if input.peek(token::Brace) {
-                // return Ok(BodyNode::RawExpr(stream.parse::<Expr>()?));
+                fn parse_inline_expr(input: ParseStream) -> Result<TokenStream> {
+                    let content: ParseBuffer;
+                    let _brace_token = braced!(content in input);
+
+                    let owned: TokenStream = content.parse().unwrap();
+
+                    Ok(owned)
+                }
+
+                let raw_expr = crate::RawExpr {
+                    expr: parse_inline_expr(input).unwrap(),
+                };
+
+                roots.push(BodyNode::RawExpr(raw_expr));
+
                 continue;
             }
 
@@ -343,7 +373,7 @@ impl ParsedRsx {
             // }
 
             // Ran into an unrecoverable case, just break and give a diagnostic on the next token
-            break;
+            panic!("Tokens remaining?");
         }
 
         roots

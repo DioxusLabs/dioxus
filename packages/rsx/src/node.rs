@@ -16,6 +16,7 @@ mod component;
 mod element;
 mod forloop;
 mod ifchain;
+mod raw_expr;
 mod text_node;
 
 pub use attribute::*;
@@ -24,13 +25,14 @@ pub use component::*;
 pub use element::*;
 pub use forloop::*;
 pub use ifchain::*;
+pub use raw_expr::*;
 pub use text_node::*;
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum BodyNode {
     Element(Element),
     Text(TextNode),
-    RawExpr(Expr),
+    RawExpr(RawExpr),
     Component(Component),
     ForLoop(ForLoop),
     IfChain(IfChain),
@@ -54,7 +56,7 @@ impl BodyNode {
             BodyNode::Element(el) => el.name.span(),
             BodyNode::Component(component) => component.name.span(),
             BodyNode::Text(text) => text.input.source.span(),
-            BodyNode::RawExpr(exp) => exp.span(),
+            BodyNode::RawExpr(exp) => exp.expr.span(),
             BodyNode::ForLoop(fl) => fl.for_token.span(),
             BodyNode::IfChain(f) => f.if_token.span(),
         }
@@ -107,12 +109,16 @@ impl Parse for BodyNode {
         // }
         // ```
         if stream.peek(Token![match]) {
-            return Ok(BodyNode::RawExpr(stream.parse::<Expr>()?));
+            return Ok(BodyNode::RawExpr(RawExpr {
+                expr: stream.parse::<Expr>()?.to_token_stream(),
+            }));
         }
 
         // Raw expressions need to be wrapped in braces
         if stream.peek(token::Brace) {
-            return Ok(BodyNode::RawExpr(stream.parse::<Expr>()?));
+            return Ok(BodyNode::RawExpr(RawExpr {
+                expr: stream.parse::<Expr>()?.to_token_stream(),
+            }));
         }
 
         // If there's an ident immediately followed by a dash, it's a web component

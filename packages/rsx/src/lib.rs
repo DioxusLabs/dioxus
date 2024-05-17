@@ -19,6 +19,7 @@ mod errors;
 mod body;
 pub mod hotreload;
 mod ifmt;
+mod ifmt2;
 mod location;
 mod node;
 

@@ -143,12 +143,15 @@ impl<'a> TemplateRenderer<'a> {
             }
 
             // Raw exprs don't require anything too crazy, just render them out
-            BodyNode::RawExpr(exp) => tokens.append_all(quote! {
-                {
-                    let ___nodes = (#exp).into_dyn_node();
-                    ___nodes
-                }
-            }),
+            BodyNode::RawExpr(exp) => {
+                let exp = &exp.expr;
+                tokens.append_all(quote! {
+                    {
+                        let ___nodes = (#exp).into_dyn_node();
+                        ___nodes
+                    }
+                })
+            }
 
             // Dynamic text nodes need ID propagation
             BodyNode::Text(txt) => {
