@@ -430,7 +430,7 @@ impl Writer<'_> {
     }
 }
 
-fn get_expr_length(expr: &Expr) -> Option<usize> {
+fn get_expr_length(expr: &impl Spanned) -> Option<usize> {
     let span = expr.span();
     let (start, end) = (span.start(), span.end());
     if start.line == end.line {
