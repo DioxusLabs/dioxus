@@ -3,7 +3,6 @@ use super::*;
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct TextNode {
     pub input: IfmtInput,
-    pub location: CallerLocation,
 }
 
 impl TextNode {
@@ -16,7 +15,6 @@ impl Parse for TextNode {
     fn parse(input: ParseStream) -> Result<Self> {
         Ok(Self {
             input: input.parse()?,
-            location: CallerLocation::default(),
         })
     }
 }

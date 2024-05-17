@@ -3,7 +3,7 @@
 use dioxus_core::prelude::Template;
 use dioxus_rsx::{
     hot_reload::{diff_rsx, template_location, ChangedRsx, DiffResult},
-    hotreload::HotreloadingResults,
+    hotreload::HotReload,
     CallBody, HotReloadingContext,
 };
 use proc_macro2::TokenStream;
@@ -49,7 +49,7 @@ fn hotreload_callbody<Ctx: HotReloadingContext>(
     new: &CallBody,
     location: &'static str,
 ) -> Option<Vec<Template>> {
-    let results = HotreloadingResults::new::<Ctx>(old, new, location)?;
+    let results = HotReload::new::<Ctx>(old, new, location)?;
     Some(results.templates)
 }
 
@@ -57,7 +57,7 @@ fn callbody_to_template<Ctx: HotReloadingContext>(
     old: &CallBody,
     location: &'static str,
 ) -> Option<Template> {
-    let results = HotreloadingResults::new::<Ctx>(old, old, location)?;
+    let results = HotReload::new::<Ctx>(old, old, location)?;
     Some(results.templates.first().unwrap().clone())
 }
 

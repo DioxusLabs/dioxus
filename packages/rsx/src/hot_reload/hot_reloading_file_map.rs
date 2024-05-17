@@ -182,7 +182,7 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
             let leaked_location = Box::leak(template_location(old_start, file).into_boxed_str());
 
             // Returns a list of templates that are hotreloadable
-            let templates = crate::hotreload::HotreloadingResults::new::<Ctx>(
+            let templates = crate::hotreload::HotReload::new::<Ctx>(
                 &old_call_body,
                 &new_call_body,
                 leaked_location,

@@ -21,6 +21,8 @@ serde = { workspace = true, features = ["derive"], optional = true }
 internment = { version = "0.7.0", optional = true }
 krates = { version = "0.16.6", optional = true }
 tracing = { workspace = true }
+proc-macro2-diagnostics = { version = "0.10", default-features = false }
+rstml = { path = "../../../Tinkering/rstml" }
 
 [features]
 default = ["html", "hot_reload"]

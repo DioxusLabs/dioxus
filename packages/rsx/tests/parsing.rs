@@ -1,4 +1,4 @@
-use dioxus_rsx::{CallBody, DynamicContext};
+use dioxus_rsx::{hot_reload::Empty, CallBody, DynamicContext};
 use proc_macro2::TokenStream;
 use syn::Item;
 
@@ -54,6 +54,12 @@ fn how_do_spans_work_again() {
         let goodbye = &new_invalid.roots[0].children()[1];
 
         dbg!(root.span(), hi.span(), goodbye.span());
+        dbg!(
+            root.span().start(),
+            hi.span().start(),
+            goodbye.span().start()
+        );
+        dbg!(root, hi, goodbye);
 
         // dbg!(second.span());
         // dbg!(first);
@@ -67,7 +73,7 @@ fn how_do_spans_work_again() {
     for _ in 0..5 {
         print_spans(quote::quote! {
             div {
-                div {}
+                h1 {}
                 for item in items {}
                 // something-cool {}
                 // if true {
@@ -78,4 +84,36 @@ fn how_do_spans_work_again() {
             }
         });
     }
+}
+
+#[test]
+fn callbody_ctx() {
+    let item = quote::quote! {
+        div {
+            h1 {}
+            for item in items {
+                "Something {cool}"
+            }
+            Component {
+                "Something {elseish}"
+            }
+            Component2 {
+                "Something {Body}"
+                Component3 {
+                    "Something {Body3}"
+                }
+            }
+            // something-cool {}
+            // if true {
+            //     div {}
+            // }
+            "hi!"
+            "goodbye!"
+        }
+    };
+
+    let new_invalid: CallBody = syn::parse2(item).unwrap();
+    let ctx = dioxus_rsx::CallBodyContext::from_callbody::<Empty>(&new_invalid);
+
+    dbg!(ctx);
 }

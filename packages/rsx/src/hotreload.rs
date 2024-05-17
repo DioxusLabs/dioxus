@@ -70,13 +70,13 @@ type DynamicNodeIdx = usize;
 /// This contains information about what has changed so the hotreloader can apply the right changes
 #[non_exhaustive]
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct HotreloadingResults {
+pub struct HotReload {
     pub templates: Vec<Template>,
 
     pub changed_strings: HashMap<String, FmtedSegments>,
 }
 
-impl HotreloadingResults {
+impl HotReload {
     pub fn new<Ctx: HotReloadingContext>(
         old: &CallBody,
         new: &CallBody,

@@ -21,13 +21,14 @@ pub mod hotreload;
 mod ifmt;
 mod location;
 mod node;
-// mod rsx_parser;
+
+pub mod rsx_parser;
 
 pub(crate) mod context;
 pub(crate) mod renderer;
 
 // Re-export the namespaces into each other
-pub use context::DynamicContext;
+pub use context::{CallBodyContext, DynamicContext};
 pub use ifmt::*;
 pub use node::*;
 
@@ -60,20 +61,6 @@ use syn::{
 #[derive(Default, Debug)]
 pub struct CallBody {
     pub roots: Vec<BodyNode>,
-}
-
-impl CallBody {
-    /// Render the template with a manually set file location. This should be used when multiple rsx! calls are used in the same macro
-    pub fn render_with_location(&self, location: String) -> TokenStream2 {
-        // Empty templates just are placeholders for "none"
-        if self.roots.is_empty() {
-            return quote! { None };
-        }
-
-        let body = TemplateRenderer::as_tokens(&self.roots, Some(location));
-
-        quote! { { #body } }
-    }
 }
 
 impl Parse for CallBody {

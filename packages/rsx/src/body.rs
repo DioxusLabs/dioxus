@@ -10,47 +10,60 @@
 //! This gets confusing fast since there's lots of IDs bouncing around.
 //!
 //! The IDs at play:
-//!
 //! - The id of the template itself so we can find it and apply it to the dom.
 //!   This is challenging since all calls to file/line/col/id are relative to the macro invocation,
 //!   so they will have to share the same base ID and we need to give each template a new ID.
+//!   The id of the template will be something like file!():line!():col!():ID where ID increases for
+//!   each nested template.
 //!
 //! - The IDs of dynamic nodes relative to the template they live in. This is somewhat easy to track
 //!   but needs to happen on a per-template basis.
 //!
-//! - The unique ID of a hotreloadable literal. This ID is unique to the Callbody, not necessarily the
-//!   template it lives in.
+//! - The unique ID of a hotreloadable literal (like ifmt or integers or strings, etc). This ID is
+//!   unique to the Callbody, not necessarily the template it lives in. This is similar to the
+//!   template ID
 //!
 //! We solve this by parsing the structure completely and then doing a second pass that fills in IDs
 //! by walking the structure.
 //!
 //! This means you can't query the ID of any node "in a vacuum" - these are assigned once - but at
-//! least theyre stable enough for the purposes of hotreloading
+//! least they're stable enough for the purposes of hotreloading
+//!
+//! The plumbing for hotreloadable literals could be template relative... ie "file:line:col:template:idx"
+//! That would be ideal if we could determine the the idx only relative to the template
+//!
+//! ```rust, ignore
+//! rsx! {
+//!     div {
+//!         class: "hello",
+//!         id: "node-{node_id}",    <--- hotreloadable with ID 0
+//!
+//!         "Hello, world!           <--- not tracked but reloadable since it's just a string
+//!
+//!         for item in 0..10 {      <--- both 0 and 10 are technically reloadable...
+//!             div { "cool-{item}" }     <--- the ifmt here is also reloadable
+//!         }
+//!
+//!         Link {
+//!             to: "/home", <-- hotreloadable since its a component prop
+//!             class: "link {is_ready}", <-- hotreloadable since its a formatted string as a prop
+//!             "Home" <-- hotreloadable since its a component child (via template)
+//!         }
+//!     }
+//! }
+//! ```
 
 use crate::*;
 use proc_macro2::TokenStream as TokenStream2;
 
-type NodePath = Vec<u8>;
-type AttributePath = Vec<u8>;
-
-/// A new implementation of the callbody that stores all the dynamic mapping on itself
-///
-/// This makes it easier to have repeatable location data between hotreloading and typical rendering
-/// It also deduplicates a lot of the tracking logic.
-///
-/// When the callbody is built, we also generate the associated template nodes... you should have
-/// *everything* you need from this struct to render and hotreload.
-///
-/// It's a lot of work, but it's all saved via caching.
 pub struct Callbody2 {
-    body: Vec<BodyNode>,
+    nodes: Vec<BodyNode>,
 }
 
 impl Parse for Callbody2 {
     /// Parse the nodes of the callbody as `Body`.
     fn parse(input: ParseStream) -> Result<Self> {
-        // let body: Body = input.parse()?;
-        let mut roots = Vec::new();
+        let mut nodes = Vec::new();
 
         while !input.is_empty() {
             let node = input.parse::<BodyNode>()?;
@@ -59,11 +72,18 @@ impl Parse for Callbody2 {
                 let _ = input.parse::<Token![,]>();
             }
 
-            roots.push(node);
+            nodes.push(node);
         }
 
-        todo!()
-        // Ok(Self::new(body).unwrap())
+        // Now walk the body with this visitor struct thing so we can fill in the IDs
+        // We do this here since we have &mut access to the body, making it easier/cheaper to represent
+        // location data.
+        //
+        // Having location data on nodes also makes the ToTokens easier to implement since it stays
+        // roughly localized
+        LocationVisitor::fill(&mut nodes, 0);
+
+        Ok(Self { nodes })
     }
 }
 
@@ -71,22 +91,49 @@ impl Parse for Callbody2 {
 /// This is because the parsing phase filled in all the additional metadata we need
 impl ToTokens for Callbody2 {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
+        // DynamicContext::from_body(&self.nodes);
         todo!()
         // self.body.to_tokens(tokens)
     }
 }
 
-/// A traverser for the entirety of the callbody
-/// We'll create new ones on the fly but pass down some fields that need to be shared among the whole
-/// callbody as we go
-struct Traverser {
+/// A traverser to install location data for a parsed body
+#[derive(Default)]
+struct LocationVisitor {
     cur_path: Vec<usize>,
     template_idx: usize,
     attr_idx: usize,
     dyn_node_idx: usize,
 }
 
-impl Traverser {
+impl LocationVisitor {
+    fn fill(roots: &mut [BodyNode], template_idx: usize) {
+        let mut s = Self {
+            cur_path: vec![],
+            attr_idx: 0,
+            dyn_node_idx: 0,
+            template_idx,
+        };
+
+        for node in roots.iter_mut() {
+            s.fill_node(node);
+        }
+    }
+
+    fn fill_node(&mut self, node: &mut BodyNode) {
+        match node {
+            // Fills with simple tracking
+            BodyNode::Element(_) => todo!(),
+            BodyNode::RawExpr(exp) => {}
+            BodyNode::Text(f) if !f.is_static() => {}
+            BodyNode::Text(f) => {}
+
+            BodyNode::Component(_) => todo!(),
+            BodyNode::ForLoop(_) => todo!(),
+            BodyNode::IfChain(_) => todo!(),
+        }
+    }
+
     /// Get an ID for the next dynamic attribute
     fn next_attr(&mut self) -> usize {
         self.attr_idx += 1;

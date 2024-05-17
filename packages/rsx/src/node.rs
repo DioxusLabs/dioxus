@@ -61,22 +61,23 @@ impl BodyNode {
     }
 
     pub(crate) fn set_location_idx(&self, idx: usize) {
-        match self {
-            BodyNode::IfChain(chain) => {
-                chain.location.idx.set(idx);
-            }
-            BodyNode::ForLoop(floop) => {
-                floop.location.idx.set(idx);
-            }
-            BodyNode::Component(comp) => {
-                comp.location.idx.set(idx);
-            }
-            BodyNode::Text(text) => {
-                text.location.idx.set(idx);
-            }
-            BodyNode::Element(_) => {}
-            BodyNode::RawExpr(_) => {}
-        }
+        todo!()
+        // match self {
+        //     BodyNode::IfChain(chain) => {
+        //         chain.location.idx.set(idx);
+        //     }
+        //     BodyNode::ForLoop(floop) => {
+        //         floop.location.idx.set(idx);
+        //     }
+        //     BodyNode::Component(comp) => {
+        //         comp.location.idx.set(idx);
+        //     }
+        //     BodyNode::Text(text) => {
+        //         text.location.idx.set(idx);
+        //     }
+        //     BodyNode::Element(_) => {}
+        //     BodyNode::RawExpr(_) => {}
+        // }
     }
 }
 

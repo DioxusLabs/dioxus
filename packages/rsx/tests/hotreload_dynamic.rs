@@ -6,14 +6,14 @@
 use dioxus_core::prelude::Template;
 use dioxus_rsx::{
     hot_reload::{diff_rsx, template_location, ChangedRsx, DiffResult, Empty},
-    hotreload::HotreloadingResults,
+    hotreload::HotReload,
     CallBody, HotReloadingContext,
 };
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use syn::{parse::Parse, spanned::Spanned, token::Token, File};
 
-fn boilerplate(old: TokenStream, new: TokenStream) -> Option<HotreloadingResults> {
+fn boilerplate(old: TokenStream, new: TokenStream) -> Option<HotReload> {
     let old: CallBody = syn::parse2(old).unwrap();
     let new: CallBody = syn::parse2(new).unwrap();
 
@@ -25,8 +25,8 @@ fn hotreload_callbody<Ctx: HotReloadingContext>(
     old: &CallBody,
     new: &CallBody,
     location: &'static str,
-) -> Option<HotreloadingResults> {
-    let results = HotreloadingResults::new::<Ctx>(old, new, location)?;
+) -> Option<HotReload> {
+    let results = HotReload::new::<Ctx>(old, new, location)?;
     Some(results)
 }
 

@@ -2,6 +2,88 @@ use crate::*;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 
+/*
+issue: hard to hash these things to generate IDs when spitting them out
+using the span info is a hack and apparently unreliable between two parse calls on the same tokens
+wait... is span info a hack? *DEBUG* info is a hack... not necessarily *SPAN* info.
+if we can trace the token back to the original we can use the start / byte index
+nvmd all spans are zero
+
+rsx! {                              <-- 0
+    if thing {                      <-- 1
+        for item in other {         <-- 2
+            Component {
+                blah {}             <-- 3
+            }
+        }
+        for item in other {         <-- 4
+            Component {
+                blah {}             <-- 5
+            }
+        }
+    }
+}
+*/
+
+#[derive(Debug)]
+pub struct CallBodyContext<'a> {
+    pub contexts: Vec<DynamicContext<'a>>,
+}
+
+impl<'a> CallBodyContext<'a> {
+    /// Take a callbody and then explore all its dynamic nodes for dynamic contexts.
+    /// Returns them in a consistent DFS order so the codegen makes some sense.
+    /// The ID of each template is its index in the context list, so the root contet will have ID=0
+    ///
+    /// "Hot literals" will indexed relative to the context they're found in - ie 0:0 would be the
+    /// first hot literal in the first template. These can show up in a number of places.
+    pub fn from_callbody<Ctx: HotReloadingContext>(callbody: &'a CallBody) -> Self {
+        let mut contexts = vec![];
+
+        // Create the root dynamic context stack and push the root context onto it
+        let mut stack = vec![];
+        stack.push(callbody.roots.as_slice());
+
+        // And then walk its dynamic nodes looking for subtemplates
+        // push those onto the stack, chewing it down
+        // Make sure to do this in such an order that we are progressing depth-first
+        // We could also do this rec
+        while let Some(roots) = stack.pop() {
+            let cx = DynamicContext::from_body::<Ctx>(roots);
+
+            // Walk these backwards so children can end up in front of the parents
+            for node in cx.dynamic_nodes.iter().rev() {
+                match node {
+                    // Elements can't be dynamic nodes
+                    BodyNode::Element(_) => unreachable!(),
+
+                    // Dynamic text nodes and exprs contain no child templates to explore
+                    BodyNode::Text(_) => continue,
+                    BodyNode::RawExpr(_) => continue,
+
+                    // Components might have a template to explore - I think we might need to push empty ones
+                    BodyNode::Component(c) => stack.push(c.children.as_slice()),
+
+                    // For loops a single template to explore
+                    BodyNode::ForLoop(f) => stack.push(f.body.as_slice()),
+
+                    // If chains have multiple templates to explore based on the chain
+                    // make sure we do this in reverse, I think?
+                    BodyNode::IfChain(chain) => {
+                        let mut local_chain: Vec<&[BodyNode]> = vec![];
+                        todo!("");
+                        stack.extend(local_chain.iter());
+                    }
+                }
+            }
+
+            contexts.push(cx);
+        }
+
+        CallBodyContext { contexts }
+    }
+}
+
 /// An understanding of a set of Tokens that provides the mapping required for:
 /// - hotreload diffing
 /// - converting to a Template
@@ -13,9 +95,20 @@ use quote::quote;
 pub struct DynamicContext<'a> {
     pub dynamic_nodes: Vec<&'a BodyNode>,
     pub dynamic_attributes: Vec<Vec<&'a AttributeType>>,
+
+    // todo: this will be *all* the reloadable items, just not ifmts
+    // for now though, it's dynamic ifmts
+    pub ifmts: Vec<&'a IfmtInput>,
+
     pub current_path: Vec<u8>,
     pub node_paths: Vec<Vec<u8>>,
     pub attr_paths: Vec<Vec<u8>>,
+
+    // The current ID of the template relative to the callbody
+    // The root template is ID=0 and then every template is assigned an ID in the order in which it
+    // is discovered
+    pub template_idx: usize,
+
     dynamic_idx: usize,
 }
 
