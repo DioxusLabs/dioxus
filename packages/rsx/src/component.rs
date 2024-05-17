@@ -21,7 +21,6 @@ use syn::{
     ext::IdentExt, spanned::Spanned, token::Brace, AngleBracketedGenericArguments, Error, Expr,
     Ident, LitStr, PathArguments, Token,
 };
-use tracing::span;
 
 #[derive(Clone, Debug)]
 pub struct Component {
