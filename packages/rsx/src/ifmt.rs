@@ -66,6 +66,15 @@ impl IfmtInput {
             })
     }
 
+    fn is_simple_expr(&self) -> bool {
+        self.segments.iter().all(|seg| match seg {
+            Segment::Literal(_) => true,
+            Segment::Formatted(FormattedSegment { segment, .. }) => {
+                matches!(segment, FormattedSegmentType::Ident(_))
+            }
+        })
+    }
+
     /// Try to convert this into a single _.to_string() call if possible
     ///
     /// Using "{single_expression}" is pretty common, but you don't need to go through the whole format! machinery for that, so we optimize it here.
@@ -179,6 +188,15 @@ impl ToTokens for IfmtInput {
         // Try to turn it into a single _.to_string() call
         if let Some(single_dynamic) = self.try_to_string() {
             tokens.extend(single_dynamic);
+            return;
+        }
+
+        // If the segments are not complex exprs, we can just use format! directly to take advantage of RA rename/expansion
+        if self.is_simple_expr() {
+            let raw = &self.source;
+            tokens.extend(quote! {
+                ::std::format_args!(#raw)
+            });
             return;
         }
 
