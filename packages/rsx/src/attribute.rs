@@ -355,6 +355,11 @@ impl ToTokens for ElementAttrValue {
 }
 
 impl ElementAttrValue {
+    /// Create a new ElementAttrValue::Shorthand from an Ident and normalize the identifier
+    pub(crate) fn shorthand(name: &Ident) -> Self {
+        Self::Shorthand(normalize_raw_ident(name))
+    }
+
     pub fn is_shorthand(&self) -> bool {
         matches!(self, ElementAttrValue::Shorthand(_))
     }
@@ -454,6 +459,16 @@ impl ElementAttrValue {
     }
 }
 
+// Create and normalize a built-in attribute name
+// If the identifier is a reserved keyword, this method will create a raw identifier
+fn normalize_raw_ident(ident: &Ident) -> Ident {
+    if syn::parse2::<syn::Ident>(ident.to_token_stream()).is_err() {
+        syn::Ident::new_raw(&ident.to_string(), ident.span())
+    } else {
+        ident.clone()
+    }
+}
+
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum ElementAttrName {
     BuiltIn(Ident),
@@ -461,6 +476,10 @@ pub enum ElementAttrName {
 }
 
 impl ElementAttrName {
+    pub(crate) fn built_in(name: &Ident) -> Self {
+        Self::BuiltIn(normalize_raw_ident(name))
+    }
+
     fn multi_attribute_separator(&self) -> Option<&'static str> {
         match self {
             ElementAttrName::BuiltIn(i) => match i.to_string().as_str() {

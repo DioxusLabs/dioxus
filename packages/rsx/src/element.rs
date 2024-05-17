@@ -8,7 +8,10 @@ use super::*;
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
-use syn::{punctuated::Punctuated, spanned::Spanned, token::Brace, Expr, Ident, LitStr, Token};
+use syn::{
+    ext::IdentExt, punctuated::Punctuated, spanned::Spanned, token::Brace, Expr, Ident, LitStr,
+    Token,
+};
 
 // =======================================
 // Parse the VNode::Element type
@@ -110,6 +113,13 @@ impl Element {
         stream: ParseStream,
         partial_completions: bool,
     ) -> Result<Self> {
+        fn peek_any_ident(input: ParseStream) -> bool {
+            input.peek(Ident::peek_any)
+                && !input.peek(Token![for])
+                && !input.peek(Token![if])
+                && !input.peek(Token![match])
+        }
+
         let el_name = ElementName::parse(stream)?;
 
         // parse the guts
@@ -187,8 +197,8 @@ impl Element {
 
             // Parse
             // abc: 123,
-            if content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
-                let name = content.parse::<Ident>()?;
+            if peek_any_ident(&content) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
+                let name = Ident::parse_any(&content)?;
 
                 let name_str = name.to_string();
                 content.parse::<Token![:]>()?;
@@ -235,7 +245,7 @@ impl Element {
                     attributes.push(attribute::AttributeType::Named(ElementAttrNamed {
                         el_name: el_name.clone(),
                         attr: ElementAttr {
-                            name: ElementAttrName::BuiltIn(name),
+                            name: ElementAttrName::built_in(&name),
                             value,
                         },
                         followed_by_comma: content.peek(Token![,]),
@@ -253,12 +263,12 @@ impl Element {
             }
 
             // Parse shorthand fields
-            if content.peek(Ident)
+            if peek_any_ident(&content)
                 && !content.peek2(Brace)
                 && !content.peek2(Token![:])
                 && !content.peek2(Token![-])
             {
-                let name = content.parse::<Ident>()?;
+                let name = Ident::parse_any(&content)?;
                 let name_ = name.clone();
 
                 // If the shorthand field is children, these are actually children!
@@ -288,12 +298,12 @@ Like so:
                 }
 
                 // Otherwise, it is really a shorthand field
-                let value = ElementAttrValue::Shorthand(name.clone());
+                let value = ElementAttrValue::shorthand(&name);
 
                 attributes.push(attribute::AttributeType::Named(ElementAttrNamed {
                     el_name: el_name.clone(),
                     attr: ElementAttr {
-                        name: ElementAttrName::BuiltIn(name),
+                        name: ElementAttrName::built_in(&name),
                         value,
                     },
                     followed_by_comma,
