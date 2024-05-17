@@ -2207,6 +2207,7 @@ version = "0.5.2"
 dependencies = [
  "cargo_toml 0.18.0",
  "clap 4.5.4",
+ "dirs",
  "once_cell",
  "serde",
  "serde_json",
