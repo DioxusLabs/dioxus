@@ -30,7 +30,7 @@ pub struct Component {
     pub fields: Vec<ComponentField>,
     pub manual_props: Option<Expr>,
     pub brace: syn::token::Brace,
-    pub location: CallerLocation,
+    pub dyn_idx: CallerLocation,
     pub children: TemplateBody,
 }
 
@@ -97,7 +97,7 @@ impl Parse for Component {
             manual_props,
             brace,
             key,
-            location: CallerLocation::default(),
+            dyn_idx: CallerLocation::default(),
         })
     }
 }

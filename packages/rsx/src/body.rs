@@ -76,7 +76,7 @@ type AttributePath = Vec<u8>;
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct TemplateBody {
     pub roots: Vec<BodyNode>,
-    pub location: CallerLocation,
+    pub template_idx: CallerLocation,
     pub brace: Option<syn::token::Brace>,
     pub implicit_key: Option<IfmtInput>,
 
@@ -89,7 +89,7 @@ impl TemplateBody {
     pub fn from_nodes(nodes: Vec<BodyNode>) -> Self {
         let mut body = Self {
             roots: vec![],
-            location: CallerLocation::default(),
+            template_idx: CallerLocation::default(),
             node_paths: Vec::new(),
             attr_paths: Vec::new(),
             brace: None,
@@ -161,9 +161,9 @@ impl TemplateBody {
         let idx = self.node_paths.len();
         match node {
             BodyNode::IfChain(chain) => chain.location.idx.set(idx),
-            BodyNode::ForLoop(floop) => floop.location.idx.set(idx),
-            BodyNode::Component(comp) => comp.location.idx.set(idx),
-            BodyNode::Text(text) => text.location.idx.set(idx),
+            BodyNode::ForLoop(floop) => floop.dyn_idx.idx.set(idx),
+            BodyNode::Component(comp) => comp.dyn_idx.idx.set(idx),
+            BodyNode::Text(text) => text.dyn_idx.idx.set(idx),
             BodyNode::RawExpr(expr) => expr.location.idx.set(idx),
             BodyNode::Element(_) => todo!(),
         }
@@ -218,6 +218,14 @@ impl TemplateBody {
             _ => unreachable!(),
         }
     }
+
+    pub fn dynamic_attributes(&self) -> impl Iterator<Item = &AttributeType> {
+        self.attr_paths.iter().map(|path| self.get_dyn_attr(path))
+    }
+
+    pub fn dynamic_nodes(&self) -> impl Iterator<Item = &BodyNode> {
+        self.node_paths.iter().map(|path| self.get_dyn_node(path))
+    }
 }
 
 impl Parse for TemplateBody {
@@ -264,7 +272,7 @@ impl ToTokens for TemplateBody {
         };
 
         let TemplateBody { roots, .. } = self;
-        let index = self.location.idx.get();
+        let index = self.template_idx.idx.get();
         let dynamic_nodes = self.node_paths.iter().map(|path| self.get_dyn_node(path));
         let dyn_attr_printer = self.attr_paths.iter().map(|path| self.get_dyn_attr(path));
         let node_paths = self.node_paths.iter().map(|it| quote!(&[#(#it),*]));

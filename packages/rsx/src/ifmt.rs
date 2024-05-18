@@ -7,11 +7,19 @@ use syn::{
     *,
 };
 
-#[derive(Debug, PartialEq, Eq, Clone, Hash, Default)]
+#[derive(Debug, Eq, Clone, Hash, Default)]
 pub struct IfmtInput {
     pub source: Option<LitStr>,
     pub segments: Vec<Segment>,
-    pub location: CallerLocation,
+    pub hr_idx: CallerLocation,
+}
+
+// Specifically avoid colliding the location field in partialeq
+// This is just because we usually want to compare two ifmts with different locations just based on their contents
+impl PartialEq for IfmtInput {
+    fn eq(&self, other: &Self) -> bool {
+        self.source == other.source && self.segments == other.segments
+    }
 }
 
 impl IfmtInput {
@@ -19,7 +27,7 @@ impl IfmtInput {
         Self {
             source: None,
             segments: vec![Segment::Literal(input.to_string())],
-            location: Default::default(),
+            hr_idx: Default::default(),
         }
     }
 
@@ -191,7 +199,7 @@ impl FromStr for IfmtInput {
         Ok(Self {
             segments,
             source: None,
-            location: Default::default(),
+            hr_idx: Default::default(),
         })
     }
 }

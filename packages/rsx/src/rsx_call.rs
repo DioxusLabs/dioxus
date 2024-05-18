@@ -48,7 +48,7 @@ impl CallBody {
                 BodyNode::RawExpr(_) => { /* one day maybe provide hr here? */ }
                 BodyNode::Text(text) => {
                     if !text.is_static() {
-                        text.input.location.set(self.next_ifmt_idx())
+                        text.input.hr_idx.set(self.next_ifmt_idx())
                     }
                 }
 
@@ -56,7 +56,7 @@ impl CallBody {
                     // Walk the attributes looking for ifmt opportunities
                     for attr in &el.attributes {
                         if let Some(ifmt) = attr.ifmt() {
-                            ifmt.location.set(self.next_ifmt_idx());
+                            ifmt.hr_idx.set(self.next_ifmt_idx());
                         }
                     }
 
@@ -67,21 +67,21 @@ impl CallBody {
                     // walk the props looking for ifmts
                     for prop in comp.fields.iter() {
                         if let Some(ifmt) = prop.ifmt() {
-                            ifmt.location.set(self.next_ifmt_idx());
+                            ifmt.hr_idx.set(self.next_ifmt_idx());
                         }
                     }
 
-                    comp.location.set(self.next_template_idx());
+                    comp.children.template_idx.set(self.next_template_idx());
                     self.cascade_hotreload_info(&comp.children.roots);
                 }
 
                 BodyNode::ForLoop(floop) => {
-                    floop.location.set(dbg!(self.next_template_idx()));
+                    floop.body.template_idx.set(dbg!(self.next_template_idx()));
                     self.cascade_hotreload_info(&floop.body.roots);
                 }
 
                 BodyNode::IfChain(chain) => chain.for_each_branch(&mut |body| {
-                    chain.location.set(self.next_template_idx());
+                    body.template_idx.set(self.next_template_idx());
                     self.cascade_hotreload_info(&body.roots)
                 }),
             }

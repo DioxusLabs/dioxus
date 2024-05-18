@@ -3,7 +3,7 @@ use super::*;
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct TextNode {
     pub input: IfmtInput,
-    pub location: CallerLocation,
+    pub dyn_idx: CallerLocation,
 }
 
 impl TextNode {
@@ -19,7 +19,7 @@ impl TextNode {
                 TemplateNode::Text { text }
             }
             false => TemplateNode::DynamicText {
-                id: self.location.get(),
+                id: self.dyn_idx.get(),
             },
         }
     }
@@ -29,7 +29,7 @@ impl Parse for TextNode {
     fn parse(input: ParseStream) -> Result<Self> {
         Ok(Self {
             input: input.parse()?,
-            location: CallerLocation::default(),
+            dyn_idx: CallerLocation::default(),
         })
     }
 }
@@ -46,7 +46,7 @@ impl ToTokens for TextNode {
             // If the text is dynamic, we actually create a signal of the formatted segments
             // Crazy, right?
             let segments = txt.as_htotreloaded();
-            let idx = txt.location.idx.get() + 1;
+            let idx = txt.hr_idx.idx.get() + 1;
 
             let rendered_segments = txt.segments.iter().filter_map(|s| match s {
                 Segment::Literal(lit) => None,

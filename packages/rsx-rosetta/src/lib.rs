@@ -26,7 +26,7 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
     match node {
         Node::Text(text) => Some(BodyNode::Text(TextNode {
             input: ifmt_from_text(text),
-            location: Default::default(),
+            dyn_idx: Default::default(),
         })),
         Node::Element(el) => {
             let el_name = if let Some(name) = map_html_element_to_rsx(&el.name) {
@@ -146,7 +146,7 @@ pub fn collect_svgs(children: &mut [BodyNode], out: &mut Vec<BodyNode>) {
                     manual_props: None,
                     key: None,
                     brace: Default::default(),
-                    location: Default::default(),
+                    dyn_idx: Default::default(),
                 });
 
                 std::mem::swap(child, &mut new_comp);
@@ -166,6 +166,6 @@ fn ifmt_from_text(text: &str) -> IfmtInput {
     IfmtInput {
         source: Some(LitStr::new(text, Span::call_site())),
         segments: vec![],
-        location: Default::default(),
+        hr_idx: Default::default(),
     }
 }

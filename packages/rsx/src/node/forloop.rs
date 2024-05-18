@@ -8,28 +8,25 @@ pub struct ForLoop {
     pub in_token: Token![in],
     pub expr: Box<Expr>,
     pub body: TemplateBody,
-    pub location: CallerLocation,
+    pub dyn_idx: CallerLocation,
 }
 
 impl Parse for ForLoop {
     fn parse(input: ParseStream) -> Result<Self> {
         // A bit stolen from `ExprForLoop` in the `syn` crate
-        let for_token: Token![for] = input.parse()?;
-        let pat = Pat::parse_single(input)?;
-        let in_token: Token![in] = input.parse()?;
-        let expr: Expr = input.call(Expr::parse_without_eager_brace)?;
-
-        let (_brace_token, body) = parse_buffer_as_braced_children(input)?;
-
-        let body = TemplateBody::from_nodes(body);
+        let for_token = input.parse()?;
+        let pat = input.call(Pat::parse_single)?;
+        let in_token = input.parse()?;
+        let expr = input.call(Expr::parse_without_eager_brace)?;
+        let body = input.parse()?;
 
         Ok(Self {
             for_token,
             pat,
             in_token,
-            body,
             expr: Box::new(expr),
-            location: CallerLocation::default(),
+            body,
+            dyn_idx: CallerLocation::default(),
         })
     }
 }
@@ -38,7 +35,7 @@ impl Parse for ForLoop {
 impl ForLoop {
     pub fn to_template_node(&self) -> TemplateNode {
         TemplateNode::Dynamic {
-            id: self.location.idx.get(),
+            id: self.dyn_idx.idx.get(),
         }
     }
 }

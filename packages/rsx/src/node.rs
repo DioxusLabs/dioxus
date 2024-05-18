@@ -79,13 +79,13 @@ impl BodyNode {
                 TemplateNode::Text { text }
             }
             BodyNode::Text(text) => TemplateNode::DynamicText {
-                id: text.location.get(),
+                id: text.dyn_idx.get(),
             },
             BodyNode::RawExpr(exp) => TemplateNode::Dynamic {
                 id: exp.location.idx.get(),
             },
             BodyNode::Component(comp) => TemplateNode::Dynamic {
-                id: comp.location.idx.get(),
+                id: comp.dyn_idx.idx.get(),
             },
             BodyNode::ForLoop(floop) => floop.to_template_node(),
             BodyNode::IfChain(chain) => chain.to_template_node(),
@@ -109,13 +109,13 @@ impl BodyNode {
                 chain.location.idx.set(idx);
             }
             BodyNode::ForLoop(floop) => {
-                floop.location.idx.set(idx);
+                floop.dyn_idx.idx.set(idx);
             }
             BodyNode::Component(comp) => {
-                comp.location.idx.set(idx);
+                comp.dyn_idx.idx.set(idx);
             }
             BodyNode::Text(text) => {
-                text.location.idx.set(idx);
+                text.dyn_idx.idx.set(idx);
             }
             BodyNode::RawExpr(expr) => {
                 expr.location.idx.set(idx);

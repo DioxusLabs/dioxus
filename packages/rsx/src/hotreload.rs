@@ -91,13 +91,10 @@ impl HotReload {
             changed_strings: Default::default(),
             location,
         };
+
         s.hotreload_callbody::<Ctx>(old, new)?;
 
         Some(s)
-    }
-
-    fn make_location(&self, idx: usize) -> String {
-        format!("{}:{}", self.location.trim_end_matches(":0"), idx)
     }
 
     /// The `old` callbody is the original callbody that was used to create the template
@@ -119,7 +116,27 @@ impl HotReload {
     /// Walk the dynamic contexts and do our best to find hotreloadable changes between the two
     /// sets of dynamic nodes/attributes. If there's a change we can't hotreload, we'll return None
     ///
-    /// Otherwise, we pump out the list of templates that need to be updated.
+    /// Otherwise, we pump out the list of templates that need to be updated. The templates will be
+    /// re-ordered such that the node paths will be adjusted to match the new template for every
+    /// existing dynamic node.
+    ///
+    /// ```
+    /// old:
+    ///     [[0], [1], [2]]
+    ///     rsx! {
+    ///         "{one}"
+    ///         "{two}"
+    ///         "{three}"
+    ///     }
+    ///
+    /// new:
+    ///     [[0], [2], [1, 1]]
+    ///     rsx! {
+    ///        "{one}"
+    ///         div { "{three}" }
+    ///         "{two}"
+    ///    }
+    /// ```
     ///
     /// Generally we can't hotreload a node if:
     /// - We add a truly dynaamic node (except maybe text nodes - but even then.. only if we've seen them before)
@@ -131,13 +148,9 @@ impl HotReload {
     /// you can preserve more information about the nodes as they've changed over time.
     pub fn hotreload_body<Ctx: HotReloadingContext>(
         &mut self,
-        old_body: &TemplateBody,
-        new_body: &TemplateBody,
+        old: &TemplateBody,
+        new: &TemplateBody,
     ) -> Option<()> {
-        // Create a context that will be used to update the template
-        let old = &DynamicContext::from_body::<Ctx>(&old_body.roots);
-        let new = &DynamicContext::from_body::<Ctx>(&new_body.roots);
-
         // Quickly run through dynamic attributes first attempting to invalidate them
         let new_attribute_paths = self.hotreload_attributes::<Ctx>(old, new)?;
 
@@ -145,16 +158,12 @@ impl HotReload {
         let new_node_paths = self.hotreload_dynamic_nodes::<Ctx>(old, new)?;
 
         // Create the new template nodes from the dynamic context, but with the new mapping
-        let roots = self.render_dynamic_context::<Ctx>(
-            new,
-            new_body,
-            &new_node_paths,
-            &new_attribute_paths,
-        );
+        let roots =
+            self.render_dynamic_context::<Ctx>(old, new, &new_node_paths, &new_attribute_paths);
 
         // Now we can assemble a template
         self.templates.push(Template {
-            name: self.make_location(old_body.location.get()).leak(),
+            name: self.make_location(dbg!(old.template_idx.get())).leak(),
             roots: intern(roots.as_slice()),
             node_paths: intern(
                 new_node_paths
@@ -220,8 +229,8 @@ impl HotReload {
     /// ```
     fn hotreload_dynamic_nodes<Ctx: HotReloadingContext>(
         &mut self,
-        old: &DynamicContext<'_>,
-        new: &DynamicContext<'_>,
+        old: &TemplateBody,
+        new: &TemplateBody,
     ) -> Option<Vec<NodePath>> {
         // Build a list of new nodes that we'll use for scans later
         // Whenever we find a new node, we'll mark the node as `None` so it's skipped on the next scan
@@ -232,11 +241,7 @@ impl HotReload {
         // We could implement an optimization where `Nones` get swapped to the end, or something faster
         // so the linear scans are usually quick, but for the sake of simplicity we'll just do a linear
         // scan where most of the time we're comparing a None against a Some
-        let mut new_nodes = new
-            .dynamic_nodes
-            .iter()
-            .map(|f| Some(f))
-            .collect::<Vec<_>>();
+        let mut new_nodes = new.dynamic_nodes().map(|f| Some(f)).collect::<Vec<_>>();
 
         // We're going to try returning the mapping of old node to new node
         // IE the new template has scrambled the dynamic nodes and we're going to return the IDs of the
@@ -257,7 +262,7 @@ impl HotReload {
         // Walk the original template trying to find a match in the new template
         // This ensures the nodepaths come out in the same order as the original template since the
         // dynamic nodes are baked into the running code
-        'outer: for (old_idx, old_node) in old.dynamic_nodes.iter().enumerate() {
+        'outer: for old_node in old.dynamic_nodes() {
             // Find the new node
             'inner: for (new_idx, maybe_new_node) in new_nodes.iter_mut().enumerate() {
                 // Skip over nodes that we've already found
@@ -268,7 +273,9 @@ impl HotReload {
 
                 let is_match = match (old_node, new_node) {
                     // Elements are not dynamic nodes... nothing to do here
-                    (BodyNode::Element(_), BodyNode::Element(_)) => unreachable!(),
+                    (BodyNode::Element(_), BodyNode::Element(_)) => {
+                        unreachable!("Elements are not dynamic nodes")
+                    }
 
                     // Text nodes can be dynamic nodes assuming they're formatted
                     // Eventually we might enable hotreloading of formatted text nodes too, but for now
@@ -390,7 +397,7 @@ impl HotReload {
             }
         }
 
-        let location = self.make_location(a.location.get());
+        let location = self.make_location(a.hr_idx.get());
 
         self.changed_strings
             .insert(location.to_string(), FmtedSegments::new(out));
@@ -398,6 +405,13 @@ impl HotReload {
         Some(true)
     }
 
+    /// Check if a for loop can be hot reloaded
+    ///
+    /// For loops are hot reloadable if their patterns and expressions are the same. We then check if the
+    /// bodies can be hot reloaded.
+    ///
+    /// Unfortunately this might lead to collisions if the expr/patterns are the same but the bodies
+    /// are different. We might want to toss some retry logic here tht checks the bodies too.a
     fn hotreload_forloop<Ctx: HotReloadingContext>(
         &mut self,
         a: &ForLoop,
@@ -523,6 +537,8 @@ impl HotReload {
     /// IE if we shuffle attributes around we should be able to hot reload them.
     /// Same thing with dropping dynamic attributes.
     ///
+    /// Does not apply with moving the dynamic contents from one attribute to another.
+    ///
     /// ```rust
     /// rsx! {
     ///     div { id: "{id}", class: "{class}", "Hi" }
@@ -534,8 +550,8 @@ impl HotReload {
     /// ```
     fn hotreload_attributes<Ctx: HotReloadingContext>(
         &mut self,
-        old: &DynamicContext<'_>,
-        new: &DynamicContext<'_>,
+        old: &TemplateBody,
+        new: &TemplateBody,
     ) -> Option<Vec<AttributePath>> {
         // Build a map of old attributes to their indexes
         // We can use the hash directly here but in theory we could support going from `class: "abc {def}"` to `class: "abc"`
@@ -543,21 +559,21 @@ impl HotReload {
         //
         // Note that we might have duplicate attributes! We use a stack just to make sure we don't lose them
         let mut new_attrs = new
-            .dynamic_attributes
-            .iter()
+            .dynamic_attributes()
             .map(|f| Some(f))
             .collect::<Vec<_>>();
 
         // Now we can run through the dynamic nodes and see if we can hot reload them
         let mut attr_paths = vec![];
 
-        for old_attr in old.dynamic_attributes.iter() {
+        for old_attr in old.dynamic_attributes() {
+            // Look for the first non-None new attribute that matches the old attribute
             for (new_idx, maybe_new_attr) in new_attrs.iter_mut().enumerate() {
-                let Some(new_attr) = maybe_new_attr else {
+                let Some(ref new_attr) = maybe_new_attr else {
                     continue;
                 };
 
-                if new_attr.as_slice() == old_attr.as_slice() {
+                if *new_attr == old_attr {
                     // We found a match! Get this dynamic node's path and push it into the output
                     attr_paths.push(new.attr_paths[new_idx].clone());
 
@@ -579,32 +595,26 @@ impl HotReload {
 
     pub fn callbody_to_template<Ctx: HotReloadingContext>(
         &mut self,
-        callbody: &CallBody,
+        CallBody { body, .. }: &CallBody,
     ) -> Template {
-        let ctx = DynamicContext::from_body::<Ctx>(&callbody.body.roots);
-
         // Rendering template nodes without a previous is just using ourselves as the previous mapping
         // Even though nothing changed, we can still use all the same rendering logic.
-        let roots = self.render_dynamic_context::<Ctx>(
-            &ctx,
-            &callbody.body,
-            &ctx.node_paths,
-            &ctx.attr_paths,
-        );
+        let roots =
+            self.render_dynamic_context::<Ctx>(body, body, &body.node_paths, &body.attr_paths);
 
         Template {
-            name: self.make_location(callbody.body.location.get()).leak(),
+            name: self.make_location(body.template_idx.get()).leak(),
             roots: intern(roots.as_slice()),
             node_paths: intern(
-                ctx.node_paths
-                    .into_iter()
+                body.node_paths
+                    .iter()
                     .map(|path| intern(path.as_slice()))
                     .collect::<Vec<_>>()
                     .as_slice(),
             ),
             attr_paths: intern(
-                ctx.attr_paths
-                    .into_iter()
+                body.attr_paths
+                    .iter()
                     .map(|path| intern(path.as_slice()))
                     .collect::<Vec<_>>()
                     .as_slice(),
@@ -622,7 +632,7 @@ impl HotReload {
     /// hotreloading formatted segments.
     fn render_dynamic_context<Ctx: HotReloadingContext>(
         &mut self,
-        ctx: &DynamicContext,
+        old: &TemplateBody,
         new: &TemplateBody,
         node_paths: &[Vec<u8>],
         attr_paths: &[Vec<u8>],
@@ -631,7 +641,7 @@ impl HotReload {
 
         for (idx, node) in new.roots.iter().enumerate() {
             nodes.push(self.render_template_node::<Ctx>(
-                ctx,
+                new,
                 node,
                 node_paths,
                 attr_paths,
@@ -644,7 +654,7 @@ impl HotReload {
 
     fn render_template_node<Ctx: HotReloadingContext>(
         &mut self,
-        ctx: &DynamicContext,
+        ctx: &TemplateBody,
         node: &BodyNode,
         node_paths: &[Vec<u8>],
         attr_paths: &[Vec<u8>],
@@ -737,6 +747,10 @@ impl HotReload {
                 }
             }
         }
+    }
+
+    fn make_location(&self, idx: usize) -> String {
+        format!("{}:{}", self.location.trim_end_matches(":0"), idx)
     }
 }
 
