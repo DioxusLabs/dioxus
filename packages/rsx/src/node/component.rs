@@ -31,7 +31,7 @@ pub struct Component {
     pub manual_props: Option<Expr>,
     pub brace: syn::token::Brace,
     pub location: CallerLocation,
-    pub children: Vec<BodyNode>,
+    pub children: TemplateBody,
 }
 
 impl Parse for Component {
@@ -90,14 +90,14 @@ impl Parse for Component {
         }
 
         Ok(Self {
-            location: CallerLocation::default(),
             name,
             prop_gen_args,
             fields,
-            children,
+            children: TemplateBody::from_nodes(children),
             manual_props,
             brace,
             key,
+            location: CallerLocation::default(),
         })
     }
 }
@@ -182,58 +182,58 @@ impl Component {
         for (idx, field) in self.fields.iter().enumerate() {
             let ComponentField { name, content, .. } = field;
 
-            let content = match content {
-                ContentField::Shorthand(i) => quote! { #i },
-                ContentField::ManExpr(e) => quote! { #e },
-                ContentField::Formatted(txt) => {
-                    // place down the signal stuff
+            todo!()
+            // let content = match content {
+            //     ContentField::Shorthand(i) => quote! { #i },
+            //     ContentField::ManExpr(e) => quote! { #e },
+            //     ContentField::Formatted(txt) => {
+            //         // place down the signal stuff
 
-                    let segments = txt.as_htotreloaded();
+            //         let segments = txt.as_htotreloaded();
 
-                    let rendered_segments = txt.segments.iter().filter_map(|s| match s {
-                        Segment::Literal(lit) => None,
-                        Segment::Formatted(fmt) => {
-                            // just render as a format_args! call
-                            Some(quote! {
-                                format!("{}", #fmt)
-                            })
-                        }
-                    });
+            //         let rendered_segments = txt.segments.iter().filter_map(|s| match s {
+            //             Segment::Literal(lit) => None,
+            //             Segment::Formatted(fmt) => {
+            //                 // just render as a format_args! call
+            //                 Some(quote! {
+            //                     format!("{}", #fmt)
+            //                 })
+            //             }
+            //         });
 
-                    let old_idx = self.location.idx.get();
-                    let cur_idx = (old_idx) * 100000 + 1 + idx;
+            //         let old_idx = self.location.idx.get();
+            //         let cur_idx = (old_idx) * 100000 + 1 + idx;
 
-                    quote! {
-                        {
-                            // Create a signal of the formatted segments
-                            // htotreloading will find this via its location and then update the signal
-                            static __SIGNAL: GlobalSignal<FmtedSegments> = GlobalSignal::with_key(|| #segments, {
-                                concat!(
-                                    file!(),
-                                    ":",
-                                    line!(),
-                                    ":",
-                                    column!(),
-                                    ":",
-                                    #cur_idx
-                                )
-                            });
+            //         quote! {
+            //             {
+            //                 // Create a signal of the formatted segments
+            //                 // htotreloading will find this via its location and then update the signal
+            //                 static __SIGNAL: GlobalSignal<FmtedSegments> = GlobalSignal::with_key(|| #segments, {
+            //                     concat!(
+            //                         file!(),
+            //                         ":",
+            //                         line!(),
+            //                         ":",
+            //                         column!(),
+            //                         ":",
+            //                         #cur_idx
+            //                     )
+            //                 });
 
-                            // render the signal and subscribe the component to its changes
-                            __SIGNAL.with(|s| s.render_with(
-                                vec![ #(#rendered_segments),* ]
-                            ))
-                        }
-                    }
-                }
-            };
+            //                 // render the signal and subscribe the component to its changes
+            //                 __SIGNAL.with(|s| s.render_with(
+            //                     vec![ #(#rendered_segments),* ]
+            //                 ))
+            //             }
+            //         }
+            //     }
+            // };
 
-            toks.append_all(quote! { .#name(#content) });
+            // toks.append_all(quote! { .#name(#content) });
         }
         if !self.children.is_empty() {
-            let renderer =
-                TemplateRenderer::as_tokens_with_idx(&self.children, self.location.idx.get());
-            toks.append_all(quote! { .children( { #renderer } ) });
+            let children = &self.children;
+            toks.append_all(quote! { .children( { #children } ) });
         }
         toks.append_all(quote! { .build() });
         toks
@@ -249,6 +249,15 @@ impl Component {
 pub struct ComponentField {
     pub name: Ident,
     pub content: ContentField,
+}
+
+impl ComponentField {
+    pub(crate) fn ifmt(&self) -> Option<&IfmtInput> {
+        match &self.content {
+            ContentField::Formatted(i) => Some(i),
+            _ => None,
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]

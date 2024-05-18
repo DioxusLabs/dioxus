@@ -56,7 +56,7 @@ impl syn::parse::Parse for ParsedRsx {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut parser = ParsedRsx::new();
 
-        parser.parse_callbody(input);
+        parser.parse_callbody(input)?;
 
         Ok(parser)
     }
@@ -75,13 +75,27 @@ impl ParsedRsx {
         }
     }
 
-    fn parse_callbody(&mut self, input: ParseStream) {
-        self.roots = self.parse_body_like(false, input);
+    fn parse_callbody(&mut self, input: ParseStream) -> Result<()> {
+        self.roots = self.parse_body_like(false, input)?;
 
         println!("is empty {}", input.is_empty());
 
         // If there's errors, handle them
         if !self.diagnostics.is_empty() {}
+
+        Ok(())
+    }
+
+    fn parse_body_like(
+        &mut self,
+        expects_attrs: bool,
+        input: ParseStream,
+    ) -> Result<Vec<BodyNode>> {
+        todo!()
+    }
+
+    fn parse_body_node(&mut self, input: ParseStream) -> Result<BodyNode> {
+        todo!()
     }
 
     /// Parse each body node one by one
@@ -97,7 +111,11 @@ impl ParsedRsx {
     ///
     /// This will come after prop/attribute parsing which we always defer for completions when inserting
     /// the first element.
-    fn parse_body_like(&mut self, expects_attrs: bool, input: ParseStream) -> Vec<BodyNode> {
+    fn parse_body_like2(
+        &mut self,
+        expects_attrs: bool,
+        input: ParseStream,
+    ) -> Result<Vec<BodyNode>> {
         let mut roots = vec![];
         let mut attribute_likes: Vec<()> = vec![];
 
@@ -376,7 +394,7 @@ impl ParsedRsx {
             panic!("Tokens remaining?");
         }
 
-        roots
+        Ok(roots)
     }
 
     /// Parse element-like things, attempting to provide diagnostics
@@ -402,7 +420,7 @@ impl ParsedRsx {
         let content;
         let _brace_token = braced!(content in input);
 
-        Ok((self.parse_body_like(false, &content), _brace_token))
+        Ok((self.parse_body_like(false, &content)?, _brace_token))
     }
 
     fn parse_attribute_things(&mut self, stream: ParseStream) {}
@@ -418,7 +436,7 @@ impl ParsedRsx {
         let in_token: Token![in] = input.parse()?;
         let expr: Expr = input.call(Expr::parse_without_eager_brace)?;
 
-        let body = self.parse_body_like(false, input);
+        let body = self.parse_body_like(false, input)?;
 
         let floop = ForLoop {
             for_token,

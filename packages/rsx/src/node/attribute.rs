@@ -22,6 +22,16 @@ pub enum AttributeType {
     Spread(Expr),
 }
 
+impl ToTokens for AttributeType {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        todo!()
+        // match self {
+        //     AttributeType::Named(named) => named.to_tokens(tokens),
+        //     AttributeType::Spread(expr) => tokens.append_all(quote! { #expr }),
+        // }
+    }
+}
+
 impl AttributeType {
     pub fn start(&self) -> Span {
         match self {
@@ -41,6 +51,16 @@ impl AttributeType {
         match (self, other) {
             (Self::Named(a), Self::Named(b)) => a.try_combine(b).map(Self::Named),
             _ => None,
+        }
+    }
+
+    pub(crate) fn ifmt(&self) -> Option<&IfmtInput> {
+        match self {
+            AttributeType::Named(named) => match &named.attr.value {
+                ElementAttrValue::AttrLiteral(lit) => Some(lit),
+                _ => None,
+            },
+            AttributeType::Spread(_) => None,
         }
     }
 

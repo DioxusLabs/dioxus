@@ -22,16 +22,16 @@ mod ifmt;
 mod ifmt2;
 mod location;
 mod node;
-
-pub mod rsx_parser;
+mod rsx_call;
 
 pub(crate) mod context;
-pub(crate) mod renderer;
 
 // Re-export the namespaces into each other
+pub use body::TemplateBody;
 pub use context::{CallBodyContext, DynamicContext};
 pub use ifmt::*;
 pub use node::*;
+pub use rsx_call::*;
 
 #[cfg(feature = "hot_reload")]
 pub mod hot_reload;
@@ -45,53 +45,11 @@ use internment::Intern;
 
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
-use renderer::TemplateRenderer;
 use std::{fmt::Debug, hash::Hash};
 use syn::{
     parse::{Parse, ParseStream},
     Result, Token,
 };
-
-/// The Callbody is the contents of the rsx! macro
-///
-/// It is a list of BodyNodes, which are the different parts of the template.
-/// The Callbody contains no information about how the template will be rendered, only information about the parsed tokens.
-///
-/// Every callbody should be valid, so you can use it to build a template.
-/// To generate the code used to render the template, use the ToTokens impl on the Callbody, or with the `render_with_location` method.
-#[derive(Default, Debug)]
-pub struct CallBody {
-    pub roots: Vec<BodyNode>,
-}
-
-impl Parse for CallBody {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let mut roots = Vec::new();
-
-        while !input.is_empty() {
-            let node = input.parse::<BodyNode>()?;
-
-            if input.peek(Token![,]) {
-                let _ = input.parse::<Token![,]>();
-            }
-
-            roots.push(node);
-        }
-
-        Ok(CallBody { roots })
-    }
-}
-
-impl ToTokens for CallBody {
-    fn to_tokens(&self, out_tokens: &mut TokenStream2) {
-        if self.roots.is_empty() {
-            return out_tokens.append_all(quote! { None });
-        }
-
-        let body = TemplateRenderer::as_tokens(&self.roots, None);
-        out_tokens.append_all(quote! { { #body } })
-    }
-}
 
 #[cfg(feature = "hot_reload")]
 // interns a object into a static object, resusing the value if it already exists

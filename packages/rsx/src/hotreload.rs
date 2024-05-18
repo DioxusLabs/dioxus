@@ -28,7 +28,7 @@ use std::collections::HashMap;
 
 use crate::{
     intern, AttributeType, Component, ComponentField, ContentField, ElementAttrName, ForLoop,
-    IfChain, IfmtInput, TextNode,
+    IfChain, IfmtInput, TemplateBody, TextNode,
 };
 use crate::{BodyNode, CallBody, DynamicContext, HotReloadingContext};
 use dioxus_core::{
@@ -73,6 +73,10 @@ type DynamicNodeIdx = usize;
 pub struct HotReload {
     pub templates: Vec<Template>,
 
+    // The location of the original call
+    // This should be in the form of `file:line:col:0` - 0 since this will be the base template
+    pub location: &'static str,
+
     pub changed_strings: HashMap<String, FmtedSegments>,
 }
 
@@ -85,9 +89,15 @@ impl HotReload {
         let mut s = Self {
             templates: Default::default(),
             changed_strings: Default::default(),
+            location,
         };
-        s.templates = s.hotreload_callbody::<Ctx>(old, new, location)?;
+        s.hotreload_callbody::<Ctx>(old, new)?;
+
         Some(s)
+    }
+
+    fn make_location(&self, idx: usize) -> String {
+        format!("{}:{}", self.location.trim_end_matches(":0"), idx)
     }
 
     /// The `old` callbody is the original callbody that was used to create the template
@@ -102,11 +112,8 @@ impl HotReload {
         &mut self,
         old: &CallBody,
         new: &CallBody,
-        location: &'static str,
-    ) -> Option<Vec<Template>> {
-        let mut templates = vec![];
-        self.hotreload_body::<Ctx>(&old.roots, &new.roots, location, &mut templates)?;
-        Some(templates)
+    ) -> Option<()> {
+        self.hotreload_body::<Ctx>(&old.body, &new.body)
     }
 
     /// Walk the dynamic contexts and do our best to find hotreloadable changes between the two
@@ -124,20 +131,18 @@ impl HotReload {
     /// you can preserve more information about the nodes as they've changed over time.
     pub fn hotreload_body<Ctx: HotReloadingContext>(
         &mut self,
-        old_body: &[BodyNode],
-        new_body: &[BodyNode],
-        location: &'static str,
-        templates: &mut Vec<Template>,
+        old_body: &TemplateBody,
+        new_body: &TemplateBody,
     ) -> Option<()> {
         // Create a context that will be used to update the template
-        let old = &DynamicContext::from_body::<Ctx>(&old_body);
-        let new = &DynamicContext::from_body::<Ctx>(&new_body);
+        let old = &DynamicContext::from_body::<Ctx>(&old_body.roots);
+        let new = &DynamicContext::from_body::<Ctx>(&new_body.roots);
 
         // Quickly run through dynamic attributes first attempting to invalidate them
         let new_attribute_paths = self.hotreload_attributes::<Ctx>(old, new)?;
 
         // Now we can run through the dynamic nodes and see if we can hot reload them
-        let new_node_paths = self.hotreload_dynamic_nodes::<Ctx>(old, new, location, templates)?;
+        let new_node_paths = self.hotreload_dynamic_nodes::<Ctx>(old, new)?;
 
         // Create the new template nodes from the dynamic context, but with the new mapping
         let roots = self.render_dynamic_context::<Ctx>(
@@ -148,8 +153,8 @@ impl HotReload {
         );
 
         // Now we can assemble a template
-        templates.push(Template {
-            name: location,
+        self.templates.push(Template {
+            name: self.make_location(old_body.location.get()).leak(),
             roots: intern(roots.as_slice()),
             node_paths: intern(
                 new_node_paths
@@ -217,8 +222,6 @@ impl HotReload {
         &mut self,
         old: &DynamicContext<'_>,
         new: &DynamicContext<'_>,
-        location: &'static str,
-        templates: &mut Vec<Template>,
     ) -> Option<Vec<NodePath>> {
         // Build a list of new nodes that we'll use for scans later
         // Whenever we find a new node, we'll mark the node as `None` so it's skipped on the next scan
@@ -271,7 +274,7 @@ impl HotReload {
                     // Eventually we might enable hotreloading of formatted text nodes too, but for now
                     // just check if the ifmt input is the same
                     (BodyNode::Text(a), BodyNode::Text(b)) => {
-                        self.hotreload_text_segment::<Ctx>(a, b, location, old_idx)?
+                        self.hotreload_text_segment::<Ctx>(a, b)?
                     }
 
                     // Nothing special for raw expressions - if an expresison changed we couldn't find it anyway
@@ -280,18 +283,18 @@ impl HotReload {
                     // If we found a matching forloop, its body might not be the same
                     // the bodies don't need to be the same but the pats/exprs do
                     (BodyNode::ForLoop(a), BodyNode::ForLoop(b)) => {
-                        self.hotreload_forloop::<Ctx>(a, b, location, old_idx, templates)?
+                        self.hotreload_forloop::<Ctx>(a, b)?
                     }
 
                     // Basically stealing the same logic as the for loop
                     (BodyNode::Component(a), BodyNode::Component(b)) => {
-                        self.hotreload_component_body::<Ctx>(a, b, location, old_idx, templates)?
+                        self.hotreload_component_body::<Ctx>(a, b)?
                     }
 
                     // Basically stealing the same logic as the for loop, but with multiple nestings
                     // We only support supports conditions
                     (BodyNode::IfChain(a), BodyNode::IfChain(b)) => {
-                        self.hotreload_ifchain::<Ctx>(a, b, location, old_idx, templates)?
+                        self.hotreload_ifchain::<Ctx>(a, b)?
                     }
 
                     // Any other pairing is not a match and we should keep looking
@@ -327,19 +330,11 @@ impl HotReload {
         &mut self,
         a: &TextNode,
         b: &TextNode,
-        location: &'static str,
-        old_idx: usize,
     ) -> Option<bool> {
-        let location = make_new_location(location, old_idx + 1);
-        self.hotreload_ifmt(&a.input, &b.input, location)
+        self.hotreload_ifmt(&a.input, &b.input)
     }
 
-    fn hotreload_ifmt(
-        &mut self,
-        a: &IfmtInput,
-        b: &IfmtInput,
-        location: &'static str,
-    ) -> Option<bool> {
+    fn hotreload_ifmt(&mut self, a: &IfmtInput, b: &IfmtInput) -> Option<bool> {
         if a.is_static() && b.is_static() {
             return Some(a == b);
         }
@@ -395,6 +390,8 @@ impl HotReload {
             }
         }
 
+        let location = self.make_location(a.location.get());
+
         self.changed_strings
             .insert(location.to_string(), FmtedSegments::new(out));
 
@@ -405,24 +402,16 @@ impl HotReload {
         &mut self,
         a: &ForLoop,
         b: &ForLoop,
-        location: &'static str,
-        old_idx: usize,
-        templates: &mut Vec<Template>,
     ) -> Option<bool> {
         let matches = a.pat == b.pat && a.expr == b.expr;
         if matches {
             // We unfortunately cannot currently hot reload for loops that didn't have
             // a body. Usually this is unlikely, but dioxus-core would need to be changed
             // to allow templates with no roots
-            let _ = a.body.first()?;
-
-            // We need to use the old location info to find the new location info
-            //
-            // This is just the file+line+col+byte index from the original
-            // If no byte index is present, we'll just use the idx of the node
-            let new_location = make_new_location(location, old_idx + 1);
-            self.hotreload_body::<Ctx>(&a.body, &b.body, new_location, templates)?;
+            let _ = a.body.roots.first()?;
+            self.hotreload_body::<Ctx>(&a.body, &b.body)?;
         }
+
         Some(matches)
     }
 
@@ -430,9 +419,6 @@ impl HotReload {
         &mut self,
         a: &Component,
         b: &Component,
-        location: &'static str,
-        old_idx: usize,
-        templates: &mut Vec<Template>,
     ) -> Option<bool> {
         let matches = a.name == b.name
             && a.prop_gen_args == b.prop_gen_args
@@ -445,10 +431,8 @@ impl HotReload {
                 || a.children.is_empty() && b.children.is_empty());
 
         if matches {
-            self.hotreload_component_fields::<Ctx>(a, b, location, old_idx, templates)?;
-
-            let new_location = make_new_location(location, old_idx + 1);
-            self.hotreload_body::<Ctx>(&a.children, &b.children, new_location, templates)?;
+            self.hotreload_component_fields::<Ctx>(a, b)?;
+            self.hotreload_body::<Ctx>(&a.children, &b.children)?;
         }
 
         Some(matches)
@@ -458,9 +442,6 @@ impl HotReload {
         &mut self,
         a: &Component,
         b: &Component,
-        location: &'static str,
-        old_idx: usize,
-        templates: &mut Vec<Template>,
     ) -> Option<()> {
         // make sure both are the same length
         if a.fields.len() != b.fields.len() {
@@ -469,15 +450,13 @@ impl HotReload {
 
         // Walk the attributes looking for literals
         // Those will have plumbing in the hotreloading code
-        // All others just get diffed via tokens
-        let cur_idx = (old_idx + 1) * 100000 + 1;
+        // All others just get diffed via tokensa
         for (idx, (old_attr, new_attr)) in a.fields.iter().zip(b.fields.iter()).enumerate() {
             match (&old_attr.content, &new_attr.content) {
                 (_, _) if old_attr.name != new_attr.name => return None,
                 (ContentField::Formatted(left), ContentField::Formatted(right)) => {
                     // try to hotreload this formatted string
-                    let new_location = make_new_location(location, cur_idx + idx);
-                    _ = self.hotreload_ifmt(&left, &right, new_location);
+                    _ = self.hotreload_ifmt(&left, &right);
                 }
                 _ => {
                     if old_attr != new_attr {
@@ -491,29 +470,15 @@ impl HotReload {
     }
 
     /// Hot reload an if chain
-    ///
-    /// This is somewhat complicated because we need to recurse into each conditional. Plus, each branch
-    /// can't share the same "location" when not running under the compiler since the location is the
-    /// file+line+col+index of the original. When running under the compiler, we can use the index
-    /// to uniquely identify the template, but we can't do that without it.
-    ///
-    /// To cheat a bit, we're just going to add a fixed number to the template ID to push it out of the
-    /// typical range of dynamic nodes. So an `if` chain with an ID of say 5, will have an ID of `5001`, `5002`, etc.
-    ///
-    /// todo: I'd like to share the idx logic with the DynamicContext itself so we have stable IDs
-    ///       between hotreloading and non-hotreloading.
+    //
     fn hotreload_ifchain<Ctx: HotReloadingContext>(
         &mut self,
         a: &IfChain,
         b: &IfChain,
-        location: &'static str,
-        local_idx: usize,
-        templates: &mut Vec<Template>,
     ) -> Option<bool> {
         let matches = a.cond == b.cond;
 
         if matches {
-            let mut cur_idx = (local_idx + 1) * 1000 + 1;
             let (mut elif_a, mut elif_b) = (Some(a), Some(b));
 
             loop {
@@ -526,14 +491,7 @@ impl HotReload {
                 let (a, b) = (elif_a.take()?, elif_b.take()?);
 
                 // Write the `then` branch
-                let new_location = make_new_location(location, cur_idx);
-                self.hotreload_body::<Ctx>(
-                    &a.then_branch,
-                    &b.then_branch,
-                    new_location,
-                    templates,
-                )?;
-                cur_idx += 1;
+                self.hotreload_body::<Ctx>(&a.then_branch, &b.then_branch)?;
 
                 // If there's an elseif branch, we set that as the next branch
                 // Otherwise we continue to the else branch - which we assume both branches have
@@ -552,8 +510,7 @@ impl HotReload {
 
                 // Write out the else branch and then we're done
                 let (left, right) = (a.else_branch.as_ref()?, b.else_branch.as_ref()?);
-                let new_location = make_new_location(location, cur_idx);
-                self.hotreload_body::<Ctx>(&left, &right, new_location, templates)?;
+                self.hotreload_body::<Ctx>(&left, &right)?;
                 break;
             }
         }
@@ -623,21 +580,20 @@ impl HotReload {
     pub fn callbody_to_template<Ctx: HotReloadingContext>(
         &mut self,
         callbody: &CallBody,
-        location: &'static str,
     ) -> Template {
-        let ctx = DynamicContext::from_body::<Ctx>(&callbody.roots);
+        let ctx = DynamicContext::from_body::<Ctx>(&callbody.body.roots);
 
         // Rendering template nodes without a previous is just using ourselves as the previous mapping
         // Even though nothing changed, we can still use all the same rendering logic.
         let roots = self.render_dynamic_context::<Ctx>(
             &ctx,
-            &callbody.roots,
+            &callbody.body,
             &ctx.node_paths,
             &ctx.attr_paths,
         );
 
         Template {
-            name: location,
+            name: self.make_location(callbody.body.location.get()).leak(),
             roots: intern(roots.as_slice()),
             node_paths: intern(
                 ctx.node_paths
@@ -667,13 +623,13 @@ impl HotReload {
     fn render_dynamic_context<Ctx: HotReloadingContext>(
         &mut self,
         ctx: &DynamicContext,
-        new: &[BodyNode],
+        new: &TemplateBody,
         node_paths: &[Vec<u8>],
         attr_paths: &[Vec<u8>],
     ) -> Vec<TemplateNode> {
         let mut nodes = Vec::new();
 
-        for (idx, node) in new.iter().enumerate() {
+        for (idx, node) in new.roots.iter().enumerate() {
             nodes.push(self.render_template_node::<Ctx>(
                 ctx,
                 node,
@@ -801,12 +757,4 @@ fn make_static_attribute<Ctx: HotReloadingContext>(
     };
 
     static_attr
-}
-
-/// Create a new location for a node
-fn make_new_location(base: &'static str, old_idx: usize) -> &'static str {
-    let base = base.rsplit_once(':').unwrap().0;
-    let byte_index = old_idx.to_string();
-    let out = format!("{base}:{byte_index}");
-    Box::leak(out.into_boxed_str())
 }

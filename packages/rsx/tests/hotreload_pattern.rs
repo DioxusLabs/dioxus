@@ -608,3 +608,20 @@ fn ide_testcase() {
 
     dbg!(changed);
 }
+
+#[test]
+fn assigns_ids() {
+    let toks = quote! {
+        div {
+            div { "hi!!!123 in!stant relo123a1123dasasdasdasdasd" }
+            for x in 0..5 {
+                h3 { "For loop contents" }
+            }
+        }
+    };
+
+    let parsed = syn::parse2::<CallBody>(toks).unwrap();
+
+    let node = parsed.body.get_dyn_node(&[0, 1]);
+    dbg!(node);
+}

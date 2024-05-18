@@ -30,59 +30,59 @@ pub struct CallBodyContext<'a> {
     pub contexts: Vec<DynamicContext<'a>>,
 }
 
-impl<'a> CallBodyContext<'a> {
-    /// Take a callbody and then explore all its dynamic nodes for dynamic contexts.
-    /// Returns them in a consistent DFS order so the codegen makes some sense.
-    /// The ID of each template is its index in the context list, so the root contet will have ID=0
-    ///
-    /// "Hot literals" will indexed relative to the context they're found in - ie 0:0 would be the
-    /// first hot literal in the first template. These can show up in a number of places.
-    pub fn from_callbody<Ctx: HotReloadingContext>(callbody: &'a CallBody) -> Self {
-        let mut contexts = vec![];
+// impl<'a> CallBodyContext<'a> {
+//     /// Take a callbody and then explore all its dynamic nodes for dynamic contexts.
+//     /// Returns them in a consistent DFS order so the codegen makes some sense.
+//     /// The ID of each template is its index in the context list, so the root contet will have ID=0
+//     ///
+//     /// "Hot literals" will indexed relative to the context they're found in - ie 0:0 would be the
+//     /// first hot literal in the first template. These can show up in a number of places.
+//     pub fn from_callbody<Ctx: HotReloadingContext>(callbody: &'a CallBody) -> Self {
+//         let mut contexts = vec![];
 
-        // Create the root dynamic context stack and push the root context onto it
-        let mut stack = vec![];
-        stack.push(callbody.roots.as_slice());
+//         // Create the root dynamic context stack and push the root context onto it
+//         let mut stack = vec![];
+//         stack.push(callbody.roots.as_slice());
 
-        // And then walk its dynamic nodes looking for subtemplates
-        // push those onto the stack, chewing it down
-        // Make sure to do this in such an order that we are progressing depth-first
-        // We could also do this rec
-        while let Some(roots) = stack.pop() {
-            let cx = DynamicContext::from_body::<Ctx>(roots);
+//         // And then walk its dynamic nodes looking for subtemplates
+//         // push those onto the stack, chewing it down
+//         // Make sure to do this in such an order that we are progressing depth-first
+//         // We could also do this rec
+//         while let Some(roots) = stack.pop() {
+//             let cx = DynamicContext::from_body::<Ctx>(roots);
 
-            // Walk these backwards so children can end up in front of the parents
-            for node in cx.dynamic_nodes.iter().rev() {
-                match node {
-                    // Elements can't be dynamic nodes
-                    BodyNode::Element(_) => unreachable!(),
+//             // Walk these backwards so children can end up in front of the parents
+//             for node in cx.dynamic_nodes.iter().rev() {
+//                 match node {
+//                     // Elements can't be dynamic nodes
+//                     BodyNode::Element(_) => unreachable!(),
 
-                    // Dynamic text nodes and exprs contain no child templates to explore
-                    BodyNode::Text(_) => continue,
-                    BodyNode::RawExpr(_) => continue,
+//                     // Dynamic text nodes and exprs contain no child templates to explore
+//                     BodyNode::Text(_) => continue,
+//                     BodyNode::RawExpr(_) => continue,
 
-                    // Components might have a template to explore - I think we might need to push empty ones
-                    BodyNode::Component(c) => stack.push(c.children.as_slice()),
+//                     // Components might have a template to explore - I think we might need to push empty ones
+//                     BodyNode::Component(c) => stack.push(&c.children.roots.as_slice()),
 
-                    // For loops a single template to explore
-                    BodyNode::ForLoop(f) => stack.push(f.body.as_slice()),
+//                     // For loops a single template to explore
+//                     BodyNode::ForLoop(f) => stack.push(f.body.as_slice()),
 
-                    // If chains have multiple templates to explore based on the chain
-                    // make sure we do this in reverse, I think?
-                    BodyNode::IfChain(chain) => {
-                        let mut local_chain: Vec<&[BodyNode]> = vec![];
-                        todo!("");
-                        stack.extend(local_chain.iter());
-                    }
-                }
-            }
+//                     // If chains have multiple templates to explore based on the chain
+//                     // make sure we do this in reverse, I think?
+//                     BodyNode::IfChain(chain) => {
+//                         let mut local_chain: Vec<&[BodyNode]> = vec![];
+//                         todo!("");
+//                         stack.extend(local_chain.iter());
+//                     }
+//                 }
+//             }
 
-            contexts.push(cx);
-        }
+//             contexts.push(cx);
+//         }
 
-        CallBodyContext { contexts }
-    }
-}
+//         CallBodyContext { contexts }
+//     }
+// }
 
 /// An understanding of a set of Tokens that provides the mapping required for:
 /// - hotreload diffing

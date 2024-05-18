@@ -46,8 +46,49 @@ impl BodyNode {
     pub fn children(&self) -> &[BodyNode] {
         match self {
             BodyNode::Element(el) => &el.children,
-            BodyNode::Component(comp) => &comp.children,
+            BodyNode::Component(comp) => &comp.children.roots,
             _ => panic!("Children not available for this node"),
+        }
+    }
+
+    /// Convert this BodyNode into a TemplateNode.
+    ///
+    /// dioxus-core uses this to understand templates at compiletime
+    pub fn to_template_node<Ctx: HotReloadingContext>(&self) -> TemplateNode {
+        match self {
+            BodyNode::Element(el) => {
+                let rust_name = el.name.to_string();
+                let (tag, namespace) =
+                    Ctx::map_element(&rust_name).unwrap_or((intern(rust_name.as_str()), None));
+
+                TemplateNode::Element {
+                    children: el
+                        .children
+                        .iter()
+                        .map(|c| c.to_template_node::<Ctx>())
+                        .collect::<Vec<_>>()
+                        .leak(),
+                    tag,
+                    namespace,
+                    attrs: &[],
+                }
+            }
+            BodyNode::Text(text) if text.is_static() => {
+                let text = text.input.source.as_ref().unwrap();
+                let text = intern(text.value().as_str());
+                TemplateNode::Text { text }
+            }
+            BodyNode::Text(text) => TemplateNode::DynamicText {
+                id: text.location.get(),
+            },
+            BodyNode::RawExpr(exp) => TemplateNode::Dynamic {
+                id: exp.location.idx.get(),
+            },
+            BodyNode::Component(comp) => TemplateNode::Dynamic {
+                id: comp.location.idx.get(),
+            },
+            BodyNode::ForLoop(floop) => floop.to_template_node(),
+            BodyNode::IfChain(chain) => chain.to_template_node(),
         }
     }
 
@@ -63,23 +104,24 @@ impl BodyNode {
     }
 
     pub(crate) fn set_location_idx(&self, idx: usize) {
-        todo!()
-        // match self {
-        //     BodyNode::IfChain(chain) => {
-        //         chain.location.idx.set(idx);
-        //     }
-        //     BodyNode::ForLoop(floop) => {
-        //         floop.location.idx.set(idx);
-        //     }
-        //     BodyNode::Component(comp) => {
-        //         comp.location.idx.set(idx);
-        //     }
-        //     BodyNode::Text(text) => {
-        //         text.location.idx.set(idx);
-        //     }
-        //     BodyNode::Element(_) => {}
-        //     BodyNode::RawExpr(_) => {}
-        // }
+        match self {
+            BodyNode::IfChain(chain) => {
+                chain.location.idx.set(idx);
+            }
+            BodyNode::ForLoop(floop) => {
+                floop.location.idx.set(idx);
+            }
+            BodyNode::Component(comp) => {
+                comp.location.idx.set(idx);
+            }
+            BodyNode::Text(text) => {
+                text.location.idx.set(idx);
+            }
+            BodyNode::RawExpr(expr) => {
+                expr.location.idx.set(idx);
+            }
+            BodyNode::Element(_) => todo!(),
+        }
     }
 }
 
@@ -111,6 +153,7 @@ impl Parse for BodyNode {
         if stream.peek(Token![match]) {
             return Ok(BodyNode::RawExpr(RawExpr {
                 expr: stream.parse::<Expr>()?.to_token_stream(),
+                location: CallerLocation::default(),
             }));
         }
 
@@ -118,6 +161,7 @@ impl Parse for BodyNode {
         if stream.peek(token::Brace) {
             return Ok(BodyNode::RawExpr(RawExpr {
                 expr: stream.parse::<Expr>()?.to_token_stream(),
+                location: CallerLocation::default(),
             }));
         }
 
@@ -168,6 +212,22 @@ impl Parse for BodyNode {
             stream.span(),
             "Expected a valid body node.\nExpressions must be wrapped in curly braces.",
         ))
+    }
+}
+
+impl ToTokens for BodyNode {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        match self {
+            BodyNode::Element(_) => {
+                unreachable!("Elements are never dynamic and should never be queued to be rendered")
+            }
+
+            BodyNode::RawExpr(exp) => exp.to_tokens(tokens),
+            BodyNode::Text(txt) => txt.to_tokens(tokens),
+            BodyNode::ForLoop(floop) => floop.to_tokens(tokens),
+            BodyNode::Component(comp) => comp.to_tokens(tokens),
+            BodyNode::IfChain(ifchain) => ifchain.to_tokens(tokens),
+        }
     }
 }
 
