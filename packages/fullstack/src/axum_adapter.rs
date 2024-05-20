@@ -59,7 +59,6 @@ use axum::{
     response::IntoResponse,
 };
 use dioxus_lib::prelude::VirtualDom;
-use futures_util::stream::StreamExt;
 use futures_util::Future;
 use http::header::*;
 
@@ -374,6 +373,15 @@ pub async fn render_handler_with_context<F: FnMut(&mut DioxusServerContext)>(
     State((mut inject_context, cfg, ssr_state, virtual_dom_factory)): State<AxumHandler<F>>,
     request: Request<Body>,
 ) -> impl IntoResponse {
+    // Only respond to requests for HTML
+    if let Some(mime) = request.headers().get("Accept") {
+        let mime = mime.to_str().map(|mime| mime.to_ascii_lowercase());
+        match mime {
+            Ok(accepts) if accepts.contains("text/html") => {}
+            _ => return Err(StatusCode::NOT_ACCEPTABLE),
+        }
+    }
+
     let (parts, _) = request.into_parts();
     let url = parts.uri.path_and_query().unwrap().to_string();
     let parts: Arc<tokio::sync::RwLock<http::request::Parts>> =
@@ -381,7 +389,9 @@ pub async fn render_handler_with_context<F: FnMut(&mut DioxusServerContext)>(
     let mut server_context = DioxusServerContext::new(parts.clone());
     inject_context(&mut server_context);
 
-    let (tx, rx) = futures_channel::mpsc::channel::<String>(100);
+    let (tx, rx) = futures_channel::mpsc::channel::<
+        Result<String, dioxus_ssr::incremental::IncrementalRendererError>,
+    >(100);
 
     match ssr_state
         .render(
@@ -394,18 +404,15 @@ pub async fn render_handler_with_context<F: FnMut(&mut DioxusServerContext)>(
         .await
     {
         Ok(freshness) => {
-            let mut response = axum::response::Html::from(Body::from_stream(
-                rx.map(Ok::<_, std::convert::Infallible>),
-            ))
-            .into_response();
+            let mut response = axum::response::Html::from(Body::from_stream(rx)).into_response();
             freshness.write(response.headers_mut());
             let headers = server_context.response_parts().unwrap().headers.clone();
             apply_request_parts_to_response(headers, &mut response);
-            response
+            Ok(response)
         }
         Err(e) => {
             tracing::error!("Failed to render page: {}", e);
-            report_err(e).into_response()
+            Ok(report_err(e).into_response())
         }
     }
 }

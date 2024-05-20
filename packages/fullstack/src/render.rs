@@ -46,7 +46,7 @@ impl SsrRendererPool {
         route: String,
         virtual_dom_factory: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
         server_context: &DioxusServerContext,
-        into: Sender<String>,
+        mut into: Sender<Result<String, dioxus_ssr::incremental::IncrementalRendererError>>,
     ) -> Result<RenderFreshness, dioxus_ssr::incremental::IncrementalRendererError> {
         let wrapper = FullstackRenderer {
             cfg: cfg.clone(),
@@ -57,28 +57,35 @@ impl SsrRendererPool {
                 let server_context = server_context.clone();
                 let mut renderer = pool.write().unwrap().pop().unwrap_or_else(pre_renderer);
 
-                let (tx, rx) = tokio::sync::oneshot::channel();
-
                 let myself = self.clone();
                 spawn_platform(move || async move {
                     let mut virtual_dom = virtual_dom_factory();
 
                     let mut pre_body = WriteBuffer { buffer: Vec::new() };
                     if let Err(err) = wrapper.render_before_body(&mut *pre_body) {
-                        _ = tx.send(err);
+                        _ = into.start_send(Err(err));
                         return;
                     }
                     let pre_body = match String::from_utf8(pre_body.buffer) {
                         Ok(html) => html,
                         Err(err) => {
-                            _ = tx.send(dioxus_ssr::incremental::IncrementalRendererError::Other(
-                                Box::new(err),
+                            _ = into.start_send(Err(
+                                dioxus_ssr::incremental::IncrementalRendererError::Other(Box::new(
+                                    err,
+                                )),
                             ));
                             return;
                         }
                     };
 
                     let mut streaming_renderer = StreamingRenderer::new(pre_body, into);
+
+                    macro_rules! throw_error {
+                        ($e:expr) => {
+                            streaming_renderer.close_with_error($e);
+                            return;
+                        };
+                    }
 
                     // poll the future, which may call server_context()
                     tracing::info!("Rebuilding vdom");
@@ -116,22 +123,19 @@ impl SsrRendererPool {
                     // We need to include hydration ids in final the SSR render so that the client can hydrate the correct nodes
                     renderer.pre_render = true;
                     if let Err(err) = renderer.render_to(&mut post_streaming, &virtual_dom) {
-                        _ = tx.send(
-                            dioxus_ssr::incremental::IncrementalRendererError::RenderError(err),
+                        throw_error!(
+                            dioxus_ssr::incremental::IncrementalRendererError::RenderError(err)
                         );
-                        return;
                     }
                     if let Err(err) = wrapper.render_after_body(&mut *post_streaming) {
-                        _ = tx.send(err);
-                        return;
+                        throw_error!(err);
                     }
                     let post_streaming = match String::from_utf8(post_streaming.buffer) {
                         Ok(html) => html,
                         Err(err) => {
-                            _ = tx.send(dioxus_ssr::incremental::IncrementalRendererError::Other(
+                            throw_error!(dioxus_ssr::incremental::IncrementalRendererError::Other(
                                 Box::new(err),
                             ));
-                            return;
                         }
                     };
                     streaming_renderer.finish_streaming(post_streaming);
@@ -243,7 +247,7 @@ impl SSRState {
         cfg: &'a ServeConfig,
         virtual_dom_factory: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
         server_context: &'a DioxusServerContext,
-        into: Sender<String>,
+        into: Sender<Result<String, dioxus_ssr::incremental::IncrementalRendererError>>,
     ) -> Result<RenderFreshness, dioxus_ssr::incremental::IncrementalRendererError> {
         self.renderers
             .clone()

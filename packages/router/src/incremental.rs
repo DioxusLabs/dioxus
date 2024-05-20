@@ -47,7 +47,7 @@ where
                     render_route(
                         renderer,
                         route,
-                        &mut tokio::io::sink(),
+                        &mut std::io::sink(),
                         |vdom| {
                             Box::pin(async move {
                                 vdom.rebuild_in_place();
@@ -85,7 +85,7 @@ pub async fn render_route<
 where
     Rt: Routable,
     <Rt as FromStr>::Err: std::fmt::Display,
-    W: tokio::io::AsyncWrite + Unpin + Send,
+    W: std::io::Write + Unpin + Send,
 {
     #[derive(Clone)]
     struct RootProps<Rt>(Rt);

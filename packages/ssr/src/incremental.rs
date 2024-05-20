@@ -9,12 +9,12 @@ use rustc_hash::FxHasher;
 use std::{
     future::Future,
     hash::BuildHasherDefault,
+    io::Write,
     ops::{Deref, DerefMut},
     path::PathBuf,
     pin::Pin,
     time::{Duration, SystemTime},
 };
-use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 pub use crate::fs_cache::*;
 pub use crate::incremental_cfg::*;
@@ -74,7 +74,7 @@ impl IncrementalRenderer {
         &'a mut self,
         route: String,
         mut virtual_dom: VirtualDom,
-        output: &'a mut (impl AsyncWrite + Unpin + Send),
+        output: &'a mut (impl Write + Send),
         rebuild_with: impl FnOnce(&mut VirtualDom) -> Pin<Box<dyn Future<Output = ()> + '_>>,
         renderer: &'a R,
     ) -> Result<RenderFreshness, IncrementalRendererError> {
@@ -89,7 +89,7 @@ impl IncrementalRenderer {
         renderer.render_after_body(&mut *html_buffer)?;
         let html_buffer = html_buffer.buffer;
 
-        output.write_all(&html_buffer).await?;
+        output.write_all(&html_buffer)?;
 
         self.add_to_cache(route, html_buffer)
     }
@@ -132,7 +132,7 @@ impl IncrementalRenderer {
     async fn search_cache(
         &mut self,
         route: String,
-        output: &mut (impl AsyncWrite + Unpin + std::marker::Send),
+        output: &mut (impl Write + std::marker::Send),
     ) -> Result<Option<RenderFreshness>, IncrementalRendererError> {
         // check the memory cache
         if let Some((timestamp, cache_hit)) = self
@@ -146,13 +146,13 @@ impl IncrementalRenderer {
             if let Some(invalidate_after) = self.invalidate_after {
                 if elapsed.to_std().unwrap() < invalidate_after {
                     tracing::trace!("memory cache hit {:?}", route);
-                    output.write_all(cache_hit).await?;
+                    output.write_all(cache_hit)?;
                     let max_age = invalidate_after.as_secs();
                     return Ok(Some(RenderFreshness::new(age as u64, max_age)));
                 }
             } else {
                 tracing::trace!("memory cache hit {:?}", route);
-                output.write_all(cache_hit).await?;
+                output.write_all(cache_hit)?;
                 return Ok(Some(RenderFreshness::new_age(age as u64)));
             }
         }
@@ -160,9 +160,9 @@ impl IncrementalRenderer {
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(file_path) = self.find_file(&route) {
             if let Some(freshness) = file_path.freshness(self.invalidate_after) {
-                if let Ok(file) = tokio::fs::File::open(file_path.full_path).await {
-                    let mut file = tokio::io::BufReader::new(file);
-                    tokio::io::copy_buf(&mut file, output).await?;
+                if let Ok(file) = std::fs::File::open(file_path.full_path) {
+                    let mut file = std::io::BufReader::new(file);
+                    std::io::copy(&mut file, output)?;
                     tracing::trace!("file cache hit {:?}", route);
                     self.promote_memory_cache(&route);
                     return Ok(Some(freshness));
@@ -177,7 +177,7 @@ impl IncrementalRenderer {
         &mut self,
         route: String,
         virtual_dom_factory: impl FnOnce() -> VirtualDom,
-        output: &mut (impl AsyncWrite + Unpin + std::marker::Send),
+        output: &mut (impl Write + std::marker::Send),
         rebuild_with: impl FnOnce(&mut VirtualDom) -> Pin<Box<dyn Future<Output = ()> + '_>>,
         renderer: &R,
     ) -> Result<RenderFreshness, IncrementalRendererError> {

@@ -44,31 +44,25 @@
 /// ```
 use std::fmt::Display;
 
-use futures_channel::mpsc::{channel, Receiver, Sender};
+use futures_channel::mpsc::Sender;
 
 // Browsers tend not to like it if you nest your HTML forever. (chrome crashes at ~600 nested elements)
 // But there is less flickering if you nest html instead of clearing and re-rendering.
 // This value controls how many nested elements we can have before we clear and re-render.
 const MAX_REPLACE_DEPTH: usize = 50;
 
-pub struct StreamingRenderer {
+pub struct StreamingRenderer<E> {
     depth: usize,
     last_mount: usize,
-    channel: Sender<String>,
+    channel: Sender<Result<String, E>>,
     root: Mount,
 }
 
-impl StreamingRenderer {
-    /// Create a new streaming renderer with the given head
-    pub fn create(head: impl Display) -> (Self, Receiver<String>) {
-        let (tx, rx) = channel(100);
-        (Self::new(head, tx), rx)
-    }
-
+impl<E> StreamingRenderer<E> {
     /// Create a new streaming renderer with the given head that renders into a channel
-    pub fn new(before_body: impl Display, mut render_into: Sender<String>) -> Self {
+    pub fn new(before_body: impl Display, mut render_into: Sender<Result<String, E>>) -> Self {
         let start_html = format!(r#"{before_body}<div id="streaming-dioxus-root">"#);
-        _ = render_into.start_send(start_html);
+        _ = render_into.start_send(Ok(start_html));
 
         Self {
             depth: 0,
@@ -84,7 +78,7 @@ impl StreamingRenderer {
         if self.depth > MAX_REPLACE_DEPTH {
             self.clear();
             // Create a new root template (each template needs to be in a unique element so we create a wrapper div)
-            let _ = self.channel.start_send(r#"<div>"#.to_string());
+            let _ = self.channel.start_send(Ok(r#"<div>"#.to_string()));
             self.depth += 1;
             self.root = self.create_template(html);
         } else {
@@ -101,7 +95,7 @@ impl StreamingRenderer {
     // Reset the depth
     fn close(&mut self) {
         let close = "</div>".repeat(self.depth);
-        _ = self.channel.start_send(close);
+        _ = self.channel.start_send(Ok(close));
         self.depth = 0;
     }
 
@@ -116,12 +110,12 @@ impl StreamingRenderer {
         let id = mount.id;
         _ = self
             .channel
-            .start_send(format!(r#"<slot name="dioxus-{id}">"#));
+            .start_send(Ok(format!(r#"<slot name="dioxus-{id}">"#)));
         mount
     }
 
     fn end_slot(&mut self) {
-        _ = self.channel.start_send("</slot>".to_string());
+        _ = self.channel.start_send(Ok("</slot>".to_string()));
     }
 
     // Replace a slot with new content. The new content should be sent after this method is called
@@ -129,7 +123,7 @@ impl StreamingRenderer {
         let mounted_id = mount.id;
         _ = self
             .channel
-            .start_send(format!(r#"<div slot="dioxus-{mounted_id}">"#));
+            .start_send(Ok(format!(r#"<div slot="dioxus-{mounted_id}">"#)));
 
         // The div is still open, keep track of the depth
         self.depth += 1;
@@ -146,15 +140,15 @@ impl StreamingRenderer {
         // Start a div and a template. Each div can only have one template.
         _ = self
             .channel
-            .start_send(r#"<template shadowrootmode="open">"#.to_string());
+            .start_send(Ok(r#"<template shadowrootmode="open">"#.to_string()));
 
         // Fill the template with some default content that will be replaced when we fill in the slot (when you call replace on mount)
         let mount = self.start_slot();
-        _ = self.channel.start_send(html);
+        _ = self.channel.start_send(Ok(html));
         self.end_slot();
 
         // Only end the template with the default content
-        _ = self.channel.start_send("</template>".to_string());
+        _ = self.channel.start_send(Ok("</template>".to_string()));
         mount
     }
 
@@ -163,14 +157,19 @@ impl StreamingRenderer {
         // Clear the current slot and reset the depth
         self.clear();
         // Close the root div
-        _ = self.channel.start_send("</div>".to_string());
+        _ = self.channel.start_send(Ok("</div>".to_string()));
         // After suspense is done, we inject a tiny bit of javascript to clear out the useless html
-        let _ = self.channel.start_send(
+        let _ = self.channel.start_send(Ok(
             "<script>document.getElementById('streaming-dioxus-root').remove();</script>"
                 .to_string(),
-        );
+        ));
         // And then render the final html with all the hydration ids we need to render
-        let _ = self.channel.start_send(final_html);
+        let _ = self.channel.start_send(Ok(final_html));
+    }
+
+    /// Close the stream with an error
+    pub fn close_with_error(mut self, error: E) {
+        _ = self.channel.start_send(Err(error));
     }
 }
 
