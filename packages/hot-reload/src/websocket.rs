@@ -23,7 +23,7 @@ pub trait HotReloadRouterExt<S> {
     /// Register the web RSX hot reloading endpoint. This will enable hot reloading for your application in debug mode when you call [`dioxus_hot_reload::hot_reload_init`].
     ///
     /// # Example
-    /// ```rust
+    /// ```rust, no_run
     /// #![allow(non_snake_case)]
     /// use dioxus_hot_reload::{HotReloadReceiver, HotReloadRouterExt};
     /// use axum::Extension;
@@ -51,7 +51,7 @@ pub trait HotReloadRouterExt<S> {
     /// Like [`connect_hot_reload`] but connects to the hot reloading messages that the CLI sends in the desktop and fullstack platforms
     ///
     /// # Example
-    /// ```rust
+    /// ```rust, no_run
     /// #![allow(non_snake_case)]
     /// use dioxus_hot_reload::{HotReloadReceiver, HotReloadRouterExt};
     ///
@@ -65,7 +65,7 @@ pub trait HotReloadRouterExt<S> {
     ///             listener,
     ///             axum::Router::new()
     ///                 // Connect to hot reloading in debug mode
-    ///                 .forward_cli_hot_reload()
+    ///                 ..forward_cli_hot_reloading()
     ///                 .into_make_service(),
     ///         )
     ///         .await
