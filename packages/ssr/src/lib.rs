@@ -12,6 +12,7 @@ pub mod incremental;
 mod incremental_cfg;
 
 pub mod renderer;
+pub mod streaming;
 pub mod template;
 
 use dioxus_core::NoOpMutations;
