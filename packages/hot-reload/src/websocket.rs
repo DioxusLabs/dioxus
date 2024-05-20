@@ -65,7 +65,7 @@ pub trait HotReloadRouterExt<S> {
     ///             listener,
     ///             axum::Router::new()
     ///                 // Connect to hot reloading in debug mode
-    ///                 ..forward_cli_hot_reloading()
+    ///                 .forward_cli_hot_reloading()
     ///                 .into_make_service(),
     ///         )
     ///         .await

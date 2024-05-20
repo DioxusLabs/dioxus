@@ -26,9 +26,12 @@ ignore = { version = "0.4.19", optional = true }
 # hot reloading serve
 axum = { workspace = true, features = ["ws"], optional = true }
 tokio-stream = { version = "0.1.12", features = ["sync"], optional = true }
-futures-util = { workspace = true, optional = true }
+futures-util = { workspace = true, features = ["async-await-macro"], optional = true }
 tokio = { workspace = true, features = ["sync"], optional = true }
 tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
 
 [features]
 default = ["dioxus-html"]
