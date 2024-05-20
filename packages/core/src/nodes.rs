@@ -1,4 +1,4 @@
-use crate::innerlude::{RenderError, VProps};
+use crate::innerlude::{HiddenSSRProps, RenderError, VProps};
 use crate::{any_props::BoxedAnyProps, innerlude::ScopeState};
 use crate::{arena::ElementId, Element, Event};
 use crate::{
@@ -428,6 +428,13 @@ impl Template {
             .iter()
             .all(|root| matches!(root, Dynamic { .. } | DynamicText { .. }))
     }
+
+    /// Get a unique id for this template. If the id between two templates are different, the contents of the template may be different.
+    pub fn id(&self) -> usize {
+        // We compare the template name by pointer so that the id is different after hot reloading even if the name is the same
+        let ptr: *const str = self.name;
+        ptr as *const () as usize
+    }
 }
 
 /// A statically known node in a layout.
@@ -600,6 +607,14 @@ impl VComponent {
         let scope_id = dom.mounts.get(mount)?.mounted_dynamic_nodes[dynamic_node_index];
 
         dom.scopes.get(scope_id)
+    }
+
+    /// Check if this component should be rendered during server-side rendering
+    pub fn render_in_ssr(&self) -> bool {
+        match self.props.props().downcast_ref::<HiddenSSRProps>() {
+            Some(props) => props.render_in_ssr,
+            None => true,
+        }
     }
 }
 

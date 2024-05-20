@@ -59,6 +59,7 @@ use axum::{
     response::IntoResponse,
 };
 use dioxus_lib::prelude::VirtualDom;
+use futures_util::stream::StreamExt;
 use futures_util::Future;
 use http::header::*;
 
@@ -383,13 +384,23 @@ pub async fn render_handler_with_context<F: FnMut(&mut DioxusServerContext)>(
     let mut server_context = DioxusServerContext::new(parts.clone());
     inject_context(&mut server_context);
 
+    let (tx, rx) = futures_channel::mpsc::channel::<String>(100);
+
     match ssr_state
-        .render(url, &cfg, move || virtual_dom_factory(), &server_context)
+        .render(
+            url,
+            &cfg,
+            move || virtual_dom_factory(),
+            &server_context,
+            tx,
+        )
         .await
     {
-        Ok(rendered) => {
-            let crate::render::RenderResponse { html, freshness } = rendered;
-            let mut response = axum::response::Html::from(html).into_response();
+        Ok(freshness) => {
+            let mut response = axum::response::Html::from(Body::from_stream(
+                rx.map(Ok::<_, std::convert::Infallible>),
+            ))
+            .into_response();
             freshness.write(response.headers_mut());
             let headers = server_context.response_parts().unwrap().headers.clone();
             apply_request_parts_to_response(headers, &mut response);

@@ -59,7 +59,7 @@ impl Debug for ErrorBoundaryInner {
 }
 
 /// A trait for any type that can be downcast to a concrete type and implements Debug. This is automatically implemented for all types that implement Any + Debug.
-pub(crate) trait AnyError {
+pub trait AnyError {
     fn as_any(&self) -> &dyn Any;
     fn as_error(&self) -> &dyn Error;
 }

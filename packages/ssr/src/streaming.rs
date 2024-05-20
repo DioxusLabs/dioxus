@@ -61,24 +61,21 @@ pub struct StreamingRenderer {
 impl StreamingRenderer {
     /// Create a new streaming renderer with the given head
     pub fn create(head: impl Display) -> (Self, Receiver<String>) {
-        let start_html = format!(
-            r#"<!DOCTYPE html>
-<head>
-    {head}
-</head>
-<body><div id="streaming-dioxus-root">"#
-        );
-        let (mut tx, rx) = channel(1000);
-        _ = tx.start_send(start_html);
+        let (tx, rx) = channel(100);
+        (Self::new(head, tx), rx)
+    }
 
-        let renderer = Self {
+    /// Create a new streaming renderer with the given head that renders into a channel
+    pub fn new(before_body: impl Display, mut render_into: Sender<String>) -> Self {
+        let start_html = format!(r#"{before_body}<div id="streaming-dioxus-root">"#);
+        _ = render_into.start_send(start_html);
+
+        Self {
             depth: 0,
             last_mount: 0,
-            channel: tx,
+            channel: render_into,
             root: Mount { id: 0 },
-        };
-
-        (renderer, rx)
+        }
     }
 
     /// Render new content in the body. This will clear out the old content and replace it with the new content (without JS/WASM)
@@ -174,14 +171,6 @@ impl StreamingRenderer {
         );
         // And then render the final html with all the hydration ids we need to render
         let _ = self.channel.start_send(final_html);
-    }
-}
-
-impl Drop for StreamingRenderer {
-    fn drop(&mut self) {
-        self.close();
-        // Close the root div and body
-        _ = self.channel.start_send("</div></body>".to_string());
     }
 }
 

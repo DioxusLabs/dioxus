@@ -4,7 +4,9 @@ use std::future::Future;
 
 /// A future that resolves to a value.
 #[must_use = "Consider using `cx.spawn` to run a future without reading its value"]
-pub fn use_server_future<T, F>(_future: impl Fn() -> F + 'static) -> Option<Resource<T>>
+pub fn use_server_future<T, F>(
+    _future: impl Fn() -> F + 'static,
+) -> Result<Resource<T>, RenderError>
 where
     T: Serialize + DeserializeOwned + 'static,
     F: Future<Output = T> + 'static,
@@ -55,11 +57,8 @@ where
 
     // Suspend if the value isn't ready
     match resource.state().cloned() {
-        UseResourceState::Pending => {
-            suspend(resource.task());
-            None
-        }
-        _ => Some(resource),
+        UseResourceState::Pending => Err(suspend(resource.task()).unwrap_err()),
+        _ => Ok(resource),
     }
 }
 

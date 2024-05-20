@@ -308,10 +308,9 @@ impl VNode {
     }
 
     fn templates_are_different(&self, other: &VNode) -> bool {
-        let self_node_name = self.template.get().name;
-        let other_node_name = other.template.get().name;
-        // we want to re-create the node if the template name is different by pointer even if the value is the same so that we can detect when hot reloading changes the template
-        !std::ptr::eq(self_node_name, other_node_name)
+        let self_node_name = self.template.get().id();
+        let other_node_name = other.template.get().id();
+        self_node_name != other_node_name
     }
 
     pub(super) fn reclaim_attributes(

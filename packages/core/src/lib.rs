@@ -74,7 +74,7 @@ pub mod prelude {
         use_after_render, use_before_render, use_drop, use_error_boundary, use_hook,
         use_hook_with_cleanup, use_suspense_boundary, wait_for_next_render, with_owner, AnyValue,
         Attribute, CapturedError, Component, ComponentFunction, Context, Element, ErrorBoundary,
-        Event, EventHandler, Fragment, HasAttributes, IntoAttributeValue, IntoDynNode,
+        Event, EventHandler, Fragment, HasAttributes, HiddenSSR, IntoAttributeValue, IntoDynNode,
         OptionStringFromMarker, Properties, RenderError, Runtime, RuntimeGuard, ScopeId,
         ScopeState, SuperFrom, SuperInto, SuspendedFuture, SuspenseContext, Task, Template,
         TemplateAttribute, TemplateNode, VNode, VNodeInner, VirtualDom,

@@ -143,3 +143,149 @@ pub(crate) mod private {
 
     impl<T> Sealed for std::result::Result<T, RenderError> {}
 }
+
+#[doc = "Properties for the [`HiddenSSR`] component."]
+// #[derive(Props)]
+#[allow(non_camel_case_types)]
+#[derive(PartialEq, Clone)]
+pub struct HiddenSSRProps {
+    // #[props(default = false)]
+    pub(crate) render_in_ssr: bool,
+    children: Element,
+}
+impl HiddenSSRProps {
+    /**
+    Create a builder for building `HiddenSSRProps`.
+    On the builder, call `.render_in_ssr(...)`(optional), `.children(...)`(optional) to set the values of the fields.
+    Finally, call `.build()` to create the instance of `HiddenSSRProps`.
+                        */
+    #[allow(dead_code, clippy::type_complexity)]
+    pub fn builder() -> HiddenSSRPropsBuilder<((), ())> {
+        HiddenSSRPropsBuilder {
+            fields: ((), ()),
+            _phantom: ::core::default::Default::default(),
+        }
+    }
+}
+#[must_use]
+#[doc(hidden)]
+#[allow(dead_code, non_camel_case_types, non_snake_case)]
+pub struct HiddenSSRPropsBuilder<TypedBuilderFields> {
+    fields: TypedBuilderFields,
+    _phantom: (),
+}
+impl Properties for HiddenSSRProps
+where
+    Self: Clone,
+{
+    type Builder = HiddenSSRPropsBuilder<((), ())>;
+    fn builder() -> Self::Builder {
+        HiddenSSRProps::builder()
+    }
+    fn memoize(&mut self, new: &Self) -> bool {
+        let equal = self == new;
+        if !equal {
+            let new_clone = new.clone();
+            self.render_in_ssr = new_clone.render_in_ssr;
+            self.children = new_clone.children;
+        }
+        equal
+    }
+}
+#[doc(hidden)]
+#[allow(dead_code, non_camel_case_types, non_snake_case)]
+pub trait HiddenSSRPropsBuilder_Optional<T> {
+    fn into_value<F: FnOnce() -> T>(self, default: F) -> T;
+}
+impl<T> HiddenSSRPropsBuilder_Optional<T> for () {
+    fn into_value<F: FnOnce() -> T>(self, default: F) -> T {
+        default()
+    }
+}
+impl<T> HiddenSSRPropsBuilder_Optional<T> for (T,) {
+    fn into_value<F: FnOnce() -> T>(self, _: F) -> T {
+        self.0
+    }
+}
+#[allow(dead_code, non_camel_case_types, missing_docs)]
+impl<__children> HiddenSSRPropsBuilder<((), __children)> {
+    #[allow(clippy::type_complexity)]
+    pub fn render_in_ssr(
+        self,
+        render_in_ssr: bool,
+    ) -> HiddenSSRPropsBuilder<((bool,), __children)> {
+        let render_in_ssr = (render_in_ssr,);
+        let (_, children) = self.fields;
+        HiddenSSRPropsBuilder {
+            fields: (render_in_ssr, children),
+            _phantom: self._phantom,
+        }
+    }
+}
+#[doc(hidden)]
+#[allow(dead_code, non_camel_case_types, non_snake_case)]
+pub enum HiddenSSRPropsBuilder_Error_Repeated_field_render_in_ssr {}
+#[doc(hidden)]
+#[allow(dead_code, non_camel_case_types, missing_docs)]
+impl<__children> HiddenSSRPropsBuilder<((bool,), __children)> {
+    #[deprecated(note = "Repeated field render_in_ssr")]
+    #[allow(clippy::type_complexity)]
+    pub fn render_in_ssr(
+        self,
+        _: HiddenSSRPropsBuilder_Error_Repeated_field_render_in_ssr,
+    ) -> HiddenSSRPropsBuilder<((bool,), __children)> {
+        self
+    }
+}
+#[allow(dead_code, non_camel_case_types, missing_docs)]
+impl<__render_in_ssr> HiddenSSRPropsBuilder<(__render_in_ssr, ())> {
+    #[allow(clippy::type_complexity)]
+    pub fn children(
+        self,
+        children: Element,
+    ) -> HiddenSSRPropsBuilder<(__render_in_ssr, (Element,))> {
+        let children = (children,);
+        let (render_in_ssr, _) = self.fields;
+        HiddenSSRPropsBuilder {
+            fields: (render_in_ssr, children),
+            _phantom: self._phantom,
+        }
+    }
+}
+#[doc(hidden)]
+#[allow(dead_code, non_camel_case_types, non_snake_case)]
+pub enum HiddenSSRPropsBuilder_Error_Repeated_field_children {}
+#[doc(hidden)]
+#[allow(dead_code, non_camel_case_types, missing_docs)]
+impl<__render_in_ssr> HiddenSSRPropsBuilder<(__render_in_ssr, (Element,))> {
+    #[deprecated(note = "Repeated field children")]
+    #[allow(clippy::type_complexity)]
+    pub fn children(
+        self,
+        _: HiddenSSRPropsBuilder_Error_Repeated_field_children,
+    ) -> HiddenSSRPropsBuilder<(__render_in_ssr, (Element,))> {
+        self
+    }
+}
+#[allow(dead_code, non_camel_case_types, missing_docs)]
+impl<
+        __children: HiddenSSRPropsBuilder_Optional<Element>,
+        __render_in_ssr: HiddenSSRPropsBuilder_Optional<bool>,
+    > HiddenSSRPropsBuilder<(__render_in_ssr, __children)>
+{
+    pub fn build(self) -> HiddenSSRProps {
+        let (render_in_ssr, children) = self.fields;
+        let render_in_ssr = HiddenSSRPropsBuilder_Optional::into_value(render_in_ssr, || false);
+        let children = HiddenSSRPropsBuilder_Optional::into_value(children, || {
+            Element::Ok(VNode::placeholder())
+        });
+        HiddenSSRProps {
+            render_in_ssr,
+            children,
+        }
+    }
+}
+#[allow(non_snake_case)]
+pub fn HiddenSSR(mut __props: HiddenSSRProps) -> Element {
+    __props.children
+}

@@ -678,70 +678,82 @@ impl VirtualDom {
     #[instrument(skip(self), level = "trace", name = "VirtualDom::wait_for_suspense")]
     pub async fn wait_for_suspense(&mut self) {
         loop {
-            if self.runtime.suspended_tasks.get() == 0 {
+            if !self.suspended_tasks_remaining() {
                 break;
             }
 
-            // Wait for a work to be ready (IE new suspense leaves to pop up)
-            'wait_for_work: loop {
-                // Process all events - Scopes are marked dirty, etc
-                // Sometimes when wakers fire we get a slew of updates at once, so its important that we drain this completely
-                self.queue_events();
+            self.wait_for_suspense_work().await;
 
-                // Now that we have collected all queued work, we should check if we have any dirty scopes. If there are not, then we can poll any queued futures
-                if self.has_dirty_scopes() {
-                    break;
-                }
+            self.render_suspense_immediate();
+        }
+    }
 
-                {
-                    // Make sure we set the runtime since we're running user code
-                    let _runtime = RuntimeGuard::new(self.runtime.clone());
-                    // Next, run any queued tasks
-                    // We choose not to poll the deadline since we complete pretty quickly anyways
-                    while let Some(task) = self.pop_task() {
-                        // Then poll any tasks that might be pending
-                        let mut tasks = task.tasks_queued.into_inner();
-                        while let Some(task) = tasks.pop_front() {
-                            if self.runtime.task_runs_during_suspense(task) {
-                                let _ = self.runtime.handle_task_wakeup(task);
-                                // Running that task, may mark a scope higher up as dirty. If it does, return from the function early
-                                self.queue_events();
-                                if self.has_dirty_scopes() {
-                                    // requeue any remaining tasks
-                                    for task in tasks {
-                                        self.mark_task_dirty(task);
-                                    }
-                                    break 'wait_for_work;
+    pub fn suspended_tasks_remaining(&self) -> bool {
+        self.runtime.suspended_tasks.get() > 0
+    }
+
+    pub async fn wait_for_suspense_work(&mut self) {
+        // Wait for a work to be ready (IE new suspense leaves to pop up)
+        'wait_for_work: loop {
+            // Process all events - Scopes are marked dirty, etc
+            // Sometimes when wakers fire we get a slew of updates at once, so its important that we drain this completely
+            self.queue_events();
+
+            // Now that we have collected all queued work, we should check if we have any dirty scopes. If there are not, then we can poll any queued futures
+            if self.has_dirty_scopes() {
+                break;
+            }
+
+            {
+                // Make sure we set the runtime since we're running user code
+                let _runtime = RuntimeGuard::new(self.runtime.clone());
+                // Next, run any queued tasks
+                // We choose not to poll the deadline since we complete pretty quickly anyways
+                while let Some(task) = self.pop_task() {
+                    // Then poll any tasks that might be pending
+                    let mut tasks = task.tasks_queued.into_inner();
+                    while let Some(task) = tasks.pop_front() {
+                        if self.runtime.task_runs_during_suspense(task) {
+                            let _ = self.runtime.handle_task_wakeup(task);
+                            // Running that task, may mark a scope higher up as dirty. If it does, return from the function early
+                            self.queue_events();
+                            if self.has_dirty_scopes() {
+                                // requeue any remaining tasks
+                                for task in tasks {
+                                    self.mark_task_dirty(task);
                                 }
+                                break 'wait_for_work;
                             }
                         }
                     }
                 }
-
-                self.wait_for_event().await;
             }
 
-            // Render whatever work needs to be rendered, unlocking new futures and suspense leaves
-            let _runtime = RuntimeGuard::new(self.runtime.clone());
-            while let Some(work) = self.pop_work() {
-                // Then, poll any tasks that might be pending in the scope
-                for task in work.tasks {
-                    // During suspense, we only want to run tasks that are suspended
-                    if self.runtime.task_runs_during_suspense(task) {
-                        let _ = self.runtime.handle_task_wakeup(task);
-                    }
+            self.wait_for_event().await;
+        }
+    }
+
+    pub fn render_suspense_immediate(&mut self) {
+        // Render whatever work needs to be rendered, unlocking new futures and suspense leaves
+        let _runtime = RuntimeGuard::new(self.runtime.clone());
+        while let Some(work) = self.pop_work() {
+            // Then, poll any tasks that might be pending in the scope
+            for task in work.tasks {
+                // During suspense, we only want to run tasks that are suspended
+                if self.runtime.task_runs_during_suspense(task) {
+                    let _ = self.runtime.handle_task_wakeup(task);
                 }
+            }
 
-                self.queue_events();
+            self.queue_events();
 
-                // If the scope is dirty, run the scope and get the mutations
-                if work.rerun_scope {
-                    let new_nodes = self.run_scope(work.scope.id);
+            // If the scope is dirty, run the scope and get the mutations
+            if work.rerun_scope {
+                let new_nodes = self.run_scope(work.scope.id);
 
-                    // if the render was successful, diff the new node
-                    if new_nodes.node.is_ok() {
-                        self.diff_scope(&mut NoOpMutations, work.scope.id, new_nodes.into());
-                    }
+                // if the render was successful, diff the new node
+                if new_nodes.node.is_ok() {
+                    self.diff_scope(&mut NoOpMutations, work.scope.id, new_nodes.into());
                 }
             }
         }

@@ -2,8 +2,10 @@
 use crate::{render::dioxus_core::NoOpMutations, server_context::with_server_context};
 use dioxus_ssr::{
     incremental::{RenderFreshness, WrapBody},
+    streaming::StreamingRenderer,
     Renderer,
 };
+use futures_channel::mpsc::Sender;
 use std::future::Future;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -39,64 +41,107 @@ enum SsrRendererPool {
 
 impl SsrRendererPool {
     async fn render_to(
-        &self,
+        self: Arc<Self>,
         cfg: &ServeConfig,
         route: String,
         virtual_dom_factory: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
         server_context: &DioxusServerContext,
-    ) -> Result<(RenderFreshness, String), dioxus_ssr::incremental::IncrementalRendererError> {
+        into: Sender<String>,
+    ) -> Result<RenderFreshness, dioxus_ssr::incremental::IncrementalRendererError> {
         let wrapper = FullstackRenderer {
             cfg: cfg.clone(),
             server_context: server_context.clone(),
         };
-        match self {
+        match &*self {
             Self::Renderer(pool) => {
                 let server_context = server_context.clone();
                 let mut renderer = pool.write().unwrap().pop().unwrap_or_else(pre_renderer);
 
                 let (tx, rx) = tokio::sync::oneshot::channel();
 
+                let myself = self.clone();
                 spawn_platform(move || async move {
-                    let mut vdom = virtual_dom_factory();
-                    let mut to = WriteBuffer { buffer: Vec::new() };
+                    let mut virtual_dom = virtual_dom_factory();
+
+                    let mut pre_body = WriteBuffer { buffer: Vec::new() };
+                    if let Err(err) = wrapper.render_before_body(&mut *pre_body) {
+                        _ = tx.send(err);
+                        return;
+                    }
+                    let pre_body = match String::from_utf8(pre_body.buffer) {
+                        Ok(html) => html,
+                        Err(err) => {
+                            _ = tx.send(dioxus_ssr::incremental::IncrementalRendererError::Other(
+                                Box::new(err),
+                            ));
+                            return;
+                        }
+                    };
+
+                    let mut streaming_renderer = StreamingRenderer::new(pre_body, into);
+
                     // poll the future, which may call server_context()
                     tracing::info!("Rebuilding vdom");
                     with_server_context(server_context.clone(), || {
-                        block_in_place(|| vdom.rebuild(&mut NoOpMutations));
+                        block_in_place(|| virtual_dom.rebuild(&mut NoOpMutations));
                     });
-                    ProvideServerContext::new(vdom.wait_for_suspense(), server_context).await;
+                    virtual_dom.rebuild(&mut NoOpMutations);
+
+                    // While we are streaming, there is no need to include hydration ids in the SSR render
+                    renderer.pre_render = false;
+
+                    loop {
+                        ProvideServerContext::new(
+                            virtual_dom.wait_for_suspense_work(),
+                            server_context.clone(),
+                        )
+                        .await;
+
+                        with_server_context(server_context.clone(), || {
+                            block_in_place(|| virtual_dom.render_suspense_immediate());
+                        });
+
+                        if virtual_dom.suspended_tasks_remaining() {
+                            let html = renderer.render(&virtual_dom);
+                            streaming_renderer.render(html);
+                        } else {
+                            break;
+                        }
+                    }
                     tracing::info!("Suspense resolved");
 
-                    if let Err(err) = wrapper.render_before_body(&mut *to) {
-                        let _ = tx.send(Err(err));
-                        return;
-                    }
-                    if let Err(err) = renderer.render_to(&mut to, &vdom) {
-                        let _ = tx.send(Err(
+                    // After suspense is done, we render one last time to get the final html that can be hydrated and then close the body
+                    let mut post_streaming = WriteBuffer { buffer: Vec::new() };
+
+                    // We need to include hydration ids in final the SSR render so that the client can hydrate the correct nodes
+                    renderer.pre_render = true;
+                    if let Err(err) = renderer.render_to(&mut post_streaming, &virtual_dom) {
+                        _ = tx.send(
                             dioxus_ssr::incremental::IncrementalRendererError::RenderError(err),
-                        ));
+                        );
                         return;
                     }
-                    if let Err(err) = wrapper.render_after_body(&mut *to) {
-                        let _ = tx.send(Err(err));
+                    if let Err(err) = wrapper.render_after_body(&mut *post_streaming) {
+                        _ = tx.send(err);
                         return;
                     }
-                    match String::from_utf8(to.buffer) {
-                        Ok(html) => {
-                            let _ = tx.send(Ok((renderer, RenderFreshness::now(None), html)));
-                        }
+                    let post_streaming = match String::from_utf8(post_streaming.buffer) {
+                        Ok(html) => html,
                         Err(err) => {
-                            _ = tx.send(Err(
-                                dioxus_ssr::incremental::IncrementalRendererError::Other(Box::new(
-                                    err,
-                                )),
+                            _ = tx.send(dioxus_ssr::incremental::IncrementalRendererError::Other(
+                                Box::new(err),
                             ));
+                            return;
                         }
+                    };
+                    streaming_renderer.finish_streaming(post_streaming);
+
+                    if let Self::Renderer(pool) = &*myself {
+                        pool.write().unwrap().push(renderer);
                     }
                 });
-                let (renderer, freshness, html) = rx.await.unwrap()?;
-                pool.write().unwrap().push(renderer);
-                Ok((freshness, html))
+
+                Ok(RenderFreshness::now(None))
             }
             Self::Incremental(pool) => {
                 let mut renderer =
@@ -152,9 +197,9 @@ impl SsrRendererPool {
                         }
                     }
                 });
-                let (freshness, html) = rx.await.unwrap()?;
+                let (freshness, _) = rx.await.unwrap()?;
 
-                Ok((freshness, html))
+                Ok(freshness)
             }
         }
     }
@@ -198,15 +243,12 @@ impl SSRState {
         cfg: &'a ServeConfig,
         virtual_dom_factory: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
         server_context: &'a DioxusServerContext,
-    ) -> Result<RenderResponse, dioxus_ssr::incremental::IncrementalRendererError> {
-        let ServeConfig { .. } = cfg;
-
-        let (freshness, html) = self
-            .renderers
-            .render_to(cfg, route, virtual_dom_factory, server_context)
-            .await?;
-
-        Ok(RenderResponse { html, freshness })
+        into: Sender<String>,
+    ) -> Result<RenderFreshness, dioxus_ssr::incremental::IncrementalRendererError> {
+        self.renderers
+            .clone()
+            .render_to(cfg, route, virtual_dom_factory, server_context, into)
+            .await
     }
 }
 
@@ -231,11 +273,6 @@ impl dioxus_ssr::incremental::WrapBody for FullstackRenderer {
         &self,
         to: &mut R,
     ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
-        // serialize the props
-        // TODO: restore props serialization
-        // crate::html_storage::serialize::encode_props_in_element(&self.cfg.props, to).map_err(
-        //     |err| dioxus_ssr::incremental::IncrementalRendererError::Other(Box::new(err)),
-        // )?;
         // serialize the server state
         crate::html_storage::serialize::encode_in_element(
             &*self.server_context.html_data().map_err(|_| {
@@ -306,25 +343,6 @@ impl dioxus_ssr::incremental::WrapBody for FullstackRenderer {
         to.write_all(index.post_main.as_bytes())?;
 
         Ok(())
-    }
-}
-
-/// A rendered response from the server.
-#[derive(Debug)]
-pub struct RenderResponse {
-    pub(crate) html: String,
-    pub(crate) freshness: RenderFreshness,
-}
-
-impl RenderResponse {
-    /// Get the rendered HTML.
-    pub fn html(&self) -> &str {
-        &self.html
-    }
-
-    /// Get the freshness of the rendered HTML.
-    pub fn freshness(&self) -> RenderFreshness {
-        self.freshness
     }
 }
 
