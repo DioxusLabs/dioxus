@@ -27,6 +27,30 @@ pub struct CallBody {
     pub tempalte_idx: Cell<usize>,
 }
 
+impl Parse for CallBody {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let body = CallBody {
+            body: input.parse::<TemplateBody>()?,
+            ifmt_idx: Cell::new(0),
+            tempalte_idx: Cell::new(1),
+        };
+
+        body.cascade_hotreload_info(&body.body.roots);
+
+        Ok(body)
+    }
+}
+
+impl ToTokens for CallBody {
+    fn to_tokens(&self, out_tokens: &mut TokenStream2) {
+        if self.body.is_empty() {
+            return out_tokens.append_all(quote! { None });
+        }
+
+        self.body.to_tokens(out_tokens);
+    }
+}
+
 impl CallBody {
     /// With the entire knowledge of the macro call, wire up location information for anything hotreloading
     /// specific. It's a little bit simpler just to have a global id per callbody than to try and track it
@@ -42,6 +66,15 @@ impl CallBody {
     /// We need to make sure to wire up:
     /// - subtemplate IDs
     /// - ifmt IDs
+    /// - dynamic node IDs
+    /// - dynamic attribute IDs
+    /// - paths for dynamic nodes and attributes
+    ///
+    /// Lots of wiring!
+    ///
+    /// However, here, we only need to wire up ifmt and template IDs since TemplateBody will handle the rest.
+    ///
+    /// This is better though since we can save the relevant data on the structures themselves.
     fn cascade_hotreload_info(&self, nodes: &Vec<BodyNode>) {
         for node in nodes.iter() {
             match node {
@@ -76,7 +109,7 @@ impl CallBody {
                 }
 
                 BodyNode::ForLoop(floop) => {
-                    floop.body.template_idx.set(dbg!(self.next_template_idx()));
+                    floop.body.template_idx.set(self.next_template_idx());
                     self.cascade_hotreload_info(&floop.body.roots);
                 }
 
@@ -98,29 +131,5 @@ impl CallBody {
         let idx = self.tempalte_idx.get();
         self.tempalte_idx.set(idx + 1);
         idx
-    }
-}
-
-impl Parse for CallBody {
-    fn parse(input: ParseStream) -> Result<Self> {
-        let body = CallBody {
-            body: input.parse::<TemplateBody>()?,
-            ifmt_idx: Cell::new(0),
-            tempalte_idx: Cell::new(1),
-        };
-
-        body.cascade_hotreload_info(&body.body.roots);
-
-        Ok(body)
-    }
-}
-
-impl ToTokens for CallBody {
-    fn to_tokens(&self, out_tokens: &mut TokenStream2) {
-        if self.body.is_empty() {
-            return out_tokens.append_all(quote! { None });
-        }
-
-        self.body.to_tokens(out_tokens);
     }
 }

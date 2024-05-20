@@ -1,4 +1,4 @@
-use dioxus_rsx::{hot_reload::Empty, CallBody, DynamicContext};
+use dioxus_rsx::{hot_reload::Empty, CallBody};
 use proc_macro2::{Span, TokenStream};
 use syn::Item;
 
@@ -19,7 +19,7 @@ fn rsx_writeout_snapshot() {
 
     assert_eq!(el.attributes.len(), 5);
 
-    let mut context = DynamicContext::default();
+    // let mut context = DynamicContext::default();
     // let o = context.render_static_node(&body.roots[0]);
 
     // hi!!!!!
@@ -115,7 +115,9 @@ fn callbody_ctx() {
                     "Something {Body4}"
                 }
             }
-            // something-cool {}
+            something-cool {
+                "Something {cool}ish"
+            }
             if true {
                 div {
                     "hi! {cool}"
@@ -132,7 +134,7 @@ fn callbody_ctx() {
     dbg!(cb.tempalte_idx.get());
     dbg!(cb.ifmt_idx.get());
 
-    let body = dbg!(cb.body);
+    let template = cb.body.to_template::<Empty>();
 
     // for attr in body.attr_paths.iter() {
     //     dbg!(body.get_dyn_attr(&attr));

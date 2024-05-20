@@ -8,26 +8,19 @@ use crate::location::CallerLocation;
 #[derive(Clone, Debug)]
 pub struct RawExpr {
     pub expr: TokenStream2,
-    pub location: CallerLocation,
-}
-
-impl PartialEq for RawExpr {
-    fn eq(&self, other: &Self) -> bool {
-        self.expr.to_string() == other.expr.to_string()
-    }
-}
-
-impl Eq for RawExpr {}
-
-impl hash::Hash for RawExpr {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        self.expr.to_string().hash(state);
-    }
+    pub dyn_idx: CallerLocation,
 }
 
 impl Parse for RawExpr {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        todo!()
+        // Pull the brace and then parse the innards as TokenStream2 - not expr
+        let content;
+        syn::braced!(content in input);
+
+        Ok(Self {
+            expr: content.parse()?,
+            dyn_idx: CallerLocation::default(),
+        })
     }
 }
 
@@ -42,5 +35,19 @@ impl ToTokens for RawExpr {
                 ___nodes
             }
         })
+    }
+}
+
+impl PartialEq for RawExpr {
+    fn eq(&self, other: &Self) -> bool {
+        self.expr.to_string() == other.expr.to_string()
+    }
+}
+
+impl Eq for RawExpr {}
+
+impl hash::Hash for RawExpr {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        self.expr.to_string().hash(state);
     }
 }

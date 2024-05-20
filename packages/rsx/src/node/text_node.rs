@@ -6,25 +6,6 @@ pub struct TextNode {
     pub dyn_idx: CallerLocation,
 }
 
-impl TextNode {
-    pub fn is_static(&self) -> bool {
-        self.input.is_static()
-    }
-
-    pub fn to_template_node(&self) -> TemplateNode {
-        match self.is_static() {
-            true => {
-                let text = self.input.source.as_ref().unwrap();
-                let text = intern(text.value().as_str());
-                TemplateNode::Text { text }
-            }
-            false => TemplateNode::DynamicText {
-                id: self.dyn_idx.get(),
-            },
-        }
-    }
-}
-
 impl Parse for TextNode {
     fn parse(input: ParseStream) -> Result<Self> {
         Ok(Self {
@@ -46,10 +27,10 @@ impl ToTokens for TextNode {
             // If the text is dynamic, we actually create a signal of the formatted segments
             // Crazy, right?
             let segments = txt.as_htotreloaded();
-            let idx = txt.hr_idx.idx.get() + 1;
+            let idx = txt.hr_idx.get() + 1;
 
             let rendered_segments = txt.segments.iter().filter_map(|s| match s {
-                Segment::Literal(lit) => None,
+                Segment::Literal(_) => None,
                 Segment::Formatted(fmt) => {
                     // just render as a format_args! call
                     Some(quote! {
@@ -80,6 +61,25 @@ impl ToTokens for TextNode {
                     ))
                 }))
             })
+        }
+    }
+}
+
+impl TextNode {
+    pub fn is_static(&self) -> bool {
+        self.input.is_static()
+    }
+
+    pub fn to_template_node(&self) -> TemplateNode {
+        match self.is_static() {
+            true => {
+                let text = self.input.source.as_ref().unwrap();
+                let text = intern(text.value().as_str());
+                TemplateNode::Text { text }
+            }
+            false => TemplateNode::DynamicText {
+                id: self.dyn_idx.get(),
+            },
         }
     }
 }

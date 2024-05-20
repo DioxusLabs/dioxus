@@ -8,7 +8,7 @@ pub struct IfChain {
     pub then_branch: TemplateBody,
     pub else_if_branch: Option<Box<IfChain>>,
     pub else_branch: Option<TemplateBody>,
-    pub location: CallerLocation,
+    pub dyn_idx: CallerLocation,
 }
 
 impl IfChain {
@@ -26,7 +26,7 @@ impl IfChain {
 
     pub fn to_template_node(&self) -> TemplateNode {
         TemplateNode::Dynamic {
-            id: self.location.idx.get(),
+            id: self.dyn_idx.get(),
         }
     }
 }
@@ -59,7 +59,7 @@ impl Parse for IfChain {
             then_branch,
             else_if_branch,
             else_branch,
-            location: CallerLocation::default(),
+            dyn_idx: CallerLocation::default(),
         })
     }
 }

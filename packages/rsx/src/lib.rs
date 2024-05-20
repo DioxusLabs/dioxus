@@ -17,18 +17,19 @@
 #[macro_use]
 mod errors;
 mod body;
+mod diagnostics;
 pub mod hotreload;
 mod ifmt;
-mod ifmt2;
 mod location;
 mod node;
 mod rsx_call;
 
-pub(crate) mod context;
+// pub(crate) mod context;
 
 // Re-export the namespaces into each other
 pub use body::TemplateBody;
-pub use context::{CallBodyContext, DynamicContext};
+// pub use context::{CallBodyContexta, DynamicContext};
+pub use diagnostics::Diagnostics;
 pub use ifmt::*;
 pub use node::*;
 pub use rsx_call::*;

@@ -12,16 +12,16 @@ use std::{cell::Cell, hash::Hash};
 /// in testing (like snapshot testing). So, we just need an ID for each of these items, hence this struct.
 #[derive(PartialEq, Eq, Clone, Debug, Default)]
 pub struct CallerLocation {
-    pub idx: Cell<usize>,
+    idx: Cell<Option<usize>>,
 }
 
 impl CallerLocation {
     pub fn set(&self, idx: usize) {
-        self.idx.set(idx);
+        self.idx.set(Some(idx));
     }
 
     pub fn get(&self) -> usize {
-        self.idx.get()
+        self.idx.get().unwrap_or(usize::MAX)
     }
 }
 

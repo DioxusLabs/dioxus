@@ -243,6 +243,107 @@ Like so:
     }
 }
 
+impl ToTokens for Element {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let el = self;
+
+        let el_name = &el.name;
+        let ns = |name| match el_name {
+            ElementName::Ident(i) => quote! { dioxus_elements::#i::#name },
+            ElementName::Custom(_) => quote! { None },
+        };
+
+        let static_attrs = el
+            .merged_attributes
+            .iter()
+            .map(|attr| {
+                // Rendering static attributes requires a bit more work than just a dynamic attrs
+                match attr.as_static_str_literal() {
+                    // If it's static, we'll take this little optimization
+                    Some((name, value)) => {
+                        let value = value.to_static().unwrap();
+
+                        let ns = match name {
+                            ElementAttrName::BuiltIn(name) => ns(quote!(#name.1)),
+                            ElementAttrName::Custom(_) => quote!(None),
+                        };
+
+                        let name = match (el_name, name) {
+                            (ElementName::Ident(_), ElementAttrName::BuiltIn(_)) => {
+                                quote! { #el_name::#name.0 }
+                            }
+                            _ => {
+                                //hmmmm I think we could just totokens this, but the to_string might be inserting quotes
+                                let as_string = name.to_string();
+                                quote! { #as_string }
+                            }
+                        };
+
+                        quote! {
+                            dioxus_core::TemplateAttribute::Static {
+                                name: #name,
+                                namespace: #ns,
+                                value: #value,
+
+                                // todo: we don't diff these so we never apply the volatile flag
+                                // volatile: dioxus_elements::#el_name::#name.2,
+                            },
+                        }
+                    }
+
+                    // Otherwise, we'll just render it as a dynamic attribute
+                    // This will also insert the attribute into the dynamic_attributes list to assemble the final template
+                    _ => {
+                        //
+                        todo!()
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
+
+        // Render either the static child or the dynamic child
+        let children = el.children.iter().map(|c| match c {
+            BodyNode::Element(el) => quote! { #el },
+            BodyNode::Text(text) if text.is_static() => {
+                let text = text.input.to_static().unwrap();
+                quote! { dioxus_core::TemplateNode::Text { text: #text } }
+            }
+            BodyNode::Text(text) => {
+                let id = text.dyn_idx.get();
+                quote! { dioxus_core::TemplateNode::DynamicText { id: #id } }
+            }
+            BodyNode::ForLoop(floop) => {
+                let id = floop.dyn_idx.get();
+                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
+            }
+            BodyNode::RawExpr(exp) => {
+                let id = exp.dyn_idx.get();
+                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
+            }
+            BodyNode::Component(exp) => {
+                let id = exp.dyn_idx.get();
+                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
+            }
+            BodyNode::IfChain(exp) => {
+                let id = exp.dyn_idx.get();
+                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
+            }
+        });
+
+        let ns = ns(quote!(NAME_SPACE));
+        let el_name = el_name.tag_name();
+
+        tokens.append_all(quote! {
+            dioxus_core::TemplateNode::Element {
+                tag: #el_name,
+                namespace: #ns,
+                attrs: &[ #(#static_attrs)* ],
+                children: &[ #(#children),* ],
+            }
+        })
+    }
+}
+
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum ElementName {
     Ident(Ident),

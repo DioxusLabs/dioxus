@@ -1,7 +1,5 @@
 use self::location::CallerLocation;
-
 use super::*;
-
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
 use syn::{
@@ -12,6 +10,7 @@ use syn::{
 };
 
 mod attribute;
+mod block;
 mod component;
 mod element;
 mod forloop;
@@ -20,6 +19,7 @@ mod raw_expr;
 mod text_node;
 
 pub use attribute::*;
+pub use block::*;
 pub use body::*;
 pub use component::*;
 pub use element::*;
@@ -30,99 +30,23 @@ pub use text_node::*;
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum BodyNode {
+    /// div {}
     Element(Element),
+
+    /// "text {formatted}"
     Text(TextNode),
+
+    /// {expr}
     RawExpr(RawExpr),
+
+    /// Component {}
     Component(Component),
+
+    /// for item in items {}
     ForLoop(ForLoop),
+
+    /// if cond {} else if cond {} (else {}?)
     IfChain(IfChain),
-}
-
-impl BodyNode {
-    pub fn is_litstr(&self) -> bool {
-        matches!(self, BodyNode::Text { .. })
-    }
-
-    pub fn children(&self) -> &[BodyNode] {
-        match self {
-            BodyNode::Element(el) => &el.children,
-            BodyNode::Component(comp) => &comp.children.roots,
-            _ => panic!("Children not available for this node"),
-        }
-    }
-
-    /// Convert this BodyNode into a TemplateNode.
-    ///
-    /// dioxus-core uses this to understand templates at compiletime
-    pub fn to_template_node<Ctx: HotReloadingContext>(&self) -> TemplateNode {
-        match self {
-            BodyNode::Element(el) => {
-                let rust_name = el.name.to_string();
-                let (tag, namespace) =
-                    Ctx::map_element(&rust_name).unwrap_or((intern(rust_name.as_str()), None));
-
-                TemplateNode::Element {
-                    children: el
-                        .children
-                        .iter()
-                        .map(|c| c.to_template_node::<Ctx>())
-                        .collect::<Vec<_>>()
-                        .leak(),
-                    tag,
-                    namespace,
-                    attrs: &[],
-                }
-            }
-            BodyNode::Text(text) if text.is_static() => {
-                let text = text.input.source.as_ref().unwrap();
-                let text = intern(text.value().as_str());
-                TemplateNode::Text { text }
-            }
-            BodyNode::Text(text) => TemplateNode::DynamicText {
-                id: text.dyn_idx.get(),
-            },
-            BodyNode::RawExpr(exp) => TemplateNode::Dynamic {
-                id: exp.location.idx.get(),
-            },
-            BodyNode::Component(comp) => TemplateNode::Dynamic {
-                id: comp.dyn_idx.idx.get(),
-            },
-            BodyNode::ForLoop(floop) => floop.to_template_node(),
-            BodyNode::IfChain(chain) => chain.to_template_node(),
-        }
-    }
-
-    pub fn span(&self) -> Span {
-        match self {
-            BodyNode::Element(el) => el.name.span(),
-            BodyNode::Component(component) => component.name.span(),
-            BodyNode::Text(text) => text.input.source.span(),
-            BodyNode::RawExpr(exp) => exp.expr.span(),
-            BodyNode::ForLoop(fl) => fl.for_token.span(),
-            BodyNode::IfChain(f) => f.if_token.span(),
-        }
-    }
-
-    pub(crate) fn set_location_idx(&self, idx: usize) {
-        match self {
-            BodyNode::IfChain(chain) => {
-                chain.location.idx.set(idx);
-            }
-            BodyNode::ForLoop(floop) => {
-                floop.dyn_idx.idx.set(idx);
-            }
-            BodyNode::Component(comp) => {
-                comp.dyn_idx.idx.set(idx);
-            }
-            BodyNode::Text(text) => {
-                text.dyn_idx.idx.set(idx);
-            }
-            BodyNode::RawExpr(expr) => {
-                expr.location.idx.set(idx);
-            }
-            BodyNode::Element(_) => todo!(),
-        }
-    }
 }
 
 impl Parse for BodyNode {
@@ -153,7 +77,7 @@ impl Parse for BodyNode {
         if stream.peek(Token![match]) {
             return Ok(BodyNode::RawExpr(RawExpr {
                 expr: stream.parse::<Expr>()?.to_token_stream(),
-                location: CallerLocation::default(),
+                dyn_idx: CallerLocation::default(),
             }));
         }
 
@@ -161,7 +85,7 @@ impl Parse for BodyNode {
         if stream.peek(token::Brace) {
             return Ok(BodyNode::RawExpr(RawExpr {
                 expr: stream.parse::<Expr>()?.to_token_stream(),
-                location: CallerLocation::default(),
+                dyn_idx: CallerLocation::default(),
             }));
         }
 
@@ -218,10 +142,7 @@ impl Parse for BodyNode {
 impl ToTokens for BodyNode {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
-            BodyNode::Element(_) => {
-                unreachable!("Elements are never dynamic and should never be queued to be rendered")
-            }
-
+            BodyNode::Element(ela) => ela.to_tokens(tokens),
             BodyNode::RawExpr(exp) => exp.to_tokens(tokens),
             BodyNode::Text(txt) => txt.to_tokens(tokens),
             BodyNode::ForLoop(floop) => floop.to_tokens(tokens),
@@ -231,14 +152,123 @@ impl ToTokens for BodyNode {
     }
 }
 
-pub(crate) fn parse_buffer_as_braced_children(
-    input: &syn::parse::ParseBuffer<'_>,
-) -> Result<(Brace, Vec<BodyNode>)> {
-    let content;
-    let brace_token = braced!(content in input);
-    let mut then_branch = vec![];
-    while !content.is_empty() {
-        then_branch.push(content.parse()?);
+impl BodyNode {
+    /// Convert this BodyNode into a TemplateNode.
+    ///
+    /// dioxus-core uses this to understand templates at compiletime
+    pub fn to_template_node<Ctx: HotReloadingContext>(&self) -> TemplateNode {
+        match self {
+            BodyNode::Element(el) => {
+                let rust_name = el.name.to_string();
+
+                let (tag, namespace) =
+                    Ctx::map_element(&rust_name).unwrap_or((intern(rust_name.as_str()), None));
+
+                let mut static_attr_array = Vec::new();
+
+                for attr in &el.merged_attributes {
+                    let template_attr = match attr.as_static_str_literal() {
+                        // For static attributes, we don't need to pull in any mapping or anything
+                        // We can just build them directly
+                        Some((name, value)) => {
+                            let value = value.source.as_ref().unwrap();
+                            let attribute_name_rust = name.to_string();
+
+                            let (name, namespace) =
+                                Ctx::map_attribute(&rust_name, &attribute_name_rust)
+                                    .unwrap_or((intern(attribute_name_rust.as_str()), None));
+
+                            let static_attr = TemplateAttribute::Static {
+                                name,
+                                namespace,
+                                value: intern(value.value().as_str()),
+                            };
+
+                            static_attr
+                        }
+
+                        // For dynamic attributes, we need to check the mapping to see if that mapping exists
+                        // todo: one day we could generate new dynamic attributes on the fly if they're a literal,
+                        // or something sufficiently serializable
+                        //  (ie `checked`` being a bool and bools being interpretable)
+                        //
+                        // For now, just give up if that attribute doesn't exist in the mapping
+                        None => {
+                            let id = usize::MAX;
+                            // let id = attr.dyn_idx.get();
+                            TemplateAttribute::Dynamic { id }
+                        }
+                    };
+
+                    static_attr_array.push(template_attr);
+                }
+
+                TemplateNode::Element {
+                    children: el
+                        .children
+                        .iter()
+                        .map(|c| c.to_template_node::<Ctx>())
+                        .collect::<Vec<_>>()
+                        .leak(),
+                    tag,
+                    namespace,
+                    attrs: &[],
+                }
+            }
+            BodyNode::Text(text) if text.is_static() => {
+                let text = text.input.source.as_ref().unwrap();
+                let text = intern(text.value().as_str());
+                TemplateNode::Text { text }
+            }
+            BodyNode::Text(text) => TemplateNode::DynamicText {
+                id: text.dyn_idx.get(),
+            },
+            BodyNode::RawExpr(exp) => TemplateNode::Dynamic {
+                id: exp.dyn_idx.get(),
+            },
+            BodyNode::Component(comp) => TemplateNode::Dynamic {
+                id: comp.dyn_idx.get(),
+            },
+            BodyNode::ForLoop(floop) => TemplateNode::Dynamic {
+                id: floop.dyn_idx.get(),
+            },
+            BodyNode::IfChain(chain) => TemplateNode::Dynamic {
+                id: chain.dyn_idx.get(),
+            },
+        }
     }
-    Ok((brace_token, then_branch))
+
+    pub(crate) fn set_location_idx(&self, idx: usize) {
+        match self {
+            BodyNode::IfChain(chain) => chain.dyn_idx.set(idx),
+            BodyNode::ForLoop(floop) => floop.dyn_idx.set(idx),
+            BodyNode::Component(comp) => comp.dyn_idx.set(idx),
+            BodyNode::Text(text) => text.dyn_idx.set(idx),
+            BodyNode::RawExpr(expr) => expr.dyn_idx.set(idx),
+            BodyNode::Element(_) => todo!(),
+        }
+    }
+
+    pub fn is_litstr(&self) -> bool {
+        matches!(self, BodyNode::Text { .. })
+    }
+
+    pub fn span(&self) -> Span {
+        match self {
+            BodyNode::Element(el) => el.name.span(),
+            BodyNode::Component(component) => component.name.span(),
+            BodyNode::Text(text) => text.input.source.span(),
+            BodyNode::RawExpr(exp) => exp.expr.span(),
+            BodyNode::ForLoop(fl) => fl.for_token.span(),
+            BodyNode::IfChain(f) => f.if_token.span(),
+        }
+    }
+
+    pub fn children(&self) -> &[BodyNode] {
+        match self {
+            BodyNode::Element(el) => &el.children,
+            BodyNode::Component(comp) => &comp.children.roots,
+            _ => panic!("Children not available for this node"),
+        }
+    }
 }

@@ -27,10 +27,9 @@
 use std::collections::HashMap;
 
 use crate::{
-    intern, AttributeType, Component, ComponentField, ContentField, ElementAttrName, ForLoop,
-    IfChain, IfmtInput, TemplateBody, TextNode,
+    intern, Component, ElementAttrName, ForLoop, IfChain, IfmtInput, TemplateBody, TextNode,
 };
-use crate::{BodyNode, CallBody, DynamicContext, HotReloadingContext};
+use crate::{BodyNode, CallBody, HotReloadingContext};
 use dioxus_core::{
     prelude::{FmtSegment, FmtedSegments, Template},
     TemplateAttribute, TemplateNode,
@@ -435,10 +434,9 @@ impl HotReload {
         b: &Component,
     ) -> Option<bool> {
         let matches = a.name == b.name
-            && a.prop_gen_args == b.prop_gen_args
-            && a.key == b.key
+            && a.generics == b.generics
             // && a.fields == b.fields
-            && a.manual_props == b.manual_props
+            // && a.manual_props == b.manual_props
             // todo: always just pass in dummy children so we can hotreload them
             // either both empty or both non-empty
             && (!a.children.is_empty() && !b.children.is_empty()
@@ -466,13 +464,16 @@ impl HotReload {
         // Those will have plumbing in the hotreloading code
         // All others just get diffed via tokensa
         for (idx, (old_attr, new_attr)) in a.fields.iter().zip(b.fields.iter()).enumerate() {
-            match (&old_attr.content, &new_attr.content) {
+            match (&old_attr.value, &new_attr.value) {
                 (_, _) if old_attr.name != new_attr.name => return None,
-                (ContentField::Formatted(left), ContentField::Formatted(right)) => {
-                    // try to hotreload this formatted string
-                    _ = self.hotreload_ifmt(&left, &right);
-                }
+
+                // (ContentField::Formatted(left), ContentField::Formatted(right)) => {
+                //     // try to hotreload this formatted string
+                //     _ = self.hotreload_ifmt(&left, &right);
+                // }
                 _ => {
+                    todo!();
+
                     if old_attr != new_attr {
                         return None;
                     }

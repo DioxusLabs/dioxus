@@ -35,7 +35,7 @@ impl Parse for ForLoop {
 impl ForLoop {
     pub fn to_template_node(&self) -> TemplateNode {
         TemplateNode::Dynamic {
-            id: self.dyn_idx.idx.get(),
+            id: self.dyn_idx.get(),
         }
     }
 }

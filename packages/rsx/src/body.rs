@@ -78,11 +78,84 @@ pub struct TemplateBody {
     pub roots: Vec<BodyNode>,
     pub template_idx: CallerLocation,
     pub brace: Option<syn::token::Brace>,
-    pub implicit_key: Option<IfmtInput>,
 
     pub node_paths: Vec<NodePath>,
     pub attr_paths: Vec<AttributePath>,
     current_path: Vec<u8>,
+}
+
+impl Parse for TemplateBody {
+    /// Parse the nodes of the callbody as `Body`.
+    fn parse(input: ParseStream) -> Result<Self> {
+        let mut nodes = Vec::new();
+
+        let mut brace_token = None;
+
+        // peek the brace if it exists
+        // some bodies have braces, some don't, depends
+        if input.peek(syn::token::Brace) {
+            let content;
+            brace_token = Some(braced!(content in input));
+            while !content.is_empty() {
+                nodes.push(content.parse::<BodyNode>()?);
+            }
+        } else {
+            while !input.is_empty() {
+                nodes.push(input.parse::<BodyNode>()?);
+            }
+        }
+
+        let mut body = Self::from_nodes(nodes);
+        body.brace = brace_token;
+
+        Ok(body)
+    }
+}
+
+/// Our ToTokens impl here just defers to rendering a template out like any other `Body`.
+/// This is because the parsing phase filled in all the additional metadata we need
+impl ToTokens for TemplateBody {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        // If there are no roots, this is an empty template, so just return None
+        if self.roots.is_empty() {
+            return tokens.append_all(quote! { Option::<dioxus_core::VNode>::None });
+        }
+
+        // If we have an implicit key, then we need to write its tokens
+        let key_tokens = match self.implicit_key() {
+            Some(tok) => quote! { Some( #tok.to_string() ) },
+            None => quote! { None },
+        };
+
+        let TemplateBody { roots, .. } = self;
+        let index = self.template_idx.get();
+        let dynamic_nodes = self.node_paths.iter().map(|path| self.get_dyn_node(path));
+        let dyn_attr_printer = self.attr_paths.iter().map(|path| self.get_dyn_attr(path));
+        let node_paths = self.node_paths.iter().map(|it| quote!(&[#(#it),*]));
+        let attr_paths = self.attr_paths.iter().map(|it| quote!(&[#(#it),*]));
+
+        tokens.append_all(quote! {
+            Some({
+                static TEMPLATE: dioxus_core::Template = dioxus_core::Template {
+                    name: concat!( file!(), ":", line!(), ":", column!(), ":", #index ) ,
+                    roots: &[ #( #roots ),* ],
+                    node_paths: &[ #(#node_paths),* ],
+                    attr_paths: &[ #(#attr_paths),* ],
+                };
+
+                {
+                    // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
+                    let __vnodes = dioxus_core::VNode::new(
+                        #key_tokens,
+                        TEMPLATE,
+                        Box::new([ #( #dynamic_nodes),* ]),
+                        Box::new([ #(#dyn_attr_printer),* ]),
+                    );
+                    __vnodes
+                }
+            })
+        });
+    }
 }
 
 impl TemplateBody {
@@ -93,7 +166,6 @@ impl TemplateBody {
             node_paths: Vec::new(),
             attr_paths: Vec::new(),
             brace: None,
-            implicit_key: None,
 
             current_path: Vec::new(),
         };
@@ -160,11 +232,11 @@ impl TemplateBody {
         // Assign the TemplateNode::Dynamic index to the node
         let idx = self.node_paths.len();
         match node {
-            BodyNode::IfChain(chain) => chain.location.idx.set(idx),
-            BodyNode::ForLoop(floop) => floop.dyn_idx.idx.set(idx),
-            BodyNode::Component(comp) => comp.dyn_idx.idx.set(idx),
-            BodyNode::Text(text) => text.dyn_idx.idx.set(idx),
-            BodyNode::RawExpr(expr) => expr.location.idx.set(idx),
+            BodyNode::IfChain(chain) => chain.dyn_idx.set(idx),
+            BodyNode::ForLoop(floop) => floop.dyn_idx.set(idx),
+            BodyNode::Component(comp) => comp.dyn_idx.set(idx),
+            BodyNode::Text(text) => text.dyn_idx.set(idx),
+            BodyNode::RawExpr(expr) => expr.dyn_idx.set(idx),
             BodyNode::Element(_) => todo!(),
         }
 
@@ -176,19 +248,33 @@ impl TemplateBody {
     ///
     /// Note that this will leak memory! We explicitly call `leak` on the vecs to match the format of
     /// the `Template` struct.
-    fn to_template<Ctx: HotReloadingContext>(&self) -> Template {
+    pub fn to_template<Ctx: HotReloadingContext>(&self) -> Template {
         let roots = self
             .roots
             .iter()
             .map(|node| node.to_template_node::<Ctx>())
             .collect::<Vec<_>>();
 
-        let template = Template {
+        Template {
             name: "placeholder",
-            roots: roots.leak(),
-            node_paths: todo!(),
-            attr_paths: todo!(),
-        };
+            roots: intern(roots.as_slice()),
+            node_paths: intern(
+                self.node_paths
+                    .clone()
+                    .into_iter()
+                    .map(|path| intern(path.as_slice()))
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+            ),
+            attr_paths: intern(
+                self.attr_paths
+                    .clone()
+                    .into_iter()
+                    .map(|path| intern(path.as_slice()))
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+            ),
+        }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -196,12 +282,13 @@ impl TemplateBody {
     }
 
     fn implicit_key(&self) -> Option<IfmtInput> {
-        let key = match self.roots.first() {
+        match self.roots.first() {
             Some(BodyNode::Element(el)) if self.roots.len() == 1 => el.key.clone(),
-            Some(BodyNode::Component(comp)) if self.roots.len() == 1 => comp.key().cloned(),
+            Some(BodyNode::Component(comp)) if self.roots.len() == 1 => {
+                comp.get_key().and_then(|f| f.ifmt().cloned())
+            }
             _ => None,
-        };
-        key
+        }
     }
 
     pub fn get_dyn_node(&self, path: &[u8]) -> &BodyNode {
@@ -225,79 +312,5 @@ impl TemplateBody {
 
     pub fn dynamic_nodes(&self) -> impl Iterator<Item = &BodyNode> {
         self.node_paths.iter().map(|path| self.get_dyn_node(path))
-    }
-}
-
-impl Parse for TemplateBody {
-    /// Parse the nodes of the callbody as `Body`.
-    fn parse(input: ParseStream) -> Result<Self> {
-        let mut nodes = Vec::new();
-
-        let mut brace_token = None;
-
-        // peak the brace if it exists
-        // some bodies have braces, some don't, depends
-        if input.peek(syn::token::Brace) {
-            let content;
-            brace_token = Some(braced!(content in input));
-            while !content.is_empty() {
-                nodes.push(content.parse::<BodyNode>()?);
-            }
-        } else {
-            while !input.is_empty() {
-                nodes.push(input.parse::<BodyNode>()?);
-            }
-        }
-
-        let mut body = Self::from_nodes(nodes);
-        body.brace = brace_token;
-
-        Ok(body)
-    }
-}
-
-/// Our ToTokens impl here just defers to rendering a template out like any other `Body`.
-/// This is because the parsing phase filled in all the additional metadata we need
-impl ToTokens for TemplateBody {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        // If there are no roots, this is an empty template, so just return None
-        if self.roots.is_empty() {
-            return tokens.append_all(quote! { Option::<dioxus_core::VNode>::None });
-        }
-
-        // If we have an implicit key, then we need to write its tokens
-        let key_tokens = match self.implicit_key() {
-            Some(tok) => quote! { Some( #tok.to_string() ) },
-            None => quote! { None },
-        };
-
-        let TemplateBody { roots, .. } = self;
-        let index = self.template_idx.idx.get();
-        let dynamic_nodes = self.node_paths.iter().map(|path| self.get_dyn_node(path));
-        let dyn_attr_printer = self.attr_paths.iter().map(|path| self.get_dyn_attr(path));
-        let node_paths = self.node_paths.iter().map(|it| quote!(&[#(#it),*]));
-        let attr_paths = self.attr_paths.iter().map(|it| quote!(&[#(#it),*]));
-
-        tokens.append_all(quote! {
-            Some({
-                static TEMPLATE: dioxus_core::Template = dioxus_core::Template {
-                    name: concat!( file!(), ":", line!(), ":", column!(), ":", #index ) ,
-                    roots: &[ #( #roots ),* ],
-                    node_paths: &[ #(#node_paths),* ],
-                    attr_paths: &[ #(#attr_paths),* ],
-                };
-
-                {
-                    // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
-                    let __vnodes = dioxus_core::VNode::new(
-                        #key_tokens,
-                        TEMPLATE,
-                        Box::new([ #( #dynamic_nodes),* ]),
-                        Box::new([ #(#dyn_attr_printer),* ]),
-                    );
-                    __vnodes
-                }
-            })
-        });
     }
 }

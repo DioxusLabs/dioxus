@@ -326,10 +326,51 @@ impl ToTokens for FormattedSegmentType {
 impl Parse for IfmtInput {
     fn parse(input: ParseStream) -> Result<Self> {
         let input: LitStr = input.parse()?;
-        println!("raw span: {:?}", input.span());
         let input_str = input.value();
         let mut ifmt = IfmtInput::from_str(&input_str)?;
         ifmt.source = Some(input);
         Ok(ifmt)
     }
+}
+
+fn hmm() {
+    // // place down the signal stuff
+
+    // let segments = txt.as_htotreloaded();
+
+    // let rendered_segments = txt.segments.iter().filter_map(|s| match s {
+    //     Segment::Literal(lit) => None,
+    //     Segment::Formatted(fmt) => {
+    //         // just render as a format_args! call
+    //         Some(quote! {
+    //             format!("{}", #fmt)
+    //         })
+    //     }
+    // });
+
+    // let old_idx = self.location.idx.get();
+    // let cur_idx = (old_idx) * 100000 + 1 + idx;
+
+    // quote! {
+    //     {
+    //         // Create a signal of the formatted segments
+    //         // htotreloading will find this via its location and then update the signal
+    //         static __SIGNAL: GlobalSignal<FmtedSegments> = GlobalSignal::with_key(|| #segments, {
+    //             concat!(
+    //                 file!(),
+    //                 ":",
+    //                 line!(),
+    //                 ":",
+    //                 column!(),
+    //                 ":",
+    //                 #cur_idx
+    //             )
+    //         });
+
+    //         // render the signal and subscribe the component to its changes
+    //         __SIGNAL.with(|s| s.render_with(
+    //             vec![ #(#rendered_segments),* ]
+    //         ))
+    //     }
+    // }
 }
