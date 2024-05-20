@@ -17,6 +17,10 @@ asset_dir = "public"
 # hot reload by default
 hot_reload = true
 
+[web]
+# The level wasm-opt should target. z is the smallest. 4 is the fastest.
+wasm_opt_level = "z"
+
 [web.app]
 
 # HTML title tag content

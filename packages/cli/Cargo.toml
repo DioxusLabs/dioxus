@@ -101,6 +101,7 @@ env_logger = "0.11.3"
 
 tracing-subscriber = { version = "0.3.18", features = ["std", "env-filter"] }
 tracing = { workspace = true }
+wasm-opt = "0.116.1"
 
 # on maco, we need to specify the vendored feature on ssl when cross compiling
 [target.'cfg(target_os = "macos")'.dependencies]
