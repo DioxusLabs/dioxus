@@ -17,9 +17,9 @@ asset_dir = "public"
 # hot reload by default
 hot_reload = true
 
-[web]
+[web.wasm_opt]
 # The level wasm-opt should target. z is the smallest. 4 is the fastest.
-wasm_opt_level = "z"
+level = "4"
 
 [web.app]
 

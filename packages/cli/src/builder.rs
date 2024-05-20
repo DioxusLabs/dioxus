@@ -225,7 +225,7 @@ pub fn build_web(
             "wasm-opt reduced WASM size from {} to {} ({:2}%)",
             old_size,
             new_size,
-            (old_size as f64 / new_size as f64) * 100.0
+            (new_size as f64 - old_size as f64) / old_size as f64 * 100.0
         );
     }
 

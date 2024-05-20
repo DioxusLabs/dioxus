@@ -306,12 +306,11 @@ pub struct WasmOptConfig {
     pub debug: bool,
 }
 
-/// The wasm-opt level to use for release web builds [default: z]
+/// The wasm-opt level to use for release web builds [default: 4]
 #[derive(Default, Debug, Copy, Clone, Serialize, Deserialize)]
 pub enum WasmOptLevel {
     /// Optimize aggressively for size
     #[serde(rename = "z")]
-    #[default]
     Z,
     /// Optimize for size
     #[serde(rename = "s")]
@@ -330,6 +329,7 @@ pub enum WasmOptLevel {
     Three,
     /// Optimize aggressively for speed
     #[serde(rename = "4")]
+    #[default]
     Four,
 }
 
