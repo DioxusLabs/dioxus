@@ -568,7 +568,7 @@ pub fn gen_page(config: &CrateConfig, manifest: Option<&AssetManifest>, serve: b
     }
 
     let base_path = match &config.dioxus_config.web.app.base_path {
-        Some(path) => path,
+        Some(path) => path.trim_matches('/'),
         None => ".",
     };
     let app_name = &config.dioxus_config.application.name;

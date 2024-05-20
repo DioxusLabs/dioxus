@@ -86,7 +86,7 @@ pub struct ConfigOptsServe {
     pub port: u16,
 
     /// Open the app in the default browser [default: true]
-    #[clap(long, default_value_t = true)]
+    #[clap(long, default_value_t = false)]
     #[serde(default)]
     pub open: bool,
 

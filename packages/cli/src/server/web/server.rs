@@ -55,8 +55,8 @@ pub async fn setup_router(config: CrateConfig, hot_reload: HotReloadState) -> Re
         .and_then(move |response| async move { Ok(no_cache(file_service_config, response)) })
         .service(ServeDir::new(config.out_dir()));
 
-    // Setup websocket
-    let mut router = Router::new().connect_hot_reload();
+    // Setup router
+    let mut router = Router::new();
 
     // Setup proxy
     for proxy_config in config.dioxus_config.web.proxy {
@@ -76,7 +76,7 @@ pub async fn setup_router(config: CrateConfig, hot_reload: HotReloadState) -> Re
     router = if let Some(base_path) = config.dioxus_config.web.app.base_path.clone() {
         let base_path = format!("/{}", base_path.trim_matches('/'));
         Router::new()
-            .route(&base_path, axum::routing::any_service(router))
+            .nest(&base_path, router)
             .fallback(get(move || {
                 let base_path = base_path.clone();
                 async move { format!("Outside of the base path: {}", base_path) }
@@ -84,6 +84,9 @@ pub async fn setup_router(config: CrateConfig, hot_reload: HotReloadState) -> Re
     } else {
         router
     };
+
+    // Setup websocket
+    router = router.connect_hot_reload();
 
     // Setup routes
     router = router
