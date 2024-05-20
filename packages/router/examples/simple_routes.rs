@@ -160,7 +160,7 @@ fn Route3(dynamic: String) -> Element {
                     }
                 }
                 else {
-                    None
+                    Ok(VNode::placeholder())
                 }
             }
             Err(err) => {
