@@ -293,7 +293,6 @@ fn WithInline(text: String) -> Element {
     }
 }
 
-#[component]
 fn Label<T: Display + Clone + PartialEq + 'static>(text: T) -> Element {
     rsx! {
         p { "{text}" }
