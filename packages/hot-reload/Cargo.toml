@@ -23,7 +23,18 @@ execute = { version = "0.2.11", optional = true }
 once_cell = { version = "1.17.0", optional = true }
 ignore = { version = "0.4.19", optional = true }
 
+# hot reloading serve
+axum = { workspace = true, features = ["ws"], optional = true }
+tokio-stream = { version = "0.1.12", features = ["sync"], optional = true }
+futures-util = { workspace = true, features = ["async-await-macro"], optional = true }
+tokio = { workspace = true, features = ["sync"], optional = true }
+tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+
 [features]
 default = ["dioxus-html"]
 custom_file_watcher = ["ignore", "chrono", "notify", "execute", "once_cell", "ignore"]
 file_watcher = ["custom_file_watcher", "dioxus-html/hot-reload-context"]
+serve = ["axum", "tokio-stream", "futures-util", "tokio", "file_watcher"]

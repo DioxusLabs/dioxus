@@ -65,7 +65,7 @@ impl Build {
                 // argument is explicitly set to `None`.
                 crate::builder::build_desktop(&crate_config, false, self.build.skip_assets, None)?
             }
-            Platform::Fullstack => {
+            Platform::Fullstack | Platform::StaticGeneration => {
                 // Fullstack mode must be built with web configs on the desktop
                 // (server) binary as well as the web binary
                 let _config = AssetConfigDropGuard::new();

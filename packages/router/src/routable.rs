@@ -233,23 +233,6 @@ type SiteMapFlattened<'a> = FlatMap<
     fn(&SiteMapSegment) -> Vec<Vec<SegmentType>>,
 >;
 
-fn seg_strs_to_route<T>(segs_maybe: &Option<Vec<&str>>) -> Option<T>
-where
-    T: Routable,
-{
-    if let Some(str) = seg_strs_to_str(segs_maybe) {
-        T::from_str(&str).ok()
-    } else {
-        None
-    }
-}
-
-fn seg_strs_to_str(segs_maybe: &Option<Vec<&str>>) -> Option<String> {
-    segs_maybe
-        .as_ref()
-        .map(|segs| String::from('/') + &segs.join("/"))
-}
-
 /// Something that can be:
 /// 1. Converted from a route.
 /// 2. Converted to a route.
@@ -354,16 +337,20 @@ pub trait Routable: FromStr + Display + Clone + 'static {
     /// Example static route: `#[route("/static/route")]`
     fn static_routes() -> Vec<Self> {
         Self::flatten_site_map()
-            .filter_map(|route| {
-                let route_if_static = &route
-                    .iter()
-                    .map(|segment| match segment {
-                        SegmentType::Static(s) => Some(*s),
-                        _ => None,
-                    })
-                    .collect::<Option<Vec<_>>>();
+            .filter_map(|segments| {
+                let mut route = String::new();
+                for segment in segments.iter() {
+                    match segment {
+                        SegmentType::Static(s) => {
+                            route.push('/');
+                            route.push_str(s)
+                        }
+                        SegmentType::Child => {}
+                        _ => return None,
+                    }
+                }
 
-                seg_strs_to_route(route_if_static)
+                route.parse().ok()
             })
             .collect()
     }
@@ -411,6 +398,40 @@ pub enum SegmentType {
     CatchAll(&'static str),
     /// A child router.
     Child,
+}
+
+impl SegmentType {
+    /// Try to convert this segment into a static segment.
+    pub fn to_static(&self) -> Option<&'static str> {
+        match self {
+            SegmentType::Static(s) => Some(*s),
+            _ => None,
+        }
+    }
+
+    /// Try to convert this segment into a dynamic segment.
+    pub fn to_dynamic(&self) -> Option<&'static str> {
+        match self {
+            SegmentType::Dynamic(s) => Some(*s),
+            _ => None,
+        }
+    }
+
+    /// Try to convert this segment into a catch all segment.
+    pub fn to_catch_all(&self) -> Option<&'static str> {
+        match self {
+            SegmentType::CatchAll(s) => Some(*s),
+            _ => None,
+        }
+    }
+
+    /// Try to convert this segment into a child segment.
+    pub fn to_child(&self) -> Option<()> {
+        match self {
+            SegmentType::Child => Some(()),
+            _ => None,
+        }
+    }
 }
 
 impl Display for SegmentType {

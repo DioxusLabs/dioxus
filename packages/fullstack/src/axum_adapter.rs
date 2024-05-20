@@ -15,9 +15,11 @@
 //!         tokio::runtime::Runtime::new()
 //!             .unwrap()
 //!             .block_on(async move {
-//!                 let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
-//!                 axum::Server::bind(&addr)
-//!                     .serve(
+//!                 let listener = tokio::net::TcpListener::bind("127.0.0.01:8080")
+//!                     .await
+//!                     .unwrap();
+//!                 axum::serve(
+//!                         listener,
 //!                         axum::Router::new()
 //!                             // Server side render the application, serve static assets, and register server functions
 //!                             .serve_dioxus_application("", ServerConfig::new(app, ()))
@@ -91,30 +93,6 @@ pub trait DioxusRouterExt<S> {
     /// ```
     fn register_server_fns(self) -> Self;
 
-    /// Register the web RSX hot reloading endpoint. This will enable hot reloading for your application in debug mode when you call [`dioxus_hot_reload::hot_reload_init`].
-    ///
-    /// # Example
-    /// ```rust
-    /// #![allow(non_snake_case)]
-    /// use dioxus_fullstack::prelude::*;
-    ///
-    /// #[tokio::main]
-    /// async fn main() {
-    ///     hot_reload_init!();
-    ///     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
-    ///     axum::Server::bind(&addr)
-    ///         .serve(
-    ///             axum::Router::new()
-    ///                 // Connect to hot reloading in debug mode
-    ///                 .connect_hot_reload()
-    ///                 .into_make_service(),
-    ///         )
-    ///         .await
-    ///         .unwrap();
-    /// }
-    /// ```
-    fn connect_hot_reload(self) -> Self;
-
     /// Serves the static WASM for your Dioxus application (except the generated index.html).
     ///
     /// # Example
@@ -151,7 +129,7 @@ pub trait DioxusRouterExt<S> {
         Self: Sized;
 
     /// Serves the Dioxus application. This will serve a complete server side rendered application.
-    /// This will serve static assets, server render the application, register server functions, and intigrate with hot reloading.
+    /// This will serve static assets, server render the application, register server functions, and integrate with hot reloading.
     ///
     /// # Example
     /// ```rust
@@ -263,44 +241,22 @@ where
             let ssr_state = SSRState::new(&cfg);
 
             // Add server functions and render index.html
-            self.serve_static_assets(cfg.assets_path.clone())
+            let mut server = self
+                .serve_static_assets(cfg.assets_path.clone())
                 .await
-                .connect_hot_reload()
-                .register_server_fns()
-                .fallback(get(render_handler).with_state((
-                    cfg,
-                    Arc::new(build_virtual_dom),
-                    ssr_state,
-                )))
-        }
-    }
+                .register_server_fns();
 
-    fn connect_hot_reload(self) -> Self {
-        #[cfg(all(debug_assertions, feature = "hot-reload"))]
-        {
-            self.nest(
-                "/_dioxus",
-                Router::new()
-                    .route(
-                        "/ws",
-                        get(|ws: axum::extract::WebSocketUpgrade| async {
-                            ws.on_upgrade(|mut ws| async move {
-                                use axum::extract::ws::Message;
-                                let _ = ws.send(Message::Text("connected".into())).await;
-                                loop {
-                                    if ws.recv().await.is_none() {
-                                        break;
-                                    }
-                                }
-                            })
-                        }),
-                    )
-                    .route("/hot_reload", get(hot_reload_handler)),
-            )
-        }
-        #[cfg(not(all(debug_assertions, feature = "hot-reload")))]
-        {
-            self
+            #[cfg(all(feature = "hot-reload", debug_assertions))]
+            {
+                use dioxus_hot_reload::HotReloadRouterExt;
+                server = server.forward_cli_hot_reloading();
+            }
+
+            server.fallback(get(render_handler).with_state((
+                cfg,
+                Arc::new(build_virtual_dom),
+                ssr_state,
+            )))
         }
     }
 }
@@ -440,51 +396,6 @@ fn report_err<E: std::fmt::Display>(e: E) -> Response<axum::body::Body> {
         .status(StatusCode::INTERNAL_SERVER_ERROR)
         .body(body::Body::new(format!("Error: {}", e)))
         .unwrap()
-}
-
-/// A handler for Dioxus web hot reload websocket. This will send the updated static parts of the RSX to the client when they change.
-#[cfg(all(debug_assertions, feature = "hot-reload"))]
-pub async fn hot_reload_handler(ws: axum::extract::WebSocketUpgrade) -> impl IntoResponse {
-    use axum::extract::ws::Message;
-    use futures_util::StreamExt;
-
-    let state = crate::hot_reload::spawn_hot_reload().await;
-
-    ws.on_upgrade(move |mut socket| async move {
-        println!("🔥 Hot Reload WebSocket connected");
-        {
-            // update any rsx calls that changed before the websocket connected.
-            {
-                println!("🔮 Finding updates since last compile...");
-                let templates_read = state.templates.read().await;
-
-                for template in &*templates_read {
-                    if socket
-                        .send(Message::Text(serde_json::to_string(&template).unwrap()))
-                        .await
-                        .is_err()
-                    {
-                        return;
-                    }
-                }
-            }
-            println!("finished");
-        }
-
-        let mut rx =
-            tokio_stream::wrappers::WatchStream::from_changes(state.message_receiver.clone());
-
-        while let Some(change) = rx.next().await {
-            if let Some(template) = change {
-                let template = { serde_json::to_string(&template).unwrap() };
-                if socket.send(Message::Text(template)).await.is_err() {
-                    break;
-                };
-            }
-        }
-
-        println!("😳 Hot Reload WebSocket disconnected");
-    })
 }
 
 /// A handler for Dioxus server functions. This will run the server function and return the result.
