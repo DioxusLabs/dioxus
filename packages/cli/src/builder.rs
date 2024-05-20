@@ -656,7 +656,7 @@ pub fn gen_page(config: &CrateConfig, manifest: Option<&AssetManifest>, serve: b
         html = html.replace(
             "</head",
             &format!(
-                r#"<link rel="preload" href="/{base_path}/assets/dioxus/{app_name}_bg.wasm" as="script">
+                r#"<link rel="preload" href="/{base_path}/assets/dioxus/{app_name}_bg.wasm" as="fetch" type="application/wasm" crossorigin="">
                     <link rel="preload" href="/{base_path}/assets/dioxus/{app_name}.js" as="script">
     </head"#
             ),

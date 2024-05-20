@@ -31,12 +31,15 @@ serde = { version = "1.0.136", optional = true }
 dioxus-hot-reload = { workspace = true, optional = true }
 
 [features]
-default = ["macro", "html", "hot-reload", "signals", "hooks", "launch"]
+default = ["macro", "html", "hot-reload", "signals", "hooks", "launch", "mounted", "file_engine", "eval"]
 signals = ["dioxus-signals"]
 macro = ["dioxus-core-macro"]
 html = ["dioxus-html"]
 hooks = ["dioxus-hooks"]
-hot-reload = ["dioxus-hot-reload"]
+hot-reload = ["dioxus-hot-reload", "dioxus-web?/hot_reload"]
+mounted = ["dioxus-web?/mounted"]
+file_engine = ["dioxus-web?/file_engine"]
+eval = ["dioxus-web?/eval"]
 
 launch = ["dioxus-config-macro"]
 router = ["dioxus-router"]

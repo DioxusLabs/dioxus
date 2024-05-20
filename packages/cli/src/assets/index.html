@@ -13,7 +13,9 @@
     <link
       rel="preload"
       href="/{base_path}/assets/dioxus/{app_name}_bg.wasm"
-      as="script"
+      as="fetch"
+      type="application/wasm"
+      crossorigin=""
     />
     {style_include}
   </head>
