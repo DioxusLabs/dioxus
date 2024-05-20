@@ -1,3 +1,4 @@
+#![allow(clippy::empty_docs)]
 #![doc = include_str!("../README.md")]
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
@@ -19,6 +20,9 @@ pub mod unified_bindings;
 
 #[cfg(feature = "sledgehammer")]
 pub use unified_bindings::*;
+
+#[cfg(feature = "eval")]
+pub mod eval;
 
 // Common bindings for minimal usage.
 #[cfg(all(feature = "minimal_bindings", feature = "webonly"))]

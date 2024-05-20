@@ -208,6 +208,8 @@ where
         self
     }
 
+    // TODO: This is a breaking change, but we should probably serve static assets from a different directory than dist where the server executable is located
+    // This would prevent issues like https://github.com/DioxusLabs/dioxus/issues/2327
     fn serve_static_assets(
         mut self,
         assets_path: impl Into<std::path::PathBuf>,
@@ -216,11 +218,6 @@ where
 
         let assets_path = assets_path.into();
         async move {
-            #[cfg(not(debug_assertions))]
-            if let Err(err) = crate::assets::pre_compress_files(assets_path.clone()).await {
-                tracing::error!("Failed to pre-compress static assets: {}", err);
-            }
-
             // Serve all files in dist folder except index.html
             let dir = std::fs::read_dir(&assets_path).unwrap_or_else(|e| {
                 panic!(
@@ -247,9 +244,9 @@ where
                     .join("/");
                 let route = format!("/{}", route);
                 if path.is_dir() {
-                    self = self.nest_service(&route, ServeDir::new(path).precompressed_gzip());
+                    self = self.nest_service(&route, ServeDir::new(path).precompressed_br());
                 } else {
-                    self = self.nest_service(&route, ServeFile::new(path).precompressed_gzip());
+                    self = self.nest_service(&route, ServeFile::new(path).precompressed_br());
                 }
             }
 

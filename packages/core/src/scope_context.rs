@@ -265,6 +265,11 @@ impl Scope {
         id
     }
 
+    /// Queue an effect to run after the next render
+    pub fn queue_effect(&self, f: impl FnOnce() + 'static) {
+        Runtime::with(|rt| rt.queue_effect(self.id, f)).expect("Runtime to exist");
+    }
+
     /// Store a value between renders. The foundational hook for all other hooks.
     ///
     /// Accepts an `initializer` closure, which is run on the first use of the hook (typically the initial render).

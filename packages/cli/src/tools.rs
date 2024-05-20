@@ -365,7 +365,6 @@ pub fn extract_zip(file: &Path, target: &Path) -> anyhow::Result<()> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::path::PathBuf;
     use tempfile::tempdir;
 
     #[test]

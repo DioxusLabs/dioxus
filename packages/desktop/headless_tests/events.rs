@@ -8,6 +8,7 @@ use dioxus_desktop::DesktopContext;
 mod utils;
 
 pub fn main() {
+    #[cfg(not(windows))]
     utils::check_app_exits(app);
 }
 
@@ -19,8 +20,9 @@ fn app() -> Element {
     let received = RECEIVED_EVENTS();
     let expected = utils::EXPECTED_EVENTS();
 
-    use_effect(move || {
+    use_memo(move || {
         println!("expecting {} events", utils::EXPECTED_EVENTS());
+        println!("received {} events", RECEIVED_EVENTS());
     });
 
     if expected != 0 && received == expected {

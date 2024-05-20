@@ -1,3 +1,4 @@
+use crate::innerlude::Effect;
 use crate::{
     innerlude::{LocalTask, SchedulerMsg},
     render_signal::RenderSignal,
@@ -5,6 +6,7 @@ use crate::{
     scopes::ScopeId,
     Task,
 };
+use std::collections::BTreeSet;
 use std::{
     cell::{Cell, Ref, RefCell},
     rc::Rc,
@@ -36,6 +38,9 @@ pub struct Runtime {
 
     // Synchronous tasks need to be run after the next render. The virtual dom stores a list of those tasks to send a signal to them when the next render is done.
     pub(crate) render_signal: RenderSignal,
+
+    // The effects that need to be run after the next render
+    pub(crate) pending_effects: RefCell<BTreeSet<Effect>>,
 }
 
 impl Runtime {
@@ -49,6 +54,7 @@ impl Runtime {
             current_task: Default::default(),
             tasks: Default::default(),
             suspended_tasks: Default::default(),
+            pending_effects: Default::default(),
         })
     }
 
@@ -149,6 +155,19 @@ impl Runtime {
     /// Runs a function with the current scope
     pub(crate) fn with_scope<R>(scope: ScopeId, f: impl FnOnce(&Scope) -> R) -> Option<R> {
         Self::with(|rt| rt.get_state(scope).map(|sc| f(&sc))).flatten()
+    }
+
+    /// Finish a render. This will mark all effects as ready to run and send the render signal.
+    pub(crate) fn finish_render(&self) {
+        // If there are new effects we can run, send a message to the scheduler to run them (after the renderer has applied the mutations)
+        if !self.pending_effects.borrow().is_empty() {
+            self.sender
+                .unbounded_send(SchedulerMsg::EffectQueued)
+                .expect("Scheduler should exist");
+        }
+
+        // And send the render signal
+        self.render_signal.send();
     }
 }
 

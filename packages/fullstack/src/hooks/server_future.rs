@@ -5,7 +5,7 @@ use std::future::Future;
 /// A future that resolves to a value.
 #[must_use = "Consider using `cx.spawn` to run a future without reading its value"]
 pub fn use_server_future<T, F>(
-    _future: impl Fn() -> F + 'static,
+    _future: impl FnMut() -> F + 'static,
 ) -> Result<Resource<T>, RenderError>
 where
     T: Serialize + DeserializeOwned + 'static,

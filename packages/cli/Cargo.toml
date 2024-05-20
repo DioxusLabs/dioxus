@@ -73,7 +73,7 @@ mlua = { version = "0.8.1", features = [
 ], optional = true }
 ctrlc = "3.2.3"
 open = "5.0.1"
-cargo-generate = "0.19.0"
+cargo-generate = "0.20.0"
 toml_edit = "0.21.0"
 
 # bundling
@@ -83,7 +83,9 @@ tauri-bundler = { version = "=1.4.*", features = ["native-tls-vendored"] }
 syn = { workspace = true }
 prettyplease = { workspace = true }
 
+# Assets
 manganis-cli-support = { workspace = true, features = ["html"] }
+brotli = "5.0.0"
 
 dioxus-autofmt = { workspace = true }
 dioxus-check = { workspace = true }
