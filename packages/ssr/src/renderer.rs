@@ -2,31 +2,21 @@ use super::cache::Segment;
 use crate::cache::StringCache;
 
 use dioxus_core::{prelude::*, AttributeValue, DynamicNode};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::fmt::Write;
 use std::sync::Arc;
 
 /// A virtualdom renderer that caches the templates it has seen for faster rendering
 #[derive(Default)]
 pub struct Renderer {
-    /// should we do our best to prettify the output?
-    pub pretty: bool,
-
-    /// Control if elements are written onto a new line
-    pub newline: bool,
-
-    /// Should we sanitize text nodes? (escape HTML)
-    pub sanitize: bool,
-
     /// Choose to write ElementIDs into elements so the page can be re-hydrated later on
     pub pre_render: bool,
 
-    // Currently not implemented
-    // Don't proceed onto new components. Instead, put the name of the component.
+    /// Don't proceed onto new components. Instead, put the name of the component.
     pub skip_components: bool,
 
     /// A cache of templates that have been rendered
-    template_cache: HashMap<&'static str, Arc<StringCache>>,
+    template_cache: FxHashMap<usize, Arc<StringCache>>,
 
     /// The current dynamic node id for hydration
     dynamic_node_id: usize,
@@ -68,11 +58,8 @@ impl Renderer {
     ) -> std::fmt::Result {
         let entry = self
             .template_cache
-            .entry(template.template.get().name)
-            .or_insert_with({
-                let prerender = self.pre_render;
-                move || Arc::new(StringCache::from_template(template, prerender).unwrap())
-            })
+            .entry(template.template.get().id())
+            .or_insert_with(move || Arc::new(StringCache::from_template(template).unwrap()))
             .clone();
 
         let mut inner_html = None;
@@ -83,8 +70,19 @@ impl Renderer {
         // We need to keep track of the listeners so we can insert them into the right place
         let mut accumulated_listeners = Vec::new();
 
-        for segment in entry.segments.iter() {
+        // We keep track of the index we are on manually so that we can jump forward to a new section quickly without iterating every item
+        let mut index = 0;
+
+        while let Some(segment) = entry.segments.get(index) {
             match segment {
+                Segment::HydrationOnlySection(jump_to) => {
+                    // If we are not prerendering, we don't need to write the content of the hydration only section
+                    // Instead we can jump to the next section
+                    if !self.pre_render {
+                        index = *jump_to;
+                        continue;
+                    }
+                }
                 Segment::Attr(idx) => {
                     let attrs = &*template.dynamic_attrs[*idx];
                     for attr in attrs {
@@ -114,7 +112,7 @@ impl Renderer {
                     DynamicNode::Component(node) => {
                         if self.skip_components {
                             write!(buf, "<{}><{}/>", node.name, node.name)?;
-                        } else {
+                        } else if node.render_in_ssr() {
                             let scope = node.mounted_scope(*idx, template, dom).unwrap();
                             let node = scope.root_node();
                             self.render_template(buf, dom, node)?
@@ -206,6 +204,8 @@ impl Renderer {
                     self.dynamic_node_id += 1
                 }
             }
+
+            index += 1;
         }
 
         Ok(())
