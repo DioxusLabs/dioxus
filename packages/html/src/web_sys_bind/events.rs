@@ -426,24 +426,6 @@ impl From<&web_sys::Element> for MountedData {
 
 #[cfg(feature = "mounted")]
 impl crate::RenderedElementBacking for web_sys::Element {
-    fn get_scroll_left(
-        &self,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::MountedResult<PixelsLength>>>>
-    {
-        let left = self.scroll_left();
-        let result = Ok(PixelsLength::new(left as f64));
-        Box::pin(async { result })
-    }
-
-    fn get_scroll_top(
-        &self,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::MountedResult<PixelsLength>>>>
-    {
-        let top = self.scroll_top();
-        let result = Ok(PixelsLength::new(top as f64));
-        Box::pin(async { result })
-    }
-
     fn get_scroll_offset(
         &self,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::MountedResult<PixelsVector>>>>
@@ -451,24 +433,6 @@ impl crate::RenderedElementBacking for web_sys::Element {
         let left = self.scroll_left();
         let top = self.scroll_top();
         let result = Ok(PixelsVector::new(left as f64, top as f64, 0.0));
-        Box::pin(async { result })
-    }
-
-    fn get_scroll_width(
-        &self,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::MountedResult<PixelsLength>>>>
-    {
-        let width = self.scroll_width();
-        let result = Ok(PixelsLength::new(width as f64));
-        Box::pin(async { result })
-    }
-
-    fn get_scroll_height(
-        &self,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::MountedResult<PixelsLength>>>>
-    {
-        let height = self.scroll_height();
-        let result = Ok(PixelsLength::new(height as f64));
         Box::pin(async { result })
     }
 

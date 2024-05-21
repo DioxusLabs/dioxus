@@ -1,7 +1,5 @@
 //! Handles querying data from the renderer
 
-use euclid::Rect;
-
 use std::{
     fmt::{Display, Formatter},
     future::Future,
@@ -16,31 +14,8 @@ pub trait RenderedElementBacking: std::any::Any {
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
 
-    /// Get the number of pixels that an element's content is scrolled horizontally
-    #[allow(clippy::type_complexity)]
-    fn get_scroll_left(&self) -> Pin<Box<dyn Future<Output = MountedResult<PixelsLength>>>> {
-        Box::pin(async { Err(MountedError::NotSupported) })
-    }
-
-    /// Get the number of pixels that an element's content is scrolled vertically
-    #[allow(clippy::type_complexity)]
-    fn get_scroll_top(&self) -> Pin<Box<dyn Future<Output = MountedResult<PixelsLength>>>> {
-        Box::pin(async { Err(MountedError::NotSupported) })
-    }
-
+    /// Get the number of pixels that an element's content is scrolled
     fn get_scroll_offset(&self) -> Pin<Box<dyn Future<Output = MountedResult<PixelsVector>>>> {
-        Box::pin(async { Err(MountedError::NotSupported) })
-    }
-
-    /// Get the width of an element's content, including content not visible on the screen due to overflow
-    #[allow(clippy::type_complexity)]
-    fn get_scroll_width(&self) -> Pin<Box<dyn Future<Output = MountedResult<PixelsLength>>>> {
-        Box::pin(async { Err(MountedError::NotSupported) })
-    }
-
-    /// Get the height of an element's content, including content not visible on the screen due to overflow
-    #[allow(clippy::type_complexity)]
-    fn get_scroll_height(&self) -> Pin<Box<dyn Future<Output = MountedResult<PixelsLength>>>> {
         Box::pin(async { Err(MountedError::NotSupported) })
     }
 
@@ -108,29 +83,9 @@ impl MountedData {
         }
     }
 
-    /// Get the number of pixels that an element's content is scrolled horizontally
-    pub async fn get_scroll_left(&self) -> MountedResult<PixelsLength> {
-        self.inner.get_scroll_left().await
-    }
-
-    /// Get the number of pixels that an element's content is scrolled vertically
-    pub async fn get_scroll_top(&self) -> MountedResult<PixelsLength> {
-        self.inner.get_scroll_top().await
-    }
-
     /// Get the number of pixels that an element's content is scrolled
     pub async fn get_scroll_offset(&self) -> MountedResult<PixelsVector> {
         self.inner.get_scroll_offset().await
-    }
-
-    /// Get the width of an element's content, including content not visible on the screen due to overflow
-    pub async fn get_scroll_width(&self) -> MountedResult<PixelsLength> {
-        self.inner.get_scroll_width().await
-    }
-
-    /// Get the height of an element's content, including content not visible on the screen due to overflow
-    pub async fn get_scroll_height(&self) -> MountedResult<PixelsLength> {
-        self.inner.get_scroll_height().await
     }
 
     /// Get the size of an element's content, including content not visible on the screen due to overflow

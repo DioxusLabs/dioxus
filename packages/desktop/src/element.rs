@@ -54,33 +54,9 @@ impl RenderedElementBacking for DesktopElement {
     }
 
     scripted_getter!(
-        get_scroll_left,
-        "return window.interpreter.getScrollLeft({id});",
-        PixelsLength
-    );
-
-    scripted_getter!(
-        get_scroll_top,
-        "return window.interpreter.getScrollTop({id});",
-        PixelsLength
-    );
-
-    scripted_getter!(
         get_scroll_offset,
         "return [window.interpreter.getScrollLeft({id}), window.interpreter.getScrollTop({id}), 0]",
         PixelsVector
-    );
-
-    scripted_getter!(
-        get_scroll_width,
-        "return window.interpreter.getScrollWidth({id});",
-        PixelsLength
-    );
-
-    scripted_getter!(
-        get_scroll_height,
-        "return window.interpreter.getScrollHeight({id});",
-        PixelsLength
     );
 
     scripted_getter!(
