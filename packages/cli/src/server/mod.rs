@@ -318,7 +318,7 @@ pub(crate) trait Platform {
     fn start(config: &CrateConfig, serve: &ConfigOptsServe) -> Result<Self>
     where
         Self: Sized;
-    fn rebuild(&mut self, config: &CrateConfig) -> Result<BuildResult>;
+    fn rebuild(&mut self, config: &CrateConfig, raw_out: bool) -> Result<BuildResult>;
 }
 
 fn is_backup_file(path: &Path) -> bool {

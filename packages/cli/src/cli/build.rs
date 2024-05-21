@@ -58,12 +58,23 @@ impl Build {
         let build_result = match platform {
             Platform::Web => {
                 // `rust_flags` are used by fullstack's client build.
-                crate::builder::build_web(&crate_config, self.build.skip_assets, rust_flags)?
+                crate::builder::build_web(
+                    &crate_config,
+                    self.build.skip_assets,
+                    rust_flags,
+                    self.build.raw_out,
+                )?
             }
             Platform::Desktop => {
                 // Since desktop platform doesn't use `rust_flags`, this
                 // argument is explicitly set to `None`.
-                crate::builder::build_desktop(&crate_config, false, self.build.skip_assets, None)?
+                crate::builder::build_desktop(
+                    &crate_config,
+                    false,
+                    self.build.skip_assets,
+                    None,
+                    self.build.raw_out,
+                )?
             }
             Platform::Fullstack => {
                 // Fullstack mode must be built with web configs on the desktop
@@ -85,6 +96,7 @@ impl Build {
                         &web_config,
                         self.build.skip_assets,
                         Some(client_rust_flags),
+                        self.build.raw_out,
                     )?;
                 }
                 {
@@ -102,6 +114,7 @@ impl Build {
                         false,
                         self.build.skip_assets,
                         Some(server_rust_flags),
+                        self.build.raw_out,
                     )?
                 }
             }

@@ -52,7 +52,7 @@ pub async fn serve(
 
     // Since web platform doesn't use `rust_flags`, this argument is explicitly
     // set to `None`.
-    let first_build_result = crate::builder::build_web(&config, skip_assets, None)?;
+    let first_build_result = crate::builder::build_web(&config, skip_assets, None, opts.raw_out)?;
 
     // generate dev-index page
     Serve::regen_dev_page(&config, first_build_result.assets.as_ref())?;
@@ -62,13 +62,15 @@ pub async fn serve(
     // WS Reload Watching
     let (reload_tx, _) = broadcast::channel(100);
 
+    let raw_out = opts.raw_out.clone();
+
     // We got to own watcher so that it exists for the duration of serve
     // Otherwise full reload won't work.
     let _watcher = setup_file_watcher(
         {
             let config = config.clone();
             let reload_tx = reload_tx.clone();
-            move || build(&config, &reload_tx, skip_assets)
+            move || build(&config, &reload_tx, skip_assets, raw_out)
         },
         &config,
         Some(WebServerInfo {
@@ -175,10 +177,11 @@ fn build(
     config: &CrateConfig,
     reload_tx: &broadcast::Sender<()>,
     skip_assets: bool,
+    raw_out: bool,
 ) -> Result<BuildResult> {
     // Since web platform doesn't use `rust_flags`, this argument is explicitly
     // set to `None`.
-    let result = std::panic::catch_unwind(|| builder::build_web(config, skip_assets, None))
+    let result = std::panic::catch_unwind(|| builder::build_web(config, skip_assets, None, raw_out))
         .map_err(|e| anyhow::anyhow!("Build failed: {e:?}"))?;
 
     // change the websocket reload state to true;

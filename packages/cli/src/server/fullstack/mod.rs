@@ -92,12 +92,14 @@ impl Platform for FullstackPlatform {
         })
     }
 
-    fn rebuild(&mut self, crate_config: &CrateConfig) -> Result<crate::BuildResult> {
+    fn rebuild(&mut self, crate_config: &CrateConfig, raw_out: bool) -> Result<crate::BuildResult> {
         let thread_handle = start_web_build_thread(crate_config, &self.serve);
         let desktop_config = make_desktop_config(crate_config, &self.serve);
-        let result = self
-            .desktop
-            .rebuild_with_options(&desktop_config, Some(self.server_rust_flags.clone()));
+        let result = self.desktop.rebuild_with_options(
+            &desktop_config,
+            Some(self.server_rust_flags.clone()),
+            raw_out,
+        );
         thread_handle
             .join()
             .map_err(|_| anyhow::anyhow!("Failed to join thread"))??;
