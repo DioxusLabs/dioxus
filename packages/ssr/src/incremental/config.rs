@@ -19,6 +19,15 @@ pub trait WrapBody {
     fn render_before_body<R: Write>(&self, to: &mut R) -> Result<(), IncrementalRendererError>;
     /// Render the HTML after the body
     fn render_after_body<R: Write>(&self, to: &mut R) -> Result<(), IncrementalRendererError>;
+
+    /// Wrap the body of the page in the wrapper.
+    fn wrap_body(&self, body: &str) -> String {
+        let mut bytes = Vec::new();
+        self.render_before_body(&mut bytes).unwrap();
+        bytes.extend_from_slice(body.as_bytes());
+        self.render_after_body(&mut bytes).unwrap();
+        String::from_utf8(bytes).unwrap()
+    }
 }
 
 /// The default page renderer

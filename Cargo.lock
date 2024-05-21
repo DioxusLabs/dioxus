@@ -2221,7 +2221,6 @@ dependencies = [
 name = "dioxus-config-macro"
 version = "0.5.2"
 dependencies = [
- "proc-macro2",
  "quote",
 ]
 

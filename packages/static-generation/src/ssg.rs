@@ -1,5 +1,6 @@
 use dioxus_lib::prelude::*;
 use dioxus_router::prelude::*;
+use dioxus_ssr::renderer;
 use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
@@ -37,6 +38,7 @@ pub async fn generate_static_site(
     std::fs::create_dir_all(&config.output_dir)?;
 
     let mut renderer = config.create_renderer();
+    let mut cache = config.create_cache();
 
     let mut routes_to_render: HashSet<String> = config.additional_routes.iter().cloned().collect();
     if let Some(site_map) = block_in_place(|| extract_site_map(app)) {
@@ -58,7 +60,7 @@ pub async fn generate_static_site(
     }
 
     for url in routes_to_render {
-        prerender_route(app, url, &mut renderer, &config).await?;
+        prerender_route(app, url, &mut renderer, &mut cache, &config).await?;
     }
 
     // Copy over the web output dir into the static output dir
@@ -99,30 +101,25 @@ fn copy_static_files(src: &Path, dst: &Path) -> Result<(), std::io::Error> {
 async fn prerender_route(
     app: fn() -> Element,
     route: String,
-    renderer: &mut dioxus_ssr::incremental::IncrementalRenderer,
+    renderer: &mut renderer::Renderer,
+    cache: &mut dioxus_ssr::incremental::IncrementalRenderer,
     config: &Config,
-) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
+) -> Result<RenderFreshness, dioxus_ssr::incremental::IncrementalRendererError> {
     use dioxus_fullstack::prelude::*;
 
     let context = server_context_for_route(&route);
     let wrapper = config.fullstack_template(&context);
-    renderer
-        .render(
-            route,
-            || VirtualDom::new(app),
-            &mut tokio::io::sink(),
-            |vdom| {
-                Box::pin(async move {
-                    with_server_context(context.clone(), || {
-                        tokio::task::block_in_place(|| vdom.rebuild_in_place());
-                    });
-                    ProvideServerContext::new(vdom.wait_for_suspense(), context).await;
-                })
-            },
-            &wrapper,
-        )
-        .await?;
-    Ok(())
+    let mut virtual_dom = VirtualDom::new(app);
+    with_server_context(context.clone(), || {
+        tokio::task::block_in_place(|| virtual_dom.rebuild_in_place());
+    });
+    ProvideServerContext::new(virtual_dom.wait_for_suspense(), context).await;
+
+    let render = renderer.render(&virtual_dom);
+
+    let wrapped = wrapper.wrap_body(&render);
+
+    cache.cache(route, wrapped)
 }
 
 #[test]
