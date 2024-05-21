@@ -61,7 +61,7 @@ impl RenderedElementBacking for DesktopElement {
 
     scripted_getter!(
         get_scroll_size,
-        "return [window.interpreter.getScrollWidth({id}), window.interpreter.getScrollHeight({id}), 0]",
+        "return [window.interpreter.getScrollWidth({id}), window.interpreter.getScrollHeight({id})]",
         PixelsSize
     );
 

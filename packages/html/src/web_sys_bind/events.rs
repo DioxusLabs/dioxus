@@ -442,7 +442,7 @@ impl crate::RenderedElementBacking for web_sys::Element {
     {
         let left = self.scroll_left();
         let top = self.scroll_top();
-        let result = Ok(PixelsSize::new(left as f64, top as f64, 0.0));
+        let result = Ok(PixelsSize::new(left as f64, top as f64));
         Box::pin(async { result })
     }
 

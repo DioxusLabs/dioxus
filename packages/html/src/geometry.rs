@@ -30,7 +30,7 @@ pub struct Pixels;
 /// A length expressed in Pixels
 pub type PixelsLength = Length<f64, Pixels>;
 /// A size expressed in Pixels
-pub type PixelsSize = Size3D<f64, Pixels>;
+pub type PixelsSize = Size2D<f64, Pixels>;
 /// A rectangle expressed in Pixels
 pub type PixelsRect = Rect<f64, Pixels>;
 /// A vector expressed in Pixels
