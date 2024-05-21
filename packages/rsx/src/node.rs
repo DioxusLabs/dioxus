@@ -9,7 +9,7 @@ use syn::{
     parse::ParseBuffer,
     spanned::Spanned,
     token::{self, Brace},
-    Expr, ExprIf, LitStr, Pat,
+    Expr, ExprCall, ExprIf, Ident, LitStr, Pat,
 };
 
 /*
@@ -108,13 +108,8 @@ impl BodyNode {
             // example:
             // div {}
             if let Some(ident) = path.get_ident() {
-                let el_name = ident.to_string();
-
-                let first_char = el_name.chars().next().unwrap();
-
                 if peek_brace(&body_stream, partial_completions)
-                    && first_char.is_ascii_lowercase()
-                    && !el_name.contains('_')
+                    && !ident_looks_like_component(ident)
                 {
                     return Ok(BodyNode::Element(Element::parse_with_options(
                         stream,
@@ -123,9 +118,55 @@ impl BodyNode {
                 }
             }
 
+            // If it is a single function call with a name that looks like a component, it should probably be a component
+            // Eg, if we run into this:
+            // ```rust
+            // my_function(key, prop)
+            // ```
+            // We should tell the user that they need braces around props instead of turning the component call into an expression
+            if let Ok(call) = stream.fork().parse::<ExprCall>() {
+                if let Expr::Path(path) = call.func.as_ref() {
+                    if let Some(ident) = path.path.get_ident() {
+                        if ident_looks_like_component(ident) {
+                            let function_args: Vec<_> = call
+                                .args
+                                .iter()
+                                .map(|arg| arg.to_token_stream().to_string())
+                                .collect();
+                            let function_call = format!("{}({})", ident, function_args.join(", "));
+                            let component_call = if function_args.is_empty() {
+                                format!("{} {{}}", ident)
+                            } else {
+                                let component_args: Vec<_> = call
+                                    .args
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(prop_count, arg)| {
+                                        // Try to parse it as a shorthand field
+                                        if let Ok(simple_ident) =
+                                            syn::parse2::<Ident>(arg.to_token_stream())
+                                        {
+                                            format!("{}", simple_ident)
+                                        } else {
+                                            let ident = format!("prop{}", prop_count + 1);
+                                            format!("{}: {}", ident, arg.to_token_stream())
+                                        }
+                                    })
+                                    .collect();
+                                format!("{} {{\n\t{}\n}}", ident, component_args.join(",\n\t"))
+                            };
+                            let error_text = format!(
+                                "Expected a valid body node found a function call. Did you forget to add braces around props?\nComponents should be called with braces instead of being called as expressions.\nInstead of:\n```rust\n{function_call}\n```\nTry:\n```rust\n{component_call}\n```\nIf you are trying to call a function, not a component, you need to wrap your expression in braces.",
+                            );
+                            return Err(syn::Error::new(call.span(), error_text));
+                        }
+                    }
+                }
+            }
+
             // Otherwise this should be Component, allowed syntax:
             // - syn::Path
-            // - PathArguments can only apper in last segment
+            // - PathArguments can only appear in last segment
             // - followed by `{` or `(`, note `(` cannot be used with one ident
             //
             // example
@@ -189,6 +230,14 @@ impl BodyNode {
             "Expected a valid body node.\nExpressions must be wrapped in curly braces.",
         ))
     }
+}
+
+// Checks if an ident looks like a component
+fn ident_looks_like_component(ident: &Ident) -> bool {
+    let as_string = ident.to_string();
+    let first_char = as_string.chars().next().unwrap();
+    // Components either start with an uppercase letter or have an underscore in them
+    first_char.is_ascii_uppercase() || as_string.contains('_')
 }
 
 impl Parse for BodyNode {
