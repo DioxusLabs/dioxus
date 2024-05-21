@@ -74,13 +74,14 @@ where
         }
     }
 
-    renderer
-        .render(
-            route.to_string(),
-            || VirtualDom::new_with_props(RenderPath, RootProps(route)),
-            writer,
-            modify_vdom,
-            wrapper,
-        )
-        .await
+    // renderer
+    //     .render(
+    //         route.to_string(),
+    //         || VirtualDom::new_with_props(RenderPath, RootProps(route)),
+    //         writer,
+    //         modify_vdom,
+    //         wrapper,
+    //     )
+    //     .await
+    todo!()
 }

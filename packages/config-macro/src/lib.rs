@@ -9,134 +9,107 @@ use quote::quote;
 #[proc_macro]
 pub fn server_only(input: TokenStream) -> TokenStream {
     if cfg!(any(feature = "ssr", feature = "liveview")) {
-        let input = TokenStream2::from(input);
-        quote! {
-            #input
-        }
+        input
     } else {
         quote! {
             {}
         }
+        .into()
     }
-    .into()
 }
 
 #[proc_macro]
 pub fn client(input: TokenStream) -> TokenStream {
     if cfg!(any(feature = "desktop", feature = "web")) {
-        let input = TokenStream2::from(input);
-        quote! {
-            #input
-        }
+        input
     } else {
         quote! {
             {}
         }
+        .into()
     }
-    .into()
 }
 
 #[proc_macro]
 pub fn web(input: TokenStream) -> TokenStream {
     if cfg!(feature = "web") {
-        let input = TokenStream2::from(input);
-        quote! {
-            #input
-        }
+        input
     } else {
         quote! {
             {}
         }
+        .into()
     }
-    .into()
 }
 
 #[proc_macro]
 pub fn desktop(input: TokenStream) -> TokenStream {
     if cfg!(feature = "desktop") {
-        let input = TokenStream2::from(input);
-        quote! {
-            #input
-        }
+        input
     } else {
         quote! {
             {}
         }
+        .into()
     }
-    .into()
 }
 
 #[proc_macro]
 pub fn mobile(input: TokenStream) -> TokenStream {
     if cfg!(feature = "mobile") {
-        let input = TokenStream2::from(input);
-        quote! {
-            #input
-        }
+        input
     } else {
         quote! {
             {}
         }
+        .into()
     }
-    .into()
 }
 
 #[proc_macro]
 pub fn fullstack(input: TokenStream) -> TokenStream {
     if cfg!(feature = "fullstack") {
-        let input = TokenStream2::from(input);
-        quote! {
-            #input
-        }
+        input
     } else {
         quote! {
             {}
         }
+        .into()
     }
-    .into()
 }
 
 #[proc_macro]
 pub fn static_generation(input: TokenStream) -> TokenStream {
     if cfg!(feature = "static-generation") {
-        let input = TokenStream2::from(input);
-        quote! {
-            #input
-        }
+        input
     } else {
         quote! {
             {}
         }
+        .into()
     }
-    .into()
 }
 
 #[proc_macro]
 pub fn ssr(input: TokenStream) -> TokenStream {
     if cfg!(feature = "ssr") {
-        let input = TokenStream2::from(input);
-        quote! {
-            #input
-        }
+        input
     } else {
         quote! {
             {}
         }
+        .into()
     }
-    .into()
 }
 
 #[proc_macro]
 pub fn liveview(input: TokenStream) -> TokenStream {
     if cfg!(feature = "liveview") {
-        let input = TokenStream2::from(input);
-        quote! {
-            #input
-        }
+        input
     } else {
         quote! {
             {}
         }
+        .into()
     }
-    .into()
 }

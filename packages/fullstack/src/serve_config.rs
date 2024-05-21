@@ -12,8 +12,7 @@ pub struct ServeConfigBuilder {
     pub(crate) index_html: Option<String>,
     pub(crate) index_path: Option<PathBuf>,
     pub(crate) assets_path: Option<PathBuf>,
-    pub(crate) incremental:
-        Option<std::sync::Arc<dioxus_ssr::incremental::IncrementalRendererConfig>>,
+    pub(crate) incremental: Option<dioxus_ssr::incremental::IncrementalRendererConfig>,
 }
 
 impl ServeConfigBuilder {
@@ -30,7 +29,7 @@ impl ServeConfigBuilder {
 
     /// Enable incremental static generation
     pub fn incremental(mut self, cfg: dioxus_ssr::incremental::IncrementalRendererConfig) -> Self {
-        self.incremental = Some(std::sync::Arc::new(cfg));
+        self.incremental = Some(cfg);
         self
     }
 
@@ -127,8 +126,7 @@ pub struct ServeConfig {
     pub(crate) index: IndexHtml,
     #[allow(dead_code)]
     pub(crate) assets_path: PathBuf,
-    pub(crate) incremental:
-        Option<std::sync::Arc<dioxus_ssr::incremental::IncrementalRendererConfig>>,
+    pub(crate) incremental: Option<dioxus_ssr::incremental::IncrementalRendererConfig>,
 }
 
 impl Default for ServeConfig {
