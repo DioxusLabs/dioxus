@@ -62,7 +62,7 @@ pub async fn serve(
     // WS Reload Watching
     let (reload_tx, _) = broadcast::channel(100);
 
-    let raw_out = opts.raw_out.clone();
+    let raw_out = opts.raw_out;
 
     // We got to own watcher so that it exists for the duration of serve
     // Otherwise full reload won't work.
@@ -181,8 +181,9 @@ fn build(
 ) -> Result<BuildResult> {
     // Since web platform doesn't use `rust_flags`, this argument is explicitly
     // set to `None`.
-    let result = std::panic::catch_unwind(|| builder::build_web(config, skip_assets, None, raw_out))
-        .map_err(|e| anyhow::anyhow!("Build failed: {e:?}"))?;
+    let result =
+        std::panic::catch_unwind(|| builder::build_web(config, skip_assets, None, raw_out))
+            .map_err(|e| anyhow::anyhow!("Build failed: {e:?}"))?;
 
     // change the websocket reload state to true;
     // the page will auto-reload.

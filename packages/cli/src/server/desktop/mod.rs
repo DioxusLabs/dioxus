@@ -95,7 +95,7 @@ async fn serve<P: Platform + Send + 'static>(
 
     tracing::info!("🚀 Starting development server...");
 
-    let raw_out = serve.raw_out.clone();
+    let raw_out = serve.raw_out;
 
     // We got to own watcher so that it exists for the duration of serve
     // Otherwise full reload won't work.
