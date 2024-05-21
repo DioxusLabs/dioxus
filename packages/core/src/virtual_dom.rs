@@ -705,10 +705,12 @@ impl VirtualDom {
         }
     }
 
+    /// Check if there are any suspended tasks remaining
     pub fn suspended_tasks_remaining(&self) -> bool {
         self.runtime.suspended_tasks.get() > 0
     }
 
+    /// Wait for the scheduler to have any work that should be run during suspense.
     pub async fn wait_for_suspense_work(&mut self) {
         // Wait for a work to be ready (IE new suspense leaves to pop up)
         'wait_for_work: loop {
@@ -750,6 +752,7 @@ impl VirtualDom {
         }
     }
 
+    /// Render any dirty scopes immediately, but don't poll any futures that are client only on that scope
     pub fn render_suspense_immediate(&mut self) {
         // Render whatever work needs to be rendered, unlocking new futures and suspense leaves
         let _runtime = RuntimeGuard::new(self.runtime.clone());
