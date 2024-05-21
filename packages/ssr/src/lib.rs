@@ -5,12 +5,7 @@
 mod cache;
 pub mod config;
 #[cfg(feature = "incremental")]
-mod fs_cache;
-#[cfg(feature = "incremental")]
 pub mod incremental;
-#[cfg(feature = "incremental")]
-mod incremental_cfg;
-
 pub mod renderer;
 pub mod streaming;
 pub mod template;

@@ -5,11 +5,13 @@ use crate::incremental::IncrementalRendererError;
 
 use std::{
     io::Write,
-    num::NonZeroUsize,
     path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
 };
+
+use super::fs_cache::PathMapFn;
+use super::memory_cache::InMemoryCache;
 
 /// Something that can render a HTML page from a body.
 pub trait WrapBody {
@@ -65,8 +67,6 @@ impl WrapBody for DefaultRenderer {
     }
 }
 
-pub(crate) type PathMapFn = Arc<dyn Fn(&str) -> PathBuf + Send + Sync>;
-
 /// A configuration for the incremental renderer.
 #[derive(Clone)]
 pub struct IncrementalRendererConfig {
@@ -75,7 +75,6 @@ pub struct IncrementalRendererConfig {
     invalidate_after: Option<Duration>,
     map_path: Option<PathMapFn>,
     clear_cache: bool,
-    pre_render: bool,
 }
 
 impl Default for IncrementalRendererConfig {
@@ -93,7 +92,6 @@ impl IncrementalRendererConfig {
             invalidate_after: None,
             map_path: None,
             clear_cache: true,
-            pre_render: false,
         }
     }
 
@@ -128,35 +126,17 @@ impl IncrementalRendererConfig {
         self
     }
 
-    /// Set whether to include hydration ids in the pre-rendered html.
-    pub fn pre_render(mut self, pre_render: bool) -> Self {
-        self.pre_render = pre_render;
-        self
-    }
-
     /// Build the incremental renderer.
     pub fn build(self) -> IncrementalRenderer {
-        let static_dir = self.static_dir.clone();
-        let mut ssr_renderer = crate::Renderer::new();
-        if self.pre_render {
-            ssr_renderer.pre_render = true;
-        }
         let mut renderer = IncrementalRenderer {
-            static_dir: self.static_dir.clone(),
-            memory_cache: NonZeroUsize::new(self.memory_cache_limit)
-                .map(|limit| lru::LruCache::with_hasher(limit, Default::default())),
+            #[cfg(not(target_arch = "wasm32"))]
+            file_system_cache: crate::incremental::fs_cache::FileSystemCache::new(
+                self.static_dir.clone(),
+                self.map_path,
+                self.invalidate_after,
+            ),
+            memory_cache: InMemoryCache::new(self.memory_cache_limit, self.invalidate_after),
             invalidate_after: self.invalidate_after,
-            ssr_renderer,
-            map_path: self.map_path.unwrap_or_else(move || {
-                Arc::new(move |route: &str| {
-                    let (before_query, _) = route.split_once('?').unwrap_or((route, ""));
-                    let mut path = static_dir.clone();
-                    for segment in before_query.split('/') {
-                        path.push(segment);
-                    }
-                    path
-                })
-            }),
         };
 
         if self.clear_cache {
