@@ -1,5 +1,8 @@
 use dioxus_core::ElementId;
-use dioxus_html::{geometry::euclid::Rect, MountedResult, RenderedElementBacking};
+use dioxus_html::{
+    geometry::{PixelsLength, PixelsRect, PixelsSize, PixelsVector},
+    MountedResult, RenderedElementBacking,
+};
 
 use crate::query::QueryEngine;
 
@@ -23,7 +26,7 @@ macro_rules! scripted_getter {
         ) -> std::pin::Pin<
             Box<dyn futures_util::Future<Output = dioxus_html::MountedResult<$output_type>>>,
         > {
-            let script = format!($script, self.id.0);
+            let script = format!($script, id = self.id.0);
 
             let fut = self
                 .query
@@ -50,33 +53,45 @@ impl RenderedElementBacking for LiveviewElement {
     }
 
     scripted_getter!(
-        get_scroll_height,
-        "return window.interpreter.getScrollHeight({});",
-        i32
-    );
-
-    scripted_getter!(
         get_scroll_left,
-        "return window.interpreter.getScrollLeft({});",
-        i32
+        "return window.interpreter.getScrollLeft({id});",
+        PixelsLength
     );
 
     scripted_getter!(
         get_scroll_top,
-        "return window.interpreter.getScrollTop({});",
-        i32
+        "return window.interpreter.getScrollTop({id});",
+        PixelsLength
+    );
+
+    scripted_getter!(
+        get_scroll_offset,
+        "return [window.interpreter.getScrollLeft({id}), window.interpreter.getScrollTop({id}), 0]",
+        PixelsVector
+    );
+
+    scripted_getter!(
+        get_scroll_height,
+        "return window.interpreter.getScrollHeight({id});",
+        PixelsLength
     );
 
     scripted_getter!(
         get_scroll_width,
-        "return window.interpreter.getScrollWidth({});",
-        i32
+        "return window.interpreter.getScrollWidth({id});",
+        PixelsLength
+    );
+
+    scripted_getter!(
+        get_scroll_size,
+        "return [window.interpreter.getScrollWidth({id}), window.interpreter.getScrollHeight({id}), 0]",
+        PixelsSize
     );
 
     scripted_getter!(
         get_client_rect,
-        "return window.interpreter.getClientRect({});",
-        Rect<f64, f64>
+        "return window.interpreter.getClientRect({id});",
+        PixelsRect
     );
 
     fn scroll_to(
