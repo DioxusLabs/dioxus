@@ -5,6 +5,7 @@ use std::{
     rc::Rc,
 };
 
+/// A task that has been suspended which may have an optional loading placeholder
 #[derive(Clone, PartialEq, Debug)]
 pub struct SuspendedFuture {
     task: Task,
@@ -12,6 +13,7 @@ pub struct SuspendedFuture {
 }
 
 impl SuspendedFuture {
+    /// Create a new suspended future
     pub fn new(task: Task) -> Self {
         Self {
             task,
@@ -19,6 +21,7 @@ impl SuspendedFuture {
         }
     }
 
+    /// Get a placeholder to display while the future is suspended
     pub fn suspense_placeholder(&self) -> Option<VNode> {
         if self.placeholder == VNode::placeholder() {
             None
@@ -27,11 +30,13 @@ impl SuspendedFuture {
         }
     }
 
+    /// Set a new placeholder the SuspenseBoundary may use to display while the future is suspended
     pub fn with_placeholder(mut self, placeholder: VNode) -> Self {
         self.placeholder = placeholder;
         self
     }
 
+    /// Get the task that was suspended
     pub fn task(&self) -> Task {
         self.task
     }
@@ -145,11 +150,9 @@ pub(crate) mod private {
 }
 
 #[doc = "Properties for the [`HiddenSSR`] component."]
-// #[derive(Props)]
 #[allow(non_camel_case_types)]
 #[derive(PartialEq, Clone)]
 pub struct HiddenSSRProps {
-    // #[props(default = false)]
     pub(crate) render_in_ssr: bool,
     children: Element,
 }
@@ -285,7 +288,9 @@ impl<
         }
     }
 }
+/// A special component that is not rendered during SSR
 #[allow(non_snake_case)]
+#[doc(hidden)]
 pub fn HiddenSSR(mut __props: HiddenSSRProps) -> Element {
     __props.children
 }
