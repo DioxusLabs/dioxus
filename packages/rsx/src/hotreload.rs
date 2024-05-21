@@ -27,13 +27,14 @@
 use std::collections::HashMap;
 
 use crate::{
-    intern, Component, ElementAttrName, ForLoop, IfChain, IfmtInput, TemplateBody, TextNode,
+    intern, AttributeName, Component, ForLoop, IfChain, IfmtInput, TemplateBody, TextNode,
 };
 use crate::{BodyNode, CallBody, HotReloadingContext};
 use dioxus_core::{
     prelude::{FmtSegment, FmtedSegments, Template},
     TemplateAttribute, TemplateNode,
 };
+use syn::LitStr;
 
 /// The mapping of a node relative to the root of its containing template
 ///
@@ -61,8 +62,6 @@ type NodePath = Vec<u8>;
 /// }
 /// ```
 type AttributePath = Vec<u8>;
-
-type DynamicNodeIdx = usize;
 
 /// A result of hot reloading
 ///
@@ -341,67 +340,68 @@ impl HotReload {
     }
 
     fn hotreload_ifmt(&mut self, a: &IfmtInput, b: &IfmtInput) -> Option<bool> {
-        if a.is_static() && b.is_static() {
-            return Some(a == b);
-        }
+        todo!()
+        // if a.is_static() && b.is_static() {
+        //     return Some(a == b);
+        // }
 
-        // Make sure all the dynamic segments of b show up in a
-        for segment in b.segments.iter() {
-            if segment.is_formatted() && !a.segments.contains(segment) {
-                return None;
-            }
-        }
+        // // Make sure all the dynamic segments of b show up in a
+        // for segment in b.segments.iter() {
+        //     if segment.is_formatted() && !a.segments.contains(segment) {
+        //         return None;
+        //     }
+        // }
 
-        // Collect all the formatted segments from the original
-        let mut out = vec![];
+        // // Collect all the formatted segments from the original
+        // let mut out = vec![];
 
-        // the original list of formatted segments
-        let mut fmted = a
-            .segments
-            .iter()
-            .flat_map(|f| match f {
-                crate::Segment::Literal(_) => None,
-                crate::Segment::Formatted(f) => Some(f),
-            })
-            .cloned()
-            .map(|f| Some(f))
-            .collect::<Vec<_>>();
+        // // the original list of formatted segments
+        // let mut fmted = a
+        //     .segments
+        //     .iter()
+        //     .flat_map(|f| match f {
+        //         crate::Segment::Literal(_) => None,
+        //         crate::Segment::Formatted(f) => Some(f),
+        //     })
+        //     .cloned()
+        //     .map(|f| Some(f))
+        //     .collect::<Vec<_>>();
 
-        for segment in b.segments.iter() {
-            match segment {
-                crate::Segment::Literal(lit) => {
-                    // create a &'static str by leaking the string
-                    let lit = Box::leak(lit.clone().into_boxed_str());
-                    out.push(FmtSegment::Literal { value: lit });
-                }
-                crate::Segment::Formatted(fmt) => {
-                    // Find the formatted segment in the original
-                    // Set it to None when we find it so we don't re-render it on accident
-                    let idx = fmted
-                        .iter_mut()
-                        .position(|_s| {
-                            if let Some(s) = _s {
-                                if s == fmt {
-                                    *_s = None;
-                                    return true;
-                                }
-                            }
+        // for segment in b.segments.iter() {
+        //     match segment {
+        //         crate::Segment::Literal(lit) => {
+        //             // create a &'static str by leaking the string
+        //             let lit = Box::leak(lit.clone().into_boxed_str());
+        //             out.push(FmtSegment::Literal { value: lit });
+        //         }
+        //         crate::Segment::Formatted(fmt) => {
+        //             // Find the formatted segment in the original
+        //             // Set it to None when we find it so we don't re-render it on accident
+        //             let idx = fmted
+        //                 .iter_mut()
+        //                 .position(|_s| {
+        //                     if let Some(s) = _s {
+        //                         if s == fmt {
+        //                             *_s = None;
+        //                             return true;
+        //                         }
+        //                     }
 
-                            false
-                        })
-                        .unwrap();
+        //                     false
+        //                 })
+        //                 .unwrap();
 
-                    out.push(FmtSegment::Dynamic { id: idx });
-                }
-            }
-        }
+        //             out.push(FmtSegment::Dynamic { id: idx });
+        //         }
+        //     }
+        // }
 
-        let location = self.make_location(a.hr_idx.get());
+        // let location = self.make_location(a.hr_idx.get());
 
-        self.changed_strings
-            .insert(location.to_string(), FmtedSegments::new(out));
+        // self.changed_strings
+        //     .insert(location.to_string(), FmtedSegments::new(out));
 
-        Some(true)
+        // Some(true)
     }
 
     /// Check if a for loop can be hot reloaded
@@ -756,11 +756,11 @@ impl HotReload {
 }
 
 fn make_static_attribute<Ctx: HotReloadingContext>(
-    value: &IfmtInput,
-    name: &ElementAttrName,
+    value: &LitStr,
+    name: &AttributeName,
     element_name_rust: &str,
 ) -> TemplateAttribute {
-    let value = value.source.as_ref().unwrap();
+    let value = value.value();
     let attribute_name_rust = name.to_string();
     let (name, namespace) = Ctx::map_attribute(element_name_rust, &attribute_name_rust)
         .unwrap_or((intern(attribute_name_rust.as_str()), None));
@@ -768,7 +768,7 @@ fn make_static_attribute<Ctx: HotReloadingContext>(
     let static_attr = TemplateAttribute::Static {
         name,
         namespace,
-        value: intern(value.value().as_str()),
+        value: intern(value.as_str()),
     };
 
     static_attr

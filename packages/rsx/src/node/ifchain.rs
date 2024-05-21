@@ -71,11 +71,6 @@ impl ToTokens for IfChain {
 
         let mut elif = Some(self);
 
-        let base_idx = 1123123;
-
-        // let base_idx = self.location.idx.get() * 1000;
-        let mut cur_idx = base_idx + 1;
-
         while let Some(chain) = elif {
             let IfChain {
                 if_token,
@@ -86,15 +81,23 @@ impl ToTokens for IfChain {
                 ..
             } = chain;
 
-            body.append_all(quote! { #if_token #cond { {#then_branch} } });
-
-            cur_idx += 1;
+            body.append_all(quote! {
+                #if_token #cond {
+                    { #then_branch }
+                }
+            });
 
             if let Some(next) = else_if_branch {
-                body.append_all(quote! { else });
+                body.append_all(quote! {
+                    else
+                });
                 elif = Some(next);
             } else if let Some(else_branch) = else_branch {
-                body.append_all(quote! { else { {#else_branch} } });
+                body.append_all(quote! {
+                    else {
+                        {#else_branch}
+                    }
+                });
                 terminated = true;
                 break;
             } else {
@@ -114,5 +117,20 @@ impl ToTokens for IfChain {
                 ___nodes
             }
         })
+    }
+}
+
+pub(crate) fn is_if_chain_terminated(chain: &ExprIf) -> bool {
+    let mut current = chain;
+    loop {
+        if let Some((_, else_block)) = &current.else_branch {
+            if let Expr::If(else_if) = else_block.as_ref() {
+                current = else_if;
+            } else {
+                return true;
+            }
+        } else {
+            return false;
+        }
     }
 }

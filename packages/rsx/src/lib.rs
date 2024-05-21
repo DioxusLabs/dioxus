@@ -14,8 +14,6 @@
 //!
 //! Any errors in using rsx! will likely occur when people start using it, so the first errors must be really helpful.
 
-#[macro_use]
-mod errors;
 mod body;
 mod diagnostics;
 pub mod hotreload;
@@ -58,4 +56,15 @@ pub(crate) fn intern<T: Eq + Hash + Send + Sync + ?Sized + 'static>(
     s: impl Into<Intern<T>>,
 ) -> &'static T {
     s.into().as_ref()
+}
+
+pub trait PrettyUnparse {
+    fn pretty_unparse(&self) -> String;
+}
+
+impl PrettyUnparse for TokenStream2 {
+    fn pretty_unparse(&self) -> String {
+        let parsed = syn::parse2::<syn::Expr>(self.clone()).unwrap();
+        prettier_please::unparse_expr(&parsed)
+    }
 }

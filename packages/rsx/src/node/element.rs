@@ -13,233 +13,40 @@ use syn::{
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct Element {
     pub name: ElementName,
-    pub key: Option<IfmtInput>,
-    pub attributes: Vec<AttributeType>,
-    pub merged_attributes: Vec<AttributeType>,
-    pub brace: syn::token::Brace,
+    pub attributes: Vec<Attribute>,
+    pub merged_attributes: Vec<Attribute>,
+    pub spreads: Vec<Spread>,
     pub children: Vec<BodyNode>,
+    pub brace: syn::token::Brace,
+    pub diagnostics: Diagnostics,
 }
 
 impl Parse for Element {
     fn parse(stream: ParseStream) -> Result<Self> {
-        let el_name = ElementName::parse(stream)?;
+        let name = stream.parse::<ElementName>()?;
 
-        // parse the guts
-        let content: ParseBuffer;
-        let brace = syn::braced!(content in stream);
-
-        let mut attributes: Vec<AttributeType> = vec![];
-        let mut children: Vec<BodyNode> = vec![];
-        let mut key = None;
-
-        // parse fields with commas
-        // break when we don't get this pattern anymore
-        // start parsing bodynodes
-        // "def": 456,
-        // abc: 123,
-        loop {
-            if content.peek(Token![..]) {
-                content.parse::<Token![..]>()?;
-                let expr = content.parse::<Expr>()?;
-                let span = expr.span();
-                attributes.push(attribute::AttributeType::Spread(expr));
-
-                if content.is_empty() {
-                    break;
-                }
-
-                if content.parse::<Token![,]>().is_err() {
-                    missing_trailing_comma!(span);
-                }
-                continue;
-            }
-
-            // Parse the raw literal fields
-            // "def": 456,
-            if content.peek(LitStr) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
-                let name = content.parse::<LitStr>()?;
-                let ident = name.clone();
-
-                content.parse::<Token![:]>()?;
-
-                let value = content.parse::<ElementAttrValue>()?;
-                attributes.push(attribute::AttributeType::Named(ElementAttrNamed {
-                    el_name: el_name.clone(),
-                    attr: ElementAttr {
-                        name: ElementAttrName::Custom(name),
-                        value,
-                    },
-                }));
-
-                if content.is_empty() {
-                    break;
-                }
-
-                if content.parse::<Token![,]>().is_err() {
-                    missing_trailing_comma!(ident.span());
-                }
-                continue;
-            }
-
-            // Parse
-            // abc: 123,
-            if content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
-                let name = content.parse::<Ident>()?;
-
-                let name_str = name.to_string();
-                content.parse::<Token![:]>()?;
-
-                // The span of the content to be parsed,
-                // for example the `hi` part of `class: "hi"`.
-                let span = content.span();
-
-                if name_str.starts_with("on") {
-                    // check for any duplicate event listeners
-                    if attributes.iter().any(|f| {
-                        if let AttributeType::Named(ElementAttrNamed {
-                            attr:
-                                ElementAttr {
-                                    name: ElementAttrName::BuiltIn(n),
-                                    value: ElementAttrValue::EventTokens(_),
-                                },
-                            ..
-                        }) = f
-                        {
-                            n == &name_str
-                        } else {
-                            false
-                        }
-                    }) {
-                        return Err(syn::Error::new(
-                            name.span(),
-                            format!("Duplicate event listener `{}`", name),
-                        ));
-                    }
-                    attributes.push(attribute::AttributeType::Named(ElementAttrNamed {
-                        el_name: el_name.clone(),
-                        attr: ElementAttr {
-                            name: ElementAttrName::BuiltIn(name),
-                            value: ElementAttrValue::EventTokens(content.parse()?),
-                        },
-                    }));
-                } else if name_str == "key" {
-                    let _key: IfmtInput = content.parse()?;
-
-                    if _key.is_static() {
-                        invalid_key!(_key);
-                    }
-
-                    key = Some(_key);
-                } else {
-                    let value = content.parse::<ElementAttrValue>()?;
-                    attributes.push(attribute::AttributeType::Named(ElementAttrNamed {
-                        el_name: el_name.clone(),
-                        attr: ElementAttr {
-                            name: ElementAttrName::BuiltIn(name),
-                            value,
-                        },
-                    }));
-                }
-
-                if content.is_empty() {
-                    break;
-                }
-
-                if content.parse::<Token![,]>().is_err() {
-                    missing_trailing_comma!(span);
-                }
-                continue;
-            }
-
-            // Parse shorthand fields
-            if content.peek(Ident)
-                && !content.peek2(Brace)
-                && !content.peek2(Token![:])
-                && !content.peek2(Token![-])
-            {
-                let name = content.parse::<Ident>()?;
-                let name_ = name.clone();
-
-                // If the shorthand field is children, these are actually children!
-                if name == "children" {
-                    return Err(syn::Error::new(
-                        name.span(),
-                        r#"Shorthand element children are not supported.
-To pass children into elements, wrap them in curly braces.
-Like so:
-    div {{ {{children}} }}
-
-"#,
-                    ));
-                };
-
-                let value = ElementAttrValue::Shorthand(name.clone());
-                attributes.push(attribute::AttributeType::Named(ElementAttrNamed {
-                    el_name: el_name.clone(),
-                    attr: ElementAttr {
-                        name: ElementAttrName::BuiltIn(name),
-                        value,
-                    },
-                }));
-
-                if content.is_empty() {
-                    break;
-                }
-
-                if content.parse::<Token![,]>().is_err() {
-                    missing_trailing_comma!(name_.span());
-                }
-                continue;
-            }
-
-            break;
-        }
-
-        while !content.is_empty() {
-            if (content.peek(LitStr) && content.peek2(Token![:])) && !content.peek3(Token![:]) {
-                attr_after_element!(content.span());
-            }
-
-            if (content.peek(Ident) && content.peek2(Token![:])) && !content.peek3(Token![:]) {
-                attr_after_element!(content.span());
-            }
-
-            children.push(content.parse::<BodyNode>()?);
-            // consume comma if it exists
-            // we don't actually care if there *are* commas after elements/text
-            if content.peek(Token![,]) {
-                let _ = content.parse::<Token![,]>();
-            }
-        }
-
-        // Now merge the attributes into the cache
-        let mut merged_attributes: Vec<AttributeType> = Vec::new();
-        for attr in &attributes {
-            let attr_index = merged_attributes
-                .iter()
-                .position(|a| a.matches_attr_name(attr));
-
-            if let Some(old_attr_index) = attr_index {
-                let old_attr = &mut merged_attributes[old_attr_index];
-
-                if let Some(combined) = old_attr.try_combine(attr) {
-                    *old_attr = combined;
-                }
-
-                continue;
-            }
-
-            merged_attributes.push(attr.clone());
-        }
-
-        Ok(Element {
-            name: el_name,
-            key,
-            attributes,
-            merged_attributes,
+        let RsxBlock {
+            fields,
             children,
             brace,
-        })
+            spreads,
+            diagnostics,
+        } = stream.parse::<RsxBlock>()?;
+
+        let mut element = Element {
+            name,
+            attributes: fields,
+            children,
+            brace,
+            spreads,
+            diagnostics,
+            merged_attributes: Vec::new(),
+        };
+
+        element.merge_attributes();
+        element.validate();
+
+        Ok(element)
     }
 }
 
@@ -261,19 +68,19 @@ impl ToTokens for Element {
                 match attr.as_static_str_literal() {
                     // If it's static, we'll take this little optimization
                     Some((name, value)) => {
-                        let value = value.to_static().unwrap();
+                        let value = value.value();
 
                         let ns = match name {
-                            ElementAttrName::BuiltIn(name) => ns(quote!(#name.1)),
-                            ElementAttrName::Custom(_) => quote!(None),
+                            AttributeName::BuiltIn(name) => ns(quote!(#name.1)),
+                            AttributeName::Custom(_) => quote!(None),
                         };
 
                         let name = match (el_name, name) {
-                            (ElementName::Ident(_), ElementAttrName::BuiltIn(_)) => {
+                            (ElementName::Ident(_), AttributeName::BuiltIn(_)) => {
                                 quote! { #el_name::#name.0 }
                             }
+                            //hmmmm I think we could just totokens this, but the to_string might be inserting quotes
                             _ => {
-                                //hmmmm I think we could just totokens this, but the to_string might be inserting quotes
                                 let as_string = name.to_string();
                                 quote! { #as_string }
                             }
@@ -294,14 +101,16 @@ impl ToTokens for Element {
                     // Otherwise, we'll just render it as a dynamic attribute
                     // This will also insert the attribute into the dynamic_attributes list to assemble the final template
                     _ => {
-                        //
-                        todo!()
+                        let id = attr.dyn_idx.get();
+                        quote! {
+                            dioxus_core::TemplateAttribute::Dynamic { id: #id  },
+                        }
                     }
                 }
             })
             .collect::<Vec<_>>();
 
-        // Render either the static child or the dynamic child
+        // Render either the child
         let children = el.children.iter().map(|c| match c {
             BodyNode::Element(el) => quote! { #el },
             BodyNode::Text(text) if text.is_static() => {
@@ -332,15 +141,72 @@ impl ToTokens for Element {
 
         let ns = ns(quote!(NAME_SPACE));
         let el_name = el_name.tag_name();
+        let diagnostics = &el.diagnostics;
 
+        // todo: generate less code if there's no diagnostics by not including the curlies
         tokens.append_all(quote! {
-            dioxus_core::TemplateNode::Element {
-                tag: #el_name,
-                namespace: #ns,
-                attrs: &[ #(#static_attrs)* ],
-                children: &[ #(#children),* ],
+            {
+                #diagnostics
+
+                dioxus_core::TemplateNode::Element {
+                    tag: #el_name,
+                    namespace: #ns,
+                    attrs: &[ #(#static_attrs)* ],
+                    children: &[ #(#children),* ],
+                }
             }
         })
+    }
+}
+
+impl Element {
+    fn validate(&mut self) {}
+
+    /// Collapses ifmt attributes into a single dynamic attribute using a space as a delimiter
+    ///
+    /// div {
+    ///     class: "abc-def",
+    ///     class: if some_expr { "abc" },
+    /// }
+    ///
+    fn merge_attributes(&mut self) {
+        // let existing = self.attributes.iter_mut().find(|attr| attr.name)
+
+        // for attr in self.attributes.iter() {
+        //     self.merged_attributes.push(attr.clone());
+        // }
+
+        // Now merge the attributes into the cache
+        // for attr in &self.attributes {
+        //     let attr_index = self
+        //         .merged_attributes
+        //         .iter()
+        //         .position(|a| a.matches_attr_name(attr));
+
+        //     if let Some(old_attr_index) = attr_index {
+        //         let old_attr = &mut self.merged_attributes[old_attr_index];
+
+        //         if let Some(combined) = old_attr.try_combine(attr) {
+        //             *old_attr = combined;
+        //         }
+
+        //         continue;
+        //     }
+
+        //     self.merged_attributes.push(attr.clone());
+        // }
+    }
+
+    pub(crate) fn key(&self) -> Option<&IfmtInput> {
+        for attr in &self.attributes {
+            if let AttributeName::BuiltIn(name) = &attr.name {
+                if name == "key" {
+                    return attr.ifmt();
+                }
+            }
+        }
+
+        None
     }
 }
 
@@ -350,6 +216,33 @@ pub enum ElementName {
     Custom(LitStr),
 }
 
+impl ToTokens for ElementName {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        match self {
+            ElementName::Ident(i) => i.to_tokens(tokens),
+            ElementName::Custom(s) => s.to_tokens(tokens),
+        }
+    }
+}
+
+impl Parse for ElementName {
+    fn parse(stream: ParseStream) -> Result<Self> {
+        let raw = Punctuated::<Ident, Token![-]>::parse_separated_nonempty(stream)?;
+        if raw.len() == 1 {
+            Ok(ElementName::Ident(raw.into_iter().next().unwrap()))
+        } else {
+            let span = raw.span();
+            let tag = raw
+                .into_iter()
+                .map(|ident| ident.to_string())
+                .collect::<Vec<_>>()
+                .join("-");
+            let tag = LitStr::new(&tag, span);
+            Ok(ElementName::Custom(tag))
+        }
+    }
+}
+
 impl ElementName {
     pub(crate) fn tag_name(&self) -> TokenStream2 {
         match self {
@@ -357,9 +250,7 @@ impl ElementName {
             ElementName::Custom(s) => quote! { #s },
         }
     }
-}
 
-impl ElementName {
     pub fn span(&self) -> Span {
         match self {
             ElementName::Ident(i) => i.span(),
@@ -386,29 +277,134 @@ impl Display for ElementName {
     }
 }
 
-impl Parse for ElementName {
-    fn parse(stream: ParseStream) -> Result<Self> {
-        let raw = Punctuated::<Ident, Token![-]>::parse_separated_nonempty(stream)?;
-        if raw.len() == 1 {
-            Ok(ElementName::Ident(raw.into_iter().next().unwrap()))
-        } else {
-            let span = raw.span();
-            let tag = raw
-                .into_iter()
-                .map(|ident| ident.to_string())
-                .collect::<Vec<_>>()
-                .join("-");
-            let tag = LitStr::new(&tag, span);
-            Ok(ElementName::Custom(tag))
+#[test]
+fn parses_name() {
+    let parsed: ElementName = syn::parse2(quote::quote! { div }).unwrap();
+    let parsed: ElementName = syn::parse2(quote::quote! { some-cool-element }).unwrap();
+
+    let parsed: Element = syn::parse2(quote::quote! { div {} }).unwrap();
+    let parsed: Element = syn::parse2(quote::quote! { some-cool-element {} }).unwrap();
+
+    let parsed: Element = syn::parse2(quote::quote! {
+        some-cool-div {
+            id: "hi",
+            id: "hi {abc}",
+            id: "hi {def}",
+            class: 123,
+            something: bool,
+            data_attr: "data",
+            data_attr: "data2",
+            data_attr: "data3",
+            exp: { some_expr },
+            something: {cool},
+            something: bool,
+            something: 123,
+            onclick: move |_| {
+                println!("hello world");
+            },
+            "some-attr": "hello world",
+            onclick: move |_| {},
+            class: "hello world",
+            id: "my-id",
+            data_attr: "data",
+            data_attr: "data2",
+            data_attr: "data3",
+            "somte_attr3": "hello world",
+            something: {cool},
+            something: bool,
+            something: 123,
+            onclick: move |_| {
+                println!("hello world");
+            },
+            ..attrs1,
+            ..attrs2,
+            ..attrs3
         }
-    }
+    })
+    .unwrap();
+
+    dbg!(parsed);
 }
 
-impl ToTokens for ElementName {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        match self {
-            ElementName::Ident(i) => tokens.append_all(quote! { dioxus_elements::#i }),
-            ElementName::Custom(s) => tokens.append_all(quote! { #s }),
+#[test]
+fn parses_variety() {
+    let input = quote::quote! {
+        div {
+            class: "hello world",
+            id: "my-id",
+            data_attr: "data",
+            data_attr: "data2",
+            data_attr: "data3",
+            "somte_attr3": "hello world",
+            something: {cool},
+            something: bool,
+            something: 123,
+            onclick: move |_| {
+                println!("hello world");
+            },
+            ..attrs,
+            ..attrs2,
+            ..attrs3
         }
-    }
+    };
+
+    let parsed: Element = syn::parse2(input).unwrap();
+    dbg!(parsed);
+}
+
+#[test]
+fn to_tokens_properly() {
+    let input = quote::quote! {
+        div {
+            class: "hello world",
+            class2: "hello {world}",
+            class3: "goodbye {world}",
+            class4: "goodbye world",
+            "something": "cool {blah}",
+            "something2": "cooler",
+            div {
+                div {
+                    h1 { class: "h1 col" }
+                    h2 { class: "h2 col" }
+                    h3 { class: "h3 col" }
+                    div {}
+                }
+            }
+        }
+    };
+
+    let parsed: Element = syn::parse2(input).unwrap();
+    println!("{}", parsed.to_token_stream().pretty_unparse());
+}
+
+#[test]
+fn to_tokens_with_diagnostic() {
+    let input = quote::quote! {
+        div {
+            class: "hello world",
+            id: "my-id",
+            ..attrs,
+            div {
+                ..attrs,
+                class: "hello world",
+                id: "my-id",
+            }
+        }
+    };
+
+    let parsed: Element = syn::parse2(input).unwrap();
+    println!("{}", parsed.to_token_stream().pretty_unparse());
+}
+
+#[test]
+fn merges_attributes() {
+    let input = quote::quote! {
+        div {
+            class: "hello world",
+            class: if some_expr { "abc" }
+        }
+    };
+
+    let parsed: Element = syn::parse2(input).unwrap();
+    assert!(parsed.merged_attributes.len() == 1);
 }

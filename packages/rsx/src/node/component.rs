@@ -25,16 +25,14 @@ use super::*;
 use proc_macro2::TokenStream as TokenStream2;
 use proc_macro2_diagnostics::SpanDiagnosticExt;
 use quote::quote;
-use syn::{
-    spanned::Spanned, AngleBracketedGenericArguments, Error, Expr, Ident, LitStr, PathArguments,
-    Token,
-};
+use syn::{spanned::Spanned, AngleBracketedGenericArguments, Expr, Ident, PathArguments};
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct Component {
     pub name: syn::Path,
     pub generics: Option<AngleBracketedGenericArguments>,
     pub fields: Vec<Attribute>,
+    pub spreads: Vec<Spread>,
     pub brace: token::Brace,
     pub children: TemplateBody,
     pub dyn_idx: CallerLocation,
@@ -42,23 +40,27 @@ pub struct Component {
 }
 
 impl Parse for Component {
-    fn parse(stream: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let mut name = input.parse::<syn::Path>()?;
+        let generics = normalize_path(&mut name);
+
         let RsxBlock {
-            name,
-            generics,
             fields,
             children,
             brace,
-        } = stream.parse::<RsxBlock>()?;
+            spreads,
+            diagnostics,
+        } = input.parse::<RsxBlock>()?;
 
         let mut component = Self {
-            diagnostics: Diagnostics::new(),
             dyn_idx: CallerLocation::default(),
             children: TemplateBody::from_nodes(children),
             name,
             generics,
             fields,
             brace,
+            spreads,
+            diagnostics,
         };
 
         component.validate_path();
@@ -98,10 +100,6 @@ impl ToTokens for Component {
 }
 
 impl Component {
-    fn to_dynamic_node(&self) {}
-
-    fn to_template_node(&self) {}
-
     // Make sure this a proper component path (uppercase ident, a path, or contains an underscorea)
     // This should be validated by the RsxBlock parser when it peeks bodynodes
     fn validate_path(&mut self) {
@@ -147,20 +145,13 @@ impl Component {
     // Make sure the spread argument is being used as props spreading
     fn validate_spread(&mut self) {
         // Next, ensure that there's only one spread argument in the attributes *and* it's the last one
-        let spread_idx = self
-            .fields
-            .iter()
-            .position(|attr| matches!(attr.value, AttributeValue::Spread(_)));
-
-        if let Some(spread_idx) = spread_idx {
-            if spread_idx != self.fields.len() - 1 {
-                self.diagnostics.push(
-                    self.fields[spread_idx]
-                        .name
-                        .span()
-                        .error("Spread attributes must be the last attribute in the component."),
-                );
-            }
+        for spread in self.spreads.iter().skip(1) {
+            self.diagnostics.push(
+                spread
+                    .expr
+                    .span()
+                    .error("Only one set of manual props is allowed for a component."),
+            );
         }
     }
 
@@ -172,10 +163,10 @@ impl Component {
 
         if let Some(attr) = key {
             let diagnostic = match &attr.value {
-                AttributeValue::AttrIfmt(ifmt) if ifmt.is_static() => {
+                AttributeValue::AttrLit(ifmt) if ifmt.is_static() => {
                     ifmt.span().error("Key must not be a static string. Make sure to use a formatted string like `key: \"{value}\"")
                 }
-                AttributeValue::AttrIfmt(_) => return,
+                AttributeValue::AttrLit(_) => return,
                 _ => attr
                     .value
                     .span()
@@ -189,7 +180,7 @@ impl Component {
     pub fn get_key(&self) -> Option<&Attribute> {
         self.fields
             .iter()
-            .find(|attr| matches!(&attr.name, AttributeName::Known(key) if key == "key"))
+            .find(|attr| matches!(&attr.name, AttributeName::BuiltIn(key) if key == "key"))
     }
 
     /// Ensure there's no duplicate props - this will be a compile error but we can move it to a
@@ -205,32 +196,29 @@ impl Component {
                     name.span()
                         .error("Custom attributes are not supported for Components. Only known attributes are allowed."),
                 ),
-                AttributeName::Known(k) => {
+                AttributeName::BuiltIn(k) => {
                     if !seen.contains(k) {
                         seen.insert(k);
                     } else {
                         self.diagnostics.push(
                             k.span()
-                                .error("Duplicate attribute found. Only one attribute of each type is allowed."),
+                                .error("Duplicate prop field found. Only one prop field per name is allowed."),
                         );
                     }
                 },
-                AttributeName::Spread(_) => {},
             }
         }
     }
 
     fn collect_props(&self) -> TokenStream2 {
-        let name = &self.name;
-
         let manual_props = self.manual_props();
+
+        let name = &self.name;
+        let generics = &self.generics;
 
         let mut toks = match manual_props.as_ref() {
             Some(props) => quote! { let mut __manual_props = #props; },
-            None => match &self.generics {
-                Some(gen_args) => quote! { fc_to_builder(#name #gen_args) },
-                None => quote! { fc_to_builder(#name) },
-            },
+            None => quote! { fc_to_builder(#name #generics) },
         };
 
         for (name, value) in self.make_field_idents() {
@@ -253,14 +241,13 @@ impl Component {
             false => toks.append_all(quote! { __manual_props }),
         }
 
-        toks
+        quote! {
+            {#toks}
+        }
     }
 
     fn manual_props(&self) -> Option<&Expr> {
-        self.fields.iter().find_map(|attr| match attr.value {
-            AttributeValue::Spread(ref expr) => Some(expr),
-            _ => None,
-        })
+        self.spreads.first().map(|spread| &spread.expr)
     }
 
     fn make_field_idents(&self) -> Vec<(TokenStream2, TokenStream2)> {
@@ -270,21 +257,19 @@ impl Component {
                 let Attribute { name, value, .. } = attr;
 
                 let attr = match name {
-                    AttributeName::Known(k) => {
+                    AttributeName::BuiltIn(k) => {
                         if k.to_string() == "key" {
                             return None;
                         }
                         quote! { #k }
                     }
                     AttributeName::Custom(_) => return None,
-                    AttributeName::Spread(_) => return None,
                 };
 
                 let val = match value {
-                    AttributeValue::Spread(_) => return None,
-                    AttributeValue::AttrIfmt(ifmt) => {
+                    AttributeValue::AttrLit(lit) => {
                         quote! {
-                            #ifmt.to_string()
+                            #lit.to_string()
                         }
                     }
                     _ => value.to_token_stream(),
@@ -304,97 +289,97 @@ impl Component {
     // }
 }
 
-mod tests {
-    use super::*;
-
-    /// Ensure we can parse a component
-    #[test]
-    fn parses() {
-        let input = quote! {
-            MyComponent {
-                key: "value {something}",
-                prop: "value",
-                ..props,
-                div {
-                    "Hello, world!"
-                }
-            }
-        };
-
-        let component: Component = syn::parse2(input).unwrap();
-
-        dbg!(component);
-
-        let input_without_manual_props = quote! {
-            MyComponent {
-                key: "value {something}",
-                prop: "value",
-                div { "Hello, world!" }
-            }
-        };
-
-        let component: Component = syn::parse2(input_without_manual_props).unwrap();
-        dbg!(component);
+fn normalize_path(name: &mut syn::Path) -> Option<AngleBracketedGenericArguments> {
+    let seg = name.segments.last_mut()?;
+    match seg.arguments.clone() {
+        PathArguments::AngleBracketed(args) => {
+            seg.arguments = PathArguments::None;
+            Some(args)
+        }
+        _ => None,
     }
+}
 
-    /// Ensure we reject invalid forms
-    ///
-    /// Maybe want to snapshot the errors?
-    #[test]
-    fn rejects() {
-        let input = quote! {
-            myComponent {
-                key: "value",
-                prop: "value",
-                prop: "other",
-                ..props,
-                ..other_props,
-                div {
-                    "Hello, world!"
-                }
+/// Ensure we can parse a component
+#[test]
+fn parses() {
+    let input = quote! {
+        MyComponent {
+            key: "value {something}",
+            prop: "value",
+            ..props,
+            div {
+                "Hello, world!"
             }
-        };
+        }
+    };
 
-        let mut component: Component = syn::parse2(input).unwrap();
-        dbg!(component.diagnostics);
-    }
+    let component: Component = syn::parse2(input).unwrap();
 
-    #[test]
-    fn to_tokens_properly() {
-        let input = quote! {
-            MyComponent {
-                key: "value {something}",
-                prop: "value",
-                ..props,
-                div {
-                    "Hello, world!"
-                }
+    dbg!(component);
+
+    let input_without_manual_props = quote! {
+        MyComponent {
+            key: "value {something}",
+            prop: "value",
+            div { "Hello, world!" }
+        }
+    };
+
+    let component: Component = syn::parse2(input_without_manual_props).unwrap();
+    dbg!(component);
+}
+
+/// Ensure we reject invalid forms
+///
+/// Maybe want to snapshot the errors?
+#[test]
+fn rejects() {
+    let input = quote! {
+        myComponent {
+            key: "value",
+            prop: "value",
+            prop: "other",
+            ..props,
+            ..other_props,
+            div {
+                "Hello, world!"
             }
-        };
+        }
+    };
 
-        let component: Component = syn::parse2(input).unwrap();
+    let mut component: Component = syn::parse2(input).unwrap();
+    dbg!(component.diagnostics);
+}
 
-        let mut tokens = TokenStream2::new();
-        component.to_tokens(&mut tokens);
+#[test]
+fn to_tokens_properly() {
+    let input = quote! {
+        MyComponent {
+            key: "value {something}",
+            prop: "value",
+            prop: "value",
+            prop: "value",
+            prop: "value",
+            prop: 123,
+            ..props,
+            div { "Hello, world!" }
+        }
+    };
 
-        dbg!(tokens.to_string());
+    let component: Component = syn::parse2(input).unwrap();
+    println!("{}", component.to_token_stream().pretty_unparse());
+}
 
-        // let input_without_manual_props = quote! {
-        //     MyComponent {
-        //         key: "value {something}",
-        //         prop: "value",
-        //         div { "Hello, world!" }
-        //     }
-        // };
-
-        // let component: Component = syn::parse2(input_without_manual_props).unwrap();
-
-        // let mut tokens = TokenStream2::new();
-        // component.to_tokens(&mut tokens);
-
-        // dbg!(tokens.to_string());
-    }
-
-    #[test]
-    fn as_template_node() {}
+#[test]
+fn to_tokens_no_manual_props() {
+    let input_without_manual_props = quote! {
+        MyComponent {
+            key: "value {something}",
+            prop: "value",
+            div { "Hello, world!" }
+        }
+    };
+    let component: Component = syn::parse2(input_without_manual_props).unwrap();
+    println!("{}", component.to_token_stream().pretty_unparse());
 }

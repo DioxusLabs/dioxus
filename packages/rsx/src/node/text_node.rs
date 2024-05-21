@@ -1,8 +1,11 @@
+use self::literal::{HotLiteral, RsxLiteral};
+
 use super::*;
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct TextNode {
     pub input: IfmtInput,
+    pub hr_idx: CallerLocation,
     pub dyn_idx: CallerLocation,
 }
 
@@ -10,6 +13,7 @@ impl Parse for TextNode {
     fn parse(input: ParseStream) -> Result<Self> {
         Ok(Self {
             input: input.parse()?,
+            hr_idx: CallerLocation::default(),
             dyn_idx: CallerLocation::default(),
         })
     }
@@ -24,42 +28,17 @@ impl ToTokens for TextNode {
                 dioxus_core::DynamicNode::Text(dioxus_core::VText::new(#txt.to_string()))
             })
         } else {
-            // If the text is dynamic, we actually create a signal of the formatted segments
-            // Crazy, right?
-            let segments = txt.as_htotreloaded();
-            let idx = txt.hr_idx.get() + 1;
-
-            let rendered_segments = txt.segments.iter().filter_map(|s| match s {
-                Segment::Literal(_) => None,
-                Segment::Formatted(fmt) => {
-                    // just render as a format_args! call
-                    Some(quote! {
-                        format!("{}", #fmt)
-                    })
-                }
-            });
+            // todo:
+            // Use the RsxLiteral implementation to spit out a hotreloadable variant of this string
+            // This is not super efficient since we're doing a bit of cloning
+            let as_lit = RsxLiteral {
+                hr_idx: self.hr_idx.clone(),
+                raw: syn::Lit::Str(txt.source.as_ref().unwrap().clone()),
+                value: HotLiteral::Fmted(txt.clone()),
+            };
 
             tokens.append_all(quote! {
-                dioxus_core::DynamicNode::Text(dioxus_core::VText::new({
-                    // Create a signal of the formatted segments
-                    // htotreloading will find this via its location and then update the signal
-                    static __SIGNAL: GlobalSignal<FmtedSegments> = GlobalSignal::with_key(|| #segments, {
-                        concat!(
-                            file!(),
-                            ":",
-                            line!(),
-                            ":",
-                            column!(),
-                            ":",
-                            #idx
-                        )
-                    });
-
-                    // render the signal and subscribe the component to its changes
-                    __SIGNAL.with(|s| s.render_with(
-                        vec![ #(#rendered_segments),* ]
-                    ))
-                }))
+                dioxus_core::DynamicNode::Text(dioxus_core::VText::new( #as_lit ))
             })
         }
     }
@@ -82,4 +61,16 @@ impl TextNode {
             },
         }
     }
+}
+
+#[test]
+fn parses() {
+    let input = syn::parse2::<TextNode>(quote! { "hello world" }).unwrap();
+    assert_eq!(input.input.source.unwrap().value(), "hello world");
+}
+
+#[test]
+fn to_tokens_with_hr() {
+    let lit = syn::parse2::<TextNode>(quote! { "hi {world1} {world2} {world3}" }).unwrap();
+    println!("{}", lit.to_token_stream().pretty_unparse());
 }

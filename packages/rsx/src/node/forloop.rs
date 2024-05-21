@@ -31,15 +31,6 @@ impl Parse for ForLoop {
     }
 }
 
-// When rendering as a node in the static layout, use the ID of the node
-impl ForLoop {
-    pub fn to_template_node(&self) -> TemplateNode {
-        TemplateNode::Dynamic {
-            id: self.dyn_idx.get(),
-        }
-    }
-}
-
 // When rendering as a proper dynamic node, write out the expr and a `into_dyn_node` call
 impl ToTokens for ForLoop {
     fn to_tokens(&self, tokens: &mut TokenStream2) {

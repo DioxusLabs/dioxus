@@ -6,36 +6,50 @@
 //! This involves custom structs for name, attributes, and children, as well as a custom parser for the block itself.
 //! It also bubbles out diagnostics if it can to give better errors.
 
+use std::fmt::Display;
+
 use crate::{
-    is_if_chain_terminated, location::CallerLocation, BodyNode, ElementAttrValue, IfmtInput,
+    intern, is_if_chain_terminated, location::CallerLocation, node::literal::HotLiteral, BodyNode,
+    Diagnostics, HotReloadingContext, IfmtInput,
 };
-use krates::cfg_expr::expr::lexer::Token;
+
+use dioxus_core::prelude::TemplateAttribute;
+use proc_macro2::{Literal, TokenStream};
+use proc_macro2_diagnostics::SpanDiagnosticExt;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseBuffer},
     spanned::Spanned,
-    token::{self, At, Brace},
-    AngleBracketedGenericArguments, Expr, ExprIf, Ident, Lit, LitStr, PatLit, PathArguments, Token,
+    token::{self, Brace},
+    AngleBracketedGenericArguments, Expr, ExprClosure, ExprIf, Ident, Lit, LitStr, PatLit,
+    PathArguments, Token,
 };
+
+use super::literal::RsxLiteral;
 
 /// An item in the form of
 ///
-/// name<Generics> {
+/// {
 ///  attributes,
+///  ..spreads,
 ///  children
 /// }
 ///
 /// Does not make any guarnatees about the contents of the block - this is meant to be verified by the
 /// element/component impls themselves.
 ///
+/// The name of the block is expected to be parsed by the parent parser. It will accept items out of
+/// order if possible and then bubble up diagnostics to the parent. This lets us give better errors
+/// and autocomplete
+///
 /// todo: add some diagnostics
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct RsxBlock {
-    pub name: syn::Path,
-    pub generics: Option<AngleBracketedGenericArguments>,
     pub fields: Vec<Attribute>,
+    pub spreads: Vec<Spread>,
     pub children: Vec<BodyNode>,
     pub brace: token::Brace,
+    pub diagnostics: Diagnostics,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
@@ -47,70 +61,83 @@ pub struct Attribute {
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum AttributeName {
+    BuiltIn(Ident),
     Custom(LitStr),
-    Known(Ident),
-    Spread(Token![..]),
+}
+
+// ..spread attribute
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+pub struct Spread {
+    pub expr: Expr,
+    pub dyn_idx: CallerLocation,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum AttributeValue {
+    /// Just a regular shorthand attribute - an ident. Makes our parsing a bit more opaque.
     /// attribute,
     Shorthand(Ident),
 
+    /// Any attribute that's a literal. These get hotreloading super powers
+    ///
     /// attribute: "value"
-    AttrIfmt(IfmtInput),
+    /// attribute: bool,
+    /// attribute: 1,
+    AttrLit(RsxLiteral),
 
     /// Unterminated expression - full expressions are handled by AttrExpr
+    ///
     /// attribute: if bool { "value" }
+    ///
+    /// Currently these don't get hotreloading super powers, but they could, depending on how far
+    /// we want to go with it
     AttrOptionalExpr {
         condition: Expr,
         value: Box<AttributeValue>,
     },
 
-    /// attribute: true
+    /// attribute: some_expr
     AttrExpr(Expr),
-
-    /// onclick: move |_| {}
-    EventTokens(Expr),
-
-    /// ..spread
-    Spread(Expr),
 }
 
 impl Parse for RsxBlock {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        // Parse the name of the block.
-        // todo: add more partial parsing options to give better autocomplete
-        let mut name = input.parse::<syn::Path>()?;
-
-        // extract the path arguments from the path into prop_gen_args
-        let generics = normalize_path(&mut name);
-
         let content: ParseBuffer;
         let brace = syn::braced!(content in input);
 
+        // todo: toss a warning for
         // Parse attributes
         let mut attributes = vec![];
+        let mut spreads = vec![];
+        let mut diagnostics = Diagnostics::new();
         loop {
-            // If there's more than 1 attr and we're not at the end, we need a comma
-            if attributes.len() > 0 && !content.is_empty() {
-                content.parse::<Token![,]>()?; // <--- diagnostics...
-            }
-
             if content.is_empty() {
                 break;
             }
 
             // Parse spread attributes
-            // For components this might actually be a props spread, which needs to come last
+            // These are expected forced to come after regular attributes
             if content.peek(Token![..]) {
                 let _spread = content.parse::<Token![..]>()?;
+
+                if content.peek(Token![.]) {
+                    let _extra = content.parse::<Token![.]>()?;
+                    diagnostics.push(
+                        _extra
+                            .span()
+                            .error("Spread expressions only take two dots - not 3! (..spread)"),
+                    );
+                }
+
                 let expr = content.parse::<Expr>()?;
-                attributes.push(Attribute {
-                    name: AttributeName::Spread(_spread),
-                    value: AttributeValue::Spread(expr),
+                spreads.push(Spread {
+                    expr,
                     dyn_idx: CallerLocation::default(),
                 });
+
+                if !content.is_empty() {
+                    content.parse::<Token![,]>()?; // <--- diagnostics...
+                }
                 continue;
             }
 
@@ -121,120 +148,151 @@ impl Parse for RsxBlock {
                 && !content.peek2(Brace)
                 && !content.peek2(Token![:])
                 && !content.peek2(Token![-])
+                && !content.peek2(token::Brace)
             {
                 let name = content.parse::<Ident>()?;
+
+                if !spreads.is_empty() {
+                    diagnostics.push(name.span().error(
+                        "Spread attributes must come after regular attributes and before children",
+                    ));
+                    diagnostics.push(spreads.last().unwrap().expr.span().warning(
+                        "This spread attribute should be moved to the end of the attribute list",
+                    ));
+                }
+
                 attributes.push(Attribute {
-                    name: AttributeName::Known(name.clone()),
+                    name: AttributeName::BuiltIn(name.clone()),
                     value: AttributeValue::Shorthand(name),
                     dyn_idx: CallerLocation::default(),
                 });
+
+                if !content.is_empty() {
+                    content.parse::<Token![,]>()?; // <--- diagnostics...
+                }
+
                 continue;
             }
 
-            // We're going to just try parsing the next attribute directly, so early escape if it's not
-            // in the right form
-            if !((content.peek(LitStr) || content.peek(Ident))
-                // And followed by a colon
-                && content.peek2(Token![:]))
-            {
-                break;
-            }
+            // Parse regular attributes
+            if (content.peek(LitStr) || content.peek(Ident)) && content.peek2(Token![:]) {
+                // Parse the name as either a known or custom attribute
+                let name = match content.peek(LitStr) {
+                    true => AttributeName::Custom(content.parse::<LitStr>()?),
+                    false => AttributeName::BuiltIn(content.parse::<Ident>()?),
+                };
 
-            // Parse the name as either a known or custom attribute
-            let name = match content.peek(LitStr) {
-                true => AttributeName::Custom(content.parse::<LitStr>()?),
-                false => AttributeName::Known(content.parse::<Ident>()?),
-            };
+                // Ensure there's a colon
+                _ = content.parse::<Token![:]>()?;
 
-            // Ensure there's a colon
-            _ = content.parse::<Token![:]>()?;
+                // if statements in attributes get automatic closing in some cases
+                let value = if content.peek(Token![if]) {
+                    let if_expr = content.parse::<ExprIf>()?;
+                    if is_if_chain_terminated(&if_expr) {
+                        AttributeValue::AttrExpr(Expr::If(if_expr))
+                    } else {
+                        AttributeValue::AttrOptionalExpr {
+                            condition: *if_expr.cond,
+                            value: {
+                                let stmts = &if_expr.then_branch.stmts;
 
-            // if statements in attributes get automatic closing in some cases
-            let value = if content.peek(Token![if]) {
-                let if_expr = content.parse::<ExprIf>()?;
-                if is_if_chain_terminated(&if_expr) {
-                    AttributeValue::AttrExpr(Expr::If(if_expr))
-                } else {
-                    AttributeValue::AttrOptionalExpr {
-                        condition: *if_expr.cond,
-                        value: {
-                            let stmts = &if_expr.then_branch.stmts;
+                                if stmts.len() != 1 {
+                                    return Err(syn::Error::new(
+                                        if_expr.then_branch.span(),
+                                        "Expected a single statement in the if block",
+                                    ));
+                                }
 
-                            if stmts.len() != 1 {
-                                return Err(syn::Error::new(
-                                    if_expr.then_branch.span(),
-                                    "Expected a single statement in the if block",
-                                ));
-                            }
+                                // either an ifmt or an expr in the block
+                                let stmt = &stmts[0];
 
-                            // either an ifmt or an expr in the block
-                            let stmt = &stmts[0];
+                                // Either it's a valid ifmt or an expression
+                                match stmt {
+                                    syn::Stmt::Expr(exp, None) => {
+                                        // Try parsing the statement as an IfmtInput by passing it through tokens
+                                        let value: Result<RsxLiteral, syn::Error> =
+                                            syn::parse2(quote! { #exp });
 
-                            // Either it's a valid ifmt or an expression
-                            match stmt {
-                                syn::Stmt::Expr(exp, None) => {
-                                    // Try parsing the statement as an IfmtInput by passing it through tokens
-                                    let value: Result<IfmtInput, syn::Error> =
-                                        syn::parse2(quote! { #exp });
-
-                                    match value {
-                                        Ok(res) => Box::new(AttributeValue::AttrIfmt(res)),
-                                        Err(_) => Box::new(AttributeValue::AttrExpr(exp.clone())),
+                                        match value {
+                                            Ok(res) => Box::new(AttributeValue::AttrLit(res)),
+                                            Err(_) => {
+                                                Box::new(AttributeValue::AttrExpr(exp.clone()))
+                                            }
+                                        }
+                                    }
+                                    _ => {
+                                        return Err(syn::Error::new(
+                                            stmt.span(),
+                                            "Expected an expression",
+                                        ))
                                     }
                                 }
-                                _ => {
-                                    return Err(syn::Error::new(
-                                        stmt.span(),
-                                        "Expected an expression",
-                                    ))
-                                }
-                            }
-                        },
+                            },
+                        }
                     }
-                }
-            } else if content.peek(LitStr) {
-                let value = content.parse()?;
-                AttributeValue::AttrIfmt(value)
-            } else if content.peek(Token![move]) || content.peek(Token![|]) {
-                // todo: add better partial expansion
-                let value = content.parse()?;
-                AttributeValue::EventTokens(value)
-            } else {
-                let value = content.parse::<Expr>()?;
-                AttributeValue::AttrExpr(value)
-            };
+                } else if RsxLiteral::peek(&content) {
+                    let value = content.parse()?;
+                    AttributeValue::AttrLit(value)
+                } else if content.peek(Token![move]) || content.peek(Token![|]) {
+                    // todo: add better partial expansion for closures - that's why we're handling them differently here
+                    let value: Expr = content.parse()?;
+                    AttributeValue::AttrExpr(value)
+                } else {
+                    let value = content.parse::<Expr>()?;
+                    AttributeValue::AttrExpr(value)
+                };
 
-            attributes.push(Attribute {
-                name,
-                value,
-                dyn_idx: CallerLocation::default(),
-            });
+                if !spreads.is_empty() {
+                    diagnostics.push(name.span().error(
+                        "Spread attributes must come after regular attributes and before children",
+                    ));
+                    diagnostics.push(spreads.last().unwrap().expr.span().warning(
+                        "This spread attribute should be moved to the end of the attribute list",
+                    ));
+                }
+
+                attributes.push(Attribute {
+                    name,
+                    value,
+                    dyn_idx: CallerLocation::default(),
+                });
+
+                if !content.is_empty() {
+                    content.parse::<Token![,]>()?; // <--- diagnostics...
+                }
+
+                continue;
+            }
+
+            break;
         }
 
         // Parse children
         let mut child_nodes = vec![];
         while !content.is_empty() {
+            println!("Parsing children... {}", content.to_string());
             let child = content.parse()?;
 
             // try to give helpful diagnostic if a prop is in the wrong location
-
             child_nodes.push(child);
         }
 
         Ok(Self {
-            name,
-            generics,
             fields: attributes,
             children: child_nodes,
+            spreads,
             brace,
+            diagnostics,
         })
     }
 }
 
-impl RsxBlock {
-    // peek the stream to see if this will parse as a block
-    pub fn peek(input: syn::parse::ParseStream) -> bool {
-        todo!()
+impl Display for AttributeName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Custom(lit) => write!(f, "{}", lit.value()),
+            Self::BuiltIn(ident) => write!(f, "{}", ident),
+        }
     }
 }
 
@@ -242,16 +300,23 @@ impl AttributeName {
     pub fn ident_to_str(&self) -> String {
         match self {
             Self::Custom(lit) => lit.value(),
-            Self::Known(ident) => ident.to_string(),
-            Self::Spread(_) => "..".to_string(),
+            Self::BuiltIn(ident) => ident.to_string(),
         }
     }
 
     pub fn span(&self) -> proc_macro2::Span {
         match self {
             Self::Custom(lit) => lit.span(),
-            Self::Known(ident) => ident.span(),
-            Self::Spread(token) => token.span(),
+            Self::BuiltIn(ident) => ident.span(),
+        }
+    }
+}
+
+impl ToTokens for AttributeName {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self {
+            Self::Custom(lit) => lit.to_tokens(tokens),
+            Self::BuiltIn(ident) => ident.to_tokens(tokens),
         }
     }
 }
@@ -260,11 +325,9 @@ impl AttributeValue {
     pub fn span(&self) -> proc_macro2::Span {
         match self {
             Self::Shorthand(ident) => ident.span(),
-            Self::AttrIfmt(ifmt) => ifmt.span(),
+            Self::AttrLit(ifmt) => ifmt.span(),
             Self::AttrOptionalExpr { value, .. } => value.span(),
             Self::AttrExpr(expr) => expr.span(),
-            Self::EventTokens(expr) => expr.span(),
-            Self::Spread(expr) => expr.span(),
         }
     }
 }
@@ -274,10 +337,66 @@ impl Attribute {
         self.name.span()
     }
 
+    /// Run this closure against the attribute if it's hotreloadable
+    pub fn with_hr(&self, f: impl FnOnce(&RsxLiteral)) {
+        if let AttributeValue::AttrLit(ifmt) = &self.value {
+            if !ifmt.is_static() {
+                f(ifmt);
+            }
+        }
+    }
+
     pub fn ifmt(&self) -> Option<&IfmtInput> {
         match &self.value {
-            AttributeValue::AttrIfmt(ifmt) => Some(ifmt),
+            AttributeValue::AttrLit(lit) => match &lit.value {
+                HotLiteral::Fmted(input) => Some(input),
+                _ => None,
+            },
             _ => None,
+        }
+    }
+
+    pub fn as_static_str_literal(&self) -> Option<(&AttributeName, &LitStr)> {
+        match &self.value {
+            AttributeValue::AttrLit(lit) => match &lit.value {
+                HotLiteral::Str(input) => Some((&self.name, input)),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    pub fn is_static_str_literal(&self) -> bool {
+        self.as_static_str_literal().is_some()
+    }
+
+    pub fn to_template_attribute<Ctx: HotReloadingContext>(
+        &self,
+        rust_name: &str,
+    ) -> TemplateAttribute {
+        // If it's a dynamic node, just return it
+        // For dynamic attributes, we need to check the mapping to see if that mapping exists
+        // todo: one day we could generate new dynamic attributes on the fly if they're a literal,
+        // or something sufficiently serializable
+        //  (ie `checked`` being a bool and bools being interpretable)
+        //
+        // For now, just give up if that attribute doesn't exist in the mapping
+        if !self.ifmt().map(|f| f.is_static()).unwrap_or(false) {
+            let id = self.dyn_idx.get();
+            return TemplateAttribute::Dynamic { id };
+        }
+
+        // Otherwise it's a static node and we can build it
+        let value = self.ifmt().unwrap().to_static().unwrap();
+        let attribute_name_rust = self.name.to_string();
+
+        let (name, namespace) = Ctx::map_attribute(&rust_name, &attribute_name_rust)
+            .unwrap_or((intern(attribute_name_rust.as_str()), None));
+
+        TemplateAttribute::Static {
+            name,
+            namespace,
+            value: intern(value.as_str()),
         }
     }
 }
@@ -286,47 +405,32 @@ impl ToTokens for AttributeValue {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         match self {
             Self::Shorthand(ident) => ident.to_tokens(tokens),
-            Self::AttrIfmt(ifmt) => ifmt.to_tokens(tokens),
+            Self::AttrLit(ifmt) => ifmt.to_tokens(tokens),
             Self::AttrOptionalExpr { condition, value } => {
                 tokens.append_all(quote! { if #condition { Some(#value) else { None } } })
             }
             Self::AttrExpr(expr) => expr.to_tokens(tokens),
-            Self::EventTokens(expr) => expr.to_tokens(tokens),
-            Self::Spread(expr) => expr.to_tokens(tokens),
         }
-    }
-}
-
-fn normalize_path(name: &mut syn::Path) -> Option<AngleBracketedGenericArguments> {
-    let seg = name.segments.last_mut()?;
-    match seg.arguments.clone() {
-        PathArguments::AngleBracketed(args) => {
-            seg.arguments = PathArguments::None;
-            Some(args)
-        }
-        _ => None,
     }
 }
 
 #[test]
 fn basic_cases() {
     let input = quote! {
-        div { "Hello, world!" }
+        { "Hello, world!" }
     };
 
     let block: RsxBlock = syn::parse2(input).unwrap();
-    assert_eq!(block.name, syn::parse_str("div").unwrap());
-    assert_eq!(block.generics, None);
     assert_eq!(block.fields.len(), 0);
     assert_eq!(block.children.len(), 1);
 
     let input = quote! {
-        Component<Generic> {
+        {
             key: "value",
-            ..spread,
             onclick: move |_| {
                 "Hello, world!"
             },
+            ..spread,
             "Hello, world!"
         }
     };
@@ -335,19 +439,19 @@ fn basic_cases() {
     dbg!(block);
 
     let complex_element = quote! {
-        div {
+        {
             key: "value",
-            ..spread,
-            ..spread1,
             onclick2: move |_| {
                 "Hello, world!"
             },
-            ..spread2,
             thing: if true { "value" },
             otherthing: if true { "value" } else { "value" },
             onclick: move |_| {
                 "Hello, world!"
             },
+            ..spread,
+            ..spread1
+            ..spread2,
             "Hello, world!"
         }
     };
@@ -355,12 +459,12 @@ fn basic_cases() {
     let block: RsxBlock = syn::parse2(complex_element).unwrap();
 
     let complex_component = quote! {
-        ::crate::some::other::Component<Generic> {
+        {
             key: "value",
-            ..spread,
             onclick2: move |_| {
                 "Hello, world!"
             },
+            ..spread,
             "Hello, world!"
         }
     };
@@ -375,7 +479,7 @@ fn ensure_props_before_elements() {}
 #[test]
 fn partial_cases() {
     let with_hander = quote! {
-        div {
+        {
             onclick: move |_| {
                 some
             }
@@ -384,3 +488,8 @@ fn partial_cases() {
 
     let block: RsxBlock = syn::parse2(with_hander).unwrap();
 }
+
+/// Give helpful errors in the cases where the tree is malformed but we can still give a good error
+/// Usually this just boils down to incorrect orders
+#[test]
+fn proper_diagnostics() {}

@@ -1,6 +1,9 @@
 use dioxus_rsx::{hot_reload::Empty, CallBody};
 use proc_macro2::{Span, TokenStream};
+use quote::ToTokens;
 use syn::Item;
+
+use dioxus_rsx::PrettyUnparse;
 
 #[test]
 fn rsx_writeout_snapshot() {
@@ -143,4 +146,19 @@ fn callbody_ctx() {
     // for root in body.node_paths.iter() {
     //     dbg!(body.get_dyn_node(&root));
     // }
+}
+
+#[test]
+fn simple_case() {
+    let item = quote::quote! {
+        div {
+            id: "Some cool attribute {cool}",
+            class: "Some cool attribute {cool2}",
+            "hi!"
+            {some_expr}
+        }
+    };
+
+    let cb: CallBody = syn::parse2(item).unwrap();
+    println!("{}", cb.to_token_stream().pretty_unparse());
 }

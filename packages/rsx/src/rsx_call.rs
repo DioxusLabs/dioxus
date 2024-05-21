@@ -81,27 +81,23 @@ impl CallBody {
                 BodyNode::RawExpr(_) => { /* one day maybe provide hr here? */ }
                 BodyNode::Text(text) => {
                     if !text.is_static() {
-                        text.input.hr_idx.set(self.next_ifmt_idx())
+                        text.hr_idx.set(self.next_ifmt_idx());
                     }
                 }
 
                 BodyNode::Element(el) => {
-                    // Walk the attributes looking for ifmt opportunities
+                    // Walk the attributes looking for hotreload opportunities
                     for attr in &el.attributes {
-                        if let Some(ifmt) = attr.ifmt() {
-                            ifmt.hr_idx.set(self.next_ifmt_idx());
-                        }
+                        attr.with_hr(|lit| lit.hr_idx.set(self.next_ifmt_idx()));
                     }
 
                     self.cascade_hotreload_info(&el.children);
                 }
 
                 BodyNode::Component(comp) => {
-                    // walk the props looking for ifmts
+                    // walk the props looking for hotreload opportunities
                     for prop in comp.fields.iter() {
-                        if let Some(ifmt) = prop.ifmt() {
-                            ifmt.hr_idx.set(self.next_ifmt_idx());
-                        }
+                        prop.with_hr(|lit| lit.hr_idx.set(self.next_ifmt_idx()));
                     }
 
                     comp.children.template_idx.set(self.next_template_idx());

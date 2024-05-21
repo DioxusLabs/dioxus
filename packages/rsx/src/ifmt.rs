@@ -3,15 +3,15 @@ use proc_macro2::{Span, TokenStream};
 use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
 use std::str::FromStr;
 use syn::{
-    parse::{Parse, ParseStream},
+    parse::{Parse, ParseStream, Peek},
     *,
 };
 
+/// A hot-reloadable formatted string, boolean, number or other literal
 #[derive(Debug, Eq, Clone, Hash, Default)]
 pub struct IfmtInput {
     pub source: Option<LitStr>,
     pub segments: Vec<Segment>,
-    pub hr_idx: CallerLocation,
 }
 
 // Specifically avoid colliding the location field in partialeq
@@ -27,7 +27,6 @@ impl IfmtInput {
         Self {
             source: None,
             segments: vec![Segment::Literal(input.to_string())],
-            hr_idx: Default::default(),
         }
     }
 
@@ -66,31 +65,6 @@ impl IfmtInput {
                     None
                 }
             })
-    }
-
-    pub fn as_htotreloaded(&self) -> TokenStream {
-        let mut idx = 0_usize;
-        let segments = self.segments.iter().map(|s| match s {
-            Segment::Literal(lit) => quote! {
-                FmtSegment::Literal { value: #lit }
-            },
-            Segment::Formatted(_fmt) => {
-                // increment idx for the dynamic segment so we maintain the mapping
-                let _idx = idx;
-                idx += 1;
-                quote! {
-                    FmtSegment::Dynamic { id: #_idx }
-                }
-            }
-        });
-
-        quote! {
-            FmtedSegments::new(
-                // The static segments with idxs for locations
-                vec![ #(#segments),* ],
-            )
-        }
-        .to_token_stream()
     }
 
     /// Try to convert this into a single _.to_string() call if possible
@@ -199,7 +173,6 @@ impl FromStr for IfmtInput {
         Ok(Self {
             segments,
             source: None,
-            hr_idx: Default::default(),
         })
     }
 }
@@ -331,46 +304,4 @@ impl Parse for IfmtInput {
         ifmt.source = Some(input);
         Ok(ifmt)
     }
-}
-
-fn hmm() {
-    // // place down the signal stuff
-
-    // let segments = txt.as_htotreloaded();
-
-    // let rendered_segments = txt.segments.iter().filter_map(|s| match s {
-    //     Segment::Literal(lit) => None,
-    //     Segment::Formatted(fmt) => {
-    //         // just render as a format_args! call
-    //         Some(quote! {
-    //             format!("{}", #fmt)
-    //         })
-    //     }
-    // });
-
-    // let old_idx = self.location.idx.get();
-    // let cur_idx = (old_idx) * 100000 + 1 + idx;
-
-    // quote! {
-    //     {
-    //         // Create a signal of the formatted segments
-    //         // htotreloading will find this via its location and then update the signal
-    //         static __SIGNAL: GlobalSignal<FmtedSegments> = GlobalSignal::with_key(|| #segments, {
-    //             concat!(
-    //                 file!(),
-    //                 ":",
-    //                 line!(),
-    //                 ":",
-    //                 column!(),
-    //                 ":",
-    //                 #cur_idx
-    //             )
-    //         });
-
-    //         // render the signal and subscribe the component to its changes
-    //         __SIGNAL.with(|s| s.render_with(
-    //             vec![ #(#rendered_segments),* ]
-    //         ))
-    //     }
-    // }
 }

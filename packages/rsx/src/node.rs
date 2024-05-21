@@ -3,22 +3,22 @@ use super::*;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
 use syn::{
-    braced,
     spanned::Spanned,
     token::{self, Brace},
     Expr, ExprIf, Ident, LitStr, Pat,
 };
 
-mod attribute;
+// mod attribute;
 mod block;
 mod component;
 mod element;
 mod forloop;
 mod ifchain;
+mod literal;
 mod raw_expr;
 mod text_node;
 
-pub use attribute::*;
+// pub use attribute::*;
 pub use block::*;
 pub use body::*;
 pub use component::*;
@@ -33,14 +33,14 @@ pub enum BodyNode {
     /// div {}
     Element(Element),
 
+    /// Component {}
+    Component(Component),
+
     /// "text {formatted}"
     Text(TextNode),
 
     /// {expr}
     RawExpr(RawExpr),
-
-    /// Component {}
-    Component(Component),
 
     /// for item in items {}
     ForLoop(ForLoop),
@@ -164,55 +164,21 @@ impl BodyNode {
                 let (tag, namespace) =
                     Ctx::map_element(&rust_name).unwrap_or((intern(rust_name.as_str()), None));
 
-                let mut static_attr_array = Vec::new();
-
-                for attr in &el.merged_attributes {
-                    let template_attr = match attr.as_static_str_literal() {
-                        // For static attributes, we don't need to pull in any mapping or anything
-                        // We can just build them directly
-                        Some((name, value)) => {
-                            let value = value.source.as_ref().unwrap();
-                            let attribute_name_rust = name.to_string();
-
-                            let (name, namespace) =
-                                Ctx::map_attribute(&rust_name, &attribute_name_rust)
-                                    .unwrap_or((intern(attribute_name_rust.as_str()), None));
-
-                            let static_attr = TemplateAttribute::Static {
-                                name,
-                                namespace,
-                                value: intern(value.value().as_str()),
-                            };
-
-                            static_attr
-                        }
-
-                        // For dynamic attributes, we need to check the mapping to see if that mapping exists
-                        // todo: one day we could generate new dynamic attributes on the fly if they're a literal,
-                        // or something sufficiently serializable
-                        //  (ie `checked`` being a bool and bools being interpretable)
-                        //
-                        // For now, just give up if that attribute doesn't exist in the mapping
-                        None => {
-                            let id = usize::MAX;
-                            // let id = attr.dyn_idx.get();
-                            TemplateAttribute::Dynamic { id }
-                        }
-                    };
-
-                    static_attr_array.push(template_attr);
-                }
-
                 TemplateNode::Element {
-                    children: el
-                        .children
-                        .iter()
-                        .map(|c| c.to_template_node::<Ctx>())
-                        .collect::<Vec<_>>()
-                        .leak(),
                     tag,
                     namespace,
-                    attrs: &[],
+                    children: intern(
+                        el.children
+                            .iter()
+                            .map(|c| c.to_template_node::<Ctx>())
+                            .collect::<Vec<_>>(),
+                    ),
+                    attrs: intern(
+                        el.attributes
+                            .iter()
+                            .map(|attr| attr.to_template_attribute::<Ctx>(&rust_name))
+                            .collect::<Vec<_>>(),
+                    ),
                 }
             }
             BodyNode::Text(text) if text.is_static() => {
@@ -235,17 +201,6 @@ impl BodyNode {
             BodyNode::IfChain(chain) => TemplateNode::Dynamic {
                 id: chain.dyn_idx.get(),
             },
-        }
-    }
-
-    pub(crate) fn set_location_idx(&self, idx: usize) {
-        match self {
-            BodyNode::IfChain(chain) => chain.dyn_idx.set(idx),
-            BodyNode::ForLoop(floop) => floop.dyn_idx.set(idx),
-            BodyNode::Component(comp) => comp.dyn_idx.set(idx),
-            BodyNode::Text(text) => text.dyn_idx.set(idx),
-            BodyNode::RawExpr(expr) => expr.dyn_idx.set(idx),
-            BodyNode::Element(_) => todo!(),
         }
     }
 

@@ -56,7 +56,6 @@
 use crate::*;
 use dioxus_core::prelude::Template;
 use proc_macro2::TokenStream as TokenStream2;
-use syn::braced;
 
 use self::location::CallerLocation;
 
@@ -77,8 +76,6 @@ type AttributePath = Vec<u8>;
 pub struct TemplateBody {
     pub roots: Vec<BodyNode>,
     pub template_idx: CallerLocation,
-    pub brace: Option<syn::token::Brace>,
-
     pub node_paths: Vec<NodePath>,
     pub attr_paths: Vec<AttributePath>,
     current_path: Vec<u8>,
@@ -89,24 +86,11 @@ impl Parse for TemplateBody {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut nodes = Vec::new();
 
-        let mut brace_token = None;
-
-        // peek the brace if it exists
-        // some bodies have braces, some don't, depends
-        if input.peek(syn::token::Brace) {
-            let content;
-            brace_token = Some(braced!(content in input));
-            while !content.is_empty() {
-                nodes.push(content.parse::<BodyNode>()?);
-            }
-        } else {
-            while !input.is_empty() {
-                nodes.push(input.parse::<BodyNode>()?);
-            }
+        while !input.is_empty() {
+            nodes.push(input.parse::<BodyNode>()?);
         }
 
         let mut body = Self::from_nodes(nodes);
-        body.brace = brace_token;
 
         Ok(body)
     }
@@ -129,10 +113,20 @@ impl ToTokens for TemplateBody {
 
         let TemplateBody { roots, .. } = self;
         let index = self.template_idx.get();
-        let dynamic_nodes = self.node_paths.iter().map(|path| self.get_dyn_node(path));
-        let dyn_attr_printer = self.attr_paths.iter().map(|path| self.get_dyn_attr(path));
         let node_paths = self.node_paths.iter().map(|it| quote!(&[#(#it),*]));
         let attr_paths = self.attr_paths.iter().map(|it| quote!(&[#(#it),*]));
+        let dynamic_nodes = self.node_paths.iter().map(|path| {
+            let node = self.get_dyn_node(path);
+            quote::quote! {
+                #node
+            }
+        });
+        let dyn_attr_printer = self.attr_paths.iter().map(|path| {
+            let attr = self.get_dyn_attr(path);
+            quote::quote! {
+                ()
+            }
+        });
 
         tokens.append_all(quote! {
             Some({
@@ -165,8 +159,6 @@ impl TemplateBody {
             template_idx: CallerLocation::default(),
             node_paths: Vec::new(),
             attr_paths: Vec::new(),
-            brace: None,
-
             current_path: Vec::new(),
         };
 
@@ -237,7 +229,7 @@ impl TemplateBody {
             BodyNode::Component(comp) => comp.dyn_idx.set(idx),
             BodyNode::Text(text) => text.dyn_idx.set(idx),
             BodyNode::RawExpr(expr) => expr.dyn_idx.set(idx),
-            BodyNode::Element(_) => todo!(),
+            BodyNode::Element(_) => unreachable!("Elements should not be assigned dynamic paths"),
         }
 
         // And then save the current path as the corresponding path
@@ -283,7 +275,7 @@ impl TemplateBody {
 
     fn implicit_key(&self) -> Option<IfmtInput> {
         match self.roots.first() {
-            Some(BodyNode::Element(el)) if self.roots.len() == 1 => el.key.clone(),
+            Some(BodyNode::Element(el)) if self.roots.len() == 1 => el.key().cloned(),
             Some(BodyNode::Component(comp)) if self.roots.len() == 1 => {
                 comp.get_key().and_then(|f| f.ifmt().cloned())
             }
@@ -299,14 +291,14 @@ impl TemplateBody {
         node
     }
 
-    pub fn get_dyn_attr(&self, path: &AttributePath) -> &AttributeType {
+    pub fn get_dyn_attr(&self, path: &AttributePath) -> &Attribute {
         match self.get_dyn_node(&path[..path.len() - 1]) {
             BodyNode::Element(el) => &el.attributes[*path.last().unwrap() as usize],
             _ => unreachable!(),
         }
     }
 
-    pub fn dynamic_attributes(&self) -> impl Iterator<Item = &AttributeType> {
+    pub fn dynamic_attributes(&self) -> impl Iterator<Item = &Attribute> {
         self.attr_paths.iter().map(|path| self.get_dyn_attr(path))
     }
 
