@@ -15,7 +15,7 @@ pub trait RenderedElementBacking: std::any::Any {
     fn as_any(&self) -> &dyn std::any::Any;
 
     /// Get the number of pixels that an element's content is scrolled
-    fn get_scroll_offset(&self) -> Pin<Box<dyn Future<Output = MountedResult<PixelsVector>>>> {
+    fn get_scroll_offset(&self) -> Pin<Box<dyn Future<Output = MountedResult<PixelsVector2D>>>> {
         Box::pin(async { Err(MountedError::NotSupported) })
     }
 
@@ -84,7 +84,7 @@ impl MountedData {
     }
 
     /// Get the number of pixels that an element's content is scrolled
-    pub async fn get_scroll_offset(&self) -> MountedResult<PixelsVector> {
+    pub async fn get_scroll_offset(&self) -> MountedResult<PixelsVector2D> {
         self.inner.get_scroll_offset().await
     }
 
@@ -119,7 +119,7 @@ impl MountedData {
 
 use dioxus_core::Event;
 
-use crate::geometry::{PixelsLength, PixelsRect, PixelsSize, PixelsVector};
+use crate::geometry::{PixelsRect, PixelsSize, PixelsVector2D};
 
 pub type MountedEvent = Event<MountedData>;
 

@@ -5,8 +5,7 @@ use crate::events::{
 };
 use crate::file_data::{FileEngine, HasFileData};
 use crate::geometry::{
-    ClientPoint, ElementPoint, PagePoint, PixelsLength, PixelsRect, PixelsSize, PixelsVector,
-    ScreenPoint,
+    ClientPoint, ElementPoint, PagePoint, PixelsRect, PixelsSize, PixelsVector2D, ScreenPoint,
 };
 use crate::input_data::{decode_key_location, decode_mouse_button_set, MouseButton};
 use crate::prelude::*;
@@ -428,11 +427,11 @@ impl From<&web_sys::Element> for MountedData {
 impl crate::RenderedElementBacking for web_sys::Element {
     fn get_scroll_offset(
         &self,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::MountedResult<PixelsVector>>>>
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::MountedResult<PixelsVector2D>>>>
     {
         let left = self.scroll_left();
         let top = self.scroll_top();
-        let result = Ok(PixelsVector::new(left as f64, top as f64, 0.0));
+        let result = Ok(PixelsVector2D::new(left as f64, top as f64));
         Box::pin(async { result })
     }
 

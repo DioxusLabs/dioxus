@@ -1,6 +1,6 @@
 use dioxus_core::ElementId;
 use dioxus_html::{
-    geometry::{PixelsLength, PixelsRect, PixelsSize, PixelsVector},
+    geometry::{PixelsRect, PixelsSize, PixelsVector2D},
     MountedResult, RenderedElementBacking,
 };
 
@@ -55,8 +55,8 @@ impl RenderedElementBacking for DesktopElement {
 
     scripted_getter!(
         get_scroll_offset,
-        "return [window.interpreter.getScrollLeft({id}), window.interpreter.getScrollTop({id}), 0]",
-        PixelsVector
+        "return [window.interpreter.getScrollLeft({id}), window.interpreter.getScrollTop({id})]",
+        PixelsVector2D
     );
 
     scripted_getter!(
