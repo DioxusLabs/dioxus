@@ -6,18 +6,16 @@ use std::fmt::{Display, Write};
 
 use crate::writer::*;
 use collect_macros::byte_offset;
-use dioxus_rsx::{BodyNode, CallBody, IfmtInput};
+use dioxus_rsx::{BodyNode, CallBody, HotLiteral, IfmtInput, RsxLiteral, TemplateBody};
 use proc_macro2::LineColumn;
 use quote::ToTokens;
 use syn::{ExprMacro, MacroDelimiter};
 
 mod buffer;
 mod collect_macros;
-mod component;
-mod element;
-mod expr;
 mod indent;
 mod prettier_please;
+mod rsx_block;
 mod writer;
 
 pub use indent::{IndentOptions, IndentType};
@@ -77,7 +75,8 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
             continue;
         }
 
-        let body = item.parse_body::<CallBody>().unwrap();
+        let call = item.parse_body::<CallBody>().unwrap();
+        let body = &call.body;
 
         let rsx_start = macro_path.span().start();
 
@@ -135,12 +134,12 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
 pub fn write_block_out(body: CallBody) -> Option<String> {
     let mut buf = Writer::new("");
 
-    write_body(&mut buf, &body);
+    write_body(&mut buf, &body.body);
 
     buf.consume()
 }
 
-fn write_body(buf: &mut Writer, body: &CallBody) {
+fn write_body(buf: &mut Writer, body: &TemplateBody) {
     match body.roots.len() {
         0 => {}
         1 if matches!(body.roots[0], BodyNode::Text(_)) => {
@@ -157,7 +156,7 @@ pub fn fmt_block_from_expr(raw: &str, expr: ExprMacro) -> Option<String> {
 
     let mut buf = Writer::new(raw);
 
-    write_body(&mut buf, &body);
+    write_body(&mut buf, &body.body);
 
     buf.consume()
 }
@@ -170,7 +169,7 @@ pub fn fmt_block(block: &str, indent_level: usize, indent: IndentOptions) -> Opt
     buf.out.indent = indent;
     buf.out.indent_level = indent_level;
 
-    write_body(&mut buf, &body);
+    write_body(&mut buf, &body.body);
 
     // writing idents leaves the final line ended at the end of the last ident
     if buf.out.buf.contains('\n') {
@@ -220,6 +219,15 @@ impl Display for DisplayIfmt<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let inner_tokens = self.0.source.as_ref().unwrap().to_token_stream();
         inner_tokens.fmt(f)
+    }
+}
+
+pub fn lit_to_string(lit: &RsxLiteral) -> String {
+    match &lit.value {
+        HotLiteral::Fmted(f) => ifmt_to_string(f),
+        HotLiteral::Float(f) => f.to_string(),
+        HotLiteral::Int(f) => f.to_string(),
+        HotLiteral::Bool(f) => f.value().to_string(),
     }
 }
 

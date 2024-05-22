@@ -1,3 +1,5 @@
+use syn::braced;
+
 use super::*;
 
 #[non_exhaustive]
@@ -18,7 +20,10 @@ impl Parse for ForLoop {
         let pat = input.call(Pat::parse_single)?;
         let in_token = input.parse()?;
         let expr = input.call(Expr::parse_without_eager_brace)?;
-        let body = input.parse()?;
+
+        let content;
+        let _brace = braced!(content in input);
+        let body = content.parse()?;
 
         Ok(Self {
             for_token,
@@ -51,8 +56,8 @@ impl ToTokens for ForLoop {
 #[test]
 fn parses_for_loop() {
     let toks = quote! {
-        for x in y {
-            div {}
+        for item in 0..10 {
+            div { "cool-{item}" }
         }
     };
 

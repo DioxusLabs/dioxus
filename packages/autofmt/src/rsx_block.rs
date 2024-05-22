@@ -1,4 +1,7 @@
-use crate::{ifmt_to_string, prettier_please::unparse_expr, Writer};
+use crate::{ifmt_to_string, lit_to_string, prettier_please::unparse_expr, Writer};
+use dioxus_rsx::Attribute as AttributeType;
+use dioxus_rsx::AttributeName as ElementAttrName;
+use dioxus_rsx::AttributeValue as ElementAttrValue;
 use dioxus_rsx::*;
 use proc_macro2::Span;
 use quote::ToTokens;
@@ -30,43 +33,24 @@ enum ShortOptimization {
     NoOpt,
 }
 
-/*
-// whitespace
-div {
-    // some whitespace
-    class: "asdasd"
-
-    // whjiot
-    asdasd // whitespace
-}
-*/
-
 impl Writer<'_> {
-    pub fn write_element(&mut self, el: &Element) -> Result {
-        let Element {
-            name,
-            key,
-            raw_attributes: attributes,
-            children,
-            brace,
-            ..
-        } = el;
-
-        /*
-            1. Write the tag
-            2. Write the key
-            3. Write the attributes
-            4. Write the children
-        */
-
-        write!(self.out, "{name} {{")?;
-
+    /// Basically elements and components are the same thing
+    ///
+    /// This writes the contents out for both in one function, centralizing the annoying logic like
+    /// key handling, breaks, closures, etc
+    pub fn write_rsx_block(
+        &mut self,
+        attributes: &[Attribute],
+        spreads: &[Spread],
+        children: &[BodyNode],
+        brace: &Brace,
+    ) -> Result {
         // decide if we have any special optimizations
         // Default with none, opt the cases in one-by-one
         let mut opt_level = ShortOptimization::NoOpt;
 
         // check if we have a lot of attributes
-        let attr_len = self.is_short_attrs(attributes);
+        let attr_len = self.is_short_attrs(attributes, spreads);
         let is_short_attr_list = (attr_len + self.out.indent_level * 4) < 80;
         let children_len = self.is_short_children(children);
         let is_small_children = children_len.is_some();
@@ -78,7 +62,7 @@ impl Writer<'_> {
 
         // even if the attr is long, it should be put on one line
         // However if we have childrne we need to just spread them out for readability
-        if !is_short_attr_list && attributes.len() <= 1 {
+        if !is_short_attr_list && attributes.len() <= 1 && spreads.is_empty() {
             if children.is_empty() {
                 opt_level = ShortOptimization::Oneliner;
             } else {
@@ -96,7 +80,7 @@ impl Writer<'_> {
         }
 
         // If there's nothing at all, empty optimization
-        if attributes.is_empty() && children.is_empty() && key.is_none() {
+        if attributes.is_empty() && children.is_empty() && spreads.is_empty() {
             opt_level = ShortOptimization::Empty;
 
             // Write comments if they exist
@@ -108,16 +92,14 @@ impl Writer<'_> {
             opt_level = ShortOptimization::NoOpt;
         }
 
+        let has_children = !children.is_empty();
+
         match opt_level {
             ShortOptimization::Empty => {}
             ShortOptimization::Oneliner => {
                 write!(self.out, " ")?;
 
-                self.write_attributes(brace, attributes, key, true)?;
-
-                if !children.is_empty() && (!attributes.is_empty() || key.is_some()) {
-                    write!(self.out, ", ")?;
-                }
+                self.write_attributes(attributes, spreads, true, brace, has_children)?;
 
                 for (id, child) in children.iter().enumerate() {
                     self.write_ident(child)?;
@@ -130,27 +112,21 @@ impl Writer<'_> {
             }
 
             ShortOptimization::PropsOnTop => {
-                if !attributes.is_empty() || key.is_some() {
+                if !attributes.is_empty() {
                     write!(self.out, " ")?;
                 }
-                self.write_attributes(brace, attributes, key, true)?;
 
-                if !children.is_empty() && (!attributes.is_empty() || key.is_some()) {
-                    write!(self.out, ",")?;
-                }
+                self.write_attributes(attributes, spreads, true, brace, has_children)?;
 
                 if !children.is_empty() {
                     self.write_body_indented(children)?;
                 }
+
                 self.out.tabbed_line()?;
             }
 
             ShortOptimization::NoOpt => {
-                self.write_attributes(brace, attributes, key, false)?;
-
-                if !children.is_empty() && (!attributes.is_empty() || key.is_some()) {
-                    write!(self.out, ",")?;
-                }
+                self.write_attributes(attributes, spreads, false, brace, has_children)?;
 
                 if !children.is_empty() {
                     self.write_body_indented(children)?;
@@ -159,39 +135,40 @@ impl Writer<'_> {
                 self.out.tabbed_line()?;
             }
         }
-
-        write!(self.out, "}}")?;
 
         Ok(())
     }
 
     fn write_attributes(
         &mut self,
-        brace: &Brace,
         attributes: &[AttributeType],
-        key: &Option<IfmtInput>,
+        spreads: &[Spread],
         sameline: bool,
+        brace: &Brace,
+        has_children: bool,
     ) -> Result {
-        let mut attr_iter = attributes.iter().peekable();
-
-        if let Some(key) = key {
-            if !sameline {
-                self.out.indented_tabbed_line()?;
-            }
-            write!(self.out, "key: {}", ifmt_to_string(key))?;
-            if !attributes.is_empty() {
-                write!(self.out, ",")?;
-                if sameline {
-                    write!(self.out, " ")?;
-                }
-            }
+        enum AttrType<'a> {
+            Attr(&'a Attribute),
+            Spread(&'a Spread),
         }
+
+        let mut attr_iter = attributes
+            .iter()
+            .map(AttrType::Attr)
+            .chain(spreads.iter().map(AttrType::Spread))
+            .peekable();
 
         while let Some(attr) = attr_iter.next() {
             self.out.indent_level += 1;
 
             if !sameline {
-                self.write_attr_comments(brace, attr.start())?;
+                self.write_attr_comments(
+                    brace,
+                    match attr {
+                        AttrType::Attr(attr) => attr.span(),
+                        AttrType::Spread(attr) => attr.expr.span(),
+                    },
+                )?;
             }
 
             self.out.indent_level -= 1;
@@ -200,7 +177,10 @@ impl Writer<'_> {
                 self.out.indented_tabbed_line()?;
             }
 
-            self.write_attribute(attr)?;
+            match attr {
+                AttrType::Attr(attr) => self.write_attribute(attr)?,
+                AttrType::Spread(attr) => self.write_spread_attribute(&attr.expr)?,
+            }
 
             if attr_iter.peek().is_some() {
                 write!(self.out, ",")?;
@@ -209,6 +189,24 @@ impl Writer<'_> {
                     write!(self.out, " ")?;
                 }
             }
+        }
+
+        let has_attributes = !attributes.is_empty() || !spreads.is_empty();
+
+        if has_attributes && has_children {
+            write!(self.out, ", ")?;
+        }
+
+        Ok(())
+    }
+
+    fn write_attribute(&mut self, attr: &AttributeType) -> Result {
+        self.write_attribute_name(&attr.name)?;
+
+        // if the attribute is a shorthand, we don't need to write the colon, just the name
+        if !attr.can_be_shorthand() {
+            write!(self.out, ": ")?;
+            self.write_attribute_value(&attr.value)?;
         }
 
         Ok(())
@@ -239,13 +237,13 @@ impl Writer<'_> {
                 write!(self.out, " }}")?;
             }
             ElementAttrValue::AttrLiteral(value) => {
-                write!(self.out, "{value}", value = ifmt_to_string(value))?;
+                write!(self.out, "{value}", value = lit_to_string(value))?;
             }
             ElementAttrValue::Shorthand(value) => {
                 write!(self.out, "{value}",)?;
             }
             ElementAttrValue::AttrExpr(value) => {
-                let out = self.unparse_expr(value);
+                let out = self.retrieve_formatted_expr(value).to_string();
                 let mut lines = out.split('\n').peekable();
                 let first = lines.next().unwrap();
 
@@ -267,56 +265,23 @@ impl Writer<'_> {
                     }
                 }
             }
-            ElementAttrValue::EventTokens(tokens) => {
-                let out = self.retrieve_formatted_expr(tokens).to_string();
-                let mut lines = out.split('\n').peekable();
-                let first = lines.next().unwrap();
-
-                // a one-liner for whatever reason
-                // Does not need a new line
-                if lines.peek().is_none() {
-                    write!(self.out, "{first}")?;
-                } else {
-                    writeln!(self.out, "{first}")?;
-
-                    while let Some(line) = lines.next() {
-                        self.out.indented_tab()?;
-                        write!(self.out, "{line}")?;
-                        if lines.peek().is_none() {
-                            write!(self.out, "")?;
-                        } else {
-                            writeln!(self.out)?;
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    fn write_attribute(&mut self, attr: &AttributeType) -> Result {
-        match attr {
-            AttributeType::Named(attr) => self.write_named_attribute(attr),
-            AttributeType::Spread(attr) => self.write_spread_attribute(attr),
-        }
-    }
-
-    fn write_named_attribute(&mut self, attr: &ElementAttrNamed) -> Result {
-        self.write_attribute_name(&attr.attr.name)?;
-
-        // if the attribute is a shorthand, we don't need to write the colon, just the name
-        if !attr.attr.can_be_shorthand() {
-            write!(self.out, ": ")?;
-            self.write_attribute_value(&attr.attr.value)?;
         }
 
         Ok(())
     }
 
     fn write_spread_attribute(&mut self, attr: &Expr) -> Result {
-        write!(self.out, "..")?;
-        write!(self.out, "{}", unparse_expr(attr))?;
+        let formatted = unparse_expr(attr);
+
+        let mut lines = formatted.lines();
+
+        let first_line = lines.next().unwrap();
+
+        write!(self.out, "..{first_line}")?;
+        for line in lines {
+            self.out.indented_tabbed_line()?;
+            write!(self.out, "{line}")?;
+        }
 
         Ok(())
     }
@@ -426,8 +391,8 @@ impl Writer<'_> {
     }
 }
 
-fn get_expr_length(expr: &Expr) -> Option<usize> {
-    let span = expr.span();
+pub fn get_expr_length(expr: &RawExpr) -> Option<usize> {
+    let span = expr.expr.span();
     let (start, end) = (span.start(), span.end());
     if start.line == end.line {
         Some(end.column - start.column)

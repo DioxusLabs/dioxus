@@ -38,7 +38,10 @@ impl Parse for IfChain {
         // stolen from ExprIf
         let cond = Box::new(input.call(Expr::parse_without_eager_brace)?);
 
-        let then_branch = input.parse()?;
+        let content;
+        syn::braced!(content in input);
+
+        let then_branch = content.parse()?;
 
         let mut else_branch = None;
         let mut else_if_branch = None;
@@ -49,7 +52,9 @@ impl Parse for IfChain {
             if input.peek(Token![if]) {
                 else_if_branch = Some(Box::new(input.parse::<IfChain>()?));
             } else {
-                else_branch = Some(input.parse()?);
+                let content;
+                syn::braced!(content in input);
+                else_branch = Some(content.parse()?);
             }
         }
 

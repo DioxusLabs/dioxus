@@ -76,7 +76,7 @@ pub struct HotReload {
     // This should be in the form of `file:line:col:0` - 0 since this will be the base template
     pub location: &'static str,
 
-    pub changed_strings: HashMap<String, HotLiteral>,
+    pub changed_lits: HashMap<String, HotLiteral>,
 }
 
 impl HotReload {
@@ -87,7 +87,7 @@ impl HotReload {
     ) -> Option<Self> {
         let mut s = Self {
             templates: Default::default(),
-            changed_strings: Default::default(),
+            changed_lits: Default::default(),
             location,
         };
 
@@ -226,7 +226,8 @@ impl HotReload {
 
                         for (left, right) in left_fields.iter().zip(right_fields.iter()) {
                             let scored = match score_attr_value(&left.value, &right.value) {
-                                usize::MAX => 2,
+                                usize::MAX => 3,
+                                a if a == usize::MAX - 1 => 2,
                                 a => a,
                             };
 
@@ -300,8 +301,6 @@ impl HotReload {
 
             new_node.set_dyn_idx(old_node.get_dyn_idx());
 
-            dbg!(old_node, new_node);
-
             // Make sure we descend into the children, and update any ifmts
             match (old_node, new_node) {
                 (BodyNode::Element(_), BodyNode::Element(_)) => {
@@ -313,7 +312,7 @@ impl HotReload {
                     if score != usize::MAX {
                         let idx = a.hr_idx.get();
                         let location = self.make_location(idx);
-                        self.changed_strings
+                        self.changed_lits
                             .insert(location.to_string(), HotLiteral::Fmted(b.input.clone()));
                     }
                 }
@@ -637,7 +636,7 @@ impl HotReload {
             match (&old_attr.value, &new_attr.value) {
                 (_, _) if old_attr.name != new_attr.name => return None,
 
-                (AttributeValue::AttrLit(_), AttributeValue::AttrLit(b)) => {
+                (AttributeValue::AttrLiteral(_), AttributeValue::AttrLiteral(b)) => {
                     let score = score_attr_value(&old_attr.value, &new_attr.value);
 
                     dbg!(&old_attr.name, score);
@@ -653,7 +652,7 @@ impl HotReload {
                         _ => {
                             let location =
                                 self.make_location(old_attr.as_lit().unwrap().hr_idx.get());
-                            self.changed_strings.insert(location, b.value.clone());
+                            self.changed_lits.insert(location, b.value.clone());
                         }
                     }
                 }
@@ -736,9 +735,7 @@ impl HotReload {
         old: &TemplateBody,
         new: &TemplateBody,
     ) -> Option<Vec<AttributePath>> {
-        // Build a map of old attributes to their indexes
-        // We can use the hash directly here but in theory we could support going from `class: "abc {def}"` to `class: "abc"`
-        // This will require not running the format, but we basically need prop reloading to get that working
+        // Build a stack of old attributes so we can pop them off as we find matches in the new attributes
         //
         // Note that we might have duplicate attributes! We use a stack just to make sure we don't lose them
         // Also note that we use a vec + remove, but the idea is that in most cases we're removing from the end
@@ -747,9 +744,15 @@ impl HotReload {
         let mut old_attrs = ReloadStack::new(old.dynamic_attributes());
 
         // Now we can run through the dynamic nodes and see if we can hot reload them
+        // Here we create the new attribute paths for the final template - we'll fill them in as we find matches
         let mut attr_paths = vec![vec![]; old.attr_paths.len()];
 
         for new_attr in new.dynamic_attributes() {
+            // We're going to score the attributes based on their names and values
+            // This ensures that we can handle the majority of cases where the attributes are shuffled around
+            // or their contents have been stripped down
+            //
+            // A higher score is better - 0 is a mismatch, usize::MAX is a perfect match
             let score_node = move |old_attr: &&Attribute| {
                 if old_attr.name != new_attr.name {
                     return 0;
@@ -759,8 +762,6 @@ impl HotReload {
             };
 
             // Find the highest scoring match between the old and new attributes
-            // Should generally be fast, but it's important to note this is quadratic
-            // To make this faster, try optimizing the ReloadStack
             let (old_idx, score) = old_attrs.highest_score(score_node)?;
 
             // Remove it from the stack so we don't match it again
@@ -770,6 +771,10 @@ impl HotReload {
             attr_paths[old_attr.dyn_idx.get()] = new.attr_paths[new_attr.dyn_idx.get()].clone().0;
 
             // Now move over the idx of the old to the new
+            //
+            // We're going to reuse the new CallBody to render the new template, so we have to make sure
+            // stuff like IDs are ported over properly
+            //
             // it's a little dumb to modify the new one in place, but it us avoid a lot of complexity
             // we should change the semantics of these methods to take the new one mutably, making it
             // clear that we're going to modify it in place and use it render
@@ -780,7 +785,7 @@ impl HotReload {
             if score != usize::MAX {
                 let idx = old_attr.as_lit().unwrap().hr_idx.get();
                 let location = self.make_location(idx);
-                self.changed_strings
+                self.changed_lits
                     .insert(location, new_attr.as_lit().unwrap().value.clone());
             }
         }
@@ -806,7 +811,7 @@ fn score_attr_value(old_attr: &AttributeValue, new_attr: &AttributeValue) -> usi
         // todo: float to int is a little weird case that we can try to support better
         //       right now going from float to int or vice versa will cause a full rebuild
         //       which can get confusing. if we can figure out a way to hotreload this, that'd be great
-        (AttrLit(left), AttrLit(right)) => {
+        (AttrLiteral(left), AttrLiteral(right)) => {
             // We assign perfect matches for token resuse, to minimize churn on the renderer
             match (&left.value, &right.value) {
                 // Quick shortcut if there's no change

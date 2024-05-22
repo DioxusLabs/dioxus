@@ -14,6 +14,7 @@ use crate::{
 };
 
 use dioxus_core::prelude::TemplateAttribute;
+use krates::cfg_expr::expr::lexer::Token;
 use proc_macro2::{Literal, TokenStream};
 use proc_macro2_diagnostics::SpanDiagnosticExt;
 use quote::{quote, ToTokens, TokenStreamExt};
@@ -83,7 +84,7 @@ pub enum AttributeValue {
     /// attribute: "value"
     /// attribute: bool,
     /// attribute: 1,
-    AttrLit(RsxLiteral),
+    AttrLiteral(RsxLiteral),
 
     /// Unterminated expression - full expressions are handled by AttrExpr
     ///
@@ -175,7 +176,10 @@ impl Parse for RsxBlock {
             }
 
             // Parse regular attributes
-            if (content.peek(LitStr) || content.peek(Ident)) && content.peek2(Token![:]) {
+            if (content.peek(LitStr) || content.peek(Ident))
+                && content.peek2(Token![:])
+                && !content.peek3(Token![:])
+            {
                 // Parse the name as either a known or custom attribute
                 let name = match content.peek(LitStr) {
                     true => AttributeName::Custom(content.parse::<LitStr>()?),
@@ -214,7 +218,7 @@ impl Parse for RsxBlock {
                                             syn::parse2(quote! { #exp });
 
                                         match value {
-                                            Ok(res) => Box::new(AttributeValue::AttrLit(res)),
+                                            Ok(res) => Box::new(AttributeValue::AttrLiteral(res)),
                                             Err(_) => {
                                                 Box::new(AttributeValue::AttrExpr(exp.clone()))
                                             }
@@ -232,7 +236,7 @@ impl Parse for RsxBlock {
                     }
                 } else if RsxLiteral::peek(&content) {
                     let value = content.parse()?;
-                    AttributeValue::AttrLit(value)
+                    AttributeValue::AttrLiteral(value)
                 } else if content.peek(Token![move]) || content.peek(Token![|]) {
                     // todo: add better partial expansion for closures - that's why we're handling them differently here
                     let value: Expr = content.parse()?;
@@ -270,10 +274,14 @@ impl Parse for RsxBlock {
         // Parse children
         let mut child_nodes = vec![];
         while !content.is_empty() {
-            let child = content.parse()?;
+            let child: BodyNode = content.parse()?;
 
             // todo: try to give helpful diagnostic if a prop is in the wrong location
             child_nodes.push(child);
+
+            if content.peek(Token![,]) {
+                _ = content.parse::<Token![,]>()?;
+            }
         }
 
         Ok(Self {
@@ -324,7 +332,7 @@ impl AttributeValue {
     pub fn span(&self) -> proc_macro2::Span {
         match self {
             Self::Shorthand(ident) => ident.span(),
-            Self::AttrLit(ifmt) => ifmt.span(),
+            Self::AttrLiteral(ifmt) => ifmt.span(),
             Self::AttrOptionalExpr { value, .. } => value.span(),
             Self::AttrExpr(expr) => expr.span(),
         }
@@ -347,7 +355,7 @@ impl Attribute {
         }
 
         match (&self.value, &other.value) {
-            (AttributeValue::AttrLit(lit), AttributeValue::AttrLit(other_lit)) => {
+            (AttributeValue::AttrLiteral(lit), AttributeValue::AttrLiteral(other_lit)) => {
                 match (&lit.value, &lit.value) {
                     (HotLiteral::Fmted(a), HotLiteral::Fmted(b)) => {
                         todo!()
@@ -363,21 +371,21 @@ impl Attribute {
 
     pub fn as_lit(&self) -> Option<&RsxLiteral> {
         match &self.value {
-            AttributeValue::AttrLit(lit) => Some(lit),
+            AttributeValue::AttrLiteral(lit) => Some(lit),
             _ => None,
         }
     }
 
     /// Run this closure against the attribute if it's hotreloadable
     pub fn with_hr(&self, f: impl FnOnce(&RsxLiteral)) {
-        if let AttributeValue::AttrLit(ifmt) = &self.value {
+        if let AttributeValue::AttrLiteral(ifmt) = &self.value {
             f(ifmt);
         }
     }
 
     pub fn ifmt(&self) -> Option<&IfmtInput> {
         match &self.value {
-            AttributeValue::AttrLit(lit) => match &lit.value {
+            AttributeValue::AttrLiteral(lit) => match &lit.value {
                 HotLiteral::Fmted(input) => Some(input),
                 _ => None,
             },
@@ -387,7 +395,7 @@ impl Attribute {
 
     pub fn as_static_str_literal(&self) -> Option<(&AttributeName, &IfmtInput)> {
         match &self.value {
-            AttributeValue::AttrLit(lit) => match &lit.value {
+            AttributeValue::AttrLiteral(lit) => match &lit.value {
                 HotLiteral::Fmted(input) if input.is_static() => Some((&self.name, input)),
                 _ => None,
             },
@@ -484,13 +492,35 @@ impl Attribute {
             }
         }
     }
+
+    pub fn start(&self) -> proc_macro2::Span {
+        self.span()
+    }
+
+    pub fn can_be_shorthand(&self) -> bool {
+        // If it's a shorthand...
+        if matches!(self.value, AttributeValue::Shorthand(_)) {
+            return true;
+        }
+
+        // If it's in the form of attr: attr, return true
+        if let AttributeValue::AttrExpr(Expr::Path(path)) = &self.value {
+            if let AttributeName::BuiltIn(name) = &self.name {
+                if path.path.segments.len() == 1 && &path.path.segments[0].ident == name {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
 }
 
 impl ToTokens for AttributeValue {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         match self {
             Self::Shorthand(ident) => ident.to_tokens(tokens),
-            Self::AttrLit(ifmt) => ifmt.to_tokens(tokens),
+            Self::AttrLiteral(ifmt) => ifmt.to_tokens(tokens),
             Self::AttrOptionalExpr { condition, value } => {
                 tokens.append_all(quote! { if #condition { Some(#value) else { None } } })
             }
@@ -643,37 +673,52 @@ fn hr_score() {
 }
 
 #[test]
-fn test_scoring() {
-    scoring_algo()
+fn kitchen_sink_parse() {
+    let input = quote! {
+        // Elements
+        {
+            class: "hello",
+            id: "node-{node_id}",
+            ..props,
+
+            // Text Nodes
+            "Hello, world!"
+
+            // Exprs
+            {rsx! { "hi again!" }}
+
+
+            for item in 0..10 {
+                // "Second"
+                div { "cool-{item}" }
+            }
+
+            Link {
+                to: "/home",
+                class: "link {is_ready}",
+                "Home"
+            }
+
+            if false {
+                div { "hi again!?" }
+            } else if true {
+                div { "its cool?" }
+            } else {
+                div { "not nice !" }
+            }
+        }
+    };
+
+    let parsed: RsxBlock = syn::parse2(input).unwrap();
+    // let tokens = quote! { #parsed };
+    // println!("{}", tokens);
 }
 
-fn scoring_algo() {
-    let left = [
-        //
-        vec!["abc", "def", "hij"],
-        vec!["abc", "def"],
-        vec!["abc"],
-    ];
+#[test]
+fn simple_comp_syntax() {
+    let input = quote! {
+        { class: "inline-block mr-4", icons::icon_14 {} }
+    };
 
-    let right = [
-        //
-        vec!["abc"],
-        vec!["def"],
-        vec!["def"],
-    ];
-
-    let mut scores = vec![];
-
-    for left in left {
-        for right in right.iter() {
-            let mut score = vec![];
-            for item in left.iter() {
-                let this_score = right.iter().filter(|x| *x == item).count();
-                score.push(this_score);
-            }
-            scores.push(score);
-        }
-    }
-
-    dbg!(scores);
+    let parsed: RsxBlock = syn::parse2(input).unwrap();
 }

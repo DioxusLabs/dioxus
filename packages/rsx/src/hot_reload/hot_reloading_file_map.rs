@@ -2,7 +2,7 @@ use super::{
     hot_reload_diff::{diff_rsx, DiffResult},
     ChangedRsx,
 };
-use crate::{CallBody, HotReloadingContext};
+use crate::{CallBody, HotLiteral, HotReloadingContext, RsxLiteral};
 use dioxus_core::{
     prelude::{FmtedSegments, TemplateAttribute, TemplateNode},
     Template,
@@ -21,7 +21,7 @@ use syn::spanned::Spanned;
 pub enum UpdateResult {
     UpdatedRsx {
         templates: Vec<Template>,
-        changed_strings: HashMap<String, FmtedSegments>,
+        changed_strings: HashMap<String, HotLiteral>,
     },
 
     NeedsRebuild,
@@ -152,7 +152,7 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
         };
 
         let mut template_list: Vec<Template> = Vec::new();
-        let mut changed_strings: HashMap<String, FmtedSegments> = HashMap::new();
+        let mut changed_strings: HashMap<String, HotLiteral> = HashMap::new();
 
         for calls in instances.into_iter() {
             let ChangedRsx { old, new } = calls;
@@ -220,11 +220,10 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
                 template_list.push(template);
             }
 
-            todo!("Fixup the changed strings stuff")
             // // And then any formatted strings
-            // for (key, value) in results.changed_strings {
-            //     changed_strings.insert(key, value);
-            // }
+            for (key, value) in results.changed_lits {
+                changed_strings.insert(key, value);
+            }
         }
 
         Ok(UpdateResult::UpdatedRsx {

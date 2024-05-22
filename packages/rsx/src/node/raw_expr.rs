@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
 use std::hash;
-use syn::parse::Parse;
+use syn::{parse::Parse, spanned::Spanned};
 
 use crate::location::CallerLocation;
 
@@ -9,6 +9,12 @@ use crate::location::CallerLocation;
 pub struct RawExpr {
     pub expr: TokenStream2,
     pub dyn_idx: CallerLocation,
+}
+
+impl RawExpr {
+    pub fn span(&self) -> proc_macro2::Span {
+        self.expr.span()
+    }
 }
 
 impl Parse for RawExpr {

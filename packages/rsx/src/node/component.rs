@@ -163,10 +163,10 @@ impl Component {
 
         if let Some(attr) = key {
             let diagnostic = match &attr.value {
-                AttributeValue::AttrLit(ifmt) if ifmt.is_static() => {
+                AttributeValue::AttrLiteral(ifmt) if ifmt.is_static() => {
                     ifmt.span().error("Key must not be a static string. Make sure to use a formatted string like `key: \"{value}\"")
                 }
-                AttributeValue::AttrLit(_) => return,
+                AttributeValue::AttrLiteral(_) => return,
                 _ => attr
                     .value
                     .span()
@@ -267,7 +267,7 @@ impl Component {
                 };
 
                 let val = match value {
-                    AttributeValue::AttrLit(lit) => {
+                    AttributeValue::AttrLiteral(lit) => {
                         quote! {
                             #lit.to_string()
                         }

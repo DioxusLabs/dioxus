@@ -812,3 +812,28 @@ fn complex_carry() {
     let changed = full_boilerplate(a, b);
     dbg!(changed.unwrap());
 }
+
+#[test]
+fn component_with_lits() {
+    let a = quote! {
+        Component {
+            class: 123,
+            id: 456.789,
+            other: true,
+            blah: "hello {world}",
+        }
+    };
+
+    // changing lit values
+    let b = quote! {
+        Component {
+            class: 456,
+            id: 789.456,
+            other: false,
+            blah: "goodbye {world}",
+        }
+    };
+
+    let changed = full_boilerplate(a, b);
+    dbg!(changed.unwrap());
+}

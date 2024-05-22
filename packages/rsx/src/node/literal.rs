@@ -47,28 +47,37 @@ pub enum HotLiteral {
 
 impl Parse for RsxLiteral {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        let raw = input.parse::<Lit>()?;
-        let value = match raw.clone() {
-            Lit::Str(a) => {
-                let ifmt_input: IfmtInput = a.value().parse()?;
-                HotLiteral::Fmted(ifmt_input)
-            }
-            Lit::Int(a) => HotLiteral::Int(a),
-            Lit::Float(a) => HotLiteral::Float(a),
-            Lit::Bool(a) => HotLiteral::Bool(a),
-            _ => {
-                return Err(syn::Error::new(
-                    raw.span(),
-                    "Only string, int, float, and bool literals are supported",
-                ))
-            }
-        };
+        // If it's a string lit we need to parse it as an ifmt input
+        if input.peek(LitStr) {
+            let ifmt_input: IfmtInput = input.parse()?;
+            let raw = ifmt_input.source.clone().unwrap();
+            let value = HotLiteral::Fmted(ifmt_input);
 
-        Ok(RsxLiteral {
-            raw,
-            value,
-            hr_idx: CallerLocation::default(),
-        })
+            return Ok(RsxLiteral {
+                raw: Lit::Str(raw),
+                value,
+                hr_idx: CallerLocation::default(),
+            });
+        } else {
+            let raw = input.parse::<Lit>()?;
+            let value = match raw.clone() {
+                Lit::Int(a) => HotLiteral::Int(a),
+                Lit::Float(a) => HotLiteral::Float(a),
+                Lit::Bool(a) => HotLiteral::Bool(a),
+                _ => {
+                    return Err(syn::Error::new(
+                        raw.span(),
+                        "Only string, int, float, and bool literals are supported",
+                    ))
+                }
+            };
+
+            Ok(RsxLiteral {
+                raw,
+                value,
+                hr_idx: CallerLocation::default(),
+            })
+        }
     }
 }
 
@@ -222,9 +231,8 @@ fn parses_lits() {
     assert!(syn::parse2::<RsxLiteral>(quote! { b"123" }).is_err());
     assert!(syn::parse2::<RsxLiteral>(quote! { 'a' }).is_err());
 
-    // Ensure that we parse the two fmt literals differently - the ifmt one should never have zero args
     let lit = syn::parse2::<RsxLiteral>(quote! { "hello" }).unwrap();
-    assert!(matches!(lit.value, HotLiteral::Str(_)));
+    assert!(matches!(lit.value, HotLiteral::Fmted(_)));
 
     let lit = syn::parse2::<RsxLiteral>(quote! { "hello {world}" }).unwrap();
     assert!(matches!(lit.value, HotLiteral::Fmted(_)));
