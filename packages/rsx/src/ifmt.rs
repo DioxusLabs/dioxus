@@ -1,4 +1,5 @@
-use crate::{location::CallerLocation, reload_stack::ReloadStack};
+use crate::{intern, location::CallerLocation, reload_stack::ReloadStack};
+use dioxus_core::prelude::{FmtSegment, FmtedSegments};
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
 use std::{collections::HashMap, str::FromStr};
@@ -118,6 +119,64 @@ impl IfmtInput {
         } else {
             score
         }
+    }
+
+    pub fn fmt_segments(&self, other: &Self) -> Option<FmtedSegments> {
+        let a = self;
+        let b = other;
+
+        // Make sure all the dynamic segments of b show up in a
+        for segment in b.segments.iter() {
+            if segment.is_formatted() && !a.segments.contains(segment) {
+                return None;
+            }
+        }
+
+        // Collect all the formatted segments from the original
+        let mut out = vec![];
+
+        // the original list of formatted segments
+        let mut fmted = a
+            .segments
+            .iter()
+            .flat_map(|f| match f {
+                crate::Segment::Literal(_) => None,
+                crate::Segment::Formatted(f) => Some(f),
+            })
+            .cloned()
+            .map(|f| Some(f))
+            .collect::<Vec<_>>();
+
+        for segment in b.segments.iter() {
+            match segment {
+                crate::Segment::Literal(lit) => {
+                    // create a &'static str by leaking the string
+                    let lit = intern(lit.clone().into_boxed_str());
+                    out.push(FmtSegment::Literal { value: lit });
+                }
+                crate::Segment::Formatted(fmt) => {
+                    // Find the formatted segment in the original
+                    // Set it to None when we find it so we don't re-render it on accident
+                    let idx = fmted
+                        .iter_mut()
+                        .position(|_s| {
+                            if let Some(s) = _s {
+                                if s == fmt {
+                                    *_s = None;
+                                    return true;
+                                }
+                            }
+
+                            false
+                        })
+                        .unwrap();
+
+                    out.push(FmtSegment::Dynamic { id: idx });
+                }
+            }
+        }
+
+        Some(FmtedSegments::new(out))
     }
 
     /// Try to convert this into a single _.to_string() call if possible

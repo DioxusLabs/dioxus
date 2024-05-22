@@ -1,7 +1,7 @@
 use proc_macro2_diagnostics::Diagnostic;
 use quote::ToTokens;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Diagnostics {
     pub diagnostics: Vec<Diagnostic>,
 }

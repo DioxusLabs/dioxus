@@ -29,16 +29,8 @@ pub struct CallBody {
 
 impl Parse for CallBody {
     fn parse(input: ParseStream) -> Result<Self> {
-        let body = CallBody {
-            body: input.parse::<TemplateBody>()?,
-            ifmt_idx: Cell::new(0),
-            tempalte_idx: Cell::new(1),
-        };
-
-        body.body.template_idx.set(0);
-        body.cascade_hotreload_info(&body.body.roots);
-
-        Ok(body)
+        let body = TemplateBody::parse(input)?;
+        Ok(CallBody::new(body))
     }
 }
 
@@ -53,6 +45,19 @@ impl ToTokens for CallBody {
 }
 
 impl CallBody {
+    pub fn new(template: TemplateBody) -> Self {
+        let body = CallBody {
+            body: template,
+            ifmt_idx: Cell::new(0),
+            tempalte_idx: Cell::new(1),
+        };
+
+        body.body.template_idx.set(0);
+        body.cascade_hotreload_info(&body.body.roots);
+
+        body
+    }
+
     /// With the entire knowledge of the macro call, wire up location information for anything hotreloading
     /// specific. It's a little bit simpler just to have a global id per callbody than to try and track it
     /// relative to each template, though we could do that if we wanted to.

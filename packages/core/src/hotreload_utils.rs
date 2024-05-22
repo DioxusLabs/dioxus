@@ -1,5 +1,15 @@
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
+#[derive(Debug, PartialEq, Clone)]
+pub enum HotReloadLiteral {
+    Fmted(FmtedSegments),
+    Float(f64),
+    Int(i64),
+    Bool(bool),
+}
+
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct FmtedSegments {
     pub segments: Vec<FmtSegment>,

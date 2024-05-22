@@ -4,7 +4,10 @@ use std::{
     path::PathBuf,
 };
 
-use dioxus_core::{prelude::FmtedSegments, Template};
+use dioxus_core::{
+    prelude::{FmtedSegments, HotReloadLiteral},
+    Template,
+};
 #[cfg(feature = "file_watcher")]
 pub use dioxus_html::HtmlCtx;
 use interprocess::local_socket::LocalSocketStream;
@@ -22,7 +25,7 @@ pub enum HotReloadMsg {
     /// Things have changed, here's a list
     Update {
         templates: Vec<Template>,
-        changed_strings: HashMap<String, FmtedSegments>,
+        changed_strings: HashMap<String, HotReloadLiteral>,
         assets: Vec<PathBuf>,
     },
 

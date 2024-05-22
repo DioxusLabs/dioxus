@@ -1,6 +1,6 @@
 use std::process::exit;
 
-use dioxus_rsx::{BodyNode, CallBody};
+use dioxus_rsx::{BodyNode, CallBody, TemplateBody};
 
 use super::*;
 
@@ -59,7 +59,7 @@ pub fn convert_html_to_formatted_rsx(dom: &Dom, component: bool) -> String {
 fn write_callbody_with_icon_section(mut callbody: CallBody) -> String {
     let mut svgs = vec![];
 
-    rsx_rosetta::collect_svgs(&mut callbody.roots, &mut svgs);
+    rsx_rosetta::collect_svgs(&mut callbody.body.roots, &mut svgs);
 
     let mut out = write_component_body(dioxus_autofmt::write_block_out(callbody).unwrap());
 
@@ -81,7 +81,8 @@ fn write_svg_section(out: &mut String, svgs: Vec<BodyNode>) {
     out.push_str("\n\nmod icons {");
     out.push_str("\n    use super::*;");
     for (idx, icon) in svgs.into_iter().enumerate() {
-        let raw = dioxus_autofmt::write_block_out(CallBody { roots: vec![icon] }).unwrap();
+        let raw =
+            dioxus_autofmt::write_block_out(CallBody::new(TemplateBody::new(vec![icon]))).unwrap();
         out.push_str("\n\n    pub fn icon_");
         out.push_str(&idx.to_string());
         out.push_str("() -> Element {\n        rsx! {");

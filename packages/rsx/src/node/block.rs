@@ -454,7 +454,7 @@ impl Attribute {
 
         let attribute = |name: &AttributeName| match name {
             AttributeName::BuiltIn(name) => match el_name {
-                ElementName::Ident(_) => quote! { #el_name::#name.0 },
+                ElementName::Ident(_) => quote! { dioxus_elements::#el_name::#name.0 },
                 ElementName::Custom(_) => {
                     let as_string = name.to_string();
                     quote!(#as_string)
@@ -464,31 +464,58 @@ impl Attribute {
         };
 
         let value = &self.value;
+        let name = &self.name;
 
         let is_event = match &self.name {
             AttributeName::BuiltIn(name) => name.to_string().starts_with("on"),
             _ => false,
         };
 
+        // // If all of them are single attributes, create a static slice
+        // if spread.is_empty() {
+        //     quote! {
+        //         Box::new([
+        //             #(#single),*
+        //         ])
+        //     }
+        // } else {
+        //     // Otherwise start with the single attributes and append the spread attributes
+        //     quote! {
+        //         {
+        //             let mut __attributes = vec![
+        //                 #(#single),*
+        //             ];
+        //             #(
+        //                 let mut __spread = #spread;
+        //                 __attributes.append(&mut __spread);
+        //             )*
+        //             __attributes.into_boxed_slice()
+        //         }
+        //     }
+        // }
+
         // If it's an event, we need to wrap it in the event form and then just return that
         if is_event {
             quote! {
-                dioxus_elements::events::#value(#value)
+                Box::new([
+                    dioxus_elements::events::#name(#value)
+                ])
             }
         } else {
-            let name = &self.name;
             let ns = ns(name);
             let volatile = volatile(name);
             let attribute = attribute(name);
             let value = quote! { #value };
 
             quote! {
-                dioxus_core::Attribute::new(
-                    #attribute,
-                    #value,
-                    #ns,
-                    #volatile
-                )
+                Box::new([
+                    dioxus_core::Attribute::new(
+                        #attribute,
+                        #value,
+                        #ns,
+                        #volatile
+                    )
+                ])
             }
         }
     }

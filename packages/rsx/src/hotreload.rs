@@ -28,11 +28,11 @@ use std::{collections::HashMap, usize};
 
 use crate::{
     intern, reload_stack::ReloadStack, Attribute, AttributeName, AttributeValue, Component,
-    ForLoop, HotLiteral, IfChain, IfmtInput, TemplateBody, TextNode,
+    ForLoop, HotLiteral, IfChain, IfmtInput, RsxLiteral, TemplateBody, TextNode,
 };
 use crate::{BodyNode, CallBody, HotReloadingContext};
 use dioxus_core::{
-    prelude::{FmtSegment, FmtedSegments, Template},
+    prelude::{FmtSegment, FmtedSegments, HotReloadLiteral, Template},
     TemplateAttribute, TemplateNode,
 };
 use syn::LitStr;
@@ -68,7 +68,7 @@ type AttributePath = Vec<u8>;
 ///
 /// This contains information about what has changed so the hotreloader can apply the right changes
 #[non_exhaustive]
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct HotReload {
     pub templates: Vec<Template>,
 
@@ -76,7 +76,7 @@ pub struct HotReload {
     // This should be in the form of `file:line:col:0` - 0 since this will be the base template
     pub location: &'static str,
 
-    pub changed_lits: HashMap<String, HotLiteral>,
+    pub changed_lits: HashMap<String, HotReloadLiteral>,
 }
 
 impl HotReload {
@@ -312,8 +312,11 @@ impl HotReload {
                     if score != usize::MAX {
                         let idx = a.hr_idx.get();
                         let location = self.make_location(idx);
+
+                        let segments = a.input.fmt_segments(&b.input)?;
+
                         self.changed_lits
-                            .insert(location.to_string(), HotLiteral::Fmted(b.input.clone()));
+                            .insert(location.to_string(), HotReloadLiteral::Fmted(segments));
                     }
                 }
 
@@ -327,7 +330,7 @@ impl HotReload {
                 }
 
                 (BodyNode::IfChain(a), BodyNode::IfChain(b)) => {
-                    self.hotreload_body::<Ctx>(&a.then_branch, &b.then_branch);
+                    self.hotreload_body::<Ctx>(&a.then_branch, &b.then_branch)?;
 
                     if a.else_if_branch.is_some() && b.else_if_branch.is_some() {
                         todo!("else if branches")
@@ -503,68 +506,18 @@ impl HotReload {
     }
 
     fn hotreload_ifmt(&mut self, a: &IfmtInput, b: &IfmtInput) -> Option<bool> {
-        todo!()
-        // if a.is_static() && b.is_static() {
-        //     return Some(a == b);
-        // }
+        if a.is_static() && b.is_static() {
+            return Some(a == b);
+        }
 
-        // // Make sure all the dynamic segments of b show up in a
-        // for segment in b.segments.iter() {
-        //     if segment.is_formatted() && !a.segments.contains(segment) {
-        //         return None;
-        //     }
-        // }
-
-        // // Collect all the formatted segments from the original
-        // let mut out = vec![];
-
-        // // the original list of formatted segments
-        // let mut fmted = a
-        //     .segments
-        //     .iter()
-        //     .flat_map(|f| match f {
-        //         crate::Segment::Literal(_) => None,
-        //         crate::Segment::Formatted(f) => Some(f),
-        //     })
-        //     .cloned()
-        //     .map(|f| Some(f))
-        //     .collect::<Vec<_>>();
-
-        // for segment in b.segments.iter() {
-        //     match segment {
-        //         crate::Segment::Literal(lit) => {
-        //             // create a &'static str by leaking the string
-        //             let lit = Box::leak(lit.clone().into_boxed_str());
-        //             out.push(FmtSegment::Literal { value: lit });
-        //         }
-        //         crate::Segment::Formatted(fmt) => {
-        //             // Find the formatted segment in the original
-        //             // Set it to None when we find it so we don't re-render it on accident
-        //             let idx = fmted
-        //                 .iter_mut()
-        //                 .position(|_s| {
-        //                     if let Some(s) = _s {
-        //                         if s == fmt {
-        //                             *_s = None;
-        //                             return true;
-        //                         }
-        //                     }
-
-        //                     false
-        //                 })
-        //                 .unwrap();
-
-        //             out.push(FmtSegment::Dynamic { id: idx });
-        //         }
-        //     }
-        // }
+        let segments = a.fmt_segments(b)?;
 
         // let location = self.make_location(a.hr_idx.get());
 
         // self.changed_strings
         //     .insert(location.to_string(), FmtedSegments::new(out));
 
-        // Some(true)
+        Some(true)
     }
 
     /// Check if a for loop can be hot reloaded
@@ -643,7 +596,8 @@ impl HotReload {
 
                     match score {
                         // Same - nothing to do
-                        usize::MAX => {}
+                        // we need to temporarily consider literals as volatile
+                        usize::MAX if !matches!(b.value, HotLiteral::Bool(_)) => {}
 
                         // Mismatch - we need to force a rebuild
                         0 => return None,
@@ -652,7 +606,21 @@ impl HotReload {
                         _ => {
                             let location =
                                 self.make_location(old_attr.as_lit().unwrap().hr_idx.get());
-                            self.changed_lits.insert(location, b.value.clone());
+
+                            let lit = match &b.value {
+                                HotLiteral::Float(f) => {
+                                    HotReloadLiteral::Float(f.base10_parse().unwrap())
+                                }
+                                HotLiteral::Int(f) => {
+                                    HotReloadLiteral::Int(f.base10_parse().unwrap())
+                                }
+                                HotLiteral::Bool(f) => HotReloadLiteral::Bool(f.value),
+                                HotLiteral::Fmted(f) => HotReloadLiteral::Fmted(
+                                    f.fmt_segments(new_attr.ifmt().unwrap())?,
+                                ),
+                            };
+
+                            self.changed_lits.insert(location, lit);
                         }
                     }
                 }
@@ -785,8 +753,17 @@ impl HotReload {
             if score != usize::MAX {
                 let idx = old_attr.as_lit().unwrap().hr_idx.get();
                 let location = self.make_location(idx);
-                self.changed_lits
-                    .insert(location, new_attr.as_lit().unwrap().value.clone());
+
+                let lit = match &new_attr.as_lit().unwrap().value {
+                    HotLiteral::Float(f) => HotReloadLiteral::Float(f.base10_parse().unwrap()),
+                    HotLiteral::Int(f) => HotReloadLiteral::Int(f.base10_parse().unwrap()),
+                    HotLiteral::Bool(f) => HotReloadLiteral::Bool(f.value),
+                    HotLiteral::Fmted(f) => {
+                        HotReloadLiteral::Fmted(f.fmt_segments(old_attr.ifmt().unwrap())?)
+                    }
+                };
+
+                self.changed_lits.insert(location, lit);
             }
         }
 

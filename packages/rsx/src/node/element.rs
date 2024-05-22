@@ -77,7 +77,7 @@ impl ToTokens for Element {
 
                         let name = match (el_name, name) {
                             (ElementName::Ident(_), AttributeName::BuiltIn(_)) => {
-                                quote! { #el_name::#name.0 }
+                                quote! { dioxus_elements::#el_name::#name.0 }
                             }
                             //hmmmm I think we could just totokens this, but the to_string might be inserting quotes
                             _ => {

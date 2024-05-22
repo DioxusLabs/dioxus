@@ -191,7 +191,7 @@ fn hotreload_files(
         match rsx_file_map.update_rsx(path, &config.crate_dir) {
             Ok(UpdateResult::UpdatedRsx {
                 templates,
-                changed_strings,
+                changed_lits: changed_strings,
             }) => {
                 messages.push(HotReloadMsg::Update {
                     templates,

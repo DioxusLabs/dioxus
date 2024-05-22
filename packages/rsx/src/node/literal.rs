@@ -115,13 +115,13 @@ impl ToTokens for RsxLiteral {
                     )
                 }
             }
-            HotLiteral::Float(a) => quote! { #a },
-            HotLiteral::Int(a) => quote! { #a },
-            HotLiteral::Bool(a) => quote! { #a },
+            HotLiteral::Float(a) => quote! { #a as f64 },
+            HotLiteral::Int(a) => quote! { #a as i64 },
+            HotLiteral::Bool(a) => quote! { #a as bool },
         };
 
         let mapped = match &self.value {
-            HotLiteral::Fmted(f) if f.is_static() => quote! { .into() },
+            HotLiteral::Fmted(f) if f.is_static() => quote! { .clone() },
 
             HotLiteral::Fmted(segments) => {
                 let rendered_segments = segments.segments.iter().filter_map(|s| match s {
@@ -138,9 +138,9 @@ impl ToTokens for RsxLiteral {
                     .render_with(vec![ #(#rendered_segments),* ])
                 }
             }
-            HotLiteral::Float(_) => quote! { .into() },
-            HotLiteral::Int(_) => quote! { .into() },
-            HotLiteral::Bool(_) => quote! { .into() },
+            HotLiteral::Float(_) => quote! { .clone() },
+            HotLiteral::Int(_) => quote! { .clone() },
+            HotLiteral::Bool(_) => quote! { .clone() },
         };
 
         let as_lit = match &self.value {
@@ -151,11 +151,11 @@ impl ToTokens for RsxLiteral {
         };
 
         let map_lit = match &self.value {
-            HotLiteral::Fmted(f) if f.is_static() => quote! { .into() },
+            HotLiteral::Fmted(f) if f.is_static() => quote! { .clone().into() },
             HotLiteral::Fmted(_) => quote! { .to_string() },
-            HotLiteral::Float(_) => quote! { .into() },
-            HotLiteral::Int(_) => quote! { .into() },
-            HotLiteral::Bool(_) => quote! { .into() },
+            HotLiteral::Float(_) => quote! { .clone().into() },
+            HotLiteral::Int(_) => quote! { .clone().into() },
+            HotLiteral::Bool(_) => quote! { .clone().into() },
         };
 
         let hr_idx = self.hr_idx.get().to_string();

@@ -54,7 +54,7 @@ impl Parse for Component {
 
         let mut component = Self {
             dyn_idx: CallerLocation::default(),
-            children: TemplateBody::from_nodes(children),
+            children: TemplateBody::new(children),
             name,
             generics,
             fields,
@@ -269,7 +269,7 @@ impl Component {
                 let val = match value {
                     AttributeValue::AttrLiteral(lit) => {
                         quote! {
-                            #lit.to_string()
+                            #lit
                         }
                     }
                     _ => value.to_token_stream(),
@@ -283,10 +283,6 @@ impl Component {
     fn fn_name(&self) -> Ident {
         self.name.segments.last().unwrap().ident.clone()
     }
-
-    // pub fn key(&self) -> Option<&IfmtInput> {
-    //     self.key.as_ref()
-    // }
 }
 
 fn normalize_path(name: &mut syn::Path) -> Option<AngleBracketedGenericArguments> {
@@ -376,10 +372,21 @@ fn to_tokens_no_manual_props() {
     let input_without_manual_props = quote! {
         MyComponent {
             key: "value {something}",
+            named: "value {something}",
             prop: "value",
+            count: 1,
             div { "Hello, world!" }
         }
     };
     let component: Component = syn::parse2(input_without_manual_props).unwrap();
+    println!("{}", component.to_token_stream().pretty_unparse());
+}
+
+#[test]
+fn generics_params() {
+    let input_without_children = quote! {
+         Outlet::<R> {}
+    };
+    let component: CallBody = syn::parse2(input_without_children).unwrap();
     println!("{}", component.to_token_stream().pretty_unparse());
 }

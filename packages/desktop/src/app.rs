@@ -329,7 +329,7 @@ impl App {
         not(target_os = "ios")
     ))]
     pub fn handle_hot_reload_msg(&mut self, msg: dioxus_hot_reload::HotReloadMsg) {
-        use dioxus_core::prelude::{FmtedSegments, ScopeId};
+        use dioxus_core::prelude::{FmtedSegments, HotReloadLiteral, ScopeId};
         use dioxus_signals::{Signal, Writable};
 
         println!("hotreloading {msg:?}");
@@ -358,9 +358,29 @@ impl App {
                         for (id, segments) in changed_strings.iter() {
                             println!("updating signal in desktop {:?} with {:?}", id, segments);
 
-                            if let Some(mut signal) = ctx.get_signal_with_key(id) {
-                                signal.set(segments.clone());
+                            match segments {
+                                HotReloadLiteral::Fmted(f) => {
+                                    if let Some(mut signal) = ctx.get_signal_with_key(id) {
+                                        signal.set(f.clone());
+                                    }
+                                }
+                                HotReloadLiteral::Float(f) => {
+                                    if let Some(mut signal) = ctx.get_signal_with_key::<f64>(id) {
+                                        signal.set(f.clone());
+                                    }
+                                }
+                                HotReloadLiteral::Int(f) => {
+                                    if let Some(mut signal) = ctx.get_signal_with_key::<i64>(id) {
+                                        signal.set(f.clone());
+                                    }
+                                }
+                                HotReloadLiteral::Bool(f) => {
+                                    if let Some(mut signal) = ctx.get_signal_with_key::<bool>(id) {
+                                        signal.set(f.clone());
+                                    }
+                                }
                             }
+
                             // let mut sig: Signal<FmtedSegments> = ctx.get_signal_with_key(&id);
                             // sig.set(segments.clone());
                         }

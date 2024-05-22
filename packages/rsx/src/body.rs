@@ -90,7 +90,7 @@ impl Parse for TemplateBody {
             nodes.push(input.parse::<BodyNode>()?);
         }
 
-        Ok(Self::from_nodes(nodes))
+        Ok(Self::new(nodes))
     }
 }
 
@@ -111,6 +111,33 @@ impl ToTokens for TemplateBody {
 
         let TemplateBody { roots, .. } = self;
         let index = self.template_idx.get();
+        let roots = roots.iter().map(|node| match node {
+            BodyNode::Element(el) => quote! { #el },
+            BodyNode::Text(text) if text.is_static() => {
+                let text = text.input.to_static().unwrap();
+                quote! { dioxus_core::TemplateNode::Text { text: #text } }
+            }
+            BodyNode::Text(text) => {
+                let id = text.dyn_idx.get();
+                quote! { dioxus_core::TemplateNode::DynamicText { id: #id } }
+            }
+            BodyNode::ForLoop(floop) => {
+                let id = floop.dyn_idx.get();
+                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
+            }
+            BodyNode::RawExpr(exp) => {
+                let id = exp.dyn_idx.get();
+                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
+            }
+            BodyNode::Component(exp) => {
+                let id = exp.dyn_idx.get();
+                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
+            }
+            BodyNode::IfChain(exp) => {
+                let id = exp.dyn_idx.get();
+                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
+            }
+        });
 
         // Print paths is easy - just print the paths
         let node_paths = self.node_paths.iter().map(|it| quote!(&[#(#it),*]));
@@ -157,7 +184,7 @@ impl ToTokens for TemplateBody {
 }
 
 impl TemplateBody {
-    pub fn from_nodes(nodes: Vec<BodyNode>) -> Self {
+    pub fn new(nodes: Vec<BodyNode>) -> Self {
         let mut body = Self {
             roots: vec![],
             template_idx: CallerLocation::default(),
