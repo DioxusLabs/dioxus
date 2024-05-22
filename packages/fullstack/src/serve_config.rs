@@ -135,6 +135,12 @@ impl Default for ServeConfig {
     }
 }
 
+impl Default for ServeConfig {
+    fn default() -> Self {
+        Self::builder().build()
+    }
+}
+
 impl ServeConfig {
     /// Create a new builder for a ServeConfig
     pub fn builder() -> ServeConfigBuilder {

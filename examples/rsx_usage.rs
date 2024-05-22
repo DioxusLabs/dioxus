@@ -21,7 +21,7 @@
 //!
 //! ### Events
 //! - Handle events with the "onXYZ" syntax
-//! - Closures can capture their environment with the 'a lifetime
+//! - Closures can capture their environment with the 'static lifetime
 //!
 //!
 //! ### Components
@@ -193,8 +193,8 @@ fn app() -> Element {
             // Type inference can be used too
             TypedInput { initial: 10.0 }
 
-            // geneircs with the `inline_props` macro
-            Label { text: "hello geneirc world!" }
+            // generic with the `inline_props` macro
+            Label { text: "hello generisc world!" }
             Label { text: 99.9 }
 
             // Lowercase components work too, as long as they are access using a path
@@ -293,6 +293,7 @@ fn WithInline(text: String) -> Element {
     }
 }
 
+#[component]
 fn Label<T: Display + Clone + PartialEq + 'static>(text: T) -> Element {
     rsx! {
         p { "{text}" }

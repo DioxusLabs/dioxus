@@ -58,10 +58,10 @@ pub(crate) mod innerlude {
 pub use crate::innerlude::{
     fc_to_builder, generation, schedule_update, schedule_update_any, use_hook, vdom_is_rendering,
     AnyValue, Attribute, AttributeValue, CapturedError, Component, ComponentFunction, DynamicNode,
-    Element, ElementId, Event, Fragment, HasAttributes, IntoDynNode, Mutation, Mutations,
-    NoOpMutations, Ok, Properties, Result, Runtime, ScopeId, ScopeState, Task, Template,
-    TemplateAttribute, TemplateNode, VComponent, VNode, VNodeInner, VPlaceholder, VText,
-    VirtualDom, WriteMutations,
+    Element, ElementId, Event, Fragment, HasAttributes, IntoDynNode, MarkerWrapper, Mutation,
+    Mutations, NoOpMutations, Ok, Properties, RenderReturn, Result, Runtime, ScopeId, ScopeState,
+    SpawnIfAsync, Task, Template, TemplateAttribute, TemplateNode, VComponent, VNode, VNodeInner,
+    VPlaceholder, VText, VirtualDom, WriteMutations,
 };
 
 /// The purpose of this module is to alleviate imports of many common types
@@ -75,10 +75,10 @@ pub mod prelude {
         schedule_update_any, spawn, spawn_forever, spawn_isomorphic, suspend, throw_error,
         try_consume_context, use_after_render, use_before_render, use_drop, use_error_boundary,
         use_hook, use_hook_with_cleanup, use_suspense_boundary, wait_for_next_render, with_owner,
-        AnyValue, Attribute, CapturedError, Component, ComponentFunction, Context, Element,
-        ErrorBoundary, Event, EventHandler, Fragment, HasAttributes, HiddenSSR, IntoAttributeValue,
-        IntoDynNode, OptionStringFromMarker, Properties, RenderError, Runtime, RuntimeGuard,
-        ScopeId, ScopeState, SuperFrom, SuperInto, SuspendedFuture, SuspenseContext, Task,
-        Template, TemplateAttribute, TemplateNode, VNode, VNodeInner, VirtualDom,
+        AnyValue, Attribute, Callback, CapturedError, Component, ComponentFunction, Context,
+        Element, ErrorBoundary, Event, EventHandler, Fragment, HasAttributes, HiddenSSR,
+        IntoAttributeValue, IntoDynNode, OptionStringFromMarker, Properties, RenderError, Runtime,
+        RuntimeGuard, ScopeId, ScopeState, SuperFrom, SuperInto, SuspendedFuture, SuspenseContext,
+        Task, Template, TemplateAttribute, TemplateNode, VNode, VNodeInner, VirtualDom,
     };
 }

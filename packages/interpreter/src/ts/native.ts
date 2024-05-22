@@ -110,6 +110,34 @@ export class NativeInterpreter extends JSChannel_ {
     }
   }
 
+  getScrollHeight(id: NodeId): number | undefined {
+    const node = this.nodes[id];
+    if (node instanceof HTMLElement) {
+      return node.scrollHeight;
+    }
+  }
+
+  getScrollLeft(id: NodeId): number | undefined {
+    const node = this.nodes[id];
+    if (node instanceof HTMLElement) {
+      return node.scrollLeft;
+    }
+  }
+
+  getScrollTop(id: NodeId): number | undefined {
+    const node = this.nodes[id];
+    if (node instanceof HTMLElement) {
+      return node.scrollTop;
+    }
+  }
+
+  getScrollWidth(id: NodeId): number | undefined {
+    const node = this.nodes[id];
+    if (node instanceof HTMLElement) {
+      return node.scrollWidth;
+    }
+  }
+
   getClientRect(
     id: NodeId
   ): { type: string; origin: number[]; size: number[] } | undefined {

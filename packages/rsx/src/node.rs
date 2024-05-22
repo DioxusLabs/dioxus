@@ -6,9 +6,10 @@ use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
 use syn::{
     braced,
+    parse::ParseBuffer,
     spanned::Spanned,
     token::{self, Brace},
-    Expr, ExprIf, LitStr, Pat,
+    Expr, ExprCall, ExprIf, Ident, LitStr, Pat,
 };
 
 /*
@@ -19,15 +20,43 @@ Parse
 -> "text {with_args}"
 -> {(0..10).map(|f| rsx!("asd"))}  // <--- notice the curly braces
 */
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+#[derive(Clone, Debug)]
 pub enum BodyNode {
     Element(Element),
     Text(IfmtInput),
-    RawExpr(Expr),
-
+    RawExpr(TokenStream2),
     Component(Component),
     ForLoop(ForLoop),
     IfChain(IfChain),
+}
+
+impl PartialEq for BodyNode {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Element(l), Self::Element(r)) => l == r,
+            (Self::Text(l), Self::Text(r)) => l == r,
+            (Self::RawExpr(l), Self::RawExpr(r)) => l.to_string() == r.to_string(),
+            (Self::Component(l), Self::Component(r)) => l == r,
+            (Self::ForLoop(l), Self::ForLoop(r)) => l == r,
+            (Self::IfChain(l), Self::IfChain(r)) => l == r,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for BodyNode {}
+
+impl Hash for BodyNode {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Self::Element(el) => el.hash(state),
+            Self::Text(text) => text.hash(state),
+            Self::RawExpr(exp) => exp.to_string().hash(state),
+            Self::Component(comp) => comp.hash(state),
+            Self::ForLoop(for_loop) => for_loop.hash(state),
+            Self::IfChain(if_chain) => if_chain.hash(state),
+        }
+    }
 }
 
 impl BodyNode {
@@ -45,10 +74,16 @@ impl BodyNode {
             BodyNode::IfChain(f) => f.if_token.span(),
         }
     }
-}
 
-impl Parse for BodyNode {
-    fn parse(stream: ParseStream) -> Result<Self> {
+    pub(crate) fn parse_with_options(
+        stream: ParseStream,
+        partial_completions: bool,
+    ) -> Result<Self> {
+        // Make sure the next token is a brace if we're not in partial completion mode
+        fn peek_brace(stream: &ParseBuffer, partial_completions: bool) -> bool {
+            partial_completions || stream.peek(token::Brace)
+        }
+
         if stream.peek(LitStr) {
             return Ok(BodyNode::Text(stream.parse()?));
         }
@@ -56,7 +91,7 @@ impl Parse for BodyNode {
         // if this is a dash-separated path, it's a web component (custom element)
         let body_stream = stream.fork();
         if let Ok(ElementName::Custom(name)) = body_stream.parse::<ElementName>() {
-            if name.value().contains('-') && body_stream.peek(token::Brace) {
+            if name.value().contains('-') && peek_brace(&body_stream, partial_completions) {
                 return Ok(BodyNode::Element(stream.parse::<Element>()?));
             }
         }
@@ -73,21 +108,65 @@ impl Parse for BodyNode {
             // example:
             // div {}
             if let Some(ident) = path.get_ident() {
-                let el_name = ident.to_string();
-
-                let first_char = el_name.chars().next().unwrap();
-
-                if body_stream.peek(token::Brace)
-                    && first_char.is_ascii_lowercase()
-                    && !el_name.contains('_')
+                if peek_brace(&body_stream, partial_completions)
+                    && !ident_looks_like_component(ident)
                 {
-                    return Ok(BodyNode::Element(stream.parse::<Element>()?));
+                    return Ok(BodyNode::Element(Element::parse_with_options(
+                        stream,
+                        partial_completions,
+                    )?));
+                }
+            }
+
+            // If it is a single function call with a name that looks like a component, it should probably be a component
+            // Eg, if we run into this:
+            // ```rust
+            // my_function(key, prop)
+            // ```
+            // We should tell the user that they need braces around props instead of turning the component call into an expression
+            if let Ok(call) = stream.fork().parse::<ExprCall>() {
+                if let Expr::Path(path) = call.func.as_ref() {
+                    if let Some(ident) = path.path.get_ident() {
+                        if ident_looks_like_component(ident) {
+                            let function_args: Vec<_> = call
+                                .args
+                                .iter()
+                                .map(|arg| arg.to_token_stream().to_string())
+                                .collect();
+                            let function_call = format!("{}({})", ident, function_args.join(", "));
+                            let component_call = if function_args.is_empty() {
+                                format!("{} {{}}", ident)
+                            } else {
+                                let component_args: Vec<_> = call
+                                    .args
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(prop_count, arg)| {
+                                        // Try to parse it as a shorthand field
+                                        if let Ok(simple_ident) =
+                                            syn::parse2::<Ident>(arg.to_token_stream())
+                                        {
+                                            format!("{}", simple_ident)
+                                        } else {
+                                            let ident = format!("prop{}", prop_count + 1);
+                                            format!("{}: {}", ident, arg.to_token_stream())
+                                        }
+                                    })
+                                    .collect();
+                                format!("{} {{\n\t{}\n}}", ident, component_args.join(",\n\t"))
+                            };
+                            let error_text = format!(
+                                "Expected a valid body node found a function call. Did you forget to add braces around props?\nComponents should be called with braces instead of being called as expressions.\nInstead of:\n```rust\n{function_call}\n```\nTry:\n```rust\n{component_call}\n```\nIf you are trying to call a function, not a component, you need to wrap your expression in braces.",
+                            );
+                            return Err(syn::Error::new(call.span(), error_text));
+                        }
+                    }
                 }
             }
 
             // Otherwise this should be Component, allowed syntax:
             // - syn::Path
-            // - PathArguments can only apper in last segment
+            // - PathArguments can only appear in last segment
             // - followed by `{` or `(`, note `(` cannot be used with one ident
             //
             // example
@@ -99,7 +178,7 @@ impl Parse for BodyNode {
             // crate::component{}
             // Input::<InputProps<'_, i32> {}
             // crate::Input::<InputProps<'_, i32> {}
-            if body_stream.peek(token::Brace) {
+            if peek_brace(&body_stream, partial_completions) {
                 return Ok(BodyNode::Component(stream.parse()?));
             }
         }
@@ -124,17 +203,46 @@ impl Parse for BodyNode {
         // }
         // ```
         if stream.peek(Token![match]) {
-            return Ok(BodyNode::RawExpr(stream.parse::<Expr>()?));
+            return Ok(BodyNode::RawExpr(stream.parse::<Expr>()?.to_token_stream()));
         }
 
         if stream.peek(token::Brace) {
-            return Ok(BodyNode::RawExpr(stream.parse::<Expr>()?));
+            // If we are in strict mode, make sure thing inside the braces is actually a valid expression
+            let combined = if !partial_completions {
+                stream.parse::<Expr>()?.to_token_stream()
+            } else {
+                // otherwise, just take whatever is inside the braces. It might be invalid, but we still want to spit it out so we get completions
+                let content;
+                let brace = braced!(content in stream);
+                let content: TokenStream2 = content.parse()?;
+                let mut combined = TokenStream2::new();
+                brace.surround(&mut combined, |inside_brace| {
+                    inside_brace.append_all(content);
+                });
+                combined
+            };
+
+            return Ok(BodyNode::RawExpr(combined));
         }
 
         Err(syn::Error::new(
             stream.span(),
             "Expected a valid body node.\nExpressions must be wrapped in curly braces.",
         ))
+    }
+}
+
+// Checks if an ident looks like a component
+fn ident_looks_like_component(ident: &Ident) -> bool {
+    let as_string = ident.to_string();
+    let first_char = as_string.chars().next().unwrap();
+    // Components either start with an uppercase letter or have an underscore in them
+    first_char.is_ascii_uppercase() || as_string.contains('_')
+}
+
+impl Parse for BodyNode {
+    fn parse(stream: ParseStream) -> Result<Self> {
+        Self::parse_with_options(stream, true)
     }
 }
 
@@ -153,6 +261,7 @@ impl ToTokens for BodyNode {
             // Expressons too
             BodyNode::RawExpr(exp) => tokens.append_all(quote! {
                 {
+                    #[allow(clippy::let_and_return)]
                     let ___nodes = (#exp).into_dyn_node();
                     ___nodes
                 }
@@ -226,6 +335,7 @@ impl ToTokens for ForLoop {
         // And then we can return them into the dyn loop
         tokens.append_all(quote! {
             {
+                #[allow(clippy::let_and_return)]
                 let ___nodes = (#expr).into_iter().map(|#pat| { #renderer }).into_dyn_node();
                 ___nodes
             }
@@ -320,6 +430,7 @@ impl ToTokens for IfChain {
 
         tokens.append_all(quote! {
             {
+                #[allow(clippy::let_and_return)]
                 let ___nodes = (#body).into_dyn_node();
                 ___nodes
             }
