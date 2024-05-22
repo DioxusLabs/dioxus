@@ -43,6 +43,11 @@ fn event_handlers_compile() {
                 onclick,
                 "Click!"
             }
+
+            // You should also be able to forward event handlers to other components with the shorthand syntax
+            TakesEventHandler {
+                onclick
+            }
         }
     }
 
