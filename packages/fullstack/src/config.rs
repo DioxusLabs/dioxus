@@ -131,15 +131,21 @@ impl Config {
             let ssr_state = SSRState::new(&cfg);
             let router = axum::Router::new().register_server_fns();
             #[cfg(not(any(feature = "desktop", feature = "mobile")))]
-            let router = router
-                .serve_static_assets(cfg.assets_path.clone())
-                .await
-                .connect_hot_reload()
-                .fallback(get(render_handler).with_state((
+            let router = {
+                let mut router = router.serve_static_assets(cfg.assets_path.clone()).await;
+
+                #[cfg(all(feature = "hot-reload", debug_assertions))]
+                {
+                    use dioxus_hot_reload::HotReloadRouterExt;
+                    router = router.forward_cli_hot_reloading();
+                }
+
+                router.fallback(get(render_handler).with_state((
                     cfg,
                     Arc::new(build_virtual_dom),
                     ssr_state,
-                )));
+                )))
+            };
             let router = router.into_make_service();
             let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
             axum::serve(listener, router).await.unwrap();

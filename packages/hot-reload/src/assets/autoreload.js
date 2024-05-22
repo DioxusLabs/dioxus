@@ -1,8 +1,3 @@
-// Dioxus-CLI
-// https://github.com/DioxusLabs/dioxus/tree/master/packages/cli
-// NOTE: This is also used in the fullstack package at ../packages/fullstack/src/render.rs, if you make changes here, make sure to update the version in there as well
-// TODO: Extract hot reloading with axum into a separate crate or use the fullstack hot reloading Axum extension trait here
-
 (function () {
   var protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   var url = protocol + "//" + window.location.host + "/_dioxus/ws";

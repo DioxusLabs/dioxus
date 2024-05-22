@@ -29,12 +29,15 @@ members = [
     "packages/hot-reload",
     "packages/fullstack",
     "packages/server-macro",
+    "packages/static-generation",
     "packages/fullstack/examples/axum-hello-world",
     "packages/fullstack/examples/axum-router",
     "packages/fullstack/examples/axum-streaming",
     "packages/fullstack/examples/axum-desktop",
     "packages/fullstack/examples/axum-auth",
-    "packages/fullstack/examples/static-hydrated",
+    "packages/static-generation/examples/simple",
+    "packages/static-generation/examples/router",
+    "packages/static-generation/examples/github-pages",
     # Full project examples
     "examples/tailwind",
     "examples/PWA-example",
@@ -76,8 +79,8 @@ dioxus-cli-config = { path = "packages/cli-config", version = "0.5.0", default-f
 generational-box = { path = "packages/generational-box", version = "0.5.0" }
 dioxus-hot-reload = { path = "packages/hot-reload", version = "0.5.0" }
 dioxus-fullstack = { path = "packages/fullstack", version = "0.5.0" }
+dioxus-static-site-generation = { path = "packages/static-generation", version = "0.5.0" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.5.0", default-features = false }
-dioxus-ext = { path = "packages/extension" }
 tracing = "0.1.37"
 tracing-futures = "0.2.5"
 toml = "0.8"
@@ -101,7 +104,7 @@ axum = "0.7.0"
 axum-server = { version = "0.6.0", default-features = false }
 tower = "0.4.13"
 http = "1.0.0"
-tower-http = "0.5.1"
+tower-http = "0.5.2"
 hyper = "1.0.0"
 hyper-rustls = "0.26.0"
 serde_json = "1.0.61"
@@ -120,9 +123,6 @@ isnta = "1.36.1"
 
 # speed up some macros by optimizing them
 [profile.dev.package.insta]
-opt-level = 3
-
-[profile.dev.package.similar]
 opt-level = 3
 
 [profile.dev.package.dioxus-core-macro]

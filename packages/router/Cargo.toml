@@ -26,13 +26,14 @@ js-sys = { version = "0.3.63", optional = true }
 gloo-utils = { version = "0.1.6", optional = true }
 dioxus-liveview = { workspace = true, optional = true }
 dioxus-ssr = { workspace = true, optional = true }
+http = { workspace = true, optional = true }
 dioxus-fullstack = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["full"], optional = true }
 dioxus-cli-config = { workspace = true, features = ["read-config"] }
 
 [features]
 default = []
-ssr = ["dioxus-ssr/incremental", "tokio", "dioxus-fullstack?/server"]
+ssr = ["dioxus-ssr/incremental", "tokio", "dioxus-fullstack?/server", "http"]
 liveview = ["dioxus-liveview", "tokio", "dep:serde", "serde_json"]
 wasm_test = []
 web = ["gloo", "web-sys", "wasm-bindgen", "gloo-utils", "js-sys", "dioxus-router-macro/web"]
@@ -41,7 +42,6 @@ fullstack = ["dioxus-fullstack"]
 [dev-dependencies]
 axum = { workspace = true, features = ["ws"] }
 dioxus = { workspace = true, features = ["router"] }
-# dioxus-liveview = { workspace = true, features = ["axum"] }
 dioxus-ssr = { workspace = true }
 criterion = { version = "0.5", features = ["async_tokio", "html_reports"] }
 

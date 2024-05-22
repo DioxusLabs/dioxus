@@ -22,6 +22,7 @@ dioxus-web = { workspace = true, optional = true }
 dioxus-mobile = { workspace = true, optional = true }
 dioxus-desktop = { workspace = true, default-features = true, optional = true }
 dioxus-fullstack = { workspace = true, optional = true }
+dioxus-static-site-generation = { workspace = true, optional = true }
 dioxus-liveview = { workspace = true, optional = true }
 dioxus-ssr ={ workspace = true, optional = true }
 
@@ -45,10 +46,11 @@ router = ["dioxus-router"]
 fullstack = ["dioxus-fullstack", "dioxus-config-macro/fullstack", "serde", "dioxus-router?/fullstack"]
 desktop = ["dioxus-desktop", "dioxus-fullstack?/desktop", "dioxus-config-macro/desktop"]
 mobile = ["dioxus-mobile", "dioxus-fullstack?/mobile", "dioxus-config-macro/mobile"]
-web = ["dioxus-web", "dioxus-fullstack?/web", "dioxus-config-macro/web", "dioxus-router?/web"]
+web = ["dioxus-web", "dioxus-fullstack?/web", "dioxus-static-site-generation?/web", "dioxus-config-macro/web", "dioxus-router?/web"]
 ssr = ["dioxus-ssr", "dioxus-router?/ssr", "dioxus-config-macro/ssr"]
 liveview = ["dioxus-liveview", "dioxus-config-macro/liveview", "dioxus-router?/liveview"]
-axum = ["dioxus-fullstack?/axum", "dioxus-fullstack?/server", "ssr", "dioxus-liveview?/axum"]
+static-generation = ["dioxus-static-site-generation", "dioxus-config-macro/static-generation"]
+axum = ["dioxus-fullstack?/axum", "dioxus-fullstack?/server", "dioxus-static-site-generation?/server", "ssr", "dioxus-liveview?/axum"]
 
 # This feature just disables the no-renderer-enabled warning
 third-party-renderer = []
