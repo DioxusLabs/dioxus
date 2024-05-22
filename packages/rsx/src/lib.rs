@@ -169,7 +169,8 @@ impl ToTokens for CallBody {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
         // Empty templates just are placeholders for "none"
         match self.roots.is_empty() {
-            true => out_tokens.append_all(quote! { None }),
+            true => out_tokens
+                .append_all(quote! { dioxus_core::prelude::Element::Ok(dioxus_core::prelude::VNode::placeholder()) }),
             false => {
                 let body = TemplateRenderer::as_tokens(&self.roots, None);
                 out_tokens.append_all(quote! { { #body } })
