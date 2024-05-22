@@ -29,11 +29,6 @@ pub enum HotLiteral {
     /// "hello {world}"
     Fmted(IfmtInput),
 
-    /// A static string literal
-    ///
-    /// "hello world"
-    Str(LitStr),
-
     /// A float literal
     ///
     /// 1.0
@@ -56,11 +51,7 @@ impl Parse for RsxLiteral {
         let value = match raw.clone() {
             Lit::Str(a) => {
                 let ifmt_input: IfmtInput = a.value().parse()?;
-                if ifmt_input.is_static() {
-                    HotLiteral::Str(a)
-                } else {
-                    HotLiteral::Fmted(ifmt_input)
-                }
+                HotLiteral::Fmted(ifmt_input)
             }
             Lit::Int(a) => HotLiteral::Int(a),
             Lit::Float(a) => HotLiteral::Float(a),
@@ -84,8 +75,8 @@ impl Parse for RsxLiteral {
 impl ToTokens for RsxLiteral {
     fn to_tokens(&self, out: &mut proc_macro2::TokenStream) {
         let ty = match &self.value {
+            HotLiteral::Fmted(f) if f.is_static() => quote! { &'static str  },
             HotLiteral::Fmted(_) => quote! { FmtedSegments },
-            HotLiteral::Str(_) => quote! { &'static str  },
             HotLiteral::Float(_) => quote! { f64 },
             HotLiteral::Int(_) => quote! { i64 },
             HotLiteral::Bool(_) => quote! { bool },
@@ -115,13 +106,14 @@ impl ToTokens for RsxLiteral {
                     )
                 }
             }
-            HotLiteral::Str(a) => quote! { #a },
             HotLiteral::Float(a) => quote! { #a },
             HotLiteral::Int(a) => quote! { #a },
             HotLiteral::Bool(a) => quote! { #a },
         };
 
         let mapped = match &self.value {
+            HotLiteral::Fmted(f) if f.is_static() => quote! { .into() },
+
             HotLiteral::Fmted(segments) => {
                 let rendered_segments = segments.segments.iter().filter_map(|s| match s {
                     Segment::Literal(_lit) => None,
@@ -137,7 +129,6 @@ impl ToTokens for RsxLiteral {
                     .render_with(vec![ #(#rendered_segments),* ])
                 }
             }
-            HotLiteral::Str(_) => quote! { .into() },
             HotLiteral::Float(_) => quote! { .into() },
             HotLiteral::Int(_) => quote! { .into() },
             HotLiteral::Bool(_) => quote! { .into() },
@@ -145,15 +136,14 @@ impl ToTokens for RsxLiteral {
 
         let as_lit = match &self.value {
             HotLiteral::Fmted(f) => f.to_token_stream(),
-            HotLiteral::Str(f) => f.to_token_stream(),
             HotLiteral::Float(f) => f.to_token_stream(),
             HotLiteral::Int(f) => f.to_token_stream(),
             HotLiteral::Bool(f) => f.to_token_stream(),
         };
 
         let map_lit = match &self.value {
+            HotLiteral::Fmted(f) if f.is_static() => quote! { .into() },
             HotLiteral::Fmted(_) => quote! { .to_string() },
-            HotLiteral::Str(_) => quote! { .into() },
             HotLiteral::Float(_) => quote! { .into() },
             HotLiteral::Int(_) => quote! { .into() },
             HotLiteral::Bool(_) => quote! { .into() },
@@ -206,7 +196,7 @@ impl RsxLiteral {
 
     pub fn is_static(&self) -> bool {
         match &self.value {
-            HotLiteral::Str(_) => true,
+            HotLiteral::Fmted(fmt) => fmt.is_static(),
             _ => false,
         }
     }

@@ -47,3 +47,14 @@ impl ToTokens for ForLoop {
         });
     }
 }
+
+#[test]
+fn parses_for_loop() {
+    let toks = quote! {
+        for x in y {
+            div {}
+        }
+    };
+
+    let for_loop: ForLoop = syn::parse2(toks).unwrap();
+}

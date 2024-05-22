@@ -91,8 +91,10 @@ impl IfmtInput {
             return usize::MAX;
         }
 
+        // Default score to 1 - an ifmt with no dynamic segments still technically has a score of 1
+        // since it's not disqualified, but it's not a perfect match
+        let mut score = 1;
         let mut l_freq_map = self.dynamic_seg_frequency_map();
-        let mut score = 0;
 
         // Pluck out the dynamic segments from the other input
         for seg in other.dynamic_segments() {

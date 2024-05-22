@@ -766,7 +766,7 @@ fn simple_carry() {
 }
 
 #[test]
-fn complex_carry() {
+fn complex_carry_text() {
     let a = quote! {
         // start with
         "thing {abc} {def}"       // 1, 1, 1
@@ -782,10 +782,22 @@ fn complex_carry() {
 
     let changed = full_boilerplate(a, b);
     dbg!(changed.unwrap());
+}
 
-    let _ = quote! {
+#[test]
+fn complex_carry() {
+    let a = quote! {
+        Component {
+            class: "thing {abc}",
+            other: "other {abc} {def}",
+        }
+        Component {
+            class: "thing {abc}",
+            other: "other",
+        }
+    };
 
-
+    let b = quote! {
         // how about shuffling components, for, if, etc
         Component {
             class: "thing {abc}",
@@ -795,14 +807,8 @@ fn complex_carry() {
             class: "thing",
             other: "other",
         }
-
-        Component {
-            class: "thing {abc}",
-            other: "other",
-        }
-        Component {
-            class: "thing {abc}",
-            other: "other {abc} {def}",
-        }
     };
+
+    let changed = full_boilerplate(a, b);
+    dbg!(changed.unwrap());
 }

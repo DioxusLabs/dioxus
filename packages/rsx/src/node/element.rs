@@ -68,7 +68,7 @@ impl ToTokens for Element {
                 match attr.as_static_str_literal() {
                     // If it's static, we'll take this little optimization
                     Some((name, value)) => {
-                        let value = value.value();
+                        let value = value.to_static().unwrap();
 
                         let ns = match name {
                             AttributeName::BuiltIn(name) => ns(quote!(#name.1)),

@@ -24,7 +24,7 @@
 //! - Hotreloading of literals is technically possible, but not currently implemented and would likely
 //!   require changes to core to work.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, usize};
 
 use crate::{
     intern, reload_stack::ReloadStack, Attribute, AttributeName, AttributeValue, Component,
@@ -218,17 +218,22 @@ impl HotReload {
                         // it might cause an unnecessary rebuild
                         let mut score = 1;
 
-                        let mut left_fields = a.fields.clone();
+                        let mut left_fields = a.fields.iter().collect::<Vec<_>>();
                         left_fields.sort_by(|a, b| a.name.to_string().cmp(&b.name.to_string()));
 
-                        let mut right_fields = b.fields.clone();
+                        let mut right_fields = b.fields.iter().collect::<Vec<_>>();
                         right_fields.sort_by(|a, b| a.name.to_string().cmp(&b.name.to_string()));
 
                         for (left, right) in left_fields.iter().zip(right_fields.iter()) {
-                            let scored = score_attr_value(&left.value, &right.value);
+                            let scored = match score_attr_value(&left.value, &right.value) {
+                                usize::MAX => 2,
+                                a => a,
+                            };
+
                             if scored == 0 {
                                 return 0;
                             }
+
                             score += scored;
                         }
 
@@ -295,6 +300,8 @@ impl HotReload {
 
             new_node.set_dyn_idx(old_node.get_dyn_idx());
 
+            dbg!(old_node, new_node);
+
             // Make sure we descend into the children, and update any ifmts
             match (old_node, new_node) {
                 (BodyNode::Element(_), BodyNode::Element(_)) => {
@@ -312,12 +319,12 @@ impl HotReload {
                 }
 
                 (BodyNode::Component(a), BodyNode::Component(b)) => {
-                    self.hotreload_component_fields::<Ctx>(a, b);
-                    self.hotreload_body::<Ctx>(&a.children, &b.children);
+                    self.hotreload_component_fields::<Ctx>(a, b)?;
+                    self.hotreload_body::<Ctx>(&a.children, &b.children)?;
                 }
 
                 (BodyNode::ForLoop(a), BodyNode::ForLoop(b)) => {
-                    self.hotreload_body::<Ctx>(&a.body, &b.body);
+                    self.hotreload_body::<Ctx>(&a.body, &b.body)?;
                 }
 
                 (BodyNode::IfChain(a), BodyNode::IfChain(b)) => {
@@ -617,24 +624,42 @@ impl HotReload {
             return None;
         }
 
+        let mut left_fields = a.fields.iter().collect::<Vec<_>>();
+        left_fields.sort_by(|a, b| a.name.to_string().cmp(&b.name.to_string()));
+
+        let mut right_fields = b.fields.iter().collect::<Vec<_>>();
+        right_fields.sort_by(|a, b| a.name.to_string().cmp(&b.name.to_string()));
+
         // Walk the attributes looking for literals
         // Those will have plumbing in the hotreloading code
         // All others just get diffed via tokensa
-        for (idx, (old_attr, new_attr)) in a.fields.iter().zip(b.fields.iter()).enumerate() {
+        for (idx, (old_attr, new_attr)) in left_fields.iter().zip(right_fields.iter()).enumerate() {
             match (&old_attr.value, &new_attr.value) {
                 (_, _) if old_attr.name != new_attr.name => return None,
 
-                // (ContentField::Formatted(left), ContentField::Formatted(right)) => {
-                //     // try to hotreload this formatted string
-                //     _ = self.hotreload_ifmt(&left, &right);
-                // }
-                _ => {
-                    todo!();
+                (AttributeValue::AttrLit(_), AttributeValue::AttrLit(b)) => {
+                    let score = score_attr_value(&old_attr.value, &new_attr.value);
 
-                    if old_attr != new_attr {
-                        return None;
+                    dbg!(&old_attr.name, score);
+
+                    match score {
+                        // Same - nothing to do
+                        usize::MAX => {}
+
+                        // Mismatch - we need to force a rebuild
+                        0 => return None,
+
+                        // Literal mismatch - we need to hotreload the literal
+                        _ => {
+                            let location =
+                                self.make_location(old_attr.as_lit().unwrap().hr_idx.get());
+                            self.changed_strings.insert(location, b.value.clone());
+                        }
                     }
                 }
+
+                _ if a != b => return None,
+                _ => {}
             }
         }
 
@@ -763,169 +788,8 @@ impl HotReload {
         Some(attr_paths)
     }
 
-    pub fn callbody_to_template<Ctx: HotReloadingContext>(
-        &mut self,
-        CallBody { body, .. }: &CallBody,
-    ) -> Template {
-        // Rendering template nodes without a previous is just using ourselves as the previous mapping
-        // Even though nothing changed, we can still use all the same rendering logic.
-        let roots =
-            self.render_dynamic_context::<Ctx>(body, body, &body.node_paths, &body.attr_paths);
-
-        Template {
-            name: self.make_location(body.template_idx.get()).leak(),
-            roots: intern(roots.as_slice()),
-            node_paths: intern(
-                body.node_paths
-                    .iter()
-                    .map(|path| intern(path.as_slice()))
-                    .collect::<Vec<_>>()
-                    .as_slice(),
-            ),
-            attr_paths: intern(
-                body.attr_paths
-                    .iter()
-                    .map(|(path, _)| intern(path.as_slice()))
-                    .collect::<Vec<_>>()
-                    .as_slice(),
-            ),
-        }
-    }
-
-    /// Use all the context we have to write out the template nodes
-    ///
-    /// This involves descendding throughout the bodynodes, hitting dynamic bits, and finding the corresponding
-    /// nodes in the context.
-    ///
-    /// For dynamic attributes, we currently have a naive approach of just finding the old attribute in
-    /// the old template. Eventually we might want to be more sophisticated about this to do things like
-    /// hotreloading formatted segments.
-    fn render_dynamic_context<Ctx: HotReloadingContext>(
-        &mut self,
-        old: &TemplateBody,
-        new: &TemplateBody,
-        node_paths: &[Vec<u8>],
-        attr_paths: &[(Vec<u8>, usize)],
-    ) -> Vec<TemplateNode> {
-        let mut nodes = Vec::new();
-
-        for (idx, node) in new.roots.iter().enumerate() {
-            nodes.push(self.render_template_node::<Ctx>(
-                new,
-                node,
-                node_paths,
-                attr_paths,
-                vec![idx as u8],
-            ));
-        }
-
-        nodes
-    }
-
-    fn render_template_node<Ctx: HotReloadingContext>(
-        &mut self,
-        ctx: &TemplateBody,
-        node: &BodyNode,
-        node_paths: &[Vec<u8>],
-        attr_paths: &[(Vec<u8>, usize)],
-        cur_path: Vec<u8>,
-    ) -> TemplateNode {
-        todo!()
-        // match node {
-        //     // The user is moving a static node around in the template
-        //     BodyNode::Element(el) => {
-        //         let rust_name = el.name.to_string();
-
-        //         // Build an iterator that will yield attributes at the current path
-        //         // This is mostly to preserve the order of the attributes
-        //         // We will interleave these dynamic nodes into the merged attributes as we write those out
-        //         // We could just dump all the dynamic attributes after the static ones, making this simpler,
-        //         // but all our tests are designed to preserve the order of the attributes, so we'll do that
-        //         //
-        //         // The `rev` is just to match the old behavior of attributes being pushed and popped rather than
-        //         // linear inserted.
-        //         let mut attr_iter = attr_paths
-        //             .iter()
-        //             .enumerate()
-        //             .rev()
-        //             .filter(|(_idx, (path, _))| *path == cur_path)
-        //             .map(|(idx, _)| idx);
-
-        //         // Write the attributes by interleaving static and dynamic
-        //         let static_attr_array = el
-        //             .merged_attributes
-        //             .iter()
-        //             .map(|attr| match attr.as_static_str_literal() {
-        //                 Some((name, value)) => {
-        //                     make_static_attribute::<Ctx>(value, name, &rust_name)
-        //                 }
-        //                 None => TemplateAttribute::Dynamic {
-        //                     id: attr_iter.next().expect("Attributes should be in order"),
-        //                 },
-        //             })
-        //             .collect::<Vec<_>>();
-
-        //         // Write out the children with the current path + the child index
-        //         let children = el
-        //             .children
-        //             .iter()
-        //             .enumerate()
-        //             .map(|(idx, child)| {
-        //                 let mut new_cur_path = cur_path.clone();
-        //                 new_cur_path.push(idx as u8);
-        //                 self.render_template_node::<Ctx>(
-        //                     ctx,
-        //                     child,
-        //                     node_paths,
-        //                     attr_paths,
-        //                     new_cur_path.clone(),
-        //                 )
-        //             })
-        //             .collect::<Vec<_>>();
-
-        //         let (tag, namespace) =
-        //             Ctx::map_element(&rust_name).unwrap_or((intern(rust_name.as_str()), None));
-
-        //         TemplateNode::Element {
-        //             tag,
-        //             namespace,
-        //             attrs: intern(static_attr_array.into_boxed_slice()),
-        //             children: intern(children.as_slice()),
-        //         }
-        //     }
-
-        //     BodyNode::Text(text) if text.input.is_static() => {
-        //         let text = text.input.source.as_ref().unwrap();
-        //         let text = intern(text.value().as_str());
-        //         TemplateNode::Text { text }
-        //     }
-
-        //     // Find the corresponding node in the node_paths map
-        //     BodyNode::RawExpr(_)
-        //     | BodyNode::Text(_)
-        //     | BodyNode::ForLoop(_)
-        //     | BodyNode::IfChain(_)
-        //     | BodyNode::Component(_) => {
-        //         // Just look for the current path in the node_paths map and thats our id
-        //         let id = node_paths
-        //             .iter()
-        //             .position(|p| p == &cur_path)
-        //             .expect("Dynamic nodes to always be linked");
-
-        //         match node {
-        //             BodyNode::Text(_) => TemplateNode::DynamicText { id },
-        //             _ => TemplateNode::Dynamic { id },
-        //         }
-        //     }
-        // }
-    }
-
     fn make_location(&self, idx: usize) -> String {
         format!("{}:{}", self.location.trim_end_matches(":0"), idx)
-    }
-
-    fn compare_attributes(&mut self, old_attr: &Attribute, new: &Attribute) -> bool {
-        todo!()
     }
 }
 
@@ -946,14 +810,14 @@ fn score_attr_value(old_attr: &AttributeValue, new_attr: &AttributeValue) -> usi
             // We assign perfect matches for token resuse, to minimize churn on the renderer
             match (&left.value, &right.value) {
                 // Quick shortcut if there's no change
-                (HotLiteral::Fmted(old), HotLiteral::Fmted(new)) if new == old => usize::MAX,
+                (HotLiteral::Fmted(old), HotLiteral::Fmted(new)) => {
+                    if new == old {
+                        return usize::MAX;
+                    }
 
-                // We can remove formatted bits but we can't add them. The scoring here must
-                // realize that every bit of the new formatted segment must be in the old formatted segment
-                (HotLiteral::Fmted(old), HotLiteral::Fmted(new)) => old.hr_score(new),
-
-                (HotLiteral::Str(_), HotLiteral::Str(_)) => {
-                    unreachable!("Strs are not dynamic attributes")
+                    // We can remove formatted bits but we can't add them. The scoring here must
+                    // realize that every bit of the new formatted segment must be in the old formatted segment
+                    old.hr_score(new)
                 }
 
                 (HotLiteral::Float(a), HotLiteral::Float(b)) if a == b => usize::MAX,

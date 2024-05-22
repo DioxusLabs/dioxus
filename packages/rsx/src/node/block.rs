@@ -385,10 +385,10 @@ impl Attribute {
         }
     }
 
-    pub fn as_static_str_literal(&self) -> Option<(&AttributeName, &LitStr)> {
+    pub fn as_static_str_literal(&self) -> Option<(&AttributeName, &IfmtInput)> {
         match &self.value {
             AttributeValue::AttrLit(lit) => match &lit.value {
-                HotLiteral::Str(input) => Some((&self.name, input)),
+                HotLiteral::Fmted(input) if input.is_static() => Some((&self.name, input)),
                 _ => None,
             },
             _ => None,
@@ -425,7 +425,7 @@ impl Attribute {
         TemplateAttribute::Static {
             name,
             namespace,
-            value: intern(value.value().as_str()),
+            value: intern(value.to_static().unwrap().as_str()),
         }
     }
 
