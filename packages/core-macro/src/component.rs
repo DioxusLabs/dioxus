@@ -51,11 +51,15 @@ impl ToTokens for ComponentBody {
             }
         };
 
+        let completion_hints = self.completion_hints();
+
         tokens.append_all(quote! {
             #props_struct
 
             #[allow(non_snake_case)]
             #comp_fn
+
+            #completion_hints
         });
     }
 }
@@ -220,6 +224,31 @@ impl ComponentBody {
         }
 
         false
+    }
+
+    // We generate an extra enum to help us autocomplete the braces after the component.
+    // This is a bit of a hack, but it's the only way to get the braces to autocomplete.
+    fn completion_hints(&self) -> TokenStream {
+        let comp_fn = &self.item_fn.sig.ident;
+        let completions_mod = Ident::new(&format!("{}_completions", comp_fn), comp_fn.span());
+
+        let vis = &self.item_fn.vis;
+
+        quote! {
+            #[allow(non_snake_case)]
+            #[doc(hidden)]
+            mod #completions_mod {
+                #[doc(hidden)]
+                #[allow(non_camel_case_types)]
+                /// This enum is generated to help autocomplete the braces after the component. It does nothing
+                pub enum Component {
+                    #comp_fn {}
+                }
+            }
+
+            #[allow(unused)]
+            #vis use #completions_mod::Component::#comp_fn;
+        }
     }
 }
 

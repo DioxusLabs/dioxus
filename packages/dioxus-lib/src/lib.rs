@@ -42,7 +42,7 @@ pub mod prelude {
     pub use dioxus_html as dioxus_elements;
 
     #[cfg(feature = "html")]
-    pub use dioxus_elements::{prelude::*, GlobalAttributes, SvgAttributes};
+    pub use dioxus_elements::{global_attributes, prelude::*, svg_attributes};
 
     pub use dioxus_core;
 }

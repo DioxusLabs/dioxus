@@ -65,7 +65,7 @@ pub mod prelude {
 
     #[cfg(feature = "html")]
     #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
-    pub use dioxus_elements::{prelude::*, GlobalAttributes, SvgAttributes};
+    pub use dioxus_elements::{global_attributes, prelude::*, svg_attributes};
 
     #[cfg(all(
         not(any(target_arch = "wasm32", target_os = "ios", target_os = "android")),
@@ -100,6 +100,10 @@ pub use dioxus_router as router;
 #[cfg(feature = "fullstack")]
 #[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]
 pub use dioxus_fullstack as fullstack;
+
+#[cfg(feature = "static-generation")]
+#[cfg_attr(docsrs, doc(cfg(feature = "static-generation")))]
+pub use dioxus_static_site_generation as static_site_generation;
 
 #[cfg(feature = "desktop")]
 #[cfg_attr(docsrs, doc(cfg(feature = "desktop")))]

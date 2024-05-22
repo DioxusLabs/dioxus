@@ -564,10 +564,7 @@ pub fn gen_page(config: &CrateConfig, manifest: Option<&AssetManifest>, serve: b
     replace_or_insert_before("{script_include}", &script_str, "</body", &mut html);
 
     if serve {
-        html += &format!(
-            "<script>{}</script>",
-            include_str!("./assets/autoreload.js")
-        );
+        html += &format!("<script>{}</script>", dioxus_hot_reload::RECONNECT_SCRIPT);
     }
 
     let base_path = match &config.dioxus_config.web.app.base_path {

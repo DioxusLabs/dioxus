@@ -4,7 +4,9 @@ use crate::events::{
     TransitionData, WheelData,
 };
 use crate::file_data::{FileEngine, HasFileData};
-use crate::geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint};
+use crate::geometry::{
+    ClientPoint, ElementPoint, PagePoint, PixelsRect, PixelsSize, PixelsVector2D, ScreenPoint,
+};
 use crate::input_data::{decode_key_location, decode_mouse_button_set, MouseButton};
 use crate::prelude::*;
 use keyboard_types::{Code, Key, Modifiers};
@@ -423,13 +425,32 @@ impl From<&web_sys::Element> for MountedData {
 
 #[cfg(feature = "mounted")]
 impl crate::RenderedElementBacking for web_sys::Element {
+    fn get_scroll_offset(
+        &self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::MountedResult<PixelsVector2D>>>>
+    {
+        let left = self.scroll_left();
+        let top = self.scroll_top();
+        let result = Ok(PixelsVector2D::new(left as f64, top as f64));
+        Box::pin(async { result })
+    }
+
+    fn get_scroll_size(
+        &self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::MountedResult<PixelsSize>>>>
+    {
+        let left = self.scroll_left();
+        let top = self.scroll_top();
+        let result = Ok(PixelsSize::new(left as f64, top as f64));
+        Box::pin(async { result })
+    }
+
     fn get_client_rect(
         &self,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = crate::MountedResult<euclid::Rect<f64, f64>>>>,
-    > {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::MountedResult<PixelsRect>>>>
+    {
         let rect = self.get_bounding_client_rect();
-        let result = Ok(euclid::Rect::new(
+        let result = Ok(PixelsRect::new(
             euclid::Point2D::new(rect.left(), rect.top()),
             euclid::Size2D::new(rect.width(), rect.height()),
         ));

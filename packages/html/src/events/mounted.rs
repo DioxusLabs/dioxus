@@ -1,7 +1,5 @@
 //! Handles querying data from the renderer
 
-use euclid::Rect;
-
 use std::{
     fmt::{Display, Formatter},
     future::Future,
@@ -16,9 +14,20 @@ pub trait RenderedElementBacking: std::any::Any {
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
 
+    /// Get the number of pixels that an element's content is scrolled
+    fn get_scroll_offset(&self) -> Pin<Box<dyn Future<Output = MountedResult<PixelsVector2D>>>> {
+        Box::pin(async { Err(MountedError::NotSupported) })
+    }
+
+    /// Get the size of an element's content, including content not visible on the screen due to overflow
+    #[allow(clippy::type_complexity)]
+    fn get_scroll_size(&self) -> Pin<Box<dyn Future<Output = MountedResult<PixelsSize>>>> {
+        Box::pin(async { Err(MountedError::NotSupported) })
+    }
+
     /// Get the bounding rectangle of the element relative to the viewport (this does not include the scroll position)
     #[allow(clippy::type_complexity)]
-    fn get_client_rect(&self) -> Pin<Box<dyn Future<Output = MountedResult<Rect<f64, f64>>>>> {
+    fn get_client_rect(&self) -> Pin<Box<dyn Future<Output = MountedResult<PixelsRect>>>> {
         Box::pin(async { Err(MountedError::NotSupported) })
     }
 
@@ -74,8 +83,18 @@ impl MountedData {
         }
     }
 
+    /// Get the number of pixels that an element's content is scrolled
+    pub async fn get_scroll_offset(&self) -> MountedResult<PixelsVector2D> {
+        self.inner.get_scroll_offset().await
+    }
+
+    /// Get the size of an element's content, including content not visible on the screen due to overflow
+    pub async fn get_scroll_size(&self) -> MountedResult<PixelsSize> {
+        self.inner.get_scroll_size().await
+    }
+
     /// Get the bounding rectangle of the element relative to the viewport (this does not include the scroll position)
-    pub async fn get_client_rect(&self) -> MountedResult<Rect<f64, f64>> {
+    pub async fn get_client_rect(&self) -> MountedResult<PixelsRect> {
         self.inner.get_client_rect().await
     }
 
@@ -99,6 +118,8 @@ impl MountedData {
 }
 
 use dioxus_core::Event;
+
+use crate::geometry::{PixelsRect, PixelsSize, PixelsVector2D};
 
 pub type MountedEvent = Event<MountedData>;
 

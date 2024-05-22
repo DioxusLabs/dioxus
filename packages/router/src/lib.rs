@@ -35,6 +35,7 @@ mod contexts {
     pub(crate) mod router;
     pub use navigator::*;
     pub(crate) use router::*;
+    pub use router::{root_router, RouterContext};
 }
 
 mod router_cfg;

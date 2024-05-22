@@ -3,7 +3,7 @@ use manganis_cli_support::AssetManifest;
 
 use super::*;
 use cargo_toml::Dependency::{Detailed, Inherited, Simple};
-use std::{fs::create_dir_all, io::Write, path::PathBuf};
+use std::fs::create_dir_all;
 
 /// Run the WASM project on dev-server
 #[derive(Clone, Debug, Parser)]
@@ -18,7 +18,7 @@ impl Serve {
         let mut crate_config = dioxus_cli_config::CrateConfig::new(bin)?;
         let serve_cfg = self.serve.clone();
 
-        // change the relase state.
+        // change the release state.
         let hot_reload = self.serve.hot_reload || crate_config.dioxus_config.application.hot_reload;
         crate_config.with_hot_reload(hot_reload);
         crate_config.with_cross_origin_policy(self.serve.cross_origin_policy);
@@ -67,7 +67,9 @@ impl Serve {
         match platform {
             Platform::Web => web::startup(crate_config.clone(), &serve_cfg).await?,
             Platform::Desktop => desktop::startup(crate_config.clone(), &serve_cfg).await?,
-            Platform::Fullstack => fullstack::startup(crate_config.clone(), &serve_cfg).await?,
+            Platform::Fullstack | Platform::StaticGeneration => {
+                fullstack::startup(crate_config.clone(), &serve_cfg).await?
+            }
             _ => unreachable!(),
         }
 
