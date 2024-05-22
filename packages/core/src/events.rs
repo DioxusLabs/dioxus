@@ -252,10 +252,10 @@ impl<Ret> SpawnIfAsync<(), Ret> for Ret {
     }
 }
 
-// Support for FnMut -> async { anything } for the unit return type
+// Support for FnMut -> async { unit } for the unit return type
 #[doc(hidden)]
-pub struct AsyncMarker<O>(PhantomData<O>);
-impl<F: std::future::Future<Output = O> + 'static, O> SpawnIfAsync<AsyncMarker<O>> for F {
+pub struct AsyncMarker;
+impl<F: std::future::Future<Output = ()> + 'static> SpawnIfAsync<AsyncMarker> for F {
     fn spawn(self) {
         crate::prelude::spawn(async move {
             self.await;
@@ -263,7 +263,7 @@ impl<F: std::future::Future<Output = O> + 'static, O> SpawnIfAsync<AsyncMarker<O
     }
 }
 
-// Support for FnMut -> async { Result(anything) } for the unit return type
+// Support for FnMut -> async { Result(()) } for the unit return type
 #[doc(hidden)]
 pub struct AsyncResultMarker;
 
