@@ -231,8 +231,9 @@ impl<T: 'static, Ret: Default + 'static> Default for Callback<T, Ret> {
 
 /// A helper trait for [`Callback`]s that allows functions to accept a [`Callback`] that may return an async block which will automatically be spawned.
 ///
-/// ```rust
-/// fn accepts_fn<Ret: SpawnIfAsync<Marker>, Marker>(callback: impl FnMut(u32) -> Ret + 'static) {
+/// ```rust, no_run
+/// use dioxus::prelude::*;
+/// fn accepts_fn<Ret: dioxus_core::SpawnIfAsync<Marker>, Marker>(callback: impl FnMut(u32) -> Ret + 'static) {
 ///     let callback = Callback::new(callback);
 /// }
 /// // You can accept both async and non-async functions
