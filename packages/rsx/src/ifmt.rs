@@ -32,6 +32,17 @@ impl IfmtInput {
             self.segments.push(Segment::Literal(separator.to_string()));
         }
         self.segments.extend(other.segments);
+        if let Some(source) = &other.source {
+            self.source = Some(LitStr::new(
+                &format!(
+                    "{}{}{}",
+                    self.source.as_ref().unwrap().value(),
+                    separator,
+                    source.value()
+                ),
+                source.span(),
+            ));
+        }
         self
     }
 
@@ -44,6 +55,12 @@ impl IfmtInput {
 
     pub fn push_str(&mut self, s: &str) {
         self.segments.push(Segment::Literal(s.to_string()));
+        if let Some(source) = &self.source {
+            self.source = Some(LitStr::new(
+                &format!("{}{}", source.value(), s),
+                source.span(),
+            ));
+        }
     }
 
     pub fn is_static(&self) -> bool {
@@ -64,6 +81,15 @@ impl IfmtInput {
                     None
                 }
             })
+    }
+
+    fn is_simple_expr(&self) -> bool {
+        self.segments.iter().all(|seg| match seg {
+            Segment::Literal(_) => true,
+            Segment::Formatted(FormattedSegment { segment, .. }) => {
+                matches!(segment, FormattedSegmentType::Ident(_))
+            }
+        })
     }
 
     /// Try to convert this into a single _.to_string() call if possible
@@ -177,8 +203,19 @@ impl FromStr for IfmtInput {
 impl ToTokens for IfmtInput {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         // Try to turn it into a single _.to_string() call
-        if let Some(single_dynamic) = self.try_to_string() {
-            tokens.extend(single_dynamic);
+        if !cfg!(debug_assertions) {
+            if let Some(single_dynamic) = self.try_to_string() {
+                tokens.extend(single_dynamic);
+                return;
+            }
+        }
+
+        // If the segments are not complex exprs, we can just use format! directly to take advantage of RA rename/expansion
+        if self.is_simple_expr() {
+            let raw = &self.source;
+            tokens.extend(quote! {
+                ::std::format_args!(#raw)
+            });
             return;
         }
 

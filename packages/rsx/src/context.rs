@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::*;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
+use quote::{quote, quote_spanned};
 
 /// As we create the dynamic nodes, we want to keep track of them in a linear fashion
 /// We'll use the size of the vecs to determine the index of the dynamic node in the final output
@@ -112,15 +112,13 @@ impl<'a> DynamicContext<'a> {
 
     fn render_static_element(&mut self, el: &'a Element) -> TokenStream2 {
         let el_name = &el.name;
-        let ns = |name| match el_name {
-            ElementName::Ident(i) => quote! { dioxus_elements::#i::#name },
-            ElementName::Custom(_) => quote! { None },
-        };
+        let ns = el_name.namespace();
+        let span = el_name.span();
 
         let static_attrs = el
             .merged_attributes
             .iter()
-            .map(|attr| self.render_merged_attributes(attr, ns, el_name))
+            .map(|attr| self.render_merged_attributes(attr, el_name))
             .collect::<Vec<_>>();
 
         let children = el
@@ -130,15 +128,29 @@ impl<'a> DynamicContext<'a> {
             .map(|(idx, root)| self.render_children_nodes(idx, root))
             .collect::<Vec<_>>();
 
-        let ns = ns(quote!(NAME_SPACE));
         let el_name = el_name.tag_name();
+        let completion_hints = el.completion_hints();
+        let errors = el.errors();
 
-        quote! {
+        let element = quote_spanned! {
+            span =>
             dioxus_core::TemplateNode::Element {
                 tag: #el_name,
                 namespace: #ns,
                 attrs: &[ #(#static_attrs)* ],
                 children: &[ #(#children),* ],
+            }
+        };
+
+        if errors.is_empty() && completion_hints.is_empty() {
+            element
+        } else {
+            quote! {
+                {
+                    #completion_hints
+                    #errors
+                    #element
+                }
             }
         }
     }
@@ -154,13 +166,12 @@ impl<'a> DynamicContext<'a> {
     fn render_merged_attributes(
         &mut self,
         attr: &'a AttributeType,
-        ns: impl Fn(TokenStream2) -> TokenStream2,
         el_name: &ElementName,
     ) -> TokenStream2 {
         // Rendering static attributes requires a bit more work than just a dynamic attrs
         match attr.as_static_str_literal() {
             // If it's static, we'll take this little optimization
-            Some((name, value)) => Self::render_static_attr(value, name, ns, el_name),
+            Some((name, value)) => Self::render_static_attr(value, name, el_name),
 
             // Otherwise, we'll just render it as a dynamic attribute
             // This will also insert the attribute into the dynamic_attributes list to assemble the final template
@@ -171,13 +182,12 @@ impl<'a> DynamicContext<'a> {
     fn render_static_attr(
         value: &IfmtInput,
         name: &ElementAttrName,
-        ns: impl Fn(TokenStream2) -> TokenStream2,
         el_name: &ElementName,
     ) -> TokenStream2 {
         let value = value.to_static().unwrap();
 
         let ns = match name {
-            ElementAttrName::BuiltIn(name) => ns(quote!(#name.1)),
+            ElementAttrName::BuiltIn(name) => quote! { #el_name::#name.1 },
             ElementAttrName::Custom(_) => quote!(None),
         };
 

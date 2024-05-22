@@ -1,6 +1,12 @@
+use proc_macro2::Span;
+
+pub(crate) fn missing_trailing_comma(span: Span) -> syn::Error {
+    syn::Error::new(span, "missing trailing comma")
+}
+
 macro_rules! missing_trailing_comma {
     ($span:expr) => {
-        return Err(syn::Error::new($span, "missing trailing comma"));
+        return Err(crate::errors::missing_trailing_comma($span));
     };
 }
 
