@@ -294,7 +294,7 @@ fn closure_types_infer() {
 
         // Or pass in a value
         let callback: Callback<u32, ()> = Callback::new(|value: u32| async move {
-            value;
+            println!("{}", value);
         });
     }
 }
