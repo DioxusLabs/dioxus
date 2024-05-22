@@ -681,7 +681,7 @@ fn complex_cases() {
 }
 
 #[test]
-fn all_cases() {
+fn attribute_cases() {
     let changed = full_boilerplate(
         quote! {
             div {
@@ -697,6 +697,112 @@ fn all_cases() {
             }
         },
     );
-
     dbg!(changed.unwrap());
+
+    let changed = full_boilerplate(
+        //
+        quote! { div { class: 123 } },
+        quote! { div { class: 456 } },
+    );
+    dbg!(changed.unwrap());
+
+    let changed = full_boilerplate(
+        //
+        quote! { div { class: 123.0 } },
+        quote! { div { class: 456.0 } },
+    );
+    dbg!(changed.unwrap());
+
+    let changed = full_boilerplate(
+        //
+        quote! { div { class: "asd {123}", } },
+        quote! { div { class: "def", } },
+    );
+    dbg!(changed.unwrap());
+}
+
+#[test]
+fn text_node_cases() {
+    let changed = full_boilerplate(
+        //
+        quote! { div { "hello {world}" } },
+        quote! { div { "world {world}" } },
+    );
+    dbg!(changed.unwrap());
+
+    let changed = full_boilerplate(
+        //
+        quote! { div { "hello {world}" } },
+        quote! { div { "world" } },
+    );
+    dbg!(changed.unwrap());
+
+    let changed = full_boilerplate(
+        //
+        quote! { div { "hello" } },
+        quote! { div { "world {world}" } },
+    );
+    assert!(changed.is_none());
+}
+
+#[test]
+fn simple_carry() {
+    let a = quote! {
+        // start with
+        "thing {abc} {def}"       // 1, 1, 1
+        "thing {def}"             // 1, 0, 1
+        "other {hij}" // 1, 1, 1
+    };
+
+    let b = quote! {
+        // end with
+        "thing {def}"
+        "thing {abc}"
+        "thing {hij}"
+    };
+
+    let changed = full_boilerplate(a, b);
+    dbg!(changed.unwrap());
+}
+
+#[test]
+fn complex_carry() {
+    let a = quote! {
+        // start with
+        "thing {abc} {def}"       // 1, 1, 1
+        "thing {abc}"             // 1, 0, 1
+        "other {abc} {def} {hij}" // 1, 1, 1
+    };
+
+    let b = quote! {
+        // end with
+        "thing {abc}"
+        "thing {hij}"
+    };
+
+    let changed = full_boilerplate(a, b);
+    dbg!(changed.unwrap());
+
+    let _ = quote! {
+
+
+        // how about shuffling components, for, if, etc
+        Component {
+            class: "thing {abc}",
+            other: "other {abc} {def}",
+        }
+        Component {
+            class: "thing",
+            other: "other",
+        }
+
+        Component {
+            class: "thing {abc}",
+            other: "other",
+        }
+        Component {
+            class: "thing {abc}",
+            other: "other {abc} {def}",
+        }
+    };
 }

@@ -1,4 +1,4 @@
-use crate::location::CallerLocation;
+use crate::{location::CallerLocation, reload_stack::ReloadStack};
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
 use std::{collections::HashMap, str::FromStr};
@@ -395,4 +395,45 @@ fn ifmt_scoring() {
     let left: IfmtInput = "{abc} {abc}".parse().unwrap();
     let right: IfmtInput = "{abc} {abc}".parse().unwrap();
     assert_eq!(left.hr_score(&right), usize::MAX);
+
+    let left: IfmtInput = "{abc} {def}".parse().unwrap();
+    let right: IfmtInput = "{hij}".parse().unwrap();
+    assert_eq!(left.hr_score(&right), 0);
+
+    let left: IfmtInput = "{abc}".parse().unwrap();
+    let right: IfmtInput = "thing {abc}".parse().unwrap();
+    assert_eq!(left.hr_score(&right), usize::MAX - 1);
+
+    let left: IfmtInput = "thing {abc}".parse().unwrap();
+    let right: IfmtInput = "{abc}".parse().unwrap();
+    assert_eq!(left.hr_score(&right), usize::MAX - 1);
+
+    let left: IfmtInput = "{abc} {def}".parse().unwrap();
+    let right: IfmtInput = "thing {abc}".parse().unwrap();
+    assert_eq!(left.hr_score(&right), 1);
+}
+
+#[test]
+fn stack_scoring() {
+    let mut stack: ReloadStack<IfmtInput> = ReloadStack::new(
+        vec![
+            "{abc} {def}".parse().unwrap(),
+            "{def}".parse().unwrap(),
+            "{hij}".parse().unwrap(),
+        ]
+        .into_iter(),
+    );
+
+    let tests = vec![
+        //
+        "thing {def}",
+        "thing {abc}",
+        "thing {hij}",
+    ];
+
+    for item in tests {
+        let score = stack.highest_score(|f| f.hr_score(&item.parse().unwrap()));
+
+        dbg!(item, score);
+    }
 }

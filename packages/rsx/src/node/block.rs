@@ -410,13 +410,13 @@ impl Attribute {
         //  (ie `checked`` being a bool and bools being interpretable)
         //
         // For now, just give up if that attribute doesn't exist in the mapping
-        if !self.ifmt().map(|f| f.is_static()).unwrap_or(false) {
+        if !self.is_static_str_literal() {
             let id = self.dyn_idx.get();
             return TemplateAttribute::Dynamic { id };
         }
 
         // Otherwise it's a static node and we can build it
-        let value = self.ifmt().unwrap().to_static().unwrap();
+        let (_name, value) = self.as_static_str_literal().unwrap();
         let attribute_name_rust = self.name.to_string();
 
         let (name, namespace) = Ctx::map_attribute(&rust_name, &attribute_name_rust)
@@ -425,7 +425,7 @@ impl Attribute {
         TemplateAttribute::Static {
             name,
             namespace,
-            value: intern(value.as_str()),
+            value: intern(value.value().as_str()),
         }
     }
 

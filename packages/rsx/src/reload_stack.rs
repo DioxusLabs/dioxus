@@ -20,18 +20,18 @@ impl<T> ReloadStack<T> {
     }
 
     pub fn remove(&mut self, idx: usize) -> Option<T> {
-        if idx == self.stack.len() - 1 {
-            let out = self.stack.pop().unwrap();
+        // if idx == self.stack.len() - 1 {
+        //     let out = self.stack.pop().unwrap();
 
-            // Clean up any trailing None values
-            while self.stack.last().map_or(false, Option::is_none) {
-                self.stack.pop();
-            }
+        //     // Clean up any trailing None values
+        //     while self.stack.last().map_or(false, Option::is_none) {
+        //         self.stack.pop();
+        //     }
 
-            out
-        } else {
-            self.stack.get_mut(idx).unwrap().take()
-        }
+        //     out
+        // } else {
+        self.stack.get_mut(idx).unwrap().take()
+        // }
     }
 
     pub fn pop_where<F>(&mut self, f: F) -> Option<T>
@@ -56,8 +56,11 @@ impl<T> ReloadStack<T> {
 
         for (idx, x) in self.stack.iter().enumerate() {
             if let Some(x) = x {
-                highest_score = highest_score.max(score(x));
-                best = Some(idx);
+                let scored = score(x);
+                if scored > highest_score {
+                    best = Some(idx);
+                    highest_score = scored;
+                }
 
                 if highest_score == usize::MAX {
                     break;
@@ -96,7 +99,8 @@ impl<T> ReloadStack<T> {
             }
         }
 
-        best.map(|idx| self.remove(idx)).flatten()
+        todo!()
+        // best.map(|idx| self.remove(idx)).flatten()
     }
 
     pub fn is_empty(&self) -> bool {

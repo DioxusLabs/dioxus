@@ -35,6 +35,7 @@ impl Parse for CallBody {
             tempalte_idx: Cell::new(1),
         };
 
+        body.body.template_idx.set(0);
         body.cascade_hotreload_info(&body.body.roots);
 
         Ok(body)

@@ -205,6 +205,28 @@ impl BodyNode {
         }
     }
 
+    pub fn get_dyn_idx(&self) -> usize {
+        match self {
+            BodyNode::Text(text) => text.dyn_idx.get(),
+            BodyNode::RawExpr(exp) => exp.dyn_idx.get(),
+            BodyNode::Component(comp) => comp.dyn_idx.get(),
+            BodyNode::ForLoop(floop) => floop.dyn_idx.get(),
+            BodyNode::IfChain(chain) => chain.dyn_idx.get(),
+            _ => panic!("Cannot get dyn_idx for this node"),
+        }
+    }
+
+    pub fn set_dyn_idx(&self, idx: usize) {
+        match self {
+            BodyNode::Text(text) => text.dyn_idx.set(idx),
+            BodyNode::RawExpr(exp) => exp.dyn_idx.set(idx),
+            BodyNode::Component(comp) => comp.dyn_idx.set(idx),
+            BodyNode::ForLoop(floop) => floop.dyn_idx.set(idx),
+            BodyNode::IfChain(chain) => chain.dyn_idx.set(idx),
+            _ => panic!("Cannot set dyn_idx for this node"),
+        }
+    }
+
     pub fn is_litstr(&self) -> bool {
         matches!(self, BodyNode::Text { .. })
     }

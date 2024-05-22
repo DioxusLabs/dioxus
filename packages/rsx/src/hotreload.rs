@@ -156,13 +156,13 @@ impl HotReload {
 
         // Now we can run through the dynamic nodes and see if we can hot reload them
         // Move over old IDs onto the new template
-        let new_node_paths = self.hotreload_dynamic_nodes::<Ctx>(old, new)?;
+        let new_node_paths = self.hotreload_dynamic_nodes2::<Ctx>(old, new)?;
 
         // Now render the new template out. We've proven that it's a close enough match to the old template
         //
         // The paths will be different but the dynamic indexes will be the same
         let template = new.to_template_with_custom_paths::<Ctx>(
-            self.make_location(dbg!(old.template_idx.get())).leak(),
+            intern(self.make_location(old.template_idx.get()).leak()),
             new_node_paths,
             new_attribute_paths,
         );
@@ -170,6 +170,173 @@ impl HotReload {
         self.templates.push(template);
 
         Some(())
+    }
+
+    fn hotreload_dynamic_nodes2<Ctx: HotReloadingContext>(
+        &mut self,
+        old: &TemplateBody,
+        new: &TemplateBody,
+    ) -> Option<Vec<NodePath>> {
+        let mut old_nodes = ReloadStack::new(old.dynamic_nodes());
+
+        let mut node_paths = vec![vec![]; old.node_paths.len()];
+
+        for new_node in new.dynamic_nodes() {
+            let score_node = move |old_node: &&BodyNode| {
+                // If they're different enums, they are not the same node
+                if std::mem::discriminant(*old_node) != std::mem::discriminant(new_node) {
+                    return 0;
+                }
+
+                use BodyNode::*;
+
+                match (old_node, new_node) {
+                    (Element(_), Element(_)) => unreachable!("Elements are not dynamic nodes"),
+
+                    (Text(left), Text(right)) => {
+                        // We shouldn't be seeing static text nodes here
+                        assert!(!left.input.is_static() && !right.input.is_static());
+
+                        left.input.hr_score(&right.input)
+                    }
+
+                    (RawExpr(expa), RawExpr(expb)) if expa == expb => usize::MAX,
+
+                    (Component(a), Component(b)) => {
+                        // First, they need to be the same name, generics, and fields - those can't be added on the fly
+                        if a.name != b.name
+                            || a.generics != b.generics
+                            || a.fields.len() != b.fields.len()
+                        {
+                            return 0;
+                        }
+
+                        // Now, the contents of the fields might've changed
+                        // That's okay... score each one
+                        // we don't actually descend into the children yet...
+                        // If you swapped two components and somehow their signatures are the same but their children are different,
+                        // it might cause an unnecessary rebuild
+                        let mut score = 1;
+
+                        let mut left_fields = a.fields.clone();
+                        left_fields.sort_by(|a, b| a.name.to_string().cmp(&b.name.to_string()));
+
+                        let mut right_fields = b.fields.clone();
+                        right_fields.sort_by(|a, b| a.name.to_string().cmp(&b.name.to_string()));
+
+                        for (left, right) in left_fields.iter().zip(right_fields.iter()) {
+                            let scored = score_attr_value(&left.value, &right.value);
+                            if scored == 0 {
+                                return 0;
+                            }
+                            score += scored;
+                        }
+
+                        score
+                    }
+
+                    (ForLoop(a), ForLoop(b)) => {
+                        if a.pat != b.pat || a.expr != b.expr {
+                            return 0;
+                        }
+
+                        // The bodies don't necessarily need to be the same, but we should throw some simple heuristics at them to
+                        // encourage proper selection
+                        let mut score = 1;
+
+                        if a.body.roots.len() != b.body.roots.len() {
+                            score += 1;
+                        }
+
+                        if a.body.node_paths.len() != b.body.node_paths.len() {
+                            score += 1;
+                        }
+
+                        if a.body.attr_paths.len() != b.body.attr_paths.len() {
+                            score += 1;
+                        }
+
+                        score
+                    }
+
+                    (IfChain(a), IfChain(b)) => {
+                        if a.cond != b.cond {
+                            return 0;
+                        }
+
+                        // The bodies don't necessarily need to be the same, but we should throw some simple heuristics at them to
+                        // encourage proper selection
+                        let mut score = 1;
+
+                        if a.then_branch.roots.len() != b.then_branch.roots.len() {
+                            score += 1;
+                        }
+
+                        if a.then_branch.node_paths.len() != b.then_branch.node_paths.len() {
+                            score += 1;
+                        }
+
+                        if a.then_branch.attr_paths.len() != b.then_branch.attr_paths.len() {
+                            score += 1;
+                        }
+
+                        score
+                    }
+
+                    _ => 0,
+                }
+            };
+
+            let (old_idx, score) = old_nodes.highest_score(score_node)?;
+
+            let old_node = old_nodes.remove(old_idx).unwrap();
+
+            node_paths[old_node.get_dyn_idx()] = new.node_paths[new_node.get_dyn_idx()].clone();
+
+            new_node.set_dyn_idx(old_node.get_dyn_idx());
+
+            // Make sure we descend into the children, and update any ifmts
+            match (old_node, new_node) {
+                (BodyNode::Element(_), BodyNode::Element(_)) => {
+                    unreachable!("Elements are not dynamic nodes")
+                }
+
+                (BodyNode::Text(a), BodyNode::Text(b)) => {
+                    // If the contents changed try to reload it
+                    if score != usize::MAX {
+                        let idx = a.hr_idx.get();
+                        let location = self.make_location(idx);
+                        self.changed_strings
+                            .insert(location.to_string(), HotLiteral::Fmted(b.input.clone()));
+                    }
+                }
+
+                (BodyNode::Component(a), BodyNode::Component(b)) => {
+                    self.hotreload_component_fields::<Ctx>(a, b);
+                    self.hotreload_body::<Ctx>(&a.children, &b.children);
+                }
+
+                (BodyNode::ForLoop(a), BodyNode::ForLoop(b)) => {
+                    self.hotreload_body::<Ctx>(&a.body, &b.body);
+                }
+
+                (BodyNode::IfChain(a), BodyNode::IfChain(b)) => {
+                    self.hotreload_body::<Ctx>(&a.then_branch, &b.then_branch);
+
+                    if a.else_if_branch.is_some() && b.else_if_branch.is_some() {
+                        todo!("else if branches")
+                        // self.hotreload_body::<Ctx>(
+                        //     a.else_if_branch.as_ref().unwrap().,
+                        //     b.else_if_branch.as_ref().unwrap().,
+                        // );
+                    }
+                }
+
+                _ => {}
+            }
+        }
+
+        Some(node_paths)
     }
 
     /// Take two dynamic contexts and return a new node_paths field for the final template.
@@ -563,56 +730,12 @@ impl HotReload {
                     return 0;
                 }
 
-                use AttributeValue::*;
-
-                match (&old_attr.value, &new_attr.value) {
-                    // For literals, the value itself might change, but what's more important is the
-                    // structure of the literal. If the structure is the same, we can hotreload it
-                    // Ideally the value doesn't change, but we're hoping that our stack approach
-                    // Will prevent spurious reloads
-                    //
-                    // todo: maybe it's a good idea to modify the original in place?
-                    // todo: float to int is a little weird case that we can try to support better
-                    //       right now going from float to int or vice versa will cause a full rebuild
-                    //       which can get confusing. if we can figure out a way to hotreload this, that'd be great
-                    (AttrLit(left), AttrLit(right)) => {
-                        // We assign perfect matches for token resuse, to minimize churn on the renderer
-                        match (&left.value, &right.value) {
-                            // Quick shortcut if there's no change
-                            (HotLiteral::Fmted(old), HotLiteral::Fmted(new)) if new == old => {
-                                usize::MAX
-                            }
-
-                            // We can remove formatted bits but we can't add them. The scoring here must
-                            // realize that every bit of the new formatted segment must be in the old formatted segment
-                            (HotLiteral::Fmted(old), HotLiteral::Fmted(new)) => old.hr_score(new),
-
-                            (HotLiteral::Str(_), HotLiteral::Str(_)) => {
-                                unreachable!("Strs are not dynamic attributes")
-                            }
-
-                            (HotLiteral::Float(a), HotLiteral::Float(b)) if a == b => usize::MAX,
-                            (HotLiteral::Float(_), HotLiteral::Float(_)) => 1,
-
-                            (HotLiteral::Int(a), HotLiteral::Int(b)) if a == b => usize::MAX,
-                            (HotLiteral::Int(_), HotLiteral::Int(_)) => 1,
-
-                            (HotLiteral::Bool(a), HotLiteral::Bool(b)) if a == b => usize::MAX,
-                            (HotLiteral::Bool(_), HotLiteral::Bool(_)) => 1,
-                            _ => 0,
-                        }
-                    }
-
-                    // If it's expression-type things, we give a perfect score if they match completely
-                    _ if old_attr.value == new_attr.value => usize::MAX,
-
-                    // If it's not a match, we give it a score of 0
-                    _ => 0,
-                }
+                score_attr_value(&old_attr.value, &new_attr.value)
             };
 
             // Find the highest scoring match between the old and new attributes
             // Should generally be fast, but it's important to note this is quadratic
+            // To make this faster, try optimizing the ReloadStack
             let (old_idx, score) = old_attrs.highest_score(score_node)?;
 
             // Remove it from the stack so we don't match it again
@@ -629,7 +752,6 @@ impl HotReload {
 
             // While we're here, if it's a literal and not a perfect score, it's a mismatch and we need to
             // hotreload the literal
-
             if score != usize::MAX {
                 let idx = old_attr.as_lit().unwrap().hr_idx.get();
                 let location = self.make_location(idx);
@@ -804,6 +926,53 @@ impl HotReload {
 
     fn compare_attributes(&mut self, old_attr: &Attribute, new: &Attribute) -> bool {
         todo!()
+    }
+}
+
+fn score_attr_value(old_attr: &AttributeValue, new_attr: &AttributeValue) -> usize {
+    use AttributeValue::*;
+
+    match (&old_attr, &new_attr) {
+        // For literals, the value itself might change, but what's more important is the
+        // structure of the literal. If the structure is the same, we can hotreload it
+        // Ideally the value doesn't change, but we're hoping that our stack approach
+        // Will prevent spurious reloads
+        //
+        // todo: maybe it's a good idea to modify the original in place?
+        // todo: float to int is a little weird case that we can try to support better
+        //       right now going from float to int or vice versa will cause a full rebuild
+        //       which can get confusing. if we can figure out a way to hotreload this, that'd be great
+        (AttrLit(left), AttrLit(right)) => {
+            // We assign perfect matches for token resuse, to minimize churn on the renderer
+            match (&left.value, &right.value) {
+                // Quick shortcut if there's no change
+                (HotLiteral::Fmted(old), HotLiteral::Fmted(new)) if new == old => usize::MAX,
+
+                // We can remove formatted bits but we can't add them. The scoring here must
+                // realize that every bit of the new formatted segment must be in the old formatted segment
+                (HotLiteral::Fmted(old), HotLiteral::Fmted(new)) => old.hr_score(new),
+
+                (HotLiteral::Str(_), HotLiteral::Str(_)) => {
+                    unreachable!("Strs are not dynamic attributes")
+                }
+
+                (HotLiteral::Float(a), HotLiteral::Float(b)) if a == b => usize::MAX,
+                (HotLiteral::Float(_), HotLiteral::Float(_)) => 1,
+
+                (HotLiteral::Int(a), HotLiteral::Int(b)) if a == b => usize::MAX,
+                (HotLiteral::Int(_), HotLiteral::Int(_)) => 1,
+
+                (HotLiteral::Bool(a), HotLiteral::Bool(b)) if a == b => usize::MAX,
+                (HotLiteral::Bool(_), HotLiteral::Bool(_)) => 1,
+                _ => 0,
+            }
+        }
+
+        // If it's expression-type things, we give a perfect score if they match completely
+        _ if old_attr == new_attr => usize::MAX,
+
+        // If it's not a match, we give it a score of 0
+        _ => 0,
     }
 }
 
