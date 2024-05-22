@@ -152,10 +152,18 @@ fn callbody_ctx() {
 fn simple_case() {
     let item = quote::quote! {
         div {
+            something: "cool",
             id: "Some cool attribute {cool}",
             class: "Some cool attribute {cool2}",
             "hi!"
             {some_expr}
+            Component {
+                boolish: true,
+                otherish: 123,
+                otherish2: 123.0,
+                otherish3: "dang!",
+                otherish3: "dang! {cool}",
+            }
         }
     };
 

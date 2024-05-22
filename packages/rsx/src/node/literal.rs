@@ -221,12 +221,12 @@ use crate::PrettyUnparse;
 
 #[test]
 fn parses_lits() {
-    let lit = syn::parse2::<RsxLiteral>(quote! { "hello" }).unwrap();
-    let lit = syn::parse2::<RsxLiteral>(quote! { "hello {world}" }).unwrap();
-    let lit = syn::parse2::<RsxLiteral>(quote! { 1 }).unwrap();
-    let lit = syn::parse2::<RsxLiteral>(quote! { 1.0 }).unwrap();
-    let lit = syn::parse2::<RsxLiteral>(quote! { false }).unwrap();
-    let lit = syn::parse2::<RsxLiteral>(quote! { true }).unwrap();
+    let _ = syn::parse2::<RsxLiteral>(quote! { "hello" }).unwrap();
+    let _ = syn::parse2::<RsxLiteral>(quote! { "hello {world}" }).unwrap();
+    let _ = syn::parse2::<RsxLiteral>(quote! { 1 }).unwrap();
+    let _ = syn::parse2::<RsxLiteral>(quote! { 1.0 }).unwrap();
+    let _ = syn::parse2::<RsxLiteral>(quote! { false }).unwrap();
+    let _ = syn::parse2::<RsxLiteral>(quote! { true }).unwrap();
 
     // Refuses the other unsupported types - we could add them if we wanted to
     assert!(syn::parse2::<RsxLiteral>(quote! { b"123" }).is_err());

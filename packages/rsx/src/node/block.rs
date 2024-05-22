@@ -10,7 +10,7 @@ use std::fmt::Display;
 
 use crate::{
     intern, is_if_chain_terminated, location::CallerLocation, node::literal::HotLiteral, BodyNode,
-    Diagnostics, HotReloadingContext, IfmtInput,
+    Diagnostics, ElementName, HotReloadingContext, IfmtInput,
 };
 
 use dioxus_core::prelude::TemplateAttribute;
@@ -270,10 +270,9 @@ impl Parse for RsxBlock {
         // Parse children
         let mut child_nodes = vec![];
         while !content.is_empty() {
-            println!("Parsing children... {}", content.to_string());
             let child = content.parse()?;
 
-            // try to give helpful diagnostic if a prop is in the wrong location
+            // todo: try to give helpful diagnostic if a prop is in the wrong location
             child_nodes.push(child);
         }
 
@@ -340,9 +339,7 @@ impl Attribute {
     /// Run this closure against the attribute if it's hotreloadable
     pub fn with_hr(&self, f: impl FnOnce(&RsxLiteral)) {
         if let AttributeValue::AttrLit(ifmt) = &self.value {
-            if !ifmt.is_static() {
-                f(ifmt);
-            }
+            f(ifmt);
         }
     }
 
@@ -397,6 +394,62 @@ impl Attribute {
             name,
             namespace,
             value: intern(value.as_str()),
+        }
+    }
+
+    pub fn rendered_as_dynamic_attr(&self, el_name: &ElementName) -> TokenStream {
+        let ns = |name: &AttributeName| match (el_name, name) {
+            (ElementName::Ident(i), AttributeName::BuiltIn(_)) => {
+                quote! { dioxus_elements::#i::#name.1 }
+            }
+            _ => quote! { None },
+        };
+
+        let volatile = |name: &AttributeName| match (el_name, name) {
+            (ElementName::Ident(i), AttributeName::BuiltIn(_)) => {
+                quote! { dioxus_elements::#i::#name.2 }
+            }
+            _ => quote! { false },
+        };
+
+        let attribute = |name: &AttributeName| match name {
+            AttributeName::BuiltIn(name) => match el_name {
+                ElementName::Ident(_) => quote! { #el_name::#name.0 },
+                ElementName::Custom(_) => {
+                    let as_string = name.to_string();
+                    quote!(#as_string)
+                }
+            },
+            AttributeName::Custom(s) => quote! { #s },
+        };
+
+        let value = &self.value;
+
+        let is_event = match &self.name {
+            AttributeName::BuiltIn(name) => name.to_string().starts_with("on"),
+            _ => false,
+        };
+
+        // If it's an event, we need to wrap it in the event form and then just return that
+        if is_event {
+            quote! {
+                dioxus_elements::events::#value(#value)
+            }
+        } else {
+            let name = &self.name;
+            let ns = ns(name);
+            let volatile = volatile(name);
+            let attribute = attribute(name);
+            let value = quote! { #value };
+
+            quote! {
+                dioxus_core::Attribute::new(
+                    #attribute,
+                    #value,
+                    #ns,
+                    #volatile
+                )
+            }
         }
     }
 }

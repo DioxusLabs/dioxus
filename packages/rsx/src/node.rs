@@ -226,4 +226,11 @@ impl BodyNode {
             _ => panic!("Children not available for this node"),
         }
     }
+
+    pub fn el_name(&self) -> &ElementName {
+        match self {
+            BodyNode::Element(el) => &el.name,
+            _ => panic!("Element name not available for this node"),
+        }
+    }
 }

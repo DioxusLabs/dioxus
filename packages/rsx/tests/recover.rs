@@ -1,10 +1,10 @@
-use dioxus_rsx::rsx_parser::ParsedRsx;
+use dioxus_rsx::CallBody;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::parse::ParseStream;
 
-fn parsed(item: TokenStream) -> ParsedRsx {
-    let new_invalid: ParsedRsx = syn::parse2(item).unwrap();
+fn parsed(item: TokenStream) -> CallBody {
+    let new_invalid: CallBody = syn::parse2(item).unwrap();
     new_invalid
 }
 
@@ -27,7 +27,7 @@ fn simple_cases_pass() {
         div {}
     });
 
-    dbg!(out.roots);
+    dbg!(out.body);
 }
 
 #[test]
@@ -86,4 +86,3 @@ fn partial_parse_components() {
     //     some::cool::$
     // });
 }
-

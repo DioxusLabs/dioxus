@@ -90,9 +90,7 @@ impl Parse for TemplateBody {
             nodes.push(input.parse::<BodyNode>()?);
         }
 
-        let mut body = Self::from_nodes(nodes);
-
-        Ok(body)
+        Ok(Self::from_nodes(nodes))
     }
 }
 
@@ -113,37 +111,43 @@ impl ToTokens for TemplateBody {
 
         let TemplateBody { roots, .. } = self;
         let index = self.template_idx.get();
+
+        // Print paths is easy - just print the paths
         let node_paths = self.node_paths.iter().map(|it| quote!(&[#(#it),*]));
         let attr_paths = self.attr_paths.iter().map(|it| quote!(&[#(#it),*]));
+
+        // For printing dynamic nodes, we rely on the ToTokens impl
+        // Elements have a weird ToTokens - they actually are the entrypoint for Template creation
         let dynamic_nodes = self.node_paths.iter().map(|path| {
             let node = self.get_dyn_node(path);
-            quote::quote! {
-                #node
-            }
+            quote::quote! { #node }
         });
+
+        // We could add a ToTokens for Attribute but since we use that for both components and elements
+        // They actually need to be different, so we just localize that here
         let dyn_attr_printer = self.attr_paths.iter().map(|path| {
+            let node = self.get_dyn_node(&path[..path.len() - 1]);
             let attr = self.get_dyn_attr(path);
-            quote::quote! {
-                ()
-            }
+            attr.rendered_as_dynamic_attr(node.el_name())
         });
 
         tokens.append_all(quote! {
             Some({
-                static TEMPLATE: dioxus_core::Template = dioxus_core::Template {
+                #[doc(hidden)] // vscode please stop showing these in symbol search
+                static ___TEMPLATE: dioxus_core::Template = dioxus_core::Template {
                     name: concat!( file!(), ":", line!(), ":", column!(), ":", #index ) ,
                     roots: &[ #( #roots ),* ],
-                    node_paths: &[ #(#node_paths),* ],
-                    attr_paths: &[ #(#attr_paths),* ],
+                    node_paths: &[ #( #node_paths ),* ],
+                    attr_paths: &[ #( #attr_paths ),* ],
                 };
 
                 {
                     // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
                     let __vnodes = dioxus_core::VNode::new(
                         #key_tokens,
-                        TEMPLATE,
+                        ___TEMPLATE,
                         Box::new([ #( #dynamic_nodes),* ]),
-                        Box::new([ #(#dyn_attr_printer),* ]),
+                        Box::new([ #( #dyn_attr_printer ),* ]),
                     );
                     __vnodes
                 }

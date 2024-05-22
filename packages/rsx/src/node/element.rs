@@ -160,6 +160,11 @@ impl ToTokens for Element {
 }
 
 impl Element {
+    /// Throw warnings if there are any issues with the element
+    /// - invalid names
+    /// - issues merging attributes
+    /// - reserved keywords
+    /// idk what else
     fn validate(&mut self) {}
 
     /// Collapses ifmt attributes into a single dynamic attribute using a space as a delimiter
@@ -170,31 +175,23 @@ impl Element {
     /// }
     ///
     fn merge_attributes(&mut self) {
-        // let existing = self.attributes.iter_mut().find(|attr| attr.name)
-
-        // for attr in self.attributes.iter() {
-        //     self.merged_attributes.push(attr.clone());
-        // }
-
         // Now merge the attributes into the cache
-        // for attr in &self.attributes {
-        //     let attr_index = self
-        //         .merged_attributes
-        //         .iter()
-        //         .position(|a| a.matches_attr_name(attr));
+        for new_attr in &self.attributes {
+            let attr_index = self
+                .merged_attributes
+                .iter()
+                .position(|a| a.name == new_attr.name);
 
-        //     if let Some(old_attr_index) = attr_index {
-        //         let old_attr = &mut self.merged_attributes[old_attr_index];
+            if let Some(old_attr_index) = attr_index {
+                let old_attr = &mut self.merged_attributes[old_attr_index];
 
-        //         if let Some(combined) = old_attr.try_combine(attr) {
-        //             *old_attr = combined;
-        //         }
+                todo!("Merge attributes properly!");
 
-        //         continue;
-        //     }
+                continue;
+            }
 
-        //     self.merged_attributes.push(attr.clone());
-        // }
+            self.merged_attributes.push(new_attr.clone());
+        }
     }
 
     pub(crate) fn key(&self) -> Option<&IfmtInput> {
