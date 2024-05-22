@@ -50,7 +50,7 @@ where
         let path = props.0;
         rsx! {
             Router::<R> {
-                config: || RouterConfig::default().history(MemoryHistory::with_initial_path(path))
+                config: move |_| RouterConfig::default().history(MemoryHistory::with_initial_path(path.clone()))
             }
         }
     }

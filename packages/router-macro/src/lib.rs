@@ -254,7 +254,6 @@ pub fn routable(input: TokenStream) -> TokenStream {
     let parse_impl = route_enum.parse_impl();
     let display_impl = route_enum.impl_display();
     let routable_impl = route_enum.routable_impl();
-    let component_impl = route_enum.component_impl();
 
     (quote! {
         #error_type
@@ -262,8 +261,6 @@ pub fn routable(input: TokenStream) -> TokenStream {
         #display_impl
 
         #routable_impl
-
-        #component_impl
 
         #parse_impl
     })
@@ -694,24 +691,6 @@ impl RouteEnum {
                     match (level, myself) {
                         #(#matches)*
                         _ => std::result::Result::Ok(VNode::placeholder())
-                    }
-                }
-            }
-        }
-    }
-
-    fn component_impl(&self) -> TokenStream2 {
-        let name = &self.name;
-        let props = quote! { ::std::rc::Rc<::std::cell::Cell<dioxus_router::prelude::RouterConfig<#name>>> };
-
-        quote! {
-            impl dioxus_core::ComponentFunction<#props> for #name {
-                fn rebuild(&self, props: #props) -> dioxus_core::Element {
-                    let initial_route = self.clone();
-                    rsx! {
-                        dioxus_router::prelude::Router::<#name> {
-                            config: move || props.take().initial_route(initial_route)
-                        }
                     }
                 }
             }

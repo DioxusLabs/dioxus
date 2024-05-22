@@ -19,17 +19,14 @@ use std::sync::Arc;
 /// }
 /// let cfg = RouterConfig::default().history(WebHistory::<Route>::default());
 /// ```
-pub struct RouterConfig<R: Routable> {
+pub struct RouterConfig<R> {
     pub(crate) failure_external_navigation: fn() -> Element,
     pub(crate) history: Option<Box<dyn AnyHistoryProvider>>,
     pub(crate) on_update: Option<RoutingCallback<R>>,
     pub(crate) initial_route: Option<R>,
 }
 
-impl<R: Routable + Clone> Default for RouterConfig<R>
-where
-    <R as std::str::FromStr>::Err: std::fmt::Display,
-{
+impl<R> Default for RouterConfig<R> {
     fn default() -> Self {
         Self {
             failure_external_navigation: FailureExternalNavigation,
