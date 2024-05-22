@@ -20,7 +20,7 @@ fn rsx_writeout_snapshot() {
 
     assert_eq!(el.name, "circle");
 
-    assert_eq!(el.attributes.len(), 5);
+    assert_eq!(el.raw_attributes.len(), 5);
 
     // let mut context = DynamicContext::default();
     // let o = context.render_static_node(&body.roots[0]);

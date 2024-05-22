@@ -27,7 +27,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    intern, AttributeName, Component, ForLoop, IfChain, IfmtInput, TemplateBody, TextNode,
+    intern, reload_stack::ReloadStack, Attribute, AttributeName, AttributeValue, Component,
+    ForLoop, HotLiteral, IfChain, IfmtInput, TemplateBody, TextNode,
 };
 use crate::{BodyNode, CallBody, HotReloadingContext};
 use dioxus_core::{
@@ -75,7 +76,7 @@ pub struct HotReload {
     // This should be in the form of `file:line:col:0` - 0 since this will be the base template
     pub location: &'static str,
 
-    pub changed_strings: HashMap<String, FmtedSegments>,
+    pub changed_strings: HashMap<String, HotLiteral>,
 }
 
 impl HotReload {
@@ -150,34 +151,23 @@ impl HotReload {
         new: &TemplateBody,
     ) -> Option<()> {
         // Quickly run through dynamic attributes first attempting to invalidate them
+        // Move over old IDs onto the new template
         let new_attribute_paths = self.hotreload_attributes::<Ctx>(old, new)?;
 
         // Now we can run through the dynamic nodes and see if we can hot reload them
+        // Move over old IDs onto the new template
         let new_node_paths = self.hotreload_dynamic_nodes::<Ctx>(old, new)?;
 
-        // Create the new template nodes from the dynamic context, but with the new mapping
-        let roots =
-            self.render_dynamic_context::<Ctx>(old, new, &new_node_paths, &new_attribute_paths);
+        // Now render the new template out. We've proven that it's a close enough match to the old template
+        //
+        // The paths will be different but the dynamic indexes will be the same
+        let template = new.to_template_with_custom_paths::<Ctx>(
+            self.make_location(dbg!(old.template_idx.get())).leak(),
+            new_node_paths,
+            new_attribute_paths,
+        );
 
-        // Now we can assemble a template
-        self.templates.push(Template {
-            name: self.make_location(dbg!(old.template_idx.get())).leak(),
-            roots: intern(roots.as_slice()),
-            node_paths: intern(
-                new_node_paths
-                    .into_iter()
-                    .map(|path| intern(path.as_slice()))
-                    .collect::<Vec<_>>()
-                    .as_slice(),
-            ),
-            attr_paths: intern(
-                new_attribute_paths
-                    .into_iter()
-                    .map(|path| intern(path.as_slice()))
-                    .collect::<Vec<_>>()
-                    .as_slice(),
-            ),
-        });
+        self.templates.push(template);
 
         Some(())
     }
@@ -559,36 +549,93 @@ impl HotReload {
         // This will require not running the format, but we basically need prop reloading to get that working
         //
         // Note that we might have duplicate attributes! We use a stack just to make sure we don't lose them
-        let mut new_attrs = new
-            .dynamic_attributes()
-            .map(|f| Some(f))
-            .collect::<Vec<_>>();
+        // Also note that we use a vec + remove, but the idea is that in most cases we're removing from the end
+        // which is an O(1) operation. We could use a linked list or a queue, but I don't want any
+        // more complexity than necessary here since this can complex.
+        let mut old_attrs = ReloadStack::new(old.dynamic_attributes());
 
         // Now we can run through the dynamic nodes and see if we can hot reload them
-        let mut attr_paths = vec![];
+        let mut attr_paths = vec![vec![]; old.attr_paths.len()];
 
-        for old_attr in old.dynamic_attributes() {
-            // Look for the first non-None new attribute that matches the old attribute
-            for (new_idx, maybe_new_attr) in new_attrs.iter_mut().enumerate() {
-                let Some(ref new_attr) = maybe_new_attr else {
-                    continue;
-                };
-
-                if *new_attr == old_attr {
-                    // We found a match! Get this dynamic node's path and push it into the output
-                    attr_paths.push(new.attr_paths[new_idx].clone());
-
-                    // And then mark the original node as `None` so it's skipped on the next scan
-                    _ = maybe_new_attr.take();
-
-                    break;
+        for new_attr in new.dynamic_attributes() {
+            let score_node = move |old_attr: &&Attribute| {
+                if old_attr.name != new_attr.name {
+                    return 0;
                 }
-            }
-        }
 
-        // If there's any lingering new attrs, they can't be hot reloaded
-        if new_attrs.iter().any(|n| n.is_some()) {
-            return None;
+                use AttributeValue::*;
+
+                match (&old_attr.value, &new_attr.value) {
+                    // For literals, the value itself might change, but what's more important is the
+                    // structure of the literal. If the structure is the same, we can hotreload it
+                    // Ideally the value doesn't change, but we're hoping that our stack approach
+                    // Will prevent spurious reloads
+                    //
+                    // todo: maybe it's a good idea to modify the original in place?
+                    // todo: float to int is a little weird case that we can try to support better
+                    //       right now going from float to int or vice versa will cause a full rebuild
+                    //       which can get confusing. if we can figure out a way to hotreload this, that'd be great
+                    (AttrLit(left), AttrLit(right)) => {
+                        // We assign perfect matches for token resuse, to minimize churn on the renderer
+                        match (&left.value, &right.value) {
+                            // Quick shortcut if there's no change
+                            (HotLiteral::Fmted(old), HotLiteral::Fmted(new)) if new == old => {
+                                usize::MAX
+                            }
+
+                            // We can remove formatted bits but we can't add them. The scoring here must
+                            // realize that every bit of the new formatted segment must be in the old formatted segment
+                            (HotLiteral::Fmted(old), HotLiteral::Fmted(new)) => old.hr_score(new),
+
+                            (HotLiteral::Str(_), HotLiteral::Str(_)) => {
+                                unreachable!("Strs are not dynamic attributes")
+                            }
+
+                            (HotLiteral::Float(a), HotLiteral::Float(b)) if a == b => usize::MAX,
+                            (HotLiteral::Float(_), HotLiteral::Float(_)) => 1,
+
+                            (HotLiteral::Int(a), HotLiteral::Int(b)) if a == b => usize::MAX,
+                            (HotLiteral::Int(_), HotLiteral::Int(_)) => 1,
+
+                            (HotLiteral::Bool(a), HotLiteral::Bool(b)) if a == b => usize::MAX,
+                            (HotLiteral::Bool(_), HotLiteral::Bool(_)) => 1,
+                            _ => 0,
+                        }
+                    }
+
+                    // If it's expression-type things, we give a perfect score if they match completely
+                    _ if old_attr.value == new_attr.value => usize::MAX,
+
+                    // If it's not a match, we give it a score of 0
+                    _ => 0,
+                }
+            };
+
+            // Find the highest scoring match between the old and new attributes
+            // Should generally be fast, but it's important to note this is quadratic
+            let (old_idx, score) = old_attrs.highest_score(score_node)?;
+
+            // Remove it from the stack so we don't match it again
+            let old_attr = old_attrs.remove(old_idx).unwrap();
+
+            // This old node will now need to take on the new path
+            attr_paths[old_attr.dyn_idx.get()] = new.attr_paths[new_attr.dyn_idx.get()].clone().0;
+
+            // Now move over the idx of the old to the new
+            // it's a little dumb to modify the new one in place, but it us avoid a lot of complexity
+            // we should change the semantics of these methods to take the new one mutably, making it
+            // clear that we're going to modify it in place and use it render
+            new_attr.dyn_idx.set(old_attr.dyn_idx.get());
+
+            // While we're here, if it's a literal and not a perfect score, it's a mismatch and we need to
+            // hotreload the literal
+
+            if score != usize::MAX {
+                let idx = old_attr.as_lit().unwrap().hr_idx.get();
+                let location = self.make_location(idx);
+                self.changed_strings
+                    .insert(location, new_attr.as_lit().unwrap().value.clone());
+            }
         }
 
         Some(attr_paths)
@@ -616,7 +663,7 @@ impl HotReload {
             attr_paths: intern(
                 body.attr_paths
                     .iter()
-                    .map(|path| intern(path.as_slice()))
+                    .map(|(path, _)| intern(path.as_slice()))
                     .collect::<Vec<_>>()
                     .as_slice(),
             ),
@@ -636,7 +683,7 @@ impl HotReload {
         old: &TemplateBody,
         new: &TemplateBody,
         node_paths: &[Vec<u8>],
-        attr_paths: &[Vec<u8>],
+        attr_paths: &[(Vec<u8>, usize)],
     ) -> Vec<TemplateNode> {
         let mut nodes = Vec::new();
 
@@ -658,100 +705,105 @@ impl HotReload {
         ctx: &TemplateBody,
         node: &BodyNode,
         node_paths: &[Vec<u8>],
-        attr_paths: &[Vec<u8>],
+        attr_paths: &[(Vec<u8>, usize)],
         cur_path: Vec<u8>,
     ) -> TemplateNode {
-        match node {
-            // The user is moving a static node around in the template
-            BodyNode::Element(el) => {
-                let rust_name = el.name.to_string();
+        todo!()
+        // match node {
+        //     // The user is moving a static node around in the template
+        //     BodyNode::Element(el) => {
+        //         let rust_name = el.name.to_string();
 
-                // Build an iterator that will yield attributes at the current path
-                // This is mostly to preserve the order of the attributes
-                // We will interleave these dynamic nodes into the merged attributes as we write those out
-                // We could just dump all the dynamic attributes after the static ones, making this simpler,
-                // but all our tests are designed to preserve the order of the attributes, so we'll do that
-                //
-                // The `rev` is just to match the old behavior of attributes being pushed and popped rather than
-                // linear inserted.
-                let mut attr_iter = attr_paths
-                    .iter()
-                    .enumerate()
-                    .rev()
-                    .filter(|(_idx, path)| *path == &cur_path)
-                    .map(|(idx, _)| idx);
+        //         // Build an iterator that will yield attributes at the current path
+        //         // This is mostly to preserve the order of the attributes
+        //         // We will interleave these dynamic nodes into the merged attributes as we write those out
+        //         // We could just dump all the dynamic attributes after the static ones, making this simpler,
+        //         // but all our tests are designed to preserve the order of the attributes, so we'll do that
+        //         //
+        //         // The `rev` is just to match the old behavior of attributes being pushed and popped rather than
+        //         // linear inserted.
+        //         let mut attr_iter = attr_paths
+        //             .iter()
+        //             .enumerate()
+        //             .rev()
+        //             .filter(|(_idx, (path, _))| *path == cur_path)
+        //             .map(|(idx, _)| idx);
 
-                // Write the attributes by interleaving static and dynamic
-                let static_attr_array = el
-                    .merged_attributes
-                    .iter()
-                    .map(|attr| match attr.as_static_str_literal() {
-                        Some((name, value)) => {
-                            make_static_attribute::<Ctx>(value, name, &rust_name)
-                        }
-                        None => TemplateAttribute::Dynamic {
-                            id: attr_iter.next().expect("Attributes should be in order"),
-                        },
-                    })
-                    .collect::<Vec<_>>();
+        //         // Write the attributes by interleaving static and dynamic
+        //         let static_attr_array = el
+        //             .merged_attributes
+        //             .iter()
+        //             .map(|attr| match attr.as_static_str_literal() {
+        //                 Some((name, value)) => {
+        //                     make_static_attribute::<Ctx>(value, name, &rust_name)
+        //                 }
+        //                 None => TemplateAttribute::Dynamic {
+        //                     id: attr_iter.next().expect("Attributes should be in order"),
+        //                 },
+        //             })
+        //             .collect::<Vec<_>>();
 
-                // Write out the children with the current path + the child index
-                let children = el
-                    .children
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, child)| {
-                        let mut new_cur_path = cur_path.clone();
-                        new_cur_path.push(idx as u8);
-                        self.render_template_node::<Ctx>(
-                            ctx,
-                            child,
-                            node_paths,
-                            attr_paths,
-                            new_cur_path.clone(),
-                        )
-                    })
-                    .collect::<Vec<_>>();
+        //         // Write out the children with the current path + the child index
+        //         let children = el
+        //             .children
+        //             .iter()
+        //             .enumerate()
+        //             .map(|(idx, child)| {
+        //                 let mut new_cur_path = cur_path.clone();
+        //                 new_cur_path.push(idx as u8);
+        //                 self.render_template_node::<Ctx>(
+        //                     ctx,
+        //                     child,
+        //                     node_paths,
+        //                     attr_paths,
+        //                     new_cur_path.clone(),
+        //                 )
+        //             })
+        //             .collect::<Vec<_>>();
 
-                let (tag, namespace) =
-                    Ctx::map_element(&rust_name).unwrap_or((intern(rust_name.as_str()), None));
+        //         let (tag, namespace) =
+        //             Ctx::map_element(&rust_name).unwrap_or((intern(rust_name.as_str()), None));
 
-                TemplateNode::Element {
-                    tag,
-                    namespace,
-                    attrs: intern(static_attr_array.into_boxed_slice()),
-                    children: intern(children.as_slice()),
-                }
-            }
+        //         TemplateNode::Element {
+        //             tag,
+        //             namespace,
+        //             attrs: intern(static_attr_array.into_boxed_slice()),
+        //             children: intern(children.as_slice()),
+        //         }
+        //     }
 
-            BodyNode::Text(text) if text.input.is_static() => {
-                let text = text.input.source.as_ref().unwrap();
-                let text = intern(text.value().as_str());
-                TemplateNode::Text { text }
-            }
+        //     BodyNode::Text(text) if text.input.is_static() => {
+        //         let text = text.input.source.as_ref().unwrap();
+        //         let text = intern(text.value().as_str());
+        //         TemplateNode::Text { text }
+        //     }
 
-            // Find the corresponding node in the node_paths map
-            BodyNode::RawExpr(_)
-            | BodyNode::Text(_)
-            | BodyNode::ForLoop(_)
-            | BodyNode::IfChain(_)
-            | BodyNode::Component(_) => {
-                // Just look for the current path in the node_paths map and thats our id
-                let id = node_paths
-                    .iter()
-                    .position(|p| p == &cur_path)
-                    .expect("Dynamic nodes to always be linked");
+        //     // Find the corresponding node in the node_paths map
+        //     BodyNode::RawExpr(_)
+        //     | BodyNode::Text(_)
+        //     | BodyNode::ForLoop(_)
+        //     | BodyNode::IfChain(_)
+        //     | BodyNode::Component(_) => {
+        //         // Just look for the current path in the node_paths map and thats our id
+        //         let id = node_paths
+        //             .iter()
+        //             .position(|p| p == &cur_path)
+        //             .expect("Dynamic nodes to always be linked");
 
-                match node {
-                    BodyNode::Text(_) => TemplateNode::DynamicText { id },
-                    _ => TemplateNode::Dynamic { id },
-                }
-            }
-        }
+        //         match node {
+        //             BodyNode::Text(_) => TemplateNode::DynamicText { id },
+        //             _ => TemplateNode::Dynamic { id },
+        //         }
+        //     }
+        // }
     }
 
     fn make_location(&self, idx: usize) -> String {
         format!("{}:{}", self.location.trim_end_matches(":0"), idx)
+    }
+
+    fn compare_attributes(&mut self, old_attr: &Attribute, new: &Attribute) -> bool {
+        todo!()
     }
 }
 

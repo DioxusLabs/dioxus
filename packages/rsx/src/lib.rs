@@ -20,6 +20,7 @@ pub mod hotreload;
 mod ifmt;
 mod location;
 mod node;
+mod reload_stack;
 mod rsx_call;
 
 // pub(crate) mod context;

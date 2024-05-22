@@ -20,7 +20,7 @@ use crate::{BodyNode, TemplateBody};
 ///
 /// Every callbody should be valid, so you can use it to build a template.
 /// To generate the code used to render the template, use the ToTokens impl on the Callbody, or with the `render_with_location` method.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CallBody {
     pub body: TemplateBody,
     pub ifmt_idx: Cell<usize>,
@@ -87,7 +87,7 @@ impl CallBody {
 
                 BodyNode::Element(el) => {
                     // Walk the attributes looking for hotreload opportunities
-                    for attr in &el.attributes {
+                    for attr in &el.merged_attributes {
                         attr.with_hr(|lit| lit.hr_idx.set(self.next_ifmt_idx()));
                     }
 

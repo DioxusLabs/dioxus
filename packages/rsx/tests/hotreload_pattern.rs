@@ -44,6 +44,15 @@ fn boilerplate(old: TokenStream, new: TokenStream) -> Option<Vec<Template>> {
     hotreload_callbody::<Mock>(&old, &new, location)
 }
 
+fn full_boilerplate(old: TokenStream, new: TokenStream) -> Option<HotReload> {
+    let old: CallBody = syn::parse2(old).unwrap();
+    let new: CallBody = syn::parse2(new).unwrap();
+
+    let location = "file:line:col:0";
+    let results = HotReload::new::<Mock>(&old, &new, location)?;
+    Some(results)
+}
+
 fn hotreload_callbody<Ctx: HotReloadingContext>(
     old: &CallBody,
     new: &CallBody,
@@ -624,4 +633,70 @@ fn assigns_ids() {
 
     let node = parsed.body.get_dyn_node(&[0, 1]);
     dbg!(node);
+}
+
+#[test]
+fn simple_start() {
+    let changed = boilerplate(
+        //
+        quote! {
+            div {
+                class: "Some {one}",
+                id: "Something {two}",
+                "One"
+            }
+        },
+        quote! {
+            div {
+                id: "Something {two}",
+                class: "Some {one}",
+                "One"
+            }
+        },
+    );
+
+    dbg!(changed.unwrap());
+}
+
+#[test]
+fn complex_cases() {
+    let changed = full_boilerplate(
+        quote! {
+            div {
+                class: "Some {one}",
+                id: "Something {two}",
+                "One"
+            }
+        },
+        quote! {
+            div {
+                class: "Some {one}",
+                id: "Something else {two}",
+                "One"
+            }
+        },
+    );
+
+    dbg!(changed.unwrap());
+}
+
+#[test]
+fn all_cases() {
+    let changed = full_boilerplate(
+        quote! {
+            div {
+                class: "Some {one}",
+                id: "Something {two}",
+                "One"
+            }
+        },
+        quote! {
+            div {
+                id: "Something {two}",
+                "One"
+            }
+        },
+    );
+
+    dbg!(changed.unwrap());
 }

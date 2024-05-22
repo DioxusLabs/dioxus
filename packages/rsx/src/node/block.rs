@@ -336,6 +336,38 @@ impl Attribute {
         self.name.span()
     }
 
+    /// Get a score of hotreloadability of this attribute with another attribute
+    ///
+    /// usize::max is a perfect score and an immediate match
+    /// 0 is no match
+    /// All other scores are relative to the other scores
+    pub fn hotreload_score(&self, other: &Attribute) -> usize {
+        if self.name != other.name {
+            return 0;
+        }
+
+        match (&self.value, &other.value) {
+            (AttributeValue::AttrLit(lit), AttributeValue::AttrLit(other_lit)) => {
+                match (&lit.value, &lit.value) {
+                    (HotLiteral::Fmted(a), HotLiteral::Fmted(b)) => {
+                        todo!()
+                    }
+                    (othera, otherb) if othera == otherb => usize::MAX,
+                    _ => 0,
+                }
+            }
+            (othera, otherb) if othera == otherb => 1,
+            _ => 0,
+        }
+    }
+
+    pub fn as_lit(&self) -> Option<&RsxLiteral> {
+        match &self.value {
+            AttributeValue::AttrLit(lit) => Some(lit),
+            _ => None,
+        }
+    }
+
     /// Run this closure against the attribute if it's hotreloadable
     pub fn with_hr(&self, f: impl FnOnce(&RsxLiteral)) {
         if let AttributeValue::AttrLit(ifmt) = &self.value {
@@ -546,3 +578,102 @@ fn partial_cases() {
 /// Usually this just boils down to incorrect orders
 #[test]
 fn proper_diagnostics() {}
+
+/// Ensure the hotreload scoring algorithm works as expected
+#[test]
+fn hr_score() {
+    let block = quote! {
+        {
+            a: "value {cool}",
+            b: "{cool} value",
+            b: "{cool} {thing} value",
+            b: "{thing} value",
+        }
+    };
+
+    // loop { accumulate perfect matches }
+    // stop when all matches are equally valid
+    //
+    // Remove new attr one by one as we find its perfect match. If it doesn't have a perfect match, we
+    // score it instead.
+
+    quote! {
+        // start with
+        div {
+            div { class: "other {abc} {def} {hij}" } // 1, 1, 1
+            div { class: "thing {abc} {def}" }       // 1, 1, 1
+            // div { class: "thing {abc}" }             // 1, 0, 1
+        }
+
+        // end with
+        div {
+            h1 {
+                class: "thing {abc}" // 1, 1, MAX
+            }
+            h1 {
+                class: "thing {hij}" // 1, 1, MAX
+            }
+            // h2 {
+            //     class: "thing {def}" // 1, 1, 0
+            // }
+            // h3 {
+            //     class: "thing {def}" // 1, 1, 0
+            // }
+        }
+
+        // how about shuffling components, for, if, etc
+        Component {
+            class: "thing {abc}",
+            other: "other {abc} {def}",
+        }
+        Component {
+            class: "thing",
+            other: "other",
+        }
+
+        Component {
+            class: "thing {abc}",
+            other: "other",
+        }
+        Component {
+            class: "thing {abc}",
+            other: "other {abc} {def}",
+        }
+    };
+}
+
+#[test]
+fn test_scoring() {
+    scoring_algo()
+}
+
+fn scoring_algo() {
+    let left = [
+        //
+        vec!["abc", "def", "hij"],
+        vec!["abc", "def"],
+        vec!["abc"],
+    ];
+
+    let right = [
+        //
+        vec!["abc"],
+        vec!["def"],
+        vec!["def"],
+    ];
+
+    let mut scores = vec![];
+
+    for left in left {
+        for right in right.iter() {
+            let mut score = vec![];
+            for item in left.iter() {
+                let this_score = right.iter().filter(|x| *x == item).count();
+                score.push(this_score);
+            }
+            scores.push(score);
+        }
+    }
+
+    dbg!(scores);
+}

@@ -25,6 +25,7 @@ pub use component::*;
 pub use element::*;
 pub use forloop::*;
 pub use ifchain::*;
+pub use literal::*;
 pub use raw_expr::*;
 pub use text_node::*;
 
@@ -174,7 +175,7 @@ impl BodyNode {
                             .collect::<Vec<_>>(),
                     ),
                     attrs: intern(
-                        el.attributes
+                        el.merged_attributes
                             .iter()
                             .map(|attr| attr.to_template_attribute::<Ctx>(&rust_name))
                             .collect::<Vec<_>>(),

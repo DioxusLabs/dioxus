@@ -77,7 +77,7 @@ pub struct TemplateBody {
     pub roots: Vec<BodyNode>,
     pub template_idx: CallerLocation,
     pub node_paths: Vec<NodePath>,
-    pub attr_paths: Vec<AttributePath>,
+    pub attr_paths: Vec<(AttributePath, usize)>,
     current_path: Vec<u8>,
 }
 
@@ -114,7 +114,7 @@ impl ToTokens for TemplateBody {
 
         // Print paths is easy - just print the paths
         let node_paths = self.node_paths.iter().map(|it| quote!(&[#(#it),*]));
-        let attr_paths = self.attr_paths.iter().map(|it| quote!(&[#(#it),*]));
+        let attr_paths = self.attr_paths.iter().map(|(it, _)| quote!(&[#(#it),*]));
 
         // For printing dynamic nodes, we rely on the ToTokens impl
         // Elements have a weird ToTokens - they actually are the entrypoint for Template creation
@@ -125,9 +125,9 @@ impl ToTokens for TemplateBody {
 
         // We could add a ToTokens for Attribute but since we use that for both components and elements
         // They actually need to be different, so we just localize that here
-        let dyn_attr_printer = self.attr_paths.iter().map(|path| {
-            let node = self.get_dyn_node(&path[..path.len() - 1]);
-            let attr = self.get_dyn_attr(path);
+        let dyn_attr_printer = self.attr_paths.iter().map(|(path, idx)| {
+            let node = self.get_dyn_node(&path);
+            let attr = self.get_dyn_attr(path, *idx);
             attr.rendered_as_dynamic_attr(node.el_name())
         });
 
@@ -190,9 +190,10 @@ impl TemplateBody {
             match node {
                 // Just descend into elements - they're not dynamic
                 BodyNode::Element(el) => {
-                    for (attr_idx, attr) in el.merged_attributes.iter().enumerate() {
+                    for (idx, attr) in el.merged_attributes.iter().enumerate() {
                         if !attr.is_static_str_literal() {
-                            self.assign_attr_idx(attr_idx);
+                            attr.dyn_idx.set(self.attr_paths.len());
+                            self.attr_paths.push((self.current_path.clone(), idx));
                         }
                     }
 
@@ -214,12 +215,6 @@ impl TemplateBody {
             };
             self.current_path.pop();
         }
-    }
-
-    fn assign_attr_idx(&mut self, attr_idx: usize) {
-        let mut new_path = self.current_path.clone();
-        new_path.push(attr_idx as u8);
-        self.attr_paths.push(new_path);
     }
 
     /// Assign a path to a node and give it its dynamic index
@@ -245,6 +240,20 @@ impl TemplateBody {
     /// Note that this will leak memory! We explicitly call `leak` on the vecs to match the format of
     /// the `Template` struct.
     pub fn to_template<Ctx: HotReloadingContext>(&self) -> Template {
+        todo!()
+        // self.to_template_with_custom_paths::<Ctx>(
+        //     "placeholder",
+        //     self.node_paths.clone(),
+        //     self.attr_paths.clone(),
+        // )
+    }
+
+    pub fn to_template_with_custom_paths<Ctx: HotReloadingContext>(
+        &self,
+        location: &'static str,
+        node_paths: Vec<NodePath>,
+        attr_paths: Vec<AttributePath>,
+    ) -> Template {
         let roots = self
             .roots
             .iter()
@@ -252,19 +261,17 @@ impl TemplateBody {
             .collect::<Vec<_>>();
 
         Template {
-            name: "placeholder",
+            name: location,
             roots: intern(roots.as_slice()),
             node_paths: intern(
-                self.node_paths
-                    .clone()
+                node_paths
                     .into_iter()
                     .map(|path| intern(path.as_slice()))
                     .collect::<Vec<_>>()
                     .as_slice(),
             ),
             attr_paths: intern(
-                self.attr_paths
-                    .clone()
+                attr_paths
                     .into_iter()
                     .map(|path| intern(path.as_slice()))
                     .collect::<Vec<_>>()
@@ -295,18 +302,20 @@ impl TemplateBody {
         node
     }
 
-    pub fn get_dyn_attr(&self, path: &AttributePath) -> &Attribute {
-        match self.get_dyn_node(&path[..path.len() - 1]) {
-            BodyNode::Element(el) => &el.attributes[*path.last().unwrap() as usize],
+    pub fn get_dyn_attr(&self, path: &AttributePath, idx: usize) -> &Attribute {
+        match self.get_dyn_node(&path) {
+            BodyNode::Element(el) => &el.merged_attributes[idx],
             _ => unreachable!(),
         }
     }
 
-    pub fn dynamic_attributes(&self) -> impl Iterator<Item = &Attribute> {
-        self.attr_paths.iter().map(|path| self.get_dyn_attr(path))
+    pub fn dynamic_attributes(&self) -> impl DoubleEndedIterator<Item = &Attribute> {
+        self.attr_paths
+            .iter()
+            .map(|(path, idx)| self.get_dyn_attr(path, *idx))
     }
 
-    pub fn dynamic_nodes(&self) -> impl Iterator<Item = &BodyNode> {
+    pub fn dynamic_nodes(&self) -> impl DoubleEndedIterator<Item = &BodyNode> {
         self.node_paths.iter().map(|path| self.get_dyn_node(path))
     }
 }

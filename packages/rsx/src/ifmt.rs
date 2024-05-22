@@ -1,7 +1,7 @@
 use crate::location::CallerLocation;
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 use syn::{
     parse::{Parse, ParseStream, Peek},
     *,
@@ -65,6 +65,57 @@ impl IfmtInput {
                     None
                 }
             })
+    }
+
+    fn dynamic_segments(&self) -> Vec<&FormattedSegment> {
+        self.segments
+            .iter()
+            .filter_map(|seg| match seg {
+                Segment::Formatted(seg) => Some(seg),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    }
+
+    fn dynamic_seg_frequency_map(&self) -> HashMap<&FormattedSegment, usize> {
+        let mut map = HashMap::new();
+        for seg in self.dynamic_segments() {
+            *map.entry(seg).or_insert(0) += 1;
+        }
+        map
+    }
+
+    pub fn hr_score(&self, other: &Self) -> usize {
+        // If they're the same by source, return max
+        if self == other {
+            return usize::MAX;
+        }
+
+        let mut l_freq_map = self.dynamic_seg_frequency_map();
+        let mut score = 0;
+
+        // Pluck out the dynamic segments from the other input
+        for seg in other.dynamic_segments() {
+            let Some(ct) = l_freq_map.get_mut(seg) else {
+                return 0;
+            };
+
+            *ct -= 1;
+
+            if *ct == 0 {
+                l_freq_map.remove(seg);
+            }
+
+            score += 1;
+        }
+
+        // If there's nothing remaining - a perfect match - return max -1
+        // We compared the sources to start, so we know they're different in some way
+        if l_freq_map.is_empty() {
+            usize::MAX - 1
+        } else {
+            score
+        }
     }
 
     /// Try to convert this into a single _.to_string() call if possible
@@ -304,4 +355,44 @@ impl Parse for IfmtInput {
         ifmt.source = Some(input);
         Ok(ifmt)
     }
+}
+
+/// Ensure the scoring algorithm works
+///
+/// - usize::MAX is return for perfect overlap
+/// - 0 is returned when the right case has segments not found in the first
+/// - a number for the other cases where there is some non-perfect overlap
+#[test]
+fn ifmt_scoring() {
+    let left: IfmtInput = "{abc} {def}".parse().unwrap();
+    let right: IfmtInput = "{abc}".parse().unwrap();
+    assert_eq!(left.hr_score(&right), 1);
+
+    let left: IfmtInput = "{abc} {def}".parse().unwrap();
+    let right: IfmtInput = "{abc} {def}".parse().unwrap();
+    assert_eq!(left.hr_score(&right), usize::MAX);
+
+    let left: IfmtInput = "{abc} {def}".parse().unwrap();
+    let right: IfmtInput = "{abc} {ghi}".parse().unwrap();
+    assert_eq!(left.hr_score(&right), 0);
+
+    let left: IfmtInput = "{abc} {def}".parse().unwrap();
+    let right: IfmtInput = "{abc} {def} {ghi}".parse().unwrap();
+    assert_eq!(left.hr_score(&right), 0);
+
+    let left: IfmtInput = "{abc} {def} {ghi}".parse().unwrap();
+    let right: IfmtInput = "{abc} {def}".parse().unwrap();
+    assert_eq!(left.hr_score(&right), 2);
+
+    let left: IfmtInput = "{abc}".parse().unwrap();
+    let right: IfmtInput = "{abc} {def}".parse().unwrap();
+    assert_eq!(left.hr_score(&right), 0);
+
+    let left: IfmtInput = "{abc} {abc} {def}".parse().unwrap();
+    let right: IfmtInput = "{abc} {def}".parse().unwrap();
+    assert_eq!(left.hr_score(&right), 2);
+
+    let left: IfmtInput = "{abc} {abc}".parse().unwrap();
+    let right: IfmtInput = "{abc} {abc}".parse().unwrap();
+    assert_eq!(left.hr_score(&right), usize::MAX);
 }

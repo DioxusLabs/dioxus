@@ -46,7 +46,7 @@ impl Writer<'_> {
         let Element {
             name,
             key,
-            attributes,
+            raw_attributes: attributes,
             children,
             brace,
             ..

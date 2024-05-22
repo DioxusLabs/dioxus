@@ -13,7 +13,7 @@ use syn::{
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct Element {
     pub name: ElementName,
-    pub attributes: Vec<Attribute>,
+    pub raw_attributes: Vec<Attribute>,
     pub merged_attributes: Vec<Attribute>,
     pub spreads: Vec<Spread>,
     pub children: Vec<BodyNode>,
@@ -35,7 +35,7 @@ impl Parse for Element {
 
         let mut element = Element {
             name,
-            attributes: fields,
+            raw_attributes: fields,
             children,
             brace,
             spreads,
@@ -176,7 +176,7 @@ impl Element {
     ///
     fn merge_attributes(&mut self) {
         // Now merge the attributes into the cache
-        for new_attr in &self.attributes {
+        for new_attr in &self.raw_attributes {
             let attr_index = self
                 .merged_attributes
                 .iter()
@@ -195,7 +195,7 @@ impl Element {
     }
 
     pub(crate) fn key(&self) -> Option<&IfmtInput> {
-        for attr in &self.attributes {
+        for attr in &self.raw_attributes {
             if let AttributeName::BuiltIn(name) = &attr.name {
                 if name == "key" {
                     return attr.ifmt();

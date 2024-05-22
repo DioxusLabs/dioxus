@@ -106,7 +106,7 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
             Some(BodyNode::Element(Element {
                 name: el_name,
                 children,
-                attributes,
+                raw_attributes: attributes,
                 merged_attributes: Default::default(),
                 key: None,
                 brace: Default::default(),

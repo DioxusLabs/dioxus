@@ -220,10 +220,11 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
                 template_list.push(template);
             }
 
-            // And then any formatted strings
-            for (key, value) in results.changed_strings {
-                changed_strings.insert(key, value);
-            }
+            todo!("Fixup the changed strings stuff")
+            // // And then any formatted strings
+            // for (key, value) in results.changed_strings {
+            //     changed_strings.insert(key, value);
+            // }
         }
 
         Ok(UpdateResult::UpdatedRsx {
