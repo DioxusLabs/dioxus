@@ -68,15 +68,18 @@ use std::{cell::Cell, future::Future, rc::Rc};
 /// }
 /// ```
 #[must_use = "Consider using `cx.spawn` to run a future without reading its value"]
+#[track_caller]
 pub fn use_resource<T, F>(mut future: impl FnMut() -> F + 'static) -> Resource<T>
 where
     T: 'static,
     F: Future<Output = T> + 'static,
 {
+    let location = std::panic::Location::caller();
+
     let mut value = use_signal(|| None);
     let mut state = use_signal(|| UseResourceState::Pending);
     let (rc, changed) = use_hook(|| {
-        let (rc, changed) = ReactiveContext::new();
+        let (rc, changed) = ReactiveContext::new_with_origin(location);
         (rc, Rc::new(Cell::new(Some(changed))))
     });
 
@@ -92,7 +95,13 @@ where
 
             // Run each poll in the context of the reactive scope
             // This ensures the scope is properly subscribed to the future's dependencies
-            let res = future::poll_fn(|cx| rc.run_in(|| fut.poll_unpin(cx))).await;
+            let res = future::poll_fn(|cx| {
+                rc.run_in(|| {
+                    tracing::trace_span!("polling resource", location = %location)
+                        .in_scope(|| fut.poll_unpin(cx))
+                })
+            })
+            .await;
 
             // Set the value and state
             state.set(UseResourceState::Ready);
