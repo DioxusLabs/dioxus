@@ -1,4 +1,4 @@
-use crate::innerlude::Effect;
+use crate::innerlude::{DirtyTasks, Effect};
 use crate::{
     innerlude::{LocalTask, SchedulerMsg},
     render_signal::RenderSignal,
@@ -41,6 +41,9 @@ pub struct Runtime {
 
     // The effects that need to be run after the next render
     pub(crate) pending_effects: RefCell<BTreeSet<Effect>>,
+
+    // Tasks that are waiting to be polled
+    pub(crate) dirty_tasks: RefCell<BTreeSet<DirtyTasks>>,
 }
 
 impl Runtime {
@@ -55,6 +58,7 @@ impl Runtime {
             tasks: Default::default(),
             suspended_tasks: Default::default(),
             pending_effects: Default::default(),
+            dirty_tasks: Default::default(),
         })
     }
 

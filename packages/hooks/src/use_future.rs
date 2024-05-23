@@ -40,18 +40,22 @@ where
     F: Future + 'static,
 {
     let mut state = use_signal(|| UseFutureState::Pending);
+    let mut task = use_hook(|| CopyValue::new(None));
 
     let callback = use_callback(move || {
         let fut = future();
         spawn(async move {
             state.set(UseFutureState::Pending);
             fut.await;
+            // Remove the task from the future so we don't accidentally try to cancel the removed future
+            task.set(None);
             state.set(UseFutureState::Ready);
         })
     });
 
     // Create the task inside a CopyValue so we can reset it in-place later
-    let task = use_hook(|| CopyValue::new(callback.call()));
+
+    use_hook(|| task.set(Some(callback.call())));
 
     // Early returns in dioxus have consequences for use_memo, use_resource, and use_future, etc
     // We *don't* want futures to be running if the component early returns. It's a rather weird behavior to have
@@ -59,9 +63,13 @@ where
     //
     // React solves this by simply not having early returns interleave with hooks.
     // However, since dioxus allows early returns (since we use them for suspense), we need to solve this problem
-    use_hook_did_run(move |did_run| match did_run {
-        true => task.peek().resume(),
-        false => task.peek().pause(),
+    use_hook_did_run(move |did_run| {
+        if let Some(task) = task() {
+            match did_run {
+                true => task.resume(),
+                false => task.pause(),
+            }
+        }
     });
 
     UseFuture {
@@ -73,7 +81,7 @@ where
 
 #[derive(Clone, Copy)]
 pub struct UseFuture {
-    task: CopyValue<Task>,
+    task: CopyValue<Option<Task>>,
     state: Signal<UseFutureState>,
     callback: UseCallback<Task>,
 }
@@ -101,21 +109,27 @@ impl UseFuture {
     /// Will not cancel the previous future, but will ignore any values that it
     /// generates.
     pub fn restart(&mut self) {
-        self.task.write().cancel();
+        if let Some(task) = self.task.cloned() {
+            task.cancel();
+        }
         let new_task = self.callback.call();
-        self.task.set(new_task);
+        self.task.set(Some(new_task));
     }
 
     /// Forcefully cancel a future
     pub fn cancel(&mut self) {
         self.state.set(UseFutureState::Stopped);
-        self.task.write().cancel();
+        if let Some(task) = self.task.cloned() {
+            task.cancel();
+        }
     }
 
     /// Pause the future
     pub fn pause(&mut self) {
         self.state.set(UseFutureState::Paused);
-        self.task.write().pause();
+        if let Some(task) = self.task.cloned() {
+            task.pause();
+        }
     }
 
     /// Resume the future
@@ -125,12 +139,14 @@ impl UseFuture {
         }
 
         self.state.set(UseFutureState::Pending);
-        self.task.write().resume();
+        if let Some(task) = self.task.cloned() {
+            task.resume();
+        }
     }
 
     /// Get a handle to the inner task backing this future
-    /// Modify the task through this handle will cause inconsistent state
-    pub fn task(&self) -> Task {
+    /// Modifying the task through this handle will cause inconsistent state
+    pub fn task(&self) -> Option<Task> {
         self.task.cloned()
     }
 
