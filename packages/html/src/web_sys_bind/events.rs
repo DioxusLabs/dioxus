@@ -439,9 +439,9 @@ impl crate::RenderedElementBacking for web_sys::Element {
         &self,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::MountedResult<PixelsSize>>>>
     {
-        let left = self.scroll_left();
-        let top = self.scroll_top();
-        let result = Ok(PixelsSize::new(left as f64, top as f64));
+        let width = self.scroll_width();
+        let height = self.scroll_height();
+        let result = Ok(PixelsSize::new(width as f64, height as f64));
         Box::pin(async { result })
     }
 
