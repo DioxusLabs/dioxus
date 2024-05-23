@@ -44,6 +44,7 @@ pub async fn generate_static_site(
         for route in flat_site_map {
             let Some(static_route) = route
                 .iter()
+                .filter(|s| s.to_child().is_none())
                 .map(SegmentType::to_static)
                 .collect::<Option<Vec<_>>>()
             else {
