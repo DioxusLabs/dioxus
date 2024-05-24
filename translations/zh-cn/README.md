@@ -3,7 +3,7 @@
       <img src="../../notes/header-light.svg#gh-light-mode-only" >
       <img src="../../notes/header-dark.svg#gh-dark-mode-only" >
       <a href="https://dioxuslabs.com">
-          <img src="./notes/dioxus_splash_8.avif">
+          <img src="../../notes/dioxus_splash_8.avif">
       </a>
     </p>
 </p>
