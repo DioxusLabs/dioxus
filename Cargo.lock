@@ -2347,7 +2347,6 @@ name = "dioxus-fullstack"
 version = "0.5.2"
 dependencies = [
  "anymap",
- "async-trait",
  "axum",
  "base64 0.21.7",
  "bytes",
