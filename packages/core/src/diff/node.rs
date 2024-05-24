@@ -558,8 +558,7 @@ impl VNode {
 
         // If this is a debug build, we need to check that the paths are in the correct order because hot reloading can cause scrambled states
         #[cfg(debug_assertions)]
-        let nodes_sorted = dbg!(sort_bfs(template.node_paths)).into_iter();
-        dbg!(&template);
+        let nodes_sorted = sort_bfs(template.node_paths).into_iter();
 
         let mut nodes = nodes_sorted.peekable();
 

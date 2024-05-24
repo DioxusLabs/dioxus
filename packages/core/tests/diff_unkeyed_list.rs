@@ -69,7 +69,6 @@ fn list_creates_one_by_one() {
             InsertAfter { id: ElementId(6,), m: 1 },
         ]
     );
-    panic!();
 }
 
 #[test]

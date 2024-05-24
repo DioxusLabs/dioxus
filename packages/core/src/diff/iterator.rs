@@ -255,6 +255,10 @@ impl VirtualDom {
         debug_assert_ne!(new.first().map(|i| &i.key), old.first().map(|i| &i.key));
         debug_assert_ne!(new.last().map(|i| &i.key), old.last().map(|i| &i.key));
 
+        println!("diff_keyed_middle");
+        println!("old: {:?}", old);
+        println!("new: {:?}", new);
+
         // 1. Map the old keys into a numerical ordering based on indices.
         // 2. Create a map of old key to its index
         // IE if the keys were A B C, then we would have (A, 0) (B, 1) (C, 2).
@@ -307,6 +311,7 @@ impl VirtualDom {
 
         // 4. Compute the LIS of this list
         let mut lis_sequence = Vec::with_capacity(new_index_to_old_index.len());
+        println!("LIS sequence: {:?}", lis_sequence);
 
         let mut predecessors = vec![0; new_index_to_old_index.len()];
         let mut starts = vec![0; new_index_to_old_index.len()];
@@ -319,12 +324,9 @@ impl VirtualDom {
             &mut starts,
         );
 
-        // the lis comes out backwards, I think. can't quite tell.
-        lis_sequence.reverse();
-
         // if a new node gets u32 max and is at the end, then it might be part of our LIS (because u32 max is a valid LIS)
-        if lis_sequence.last().map(|f| new_index_to_old_index[*f]) == Some(u32::MAX as usize) {
-            lis_sequence.pop();
+        if lis_sequence.first().map(|f| new_index_to_old_index[*f]) == Some(u32::MAX as usize) {
+            lis_sequence.remove(0);
         }
 
         // Diff each nod in the LIS
@@ -348,7 +350,7 @@ impl VirtualDom {
                 .iter()
                 .enumerate()
                 .map(|(idx, new_node)| {
-                    let new_idx = range_start + idx + 1;
+                    let new_idx = range_start + idx;
                     let old_index = new_index_to_old_index[new_idx];
                     if old_index == u32::MAX as usize {
                         new_node.create(vdom, parent);
@@ -361,8 +363,8 @@ impl VirtualDom {
                 .sum()
         }
 
-        // add mount instruction for the items after the LIS
-        let last = *lis_sequence.last().unwrap();
+        // add mount instruction for the items before the LIS
+        let last = *lis_sequence.first().unwrap();
         if last < (new.len() - 1) {
             let nodes_created = create_or_diff(
                 self,
@@ -375,15 +377,12 @@ impl VirtualDom {
             );
 
             // Insert all the nodes that we just created after the last node in the LIS
-            let id = new[last].find_last_element(self);
-            if nodes_created > 0 {
-                to.insert_nodes_after(id, nodes_created)
-            }
+            self.insert_after(to, nodes_created, &new[last]);
         }
 
         // For each node inside of the LIS, but not included in the LIS, generate a mount instruction
         // We loop over the LIS in reverse order and insert any nodes we find in the gaps between indexes
-        let mut lis_iter = lis_sequence.iter().rev();
+        let mut lis_iter = lis_sequence.iter();
         let mut last = *lis_iter.next().unwrap();
         for next in lis_iter {
             if last - next > 1 {
@@ -397,16 +396,13 @@ impl VirtualDom {
                     (next + 1)..last,
                 );
 
-                let id = new[last].find_first_element(self);
-                if nodes_created > 0 {
-                    to.insert_nodes_before(id, nodes_created);
-                }
+                self.insert_before(to, nodes_created, &new[last]);
             }
             last = *next;
         }
 
-        // add mount instruction for the items before the LIS
-        let first_lis = *lis_sequence.first().unwrap();
+        // add mount instruction for the items after the LIS
+        let first_lis = *lis_sequence.last().unwrap();
         if first_lis > 0 {
             let nodes_created = create_or_diff(
                 self,
@@ -418,10 +414,7 @@ impl VirtualDom {
                 0..first_lis,
             );
 
-            let id = new[first_lis].find_first_element(self);
-            if nodes_created > 0 {
-                to.insert_nodes_before(id, nodes_created);
-            }
+            self.insert_before(to, nodes_created, &new[first_lis]);
         }
     }
 
@@ -433,8 +426,14 @@ impl VirtualDom {
         parent: Option<ElementRef>,
     ) {
         let m = self.create_children(to, new, parent);
-        let id = before.find_first_element(self);
-        to.insert_nodes_before(id, m);
+        self.insert_before(to, m, before);
+    }
+
+    fn insert_before(&mut self, to: &mut impl WriteMutations, new: usize, before: &VNode) {
+        if new > 0 {
+            let id = before.find_first_element(self);
+            to.insert_nodes_before(id, new);
+        }
     }
 
     fn create_and_insert_after(
@@ -445,8 +444,14 @@ impl VirtualDom {
         parent: Option<ElementRef>,
     ) {
         let m = self.create_children(to, new, parent);
-        let id = after.find_last_element(self);
-        to.insert_nodes_after(id, m);
+        self.insert_after(to, m, after);
+    }
+
+    fn insert_after(&mut self, to: &mut impl WriteMutations, new: usize, after: &VNode) {
+        if new > 0 {
+            let id = after.find_last_element(self);
+            to.insert_nodes_after(id, new);
+        }
     }
 }
 

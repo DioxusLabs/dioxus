@@ -37,6 +37,7 @@ fn dual_stream() {
     assert_eq!(edits.edits, {
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1) },
+            HydrateText { path: &[0, 0], value: "123".to_string(), id: ElementId(2) },
             SetAttribute {
                 name: "class",
                 value: "asd 123 123".into_value(),
@@ -44,7 +45,6 @@ fn dual_stream() {
                 ns: None,
             },
             NewEventListener { name: "click".to_string(), id: ElementId(1) },
-            HydrateText { path: &[0, 0], value: "123".to_string(), id: ElementId(2) },
             AppendChildren { id: ElementId(0), m: 1 },
         ]
     });
