@@ -1,7 +1,7 @@
 <p>
     <p align="center" >
-      <img src="./notes/header-light.svg#gh-light-mode-only" >
-      <img src="./notes/header-dark.svg#gh-dark-mode-only" >
+      <img src="../../notes/header-light.svg#gh-light-mode-only" >
+      <img src="../../notes/header-dark.svg#gh-dark-mode-only" >
       <a href="https://dioxuslabs.com">
           <img src="./notes/dioxus_splash_8.avif">
       </a>
@@ -87,7 +87,7 @@ fn app() -> Element {
 使用一个命令 `dx serve`，您的应用程序即可运行。编辑您的标记和样式，并实时查看结果。目前Rust代码热重载尚未达到一流水平，但也许可以使用 [hot-lib-reloader](https://docs.rs/hot-lib-reloader/latest/hot_lib_reloader/) 实现。
 
 <div align="center">
-  <img src="./notes/hotreload.gif">
+  <img src="../../notes/hotreload.gif">
 </div>
 
 ## 用于Web和桌面部署的捆绑包
@@ -95,7 +95,7 @@ fn app() -> Element {
 只需运行 `dx bundle`，您的应用程序将被构建和捆绑，并进行最大化的优化。在Web上，利用 [`.avif` 生成，`.wasm` 压缩，代码缩小](https://dioxuslabs.com/learn/0.5/reference/assets)，等等。构建的Web应用程序大小 [不到50kb](https://github.com/ealmloff/tiny-dioxus/)，桌面/移动应用程序小于15mb。
 
 <div align="center">
-  <img src="./notes/bundle.gif">
+  <img src="../../notes/bundle.gif">
 </div>
 
 ## 出色的文档
@@ -103,7 +103,7 @@ fn app() -> Element {
 我们花费了大量精力构建清晰、易读和全面的文档。所有HTML元素和监听器都使用MDN文档进行了记录，并且我们的文档站点通过Dioxus本身进行持续集成，以确保文档始终保持最新。查看 [Dioxus网站](https://dioxuslabs.com/learn/0.5/) 获取指南、参考资料、示例和更多信息。有趣的事实：我们将Dioxus网站用作新特性的测试平台 - [来看看吧！](https://github.com/dioxusLabs/docsite)
 
 <div align="center">
-  <img src="./notes/docs.avif">
+  <img src="../../notes/docs.avif">
 </div>
 
 ## 开发者体验的重点
@@ -119,7 +119,7 @@ Dioxus优先考虑开发者体验，我们为端到端工具链付出了大量�
 Dioxus是一个社区驱动的项目，拥有非常活跃的 [Discord](https://discord.gg/XgGxMSkvUM) 和 [GitHub](https://github.com/DioxusLabs/dioxus/issues) 社区。我们一直在寻求帮助，乐意回答问题并帮助您入门。 [我们的SDK](https://github.com/DioxusLabs/dioxus-std) 由社区运行，我们甚至有一个 [GitHub组织](https://github.com/dioxus-community/)，用于最好的Dioxus crates，这些crate可以获得免费升级和支持。
 
 <div align="center">
-  <img src="./notes/dioxus-community.avif">
+  <img src="../../notes/dioxus-community.avif">
 </div>
 
 ## 全职核心团队
