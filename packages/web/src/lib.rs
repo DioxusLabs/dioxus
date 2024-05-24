@@ -23,8 +23,6 @@
 use std::rc::Rc;
 
 pub use crate::cfg::Config;
-#[cfg(feature = "file_engine")]
-pub use crate::file_engine::WebFileEngineExt;
 use dioxus_core::VirtualDom;
 use futures_util::{pin_mut, select, FutureExt, StreamExt};
 
@@ -38,9 +36,6 @@ pub use event::*;
 
 #[cfg(feature = "eval")]
 mod eval;
-
-#[cfg(feature = "file_engine")]
-mod file_engine;
 
 #[cfg(all(feature = "hot_reload", debug_assertions))]
 mod hot_reload;

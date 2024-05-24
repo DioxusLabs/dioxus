@@ -29,14 +29,6 @@ impl VirtualDom {
             .sum()
     }
 
-    pub(crate) fn mount_children<'a>(
-        &mut self,
-        to: &mut impl WriteMutations,
-        nodes: impl IntoIterator<Item = &'a VNode>,
-    ) -> usize {
-        nodes.into_iter().map(|child| child.mount(self, to)).sum()
-    }
-
     /// Simply replace a placeholder with a list of nodes
     fn replace_placeholder<'a>(
         &mut self,

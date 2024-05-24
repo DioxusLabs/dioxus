@@ -32,6 +32,7 @@ impl MountId {
         }
     }
 
+    #[allow(unused)]
     pub(crate) fn mounted(self) -> bool {
         self.0 != usize::MAX
     }

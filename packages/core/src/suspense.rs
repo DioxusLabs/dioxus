@@ -54,7 +54,7 @@ impl SuspendedFuture {
 /// This should be created as a child of [`SuspenseContext`] and used to wrap all child nodes.
 #[derive(Debug, Clone, Default)]
 pub struct FrozenContext {
-    pub show_children: bool
+    pub show_children: bool,
 }
 
 /// A boundary that will capture any errors from child components
@@ -78,7 +78,9 @@ impl SuspenseContext {
 
     /// Get a frozen context that will freeze rendering for all child nodes
     pub fn freeze(self) -> FrozenContext {
-        FrozenContext{show_children: self.suspended_futures().is_empty()} 
+        FrozenContext {
+            show_children: self.suspended_futures().is_empty(),
+        }
     }
 
     /// Add a suspended task

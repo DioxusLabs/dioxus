@@ -1,5 +1,5 @@
 use crate::{innerlude::SuspendedFuture, runtime::Runtime, CapturedError, Element, ScopeId, Task};
-use futures_util::Future;
+use std::future::Future;
 use std::sync::Arc;
 
 /// Get the current scope id

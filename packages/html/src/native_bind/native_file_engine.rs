@@ -16,6 +16,7 @@ impl NativeFileEngine {
     }
 }
 
+#[cfg(feature = "file-engine")]
 #[async_trait::async_trait(?Send)]
 impl FileEngine for NativeFileEngine {
     fn files(&self) -> Vec<String> {

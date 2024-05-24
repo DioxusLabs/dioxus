@@ -1583,12 +1583,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
 
 [[package]]
-name = "constcat"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd7e35aee659887cbfb97aaf227ac12cad1a9d7c71e55ff3376839ed4e282d08"
-
-[[package]]
 name = "convert_case"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2266,7 +2260,6 @@ dependencies = [
 name = "dioxus-core-macro"
 version = "0.5.2"
 dependencies = [
- "constcat",
  "convert_case 0.6.0",
  "dioxus",
  "dioxus-rsx",
@@ -2277,12 +2270,6 @@ dependencies = [
  "syn 2.0.60",
  "trybuild",
 ]
-
-[[package]]
-name = "dioxus-debug-cell"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ea539174bb236e0e7dc9c12b19b88eae3cb574dedbd0252a2d43ea7e6de13e2"
 
 [[package]]
 name = "dioxus-desktop"
@@ -2400,13 +2387,11 @@ version = "0.5.2"
 dependencies = [
  "dioxus",
  "dioxus-core 0.5.2",
- "dioxus-debug-cell",
  "dioxus-signals",
  "futures-channel",
  "futures-util",
  "generational-box 0.5.2",
  "slab",
- "thiserror",
  "tokio",
  "tracing",
  "web-sys",
@@ -2446,6 +2431,7 @@ dependencies = [
  "euclid",
  "futures-channel",
  "generational-box 0.5.2",
+ "js-sys",
  "keyboard-types",
  "rfd",
  "serde",

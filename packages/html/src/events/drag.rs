@@ -1,4 +1,3 @@
-use crate::file_data::{FileEngine, HasFileData};
 use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
 use crate::input_data::{MouseButton, MouseButtonSet};
 use crate::prelude::*;
@@ -58,8 +57,9 @@ impl DragData {
     }
 }
 
-impl HasFileData for DragData {
-    fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
+#[cfg(feature = "file-engine")]
+impl crate::HasFileData for DragData {
+    fn files(&self) -> Option<std::sync::Arc<dyn crate::file_data::FileEngine>> {
         self.inner.files()
     }
 }
@@ -133,8 +133,9 @@ impl HasDragData for SerializedDragData {
 }
 
 #[cfg(feature = "serialize")]
-impl HasFileData for SerializedDragData {
-    fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
+impl crate::file_data::HasFileData for SerializedDragData {
+    #[cfg(feature = "file-engine")]
+    fn files(&self) -> Option<std::sync::Arc<dyn crate::file_data::FileEngine>> {
         self.files
             .as_ref()
             .map(|files| std::sync::Arc::new(files.clone()) as _)
@@ -210,7 +211,7 @@ impl<'de> serde::Deserialize<'de> for DragData {
 }
 
 /// A trait for any object that has the data for a drag event
-pub trait HasDragData: HasMouseData + HasFileData {
+pub trait HasDragData: HasMouseData + crate::HasFileData {
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
 }

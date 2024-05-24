@@ -546,18 +546,15 @@ impl HasMediaData for web_sys::Event {
 }
 
 impl HasFileData for web_sys::Event {
+    #[cfg(feature = "file-engine")]
     fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
-        #[cfg(not(feature = "file_engine"))]
-        let files = None;
-        #[cfg(feature = "file_engine")]
-        let files = element
+        let files = self
             .dyn_ref()
             .and_then(|input: &web_sys::HtmlInputElement| {
                 input.files().and_then(|files| {
                     #[allow(clippy::arc_with_non_send_sync)]
-                    crate::file_engine::WebFileEngine::new(files).map(|f| {
-                        std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>
-                    })
+                    crate::web_sys_bind::file_engine::WebFileEngine::new(files)
+                        .map(|f| std::sync::Arc::new(f) as std::sync::Arc<dyn crate::FileEngine>)
                 })
             });
 

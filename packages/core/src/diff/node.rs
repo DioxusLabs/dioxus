@@ -12,12 +12,7 @@ use crate::{
 };
 
 impl VNode {
-    pub(crate) fn diff_node(
-        &self,
-        new: &VNode,
-        dom: &mut VirtualDom,
-        to: &mut impl WriteMutations,
-    ) {
+    pub(crate) fn diff_node(&self, new: &VNode, dom: &mut VirtualDom, to: &mut impl WriteMutations) {
         // The node we are diffing from should always be mounted
         debug_assert!(dom.mounts.get(self.mount.get().0).is_some());
 
@@ -558,7 +553,7 @@ impl VNode {
 
         // If this is a debug build, we need to check that the paths are in the correct order because hot reloading can cause scrambled states
         #[cfg(debug_assertions)]
-        let nodes_sorted = sort_bfs(template.node_paths).iter().copied();
+        let nodes_sorted = sort_bfs(template.node_paths).into_iter();
 
         let mut nodes = nodes_sorted.peekable();
 

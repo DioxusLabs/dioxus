@@ -1,4 +1,3 @@
-use crate::file_data::FileEngine;
 use crate::file_data::HasFileData;
 use std::{collections::HashMap, fmt::Debug, ops::Deref};
 
@@ -106,7 +105,8 @@ impl FormData {
     }
 
     /// Get the files of the form event
-    pub fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
+    #[cfg(feature = "file-engine")]
+    pub fn files(&self) -> Option<std::sync::Arc<dyn crate::file_data::FileEngine>> {
         self.inner.files()
     }
 
@@ -250,16 +250,18 @@ impl HasFormData for SerializedFormData {
 }
 
 #[cfg(feature = "serialize")]
+#[cfg(feature = "file-engine")]
 impl HasFileData for SerializedFormData {
-    fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
+    fn files(&self) -> Option<std::sync::Arc<dyn crate::FileEngine>> {
         self.files
             .as_ref()
             .map(|files| std::sync::Arc::new(files.clone()) as _)
     }
 }
 
+#[cfg(feature = "file-engine")]
 impl HasFileData for FormData {
-    fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
+    fn files(&self) -> Option<std::sync::Arc<dyn crate::FileEngine>> {
         self.inner.files()
     }
 }

@@ -31,7 +31,8 @@ impl VirtualDom {
             .is_some()
         {
             tracing::info!("Rendering suspended scope {scope:?}");
-            old.diff_node(new, self, &mut NoOpMutations);
+            // old.diff_node(new, self, &mut NoOpMutations);
+            todo!()
         } else {
             tracing::info!("Rendering non-suspended scope {scope:?}");
             old.diff_node(new, self, to);
@@ -67,7 +68,8 @@ impl VirtualDom {
             {
                 tracing::info!("Creating suspended scope {scope:?}");
                 new_node.create(self, parent);
-                new_node.mount(self, &mut NoOpMutations)
+                // new_node.mount(self, &mut NoOpMutations)
+                todo!()
             } else {
                 tracing::info!("Creating non-suspended scope {scope:?}");
                 new_node.create(self, parent);
