@@ -26,3 +26,6 @@ dioxus = { workspace = true, features = ["router"] }
 [features]
 default = []
 web = []
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

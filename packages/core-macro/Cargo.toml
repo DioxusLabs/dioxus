@@ -29,3 +29,6 @@ trybuild = "1.0"
 
 [features]
 default = []
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

@@ -73,3 +73,6 @@ gloo-timers = "0.2.3"
 gloo-dialogs = "0.1.1"
 dioxus-web = { path = ".", features = ["hydrate"] }
 tracing-wasm = "0.2.1"
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

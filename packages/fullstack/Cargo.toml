@@ -96,3 +96,7 @@ server = [
     "thiserror",
     "dioxus-cli-config"
 ]
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+features = ["axum", "web"]

@@ -67,3 +67,6 @@ tokio = { workspace = true, features = ["full"] }
 [[bench]]
 name = "jsframework"
 harness = false
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
