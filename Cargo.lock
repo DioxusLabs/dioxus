@@ -2239,6 +2239,7 @@ name = "dioxus-core"
 version = "0.5.2"
 dependencies = [
  "dioxus",
+ "dioxus-html",
  "dioxus-ssr",
  "futures-channel",
  "futures-util",

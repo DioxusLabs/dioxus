@@ -202,20 +202,25 @@ impl SerializedFormData {
             value: data.value(),
             values: data.values(),
             valid: data.valid(),
-            files: match data.files() {
-                Some(files) => {
-                    let mut resolved_files = HashMap::new();
+            files: {
+                #[cfg(feature = "file-engine")]
+                match data.files() {
+                    Some(files) => {
+                        let mut resolved_files = HashMap::new();
 
-                    for file in files.files() {
-                        let bytes = files.read_file(&file).await;
-                        resolved_files.insert(file, bytes.unwrap_or_default());
+                        for file in files.files() {
+                            let bytes = files.read_file(&file).await;
+                            resolved_files.insert(file, bytes.unwrap_or_default());
+                        }
+
+                        Some(crate::file_data::SerializedFileEngine {
+                            files: resolved_files,
+                        })
                     }
-
-                    Some(crate::file_data::SerializedFileEngine {
-                        files: resolved_files,
-                    })
+                    None => None,
                 }
-                None => None,
+                #[cfg(not(feature = "file-engine"))]
+                None
             },
         }
     }
@@ -250,8 +255,8 @@ impl HasFormData for SerializedFormData {
 }
 
 #[cfg(feature = "serialize")]
-#[cfg(feature = "file-engine")]
 impl HasFileData for SerializedFormData {
+    #[cfg(feature = "file-engine")]
     fn files(&self) -> Option<std::sync::Arc<dyn crate::FileEngine>> {
         self.files
             .as_ref()

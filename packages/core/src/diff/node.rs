@@ -12,7 +12,12 @@ use crate::{
 };
 
 impl VNode {
-    pub(crate) fn diff_node(&self, new: &VNode, dom: &mut VirtualDom, to: &mut impl WriteMutations) {
+    pub(crate) fn diff_node(
+        &self,
+        new: &VNode,
+        dom: &mut VirtualDom,
+        to: &mut impl WriteMutations,
+    ) {
         // The node we are diffing from should always be mounted
         debug_assert!(dom.mounts.get(self.mount.get().0).is_some());
 
@@ -553,7 +558,8 @@ impl VNode {
 
         // If this is a debug build, we need to check that the paths are in the correct order because hot reloading can cause scrambled states
         #[cfg(debug_assertions)]
-        let nodes_sorted = sort_bfs(template.node_paths).into_iter();
+        let nodes_sorted = dbg!(sort_bfs(template.node_paths)).into_iter();
+        dbg!(&template);
 
         let mut nodes = nodes_sorted.peekable();
 
@@ -578,7 +584,12 @@ impl VNode {
             .enumerate()
             .map(|(root_idx, root)| {
                 match root {
-                    TemplateNode::Dynamic { id } => self.mount_dynamic_node(mount, *id, dom, to),
+                    TemplateNode::Dynamic { id } => {
+                        // Take a dynamic node off the depth first iterator
+                        nodes.next().unwrap();
+                        // Then mount the node
+                        self.mount_dynamic_node(mount, *id, dom, to)
+                    }
                     // For static text and element nodes, just load the template root. This may be a placeholder or just a static node. We now know that each root node has a unique id
                     TemplateNode::Text { .. } | TemplateNode::Element { .. } => {
                         self.load_template_root(mount, root_idx, dom, to);
@@ -662,9 +673,8 @@ impl VNode {
         to: &mut impl WriteMutations,
     ) {
         // Only take nodes that are under this root node
-        let with_root_node =
-            dynamic_nodes_iter.take_while(|(_, path)| path.first() == Some(&root_idx));
-        for (dynamic_node_id, path) in with_root_node {
+        let from_root_node = |(_, path): &(usize, &[u8])| path.first() == Some(&root_idx);
+        while let Some((dynamic_node_id, path)) = dynamic_nodes_iter.next_if(from_root_node) {
             let m = self.mount_dynamic_node(mount, dynamic_node_id, dom, to);
             // If we actually created real new nodes, we need to replace the placeholder for this dynamic node with the new dynamic nodes
             if m > 0 {
@@ -688,13 +698,23 @@ impl VNode {
     /// ```
     fn write_attrs(&self, mount: MountId, dom: &mut VirtualDom, to: &mut impl WriteMutations) {
         let template = self.template.get();
+        let mut last_path = None;
         for (attribute_idx, (attribute, attribute_path)) in self
             .dynamic_attrs
             .iter()
             .zip(template.attr_paths.iter())
             .enumerate()
         {
-            let id = self.assign_static_node_as_dynamic(mount, attribute_path, dom, to);
+            let id = match last_path {
+                // If the last path was exactly the same, we can reuse the id
+                Some((path, id)) if path == attribute_path => id,
+                // Otherwise, we need to create a new id
+                _ => {
+                    let id = self.assign_static_node_as_dynamic(mount, attribute_path, dom, to);
+                    last_path = Some((attribute_path, id));
+                    id
+                }
+            };
 
             for attr in &**attribute {
                 self.write_attribute(attribute_path, attr, id, mount, dom, to);
@@ -774,7 +794,7 @@ impl VNode {
 
         // If this is a root node, the path is empty and we need to create a new text node
         if path.is_empty() {
-            to.create_placeholder(new_id);
+            to.create_text_node(&text.value, new_id);
             // We create one node on the stack
             1
         } else {

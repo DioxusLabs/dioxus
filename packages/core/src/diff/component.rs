@@ -6,7 +6,6 @@ use crate::{
     nodes::VNode,
     scopes::ScopeId,
     virtual_dom::VirtualDom,
-    NoOpMutations,
 };
 
 impl VirtualDom {

@@ -247,7 +247,7 @@ impl VNode {
                     template: Cell::new(Template {
                         name: "packages/core/nodes.rs:198:0:0",
                         roots: &[TemplateNode::Dynamic { id: 0 }],
-                        node_paths: &[&[]],
+                        node_paths: &[&[0]],
                         attr_paths: &[],
                     }),
                 })
