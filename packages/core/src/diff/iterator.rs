@@ -1,7 +1,7 @@
 use crate::{
     innerlude::{ElementRef, WriteMutations},
     nodes::VNode,
-    DynamicNode, ScopeId, TemplateNode, VirtualDom,
+    DynamicNode, ScopeId, VirtualDom,
 };
 
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -236,7 +236,7 @@ impl VirtualDom {
             - IE if we have ABCD becomes BACD, our sequence would be 1,0,2,3
             - if we have ABCD to ABDE, our sequence would be 0,1,3,MAX because E doesn't exist
 
-        now, we should have a list of integers that indicates where in the old list the new items mapto.
+        now, we should have a list of integers that indicates where in the old list the new items map to.
 
         4. Compute the LIS of this list
             - this indicates the longest list of new children that won't need to be moved.
@@ -257,7 +257,7 @@ impl VirtualDom {
 
         // 1. Map the old keys into a numerical ordering based on indices.
         // 2. Create a map of old key to its index
-        // IE if the keys were A B C, then we would have (A, 1) (B, 2) (C, 3).
+        // IE if the keys were A B C, then we would have (A, 0) (B, 1) (C, 2).
         let old_key_to_old_index = old
             .iter()
             .enumerate()
@@ -291,7 +291,7 @@ impl VirtualDom {
                 // only valid of the if there are no trailing elements
                 // self.create_and_append_children(new);
 
-                todo!("we should never be appending - just creating N");
+                unreachable!("we should never be appending - just creating N");
             }
             return;
         }
@@ -320,78 +320,103 @@ impl VirtualDom {
         );
 
         // the lis comes out backwards, I think. can't quite tell.
-        lis_sequence.sort_unstable();
+        lis_sequence.reverse();
 
         // if a new node gets u32 max and is at the end, then it might be part of our LIS (because u32 max is a valid LIS)
         if lis_sequence.last().map(|f| new_index_to_old_index[*f]) == Some(u32::MAX as usize) {
             lis_sequence.pop();
         }
 
+        // Diff each nod in the LIS
         for idx in &lis_sequence {
             old[new_index_to_old_index[*idx]].diff_node(&new[*idx], self, to);
         }
 
-        let mut nodes_created = 0;
+        /// Create or diff each node in a range depending on whether it is in the LIS or not
+        /// Returns the number of nodes created on the stack
+        fn create_or_diff(
+            vdom: &mut VirtualDom,
+            new: &[VNode],
+            old: &[VNode],
+            to: &mut impl WriteMutations,
+            parent: Option<ElementRef>,
+            new_index_to_old_index: &[usize],
+            range: std::ops::Range<usize>,
+        ) -> usize {
+            let range_start = range.start;
+            new[range]
+                .iter()
+                .enumerate()
+                .map(|(idx, new_node)| {
+                    let new_idx = range_start + idx + 1;
+                    let old_index = new_index_to_old_index[new_idx];
+                    if old_index == u32::MAX as usize {
+                        new_node.create(vdom, parent);
+                        new_node.mount(vdom, to)
+                    } else {
+                        old[old_index].diff_node(new_node, vdom, to);
+                        new_node.push_all_real_nodes(vdom, to)
+                    }
+                })
+                .sum()
+        }
 
-        // add mount instruction for the first items not covered by the lis
+        // add mount instruction for the items after the LIS
         let last = *lis_sequence.last().unwrap();
         if last < (new.len() - 1) {
-            for (idx, new_node) in new[(last + 1)..].iter().enumerate() {
-                let new_idx = idx + last + 1;
-                let old_index = new_index_to_old_index[new_idx];
-                if old_index == u32::MAX as usize {
-                    nodes_created += new_node.create(self, to, parent);
-                } else {
-                    old[old_index].diff_node(new_node, self, to);
-                    nodes_created += new_node.push_all_real_nodes(self, to);
-                }
-            }
+            let nodes_created = create_or_diff(
+                self,
+                new,
+                old,
+                to,
+                parent,
+                &new_index_to_old_index,
+                (last + 1)..new.len(),
+            );
 
+            // Insert all the nodes that we just created after the last node in the LIS
             let id = new[last].find_last_element(self);
             if nodes_created > 0 {
                 to.insert_nodes_after(id, nodes_created)
             }
-            nodes_created = 0;
         }
 
-        // for each spacing, generate a mount instruction
+        // For each node inside of the LIS, but not included in the LIS, generate a mount instruction
+        // We loop over the LIS in reverse order and insert any nodes we find in the gaps between indexes
         let mut lis_iter = lis_sequence.iter().rev();
         let mut last = *lis_iter.next().unwrap();
         for next in lis_iter {
             if last - next > 1 {
-                for (idx, new_node) in new[(next + 1)..last].iter().enumerate() {
-                    let new_idx = idx + next + 1;
-                    let old_index = new_index_to_old_index[new_idx];
-                    if old_index == u32::MAX as usize {
-                        nodes_created += new_node.create(self, to, parent);
-                    } else {
-                        old[old_index].diff_node(new_node, self, to);
-                        nodes_created += new_node.push_all_real_nodes(self, to);
-                    }
-                }
+                let nodes_created = create_or_diff(
+                    self,
+                    new,
+                    old,
+                    to,
+                    parent,
+                    &new_index_to_old_index,
+                    (next + 1)..last,
+                );
 
                 let id = new[last].find_first_element(self);
                 if nodes_created > 0 {
                     to.insert_nodes_before(id, nodes_created);
                 }
-
-                nodes_created = 0;
             }
             last = *next;
         }
 
-        // add mount instruction for the last items not covered by the lis
+        // add mount instruction for the items before the LIS
         let first_lis = *lis_sequence.first().unwrap();
         if first_lis > 0 {
-            for (idx, new_node) in new[..first_lis].iter().enumerate() {
-                let old_index = new_index_to_old_index[idx];
-                if old_index == u32::MAX as usize {
-                    nodes_created += new_node.create(self, to, parent);
-                } else {
-                    old[old_index].diff_node(new_node, self, to);
-                    nodes_created += new_node.push_all_real_nodes(self, to);
-                }
-            }
+            let nodes_created = create_or_diff(
+                self,
+                new,
+                old,
+                to,
+                parent,
+                &new_index_to_old_index,
+                0..first_lis,
+            );
 
             let id = new[first_lis].find_first_element(self);
             if nodes_created > 0 {
@@ -440,30 +465,27 @@ impl VNode {
             .roots
             .iter()
             .enumerate()
-            .map(|(root_idx, _)| match &self.template.get().roots[root_idx] {
-                TemplateNode::Dynamic { id: idx } => match &self.dynamic_nodes[*idx] {
-                    DynamicNode::Placeholder(_) | DynamicNode::Text(_) => {
-                        to.push_root(mount.root_ids[root_idx]);
-                        1
-                    }
-                    DynamicNode::Fragment(nodes) => {
+            .map(
+                |(root_idx, _)| match self.get_dynamic_root_node_and_id(root_idx) {
+                    Some((_, DynamicNode::Fragment(nodes))) => {
                         let mut accumulated = 0;
                         for node in nodes {
                             accumulated += node.push_all_real_nodes(dom, to);
                         }
                         accumulated
                     }
-                    DynamicNode::Component(_) => {
-                        let scope = ScopeId(mount.mounted_dynamic_nodes[*idx]);
+                    Some((idx, DynamicNode::Component(_))) => {
+                        let scope = ScopeId(mount.mounted_dynamic_nodes[idx]);
                         let node = dom.get_scope(scope).unwrap().root_node();
                         node.push_all_real_nodes(dom, to)
                     }
+                    // This is a static root node or a single dynamic node, just push it
+                    None | Some((_, DynamicNode::Placeholder(_) | DynamicNode::Text(_))) => {
+                        to.push_root(mount.root_ids[root_idx]);
+                        1
+                    }
                 },
-                _ => {
-                    to.push_root(mount.root_ids[root_idx]);
-                    1
-                }
-            })
+            )
             .sum()
     }
 }

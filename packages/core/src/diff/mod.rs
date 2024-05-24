@@ -22,8 +22,19 @@ impl VirtualDom {
     ) -> usize {
         nodes
             .into_iter()
-            .map(|child| child.create(self, to, parent))
+            .map(|child| {
+                child.create(self, parent);
+                child.mount(self, to)
+            })
             .sum()
+    }
+
+    pub(crate) fn mount_children<'a>(
+        &mut self,
+        to: &mut impl WriteMutations,
+        nodes: impl IntoIterator<Item = &'a VNode>,
+    ) -> usize {
+        nodes.into_iter().map(|child| child.mount(self, to)).sum()
     }
 
     /// Simply replace a placeholder with a list of nodes

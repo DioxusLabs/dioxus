@@ -74,7 +74,7 @@ fn memo_works_properly() {
         let val = generation();
 
         if val == 2 || val == 4 {
-            return None;
+            return Element::Ok(VNode::default());
         }
 
         let name = use_hook(|| String::from("asd"));

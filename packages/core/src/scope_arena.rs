@@ -1,5 +1,5 @@
 use crate::innerlude::{
-    throw_error, try_consume_context, RenderError, RenderReturn, ScopeOrder, SuspenseBoundary,
+    throw_error, try_consume_context, RenderError, RenderReturn, ScopeOrder, SuspenseContext,
 };
 use crate::{
     any_props::{AnyProps, BoxedAnyProps},
@@ -32,6 +32,8 @@ impl VirtualDom {
     }
 
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> RenderReturn {
+        tracing::info!("Running scope {scope_id:?}");
+
         debug_assert!(
             crate::Runtime::current().is_some(),
             "Must be in a dioxus runtime"
@@ -74,7 +76,7 @@ impl VirtualDom {
             Err(RenderError::Suspended(e)) => {
                 let task = e.task();
                 // Insert the task into the nearest suspense boundary if it exists
-                let boundary = try_consume_context::<SuspenseBoundary>();
+                let boundary = try_consume_context::<SuspenseContext>();
                 let already_suspended = self
                     .runtime
                     .tasks

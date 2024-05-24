@@ -31,6 +31,10 @@ impl MountId {
             Some(self.0)
         }
     }
+
+    pub(crate) fn mounted(self) -> bool {
+        self.0 != usize::MAX
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -464,7 +464,7 @@ fn default_handler(errors: &[CapturedError]) -> Element {
                         tag: "pre",
                         namespace: None,
                         attrs: &[],
-                        children: &[TemplateNode::DynamicText { id: 0usize }],
+                        children: &[TemplateNode::Dynamic { id: 0usize }],
                     }],
                     node_paths: &[&[0u8, 0u8]],
                     attr_paths: &[],

@@ -249,9 +249,7 @@ fn from_template_recursive(
                 chain.if_hydration_enabled(|chain| write!(chain, "<!--#-->"))?;
             }
         }
-        TemplateNode::Dynamic { id: idx } | TemplateNode::DynamicText { id: idx } => {
-            *chain += Segment::Node(*idx)
-        }
+        TemplateNode::Dynamic { id: idx } => *chain += Segment::Node(*idx),
     }
 
     Ok(())

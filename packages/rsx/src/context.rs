@@ -104,10 +104,7 @@ impl<'a> DynamicContext<'a> {
         let ct = self.dynamic_nodes.len();
         self.dynamic_nodes.push(root);
         self.node_paths.push(self.current_path.clone());
-        match root {
-            BodyNode::Text(_) => quote! { dioxus_core::TemplateNode::DynamicText { id: #ct } },
-            _ => quote! { dioxus_core::TemplateNode::Dynamic { id: #ct } },
-        }
+        quote! { dioxus_core::TemplateNode::Dynamic { id: #ct } }
     }
 
     fn render_static_element(&mut self, el: &'a Element) -> TokenStream2 {
@@ -274,7 +271,7 @@ impl<'a> DynamicContext<'a> {
         self.node_paths[idx].clone_from(&self.current_path);
 
         Some(match root {
-            BodyNode::Text(_) => TemplateNode::DynamicText { id: idx },
+            BodyNode::Text(_) => TemplateNode::Dynamic { id: idx },
             _ => TemplateNode::Dynamic { id: idx },
         })
     }

@@ -45,7 +45,6 @@ impl WebsysDom {
                 el.dyn_into().unwrap()
             }
             Text { text } => self.document.create_text_node(text).dyn_into().unwrap(),
-            DynamicText { .. } => self.document.create_text_node("p").dyn_into().unwrap(),
             Dynamic { .. } => {
                 let el = self.document.create_element("pre").unwrap();
                 let _ = el.toggle_attribute("hidden");

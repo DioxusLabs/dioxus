@@ -194,9 +194,12 @@ pub struct VirtualDom {
     pub(crate) queued_templates: Vec<Template>,
 
     // The element ids that are used in the renderer
+    // These mark a specific place in a whole rsx block
     pub(crate) elements: Slab<Option<ElementRef>>,
 
     // Once nodes are mounted, the information about where they are mounted is stored here
+    // We need to store this information on the virtual dom so that we know what nodes are mounted where when we bubble events
+    // Each mount is associated with a whole rsx block. [`VirtualDom::elements`] link to a specific node in the block
     pub(crate) mounts: Slab<VNodeMount>,
 
     pub(crate) runtime: Rc<Runtime>,
@@ -669,7 +672,7 @@ impl VirtualDom {
                 if work.rerun_scope {
                     let new_nodes = self.run_scope(work.scope.id);
                     // if the render was successful, diff the new node
-                    if new_nodes.node.is_ok() {
+                    if new_nodes.should_render() {
                         self.diff_scope(to, work.scope.id, new_nodes.into());
                     }
                 }
@@ -772,7 +775,7 @@ impl VirtualDom {
                 let new_nodes = self.run_scope(work.scope.id);
 
                 // if the render was successful, diff the new node
-                if new_nodes.node.is_ok() {
+                if new_nodes.should_render() {
                     self.diff_scope(&mut NoOpMutations, work.scope.id, new_nodes.into());
                 }
             }

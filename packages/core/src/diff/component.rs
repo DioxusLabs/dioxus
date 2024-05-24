@@ -2,10 +2,11 @@ use std::ops::{Deref, DerefMut};
 
 use crate::{
     any_props::AnyProps,
-    innerlude::{ElementRef, MountId, ScopeOrder, VComponent, WriteMutations},
+    innerlude::{ElementRef, FrozenContext, MountId, ScopeOrder, VComponent, WriteMutations},
     nodes::VNode,
     scopes::ScopeId,
     virtual_dom::VirtualDom,
+    NoOpMutations,
 };
 
 impl VirtualDom {
@@ -17,11 +18,24 @@ impl VirtualDom {
     ) {
         self.runtime.scope_stack.borrow_mut().push(scope);
         let scope_state = &mut self.scopes[scope.0];
-        // Load the old and new bump arenas
+        // Load the old and new rendered nodes
         let new = &new_nodes;
         let old = scope_state.last_rendered_node.take().unwrap();
 
-        old.diff_node(new, self, to);
+        // If there are suspended scopes, we need to check if the scope is suspended before we diff it
+        // If it is suspended, we need to diff it but write the mutations nothing
+        // Note: It is important that we still diff the scope even if it is suspended, because the scope may render other child components which may change between renders
+        if scope_state
+            .state()
+            .consume_context::<FrozenContext>()
+            .is_some()
+        {
+            tracing::info!("Rendering suspended scope {scope:?}");
+            old.diff_node(new, self, &mut NoOpMutations);
+        } else {
+            tracing::info!("Rendering non-suspended scope {scope:?}");
+            old.diff_node(new, self, to);
+        }
 
         let scope_state = &mut self.scopes[scope.0];
         scope_state.last_rendered_node = Some(new_nodes);
@@ -29,7 +43,7 @@ impl VirtualDom {
         self.runtime.scope_stack.borrow_mut().pop();
     }
 
-    /// Create a new template [`VNode`] and write it to the [`Mutations`] buffer.
+    /// Create a new template [`VNode`] and write it to the [`WriteMutations`] buffer.
     ///
     /// This method pushes the ScopeID to the internal scopestack and returns the number of nodes created.
     pub(crate) fn create_scope(
@@ -42,7 +56,24 @@ impl VirtualDom {
         self.runtime.scope_stack.borrow_mut().push(scope);
 
         // Create the node
-        let nodes = new_node.create(self, to, parent);
+        let nodes = {
+            // If there are suspended scopes, we need to check if the scope is suspended before we diff it
+            // If it is suspended, we need to diff it but write the mutations nothing
+            // Note: It is important that we still diff the scope even if it is suspended, because the scope may render other child components which may change between renders
+            if self.scopes[scope.0]
+                .state()
+                .consume_context::<FrozenContext>()
+                .is_some()
+            {
+                tracing::info!("Creating suspended scope {scope:?}");
+                new_node.create(self, parent);
+                new_node.mount(self, &mut NoOpMutations)
+            } else {
+                tracing::info!("Creating non-suspended scope {scope:?}");
+                new_node.create(self, parent);
+                new_node.mount(self, to)
+            }
+        };
 
         // Then set the new node as the last rendered node
         self.scopes[scope.0].last_rendered_node = Some(new_node);
@@ -85,7 +116,7 @@ impl VNode {
         // Now run the component and diff it
         let new = dom.run_scope(scope_id);
         // If the render was successful, diff the new node
-        if new.node.is_ok() {
+        if new.should_render() {
             dom.diff_scope(to, scope_id, new.into());
         }
 

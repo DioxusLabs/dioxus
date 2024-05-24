@@ -26,6 +26,16 @@ pub struct RenderReturn {
     pub(crate) node: Element,
 }
 
+impl RenderReturn {
+    /// Check if the render was successful and the children should be diffed
+    pub(crate) fn should_render(&self) -> bool {
+        matches!(
+            self.node,
+            Ok(_) | Err(crate::render_error::RenderError::Suspended(_))
+        )
+    }
+}
+
 impl From<RenderReturn> for VNode {
     fn from(val: RenderReturn) -> Self {
         match val.node {
@@ -272,12 +282,9 @@ impl VNode {
     ///
     /// Returns [`None`] if the root is actually a static node (Element/Text)
     pub fn dynamic_root(&self, idx: usize) -> Option<&DynamicNode> {
-        match &self.template.get().roots[idx] {
-            TemplateNode::Element { .. } | TemplateNode::Text { text: _ } => None,
-            TemplateNode::Dynamic { id } | TemplateNode::DynamicText { id } => {
-                Some(&self.dynamic_nodes[*id])
-            }
-        }
+        self.template.get().roots[idx]
+            .dynamic_id()
+            .map(|id| &self.dynamic_nodes[id])
     }
 
     /// Get the mounted id for a dynamic node index
@@ -424,9 +431,7 @@ impl Template {
     /// There's no point in saving templates that are completely dynamic, since they'll be recreated every time anyway.
     pub fn is_completely_dynamic(&self) -> bool {
         use TemplateNode::*;
-        self.roots
-            .iter()
-            .all(|root| matches!(root, Dynamic { .. } | DynamicText { .. }))
+        self.roots.iter().all(|root| matches!(root, Dynamic { .. }))
     }
 
     /// Get a unique id for this template. If the id between two templates are different, the contents of the template may be different.
@@ -488,14 +493,6 @@ pub enum TemplateNode {
         /// The index of the dynamic node in the VNode's dynamic_nodes list
         id: usize,
     },
-
-    /// This template node is known to be some text, but needs to be created at runtime
-    ///
-    /// This is separate from the pure Dynamic variant for various optimizations
-    DynamicText {
-        /// The index of the dynamic node in the VNode's dynamic_nodes list
-        id: usize,
-    },
 }
 
 impl TemplateNode {
@@ -503,7 +500,7 @@ impl TemplateNode {
     pub fn dynamic_id(&self) -> Option<usize> {
         use TemplateNode::*;
         match self {
-            Dynamic { id } | DynamicText { id } => Some(*id),
+            Dynamic { id } => Some(*id),
             _ => None,
         }
     }
@@ -840,9 +837,7 @@ impl<T: Any + PartialEq + 'static> AnyValue for T {
 
 /// A trait that allows various items to be converted into a dynamic node for the rsx macro
 pub trait IntoDynNode<A = ()> {
-    /// Consume this item along with a scopestate and produce a DynamicNode
-    ///
-    /// You can use the bump alloactor of the scopestate to creat the dynamic node
+    /// Consume this item and produce a DynamicNode
     fn into_dyn_node(self) -> DynamicNode;
 }
 

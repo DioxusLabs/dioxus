@@ -104,15 +104,14 @@ impl WebsysDom {
                     }
                 }
             }
-            TemplateNode::Dynamic { id } | TemplateNode::DynamicText { id } => self
-                .rehydrate_dynamic_node(
-                    dom,
-                    &vnode.dynamic_nodes[*id],
-                    *id,
-                    vnode,
-                    ids,
-                    to_mount,
-                )?,
+            TemplateNode::Dynamic { id } => self.rehydrate_dynamic_node(
+                dom,
+                &vnode.dynamic_nodes[*id],
+                *id,
+                vnode,
+                ids,
+                to_mount,
+            )?,
             TemplateNode::Text { .. } => {
                 if let Some(id) = root_id {
                     ids.push(id.0 as u32);

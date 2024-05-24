@@ -1,6 +1,7 @@
 use crate::innerlude::Effect;
 use crate::innerlude::ScopeOrder;
-use crate::innerlude::{remove_future, spawn, Runtime, SuspenseBoundary};
+use crate::innerlude::{remove_future, spawn, Runtime};
+use crate::prelude::SuspenseContext;
 use crate::ScopeId;
 use futures_util::task::ArcWake;
 use std::sync::Arc;
@@ -277,7 +278,7 @@ pub(crate) struct LocalTask {
 
 impl LocalTask {
     /// Suspend the task, returns true if the task was already suspended
-    pub(crate) fn suspend(&self, boundary: Option<SuspenseBoundary>) -> bool {
+    pub(crate) fn suspend(&self, boundary: Option<SuspenseContext>) -> bool {
         // Make this a suspended task so it runs during suspense
         let old_type = self.ty.replace(TaskType::Suspended { boundary });
         matches!(old_type, TaskType::Suspended { .. })
@@ -287,7 +288,7 @@ impl LocalTask {
 #[derive(Clone)]
 enum TaskType {
     ClientOnly,
-    Suspended { boundary: Option<SuspenseBoundary> },
+    Suspended { boundary: Option<SuspenseContext> },
     Isomorphic,
 }
 

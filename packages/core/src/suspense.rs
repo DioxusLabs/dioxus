@@ -50,21 +50,35 @@ impl SuspendedFuture {
     }
 }
 
-/// Provide an error boundary to catch errors from child components
-pub fn use_suspense_boundary() -> SuspenseBoundary {
-    use_hook(|| provide_context(SuspenseBoundary::new()))
+/// A boundary that freezes rendering for all child nodes.
+/// This should be created as a child of [`SuspenseContext`] and used to wrap all child nodes.
+#[derive(Debug, Clone, Default)]
+pub struct FrozenContext {
+    pub show_children: bool
 }
 
 /// A boundary that will capture any errors from child components
+/// NOTE: this will not prevent rendering in child components. [`FrozenContext`] should be used instead.
 #[derive(Debug, Clone, Default)]
-pub struct SuspenseBoundary {
+pub struct SuspenseContext {
     inner: Rc<SuspenseBoundaryInner>,
 }
 
-impl SuspenseBoundary {
+impl PartialEq for SuspenseContext {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.inner, &other.inner)
+    }
+}
+
+impl SuspenseContext {
     /// Create a new suspense boundary
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Get a frozen context that will freeze rendering for all child nodes
+    pub fn freeze(self) -> FrozenContext {
+        FrozenContext{show_children: self.suspended_futures().is_empty()} 
     }
 
     /// Add a suspended task
@@ -118,7 +132,7 @@ impl Default for SuspenseBoundaryInner {
 /// Provides context methods to [`Result<T, RenderError>`] to show loading indicators
 ///
 /// This trait is sealed and cannot be implemented outside of dioxus-core
-pub trait SuspenseContext<T>: private::Sealed {
+pub trait SuspenseExtension<T>: private::Sealed {
     /// Add a loading indicator if the result is suspended
     fn with_loading_placeholder(
         self,
@@ -126,7 +140,7 @@ pub trait SuspenseContext<T>: private::Sealed {
     ) -> std::result::Result<T, RenderError>;
 }
 
-impl<T> SuspenseContext<T> for std::result::Result<T, RenderError> {
+impl<T> SuspenseExtension<T> for std::result::Result<T, RenderError> {
     fn with_loading_placeholder(
         self,
         display_placeholder: impl FnOnce() -> Element,

@@ -1050,7 +1050,6 @@ Finally, call `.build()` to create the instance of `{name}`.
                 ty: field_type,
                 ..
             } = field;
-            // Add the bump lifetime to the generics
             let mut ty_generics: Vec<syn::GenericArgument> = self
                 .generics
                 .params
@@ -1205,7 +1204,6 @@ Finally, call `.build()` to create the instance of `{name}`.
                 name: ref field_name,
                 ..
             } = field;
-            // Add a bump lifetime to the generics
             let mut builder_generics: Vec<syn::GenericArgument> = self
                 .generics
                 .params
