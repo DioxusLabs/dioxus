@@ -80,7 +80,9 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) {
     if should_hydrate {
         #[cfg(feature = "hydrate")]
         {
-            dom.rebuild(&mut crate::rehydrate::OnlyWriteTemplates(&mut websys_dom));
+            websys_dom.only_write_templates = true;
+            dom.rebuild(&mut websys_dom);
+            websys_dom.only_write_templates = false;
 
             if let Err(err) = websys_dom.rehydrate(&dom) {
                 tracing::error!("Rehydration failed. {:?}", err);

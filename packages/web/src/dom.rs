@@ -29,6 +29,9 @@ pub struct WebsysDom {
 
     #[cfg(feature = "mounted")]
     pub(crate) queued_mounted_events: Vec<ElementId>,
+
+    #[cfg(feature = "hydrate")]
+    pub(crate) only_write_templates: bool,
 }
 
 pub struct UiEvent {
@@ -131,6 +134,8 @@ impl WebsysDom {
             event_channel,
             #[cfg(feature = "mounted")]
             queued_mounted_events: Default::default(),
+            #[cfg(feature = "hydrate")]
+            only_write_templates: false,
         }
     }
 
