@@ -9,9 +9,9 @@ use crate::{
 };
 
 impl VirtualDom {
-    pub(crate) fn diff_scope(
+    pub(crate) fn diff_scope<M: WriteMutations>(
         &mut self,
-        to: Option<&mut impl WriteMutations>,
+        mut to: Option<&mut M>,
         scope: ScopeId,
         new_nodes: VNode,
     ) {
@@ -19,26 +19,28 @@ impl VirtualDom {
         let scope_state = &mut self.scopes[scope.0];
         // Load the old and new rendered nodes
         let new = &new_nodes;
-        let old = scope_state.last_mounted_node.take().unwrap();
+        let old = scope_state.last_rendered_node.take().unwrap();
 
         // If there are suspended scopes, we need to check if the scope is suspended before we diff it
         // If it is suspended, we need to diff it but write the mutations nothing
         // Note: It is important that we still diff the scope even if it is suspended, because the scope may render other child components which may change between renders
-        if scope_state
+        let frozen = scope_state
             .state()
             .consume_context::<FrozenContext>()
-            .is_some()
-        {
+            .is_some();
+        if frozen {
             tracing::info!("Rendering suspended scope {scope:?}");
-            // old.diff_node(new, self, &mut NoOpMutations);
-            todo!()
+            old.diff_node(new, self, None::<&mut M>);
         } else {
             tracing::info!("Rendering non-suspended scope {scope:?}");
-            old.diff_node(new, self, to);
+            old.diff_node(new, self, to.as_deref_mut());
+
+            if to.is_some() {
+                self.scopes[scope.0].last_mounted_node = Some(new_nodes.clone_mounted());
+            }
         }
 
-        let scope_state = &mut self.scopes[scope.0];
-        scope_state.last_mounted_node = Some(new_nodes.clone_mounted());
+        self.scopes[scope.0].last_rendered_node = Some(new_nodes.clone_mounted());
 
         self.runtime.scope_stack.borrow_mut().pop();
     }
@@ -48,9 +50,9 @@ impl VirtualDom {
     /// Returns the number of nodes created on the stack
     pub(crate) fn create_scope<M: WriteMutations>(
         &mut self,
-        to: Option<&mut M>,
+        mut to: Option<&mut M>,
         scope: ScopeId,
-        new_node: VNode,
+        new_nodes: VNode,
         parent: Option<ElementRef>,
     ) -> usize {
         self.runtime.scope_stack.borrow_mut().push(scope);
@@ -67,15 +69,21 @@ impl VirtualDom {
             {
                 tracing::info!("Creating suspended scope {scope:?}");
                 // Suspended nodes don't get mounted, so we don't pass down the mutations
-                new_node.create(self, parent, Option::<&mut M>::None)
+                new_nodes.create(self, parent, Option::<&mut M>::None)
             } else {
                 tracing::info!("Creating non-suspended scope {scope:?}");
-                new_node.create(self, parent, to)
+                let nodes_created = new_nodes.create(self, parent, to.as_deref_mut());
+
+                if to.is_some() {
+                    self.scopes[scope.0].last_mounted_node = Some(new_nodes.clone_mounted());
+                }
+
+                nodes_created
             }
         };
 
         // Then set the new node as the last rendered node
-        self.scopes[scope.0].last_mounted_node = Some(new_node);
+        self.scopes[scope.0].last_rendered_node = Some(new_nodes);
 
         self.runtime.scope_stack.borrow_mut().pop();
         nodes
@@ -134,6 +142,8 @@ impl VNode {
     ) {
         let scope = ScopeId(dom.mounts[mount.0].mounted_dynamic_nodes[idx]);
 
+        // Remove the scope id from the mount
+        dom.mounts[mount.0].mounted_dynamic_nodes[idx] = ScopeId::PLACEHOLDER.0;
         let m = self.create_component_node(mount, idx, new, parent, dom, to.as_deref_mut());
 
         // Instead of *just* removing it, we can use the replace mutation

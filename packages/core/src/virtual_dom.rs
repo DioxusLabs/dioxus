@@ -779,7 +779,6 @@ impl VirtualDom {
                 // if the render was successful, diff the new node
                 if new_nodes.should_diff() {
                     self.diff_scope(None::<&mut NoOpMutations>, work.scope.id, new_nodes.into());
-                    todo!()
                 }
             }
         }

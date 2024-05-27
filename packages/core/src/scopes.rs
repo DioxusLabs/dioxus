@@ -45,7 +45,7 @@ impl ScopeId {
     pub(crate) const PLACEHOLDER: ScopeId = ScopeId(usize::MAX);
 
     pub(crate) fn is_placeholder(&self) -> bool {
-        self.0 == usize::MAX
+        *self == Self::PLACEHOLDER
     }
 }
 

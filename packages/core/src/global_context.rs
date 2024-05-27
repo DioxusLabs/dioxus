@@ -17,6 +17,7 @@ pub fn vdom_is_rendering() -> bool {
 ///
 /// # Examples
 /// ```rust, no_run
+/// # use dioxus::prelude::*;
 /// fn Component() -> Element {
 ///     let request = spawn(async move {
 ///         match reqwest::get("https://api.example.com").await {
