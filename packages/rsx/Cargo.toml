@@ -24,7 +24,8 @@ tracing = { workspace = true }
 
 [features]
 default = ["html"]
-hot_reload = ["krates", "internment", "dioxus-core"]
+hot_reload_traits = []
+hot_reload = ["krates", "internment", "dioxus-core", "hot_reload_traits"]
 serde = ["dep:serde"]
 html = []
 

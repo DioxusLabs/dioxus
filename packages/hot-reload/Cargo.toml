@@ -36,5 +36,5 @@ tokio = { workspace = true, features = ["full"] }
 [features]
 default = ["dioxus-html"]
 custom_file_watcher = ["ignore", "chrono", "notify", "execute", "once_cell", "ignore"]
-file_watcher = ["custom_file_watcher", "dioxus-html/hot-reload-context"]
+file_watcher = ["custom_file_watcher", "dioxus-html/hot-reload-context", "dioxus-rsx/hot_reload"]
 serve = ["axum", "tokio-stream", "futures-util", "tokio", "file_watcher"]

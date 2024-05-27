@@ -1,5 +1,3 @@
-use std::any::Any;
-
 pub trait HasFileData: std::any::Any {
     #[cfg(feature = "file-engine")]
     fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
@@ -36,10 +34,10 @@ impl FileEngine for SerializedFileEngine {
     }
 
     #[cfg(feature = "file-engine")]
-    async fn get_native_file(&self, file: &str) -> Option<Box<dyn Any>> {
+    async fn get_native_file(&self, file: &str) -> Option<Box<dyn std::any::Any>> {
         self.read_file(file)
             .await
-            .map(|val| Box::new(val) as Box<dyn Any>)
+            .map(|val| Box::new(val) as Box<dyn std::any::Any>)
     }
 }
 
@@ -59,5 +57,5 @@ pub trait FileEngine {
 
     #[cfg(feature = "file-engine")]
     // returns a file in platform's native representation
-    async fn get_native_file(&self, file: &str) -> Option<Box<dyn Any>>;
+    async fn get_native_file(&self, file: &str) -> Option<Box<dyn std::any::Any>>;
 }

@@ -85,5 +85,5 @@ file-engine = [
 ]
 wasm-bind = ["web-sys", "wasm-bindgen"]
 native-bind = ["tokio", "file-engine"]
-hot-reload-context = ["dioxus-rsx"]
+hot-reload-context = ["dioxus-rsx", "dioxus-rsx/hot_reload_traits"]
 html-to-rsx = []

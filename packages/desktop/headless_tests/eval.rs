@@ -61,5 +61,5 @@ fn app() -> Element {
         }
     });
 
-    None
+    Ok(VNode::placeholder())
 }

@@ -71,12 +71,11 @@ pub use element::*;
 pub use ifmt::*;
 pub use node::*;
 
-#[cfg(feature = "hot_reload")]
 pub mod hot_reload;
 
 #[cfg(feature = "hot_reload")]
 use dioxus_core::{Template, TemplateAttribute, TemplateNode};
-#[cfg(feature = "hot_reload")]
+#[cfg(feature = "hot_reload_traits")]
 pub use hot_reload::HotReloadingContext;
 #[cfg(feature = "hot_reload")]
 use internment::Intern;
