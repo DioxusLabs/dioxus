@@ -254,8 +254,8 @@ impl VNode {
                     } else {
                         to.remove_node(id);
                     }
+                    dom.reclaim(id);
                 }
-                dom.reclaim(id);
             }
         }
     }
@@ -293,8 +293,8 @@ impl VNode {
                     } else {
                         to.remove_node(id);
                     }
+                    dom.reclaim(id)
                 }
-                dom.reclaim(id)
             }
             Fragment(nodes) => {
                 for node in &nodes[..nodes.len() - 1] {

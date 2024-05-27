@@ -1,7 +1,6 @@
 use crate::dom::WebsysDom;
 use dioxus_core::prelude::*;
 use dioxus_core::AttributeValue;
-use dioxus_core::WriteMutations;
 use dioxus_core::{DynamicNode, ElementId};
 
 #[derive(Debug)]

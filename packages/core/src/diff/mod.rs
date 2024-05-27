@@ -46,8 +46,8 @@ impl VirtualDom {
         let m = self.create_children(to.as_deref_mut(), r, parent);
         if let Some(to) = to {
             to.replace_node_with(placeholder_id, m);
+            self.reclaim(placeholder_id);
         }
-        self.reclaim(placeholder_id);
     }
 
     fn nodes_to_placeholder(
