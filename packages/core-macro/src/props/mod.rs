@@ -271,7 +271,7 @@ mod field_info {
     #[derive(Debug, Default, Clone)]
     pub struct FieldBuilderAttr {
         pub default: Option<syn::Expr>,
-        pub docs: Vec<String>,
+        pub docs: Vec<syn::Attribute>,
         pub skip: bool,
         pub auto_into: bool,
         pub from_displayable: bool,
@@ -285,7 +285,7 @@ mod field_info {
             let mut skip_tokens = None;
             for attr in attrs {
                 if attr.path().is_ident("doc") {
-                    self.apply_doc_meta(&attr.meta)?;
+                    self.docs.push(attr.clone());
                     continue;
                 }
 
@@ -473,33 +473,6 @@ mod field_info {
                 }
                 _ => Err(Error::new_spanned(expr, "Expected (<...>=<...>)")),
             }
-        }
-
-        fn apply_doc_meta(&mut self, meta: &syn::Meta) -> Result<(), Error> {
-            match meta {
-                syn::Meta::NameValue(meta) => {
-                    match &meta.value {
-                        syn::Expr::Lit(expr) => {
-                            match &expr.lit {
-                                syn::Lit::Str(lit) => {
-                                    self.docs.push(lit.value());
-                                }
-                                _ => {
-                                    return Err(Error::new_spanned(&meta.value, "Expected string"));
-                                }
-                            }
-                        }
-                        _ => {
-                            return Err(Error::new_spanned(&meta.value, "Expected string"));
-                        }
-                    }
-                }
-                _ => {
-                    // Ignore other doc attributes
-                }
-            }
-
-            Ok(())
         }
     }
 }
@@ -1129,7 +1102,7 @@ Finally, call `.build()` to create the instance of `{name}`.
             );
 
             let (impl_generics, _, where_clause) = generics.split_for_impl();
-            let docs = field.builder_attr.docs.iter().map(|doc| quote!(#[doc = #doc]));
+            let docs = &field.builder_attr.docs;
 
             let arg_type = field_type;
             // If the field is auto_into, we need to add a generic parameter to the builder for specialization
