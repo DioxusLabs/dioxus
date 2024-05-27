@@ -10,7 +10,11 @@ use crate::{
 };
 
 impl VirtualDom {
-    pub(super) fn new_scope(&mut self, props: BoxedAnyProps, name: &'static str) -> &ScopeState {
+    pub(super) fn new_scope(
+        &mut self,
+        props: BoxedAnyProps,
+        name: &'static str,
+    ) -> &mut ScopeState {
         let parent_id = self.runtime.current_scope_id();
         let height = parent_id
             .and_then(|parent_id| self.runtime.get_state(parent_id).map(|f| f.height + 1))
@@ -23,6 +27,7 @@ impl VirtualDom {
             context_id: id,
             props,
             last_rendered_node: Default::default(),
+            last_mounted_node: Default::default(),
         });
 
         self.runtime
@@ -31,6 +36,7 @@ impl VirtualDom {
         scope
     }
 
+    /// Run a scope and return the rendered nodes. This will not modify the DOM or update the last rendered node of the scope.
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> RenderReturn {
         tracing::info!("Running scope {scope_id:?}");
 

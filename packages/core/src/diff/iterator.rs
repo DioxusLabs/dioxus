@@ -9,7 +9,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 impl VirtualDom {
     pub(crate) fn diff_non_empty_fragment(
         &mut self,
-        to: &mut impl WriteMutations,
+        to: Option<&mut impl WriteMutations>,
         old: &[VNode],
         new: &[VNode],
         parent: Option<ElementRef>,
@@ -42,7 +42,7 @@ impl VirtualDom {
     // the change list stack is in the same state when this function returns.
     fn diff_non_keyed_children(
         &mut self,
-        to: &mut impl WriteMutations,
+        mut to: Option<&mut impl WriteMutations>,
         old: &[VNode],
         new: &[VNode],
         parent: Option<ElementRef>,
@@ -54,15 +54,18 @@ impl VirtualDom {
         debug_assert!(!old.is_empty());
 
         match old.len().cmp(&new.len()) {
-            Ordering::Greater => self.remove_nodes(to, &old[new.len()..], None),
-            Ordering::Less => {
-                self.create_and_insert_after(to, &new[old.len()..], old.last().unwrap(), parent)
-            }
+            Ordering::Greater => self.remove_nodes(to.as_deref_mut(), &old[new.len()..], None),
+            Ordering::Less => self.create_and_insert_after(
+                to.as_deref_mut(),
+                &new[old.len()..],
+                old.last().unwrap(),
+                parent,
+            ),
             Ordering::Equal => {}
         }
 
         for (new, old) in new.iter().zip(old.iter()) {
-            old.diff_node(new, self, to);
+            old.diff_node(new, self, to.as_deref_mut());
         }
     }
 
@@ -84,7 +87,7 @@ impl VirtualDom {
     // The stack is empty upon entry.
     fn diff_keyed_children(
         &mut self,
-        to: &mut impl WriteMutations,
+        mut to: Option<&mut impl WriteMutations>,
         old: &[VNode],
         new: &[VNode],
         parent: Option<ElementRef>,
@@ -116,10 +119,11 @@ impl VirtualDom {
         //
         // `shared_prefix_count` is the count of how many nodes at the start of
         // `new` and `old` share the same keys.
-        let (left_offset, right_offset) = match self.diff_keyed_ends(to, old, new, parent) {
-            Some(count) => count,
-            None => return,
-        };
+        let (left_offset, right_offset) =
+            match self.diff_keyed_ends(to.as_deref_mut(), old, new, parent) {
+                Some(count) => count,
+                None => return,
+            };
 
         // Ok, we now hopefully have a smaller range of children in the middle
         // within which to re-order nodes with the same keys, remove old nodes with
@@ -164,7 +168,7 @@ impl VirtualDom {
     /// If there is no offset, then this function returns None and the diffing is complete.
     fn diff_keyed_ends(
         &mut self,
-        to: &mut impl WriteMutations,
+        mut to: Option<&mut impl WriteMutations>,
         old: &[VNode],
         new: &[VNode],
         parent: Option<ElementRef>,
@@ -176,7 +180,7 @@ impl VirtualDom {
             if old.key != new.key {
                 break;
             }
-            old.diff_node(new, self, to);
+            old.diff_node(new, self, to.as_deref_mut());
             left_offset += 1;
         }
 
@@ -201,7 +205,7 @@ impl VirtualDom {
             if old.key != new.key {
                 break;
             }
-            old.diff_node(new, self, to);
+            old.diff_node(new, self, to.as_deref_mut());
             right_offset += 1;
         }
 
@@ -224,7 +228,7 @@ impl VirtualDom {
     #[allow(clippy::too_many_lines)]
     fn diff_keyed_middle(
         &mut self,
-        to: &mut impl WriteMutations,
+        mut to: Option<&mut impl WriteMutations>,
         old: &[VNode],
         new: &[VNode],
         parent: Option<ElementRef>,
@@ -255,10 +259,6 @@ impl VirtualDom {
         debug_assert_ne!(new.first().map(|i| &i.key), old.first().map(|i| &i.key));
         debug_assert_ne!(new.last().map(|i| &i.key), old.last().map(|i| &i.key));
 
-        println!("diff_keyed_middle");
-        println!("old: {:?}", old);
-        println!("new: {:?}", new);
-
         // 1. Map the old keys into a numerical ordering based on indices.
         // 2. Create a map of old key to its index
         // IE if the keys were A B C, then we would have (A, 0) (B, 1) (C, 2).
@@ -279,59 +279,55 @@ impl VirtualDom {
                     shared_keys.insert(key);
                     index
                 } else {
-                    u32::MAX as usize
+                    usize::MAX
                 }
             })
-            .collect::<Vec<_>>();
+            .collect::<Box<[_]>>();
 
         // If none of the old keys are reused by the new children, then we remove all the remaining old children and
         // create the new children afresh.
         if shared_keys.is_empty() {
-            if !old.is_empty() {
-                let m = self.create_children(to, new, parent);
-                self.remove_nodes(to, old, Some(m));
-            } else {
-                // I think this is wrong - why are we appending?
-                // only valid of the if there are no trailing elements
-                // self.create_and_append_children(new);
+            debug_assert!(
+                !old.is_empty(),
+                "we should never be appending - just creating N"
+            );
 
-                unreachable!("we should never be appending - just creating N");
-            }
+            let m = self.create_children(to.as_deref_mut(), new, parent);
+            self.remove_nodes(to, old, Some(m));
+
             return;
         }
 
         // remove any old children that are not shared
-        // todo: make this an iterator
-        for child in old {
-            let key = child.key.as_ref().unwrap();
-            if !shared_keys.contains(&key) {
-                child.remove_node(self, to, None, true);
-            }
+        for child_to_remove in old
+            .iter()
+            .filter(|child| !shared_keys.contains(child.key.as_ref().unwrap()))
+        {
+            child_to_remove.remove_node(self, to.as_deref_mut(), None);
         }
 
         // 4. Compute the LIS of this list
         let mut lis_sequence = Vec::with_capacity(new_index_to_old_index.len());
-        println!("LIS sequence: {:?}", lis_sequence);
 
-        let mut predecessors = vec![0; new_index_to_old_index.len()];
-        let mut starts = vec![0; new_index_to_old_index.len()];
+        let mut allocation = vec![0; new_index_to_old_index.len() * 2];
+        let (predecessors, starts) = allocation.split_at_mut(new_index_to_old_index.len());
 
         longest_increasing_subsequence::lis_with(
             &new_index_to_old_index,
             &mut lis_sequence,
             |a, b| a < b,
-            &mut predecessors,
-            &mut starts,
+            predecessors,
+            starts,
         );
 
         // if a new node gets u32 max and is at the end, then it might be part of our LIS (because u32 max is a valid LIS)
-        if lis_sequence.first().map(|f| new_index_to_old_index[*f]) == Some(u32::MAX as usize) {
+        if lis_sequence.first().map(|f| new_index_to_old_index[*f]) == Some(usize::MAX) {
             lis_sequence.remove(0);
         }
 
         // Diff each nod in the LIS
         for idx in &lis_sequence {
-            old[new_index_to_old_index[*idx]].diff_node(&new[*idx], self, to);
+            old[new_index_to_old_index[*idx]].diff_node(&new[*idx], self, to.as_deref_mut());
         }
 
         /// Create or diff each node in a range depending on whether it is in the LIS or not
@@ -340,7 +336,7 @@ impl VirtualDom {
             vdom: &mut VirtualDom,
             new: &[VNode],
             old: &[VNode],
-            to: &mut impl WriteMutations,
+            mut to: Option<&mut impl WriteMutations>,
             parent: Option<ElementRef>,
             new_index_to_old_index: &[usize],
             range: std::ops::Range<usize>,
@@ -352,12 +348,17 @@ impl VirtualDom {
                 .map(|(idx, new_node)| {
                     let new_idx = range_start + idx;
                     let old_index = new_index_to_old_index[new_idx];
-                    if old_index == u32::MAX as usize {
-                        new_node.create(vdom, parent);
-                        new_node.mount(vdom, to)
+                    // If the node existed in the old list, diff it
+                    if let Some(old_node) = old.get(old_index) {
+                        old_node.diff_node(new_node, vdom, to.as_deref_mut());
+                        if let Some(to) = to.as_deref_mut() {
+                            new_node.push_all_real_nodes(vdom, to)
+                        } else {
+                            0
+                        }
                     } else {
-                        old[old_index].diff_node(new_node, vdom, to);
-                        new_node.push_all_real_nodes(vdom, to)
+                        // Otherwise, just add it to the stack
+                        new_node.create(vdom, parent, to.as_deref_mut())
                     }
                 })
                 .sum()
@@ -370,14 +371,14 @@ impl VirtualDom {
                 self,
                 new,
                 old,
-                to,
+                to.as_deref_mut(),
                 parent,
                 &new_index_to_old_index,
                 (last + 1)..new.len(),
             );
 
             // Insert all the nodes that we just created after the last node in the LIS
-            self.insert_after(to, nodes_created, &new[last]);
+            self.insert_after(to.as_deref_mut(), nodes_created, &new[last]);
         }
 
         // For each node inside of the LIS, but not included in the LIS, generate a mount instruction
@@ -390,13 +391,13 @@ impl VirtualDom {
                     self,
                     new,
                     old,
-                    to,
+                    to.as_deref_mut(),
                     parent,
                     &new_index_to_old_index,
                     (next + 1)..last,
                 );
 
-                self.insert_before(to, nodes_created, &new[last]);
+                self.insert_before(to.as_deref_mut(), nodes_created, &new[last]);
             }
             last = *next;
         }
@@ -408,7 +409,7 @@ impl VirtualDom {
                 self,
                 new,
                 old,
-                to,
+                to.as_deref_mut(),
                 parent,
                 &new_index_to_old_index,
                 0..first_lis,
@@ -420,37 +421,41 @@ impl VirtualDom {
 
     fn create_and_insert_before(
         &mut self,
-        to: &mut impl WriteMutations,
+        mut to: Option<&mut impl WriteMutations>,
         new: &[VNode],
         before: &VNode,
         parent: Option<ElementRef>,
     ) {
-        let m = self.create_children(to, new, parent);
+        let m = self.create_children(to.as_deref_mut(), new, parent);
         self.insert_before(to, m, before);
     }
 
-    fn insert_before(&mut self, to: &mut impl WriteMutations, new: usize, before: &VNode) {
-        if new > 0 {
-            let id = before.find_first_element(self);
-            to.insert_nodes_before(id, new);
+    fn insert_before(&mut self, to: Option<&mut impl WriteMutations>, new: usize, before: &VNode) {
+        if let Some(to) = to {
+            if new > 0 {
+                let id = before.find_first_element(self);
+                to.insert_nodes_before(id, new);
+            }
         }
     }
 
     fn create_and_insert_after(
         &mut self,
-        to: &mut impl WriteMutations,
+        mut to: Option<&mut impl WriteMutations>,
         new: &[VNode],
         after: &VNode,
         parent: Option<ElementRef>,
     ) {
-        let m = self.create_children(to, new, parent);
+        let m = self.create_children(to.as_deref_mut(), new, parent);
         self.insert_after(to, m, after);
     }
 
-    fn insert_after(&mut self, to: &mut impl WriteMutations, new: usize, after: &VNode) {
-        if new > 0 {
-            let id = after.find_last_element(self);
-            to.insert_nodes_after(id, new);
+    fn insert_after(&mut self, to: Option<&mut impl WriteMutations>, new: usize, after: &VNode) {
+        if let Some(to) = to {
+            if new > 0 {
+                let id = after.find_last_element(self);
+                to.insert_nodes_after(id, new);
+            }
         }
     }
 }
@@ -494,3 +499,18 @@ impl VNode {
             .sum()
     }
 }
+
+// struct ListDiffResult {
+//     /// An offset in the first diff list that marks the end of nodes that should be removed
+//     first_list_remove_offset: usize,
+//     /// The indices in the first list that should be diffed in the format:
+//     /// | remove these | diff these |
+//     first_list_indices: Vec<usize>,
+//     /// An offset in the second diff list that marks the end of nodes that should be added after the end of the list
+//     second_list_insert_after_offset: usize,
+//     /// An offset in the second diff list that marks the end of nodes that should be added before the end of the list
+//     second_list_insert_before_offset: usize,
+//     /// The indices in the second list that should be diffed in the format:
+//     /// | add these before | add these after | diff these |
+//     second_list_indices: Vec<usize>,
+// }

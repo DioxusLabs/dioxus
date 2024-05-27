@@ -28,7 +28,7 @@ pub struct RenderReturn {
 
 impl RenderReturn {
     /// Check if the render was successful and the children should be diffed
-    pub(crate) fn should_render(&self) -> bool {
+    pub(crate) fn should_diff(&self) -> bool {
         matches!(
             self.node,
             Ok(_) | Err(crate::render_error::RenderError::Suspended(_))

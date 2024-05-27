@@ -41,6 +41,12 @@ impl ScopeId {
     /// let my_persistent_state = Signal::new_in_scope(ScopeId::ROOT, String::new());
     /// ```
     pub const ROOT: ScopeId = ScopeId(0);
+
+    pub(crate) const PLACEHOLDER: ScopeId = ScopeId(usize::MAX);
+
+    pub(crate) fn is_placeholder(&self) -> bool {
+        self.0 == usize::MAX
+    }
 }
 
 /// A component's rendered state.
@@ -49,7 +55,11 @@ impl ScopeId {
 pub struct ScopeState {
     pub(crate) runtime: Rc<Runtime>,
     pub(crate) context_id: ScopeId,
+    /// The last node that has been rendered for this component. This node may not ben mounted
+    /// During suspense, this component can be rendered in the background multiple times
     pub(crate) last_rendered_node: Option<VNode>,
+    /// The last node that has been mounted to the DOM for this component
+    pub(crate) last_mounted_node: Option<VNode>,
     pub(crate) props: BoxedAnyProps,
 }
 

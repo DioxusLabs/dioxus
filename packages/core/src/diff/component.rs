@@ -11,7 +11,7 @@ use crate::{
 impl VirtualDom {
     pub(crate) fn diff_scope(
         &mut self,
-        to: &mut impl WriteMutations,
+        to: Option<&mut impl WriteMutations>,
         scope: ScopeId,
         new_nodes: VNode,
     ) {
@@ -19,7 +19,7 @@ impl VirtualDom {
         let scope_state = &mut self.scopes[scope.0];
         // Load the old and new rendered nodes
         let new = &new_nodes;
-        let old = scope_state.last_rendered_node.take().unwrap();
+        let old = scope_state.last_mounted_node.take().unwrap();
 
         // If there are suspended scopes, we need to check if the scope is suspended before we diff it
         // If it is suspended, we need to diff it but write the mutations nothing
@@ -38,17 +38,17 @@ impl VirtualDom {
         }
 
         let scope_state = &mut self.scopes[scope.0];
-        scope_state.last_rendered_node = Some(new_nodes);
+        scope_state.last_mounted_node = Some(new_nodes.clone_mounted());
 
         self.runtime.scope_stack.borrow_mut().pop();
     }
 
-    /// Create a new template [`VNode`] and write it to the [`WriteMutations`] buffer.
+    /// Create a new [`ScopeState`] for a component that has been created with [`VirtualDom::create_scope`]
     ///
-    /// This method pushes the ScopeID to the internal scopestack and returns the number of nodes created.
-    pub(crate) fn create_scope(
+    /// Returns the number of nodes created on the stack
+    pub(crate) fn create_scope<M: WriteMutations>(
         &mut self,
-        to: &mut impl WriteMutations,
+        to: Option<&mut M>,
         scope: ScopeId,
         new_node: VNode,
         parent: Option<ElementRef>,
@@ -66,18 +66,16 @@ impl VirtualDom {
                 .is_some()
             {
                 tracing::info!("Creating suspended scope {scope:?}");
-                new_node.create(self, parent);
-                // new_node.mount(self, &mut NoOpMutations)
-                todo!()
+                // Suspended nodes don't get mounted, so we don't pass down the mutations
+                new_node.create(self, parent, Option::<&mut M>::None)
             } else {
                 tracing::info!("Creating non-suspended scope {scope:?}");
-                new_node.create(self, parent);
-                new_node.mount(self, to)
+                new_node.create(self, parent, to)
             }
         };
 
         // Then set the new node as the last rendered node
-        self.scopes[scope.0].last_rendered_node = Some(new_node);
+        self.scopes[scope.0].last_mounted_node = Some(new_node);
 
         self.runtime.scope_stack.borrow_mut().pop();
         nodes
@@ -94,7 +92,7 @@ impl VNode {
         scope_id: ScopeId,
         parent: Option<ElementRef>,
         dom: &mut VirtualDom,
-        to: &mut impl WriteMutations,
+        to: Option<&mut impl WriteMutations>,
     ) {
         // Replace components that have different render fns
         if old.render_fn != new.render_fn {
@@ -117,7 +115,7 @@ impl VNode {
         // Now run the component and diff it
         let new = dom.run_scope(scope_id);
         // If the render was successful, diff the new node
-        if new.should_render() {
+        if new.should_diff() {
             dom.diff_scope(to, scope_id, new.into());
         }
 
@@ -132,16 +130,19 @@ impl VNode {
         new: &VComponent,
         parent: Option<ElementRef>,
         dom: &mut VirtualDom,
-        to: &mut impl WriteMutations,
+        mut to: Option<&mut impl WriteMutations>,
     ) {
         let scope = ScopeId(dom.mounts[mount.0].mounted_dynamic_nodes[idx]);
 
-        let m = self.create_component_node(mount, idx, new, parent, dom, to);
+        let m = self.create_component_node(mount, idx, new, parent, dom, to.as_deref_mut());
 
         // Instead of *just* removing it, we can use the replace mutation
-        dom.remove_component_node(to, scope, Some(m), true);
+        dom.remove_component_node(to, scope, Some(m));
     }
 
+    /// Create a new component (if it doesn't already exist) node and then mount the [`ScopeState`] for a component
+    ///
+    /// Returns the number of nodes created on the stack
     pub(super) fn create_component_node(
         &self,
         mount: MountId,
@@ -149,19 +150,35 @@ impl VNode {
         component: &VComponent,
         parent: Option<ElementRef>,
         dom: &mut VirtualDom,
-        to: &mut impl WriteMutations,
+        to: Option<&mut impl WriteMutations>,
     ) -> usize {
-        // Load up a ScopeId for this vcomponent. If it's already mounted, then we can just use that
-        let scope = dom
-            .new_scope(component.props.duplicate(), component.name)
-            .state()
-            .id;
+        let mut scope_id = ScopeId(dom.mounts[mount.0].mounted_dynamic_nodes[idx]);
 
-        // Store the scope id for the next render
-        dom.mounts[mount.0].mounted_dynamic_nodes[idx] = scope.0;
+        // If the scopeid is a placeholder, we need to load up a new scope for this vcomponent. If it's already mounted, then we can just use that
+        if scope_id.is_placeholder() {
+            scope_id = dom
+                .new_scope(component.props.duplicate(), component.name)
+                .state()
+                .id;
 
-        let new = dom.run_scope(scope);
+            // Store the scope id for the next render
+            dom.mounts[mount.0].mounted_dynamic_nodes[idx] = scope_id.0;
 
-        dom.create_scope(to, scope, new.into(), parent)
+            // If this is a new scope, we also need to run it once to get the initial state
+            let new = dom.run_scope(scope_id);
+
+            // Then set the new node as the last rendered node
+            dom.scopes[scope_id.0].last_rendered_node = Some(new.clone_mounted());
+        }
+
+        let scope = ScopeId(dom.mounts[mount.0].mounted_dynamic_nodes[idx]);
+
+        let new_node = dom.scopes[scope.0]
+            .last_rendered_node
+            .as_ref()
+            .expect("Component to be mounted")
+            .clone_mounted();
+
+        dom.create_scope(to, scope, new_node, parent)
     }
 }

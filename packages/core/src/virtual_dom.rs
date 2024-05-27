@@ -638,8 +638,10 @@ impl VirtualDom {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
         let new_nodes = self.run_scope(ScopeId::ROOT);
 
+        self.scopes[ScopeId::ROOT.0].last_rendered_node = Some(new_nodes.clone_mounted());
+
         // Rebuilding implies we append the created elements to the root
-        let m = self.create_scope(to, ScopeId::ROOT, new_nodes.into(), None);
+        let m = self.create_scope(Some(to), ScopeId::ROOT, new_nodes.into(), None);
 
         to.append_children(ElementId(0), m);
     }
@@ -672,8 +674,8 @@ impl VirtualDom {
                 if work.rerun_scope {
                     let new_nodes = self.run_scope(work.scope.id);
                     // if the render was successful, diff the new node
-                    if new_nodes.should_render() {
-                        self.diff_scope(to, work.scope.id, new_nodes.into());
+                    if new_nodes.should_diff() {
+                        self.diff_scope(Some(to), work.scope.id, new_nodes.into());
                     }
                 }
             }
@@ -775,8 +777,8 @@ impl VirtualDom {
                 let new_nodes = self.run_scope(work.scope.id);
 
                 // if the render was successful, diff the new node
-                if new_nodes.should_render() {
-                    self.diff_scope(&mut NoOpMutations, work.scope.id, new_nodes.into());
+                if new_nodes.should_diff() {
+                    self.diff_scope(None::<&mut NoOpMutations>, work.scope.id, new_nodes.into());
                     todo!()
                 }
             }

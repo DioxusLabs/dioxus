@@ -1,3 +1,12 @@
+//! This module contains all the code for creating and diffing nodes.
+//!
+//! For suspense there are three different cases we need to handle:
+//! - Creating nodes/scopes without mounting them
+//! - Diffing nodes that are not mounted
+//! - Mounted nodes that have already been created
+//!
+//! To support those cases, we separate node creation into initialization and mounting. We also keep track of if we should be adding mutations or not.
+
 #![allow(clippy::too_many_arguments)]
 
 use crate::{
@@ -16,35 +25,34 @@ mod node;
 impl VirtualDom {
     pub(crate) fn create_children<'a>(
         &mut self,
-        to: &mut impl WriteMutations,
+        mut to: Option<&mut impl WriteMutations>,
         nodes: impl IntoIterator<Item = &'a VNode>,
         parent: Option<ElementRef>,
     ) -> usize {
         nodes
             .into_iter()
-            .map(|child| {
-                child.create(self, parent);
-                child.mount(self, to)
-            })
+            .map(|child| child.create(self, parent, to.as_deref_mut()))
             .sum()
     }
 
     /// Simply replace a placeholder with a list of nodes
     fn replace_placeholder<'a>(
         &mut self,
-        to: &mut impl WriteMutations,
+        mut to: Option<&mut impl WriteMutations>,
         placeholder_id: ElementId,
         r: impl IntoIterator<Item = &'a VNode>,
         parent: Option<ElementRef>,
     ) {
-        let m = self.create_children(to, r, parent);
-        to.replace_node_with(placeholder_id, m);
+        let m = self.create_children(to.as_deref_mut(), r, parent);
+        if let Some(to) = to {
+            to.replace_node_with(placeholder_id, m);
+        }
         self.reclaim(placeholder_id);
     }
 
     fn nodes_to_placeholder(
         &mut self,
-        to: &mut impl WriteMutations,
+        mut to: Option<&mut impl WriteMutations>,
         mount: MountId,
         dyn_node_idx: usize,
         old_nodes: &[VNode],
@@ -55,13 +63,15 @@ impl VirtualDom {
         // Set the id of the placeholder
         self.mounts[mount.0].mounted_dynamic_nodes[dyn_node_idx] = placeholder.0;
 
-        to.create_placeholder(placeholder);
+        if let Some(to) = to.as_deref_mut() {
+            to.create_placeholder(placeholder);
+        }
 
         self.replace_nodes(to, old_nodes, 1);
     }
 
     /// Replace many nodes with a number of nodes on the stack
-    fn replace_nodes(&mut self, to: &mut impl WriteMutations, nodes: &[VNode], m: usize) {
+    fn replace_nodes(&mut self, to: Option<&mut impl WriteMutations>, nodes: &[VNode], m: usize) {
         debug_assert!(
             !nodes.is_empty(),
             "replace_nodes must have at least one node"
@@ -76,26 +86,25 @@ impl VirtualDom {
     /// Wont generate mutations for the inner nodes
     fn remove_nodes(
         &mut self,
-        to: &mut impl WriteMutations,
+        mut to: Option<&mut impl WriteMutations>,
         nodes: &[VNode],
         replace_with: Option<usize>,
     ) {
         for (i, node) in nodes.iter().rev().enumerate() {
             let last_node = i == nodes.len() - 1;
-            node.remove_node(self, to, replace_with.filter(|_| last_node), true);
+            node.remove_node(self, to.as_deref_mut(), replace_with.filter(|_| last_node));
         }
     }
 
     pub(crate) fn remove_component_node(
         &mut self,
-        to: &mut impl WriteMutations,
+        to: Option<&mut impl WriteMutations>,
         scope: ScopeId,
         replace_with: Option<usize>,
-        gen_muts: bool,
     ) {
         // Remove the component from the dom
-        if let Some(node) = self.scopes[scope.0].last_rendered_node.take() {
-            node.remove_node(self, to, replace_with, gen_muts)
+        if let Some(node) = self.scopes[scope.0].last_mounted_node.take() {
+            node.remove_node(self, to, replace_with)
         };
 
         // Now drop all the resources
