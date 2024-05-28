@@ -202,7 +202,7 @@ fn create_random_dynamic_node(depth: usize) -> DynamicNode {
 
 fn create_random_dynamic_attr() -> Attribute {
     let value = match rand::random::<u8>() % 7 {
-        0 => AttributeValue::Text(format!("{}", rand::random::<usize>())),
+        0 => format!("{}", rand::random::<usize>()).into_value(),
         1 => AttributeValue::Float(rand::random()),
         2 => AttributeValue::Int(rand::random()),
         3 => AttributeValue::Bool(rand::random()),

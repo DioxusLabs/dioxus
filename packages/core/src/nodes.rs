@@ -7,6 +7,7 @@ use crate::{
 };
 use crate::{Properties, VirtualDom};
 use core::panic;
+use std::borrow::Cow;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::vec;
@@ -709,7 +710,7 @@ impl Attribute {
 /// variant.
 pub enum AttributeValue {
     /// Text attribute
-    Text(String),
+    Text(Cow<'static, str>),
 
     /// A float
     Float(f64),
@@ -950,15 +951,21 @@ impl IntoAttributeValue for AttributeValue {
     }
 }
 
-impl IntoAttributeValue for &str {
+impl IntoAttributeValue for Cow<'static, str> {
     fn into_value(self) -> AttributeValue {
-        AttributeValue::Text(self.to_string())
+        AttributeValue::Text(self)
+    }
+}
+
+impl IntoAttributeValue for &'static str {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Text(self.into())
     }
 }
 
 impl IntoAttributeValue for String {
     fn into_value(self) -> AttributeValue {
-        AttributeValue::Text(self)
+        AttributeValue::Text(self.into())
     }
 }
 
@@ -982,7 +989,7 @@ impl IntoAttributeValue for bool {
 
 impl IntoAttributeValue for Arguments<'_> {
     fn into_value(self) -> AttributeValue {
-        AttributeValue::Text(self.to_string())
+        AttributeValue::Text(self.to_string().into())
     }
 }
 
