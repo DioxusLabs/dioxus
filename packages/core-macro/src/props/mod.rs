@@ -539,6 +539,7 @@ mod struct_info {
         pub builder_attr: TypeBuilderAttr,
         pub builder_name: syn::Ident,
         pub conversion_helper_trait_name: syn::Ident,
+        #[allow(unused)]
         pub core: syn::Ident,
     }
 

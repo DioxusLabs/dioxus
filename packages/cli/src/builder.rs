@@ -237,9 +237,7 @@ pub fn build_web(
     }
 
     // If pre-compressing is enabled, we can pre_compress the wasm-bindgen output
-    if config.should_pre_compress_web_assets() {
-        pre_compress_folder(&bindgen_outdir)?;
-    }
+    pre_compress_folder(&bindgen_outdir, config.should_pre_compress_web_assets())?;
 
     // [5][OPTIONAL] If tailwind is enabled and installed we run it to generate the CSS
     if dioxus_tools.contains_key("tailwindcss") {

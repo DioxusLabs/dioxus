@@ -1,6 +1,7 @@
 use crate::innerlude::{
     throw_error, try_consume_context, RenderError, RenderReturn, ScopeOrder, SuspenseContext,
 };
+use crate::Element;
 use crate::{
     any_props::{AnyProps, BoxedAnyProps},
     innerlude::ScopeState,
@@ -27,55 +28,63 @@ impl VirtualDom {
             context_id: id,
             props,
             last_rendered_node: Default::default(),
-            last_mounted_node: Default::default(),
         });
 
         self.runtime
             .create_scope(Scope::new(name, id, parent_id, height));
+        tracing::trace!("created scope {id:?} with parent {parent_id:?}");
 
         scope
     }
 
     /// Run a scope and return the rendered nodes. This will not modify the DOM or update the last rendered node of the scope.
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> RenderReturn {
-        tracing::info!("Running scope {scope_id:?}");
-
         debug_assert!(
             crate::Runtime::current().is_some(),
             "Must be in a dioxus runtime"
         );
-
         self.runtime.scope_stack.borrow_mut().push(scope_id);
-        let scope = &self.scopes[scope_id.0];
-        let new_nodes = {
-            let context = scope.state();
 
-            context.hook_index.set(0);
+        let scope = &self.scopes[scope_id.0];
+        let output = {
+            let scope_state = scope.state();
+
+            scope_state.hook_index.set(0);
 
             // Run all pre-render hooks
-            for pre_run in context.before_render.borrow_mut().iter_mut() {
+            for pre_run in scope_state.before_render.borrow_mut().iter_mut() {
                 pre_run();
             }
 
-            // safety: due to how we traverse the tree, we know that the scope is not currently aliased
             let props: &dyn AnyProps = &*scope.props;
 
             let span = tracing::trace_span!("render", scope = %scope.state().name);
-            span.in_scope(|| props.render())
+            span.in_scope(|| {
+                let render_return = props.render();
+                self.handle_element_return(&render_return.node, scope_id, &scope.state());
+                render_return
+            })
         };
 
-        let context = scope.state();
+        let scope_state = scope.state();
 
         // Run all post-render hooks
-        for post_run in context.after_render.borrow_mut().iter_mut() {
+        for post_run in scope_state.after_render.borrow_mut().iter_mut() {
             post_run();
         }
 
         // remove this scope from dirty scopes
         self.dirty_scopes
-            .remove(&ScopeOrder::new(context.height, scope_id));
+            .remove(&ScopeOrder::new(scope_state.height, scope_id));
 
-        match &new_nodes.node {
+        self.runtime.scope_stack.borrow_mut().pop();
+
+        output
+    }
+
+    /// Insert any errors, or suspended tasks from an element return into the runtime
+    fn handle_element_return(&self, node: &Element, scope_id: ScopeId, scope_state: &Scope) {
+        match &node {
             Err(RenderError::Aborted(e)) => {
                 throw_error(e.clone());
             }
@@ -103,12 +112,10 @@ impl VirtualDom {
             }
             Ok(_) => {
                 // If the render was successful, we can move the render generation forward by one
-                context.render_count.set(context.render_count.get() + 1);
+                scope_state
+                    .render_count
+                    .set(scope_state.render_count.get() + 1);
             }
         }
-
-        self.runtime.scope_stack.borrow_mut().pop();
-
-        new_nodes
     }
 }

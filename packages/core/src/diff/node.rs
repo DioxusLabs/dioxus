@@ -19,7 +19,7 @@ impl VNode {
         mut to: Option<&mut impl WriteMutations>,
     ) {
         // The node we are diffing from should always be mounted
-        debug_assert!(dom.mounts.get(self.mount.get().0).is_some());
+        debug_assert!(dom.mounts.get(self.mount.get().0).is_some() || to.is_none());
 
         // If hot reloading is enabled, we need to make sure we're using the latest template
         #[cfg(debug_assertions)]
@@ -76,10 +76,16 @@ impl VNode {
         let mount_id = self.mount.get();
         new.mount.set(mount_id);
 
-        let mount = &mut dom.mounts[mount_id.0];
+        tracing::trace!(?self, ?new, "moving mount");
+        tracing::trace!("mount id: {mount_id:?}");
+        tracing::trace!("mounts: {:?}", dom.mounts);
 
-        // Update the reference to the node for bubbling events
-        mount.node = new.clone_mounted();
+        if mount_id.mounted() {
+            let mount = &mut dom.mounts[mount_id.0];
+
+            // Update the reference to the node for bubbling events
+            mount.node = new.clone_mounted();
+        }
     }
 
     fn diff_dynamic_node(
@@ -190,12 +196,36 @@ impl VNode {
         right: impl IntoIterator<Item = &'a VNode>,
         parent: Option<ElementRef>,
         dom: &mut VirtualDom,
+        to: Option<&mut impl WriteMutations>,
+    ) {
+        self.replace_inner(right, parent, dom, to, true)
+    }
+
+    /// Replace this node with new children, but *don't destroy* the old node's component state
+    ///
+    /// This is useful for moving a node from the rendered nodes into a suspended node
+    pub(crate) fn move_node_to_background<'a>(
+        &self,
+        right: impl IntoIterator<Item = &'a VNode>,
+        parent: Option<ElementRef>,
+        dom: &mut VirtualDom,
+        to: Option<&mut impl WriteMutations>,
+    ) {
+        self.replace_inner(right, parent, dom, to, false)
+    }
+
+    pub(crate) fn replace_inner<'a>(
+        &self,
+        right: impl IntoIterator<Item = &'a VNode>,
+        parent: Option<ElementRef>,
+        dom: &mut VirtualDom,
         mut to: Option<&mut impl WriteMutations>,
+        destroy_component_state: bool,
     ) {
         let m = dom.create_children(to.as_deref_mut(), right, parent);
 
         // Instead of *just* removing it, we can use the replace mutation
-        self.remove_node(dom, to, Some(m))
+        self.remove_node_inner(dom, to, destroy_component_state, Some(m))
     }
 
     pub(crate) fn remove_node<M: WriteMutations>(
@@ -204,7 +234,25 @@ impl VNode {
         to: Option<&mut M>,
         replace_with: Option<usize>,
     ) {
+        self.remove_node_inner(dom, to, true, replace_with)
+    }
+
+    pub(crate) fn remove_node_inner<M: WriteMutations>(
+        &self,
+        dom: &mut VirtualDom,
+        to: Option<&mut M>,
+        destroy_component_state: bool,
+        replace_with: Option<usize>,
+    ) {
+        tracing::trace!(
+            ?self,
+            "removing node with component state {destroy_component_state}"
+        );
+
         let mount = self.mount.get();
+
+        tracing::trace!("mount id: {mount:?}");
+        tracing::trace!("mount: {:?}", dom.mounts[mount.0]);
 
         // Clean up any attributes that have claimed a static node as dynamic for mount/unmounts
         // Will not generate mutations!
@@ -213,16 +261,16 @@ impl VNode {
         // Remove the nested dynamic nodes
         // We don't generate mutations for these, as they will be removed by the parent (in the next line)
         // But we still need to make sure to reclaim them from the arena and drop their hooks, etc
-        self.remove_nested_dyn_nodes::<M>(mount, dom);
+        self.remove_nested_dyn_nodes::<M>(mount, dom, destroy_component_state);
 
         // Clean up the roots, assuming we need to generate mutations for these
         // This is done last in order to preserve Node ID reclaim order (reclaim in reverse order of claim)
-        self.reclaim_roots(mount, dom, to, replace_with);
+        self.reclaim_roots(mount, dom, to, destroy_component_state, replace_with);
 
-        // Remove the mount information
-        dom.mounts.remove(mount.0);
-
-        tracing::trace!(?self, "removed node");
+        if destroy_component_state {
+            // Remove the mount information
+            dom.mounts.remove(mount.0);
+        }
     }
 
     fn reclaim_roots(
@@ -230,6 +278,7 @@ impl VNode {
         mount: MountId,
         dom: &mut VirtualDom,
         mut to: Option<&mut impl WriteMutations>,
+        destroy_component_state: bool,
         replace_with: Option<usize>,
     ) {
         let roots = self.template.get().roots;
@@ -241,32 +290,44 @@ impl VNode {
                     mount,
                     dom,
                     to.as_deref_mut(),
+                    destroy_component_state,
                     id,
                     dynamic_node,
                     replace_with.filter(|_| last_node),
                 );
-            } else {
+            } else if let Some(to) = to.as_deref_mut() {
                 let mount = &dom.mounts[mount.0];
                 let id = mount.root_ids[idx];
-                if let Some(to) = to.as_deref_mut() {
-                    if let (true, Some(replace_with)) = (last_node, replace_with) {
-                        to.replace_node_with(id, replace_with);
-                    } else {
-                        to.remove_node(id);
-                    }
-                    dom.reclaim(id);
+                if let (true, Some(replace_with)) = (last_node, replace_with) {
+                    to.replace_node_with(id, replace_with);
+                } else {
+                    to.remove_node(id);
                 }
+                dom.reclaim(id);
             }
         }
     }
 
-    fn remove_nested_dyn_nodes<M: WriteMutations>(&self, mount: MountId, dom: &mut VirtualDom) {
+    fn remove_nested_dyn_nodes<M: WriteMutations>(
+        &self,
+        mount: MountId,
+        dom: &mut VirtualDom,
+        destroy_component_state: bool,
+    ) {
         let template = self.template.get();
         for (idx, dyn_node) in self.dynamic_nodes.iter().enumerate() {
             let path_len = template.node_paths.get(idx).map(|path| path.len());
             // Roots are cleaned up automatically above and nodes with a empty path are placeholders
             if let Some(2..) = path_len {
-                self.remove_dynamic_node(mount, dom, Option::<&mut M>::None, idx, dyn_node, None)
+                self.remove_dynamic_node(
+                    mount,
+                    dom,
+                    Option::<&mut M>::None,
+                    destroy_component_state,
+                    idx,
+                    dyn_node,
+                    None,
+                )
             }
         }
     }
@@ -276,6 +337,7 @@ impl VNode {
         mount: MountId,
         dom: &mut VirtualDom,
         mut to: Option<&mut impl WriteMutations>,
+        destroy_component_state: bool,
         idx: usize,
         node: &DynamicNode,
         replace_with: Option<usize>,
@@ -283,7 +345,7 @@ impl VNode {
         match node {
             Component(_comp) => {
                 let scope_id = ScopeId(dom.mounts[mount.0].mounted_dynamic_nodes[idx]);
-                dom.remove_component_node(to, scope_id, replace_with);
+                dom.remove_component_node(to, destroy_component_state, scope_id, replace_with);
             }
             Text(_) | Placeholder(_) => {
                 let id = ElementId(dom.mounts[mount.0].mounted_dynamic_nodes[idx]);
@@ -298,10 +360,10 @@ impl VNode {
             }
             Fragment(nodes) => {
                 for node in &nodes[..nodes.len() - 1] {
-                    node.remove_node(dom, to.as_deref_mut(), None)
+                    node.remove_node_inner(dom, to.as_deref_mut(), destroy_component_state, None)
                 }
                 if let Some(last_node) = nodes.last() {
-                    last_node.remove_node(dom, to, replace_with)
+                    last_node.remove_node_inner(dom, to, destroy_component_state, replace_with)
                 }
             }
         };

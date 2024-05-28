@@ -13,7 +13,6 @@ use crate::{
     arena::ElementId,
     innerlude::{ElementRef, MountId, WriteMutations},
     nodes::VNode,
-    scopes::ScopeId,
     virtual_dom::VirtualDom,
     Template, TemplateNode,
 };
@@ -94,21 +93,6 @@ impl VirtualDom {
             let last_node = i == nodes.len() - 1;
             node.remove_node(self, to.as_deref_mut(), replace_with.filter(|_| last_node));
         }
-    }
-
-    pub(crate) fn remove_component_node(
-        &mut self,
-        to: Option<&mut impl WriteMutations>,
-        scope: ScopeId,
-        replace_with: Option<usize>,
-    ) {
-        // Remove the component from the dom
-        if let Some(node) = self.scopes[scope.0].last_mounted_node.take() {
-            node.remove_node(self, to, replace_with)
-        };
-
-        // Now drop all the resources
-        self.drop_scope(scope);
     }
 
     /// Insert a new template into the VirtualDom's template registry

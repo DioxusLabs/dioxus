@@ -1,4 +1,4 @@
-use crate::innerlude::{HiddenSSRProps, RenderError, VProps};
+use crate::innerlude::{RenderError, VProps};
 use crate::{any_props::BoxedAnyProps, innerlude::ScopeState};
 use crate::{arena::ElementId, Element, Event};
 use crate::{
@@ -27,11 +27,10 @@ pub struct RenderReturn {
 }
 
 impl RenderReturn {
-    /// Check if the render was successful and the children should be diffed
-    pub(crate) fn should_diff(&self) -> bool {
+    pub(crate) fn suspended(&self) -> bool {
         matches!(
             self.node,
-            Ok(_) | Err(crate::render_error::RenderError::Suspended(_))
+            Err(crate::render_error::RenderError::Suspended(_))
         )
     }
 }
@@ -604,14 +603,6 @@ impl VComponent {
         let scope_id = dom.mounts.get(mount)?.mounted_dynamic_nodes[dynamic_node_index];
 
         dom.scopes.get(scope_id)
-    }
-
-    /// Check if this component should be rendered during server-side rendering
-    pub fn render_in_ssr(&self) -> bool {
-        match self.props.props().downcast_ref::<HiddenSSRProps>() {
-            Some(props) => props.render_in_ssr,
-            None => true,
-        }
     }
 }
 

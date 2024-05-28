@@ -76,10 +76,10 @@ pub mod prelude {
         try_consume_context, use_after_render, use_before_render, use_drop, use_error_boundary,
         use_hook, use_hook_with_cleanup, wait_for_next_render, with_owner, AnyValue, Attribute,
         Callback, CapturedError, Component, ComponentFunction, Context, Element, ErrorBoundary,
-        Event, EventHandler, Fragment, FrozenContext, HasAttributes, HiddenSSR, IntoAttributeValue,
+        Event, EventHandler, Fragment, FrozenContext, HasAttributes, IntoAttributeValue,
         IntoDynNode, OptionStringFromMarker, Properties, RenderError, Runtime, RuntimeGuard,
-        ScopeId, ScopeState, SuperFrom, SuperInto, SuspendedFuture, SuspenseContext,
-        SuspenseExtension, Task, Template, TemplateAttribute, TemplateNode, VNode, VNodeInner,
-        VirtualDom,
+        ScopeId, ScopeState, SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary,
+        SuspenseContext, SuspenseExtension, Task, Template, TemplateAttribute, TemplateNode, VNode,
+        VNodeInner, VirtualDom,
     };
 }

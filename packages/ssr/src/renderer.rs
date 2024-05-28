@@ -112,7 +112,7 @@ impl Renderer {
                     DynamicNode::Component(node) => {
                         if self.skip_components {
                             write!(buf, "<{}><{}/>", node.name, node.name)?;
-                        } else if node.render_in_ssr() {
+                        } else {
                             let scope = node.mounted_scope(*idx, template, dom).unwrap();
                             let node = scope.root_node();
                             self.render_template(buf, dom, node)?

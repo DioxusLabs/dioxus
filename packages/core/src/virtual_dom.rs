@@ -638,10 +638,10 @@ impl VirtualDom {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
         let new_nodes = self.run_scope(ScopeId::ROOT);
 
-        self.scopes[ScopeId::ROOT.0].last_rendered_node = Some(new_nodes.clone_mounted());
+        self.scopes[ScopeId::ROOT.0].last_rendered_node = Some(new_nodes.clone());
 
         // Rebuilding implies we append the created elements to the root
-        let m = self.create_scope(Some(to), ScopeId::ROOT, new_nodes.into(), None);
+        let m = self.create_scope(Some(to), ScopeId::ROOT, new_nodes, None);
 
         to.append_children(ElementId(0), m);
     }
@@ -672,11 +672,7 @@ impl VirtualDom {
 
                 // If the scope is dirty, run the scope and get the mutations
                 if work.rerun_scope {
-                    let new_nodes = self.run_scope(work.scope.id);
-                    // if the render was successful, diff the new node
-                    if new_nodes.should_diff() {
-                        self.diff_scope(Some(to), work.scope.id, new_nodes.into());
-                    }
+                    self.run_and_diff_scope(Some(to), work.scope.id);
                 }
             }
         }
@@ -774,12 +770,7 @@ impl VirtualDom {
 
             // If the scope is dirty, run the scope and get the mutations
             if work.rerun_scope {
-                let new_nodes = self.run_scope(work.scope.id);
-
-                // if the render was successful, diff the new node
-                if new_nodes.should_diff() {
-                    self.diff_scope(None::<&mut NoOpMutations>, work.scope.id, new_nodes.into());
-                }
+                self.run_and_diff_scope(None::<&mut NoOpMutations>, work.scope.id);
             }
         }
     }

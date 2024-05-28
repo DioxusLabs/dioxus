@@ -19,13 +19,15 @@ pub(crate) struct MountId(pub(crate) usize);
 
 impl Default for MountId {
     fn default() -> Self {
-        Self(usize::MAX)
+        Self::PLACEHOLDER
     }
 }
 
 impl MountId {
+    pub(crate) const PLACEHOLDER: Self = Self(usize::MAX);
+
     pub(crate) fn as_usize(self) -> Option<usize> {
-        if self.0 == usize::MAX {
+        if self == Self::PLACEHOLDER {
             None
         } else {
             Some(self.0)
@@ -34,7 +36,7 @@ impl MountId {
 
     #[allow(unused)]
     pub(crate) fn mounted(self) -> bool {
-        self.0 != usize::MAX
+        self != Self::PLACEHOLDER
     }
 }
 
@@ -58,13 +60,15 @@ impl VirtualDom {
     }
 
     pub(crate) fn reclaim(&mut self, el: ElementId) {
-        self.try_reclaim(el)
-            .unwrap_or_else(|| panic!("cannot reclaim {:?}", el));
+        self.try_reclaim(el).unwrap_or_else(|| {
+            tracing::error!("cannot reclaim {:?}", el);
+            panic!("cannot reclaim {:?}", el)
+        });
     }
 
     pub(crate) fn try_reclaim(&mut self, el: ElementId) -> Option<()> {
         if el.0 == 0 {
-            panic!("Cannot reclaim the root element",);
+            panic!("Cannot reclaim the root element");
         }
 
         self.elements.try_remove(el.0).map(|_| ())

@@ -11,6 +11,8 @@ pub(crate) trait AnyProps: 'static {
     fn memoize(&mut self, other: &dyn Any) -> bool;
     /// Get the props as a type erased `dyn Any`.
     fn props(&self) -> &dyn Any;
+    /// Get the props as a type erased `dyn Any`.
+    fn props_mut(&mut self) -> &mut dyn Any;
     /// Duplicate this component into a new boxed component.
     fn duplicate(&self) -> BoxedAnyProps;
 }
@@ -66,6 +68,10 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> AnyProp
 
     fn props(&self) -> &dyn Any {
         &self.props
+    }
+
+    fn props_mut(&mut self) -> &mut dyn Any {
+        &mut self.props
     }
 
     fn render(&self) -> RenderReturn {
