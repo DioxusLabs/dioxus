@@ -2368,7 +2368,6 @@ dependencies = [
  "once_cell",
  "pin-project",
  "serde",
- "serde_json",
  "server_fn",
  "thiserror",
  "tokio",

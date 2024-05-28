@@ -43,7 +43,6 @@ anymap = { version = "0.12.1", optional = true }
 async-trait = { version = "0.1.58", optional = true }
 
 serde = "1.0.159"
-serde_json = { version = "1.0.95", optional = true }
 tokio-stream = { version = "0.1.12", features = ["sync"], optional = true }
 futures-util = { workspace = true }
 futures-channel = { workspace = true }
@@ -71,7 +70,7 @@ dioxus = { workspace = true, features = ["fullstack"] }
 
 [features]
 default = ["hot-reload"]
-hot-reload = ["serde_json", "dioxus-web?/hot_reload", "dioxus-hot-reload/serve"]
+hot-reload = ["dioxus-web?/hot_reload", "dioxus-hot-reload/serve"]
 mounted = ["dioxus-web?/mounted"]
 file_engine = ["dioxus-web?/file_engine"]
 eval = ["dioxus-web?/eval"]

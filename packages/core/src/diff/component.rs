@@ -22,11 +22,6 @@ impl VirtualDom {
         scope_id: ScopeId,
     ) {
         let scope = &mut self.scopes[scope_id.0];
-        println!(
-            "running {:?} vs {:?}",
-            scope.props.props().type_id(),
-            TypeId::of::<SuspenseBoundaryPropsWithOwner>()
-        );
         if SuspenseBoundaryProps::downcast_from_props(&mut *scope.props).is_some() {
             SuspenseBoundaryProps::diff(scope_id, self, to)
         } else {
