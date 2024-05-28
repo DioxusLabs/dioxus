@@ -35,7 +35,7 @@ pub mod prelude {
     #[allow(deprecated)]
     pub use dioxus_core_macro::{component, format_args_f, inline_props, render, rsx, Props};
 
-    #[cfg(feature = "launch")]
+    #[cfg(feature = "macro")]
     pub use dioxus_config_macro::*;
 
     #[cfg(feature = "html")]

@@ -38,3 +38,6 @@ default = ["dioxus-html"]
 custom_file_watcher = ["ignore", "chrono", "notify", "execute", "once_cell", "ignore"]
 file_watcher = ["custom_file_watcher", "dioxus-html/hot-reload-context"]
 serve = ["axum", "tokio-stream", "futures-util", "tokio", "file_watcher"]
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

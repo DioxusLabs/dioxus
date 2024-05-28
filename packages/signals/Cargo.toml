@@ -32,3 +32,6 @@ simple_logger = "4.2.0"
 [features]
 default = []
 serialize = ["serde"]
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
