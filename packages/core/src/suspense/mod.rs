@@ -64,10 +64,6 @@ pub struct FrozenContext {
 }
 
 impl FrozenContext {
-    pub(crate) fn frozen(&self) -> bool {
-        !self.inner.suspended_tasks.borrow().is_empty()
-    }
-
     pub(crate) fn suspended_tasks_outside_of_scope(&self, scope: ScopeId) -> bool {
         self.inner
             .suspended_tasks

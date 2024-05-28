@@ -150,8 +150,7 @@ pub(crate) fn pre_compress_file(path: &Path) -> std::io::Result<()> {
     };
     let file = std::fs::File::open(path)?;
     let mut stream = std::io::BufReader::new(file);
-    let output = path.with_extension(compressed_path);
-    let mut buffer = std::fs::File::create(output)?;
+    let mut buffer = std::fs::File::create(compressed_path)?;
     let params = BrotliEncoderParams::default();
     brotli::BrotliCompress(&mut stream, &mut buffer, &params)?;
     Ok(())
@@ -164,7 +163,9 @@ pub(crate) fn pre_compress_folder(path: &Path, pre_compress: bool) -> std::io::R
         let entry_path = entry.path();
         if entry_path.is_file() {
             if pre_compress {
-                pre_compress_file(entry_path)?;
+                if let Err(err) = pre_compress_file(entry_path) {
+                    tracing::error!("Failed to pre-compress file {entry_path:?}: {err}");
+                }
             }
             // If pre-compression isn't enabled, we should remove the old compressed file if it exists
             else if let Some(compressed_path) = compressed_path(entry_path) {
