@@ -46,3 +46,9 @@ impl<E: std::error::Error + 'static> From<E> for RenderError {
         Self::Aborted(CapturedError::from(e))
     }
 }
+
+impl From<CapturedError> for RenderError {
+    fn from(e: CapturedError) -> Self {
+        RenderError::Aborted(e)
+    }
+}

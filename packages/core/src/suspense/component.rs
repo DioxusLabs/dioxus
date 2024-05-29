@@ -247,6 +247,172 @@ use generational_box::Owner;
 #[allow(unused)]
 pub use SuspenseBoundary_completions::Component::SuspenseBoundary;
 
+#[doc = "Properties for the [`FrozenContext`] component."]
+#[derive(Clone, PartialEq)]
+#[allow(non_camel_case_types)]
+struct FrozenContextProps {
+    children: Element,
+}
+impl FrozenContextProps {
+    #[doc = "\nCreate a builder for building `FrozenContextProps`.\nOn the builder, call `.children(...)`(optional) to set the values of the fields.\nFinally, call `.build()` to create the instance of `FrozenContextProps`.\n                    "]
+    #[allow(dead_code, clippy::type_complexity)]
+    fn builder() -> FrozenContextPropsBuilder<((),)> {
+        FrozenContextPropsBuilder {
+            fields: ((),),
+            _phantom: ::core::default::Default::default(),
+        }
+    }
+}
+#[must_use]
+#[doc(hidden)]
+#[allow(dead_code, non_camel_case_types, non_snake_case)]
+struct FrozenContextPropsBuilder<TypedBuilderFields> {
+    fields: TypedBuilderFields,
+    _phantom: (),
+}
+impl Properties for FrozenContextProps
+where
+    Self: Clone,
+{
+    type Builder = FrozenContextPropsBuilder<((),)>;
+    fn builder() -> Self::Builder {
+        FrozenContextProps::builder()
+    }
+    fn memoize(&mut self, new: &Self) -> bool {
+        let equal = self == new;
+        if !equal {
+            let new_clone = new.clone();
+            self.children = new_clone.children;
+        }
+        equal
+    }
+}
+#[doc(hidden)]
+#[allow(dead_code, non_camel_case_types, non_snake_case)]
+pub trait FrozenContextPropsBuilder_Optional<T> {
+    fn into_value<F: FnOnce() -> T>(self, default: F) -> T;
+}
+impl<T> FrozenContextPropsBuilder_Optional<T> for () {
+    fn into_value<F: FnOnce() -> T>(self, default: F) -> T {
+        default()
+    }
+}
+impl<T> FrozenContextPropsBuilder_Optional<T> for (T,) {
+    fn into_value<F: FnOnce() -> T>(self, _: F) -> T {
+        self.0
+    }
+}
+#[allow(dead_code, non_camel_case_types, missing_docs)]
+impl FrozenContextPropsBuilder<((),)> {
+    #[allow(clippy::type_complexity)]
+    pub fn children(self, children: Element) -> FrozenContextPropsBuilder<((Element,),)> {
+        let children = (children,);
+        let (_,) = self.fields;
+        FrozenContextPropsBuilder {
+            fields: (children,),
+            _phantom: self._phantom,
+        }
+    }
+}
+#[doc(hidden)]
+#[allow(dead_code, non_camel_case_types, non_snake_case)]
+pub enum FrozenContextPropsBuilder_Error_Repeated_field_children {}
+
+#[doc(hidden)]
+#[allow(dead_code, non_camel_case_types, missing_docs)]
+impl FrozenContextPropsBuilder<((Element,),)> {
+    #[deprecated(note = "Repeated field children")]
+    #[allow(clippy::type_complexity)]
+    pub fn children(
+        self,
+        _: FrozenContextPropsBuilder_Error_Repeated_field_children,
+    ) -> FrozenContextPropsBuilder<((Element,),)> {
+        self
+    }
+}
+#[allow(dead_code, non_camel_case_types, missing_docs)]
+impl<__children: FrozenContextPropsBuilder_Optional<Element>>
+    FrozenContextPropsBuilder<(__children,)>
+{
+    pub fn build(self) -> FrozenContextProps {
+        let (children,) = self.fields;
+        let children = FrozenContextPropsBuilder_Optional::into_value(children, || {
+            Element::Ok(VNode::placeholder())
+        });
+        FrozenContextProps { children }
+    }
+}
+#[allow(non_snake_case)]
+fn FrozenContext(mut __props: FrozenContextProps) -> Element {
+    let FrozenContextProps { children } = __props;
+    {
+        let suspense: SuspenseContext = use_hook(consume_context);
+        provide_context(suspense.freeze());
+        children
+    }
+}
+#[allow(non_snake_case)]
+#[doc(hidden)]
+mod FrozenContext_completions {
+    #[doc(hidden)]
+    #[allow(non_camel_case_types)]
+    #[doc = r" This enum is generated to help autocomplete the braces after the component. It does nothing"]
+    pub enum Component {
+        FrozenContext {},
+    }
+}
+#[allow(unused)]
+use FrozenContext_completions::Component::FrozenContext;
+
+fn wrap_children_with_frozen_context(children: Element) -> Element {
+    Element::Ok({
+        static TEMPLATE: Template = Template {
+            name: ":281u32:0u32:0",
+            roots: &[TemplateNode::Dynamic { id: 0usize }],
+            node_paths: &[&[0u8]],
+            attr_paths: &[],
+        };
+        {
+            #[allow(clippy::let_and_return)]
+            let __vnodes = VNode::new(
+                None,
+                TEMPLATE,
+                Box::new([DynamicNode::Component({
+                    #[allow(unused_imports)]
+                    use crate::prelude::Properties;
+                    fc_to_builder(FrozenContext)
+                        .children(Element::Ok({
+                            static TEMPLATE: Template = Template {
+                                name: ":0u32:0u32:0",
+                                roots: &[TemplateNode::Dynamic { id: 0usize }],
+                                node_paths: &[&[0u8]],
+                                attr_paths: &[],
+                            };
+                            {
+                                #[allow(clippy::let_and_return)]
+                                let __vnodes = VNode::new(
+                                    None,
+                                    TEMPLATE,
+                                    Box::new([{
+                                        #[allow(clippy::let_and_return)]
+                                        let ___nodes = ({ children }).into_dyn_node();
+                                        ___nodes
+                                    }]),
+                                    Box::new([]),
+                                );
+                                __vnodes
+                            }
+                        }))
+                        .build()
+                        .into_vcomponent(FrozenContext, "FrozenContext")
+                })]),
+                Box::new([]),
+            );
+            __vnodes
+        }
+    })
+}
+
 fn suspense_context(scope: &ScopeState) -> SuspenseContext {
     scope.state().consume_context::<SuspenseContext>().unwrap()
 }
@@ -276,10 +442,10 @@ impl SuspenseBoundaryProps {
                     .new_scope(component.props.duplicate(), component.name)
                     .state();
 
-                // Provide the suspense context to the scope
-                scope_state.provide_context(SuspenseContext::new());
-
                 scope_id = scope_state.id;
+
+                // Provide the suspense context to the scope
+                scope_state.provide_context(SuspenseContext::new_in_scope(scope_id));
             }
 
             // Store the scope id for the next render
@@ -293,7 +459,7 @@ impl SuspenseBoundaryProps {
         let props = Self::downcast_from_props(&mut *scope_state.props).unwrap();
 
         let children = RenderReturn {
-            node: props.children.clone(),
+            node: wrap_children_with_frozen_context(props.children.clone()),
         };
 
         // If there are suspended futures, render the callback
@@ -354,6 +520,8 @@ impl SuspenseBoundaryProps {
             children,
             suspended_nodes,
         } = myself;
+
+        let children = wrap_children_with_frozen_context(children);
 
         let suspense_context = suspense_context(scope);
         let suspended = !suspense_context.suspended_futures().is_empty();

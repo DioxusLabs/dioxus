@@ -92,6 +92,16 @@ impl SuspenseContext {
         Self::default()
     }
 
+    /// Create a new suspense boundary in a specific scope
+    pub(crate) fn new_in_scope(scope: ScopeId) -> Self {
+        Self {
+            inner: Rc::new(SuspenseBoundaryInner {
+                suspended_tasks: RefCell::new(vec![]),
+                id: scope,
+            }),
+        }
+    }
+
     /// Get a frozen context that will freeze rendering for all child nodes
     pub fn freeze(self) -> FrozenContext {
         FrozenContext { inner: self.inner }
