@@ -57,9 +57,5 @@ pub fn use_context<T: 'static + Clone>() -> T {
 ///}
 /// ```
 pub fn use_context_provider<T: 'static + Clone>(f: impl FnOnce() -> T) -> T {
-    use_hook(|| {
-        let val = f();
-        provide_context(val.clone());
-        val
-    })
+    use_hook(|| provide_context(f()))
 }
