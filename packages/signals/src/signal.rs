@@ -1,8 +1,5 @@
 use crate::{default_impl, fmt_impls, write_impls};
-use crate::{
-    read::Readable, write::Writable, CopyValue, GlobalMemo, GlobalSignal, ReactiveContext,
-    ReadableRef,
-};
+use crate::{read::*, write::*, CopyValue, GlobalMemo, GlobalSignal, ReactiveContext, ReadableRef};
 use crate::{Memo, WritableRef};
 use dioxus_core::IntoDynNode;
 use dioxus_core::{prelude::IntoAttributeValue, ScopeId};
@@ -14,41 +11,19 @@ use std::{
     sync::Mutex,
 };
 
-/// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
-///
-/// ```rust
-/// use dioxus::prelude::*;
-/// use dioxus_signals::*;
-///
-/// #[component]
-/// fn App() -> Element {
-///     let mut count = use_signal(|| 0);
-///
-///     // Because signals have automatic dependency tracking, if you never read them in a component, that component will not be re-rended when the signal is updated.
-///     // The app component will never be rerendered in this example.
-///     rsx! { Child { state: count } }
-/// }
-///
-/// #[component]
-/// fn Child(mut state: Signal<u32>) -> Element {
-///     use_future(move || async move {
-///         // Because the signal is a Copy type, we can use it in an async block without cloning it.
-///         state += 1;
-///     });
-///
-///     rsx! {
-///         button {
-///             onclick: move |_| state += 1,
-///             "{state}"
-///         }
-///     }
-/// }
-/// ```
+#[doc = include_str!("./signals.md")]
+#[doc(alias = "State")]
+#[doc(alias = "UseState")]
+#[doc(alias = "UseRef")]
 pub struct Signal<T: 'static, S: Storage<SignalData<T>> = UnsyncStorage> {
     pub(crate) inner: CopyValue<SignalData<T>, S>,
 }
 
 /// A signal that can safely shared between threads.
+#[doc(alias = "SendSignal")]
+#[doc(alias = "UseRwLock")]
+#[doc(alias = "UseRw")]
+#[doc(alias = "UseMutex")]
 pub type SyncSignal<T> = Signal<T, SyncStorage>;
 
 /// The data stored for tracking in a signal.
@@ -58,7 +33,24 @@ pub struct SignalData<T> {
 }
 
 impl<T: 'static> Signal<T> {
-    /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
+    /// Creates a new [`Signal`]. Signals are a Copy state management solution with automatic dependency tracking.
+    ///
+    /// <div class="warning">
+    ///
+    /// This function should generally only be called inside hooks. The signal that this function creates is owned by the current component and will only be dropped when the component is dropped. If you call this function outside of a hook many times, you will leak memory until the component is dropped.
+    ///
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// fn MyComponent() {
+    ///     // ❌ Every time MyComponent runs, it will create a new signal that is only dropped when MyComponent is dropped
+    ///     let signal = Signal::new(0);
+    ///     use_context_provider(|| signal);
+    ///     // ✅ Since the use_context_provider hook only runs when the component is created, the signal will only be created once and it will be dropped when MyComponent is dropped
+    ///     let signal = use_context_provider(|| Signal::new(0));
+    /// }
+    /// ```
+    ///
+    /// </div>
     #[track_caller]
     pub fn new(value: T) -> Self {
         Self::new_maybe_sync(value)
@@ -70,16 +62,60 @@ impl<T: 'static> Signal<T> {
         Self::new_maybe_sync_in_scope(value, owner)
     }
 
-    /// Creates a new global Signal that can be used in a global static.
-    #[track_caller]
+    /// Creates a new [`GlobalSignal`] that can be used anywhere inside your dioxus app. This signal will automatically be created once per app the first time you use it.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// // Create a new global signal that can be used anywhere in your app
+    /// static SIGNAL: GlobalSignal<i32> = Signal::global(|| 0);
+    ///
+    /// fn App() -> Element {
+    ///     rsx! {
+    ///         button {
+    ///             "{SIGNAL}"
+    ///             onclick: move |_| *SIGNAL.write() += 1,
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// <div class="warning">
+    ///
+    /// Global signals are generally not recommended for use in libraries because it makes it more difficult to allow multiple instances of components you define in your library.
+    ///
+    /// </div>
     pub const fn global(constructor: fn() -> T) -> GlobalSignal<T> {
         GlobalSignal::new(constructor)
     }
 }
 
 impl<T: PartialEq + 'static> Signal<T> {
-    /// Creates a new global Signal that can be used in a global static.
-    #[track_caller]
+    /// Creates a new [`GlobalMemo`] that can be used anywhere inside your dioxus app. This memo will automatically be created once per app the first time you use it.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// static SIGNAL: GlobalSignal<i32> = Signal::global(|| 0);
+    /// // Create a new global memo that can be used anywhere in your app
+    /// static DOUBLED: GlobalMemo<i32> = Signal::global(|| SIGNAL() * 2);
+    ///
+    /// fn App() -> Element {
+    ///     rsx! {
+    ///         button {
+    ///             "{DOUBLED}"
+    ///             // When SIGNAL changes, the memo will update because the SIGNAL is read inside DOUBLED
+    ///             onclick: move |_| *SIGNAL.write() += 1,
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// <div class="warning">
+    ///
+    /// Global memos are generally not recommended for use in libraries because it makes it more difficult to allow multiple instances of components you define in your library.
+    ///
+    /// </div>
     pub const fn global_memo(constructor: fn() -> T) -> GlobalMemo<T> {
         GlobalMemo::new(constructor)
     }
@@ -106,11 +142,20 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
         }
     }
 
-    /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
-    pub fn new_with_caller(
-        value: T,
-        #[cfg(debug_assertions)] caller: &'static std::panic::Location<'static>,
-    ) -> Self {
+    /// Creates a new Signal with an explicit caller. Signals are a Copy state management solution with automatic dependency tracking.
+    ///
+    /// This method can be used to provide the correct caller information for signals that are created in closures:
+    ///
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// #[track_caller]
+    /// fn use_my_signal(function: impl FnOnce() -> i32) -> Signal<i32> {
+    ///     // We capture the caller information outside of the closure so that it points to the caller of use_my_custom_hook instead of the closure
+    ///     let caller = std::panic::Location::caller();
+    ///     use_hook(move || Signal::new_with_caller(function(), caller))
+    /// }
+    /// ```
+    pub fn new_with_caller(value: T, caller: &'static std::panic::Location<'static>) -> Self {
         Self {
             inner: CopyValue::new_with_caller(
                 SignalData {

@@ -6,6 +6,8 @@ use dioxus_core::{
 /// Consume some context in the tree, providing a sharable handle to the value
 ///
 /// Does not regenerate the value if the value is changed at the parent.
+#[doc = include_str!("../docs/rules_of_hooks.md")]
+#[doc = include_str!("../docs/moving_state_around.md")]
 #[must_use]
 pub fn try_use_context<T: 'static + Clone>() -> Option<T> {
     use_hook(|| try_consume_context::<T>())
@@ -29,6 +31,8 @@ pub fn try_use_context<T: 'static + Clone>() -> Option<T> {
 ///     rsx! { "user using dark mode: {user_theme == Theme::Dark}" }
 /// }
 /// ```
+#[doc = include_str!("../docs/rules_of_hooks.md")]
+#[doc = include_str!("../docs/moving_state_around.md")]
 #[must_use]
 pub fn use_context<T: 'static + Clone>() -> T {
     use_hook(|| consume_context::<T>())
@@ -56,6 +60,8 @@ pub fn use_context<T: 'static + Clone>() -> T {
 ///     }
 ///}
 /// ```
+#[doc = include_str!("../docs/rules_of_hooks.md")]
+#[doc = include_str!("../docs/moving_state_around.md")]
 pub fn use_context_provider<T: 'static + Clone>(f: impl FnOnce() -> T) -> T {
     use_hook(|| {
         let val = f();

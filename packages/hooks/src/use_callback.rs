@@ -9,6 +9,7 @@ use dioxus_signals::Writable;
 /// There is *currently* no signal tracking on the Callback so anything reading from it will not be updated.
 ///
 /// This API is in flux and might not remain.
+#[doc = include_str!("../docs/rules_of_hooks.md")]
 pub fn use_callback<O>(f: impl FnMut() -> O + 'static) -> UseCallback<O> {
     // Create a copyvalue with no contents
     // This copyvalue is generic over F so that it can be sized properly

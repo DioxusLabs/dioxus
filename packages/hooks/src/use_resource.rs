@@ -67,6 +67,10 @@ use std::{cell::Cell, future::Future, rc::Rc};
 ///     todo!()
 /// }
 /// ```
+#[doc = include_str!("../docs/rules_of_hooks.md")]
+#[doc = include_str!("../docs/moving_state_around.md")]
+#[doc(alias = "use_async_memo")]
+#[doc(alias = "use_memo_async")]
 #[must_use = "Consider using `cx.spawn` to run a future without reading its value"]
 pub fn use_resource<T, F>(mut future: impl FnMut() -> F + 'static) -> Resource<T>
 where

@@ -30,6 +30,8 @@ use dioxus_signals::{Signal, SignalData, Storage, SyncStorage, UnsyncStorage};
 ///     }
 /// }
 /// ```
+#[doc = include_str!("../docs/rules_of_hooks.md")]
+#[doc = include_str!("../docs/moving_state_around.md")]
 #[track_caller]
 #[must_use]
 pub fn use_signal<T: 'static>(f: impl FnOnce() -> T) -> Signal<T, UnsyncStorage> {

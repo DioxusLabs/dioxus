@@ -33,7 +33,7 @@ use std::future::Future;
 /// ## UseCallback instead
 ///
 /// However, you must plan out your own concurrency and synchronization. If you
-/// don't care about actions in your app being synchronized, you can use [`use_callback`]
+/// don't care about actions in your app being synchronized, you can use [`crate::use_callback()`]
 /// hook to spawn multiple tasks and run them concurrently.
 ///
 /// ### Notice
@@ -65,6 +65,7 @@ use std::future::Future;
 ///     }
 /// })
 /// ```
+#[doc = include_str!("../docs/rules_of_hooks.md")]
 pub fn use_coroutine<M, G, F>(init: G) -> Coroutine<M>
 where
     M: 'static,
@@ -96,6 +97,7 @@ where
 /// Analagous to use_context_provider and use_context,
 /// but used for coroutines specifically
 /// See the docs for [`use_coroutine`] for more details.
+#[doc = include_str!("../docs/rules_of_hooks.md")]
 #[must_use]
 pub fn use_coroutine_handle<M: 'static>() -> Coroutine<M> {
     use_hook(consume_context::<Coroutine<M>>)

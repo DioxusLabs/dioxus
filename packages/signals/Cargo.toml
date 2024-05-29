@@ -22,6 +22,7 @@ once_cell = "1.18.0"
 rustc-hash = { workspace = true }
 futures-channel = { workspace = true }
 futures-util = { workspace = true }
+embed-doc-image = "0.1.4"
 
 [dev-dependencies]
 dioxus = { workspace = true }

@@ -83,6 +83,7 @@ impl_dep!(A = a1 a2, B = b1 b2, C = c1 c2, D = d1 d2, E = e1 e2, F = f1 f2, G = 
 ///     println!("Data changed: {}", data);
 /// }));
 /// ```
+#[doc = include_str!("../docs/rules_of_hooks.md")]
 pub fn use_reactive<O, D: Dependency>(
     non_reactive_data: D,
     mut closure: impl FnMut(D::Out) -> O + 'static,
@@ -113,6 +114,7 @@ pub fn use_reactive<O, D: Dependency>(
 ///     println!("Data changed: {}", data);
 /// }));
 /// ```
+#[doc = include_str!("../docs/rules_of_hooks.md")]
 #[macro_export]
 macro_rules! use_reactive {
     (|| $($rest:tt)*) => { use_reactive( (), move |_| $($rest)* ) };

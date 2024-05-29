@@ -23,6 +23,15 @@ use crate::innerlude::*;
 ///     data: String
 /// }
 /// ```
+#[rustversion::attr(
+    since(1.78.0),
+    diagnostic::on_unimplemented(
+        message = "`Props` is not implemented for `{Self}`",
+        label = "Props",
+        note = "Props is a trait that is automatically implemented for all structs that can be used as props for a component",
+        note = "If you manually created a new properties struct, you may have forgotten to add `#[derive(Props, PartialEq, Clone)]` to your struct",
+    )
+)]
 pub trait Properties: Clone + Sized + 'static {
     /// The type of the builder for this component.
     /// Used to create "in-progress" versions of the props.
@@ -96,6 +105,28 @@ where
 }
 
 /// Any component that implements the `ComponentFn` trait can be used as a component.
+///
+/// This trait is automatically implemented for functions that are in one of the following forms:
+/// - `fn() -> Element`
+/// - `fn(props: Properties) -> Element`
+///
+/// You can derive it automatically for any function with arguments that implement PartialEq with the `#[component]` attribute:
+/// ```rust
+/// # use dioxus::prelude::*;
+/// #[component]
+/// fn MyComponent(a: u32, b: u32) -> Element {
+///     rsx! { "a: {a}, b: {b}" }
+/// }
+/// ```
+#[rustversion::attr(
+    since(1.78.0),
+    diagnostic::on_unimplemented(
+        message = "`Component<{Props}>` is not implemented for `{Self}`",
+        label = "Component",
+        note = "Components are functions in the form `fn() -> Element`, `fn(props: Properties) -> Element`, or `#[component] fn(partial_eq1: u32, partial_eq2: u32) -> Element`.", 
+        note = "You may have forgotten to add `#[component]` to your function to automatically implement the `ComponentFunction` trait."
+    )
+)]
 pub trait ComponentFunction<Props, Marker = ()>: Clone + 'static {
     /// Get the type id of the component.
     fn id(&self) -> TypeId {

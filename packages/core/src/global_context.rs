@@ -253,6 +253,7 @@ pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
 ///     }
 /// }
 /// ```
+#[doc(alias = "use_on_unmount")]
 pub fn use_drop<D: FnOnce() + 'static>(destroy: D) {
     struct LifeCycle<D: FnOnce()> {
         /// Wrap the closure in an option so that we can take it out on drop.
