@@ -356,6 +356,15 @@ pub fn event_bubbles(evt: &str) -> bool {
 }
 
 #[doc(hidden)]
+#[rustversion::attr(
+    since(1.78.0),
+    diagnostic::on_unimplemented(
+        message = "`EventHandlerReturn` is not implemented for `{Self}`",
+        label = "Return Value",
+        note = "Event handlers in dioxus need to return either: nothing (the unit type `()`), or an async block that dioxus will automatically spawn",
+        note = "You likely need to add a semicolon to the end of the event handler to make it return nothing",
+    )
+)]
 pub trait EventReturn<P>: Sized {
     fn spawn(self) {}
 }
