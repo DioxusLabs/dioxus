@@ -35,6 +35,7 @@ impl Task {
     ///
     /// This does not abort the task, so you'll want to wrap it in an abort handle if that's important to you
     pub fn cancel(self) {
+        tracing::trace!("Cancelling task {:?}", self);
         remove_future(self);
     }
 
@@ -154,6 +155,7 @@ impl Runtime {
                 })),
                 ty: RefCell::new(ty),
             });
+            tracing::trace!("spawned new task {:?} on scope {:?}", task_id, scope);
 
             entry.insert(task.clone());
 
@@ -230,6 +232,11 @@ impl Runtime {
                 .borrow_mut()
                 .remove(&id);
 
+            tracing::trace!(
+                "task {:?} finished, removing from scope {:?}",
+                id,
+                task.scope
+            );
             self.remove_task(id);
         }
 
@@ -245,16 +252,29 @@ impl Runtime {
     ///
     /// This does not abort the task, so you'll want to wrap it in an abort handle if that's important to you
     pub(crate) fn remove_task(&self, id: Task) -> Option<Rc<LocalTask>> {
+        // Remove the task from the task list
         let task = self.tasks.borrow_mut().try_remove(id.0);
-        // If the task is suspended, we need to remove it from the boundary and decrease the suspended tasks count
+
+        tracing::trace!("Removing task {:?}", id);
+
         if let Some(task) = &task {
-            if let TaskType::Suspended { boundary } = &*task.ty.borrow() {
+            // Remove the task from suspense
+            if task.suspended() {
                 self.suspended_tasks.set(self.suspended_tasks.get() - 1);
                 if let Some(boundary) = boundary {
                     boundary.remove_suspended_task(id);
                 }
             }
+
+            // Remove the task from pending work. We could reuse the slot before the task is polled and discarded so we need to remove it from pending work instead of filtering out dead tasks when we try to poll them
+            if let Some(scope) = self.get_state(task.scope) {
+                let order = ScopeOrder::new(scope.height(), scope.id);
+                if let Some(dirty_tasks) = self.dirty_tasks.borrow_mut().get(&order) {
+                    dirty_tasks.remove(id);
+                }
+            }
         }
+
         task
     }
 

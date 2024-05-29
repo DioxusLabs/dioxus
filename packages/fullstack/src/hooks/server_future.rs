@@ -52,12 +52,17 @@ where
 
     // On the first run, force this task to be polled right away in case its value is ready
     use_hook(|| {
-        let _ = resource.task().poll_now();
+        let _ = resource.task().map(|task| task.poll_now());
     });
 
     // Suspend if the value isn't ready
     match resource.state().cloned() {
-        UseResourceState::Pending => Err(suspend(resource.task()).unwrap_err()),
+        UseResourceState::Pending => {
+            if let Some(task) = resource.task() {
+                return Err(suspend(resource.task()).unwrap_err());
+            }
+            Ok(resource)
+        }
         _ => Ok(resource),
     }
 }

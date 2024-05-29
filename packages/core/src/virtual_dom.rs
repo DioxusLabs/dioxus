@@ -2,13 +2,14 @@
 //!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
+use crate::innerlude::Work;
 use crate::Task;
 use crate::{
     any_props::AnyProps,
     arena::ElementId,
     innerlude::{
-        DirtyTasks, ElementRef, ErrorBoundary, NoOpMutations, SchedulerMsg, ScopeOrder, ScopeState,
-        VNodeMount, VProps, WriteMutations,
+        ElementRef, ErrorBoundary, NoOpMutations, SchedulerMsg, ScopeOrder, ScopeState, VNodeMount,
+        VProps, WriteMutations,
     },
     nodes::{Template, TemplateId},
     runtime::{Runtime, RuntimeGuard},
@@ -185,7 +186,6 @@ pub struct VirtualDom {
     pub(crate) scopes: Slab<ScopeState>,
 
     pub(crate) dirty_scopes: BTreeSet<ScopeOrder>,
-    pub(crate) dirty_tasks: BTreeSet<DirtyTasks>,
 
     // Maps a template path to a map of byte indexes to templates
     pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template>>,
@@ -315,7 +315,6 @@ impl VirtualDom {
             runtime: Runtime::new(tx),
             scopes: Default::default(),
             dirty_scopes: Default::default(),
-            dirty_tasks: Default::default(),
             templates: Default::default(),
             queued_templates: Default::default(),
             elements: Default::default(),
@@ -392,9 +391,17 @@ impl VirtualDom {
     /// Mark a task as dirty
     fn mark_task_dirty(&mut self, task: Task) {
         let Some(scope) = self.runtime.task_scope(task) else {
+            tracing::trace!(
+                "Task {:?} doesn't have a scope, cannot mark it as dirty",
+                task
+            );
             return;
         };
         let Some(scope) = self.runtime.get_state(scope) else {
+            tracing::trace!(
+                "Task {:?} was spawned in a scope that is no longer in the virtualdom, cannot mark it as dirty",
+                task
+            );
             return;
         };
 
@@ -520,24 +527,18 @@ impl VirtualDom {
 
         // Keep polling tasks until there are no more effects or tasks to run
         // Or until we have no more dirty scopes
-        while !self.dirty_tasks.is_empty() || !self.runtime.pending_effects.borrow().is_empty() {
+        while !self.runtime.dirty_tasks.borrow().is_empty()
+            || !self.runtime.pending_effects.borrow().is_empty()
+        {
             // Next, run any queued tasks
             // We choose not to poll the deadline since we complete pretty quickly anyways
             while let Some(task) = self.pop_task() {
-                // Then poll any tasks that might be pending
-                let mut tasks = task.tasks_queued.into_inner();
-                while let Some(task) = tasks.pop_front() {
-                    let _ = self.runtime.handle_task_wakeup(task);
+                let _ = self.runtime.handle_task_wakeup(task);
 
-                    // Running that task, may mark a scope higher up as dirty. If it does, return from the function early
-                    self.queue_events();
-                    if self.has_dirty_scopes() {
-                        // requeue any remaining tasks
-                        for task in tasks {
-                            self.mark_task_dirty(task);
-                        }
-                        return;
-                    }
+                // Running that task, may mark a scope higher up as dirty. If it does, return from the function early
+                self.queue_events();
+                if self.has_dirty_scopes() {
+                    return;
                 }
             }
 
@@ -659,14 +660,17 @@ impl VirtualDom {
 
         // Next, diff any dirty scopes
         // We choose not to poll the deadline since we complete pretty quickly anyways
+        let _runtime = RuntimeGuard::new(self.runtime.clone());
         while let Some(work) = self.pop_work() {
-            {
-                let _runtime = RuntimeGuard::new(self.runtime.clone());
-
-                // Then, poll any tasks that might be pending in the scope
-                for task in work.tasks {
-                    let _ = self.runtime.handle_task_wakeup(task);
+            match work {
+                Work::PollTask(task) => {
+                    _ = self.runtime.handle_task_wakeup(task);
+                    // Make sure we process any new events
+                    self.queue_events();
                 }
+                Work::RerunScope(scope) => {
+                    // If the scope is dirty, run the scope and get the mutations
+                    let new_nodes = self.run_scope(scope.id);
 
                 self.queue_events();
 
@@ -730,22 +734,14 @@ impl VirtualDom {
                 // Next, run any queued tasks
                 // We choose not to poll the deadline since we complete pretty quickly anyways
                 while let Some(task) = self.pop_task() {
-                    // Then poll any tasks that might be pending
-                    let mut tasks = task.tasks_queued.into_inner();
-                    while let Some(task) = tasks.pop_front() {
                         if self.runtime.task_runs_during_suspense(task) {
                             let _ = self.runtime.handle_task_wakeup(task);
                             // Running that task, may mark a scope higher up as dirty. If it does, return from the function early
                             self.queue_events();
                             if self.has_dirty_scopes() {
-                                // requeue any remaining tasks
-                                for task in tasks {
-                                    self.mark_task_dirty(task);
-                                }
                                 break 'wait_for_work;
                             }
                         }
-                    }
                 }
             }
 
@@ -753,26 +749,25 @@ impl VirtualDom {
         }
     }
 
-    /// Render any dirty scopes immediately, but don't poll any futures that are client only on that scope
-    pub fn render_suspense_immediate(&mut self) {
-        // Render whatever work needs to be rendered, unlocking new futures and suspense leaves
-        let _runtime = RuntimeGuard::new(self.runtime.clone());
-        while let Some(work) = self.pop_work() {
-            // Then, poll any tasks that might be pending in the scope
-            for task in work.tasks {
-                // During suspense, we only want to run tasks that are suspended
-                if self.runtime.task_runs_during_suspense(task) {
-                    let _ = self.runtime.handle_task_wakeup(task);
+            /// Render any dirty scopes immediately, but don't poll any futures that are client only on that scope
+    pub fn render_suspense_immediate(&mut self) {// Render whatever work needs to be rendered, unlocking new futures and suspense leaves
+            let _runtime = RuntimeGuard::new(self.runtime.clone());
+            while let Some(work) = self.pop_work() {
+                match work {
+                    Work::PollTask(task) => {
+                        // During suspense, we only want to run tasks that are suspended
+                        if self.runtime.task_runs_during_suspense(task) {
+                            let _ = self.runtime.handle_task_wakeup(task);
+                            self.queue_events();
+                        }
+                    }
+                    Work::RerunScope(scope) => {
+                        // If the scope is dirty, run the scope and get the mutations
+                        self.run_and_diff_scope(None::<&mut NoOpMutations>, work.scope.id);
+                    }
                 }
             }
-
-            self.queue_events();
-
-            // If the scope is dirty, run the scope and get the mutations
-            if work.rerun_scope {
-                self.run_and_diff_scope(None::<&mut NoOpMutations>, work.scope.id);
-            }
-        }
+        
     }
 
     /// Get the current runtime
