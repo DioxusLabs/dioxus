@@ -59,7 +59,7 @@ where
     match resource.state().cloned() {
         UseResourceState::Pending => {
             if let Some(task) = resource.task() {
-                return Err(suspend(resource.task()).unwrap_err());
+                return Err(suspend(task).unwrap_err());
             }
             Ok(resource)
         }

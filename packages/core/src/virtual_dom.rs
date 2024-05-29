@@ -670,13 +670,7 @@ impl VirtualDom {
                 }
                 Work::RerunScope(scope) => {
                     // If the scope is dirty, run the scope and get the mutations
-                    let new_nodes = self.run_scope(scope.id);
-
-                self.queue_events();
-
-                // If the scope is dirty, run the scope and get the mutations
-                if work.rerun_scope {
-                    self.run_and_diff_scope(Some(to), work.scope.id);
+                    self.run_and_diff_scope(Some(to), scope.id);
                 }
             }
         }
@@ -734,14 +728,17 @@ impl VirtualDom {
                 // Next, run any queued tasks
                 // We choose not to poll the deadline since we complete pretty quickly anyways
                 while let Some(task) = self.pop_task() {
-                        if self.runtime.task_runs_during_suspense(task) {
-                            let _ = self.runtime.handle_task_wakeup(task);
-                            // Running that task, may mark a scope higher up as dirty. If it does, return from the function early
-                            self.queue_events();
-                            if self.has_dirty_scopes() {
-                                break 'wait_for_work;
-                            }
+                    if self.runtime.task_runs_during_suspense(task) {
+                        tracing::info!("Task {:?} runs during suspense, running it", task);
+                        let _ = self.runtime.handle_task_wakeup(task);
+                        // Running that task, may mark a scope higher up as dirty. If it does, return from the function early
+                        self.queue_events();
+                        if self.has_dirty_scopes() {
+                            break 'wait_for_work;
                         }
+                    } else {
+                        tracing::info!("Task {:?} does not run during suspense, skipping it", task);
+                    }
                 }
             }
 
@@ -749,25 +746,25 @@ impl VirtualDom {
         }
     }
 
-            /// Render any dirty scopes immediately, but don't poll any futures that are client only on that scope
-    pub fn render_suspense_immediate(&mut self) {// Render whatever work needs to be rendered, unlocking new futures and suspense leaves
-            let _runtime = RuntimeGuard::new(self.runtime.clone());
-            while let Some(work) = self.pop_work() {
-                match work {
-                    Work::PollTask(task) => {
-                        // During suspense, we only want to run tasks that are suspended
-                        if self.runtime.task_runs_during_suspense(task) {
-                            let _ = self.runtime.handle_task_wakeup(task);
-                            self.queue_events();
-                        }
-                    }
-                    Work::RerunScope(scope) => {
-                        // If the scope is dirty, run the scope and get the mutations
-                        self.run_and_diff_scope(None::<&mut NoOpMutations>, work.scope.id);
+    /// Render any dirty scopes immediately, but don't poll any futures that are client only on that scope
+    pub fn render_suspense_immediate(&mut self) {
+        // Render whatever work needs to be rendered, unlocking new futures and suspense leaves
+        let _runtime = RuntimeGuard::new(self.runtime.clone());
+        while let Some(work) = self.pop_work() {
+            match work {
+                Work::PollTask(task) => {
+                    // During suspense, we only want to run tasks that are suspended
+                    if self.runtime.task_runs_during_suspense(task) {
+                        let _ = self.runtime.handle_task_wakeup(task);
+                        self.queue_events();
                     }
                 }
+                Work::RerunScope(scope) => {
+                    // If the scope is dirty, run the scope and get the mutations
+                    self.run_and_diff_scope(None::<&mut NoOpMutations>, scope.id);
+                }
             }
-        
+        }
     }
 
     /// Get the current runtime

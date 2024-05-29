@@ -244,7 +244,10 @@ impl<T> Resource<T> {
     pub fn suspend(&self) -> std::result::Result<MappedSignal<T>, RenderError> {
         match self.state.cloned() {
             UseResourceState::Stopped | UseResourceState::Paused | UseResourceState::Pending => {
-                Err(RenderError::Suspended(SuspendedFuture::new(self.task())))
+                match self.task() {
+                    Some(task) => Err(RenderError::Suspended(SuspendedFuture::new(task))),
+                    None => Ok(self.value.map(|v| v.as_ref().unwrap())),
+                }
             }
             _ => Ok(self.value.map(|v| v.as_ref().unwrap())),
         }

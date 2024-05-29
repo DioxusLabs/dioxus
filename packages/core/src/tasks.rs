@@ -212,6 +212,7 @@ impl Runtime {
 
         // If a task woke up but is paused, we can just ignore it
         if !task.active.get() {
+            tracing::trace!("Task {:?} is paused, ignoring wakeup", id);
             return Poll::Pending;
         }
 
@@ -259,7 +260,7 @@ impl Runtime {
 
         if let Some(task) = &task {
             // Remove the task from suspense
-            if task.suspended() {
+            if let TaskType::Suspended { boundary } = &*task.ty.borrow() {
                 self.suspended_tasks.set(self.suspended_tasks.get() - 1);
                 if let Some(boundary) = boundary {
                     boundary.remove_suspended_task(id);
