@@ -24,6 +24,12 @@ mod scopes;
 mod tasks;
 mod virtual_dom;
 
+/// Items exported from this module are used in macros and should not be used directly.
+#[doc(hidden)]
+pub mod internal {
+    pub use crate::properties::verify_component_called_as_component;
+}
+
 pub(crate) mod innerlude {
     pub(crate) use crate::any_props::*;
     pub use crate::arena::*;

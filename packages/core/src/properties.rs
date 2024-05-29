@@ -95,6 +95,53 @@ where
     P::builder()
 }
 
+#[cfg(debug_assertions)]
+thread_local! {
+    static CURRENTLY_RUNNING_COMPONENT: std::cell::RefCell<Option<TypeId>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Calling a component like a function is a common mistake that can cause issues with out of order hooks and poor performance.
+/// In debug mode we try to detect when the user calls a component like a normal function.
+///
+/// When we call a function, we set a thread local variable to that function pointer. If the component is using the component macro, it will check if the function pointer is set and if it isn't, then the user is calling the component like a function.
+#[allow(unused)]
+fn call_component_function<O>(type_id: TypeId, call_with: impl FnOnce() -> O) -> O {
+    #[cfg(debug_assertions)]
+    CURRENTLY_RUNNING_COMPONENT.with(|currently_running_component| {
+        currently_running_component.borrow_mut().replace(type_id);
+    });
+
+    let result = call_with();
+
+    #[cfg(debug_assertions)]
+    CURRENTLY_RUNNING_COMPONENT.with(|currently_running_component| {
+        currently_running_component.borrow_mut().take();
+    });
+
+    result
+}
+
+/// Make sure that this component is currently running as a component, not a function call
+#[doc(hidden)]
+#[allow(unused)]
+pub fn verify_component_called_as_component<C: ComponentFunction<P, M>, P, M>(component: C) {
+    #[cfg(debug_assertions)]
+    CURRENTLY_RUNNING_COMPONENT.with(|currently_running_component| {
+        if let Some(type_id) = currently_running_component.borrow().as_ref() {
+            // If we are in a component, and the type id is the same as the component type, then we can just return
+            if *type_id == TypeId::of::<C>() {
+                return;
+            }
+        }
+
+        // Otherwise the component was called like a function, so we should log an error
+        let type_name = std::any::type_name::<C>();
+        tracing::error!(
+            "It looks like you called the component {type_name} like a function instead of a component. Components should be called with braces like `{type_name} {{ prop: value }}` instead of as a function"
+        );
+    });
+}
+
 /// Any component that implements the `ComponentFn` trait can be used as a component.
 pub trait ComponentFunction<Props, Marker = ()>: Clone + 'static {
     /// Get the type id of the component.
@@ -109,7 +156,7 @@ pub trait ComponentFunction<Props, Marker = ()>: Clone + 'static {
 /// Accept any callbacks that take props
 impl<F: Fn(P) -> Element + Clone + 'static, P> ComponentFunction<P> for F {
     fn rebuild(&self, props: P) -> Element {
-        self(props)
+        call_component_function(TypeId::of::<Self>(), || self(props))
     }
 }
 
@@ -117,7 +164,7 @@ impl<F: Fn(P) -> Element + Clone + 'static, P> ComponentFunction<P> for F {
 pub struct EmptyMarker;
 impl<F: Fn() -> Element + Clone + 'static> ComponentFunction<(), EmptyMarker> for F {
     fn rebuild(&self, _: ()) -> Element {
-        self()
+        call_component_function(TypeId::of::<Self>(), self)
     }
 }
 
