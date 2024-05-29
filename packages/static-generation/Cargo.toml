@@ -32,3 +32,6 @@ dioxus = { workspace = true }
 default = []
 server = ["dioxus-fullstack/server", "dioxus-router/ssr", "dioxus-ssr", "tokio", "http", "dep:axum", "tower-http", "dioxus-hot-reload", "dioxus-cli-config", "tower"]
 web = ["dioxus-fullstack/web", "dioxus-router/web", "dioxus-web"]
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

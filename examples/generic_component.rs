@@ -7,7 +7,7 @@ use dioxus::prelude::*;
 use std::fmt::Display;
 
 fn main() {
-    launch_desktop(app);
+    launch(app);
 }
 
 fn app() -> Element {
