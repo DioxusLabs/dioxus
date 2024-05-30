@@ -112,15 +112,7 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         at: crate::GenerationalRefBorrowInfo,
     ) -> Result<Self::Ref<'static, T>, error::BorrowError> {
-        let read = self.0.try_read();
-
-        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-        let read = read.ok_or_else(|| at.borrowed_from.borrow_error())?;
-
-        #[cfg(not(any(debug_assertions, feature = "debug_ownership")))]
-        let read = read.ok_or_else(|| {
-            error::BorrowError::AlreadyBorrowedMut(error::AlreadyBorrowedMutError {})
-        })?;
+        let read = self.0.read();
 
         RwLockReadGuard::try_map(read, |any| any.as_ref()?.downcast_ref())
             .map_err(|_| {
