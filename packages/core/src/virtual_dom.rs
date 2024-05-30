@@ -500,7 +500,6 @@ impl VirtualDom {
     fn queue_events(&mut self) {
         // Prevent a task from deadlocking the runtime by repeatedly queueing itself
         while let Ok(Some(msg)) = self.rx.try_next() {
-            println!("queueing event {:?}", msg);
             match msg {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
                 SchedulerMsg::TaskNotified(task) => self.mark_task_dirty(Task::from_id(task)),
