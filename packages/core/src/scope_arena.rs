@@ -86,6 +86,10 @@ impl VirtualDom {
     fn handle_element_return(&self, node: &Element, scope_id: ScopeId, scope_state: &Scope) {
         match &node {
             Err(RenderError::Aborted(e)) => {
+                tracing::error!(
+                    "Error while rendering component `{}`: {e:?}",
+                    scope_state.name
+                );
                 throw_error(e.clone());
             }
             Err(RenderError::Suspended(e)) => {
@@ -96,7 +100,7 @@ impl VirtualDom {
                     .runtime
                     .tasks
                     .borrow()
-                    .get(task.0)
+                    .get(task.id)
                     .unwrap()
                     .suspend(boundary.clone());
                 if !already_suspended {

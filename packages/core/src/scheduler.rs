@@ -252,7 +252,12 @@ impl From<ScopeOrder> for DirtyTasks {
 
 impl DirtyTasks {
     pub fn queue_task(&self, task: Task) {
-        self.tasks_queued.borrow_mut().push_back(task);
+        let mut borrow_mut = self.tasks_queued.borrow_mut();
+        // If the task is already queued, we don't need to do anything
+        if borrow_mut.contains(&task) {
+            return;
+        }
+        borrow_mut.push_back(task);
     }
 
     pub(crate) fn remove(&self, id: Task) {

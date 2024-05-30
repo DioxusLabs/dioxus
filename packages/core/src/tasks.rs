@@ -4,6 +4,7 @@ use crate::innerlude::{remove_future, spawn, Runtime};
 use crate::prelude::SuspenseContext;
 use crate::ScopeId;
 use futures_util::task::ArcWake;
+use std::marker::PhantomData;
 use std::sync::Arc;
 use std::task::Waker;
 use std::{cell::Cell, future::Future};
@@ -15,9 +16,21 @@ use std::{pin::Pin, task::Poll};
 /// `Task` is a unique identifier for a task that has been spawned onto the runtime. It can be used to cancel the task
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct Task(pub(crate) usize);
+pub struct Task {
+    pub(crate) id: usize,
+    // We add a raw pointer to make this !Send + !Sync
+    unsend: PhantomData<*const ()>,
+}
 
 impl Task {
+    /// Create a task from a raw id
+    pub(crate) const fn from_id(id: usize) -> Self {
+        Self {
+            id,
+            unsend: PhantomData,
+        }
+    }
+
     /// Start a new future on the same thread as the rest of the VirtualDom.
     ///
     /// This future will not contribute to suspense resolving, so you should primarily use this for reacting to changes
@@ -52,7 +65,7 @@ impl Task {
     /// Check if the task is paused.
     pub fn paused(&self) -> bool {
         Runtime::with(|rt| {
-            if let Some(task) = rt.tasks.borrow().get(self.0) {
+            if let Some(task) = rt.tasks.borrow().get(self.id) {
                 !task.active.get()
             } else {
                 false
@@ -63,7 +76,11 @@ impl Task {
 
     /// Wake the task.
     pub fn wake(&self) {
-        Runtime::with(|rt| _ = rt.sender.unbounded_send(SchedulerMsg::TaskNotified(*self)));
+        Runtime::with(|rt| {
+            _ = rt
+                .sender
+                .unbounded_send(SchedulerMsg::TaskNotified(self.id))
+        });
     }
 
     /// Poll the task immediately.
@@ -74,10 +91,12 @@ impl Task {
     /// Set the task as active or paused.
     pub fn set_active(&self, active: bool) {
         Runtime::with(|rt| {
-            if let Some(task) = rt.tasks.borrow().get(self.0) {
+            if let Some(task) = rt.tasks.borrow().get(self.id) {
                 let was_active = task.active.replace(active);
                 if !was_active && active {
-                    _ = rt.sender.unbounded_send(SchedulerMsg::TaskNotified(*self));
+                    _ = rt
+                        .sender
+                        .unbounded_send(SchedulerMsg::TaskNotified(self.id));
                 }
             }
         });
@@ -142,7 +161,7 @@ impl Runtime {
             let mut tasks = self.tasks.borrow_mut();
 
             let entry = tasks.vacant_entry();
-            let task_id = Task(entry.key());
+            let task_id = Task::from_id(entry.key());
 
             let task = Rc::new(LocalTask {
                 scope,
@@ -150,7 +169,7 @@ impl Runtime {
                 parent: self.current_task(),
                 task: RefCell::new(Box::pin(task)),
                 waker: futures_util::task::waker(Arc::new(LocalTaskHandle {
-                    id: task_id,
+                    id: task_id.id,
                     tx: self.sender.clone(),
                 })),
                 ty: RefCell::new(ty),
@@ -167,7 +186,7 @@ impl Runtime {
         debug_assert!(task.task.try_borrow_mut().is_ok());
 
         self.sender
-            .unbounded_send(SchedulerMsg::TaskNotified(task_id))
+            .unbounded_send(SchedulerMsg::TaskNotified(task_id.id))
             .expect("Scheduler should exist");
 
         task_id
@@ -193,17 +212,18 @@ impl Runtime {
 
     /// Get the parent task of the given task, if it exists
     pub fn parent_task(&self, task: Task) -> Option<Task> {
-        self.tasks.borrow().get(task.0)?.parent
+        self.tasks.borrow().get(task.id)?.parent
     }
 
     pub(crate) fn task_scope(&self, task: Task) -> Option<ScopeId> {
-        self.tasks.borrow().get(task.0).map(|t| t.scope)
+        self.tasks.borrow().get(task.id).map(|t| t.scope)
     }
 
     pub(crate) fn handle_task_wakeup(&self, id: Task) -> Poll<()> {
         debug_assert!(Runtime::current().is_some(), "Must be in a dioxus runtime");
 
-        let task = self.tasks.borrow().get(id.0).cloned();
+        tracing::info!("Polling task {:?}", id);
+        let task = self.tasks.borrow().get(id.id).cloned();
 
         // The task was removed from the scheduler, so we can just ignore it
         let Some(task) = task else {
@@ -224,6 +244,7 @@ impl Runtime {
         self.current_task.set(Some(id));
 
         let poll_result = task.task.borrow_mut().as_mut().poll(&mut cx);
+        tracing::info!("Task {:?} finished with result {:?}", id, poll_result);
 
         if poll_result.is_ready() {
             // Remove it from the scope so we dont try to double drop it when the scope dropes
@@ -254,7 +275,7 @@ impl Runtime {
     /// This does not abort the task, so you'll want to wrap it in an abort handle if that's important to you
     pub(crate) fn remove_task(&self, id: Task) -> Option<Rc<LocalTask>> {
         // Remove the task from the task list
-        let task = self.tasks.borrow_mut().try_remove(id.0);
+        let task = self.tasks.borrow_mut().try_remove(id.id);
 
         tracing::trace!("Removing task {:?}", id);
 
@@ -282,7 +303,7 @@ impl Runtime {
     /// Check if a task should be run during suspense
     pub(crate) fn task_runs_during_suspense(&self, task: Task) -> bool {
         let borrow = self.tasks.borrow();
-        let task: Option<&LocalTask> = borrow.get(task.0).map(|t| &**t);
+        let task: Option<&LocalTask> = borrow.get(task.id).map(|t| &**t);
         matches!(task, Some(LocalTask { ty, .. }) if ty.borrow().runs_during_suspense())
     }
 }
@@ -322,19 +343,20 @@ impl TaskType {
 /// The type of message that can be sent to the scheduler.
 ///
 /// These messages control how the scheduler will process updates to the UI.
+#[derive(Debug)]
 pub(crate) enum SchedulerMsg {
     /// Immediate updates from Components that mark them as dirty
     Immediate(ScopeId),
 
     /// A task has woken and needs to be progressed
-    TaskNotified(Task),
+    TaskNotified(usize),
 
     /// An effect has been queued to run after the next render
     EffectQueued,
 }
 
 struct LocalTaskHandle {
-    id: Task,
+    id: usize,
     tx: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
 }
 

@@ -389,6 +389,7 @@ impl VirtualDom {
     }
 
     /// Mark a task as dirty
+    #[track_caller]
     fn mark_task_dirty(&mut self, task: Task) {
         let Some(scope) = self.runtime.task_scope(task) else {
             tracing::trace!(
@@ -407,9 +408,10 @@ impl VirtualDom {
 
         tracing::event!(
             tracing::Level::TRACE,
-            "Marking task {:?} (spawned in {:?}) as dirty",
+            "Marking task {:?} (spawned in {:?}) as dirty (called from {:?})",
             task,
-            scope.id
+            scope.id,
+            std::panic::Location::caller()
         );
 
         let order = ScopeOrder::new(scope.height(), scope.id);
@@ -488,7 +490,7 @@ impl VirtualDom {
             SchedulerMsg::TaskNotified(id) => {
                 // Instead of running the task immediately, we insert it into the runtime's task queue.
                 // The task may be marked dirty at the same time as the scope that owns the task is dropped.
-                self.mark_task_dirty(id);
+                self.mark_task_dirty(Task::from_id(id));
             }
             SchedulerMsg::EffectQueued => {}
         };
@@ -498,9 +500,10 @@ impl VirtualDom {
     fn queue_events(&mut self) {
         // Prevent a task from deadlocking the runtime by repeatedly queueing itself
         while let Ok(Some(msg)) = self.rx.try_next() {
+            println!("queueing event {:?}", msg);
             match msg {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
-                SchedulerMsg::TaskNotified(task) => self.mark_task_dirty(task),
+                SchedulerMsg::TaskNotified(task) => self.mark_task_dirty(Task::from_id(task)),
                 SchedulerMsg::EffectQueued => {}
             }
         }
@@ -712,7 +715,7 @@ impl VirtualDom {
     /// Wait for the scheduler to have any work that should be run during suspense.
     pub async fn wait_for_suspense_work(&mut self) {
         // Wait for a work to be ready (IE new suspense leaves to pop up)
-        'wait_for_work: loop {
+        loop {
             // Process all events - Scopes are marked dirty, etc
             // Sometimes when wakers fire we get a slew of updates at once, so its important that we drain this completely
             self.queue_events();
@@ -727,17 +730,37 @@ impl VirtualDom {
                 let _runtime = RuntimeGuard::new(self.runtime.clone());
                 // Next, run any queued tasks
                 // We choose not to poll the deadline since we complete pretty quickly anyways
+                let mut tasks_polled = 0;
                 while let Some(task) = self.pop_task() {
                     if self.runtime.task_runs_during_suspense(task) {
-                        tracing::info!("Task {:?} runs during suspense, running it", task);
+                        tracing::trace!("Task {:?} runs during suspense, running it", task);
                         let _ = self.runtime.handle_task_wakeup(task);
                         // Running that task, may mark a scope higher up as dirty. If it does, return from the function early
                         self.queue_events();
                         if self.has_dirty_scopes() {
-                            break 'wait_for_work;
+                            return;
                         }
                     } else {
-                        tracing::info!("Task {:?} does not run during suspense, skipping it", task);
+                        tracing::trace!(
+                            "Task {:?} does not run during suspense, skipping it",
+                            task
+                        );
+                    }
+                    tasks_polled += 1;
+                    // Once we have polled a few tasks, we manually yield to the scheduler to give it a chance to run other pending work
+                    if tasks_polled > 32 {
+                        let mut yielded = false;
+                        std::future::poll_fn::<(), _>(move |cx| {
+                            if !yielded {
+                                cx.waker().wake_by_ref();
+                                yielded = true;
+                                std::task::Poll::Pending
+                            } else {
+                                std::task::Poll::Ready(())
+                            }
+                        })
+                        .await;
+                        tasks_polled = 0;
                     }
                 }
             }

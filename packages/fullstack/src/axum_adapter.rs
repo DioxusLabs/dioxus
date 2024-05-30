@@ -340,29 +340,19 @@ pub async fn render_handler_with_context<F: FnMut(&mut DioxusServerContext)>(
 
     let (parts, _) = request.into_parts();
     let url = parts.uri.path_and_query().unwrap().to_string();
-    let parts: Arc<tokio::sync::RwLock<http::request::Parts>> =
-        Arc::new(tokio::sync::RwLock::new(parts));
+    let parts: Arc<parking_lot::RwLock<http::request::Parts>> =
+        Arc::new(parking_lot::RwLock::new(parts));
     let mut server_context = DioxusServerContext::new(parts.clone());
     inject_context(&mut server_context);
 
-    let (tx, rx) = futures_channel::mpsc::channel::<
-        Result<String, dioxus_ssr::incremental::IncrementalRendererError>,
-    >(100);
-
     match ssr_state
-        .render(
-            url,
-            &cfg,
-            move || virtual_dom_factory(),
-            &server_context,
-            tx,
-        )
+        .render(url, &cfg, move || virtual_dom_factory(), &server_context)
         .await
     {
-        Ok(freshness) => {
+        Ok((freshness, rx)) => {
             let mut response = axum::response::Html::from(Body::from_stream(rx)).into_response();
             freshness.write(response.headers_mut());
-            let headers = server_context.response_parts().unwrap().headers.clone();
+            let headers = server_context.response_parts().headers.clone();
             apply_request_parts_to_response(headers, &mut response);
             Ok(response)
         }
@@ -415,7 +405,7 @@ async fn handle_server_fns_inner(
         if let Some(mut service) =
             server_fn::axum::get_server_fn_service(&path_string)
         {
-            let server_context = DioxusServerContext::new(Arc::new(tokio::sync::RwLock::new(parts)));
+            let server_context = DioxusServerContext::new(Arc::new(parking_lot::RwLock::new(parts)));
             additional_context();
 
             // store Accepts and Referrer in case we need them for redirect (below)
@@ -443,7 +433,7 @@ async fn handle_server_fns_inner(
             }
 
             // apply the response parts from the server context to the response
-            let mut res_options = server_context.response_parts_mut().unwrap();
+            let mut res_options = server_context.response_parts_mut();
             res.headers_mut().extend(res_options.headers.drain());
 
             Ok(res)

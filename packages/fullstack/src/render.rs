@@ -6,10 +6,10 @@ use dioxus_ssr::{
     Renderer,
 };
 use futures_channel::mpsc::Sender;
+use futures_util::{Stream, StreamExt};
 use std::future::Future;
 use std::sync::Arc;
 use std::sync::RwLock;
-use tokio::task::block_in_place;
 use tokio::task::JoinHandle;
 
 use crate::prelude::*;
@@ -22,11 +22,16 @@ where
 {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        tokio::task::spawn_blocking(move || {
-            tokio::runtime::Runtime::new()
-                .expect("couldn't spawn runtime")
-                .block_on(f())
-        })
+        use tokio_util::task::LocalPoolHandle;
+        static TASK_POOL: std::sync::OnceLock<LocalPoolHandle> = std::sync::OnceLock::new();
+
+        let pool = TASK_POOL.get_or_init(|| {
+            let threads = std::thread::available_parallelism()
+                .unwrap_or(std::num::NonZeroUsize::new(1).unwrap());
+            LocalPoolHandle::new(threads.into())
+        });
+
+        pool.spawn_pinned(f)
     }
     #[cfg(target_arch = "wasm32")]
     {
@@ -92,11 +97,53 @@ impl SsrRendererPool {
         route: String,
         virtual_dom_factory: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
         server_context: &DioxusServerContext,
-        mut into: Sender<Result<String, dioxus_ssr::incremental::IncrementalRendererError>>,
-    ) -> Result<RenderFreshness, dioxus_ssr::incremental::IncrementalRendererError> {
+    ) -> Result<
+        (
+            RenderFreshness,
+            impl Stream<Item = Result<String, dioxus_ssr::incremental::IncrementalRendererError>>,
+        ),
+        dioxus_ssr::incremental::IncrementalRendererError,
+    > {
+        struct ReceiverWithDrop {
+            receiver: futures_channel::mpsc::Receiver<
+                Result<String, dioxus_ssr::incremental::IncrementalRendererError>,
+            >,
+            cancel_task: Option<tokio::task::JoinHandle<()>>,
+        }
+
+        impl Stream for ReceiverWithDrop {
+            type Item = Result<String, dioxus_ssr::incremental::IncrementalRendererError>;
+
+            fn poll_next(
+                mut self: std::pin::Pin<&mut Self>,
+                cx: &mut std::task::Context<'_>,
+            ) -> std::task::Poll<Option<Self::Item>> {
+                self.receiver.poll_next_unpin(cx)
+            }
+        }
+
+        // When we drop the stream, we need to cancel the task that is feeding values to the stream
+        impl Drop for ReceiverWithDrop {
+            fn drop(&mut self) {
+                if let Some(cancel_task) = self.cancel_task.take() {
+                    cancel_task.abort();
+                }
+            }
+        }
+
+        let (mut into, rx) = futures_channel::mpsc::channel::<
+            Result<String, dioxus_ssr::incremental::IncrementalRendererError>,
+        >(1000);
+
         // before we even spawn anything, we can check synchronously if we have the route cached
         if let Some(freshness) = self.check_cached_route(&route, &mut into) {
-            return Ok(freshness);
+            return Ok((
+                freshness,
+                ReceiverWithDrop {
+                    receiver: rx,
+                    cancel_task: None,
+                },
+            ));
         }
 
         let wrapper = FullstackHTMLTemplate {
@@ -114,7 +161,7 @@ impl SsrRendererPool {
 
         let myself = self.clone();
 
-        spawn_platform(move || async move {
+        let join_handle = spawn_platform(move || async move {
             let mut virtual_dom = virtual_dom_factory();
 
             let mut pre_body = WriteBuffer { buffer: Vec::new() };
@@ -144,7 +191,7 @@ impl SsrRendererPool {
             // poll the future, which may call server_context()
             tracing::info!("Rebuilding vdom");
             with_server_context(server_context.clone(), || {
-                block_in_place(|| virtual_dom.rebuild(&mut NoOpMutations));
+                virtual_dom.rebuild(&mut NoOpMutations);
             });
 
             // While we are streaming, there is no need to include hydration ids in the SSR render
@@ -158,7 +205,7 @@ impl SsrRendererPool {
                 .await;
 
                 with_server_context(server_context.clone(), || {
-                    block_in_place(|| virtual_dom.render_suspense_immediate());
+                    virtual_dom.render_suspense_immediate();
                 });
 
                 if virtual_dom.suspended_tasks_remaining() {
@@ -208,7 +255,13 @@ impl SsrRendererPool {
             myself.renderers.write().unwrap().push(renderer);
         });
 
-        Ok(RenderFreshness::now(None))
+        Ok((
+            RenderFreshness::now(None),
+            ReceiverWithDrop {
+                receiver: rx,
+                cancel_task: Some(join_handle),
+            },
+        ))
     }
 }
 
@@ -234,11 +287,16 @@ impl SSRState {
         cfg: &'a ServeConfig,
         virtual_dom_factory: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
         server_context: &'a DioxusServerContext,
-        into: Sender<Result<String, dioxus_ssr::incremental::IncrementalRendererError>>,
-    ) -> Result<RenderFreshness, dioxus_ssr::incremental::IncrementalRendererError> {
+    ) -> Result<
+        (
+            RenderFreshness,
+            impl Stream<Item = Result<String, dioxus_ssr::incremental::IncrementalRendererError>>,
+        ),
+        dioxus_ssr::incremental::IncrementalRendererError,
+    > {
         self.renderers
             .clone()
-            .render_to(cfg, route, virtual_dom_factory, server_context, into)
+            .render_to(cfg, route, virtual_dom_factory, server_context)
             .await
     }
 }
@@ -277,28 +335,10 @@ impl dioxus_ssr::incremental::WrapBody for FullstackHTMLTemplate {
         to: &mut R,
     ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
         // serialize the server state
-        crate::html_storage::serialize::encode_in_element(
-            &*self.server_context.html_data().map_err(|_| {
-                dioxus_ssr::incremental::IncrementalRendererError::Other(Box::new({
-                    #[derive(Debug)]
-                    struct HTMLDataReadError;
-
-                    impl std::fmt::Display for HTMLDataReadError {
-                        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                            f.write_str(
-                                "Failed to read the server data to serialize it into the HTML",
-                            )
-                        }
-                    }
-
-                    impl std::error::Error for HTMLDataReadError {}
-
-                    HTMLDataReadError
-                }))
-            })?,
-            to,
-        )
-        .map_err(|err| dioxus_ssr::incremental::IncrementalRendererError::Other(Box::new(err)))?;
+        crate::html_storage::serialize::encode_in_element(&self.server_context.html_data(), to)
+            .map_err(|err| {
+                dioxus_ssr::incremental::IncrementalRendererError::Other(Box::new(err))
+            })?;
 
         #[cfg(all(debug_assertions, feature = "hot-reload"))]
         {
