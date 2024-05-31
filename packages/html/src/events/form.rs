@@ -287,7 +287,7 @@ impl_event! {
     /// onchange
     onchange
 
-    /// The `oninput` event is fired when the value of a <input>, <select>, or <textarea> element is changed.
+    /// The `oninput` event is fired when the value of a `<input>`, `<select>`, or `<textarea>` element is changed.
     ///
     /// There are two main approaches to updating your input element:
     /// 1) Controlled inputs directly update the value of the input element as the user interacts with the element

@@ -15,10 +15,12 @@ macro_rules! impl_event {
             $( #[$attr] )*
             /// <details>
             /// <summary>General Event Handler Information</summary>
+            ///
             #[doc = include_str!("../../docs/event_handlers.md")]
+            ///
             /// </details>
             ///
-            #[doc = include_str!("../../docs/common_errors.md")]
+            #[doc = include_str!("../../docs/common_event_handler_errors.md")]
             #[inline]
             pub fn $name<E: crate::EventReturn<T>, T>(mut _f: impl FnMut(::dioxus_core::Event<$data>) -> E + 'static) -> ::dioxus_core::Attribute {
                 ::dioxus_core::Attribute::new(
