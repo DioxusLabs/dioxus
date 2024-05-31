@@ -30,7 +30,7 @@ impl FormValue {
         self.0.first().unwrap().clone()
     }
 
-    /// Convert into Vec<String>
+    /// Convert into [`Vec<String>`]
     pub fn to_vec(self) -> Vec<String> {
         self.0.clone()
     }
