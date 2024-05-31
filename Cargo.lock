@@ -2606,6 +2606,7 @@ dependencies = [
  "gloo-utils 0.1.7",
  "http 1.1.0",
  "js-sys",
+ "rustversion",
  "serde",
  "serde_json",
  "tokio",
