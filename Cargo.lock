@@ -1583,12 +1583,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
 
 [[package]]
-name = "constcat"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd7e35aee659887cbfb97aaf227ac12cad1a9d7c71e55ff3376839ed4e282d08"
-
-[[package]]
 name = "convert_case"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2267,7 +2261,6 @@ dependencies = [
 name = "dioxus-core-macro"
 version = "0.5.2"
 dependencies = [
- "constcat",
  "convert_case 0.6.0",
  "dioxus",
  "dioxus-rsx",
