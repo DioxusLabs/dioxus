@@ -2,7 +2,7 @@
 
 `dioxus-core` provides a fast and featureful VirtualDom implementation for Rust.
 
-```rust, ignore
+```rust, no_run
 use dioxus_core::prelude::*;
 
 let vdom = VirtualDom::new(app);
@@ -10,19 +10,19 @@ let real_dom = SomeRenderer::new();
 
 loop {
     select! {
-        evt = real_dom.event() => vdom.handle_event(evt),
+        evt = real_dom.event() => vdom.handle_event("onclick", evt, ElementId(0), true),
         _ = vdom.wait_for_work() => {}
     }
     vdom.render(&mut real_dom)
 }
 
 # fn app() -> Element { None }
-# struct SomeRenderer; impl SomeRenderer { fn new() -> SomeRenderer { SomeRenderer; } async fn event() -> () { unimplemented!() } }
+# struct SomeRenderer; impl SomeRenderer { fn new() -> SomeRenderer { SomeRenderer; } async fn event() -> std::rc::Rc<dyn Any> { unimplemented!() } }
 ```
 
 ## Features
 
-A virtualdom is an efficient and flexible tree datastructure that allows you to manage state for a graphical user interface. The Dioxus VirtualDom is perhaps the most fully-featured virtualdom implementation in Rust and powers renderers running across Web, Desktop, Mobile, SSR, TUI, LiveView, and more. When you use the Dioxus VirtualDom, you immediately enable users of your renderer to leverage the wide ecosystem of Dioxus components, hooks, and associated tooling.
+A virtualdom is an efficient and flexible tree data structure that allows you to manage state for a graphical user interface. The Dioxus VirtualDom is perhaps the most fully-featured virtualdom implementation in Rust and powers renderers running across Web, Desktop, Mobile, SSR, TUI, LiveView, and more. When you use the Dioxus VirtualDom, you immediately enable users of your renderer to leverage the wide ecosystem of Dioxus components, hooks, and associated tooling.
 
 Some features of `dioxus-core` include:
 
@@ -40,6 +40,7 @@ If you are just starting, check out the Guides first.
 `dioxus-core` is designed to be a lightweight crate that. It exposes a number of flexible primitives without being deeply concerned about the intracices of state management itself. We proivde a number of useful abstractions built on these primitives in the `dioxus-hooks` crate as well as the `dioxus-signals` crate.
 
 The important abstractions to understand are:
+
 - The [`VirtualDom`]
 - The [`Component`] and its [`Properties`]
 - Handling events
@@ -73,17 +74,17 @@ fn main() {
 ```
 
 ## Contributing
+
 - Check out the website [section on contributing](https://dioxuslabs.com/learn/0.5/contributing).
 - Report issues on our [issue tracker](https://github.com/dioxuslabs/dioxus/issues).
 - [Join](https://discord.gg/XgGxMSkvUM) the discord and ask questions!
-
 
 <a href="https://github.com/dioxuslabs/dioxus/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=dioxuslabs/dioxus&max=30&columns=10" />
 </a>
 
-
 ## License
+
 This project is licensed under the [MIT license].
 
 [mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT

@@ -173,16 +173,18 @@ impl Scope {
     ///
     /// # Example
     ///
-    /// ```rust, ignore
+    /// ```rust
     /// struct SharedState(&'static str);
     ///
-    /// static app: Component = |cx| {
-    ///     cx.use_hook(|| cx.provide_context(SharedState("world")));
+    /// // The parent provides context that is available in all children
+    /// fn app() -> Element {
+    ///     use_hook(|| provide_context(SharedState("world")));
     ///     rsx!(Child {})
     /// }
     ///
-    /// static Child: Component = |cx| {
-    ///     let state = cx.consume_state::<SharedState>();
+    /// // Any child elements can access the context with the `consume_context` function
+    /// fn Child() -> Element {
+    ///     let state = consume_state::<SharedState>();
     ///     rsx!(div { "hello {state.0}" })
     /// }
     /// ```

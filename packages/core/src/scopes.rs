@@ -38,8 +38,8 @@ impl ScopeId {
     ///
     /// # Example
     ///
-    /// ```rust, ignore
-    /// use dioxus_signals::*;
+    /// ```rust
+    /// use dioxus::prelude::*;
     /// let my_persistent_state = Signal::new_in_scope(ScopeId::ROOT, String::new());
     /// ```
     pub const ROOT: ScopeId = ScopeId(0);

@@ -12,12 +12,12 @@ use std::{
 ///
 /// # Example
 ///
-/// ```rust, ignore
+/// ```rust
+/// # use dioxus::prelude::*;
 /// rsx! {
 ///     button {
 ///         onclick: move |evt: Event<MouseData>| {
 ///             evt.cancel_bubble();
-///
 ///         }
 ///     }
 /// }
@@ -42,7 +42,8 @@ impl<T> Event<T> {
     ///
     /// # Example
     ///
-    /// ```rust, ignore
+    /// ```rust
+    /// # use dioxus::prelude::*;
     /// rsx! {
     ///    button {
     ///       onclick: move |evt: Event<FormData>| {
@@ -63,7 +64,8 @@ impl<T> Event<T> {
     ///
     /// # Example
     ///
-    /// ```rust, ignore
+    /// ```rust
+    /// # use dioxus::prelude::*;
     /// rsx! {
     ///     button {
     ///         onclick: move |evt: Event<MouseData>| {
@@ -81,7 +83,8 @@ impl<T> Event<T> {
     ///
     /// # Example
     ///
-    /// ```rust, ignore
+    /// ```rust
+    /// # use dioxus::prelude::*;
     /// rsx! {
     ///     button {
     ///         onclick: move |evt: Event<MouseData>| {
@@ -96,7 +99,8 @@ impl<T> Event<T> {
 
     /// Get a reference to the inner data from this event
     ///
-    /// ```rust, ignore
+    /// ```rust
+    /// # use dioxus::prelude::*;
     /// rsx! {
     ///     button {
     ///         onclick: move |evt: Event<MouseData>| {
@@ -145,7 +149,8 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
 ///
 /// # Example
 ///
-/// ```rust, ignore
+/// ```rust
+/// # use dioxus::prelude::*;
 /// rsx!{
 ///     MyComponent { onclick: move |evt| tracing::debug!("clicked") }
 /// }

@@ -4,23 +4,34 @@ use crate::innerlude::*;
 
 /// Every "Props" used for a component must implement the `Properties` trait. This trait gives some hints to Dioxus
 /// on how to memoize the props and some additional optimizations that can be made. We strongly encourage using the
-/// derive macro to implement the `Properties` trait automatically as guarantee that your memoization strategy is safe.
+/// derive macro to implement the `Properties` trait automatically.
 ///
-/// If your props are 'static, then Dioxus will require that they also be PartialEq for the derived memoize strategy.
-///
-/// By default, the memoization strategy is very conservative, but can be tuned to be more aggressive manually. However,
-/// this is only safe if the props are 'static - otherwise you might borrow references after-free.
-///
-/// We strongly suggest that any changes to memoization be done at the "PartialEq" level for 'static props. Additionally,
-/// we advise the use of smart pointers in cases where memoization is important.
+/// Dioxus requires your props to be 'static, `Clone`, and `PartialEq`. We use the `PartialEq` trait to determine if
+/// the props have changed when we diff the component.
 ///
 /// ## Example
 ///
-/// For props that are 'static:
-/// ```rust, ignore
+/// ```rust
 /// #[derive(Props, PartialEq, Clone)]
-/// struct MyProps {
+/// struct MyComponentProps {
 ///     data: String
+/// }
+///
+/// fn MyComponent(props: MyProps) -> Element {
+///     rsx! {
+///         div { "Hello {props.data}" }
+///     }
+/// }
+/// ```
+///
+/// Or even better, derive your entire props struct with the [`#[crate::component]`] macro:
+///
+/// ```rust
+/// #[component]
+/// fn MyComponent(data: String) -> Element {
+///     rsx! {
+///         div { "Hello {data}" }
+///     }
 /// }
 /// ```
 #[rustversion::attr(

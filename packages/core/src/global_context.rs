@@ -273,25 +273,25 @@ pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
 /// (created with [`use_effect`](crate::use_effect)).
 ///
 /// Example:
-/// ```rust, ignore
+/// ```rust
 /// use dioxus::prelude::*;
 ///
 /// fn app() -> Element {
-///     let state = use_signal(|| true);
+///     let mut state = use_signal(|| true);
 ///     rsx! {
 ///         for _ in 0..100 {
 ///             h1 {
 ///                 "spacer"
 ///             }
 ///         }
-///         if **state {
+///         if state() {
 ///             rsx! {
 ///                 child_component {}
 ///             }
 ///         }
 ///         button {
 ///             onclick: move |_| {
-///                 state.set(!*state.get());
+///                 state.toggle()
 ///             },
 ///             "Unmount element"
 ///         }

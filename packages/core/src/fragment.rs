@@ -11,7 +11,8 @@ use crate::innerlude::*;
 ///
 /// ## Example
 ///
-/// ```rust, ignore
+/// ```rust
+/// # use dioxus::prelude::*;
 /// rsx!{
 ///     Fragment { key: "abc" }
 /// }
@@ -61,7 +62,8 @@ impl<const A: bool> FragmentBuilder<A> {
 ///
 /// ## Example
 ///
-/// ```rust, ignore
+/// ```rust
+/// # use dioxus::prelude::*;
 /// fn app() -> Element {
 ///     rsx!{
 ///         CustomCard {
@@ -71,16 +73,12 @@ impl<const A: bool> FragmentBuilder<A> {
 ///     })
 /// }
 ///
-/// #[derive(PartialEq, Props)]
-/// struct CardProps {
-///     children: Element
-/// }
-///
-/// fn CustomCard(cx: CardProps) -> Element {
+/// #[component]
+/// fn CustomCard(childern: Element) -> Element {
 ///     rsx!{
 ///         div {
 ///             h1 {"Title card"}
-///             {cx.children}
+///             {children}
 ///         }
 ///     })
 /// }

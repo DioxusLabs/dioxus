@@ -101,18 +101,25 @@ pub struct VNodeInner {
     /// The inner list *must* be in the format [static named attributes, remaining dynamically named attributes].
     ///
     /// For example:
-    /// ```rust, ignore
-    /// div {
-    ///     class: "{class}",
-    ///     ..attrs,
-    ///     p {
-    ///         color: "{color}",
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// let class = "my-class";
+    /// let attrs = vec![];
+    /// let color = "red";
+    ///
+    /// rsx! {
+    ///     div {
+    ///         class: "{class}",
+    ///         ..attrs,
+    ///         p {
+    ///             color: "{color}",
+    ///         }
     ///     }
     /// }
     /// ```
     ///
     /// Would be represented as:
-    /// ```rust, ignore
+    /// ```text
     /// [
     ///     [class, every attribute in attrs sorted by name], // Slot 0 in the template
     ///     [color], // Slot 1 in the template
