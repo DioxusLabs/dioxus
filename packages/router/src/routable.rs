@@ -517,12 +517,72 @@ type SiteMapFlattened<'a> = FlatMap<
     fn(&SiteMapSegment) -> Vec<Vec<SegmentType>>,
 >;
 
-/// Something that can be:
+/// The Routable trait is implemented for types that can be converted to and from a route and be rendered as a page.
+///
+/// A Routable object is something that can be:
 /// 1. Converted from a route.
 /// 2. Converted to a route.
 /// 3. Rendered as a component.
 ///
-/// This trait should generally be derived using the `dioxus_router_macro::Routable` macro.
+/// This trait should generally be derived using the [`dioxus_router_macro::Routable`] macro which has more information about the syntax.
+///
+/// ## Example
+/// ```rust
+/// use dioxus::prelude::*;
+///
+/// fn App() -> Element {
+///     rsx! {
+///         Router::<Route> { }
+///     }
+/// }
+///
+/// // Routes are generally enums that derive `Routable`
+/// #[derive(Routable, Clone, PartialEq, Debug)]
+/// enum Route {
+///     // Each enum has an associated url
+///     #[route("/")]
+///     Home {},
+///     // Routes can include dynamic segments that are parsed from the url
+///     #[route("/blog/:blog_id")]
+///     Blog { blog_id: usize },
+///     // Or query segments that are parsed from the url
+///     #[route("/edit?:blog_id")]
+///     Edit { blog_id: usize },
+///     // Or hash segments that are parsed from the url
+///     #[route("/hashtag/#:hash")]
+///     Hash { hash: String },
+/// }
+///
+/// // Each route variant defaults to rendering a component of the same name
+/// #[component]
+/// fn Home() -> Element {
+///     rsx! {
+///         h1 { "Home" }
+///     }
+/// }
+///
+/// // If the variant has dynamic parameters, those are passed to the component
+/// #[component]
+/// fn Blog(blog_id: usize) -> Element {
+///     rsx! {
+///         h1 { "Blog" }
+///     }
+/// }
+///
+/// #[component]
+/// fn Edit(blog_id: usize) -> Element {
+///     rsx! {
+///         h1 { "Edit" }
+///     }
+/// }
+///
+/// #[component]
+/// fn Hash(hash: String) -> Element {
+///     rsx! {
+///         h1 { "Hashtag #{hash}" }
+///     }
+/// }
+/// ```
 #[rustversion::attr(
     since(1.78.0),
     diagnostic::on_unimplemented(
