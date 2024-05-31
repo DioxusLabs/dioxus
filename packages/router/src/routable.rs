@@ -66,6 +66,14 @@ impl<E: Display> Display for RouteParseError<E> {
 /// #     todo!()
 /// # }
 /// ```
+#[rustversion::attr(
+    since(1.78.0),
+    diagnostic::on_unimplemented(
+        message = "`FromQuery` is not implemented for `{Self}`",
+        label = "spread query",
+        note = "FromQuery is automatically implemented for types that implement `From<&str>`. You need to either implement From<&str> or implement FromQuery manually."
+    )
+)]
 pub trait FromQuery {
     /// Create an instance of `Self` from a query string.
     fn from_query(query: &str) -> Self;
@@ -126,6 +134,14 @@ impl<T: for<'a> From<&'a str>> FromQuery for T {
 /// #     todo!()
 /// # }
 /// ```
+#[rustversion::attr(
+    since(1.78.0),
+    diagnostic::on_unimplemented(
+        message = "`FromQueryArgument` is not implemented for `{Self}`",
+        label = "query argument",
+        note = "FromQueryArgument is automatically implemented for types that implement `FromStr` and `Default`. You need to either implement FromStr and Default or implement FromQueryArgument manually."
+    )
+)]
 pub trait FromQueryArgument: Default {
     /// The error that can occur when parsing a query argument.
     type Err;
@@ -207,6 +223,15 @@ where
 ///         }
 ///     }
 /// }
+/// ```
+#[rustversion::attr(
+    since(1.78.0),
+    diagnostic::on_unimplemented(
+        message = "`FromHashFragment` is not implemented for `{Self}`",
+        label = "hash fragment",
+        note = "FromHashFragment is automatically implemented for types that implement `FromStr` and `Default`. You need to either implement FromStr and Default or implement FromHashFragment manually."
+    )
+)]
 pub trait FromHashFragment {
     /// Create an instance of `Self` from a hash fragment.
     fn from_hash_fragment(hash: &str) -> Self;
@@ -278,6 +303,14 @@ where
 /// #     todo!()
 /// # }
 /// ```
+#[rustversion::attr(
+    since(1.78.0),
+    diagnostic::on_unimplemented(
+        message = "`FromRouteSegment` is not implemented for `{Self}`",
+        label = "route segment",
+        note = "FromRouteSegment is automatically implemented for types that implement `FromStr` and `Default`. You need to either implement FromStr and Default or implement FromRouteSegment manually."
+    )
+)]
 pub trait FromRouteSegment: Sized {
     /// The error that can occur when parsing a route segment.
     type Err;
@@ -355,6 +388,14 @@ fn full_circle() {
 /// #     todo!()
 /// # }
 /// ```
+#[rustversion::attr(
+    since(1.78.0),
+    diagnostic::on_unimplemented(
+        message = "`ToRouteSegments` is not implemented for `{Self}`",
+        label = "route segment",
+        note = "ToRouteSegments is automatically implemented for types that implement `IntoIterator` with an `Item` type that implements `Display`. You need to either implement IntoIterator or implement ToRouteSegments manually."
+    )
+)]
 pub trait ToRouteSegments {
     /// Display the route segments. You must url encode the segments.
     fn display_route_segments(self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
@@ -441,6 +482,14 @@ fn to_route_segments() {
 /// #     todo!()
 /// # }
 /// ```
+#[rustversion::attr(
+    since(1.78.0),
+    diagnostic::on_unimplemented(
+        message = "`FromRouteSegments` is not implemented for `{Self}`",
+        label = "spread route segments",
+        note = "FromRouteSegments is automatically implemented for types that implement `FromIterator` with an `Item` type that implements `Display`. You need to either implement FromIterator or implement FromRouteSegments manually."
+    )
+)]
 pub trait FromRouteSegments: Sized {
     /// The error that can occur when parsing route segments.
     type Err;
@@ -474,6 +523,14 @@ type SiteMapFlattened<'a> = FlatMap<
 /// 3. Rendered as a component.
 ///
 /// This trait should generally be derived using the `dioxus_router_macro::Routable` macro.
+#[rustversion::attr(
+    since(1.78.0),
+    diagnostic::on_unimplemented(
+        message = "`Routable` is not implemented for `{Self}`",
+        label = "Route",
+        note = "Routable should generally be derived using the `#[derive(Routable)]` macro."
+    )
+)]
 pub trait Routable: FromStr + Display + Clone + 'static {
     /// The error that can occur when parsing a route.
     const SITE_MAP: &'static [SiteMapSegment];
