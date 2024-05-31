@@ -1,7 +1,7 @@
 use dioxus_core::ElementId;
 use dioxus_html::{
     geometry::{PixelsRect, PixelsSize, PixelsVector2D},
-    MountedResult, RenderedElementBacking,
+    MountedResult, ObserverEntryBacking, RenderedElementBacking,
 };
 
 use crate::query::QueryEngine;
@@ -116,6 +116,12 @@ impl RenderedElementBacking for LiveviewElement {
                 }
             }
         })
+    }
+}
+
+impl ObserverEntryBacking for LiveviewElement {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

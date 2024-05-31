@@ -19,6 +19,8 @@ export class BaseInterpreter {
 
   root: HTMLElement;
   handler: EventListener;
+  resize_observer: ResizeObserver;
+
   nodes: Node[];
   stack: Node[];
   templates: {
@@ -30,7 +32,10 @@ export class BaseInterpreter {
 
   constructor() { }
 
-  initialize(root: HTMLElement, handler: EventListener | null = null) {
+  initialize(
+    root: HTMLElement,
+    handler: EventListener | null = null,
+    resize_observer_handler: ResizeObserverCallback | null = null) {
     this.global = {};
     this.local = {};
     this.root = root;
@@ -41,6 +46,34 @@ export class BaseInterpreter {
 
     if (handler) {
       this.handler = handler;
+    }
+
+    if (resize_observer_handler) {
+      this.resize_observer = new ResizeObserver(resize_observer_handler);
+    }
+  }
+
+  createObserver(event_name: string, element: HTMLElement) {
+    switch (event_name) {
+      case "resized":
+        if (this.resize_observer) {
+          this.resize_observer.observe(element);
+        }
+        break;
+      default:
+        console.warn(`No observer for ${event_name} events`);
+    }
+  }
+
+  removeObserver(event_name: String, element: HTMLElement) {
+    switch (event_name) {
+      case "resized":
+        if (this.resize_observer) {
+          this.resize_observer.unobserve(element);
+        }
+        break;
+      default:
+        console.warn(`No observer for ${event_name} events`);
     }
   }
 

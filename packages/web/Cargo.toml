@@ -49,6 +49,9 @@ features = [
     "DataTransfer",
     "console",
     "NodeList",
+    "ResizeObserver",
+    "ResizeObserverEntry",
+    "ResizeObserverSize",
 ]
 
 [features]

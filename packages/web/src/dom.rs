@@ -12,7 +12,7 @@ use dioxus_interpreter_js::unified_bindings::Interpreter;
 use futures_channel::mpsc;
 use rustc_hash::FxHashMap;
 use wasm_bindgen::{closure::Closure, JsCast};
-use web_sys::{Document, Element, Event};
+use web_sys::{Document, Element, Event, ResizeObserver, ResizeObserverEntry};
 
 use crate::{load_document, virtual_event_from_websys_event, Config, WebEventConverter};
 
@@ -112,14 +112,39 @@ impl WebsysDom {
             }
         }));
 
+        let resize_observer_handler: Closure<dyn FnMut(Vec<ResizeObserverEntry>, ResizeObserver)> =
+            Closure::wrap(Box::new({
+                let event_channel = event_channel.clone();
+                move |entries: Vec<web_sys::ResizeObserverEntry>,
+                      _observer: web_sys::ResizeObserver| {
+                    for entry in entries {
+                        let target = entry.target();
+                        let element = walk_node_for_id(target);
+
+                        let Some((element, _)) = element else {
+                            return;
+                        };
+
+                        let _ = event_channel.unbounded_send(UiEvent {
+                            name: "resized".to_string(),
+                            bubbles: false,
+                            element,
+                            data: PlatformEventData::new(Box::new(entry)),
+                        });
+                    }
+                }
+            }));
+
         let _interpreter = interpreter.base();
         _interpreter.initialize(
             root.clone().unchecked_into(),
             handler.as_ref().unchecked_ref(),
+            resize_observer_handler.as_ref().unchecked_ref(),
         );
 
         dioxus_html::set_event_converter(Box::new(WebEventConverter));
         handler.forget();
+        resize_observer_handler.forget();
 
         Self {
             document,
@@ -143,6 +168,42 @@ fn walk_event_for_id(event: &web_sys::Event) -> Option<(ElementId, web_sys::Elem
     let target = event
         .target()
         .expect("missing target")
+        .dyn_into::<web_sys::Node>()
+        .expect("not a valid node");
+    let mut current_target_element = target.dyn_ref::<web_sys::Element>().cloned();
+
+    loop {
+        match (
+            current_target_element
+                .as_ref()
+                .and_then(|el| el.get_attribute("data-dioxus-id").map(|f| f.parse())),
+            current_target_element,
+        ) {
+            // This node is an element, and has a dioxus id, so we can stop walking
+            (Some(Ok(id)), Some(target)) => return Some((ElementId(id), target)),
+
+            // Walk the tree upwards until we actually find an event target
+            (None, target_element) => {
+                let parent = match target_element.as_ref() {
+                    Some(el) => el.parent_element(),
+                    // if this is the first node and not an element, we need to get the parent from the target node
+                    None => target.parent_element(),
+                };
+                match parent {
+                    Some(parent) => current_target_element = Some(parent),
+                    _ => return None,
+                }
+            }
+
+            // This node is an element with an invalid dioxus id, give up
+            _ => return None,
+        }
+    }
+}
+
+// TODO: Merge with walk_event_for_id
+fn walk_node_for_id(target: web_sys::Element) -> Option<(ElementId, web_sys::Element)> {
+    let target = target
         .dyn_into::<web_sys::Node>()
         .expect("not a valid node");
     let mut current_target_element = target.dyn_ref::<web_sys::Element>().cloned();

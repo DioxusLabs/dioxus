@@ -99,6 +99,10 @@ impl HtmlEventConverter for SerializedHtmlEventConverter {
             .into()
     }
 
+    fn convert_resized_data(&self, event: &PlatformEventData) -> ResizedData {
+        event.downcast::<LiveviewElement>().cloned().unwrap().into()
+    }
+
     fn convert_scroll_data(&self, event: &PlatformEventData) -> ScrollData {
         event
             .downcast::<SerializedScrollData>()

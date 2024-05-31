@@ -9,7 +9,12 @@ extern "C" {
     pub type BaseInterpreter;
 
     #[wasm_bindgen(method)]
-    pub fn initialize(this: &BaseInterpreter, root: Node, handler: &js_sys::Function);
+    pub fn initialize(
+        this: &BaseInterpreter,
+        root: Node,
+        handler: &js_sys::Function,
+        resize_observer_handler: &js_sys::Function,
+    );
 
     #[wasm_bindgen(method, js_name = "saveTemplate")]
     pub fn save_template(this: &BaseInterpreter, nodes: Vec<Node>, tmpl_id: u16);
@@ -74,16 +79,39 @@ mod js {
     fn create_placeholder(id: u32) {
         "{let node = document.createElement('pre'); node.hidden = true; this.stack.push(node); this.nodes[$id$] = node;}"
     }
+
     fn new_event_listener(event_name: &str<u8, evt>, id: u32, bubbles: u8) {
-        r#"
-            let node = this.nodes[id];
-            if(node.listening){node.listening += 1;}else{node.listening = 1;}
+        r#"{
+            const event_name = $event_name$;
+            const node = this.nodes[id];
+            const bubbles = $bubbles$;
+
+            if (node.listening) { node.listening += 1; } else { node.listening = 1; }
             node.setAttribute('data-dioxus-id', `\${id}`);
-            this.createListener($event_name$, node, $bubbles$);
-        "#
+
+            if (["resized"].indexOf(event_name) >= 0) {
+              this.createObserver(event_name, node);
+            }
+            else {
+              this.createListener(event_name, node, bubbles);
+            }
+        }"#
     }
     fn remove_event_listener(event_name: &str<u8, evt>, id: u32, bubbles: u8) {
-        "{let node = this.nodes[$id$]; node.listening -= 1; node.removeAttribute('data-dioxus-id'); this.removeListener(node, $event_name$, $bubbles$);}"
+        r#"{
+            const event_name = $event_name$;
+            const node = this.nodes[$id$];
+            const bubbles = $bubbles$;
+
+            node.listening -= 1;
+            node.removeAttribute('data-dioxus-id');
+
+            if (["resized"].indexOf(event_name) >= 0) {
+              this.removeObserver(event_name, node);
+            } else {
+              this.removeListener(node, event_name, bubbles);
+            }
+        }"#
     }
     fn set_text(id: u32, text: &str) {
         "{this.nodes[$id$].textContent = $text$;}"

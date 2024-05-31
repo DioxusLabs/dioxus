@@ -102,6 +102,8 @@ pub trait HtmlEventConverter: Send + Sync {
     fn convert_mouse_data(&self, event: &PlatformEventData) -> MouseData;
     /// Convert a general event to a pointer data event
     fn convert_pointer_data(&self, event: &PlatformEventData) -> PointerData;
+    /// Convert a general event to a resize data event
+    fn convert_resized_data(&self, event: &PlatformEventData) -> ResizedData;
     /// Convert a general event to a scroll data event
     fn convert_scroll_data(&self, event: &PlatformEventData) -> ScrollData;
     /// Convert a general event to a selection data event
@@ -188,6 +190,12 @@ impl From<&PlatformEventData> for PointerData {
     }
 }
 
+impl From<&PlatformEventData> for ResizedData {
+    fn from(val: &PlatformEventData) -> Self {
+        with_event_converter(|c| c.convert_resized_data(val))
+    }
+}
+
 impl From<&PlatformEventData> for ScrollData {
     fn from(val: &PlatformEventData) -> Self {
         with_event_converter(|c| c.convert_scroll_data(val))
@@ -236,6 +244,7 @@ mod media;
 mod mounted;
 mod mouse;
 mod pointer;
+mod resized;
 mod scroll;
 mod selection;
 mod toggle;
@@ -255,6 +264,7 @@ pub use media::*;
 pub use mounted::*;
 pub use mouse::*;
 pub use pointer::*;
+pub use resized::*;
 pub use scroll::*;
 pub use selection::*;
 pub use toggle::*;
@@ -335,6 +345,7 @@ pub fn event_bubbles(evt: &str) -> bool {
         "playing" => false,
         "progress" => false,
         "ratechange" => false,
+        "resized" => false,
         "seeked" => false,
         "seeking" => false,
         "stalled" => false,
