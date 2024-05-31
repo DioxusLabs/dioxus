@@ -85,6 +85,25 @@ macro_rules! mod_methods {
             use super::*;
             $(
                 $(#[$attr])*
+                ///
+                /// ## Usage in rsx
+                ///
+                /// ```rust, no_run
+                /// # use dioxus::prelude::*;
+                #[doc = concat!("let ", stringify!($name), " = \"value\";")]
+                ///
+                /// rsx! {
+                ///     // Attributes need to be under the element they modify
+                ///     div {
+                ///         // Attributes are followed by a colon and then the value of the attribute
+                #[doc = concat!("        ", stringify!($name), ": \"value\"")]
+                ///     }
+                ///     div {
+                ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
+                #[doc = concat!("        ", stringify!($name))]
+                ///     }
+                /// }
+                /// ```
                 pub const $name: AttributeDiscription = mod_methods! { $name $(: $($arg),*)*; };
             )*
         }
