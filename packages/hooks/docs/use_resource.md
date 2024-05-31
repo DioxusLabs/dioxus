@@ -52,7 +52,7 @@ fn WeatherElement(weather: String) -> Element {
 
 ```rust, no_run
 // Create a new count signal
-let mut count = use_state(|| 1);
+let mut count = use_signal(|| 1);
 // Create a new resource that doubles the value of count
 let double_count = use_resource(move || async move {
     // Start a request to the server. We are reading the value of count in the format macro

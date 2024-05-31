@@ -7,7 +7,7 @@ The closure you pass into memos will be called whenever the state you read insid
 That is a lot, lets dig into some examples to see how this works:
 
 ```rust
-let count = use_state(|| 1);
+let count = use_signal(|| 1);
 // double_count will rerun when state we read inside the memo changes (count)
 let double_count = use_memo(move || count() * 2);
 

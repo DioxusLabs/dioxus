@@ -8,7 +8,7 @@ If you are trying to update the DOM, you can use the [`use_effect`](https://docs
 
 ```rust
 fn MyComponent() {
-    let count = use_state(|| 0);
+    let count = use_signal(|| 0);
 
     use_effect(move || {
         // Effects are reactive like memos, and resources. If you read a value inside the effect, the effect will rerun when that value changes
@@ -38,7 +38,7 @@ ctx.fillText("{count}", 10, 50);"#
 
 ## With non-reactive dependencies
 
-To add non-reactive dependencies, you can use the [`use_reactive`] hook.
+To add non-reactive dependencies, you can use the [`crate::use_reactive()`] hook.
 
 Signals will automatically be added as dependencies, so you don't need to call this method for them.
 

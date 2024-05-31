@@ -146,7 +146,7 @@ TLDR **Don't pass signals up in the component tree**. It will cause issues:
 
 ```rust
 fn MyComponent() {
-    let child_signal = use_state(|| None);
+    let child_signal = use_signal(|| None);
 
     rsx! {
         IncrementButton {
@@ -157,7 +157,7 @@ fn MyComponent() {
 
 #[component]
 fn IncrementButton(mut child_signal: Signal<Option<Signal<i32>>>) {
-    let signal_owned_by_child = use_state(|| 0);
+    let signal_owned_by_child = use_signal(|| 0);
     // Don't do this: it may cause issues if you drop the child component
     child_signal.write() = Some(signal_owned_by_child);
 

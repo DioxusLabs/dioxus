@@ -6,11 +6,11 @@ use std::future::Future;
 
 /// Maintain a handle over a future that can be paused, resumed, and canceled.
 ///
-/// This is an upgraded form of [`use_future`] with an integrated channel system.
-/// Specifically, the coroutine generated here comes with an [`UnboundedChannel`]
+/// This is an upgraded form of [`crate::use_future()`] with an integrated channel system.
+/// Specifically, the coroutine generated here comes with an [`futures_channel::mpsc::UnboundedSender`]
 /// built into it - saving you the hassle of building your own.
 ///
-/// Addititionally, coroutines are automatically injected as shared contexts, so
+/// Additionally, coroutines are automatically injected as shared contexts, so
 /// downstream components can tap into a coroutine's channel and send messages
 /// into a singular async event loop.
 ///

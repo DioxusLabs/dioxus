@@ -21,7 +21,7 @@ use dioxus_signals::{Memo, Signal};
 /// ```
 ///
 /// ## With non-reactive dependencies
-/// To add non-reactive dependencies, you can use the `use_reactive` hook.
+/// To add non-reactive dependencies, you can use the [`crate::use_reactive()`] hook.
 ///
 /// Signals will automatically be added as dependencies, so you don't need to call this method for them.
 ///

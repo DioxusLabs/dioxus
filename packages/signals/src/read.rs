@@ -131,7 +131,7 @@ pub trait Readable {
     /// ```rust
     /// # use dioxus::prelude::*;
     /// fn MyComponent(mut count: Signal<i32>) -> Element {
-    ///     let mut event_source = use_state(|| None);
+    ///     let mut event_source = use_signal(|| None);
     ///     let doubled = use_memo(move || {
     ///         // We want to log the value of the event_source, but we don't need to rerun the doubled value if the event_source changes (because the value of doubled doesn't depend on the event_source)
     ///         // We can read the value with peek without subscribing to updates

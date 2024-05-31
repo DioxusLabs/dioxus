@@ -7,7 +7,7 @@ You will often need to move state around between your components. Dioxus provide
 
 ```rust
 fn MyComponent() {
-    let count = use_state(|| 0);
+    let count = use_signal(|| 0);
 
     rsx! {
         IncrementButton {
@@ -60,7 +60,7 @@ fn IncrementButton() {
 }
 ```
 
-This is slightly less explicit than passing it as a prop, but it is still local to the component. This is really great if you want state that is global to part of your app. It lets you create multiple global-ish states while still making state different when you reuse components. If I create a new [`ParentComponent`], it will have a new [`MyState`].
+This is slightly less explicit than passing it as a prop, but it is still local to the component. This is really great if you want state that is global to part of your app. It lets you create multiple global-ish states while still making state different when you reuse components. If I create a new `ParentComponent`, it will have a new `MyState`.
 
 3. Globals let you share state with your whole app with rust statics:
 
