@@ -7,68 +7,7 @@ use futures_util::{future, pin_mut, FutureExt, StreamExt};
 use std::ops::Deref;
 use std::{cell::Cell, future::Future, rc::Rc};
 
-/// A reactive value that resolves to the result of a future.
-/// Similar to `use_future` but `use_resource` returns a value.
-/// See [`Resource`] for more details.
-///
-/// ## Example
-/// ```rust
-/// # use dioxus::prelude::*;
-/// # #[derive(Clone)]
-/// # struct WeatherLocation {
-/// #     city: String,
-/// #     country: String,
-/// #     coordinates: (f64, f64),
-/// # }
-/// # async fn get_weather(location: &WeatherLocation) -> Result<String, String> {
-/// #     Ok("Sunny".to_string())
-/// # }
-/// # #[component]
-/// # fn WeatherElement(weather: String) -> Element {
-/// #     rsx! { p { "The weather is {weather}" } }
-/// # }
-/// fn app() -> Element {
-///     let country = use_signal(|| WeatherLocation {
-///         city: "Berlin".to_string(),
-///         country: "Germany".to_string(),
-///         coordinates: (52.5244, 13.4105),
-///     });
-///     ///
-///     // Because the resource's future subscribes to `country` by reading it (`country.read()`),
-///     // every time `country` changes the resource's future will run again and thus provide a new value.
-///     let current_weather = use_resource(move || async move { get_weather(&country()).await });
-///
-///     rsx! {
-///         // the value of the resource can be polled to
-///         // conditionally render elements based off if it's future
-///         // finished (Some(Ok(_)), errored Some(Err(_)),
-///         // or is still running (None)
-///         match &*current_weather.read() {
-///             Some(Ok(weather)) => rsx! { WeatherElement { weather } },
-///             Some(Err(e)) => rsx! { p { "Loading weather failed, {e}" } },
-///             None =>  rsx! { p { "Loading..." } }
-///         }
-///     }
-/// }
-/// ```
-///
-/// ## With non-reactive dependencies
-/// To add non-reactive dependencies, you can use the `use_reactive` hook.
-///
-/// Signals will automatically be added as dependencies, so you don't need to call this method for them.
-///
-/// ```rust
-/// # use dioxus::prelude::*;
-/// # async fn sleep(delay: u32) {}
-///
-/// #[component]
-/// fn Comp(count: u32) -> Element {
-///     // Because the memo subscribes to `count` by adding it as a dependency, the memo will rerun every time `count` changes.
-///     let new_count = use_resource(use_reactive((&count,), |(count,)| async move {count + 1} ));
-///
-///     todo!()
-/// }
-/// ```
+#[doc = include_str!("../docs/use_resource.md")]
 #[doc = include_str!("../docs/rules_of_hooks.md")]
 #[doc = include_str!("../docs/moving_state_around.md")]
 #[doc(alias = "use_async_memo")]
@@ -147,13 +86,10 @@ where
 ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{rev}/awesome.json")).await.unwrap();
 ///     });
 ///
-///     // We can get a signal with the value of the resource with the `value` method
-///     let value = resource.value();
-///
 ///     // Since our resource may not be ready yet, the value is an Option. Our request may also fail, so the get function returns a Result
-///     // Our complete type we need to match is `Option<Result<String, reqwest::Error>>`
+///     // The complete type we need to match is `Option<Result<String, reqwest::Error>>`
 ///     // We can use `read_unchecked` to keep our matching code in one statement while avoiding a temporary variable error (this is still completely safe because dioxus checks the borrows at runtime)
-///     match value.read_unchecked() {
+///     match resource.read_unchecked() {
 ///         Some(Ok(value)) => rsx! { "{value:?}" },
 ///         Some(Err(err)) => rsx! { "Error: {err}" },
 ///         None => rsx! { "Loading..." },
@@ -412,7 +348,7 @@ impl<T> Resource<T> {
     ///     });
     ///
     ///     // We can read the current state of the future with the `state` method
-    ///     match resource.state().cloned() {
+    ///     match resource.cloned() {
     ///         UseResourceState::Pending => rsx! {
     ///             "The resource is still pending"
     ///         },
@@ -450,7 +386,7 @@ impl<T> Resource<T> {
     ///     let value = resource.value();
     ///
     ///     // Since our resource may not be ready yet, the value is an Option. Our request may also fail, so the get function returns a Result
-    ///     // Our complete type we need to match is `Option<Result<String, reqwest::Error>>`
+    ///     // The complete type we need to match is `Option<Result<String, reqwest::Error>>`
     ///     // We can use `read_unchecked` to keep our matching code in one statement while avoiding a temporary variable error (this is still completely safe because dioxus checks the borrows at runtime)
     ///     match value.read_unchecked() {
     ///         Some(Ok(value)) => rsx! { "{value:?}" },
