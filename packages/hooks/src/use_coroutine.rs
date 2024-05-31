@@ -42,7 +42,7 @@ use std::future::Future;
 ///
 /// ## Example
 ///
-/// ```rust, ignore
+/// ```rust, no_run
 /// enum Action {
 ///     Start,
 ///     Stop,
@@ -63,7 +63,7 @@ use std::future::Future;
 ///         onclick: move |_| chat_client.send(Action::Start),
 ///         "Start Chat Service"
 ///     }
-/// })
+/// }
 /// ```
 #[doc = include_str!("../docs/rules_of_hooks.md")]
 pub fn use_coroutine<M, G, F>(init: G) -> Coroutine<M>

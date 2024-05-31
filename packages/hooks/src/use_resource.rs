@@ -7,9 +7,11 @@ use futures_util::{future, pin_mut, FutureExt, StreamExt};
 use std::ops::Deref;
 use std::{cell::Cell, future::Future, rc::Rc};
 
-/// A memo that resolves to a value asynchronously.
+/// A reactive value that resolves to the result of a future.
 /// Similar to `use_future` but `use_resource` returns a value.
 /// See [`Resource`] for more details.
+///
+/// ## Example
 /// ```rust
 /// # use dioxus::prelude::*;
 /// # #[derive(Clone)]
@@ -130,12 +132,49 @@ where
     }
 }
 
-#[allow(unused)]
+/// A handle to a reactive future spawned with [`use_resource`] that can be used to modify or read the result of the future.
+///
+/// ## Example
+///
+/// Reading the result of a resource:
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
+/// # use std::time::Duration;
+/// fn App() -> Element {
+///     let mut revision = use_signal(|| "1d03b42");
+///     let mut resource = use_resource(move || async move {
+///         // This will run every time the revision signal changes because we read the count inside the future
+///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{rev}/awesome.json")).await.unwrap();
+///     });
+///
+///     // We can get a signal with the value of the resource with the `value` method
+///     let value = resource.value();
+///
+///     // Since our resource may not be ready yet, the value is an Option. Our request may also fail, so the get function returns a Result
+///     // Our complete type we need to match is `Option<Result<String, reqwest::Error>>`
+///     // We can use `read_unchecked` to keep our matching code in one statement while avoiding a temporary variable error (this is still completely safe because dioxus checks the borrows at runtime)
+///     match value.read_unchecked() {
+///         Some(Ok(value)) => rsx! { "{value:?}" },
+///         Some(Err(err)) => rsx! { "Error: {err}" },
+///         None => rsx! { "Loading..." },
+///     }
+/// }
+/// ```
+#[derive(Debug)]
 pub struct Resource<T: 'static> {
     value: Signal<Option<T>>,
     task: Signal<Task>,
     state: Signal<UseResourceState>,
     callback: UseCallback<Task>,
+}
+
+impl<T> PartialEq for Resource<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+            && self.state == other.state
+            && self.task == other.task
+            && self.callback == other.callback
+    }
 }
 
 impl<T> Clone for Resource<T> {
@@ -167,6 +206,28 @@ impl<T> Resource<T> {
     ///
     /// Will not cancel the previous future, but will ignore any values that it
     /// generates.
+    ///
+    /// ## Example
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # use std::time::Duration;
+    /// fn App() -> Element {
+    ///     let mut revision = use_signal(|| "1d03b42");
+    ///     let mut resource = use_resource(move || async move {
+    ///         // This will run every time the revision signal changes because we read the count inside the future
+    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{rev}/awesome.json")).await.unwrap();
+    ///     });
+    ///
+    ///     rsx! {
+    ///         button {
+    ///             // We can get a signal with the value of the resource with the `value` method
+    ///             onclick: move |_| resource.restart(),
+    ///             "Restart resource"
+    ///         }
+    ///         "{resource:?}"
+    ///     }
+    /// }
+    /// ```
     pub fn restart(&mut self) {
         self.task.write().cancel();
         let new_task = self.callback.call();
@@ -174,18 +235,93 @@ impl<T> Resource<T> {
     }
 
     /// Forcefully cancel the resource's future.
+    ///
+    /// ## Example
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # use std::time::Duration;
+    /// fn App() -> Element {
+    ///     let mut revision = use_signal(|| "1d03b42");
+    ///     let mut resource = use_resource(move || async move {
+    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{rev}/awesome.json")).await.unwrap();
+    ///     });
+    ///
+    ///     rsx! {
+    ///         button {
+    ///             // We can cancel the resource before it finishes with the `cancel` method
+    ///             onclick: move |_| resource.cancel(),
+    ///             "Cancel resource"
+    ///         }
+    ///         "{resource:?}"
+    ///     }
+    /// }
+    /// ```
     pub fn cancel(&mut self) {
         self.state.set(UseResourceState::Stopped);
         self.task.write().cancel();
     }
 
     /// Pause the resource's future.
+    ///
+    /// ## Example
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # use std::time::Duration;
+    /// fn App() -> Element {
+    ///     let mut revision = use_signal(|| "1d03b42");
+    ///     let mut resource = use_resource(move || async move {
+    ///         // This will run every time the revision signal changes because we read the count inside the future
+    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{rev}/awesome.json")).await.unwrap();
+    ///     });
+    ///
+    ///     rsx! {
+    ///         button {
+    ///             // We can pause the future with the `pause` method
+    ///             onclick: move |_| resource.pause(),
+    ///             "Pause"
+    ///         }
+    ///         button {
+    ///             // And resume it with the `resume` method
+    ///             onclick: move |_| resource.resume(),
+    ///             "Resume"
+    ///         }
+    ///         "{resource:?}"
+    ///     }
+    /// }
+    /// ```
     pub fn pause(&mut self) {
         self.state.set(UseResourceState::Paused);
         self.task.write().pause();
     }
 
     /// Resume the resource's future.
+    ///
+    /// ## Example
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # use std::time::Duration;
+    /// fn App() -> Element {
+    ///     let mut revision = use_signal(|| "1d03b42");
+    ///     let mut resource = use_resource(move || async move {
+    ///         // This will run every time the revision signal changes because we read the count inside the future
+    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{rev}/awesome.json")).await.unwrap();
+    ///     });
+    ///
+    ///     rsx! {
+    ///         button {
+    ///             // We can pause the future with the `pause` method
+    ///             onclick: move |_| resource.pause(),
+    ///             "Pause"
+    ///         }
+    ///         button {
+    ///             // And resume it with the `resume` method
+    ///             onclick: move |_| resource.resume(),
+    ///             "Resume"
+    ///         }
+    ///         "{resource:?}"
+    ///     }
+    /// }
+    /// ```
     pub fn resume(&mut self) {
         if self.finished() {
             return;
@@ -195,7 +331,29 @@ impl<T> Resource<T> {
         self.task.write().resume();
     }
 
-    /// Clear the resource's value.
+    /// Clear the resource's value. This will just reset the value. It will not modify any running tasks.
+    ///
+    /// ## Example
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # use std::time::Duration;
+    /// fn App() -> Element {
+    ///     let mut revision = use_signal(|| "1d03b42");
+    ///     let mut resource = use_resource(move || async move {
+    ///         // This will run every time the revision signal changes because we read the count inside the future
+    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{rev}/awesome.json")).await.unwrap();
+    ///     });
+    ///
+    ///     rsx! {
+    ///         button {
+    ///             // We clear the value without modifying any running tasks with the `clear` method
+    ///             onclick: move |_| resource.clear(),
+    ///             "Clear"
+    ///         }
+    ///         "{resource:?}"
+    ///     }
+    /// }
+    /// ```
     pub fn clear(&mut self) {
         self.value.write().take();
     }
@@ -209,6 +367,30 @@ impl<T> Resource<T> {
     /// Is the resource's future currently finished running?
     ///
     /// Reading this does not subscribe to the future's state
+    ///
+    /// ## Example
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # use std::time::Duration;
+    /// fn App() -> Element {
+    ///     let mut revision = use_signal(|| "1d03b42");
+    ///     let mut resource = use_resource(move || async move {
+    ///         // This will run every time the revision signal changes because we read the count inside the future
+    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{rev}/awesome.json")).await.unwrap();
+    ///     });
+    ///
+    ///     // We can use the `finished` method to check if the future is finished
+    ///     if resource.finished() {
+    ///         rsx! {
+    ///             "The resource is finished"
+    ///         }
+    ///     } else {
+    ///         rsx! {
+    ///             "The resource is still running"
+    ///         }
+    ///     }
+    /// }
+    /// ```
     pub fn finished(&self) -> bool {
         matches!(
             *self.state.peek(),
@@ -216,12 +398,67 @@ impl<T> Resource<T> {
         )
     }
 
-    /// Get the current state of the resource's future.
+    /// Get the current state of the resource's future. This method returns a [`ReadOnlySignal`] which can be read to get the current state of the resource or passed to other hooks and components.
+    ///
+    /// ## Example
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # use std::time::Duration;
+    /// fn App() -> Element {
+    ///     let mut revision = use_signal(|| "1d03b42");
+    ///     let mut resource = use_resource(move || async move {
+    ///         // This will run every time the revision signal changes because we read the count inside the future
+    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{rev}/awesome.json")).await.unwrap();
+    ///     });
+    ///
+    ///     // We can read the current state of the future with the `state` method
+    ///     match resource.state().cloned() {
+    ///         UseResourceState::Pending => rsx! {
+    ///             "The resource is still pending"
+    ///         },
+    ///         UseResourceState::Paused => rsx! {
+    ///             "The resource has been paused"
+    ///         },
+    ///         UseResourceState::Stopped => rsx! {
+    ///             "The resource has been stopped"
+    ///         },
+    ///         UseResourceState::Ready => rsx! {
+    ///             "The resource is ready!"
+    ///         },
+    ///     }
+    /// }
+    /// ```
     pub fn state(&self) -> ReadOnlySignal<UseResourceState> {
         self.state.into()
     }
 
-    /// Get the current value of the resource's future.
+    /// Get the current value of the resource's future.  This method returns a [`ReadOnlySignal`] which can be read to get the current value of the resource or passed to other hooks and components.
+    ///
+    /// ## Example
+    ///
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # use std::time::Duration;
+    /// fn App() -> Element {
+    ///     let mut revision = use_signal(|| "1d03b42");
+    ///     let mut resource = use_resource(move || async move {
+    ///         // This will run every time the revision signal changes because we read the count inside the future
+    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{rev}/awesome.json")).await.unwrap();
+    ///     });
+    ///
+    ///     // We can get a signal with the value of the resource with the `value` method
+    ///     let value = resource.value();
+    ///
+    ///     // Since our resource may not be ready yet, the value is an Option. Our request may also fail, so the get function returns a Result
+    ///     // Our complete type we need to match is `Option<Result<String, reqwest::Error>>`
+    ///     // We can use `read_unchecked` to keep our matching code in one statement while avoiding a temporary variable error (this is still completely safe because dioxus checks the borrows at runtime)
+    ///     match value.read_unchecked() {
+    ///         Some(Ok(value)) => rsx! { "{value:?}" },
+    ///         Some(Err(err)) => rsx! { "Error: {err}" },
+    ///         None => rsx! { "Loading..." },
+    ///     }
+    /// }
+    /// ```
     pub fn value(&self) -> ReadOnlySignal<Option<T>> {
         self.value.into()
     }
