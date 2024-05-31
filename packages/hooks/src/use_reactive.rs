@@ -3,6 +3,14 @@ use dioxus_signals::{Readable, Writable};
 use crate::use_signal;
 
 /// A dependency is a trait that can be used to determine if a effect or selector should be re-run.
+#[rustversion::attr(
+    since(1.78.0),
+    diagnostic::on_unimplemented(
+        message = "`Dependency` is not implemented for `{Self}`",
+        label = "Dependency",
+        note = "Dependency is automatically implemented for all tuples with less than 8 references to element that implement `PartialEq` and `Clone`. For example, `(&A, &B, &C)` implements `Dependency` automatically as long as `A`, `B`, and `C` implement `PartialEq` and `Clone`.",
+    )
+)]
 pub trait Dependency: Sized + Clone {
     /// The output of the dependency
     type Out: Clone + PartialEq + 'static;
@@ -20,6 +28,14 @@ impl Dependency for () {
 }
 
 /// A dependency is a trait that can be used to determine if a effect or selector should be re-run.
+#[rustversion::attr(
+    since(1.78.0),
+    diagnostic::on_unimplemented(
+        message = "`DependencyElement` is not implemented for `{Self}`",
+        label = "dependency element",
+        note = "DependencyElement is automatically implemented for types that implement `PartialEq` and `Clone`",
+    )
+)]
 pub trait DependencyElement: 'static + PartialEq + Clone {}
 impl<T> DependencyElement for T where T: 'static + PartialEq + Clone {}
 

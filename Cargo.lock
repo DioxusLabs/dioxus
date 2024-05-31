@@ -2417,6 +2417,7 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "generational-box 0.5.2",
+ "rustversion",
  "slab",
  "thiserror",
  "tokio",
