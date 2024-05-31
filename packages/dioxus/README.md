@@ -64,13 +64,13 @@ Any element in `rsx!` can have attributes, listeners, and children. For
 consistency, we force all attributes and listeners to be listed _before_
 children.
 
-```rust, ignore
+```rust, no_run
 let value = "123";
 
 rsx! {
     div {
         class: "my-class {value}",                  // <--- attribute
-        onclick: move |_| info!("clicked!"),   // <--- listener
+        onclick: move |_| tracing::info!("clicked!"),   // <--- listener
         h1 { "hello world" },                       // <--- child
     }
 }
@@ -78,7 +78,7 @@ rsx! {
 
 The `rsx!` macro accepts attributes in "struct form". Any rust expression contained within curly braces that implements `IntoIterator<Item = impl IntoVNode>` will be parsed as a child. We make two exceptions: both `for` loops and `if` statements are parsed where their body is parsed as a child.
 
-```rust, ignore
+```rust, no_run
 rsx! {
     div {
         for _ in 0..10 {
@@ -90,7 +90,7 @@ rsx! {
 
 The `rsx!` macro is what generates the `Element` that our components return.
 
-```rust, ignore
+```rust, no_run
 #[component]
 fn Example() -> Element {
     rsx!{ "hello world" }
@@ -100,7 +100,7 @@ fn Example() -> Element {
 Putting everything together, we can write a simple component that renders a list of
 elements:
 
-```rust, ignore
+```rust, no_run
 #[component]
 fn App() -> Element {
     let name = "dave";
@@ -123,7 +123,7 @@ properties we can omit the type altogether.
 
 In Dioxus, all properties are memoized by default, and this implement both Clone and PartialEq. For props you can't clone, simply wrap the fields in a ReadOnlySignal and Dioxus will handle the wrapping for you.
 
-```rust, ignore
+```rust, no_run
 #[component]
 fn App() -> Element {
     rsx! {
@@ -138,7 +138,7 @@ fn App() -> Element {
 Our `Header` component takes a `title` and a `color` property, which we
 declare on an explicit `HeaderProps` struct.
 
-```rust, ignore
+```rust, no_run
 // The `Props` derive macro lets us add additional functionality to how props are interpreted.
 #[derive(Props, PartialEq)]
 struct HeaderProps {
@@ -160,7 +160,7 @@ fn Header(props: HeaderProps) -> Element {
 The `#[component]` macro also allows you to derive the props
 struct from function arguments:
 
-```rust, ignore
+```rust, no_run
 #[component]
 fn Header(title: String, color: String) -> Element {
     rsx! {
@@ -175,7 +175,7 @@ fn Header(title: String, color: String) -> Element {
 Components that begin with an uppercase letter may be called with
 the traditional (for React) curly-brace syntax like so:
 
-```rust, ignore
+```rust, no_run
 rsx! {
     Header { title: "My App" }
 }
@@ -190,7 +190,7 @@ it to render UI elements.
 By convention, all hooks are functions that should start with `use_`. We can
 use hooks to define the state and modify it from within listeners.
 
-```rust, ignore
+```rust, no_run
 #[component]
 fn App() -> Element {
     let name = use_signal(|| "world");
@@ -212,7 +212,7 @@ order. If that order is wrong, then the hook will pick the wrong state and panic
 
 Most hooks you'll write are simply compositions of other hooks:
 
-```rust, ignore
+```rust, no_run
 fn use_username(d: Uuid) -> bool {
     let users = use_context::<Users>();
     users.get(&id).map(|user| user.logged_in).ok_or(false)
@@ -221,7 +221,7 @@ fn use_username(d: Uuid) -> bool {
 
 To create entirely new foundational hooks, we can use the `use_hook` method.
 
-```rust, ignore
+```rust, no_run
 fn use_mut_string() -> String {
     use_hook(|_| "Hello".to_string())
 }
@@ -233,7 +233,7 @@ If you want to extend Dioxus with some new functionality, you'll probably want t
 
 Using components, templates, and hooks, we can build a simple app.
 
-```rust, ignore
+```rust, no_run
 use dioxus::prelude::*;
 
 fn main() {
