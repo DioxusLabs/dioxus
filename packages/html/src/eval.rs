@@ -1,4 +1,5 @@
 #![allow(clippy::await_holding_refcell_ref)]
+#![doc = include_str!("../docs/eval.md")]
 
 use dioxus_core::prelude::*;
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
@@ -47,6 +48,7 @@ pub fn eval_provider() -> EvalCreator {
         as Rc<dyn Fn(&str) -> UseEval>
 }
 
+#[doc = include_str!("../docs/eval.md")]
 pub fn eval(script: &str) -> UseEval {
     let eval_provider = dioxus_core::prelude::try_consume_context::<Rc<dyn EvalProvider>>()
         // Create a dummy provider that always hiccups when trying to evaluate
@@ -84,7 +86,9 @@ pub fn eval(script: &str) -> UseEval {
     UseEval::new(eval_provider.new_evaluator(script.to_string()))
 }
 
-/// A wrapper around the target platform's evaluator.
+/// A wrapper around the target platform's evaluator that lets you send and receive data from JavaScript spawned by [`eval`].
+///
+#[doc = include_str!("../docs/eval.md")]
 #[derive(Clone, Copy)]
 pub struct UseEval {
     evaluator: GenerationalBox<Box<dyn Evaluator>>,
