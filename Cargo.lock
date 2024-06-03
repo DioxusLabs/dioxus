@@ -2455,9 +2455,11 @@ name = "dioxus-html"
 version = "0.5.2"
 dependencies = [
  "async-trait",
+ "dioxus",
  "dioxus-core 0.5.2",
  "dioxus-html-internal-macro",
  "dioxus-rsx",
+ "dioxus-web",
  "enumset",
  "euclid",
  "futures-channel",

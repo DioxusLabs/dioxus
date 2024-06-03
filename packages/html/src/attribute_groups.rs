@@ -106,7 +106,7 @@ macro_rules! mod_methods {
                 ///
                 /// ## Usage in rsx
                 ///
-                /// ```rust, no_run
+                /// ```rust, ignore
                 /// # use dioxus::prelude::*;
                 #[doc = concat!("let ", stringify!($name), " = \"value\";")]
                 ///
@@ -118,9 +118,9 @@ macro_rules! mod_methods {
                 ///     }
                 ///     div {
                 ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
-                #[doc = concat!("        ", stringify!($name))]
+                #[doc = concat!("        ", stringify!($name), ",")]
                 ///     }
-                /// }
+                /// };
                 /// ```
                 $(
                     #[doc(alias = $js_name)]
@@ -207,12 +207,13 @@ mod_methods! {
     /// If you include multiple classes in a single element dioxus will automatically join them with a space.
     ///
     /// ```rust
+    /// # use dioxus::prelude::*;
     /// rsx! {
     ///     div {
     ///         class: "my-class",
     ///         class: "my-other-class"
     ///     }
-    /// }
+    /// };
     /// ```
     ///
     /// ## Optional Classes
@@ -220,16 +221,17 @@ mod_methods! {
     /// You can include optional attributes with an unterminated if statement as the value of the attribute. This is very useful for conditionally applying css classes:
     ///
     /// ```rust
+    /// # use dioxus::prelude::*;
     /// rsx! {
     ///     div {
     ///         class: if true {
-    ///             class: "my-class"
+    ///             "my-class"
     ///         },
     ///         class: if false {
-    ///             class: "my-other-class"
+    ///             "my-other-class"
     ///         }
     ///     }
-    /// }
+    /// };
     /// ```
     ///
     /// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/class>

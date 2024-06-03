@@ -7,7 +7,8 @@ Event handler in Dioxus need only access data that can last for the entire lifet
 
 Broken component:
 
-```rust
+```rust, compile_fail
+# use dioxus::prelude::*;
 // We return an Element which can last as long as the component is on the screen
 fn App() -> Element {
     // Signals are `Copy` which makes them very easy to move into `'static` closures like event handlers
@@ -28,7 +29,8 @@ fn App() -> Element {
 
 Fixed component:
 
-```rust
+```rust, no_run
+# use dioxus::prelude::*;
 fn App() -> Element {
     let state = use_signal(|| "hello world".to_string());
 
@@ -53,7 +55,8 @@ Data in rust has a single owner. If you run into this error, you have likely tri
 
 Broken component:
 
-```rust
+```rust, compile_fail
+# use dioxus::prelude::*;
 // `MyComponent` accepts a string which cannot be copied implicitly
 #[component]
 fn MyComponent(string: String) -> Element {
@@ -80,10 +83,11 @@ You can fix this issue by either:
 
 - Making your data `Copy` with `ReadOnlySignal`:
 
-```rust
+```rust, no_run
+# use dioxus::prelude::*;
 // `MyComponent` accepts `ReadOnlySignal<String>` which implements `Copy`
 #[component]
-fn MyComponent(string: String) -> Element {
+fn MyComponent(string: ReadOnlySignal<String>) -> Element {
     rsx! {
         button {
             // ✅ Because the `string` signal is `Copy`, we can copy it into the closure while still having access to it elsewhere
@@ -101,7 +105,8 @@ fn MyComponent(string: String) -> Element {
 
 - Calling `clone` on your data before you move it into the closure:
 
-```rust
+```rust, no_run
+# use dioxus::prelude::*;
 // `MyComponent` accepts a string which doesn't implement `Copy`
 #[component]
 fn MyComponent(string: String) -> Element {

@@ -308,7 +308,7 @@ impl_event! {
     ///         }
     ///         // Since this is a controlled input, we can also update the value of the input element directly
     ///         button {
-    ///             onclick: move |_| value.write().clear()
+    ///             onclick: move |_| value.write().clear(),
     ///             "Clear"
     ///         }
     ///     }

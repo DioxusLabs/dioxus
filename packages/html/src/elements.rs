@@ -34,9 +34,9 @@ macro_rules! impl_attribute {
         ///     }
         #[doc = concat!("    ", stringify!($element), " {")]
         ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
-        #[doc = concat!("        ", stringify!($fil))]
+        #[doc = concat!("        ", stringify!($fil), ",")]
         ///     }
-        /// }
+        /// };
         /// ```
         pub const $fil: AttributeDiscription = (stringify!($fil), None, false);
     };
@@ -63,9 +63,9 @@ macro_rules! impl_attribute {
         ///     }
         #[doc = concat!("    ", stringify!($element), " {")]
         ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
-        #[doc = concat!("        ", stringify!($fil))]
+        #[doc = concat!("        ", stringify!($fil), ",")]
         ///     }
-        /// }
+        /// };
         /// ```
         pub const $fil: AttributeDiscription = ($name, None, false);
     };
@@ -92,9 +92,9 @@ macro_rules! impl_attribute {
         ///     }
         #[doc = concat!("    ", stringify!($element), " {")]
         ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
-        #[doc = concat!("        ", stringify!($fil))]
+        #[doc = concat!("        ", stringify!($fil), ",")]
         ///     }
-        /// }
+        /// };
         /// ```
         pub const $fil: AttributeDiscription = (stringify!($fil), None, true);
     };
@@ -121,9 +121,9 @@ macro_rules! impl_attribute {
         ///     }
         #[doc = concat!("    ", stringify!($element), " {")]
         ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
-        #[doc = concat!("        ", stringify!($fil))]
+        #[doc = concat!("        ", stringify!($fil), ",")]
         ///     }
-        /// }
+        /// };
         /// ```
         pub const $fil: AttributeDiscription = (stringify!($fil), Some($ns), false)
     };
@@ -150,9 +150,9 @@ macro_rules! impl_attribute {
         ///     }
         #[doc = concat!("    ", stringify!($element), " {")]
         ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
-        #[doc = concat!("        ", stringify!($fil))]
+        #[doc = concat!("        ", stringify!($fil), ",")]
         ///     }
-        /// }
+        /// };
         /// ```
         pub const $fil: AttributeDiscription = (stringify!($fil), Some($ns), true)
     };
@@ -231,7 +231,7 @@ macro_rules! impl_element {
         /// # use dioxus::prelude::*;
         /// # let attributes = vec![];
         /// # fn ChildComponent() -> Element { todo!() }
-        /// # let raw_expression = rsx! {};
+        /// # let raw_expression: Element = rsx! {};
         /// rsx! {
         ///     // Elements are followed by braces that surround any attributes and children for that element
         #[doc = concat!("    ", stringify!($name), " {")]
@@ -246,7 +246,7 @@ macro_rules! impl_element {
         ///         "child text"
         ///         {raw_expression}
         ///     }
-        /// }
+        /// };
         /// ```
         pub mod $name {
             #[allow(unused)]
@@ -284,7 +284,7 @@ macro_rules! impl_element {
         /// # use dioxus::prelude::*;
         /// # let attributes = vec![];
         /// # fn ChildComponent() -> Element { todo!() }
-        /// # let raw_expression = rsx! {};
+        /// # let raw_expression: Element = rsx! {};
         /// rsx! {
         ///     // Elements are followed by braces that surround any attributes and children for that element
         #[doc = concat!("    ", stringify!($name), " {")]
@@ -299,7 +299,7 @@ macro_rules! impl_element {
         ///         "child text"
         ///         {raw_expression}
         ///     }
-        /// }
+        /// };
         /// ```
         pub mod $name {
             #[allow(unused)]
@@ -338,7 +338,7 @@ macro_rules! impl_element {
         /// # use dioxus::prelude::*;
         /// # let attributes = vec![];
         /// # fn ChildComponent() -> Element { todo!() }
-        /// # let raw_expression = rsx! {};
+        /// # let raw_expression: Element = rsx! {};
         /// rsx! {
         ///     // Elements are followed by braces that surround any attributes and children for that element
         #[doc = concat!("    ", stringify!($element), " {")]
@@ -353,7 +353,7 @@ macro_rules! impl_element {
         ///         "child text"
         ///         {raw_expression}
         ///     }
-        /// }
+        /// };
         /// ```
         pub mod $element {
             #[allow(unused)]
@@ -585,7 +585,7 @@ macro_rules! builder_constructors {
                     /// # use dioxus::prelude::*;
                     /// # let attributes = vec![];
                     /// # fn ChildComponent() -> Element { todo!() }
-                    /// # let raw_expression = rsx! {};
+                    /// # let raw_expression: Element = rsx! {};
                     /// rsx! {
                     ///     // Elements are followed by braces that surround any attributes and children for that element
                     #[doc = concat!("    ", stringify!($name), " {")]
@@ -600,7 +600,7 @@ macro_rules! builder_constructors {
                     ///         "child text"
                     ///         {raw_expression}
                     ///     }
-                    /// }
+                    /// };
                     /// ```
                     $name {}
                 ),*

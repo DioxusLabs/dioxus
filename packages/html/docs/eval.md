@@ -107,10 +107,12 @@ fn app() -> Element {
     // eval(SCRIPT);
 
     // ✅ You should run eval inside an effect or event. This will run after the component has been mounted
-    use_effect(move || spawn(async {
-        let count = eval(SCRIPT).await;
-        println!("Count is {}", count);
-    }));
+    use_effect(move || {
+        spawn(async {
+            let count = eval(SCRIPT).await;
+            println!("Count is {:?}", count);
+        });
+    });
 
 
     rsx! {

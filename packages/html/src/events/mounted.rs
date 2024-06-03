@@ -146,7 +146,7 @@ impl_event! [
     ///
     /// ```rust, no_run
     /// # use dioxus::prelude::*;
-    /// fn App() {
+    /// fn App() -> Element {
     ///     let mut header_element = use_signal(|| None);
     ///
     ///     rsx! {
@@ -179,14 +179,15 @@ impl_event! [
     ///
     /// ```rust, no_run
     /// # use dioxus::prelude::*;
-    /// fn App() {
+    /// # use dioxus_web::WebEventExt;
+    /// fn App() -> Element {
     ///     rsx! {
     ///         div {
     ///             id: "some-id",
     ///             onmounted: move |element| {
     ///                 // You can use the web_event trait to downcast the element to a web specific event. For the mounted event, this will be a web_sys::Element
     ///                 let web_sys_element = element.web_event();
-    ///                 assert!(web_sys_element.id(), "some-id");
+    ///                 assert_eq!(web_sys_element.id(), "some-id");
     ///             }
     ///         }
     ///     }
