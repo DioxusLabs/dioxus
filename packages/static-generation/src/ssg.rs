@@ -13,7 +13,7 @@ fn server_context_for_route(route: &str) -> dioxus_fullstack::prelude::DioxusSer
     let request = http::Request::builder().uri(route).body(()).unwrap();
     let (parts, _) = request.into_parts();
 
-    DioxusServerContext::new(Arc::new(tokio::sync::RwLock::new(parts)))
+    DioxusServerContext::new(parts)
 }
 
 /// Try to extract the site map by finding the root router that a component renders.

@@ -342,7 +342,7 @@ pub async fn render_handler_with_context<F: FnMut(&mut DioxusServerContext)>(
     let url = parts.uri.path_and_query().unwrap().to_string();
     let parts: Arc<parking_lot::RwLock<http::request::Parts>> =
         Arc::new(parking_lot::RwLock::new(parts));
-    let mut server_context = DioxusServerContext::new(parts.clone());
+    let mut server_context = DioxusServerContext::from_shared_parts(parts.clone());
     inject_context(&mut server_context);
 
     match ssr_state
@@ -405,7 +405,7 @@ async fn handle_server_fns_inner(
         if let Some(mut service) =
             server_fn::axum::get_server_fn_service(&path_string)
         {
-            let server_context = DioxusServerContext::new(Arc::new(parking_lot::RwLock::new(parts)));
+            let server_context = DioxusServerContext::new(parts);
             additional_context();
 
             // store Accepts and Referrer in case we need them for redirect (below)

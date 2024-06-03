@@ -39,9 +39,21 @@ mod server_fn_impl {
 
     impl DioxusServerContext {
         /// Create a new server context from a request
-        pub fn new(parts: impl Into<Arc<parking_lot::RwLock<http::request::Parts>>>) -> Self {
+        pub fn new(parts: http::request::Parts) -> Self {
             Self {
-                parts: parts.into(),
+                parts: Arc::new(RwLock::new(parts)),
+                shared_context: Arc::new(RwLock::new(SendSyncAnyMap::new())),
+                response_parts: std::sync::Arc::new(RwLock::new(
+                    http::response::Response::new(()).into_parts().0,
+                )),
+                html_data: Arc::new(RwLock::new(HTMLData::default())),
+            }
+        }
+
+        /// Create a server context from a shared parts
+        pub(crate) fn from_shared_parts(parts: Arc<RwLock<http::request::Parts>>) -> Self {
+            Self {
+                parts,
                 shared_context: Arc::new(RwLock::new(SendSyncAnyMap::new())),
                 response_parts: std::sync::Arc::new(RwLock::new(
                     http::response::Response::new(()).into_parts().0,
