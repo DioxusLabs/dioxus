@@ -2089,6 +2089,7 @@ name = "dioxus"
 version = "0.5.2"
 dependencies = [
  "criterion 0.3.6",
+ "dioxus",
  "dioxus-config-macro",
  "dioxus-core 0.5.2",
  "dioxus-core-macro",

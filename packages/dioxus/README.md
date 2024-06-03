@@ -39,7 +39,6 @@ All Dioxus apps are built by composing functions that start with a capital lette
 To launch an app, we use the `launch` method and use features in `Cargo.toml` to specify which renderer we want to use. In the launch function, we pass the app's root `Component`.
 
 ```rust, no_run
-# use dioxus::prelude::*;
 use dioxus::prelude::*;
 
 fn main() {
@@ -71,7 +70,7 @@ rsx! {
         onclick: move |_| println!("clicked!"),   // <--- listener
         h1 { "hello world" },                       // <--- child
     }
-}
+};
 ```
 
 The `rsx!` macro accepts attributes in "struct form". Any rust expression contained within curly braces that implements [`IntoDynNode`](dioxus_core::IntoDynNode) will be parsed as a child. We make two exceptions: both `for` loops and `if` statements are parsed where their body is parsed as a rsx nodes.
@@ -84,13 +83,14 @@ rsx! {
             span { "hello world" }
         }
     }
-}
+};
 ```
 
 Putting everything together, we can write a simple component that renders a list of
 elements:
 
 ```rust, no_run
+# use dioxus::prelude::*;
 #[component]
 fn App() -> Element {
     let name = "dave";
@@ -190,15 +190,15 @@ fn main() {
 fn App() -> Element {
     let mut count = use_signal(|| 0);
 
-    rsx!(
+    rsx! {
         div { "Count: {count}" }
         button { onclick: move |_| count += 1, "Increment" }
         button { onclick: move |_| count -= 1, "Decrement" }
-    )
+    }
 }
 ```
 
-## Features
+## Conclusion
 
 This overview doesn't cover everything. Make sure to check out the [tutorial](https://dioxuslabs.com/learn/0.5/guide) and [reference](https://dioxuslabs.com/learn/0.5/reference) on the official
 website for more details.
