@@ -138,11 +138,11 @@ fn removes_one_by_one() {
         dom.render_immediate_to_vec().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(2) },
-            HydrateText { path: &[0], value: "0".to_string(), id: ElementId(3) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(5) },
-            HydrateText { path: &[0], value: "1".to_string(), id: ElementId(6) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(7) },
-            HydrateText { path: &[0], value: "2".to_string(), id: ElementId(8) },
+            HydrateText { path: &[0], value: "0".to_string(), id: ElementId(6) },
+            LoadTemplate { name: "template", index: 0, id: ElementId(8) },
+            HydrateText { path: &[0], value: "1".to_string(), id: ElementId(9) },
+            LoadTemplate { name: "template", index: 0, id: ElementId(10) },
+            HydrateText { path: &[0], value: "2".to_string(), id: ElementId(11) },
             ReplaceWith { id: ElementId(4), m: 3 }
         ]
     );
@@ -384,7 +384,7 @@ fn remove_many() {
             edits.edits,
             [
                 LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
-                HydrateText { path: &[0,], value: "hello 0".to_string(), id: ElementId(3,) },
+                HydrateText { path: &[0,], value: "hello 0".to_string(), id: ElementId(1,) },
                 ReplaceWith { id: ElementId(11,), m: 1 },
             ]
         )

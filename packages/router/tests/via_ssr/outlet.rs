@@ -4,11 +4,16 @@ use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
 fn prepare(path: impl Into<String>) -> VirtualDom {
-    let mut vdom = VirtualDom::new_with_props(App, AppProps { path: path.into() });
+    let mut vdom = VirtualDom::new_with_props(
+        App,
+        AppProps {
+            path: path.into().parse().unwrap(),
+        },
+    );
     vdom.rebuild_in_place();
     return vdom;
 
-    #[derive(Routable, Clone)]
+    #[derive(Routable, Clone, PartialEq)]
     #[rustfmt::skip]
     enum Route {
         #[route("/")]
@@ -30,13 +35,12 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
     }
 
     #[component]
-    fn App(path: String) -> Element {
+    fn App(path: Route) -> Element {
         rsx! {
             h1 { "App" }
             Router::<Route> {
-                config: {
-                    let path = path.parse().unwrap();
-                    move || RouterConfig::default().history(MemoryHistory::with_initial_path(path))
+                config: move |_| -> RouterConfig<Route> {
+                    RouterConfig::default().history(MemoryHistory::with_initial_path(path.clone()))
                 }
             }
         }
