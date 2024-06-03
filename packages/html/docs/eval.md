@@ -91,7 +91,7 @@ fn app() -> Element {
 
 ## Interacting with the DOM with Eval
 
-You can also use the `eval` function to execute JavaScript code that reads or modifies the DOM. If you want to interact with the mounted DOM, you need to use `eval` inside the [`use_effect`] hook which runs after the component has been mounted.
+You can also use the `eval` function to execute JavaScript code that reads or modifies the DOM. If you want to interact with the mounted DOM, you need to use `eval` inside the [`dioxus_hooks::use_effect`] hook which runs after the component has been mounted.
 
 ```rust
 use dioxus::prelude::*;

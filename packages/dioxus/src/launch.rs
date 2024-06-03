@@ -39,7 +39,16 @@ impl LaunchBuilder {
     /// Create a new builder for your application. This will create a launch configuration for the current platform based on the features enabled on the `dioxus` crate.
     // If you aren't using a third party renderer and this is not a docs.rs build, generate a warning about no renderer being enabled
     #[cfg_attr(
-        not(any(feature = "third-party-renderer", docsrs)),
+        all(not(any(
+            docsrs,
+            feature = "third-party-renderer",
+            feature = "liveview",
+            feature = "desktop",
+            feature = "mobile",
+            feature = "web",
+            feature = "fullstack",
+            feature = "static-generation"
+        ))),
         deprecated(
             note = "No renderer is enabled. You must enable a renderer feature on the dioxus crate before calling the launch function.\nAdd `web`, `desktop`, `mobile`, `fullstack`, or `static-generation` to the `features` of dioxus field in your Cargo.toml.\n# Example\n```toml\n# ...\n[dependencies]\ndioxus = { version = \"0.5.0\", features = [\"web\"] }\n# ...\n```"
         )
@@ -310,7 +319,16 @@ mod current_platform {
 /// Launch your application without any additional configuration. See [`LaunchBuilder`] for more options.
 // If you aren't using a third party renderer and this is not a docs.rs build, generate a warning about no renderer being enabled
 #[cfg_attr(
-    not(any(feature = "third-party-renderer", docsrs)),
+    all(not(any(
+        docsrs,
+        feature = "third-party-renderer",
+        feature = "liveview",
+        feature = "desktop",
+        feature = "mobile",
+        feature = "web",
+        feature = "fullstack",
+        feature = "static-generation"
+    ))),
     deprecated(
         note = "No renderer is enabled. You must enable a renderer feature on the dioxus crate before calling the launch function.\nAdd `web`, `desktop`, `mobile`, `fullstack`, or `static-generation` to the `features` of dioxus field in your Cargo.toml.\n# Example\n```toml\n# ...\n[dependencies]\ndioxus = { version = \"0.5.0\", features = [\"web\"] }\n# ...\n```"
     )

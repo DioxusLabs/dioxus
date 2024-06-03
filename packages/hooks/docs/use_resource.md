@@ -110,7 +110,7 @@ println!("{:?}", double_count.read()); // Prints "Some(8)"
 
 ## With non-reactive dependencies
 
-`use_resource` can determine dependencies automatically with any reactive value ([`Signal`]s, [`ReadOnlySignal`]s, [`Memo`]s, [`Resource`]s, etc). If you need to rerun the future when a normal rust value changes, you can add it as a dependency with the [`use_reactive`] hook:
+`use_resource` can determine dependencies automatically with any reactive value ([`Signal`]s, [`ReadOnlySignal`]s, [`Memo`]s, [`Resource`]s, etc). If you need to rerun the future when a normal rust value changes, you can add it as a dependency with the [`crate::use_reactive()`] hook:
 
 ```rust
 # use dioxus::prelude::*;

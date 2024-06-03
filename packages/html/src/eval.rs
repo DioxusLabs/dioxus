@@ -9,7 +9,7 @@ use std::rc::Rc;
 use std::task::{Context, Poll};
 
 /// A struct that implements EvalProvider is sent through [`ScopeState`]'s provide_context function
-/// so that [`use_eval`] can provide a platform agnostic interface for evaluating JavaScript code.
+/// so that [`eval`] can provide a platform agnostic interface for evaluating JavaScript code.
 pub trait EvalProvider {
     fn new_evaluator(&self, js: String) -> GenerationalBox<Box<dyn Evaluator>>;
 }

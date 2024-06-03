@@ -52,7 +52,7 @@ for i in signal_vec {
 
 For a full list of all the helpers available, check out the [`Readable`], [`ReadableVecExt`], [`ReadableOptionExt`], [`Writable`], [`WritableVecExt`], and [`WritableOptionExt`] traits.
 
-Just like RefCell<T>, Signal checks borrows at runtime. If you read and write to the signal at the same time, it will panic:
+Just like `RefCell<T>`, Signal checks borrows at runtime. If you read and write to the signal at the same time, it will panic:
 
 ```rust, no_run
 # use dioxus::prelude::*;

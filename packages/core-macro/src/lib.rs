@@ -147,7 +147,7 @@ pub fn derive_typed_builder(input: TokenStream) -> TokenStream {
 ///
 /// ## Components
 ///
-/// You can render any [`crate::component`]s you created inside your markup just like elements. Components must either start with a capital letter or contain a `_` character.
+/// You can render any [`macro@crate::component`]s you created inside your markup just like elements. Components must either start with a capital letter or contain a `_` character.
 ///
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
