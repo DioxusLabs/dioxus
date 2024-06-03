@@ -129,7 +129,7 @@ When we first create the component, we run the hooks in the order they are defin
 
 ```rust, ignore
 [
-    Box::new(0),
+    Box::new(1),
     Box::new("hello world".to_string()),
     Box::new(2),
 ]
@@ -139,7 +139,7 @@ Next time we run the component, we return items from the state list instead of c
 
 ```rust, ignore
 [
-    Box::new(0), // Hook 1 returns 0
+    Box::new(1), // Hook 1 returns 1
     Box::new("hello world".to_string()), // Hook 2 returns "hello world"
     Box::new(2), // Hook 3 returns 2
 ]
