@@ -83,13 +83,13 @@ where
 ///     let mut revision = use_signal(|| "1d03b42");
 ///     let mut resource = use_resource(move || async move {
 ///         // This will run every time the revision signal changes because we read the count inside the future
-///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{rev}/awesome.json")).await.unwrap();
+///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{revision}/awesome.json")).await
 ///     });
 ///
 ///     // Since our resource may not be ready yet, the value is an Option. Our request may also fail, so the get function returns a Result
 ///     // The complete type we need to match is `Option<Result<String, reqwest::Error>>`
 ///     // We can use `read_unchecked` to keep our matching code in one statement while avoiding a temporary variable error (this is still completely safe because dioxus checks the borrows at runtime)
-///     match resource.read_unchecked() {
+///     match &*resource.read_unchecked() {
 ///         Some(Ok(value)) => rsx! { "{value:?}" },
 ///         Some(Err(err)) => rsx! { "Error: {err}" },
 ///         None => rsx! { "Loading..." },
@@ -151,7 +151,7 @@ impl<T> Resource<T> {
     ///     let mut revision = use_signal(|| "1d03b42");
     ///     let mut resource = use_resource(move || async move {
     ///         // This will run every time the revision signal changes because we read the count inside the future
-    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{rev}/awesome.json")).await.unwrap();
+    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{revision}/awesome.json")).await
     ///     });
     ///
     ///     rsx! {
@@ -179,7 +179,7 @@ impl<T> Resource<T> {
     /// fn App() -> Element {
     ///     let mut revision = use_signal(|| "1d03b42");
     ///     let mut resource = use_resource(move || async move {
-    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{rev}/awesome.json")).await.unwrap();
+    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{revision}/awesome.json")).await
     ///     });
     ///
     ///     rsx! {
@@ -207,7 +207,7 @@ impl<T> Resource<T> {
     ///     let mut revision = use_signal(|| "1d03b42");
     ///     let mut resource = use_resource(move || async move {
     ///         // This will run every time the revision signal changes because we read the count inside the future
-    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{rev}/awesome.json")).await.unwrap();
+    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{revision}/awesome.json")).await
     ///     });
     ///
     ///     rsx! {
@@ -240,7 +240,7 @@ impl<T> Resource<T> {
     ///     let mut revision = use_signal(|| "1d03b42");
     ///     let mut resource = use_resource(move || async move {
     ///         // This will run every time the revision signal changes because we read the count inside the future
-    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{rev}/awesome.json")).await.unwrap();
+    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{revision}/awesome.json")).await
     ///     });
     ///
     ///     rsx! {
@@ -277,7 +277,7 @@ impl<T> Resource<T> {
     ///     let mut revision = use_signal(|| "1d03b42");
     ///     let mut resource = use_resource(move || async move {
     ///         // This will run every time the revision signal changes because we read the count inside the future
-    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{rev}/awesome.json")).await.unwrap();
+    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{revision}/awesome.json")).await
     ///     });
     ///
     ///     rsx! {
@@ -312,7 +312,7 @@ impl<T> Resource<T> {
     ///     let mut revision = use_signal(|| "1d03b42");
     ///     let mut resource = use_resource(move || async move {
     ///         // This will run every time the revision signal changes because we read the count inside the future
-    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{rev}/awesome.json")).await.unwrap();
+    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{revision}/awesome.json")).await
     ///     });
     ///
     ///     // We can use the `finished` method to check if the future is finished
@@ -344,11 +344,11 @@ impl<T> Resource<T> {
     ///     let mut revision = use_signal(|| "1d03b42");
     ///     let mut resource = use_resource(move || async move {
     ///         // This will run every time the revision signal changes because we read the count inside the future
-    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{rev}/awesome.json")).await.unwrap();
+    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{revision}/awesome.json")).await
     ///     });
     ///
     ///     // We can read the current state of the future with the `state` method
-    ///     match resource.cloned() {
+    ///     match resource.state().cloned() {
     ///         UseResourceState::Pending => rsx! {
     ///             "The resource is still pending"
     ///         },
@@ -379,7 +379,7 @@ impl<T> Resource<T> {
     ///     let mut revision = use_signal(|| "1d03b42");
     ///     let mut resource = use_resource(move || async move {
     ///         // This will run every time the revision signal changes because we read the count inside the future
-    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{rev}/awesome.json")).await.unwrap();
+    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{revision}/awesome.json")).await
     ///     });
     ///
     ///     // We can get a signal with the value of the resource with the `value` method
@@ -388,7 +388,7 @@ impl<T> Resource<T> {
     ///     // Since our resource may not be ready yet, the value is an Option. Our request may also fail, so the get function returns a Result
     ///     // The complete type we need to match is `Option<Result<String, reqwest::Error>>`
     ///     // We can use `read_unchecked` to keep our matching code in one statement while avoiding a temporary variable error (this is still completely safe because dioxus checks the borrows at runtime)
-    ///     match value.read_unchecked() {
+    ///     match &*value.read_unchecked() {
     ///         Some(Ok(value)) => rsx! { "{value:?}" },
     ///         Some(Err(err)) => rsx! { "Error: {err}" },
     ///         None => rsx! { "Loading..." },

@@ -129,12 +129,13 @@ fn App() -> Element {
 The `#[component]` macro will help us automatically create a props struct for our component:
 
 ```rust, no_run
+# use dioxus::prelude::*;
 // The component macro turns the arguments for our function into named fields we can pass in to the component in rsx
 #[component]
 fn Header(title: String, color: String) -> Element {
     rsx! {
         div {
-            background_color: "{color}"
+            background_color: "{color}",
             h1 { "{title}" }
         }
     }

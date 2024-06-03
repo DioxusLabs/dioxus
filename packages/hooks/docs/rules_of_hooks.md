@@ -8,7 +8,8 @@ Hooks in dioxus need to run in the same order every time you run the component. 
 1. Hooks should only be called from the root of a component or another hook
 
 ```rust
-fn App() {
+# use dioxus::prelude::*;
+fn App() -> Element {
     // ✅ You can call hooks from the body of a component
     let number = use_signal(|| 1);
     if number() == 1 {
@@ -39,7 +40,8 @@ Because hooks should only be called from the root of a component or another hook
 - ❌ Conditionals
 
 ```rust
-fn App() {
+# use dioxus::prelude::*;
+fn App() -> Element {
     let number = use_signal(|| 1);
     // ❌ Changing the condition will change the order of the hooks
     if number() == 1 {
@@ -48,7 +50,9 @@ fn App() {
 
     // ❌ Changing the value you are matching will change the order of the hooks
     match number() {
-        1 => let string = use_signal(|| "hello world".to_string()),
+        1 => {
+            let string = use_signal(|| "hello world".to_string());
+        },
         _ => (),
     }
 
@@ -59,7 +63,8 @@ fn App() {
 - ❌ Loops
 
 ```rust
-fn App() {
+# use dioxus::prelude::*;
+fn App() -> Element {
     let number = use_signal(|| 1);
     // ❌ Changing the loop will change the order of the hooks
     for i in 0..number() {
@@ -73,7 +78,8 @@ fn App() {
 - ❌ Event Handlers
 
 ```rust
-fn App() {
+# use dioxus::prelude::*;
+fn App() -> Element {
     rsx! {
         button {
             onclick: move |_| {
@@ -89,7 +95,8 @@ fn App() {
 - ❌ Initialization closures in other hooks
 
 ```rust
-fn App() {
+# use dioxus::prelude::*;
+fn App() -> Element {
     let number = use_signal(|| {
         // ❌ This closure will only be called when the component is first created. Running the component will change the order of the hooks
         let string = use_signal(|| "hello world".to_string());
@@ -108,10 +115,11 @@ Hooks need to be run in a consistent order because dioxus stores hooks in a list
 Lets look at an example component:
 
 ```rust
-fn App() {
+# use dioxus::prelude::*;
+fn App() -> Element {
     let number = use_signal(|| 1); // Hook 1
     let string = use_signal(|| "hello world".to_string()); // Hook 2
-    let doubled = use_memo(|| number() * 2); // Hook 3
+    let doubled = use_memo(move || number() * 2); // Hook 3
 
     todo!()
 }
@@ -119,7 +127,7 @@ fn App() {
 
 When we first create the component, we run the hooks in the order they are defined and store the state in the component in a list.
 
-```rust
+```rust, ignore
 [
     Box::new(0),
     Box::new("hello world".to_string()),
@@ -129,7 +137,7 @@ When we first create the component, we run the hooks in the order they are defin
 
 Next time we run the component, we return items from the state list instead of creating state again.
 
-```rust
+```rust, ignore
 [
     Box::new(0), // Hook 1 returns 0
     Box::new("hello world".to_string()), // Hook 2 returns "hello world"

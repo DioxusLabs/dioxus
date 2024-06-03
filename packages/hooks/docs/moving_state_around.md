@@ -6,7 +6,8 @@ You will often need to move state around between your components. Dioxus provide
 1. Just pass your values as [props](https://dioxuslabs.com/learn/0.5/reference/component_props):
 
 ```rust
-fn MyComponent() {
+# use dioxus::prelude::*;
+fn MyComponent() -> Element {
     let count = use_signal(|| 0);
 
     rsx! {
@@ -17,7 +18,7 @@ fn MyComponent() {
 }
 
 #[component]
-fn IncrementButton(mut count: Signal<i32>) {
+fn IncrementButton(mut count: Signal<i32>) -> Element {
     rsx! {
         button {
             onclick: move |_| count += 1,
@@ -32,11 +33,13 @@ This is the most common way to pass state around. It is the most explicit and lo
 2. Use [use_context](https://dioxuslabs.com/learn/0.5/reference/context) to pass state from a parent component to all children:
 
 ```rust
+# use dioxus::prelude::*;
+#[derive(Clone, Copy)]
 struct MyState {
     count: Signal<i32>
 }
 
-fn ParentComponent() {
+fn ParentComponent() -> Element {
     // Use context provider provides an unique type to all children of this component
     use_context_provider(|| MyState { count: Signal::new(0) });
 
@@ -47,9 +50,9 @@ fn ParentComponent() {
 }
 
 #[component]
-fn IncrementButton() {
+fn IncrementButton() -> Element {
     // Use context gets the value from a parent component
-    let count = use_context::<MyState>().count;
+    let mut count = use_context::<MyState>().count;
 
     rsx! {
         button {
@@ -65,17 +68,17 @@ This is slightly less explicit than passing it as a prop, but it is still local 
 3. Globals let you share state with your whole app with rust statics:
 
 ```rust
+# use dioxus::prelude::*;
 // Count will be created the first time you access it with the closure you pass to Signal::global
 static COUNT: GlobalSignal<i32> = Signal::global(|| 0);
 
-fn ParentComponent() {
+fn ParentComponent() -> Element {
     rsx! {
         IncrementButton {}
     }
 }
 
-#[component]
-fn IncrementButton() {
+fn IncrementButton() -> Element {
     rsx! {
         button {
             // You don't need to pass anything around or get anything out of the context because COUNT is global

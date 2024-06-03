@@ -115,7 +115,7 @@ pub struct VNodeInner {
     ///             color: "{color}",
     ///         }
     ///     }
-    /// }
+    /// };
     /// ```
     ///
     /// Would be represented as:

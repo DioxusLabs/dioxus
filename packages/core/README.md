@@ -3,21 +3,24 @@
 `dioxus-core` provides a fast and featureful VirtualDom implementation for Rust.
 
 ```rust, no_run
+# tokio::runtime::Runtime::new().unwrap().block_on(async {
 use dioxus_core::prelude::*;
+use dioxus_core::*;
 
-let vdom = VirtualDom::new(app);
+let mut vdom = VirtualDom::new(app);
 let real_dom = SomeRenderer::new();
 
 loop {
-    select! {
+    tokio::select! {
         evt = real_dom.event() => vdom.handle_event("onclick", evt, ElementId(0), true),
         _ = vdom.wait_for_work() => {}
     }
-    vdom.render(&mut real_dom)
+    vdom.render_immediate(&mut real_dom.apply())
 }
 
 # fn app() -> Element { None }
-# struct SomeRenderer; impl SomeRenderer { fn new() -> SomeRenderer { SomeRenderer; } async fn event() -> std::rc::Rc<dyn Any> { unimplemented!() } }
+# struct SomeRenderer; impl SomeRenderer { fn new() -> SomeRenderer { SomeRenderer } async fn event(&self) -> std::rc::Rc<dyn std::any::Any> { unimplemented!() } fn apply(&self) -> Mutations { Mutations::default() } }
+# });
 ```
 
 ## Features

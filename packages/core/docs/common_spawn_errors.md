@@ -7,7 +7,7 @@ Tasks in Dioxus need only access data that can last for the entire lifetime of t
 
 Broken component:
 
-```rust, no_run
+```rust, compile_fail
 use dioxus::prelude::*;
 
 fn App() -> Element {
@@ -19,12 +19,14 @@ fn App() -> Element {
             println!("{}", signal());
         })
     });
+
+    todo!()
 }
 ```
 
 Fixed component:
 
-```rust
+```rust, no_run
 use dioxus::prelude::*;
 
 fn App() -> Element {
@@ -36,6 +38,8 @@ fn App() -> Element {
             println!("{}", signal());
         })
     });
+
+    todo!()
 }
 ```
 
@@ -48,7 +52,8 @@ Data in rust has a single owner. If you run into this error, you have likely tri
 
 Broken component:
 
-```rust
+```rust, compile_fail
+# use dioxus::prelude::*;
 // `MyComponent` accepts a string which cannot be copied implicitly
 #[component]
 fn MyComponent(string: String) -> Element {
@@ -71,10 +76,11 @@ You can fix this issue by either:
 
 - Making your data `Copy` with `ReadOnlySignal`:
 
-```rust
+```rust, no_run
+# use dioxus::prelude::*;
 // `MyComponent` accepts `ReadOnlySignal<String>` which implements `Copy`
 #[component]
-fn MyComponent(string: String) -> Element {
+fn MyComponent(string: ReadOnlySignal<String>) -> Element {
     use_hook(move || {
         // ✅ Because the `string` signal is `Copy`, we can copy it into the async task while still having access to it elsewhere
         spawn(async move {
@@ -92,7 +98,8 @@ fn MyComponent(string: String) -> Element {
 
 - Calling `clone` on your data before you move it into the closure:
 
-```rust
+```rust, no_run
+# use dioxus::prelude::*;
 // `MyComponent` accepts a string which doesn't implement `Copy`
 #[component]
 fn MyComponent(string: String) -> Element {

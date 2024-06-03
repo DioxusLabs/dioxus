@@ -91,6 +91,7 @@ use tracing::instrument;
 ///
 /// ```rust
 /// # use dioxus::prelude::*;
+/// # use dioxus_core::*;
 /// # fn app() -> Element { rsx! { div {} } }
 ///
 /// let mut vdom = VirtualDom::new(app);
@@ -101,18 +102,23 @@ use tracing::instrument;
 ///
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
+/// # use dioxus_core::*;
 /// # fn app() -> Element { rsx! { div {} } }
 /// # let mut vdom = VirtualDom::new(app);
-/// vdom.handle_event(event);
+/// let event = std::rc::Rc::new(0);
+/// vdom.handle_event("onclick", event, ElementId(0), true);
 /// ```
 ///
 /// While no events are ready, call [`VirtualDom::wait_for_work`] to poll any futures inside the VirtualDom.
 ///
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
+/// # use dioxus_core::*;
 /// # fn app() -> Element { rsx! { div {} } }
 /// # let mut vdom = VirtualDom::new(app);
-/// vdom.wait_for_work().await;
+/// tokio::runtime::Runtime::new().unwrap().block_on(async {
+///     vdom.wait_for_work().await;
+/// });
 /// ```
 ///
 /// Once work is ready, call [`VirtualDom::render_immediate`] to compute the differences between the previous and
@@ -121,6 +127,7 @@ use tracing::instrument;
 ///
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
+/// # use dioxus_core::*;
 /// # fn app() -> Element { rsx! { div {} } }
 /// # let mut vdom = VirtualDom::new(app);
 /// let mut mutations = Mutations::default();
@@ -135,6 +142,8 @@ use tracing::instrument;
 ///
 /// Putting everything together, you can build an event loop around Dioxus by using the methods outlined above.
 /// ```rust, no_run
+/// # use dioxus::prelude::*;
+/// # use dioxus_core::*;
 /// # struct RealDom;
 /// # struct Event {}
 /// # impl RealDom {
@@ -144,12 +153,13 @@ use tracing::instrument;
 /// #     fn apply(&mut self) -> Mutations {
 /// #         todo!()
 /// #     }
-/// #     async fn wait_for_event(&mut self) -> std::rc::Rc<dyn Any> {
+/// #     async fn wait_for_event(&mut self) -> std::rc::Rc<dyn std::any::Any> {
 /// #         todo!()
 /// #     }
 /// # }
-///
-/// let real_dom = RealDom::new();
+/// #
+/// # tokio::runtime::Runtime::new().unwrap().block_on(async {
+/// let mut real_dom = RealDom::new();
 ///
 /// #[component]
 /// fn app() -> Element {
@@ -158,18 +168,19 @@ use tracing::instrument;
 ///     }
 /// }
 ///
-/// let dom = VirtualDom::new(app);
+/// let mut dom = VirtualDom::new(app);
 ///
-/// dom.rebuild(real_dom.apply());
+/// dom.rebuild(&mut real_dom.apply());
 ///
 /// loop {
-///     select! {
+///     tokio::select! {
 ///         _ = dom.wait_for_work() => {}
 ///         evt = real_dom.wait_for_event() => dom.handle_event("onclick", evt, ElementId(0), true),
 ///     }
 ///
-///     dom.render_immediate(real_dom.apply());
+///     dom.render_immediate(&mut real_dom.apply());
 /// }
+/// # });
 /// ```
 ///
 /// ## Waiting for suspense
@@ -179,10 +190,15 @@ use tracing::instrument;
 /// [`VirtualDom::wait_for_suspense`] method:
 ///
 /// ```rust, no_run
-/// let dom = VirtualDom::new(app);
+/// # use dioxus::prelude::*;
+/// # use dioxus_core::*;
+/// # fn app() -> Element { rsx! { div {} } }
+/// tokio::runtime::Runtime::new().unwrap().block_on(async {
+///     let mut dom = VirtualDom::new(app);
 ///
-/// dom.rebuild_in_place();
-/// dom.wait_for_suspense().await;
+///     dom.rebuild_in_place();
+///     dom.wait_for_suspense().await;
+/// });
 ///
 /// // Render the virtual dom
 /// ```
@@ -222,6 +238,8 @@ impl VirtualDom {
     ///
     /// # Example
     /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # use dioxus_core::*;
     /// fn Example() -> Element  {
     ///     rsx!( div { "hello world" } )
     /// }
@@ -246,6 +264,8 @@ impl VirtualDom {
     ///
     /// # Example
     /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # use dioxus_core::*;
     /// #[derive(PartialEq, Props, Clone)]
     /// struct SomeProps {
     ///     name: &'static str
@@ -255,12 +275,21 @@ impl VirtualDom {
     ///     rsx!{ div { "hello {cx.name}" } }
     /// }
     ///
-    /// let dom = VirtualDom::new(Example);
+    /// let dom = VirtualDom::new_with_props(Example, SomeProps { name: "world" });
     /// ```
     ///
     /// Note: the VirtualDom is not progressed on creation. You must either "run_with_deadline" or use "rebuild" to progress it.
     ///
     /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # use dioxus_core::*;
+    /// # #[derive(PartialEq, Props, Clone)]
+    /// # struct SomeProps {
+    /// #     name: &'static str
+    /// # }
+    /// # fn Example(cx: SomeProps) -> Element  {
+    /// #     rsx!{ div { "hello {cx.name}" } }
+    /// # }
     /// let mut dom = VirtualDom::new_with_props(Example, SomeProps { name: "jane" });
     /// dom.rebuild_in_place();
     /// ```
@@ -602,13 +631,15 @@ impl VirtualDom {
     ///
     /// # Example
     /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # use dioxus_core::*;
     /// fn app() -> Element {
     ///     rsx! { "hello world" }
     /// }
     ///
-    /// let mut dom = VirtualDom::new();
+    /// let mut dom = VirtualDom::new(app);
     /// let mut mutations = Mutations::default();
-    /// dom.rebuild(mutations);
+    /// dom.rebuild(&mut mutations);
     /// ```
     #[instrument(skip(self, to), level = "trace", name = "VirtualDom::rebuild")]
     pub fn rebuild(&mut self, to: &mut impl WriteMutations) {

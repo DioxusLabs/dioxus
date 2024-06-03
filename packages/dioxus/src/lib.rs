@@ -1,4 +1,5 @@
 #![doc = include_str!("../README.md")]
+//!
 //! ## Dioxus Crate Features
 //!
 //! This crate has several features that can be enabled to change the active renderer and enable various integrations:

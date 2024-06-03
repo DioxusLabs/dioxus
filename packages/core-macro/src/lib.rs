@@ -42,7 +42,7 @@ pub fn derive_typed_builder(input: TokenStream) -> TokenStream {
 ///     div {
 ///         div {}
 ///     }
-/// }
+/// };
 /// ```
 ///
 /// <details>
@@ -57,14 +57,14 @@ pub fn derive_typed_builder(input: TokenStream) -> TokenStream {
 ///     div-component {
 ///         div {}
 ///     }
-/// }
+/// };
 /// ```
 ///
 /// You can wrap your web component in a custom component to add type checking:
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
 /// #[component]
-/// fn MyDivComponent(width: u32) -> Element {
+/// fn MyDivComponent(width: i64) -> Element {
 ///     rsx! {
 ///         div-component {
 ///             "width": width
@@ -90,7 +90,7 @@ pub fn derive_typed_builder(input: TokenStream) -> TokenStream {
 ///         // attribute strings are automatically formatted with the format macro
 ///         width: "{width}px",
 ///     }
-/// }
+/// };
 /// ```
 ///
 /// ### Optional Attributes
@@ -112,7 +112,7 @@ pub fn derive_typed_builder(input: TokenStream) -> TokenStream {
 ///             "my-other-class"
 ///         }
 ///     }
-/// }
+/// };
 /// ```
 ///
 /// ### Raw Attributes
@@ -126,7 +126,7 @@ pub fn derive_typed_builder(input: TokenStream) -> TokenStream {
 ///         // Set the data-count attribute to "1"
 ///         "data-count": "1"
 ///     }
-/// }
+/// };
 /// ```
 ///
 /// ## Text
@@ -142,7 +142,7 @@ pub fn derive_typed_builder(input: TokenStream) -> TokenStream {
 ///         // Just like attributes, you can included formatted segments inside your text
 ///         "Hello {name}"
 ///     }
-/// }
+/// };
 /// ```
 ///
 /// ## Components
@@ -160,7 +160,7 @@ pub fn derive_typed_builder(input: TokenStream) -> TokenStream {
 ///     div {
 ///         HelloWorld {}
 ///     }
-/// }
+/// };
 /// ```
 ///
 /// ## If statements
@@ -181,7 +181,7 @@ pub fn derive_typed_builder(input: TokenStream) -> TokenStream {
 ///     if second_boolean {
 ///         "second"
 ///     }
-/// }
+/// };
 /// ```
 ///
 /// ## For loops
@@ -197,7 +197,7 @@ pub fn derive_typed_builder(input: TokenStream) -> TokenStream {
 ///             "{number}"
 ///         }
 ///     }
-/// }
+/// };
 /// ```
 ///
 /// ## Raw Expressions
@@ -214,7 +214,7 @@ pub fn derive_typed_builder(input: TokenStream) -> TokenStream {
 ///     }
 ///     // Iterators can also be converted into dynamic nodes
 ///     {(0..10).map(|n| n * n).map(|number| rsx! { div { "{number}" } })}
-/// }
+/// };
 /// ```
 #[proc_macro]
 pub fn rsx(tokens: TokenStream) -> TokenStream {
@@ -255,7 +255,7 @@ pub fn render(tokens: TokenStream) -> TokenStream {
 /// # Examples
 /// * Without props:
 /// ```rust, no_run
-/// # use rsx::prelude::*;
+/// # use dioxus::prelude::*;
 /// #[component]
 /// fn GreetBob() -> Element {
 ///     rsx! { "hello, bob" }
@@ -264,7 +264,7 @@ pub fn render(tokens: TokenStream) -> TokenStream {
 ///
 /// * With props:
 /// ```rust, no_run
-/// # use rsx::prelude::*;
+/// # use dioxus::prelude::*;
 /// #[component]
 /// fn GreetBob(bob: String) -> Element {
 ///    rsx! { "hello, {bob}" }
@@ -287,21 +287,24 @@ pub fn component(_args: TokenStream, input: TokenStream) -> TokenStream {
 ///
 /// # Example
 /// ```rust,no_run
-/// # use rsx::prelude::*;
+/// # use dioxus::prelude::*;
 /// #[inline_props]
 /// fn GreetBob(bob: String) -> Element {
 ///     rsx! { "hello, {bob}" }
 /// }
+/// ```
 ///
-/// // is equivalent to
+/// is equivalent to
 ///
-/// #[derive(PartialEq, Props)]
+/// ```rust,no_run
+/// # use dioxus::prelude::*;
+/// #[derive(PartialEq, Props, Clone)]
 /// struct AppProps {
 ///     bob: String,
 /// }
 ///
 /// fn GreetBob(props: AppProps) -> Element {
-///     rsx! { "hello, {bob}" }
+///     rsx! { "hello, {props.bob}" }
 /// }
 /// ```
 #[proc_macro_attribute]

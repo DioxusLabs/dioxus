@@ -51,6 +51,7 @@ fn WeatherElement(weather: String) -> Element {
 `use_resource` is reactive which just means that it will rerun when you write to any signals you read inside the future. This means that any time you change something the future depends on, the resource automatically knows to rerun. Lets take a look at some examples:
 
 ```rust, no_run
+# use dioxus::prelude::*;
 // Create a new count signal
 let mut count = use_signal(|| 1);
 // Create a new resource that doubles the value of count
@@ -92,7 +93,7 @@ println!("{:?}", double_count.read()); // Prints "Some(4)"
 
 // One more case, what happens if we write to the resource while it is in progress?
 // The resource will rerun and the value will be None
-count.write() += 1; // count is now 3
+count += 1; // count is now 3
 
 // If we write to a value the resource subscribes to again, it will cancel the current future and start a new one
 count += 1; // count is now 4

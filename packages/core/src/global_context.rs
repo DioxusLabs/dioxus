@@ -99,10 +99,10 @@ pub fn spawn_isomorphic(fut: impl Future<Output = ()> + 'static) -> Task {
 ///             onclick: move |_| {
 ///                 spawn(async move {
 ///                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-///                     println!("Count is {count}");
+///                     println!("Hello World");
 ///                 });
 ///             },
-///             "Print count in one second"
+///             "Print hello in one second"
 ///         }
 ///     }
 /// }
@@ -285,9 +285,7 @@ pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
 ///             }
 ///         }
 ///         if state() {
-///             rsx! {
-///                 child_component {}
-///             }
+///             child_component {}
 ///         }
 ///         button {
 ///             onclick: move |_| {
@@ -299,9 +297,9 @@ pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
 /// }
 ///
 /// fn child_component() -> Element {
-///     let original_scroll_position = use_signal(|| 0.0);
+///     let mut original_scroll_position = use_signal(|| 0.0);
 ///
-///     use_effect(move |_| async move {
+///     use_effect(move || {
 ///         let window = web_sys::window().unwrap();
 ///         let document = window.document().unwrap();
 ///         let element = document.get_element_by_id("my_element").unwrap();
@@ -312,7 +310,7 @@ pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
 ///     use_drop(move || {
 ///         /// restore scroll to the top of the page
 ///         let window = web_sys::window().unwrap();
-///         window.scroll_with_x_and_y(*original_scroll_position.current(), 0.0);
+///         window.scroll_with_x_and_y(original_scroll_position(), 0.0);
 ///     });
 ///
 ///     rsx!{

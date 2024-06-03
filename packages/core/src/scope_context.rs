@@ -174,6 +174,8 @@ impl Scope {
     /// # Example
     ///
     /// ```rust
+    /// # use dioxus::prelude::*;
+    /// #[derive(Clone)]
     /// struct SharedState(&'static str);
     ///
     /// // The parent provides context that is available in all children
@@ -184,7 +186,7 @@ impl Scope {
     ///
     /// // Any child elements can access the context with the `consume_context` function
     /// fn Child() -> Element {
-    ///     let state = consume_state::<SharedState>();
+    ///     let state = use_context::<SharedState>();
     ///     rsx!(div { "hello {state.0}" })
     /// }
     /// ```

@@ -2269,6 +2269,7 @@ dependencies = [
  "tracing",
  "tracing-fluent-assertions",
  "tracing-subscriber",
+ "web-sys",
 ]
 
 [[package]]
@@ -2418,6 +2419,7 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "generational-box 0.5.2",
+ "reqwest",
  "rustversion",
  "slab",
  "thiserror",

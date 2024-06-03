@@ -13,9 +13,10 @@ use crate::innerlude::*;
 ///
 /// ```rust
 /// # use dioxus::prelude::*;
+/// let value = 1;
 /// rsx!{
-///     Fragment { key: "abc" }
-/// }
+///     Fragment { key: "{value}" }
+/// };
 /// ```
 ///
 /// ## Usage
@@ -70,17 +71,17 @@ impl<const A: bool> FragmentBuilder<A> {
 ///             h1 {}
 ///             p {}
 ///         }
-///     })
+///     }
 /// }
 ///
 /// #[component]
-/// fn CustomCard(childern: Element) -> Element {
+/// fn CustomCard(children: Element) -> Element {
 ///     rsx!{
 ///         div {
 ///             h1 {"Title card"}
 ///             {children}
 ///         }
-///     })
+///     }
 /// }
 /// ```
 impl Properties for FragmentProps {

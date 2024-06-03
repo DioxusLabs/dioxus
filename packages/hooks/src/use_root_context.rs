@@ -6,6 +6,7 @@ use dioxus_core::{prelude::provide_root_context, prelude::try_consume_context, u
 ///
 /// # Example
 /// ```rust
+/// # #[derive(Clone)]
 /// # struct Logger;
 /// use dioxus::prelude::*;
 ///

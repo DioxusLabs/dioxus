@@ -14,7 +14,7 @@ fn App() -> Element {
         button {
             // When count changes, the memo will rerun and double will be updated
             // memos rerun any time you write to a signal they read. They will only rerun values/component that depend on them if the value of the memo changes
-            onclick: move |_| count += 1;
+            onclick: move |_| count += 1,
             "Increment"
         }
     }
@@ -25,8 +25,9 @@ The closure you pass into memos will be called whenever the state you read insid
 
 Lets dig into some examples to see how this works:
 
-```rust
-let count = use_signal(|| 1);
+```rust, no_run
+# use dioxus::prelude::*;
+let mut count = use_signal(|| 1);
 // double_count will rerun when state we read inside the memo changes (count)
 let double_count = use_memo(move || count() * 2);
 
@@ -66,6 +67,7 @@ To add non-reactive dependencies, you can use the [`crate::use_reactive()`] hook
 Signals will automatically be added as dependencies, so you don't need to call this method for them.
 
 ```rust
+# use dioxus::prelude::*;
 #[component]
 fn Comp(count: u32) -> Element {
 // Because the memo subscribes to `count` by adding it as a dependency, the memo will rerun every time `count` changes.

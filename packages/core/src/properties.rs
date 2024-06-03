@@ -12,12 +12,13 @@ use crate::innerlude::*;
 /// ## Example
 ///
 /// ```rust
+/// # use dioxus::prelude::*;
 /// #[derive(Props, PartialEq, Clone)]
 /// struct MyComponentProps {
 ///     data: String
 /// }
 ///
-/// fn MyComponent(props: MyProps) -> Element {
+/// fn MyComponent(props: MyComponentProps) -> Element {
 ///     rsx! {
 ///         div { "Hello {props.data}" }
 ///     }
@@ -27,6 +28,7 @@ use crate::innerlude::*;
 /// Or even better, derive your entire props struct with the [`#[crate::component]`] macro:
 ///
 /// ```rust
+/// # use dioxus::prelude::*;
 /// #[component]
 /// fn MyComponent(data: String) -> Element {
 ///     rsx! {
