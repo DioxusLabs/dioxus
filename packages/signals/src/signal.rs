@@ -73,8 +73,8 @@ impl<T: 'static> Signal<T> {
     /// fn App() -> Element {
     ///     rsx! {
     ///         button {
-    ///             "{SIGNAL}"
     ///             onclick: move |_| *SIGNAL.write() += 1,
+    ///             "{SIGNAL}"
     ///         }
     ///     }
     /// }
@@ -98,14 +98,14 @@ impl<T: PartialEq + 'static> Signal<T> {
     /// # use dioxus::prelude::*;
     /// static SIGNAL: GlobalSignal<i32> = Signal::global(|| 0);
     /// // Create a new global memo that can be used anywhere in your app
-    /// static DOUBLED: GlobalMemo<i32> = Signal::global(|| SIGNAL() * 2);
+    /// static DOUBLED: GlobalMemo<i32> = Signal::global_memo(|| SIGNAL() * 2);
     ///
     /// fn App() -> Element {
     ///     rsx! {
     ///         button {
-    ///             "{DOUBLED}"
     ///             // When SIGNAL changes, the memo will update because the SIGNAL is read inside DOUBLED
     ///             onclick: move |_| *SIGNAL.write() += 1,
+    ///             "{DOUBLED}"
     ///         }
     ///     }
     /// }

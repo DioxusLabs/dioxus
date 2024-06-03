@@ -14,7 +14,7 @@ let mut signal = use_signal(|| 0);
     // This will read the value (we use a block to make sure the read is dropped before the write. You can read more about this in the next section)
     let read = signal.read();
     // Just like refcell, read you can deref the read to get the inner &T reference
-    match &read {
+    match &*read {
         &0 => println!("read is 0"),
         &1 => println!("read is 1"),
         _ => println!("read is something else ({read})"),
@@ -22,7 +22,7 @@ let mut signal = use_signal(|| 0);
 }
 
 // This will write to the value
-let write = signal.write();
+let mut write = signal.write();
 // Again, we can deref the write to get the inner &mut T reference
 *write += 1;
 ```
@@ -38,14 +38,14 @@ let clone: i32 = signal();
 // You can directly display the signal
 println!("{}", signal);
 
+let signal_vec = use_signal(|| vec![1, 2, 3]);
 // And use vec methods like .get and .len without reading the signal explicitly
-let first = signal.get(0);
-let last = signal.last();
-let len = signal.len();
+let first = signal_vec.get(0);
+let last = signal_vec.last();
+let len = signal_vec.len();
 
 // You can also iterate over signals directly
-let signal_vec = use_signal(|| vec![1, 2, 3]);
-for i in signal_vec {
+for i in signal_vec.iter() {
     println!("{}", i);
 }
 ```
@@ -56,11 +56,11 @@ Just like `RefCell<T>`, Signal checks borrows at runtime. If you read and write 
 
 ```rust, no_run
 # use dioxus::prelude::*;
-let signal = use_signal(|| 0);
+let mut signal = use_signal(|| 0);
 // If you create a read and hold it while you write to the signal, it will panic
-let read = signal.read();
+let read = signal.read_unchecked();
 // This will panic
-signal.write() += 1;
+signal += 1;
 println!("{}", read);
 ```
 
@@ -69,19 +69,17 @@ To avoid issues with overlapping reads and writes, you can use the `with_*` vari
 ```rust, no_run
 # use dioxus::prelude::*;
 let mut signal = use_signal(|| 0);
-
-let signal = use_signal(|| 0);
 {
     // Since this read is inside a block that ends before we write to the signal, the signal will be dropped before the write and it will not panic
     let read = signal.read();
     println!("{}", read);
 }
-signal.write() += 1;
+signal += 1;
 
-// Or you can use the with_read and with_write methods which only read or write to the signal inside the closure
-signal.with_read(|read| println!("{}", read));
+// Or you can use the with and with_write methods which only read or write to the signal inside the closure
+signal.with(|read| println!("{}", read));
 // Since the read only lasts as long as the closure, this will not panic
-signal.with_write(|write| *write += 1);
+signal.with_mut(|write| *write += 1);
 ```
 
 # Signals with Async
@@ -99,7 +97,7 @@ let mut signal = use_signal(|| 0);
 
 use_future(move || async move {
     // Don't hold reads or writes over await points
-    let write = signal.write();
+    let mut write = signal.write();
     // While the future is waiting for the async work to finish, the write will be open
     double_me_async(&mut write).await;
 });
@@ -107,7 +105,7 @@ use_future(move || async move {
 rsx!{
     // This read may panic because the write is still active while the future is waiting for the async work to finish
     "{signal}"
-}
+};
 ```
 
 Instead of holding a read or write over an await point, you can clone whatever values you need out of your signal and then set the signal to the result once the async work is done:
@@ -133,7 +131,7 @@ use_future(move || async move {
 rsx! {
     // This read will not panic because the write is never held over an await point
     "{signal}"
-}
+};
 ```
 
 # Signals lifecycle
@@ -145,7 +143,8 @@ This is incredibly convenient for UI development, but it does come with some tra
 TLDR **Don't pass signals up in the component tree**. It will cause issues:
 
 ```rust
-fn MyComponent() {
+# use dioxus::prelude::*;
+fn MyComponent() -> Element {
     let child_signal = use_signal(|| None);
 
     rsx! {
@@ -156,10 +155,10 @@ fn MyComponent() {
 }
 
 #[component]
-fn IncrementButton(mut child_signal: Signal<Option<Signal<i32>>>) {
+fn IncrementButton(mut child_signal: Signal<Option<Signal<i32>>>) -> Element {
     let signal_owned_by_child = use_signal(|| 0);
     // Don't do this: it may cause issues if you drop the child component
-    child_signal.write() = Some(signal_owned_by_child);
+    child_signal.set(Some(signal_owned_by_child));
 
     todo!()
 }

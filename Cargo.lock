@@ -2661,6 +2661,8 @@ dependencies = [
  "generational-box 0.5.2",
  "once_cell",
  "parking_lot",
+ "rand 0.8.5",
+ "reqwest",
  "rustc-hash",
  "serde",
  "simple_logger",

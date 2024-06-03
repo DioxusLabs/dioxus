@@ -8,7 +8,8 @@ There are two parts to reactivity: **Reactive Contexts** and **Tracked Values**.
 
 Reactive Contexts keep track of what state different parts of your app rely on. Reactive Context show up throughout dioxus: Component, use_effect, use_memo and use_resource all have their own reactive contexts:
 
-```rust
+```rust, no_run
+# use dioxus::prelude::*;
 let count = use_signal(|| 0);
 // The reactive context in the memo knows that the memo depends on the count signal
 use_memo(move || count() * 2);
@@ -18,7 +19,8 @@ use_memo(move || count() * 2);
 
 Tracked values are values that reactive contexts know about. When you read a tracked value, the reactive context will rerun when the value changes. Signals, Memos, and Resources are all tracked values:
 
-```rust
+```rust, no_run
+# use dioxus::prelude::*;
 // The count signal is tracked
 let count = use_signal(|| 0);
 // When you read the count signal, the reactive context subscribes to the count signal
@@ -33,10 +35,10 @@ You can use reactivity to create derived state and update your app when state ch
 
 You can derive state from other state with [`use_memo`](https://docs.rs/dioxus/latest/dioxus/prelude/fn.use_memo.html).
 
-```rust
+```rust, no_run
 use dioxus::prelude::*;
 
-let count = use_signal(|| 0);
+let mut count = use_signal(|| 0);
 let double_count = use_memo(move || count() * 2);
 
 // Now whenever we read double_count, we know it is always twice the value of count
@@ -50,7 +52,7 @@ println!("{}", double_count); // Prints "4"
 
 You can also use reactivity to create derive state asynchronously. For example, you can use [`use_resource`](https://docs.rs/dioxus/latest/dioxus/prelude/fn.use_resource.html) to load data from a server:
 
-```rust
+```rust, no_run
 use dioxus::prelude::*;
 
 let count = use_signal(|| 0);
@@ -68,11 +70,11 @@ You can use plain Rust types in Dioxus, but you should be aware that they are no
 
 You can make non-reactive state reactive by using the `Signal` type instead of a plain Rust type or by using the `use_reactive` hook.
 
-```rust
+```rust, no_run
 use dioxus::prelude::*;
 
 // ❌ Don't create non-reactive state
-let state = use_hook(|| RefCell::new(0));
+let state = use_hook(|| std::cell::RefCell::new(0));
 
 // Computed values will get out of date if the state they depend on is not reactive
 let doubled = use_memo(move || *state.borrow() * 2);
@@ -100,7 +102,7 @@ fn MyReactiveComponent(state: ReadOnlySignal<i32>) -> Element {
 
 If your state can't be reactive, you can use the `use_reactive` hook to make it reactive.
 
-```rust
+```rust, no_run
 use dioxus::prelude::*;
 
 let state = rand::random::<i32>();
