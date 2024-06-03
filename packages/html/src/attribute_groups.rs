@@ -202,25 +202,36 @@ mod_methods! {
     /// Classes allow CSS and Javascript to select and access specific elements via the class selectors or
     /// functions like the DOM method document.getElementsByClassName.
     ///
-    /// ## Example
+    /// ## Multiple Classes
     ///
-    /// ### HTML:
-    /// ```html
-    /// <p class="note editorial">Above point sounds a bit obvious. Remove/rewrite?</p>
-    /// ```
+    /// If you include multiple classes in a single element dioxus will automatically join them with a space.
     ///
-    /// ### CSS:
-    /// ```css
-    /// .note {
-    ///     font-style: italic;
-    ///     font-weight: bold;
-    /// }
-    ///
-    /// .editorial {
-    ///     background: rgb(255, 0, 0, .25);
-    ///     padding: 10px;
+    /// ```rust
+    /// rsx! {
+    ///     div {
+    ///         class: "my-class",
+    ///         class: "my-other-class"
+    ///     }
     /// }
     /// ```
+    ///
+    /// ## Optional Classes
+    ///
+    /// You can include optional attributes with an unterminated if statement as the value of the attribute. This is very useful for conditionally applying css classes:
+    ///
+    /// ```rust
+    /// rsx! {
+    ///     div {
+    ///         class: if true {
+    ///             class: "my-class"
+    ///         },
+    ///         class: if false {
+    ///             class: "my-other-class"
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    ///
     /// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/class>
     class;
 
