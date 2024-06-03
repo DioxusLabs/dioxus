@@ -18,7 +18,7 @@ struct UpdateInformation<T> {
     callback: RefCell<Box<dyn FnMut() -> T>>,
 }
 
-#[doc = include_str!("derived_state.md")]
+#[doc = include_str!("../docs/memo.md")]
 #[doc(alias = "Selector")]
 #[doc(alias = "UseMemo")]
 #[doc(alias = "Memorize")]

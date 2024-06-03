@@ -87,7 +87,7 @@ pub fn spawn_isomorphic(fut: impl Future<Output = ()> + 'static) -> Task {
     Runtime::with_current_scope(|cx| cx.spawn_isomorphic(fut)).expect("to be in a dioxus runtime")
 }
 
-/// Spawns the future but does not return the [`TaskId`]. This task will automatically be canceled when the component is dropped.
+/// Spawns the future but does not return the [`Task`]. This task will automatically be canceled when the component is dropped.
 ///
 /// # Example
 /// ```rust

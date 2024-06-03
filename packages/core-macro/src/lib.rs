@@ -254,7 +254,8 @@ pub fn render(tokens: TokenStream) -> TokenStream {
 ///
 /// # Examples
 /// * Without props:
-/// ```rust,ignore
+/// ```rust, no_run
+/// # use rsx::prelude::*;
 /// #[component]
 /// fn GreetBob() -> Element {
 ///     rsx! { "hello, bob" }
@@ -262,7 +263,8 @@ pub fn render(tokens: TokenStream) -> TokenStream {
 /// ```
 ///
 /// * With props:
-/// ```rust,ignore
+/// ```rust, no_run
+/// # use rsx::prelude::*;
 /// #[component]
 /// fn GreetBob(bob: String) -> Element {
 ///    rsx! { "hello, {bob}" }
@@ -284,9 +286,10 @@ pub fn component(_args: TokenStream, input: TokenStream) -> TokenStream {
 /// you would be repeating a lot of the usual Rust boilerplate.
 ///
 /// # Example
-/// ```rust,ignore
+/// ```rust,no_run
+/// # use rsx::prelude::*;
 /// #[inline_props]
-/// fn app(bob: String) -> Element {
+/// fn GreetBob(bob: String) -> Element {
 ///     rsx! { "hello, {bob}" }
 /// }
 ///
@@ -297,7 +300,7 @@ pub fn component(_args: TokenStream, input: TokenStream) -> TokenStream {
 ///     bob: String,
 /// }
 ///
-/// fn app(props: AppProps) -> Element {
+/// fn GreetBob(props: AppProps) -> Element {
 ///     rsx! { "hello, {bob}" }
 /// }
 /// ```

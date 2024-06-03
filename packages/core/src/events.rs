@@ -187,7 +187,7 @@ pub struct EventHandler<T = ()> {
     /// This is both more efficient and allows us to avoid out of date EventHandlers.
     ///
     /// We double box here because we want the data to be copy (GenerationalBox) and still update in place (ExternalListenerCallback)
-    /// This isn't an ideal solution for performance, but it is non-breaking and fixes the issues described in https://github.com/DioxusLabs/dioxus/pull/2298
+    /// This isn't an ideal solution for performance, but it is non-breaking and fixes the issues described in <https://github.com/DioxusLabs/dioxus/pull/2298>
     pub(super) callback: GenerationalBox<Option<ExternalListenerCallback<T>>>,
 }
 

@@ -39,6 +39,7 @@
 //!         div { id: "{id}" }
 //!     }
 //! }
+//! ```
 //!
 //! 3. Observing out of date state. Related issues (<https://github.com/DioxusLabs/dioxus/issues/1935>)
 //!

@@ -11,7 +11,7 @@ use std::{
     sync::Mutex,
 };
 
-#[doc = include_str!("./signals.md")]
+#[doc = include_str!("../docs/signals.md")]
 #[doc(alias = "State")]
 #[doc(alias = "UseState")]
 #[doc(alias = "UseRef")]
