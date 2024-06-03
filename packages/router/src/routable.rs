@@ -41,6 +41,7 @@ impl<E: Display> Display for RouteParseError<E> {
 ///     },
 /// }
 ///
+/// #[derive(Default, Clone, PartialEq, Debug)]
 /// struct CustomQuery {
 ///     count: i32,
 /// }
@@ -55,7 +56,7 @@ impl<E: Display> Display for RouteParseError<E> {
 /// }
 ///
 /// // We also need to implement Display for CustomQuery which will be used to format the query string into the URL
-/// impl Display for CustomQuery {
+/// impl std::fmt::Display for CustomQuery {
 ///     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 ///         write!(f, "{}", self.count)
 ///     }
@@ -106,14 +107,14 @@ impl<T: for<'a> From<&'a str>> FromQuery for T {
 ///
 /// // We can derive Default for CustomQuery
 /// // If the router fails to parse the query value, it will use the default value instead
-/// #[derive(Default)]
+/// #[derive(Default, Clone, PartialEq, Debug)]
 /// struct CustomQuery {
 ///     count: i32,
 /// }
 ///
 /// // We implement FromStr for CustomQuery so that FromQuerySegment is implemented automatically
-/// impl FromStr for CustomQuery {
-///     type Err = <i32 as FromStr>::Err;
+/// impl std::str::FromStr for CustomQuery {
+///     type Err = <i32 as std::str::FromStr>::Err;
 ///
 ///     fn from_str(query: &str) -> Result<Self, Self::Err> {
 ///         Ok(CustomQuery {
@@ -123,7 +124,7 @@ impl<T: for<'a> From<&'a str>> FromQuery for T {
 /// }
 ///
 /// // We also need to implement Display for CustomQuery which will be used to format the query string into the URL
-/// impl Display for CustomQuery {
+/// impl std::fmt::Display for CustomQuery {
 ///     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 ///         write!(f, "{}", self.count)
 ///     }
@@ -275,14 +276,14 @@ where
 ///
 /// // We can derive Default for CustomRouteSegment
 /// // If the router fails to parse the route segment, it will use the default value instead
-/// #[derive(Default)]
+/// #[derive(Default, PartialEq, Clone, Debug)]
 /// struct CustomRouteSegment {
 ///     count: i32,
 /// }
 ///
 /// // We implement FromStr for CustomRouteSegment so that FromRouteSegment is implemented automatically
-/// impl FromStr for CustomRouteSegment {
-///     type Err = <i32 as FromStr>::Err;
+/// impl std::str::FromStr for CustomRouteSegment {
+///     type Err = <i32 as std::str::FromStr>::Err;
 ///
 ///     fn from_str(route_segment: &str) -> Result<Self, Self::Err> {
 ///         Ok(CustomRouteSegment {
@@ -292,7 +293,7 @@ where
 /// }
 ///
 /// // We also need to implement Display for CustomRouteSegment which will be used to format the route segment into the URL
-/// impl Display for CustomRouteSegment {
+/// impl std::fmt::Display for CustomRouteSegment {
 ///     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 ///         write!(f, "{}", self.count)
 ///     }
@@ -357,23 +358,25 @@ fn full_circle() {
 ///
 /// // We can derive Default for NumericRouteSegments
 /// // If the router fails to parse the route segment, it will use the default value instead
-/// #[derive(Default)]
+/// #[derive(Default, PartialEq, Clone, Debug)]
 /// struct NumericRouteSegments {
 ///     numbers: Vec<i32>,
 /// }
 ///
-/// // We implement IntoIterator for NumericRouteSegments so that FromRouteSegments is implemented automatically
-/// impl IntoIterator for NumericRouteSegments {
-///     type Item = i32;
-///     type IntoIter = std::vec::IntoIter<Self::Item>;
-///
-///     fn into_iter(self) -> Self::IntoIter {
-///         self.count.into_iter()
+/// // Implement ToRouteSegments for NumericRouteSegments so that we can display the route segments
+/// impl ToRouteSegments for &NumericRouteSegments {
+///     fn display_route_segments(self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+///         for number in &self.numbers {
+///             write!(f, "/{}", number)?;
+///         }
+///         Ok(())
 ///     }
 /// }
 ///
 /// // We also need to parse the route segments with `FromRouteSegments`
 /// impl FromRouteSegments for NumericRouteSegments {
+///     type Err = <i32 as std::str::FromStr>::Err;
+///
 ///     fn from_route_segments(segments: &[&str]) -> Result<Self, Self::Err> {
 ///         let mut numbers = Vec::new();
 ///         for segment in segments {
@@ -451,23 +454,25 @@ fn to_route_segments() {
 ///
 /// // We can derive Default for NumericRouteSegments
 /// // If the router fails to parse the route segment, it will use the default value instead
-/// #[derive(Default)]
+/// #[derive(Default, Clone, PartialEq, Debug)]
 /// struct NumericRouteSegments {
 ///     numbers: Vec<i32>,
 /// }
 ///
-/// // We implement IntoIterator for NumericRouteSegments so that FromRouteSegments is implemented automatically
-/// impl IntoIterator for NumericRouteSegments {
-///     type Item = i32;
-///     type IntoIter = std::vec::IntoIter<Self::Item>;
-///
-///     fn into_iter(self) -> Self::IntoIter {
-///         self.count.into_iter()
+/// // Implement ToRouteSegments for NumericRouteSegments so that we can display the route segments
+/// impl ToRouteSegments for &NumericRouteSegments {
+///     fn display_route_segments(self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+///         for number in &self.numbers {
+///             write!(f, "/{}", number)?;
+///         }
+///         Ok(())
 ///     }
 /// }
 ///
 /// // We also need to parse the route segments with `FromRouteSegments`
 /// impl FromRouteSegments for NumericRouteSegments {
+///     type Err = <i32 as std::str::FromStr>::Err;
+///
 ///     fn from_route_segments(segments: &[&str]) -> Result<Self, Self::Err> {
 ///         let mut numbers = Vec::new();
 ///         for segment in segments {

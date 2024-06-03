@@ -17,7 +17,7 @@ use std::sync::Arc;
 ///     #[route("/")]
 ///     Index {},
 /// }
-/// let cfg = RouterConfig::default().history(WebHistory::<Route>::default());
+/// let cfg = RouterConfig::default().history(MemoryHistory::<Route>::default());
 /// ```
 pub struct RouterConfig<R: Routable> {
     pub(crate) failure_external_navigation: fn() -> Element,
