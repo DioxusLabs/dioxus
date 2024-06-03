@@ -1,38 +1,60 @@
-use fermi::UseAtomRef;
-use gloo_storage::{LocalStorage, Storage};
-use serde::{Deserialize, Serialize};
+use dioxus::prelude::*;
+use dioxus_sdk::storage::*;
 
 use crate::{
     constants::{DIOXUS_FRONT_AUTH_REQUEST, DIOXUS_FRONT_AUTH_TOKEN},
     oidc::{AuthRequestState, AuthTokenState},
+    AUTH_REQUEST, AUTH_TOKEN,
 };
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct StorageEntry<T> {
-    pub key: String,
-    pub value: T,
+pub trait PersistentInit {
+    fn persistent_init();
 }
 
-pub trait PersistentWrite<T: Serialize + Clone> {
-    fn persistent_set(atom_ref: &UseAtomRef<Option<T>>, entry: Option<T>);
-}
-
-impl PersistentWrite<AuthTokenState> for AuthTokenState {
-    fn persistent_set(
-        atom_ref: &UseAtomRef<Option<AuthTokenState>>,
-        entry: Option<AuthTokenState>,
-    ) {
-        *atom_ref.write() = entry.clone();
-        LocalStorage::set(DIOXUS_FRONT_AUTH_TOKEN, entry).unwrap();
+impl PersistentInit for AuthTokenState {
+    fn persistent_init() {
+        let stored_token = use_storage::<LocalStorage, _>(
+            DIOXUS_FRONT_AUTH_TOKEN.to_owned(),
+            AuthTokenState::default,
+        );
+        use_effect(move || {
+            *AUTH_TOKEN.write() = Some(stored_token());
+        });
     }
 }
 
-impl PersistentWrite<AuthRequestState> for AuthRequestState {
-    fn persistent_set(
-        atom_ref: &UseAtomRef<Option<AuthRequestState>>,
-        entry: Option<AuthRequestState>,
-    ) {
-        *atom_ref.write() = entry.clone();
-        LocalStorage::set(DIOXUS_FRONT_AUTH_REQUEST, entry).unwrap();
+impl PersistentInit for AuthRequestState {
+    fn persistent_init() {
+        let stored_req = use_storage::<LocalStorage, _>(
+            DIOXUS_FRONT_AUTH_REQUEST.to_owned(),
+            AuthRequestState::default,
+        );
+        use_effect(move || {
+            *AUTH_REQUEST.write() = Some(stored_req());
+        });
+    }
+}
+
+pub trait PersistentWrite {
+    fn persistent_set(entry: Self);
+}
+
+impl PersistentWrite for AuthTokenState {
+    fn persistent_set(entry: AuthTokenState) {
+        let mut stored_token = use_storage::<LocalStorage, _>(
+            DIOXUS_FRONT_AUTH_TOKEN.to_string(),
+            AuthTokenState::default,
+        );
+        Signal::<AuthTokenState>::set(&mut stored_token, entry);
+    }
+}
+
+impl PersistentWrite for AuthRequestState {
+    fn persistent_set(entry: AuthRequestState) {
+        let mut stored_req = use_storage::<LocalStorage, _>(
+            DIOXUS_FRONT_AUTH_REQUEST.to_string(),
+            AuthRequestState::default,
+        );
+        *stored_req.write() = entry;
     }
 }
