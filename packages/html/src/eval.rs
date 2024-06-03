@@ -49,6 +49,7 @@ pub fn eval_provider() -> EvalCreator {
 }
 
 #[doc = include_str!("../docs/eval.md")]
+#[doc(alias = "javascript")]
 pub fn eval(script: &str) -> UseEval {
     let eval_provider = dioxus_core::prelude::try_consume_context::<Rc<dyn EvalProvider>>()
         // Create a dummy provider that always hiccups when trying to evaluate
