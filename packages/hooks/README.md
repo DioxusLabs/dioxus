@@ -49,11 +49,11 @@ Depending on where you need to access the state, you can put your state in one o
 
 If you don't have an initial value for your state, you can derive your state from other states with a closure or asynchronous function:
 
-| Hook                                                                                | Reactive (reruns when dependencies change) | Async | Memorizes Output | Example                                                             |
-| ----------------------------------------------------------------------------------- | ------------------------------------------ | ----- | ---------------- | ------------------------------------------------------------------- |
-| [`use_memo`](https://docs.rs/dioxus/latest/dioxus/prelude/fn.use_memo.html)         | ✅                                         | ❌    | ✅               | `use_memo(move \|\| count() * 2)`                                   |
-| [`use_resource`](https://docs.rs/dioxus/latest/dioxus/prelude/fn.use_resource.html) | ✅                                         | ✅    | ❌               | `use_resource(move \|\| reqwest::get(format!("/users/{user_id}")))` |
-| [`use_future`](https://docs.rs/dioxus/latest/dioxus/prelude/fn.use_future.html)     | ❌                                         | ✅    | ❌               | `use_resource(move \|\| reqwest::get(format!("/users/{user_id}")))` |
+| Hook                                                                                | Reactive (reruns when dependencies change) | Async | Memorizes Output | Example                                                                             |
+| ----------------------------------------------------------------------------------- | ------------------------------------------ | ----- | ---------------- | ----------------------------------------------------------------------------------- |
+| [`use_memo`](https://docs.rs/dioxus/latest/dioxus/prelude/fn.use_memo.html)         | ✅                                         | ❌    | ✅               | `use_memo(move \|\| count() * 2)`                                                   |
+| [`use_resource`](https://docs.rs/dioxus/latest/dioxus/prelude/fn.use_resource.html) | ✅                                         | ✅    | ❌               | `use_resource(move \|\| reqwest::get(format!("/users/{user_id}")))`                 |
+| [`use_future`](https://docs.rs/dioxus/latest/dioxus/prelude/fn.use_future.html)     | ❌                                         | ✅    | ❌               | `use_future(move \|\| println!("{:?}", reqwest::get(format!("/users/{user_id}"))))` |
 
 ### Persistent State
 
