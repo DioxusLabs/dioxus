@@ -7,10 +7,10 @@ use dioxus_ssr::{
 };
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
-use std::future::Future;
 use std::sync::Arc;
 use std::sync::RwLock;
-use tokio::task::JoinHandle;
+use std::{future::Future, time::Duration};
+use tokio::{task::JoinHandle, time::Instant};
 
 use crate::prelude::*;
 use dioxus_lib::prelude::*;
@@ -197,20 +197,51 @@ impl SsrRendererPool {
             // While we are streaming, there is no need to include hydration ids in the SSR render
             renderer.pre_render = false;
 
+            // We only render with a maximum frequency of 200ms to avoid forcing the client to render too much data
+            const RENDER_DEDUPLICATE_TIMEOUT: Duration = Duration::from_millis(200);
+
+            let mut last_render: Option<Instant> = None;
+
             while virtual_dom.suspended_tasks_remaining() {
-                ProvideServerContext::new(
-                    virtual_dom.wait_for_suspense_work(),
-                    server_context.clone(),
-                )
-                .await;
+                let deadline = last_render
+                    .map(|last_render| {
+                        RENDER_DEDUPLICATE_TIMEOUT
+                            .checked_sub(last_render.elapsed())
+                            .unwrap_or(Duration::ZERO)
+                    })
+                    .unwrap_or(tokio::time::Duration::MAX);
 
-                with_server_context(server_context.clone(), || {
-                    virtual_dom.render_suspense_immediate();
-                });
+                let run_virtual_dom = async {
+                    ProvideServerContext::new(
+                        virtual_dom.wait_for_suspense_work(),
+                        server_context.clone(),
+                    )
+                    .await;
 
-                if virtual_dom.suspended_tasks_remaining() {
-                    let html = renderer.render(&virtual_dom);
-                    streaming_renderer.render(html);
+                    with_server_context(server_context.clone(), || {
+                        virtual_dom.render_suspense_immediate();
+                    });
+                };
+
+                let mut rerender = |last_render: &mut Option<Instant>, virtual_dom: &VirtualDom| {
+                    if virtual_dom.suspended_tasks_remaining() {
+                        let html = renderer.render(virtual_dom);
+                        streaming_renderer.render(html);
+                        *last_render = Some(Instant::now());
+                    }
+                };
+
+                tokio::select! {
+                    // If it has been 100ms since running a scope, we should stream the edits to the client
+                    _ = tokio::time::sleep(deadline) => {
+                        rerender(&mut last_render, &virtual_dom);
+                    }
+                    // Otherwise, just keep running the virtual dom or quit if suspense is done
+                    _ = run_virtual_dom => {
+                        if last_render.is_none() {
+                            rerender(&mut last_render, &virtual_dom);
+                        }
+                    }
                 }
             }
             tracing::info!("Suspense resolved");

@@ -40,27 +40,13 @@ fn app() -> Element {
 
             h3 { "Illustrious Dog Photo" }
             SuspenseBoundary {
+                fallback: move |suspense: SuspenseContext| suspense.suspense_placeholder().unwrap_or_else(|| rsx! {
+                    div {
+                        "Loading..."
+                    }
+                }),
                 Doggo {}
                 Doggo {}
-            }
-        }
-    }
-}
-
-#[component]
-fn SuspenseBoundary(children: Element) -> Element {
-    let boundary = use_suspense_boundary();
-    rsx! {
-        div {
-            display: if boundary.suspended_futures().is_empty() { "block" } else { "none" },
-            {children}
-        }
-        div {
-            display: if boundary.suspended_futures().is_empty() { "none" } else { "block" },
-            if let Some(placeholder) = boundary.suspense_placeholder() {
-                {placeholder}
-            } else {
-                "loading..."
             }
         }
     }

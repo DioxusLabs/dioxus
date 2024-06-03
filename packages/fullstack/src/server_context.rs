@@ -124,12 +124,10 @@ pub async fn extract<E: FromServerContext<I>, I>() -> Result<E, E::Rejection> {
 /// Run a function inside of the server context.
 pub fn with_server_context<O>(context: DioxusServerContext, f: impl FnOnce() -> O) -> O {
     // before polling the future, we need to set the context
-    println!("setting server context to {:p}", &context);
     let prev_context = SERVER_CONTEXT.with(|ctx| ctx.replace(Box::new(context)));
     // poll the future, which may call server_context()
     let result = f();
     // after polling the future, we need to restore the context
-    println!("setting server context to {:p}", &prev_context);
     SERVER_CONTEXT.with(|ctx| ctx.replace(prev_context));
     result
 }

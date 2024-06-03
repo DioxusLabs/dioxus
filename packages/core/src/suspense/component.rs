@@ -229,6 +229,29 @@ impl ::core::cmp::PartialEq for SuspenseBoundaryProps {
         self.fallback == other.fallback && self.children == other.children
     }
 }
+
+/// Suspense Boundaries let you render a fallback UI while a child component is suspended.
+///
+/// # Example
+///
+/// ```rust
+/// # use dioxus::prelude::*;
+/// # fn Article() -> Element { rsx! { "Article" } }
+/// fn App() {
+///     rsx! {
+///         SuspenseBoundary {
+///             fallback: |context: SuspenseContext| rsx! {
+///                 if let Some(placeholder) = context.suspense_placeholder() {
+///                     {placeholder}
+///                 } else {
+///                     "Loading..."
+///                 }
+///             }
+///             Article {}
+///         }
+///     }
+/// }
+/// ```
 #[allow(non_snake_case)]
 pub fn SuspenseBoundary(mut __props: SuspenseBoundaryProps) -> Element {
     unreachable!("SuspenseBoundary should not be called directly")

@@ -130,12 +130,13 @@ impl SuspenseContext {
     }
 
     /// Get the first suspended task with a loading placeholder
-    pub fn suspense_placeholder(&self) -> Option<VNode> {
+    pub fn suspense_placeholder(&self) -> Option<Element> {
         self.inner
             .suspended_tasks
             .borrow()
             .iter()
             .find_map(|task| task.suspense_placeholder())
+            .map(std::result::Result::Ok)
     }
 }
 
