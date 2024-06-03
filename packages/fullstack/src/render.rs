@@ -151,6 +151,7 @@ impl SsrRendererPool {
             server_context: server_context.clone(),
         };
 
+        let stream_page = cfg.stream_page;
         let server_context = server_context.clone();
         let mut renderer = self
             .renderers
@@ -226,7 +227,9 @@ impl SsrRendererPool {
                 let mut rerender = |last_render: &mut Option<Instant>, virtual_dom: &VirtualDom| {
                     if virtual_dom.suspended_tasks_remaining() {
                         let html = renderer.render(virtual_dom);
-                        streaming_renderer.render(html);
+                        if stream_page {
+                            streaming_renderer.render(html);
+                        }
                         *last_render = Some(Instant::now());
                     }
                 };

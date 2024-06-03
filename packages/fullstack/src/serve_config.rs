@@ -8,6 +8,7 @@ use std::path::PathBuf;
 /// A ServeConfig is used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
 #[derive(Clone, Default)]
 pub struct ServeConfigBuilder {
+    pub(crate) stream_page: bool,
     pub(crate) root_id: Option<&'static str>,
     pub(crate) index_html: Option<String>,
     pub(crate) index_path: Option<PathBuf>,
@@ -19,12 +20,20 @@ impl ServeConfigBuilder {
     /// Create a new ServeConfigBuilder with the root component and props to render on the server.
     pub fn new() -> Self {
         Self {
+            stream_page: false,
             root_id: None,
             index_html: None,
             index_path: None,
             assets_path: None,
             incremental: None,
         }
+    }
+
+    /// Set if the rendered pages should be streamed or just suspended and rendered in one large chunk.
+    #[allow(unused)]
+    pub fn stream_page(mut self, stream_page: bool) -> Self {
+        self.stream_page = stream_page;
+        self
     }
 
     /// Enable incremental static generation
@@ -79,6 +88,7 @@ impl ServeConfigBuilder {
 
         let index = load_index_html(index_html, root_id);
         ServeConfig {
+            stream_page: self.stream_page,
             index,
             assets_path,
             incremental: self.incremental,
@@ -123,6 +133,7 @@ pub(crate) struct IndexHtml {
 /// See [`ServeConfigBuilder`] to create a ServeConfig
 #[derive(Clone)]
 pub struct ServeConfig {
+    pub(crate) stream_page: bool,
     pub(crate) index: IndexHtml,
     #[allow(dead_code)]
     pub(crate) assets_path: PathBuf,
