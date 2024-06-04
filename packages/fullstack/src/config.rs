@@ -79,6 +79,16 @@ impl Config {
         }
     }
 
+    /// Set if the rendered pages should be streamed or just suspended and rendered in one large chunk.
+    #[allow(unused)]
+    pub fn stream_page(mut self, stream_page: bool) -> Self {
+        #[cfg(feature = "server")]
+        {
+            self.server_cfg = self.server_cfg.stream_page(stream_page);
+        }
+        self
+    }
+
     /// Set the server config.
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]

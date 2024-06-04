@@ -30,7 +30,6 @@ impl ServeConfigBuilder {
     }
 
     /// Set if the rendered pages should be streamed or just suspended and rendered in one large chunk.
-    #[allow(unused)]
     pub fn stream_page(mut self, stream_page: bool) -> Self {
         self.stream_page = stream_page;
         self

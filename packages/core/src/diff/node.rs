@@ -97,6 +97,7 @@ impl VNode {
         dom: &mut VirtualDom,
         to: Option<&mut impl WriteMutations>,
     ) {
+        tracing::info!("diffing dynamic node from {old_node:?} to {new_node:?}");
         match (old_node, new_node) {
             (Text(old), Text(new)) => {
                 // Diffing text is just a side effect, if we are diffing suspended nodes and are not outputting mutations, we can skip it
