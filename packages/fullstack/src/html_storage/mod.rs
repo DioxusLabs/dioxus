@@ -1,13 +1,29 @@
 #![allow(unused)]
 use base64::Engine;
-use std::{io::Cursor, sync::atomic::AtomicUsize};
+use dioxus_lib::prelude::{has_context, provide_context, use_hook};
+use std::{cell::RefCell, io::Cursor, rc::Rc, sync::atomic::AtomicUsize};
 
 use base64::engine::general_purpose::STANDARD;
 use serde::{de::DeserializeOwned, Serialize};
 
 pub(crate) mod deserialize;
-
 pub(crate) mod serialize;
+
+#[derive(Default, Clone)]
+pub(crate) struct SerializeContext {
+    data: Rc<RefCell<HTMLData>>,
+}
+
+impl SerializeContext {
+    pub fn push<T: Serialize>(&self, value: &T) {
+        let mut data = self.data.borrow_mut();
+        data.push(value);
+    }
+}
+
+pub(crate) fn use_serialize_context() -> SerializeContext {
+    use_hook(|| has_context().unwrap_or_else(|| provide_context(SerializeContext::default())))
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 pub(crate) struct HTMLData {
@@ -17,7 +33,7 @@ pub(crate) struct HTMLData {
 impl HTMLData {
     pub(crate) fn push<T: Serialize>(&mut self, value: &T) {
         let mut serialized = Vec::new();
-        serialize::serde_to_writable(value, &mut serialized).unwrap();
+        ciborium::into_writer(value, &mut serialized).unwrap();
         self.data.push(serialized);
     }
 
@@ -46,9 +62,8 @@ impl HTMLDataCursor {
             return None;
         }
         let mut cursor = &self.data[current];
-        let mut decoded = STANDARD.decode(cursor).unwrap();
         self.index.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        match ciborium::from_reader(Cursor::new(decoded)) {
+        match ciborium::from_reader(Cursor::new(cursor)) {
             Ok(x) => Some(x),
             Err(e) => {
                 tracing::error!("Error deserializing data: {:?}", e);

@@ -1,20 +1,38 @@
 use dioxus_lib::prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
-use std::future::Future;
+use std::{cell::Cell, future::Future, rc::Rc};
+
+use crate::html_storage::use_serialize_context;
 
 /// A future that resolves to a value.
 #[must_use = "Consider using `cx.spawn` to run a future without reading its value"]
-pub fn use_server_future<T, F>(
-    _future: impl FnMut() -> F + 'static,
+pub fn use_server_future<T, F, D: Dependency>(
+    dependencies: D,
+    mut future: impl FnMut(D::Out) -> F + 'static,
 ) -> Result<Resource<T>, RenderError>
 where
     T: Serialize + DeserializeOwned + 'static,
     F: Future<Output = T> + 'static,
 {
-    let cb = use_callback(_future);
+    let first_run = use_hook(|| Rc::new(Cell::new(true)));
+    let mut last_state = use_signal(|| {
+        first_run.set(false);
+        dependencies.out()
+    });
+    if !first_run.get() && dependencies.changed(&*last_state.peek()) {
+        last_state.set(dependencies.out());
+    }
+
+    let cb = use_callback(move || future(last_state()));
     let mut first_run = use_hook(|| CopyValue::new(true));
 
+    #[cfg(feature = "server")]
+    let serialize_context = use_serialize_context();
+
     let resource = use_resource(move || {
+        #[cfg(feature = "server")]
+        let serialize_context = serialize_context.clone();
+
         async move {
             let user_fut = cb.call();
 
@@ -28,10 +46,6 @@ where
 
                 #[cfg(feature = "web")]
                 if let Some(o) = crate::html_storage::deserialize::take_server_data::<T>() {
-                    // this is going to subscribe this resource to any reactivity given to use in the callback
-                    // We're doing this regardless so inputs get tracked, even if we drop the future before polling it
-                    kick_future(user_fut);
-
                     return o;
                 }
             }
@@ -42,7 +56,7 @@ where
             // If this is the first run and we are on the server, cache the data
             #[cfg(feature = "server")]
             if currently_in_first_run {
-                crate::server_context::server_context().push_html_data(&out);
+                serialize_context.push(&out);
             }
 
             #[allow(clippy::let_and_return)]
@@ -65,19 +79,4 @@ where
         }
         _ => Ok(resource),
     }
-}
-
-#[cfg(feature = "web")]
-#[inline]
-fn kick_future<F, T>(user_fut: F)
-where
-    F: Future<Output = T> + 'static,
-{
-    // Kick the future to subscribe its dependencies
-    use futures_util::future::FutureExt;
-    let waker = futures_util::task::noop_waker();
-    let mut cx = std::task::Context::from_waker(&waker);
-    futures_util::pin_mut!(user_fut);
-
-    let _ = user_fut.poll_unpin(&mut cx);
 }

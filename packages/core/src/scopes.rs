@@ -89,6 +89,11 @@ impl ScopeState {
         self.last_rendered_node.as_deref()
     }
 
+    /// Returns the scope id of this [`ScopeState`].
+    pub fn id(&self) -> ScopeId {
+        self.context_id
+    }
+
     pub(crate) fn state(&self) -> Ref<'_, Scope> {
         self.runtime.get_state(self.context_id).unwrap()
     }

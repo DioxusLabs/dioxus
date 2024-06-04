@@ -1,7 +1,7 @@
 //! A shared pool of renderers for efficient server side rendering.
 use crate::render::dioxus_core::NoOpMutations;
 use dioxus_ssr::{
-    incremental::{CachedRender, RenderFreshness, WrapBody},
+    incremental::{CachedRender, RenderFreshness},
     streaming::StreamingRenderer,
     Renderer,
 };
@@ -146,10 +146,7 @@ impl SsrRendererPool {
             ));
         }
 
-        let wrapper = FullstackHTMLTemplate {
-            cfg: cfg.clone(),
-            server_context: server_context.clone(),
-        };
+        let wrapper = FullstackHTMLTemplate { cfg: cfg.clone() };
 
         let stream_page = cfg.stream_page;
         let server_context = server_context.clone();
@@ -257,7 +254,11 @@ impl SsrRendererPool {
             if let Err(err) = renderer.render_to(&mut post_streaming, &virtual_dom) {
                 throw_error!(dioxus_ssr::incremental::IncrementalRendererError::RenderError(err));
             }
-            if let Err(err) = wrapper.render_after_body(&mut *post_streaming) {
+
+            // Extract any data we serialized for hydration (from server futures)
+            let html_data = crate::html_storage::HTMLData::extract_from_virtual_dom(&virtual_dom);
+
+            if let Err(err) = wrapper.render_after_body(&mut *post_streaming, &html_data) {
                 throw_error!(err);
             }
 
@@ -339,20 +340,16 @@ impl SSRState {
 #[derive(Default)]
 pub struct FullstackHTMLTemplate {
     cfg: ServeConfig,
-    server_context: DioxusServerContext,
 }
 
 impl FullstackHTMLTemplate {
     /// Create a new [`FullstackHTMLTemplate`].
-    pub fn new(cfg: &ServeConfig, server_context: &DioxusServerContext) -> Self {
-        Self {
-            cfg: cfg.clone(),
-            server_context: server_context.clone(),
-        }
+    pub fn new(cfg: &ServeConfig) -> Self {
+        Self { cfg: cfg.clone() }
     }
 }
 
-impl dioxus_ssr::incremental::WrapBody for FullstackHTMLTemplate {
+impl FullstackHTMLTemplate {
     fn render_before_body<R: std::io::Write>(
         &self,
         to: &mut R,
@@ -367,12 +364,12 @@ impl dioxus_ssr::incremental::WrapBody for FullstackHTMLTemplate {
     fn render_after_body<R: std::io::Write>(
         &self,
         to: &mut R,
+        html_data: &crate::html_storage::HTMLData,
     ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
         // serialize the server state
-        crate::html_storage::serialize::encode_in_element(&self.server_context.html_data(), to)
-            .map_err(|err| {
-                dioxus_ssr::incremental::IncrementalRendererError::Other(Box::new(err))
-            })?;
+        crate::html_storage::serialize::encode_in_element(html_data, to).map_err(|err| {
+            dioxus_ssr::incremental::IncrementalRendererError::Other(Box::new(err))
+        })?;
 
         #[cfg(all(debug_assertions, feature = "hot-reload"))]
         {

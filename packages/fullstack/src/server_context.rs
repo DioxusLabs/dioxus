@@ -1,4 +1,3 @@
-use crate::html_storage::HTMLData;
 use parking_lot::RwLock;
 use std::sync::Arc;
 
@@ -13,7 +12,6 @@ pub struct DioxusServerContext {
     >,
     response_parts: std::sync::Arc<RwLock<http::response::Parts>>,
     pub(crate) parts: Arc<RwLock<http::request::Parts>>,
-    html_data: Arc<RwLock<HTMLData>>,
 }
 
 #[allow(clippy::derivable_impls)]
@@ -25,7 +23,6 @@ impl Default for DioxusServerContext {
                 http::response::Response::new(()).into_parts().0,
             )),
             parts: std::sync::Arc::new(RwLock::new(http::request::Request::new(()).into_parts().0)),
-            html_data: Arc::new(RwLock::new(HTMLData::default())),
         }
     }
 }
@@ -46,7 +43,6 @@ mod server_fn_impl {
                 response_parts: std::sync::Arc::new(RwLock::new(
                     http::response::Response::new(()).into_parts().0,
                 )),
-                html_data: Arc::new(RwLock::new(HTMLData::default())),
             }
         }
 
@@ -58,7 +54,6 @@ mod server_fn_impl {
                 response_parts: std::sync::Arc::new(RwLock::new(
                     http::response::Response::new(()).into_parts().0,
                 )),
-                html_data: Arc::new(RwLock::new(HTMLData::default())),
             }
         }
 
@@ -101,16 +96,6 @@ mod server_fn_impl {
             &self,
         ) -> Result<T, R> {
             T::from_request(self).await
-        }
-
-        /// Insert some data into the html data store
-        pub(crate) fn push_html_data<T: serde::Serialize>(&self, value: &T) {
-            self.html_data.write().push(value);
-        }
-
-        /// Get the html data store
-        pub(crate) fn html_data(&self) -> RwLockReadGuard<'_, HTMLData> {
-            self.html_data.read()
         }
     }
 }

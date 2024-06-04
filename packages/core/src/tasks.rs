@@ -222,11 +222,11 @@ impl Runtime {
     pub(crate) fn handle_task_wakeup(&self, id: Task) -> Poll<()> {
         debug_assert!(Runtime::current().is_some(), "Must be in a dioxus runtime");
 
-        tracing::info!("Polling task {:?}", id);
         let task = self.tasks.borrow().get(id.id).cloned();
 
         // The task was removed from the scheduler, so we can just ignore it
         let Some(task) = task else {
+            tracing::trace!("Task {:?} doesn't exist, ignoring wakeup", id);
             return Poll::Ready(());
         };
 
@@ -244,7 +244,6 @@ impl Runtime {
         self.current_task.set(Some(id));
 
         let poll_result = task.task.borrow_mut().as_mut().poll(&mut cx);
-        tracing::info!("Task {:?} finished with result {:?}", id, poll_result);
 
         if poll_result.is_ready() {
             // Remove it from the scope so we dont try to double drop it when the scope dropes
