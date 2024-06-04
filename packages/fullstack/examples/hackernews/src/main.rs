@@ -178,8 +178,10 @@ fn Preview() -> Element {
         div { padding: "0.5rem",
             div { font_size: "1.5rem", a { href: story.item.url, "{story.item.title}" } }
             div { if let Some(text) = &story.item.text { "{text}" } }
-            for comment in &story.item.kids {
-                Comment { comment: *comment }
+            for comment in story.item.kids.iter().copied() {
+                ChildrenOrLoading {
+                    Comment { comment }
+                }
             }
         }
     }
@@ -209,9 +211,9 @@ fn Comment(comment: i64) -> Element {
         div { padding: "0.5rem",
             div { color: "gray", "by {by}" }
             div { dangerous_inner_html: "{text}" }
-            for kid in &kids {
+            for comment in kids.iter().copied() {
                 ChildrenOrLoading {
-                    Comment { comment: *kid }
+                    Comment { comment }
                 }
             }
         }
@@ -270,12 +272,33 @@ pub async fn get_story(id: i64) -> Result<StoryPageData, server_fn::ServerFnErro
     Ok(reqwest::get(&url).await?.json::<StoryPageData>().await?)
 }
 
+const STYLE: &str = r#"@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+.spinner {
+    width: 10px;
+    height: 10px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    animation: spin 2s linear infinite;
+}"#;
+
 #[component]
 fn ChildrenOrLoading(children: Element) -> Element {
     rsx! {
         SuspenseBoundary {
             fallback: |context: SuspenseContext| {
                 rsx! {
+                    style {
+                        {STYLE}
+                    }
                     if let Some(placeholder) = context.suspense_placeholder() {
                         {placeholder}
                     } else {
