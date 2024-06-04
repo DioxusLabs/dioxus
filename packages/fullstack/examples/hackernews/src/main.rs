@@ -25,7 +25,7 @@ fn main() {
 
 #[derive(Clone, Routable)]
 enum Route {
-    #[redirect("/", || Route::Homepage { story: PreviewState { active_story: Some(0) } })]
+    #[redirect("/", || Route::Homepage { story: PreviewState { active_story: None } })]
     #[route("/:story")]
     Homepage { story: PreviewState },
 }

@@ -117,7 +117,10 @@ impl Scope {
         let mut search_parent = self.parent_id;
         let cur_runtime = Runtime::with(|runtime| {
             while let Some(parent_id) = search_parent {
-                let parent = runtime.get_state(parent_id).unwrap();
+                let Some(parent) = runtime.get_state(parent_id) else {
+                    tracing::error!("Parent scope {:?} not found", parent_id);
+                    return None;
+                };
                 tracing::trace!(
                     "looking for context {} ({:?}) in {}",
                     std::any::type_name::<T>(),
