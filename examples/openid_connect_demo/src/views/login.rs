@@ -1,8 +1,8 @@
 use crate::{
-    oidc::{token_response, AuthRequestState, AuthTokenState},
+    oidc::{token_response, AuthTokenState},
     router::Route,
-    storage::PersistentWrite,
-    AUTH_TOKEN, CLIENT,
+    storage::{auth_request, use_auth_token},
+    CLIENT,
 };
 use dioxus::prelude::*;
 use dioxus::router::prelude::Link;
@@ -11,10 +11,14 @@ use openidconnect::{OAuth2TokenResponse, TokenResponse};
 #[component]
 pub fn Login(query_string: String) -> Element {
     let client = CLIENT.read().oidc_client.clone();
-    let auth_token_read = AUTH_TOKEN.read().clone();
-    match (client, auth_token_read) {
-        (Some(client_props), Some(auth_token_read)) => {
-            match (auth_token_read.id_token, auth_token_read.refresh_token) {
+    let mut auth_token = use_auth_token();
+    let current_auth_token = auth_token();
+    match client {
+        Some(client_props) => {
+            match (
+                current_auth_token.id_token,
+                current_auth_token.refresh_token,
+            ) {
                 (Some(_id_token), Some(_refresh_token)) => {
                     rsx! {
                         div { "Sign in successful" }
@@ -28,10 +32,8 @@ pub fn Login(query_string: String) -> Element {
                         Link {
                             to: Route::Home {},
                             onclick: move |_| {
-                                AuthTokenState::persistent_set(AuthTokenState::default());
-                                AuthRequestState::persistent_set(
-                                    AuthRequestState::default()
-                                );
+                                auth_token.take();
+                                auth_request().take();
                             },
                             "Go back home"
                         }
@@ -54,7 +56,7 @@ pub fn Login(query_string: String) -> Element {
                                             match token_response_result {
                                                 Ok(token_response) => {
                                                     let id_token = token_response.id_token().unwrap();
-                                                    AuthTokenState::persistent_set(AuthTokenState {
+                                                    auth_token.set(AuthTokenState {
                                                         id_token: Some(id_token.clone()),
                                                         refresh_token: token_response
                                                             .refresh_token()
@@ -77,7 +79,7 @@ pub fn Login(query_string: String) -> Element {
                 }
             }
         }
-        (_, _) => {
+        _ => {
             rsx! {{}}
         }
     }

@@ -1,3 +1,4 @@
+use crate::storage::{auth_request, use_auth_request, use_auth_token};
 use crate::{
     oidc::{
         authorize_url, email, exchange_refresh_token, init_oidc_client, log_out_url,
@@ -5,8 +6,7 @@ use crate::{
     },
     props::client::ClientProps,
     router::Route,
-    storage::PersistentWrite,
-    AUTH_REQUEST, AUTH_TOKEN, CLIENT,
+    CLIENT,
 };
 use anyhow::Result;
 use dioxus::prelude::*;
@@ -15,53 +15,44 @@ use openidconnect::{url::Url, OAuth2TokenResponse, TokenResponse};
 
 #[component]
 pub fn LogOut() -> Element {
-    let AUTH_TOKEN_read = AUTH_TOKEN.read().clone();
+    let mut auth_token = use_auth_token();
     let log_out_url_state = use_signal(|| None::<Option<Result<Url>>>);
-    match AUTH_TOKEN_read {
-        Some(AUTH_TOKEN_read) => match AUTH_TOKEN_read.id_token.clone() {
-            Some(id_token) => match &*log_out_url_state.read() {
-                Some(log_out_url_result) => match log_out_url_result {
-                    Some(uri) => match uri {
-                        Ok(uri) => {
-                            rsx! {
-                                Link {
-                                    onclick: move |_| {
-                                        {
-                                            AuthTokenState::persistent_set(
-                                                AuthTokenState::default()
-                                            );
-                                        }
-                                    },
-                                    to: uri.to_string(),
-                                    "Log out"
-                                }
+    match auth_token().id_token {
+        Some(id_token) => match &*log_out_url_state.read() {
+            Some(log_out_url_result) => match log_out_url_result {
+                Some(uri) => match uri {
+                    Ok(uri) => {
+                        rsx! {
+                            Link {
+                                onclick: move |_| {
+                                    auth_token.take();
+                                },
+                                to: uri.to_string(),
+                                "Log out"
                             }
                         }
-                        Err(error) => {
-                            rsx! { div { "Failed to load disconnection url: {error:?}" } }
-                        }
-                    },
-                    None => {
-                        rsx! { div { "Loading... Please wait" } }
+                    }
+                    Err(error) => {
+                        rsx! { div { "Failed to load disconnection url: {error:?}" } }
                     }
                 },
                 None => {
-                    let logout_url_task = move || {
-                        spawn({
-                            let mut log_out_url_state = log_out_url_state.to_owned();
-                            async move {
-                                let logout_url = log_out_url(id_token).await;
-                                let logout_url_option = Some(logout_url);
-                                log_out_url_state.set(Some(logout_url_option));
-                            }
-                        })
-                    };
-                    logout_url_task();
-                    rsx! { div { "Loading log out url... Please wait" } }
+                    rsx! { div { "Loading... Please wait" } }
                 }
             },
             None => {
-                rsx! {{}}
+                let logout_url_task = move || {
+                    spawn({
+                        let mut log_out_url_state = log_out_url_state.to_owned();
+                        async move {
+                            let logout_url = log_out_url(id_token).await;
+                            let logout_url_option = Some(logout_url);
+                            log_out_url_state.set(Some(logout_url_option));
+                        }
+                    })
+                };
+                logout_url_task();
+                rsx! { div { "Loading log out url... Please wait" } }
             }
         },
         None => {
@@ -72,42 +63,37 @@ pub fn LogOut() -> Element {
 
 #[component]
 pub fn RefreshToken(props: ClientProps) -> Element {
-    let auth_token = AUTH_TOKEN.read().clone();
-    match auth_token {
-        Some(auth_token) => match auth_token.refresh_token {
-            Some(refresh_token) => {
-                rsx! { div {
-                    onmounted: {
-                        move |_| {
-                            let client = props.client.clone();
-                            let refresh_token = refresh_token.clone();
-                            async move {
-                                let exchange_refresh_token =
-                                    exchange_refresh_token(client, refresh_token).await;
-                                match exchange_refresh_token {
-                                    Ok(response_token) => {
-                                        AuthTokenState::persistent_set(AuthTokenState {
-                                            id_token: response_token.id_token().cloned(),
-                                            refresh_token: response_token.refresh_token().cloned(),
-                                        });
-                                    }
-                                    Err(_error) => {
-                                        AuthTokenState::persistent_set(AuthTokenState::default());
-                                        AuthRequestState::persistent_set(AuthRequestState::default());
-                                    }
+    let mut auth_token = use_auth_token();
+    match auth_token().refresh_token {
+        Some(refresh_token) => {
+            rsx! { div {
+                onmounted: {
+                    move |_| {
+                        let client = props.client.clone();
+                        let refresh_token = refresh_token.clone();
+                        async move {
+                            let exchange_refresh_token =
+                                exchange_refresh_token(client, refresh_token).await;
+                            match exchange_refresh_token {
+                                Ok(response_token) => {
+                                    auth_token.set(AuthTokenState {
+                                        id_token: response_token.id_token().cloned(),
+                                        refresh_token: response_token.refresh_token().cloned(),
+                                    });
+                                }
+                                Err(_error) => {
+                                    auth_token.take();
+                                    auth_request().take();
                                 }
                             }
                         }
-                    },
-                    "Refreshing session, please wait"
-                } }
-            }
-            None => {
-                rsx! { div { "Id token expired and no refresh token found" } }
-            }
-        },
+                    }
+                },
+                "Refreshing session, please wait"
+            } }
+        }
         None => {
-            rsx! {{}}
+            rsx! { div { "Id token expired and no refresh token found" } }
         }
     }
 }
@@ -115,33 +101,29 @@ pub fn RefreshToken(props: ClientProps) -> Element {
 #[component]
 pub fn LoadClient() -> Element {
     let init_client_future = use_resource(move || async move { init_oidc_client().await });
-    match &*init_client_future.value().read() {
-        Some(client_props) => match client_props {
-            Ok((client_id, client)) => {
-                rsx! {
-                    div {
-                        onmounted: {
-                            let client_id = client_id.clone();
-                            let client = client.clone();
-                            move |_| {
-                                *CLIENT.write() = ClientState {
-                                    oidc_client: Some(ClientProps::new(client_id.clone(), client.clone())),
-                                };
-                            }
-                        },
-                        "Client successfully loaded"
+    match &*init_client_future.read_unchecked() {
+        Some(Ok((client_id, client))) => rsx! {
+            div {
+                onmounted: {
+                    let client_id = client_id.clone();
+                    let client = client.clone();
+                    move |_| {
+                        *CLIENT.write() = ClientState {
+                            oidc_client: Some(ClientProps::new(client_id.clone(), client.clone())),
+                        };
                     }
-                    Outlet::<Route> {}
-                }
+                },
+                "Client successfully loaded"
             }
-            Err(error) => {
-                log::info! {"Failed to load client: {:?}", error};
-                rsx! {
-                    div { "Failed to load client: {error:?}" }
-                    Outlet::<Route> {}
-                }
-            }
+            Outlet::<Route> {}
         },
+        Some(Err(error)) => {
+            log::info! {"Failed to load client: {:?}", error};
+            rsx! {
+                div { "Failed to load client: {error:?}" }
+                Outlet::<Route> {}
+            }
+        }
         None => {
             rsx! {
                 div {
@@ -156,19 +138,19 @@ pub fn LoadClient() -> Element {
 #[component]
 pub fn AuthHeader() -> Element {
     let client = CLIENT.read().oidc_client.clone();
-    let auth_request = AUTH_REQUEST.read().clone();
-    let auth_token = AUTH_TOKEN.read().clone();
-    match (client, auth_request, auth_token) {
+    let mut auth_request = use_auth_request();
+    let auth_token = use_auth_token();
+    match (client, auth_request(), auth_token()) {
         // We have everything we need to attempt to authenticate the user
-        (Some(client_props), Some(auth_request), Some(auth_token)) => {
-            match auth_request.auth_request {
-                Some(auth_request) => {
-                    match auth_token.id_token {
+        (Some(client_props), current_auth_request, current_auth_token) => {
+            match current_auth_request.auth_request {
+                Some(new_auth_request) => {
+                    match current_auth_token.id_token {
                         Some(id_token) => {
                             match email(
                                 client_props.client.clone(),
                                 id_token.clone(),
-                                auth_request.nonce.clone(),
+                                new_auth_request.nonce.clone(),
                             ) {
                                 Ok(email) => {
                                     rsx! {
@@ -208,7 +190,7 @@ pub fn AuthHeader() -> Element {
                         None => {
                             rsx! {
                                 div {
-                                    Link { to: auth_request.authorize_url.clone(), "Log in" }
+                                    Link { to: new_auth_request.authorize_url.clone(), "Log in" }
                                     Outlet::<Route> {}
                                 }
                             }
@@ -220,9 +202,9 @@ pub fn AuthHeader() -> Element {
                         onmounted: {
                             let client = client_props.client;
                             move |_| {
-                                let auth_request = authorize_url(client.clone());
-                                AuthRequestState::persistent_set(AuthRequestState {
-                                    auth_request: Some(auth_request),
+                                let new_auth_request = authorize_url(client.clone());
+                                auth_request.set(AuthRequestState {
+                                    auth_request: Some(new_auth_request),
                                 });
                             }
                         },
@@ -234,10 +216,6 @@ pub fn AuthHeader() -> Element {
         // Client is not initialized yet, we need it for everything
         (None, _, _) => {
             rsx! { LoadClient {} }
-        }
-        // We need everything loaded before doing anything
-        (_client, _auth_request, _auth_token) => {
-            rsx! {{}}
         }
     }
 }
