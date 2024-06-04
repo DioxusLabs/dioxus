@@ -15,6 +15,13 @@ use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
 use dioxus::prelude::*;
 
 fn main() {
+    let file = std::fs::File::create("test.log").unwrap();
+    tracing_subscriber::fmt::Subscriber::builder()
+        .with_writer(file)
+        .with_ansi(false)
+        .with_max_level(tracing::Level::TRACE)
+        .init();
+
     LaunchBuilder::new()
         .with_cfg(desktop! {
             Config::new().with_window(
@@ -63,7 +70,7 @@ fn Doggo() -> Element {
             message: String,
         }
 
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        tokio::time::sleep(std::time::Duration::from_secs(1000)).await;
 
         reqwest::get("https://dog.ceo/api/breeds/image/random/")
             .await
@@ -75,8 +82,10 @@ fn Doggo() -> Element {
     // You can suspend the future and only continue rendering when it's ready
     let value = resource.suspend().with_loading_placeholder(|| {
         rsx! {
-            "Loading doggos"
-            LoadingDots {}
+            div {
+                "Loading doggos"
+                LoadingDots {}
+            }
         }
     })?;
 

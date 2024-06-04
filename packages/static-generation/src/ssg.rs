@@ -9,7 +9,6 @@ use crate::Config;
 
 fn server_context_for_route(route: &str) -> dioxus_fullstack::prelude::DioxusServerContext {
     use dioxus_fullstack::prelude::*;
-    use std::sync::Arc;
     let request = http::Request::builder().uri(route).body(()).unwrap();
     let (parts, _) = request.into_parts();
 

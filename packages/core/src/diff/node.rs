@@ -376,16 +376,19 @@ impl VNode {
     }
 
     pub(super) fn reclaim_attributes(&self, mount: MountId, dom: &mut VirtualDom) {
+        let mut next_id = None;
         for (idx, path) in self.template.get().attr_paths.iter().enumerate() {
             // We clean up the roots in the next step, so don't worry about them here
             if path.len() <= 1 {
                 continue;
             }
 
-            let next_id = dom.mounts[mount.0].mounted_attributes[idx];
-
             // only reclaim the new element if it's different from the previous one
-            _ = dom.try_reclaim(next_id);
+            let new_id = dom.mounts[mount.0].mounted_attributes[idx];
+            if Some(new_id) != next_id {
+                dom.reclaim(new_id);
+                next_id = Some(new_id);
+            }
         }
     }
 
@@ -730,8 +733,10 @@ impl VNode {
             Placeholder(_) => {
                 // If we are diffing suspended nodes and are not outputting mutations, we can skip it
                 if let Some(to) = to {
+                    tracing::trace!("creating placeholder");
                     self.create_placeholder(mount, dynamic_node_id, dom, to)
                 } else {
+                    tracing::trace!("skipping creating placeholder");
                     0
                 }
             }

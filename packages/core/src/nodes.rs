@@ -7,7 +7,7 @@ use crate::{
 };
 use crate::{Properties, VirtualDom};
 use core::panic;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use std::vec;
 use std::{
@@ -21,6 +21,7 @@ pub type TemplateId = &'static str;
 /// The actual state of the component's most recent computation
 ///
 /// If the component returned early (e.g. `return None`), this will be Aborted(None)
+#[derive(Debug)]
 pub struct RenderReturn {
     /// The node that was rendered
     pub(crate) node: Element,
@@ -83,6 +84,16 @@ impl Deref for RenderReturn {
             Ok(node) => node,
             Err(RenderError::Aborted(err)) => &err.render,
             Err(RenderError::Suspended(fut)) => &fut.placeholder,
+        }
+    }
+}
+
+impl DerefMut for RenderReturn {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match &mut self.node {
+            Ok(node) => node,
+            Err(RenderError::Aborted(err)) => &mut err.render,
+            Err(RenderError::Suspended(fut)) => &mut fut.placeholder,
         }
     }
 }

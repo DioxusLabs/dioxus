@@ -97,7 +97,6 @@ impl VirtualDom {
 
     /// Insert a new template into the VirtualDom's template registry
     // used in conditional compilation
-    #[allow(unused_mut)]
     pub(crate) fn register_template(
         &mut self,
         to: &mut impl WriteMutations,

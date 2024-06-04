@@ -49,7 +49,7 @@ impl VirtualDom {
         // If there are suspended scopes, we need to check if the scope is suspended before we diff it
         // If it is suspended, we need to diff it but write the mutations nothing
         // Note: It is important that we still diff the scope even if it is suspended, because the scope may render other child components which may change between renders
-        let render_to = to.filter(|_| !self.scope_frozen(scope, old.suspended()));
+        let render_to = to.filter(|_| !self.scope_frozen(scope, new_nodes.suspended()));
         old.diff_node(new_real_nodes, self, render_to);
 
         self.scopes[scope.0].last_rendered_node = Some(new_nodes);
@@ -57,21 +57,28 @@ impl VirtualDom {
         self.runtime.scope_stack.borrow_mut().pop();
     }
 
-    fn scope_frozen(&self, scope: ScopeId, return_suspended: bool) -> bool {
-        // We only freeze rendering on the scope if:
-        // - There are suspended scopes (this is very cheap to check) and more than just this scope is suspended
-        // - This scope is under a suspended scope with tasks spawned outside of this scope
-        self.runtime.suspended_tasks.get() > return_suspended as usize
-            && self.scopes[scope.0]
-                .state()
-                .consume_context::<FrozenContext>()
-                .filter(|suspense| suspense.suspended_tasks_outside_of_scope(scope))
-                .is_some()
+    fn scope_frozen(&self, scope_id: ScopeId, return_suspended: bool) -> bool {
+        // We always render scopes that are suspended to render a placeholder we can replace with the loading template later
+        if return_suspended {
+            return false;
+        }
+        // If there are no suspended futures, we know that there are no frozen contexts
+        if self.runtime.suspended_tasks.get() == 0 {
+            return false;
+        }
+        // If this is not a suspended scope, and we are under a frozen context, then we should
+        let scope = &self.scopes[scope_id.0];
+        scope
+            .state()
+            .consume_context::<FrozenContext>()
+            .filter(|frozen_context| frozen_context.frozen())
+            .is_some()
     }
 
     /// Create a new [`ScopeState`] for a component that has been created with [`VirtualDom::create_scope`]
     ///
     /// Returns the number of nodes created on the stack
+    #[tracing::instrument(skip(self, to), level = "trace", name = "VirtualDom::create_scope")]
     pub(crate) fn create_scope<M: WriteMutations>(
         &mut self,
         to: Option<&mut M>,

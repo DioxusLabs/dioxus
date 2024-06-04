@@ -1,7 +1,6 @@
 use crate::innerlude::{
     throw_error, try_consume_context, RenderError, RenderReturn, ScopeOrder, SuspenseContext,
 };
-use crate::Element;
 use crate::{
     any_props::{AnyProps, BoxedAnyProps},
     innerlude::ScopeState,
@@ -9,6 +8,7 @@ use crate::{
     scopes::ScopeId,
     virtual_dom::VirtualDom,
 };
+use crate::{Element, VNode};
 
 impl VirtualDom {
     pub(super) fn new_scope(
@@ -60,8 +60,8 @@ impl VirtualDom {
 
             let span = tracing::trace_span!("render", scope = %scope.state().name);
             span.in_scope(|| {
-                let render_return = props.render();
-                self.handle_element_return(&render_return.node, scope_id, &scope.state());
+                let mut render_return = props.render();
+                self.handle_element_return(&mut render_return.node, scope_id, &scope.state());
                 render_return
             })
         };
@@ -83,14 +83,15 @@ impl VirtualDom {
     }
 
     /// Insert any errors, or suspended tasks from an element return into the runtime
-    fn handle_element_return(&self, node: &Element, scope_id: ScopeId, scope_state: &Scope) {
-        match &node {
+    fn handle_element_return(&self, node: &mut Element, scope_id: ScopeId, scope_state: &Scope) {
+        match node {
             Err(RenderError::Aborted(e)) => {
                 tracing::error!(
                     "Error while rendering component `{}`: {e:?}",
                     scope_state.name
                 );
-                throw_error(e.clone());
+                throw_error(e.clone_mounted());
+                e.render = VNode::placeholder();
             }
             Err(RenderError::Suspended(e)) => {
                 let task = e.task();
@@ -113,6 +114,7 @@ impl VirtualDom {
                         .suspended_tasks
                         .set(self.runtime.suspended_tasks.get() + 1);
                 }
+                e.placeholder = VNode::placeholder();
             }
             Ok(_) => {
                 // If the render was successful, we can move the render generation forward by one

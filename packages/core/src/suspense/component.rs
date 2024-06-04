@@ -273,7 +273,7 @@ pub use SuspenseBoundary_completions::Component::SuspenseBoundary;
 #[doc = "Properties for the [`FrozenContext`] component."]
 #[derive(Clone, PartialEq)]
 #[allow(non_camel_case_types)]
-struct FrozenContextProps {
+pub(crate) struct FrozenContextProps {
     children: Element,
 }
 impl FrozenContextProps {
@@ -289,7 +289,7 @@ impl FrozenContextProps {
 #[must_use]
 #[doc(hidden)]
 #[allow(dead_code, non_camel_case_types, non_snake_case)]
-struct FrozenContextPropsBuilder<TypedBuilderFields> {
+pub(crate) struct FrozenContextPropsBuilder<TypedBuilderFields> {
     fields: TypedBuilderFields,
     _phantom: (),
 }
@@ -390,7 +390,7 @@ use FrozenContext_completions::Component::FrozenContext;
 fn wrap_children_with_frozen_context(children: Element) -> Element {
     Element::Ok({
         static TEMPLATE: Template = Template {
-            name: ":281u32:0u32:0",
+            name: ":281:0:0",
             roots: &[TemplateNode::Dynamic { id: 0usize }],
             node_paths: &[&[0u8]],
             attr_paths: &[],
@@ -406,7 +406,7 @@ fn wrap_children_with_frozen_context(children: Element) -> Element {
                     fc_to_builder(FrozenContext)
                         .children(Element::Ok({
                             static TEMPLATE: Template = Template {
-                                name: ":0u32:0u32:0",
+                                name: ":409:0:0",
                                 roots: &[TemplateNode::Dynamic { id: 0usize }],
                                 node_paths: &[&[0u8]],
                                 attr_paths: &[],

@@ -60,18 +60,21 @@ impl VirtualDom {
     }
 
     pub(crate) fn reclaim(&mut self, el: ElementId) {
-        self.try_reclaim(el).unwrap_or_else(|| {
+        if !self.try_reclaim(el) {
             tracing::error!("cannot reclaim {:?}", el);
             panic!("cannot reclaim {:?}", el)
-        });
+        }
     }
 
-    pub(crate) fn try_reclaim(&mut self, el: ElementId) -> Option<()> {
+    pub(crate) fn try_reclaim(&mut self, el: ElementId) -> bool {
+        if el.0 == usize::MAX {
+            return true;
+        }
         if el.0 == 0 {
             panic!("Cannot reclaim the root element");
         }
 
-        self.elements.try_remove(el.0).map(|_| ())
+        self.elements.try_remove(el.0).is_some()
     }
 
     // Drop a scope without dropping its children
