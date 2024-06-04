@@ -32,5 +32,5 @@ fullstack = ["dioxus/fullstack"]
 
 # since we're using dioxus from local path, inform dioxus-sdk to use it as well
 [patch.crates-io]
-dioxus = { version = "0.5.1", path = "../../packages/dioxus" }
+dioxus = { path = "../../packages/dioxus" }
 dioxus-signals = { path = "../../packages/signals" }
