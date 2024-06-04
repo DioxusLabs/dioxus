@@ -13,13 +13,12 @@ use svg_attributes::to;
 fn main() {
     LaunchBuilder::new()
         .with_cfg({
-            let mut config = 
-            dioxus::fullstack::Config::new().stream_page(true);
+            let mut config = dioxus::fullstack::Config::new().stream_page(true);
             server_only!{
                 config = config.incremental(dioxus::ssr::incremental::IncrementalRendererConfig::new());
             }
             config
-})
+        })
         .launch(|| rsx! { Router::<Route> {} });
 }
 
