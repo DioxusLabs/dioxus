@@ -102,7 +102,7 @@ impl VirtualDom {
                     .tasks
                     .borrow()
                     .get(task.id)
-                    .unwrap()
+                    .expect("Suspended on a task that no longer exists")
                     .suspend(boundary.clone());
                 if !already_suspended {
                     tracing::trace!("Suspending {:?} on {:?}", scope_id, task);

@@ -770,6 +770,9 @@ impl VirtualDom {
 
     /// Render any dirty scopes immediately, but don't poll any futures that are client only on that scope
     pub fn render_suspense_immediate(&mut self) {
+        // Queue any new events before we start working
+        self.queue_events();
+
         // Render whatever work needs to be rendered, unlocking new futures and suspense leaves
         let _runtime = RuntimeGuard::new(self.runtime.clone());
         while let Some(work) = self.pop_work() {
@@ -778,7 +781,6 @@ impl VirtualDom {
                     // During suspense, we only want to run tasks that are suspended
                     if self.runtime.task_runs_during_suspense(task) {
                         let _ = self.runtime.handle_task_wakeup(task);
-                        self.queue_events();
                     }
                 }
                 Work::RerunScope(scope) => {
@@ -786,6 +788,8 @@ impl VirtualDom {
                     self.run_and_diff_scope(None::<&mut NoOpMutations>, scope.id);
                 }
             }
+            // Queue any new events
+            self.queue_events();
         }
     }
 

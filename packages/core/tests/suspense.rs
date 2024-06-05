@@ -2,6 +2,22 @@ use dioxus::prelude::*;
 use std::future::poll_fn;
 use std::task::Poll;
 
+async fn poll_three_times() {
+    // Poll each task 3 times
+    let mut count = 0;
+    poll_fn(|cx| {
+        println!("polling... {}", count);
+        if count < 3 {
+            count += 1;
+            cx.waker().wake_by_ref();
+            Poll::Pending
+        } else {
+            Poll::Ready(())
+        }
+    })
+    .await;
+}
+
 #[test]
 fn suspense_resolves() {
     // wait just a moment, not enough time for the boundary to resolve
@@ -15,8 +31,6 @@ fn suspense_resolves() {
             let out = dioxus_ssr::render(&dom);
 
             assert_eq!(out, "<div>Waiting for... child</div>");
-
-            dbg!(out);
         });
 }
 
@@ -43,20 +57,7 @@ fn suspended_child() -> Element {
 
     if val() < 3 {
         let task = spawn(async move {
-            // Poll each task 3 times
-            let mut count = 0;
-            poll_fn(|cx| {
-                println!("polling... {}", count);
-                if count < 3 {
-                    count += 1;
-                    cx.waker().wake_by_ref();
-                    Poll::Pending
-                } else {
-                    Poll::Ready(())
-                }
-            })
-            .await;
-
+            poll_three_times().await;
             println!("waiting... {}", val);
             val += 1;
         });
@@ -64,4 +65,185 @@ fn suspended_child() -> Element {
     }
 
     rsx!("child")
+}
+
+/// When switching from a suspense fallback to the real child, the state of that component must be kept
+#[test]
+fn suspense_keeps_state() {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .unwrap()
+        .block_on(async {
+            let mut dom = VirtualDom::new(app);
+            dom.rebuild(&mut dioxus_core::NoOpMutations);
+            dom.render_suspense_immediate();
+
+            let out = dioxus_ssr::render(&dom);
+
+            assert_eq!(out, "fallback");
+
+            dom.wait_for_suspense().await;
+            let out = dioxus_ssr::render(&dom);
+
+            assert_eq!(out, "<div>child with future resolved</div>");
+        });
+
+    fn app() -> Element {
+        rsx! {
+            SuspenseBoundary {
+                fallback: |_| rsx! { "fallback" },
+                Child {}
+            }
+        }
+    }
+
+    #[component]
+    fn Child() -> Element {
+        let mut future_resolved = use_signal(|| false);
+
+        let task = use_hook(|| {
+            spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                future_resolved.set(true);
+            })
+        });
+        if !future_resolved() {
+            suspend(task)?;
+        }
+
+        println!("future resolved: {future_resolved:?}");
+
+        if future_resolved() {
+            rsx! {
+                div { "child with future resolved" }
+            }
+        } else {
+            rsx! {
+                div { "this should never be rendered" }
+            }
+        }
+    }
+}
+
+/// spawn doesn't run in suspense
+#[test]
+fn suspense_does_not_poll_spawn() {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .unwrap()
+        .block_on(async {
+            let mut dom = VirtualDom::new(app);
+            dom.rebuild(&mut dioxus_core::NoOpMutations);
+
+            dom.wait_for_suspense().await;
+            let out = dioxus_ssr::render(&dom);
+
+            assert_eq!(out, "<div>child with future resolved</div>");
+        });
+
+    fn app() -> Element {
+        rsx! {
+            SuspenseBoundary {
+                fallback: |_| rsx! { "fallback" },
+                Child {}
+            }
+        }
+    }
+
+    #[component]
+    fn Child() -> Element {
+        let mut future_resolved = use_signal(|| false);
+
+        // futures that are spawned, but not suspended should never be polled
+        use_hook(|| {
+            spawn(async move {
+                panic!("Non-suspended task was polled");
+            });
+        });
+
+        let task = use_hook(|| {
+            spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                future_resolved.set(true);
+            })
+        });
+        if !future_resolved() {
+            suspend(task)?;
+        }
+
+        rsx! {
+            div { "child with future resolved" }
+        }
+    }
+}
+
+/// Make sure we keep any state of components when we switch from a resolved future to a suspended future
+#[test]
+fn resolved_to_suspended() {
+    tracing_subscriber::fmt::SubscriberBuilder::default()
+        .with_max_level(tracing::Level::INFO)
+        .init();
+
+    static SUSPENDED: GlobalSignal<bool> = Signal::global(|| false);
+
+    tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .unwrap()
+        .block_on(async {
+            let mut dom = VirtualDom::new(app);
+            dom.rebuild(&mut dioxus_core::NoOpMutations);
+
+            let out = dioxus_ssr::render(&dom);
+
+            assert_eq!(out, "rendered 1 times");
+
+            dom.in_runtime(|| ScopeId::ROOT.in_runtime(|| *SUSPENDED.write() = true));
+
+            dom.render_suspense_immediate();
+            let out = dioxus_ssr::render(&dom);
+
+            assert_eq!(out, "fallback");
+
+            dom.wait_for_suspense().await;
+            let out = dioxus_ssr::render(&dom);
+
+            assert_eq!(out, "rendered 3 times");
+        });
+
+    fn app() -> Element {
+        rsx! {
+            SuspenseBoundary {
+                fallback: |_| rsx! { "fallback" },
+                Child {}
+            }
+        }
+    }
+
+    #[component]
+    fn Child() -> Element {
+        let mut render_count = use_signal(|| 0);
+        render_count += 1;
+
+        let mut task = use_hook(|| CopyValue::new(None));
+
+        tracing::info!("render_count: {}", render_count.peek());
+
+        if SUSPENDED() {
+            if task().is_none() {
+                task.set(Some(spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    tracing::info!("task finished");
+                    *SUSPENDED.write() = false;
+                })));
+            }
+            suspend(task().unwrap())?;
+        }
+
+        rsx! {
+            "rendered {render_count.peek()} times"
+        }
+    }
 }
