@@ -203,4 +203,3 @@ export class BaseInterpreter {
     setAttributeInner(node, field, value, ns);
   }
 }
-

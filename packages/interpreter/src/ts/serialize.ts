@@ -59,6 +59,22 @@ export function serializeEvent(event: Event, target: EventTarget): SerializedEve
   return contents;
 }
 
+function toSerializableResizeObserverEntry(size: ResizeObserverSize): Object {
+  return {
+    blockSize: size.blockSize,
+    inlineSize: size.inlineSize
+  };
+}
+
+export function serializeResizeObserverEntry(entry: ResizeObserverEntry, target: EventTarget): SerializedEvent {
+  return {
+    border_box_size: entry.borderBoxSize.map(toSerializableResizeObserverEntry),
+    content_box_size: entry.contentBoxSize.map(toSerializableResizeObserverEntry),
+    content_rect: entry.contentRect,
+    device_pixel_content_box_size: entry.devicePixelContentBoxSize,
+  };
+}
+
 function serializeInputEvent(event: InputEvent, target: EventTarget): SerializedEvent {
   let contents: SerializedEvent = {};
 

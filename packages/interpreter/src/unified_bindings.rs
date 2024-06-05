@@ -229,10 +229,12 @@ mod js {
                 bubbles,
             })
         );
+    } else if (["resized"].indexOf(event_name) >= 0) {
+      this.createObserver(event_name, this_node);
     } else {
-        this.createListener(event_name, this_node, bubbles, (event) => {
-            this.handler(event, event_name, bubbles);
-        });
+      this.createListener(event_name, this_node, bubbles, (event) => {
+        this.handler(event, event_name, bubbles);
+      });
     }"#
     }
 

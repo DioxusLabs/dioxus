@@ -4,7 +4,7 @@
 // provide since it doesn't have access to the dom.
 
 import { BaseInterpreter, NodeId } from "./core";
-import { SerializedEvent, serializeEvent } from "./serialize";
+import { SerializedEvent, serializeEvent, serializeResizeObserverEntry } from "./serialize";
 
 // okay so, we've got this JSChannel thing from sledgehammer, implicitly imported into our scope
 // we want to extend it, and it technically extends base intepreter. To make typescript happy,
@@ -42,7 +42,7 @@ export class NativeInterpreter extends JSChannel_ {
     // this is because the browser will try to navigate to the file if it's dropped on the window
     window.addEventListener(
       "dragover",
-      function (e) {
+      function(e) {
         // // check which element is our target
         if (e.target instanceof Element && e.target.tagName != "INPUT") {
           e.preventDefault();
@@ -53,7 +53,7 @@ export class NativeInterpreter extends JSChannel_ {
 
     window.addEventListener(
       "drop",
-      function (e) {
+      function(e) {
         let target = e.target;
 
         if (!(target instanceof Element)) {
@@ -96,7 +96,11 @@ export class NativeInterpreter extends JSChannel_ {
     // make sure we pass the handler to the base interpreter
     const handler: EventListener = (event) =>
       this.handleEvent(event, event.type, true);
-    super.initialize(root, handler);
+
+    const resize_observer_handler = (entries: ResizeObserverEntry[], observer: ResizeObserver) =>
+      this.handleResizeEvent(entries, observer);
+
+    super.initialize(root, handler, resize_observer_handler);
   }
 
   serializeIpcMessage(method: string, params = {}) {
@@ -265,6 +269,29 @@ export class NativeInterpreter extends JSChannel_ {
     // Attempt to intercept if the event is a click
     if (target instanceof Element && event.type === "click") {
       this.handleClickNavigate(event, target, preventDefaultRequests);
+    }
+  }
+
+  handleResizeEvent(entries: ResizeObserverEntry[], observer: ResizeObserver) {
+    for (const entry of entries) {
+      const target = entry.target;
+      const realId = getTargetId(target)!;
+
+      const contents = serializeResizeObserverEntry(entry, target);
+
+      const body = {
+        name: "resized",
+        data: contents,
+        element: realId,
+        bubbles: false,
+      };
+
+      if (this.liveview) {
+        // TODO:
+      } else {
+        const message = this.serializeIpcMessage("user_event", body);
+        this.ipc.postMessage(message);
+      }
     }
   }
 

@@ -1,7 +1,7 @@
 use dioxus_core::ElementId;
 use dioxus_html::{
     geometry::{PixelsRect, PixelsSize, PixelsVector2D},
-    MountedResult, ObserverEntryBacking, RenderedElementBacking,
+    MountedResult, RenderedElementBacking,
 };
 
 use crate::{desktop_context::DesktopContext, query::QueryEngine};
@@ -123,12 +123,6 @@ impl RenderedElementBacking for DesktopElement {
                 }
             }
         })
-    }
-}
-
-impl ObserverEntryBacking for DesktopElement {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
     }
 }
 

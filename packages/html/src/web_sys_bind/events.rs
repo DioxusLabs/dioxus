@@ -501,9 +501,7 @@ impl crate::RenderedElementBacking for web_sys::Element {
 macro_rules! get_observer_entry_size {
     ($meth_name:ident, $entry_meth_name:ident, $field_name:literal) => {
         #[doc = concat!("Get the ", $field_name, " size of the observed element")]
-        fn $meth_name(
-            &self,
-        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ResizedResult<PixelsSize>>>> {
+        fn $meth_name(&self) -> ResizedResult<PixelsSize> {
             let sizes = web_sys::ResizeObserverEntry::$entry_meth_name(&self);
 
             let (width, height) = if sizes.length() > 0 {
@@ -518,9 +516,7 @@ macro_rules! get_observer_entry_size {
                 (rect.width(), rect.height())
             };
 
-            let result = Ok(PixelsSize::new(width, height));
-
-            Box::pin(async { result })
+            Ok(PixelsSize::new(width, height))
         }
     };
 }
