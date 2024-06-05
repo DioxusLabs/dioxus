@@ -106,7 +106,11 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) {
     loop {
         // if virtual dom has nothing, wait for it to have something before requesting idle time
         // if there is work then this future resolves immediately.
-        let (mut res, template) = {
+        let mut res;
+        #[cfg(all(feature = "hot_reload", debug_assertions))]
+        let template;
+
+        {
             let work = dom.wait_for_work().fuse();
             pin_mut!(work);
 
@@ -116,19 +120,29 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) {
             {
                 let mut hot_reload_next = hotreload_rx.select_next_some();
                 select! {
-                    _ = work => (None, None),
-                    new_template = hot_reload_next => (None, Some(new_template)),
-                    evt = rx_next => (Some(evt), None),
+                    _ = work => {
+                        res = None;
+                        template = None;
+                    },
+                    new_template = hot_reload_next => {
+                        res = None;
+                        template = Some(new_template);
+                    },
+                    evt = rx_next => {
+                        res = Some(evt);
+                        template = None;
+                    }
                 }
             }
 
             #[cfg(not(all(feature = "hot_reload", debug_assertions)))]
             select! {
-                _ = work => (None, None),
-                evt = rx_next => (Some(evt), None),
+                _ = work => res = None,
+                evt = rx_next => res = Some(evt),
             }
-        };
+        }
 
+        #[cfg(all(feature = "hot_reload", debug_assertions))]
         if let Some(template) = template {
             dom.replace_template(template);
         }

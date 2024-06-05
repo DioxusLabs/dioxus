@@ -89,7 +89,7 @@ impl WebsysDom {
                     .map(|f| f.split_whitespace())
                 {
                     prevent_event = prevent_requests
-                        .map(|f| f.trim_start_matches("on"))
+                        .map(|f| f.strip_prefix("on").unwrap_or(f))
                         .any(|f| f == name);
                 } else {
                     prevent_event = false;

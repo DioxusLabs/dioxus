@@ -1,6 +1,7 @@
 #![allow(unused)]
 use base64::Engine;
 use dioxus_lib::prelude::{has_context, provide_context, use_hook};
+use serialize::serde_to_writable;
 use std::{cell::RefCell, io::Cursor, rc::Rc, sync::atomic::AtomicUsize};
 
 use base64::engine::general_purpose::STANDARD;
@@ -26,6 +27,7 @@ pub(crate) fn use_serialize_context() -> SerializeContext {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]
+#[serde(transparent)]
 pub(crate) struct HTMLData {
     pub data: Vec<Vec<u8>>,
 }
@@ -94,7 +96,6 @@ fn serialized_and_deserializes() {
 
     for x in 0..10usize {
         for y in 0..10 {
-            let mut as_string: Vec<u8> = Vec::new();
             let data = vec![
                 Data {
                     a: x as u32,
@@ -108,16 +109,16 @@ fn serialized_and_deserializes() {
                 };
                 y
             ];
-            serialize::serde_to_writable(&data, &mut as_string).unwrap();
 
-            println!("{:?}", as_string);
             println!(
                 "original size: {}",
                 std::mem::size_of::<Data>() * data.len()
             );
-            let mut bytes = Vec::new();
-            into_writer(&data, &mut bytes).unwrap();
-            println!("serialized size: {}", bytes.len());
+            let mut storage = HTMLData::default();
+            storage.push(&data);
+            println!("serialized size: {}", storage.data[0].len());
+            let mut as_string = Vec::new();
+            serde_to_writable(&data, &mut as_string).unwrap();
             println!("compressed size: {}", as_string.len());
 
             let decoded: Vec<Data> = deserialize::serde_from_bytes(&as_string).unwrap();

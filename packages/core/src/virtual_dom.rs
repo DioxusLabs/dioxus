@@ -843,7 +843,11 @@ impl VirtualDom {
         while let Some(path) = parent {
             let mut listeners = vec![];
 
-            let el_ref = &self.mounts[path.mount.0].node;
+            let Some(mount) = self.mounts.get(path.mount.0) else {
+                // If the node is suspended and not mounted, we can just ignore the event
+                return;
+            };
+            let el_ref = &mount.node;
             let node_template = el_ref.template.get();
             let target_path = path.path;
 
@@ -853,9 +857,7 @@ impl VirtualDom {
 
                 for attr in attrs.iter() {
                     // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                    if attr.name.trim_start_matches("on") == name
-                        && target_path.is_decendant(&this_path)
-                    {
+                    if &attr.name[2..] == name && target_path.is_decendant(&this_path) {
                         listeners.push(&attr.value);
 
                         // Break if this is the exact target element.
@@ -899,7 +901,11 @@ impl VirtualDom {
         name = "VirtualDom::handle_non_bubbling_event"
     )]
     fn handle_non_bubbling_event(&mut self, node: ElementRef, name: &str, uievent: Event<dyn Any>) {
-        let el_ref = &self.mounts[node.mount.0].node;
+        let Some(mount) = self.mounts.get(node.mount.0) else {
+            // If the node is suspended and not mounted, we can just ignore the event
+            return;
+        };
+        let el_ref = &mount.node;
         let node_template = el_ref.template.get();
         let target_path = node.path;
 
@@ -909,7 +915,7 @@ impl VirtualDom {
             for attr in attr.iter() {
                 // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
                 // Only call the listener if this is the exact target element.
-                if attr.name.trim_start_matches("on") == name && target_path == this_path {
+                if &attr.name[2..] == name && target_path == this_path {
                     if let AttributeValue::Listener(listener) = &attr.value {
                         self.runtime.rendering.set(false);
                         listener.call(uievent.clone());

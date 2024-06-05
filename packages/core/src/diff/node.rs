@@ -32,7 +32,7 @@ impl VNode {
                     if template != self.template.get() {
                         let mount_id = self.mount.get();
                         let parent = dom.mounts[mount_id.0].parent;
-                        self.replace([new], parent, dom, to);
+                        self.replace(std::slice::from_ref(new), parent, dom, to);
                         return;
                     }
                 }
@@ -192,9 +192,9 @@ impl VNode {
         }
     }
 
-    pub(crate) fn replace<'a>(
+    pub(crate) fn replace(
         &self,
-        right: impl IntoIterator<Item = &'a VNode>,
+        right: &[VNode],
         parent: Option<ElementRef>,
         dom: &mut VirtualDom,
         to: Option<&mut impl WriteMutations>,
@@ -205,9 +205,9 @@ impl VNode {
     /// Replace this node with new children, but *don't destroy* the old node's component state
     ///
     /// This is useful for moving a node from the rendered nodes into a suspended node
-    pub(crate) fn move_node_to_background<'a>(
+    pub(crate) fn move_node_to_background(
         &self,
-        right: impl IntoIterator<Item = &'a VNode>,
+        right: &[VNode],
         parent: Option<ElementRef>,
         dom: &mut VirtualDom,
         to: Option<&mut impl WriteMutations>,
@@ -215,9 +215,9 @@ impl VNode {
         self.replace_inner(right, parent, dom, to, false)
     }
 
-    pub(crate) fn replace_inner<'a>(
+    pub(crate) fn replace_inner(
         &self,
-        right: impl IntoIterator<Item = &'a VNode>,
+        right: &[VNode],
         parent: Option<ElementRef>,
         dom: &mut VirtualDom,
         mut to: Option<&mut impl WriteMutations>,
@@ -546,7 +546,7 @@ impl VNode {
         let mount = &dom.mounts[mount_id.0];
         let parent = mount.parent;
         match matching_components(self, new) {
-            None => self.replace([new], parent, dom, to),
+            None => self.replace(std::slice::from_ref(new), parent, dom, to),
             Some(components) => {
                 self.move_mount_to(new, dom);
 

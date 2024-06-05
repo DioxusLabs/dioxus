@@ -2,9 +2,33 @@ use dioxus_lib::prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{cell::Cell, future::Future, rc::Rc};
 
-use crate::html_storage::use_serialize_context;
-
-/// A future that resolves to a value.
+/// Runs a future with a manual list of dependencies and returns a resource with the result if the future is finished or a suspended error if it is still running.
+///
+///
+/// On the server, this will wait until the future is resolved before continuing to render. When the future is resolved, the result will be serialized into the page and hydrated on the client without rerunning the future.
+///
+///
+/// Unlike [`use_resource`] dependencies are not automatically tracked because the future may not be run at all on the client
+///
+/// # Example
+///
+/// ```rust
+/// # async fn fetch_article(id: u32) -> String { todo!() }
+/// use dioxus::prelude::*;
+///
+/// fn App() -> Element {
+///     let mut article_id = use_signal(|| 0);
+///     // `use_server_future` will spawn a task with the given dependencies and return the result of the future
+///     let article = use_server_future((&article_id()), move |article_id| async move {
+///         fetch_article(article_id).await
+///     // Since we bubble up the suspense with `?`, the server will wait for the future to resolve before rendering
+///     })?;
+///
+///     rsx! {
+///         "{article().unwrap()}"
+///     }
+/// }
+/// ```
 #[must_use = "Consider using `cx.spawn` to run a future without reading its value"]
 pub fn use_server_future<T, F, D: Dependency>(
     dependencies: D,
@@ -27,7 +51,7 @@ where
     let mut first_run = use_hook(|| CopyValue::new(true));
 
     #[cfg(feature = "server")]
-    let serialize_context = use_serialize_context();
+    let serialize_context = crate::html_storage::use_serialize_context();
 
     let resource = use_resource(move || {
         #[cfg(feature = "server")]

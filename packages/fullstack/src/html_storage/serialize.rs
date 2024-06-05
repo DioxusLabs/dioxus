@@ -8,7 +8,7 @@ use base64::Engine;
 use super::SerializeContext;
 
 #[allow(unused)]
-fn serde_to_writable<T: Serialize>(
+pub(crate) fn serde_to_writable<T: Serialize>(
     value: &T,
     write_to: &mut impl std::io::Write,
 ) -> Result<(), ciborium::ser::Error<std::io::Error>> {

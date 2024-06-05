@@ -243,25 +243,30 @@ fn to_string_works() {
     let out = renderer.render(&dom);
 
     for item in renderer.template_cache.iter() {
-        if item.1.segments.len() > 5 {
+        if item.1.segments.len() > 10 {
             assert_eq!(
                 item.1.segments,
                 vec![
-                    PreRendered("<div class=\"asdasdasd asdasdasd\"".into(),),
-                    Attr(0,),
+                    PreRendered("<div class=\"asdasdasd asdasdasd\"".to_string()),
+                    Attr(0),
                     StyleMarker {
-                        inside_style_tag: false,
+                        inside_style_tag: false
                     },
-                    PreRendered(">".into()),
+                    HydrationOnlySection(7), // jump to `>` if we don't need to hydrate
+                    PreRendered(" data-node-hydration=\"".to_string()),
+                    AttributeNodeMarker,
+                    PreRendered("\"".to_string()),
+                    PreRendered(">".to_string()),
                     InnerHtmlMarker,
-                    PreRendered("Hello world 1 --&gt;".into(),),
-                    Node(0,),
+                    PreRendered("Hello world 1 --&gt;".to_string()),
+                    Node(0),
                     PreRendered(
-                        "&lt;-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>".into(),
+                        "&lt;-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>"
+                            .to_string()
                     ),
-                    Node(1,),
-                    Node(2,),
-                    PreRendered("</div>".into(),),
+                    Node(1),
+                    Node(2),
+                    PreRendered("</div>".to_string())
                 ]
             );
         }
@@ -297,14 +302,14 @@ fn empty_for_loop_works() {
             assert_eq!(
                 item.1.segments,
                 vec![
-                    PreRendered("<div class=\"asdasdasd\"".into(),),
-                    Attr(0,),
-                    StyleMarker {
-                        inside_style_tag: false,
-                    },
-                    PreRendered(">".into()),
-                    InnerHtmlMarker,
-                    PreRendered("</div>".into(),),
+                    PreRendered("<div class=\"asdasdasd\"".to_string()),
+                    HydrationOnlySection(5), // jump to `>` if we don't need to hydrate
+                    PreRendered(" data-node-hydration=\"".to_string()),
+                    RootNodeMarker,
+                    PreRendered("\"".to_string()),
+                    PreRendered(">".to_string()),
+                    Node(0),
+                    PreRendered("</div>".to_string())
                 ]
             );
         }

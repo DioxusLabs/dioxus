@@ -237,7 +237,7 @@ impl ::core::cmp::PartialEq for SuspenseBoundaryProps {
 /// ```rust
 /// # use dioxus::prelude::*;
 /// # fn Article() -> Element { rsx! { "Article" } }
-/// fn App() {
+/// fn App() -> Element {
 ///     rsx! {
 ///         SuspenseBoundary {
 ///             fallback: |context: SuspenseContext| rsx! {
@@ -246,7 +246,7 @@ impl ::core::cmp::PartialEq for SuspenseBoundaryProps {
 ///                 } else {
 ///                     "Loading..."
 ///                 }
-///             }
+///             },
 ///             Article {}
 ///         }
 ///     }
@@ -548,8 +548,6 @@ impl SuspenseBoundaryProps {
 
         let suspense_context = suspense_context(scope);
         let suspended = !suspense_context.suspended_futures().is_empty();
-        tracing::trace!("suspense is suspended: {suspended}");
-        tracing::trace!("suspended nodes: {suspended_nodes:?}");
         match (suspended_nodes, suspended) {
             // We already have suspended nodes that still need to be suspended
             // Just diff the normal and suspended nodes
@@ -585,6 +583,7 @@ impl SuspenseBoundaryProps {
             }
             // We have no suspended nodes, but we just became suspended. Move the children to the background
             (None, true) => {
+                tracing::trace!("Children were just suspended. Moving into background.");
                 let old_children = last_rendered_node;
                 let new_children: VNode = RenderReturn { node: children }.into();
 
@@ -602,7 +601,12 @@ impl SuspenseBoundaryProps {
                 let mount = dom.mounts.get(mount.0).expect("mount should exist");
                 tracing::trace!("new children mount: {:?}", mount);
                 let parent = mount.parent;
-                old_children.move_node_to_background([&*new_placeholder], parent, dom, to);
+                old_children.move_node_to_background(
+                    std::slice::from_ref(&*new_placeholder),
+                    parent,
+                    dom,
+                    to,
+                );
 
                 // Then diff the new children in the background
                 old_children.diff_node(&new_children, dom, None::<&mut M>);
@@ -615,6 +619,7 @@ impl SuspenseBoundaryProps {
             }
             // We have suspended nodes, but we just got out of suspense. Move the suspended nodes to the foreground
             (Some(old_suspended_nodes), false) => {
+                tracing::trace!("Suspended nodes were just resolved. Moving into foreground.");
                 let old_placeholder = last_rendered_node;
                 let new_children = RenderReturn { node: children };
 
@@ -625,7 +630,7 @@ impl SuspenseBoundaryProps {
                 let mount = old_placeholder.mount.get();
                 let mount = dom.mounts.get(mount.0).expect("mount should exist");
                 let parent = mount.parent;
-                old_placeholder.replace([&*new_children], parent, dom, to);
+                old_placeholder.replace(std::slice::from_ref(&*new_children), parent, dom, to);
                 tracing::trace!("Exiting suspense: replaced placeholder with new children");
                 tracing::trace!("Non-suspended nodes: {:?}", &*new_children);
 

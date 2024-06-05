@@ -22,24 +22,24 @@ mod iterator;
 mod node;
 
 impl VirtualDom {
-    pub(crate) fn create_children<'a>(
+    pub(crate) fn create_children(
         &mut self,
         mut to: Option<&mut impl WriteMutations>,
-        nodes: impl IntoIterator<Item = &'a VNode>,
+        nodes: &[VNode],
         parent: Option<ElementRef>,
     ) -> usize {
         nodes
-            .into_iter()
+            .iter()
             .map(|child| child.create(self, parent, to.as_deref_mut()))
             .sum()
     }
 
     /// Simply replace a placeholder with a list of nodes
-    fn replace_placeholder<'a>(
+    fn replace_placeholder(
         &mut self,
         mut to: Option<&mut impl WriteMutations>,
         placeholder_id: ElementId,
-        r: impl IntoIterator<Item = &'a VNode>,
+        r: &[VNode],
         parent: Option<ElementRef>,
     ) {
         let m = self.create_children(to.as_deref_mut(), r, parent);
@@ -97,6 +97,7 @@ impl VirtualDom {
 
     /// Insert a new template into the VirtualDom's template registry
     // used in conditional compilation
+    #[allow(unused_mut)]
     pub(crate) fn register_template(
         &mut self,
         to: &mut impl WriteMutations,

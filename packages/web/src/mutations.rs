@@ -1,10 +1,8 @@
-use crate::dom::UiEvent;
 use crate::dom::WebsysDom;
 use dioxus_core::prelude::*;
 use dioxus_core::WriteMutations;
 use dioxus_core::{AttributeValue, ElementId};
 use dioxus_html::event_bubbles;
-use dioxus_html::PlatformEventData;
 use dioxus_interpreter_js::minimal_bindings;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
@@ -66,11 +64,11 @@ impl WebsysDom {
         for id in self.queued_mounted_events.drain(..) {
             let node = self.interpreter.base().get_node(id.0 as u32);
             if let Some(element) = node.dyn_ref::<web_sys::Element>() {
-                let _ = self.event_channel.unbounded_send(UiEvent {
+                let _ = self.event_channel.unbounded_send(crate::dom::UiEvent {
                     name: "mounted".to_string(),
                     bubbles: false,
                     element: id,
-                    data: PlatformEventData::new(Box::new(element.clone())),
+                    data: dioxus_html::PlatformEventData::new(Box::new(element.clone())),
                 });
             }
         }

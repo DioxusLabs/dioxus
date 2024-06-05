@@ -6,7 +6,7 @@ use base64::Engine;
 use super::HTMLDataCursor;
 
 #[allow(unused)]
-fn serde_from_bytes<T: DeserializeOwned>(string: &[u8]) -> Option<T> {
+pub(crate) fn serde_from_bytes<T: DeserializeOwned>(string: &[u8]) -> Option<T> {
     let decompressed = match STANDARD.decode(string) {
         Ok(bytes) => bytes,
         Err(err) => {

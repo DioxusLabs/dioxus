@@ -72,12 +72,27 @@ impl<'a> TemplateRenderer<'a> {
         quote! { dioxus_core::Element::Ok({ #vnode }) }
     }
 
+    #[allow(unused)]
     fn get_template_id_tokens(&self) -> TokenStream2 {
         match self.location {
             Some(ref loc) => quote! { #loc },
             None => {
                 // Get the root:column:id tag we'll use as the ID of the template
                 let root_col = self.get_root_col_id();
+
+                // If this is a release build, strip the location out of the template for smaller binaries and so we don't leak that information
+                #[cfg(not(debug_assertions))]
+                return {
+                    use std::hash::{Hash, Hasher};
+                    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                    if let Some(first) = self.roots.first() {
+                        first.hash(&mut hasher);
+                    }
+                    let hash = hasher.finish();
+                    let lit_str =
+                        syn::LitStr::new(&format!("{hash}"), proc_macro2::Span::call_site());
+                    quote! { #lit_str }
+                };
 
                 quote! {
                     concat!(
