@@ -5,12 +5,12 @@ pub trait ObserverEntryBacking: std::any::Any {
     fn as_any(&self) -> &dyn std::any::Any;
 
     /// Get the border box size of the observed element
-    fn get_border_box_size(&self) -> ResizedResult<PixelsSize> {
+    fn get_border_box_size(&self) -> ResizedResult<Vec<PixelsSize>> {
         Err(ResizedError::NotSupported)
     }
 
     /// Get the content box size of the observed element
-    fn get_content_box_size(&self) -> ResizedResult<PixelsSize> {
+    fn get_content_box_size(&self) -> ResizedResult<Vec<PixelsSize>> {
         Err(ResizedError::NotSupported)
     }
 }
@@ -43,12 +43,12 @@ impl ResizedData {
     }
 
     /// Get the border box size of the observed element
-    pub fn get_border_box_size(&self) -> ResizedResult<PixelsSize> {
+    pub fn get_border_box_size(&self) -> ResizedResult<Vec<PixelsSize>> {
         self.inner.get_border_box_size()
     }
 
     /// Get the content box size of the observed element
-    pub fn get_content_box_size(&self) -> ResizedResult<PixelsSize> {
+    pub fn get_content_box_size(&self) -> ResizedResult<Vec<PixelsSize>> {
         self.inner.get_content_box_size()
     }
 
@@ -89,19 +89,23 @@ pub struct SerializedResizedData {
 impl From<&ResizedData> for SerializedResizedData {
     fn from(data: &ResizedData) -> Self {
         let mut border_box_sizes = Vec::new();
-        if let Some(size) = data.inner.get_border_box_size().ok() {
-            border_box_sizes.push(SerializedResizeObserverSize {
-                block_size: size.width,
-                inline_size: size.height,
-            });
+        if let Some(sizes) = data.inner.get_border_box_size().ok() {
+            for size in sizes {
+                border_box_sizes.push(SerializedResizeObserverSize {
+                    block_size: size.width,
+                    inline_size: size.height,
+                });
+            }
         }
 
         let mut content_box_sizes = Vec::new();
-        if let Some(size) = data.inner.get_content_box_size().ok() {
-            content_box_sizes.push(SerializedResizeObserverSize {
-                block_size: size.width,
-                inline_size: size.height,
-            });
+        if let Some(sizes) = data.inner.get_content_box_size().ok() {
+            for size in sizes {
+                content_box_sizes.push(SerializedResizeObserverSize {
+                    block_size: size.width,
+                    inline_size: size.height,
+                });
+            }
         }
 
         Self {
@@ -113,10 +117,16 @@ impl From<&ResizedData> for SerializedResizedData {
 
 macro_rules! get_box_size {
     ($meth_name:ident, $field_name:ident) => {
-        fn $meth_name(&self) -> ResizedResult<PixelsSize> {
-            match self.$field_name.first() {
-                Some(size) => Ok(PixelsSize::new(size.block_size, size.inline_size)),
-                None => Err(ResizedError::NotSupported),
+        fn $meth_name(&self) -> ResizedResult<Vec<PixelsSize>> {
+            if self.$field_name.len() > 0 {
+                let sizes = self
+                    .$field_name
+                    .iter()
+                    .map(|s| PixelsSize::new(s.block_size, s.inline_size))
+                    .collect();
+                Ok(sizes)
+            } else {
+                Err(ResizedError::NotSupported)
             }
         }
     };

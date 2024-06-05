@@ -501,22 +501,31 @@ impl crate::RenderedElementBacking for web_sys::Element {
 macro_rules! get_observer_entry_size {
     ($meth_name:ident, $entry_meth_name:ident, $field_name:literal) => {
         #[doc = concat!("Get the ", $field_name, " size of the observed element")]
-        fn $meth_name(&self) -> ResizedResult<PixelsSize> {
+        fn $meth_name(&self) -> ResizedResult<Vec<PixelsSize>> {
             let sizes = web_sys::ResizeObserverEntry::$entry_meth_name(&self);
 
-            let (width, height) = if sizes.length() > 0 {
-                let size: web_sys::ResizeObserverSize = sizes.get(0).into();
-                // block_size matchs the height of the element if its writing-mode is horizontal, the width otherwise
-                let block_size = size.block_size();
-                // inline_size matchs the width of the element if its writing-mode is horizontal, the height otherwise
-                let inline_size = size.inline_size();
-                (inline_size, block_size)
+            let sizes = if sizes.length() > 0 {
+                sizes
+                    .iter()
+                    .map(|s| {
+                        let size: web_sys::ResizeObserverSize = s.into();
+                        // block_size matchs the height of the element if its writing-mode is horizontal, the width otherwise
+                        let block_size = size.block_size();
+                        // inline_size matchs the width of the element if its writing-mode is horizontal, the height otherwise
+                        let inline_size = size.inline_size();
+                        PixelsSize::new(inline_size, block_size)
+                    })
+                    .collect()
             } else {
+                let mut sizes = Vec::with_capacity(1);
+
                 let rect = web_sys::ResizeObserverEntry::content_rect(&self);
-                (rect.width(), rect.height())
+                sizes.push(PixelsSize::new(rect.width(), rect.height()));
+
+                sizes
             };
 
-            Ok(PixelsSize::new(width, height))
+            Ok(sizes)
         }
     };
 }
