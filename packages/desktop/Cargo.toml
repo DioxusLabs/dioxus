@@ -10,7 +10,7 @@ homepage = "https://dioxuslabs.com/learn/0.5/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
-dioxus-core = { workspace = true, features = ["serialize"] }
+dioxus-core = { workspace = true, features = ["serialize", "drop-virtual-dom"] }
 dioxus-html = { workspace = true, features = [
     "serialize",
     "native-bind",

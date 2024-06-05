@@ -9,7 +9,7 @@ repository = "https://github.com/DioxusLabs/dioxus/"
 keywords = ["dom", "ui", "gui", "react", "ssr"]
 
 [dependencies]
-dioxus-core = { workspace = true, features = ["serialize"] }
+dioxus-core = { workspace = true, features = ["serialize", "drop-virtual-dom"] }
 dioxus-html = { workspace = true, features = ["eval"]}
 dioxus-cli-config = { workspace = true, features = ["read-config"], optional = true }
 generational-box = { workspace = true }

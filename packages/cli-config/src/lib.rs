@@ -55,6 +55,7 @@ pub static CURRENT_CONFIG: once_cell::sync::Lazy<
     })
 });
 
+#[cfg(feature = "read-config")]
 /// Get just the base path from the config without pulling in serde_json
 pub const fn current_config_base_path() -> Option<&'static str> {
     // Find "base_path": "path/to/base"

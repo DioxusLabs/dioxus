@@ -34,5 +34,7 @@ reqwest = { workspace = true}
 tracing-subscriber = "0.3.18"
 
 [features]
-default = []
+default = ["drop-virtual-dom"]
 serialize = ["serde"]
+# The drop code can take a large fraction of the total binary size. We don't always need it. On web, the virtual dom can just be forcefully deallocated
+drop-virtual-dom = []
