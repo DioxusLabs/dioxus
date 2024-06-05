@@ -89,7 +89,7 @@ pub struct SerializedResizedData {
 impl From<&ResizedData> for SerializedResizedData {
     fn from(data: &ResizedData) -> Self {
         let mut border_box_sizes = Vec::new();
-        if let Some(sizes) = data.inner.get_border_box_size().ok() {
+        if let Ok(sizes) = data.inner.get_border_box_size() {
             for size in sizes {
                 border_box_sizes.push(SerializedResizeObserverSize {
                     block_size: size.width,
@@ -99,7 +99,7 @@ impl From<&ResizedData> for SerializedResizedData {
         }
 
         let mut content_box_sizes = Vec::new();
-        if let Some(sizes) = data.inner.get_content_box_size().ok() {
+        if let Ok(sizes) = data.inner.get_content_box_size() {
             for size in sizes {
                 content_box_sizes.push(SerializedResizeObserverSize {
                     block_size: size.width,
