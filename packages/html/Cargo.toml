@@ -87,3 +87,7 @@ wasm-bind = ["web-sys", "wasm-bindgen"]
 native-bind = ["tokio", "file-engine"]
 hot-reload-context = ["dioxus-rsx", "dioxus-rsx/hot_reload_traits"]
 html-to-rsx = []
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+feature = ["html-to-rsx", "hot-reload-context", "html-to-rsx", "native-bind", "wasm-bind"]

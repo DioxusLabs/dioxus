@@ -102,3 +102,7 @@ server = [
     "async-trait",
     "parking_lot"
 ]
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+features = ["axum", "web"]

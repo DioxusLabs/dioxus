@@ -8,8 +8,7 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus = { workspace = true }
-dioxus-web = { workspace = true }
+dioxus = { workspace = true, features = ["web"] }
 
 log = "0.4.6"
 

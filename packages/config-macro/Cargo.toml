@@ -24,3 +24,6 @@ mobile = []
 web = []
 ssr = []
 liveview = []
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
