@@ -74,7 +74,7 @@ cargo run --example hello_world
 
 [disabled](./disabled.rs) - Disable buttons conditionally
 
-[error_handle](./error_handle.rs) - Handle errors with early return
+[errors](./errors.rs) - Handle errors with early return
 
 ## Routing
 
@@ -103,12 +103,15 @@ cargo run --example hello_world
 [todomvc](./todomvc.rs) - Todo task list example
 
 # TODO
+
 Missing Features
+
 - Fine-grained reactivity
 - Refs - imperative handles to elements
 - Function-driven children: Pass functions to make VNodes
 
 Missing examples
+
 - Shared state
 - Root-less element groups
 - Custom elements

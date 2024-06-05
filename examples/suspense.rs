@@ -15,13 +15,6 @@ use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
 use dioxus::prelude::*;
 
 fn main() {
-    let file = std::fs::File::create("test.log").unwrap();
-    tracing_subscriber::fmt::Subscriber::builder()
-        .with_writer(file)
-        .with_ansi(false)
-        .with_max_level(tracing::Level::TRACE)
-        .init();
-
     LaunchBuilder::new()
         .with_cfg(desktop! {
             Config::new().with_window(

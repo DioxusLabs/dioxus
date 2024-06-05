@@ -158,7 +158,6 @@ reqwest = { version = "0.11.9", features = ["json"], optional = true }
 http-range = { version = "0.1.5", optional = true }
 ciborium = { version = "0.2.1", optional = true }
 base64 = { version = "0.21.0", optional = true }
-tracing-subscriber = "0.3.18"
 tracing.workspace = true
 
 [dev-dependencies]
@@ -272,7 +271,7 @@ required-features = ["desktop"]
 doc-scrape-examples = true
 
 [[example]]
-name = "error_handle"
+name = "errors"
 required-features = ["desktop"]
 doc-scrape-examples = true
 
