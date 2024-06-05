@@ -13,7 +13,11 @@ use std::{
 
 /// A panic in a component that was caught by an error boundary.
 ///
-/// NOTE: WASM currently does not support caching unwinds, so this struct will not be created in WASM.
+/// <div class="warning">
+///
+/// WASM currently does not support caching unwinds, so this struct will not be created in WASM.
+///
+/// </div>
 pub struct CapturedPanic {
     #[allow(dead_code)]
     /// The error that was caught
@@ -612,7 +616,7 @@ impl<
         }
     }
 }
-/// Create a new error boundary component.
+/// Create a new error boundary component that catches any errors thrown from child components
 ///
 /// ## Details
 ///
@@ -620,13 +624,15 @@ impl<
 ///
 /// ## Example
 ///
-/// ```rust, ignore
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
+/// # fn ThrowsError() -> Element { todo!() }
 /// rsx!{
 ///     ErrorBoundary {
-///         handle_error: |error| rsx! { "Oops, we encountered an error. Please report {error} to the developer of this application" }
+///         handle_error: |errors| rsx! { "Oops, we encountered an error. Please report {errors[0]} to the developer of this application" }
 ///         ThrowsError {}
 ///     }
-/// }
+/// };
 /// ```
 ///
 /// ## Usage
