@@ -186,7 +186,8 @@ tokio = { version = "1.16.1", features = ["full"] }
 # To make most examples faster to compile, we split out assets and http-related stuff
 # This trims off like 270 dependencies, leading to a significant speedup in compilation time
 [features]
-default = ["dioxus/desktop"]
+default = ["desktop"]
+desktop = ["dioxus/desktop"]
 liveview = ["dioxus/liveview"]
 fullstack = ["dioxus/fullstack"]
 axum = ["dioxus/axum"]
