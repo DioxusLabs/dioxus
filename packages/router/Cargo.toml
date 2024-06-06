@@ -94,8 +94,3 @@ doc-scrape-examples = true
 name = "simple_router"
 path = "../../examples/simple_router.rs"
 doc-scrape-examples = true
-
-[[example]]
-name = "static_generation"
-required-features = ["ssr"]
-doc-scrape-examples = true
