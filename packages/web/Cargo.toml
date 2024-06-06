@@ -64,7 +64,7 @@ hot_reload = ["web-sys/MessageEvent", "web-sys/WebSocket", "web-sys/Location", "
 eval = ["dioxus-html/eval", "dioxus-interpreter-js/eval", "serde-wasm-bindgen", "async-trait", "serde_json"]
 
 [dev-dependencies]
-dioxus = { workspace = true }
+dioxus = { workspace = true, default-features = true }
 wasm-bindgen-test = "0.3.29"
 dioxus-ssr = { workspace = true, default-features = false }
 gloo-timers = "0.2.3"

@@ -1,10 +1,8 @@
 #![allow(non_snake_case)]
 
 use crate::incremental::IncrementalRenderer;
-use crate::incremental::IncrementalRendererError;
 
 use std::{
-    io::Write,
     path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
@@ -12,69 +10,6 @@ use std::{
 
 use super::fs_cache::PathMapFn;
 use super::memory_cache::InMemoryCache;
-
-/// Something that can render a HTML page from a body.
-pub trait WrapBody {
-    /// Render the HTML before the body
-    fn render_before_body<R: Write>(&self, to: &mut R) -> Result<(), IncrementalRendererError>;
-    /// Render the HTML after the body
-    fn render_after_body<R: Write>(&self, to: &mut R) -> Result<(), IncrementalRendererError>;
-
-    /// Wrap the body of the page in the wrapper.
-    fn wrap_body(&self, body: &str) -> String {
-        let mut bytes = Vec::new();
-        self.render_before_body(&mut bytes).unwrap();
-        bytes.extend_from_slice(body.as_bytes());
-        self.render_after_body(&mut bytes).unwrap();
-        String::from_utf8(bytes).unwrap()
-    }
-}
-
-/// The default page renderer
-pub struct DefaultRenderer {
-    /// The HTML before the body.
-    pub before_body: String,
-    /// The HTML after the body.
-    pub after_body: String,
-}
-
-impl Default for DefaultRenderer {
-    fn default() -> Self {
-        let title = dioxus_cli_config::CURRENT_CONFIG
-            .as_ref()
-            .map(|c| c.dioxus_config.application.name.clone())
-            .unwrap_or("Dioxus Application".into());
-        let before = format!(
-            r#"<!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>{}</title>
-        </head>
-        <body>"#,
-            title
-        );
-        let after = r#"</body>
-        </html>"#;
-        Self {
-            before_body: before.to_string(),
-            after_body: after.to_string(),
-        }
-    }
-}
-
-impl WrapBody for DefaultRenderer {
-    fn render_before_body<R: Write>(&self, to: &mut R) -> Result<(), IncrementalRendererError> {
-        to.write_all(self.before_body.as_bytes())?;
-        Ok(())
-    }
-
-    fn render_after_body<R: Write>(&self, to: &mut R) -> Result<(), IncrementalRendererError> {
-        to.write_all(self.after_body.as_bytes())?;
-        Ok(())
-    }
-}
 
 /// A configuration for the incremental renderer.
 #[derive(Clone)]

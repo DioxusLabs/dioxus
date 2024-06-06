@@ -1,5 +1,6 @@
 use dioxus_lib::prelude::*;
 use dioxus_router::prelude::*;
+use dioxus_ssr::incremental::*;
 use dioxus_ssr::renderer;
 use std::collections::HashSet;
 use std::fs;
@@ -108,16 +109,21 @@ async fn prerender_route(
     use dioxus_fullstack::prelude::*;
 
     let context = server_context_for_route(&route);
-    let wrapper = config.fullstack_template(&context);
+    let wrapper = config.fullstack_template();
     let mut virtual_dom = VirtualDom::new(app);
     with_server_context(context.clone(), || {
         tokio::task::block_in_place(|| virtual_dom.rebuild_in_place());
     });
     ProvideServerContext::new(virtual_dom.wait_for_suspense(), context).await;
 
-    let render = renderer.render(&virtual_dom);
+    let mut wrapped = String::new();
 
-    let wrapped = wrapper.wrap_body(&render);
+    // Render everything before the body
+    wrapper.render_before_body(&mut wrapped)?;
+
+    renderer.render_to(&mut wrapped, &virtual_dom)?;
+
+    wrapper.render_after_body(&mut wrapped, &virtual_dom)?;
 
     cache.cache(route, wrapped)
 }

@@ -162,20 +162,11 @@ impl SsrRendererPool {
         let join_handle = spawn_platform(move || async move {
             let mut virtual_dom = virtual_dom_factory();
 
-            let mut pre_body = WriteBuffer { buffer: Vec::new() };
-            if let Err(err) = wrapper.render_before_body(&mut *pre_body) {
+            let mut pre_body = String::new();
+            if let Err(err) = wrapper.render_before_body(&mut pre_body) {
                 _ = into.start_send(Err(err));
                 return;
             }
-            let pre_body = match String::from_utf8(pre_body.buffer) {
-                Ok(html) => html,
-                Err(err) => {
-                    _ = into.start_send(Err(
-                        dioxus_ssr::incremental::IncrementalRendererError::Other(Box::new(err)),
-                    ));
-                    return;
-                }
-            };
 
             let mut streaming_renderer = StreamingRenderer::new(pre_body, into);
 
@@ -247,7 +238,7 @@ impl SsrRendererPool {
             tracing::info!("Suspense resolved");
 
             // After suspense is done, we render one last time to get the final html that can be hydrated and then close the body
-            let mut post_streaming = WriteBuffer { buffer: Vec::new() };
+            let mut post_streaming = String::new();
 
             // We need to include hydration ids in final the SSR render so that the client can hydrate the correct nodes
             renderer.pre_render = true;
@@ -255,36 +246,23 @@ impl SsrRendererPool {
                 throw_error!(dioxus_ssr::incremental::IncrementalRendererError::RenderError(err));
             }
 
-            // Extract any data we serialized for hydration (from server futures)
-            let html_data = crate::html_storage::HTMLData::extract_from_virtual_dom(&virtual_dom);
-
-            if let Err(err) = wrapper.render_after_body(&mut *post_streaming, &html_data) {
+            if let Err(err) = wrapper.render_after_body(&mut post_streaming, &virtual_dom) {
                 throw_error!(err);
             }
 
             // If incremental rendering is enabled, add the new render to the cache without the streaming bits
             if let Some(incremental) = &self.incremental_cache {
-                let mut cached_render = WriteBuffer { buffer: Vec::new() };
-                if let Err(err) = wrapper.render_before_body(&mut *cached_render) {
+                let mut cached_render = String::new();
+                if let Err(err) = wrapper.render_before_body(&mut cached_render) {
                     throw_error!(err);
                 }
-                cached_render
-                    .buffer
-                    .extend_from_slice(post_streaming.buffer.as_slice());
+                cached_render.push_str(&post_streaming);
 
                 if let Ok(mut incremental) = incremental.write() {
-                    let _ = incremental.cache(route, cached_render.buffer);
+                    let _ = incremental.cache(route, cached_render);
                 }
             }
 
-            let post_streaming = match String::from_utf8(post_streaming.buffer) {
-                Ok(html) => html,
-                Err(err) => {
-                    throw_error!(dioxus_ssr::incremental::IncrementalRendererError::Other(
-                        Box::new(err),
-                    ));
-                }
-            };
             streaming_renderer.finish_streaming(post_streaming);
 
             myself.renderers.write().unwrap().push(renderer);
@@ -350,24 +328,29 @@ impl FullstackHTMLTemplate {
 }
 
 impl FullstackHTMLTemplate {
-    fn render_before_body<R: std::io::Write>(
+    /// Render any content before the body of the page.
+    pub fn render_before_body<R: std::fmt::Write>(
         &self,
         to: &mut R,
     ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
         let ServeConfig { index, .. } = &self.cfg;
 
-        to.write_all(index.pre_main.as_bytes())?;
+        to.write_str(&index.pre_main)?;
 
         Ok(())
     }
 
-    fn render_after_body<R: std::io::Write>(
+    /// Render all content after the body of the page.
+    pub fn render_after_body<R: std::fmt::Write>(
         &self,
         to: &mut R,
-        html_data: &crate::html_storage::HTMLData,
+        vdom: &VirtualDom,
     ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
+        // Extract any data we serialized for hydration (from server futures)
+        let html_data = crate::html_storage::HTMLData::extract_from_virtual_dom(vdom);
+
         // serialize the server state
-        crate::html_storage::serialize::encode_in_element(html_data, to).map_err(|err| {
+        crate::html_storage::serialize::encode_in_element(&html_data, to).map_err(|err| {
             dioxus_ssr::incremental::IncrementalRendererError::Other(Box::new(err))
         })?;
 
@@ -376,14 +359,14 @@ impl FullstackHTMLTemplate {
             // In debug mode, we need to add a script to the page that will reload the page if the websocket disconnects to make full recompile hot reloads work
             let disconnect_js = dioxus_hot_reload::RECONNECT_SCRIPT;
 
-            to.write_all(r#"<script>"#.as_bytes())?;
-            to.write_all(disconnect_js.as_bytes())?;
-            to.write_all(r#"</script>"#.as_bytes())?;
+            to.write_str(r#"<script>"#)?;
+            to.write_str(disconnect_js)?;
+            to.write_str(r#"</script>"#)?;
         }
 
         let ServeConfig { index, .. } = &self.cfg;
 
-        to.write_all(index.post_main.as_bytes())?;
+        to.write_str(&index.post_main)?;
 
         Ok(())
     }
@@ -393,29 +376,4 @@ fn pre_renderer() -> Renderer {
     let mut renderer = Renderer::default();
     renderer.pre_render = true;
     renderer
-}
-
-struct WriteBuffer {
-    buffer: Vec<u8>,
-}
-
-impl std::fmt::Write for WriteBuffer {
-    fn write_str(&mut self, s: &str) -> std::fmt::Result {
-        self.buffer.extend_from_slice(s.as_bytes());
-        Ok(())
-    }
-}
-
-impl std::ops::Deref for WriteBuffer {
-    type Target = Vec<u8>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.buffer
-    }
-}
-
-impl std::ops::DerefMut for WriteBuffer {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.buffer
-    }
 }

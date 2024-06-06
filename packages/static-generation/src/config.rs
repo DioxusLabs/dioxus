@@ -157,10 +157,7 @@ impl Config {
 
 #[cfg(feature = "server")]
 impl Config {
-    pub(crate) fn fullstack_template(
-        &self,
-        server_context: &dioxus_fullstack::prelude::DioxusServerContext,
-    ) -> impl dioxus_ssr::incremental::WrapBody {
+    pub(crate) fn fullstack_template(&self) -> dioxus_fullstack::prelude::FullstackHTMLTemplate {
         use dioxus_fullstack::prelude::{FullstackHTMLTemplate, ServeConfig};
         let mut cfg_builder = ServeConfig::builder();
         if let Some(index_html) = &self.index_html {
@@ -174,7 +171,7 @@ impl Config {
         }
         let cfg = cfg_builder.build();
 
-        FullstackHTMLTemplate::new(&cfg, server_context)
+        FullstackHTMLTemplate::new(&cfg)
     }
 
     pub(crate) fn create_cache(&mut self) -> dioxus_ssr::incremental::IncrementalRenderer {

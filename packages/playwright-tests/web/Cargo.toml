@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
-dioxus = { workspace = true, features = ["web"]}
+dioxus = { workspace = true, features = ["web"], default-features = true }
 serde_json = "1.0.96"
 tracing.workspace = true
 tracing-wasm = "0.2.1"

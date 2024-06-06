@@ -14,7 +14,7 @@ use crate::{
     nodes::{Template, TemplateId},
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
-    AttributeValue, ComponentFunction, Element, Event, Mutations, VNode,
+    AttributeValue, ComponentFunction, Element, Event, Mutations,
 };
 use futures_util::StreamExt;
 use slab::Slab;
@@ -577,7 +577,7 @@ impl VirtualDom {
             let mut dirty = Vec::new();
             for (id, scope) in self.scopes.iter() {
                 // Recurse into the dynamic nodes of the existing mounted node to see if the template is alive in the tree
-                fn check_node_for_templates(node: &VNode, template: Template) -> bool {
+                fn check_node_for_templates(node: &crate::VNode, template: Template) -> bool {
                     let this_template_name = node.template.get().name.rsplit_once(':').unwrap().0;
 
                     if this_template_name == template.name.rsplit_once(':').unwrap().0 {

@@ -569,6 +569,7 @@ impl VNode {
     }
 
     /// Get the most up to date template for this rsx block
+    #[allow(unused)]
     pub(crate) fn template(&self, dom: &VirtualDom) -> Template {
         // check for a overridden template
         #[cfg(debug_assertions)]

@@ -40,10 +40,6 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     pub use crate::render::{FullstackHTMLTemplate, SSRState};
 
-    #[cfg(feature = "router")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "router")))]
-    pub use crate::router::FullstackRouterConfig;
-
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     pub use crate::serve_config::{ServeConfig, ServeConfigBuilder};

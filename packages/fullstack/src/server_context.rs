@@ -47,6 +47,7 @@ mod server_fn_impl {
         }
 
         /// Create a server context from a shared parts
+        #[allow(unused)]
         pub(crate) fn from_shared_parts(parts: Arc<RwLock<http::request::Parts>>) -> Self {
             Self {
                 parts,

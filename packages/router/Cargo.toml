@@ -42,7 +42,7 @@ wasm-bindgen-test = "0.3.33"
 
 [features]
 default = []
-ssr = ["dioxus-ssr/incremental", "tokio", "dioxus-fullstack?/server", "http"]
+ssr = []
 liveview = ["dioxus-liveview", "tokio", "dep:serde", "serde_json"]
 wasm_test = []
 web = ["gloo", "web-sys", "wasm-bindgen", "gloo-utils", "js-sys", "dioxus-router-macro/web"]
@@ -59,12 +59,6 @@ serde = { version = "1", features = ["derive"] }
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
-
-[[bench]]
-name = "incremental"
-required-features = ["ssr"]
-harness = false
-
 # Most of the examples live in the workspace. We include some here so that docs.rs can scrape our examples for better inline docs
 [[example]]
 name = "crm"
