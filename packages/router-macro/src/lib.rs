@@ -80,15 +80,15 @@ mod segment;
 ///     Route3 { dynamic: String },
 /// }
 /// # #[component]
-/// # fn Route1(user_id: usize, dynamic: usize, query: String) -> Element { None }
+/// # fn Route1(user_id: usize, dynamic: usize, query: String) -> Element { Ok(VNode::placeholder()) }
 /// # #[component]
-/// # fn Route2(user_id: usize) -> Element { None }
+/// # fn Route2(user_id: usize) -> Element { Ok(VNode::placeholder()) }
 /// # #[component]
-/// # fn Route3(dynamic: String) -> Element { None }
+/// # fn Route3(dynamic: String) -> Element { Ok(VNode::placeholder()) }
 /// # #[component]
-/// # fn UserFrame(user_id: usize) -> Element { None }
+/// # fn UserFrame(user_id: usize) -> Element { Ok(VNode::placeholder()) }
 /// # #[component]
-/// # fn IndexComponent() -> Element { None }
+/// # fn IndexComponent() -> Element { Ok(VNode::placeholder()) }
 /// ```
 ///
 /// # `#[route("path", component)]`
@@ -111,7 +111,7 @@ mod segment;
 ///     Index {},
 /// }
 /// # #[component]
-/// # fn Index() -> Element { None }
+/// # fn Index() -> Element { Ok(VNode::placeholder()) }
 /// ```
 ///
 /// # `#[redirect("path", function)]`
@@ -131,7 +131,7 @@ mod segment;
 ///     Index {},
 /// }
 /// # #[component]
-/// # fn Index() -> Element { None }
+/// # fn Index() -> Element { Ok(VNode::placeholder()) }
 /// ```
 ///
 /// Redirects allow you to redirect a route to another route. The function must take all dynamic parameters of the route and all parent nests.
@@ -157,7 +157,7 @@ mod segment;
 ///         Index {},
 /// }
 /// # #[component]
-/// # fn Index() -> Element { None }
+/// # fn Index() -> Element { Ok(VNode::placeholder()) }
 /// ```
 ///
 /// # `#[end_nest]`
@@ -182,9 +182,9 @@ mod segment;
 ///     Home {},
 /// }
 /// # #[component]
-/// # fn Index() -> Element { None }
+/// # fn Index() -> Element { Ok(VNode::placeholder()) }
 /// # #[component]
-/// # fn Home() -> Element { None }
+/// # fn Home() -> Element { Ok(VNode::placeholder()) }
 /// ```
 ///
 /// # `#[layout(component)]`
@@ -206,9 +206,9 @@ mod segment;
 ///         Index {},
 /// }
 /// # #[component]
-/// # fn Index() -> Element { None }
+/// # fn Index() -> Element { Ok(VNode::placeholder()) }
 /// # #[component]
-/// # fn BlogFrame() -> Element { None }
+/// # fn BlogFrame() -> Element { Ok(VNode::placeholder()) }
 /// ```
 ///
 /// # `#[end_layout]`
@@ -232,11 +232,11 @@ mod segment;
 ///     Home {},
 /// }
 /// # #[component]
-/// # fn Index() -> Element { None }
+/// # fn Index() -> Element { Ok(VNode::placeholder()) }
 /// # #[component]
-/// # fn BlogFrame() -> Element { None }
+/// # fn BlogFrame() -> Element { Ok(VNode::placeholder()) }
 /// # #[component]
-/// # fn Home() -> Element { None }
+/// # fn Home() -> Element { Ok(VNode::placeholder()) }
 /// ```
 #[proc_macro_derive(
     Routable,

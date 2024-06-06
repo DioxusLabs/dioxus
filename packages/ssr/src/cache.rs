@@ -4,11 +4,12 @@
 //!
 //! For example, in this code, we can cache the whole render:
 //! ```rust, no_run
+//! use dioxus::prelude::*;
 //! rsx! {
 //!     div {
 //!         "Hello world"
 //!     }
-//! }
+//! };
 //! ```
 //! Because everything exists in the template, we can calculate the whole HTML for the template once and then reuse it.
 //! ```html
@@ -18,12 +19,14 @@
 //! If the template is more complex, we can only cache the parts that are static. In this case, we can cache `<div width="100px">` and `</div>`, but not the child text.
 //!
 //! ```rust, no_run
+//! use dioxus::prelude::*;
+//! let dynamic = 123;
 //! rsx! {
 //!     div {
 //!         width: "100px",
 //!         "{dynamic}"
 //!     }
-//! }
+//! };
 //!```
 
 use dioxus_core::prelude::*;

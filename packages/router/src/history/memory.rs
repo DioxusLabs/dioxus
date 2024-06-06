@@ -21,9 +21,9 @@ where
     /// # use dioxus_router::prelude::*;
     /// # use dioxus::prelude::*;
     /// # #[component]
-    /// # fn Index() -> Element { None }
+    /// # fn Index() -> Element { Ok(VNode::placeholder()) }
     /// # #[component]
-    /// # fn OtherPage() -> Element { None }
+    /// # fn OtherPage() -> Element { Ok(VNode::placeholder()) }
     /// #[derive(Clone, Routable, Debug, PartialEq)]
     /// enum Route {
     ///     #[route("/")]

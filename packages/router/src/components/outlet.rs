@@ -59,7 +59,7 @@ use dioxus_lib::prelude::*;
 /// # fn App() -> Element {
 /// #     rsx! {
 /// #         Router::<Route> {
-/// #             config: || RouterConfig::default().history(MemoryHistory::with_initial_path(Route::Child {}))
+/// #             config: |_| RouterConfig::default().history(MemoryHistory::with_initial_path(Route::Child {}))
 /// #         }
 /// #     }
 /// # }
