@@ -211,7 +211,7 @@ fn from_template_recursive(
                         *chain += Segment::RootNodeMarker;
                     }
                     write!(chain, "\"")?;
-                    Ok(())
+                    std::fmt::Result::Ok(())
                 })?;
             }
 
@@ -240,7 +240,7 @@ fn from_template_recursive(
                     write!(chain, "<!--node-id")?;
                     *chain += Segment::RootNodeMarker;
                     write!(chain, "-->")?;
-                    Ok(())
+                    std::fmt::Result::Ok(())
                 })?;
             }
             write!(
