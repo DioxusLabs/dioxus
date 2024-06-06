@@ -626,12 +626,17 @@ impl VNode {
         // nodes in an iterator of (dynamic_node_index, path)
         #[cfg(not(debug_assertions))]
         let nodes_sorted = template.node_paths.iter().copied().enumerate();
+        #[cfg(not(debug_assertions))]
+        let attrs_sorted = template.attr_paths.iter().copied().enumerate().peekable();
 
         // If this is a debug build, we need to check that the paths are in the correct order because hot reloading can cause scrambled states
         #[cfg(debug_assertions)]
         let nodes_sorted = sort_bfs(template.node_paths).into_iter();
+        #[cfg(debug_assertions)]
+        let attrs_sorted = sort_bfs(template.attr_paths).into_iter();
 
         let mut nodes = nodes_sorted.peekable();
+        let mut attrs = attrs_sorted.peekable();
 
         // Get the mounted id of this block
         // At this point, we should have already mounted the block
@@ -676,6 +681,10 @@ impl VNode {
                                 dom,
                                 to.as_deref_mut(),
                             );
+                            // Now write out any attributes we need
+                            if let Some(to) = to.as_deref_mut() {
+                                self.write_attrs(mount, &mut attrs, root_idx as u8, dom, to);
+                            }
                         }
 
                         // This creates one node on the stack
@@ -684,11 +693,6 @@ impl VNode {
                 }
             })
             .sum();
-
-        // Now write out any attributes we need
-        if let Some(to) = to {
-            self.write_attrs(mount, dom, to);
-        }
 
         // And return the number of nodes we created on the stack
         nodes_created
@@ -794,15 +798,23 @@ impl VNode {
     ///     }
     /// }
     /// ```
-    fn write_attrs(&self, mount: MountId, dom: &mut VirtualDom, to: &mut impl WriteMutations) {
-        let template = self.template.get();
+    ///
+    /// IMPORTANT: This function assumes that root node is the top node on the stack
+    fn write_attrs(
+        &self,
+        mount: MountId,
+        dynamic_attrbiutes_iter: &mut Peekable<impl Iterator<Item = (usize, &'static [u8])>>,
+        root_idx: u8,
+        dom: &mut VirtualDom,
+        to: &mut impl WriteMutations,
+    ) {
         let mut last_path = None;
-        for (attribute_idx, (attribute, attribute_path)) in self
-            .dynamic_attrs
-            .iter()
-            .zip(template.attr_paths.iter())
-            .enumerate()
+        // Only take nodes that are under this root node
+        let from_root_node = |(_, path): &(usize, &[u8])| path.first() == Some(&root_idx);
+        while let Some((attribute_idx, attribute_path)) =
+            dynamic_attrbiutes_iter.next_if(from_root_node)
         {
+            let attribute = &self.dynamic_attrs[attribute_idx];
             let id = match last_path {
                 // If the last path was exactly the same, we can reuse the id
                 Some((path, id)) if path == attribute_path => id,

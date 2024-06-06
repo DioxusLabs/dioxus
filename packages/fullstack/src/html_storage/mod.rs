@@ -117,11 +117,11 @@ fn serialized_and_deserializes() {
             let mut storage = HTMLData::default();
             storage.push(&data);
             println!("serialized size: {}", storage.data[0].len());
-            let mut as_string = Vec::new();
+            let mut as_string = String::new();
             serde_to_writable(&data, &mut as_string).unwrap();
             println!("compressed size: {}", as_string.len());
 
-            let decoded: Vec<Data> = deserialize::serde_from_bytes(&as_string).unwrap();
+            let decoded: Vec<Data> = deserialize::serde_from_bytes(as_string.as_bytes()).unwrap();
             assert_eq!(data, decoded);
         }
     }

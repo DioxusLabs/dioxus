@@ -865,7 +865,7 @@ impl VirtualDom {
 
                 for attr in attrs.iter() {
                     // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                    if &attr.name[2..] == name && target_path.is_decendant(&this_path) {
+                    if attr.name.get(2..) == Some(name) && target_path.is_decendant(&this_path) {
                         listeners.push(&attr.value);
 
                         // Break if this is the exact target element.
@@ -923,7 +923,7 @@ impl VirtualDom {
             for attr in attr.iter() {
                 // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
                 // Only call the listener if this is the exact target element.
-                if &attr.name[2..] == name && target_path == this_path {
+                if attr.name.get(2..) == Some(name) && target_path == this_path {
                     if let AttributeValue::Listener(listener) = &attr.value {
                         self.runtime.rendering.set(false);
                         listener.call(uievent.clone());
