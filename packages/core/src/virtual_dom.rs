@@ -91,6 +91,7 @@ use tracing::instrument;
 ///
 /// ```rust
 /// # use dioxus::prelude::*;
+/// # use dioxus_core::*;
 /// # fn app() -> Element { rsx! { div {} } }
 ///
 /// let mut vdom = VirtualDom::new(app);
@@ -99,36 +100,67 @@ use tracing::instrument;
 ///
 /// To call listeners inside the VirtualDom, call [`VirtualDom::handle_event`] with the appropriate event data.
 ///
-/// ```rust, ignore
-/// vdom.handle_event(event);
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
+/// # use dioxus_core::*;
+/// # fn app() -> Element { rsx! { div {} } }
+/// # let mut vdom = VirtualDom::new(app);
+/// let event = std::rc::Rc::new(0);
+/// vdom.handle_event("onclick", event, ElementId(0), true);
 /// ```
 ///
 /// While no events are ready, call [`VirtualDom::wait_for_work`] to poll any futures inside the VirtualDom.
 ///
-/// ```rust, ignore
-/// vdom.wait_for_work().await;
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
+/// # use dioxus_core::*;
+/// # fn app() -> Element { rsx! { div {} } }
+/// # let mut vdom = VirtualDom::new(app);
+/// tokio::runtime::Runtime::new().unwrap().block_on(async {
+///     vdom.wait_for_work().await;
+/// });
 /// ```
 ///
-/// Once work is ready, call [`VirtualDom::render_with_deadline`] to compute the differences between the previous and
-/// current UI trees. This will return a [`Mutations`] object that contains Edits, Effects, and NodeRefs that need to be
+/// Once work is ready, call [`VirtualDom::render_immediate`] to compute the differences between the previous and
+/// current UI trees. This will write edits to a [`WriteMutations`] object you pass in that contains with edits that need to be
 /// handled by the renderer.
 ///
-/// ```rust, ignore
-/// let mutations = vdom.work_with_deadline(tokio::time::sleep(Duration::from_millis(100)));
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
+/// # use dioxus_core::*;
+/// # fn app() -> Element { rsx! { div {} } }
+/// # let mut vdom = VirtualDom::new(app);
+/// let mut mutations = Mutations::default();
 ///
-/// for edit in mutations.edits {
-///     real_dom.apply(edit);
-/// }
+/// vdom.render_immediate(&mut mutations);
 /// ```
 ///
-/// To not wait for suspense while diffing the VirtualDom, call [`VirtualDom::render_immediate`] or pass an immediately
-/// ready future to [`VirtualDom::render_with_deadline`].
+/// To not wait for suspense while diffing the VirtualDom, call [`VirtualDom::render_immediate`].
 ///
 ///
 /// ## Building an event loop around Dioxus:
 ///
 /// Putting everything together, you can build an event loop around Dioxus by using the methods outlined above.
-/// ```rust, ignore
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
+/// # use dioxus_core::*;
+/// # struct RealDom;
+/// # struct Event {}
+/// # impl RealDom {
+/// #     fn new() -> Self {
+/// #         Self {}
+/// #     }
+/// #     fn apply(&mut self) -> Mutations {
+/// #         todo!()
+/// #     }
+/// #     async fn wait_for_event(&mut self) -> std::rc::Rc<dyn std::any::Any> {
+/// #         todo!()
+/// #     }
+/// # }
+/// #
+/// # tokio::runtime::Runtime::new().unwrap().block_on(async {
+/// let mut real_dom = RealDom::new();
+///
 /// #[component]
 /// fn app() -> Element {
 ///     rsx! {
@@ -136,51 +168,39 @@ use tracing::instrument;
 ///     }
 /// }
 ///
-/// let dom = VirtualDom::new(app);
+/// let mut dom = VirtualDom::new(app);
 ///
-/// real_dom.apply(dom.rebuild());
+/// dom.rebuild(&mut real_dom.apply());
 ///
 /// loop {
-///     select! {
+///     tokio::select! {
 ///         _ = dom.wait_for_work() => {}
-///         evt = real_dom.wait_for_event() => dom.handle_event(evt),
+///         evt = real_dom.wait_for_event() => dom.handle_event("onclick", evt, ElementId(0), true),
 ///     }
 ///
-///     real_dom.apply(dom.render_immediate());
+///     dom.render_immediate(&mut real_dom.apply());
 /// }
+/// # });
 /// ```
 ///
 /// ## Waiting for suspense
 ///
-/// Because Dioxus supports suspense, you can use it for server-side rendering, static site generation, and other usecases
+/// Because Dioxus supports suspense, you can use it for server-side rendering, static site generation, and other use cases
 /// where waiting on portions of the UI to finish rendering is important. To wait for suspense, use the
-/// [`VirtualDom::render_with_deadline`] method:
+/// [`VirtualDom::wait_for_suspense`] method:
 ///
-/// ```rust, ignore
-/// let dom = VirtualDom::new(app);
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
+/// # use dioxus_core::*;
+/// # fn app() -> Element { rsx! { div {} } }
+/// tokio::runtime::Runtime::new().unwrap().block_on(async {
+///     let mut dom = VirtualDom::new(app);
 ///
-/// let deadline = tokio::time::sleep(Duration::from_millis(100));
-/// let edits = dom.render_with_deadline(deadline).await;
-/// ```
+///     dom.rebuild_in_place();
+///     dom.wait_for_suspense().await;
+/// });
 ///
-/// ## Use with streaming
-///
-/// If not all rendering is done by the deadline, it might be worthwhile to stream the rest later. To do this, we
-/// suggest rendering with a deadline, and then looping between [`VirtualDom::wait_for_work`] and render_immediate until
-/// no suspended work is left.
-///
-/// ```rust, ignore
-/// let dom = VirtualDom::new(app);
-///
-/// let deadline = tokio::time::sleep(Duration::from_millis(20));
-/// let edits = dom.render_with_deadline(deadline).await;
-///
-/// real_dom.apply(edits);
-///
-/// while dom.has_suspended_work() {
-///    dom.wait_for_work().await;
-///    real_dom.apply(dom.render_immediate());
-/// }
+/// // Render the virtual dom
 /// ```
 pub struct VirtualDom {
     pub(crate) scopes: Slab<ScopeState>,
@@ -217,7 +237,9 @@ impl VirtualDom {
     ///
     ///
     /// # Example
-    /// ```rust, ignore
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # use dioxus_core::*;
     /// fn Example() -> Element  {
     ///     rsx!( div { "hello world" } )
     /// }
@@ -241,8 +263,10 @@ impl VirtualDom {
     ///
     ///
     /// # Example
-    /// ```rust, ignore
-    /// #[derive(PartialEq, Props)]
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # use dioxus_core::*;
+    /// #[derive(PartialEq, Props, Clone)]
     /// struct SomeProps {
     ///     name: &'static str
     /// }
@@ -251,12 +275,21 @@ impl VirtualDom {
     ///     rsx!{ div { "hello {cx.name}" } }
     /// }
     ///
-    /// let dom = VirtualDom::new(Example);
+    /// let dom = VirtualDom::new_with_props(Example, SomeProps { name: "world" });
     /// ```
     ///
     /// Note: the VirtualDom is not progressed on creation. You must either "run_with_deadline" or use "rebuild" to progress it.
     ///
-    /// ```rust, ignore
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # use dioxus_core::*;
+    /// # #[derive(PartialEq, Props, Clone)]
+    /// # struct SomeProps {
+    /// #     name: &'static str
+    /// # }
+    /// # fn Example(cx: SomeProps) -> Element  {
+    /// #     rsx!{ div { "hello {cx.name}" } }
+    /// # }
     /// let mut dom = VirtualDom::new_with_props(Example, SomeProps { name: "jane" });
     /// let mutations = dom.rebuild();
     /// ```
@@ -274,36 +307,7 @@ impl VirtualDom {
         dom
     }
 
-    /// Create a new VirtualDom with the given properties for the root component.
-    ///
-    /// # Description
-    ///
-    /// Later, the props can be updated by calling "update" with a new set of props, causing a set of re-renders.
-    ///
-    /// This is useful when a component tree can be driven by external state (IE SSR) but it would be too expensive
-    /// to toss out the entire tree.
-    ///
-    ///
-    /// # Example
-    /// ```rust, ignore
-    /// #[derive(PartialEq, Props)]
-    /// struct SomeProps {
-    ///     name: &'static str
-    /// }
-    ///
-    /// fn Example(cx: SomeProps) -> Element  {
-    ///     rsx!{ div{ "hello {cx.name}" } }
-    /// }
-    ///
-    /// let dom = VirtualDom::new(Example);
-    /// ```
-    ///
-    /// Note: the VirtualDom is not progressed on creation. You must either "run_with_deadline" or use "rebuild" to progress it.
-    ///
-    /// ```rust, ignore
-    /// let mut dom = VirtualDom::new_from_root(VComponent::new(Example, SomeProps { name: "jane" }, "Example"));
-    /// let mutations = dom.rebuild();
-    /// ```
+    /// Create a new VirtualDom from something that implements [`AnyProps`]
     #[instrument(skip(root), level = "trace", name = "VirtualDom::new")]
     pub(crate) fn new_with_component(root: impl AnyProps + 'static) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
@@ -448,7 +452,9 @@ impl VirtualDom {
     ///
     /// # Example
     ///
-    /// ```rust, ignore
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # fn app() -> Element { rsx! { div {} } }
     /// let dom = VirtualDom::new(app);
     /// ```
     #[instrument(skip(self), level = "trace", name = "VirtualDom::wait_for_work")]
@@ -607,13 +613,16 @@ impl VirtualDom {
     /// Any templates previously registered will remain.
     ///
     /// # Example
-    /// ```rust, ignore
-    /// static app: Component = |cx|  rsx!{ "hello world" };
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # use dioxus_core::*;
+    /// fn app() -> Element {
+    ///     rsx! { "hello world" }
+    /// }
     ///
-    /// let mut dom = VirtualDom::new();
-    /// let edits = dom.rebuild();
-    ///
-    /// apply_edits(edits);
+    /// let mut dom = VirtualDom::new(app);
+    /// let mut mutations = Mutations::default();
+    /// dom.rebuild(&mut mutations);
     /// ```
     #[instrument(skip(self, to), level = "trace", name = "VirtualDom::rebuild")]
     pub fn rebuild(&mut self, to: &mut impl WriteMutations) {

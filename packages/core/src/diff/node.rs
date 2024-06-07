@@ -459,27 +459,35 @@ impl VNode {
     /// This is mostly implemented to help solve the issue where the same component is rendered under two different
     /// conditions:
     ///
-    /// ```rust, ignore
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # let enabled = true;
+    /// # #[component]
+    /// # fn Component(enabled_sign: String) -> Element { todo!() }
     /// if enabled {
     ///     rsx!{ Component { enabled_sign: "abc" } }
     /// } else {
     ///     rsx!{ Component { enabled_sign: "xyz" } }
-    /// }
+    /// };
     /// ```
     ///
     /// However, we should not that it's explicit in the docs that this is not a guarantee. If you need to preserve state,
     /// then you should be passing in separate props instead.
     ///
-    /// ```rust, ignore
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # #[component]
+    /// # fn Component(enabled_sign: String) -> Element { todo!() }
+    /// # let enabled = true;
     /// let props = if enabled {
-    ///     ComponentProps { enabled_sign: "abc" }
+    ///     ComponentProps { enabled_sign: "abc".to_string() }
     /// } else {
-    ///     ComponentProps { enabled_sign: "xyz" }
+    ///     ComponentProps { enabled_sign: "xyz".to_string() }
     /// };
     ///
     /// rsx! {
     ///     Component { ..props }
-    /// }
+    /// };
     /// ```
     pub(crate) fn light_diff_templates(
         &self,
@@ -707,16 +715,19 @@ impl VNode {
 
     /// Load all of the placeholder nodes for descendents of this root node
     ///
-    /// ```rust, ignore
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # let some_text = "hello world";
+    /// # let some_value = "123";
     /// rsx! {
     ///     div {
     ///         // This is a placeholder
-    ///         some_value,
+    ///         {some_value}
     ///
     ///         // Load this too
     ///         "{some_text}"
     ///     }
-    /// }
+    /// };
     /// ```
     #[allow(unused)]
     fn load_placeholders(

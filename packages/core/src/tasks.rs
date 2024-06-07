@@ -225,7 +225,7 @@ impl Runtime {
         poll_result
     }
 
-    /// Drop the future with the given TaskId
+    /// Drop the future with the given Task
     ///
     /// This does not abort the task, so you'll want to wrap it in an abort handle if that's important to you
     pub(crate) fn remove_task(&self, id: Task) -> Option<Rc<LocalTask>> {

@@ -2093,6 +2093,7 @@ name = "dioxus"
 version = "0.5.2"
 dependencies = [
  "criterion 0.3.6",
+ "dioxus",
  "dioxus-config-macro",
  "dioxus-core 0.5.2",
  "dioxus-core-macro",
@@ -2262,12 +2263,14 @@ dependencies = [
  "rand 0.8.5",
  "reqwest",
  "rustc-hash",
+ "rustversion",
  "serde",
  "slab",
  "tokio",
  "tracing",
  "tracing-fluent-assertions",
  "tracing-subscriber",
+ "web-sys",
 ]
 
 [[package]]
@@ -2410,6 +2413,8 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "generational-box",
+ "reqwest",
+ "rustversion",
  "slab",
  "thiserror",
  "tokio",
@@ -2439,15 +2444,18 @@ name = "dioxus-html"
 version = "0.5.2"
 dependencies = [
  "async-trait",
+ "dioxus",
  "dioxus-core 0.5.2",
  "dioxus-html-internal-macro",
  "dioxus-rsx",
+ "dioxus-web",
  "enumset",
  "euclid",
  "futures-channel",
  "generational-box",
  "keyboard-types",
  "rfd",
+ "rustversion",
  "serde",
  "serde-value",
  "serde_json",
@@ -2588,6 +2596,7 @@ dependencies = [
  "gloo",
  "gloo-utils 0.1.7",
  "js-sys",
+ "rustversion",
  "serde",
  "serde_json",
  "tokio",
@@ -2635,6 +2644,8 @@ dependencies = [
  "generational-box",
  "once_cell",
  "parking_lot",
+ "rand 0.8.5",
+ "reqwest",
  "rustc-hash",
  "serde",
  "simple_logger",
@@ -7760,9 +7771,9 @@ dependencies = [
 
 [[package]]
 name = "rustversion"
-version = "1.0.14"
+version = "1.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ffc183a10b4478d04cbbbfc96d0873219d962dd5accaff2ffbd4ceb7df837f4"
+checksum = "955d28af4278de8121b7ebeb796b6a45735dc01436d898801014aced2773a3d6"
 
 [[package]]
 name = "ryu"

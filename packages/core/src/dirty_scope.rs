@@ -1,8 +1,14 @@
 //! Dioxus resolves scopes in a specific order to avoid unexpected behavior. All tasks are resolved in the order of height. Scopes that are higher up in the tree are resolved first.
 //! When a scope that is higher up in the tree is rerendered, it may drop scopes lower in the tree along with their tasks.
 //!
-//! ```rust
-//! use dioxus::prelude::*;
+//! ## Goals
+//! We try to prevent three different situations:
+//! 1. Running queued work after it could be dropped. Related issues (<https://github.com/DioxusLabs/dioxus/pull/1993>)
+//!
+//! User code often assumes that this property is true. For example, if this code reruns the child component after signal is changed to None, it will panic
+//! ```rust, ignore
+//! fn ParentComponent() -> Element {
+//!     let signal: Signal<Option<i32>> = use_signal(None);
 //!
 //! fn app() -> Element {
 //!     let vec = use_signal(|| vec![0; 10]);
@@ -15,15 +21,47 @@
 //! }
 //!
 //! #[component]
-//! fn Child(vec: Signal<Vec<usize>>, idx: usize) -> Element {
-//!     use_hook(move || {
-//!         spawn(async move {
-//!             // If we let this task run after the child is dropped, it will panic.
-//!             println!("Task {}", vec.read()[idx]);
-//!         });
+//! fn ChildComponent(signal: Signal<Option<i32>>) -> Element {
+//!     // It feels safe to assume that signal is some because the parent component checked that it was some
+//!     rsx! { "{signal.read().unwrap()}" }
+//! }
+//! ```
+//!
+//! 2. Running effects before the dom is updated. Related issues (<https://github.com/DioxusLabs/dioxus/issues/2307>)
+//!
+//! Effects can be used to run code that accesses the DOM directly. They should only run when the DOM is in an updated state. If they are run with an out of date version of the DOM, unexpected behavior can occur.
+//! ```rust, ignore
+//! fn EffectComponent() -> Element {
+//!     let id = use_signal(0);
+//!     use_effect(move || {
+//!         let id = id.read();
+//!         // This will panic if the id is not written to the DOM before the effect is run
+//!         eval(format!(r#"document.getElementById("{id}").innerHTML = "Hello World";"#));
 //!     });
 //!
-//!     rsx! {}
+//!     rsx! {
+//!         div { id: "{id}" }
+//!     }
+//! }
+//! ```
+//!
+//! 3. Observing out of date state. Related issues (<https://github.com/DioxusLabs/dioxus/issues/1935>)
+//!
+//! Where ever possible, updates should happen in an order that makes it impossible to observe an out of date state.
+//! ```rust, ignore
+//! fn OutOfDateComponent() -> Element {
+//!     let id = use_signal(0);
+//!     // When you read memo, it should **always** be two times the value of id
+//!     let memo = use_memo(move || id() * 2);
+//!     assert_eq!(memo(), id() * 2);
+//!
+//!     // This should be true even if you update the value of id in the middle of the component
+//!     id += 1;
+//!     assert_eq!(memo(), id() * 2);
+//!
+//!     rsx! {
+//!         div { id: "{id}" }
+//!     }
 //! }
 //! ```
 

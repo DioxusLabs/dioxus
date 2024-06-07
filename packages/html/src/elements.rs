@@ -14,37 +14,147 @@ pub type AttributeDiscription = (&'static str, Option<&'static str>, bool);
 
 macro_rules! impl_attribute {
     (
-        $(#[$attr_method:meta])*
-        $fil:ident: $vil:ident (DEFAULT),
+        $element:ident {
+            $(#[$attr_method:meta])*
+            $fil:ident: $vil:ident (DEFAULT),
+        }
     ) => {
+        $(#[$attr_method])*
+        ///
+        /// ## Usage in rsx
+        ///
+        /// ```rust, no_run
+        /// # use dioxus::prelude::*;
+        #[doc = concat!("let ", stringify!($fil), " = \"value\";")]
+        ///
+        /// rsx! {
+        ///     // Attributes need to be under the element they modify
+        #[doc = concat!("    ", stringify!($element), " {")]
+        ///         // Attributes are followed by a colon and then the value of the attribute
+        #[doc = concat!("        ", stringify!($fil), ": \"value\"")]
+        ///     }
+        #[doc = concat!("    ", stringify!($element), " {")]
+        ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
+        #[doc = concat!("        ", stringify!($fil), ",")]
+        ///     }
+        /// };
+        /// ```
         pub const $fil: AttributeDiscription = (stringify!($fil), None, false);
     };
 
     (
-        $(#[$attr_method:meta])*
-        $fil:ident: $vil:ident ($name:literal),
+        $element:ident {
+            $(#[$attr_method:meta])*
+            $fil:ident: $vil:ident ($name:literal),
+        }
     ) => {
+        $(#[$attr_method])*
+        ///
+        /// ## Usage in rsx
+        ///
+        /// ```rust, no_run
+        /// # use dioxus::prelude::*;
+        #[doc = concat!("let ", stringify!($fil), " = \"value\";")]
+        ///
+        /// rsx! {
+        ///     // Attributes need to be under the element they modify
+        #[doc = concat!("    ", stringify!($element), " {")]
+        ///         // Attributes are followed by a colon and then the value of the attribute
+        #[doc = concat!("        ", stringify!($fil), ": \"value\"")]
+        ///     }
+        #[doc = concat!("    ", stringify!($element), " {")]
+        ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
+        #[doc = concat!("        ", stringify!($fil), ",")]
+        ///     }
+        /// };
+        /// ```
         pub const $fil: AttributeDiscription = ($name, None, false);
     };
 
     (
-        $(#[$attr_method:meta])*
-        $fil:ident: $vil:ident (volatile),
+        $element:ident {
+            $(#[$attr_method:meta])*
+            $fil:ident: $vil:ident (volatile),
+        }
     ) => {
+        $(#[$attr_method])*
+        ///
+        /// ## Usage in rsx
+        ///
+        /// ```rust, no_run
+        /// # use dioxus::prelude::*;
+        #[doc = concat!("let ", stringify!($fil), " = \"value\";")]
+        ///
+        /// rsx! {
+        ///     // Attributes need to be under the element they modify
+        #[doc = concat!("    ", stringify!($element), " {")]
+        ///         // Attributes are followed by a colon and then the value of the attribute
+        #[doc = concat!("        ", stringify!($fil), ": \"value\"")]
+        ///     }
+        #[doc = concat!("    ", stringify!($element), " {")]
+        ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
+        #[doc = concat!("        ", stringify!($fil), ",")]
+        ///     }
+        /// };
+        /// ```
         pub const $fil: AttributeDiscription = (stringify!($fil), None, true);
     };
 
     (
-        $(#[$attr_method:meta])*
-        $fil:ident: $vil:ident (in $ns:literal),
+        $element:ident {
+            $(#[$attr_method:meta])*
+            $fil:ident: $vil:ident (in $ns:literal),
+        }
     ) => {
+        $(#[$attr_method])*
+        ///
+        /// ## Usage in rsx
+        ///
+        /// ```rust, no_run
+        /// # use dioxus::prelude::*;
+        #[doc = concat!("let ", stringify!($fil), " = \"value\";")]
+        ///
+        /// rsx! {
+        ///     // Attributes need to be under the element they modify
+        #[doc = concat!("    ", stringify!($element), " {")]
+        ///         // Attributes are followed by a colon and then the value of the attribute
+        #[doc = concat!("        ", stringify!($fil), ": \"value\"")]
+        ///     }
+        #[doc = concat!("    ", stringify!($element), " {")]
+        ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
+        #[doc = concat!("        ", stringify!($fil), ",")]
+        ///     }
+        /// };
+        /// ```
         pub const $fil: AttributeDiscription = (stringify!($fil), Some($ns), false)
     };
 
     (
-        $(#[$attr_method:meta])*
-        $fil:ident: $vil:ident (in $ns:literal : volatile),
+        $element:ident {
+            $(#[$attr_method:meta])*
+            $fil:ident: $vil:ident (in $ns:literal : volatile),
+        }
     ) => {
+        $(#[$attr_method])*
+        ///
+        /// ## Usage in rsx
+        ///
+        /// ```rust, no_run
+        /// # use dioxus::prelude::*;
+        #[doc = concat!("let ", stringify!($fil), " = \"value\";")]
+        ///
+        /// rsx! {
+        ///     // Attributes need to be under the element they modify
+        #[doc = concat!("    ", stringify!($element), " {")]
+        ///         // Attributes are followed by a colon and then the value of the attribute
+        #[doc = concat!("        ", stringify!($fil), ": \"value\"")]
+        ///     }
+        #[doc = concat!("    ", stringify!($element), " {")]
+        ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
+        #[doc = concat!("        ", stringify!($fil), ",")]
+        ///     }
+        /// };
+        /// ```
         pub const $fil: AttributeDiscription = (stringify!($fil), Some($ns), true)
     };
 }
@@ -123,8 +233,10 @@ macro_rules! impl_element {
 
             $(
                 impl_attribute!(
-                    $(#[$attr_method])*
-                    $fil: $vil ($extra),
+                    $name {
+                        $(#[$attr_method])*
+                        $fil: $vil ($extra),
+                    }
                 );
             )*
         }
@@ -153,8 +265,10 @@ macro_rules! impl_element {
 
             $(
                 impl_attribute!(
-                    $(#[$attr_method])*
-                    $fil: $vil ($extra),
+                    $name {
+                        $(#[$attr_method])*
+                        $fil: $vil ($extra),
+                    }
                 );
             )*
         }
@@ -181,8 +295,10 @@ macro_rules! impl_element {
 
             $(
                 impl_attribute!(
-                    $(#[$attr_method])*
-                    $fil: $vil ($extra),
+                    $element {
+                        $(#[$attr_method])*
+                        $fil: $vil ($extra),
+                    }
                 );
             )*
         }
@@ -384,6 +500,43 @@ macro_rules! builder_constructors {
             );
         )*
 
+        /// This module contains helpers for rust analyzer autocompletion
+        #[doc(hidden)]
+        pub mod completions {
+            /// This helper tells rust analyzer that it should autocomplete the element name with braces.
+            #[allow(non_camel_case_types)]
+            pub enum CompleteWithBraces {
+                $(
+                    $(#[$attr])*
+                    ///
+                    /// ## Usage in rsx
+                    ///
+                    /// ```rust, no_run
+                    /// # use dioxus::prelude::*;
+                    /// # let attributes = vec![];
+                    /// # fn ChildComponent() -> Element { todo!() }
+                    /// # let raw_expression: Element = rsx! {};
+                    /// rsx! {
+                    ///     // Elements are followed by braces that surround any attributes and children for that element
+                    #[doc = concat!("    ", stringify!($name), " {")]
+                    ///         // Add any attributes first
+                    ///         class: "my-class",
+                    ///         "custom-attribute-name": "value",
+                    ///         // Then add any attributes you are spreading into this element
+                    ///         ..attributes,
+                    ///         // Then add any children elements, components, text nodes, or raw expressions
+                    ///         div {}
+                    ///         ChildComponent {}
+                    ///         "child text"
+                    ///         {raw_expression}
+                    ///     }
+                    /// };
+                    /// ```
+                    $name {}
+                ),*
+            }
+        }
+
         pub(crate) mod extensions {
             use super::*;
             $(
@@ -510,14 +663,6 @@ builder_constructors! {
     /// - The most important heading is `<h1>` and the least important heading is `<h6>`.
     /// - The `<h1>` heading is the first heading in the document.
     /// - The `<h1>` heading is usually a large bolded font.
-    ///
-    /// # Usage
-    ///
-    /// ```rust, ignore
-    /// html!(<h1> A header element </h1>)
-    /// rsx!(h1 { "A header element" })
-    /// LazyNodes::new(|f| f.el(h1).children([f.text("A header element")]).finish())
-    /// ```
     h1 None {};
 
     /// Build a
@@ -530,13 +675,6 @@ builder_constructors! {
     /// - The most important heading is `<h1>` and the least important heading is `<h6>`.
     /// - The `<h2>` heading is the second heading in the document.
     /// - The `<h2>` heading is usually a large bolded font.
-    ///
-    /// # Usage
-    /// ```rust, ignore
-    /// html!(<h2> A header element </h2>)
-    /// rsx!(h2 { "A header element" })
-    /// LazyNodes::new(|f| f.el(h2).children([f.text("A header element")]).finish())
-    /// ```
     h2 None {};
 
     /// Build a
@@ -545,10 +683,10 @@ builder_constructors! {
     ///
     /// # About
     /// - The HTML <h1> element is found within the <body> tag.
-    /// - Headings can range from <h1> to <h6>.
-    /// - The most important heading is <h1> and the least important heading is <h6>.
-    /// - The <h1> heading is the first heading in the document.
-    /// - The <h1> heading is usually a large bolded font.
+    /// - Headings can range from `<h1>` to `<h6>`.
+    /// - The most important heading is `<h1>`` and the least important heading is `<h6>`.
+    /// - The `<h1>` heading is the first heading in the document.
+    /// - The `<h1>` heading is usually a large bolded font.
     h3 None {};
 
     /// Build a
@@ -601,19 +739,12 @@ builder_constructors! {
     /// Part of the HTML namespace. Only works in HTML-compatible renderers
     ///
     /// ## Definition and Usage
-    /// - The <div> tag defines a division or a section in an HTML document.
-    /// - The <div> tag is used as a container for HTML elements - which is then styled with CSS or manipulated with  JavaScript.
-    /// - The <div> tag is easily styled by using the class or id attribute.
-    /// - Any sort of content can be put inside the <div> tag!
+    /// - The `<div>` tag defines a division or a section in an HTML document.
+    /// - The `<div>` tag is used as a container for HTML elements - which is then styled with CSS or manipulated with  JavaScript.
+    /// - The `<div>` tag is easily styled by using the class or id attribute.
+    /// - Any sort of content can be put inside the `<div>` tag!
     ///
     /// Note: By default, browsers always place a line break before and after the <div> element.
-    ///
-    /// ## Usage
-    /// ```rust, ignore
-    /// html!(<div> A header element </div>)
-    /// rsx!(div { "A header element" })
-    /// LazyNodes::new(|f| f.element(div, &[], &[], &[], None))
-    /// ```
     ///
     /// ## References:
     /// - <https://developer.mozilla.org/en-US/docs/Web/HTML/Element/div>

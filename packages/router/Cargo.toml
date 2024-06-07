@@ -29,6 +29,7 @@ dioxus-ssr = { workspace = true, optional = true }
 dioxus-fullstack = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["full"], optional = true }
 dioxus-cli-config = { workspace = true, features = ["read-config"] }
+rustversion = "1.0.17"
 
 [features]
 default = []

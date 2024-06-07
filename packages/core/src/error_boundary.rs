@@ -152,13 +152,15 @@ impl ErrorBoundary {
 ///
 /// The call stack is saved for this component and provided to the error boundary
 ///
-/// ```rust, ignore
+/// ```rust
+/// use dioxus::prelude::*;
+///
 /// #[component]
 /// fn app(count: String) -> Element {
-///     let id: i32 = count.parse().throw()?;
+///     let count: i32 = count.parse().throw()?;
 ///
 ///     rsx! {
-///         div { "Count {}" }
+///         div { "Count {count}" }
 ///     }
 /// }
 /// ```
@@ -177,13 +179,15 @@ pub trait Throw<S = ()>: Sized {
     /// which is what this trait shells out to.
     ///
     ///
-    /// ```rust, ignore
+    /// ```rust
+    /// use dioxus::prelude::*;
+    ///
     /// #[component]
     /// fn app( count: String) -> Element {
-    ///     let id: i32 = count.parse().throw()?;
+    ///     let count: i32 = count.parse().throw()?;
     ///
     ///     rsx! {
-    ///         div { "Count {}" }
+    ///         div { "Count {count}" }
     ///     }
     /// }
     /// ```
@@ -200,13 +204,15 @@ pub trait Throw<S = ()>: Sized {
     /// which is what this trait shells out to.
     ///
     ///
-    /// ```rust, ignore
+    /// ```rust
+    /// use dioxus::prelude::*;
+    ///
     /// #[component]
     /// fn app( count: String) -> Element {
-    ///     let id: i32 = count.parse().throw()?;
+    ///     let count: i32 = count.parse().throw()?;
     ///
     ///     rsx! {
-    ///         div { "Count {}" }
+    ///         div { "Count {count}" }
     ///     }
     /// }
     /// ```
@@ -445,13 +451,15 @@ impl<
 ///
 /// ## Example
 ///
-/// ```rust, ignore
-/// rsx!{
+/// ```rust
+/// # use dioxus::prelude::*;
+/// # fn ThrowsError() -> Element { todo!() }
+/// rsx! {
 ///     ErrorBoundary {
-///         handle_error: |error| rsx! { "Oops, we encountered an error. Please report {error} to the developer of this application" }
+///         handle_error: |error| rsx! { "Oops, we encountered an error. Please report {error} to the developer of this application" },
 ///         ThrowsError {}
 ///     }
-/// }
+/// };
 /// ```
 ///
 /// ## Usage

@@ -3,8 +3,8 @@
 //! However, it has been adopted to fit the Dioxus Props builder pattern.
 //!
 //! For Dioxus, we make a few changes:
-//! - [x] Automatically implement Into<Option> on the setters (IE the strip setter option)
-//! - [x] Automatically implement a default of none for optional fields (those explicitly wrapped with Option<T>)
+//! - [x] Automatically implement [`Into<Option>`] on the setters (IE the strip setter option)
+//! - [x] Automatically implement a default of none for optional fields (those explicitly wrapped with [`Option<T>`])
 
 use proc_macro2::TokenStream;
 
@@ -533,6 +533,7 @@ mod struct_info {
         pub builder_attr: TypeBuilderAttr,
         pub builder_name: syn::Ident,
         pub conversion_helper_trait_name: syn::Ident,
+        #[allow(unused)]
         pub core: syn::Ident,
     }
 

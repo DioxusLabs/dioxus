@@ -173,16 +173,20 @@ impl Scope {
     ///
     /// # Example
     ///
-    /// ```rust, ignore
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// #[derive(Clone)]
     /// struct SharedState(&'static str);
     ///
-    /// static app: Component = |cx| {
-    ///     cx.use_hook(|| cx.provide_context(SharedState("world")));
+    /// // The parent provides context that is available in all children
+    /// fn app() -> Element {
+    ///     use_hook(|| provide_context(SharedState("world")));
     ///     rsx!(Child {})
     /// }
     ///
-    /// static Child: Component = |cx| {
-    ///     let state = cx.consume_state::<SharedState>();
+    /// // Any child elements can access the context with the `consume_context` function
+    /// fn Child() -> Element {
+    ///     let state = use_context::<SharedState>();
     ///     rsx!(div { "hello {state.0}" })
     /// }
     /// ```
@@ -258,7 +262,7 @@ impl Scope {
         id
     }
 
-    /// Spawns the future but does not return the [`TaskId`]
+    /// Spawns the future and returns the [`Task`]
     pub fn spawn(&self, fut: impl Future<Output = ()> + 'static) -> Task {
         let id = Runtime::with(|rt| rt.spawn(self.id, fut)).expect("Runtime to exist");
         self.spawned_tasks.borrow_mut().insert(id);
@@ -377,7 +381,7 @@ impl ScopeId {
         Runtime::with_scope(self, |cx| cx.spawn(fut))
     }
 
-    /// Spawns the future but does not return the [`TaskId`]
+    /// Spawns the future but does not return the [`Task`]
     pub fn spawn(self, fut: impl Future<Output = ()> + 'static) {
         Runtime::with_scope(self, |cx| cx.spawn(fut));
     }
@@ -401,7 +405,7 @@ impl ScopeId {
 
     /// Create a subscription that schedules a future render for the reference component. Unlike [`Self::needs_update`], this function will work outside of the dioxus runtime.
     ///
-    /// ## Notice: you should prefer using [`dioxus_core::schedule_update_any`] and [`Self::scope_id`]
+    /// ## Notice: you should prefer using [`schedule_update_any`]
     pub fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
         Runtime::with_scope(*self, |cx| cx.schedule_update()).expect("to be in a dioxus runtime")
     }
