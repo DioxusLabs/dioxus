@@ -17,6 +17,7 @@ futures-util = { workspace = true, default-features = false, features = [
     "std",
 ] }
 slab = { workspace = true }
+slotmap = { workspace = true }
 futures-channel = { workspace = true }
 tracing = { workspace = true }
 serde = { version = "1", features = ["derive"], optional = true }

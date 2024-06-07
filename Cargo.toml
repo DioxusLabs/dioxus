@@ -83,6 +83,7 @@ tracing-futures = "0.2.5"
 toml = "0.8"
 tokio = "1.28"
 slab = "0.4.2"
+slotmap = { version = "1.0.7", features = ["serde"] }
 futures-channel = "0.3.21"
 futures-util = { version = "0.3", default-features = false }
 rustc-hash = "1.1.0"
