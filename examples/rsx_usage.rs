@@ -294,10 +294,7 @@ fn WithInline(text: String) -> Element {
 }
 
 #[component]
-fn Label<T: Clone + PartialEq + 'static>(text: T) -> Element
-where
-    T: Display,
-{
+fn Label<T: Clone + PartialEq + Display + 'static>(text: T) -> Element {
     rsx! {
         p { "{text}" }
     }

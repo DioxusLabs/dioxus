@@ -92,3 +92,6 @@ pub use use_hook_did_run::*;
 
 mod use_signal;
 pub use use_signal::*;
+
+mod use_set_compare;
+pub use use_set_compare::*;

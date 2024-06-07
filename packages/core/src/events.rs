@@ -1,6 +1,9 @@
 use crate::{global_context::current_scope_id, Runtime, ScopeId};
 use generational_box::GenerationalBox;
-use std::{cell::Cell, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+};
 
 /// A wrapper around some generic data that handles the event's state
 ///
@@ -9,15 +12,15 @@ use std::{cell::Cell, rc::Rc};
 ///
 /// # Example
 ///
-/// ```rust, ignore
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
 /// rsx! {
 ///     button {
 ///         onclick: move |evt: Event<MouseData>| {
-///             evt.cancel_bubble();
-///
+///             evt.stop_propagation();
 ///         }
 ///     }
-/// }
+/// };
 /// ```
 pub struct Event<T: 'static + ?Sized> {
     /// The data associated with this event
@@ -39,15 +42,16 @@ impl<T> Event<T> {
     ///
     /// # Example
     ///
-    /// ```rust, ignore
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
     /// rsx! {
     ///    button {
-    ///       onclick: move |evt: Event<FormData>| {
-    ///          let data = evt.map(|data| data.value());
-    ///          assert_eq!(data.inner(), "hello world");
+    ///       onclick: move |evt: MouseEvent| {
+    ///          let data = evt.map(|data| data.client_coordinates());
+    ///          println!("{:?}", data.data());
     ///       }
     ///    }
-    /// }
+    /// };
     /// ```
     pub fn map<U: 'static, F: FnOnce(&T) -> U>(&self, f: F) -> Event<U> {
         Event {
@@ -60,14 +64,16 @@ impl<T> Event<T> {
     ///
     /// # Example
     ///
-    /// ```rust, ignore
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
     /// rsx! {
     ///     button {
     ///         onclick: move |evt: Event<MouseData>| {
+    ///             # #[allow(deprecated)]
     ///             evt.cancel_bubble();
     ///         }
     ///     }
-    /// }
+    /// };
     /// ```
     #[deprecated = "use stop_propagation instead"]
     pub fn cancel_bubble(&self) {
@@ -78,14 +84,15 @@ impl<T> Event<T> {
     ///
     /// # Example
     ///
-    /// ```rust, ignore
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
     /// rsx! {
     ///     button {
     ///         onclick: move |evt: Event<MouseData>| {
     ///             evt.stop_propagation();
     ///         }
     ///     }
-    /// }
+    /// };
     /// ```
     pub fn stop_propagation(&self) {
         self.propagates.set(false);
@@ -93,17 +100,18 @@ impl<T> Event<T> {
 
     /// Get a reference to the inner data from this event
     ///
-    /// ```rust, ignore
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
     /// rsx! {
     ///     button {
     ///         onclick: move |evt: Event<MouseData>| {
-    ///             let data = evt.inner.clone();
-    ///             cx.spawn(async move {
+    ///             let data = evt.data();
+    ///             async move {
     ///                 println!("{:?}", data);
-    ///             });
+    ///             }
     ///         }
     ///     }
-    /// }
+    /// };
     /// ```
     pub fn data(&self) -> Rc<T> {
         self.data.clone()
@@ -142,12 +150,13 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
 ///
 /// # Example
 ///
-/// ```rust, ignore
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
 /// rsx!{
 ///     MyComponent { onclick: move |evt| tracing::debug!("clicked") }
-/// }
+/// };
 ///
-/// #[derive(Props)]
+/// #[derive(Props, Clone, PartialEq)]
 /// struct MyProps {
 ///     onclick: EventHandler<MouseEvent>,
 /// }
@@ -159,11 +168,38 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
 ///         }
 ///     }
 /// }
-///
 /// ```
 pub struct EventHandler<T = ()> {
     pub(crate) origin: ScopeId,
+    /// During diffing components with EventHandler, we move the EventHandler over in place instead of rerunning the child component.
+    ///
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// #[component]
+    /// fn Child(onclick: EventHandler<MouseEvent>) -> Element {
+    ///     rsx!{
+    ///         button {
+    ///             // Diffing Child will not rerun this component, it will just update the EventHandler in place so that if this callback is called, it will run the latest version of the callback
+    ///             onclick: move |evt| onclick(evt),
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// This is both more efficient and allows us to avoid out of date EventHandlers.
+    ///
+    /// We double box here because we want the data to be copy (GenerationalBox) and still update in place (ExternalListenerCallback)
+    /// This isn't an ideal solution for performance, but it is non-breaking and fixes the issues described in <https://github.com/DioxusLabs/dioxus/pull/2298>
     pub(super) callback: GenerationalBox<Option<ExternalListenerCallback<T>>>,
+}
+
+impl<T> std::fmt::Debug for EventHandler<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EventHandler")
+            .field("origin", &self.origin)
+            .field("callback", &self.callback)
+            .finish()
+    }
 }
 
 impl<T: 'static> Default for EventHandler<T> {
@@ -192,15 +228,29 @@ impl<T: 'static> PartialEq for EventHandler<T> {
     }
 }
 
-type ExternalListenerCallback<T> = Box<dyn FnMut(T)>;
+type ExternalListenerCallback<T> = Rc<RefCell<dyn FnMut(T)>>;
 
 impl<T: 'static> EventHandler<T> {
-    /// Create a new [`EventHandler`] from an [`FnMut`]
+    /// Create a new [`EventHandler`] from an [`FnMut`]. The callback is owned by the current scope and will be dropped when the scope is dropped.
+    /// This should not be called directly in the body of a component because it will not be dropped until the component is dropped.
     #[track_caller]
     pub fn new(mut f: impl FnMut(T) + 'static) -> EventHandler<T> {
-        let callback = GenerationalBox::leak(Some(Box::new(move |event: T| {
+        let owner = crate::innerlude::current_owner::<generational_box::UnsyncStorage>();
+        let callback = owner.insert(Some(Rc::new(RefCell::new(move |event: T| {
             f(event);
-        }) as Box<dyn FnMut(T)>));
+        })) as Rc<RefCell<dyn FnMut(T)>>));
+        EventHandler {
+            callback,
+            origin: current_scope_id().expect("to be in a dioxus runtime"),
+        }
+    }
+
+    /// Leak a new [`EventHandler`] that will not be dropped unless it is manually dropped.
+    #[track_caller]
+    pub fn leak(mut f: impl FnMut(T) + 'static) -> EventHandler<T> {
+        let callback = GenerationalBox::leak(Some(Rc::new(RefCell::new(move |event: T| {
+            f(event);
+        })) as Rc<RefCell<dyn FnMut(T)>>));
         EventHandler {
             callback,
             origin: current_scope_id().expect("to be in a dioxus runtime"),
@@ -211,9 +261,12 @@ impl<T: 'static> EventHandler<T> {
     ///
     /// This borrows the event using a RefCell. Recursively calling a listener will cause a panic.
     pub fn call(&self, event: T) {
-        if let Some(callback) = self.callback.write().as_mut() {
+        if let Some(callback) = self.callback.read().as_ref() {
             Runtime::with(|rt| rt.scope_stack.borrow_mut().push(self.origin));
-            callback(event);
+            {
+                let mut callback = callback.borrow_mut();
+                callback(event);
+            }
             Runtime::with(|rt| rt.scope_stack.borrow_mut().pop());
         }
     }
@@ -227,16 +280,16 @@ impl<T: 'static> EventHandler<T> {
 
     #[doc(hidden)]
     /// This should only be used by the `rsx!` macro.
-    pub fn __set(&mut self, value: impl FnMut(T) + 'static) {
-        self.callback.set(Some(Box::new(value)));
+    pub fn __set(&mut self, value: ExternalListenerCallback<T>) {
+        self.callback.set(Some(value));
     }
 
     #[doc(hidden)]
     /// This should only be used by the `rsx!` macro.
     pub fn __take(&self) -> ExternalListenerCallback<T> {
         self.callback
-            .manually_drop()
-            .expect("Signal has already been dropped")
+            .read()
+            .clone()
             .expect("EventHandler was manually dropped")
     }
 }

@@ -83,7 +83,22 @@ pub fn mobile(input: TokenStream) -> TokenStream {
 
 #[proc_macro]
 pub fn fullstack(input: TokenStream) -> TokenStream {
-    if cfg!(feature = "web") {
+    if cfg!(feature = "fullstack") {
+        let input = TokenStream2::from(input);
+        quote! {
+            #input
+        }
+    } else {
+        quote! {
+            {}
+        }
+    }
+    .into()
+}
+
+#[proc_macro]
+pub fn static_generation(input: TokenStream) -> TokenStream {
+    if cfg!(feature = "static-generation") {
         let input = TokenStream2::from(input);
         quote! {
             #input

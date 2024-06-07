@@ -1,8 +1,5 @@
 use crate::{default_impl, fmt_impls, write_impls};
-use crate::{
-    read::Readable, write::Writable, CopyValue, GlobalMemo, GlobalSignal, ReactiveContext,
-    ReadableRef,
-};
+use crate::{read::*, write::*, CopyValue, GlobalMemo, GlobalSignal, ReactiveContext, ReadableRef};
 use crate::{Memo, WritableRef};
 use dioxus_core::IntoDynNode;
 use dioxus_core::{prelude::IntoAttributeValue, ScopeId};
@@ -14,41 +11,19 @@ use std::{
     sync::Mutex,
 };
 
-/// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
-///
-/// ```rust
-/// use dioxus::prelude::*;
-/// use dioxus_signals::*;
-///
-/// #[component]
-/// fn App() -> Element {
-///     let mut count = use_signal(|| 0);
-///
-///     // Because signals have automatic dependency tracking, if you never read them in a component, that component will not be re-rended when the signal is updated.
-///     // The app component will never be rerendered in this example.
-///     rsx! { Child { state: count } }
-/// }
-///
-/// #[component]
-/// fn Child(mut state: Signal<u32>) -> Element {
-///     use_future(move || async move {
-///         // Because the signal is a Copy type, we can use it in an async block without cloning it.
-///         state += 1;
-///     });
-///
-///     rsx! {
-///         button {
-///             onclick: move |_| state += 1,
-///             "{state}"
-///         }
-///     }
-/// }
-/// ```
+#[doc = include_str!("../docs/signals.md")]
+#[doc(alias = "State")]
+#[doc(alias = "UseState")]
+#[doc(alias = "UseRef")]
 pub struct Signal<T: 'static, S: Storage<SignalData<T>> = UnsyncStorage> {
     pub(crate) inner: CopyValue<SignalData<T>, S>,
 }
 
 /// A signal that can safely shared between threads.
+#[doc(alias = "SendSignal")]
+#[doc(alias = "UseRwLock")]
+#[doc(alias = "UseRw")]
+#[doc(alias = "UseMutex")]
 pub type SyncSignal<T> = Signal<T, SyncStorage>;
 
 /// The data stored for tracking in a signal.
@@ -58,7 +33,24 @@ pub struct SignalData<T> {
 }
 
 impl<T: 'static> Signal<T> {
-    /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
+    /// Creates a new [`Signal`]. Signals are a Copy state management solution with automatic dependency tracking.
+    ///
+    /// <div class="warning">
+    ///
+    /// This function should generally only be called inside hooks. The signal that this function creates is owned by the current component and will only be dropped when the component is dropped. If you call this function outside of a hook many times, you will leak memory until the component is dropped.
+    ///
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// fn MyComponent() {
+    ///     // ❌ Every time MyComponent runs, it will create a new signal that is only dropped when MyComponent is dropped
+    ///     let signal = Signal::new(0);
+    ///     use_context_provider(|| signal);
+    ///     // ✅ Since the use_context_provider hook only runs when the component is created, the signal will only be created once and it will be dropped when MyComponent is dropped
+    ///     let signal = use_context_provider(|| Signal::new(0));
+    /// }
+    /// ```
+    ///
+    /// </div>
     #[track_caller]
     pub fn new(value: T) -> Self {
         Self::new_maybe_sync(value)
@@ -70,16 +62,60 @@ impl<T: 'static> Signal<T> {
         Self::new_maybe_sync_in_scope(value, owner)
     }
 
-    /// Creates a new global Signal that can be used in a global static.
-    #[track_caller]
+    /// Creates a new [`GlobalSignal`] that can be used anywhere inside your dioxus app. This signal will automatically be created once per app the first time you use it.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// // Create a new global signal that can be used anywhere in your app
+    /// static SIGNAL: GlobalSignal<i32> = Signal::global(|| 0);
+    ///
+    /// fn App() -> Element {
+    ///     rsx! {
+    ///         button {
+    ///             onclick: move |_| *SIGNAL.write() += 1,
+    ///             "{SIGNAL}"
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// <div class="warning">
+    ///
+    /// Global signals are generally not recommended for use in libraries because it makes it more difficult to allow multiple instances of components you define in your library.
+    ///
+    /// </div>
     pub const fn global(constructor: fn() -> T) -> GlobalSignal<T> {
         GlobalSignal::new(constructor)
     }
 }
 
 impl<T: PartialEq + 'static> Signal<T> {
-    /// Creates a new global Signal that can be used in a global static.
-    #[track_caller]
+    /// Creates a new [`GlobalMemo`] that can be used anywhere inside your dioxus app. This memo will automatically be created once per app the first time you use it.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// static SIGNAL: GlobalSignal<i32> = Signal::global(|| 0);
+    /// // Create a new global memo that can be used anywhere in your app
+    /// static DOUBLED: GlobalMemo<i32> = Signal::global_memo(|| SIGNAL() * 2);
+    ///
+    /// fn App() -> Element {
+    ///     rsx! {
+    ///         button {
+    ///             // When SIGNAL changes, the memo will update because the SIGNAL is read inside DOUBLED
+    ///             onclick: move |_| *SIGNAL.write() += 1,
+    ///             "{DOUBLED}"
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// <div class="warning">
+    ///
+    /// Global memos are generally not recommended for use in libraries because it makes it more difficult to allow multiple instances of components you define in your library.
+    ///
+    /// </div>
     pub const fn global_memo(constructor: fn() -> T) -> GlobalMemo<T> {
         GlobalMemo::new(constructor)
     }
@@ -90,6 +126,16 @@ impl<T: PartialEq + 'static> Signal<T> {
     #[track_caller]
     pub fn memo(f: impl FnMut() -> T + 'static) -> Memo<T> {
         Memo::new(f)
+    }
+
+    /// Creates a new unsync Selector with an explicit location. The selector will be run immediately and whenever any signal it reads changes.
+    ///
+    /// Selectors can be used to efficiently compute derived data from signals.
+    pub fn memo_with_location(
+        f: impl FnMut() -> T + 'static,
+        location: &'static std::panic::Location<'static>,
+    ) -> Memo<T> {
+        Memo::new_with_location(f, location)
     }
 }
 
@@ -106,11 +152,20 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
         }
     }
 
-    /// Creates a new Signal. Signals are a Copy state management solution with automatic dependency tracking.
-    pub fn new_with_caller(
-        value: T,
-        #[cfg(debug_assertions)] caller: &'static std::panic::Location<'static>,
-    ) -> Self {
+    /// Creates a new Signal with an explicit caller. Signals are a Copy state management solution with automatic dependency tracking.
+    ///
+    /// This method can be used to provide the correct caller information for signals that are created in closures:
+    ///
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// #[track_caller]
+    /// fn use_my_signal(function: impl FnOnce() -> i32) -> Signal<i32> {
+    ///     // We capture the caller information outside of the closure so that it points to the caller of use_my_custom_hook instead of the closure
+    ///     let caller = std::panic::Location::caller();
+    ///     use_hook(move || Signal::new_with_caller(function(), caller))
+    /// }
+    /// ```
+    pub fn new_with_caller(value: T, caller: &'static std::panic::Location<'static>) -> Self {
         Self {
             inner: CopyValue::new_with_caller(
                 SignalData {
@@ -155,7 +210,8 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
             // We cannot hold the subscribers lock while calling mark_dirty, because mark_dirty can run user code which may cause a new subscriber to be added. If we hold the lock, we will deadlock.
             let mut subscribers = std::mem::take(&mut *inner.subscribers.lock().unwrap());
             subscribers.retain(|reactive_context| reactive_context.mark_dirty());
-            *inner.subscribers.lock().unwrap() = subscribers;
+            // Extend the subscribers list instead of overwriting it in case a subscriber is added while reactive contexts are marked dirty
+            inner.subscribers.lock().unwrap().extend(subscribers);
         }
     }
 
@@ -345,6 +401,8 @@ impl<T: 'static, S: Storage<SignalData<T>>> Writable for Signal<T, S> {
     fn try_write_unchecked(
         &self,
     ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError> {
+        #[cfg(debug_assertions)]
+        let origin = std::panic::Location::caller();
         self.inner.try_write_unchecked().map(|inner| {
             let borrow = S::map_mut(inner, |v| &mut v.value);
             Write {
@@ -352,7 +410,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Writable for Signal<T, S> {
                 drop_signal: Box::new(SignalSubscriberDrop {
                     signal: *self,
                     #[cfg(debug_assertions)]
-                    origin: std::panic::Location::caller(),
+                    origin,
                 }),
             }
         })
@@ -475,6 +533,68 @@ impl<T: ?Sized, S: AnyStorage> DerefMut for Write<'_, T, S> {
     }
 }
 
+#[allow(unused)]
+const SIGNAL_READ_WRITE_SAME_SCOPE_HELP: &str = r#"This issue is caused by reading and writing to the same signal in a reactive scope. Components, effects, memos, and resources each have their own a reactive scopes. Reactive scopes rerun when any signal you read inside of them are changed. If you read and write to the same signal in the same scope, the write will cause the scope to rerun and trigger the write again. This can cause an infinite loop.
+
+You can fix the issue by either:
+1) Splitting up your state and Writing, reading to different signals:
+
+For example, you could change this broken code:
+
+#[derive(Clone, Copy)]
+struct Counts {
+    count1: i32,
+    count2: i32,
+}
+
+fn app() -> Element {
+    let mut counts = use_signal(|| Counts { count1: 0, count2: 0 });
+    
+    use_effect(move || {
+        // This effect both reads and writes to counts
+        counts.write().count1 = counts().count2;
+    })
+}
+
+Into this working code:
+
+fn app() -> Element {
+    let mut count1 = use_signal(|| 0);
+    let mut count2 = use_signal(|| 0);
+
+    use_effect(move || {
+        count1.write(count2());
+    });
+}
+2) Reading and Writing to the same signal in different scopes:
+
+For example, you could change this broken code:
+
+fn app() -> Element {
+    let mut count = use_signal(|| 0);
+
+    use_effect(move || {
+        // This effect both reads and writes to count
+        println!("{}", count());
+        count.write(count());
+    });
+}
+
+
+To this working code:
+
+fn app() -> Element {
+    let mut count = use_signal(|| 0);
+
+    use_effect(move || {
+        count.write(count());
+    });
+    use_effect(move || {
+        println!("{}", count());
+    });
+}
+"#;
+
 struct SignalSubscriberDrop<T: 'static, S: Storage<SignalData<T>>> {
     signal: Signal<T, S>,
     #[cfg(debug_assertions)]
@@ -484,10 +604,36 @@ struct SignalSubscriberDrop<T: 'static, S: Storage<SignalData<T>>> {
 impl<T: 'static, S: Storage<SignalData<T>>> Drop for SignalSubscriberDrop<T, S> {
     fn drop(&mut self) {
         #[cfg(debug_assertions)]
-        tracing::trace!(
-            "Write on signal at {:?} finished, updating subscribers",
-            self.origin
-        );
+        {
+            tracing::trace!(
+                "Write on signal at {} finished, updating subscribers",
+                self.origin
+            );
+
+            // Check if the write happened during a render. If it did, we should warn the user that this is generally a bad practice.
+            if dioxus_core::vdom_is_rendering() {
+                tracing::warn!(
+                    "Write on signal at {} happened while a component was running. Writing to signals during a render can cause infinite rerenders when you read the same signal in the component. Consider writing to the signal in an effect, future, or event handler if possible.",
+                    self.origin
+                );
+            }
+
+            // Check if the write happened during a scope that the signal is also subscribed to. If it did, this will probably cause an infinite loop.
+            if let Some(reactive_context) = ReactiveContext::current() {
+                if let Ok(inner) = self.signal.inner.try_read() {
+                    if let Ok(subscribers) = inner.subscribers.lock() {
+                        for subscriber in subscribers.iter() {
+                            if reactive_context == *subscriber {
+                                let origin = self.origin;
+                                tracing::warn!(
+                                    "Write on signal at {origin} finished in {reactive_context} which is also subscribed to the signal. This will likely cause an infinite loop. When the write finishes, {reactive_context} will rerun which may cause the write to be rerun again.\nHINT:\n{SIGNAL_READ_WRITE_SAME_SCOPE_HELP}",
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
         self.signal.update_subscribers();
     }
 }

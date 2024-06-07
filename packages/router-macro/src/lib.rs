@@ -16,6 +16,7 @@ use proc_macro2::TokenStream as TokenStream2;
 
 use crate::{layout::LayoutId, route_tree::RouteTree};
 
+mod hash;
 mod layout;
 mod nest;
 mod query;
@@ -42,7 +43,9 @@ mod segment;
 /// 2. By the order they are defined in the enum
 ///
 /// All features:
-/// ```rust, skip
+/// ```rust
+/// use dioxus::prelude::*;
+///
 /// #[rustfmt::skip]
 /// #[derive(Clone, Debug, PartialEq, Routable)]
 /// enum Route {
@@ -75,9 +78,17 @@ mod segment;
 ///     #[redirect("/:id/user", |id: usize| Route::Route3 { dynamic: id.to_string()})]
 ///     #[route("/:dynamic")]
 ///     Route3 { dynamic: String },
-///     #[child]
-///     NestedRoute(NestedRoute),
 /// }
+/// # #[component]
+/// # fn Route1(user_id: usize, dynamic: usize, query: String) -> Element { None }
+/// # #[component]
+/// # fn Route2(user_id: usize) -> Element { None }
+/// # #[component]
+/// # fn Route3(dynamic: String) -> Element { None }
+/// # #[component]
+/// # fn UserFrame(user_id: usize) -> Element { None }
+/// # #[component]
+/// # fn IndexComponent() -> Element { None }
 /// ```
 ///
 /// # `#[route("path", component)]`
@@ -89,7 +100,9 @@ mod segment;
 /// Routes are the most basic attribute. They allow you to define a route and the component to render when the route is matched. The component must take all dynamic parameters of the route and all parent nests.
 /// The next variant will be tied to the component. If you link to that variant, the component will be rendered.
 ///
-/// ```rust, skip
+/// ```rust
+/// use dioxus::prelude::*;
+///
 /// #[derive(Clone, Debug, PartialEq, Routable)]
 /// enum Route {
 ///     // Define routes that renders the IndexComponent
@@ -97,6 +110,8 @@ mod segment;
 ///     #[route("/", Index)]
 ///     Index {},
 /// }
+/// # #[component]
+/// # fn Index() -> Element { None }
 /// ```
 ///
 /// # `#[redirect("path", function)]`
@@ -105,14 +120,18 @@ mod segment;
 /// - `path`: The path to the enum variant (relative to the parent nest)
 /// - `function`: A function that takes the parameters from the path and returns a new route
 ///
-/// ```rust, skip
+/// ```rust
+/// use dioxus::prelude::*;
+///
 /// #[derive(Clone, Debug, PartialEq, Routable)]
 /// enum Route {
 ///     // Redirects the /:id route to the Index route
-///     #[redirect("/:id", |_: usize| Route::Index {})]
+///     #[redirect("/:id", |id: usize| Route::Index {})]
 ///     #[route("/", Index)]
 ///     Index {},
 /// }
+/// # #[component]
+/// # fn Index() -> Element { None }
 /// ```
 ///
 /// Redirects allow you to redirect a route to another route. The function must take all dynamic parameters of the route and all parent nests.
@@ -124,29 +143,35 @@ mod segment;
 ///
 /// Nests effect all nests, routes and redirects defined until the next `#[end_nest]` attribute. All children of nests are relative to the nest route and must include all dynamic parameters of the nest.
 ///
-/// ```rust, skip
+/// ```rust
+/// use dioxus::prelude::*;
+///
 /// #[derive(Clone, Debug, PartialEq, Routable)]
 /// enum Route {
 ///     // Nests all child routes in the /blog route
 ///     #[nest("/blog")]
 ///         // This is at /blog/:id
-///         #[redirect("/:id", |_: usize| Route::Index {})]
+///         #[redirect("/:id", |id: usize| Route::Index {})]
 ///         // This is at /blog
 ///         #[route("/", Index)]
 ///         Index {},
 /// }
+/// # #[component]
+/// # fn Index() -> Element { None }
 /// ```
 ///
 /// # `#[end_nest]`
 ///
 /// The `#[end_nest]` attribute is used to end a nest. It takes no parameters.
 ///
-/// ```rust, skip
+/// ```rust
+/// use dioxus::prelude::*;
+///
 /// #[derive(Clone, Debug, PartialEq, Routable)]
 /// enum Route {
 ///     #[nest("/blog")]
 ///         // This is at /blog/:id
-///         #[redirect("/:id", |_: usize| Route::Index {})]
+///         #[redirect("/:id", |id: usize| Route::Index {})]
 ///         // This is at /blog
 ///         #[route("/", Index)]
 ///         Index {},
@@ -156,6 +181,10 @@ mod segment;
 ///     #[route("/")]
 ///     Home {},
 /// }
+/// # #[component]
+/// # fn Index() -> Element { None }
+/// # #[component]
+/// # fn Home() -> Element { None }
 /// ```
 ///
 /// # `#[layout(component)]`
@@ -165,26 +194,34 @@ mod segment;
 ///
 /// The layout component allows you to wrap all children of the layout in a component. The child routes are rendered in the Outlet of the layout component. The layout component must take all dynamic parameters of the nests it is nested in.
 ///
-/// ```rust, skip
+/// ```rust
+/// use dioxus::prelude::*;
+///
 /// #[derive(Clone, Debug, PartialEq, Routable)]
 /// enum Route {
 ///     #[layout(BlogFrame)]
-///         #[redirect("/:id", |_: usize| Route::Index {})]
+///         #[redirect("/:id", |id: usize| Route::Index {})]
 ///         // Index will be rendered in the Outlet of the BlogFrame component
 ///         #[route("/", Index)]
 ///         Index {},
 /// }
+/// # #[component]
+/// # fn Index() -> Element { None }
+/// # #[component]
+/// # fn BlogFrame() -> Element { None }
 /// ```
 ///
 /// # `#[end_layout]`
 ///
 /// The `#[end_layout]` attribute is used to end a layout. It takes no parameters.
 ///
-/// ```rust, skip
+/// ```rust
+/// use dioxus::prelude::*;
+///
 /// #[derive(Clone, Debug, PartialEq, Routable)]
 /// enum Route {
 ///     #[layout(BlogFrame)]
-///         #[redirect("/:id", |_: usize| Route::Index {})]
+///         #[redirect("/:id", |id: usize| Route::Index {})]
 ///         // Index will be rendered in the Outlet of the BlogFrame component
 ///         #[route("/", Index)]
 ///         Index {},
@@ -194,7 +231,14 @@ mod segment;
 ///     #[route("/")]
 ///     Home {},
 /// }
+/// # #[component]
+/// # fn Index() -> Element { None }
+/// # #[component]
+/// # fn BlogFrame() -> Element { None }
+/// # #[component]
+/// # fn Home() -> Element { None }
 /// ```
+#[doc(alias = "route")]
 #[proc_macro_derive(
     Routable,
     attributes(route, nest, end_nest, layout, end_layout, redirect, child)
@@ -481,6 +525,11 @@ impl RouteEnum {
                             from_route = true
                         }
                     }
+                    if let Some(hash) = &route.hash {
+                        if hash.contains_ident(field) {
+                            from_route = true
+                        }
+                    }
                 }
             }
         }
@@ -534,9 +583,10 @@ impl RouteEnum {
 
                 fn from_str(s: &str) -> Result<Self, Self::Err> {
                     let route = s;
-                    let (route, _hash) = route.split_once('#').unwrap_or((route, ""));
+                    let (route, hash) = route.split_once('#').unwrap_or((route, ""));
                     let (route, query) = route.split_once('?').unwrap_or((route, ""));
                     let query = dioxus_router::exports::urlencoding::decode(query).unwrap_or(query.into());
+                    let hash = dioxus_router::exports::urlencoding::decode(hash).unwrap_or(hash.into());
                     let mut segments = route.split('/').map(|s| dioxus_router::exports::urlencoding::decode(s).unwrap_or(s.into()));
                     // skip the first empty segment
                     if s.starts_with('/') {
@@ -645,7 +695,7 @@ impl RouteEnum {
                     #(#site_map,)*
                 ];
 
-                fn render(&self, level: usize) -> ::dioxus::prelude::Element {
+                fn render(&self, level: usize) -> dioxus_core::Element {
                     let myself = self.clone();
                     match (level, myself) {
                         #(#matches)*

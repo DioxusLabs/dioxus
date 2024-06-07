@@ -1,11 +1,7 @@
-use super::{hot_reload::*, WsReloadState};
 use crate::{server::HotReloadState, Result};
 use axum::{
     body::Body,
-    extract::{
-        ws::{Message, WebSocket},
-        Extension, WebSocketUpgrade,
-    },
+    extract::Extension,
     http::{
         self,
         header::{HeaderName, HeaderValue},
@@ -17,7 +13,8 @@ use axum::{
 };
 use axum_server::tls_rustls::RustlsConfig;
 use dioxus_cli_config::{CrateConfig, WebHttpsConfig};
-use std::{fs, io, process::Command, sync::Arc};
+use dioxus_hot_reload::HotReloadRouterExt;
+use std::{fs, io, process::Command};
 use tower::ServiceBuilder;
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -26,11 +23,7 @@ use tower_http::{
 };
 
 /// Sets up and returns a router
-pub async fn setup_router(
-    config: CrateConfig,
-    ws_reload: Arc<WsReloadState>,
-    hot_reload: Option<HotReloadState>,
-) -> Result<Router> {
+pub async fn setup_router(config: CrateConfig, hot_reload: HotReloadState) -> Result<Router> {
     // Setup cors
     let cors = CorsLayer::new()
         // allow `GET` and `POST` when accessing the resource
@@ -62,8 +55,8 @@ pub async fn setup_router(
         .and_then(move |response| async move { Ok(no_cache(file_service_config, response)) })
         .service(ServeDir::new(config.out_dir()));
 
-    // Setup websocket
-    let mut router = Router::new().route("/_dioxus/ws", get(ws_handler));
+    // Setup router
+    let mut router = Router::new();
 
     // Setup proxy
     for proxy_config in config.dioxus_config.web.proxy {
@@ -83,7 +76,7 @@ pub async fn setup_router(
     router = if let Some(base_path) = config.dioxus_config.web.app.base_path.clone() {
         let base_path = format!("/{}", base_path.trim_matches('/'));
         Router::new()
-            .route(&base_path, axum::routing::any_service(router))
+            .nest(&base_path, router)
             .fallback(get(move || {
                 let base_path = base_path.clone();
                 async move { format!("Outside of the base path: {}", base_path) }
@@ -92,15 +85,13 @@ pub async fn setup_router(
         router
     };
 
+    // Setup websocket
+    router = router.connect_hot_reload();
+
     // Setup routes
     router = router
-        .route("/_dioxus/hot_reload", get(hot_reload_handler))
         .layer(cors)
-        .layer(Extension(ws_reload));
-
-    if let Some(hot_reload) = hot_reload {
-        router = router.layer(Extension(hot_reload))
-    }
+        .layer(Extension(hot_reload.receiver.clone()));
 
     Ok(router)
 }
@@ -133,34 +124,6 @@ fn no_cache(
     headers.insert(http::header::PRAGMA, HeaderValue::from_static("no-cache"));
     headers.insert(http::header::EXPIRES, HeaderValue::from_static("0"));
     response
-}
-
-/// Handle websockets
-async fn ws_handler(
-    ws: WebSocketUpgrade,
-    Extension(state): Extension<Arc<WsReloadState>>,
-) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| ws_reload_handler(socket, state))
-}
-
-async fn ws_reload_handler(mut socket: WebSocket, state: Arc<WsReloadState>) {
-    let mut rx = state.update.subscribe();
-
-    let reload_watcher = tokio::spawn(async move {
-        loop {
-            rx.recv().await.unwrap();
-
-            let _ = socket.send(Message::Text(String::from("reload"))).await;
-
-            // ignore the error
-            println!("forcing reload");
-
-            // flush the errors after recompling
-            rx = rx.resubscribe();
-        }
-    });
-
-    reload_watcher.await.unwrap();
 }
 
 const DEFAULT_KEY_PATH: &str = "ssl/key.pem";
@@ -220,7 +183,7 @@ pub fn get_rustls_with_mkcert(web_config: &WebHttpsConfig) -> Result<(String, St
         Err(e) => {
             match e.kind() {
                 io::ErrorKind::NotFound => tracing::error!("mkcert is not installed. See https://github.com/FiloSottile/mkcert#installation for installation instructions."),
-                e => tracing::error!("an error occured while generating mkcert certificates: {}", e.to_string()),
+                e => tracing::error!("an error occurred while generating mkcert certificates: {}", e.to_string()),
             };
             return Err("failed to generate mkcert certificates".into());
         }

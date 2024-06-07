@@ -1,17 +1,20 @@
 #![allow(missing_docs)]
 use crate::{use_callback, use_hook_did_run, use_signal, UseCallback};
-use dioxus_core::{prelude::*, Task};
+use dioxus_core::prelude::*;
 use dioxus_signals::*;
-use dioxus_signals::{Readable, Writable};
 use std::future::Future;
 use std::ops::Deref;
 
-/// A hook that allows you to spawn a future.
-/// This future will **not** run on the server
-/// The future is spawned on the next call to `wait_for_next_render` which means that it will not run on the server.
-/// To run a future on the server, you should use `spawn` directly.
-/// `use_future` **won't return a value**.
-/// If you want to return a value from a future, use `use_resource` instead.
+/// A hook that allows you to spawn a future the first time you render a component.
+///
+///
+/// This future will **not** run on the server. To run a future on the server, you should use [`spawn_isomorphic`] directly.
+///
+///
+/// `use_future` **won't return a value**. If you want to return a value from a future, use [`crate::use_resource()`] instead.
+///
+/// ## Example
+///
 /// ```rust
 /// # use dioxus::prelude::*;
 /// # use std::time::Duration;
@@ -36,6 +39,9 @@ use std::ops::Deref;
 ///     }
 /// }
 /// ```
+#[doc = include_str!("../docs/rules_of_hooks.md")]
+#[doc = include_str!("../docs/moving_state_around.md")]
+#[doc(alias = "use_async")]
 pub fn use_future<F>(mut future: impl FnMut() -> F + 'static) -> UseFuture
 where
     F: Future + 'static,

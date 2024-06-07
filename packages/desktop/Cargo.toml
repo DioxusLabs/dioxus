@@ -17,7 +17,7 @@ dioxus-html = { workspace = true, features = [
     "mounted",
     "eval",
 ] }
-dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
+dioxus-interpreter-js = { workspace = true, features = ["binary-protocol", "eval"] }
 dioxus-cli-config = { workspace = true, features = ["read-config"] }
 generational-box = { workspace = true }
 
@@ -81,10 +81,16 @@ gnu = []
 [package.metadata.docs.rs]
 default-features = false
 features = ["tokio_runtime", "hot-reload"]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["desktop"] }
 exitcode = "1.1.2"
+reqwest = { version = "0.11.9", features = ["json"] }
+http-range = { version = "0.1.5" }
+dioxus-ssr = { workspace = true, version = "0.5.0", default-features = false }
+separator = "0.4.1"
+rand = { version = "0.8.4", features = ["small_rng"] }
 
 # These tests need to be run on the main thread, so they cannot use rust's test harness.
 [[test]]
@@ -96,3 +102,119 @@ harness = false
 name = "check_rendering"
 path = "headless_tests/rendering.rs"
 harness = false
+
+[[test]]
+name = "check_eval"
+path = "headless_tests/eval.rs"
+harness = false
+
+# Most of the examples live in the workspace. We include some here so that docs.rs can scrape our examples for better inline docs
+[[example]]
+name = "video_stream"
+path = "../../examples/video_stream.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "suspense"
+path = "../../examples/suspense.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "calculator_mutable"
+path = "../../examples/calculator_mutable.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "calculator"
+path = "../../examples/calculator.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "clock"
+path = "../../examples/clock.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "crm"
+path = "../../examples/crm.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "custom_html"
+path = "../../examples/custom_html.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "custom_menu"
+path = "../../examples/custom_menu.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "dynamic_asset"
+path = "../../examples/dynamic_asset.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "error_handle"
+path = "../../examples/error_handle.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "file_explorer"
+path = "../../examples/file_explorer.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "future"
+path = "../../examples/future.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "hydration"
+path = "../../examples/hydration.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "multiwindow"
+path = "../../examples/multiwindow.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "overlay"
+path = "../../examples/overlay.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "popup"
+path = "../../examples/popup.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "read_size"
+path = "../../examples/read_size.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "shortcut"
+path = "../../examples/shortcut.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "streams"
+path = "../../examples/streams.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "window_event"
+path = "../../examples/window_event.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "window_focus"
+path = "../../examples/window_focus.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "window_zoom"
+path = "../../examples/window_zoom.rs"
+doc-scrape-examples = true

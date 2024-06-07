@@ -16,7 +16,7 @@
 //!
 //! Currently, we don't validate for structures, but do validate attributes.
 
-mod elements;
+pub mod elements;
 #[cfg(feature = "hot-reload-context")]
 pub use elements::HtmlCtx;
 #[cfg(feature = "html-to-rsx")]
@@ -24,8 +24,8 @@ pub use elements::{map_html_attribute_to_rsx, map_html_element_to_rsx};
 pub mod events;
 pub(crate) mod file_data;
 pub use file_data::*;
+mod attribute_groups;
 pub mod geometry;
-mod global_attributes;
 pub mod input_data;
 #[cfg(feature = "native-bind")]
 pub mod native_bind;
@@ -40,25 +40,25 @@ mod transit;
 #[cfg(feature = "serialize")]
 pub use transit::*;
 
+pub use attribute_groups::*;
 pub use elements::*;
 pub use events::*;
-pub use global_attributes::*;
 pub use render_template::*;
 
 #[cfg(feature = "eval")]
 pub mod eval;
 
 pub mod extensions {
+    pub use crate::attribute_groups::{GlobalAttributesExtension, SvgAttributesExtension};
     pub use crate::elements::extensions::*;
-    pub use crate::global_attributes::{GlobalAttributesExtension, SvgAttributesExtension};
 }
 
 pub mod prelude {
+    pub use crate::attribute_groups::{GlobalAttributesExtension, SvgAttributesExtension};
     pub use crate::elements::extensions::*;
     #[cfg(feature = "eval")]
     pub use crate::eval::*;
     pub use crate::events::*;
-    pub use crate::global_attributes::{GlobalAttributesExtension, SvgAttributesExtension};
     pub use crate::point_interaction::*;
     pub use keyboard_types::{self, Code, Key, Location, Modifiers};
 }

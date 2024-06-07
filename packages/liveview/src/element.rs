@@ -1,5 +1,8 @@
 use dioxus_core::ElementId;
-use dioxus_html::{geometry::euclid::Rect, MountedResult, RenderedElementBacking};
+use dioxus_html::{
+    geometry::{PixelsRect, PixelsSize, PixelsVector2D},
+    MountedResult, RenderedElementBacking,
+};
 
 use crate::query::QueryEngine;
 
@@ -16,38 +19,56 @@ impl LiveviewElement {
     }
 }
 
+macro_rules! scripted_getter {
+    ($meth_name:ident, $script:literal, $output_type:path) => {
+        fn $meth_name(
+            &self,
+        ) -> std::pin::Pin<
+            Box<dyn futures_util::Future<Output = dioxus_html::MountedResult<$output_type>>>,
+        > {
+            let script = format!($script, id = self.id.0);
+
+            let fut = self
+                .query
+                .new_query::<Option<$output_type>>(&script)
+                .resolve();
+            Box::pin(async move {
+                match fut.await {
+                    Ok(Some(res)) => Ok(res),
+                    Ok(None) => MountedResult::Err(dioxus_html::MountedError::OperationFailed(
+                        Box::new(DesktopQueryError::FailedToQuery),
+                    )),
+                    Err(err) => MountedResult::Err(dioxus_html::MountedError::OperationFailed(
+                        Box::new(err),
+                    )),
+                }
+            })
+        }
+    };
+}
+
 impl RenderedElementBacking for LiveviewElement {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
-    fn get_client_rect(
-        &self,
-    ) -> std::pin::Pin<
-        Box<
-            dyn futures_util::Future<
-                Output = dioxus_html::MountedResult<dioxus_html::geometry::euclid::Rect<f64, f64>>,
-            >,
-        >,
-    > {
-        let script = format!("return window.interpreter.getClientRect({});", self.id.0);
+    scripted_getter!(
+        get_scroll_offset,
+        "return [window.interpreter.getScrollLeft({id}), window.interpreter.getScrollTop({id})]",
+        PixelsVector2D
+    );
 
-        let fut = self
-            .query
-            .new_query::<Option<Rect<f64, f64>>>(&script)
-            .resolve();
-        Box::pin(async move {
-            match fut.await {
-                Ok(Some(rect)) => Ok(rect),
-                Ok(None) => MountedResult::Err(dioxus_html::MountedError::OperationFailed(
-                    Box::new(DesktopQueryError::FailedToQuery),
-                )),
-                Err(err) => {
-                    MountedResult::Err(dioxus_html::MountedError::OperationFailed(Box::new(err)))
-                }
-            }
-        })
-    }
+    scripted_getter!(
+        get_scroll_size,
+        "return [window.interpreter.getScrollWidth({id}), window.interpreter.getScrollHeight({id})]",
+        PixelsSize
+    );
+
+    scripted_getter!(
+        get_client_rect,
+        "return window.interpreter.getClientRect({id});",
+        PixelsRect
+    );
 
     fn scroll_to(
         &self,

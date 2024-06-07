@@ -22,6 +22,11 @@ pub enum Platform {
     #[cfg_attr(feature = "cli", clap(name = "fullstack"))]
     #[serde(rename = "fullstack")]
     Fullstack,
+
+    /// Targeting the static generation platform using SSR and Dioxus-Fullstack
+    #[cfg_attr(feature = "cli", clap(name = "fullstack"))]
+    #[serde(rename = "static-generation")]
+    StaticGeneration,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -109,6 +114,7 @@ impl std::error::Error for CrateConfigError {}
 impl DioxusConfig {
     #[cfg(feature = "cli")]
     /// Load the dioxus config from a path
+    #[tracing::instrument]
     pub fn load(bin: Option<PathBuf>) -> Result<Option<DioxusConfig>, CrateConfigError> {
         let crate_dir = crate::cargo::crate_root();
 
@@ -125,6 +131,7 @@ impl DioxusConfig {
         let crate_dir = crate_dir.as_path();
 
         let Some(dioxus_conf_file) = acquire_dioxus_toml(crate_dir) else {
+            tracing::warn!(?crate_dir, "no dioxus config found for");
             return Ok(None);
         };
 
@@ -158,20 +165,15 @@ impl DioxusConfig {
 }
 
 #[cfg(feature = "cli")]
+#[tracing::instrument]
 fn acquire_dioxus_toml(dir: &std::path::Path) -> Option<PathBuf> {
-    // prefer uppercase
-    let uppercase_conf = dir.join("Dioxus.toml");
-    if uppercase_conf.is_file() {
-        return Some(uppercase_conf);
-    }
+    use tracing::trace;
 
-    // lowercase is fine too
-    let lowercase_conf = dir.join("dioxus.toml");
-    if lowercase_conf.is_file() {
-        return Some(lowercase_conf);
-    }
-
-    None
+    ["Dioxus.toml", "dioxus.toml"]
+        .into_iter()
+        .map(|file| dir.join(file))
+        .inspect(|path| trace!("checking [{path:?}]"))
+        .find(|path| path.is_file())
 }
 
 impl Default for DioxusConfig {
@@ -211,6 +213,7 @@ impl Default for DioxusConfig {
                     key_path: None,
                     cert_path: None,
                 },
+                pre_compress: true,
             },
             bundle: BundleConfig {
                 identifier: Some(format!("io.github.{name}")),
@@ -280,6 +283,9 @@ pub struct WebConfig {
     pub resource: WebResourceConfig,
     #[serde(default)]
     pub https: WebHttpsConfig,
+    /// Whether to enable pre-compression of assets and wasm during a web build in release mode
+    #[serde(default = "true_bool")]
+    pub pre_compress: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -570,6 +576,11 @@ impl CrateConfig {
         };
         self.add_features(features);
         self
+    }
+
+    /// Check if assets should be pre_compressed. This will only be true in release mode if the user has enabled pre_compress in the web config.
+    pub fn should_pre_compress_web_assets(&self) -> bool {
+        self.dioxus_config.web.pre_compress && self.release
     }
 }
 
