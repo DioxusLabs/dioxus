@@ -561,8 +561,12 @@ impl VNode {
 
         // If this is a debug build, we need to check that the paths are in the correct order because hot reloading can cause scrambled states
         #[cfg(debug_assertions)]
-        let (attrs_sorted, nodes_sorted) =
-            { (sort_bfs(template.attr_paths), sort_bfs(template.node_paths)) };
+        let (attrs_sorted, nodes_sorted) = {
+            (
+                crate::nodes::sort_bfo(template.attr_paths),
+                crate::nodes::sort_bfo(template.node_paths),
+            )
+        };
         #[cfg(debug_assertions)]
         let (mut attrs, mut nodes) = {
             (
@@ -958,55 +962,4 @@ fn matching_components<'a>(
             Some((l, r))
         })
         .collect()
-}
-
-#[cfg(debug_assertions)]
-fn sort_bfs(paths: &[&'static [u8]]) -> Vec<(usize, &'static [u8])> {
-    let mut with_indecies = paths.iter().copied().enumerate().collect::<Vec<_>>();
-    with_indecies.sort_unstable_by(|(_, a), (_, b)| {
-        let mut a = a.iter();
-        let mut b = b.iter();
-        loop {
-            match (a.next(), b.next()) {
-                (Some(a), Some(b)) => {
-                    if a != b {
-                        return a.cmp(b);
-                    }
-                }
-                // The shorter path goes first
-                (None, Some(_)) => return std::cmp::Ordering::Less,
-                (Some(_), None) => return std::cmp::Ordering::Greater,
-                (None, None) => return std::cmp::Ordering::Equal,
-            }
-        }
-    });
-    with_indecies
-}
-
-#[test]
-#[cfg(debug_assertions)]
-fn sorting() {
-    let r: [(usize, &[u8]); 5] = [
-        (0, &[0, 1]),
-        (1, &[0, 2]),
-        (2, &[1, 0]),
-        (3, &[1, 0, 1]),
-        (4, &[1, 2]),
-    ];
-    assert_eq!(
-        sort_bfs(&[&[0, 1,], &[0, 2,], &[1, 0,], &[1, 0, 1,], &[1, 2,],]),
-        r
-    );
-    let r: [(usize, &[u8]); 6] = [
-        (0, &[0]),
-        (1, &[0, 1]),
-        (2, &[0, 1, 2]),
-        (3, &[1]),
-        (4, &[1, 2]),
-        (5, &[2]),
-    ];
-    assert_eq!(
-        sort_bfs(&[&[0], &[0, 1], &[0, 1, 2], &[1], &[1, 2], &[2],]),
-        r
-    );
 }
