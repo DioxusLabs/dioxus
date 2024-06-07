@@ -364,8 +364,8 @@ fn full_circle() {
 /// }
 ///
 /// // Implement ToRouteSegments for NumericRouteSegments so that we can display the route segments
-/// impl ToRouteSegments for &NumericRouteSegments {
-///     fn display_route_segments(self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+/// impl ToRouteSegments for NumericRouteSegments {
+///     fn display_route_segments(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 ///         for number in &self.numbers {
 ///             write!(f, "/{}", number)?;
 ///         }
@@ -391,24 +391,18 @@ fn full_circle() {
 /// #     todo!()
 /// # }
 /// ```
-#[rustversion::attr(
-    since(1.78.0),
-    diagnostic::on_unimplemented(
-        message = "`ToRouteSegments` is not implemented for `{Self}`",
-        label = "route segment",
-        note = "ToRouteSegments is automatically implemented for types that implement `IntoIterator` with an `Item` type that implements `Display`. You need to either implement IntoIterator or implement ToRouteSegments manually."
-    )
-)]
 pub trait ToRouteSegments {
-    /// Display the route segments. You must url encode the segments.
-    fn display_route_segments(self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
+    /// Display the route segments with each route segment separated by a `/`. This should not start with a `/`.
+    ///
+    fn display_route_segments(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
 }
 
+// Implement ToRouteSegments for any type that can turn &self into an iterator of &T where T: Display
 impl<I, T: Display> ToRouteSegments for I
 where
-    I: IntoIterator<Item = T>,
+    for<'a> &'a I: IntoIterator<Item = &'a T>,
 {
-    fn display_route_segments(self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn display_route_segments(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for segment in self {
             write!(f, "/")?;
             let segment = segment.to_string();
@@ -460,8 +454,8 @@ fn to_route_segments() {
 /// }
 ///
 /// // Implement ToRouteSegments for NumericRouteSegments so that we can display the route segments
-/// impl ToRouteSegments for &NumericRouteSegments {
-///     fn display_route_segments(self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+/// impl ToRouteSegments for NumericRouteSegments {
+///     fn display_route_segments(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 ///         for number in &self.numbers {
 ///             write!(f, "/{}", number)?;
 ///         }
@@ -497,9 +491,11 @@ fn to_route_segments() {
 )]
 pub trait FromRouteSegments: Sized {
     /// The error that can occur when parsing route segments.
-    type Err;
+    type Err: std::fmt::Display;
 
     /// Create an instance of `Self` from route segments.
+    ///
+    /// NOTE: This method must parse the output of `ToRouteSegments::display_route_segments` into the type `Self`.
     fn from_route_segments(segments: &[&str]) -> Result<Self, Self::Err>;
 }
 
