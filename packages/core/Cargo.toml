@@ -22,6 +22,7 @@ tracing = { workspace = true }
 serde = { version = "1", features = ["derive"], optional = true }
 tracing-subscriber = "0.3.18"
 generational-box = { workspace = true }
+rustversion = "1.0.17"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
@@ -31,6 +32,13 @@ pretty_assertions = "1.3.0"
 rand = "0.8.5"
 dioxus-ssr = { workspace = true }
 reqwest = { workspace = true}
+
+[dev-dependencies.web-sys]
+version = "0.3.56"
+features = [
+    "Document",
+    "HtmlElement",
+]
 
 [features]
 default = []

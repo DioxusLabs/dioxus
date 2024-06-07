@@ -40,6 +40,7 @@ use crate::utils::use_router_internal::use_router_internal;
 /// # vdom.rebuild_in_place();
 /// # assert_eq!(dioxus_ssr::render(&vdom), "<h1>App</h1><h2>Current Path</h2><p>/</p>")
 /// ```
+#[doc(alias = "use_url")]
 #[must_use]
 pub fn use_route<R: Routable + Clone>() -> R {
     match use_router_internal() {

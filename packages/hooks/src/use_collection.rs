@@ -1,5 +1,5 @@
 /*
-a form of use_state explicitly for map-style collections (BTreeMap, HashMap, etc).
+a form of use_signal explicitly for map-style collections (BTreeMap, HashMap, etc).
 
 Why?
 ---

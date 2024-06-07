@@ -1,3 +1,5 @@
+#![doc = include_str!("../../docs/event_handlers.md")]
+
 use std::any::Any;
 use std::sync::RwLock;
 
@@ -11,6 +13,17 @@ macro_rules! impl_event {
     ) => {
         $(
             $( #[$attr] )*
+            /// <details open>
+            /// <summary>General Event Handler Information</summary>
+            ///
+            #[doc = include_str!("../../docs/event_handlers.md")]
+            ///
+            /// </details>
+            ///
+            #[doc = include_str!("../../docs/common_event_handler_errors.md")]
+            $(
+                #[doc(alias = $js_name)]
+            )?
             #[inline]
             pub fn $name<E: crate::EventReturn<T>, T>(mut _f: impl FnMut(::dioxus_core::Event<$data>) -> E + 'static) -> ::dioxus_core::Attribute {
                 ::dioxus_core::Attribute::new(
@@ -367,6 +380,15 @@ pub fn event_bubbles(evt: &str) -> bool {
 }
 
 #[doc(hidden)]
+#[rustversion::attr(
+    since(1.78.0),
+    diagnostic::on_unimplemented(
+        message = "`EventHandlerReturn` is not implemented for `{Self}`",
+        label = "Return Value",
+        note = "Event handlers in dioxus need to return either: nothing (the unit type `()`), or an async block that dioxus will automatically spawn",
+        note = "You likely need to add a semicolon to the end of the event handler to make it return nothing",
+    )
+)]
 pub trait EventReturn<P>: Sized {
     fn spawn(self) {}
 }

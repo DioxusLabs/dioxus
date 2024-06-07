@@ -126,6 +126,7 @@ mod js {
                 switch (field) {
                     case "value":
                         node.value = "";
+                        node.removeAttribute("value");
                         break;
                     case "checked":
                         node.checked = false;

@@ -2077,6 +2077,7 @@ name = "dioxus"
 version = "0.5.2"
 dependencies = [
  "criterion 0.3.6",
+ "dioxus",
  "dioxus-config-macro",
  "dioxus-core 0.5.2",
  "dioxus-core-macro",
@@ -2249,12 +2250,14 @@ dependencies = [
  "rand 0.8.5",
  "reqwest",
  "rustc-hash",
+ "rustversion",
  "serde",
  "slab",
  "tokio",
  "tracing",
  "tracing-fluent-assertions",
  "tracing-subscriber",
+ "web-sys",
 ]
 
 [[package]]
@@ -2403,6 +2406,8 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "generational-box 0.5.2",
+ "reqwest",
+ "rustversion",
  "slab",
  "thiserror",
  "tokio",
@@ -2437,15 +2442,18 @@ name = "dioxus-html"
 version = "0.5.2"
 dependencies = [
  "async-trait",
+ "dioxus",
  "dioxus-core 0.5.2",
  "dioxus-html-internal-macro",
  "dioxus-rsx",
+ "dioxus-web",
  "enumset",
  "euclid",
  "futures-channel",
  "generational-box 0.5.2",
  "keyboard-types",
  "rfd",
+ "rustversion",
  "serde",
  "serde-value",
  "serde_json",
@@ -2590,6 +2598,7 @@ dependencies = [
  "gloo-utils 0.1.7",
  "http 1.1.0",
  "js-sys",
+ "rustversion",
  "serde",
  "serde_json",
  "tokio",
@@ -2638,6 +2647,8 @@ dependencies = [
  "generational-box 0.5.2",
  "once_cell",
  "parking_lot",
+ "rand 0.8.5",
+ "reqwest",
  "rustc-hash",
  "serde",
  "simple_logger",
@@ -7801,9 +7812,9 @@ dependencies = [
 
 [[package]]
 name = "rustversion"
-version = "1.0.15"
+version = "1.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80af6f9131f277a45a3fba6ce8e2258037bb0477a67e610d3c1fe046ab31de47"
+checksum = "955d28af4278de8121b7ebeb796b6a45735dc01436d898801014aced2773a3d6"
 
 [[package]]
 name = "ryu"
@@ -7936,9 +7947,9 @@ checksum = "f97841a747eef040fcd2e7b3b9a220a7205926e60488e673d9e4926d27772ce5"
 
 [[package]]
 name = "serde"
-version = "1.0.198"
+version = "1.0.203"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9846a40c979031340571da2545a4e5b7c4163bdae79b301d5f86d03979451fcc"
+checksum = "7253ab4de971e72fb7be983802300c30b5a7f0c2e56fab8abfc6a214307c0094"
 dependencies = [
  "serde_derive",
 ]
@@ -7976,9 +7987,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.198"
+version = "1.0.203"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e88edab869b01783ba905e7d0153f9fc1a6505a96e4ad3018011eedb838566d9"
+checksum = "500cbc0ebeb6f46627f50f3f5811ccf6bf00643be300b4c3eabc0ef55dc5b5ba"
 dependencies = [
  "proc-macro2",
  "quote",
