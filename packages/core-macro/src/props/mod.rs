@@ -3,8 +3,8 @@
 //! However, it has been adopted to fit the Dioxus Props builder pattern.
 //!
 //! For Dioxus, we make a few changes:
-//! - [x] Automatically implement Into<Option> on the setters (IE the strip setter option)
-//! - [x] Automatically implement a default of none for optional fields (those explicitly wrapped with Option<T>)
+//! - [x] Automatically implement [`Into<Option>`] on the setters (IE the strip setter option)
+//! - [x] Automatically implement a default of none for optional fields (those explicitly wrapped with [`Option<T>`])
 
 use proc_macro2::TokenStream;
 
@@ -271,7 +271,7 @@ mod field_info {
     #[derive(Debug, Default, Clone)]
     pub struct FieldBuilderAttr {
         pub default: Option<syn::Expr>,
-        pub doc: Option<syn::Expr>,
+        pub docs: Vec<syn::Attribute>,
         pub skip: bool,
         pub auto_into: bool,
         pub from_displayable: bool,
@@ -284,6 +284,11 @@ mod field_info {
         pub fn with(mut self, attrs: &[syn::Attribute]) -> Result<Self, Error> {
             let mut skip_tokens = None;
             for attr in attrs {
+                if attr.path().is_ident("doc") {
+                    self.docs.push(attr.clone());
+                    continue;
+                }
+
                 if path_to_single_string(attr.path()).as_deref() != Some("props") {
                     continue;
                 }
@@ -343,10 +348,6 @@ mod field_info {
                         }
                         "default" => {
                             self.default = Some(*assign.right);
-                            Ok(())
-                        }
-                        "doc" => {
-                            self.doc = Some(*assign.right);
                             Ok(())
                         }
                         "default_code" => {
@@ -444,10 +445,6 @@ mod field_info {
                                 self.default = None;
                                 Ok(())
                             }
-                            "doc" => {
-                                self.doc = None;
-                                Ok(())
-                            }
                             "skip" => {
                                 self.skip = false;
                                 Ok(())
@@ -535,6 +532,7 @@ mod struct_info {
         pub builder_attr: TypeBuilderAttr,
         pub builder_name: syn::Ident,
         pub conversion_helper_trait_name: syn::Ident,
+        #[allow(unused)]
         pub core: syn::Ident,
     }
 
@@ -1105,10 +1103,7 @@ Finally, call `.build()` to create the instance of `{name}`.
             );
 
             let (impl_generics, _, where_clause) = generics.split_for_impl();
-            let doc = match field.builder_attr.doc {
-                Some(ref doc) => quote!(#[doc = #doc]),
-                None => quote!(),
-            };
+            let docs = &field.builder_attr.docs;
 
             let arg_type = field_type;
             // If the field is auto_into, we need to add a generic parameter to the builder for specialization
@@ -1161,7 +1156,7 @@ Finally, call `.build()` to create the instance of `{name}`.
             Ok(quote! {
                 #[allow(dead_code, non_camel_case_types, missing_docs)]
                 impl #impl_generics #builder_name < #( #ty_generics ),* > #where_clause {
-                    #doc
+                    #( #docs )*
                     #[allow(clippy::type_complexity)]
                     pub fn #field_name < #marker > (self, #field_name: #arg_type) -> #builder_name < #( #target_generics ),* > {
                         let #field_name = (#arg_expr,);

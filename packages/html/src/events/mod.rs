@@ -1,3 +1,5 @@
+#![doc = include_str!("../../docs/event_handlers.md")]
+
 use std::any::Any;
 use std::sync::RwLock;
 
@@ -11,6 +13,17 @@ macro_rules! impl_event {
     ) => {
         $(
             $( #[$attr] )*
+            /// <details open>
+            /// <summary>General Event Handler Information</summary>
+            ///
+            #[doc = include_str!("../../docs/event_handlers.md")]
+            ///
+            /// </details>
+            ///
+            #[doc = include_str!("../../docs/common_event_handler_errors.md")]
+            $(
+                #[doc(alias = $js_name)]
+            )?
             #[inline]
             pub fn $name<__Marker>(mut _f: impl ::dioxus_core::prelude::SuperInto<::dioxus_core::prelude::EventHandler<::dioxus_core::Event<$data>>, __Marker>) -> ::dioxus_core::Attribute {
                 let event_handler = _f.super_into();

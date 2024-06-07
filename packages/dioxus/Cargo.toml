@@ -63,7 +63,11 @@ criterion = "0.3.5"
 thiserror = { workspace = true }
 env_logger = "0.10.0"
 tokio = { workspace = true, features = ["full"] }
+dioxus = { workspace = true }
 
 [[bench]]
 name = "jsframework"
 harness = false
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
