@@ -3,6 +3,7 @@ use crate::innerlude::ScopeOrder;
 use crate::innerlude::{remove_future, spawn, Runtime};
 use crate::ScopeId;
 use futures_util::task::ArcWake;
+use slotmap::DefaultKey;
 use std::sync::Arc;
 use std::task::Waker;
 use std::{cell::Cell, future::Future};
@@ -14,7 +15,7 @@ use std::{pin::Pin, task::Poll};
 /// `Task` is a unique identifier for a task that has been spawned onto the runtime. It can be used to cancel the task
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct Task(pub(crate) usize);
+pub struct Task(pub(crate) slotmap::DefaultKey);
 
 impl Task {
     /// Start a new future on the same thread as the rest of the VirtualDom.
@@ -139,24 +140,29 @@ impl Runtime {
         let (task, task_id) = {
             let mut tasks = self.tasks.borrow_mut();
 
-            let entry = tasks.vacant_entry();
-            let task_id = Task(entry.key());
+            let mut task_id = Task(DefaultKey::default());
+            let mut local_task = None;
+            tasks.insert_with_key(|key| {
+                task_id = Task(key);
 
-            let task = Rc::new(LocalTask {
-                scope,
-                active: Cell::new(true),
-                parent: self.current_task(),
-                task: RefCell::new(Box::pin(task)),
-                waker: futures_util::task::waker(Arc::new(LocalTaskHandle {
-                    id: task_id,
-                    tx: self.sender.clone(),
-                })),
-                ty: Cell::new(ty),
+                let new_task = Rc::new(LocalTask {
+                    scope,
+                    active: Cell::new(true),
+                    parent: self.current_task(),
+                    task: RefCell::new(Box::pin(task)),
+                    waker: futures_util::task::waker(Arc::new(LocalTaskHandle {
+                        id: task_id,
+                        tx: self.sender.clone(),
+                    })),
+                    ty: Cell::new(ty),
+                });
+
+                local_task = Some(new_task.clone());
+
+                new_task
             });
 
-            entry.insert(task.clone());
-
-            (task, task_id)
+            (local_task.unwrap(), task_id)
         };
 
         // Get a borrow on the task, holding no borrows on the tasks map
@@ -244,7 +250,7 @@ impl Runtime {
     ///
     /// This does not abort the task, so you'll want to wrap it in an abort handle if that's important to you
     pub(crate) fn remove_task(&self, id: Task) -> Option<Rc<LocalTask>> {
-        let task = self.tasks.borrow_mut().try_remove(id.0);
+        let task = self.tasks.borrow_mut().remove(id.0);
         if let Some(task) = &task {
             if task.suspended() {
                 self.suspended_tasks.set(self.suspended_tasks.get() - 1);
