@@ -91,6 +91,16 @@ impl<T: PartialEq + 'static> Signal<T> {
     pub fn memo(f: impl FnMut() -> T + 'static) -> Memo<T> {
         Memo::new(f)
     }
+
+    /// Creates a new unsync Selector with an explicit location. The selector will be run immediately and whenever any signal it reads changes.
+    ///
+    /// Selectors can be used to efficiently compute derived data from signals.
+    pub fn memo_with_location(
+        f: impl FnMut() -> T + 'static,
+        location: &'static std::panic::Location<'static>,
+    ) -> Memo<T> {
+        Memo::new_with_location(f, location)
+    }
 }
 
 impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
