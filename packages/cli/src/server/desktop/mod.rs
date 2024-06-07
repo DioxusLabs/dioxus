@@ -95,12 +95,14 @@ async fn serve<P: Platform + Send + 'static>(
 
     tracing::info!("🚀 Starting development server...");
 
+    let raw_out = serve.raw_out;
+
     // We got to own watcher so that it exists for the duration of serve
     // Otherwise full reload won't work.
     let _watcher = setup_file_watcher(
         {
             let config = config.clone();
-            move || platform.write().unwrap().rebuild(&config)
+            move || platform.write().unwrap().rebuild(&config, raw_out)
         },
         &config,
         None,
@@ -238,10 +240,11 @@ fn start_desktop(
     config: &CrateConfig,
     skip_assets: bool,
     rust_flags: Option<String>,
+    raw_out: bool,
 ) -> Result<(RAIIChild, BuildResult)> {
     // Run the desktop application
     // Only used for the fullstack platform,
-    let result = crate::builder::build_desktop(config, true, skip_assets, rust_flags)?;
+    let result = crate::builder::build_desktop(config, true, skip_assets, rust_flags, raw_out)?;
 
     let active = "DIOXUS_ACTIVE";
     let child = RAIIChild(
@@ -271,7 +274,8 @@ impl DesktopPlatform {
         serve: &ConfigOptsServe,
         rust_flags: Option<String>,
     ) -> Result<Self> {
-        let (child, first_build_result) = start_desktop(config, serve.skip_assets, rust_flags)?;
+        let (child, first_build_result) =
+            start_desktop(config, serve.skip_assets, rust_flags, serve.raw_out)?;
 
         tracing::info!("🚀 Starting development server...");
 
@@ -298,6 +302,7 @@ impl DesktopPlatform {
         &mut self,
         config: &CrateConfig,
         rust_flags: Option<String>,
+        raw_out: bool,
     ) -> Result<BuildResult> {
         // Gracefully shtudown the desktop app
         // It might have a receiver to do some cleanup stuff
@@ -322,7 +327,7 @@ impl DesktopPlatform {
         // Todo: add a timeout here to kill the process if it doesn't shut down within a reasonable time
         self.currently_running_child.0.wait()?;
 
-        let (child, result) = start_desktop(config, self.skip_assets, rust_flags)?;
+        let (child, result) = start_desktop(config, self.skip_assets, rust_flags, raw_out)?;
         self.currently_running_child = child;
         Ok(result)
     }
@@ -337,12 +342,12 @@ impl Platform for DesktopPlatform {
         DesktopPlatform::start_with_options(config, serve, None)
     }
 
-    fn rebuild(&mut self, config: &CrateConfig) -> Result<BuildResult> {
+    fn rebuild(&mut self, config: &CrateConfig, raw_out: bool) -> Result<BuildResult> {
         // See `rebuild_with_options()`'s docs for the explanation why the code
         // was moved there.
         // Since desktop platform doesn't use `rust_flags`, this argument is
         // explicitly set to `None`.
-        DesktopPlatform::rebuild_with_options(self, config, None)
+        DesktopPlatform::rebuild_with_options(self, config, None, raw_out)
     }
 }
 

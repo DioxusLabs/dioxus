@@ -15,10 +15,15 @@ pub struct ConfigOptsBuild {
     #[serde(default)]
     pub force_debug: bool,
 
-    // Use verbose output [default: false]
+    /// Use verbose output [default: false]
     #[clap(long)]
     #[serde(default)]
     pub verbose: bool,
+
+    /// Output the build steps with raw text instead of progress bars.
+    #[clap(long)]
+    #[serde(default)]
+    pub raw_out: bool,
 
     /// Build a example [default: ""]
     #[clap(long)]
@@ -73,6 +78,7 @@ impl From<ConfigOptsServe> for ConfigOptsBuild {
             skip_assets: serve.skip_assets,
             force_debug: serve.force_debug,
             cargo_args: serve.cargo_args,
+            raw_out: serve.raw_out,
         }
     }
 }
@@ -104,10 +110,15 @@ pub struct ConfigOptsServe {
     #[serde(default)]
     pub force_debug: bool,
 
-    // Use verbose output [default: false]
+    /// Use verbose output [default: false]
     #[clap(long)]
     #[serde(default)]
     pub verbose: bool,
+
+    /// Output the build steps with raw text instead of progress bars.
+    #[clap(long)]
+    #[serde(default)]
+    pub raw_out: bool,
 
     /// Build with custom profile
     #[clap(long)]
@@ -169,10 +180,15 @@ pub struct ConfigOptsBundle {
     #[serde(default)]
     pub release: bool,
 
-    // Use verbose output [default: false]
+    /// Use verbose output [default: false]
     #[clap(long)]
     #[serde(default)]
     pub verbose: bool,
+
+    /// Output the build steps with raw text instead of progress bars.
+    #[clap(long)]
+    #[serde(default)]
+    pub raw_out: bool,
 
     /// Build a example [default: ""]
     #[clap(long)]

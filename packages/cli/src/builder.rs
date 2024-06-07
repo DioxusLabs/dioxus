@@ -72,6 +72,7 @@ pub fn build_web(
     config: &CrateConfig,
     skip_assets: bool,
     rust_flags: Option<String>,
+    raw_out: bool,
 ) -> Result<BuildResult> {
     // [1] Build the project with cargo, generating a wasm32-unknown-unknown target (is there a more specific, better target to leverage?)
     // [2] Generate the appropriate build folders
@@ -161,7 +162,7 @@ pub fn build_web(
     let CargoBuildResult {
         warnings,
         output_location,
-    } = prettier_build(cmd)?;
+    } = prettier_build(cmd, raw_out)?;
     let output_location = output_location.context("No output location found")?;
 
     // [2] Establish the output directory structure
@@ -338,6 +339,7 @@ pub fn build_desktop(
     _is_serve: bool,
     skip_assets: bool,
     rust_flags: Option<String>,
+    raw_out: bool,
 ) -> Result<BuildResult> {
     tracing::info!("🚅 Running build [Desktop] command...");
 
@@ -385,7 +387,7 @@ pub fn build_desktop(
         ExecutableType::Example(name) => cmd.arg("--example").arg(name),
     };
 
-    let warning_messages = prettier_build(cmd)?;
+    let warning_messages = prettier_build(cmd, raw_out)?;
 
     let file_name: String = config.executable.executable().unwrap().to_string();
 
@@ -437,18 +439,23 @@ struct CargoBuildResult {
     output_location: Option<PathBuf>,
 }
 
-fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<CargoBuildResult> {
+fn prettier_build(cmd: subprocess::Exec, raw_out: bool) -> anyhow::Result<CargoBuildResult> {
     let mut warning_messages: Vec<Diagnostic> = vec![];
 
-    let mut pb = ProgressBar::new_spinner();
-    pb.enable_steady_tick(Duration::from_millis(200));
-    pb = PROGRESS_BARS.add(pb);
-    pb.set_style(
-        ProgressStyle::with_template("{spinner:.dim.bold} {wide_msg}")
-            .unwrap()
-            .tick_chars("/|\\- "),
-    );
-    pb.set_message("💼 Waiting to start building the project...");
+    let mut pb = None;
+
+    if !raw_out {
+        let mut bar = ProgressBar::new_spinner();
+        bar.enable_steady_tick(Duration::from_millis(200));
+        bar = PROGRESS_BARS.add(bar);
+        bar.set_style(
+            ProgressStyle::with_template("{spinner:.dim.bold} {wide_msg}")
+                .unwrap()
+                .tick_chars("/|\\- "),
+        );
+        bar.set_message("💼 Waiting to start building the project...");
+        pb = Some(bar)
+    }
 
     let stdout = cmd.detached().stream_stdout()?;
     let reader = std::io::BufReader::new(stdout);
@@ -473,8 +480,14 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<CargoBuildResult> {
                 }
             }
             Message::CompilerArtifact(artifact) => {
-                pb.set_message(format!("⚙ Compiling {} ", artifact.package_id));
-                pb.tick();
+                let msg = format!("⚙ Compiling {} ", artifact.package_id);
+                if let Some(pb) = &pb {
+                    pb.set_message(msg);
+                    pb.tick();
+                } else {
+                    println!("{msg}");
+                }
+
                 if let Some(executable) = artifact.executable {
                     output_location = Some(executable.into());
                 }
@@ -484,9 +497,15 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<CargoBuildResult> {
             }
             Message::BuildFinished(finished) => {
                 if finished.success {
-                    pb.finish_with_message("👑 Build done.");
+                    match &pb {
+                        Some(pb) => pb.finish_with_message("👑 Build done."),
+                        None => println!("👑 Build done."),
+                    }
                 } else {
-                    pb.finish_with_message("❌ Build failed.");
+                    match &pb {
+                        Some(pb) => pb.finish_with_message("❌ Build failed."),
+                        None => println!("❌ Build failed."),
+                    }
                     return Err(anyhow::anyhow!("Build failed"));
                 }
             }

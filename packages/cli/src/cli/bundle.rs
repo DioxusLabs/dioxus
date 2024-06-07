@@ -93,7 +93,7 @@ impl Bundle {
         // build the desktop app
         // Since the `bundle()` function is only run for the desktop platform,
         // the `rust_flags` argument is set to `None`.
-        build_desktop(&crate_config, false, false, None)?;
+        build_desktop(&crate_config, false, false, None, self.build.raw_out)?;
 
         // copy the binary to the out dir
         let package = crate_config.manifest.package.as_ref().unwrap();
