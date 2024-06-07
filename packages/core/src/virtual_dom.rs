@@ -433,7 +433,7 @@ impl VirtualDom {
 
         if let Some(Some(parent_path)) = self.elements.get(element.0).copied() {
             if bubbles {
-                self.handle_bubbling_event(Some(parent_path), name, Event::new(data, bubbles));
+                self.handle_bubbling_event(parent_path, name, Event::new(data, bubbles));
             } else {
                 self.handle_non_bubbling_event(parent_path, name, Event::new(data, bubbles));
             }
@@ -793,14 +793,10 @@ impl VirtualDom {
         level = "trace",
         name = "VirtualDom::handle_bubbling_event"
     )]
-    fn handle_bubbling_event(
-        &mut self,
-        mut parent: Option<ElementRef>,
-        name: &str,
-        uievent: Event<dyn Any>,
-    ) {
+    fn handle_bubbling_event(&mut self, parent: ElementRef, name: &str, uievent: Event<dyn Any>) {
         // If the event bubbles, we traverse through the tree until we find the target element.
         // Loop through each dynamic attribute (in a depth first order) in this template before moving up to the template's parent.
+        let mut parent = Some(parent);
         while let Some(path) = parent {
             let mut listeners = vec![];
 
@@ -809,13 +805,13 @@ impl VirtualDom {
             let target_path = path.path;
 
             // Accumulate listeners into the listener list bottom to top
-            for (idx, attrs) in el_ref.dynamic_attrs.iter().enumerate() {
-                let this_path = node_template.attr_paths[idx];
+            for (idx, this_path) in node_template.breadth_first_attribute_paths() {
+                let attrs = &*el_ref.dynamic_attrs[idx];
 
                 for attr in attrs.iter() {
                     // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
                     if attr.name.trim_start_matches("on") == name
-                        && target_path.is_decendant(&this_path)
+                        && target_path.is_decendant(this_path)
                     {
                         listeners.push(&attr.value);
 
@@ -836,6 +832,7 @@ impl VirtualDom {
                 "Calling {} listeners",
                 listeners.len()
             );
+            tracing::info!("Listeners: {:?}", listeners);
             for listener in listeners.into_iter().rev() {
                 if let AttributeValue::Listener(listener) = listener {
                     self.runtime.rendering.set(false);
@@ -864,10 +861,10 @@ impl VirtualDom {
         let node_template = el_ref.template.get();
         let target_path = node.path;
 
-        for (idx, attr) in el_ref.dynamic_attrs.iter().enumerate() {
-            let this_path = node_template.attr_paths[idx];
+        for (idx, this_path) in node_template.breadth_first_attribute_paths() {
+            let attrs = &*el_ref.dynamic_attrs[idx];
 
-            for attr in attr.iter() {
+            for attr in attrs.iter() {
                 // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
                 // Only call the listener if this is the exact target element.
                 if attr.name.trim_start_matches("on") == name && target_path == this_path {
