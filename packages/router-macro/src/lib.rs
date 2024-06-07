@@ -238,6 +238,7 @@ mod segment;
 /// # #[component]
 /// # fn Home() -> Element { None }
 /// ```
+#[doc(alias = "route")]
 #[proc_macro_derive(
     Routable,
     attributes(route, nest, end_nest, layout, end_layout, redirect, child)

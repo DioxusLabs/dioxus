@@ -42,7 +42,7 @@ pub(crate) mod innerlude {
     pub use crate::tasks::*;
     pub use crate::virtual_dom::*;
 
-    /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`Scope`] or [`ScopeState`].
+    /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`ScopeId`] or [`ScopeState`].
     ///
     /// An Errored [`Element`] will propagate the error to the nearest error boundary.
     pub type Element = Option<VNode>;

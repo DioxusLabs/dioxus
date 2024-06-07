@@ -17,7 +17,10 @@ struct UpdateInformation<T> {
     callback: RefCell<Box<dyn FnMut() -> T>>,
 }
 
-/// A value that is memoized. This is useful for caching the result of a computation.
+#[doc = include_str!("../docs/memo.md")]
+#[doc(alias = "Selector")]
+#[doc(alias = "UseMemo")]
+#[doc(alias = "Memorize")]
 pub struct Memo<T: 'static> {
     inner: Signal<T>,
     update: CopyValue<UpdateInformation<T>>,

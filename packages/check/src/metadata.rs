@@ -1,11 +1,11 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Information about a hook call or function.
 pub struct HookInfo {
-    /// The name of the hook, e.g. `use_state`.
+    /// The name of the hook, e.g. `use_signal`.
     pub name: String,
-    /// The span of the hook, e.g. `use_signal(|| 0)`.
+    /// The span of the hook, e.g. `use_signal`.
     pub span: Span,
-    /// The span of the name, e.g. `use_state`.
+    /// The span of the name, e.g. `use_signal`.
     pub name_span: Span,
 }
 

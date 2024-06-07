@@ -2077,6 +2077,7 @@ name = "dioxus"
 version = "0.5.2"
 dependencies = [
  "criterion 0.3.6",
+ "dioxus",
  "dioxus-config-macro",
  "dioxus-core 0.5.2",
  "dioxus-core-macro",
@@ -2249,12 +2250,14 @@ dependencies = [
  "rand 0.8.5",
  "reqwest",
  "rustc-hash",
+ "rustversion",
  "serde",
  "slab",
  "tokio",
  "tracing",
  "tracing-fluent-assertions",
  "tracing-subscriber",
+ "web-sys",
 ]
 
 [[package]]
@@ -2403,6 +2406,8 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "generational-box 0.5.2",
+ "reqwest",
+ "rustversion",
  "slab",
  "thiserror",
  "tokio",
@@ -2437,15 +2442,18 @@ name = "dioxus-html"
 version = "0.5.2"
 dependencies = [
  "async-trait",
+ "dioxus",
  "dioxus-core 0.5.2",
  "dioxus-html-internal-macro",
  "dioxus-rsx",
+ "dioxus-web",
  "enumset",
  "euclid",
  "futures-channel",
  "generational-box 0.5.2",
  "keyboard-types",
  "rfd",
+ "rustversion",
  "serde",
  "serde-value",
  "serde_json",
@@ -2590,6 +2598,7 @@ dependencies = [
  "gloo-utils 0.1.7",
  "http 1.1.0",
  "js-sys",
+ "rustversion",
  "serde",
  "serde_json",
  "tokio",
@@ -2638,6 +2647,8 @@ dependencies = [
  "generational-box 0.5.2",
  "once_cell",
  "parking_lot",
+ "rand 0.8.5",
+ "reqwest",
  "rustc-hash",
  "serde",
  "simple_logger",
