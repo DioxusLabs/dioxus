@@ -7,7 +7,8 @@ pub fn use_router() -> RouterContext {
     use_router_internal().expect("use_route must have access to a router")
 }
 
-/// Aquire the router without subscribing to updates.
+/// Acquire the router without subscribing to updates.
+#[doc(alias = "url")]
 pub fn router() -> RouterContext {
     dioxus_lib::prelude::consume_context()
 }

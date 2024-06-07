@@ -1,10 +1,11 @@
+use anyhow::Result;
 use openidconnect::{
-    core::{CoreClient, CoreErrorResponseType, CoreIdToken, CoreResponseType, CoreTokenResponse},
+    core::{CoreClient, CoreIdToken, CoreResponseType, CoreTokenResponse},
     reqwest::async_http_client,
     url::Url,
-    AuthenticationFlow, AuthorizationCode, ClaimsVerificationError, ClientId, CsrfToken, IssuerUrl,
-    LogoutRequest, Nonce, ProviderMetadataWithLogout, RedirectUrl, RefreshToken, RequestTokenError,
-    StandardErrorResponse,
+    AuthenticationFlow, AuthorizationCode, ClaimsVerificationError, ClientId, ClientSecret,
+    CsrfToken, IssuerUrl, LogoutRequest, Nonce, ProviderMetadataWithLogout, RedirectUrl,
+    RefreshToken,
 };
 use serde::{Deserialize, Serialize};
 
@@ -16,12 +17,12 @@ pub struct ClientState {
 }
 
 /// State that holds the nonce and authorization url and the nonce generated to log in an user
-#[derive(Clone, Deserialize, Serialize, Default)]
+#[derive(Clone, PartialEq, Deserialize, Serialize, Default)]
 pub struct AuthRequestState {
     pub auth_request: Option<AuthRequest>,
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, PartialEq, Deserialize, Serialize)]
 pub struct AuthRequest {
     pub nonce: Nonce,
     pub authorize_url: String,
@@ -34,6 +35,14 @@ pub struct AuthTokenState {
     pub id_token: Option<CoreIdToken>,
     /// Token used to refresh the tokens if they expire
     pub refresh_token: Option<RefreshToken>,
+}
+
+impl PartialEq for AuthTokenState {
+    fn eq(&self, other: &Self) -> bool {
+        self.id_token == other.id_token
+            && self.refresh_token.as_ref().map(|t| t.secret().clone())
+                == other.refresh_token.as_ref().map(|t| t.secret().clone())
+    }
 }
 
 pub fn email(
@@ -63,15 +72,17 @@ pub fn authorize_url(client: CoreClient) -> AuthRequest {
     }
 }
 
-pub async fn init_provider_metadata() -> Result<ProviderMetadataWithLogout, crate::errors::Error> {
+pub async fn init_provider_metadata() -> Result<ProviderMetadataWithLogout> {
     let issuer_url = IssuerUrl::new(crate::DIOXUS_FRONT_ISSUER_URL.to_string())?;
     Ok(ProviderMetadataWithLogout::discover_async(issuer_url, async_http_client).await?)
 }
 
-pub async fn init_oidc_client() -> Result<(ClientId, CoreClient), crate::errors::Error> {
+pub async fn init_oidc_client() -> Result<(ClientId, CoreClient)> {
     let client_id = ClientId::new(crate::DIOXUS_FRONT_CLIENT_ID.to_string());
     let provider_metadata = init_provider_metadata().await?;
-    let client_secret = None;
+    let client_secret = Some(ClientSecret::new(
+        crate::DIOXUS_FRONT_CLIENT_SECRET.to_string(),
+    ));
     let redirect_url = RedirectUrl::new(format!("{}/login", crate::DIOXUS_FRONT_URL))?;
 
     Ok((
@@ -82,10 +93,7 @@ pub async fn init_oidc_client() -> Result<(ClientId, CoreClient), crate::errors:
 }
 
 ///TODO: Add pkce_pacifier
-pub async fn token_response(
-    oidc_client: CoreClient,
-    code: String,
-) -> Result<CoreTokenResponse, crate::errors::Error> {
+pub async fn token_response(oidc_client: CoreClient, code: String) -> Result<CoreTokenResponse> {
     // let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
     Ok(oidc_client
         .exchange_code(AuthorizationCode::new(code.clone()))
@@ -97,20 +105,14 @@ pub async fn token_response(
 pub async fn exchange_refresh_token(
     oidc_client: CoreClient,
     refresh_token: RefreshToken,
-) -> Result<
-    CoreTokenResponse,
-    RequestTokenError<
-        openidconnect::reqwest::Error<reqwest::Error>,
-        StandardErrorResponse<CoreErrorResponseType>,
-    >,
-> {
-    oidc_client
+) -> Result<CoreTokenResponse> {
+    Ok(oidc_client
         .exchange_refresh_token(&refresh_token)
         .request_async(async_http_client)
-        .await
+        .await?)
 }
 
-pub async fn log_out_url(id_token_hint: CoreIdToken) -> Result<Url, crate::errors::Error> {
+pub async fn log_out_url(id_token_hint: CoreIdToken) -> Result<Url> {
     let provider_metadata = init_provider_metadata().await?;
     let end_session_url = provider_metadata
         .additional_metadata()

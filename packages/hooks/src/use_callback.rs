@@ -9,6 +9,7 @@ use dioxus_signals::Writable;
 /// There is *currently* no signal tracking on the Callback so anything reading from it will not be updated.
 ///
 /// This API is in flux and might not remain.
+#[doc = include_str!("../docs/rules_of_hooks.md")]
 pub fn use_callback<O>(f: impl FnMut() -> O + 'static) -> UseCallback<O> {
     // Create a copyvalue with no contents
     // This copyvalue is generic over F so that it can be sized properly
@@ -35,9 +36,22 @@ pub fn use_callback<O>(f: impl FnMut() -> O + 'static) -> UseCallback<O> {
 /// This callback is not generic over a return type so you can hold a bunch of callbacks at once
 ///
 /// If you need a callback that returns a value, you can simply wrap the closure you pass in that sets a value in its scope
-#[derive(PartialEq)]
 pub struct UseCallback<O: 'static + ?Sized> {
     inner: CopyValue<Box<dyn FnMut() -> O>>,
+}
+
+impl<O: 'static + ?Sized> PartialEq for UseCallback<O> {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner == other.inner
+    }
+}
+
+impl<O: 'static + ?Sized> std::fmt::Debug for UseCallback<O> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UseCallback")
+            .field("inner", &self.inner.value())
+            .finish()
+    }
 }
 
 impl<O: 'static + ?Sized> Clone for UseCallback<O> {

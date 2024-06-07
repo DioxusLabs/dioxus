@@ -30,6 +30,16 @@ http = { workspace = true, optional = true }
 dioxus-fullstack = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["full"], optional = true }
 dioxus-cli-config = { workspace = true, features = ["read-config"] }
+rustversion = "1.0.17"
+
+# you need to comment this out when publishing since cargo workspaces is not smart enough to wipe this when dropping
+# dev-dependncey crates
+[target.'cfg(target_family = "wasm")'.dev-dependencies]
+console_error_panic_hook = "0.1.7"
+dioxus-router = { workspace = true, features = ["web"] }
+# dioxus-web = { workspace = true }
+gloo = "0.8.0"
+wasm-bindgen-test = "0.3.33"
 
 [features]
 default = []
@@ -44,21 +54,55 @@ axum = { workspace = true, features = ["ws"] }
 dioxus = { workspace = true, features = ["router"] }
 dioxus-ssr = { workspace = true }
 criterion = { version = "0.5", features = ["async_tokio", "html_reports"] }
+ciborium = { version = "0.2.1" }
+base64 = { version = "0.21.0" }
+serde = { version = "1", features = ["derive"] }
 
-[[example]]
-name = "static_generation"
-required-features = ["ssr"]
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 
 [[bench]]
 name = "incremental"
 required-features = ["ssr"]
 harness = false
 
-# you need to comment this out when publishing since cargo workspaces is not smart enough to wipe this when dropping
-# dev-dependncey crates
-[target.'cfg(target_family = "wasm")'.dev-dependencies]
-console_error_panic_hook = "0.1.7"
-dioxus-router = { workspace = true, features = ["web"] }
-# dioxus-web = { workspace = true }
-gloo = "0.8.0"
-wasm-bindgen-test = "0.3.33"
+# Most of the examples live in the workspace. We include some here so that docs.rs can scrape our examples for better inline docs
+[[example]]
+name = "crm"
+path = "../../examples/crm.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "flat_router"
+path = "../../examples/flat_router.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "hash_fragment_state"
+path = "../../examples/hash_fragment_state.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "link"
+path = "../../examples/link.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "query_segment_search"
+path = "../../examples/query_segment_search.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "router"
+path = "../../examples/router.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "simple_router"
+path = "../../examples/simple_router.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "static_generation"
+required-features = ["ssr"]
+doc-scrape-examples = true

@@ -29,3 +29,6 @@ convert_case = "0.5.0"
 
 [dev-dependencies]
 pretty_assertions = "1.2.1"
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

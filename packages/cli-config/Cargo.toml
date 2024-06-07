@@ -25,3 +25,6 @@ tauri-utils = { version = "=1.5.*", optional = true }
 default = ["read-config"]
 cli = ["tauri-bundler", "tauri-utils", "clap", "toml", "cargo_toml"]
 read-config = []
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

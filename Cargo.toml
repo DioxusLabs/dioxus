@@ -118,9 +118,6 @@ axum-extra = "0.9.2"
 reqwest = "0.11.24"
 owo-colors = "4.0.0"
 
-[workspace.dev-dependencies]
-isnta = "1.36.1"
-
 # speed up some macros by optimizing them
 [profile.dev.package.insta]
 opt-level = 3
@@ -199,27 +196,139 @@ http = ["reqwest", "http-range"]
 [[example]]
 name = "login_form"
 required-features = ["http"]
+doc-scrape-examples = true
 
 [[example]]
 name = "dog_app"
 required-features = ["http"]
+doc-scrape-examples = true
 
 [[example]]
 name = "video_stream"
-required-features = ["http"]
+required-features = ["http", "desktop"]
+doc-scrape-examples = true
 
 [[example]]
 name = "suspense"
-required-features = ["http"]
+required-features = ["http", "desktop"]
+doc-scrape-examples = true
 
 [[example]]
 name = "weather_app"
 required-features = ["http"]
+doc-scrape-examples = true
 
 [[example]]
 name = "image_generator_openai"
 required-features = ["http"]
+doc-scrape-examples = true
 
 [[example]]
 name = "hash_fragment_state"
 required-features = ["ciborium", "base64"]
+doc-scrape-examples = true
+
+[[example]]
+name = "backgrounded_futures"
+required-features = ["desktop"]
+doc-scrape-examples = true
+
+[[example]]
+name = "calculator_mutable"
+required-features = ["desktop"]
+doc-scrape-examples = true
+
+[[example]]
+name = "calculator"
+required-features = ["desktop"]
+doc-scrape-examples = true
+
+[[example]]
+name = "clock"
+required-features = ["desktop"]
+doc-scrape-examples = true
+
+[[example]]
+name = "crm"
+required-features = ["desktop"]
+doc-scrape-examples = true
+
+[[example]]
+name = "custom_html"
+required-features = ["desktop"]
+doc-scrape-examples = true
+
+[[example]]
+name = "custom_menu"
+required-features = ["desktop"]
+doc-scrape-examples = true
+
+[[example]]
+name = "dynamic_asset"
+required-features = ["desktop"]
+doc-scrape-examples = true
+
+[[example]]
+name = "error_handle"
+required-features = ["desktop"]
+doc-scrape-examples = true
+
+[[example]]
+name = "file_explorer"
+required-features = ["desktop"]
+doc-scrape-examples = true
+
+[[example]]
+name = "future"
+required-features = ["desktop"]
+doc-scrape-examples = true
+
+[[example]]
+name = "hydration"
+required-features = ["desktop"]
+doc-scrape-examples = true
+
+[[example]]
+name = "multiwindow"
+required-features = ["desktop"]
+doc-scrape-examples = true
+
+[[example]]
+name = "overlay"
+required-features = ["desktop"]
+doc-scrape-examples = true
+
+[[example]]
+name = "popup"
+required-features = ["desktop"]
+doc-scrape-examples = true
+
+[[example]]
+name = "read_size"
+required-features = ["desktop"]
+doc-scrape-examples = true
+
+[[example]]
+name = "shortcut"
+required-features = ["desktop"]
+doc-scrape-examples = true
+
+[[example]]
+name = "streams"
+required-features = ["desktop"]
+doc-scrape-examples = true
+
+[[example]]
+name = "window_event"
+required-features = ["desktop"]
+doc-scrape-examples = true
+
+[[example]]
+name = "window_focus"
+required-features = ["desktop"]
+doc-scrape-examples = true
+
+[[example]]
+name = "window_zoom"
+required-features = ["desktop"]
+doc-scrape-examples = true

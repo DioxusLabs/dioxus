@@ -114,6 +114,11 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
     pub fn id(&self) -> GenerationalBoxId {
         self.value.id()
     }
+
+    /// Get the underlying [`GenerationalBox`] value.
+    pub fn value(&self) -> GenerationalBox<T, S> {
+        self.value
+    }
 }
 
 impl<T: 'static, S: Storage<T>> Readable for CopyValue<T, S> {
