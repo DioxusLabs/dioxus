@@ -155,7 +155,7 @@ impl ErrorBoundary {
 ///
 /// ```rust, ignore
 /// #[component]
-/// fn app(count: String) -> Element {
+/// fn App(count: String) -> Element {
 ///     let id: i32 = count.parse().throw()?;
 ///
 ///     rsx! {
@@ -180,7 +180,7 @@ pub trait Throw<S = ()>: Sized {
     ///
     /// ```rust, ignore
     /// #[component]
-    /// fn app( count: String) -> Element {
+    /// fn App(count: String) -> Element {
     ///     let id: i32 = count.parse().throw()?;
     ///
     ///     rsx! {
@@ -203,7 +203,7 @@ pub trait Throw<S = ()>: Sized {
     ///
     /// ```rust, ignore
     /// #[component]
-    /// fn app( count: String) -> Element {
+    /// fn App(count: String) -> Element {
     ///     let id: i32 = count.parse().throw()?;
     ///
     ///     rsx! {

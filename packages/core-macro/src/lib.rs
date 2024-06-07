@@ -9,7 +9,6 @@ use syn::parse_macro_input;
 
 mod component;
 mod props;
-mod utils;
 
 use dioxus_rsx as rsx;
 
@@ -30,7 +29,7 @@ pub fn derive_typed_builder(input: TokenStream) -> TokenStream {
     }
 }
 
-/// The rsx! macro makes it easy for developers to write jsx-style markup in their components.
+/// The `rsx!` macro makes it easy for developers to write jsx-style markup in their components.
 #[proc_macro]
 pub fn rsx(tokens: TokenStream) -> TokenStream {
     match syn::parse::<rsx::CallBody>(tokens) {
@@ -39,50 +38,46 @@ pub fn rsx(tokens: TokenStream) -> TokenStream {
     }
 }
 
-/// The rsx! macro makes it easy for developers to write jsx-style markup in their components.
-///
-/// The render macro automatically renders rsx - making it unhygienic.
+/// This macro has been deprecated in favor of [`rsx`].
 #[deprecated(note = "Use `rsx!` instead.")]
 #[proc_macro]
 pub fn render(tokens: TokenStream) -> TokenStream {
     rsx(tokens)
 }
 
-/// Streamlines component creation.
-/// This is the recommended way of creating components,
-/// though you might want lower-level control with more advanced uses.
-///
-/// # Arguments
-/// * `no_case_check` - Doesn't enforce `PascalCase` on your component names.
-/// **This will be removed/deprecated in a future update in favor of a more complete Clippy-backed linting system.**
-/// The reasoning behind this is that Clippy allows more robust and powerful lints, whereas
-/// macros are extremely limited.
-///
-/// # Features
-/// This attribute:
-/// * Enforces that your component uses `PascalCase`.
-/// No warnings are generated for the `PascalCase`
-/// function name, but everything else will still raise a warning if it's incorrectly `PascalCase`.
-/// Does not disable warnings anywhere else, so if you, for example,
-/// accidentally don't use `snake_case`
-/// for a variable name in the function, the compiler will still warn you.
-/// * Automatically uses `#[inline_props]` if there's more than 1 parameter in the function.
+/// * Makes the compiler allow an `UpperCamelCase` function identifier.
+/// * Seamlessly creates a props struct if there's more than 1 parameter in the function.
 /// * Verifies the validity of your component.
 ///
 /// # Examples
+///
 /// * Without props:
-/// ```rust,ignore
+/// ```rust
+/// # use dioxus::prelude::*;
 /// #[component]
-/// fn GreetBob() -> Element {
-///     rsx! { "hello, bob" }
+/// fn Greet() -> Element {
+///     rsx! { "hello, someone" }
 /// }
 /// ```
 ///
 /// * With props:
-/// ```rust,ignore
+/// ```rust
+/// # use dioxus::prelude::*;
 /// #[component]
-/// fn GreetBob(bob: String) -> Element {
-///    rsx! { "hello, {bob}" }
+/// fn Greet(person: String) -> Element {
+///    rsx! { "hello, " {person} }
+/// }
+/// ```
+/// Which is roughly equivalent to:
+/// ```rust
+/// # use dioxus::prelude::*;
+/// #[derive(PartialEq, Clone, Props)]
+/// struct GreetProps {
+///     person: String,
+/// }
+///
+/// fn Greet(GreetProps { person }: GreetProps) -> Element {
+///     rsx! { "hello, " {person} }
 /// }
 /// ```
 #[proc_macro_attribute]
@@ -92,32 +87,7 @@ pub fn component(_args: TokenStream, input: TokenStream) -> TokenStream {
         .into()
 }
 
-/// Derive props for a component within the component definition.
-///
-/// This macro provides a simple transformation from `Scope<{}>` to `Scope<P>`,
-/// removing some boilerplate when defining props.
-///
-/// You don't *need* to use this macro at all, but it can be helpful in cases where
-/// you would be repeating a lot of the usual Rust boilerplate.
-///
-/// # Example
-/// ```rust,ignore
-/// #[inline_props]
-/// fn app(bob: String) -> Element {
-///     rsx! { "hello, {bob}") }
-/// }
-///
-/// // is equivalent to
-///
-/// #[derive(PartialEq, Props)]
-/// struct AppProps {
-///     bob: String,
-/// }
-///
-/// fn app(props: AppProps) -> Element {
-///     rsx! { "hello, {bob}") }
-/// }
-/// ```
+/// This macro has been deprecated in favor of [`component`].
 #[proc_macro_attribute]
 #[deprecated(note = "Use `#[component]` instead.")]
 pub fn inline_props(args: TokenStream, input: TokenStream) -> TokenStream {
