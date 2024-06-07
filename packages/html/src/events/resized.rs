@@ -92,8 +92,10 @@ impl From<&ResizedData> for SerializedResizedData {
         if let Ok(sizes) = data.inner.get_border_box_size() {
             for size in sizes {
                 border_box_sizes.push(SerializedResizeObserverSize {
-                    block_size: size.width,
-                    inline_size: size.height,
+                    // block_size matchs the height of the element if its writing-mode is horizontal, the width otherwise
+                    block_size: size.height,
+                    // inline_size matchs the width of the element if its writing-mode is horizontal, the height otherwise
+                    inline_size: size.width,
                 });
             }
         }
@@ -102,8 +104,10 @@ impl From<&ResizedData> for SerializedResizedData {
         if let Ok(sizes) = data.inner.get_content_box_size() {
             for size in sizes {
                 content_box_sizes.push(SerializedResizeObserverSize {
-                    block_size: size.width,
-                    inline_size: size.height,
+                    // block_size matchs the height of the element if its writing-mode is horizontal, the width otherwise
+                    block_size: size.height,
+                    // inline_size matchs the width of the element if its writing-mode is horizontal, the height otherwise
+                    inline_size: size.width,
                 });
             }
         }
@@ -122,7 +126,7 @@ macro_rules! get_box_size {
                 let sizes = self
                     .$field_name
                     .iter()
-                    .map(|s| PixelsSize::new(s.block_size, s.inline_size))
+                    .map(|s| PixelsSize::new(s.inline_size, s.block_size))
                     .collect();
                 Ok(sizes)
             } else {
