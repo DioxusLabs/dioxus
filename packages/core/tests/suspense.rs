@@ -179,6 +179,83 @@ fn suspense_does_not_poll_spawn() {
     }
 }
 
+/// suspended nodes are not mounted, so they should not run effects
+#[test]
+fn suspended_nodes_dont_trigger_effects() {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .unwrap()
+        .block_on(async {
+            let mut dom = VirtualDom::new(app);
+            dom.rebuild(&mut dioxus_core::NoOpMutations);
+
+            let work = async move {
+                loop {
+                    dom.wait_for_work().await;
+                    dom.render_immediate(&mut dioxus_core::NoOpMutations);
+                }
+            };
+            tokio::select! {
+                _ = work => {},
+                _ = tokio::time::sleep(std::time::Duration::from_millis(100)) => {}
+            }
+        });
+
+    fn app() -> Element {
+        rsx! {
+            SuspenseBoundary {
+                fallback: |_| rsx! { "fallback" },
+                Child {}
+            }
+        }
+    }
+
+    #[component]
+    fn RerendersFrequently() -> Element {
+        let mut count = use_signal(|| 0);
+
+        use_future(move || async move {
+            for _ in 0..100 {
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                count.set(count() + 1);
+            }
+        });
+
+        rsx! {
+            div { "rerenders frequently" }
+        }
+    }
+
+    #[component]
+    fn Child() -> Element {
+        let mut future_resolved = use_signal(|| false);
+
+        use_effect(|| panic!("effects should not run during suspense"));
+
+        // futures that are spawned, but not suspended should never be polled
+        use_hook(|| {
+            spawn(async move {
+                panic!("Non-suspended task was polled");
+            });
+        });
+
+        let task = use_hook(|| {
+            spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                future_resolved.set(true);
+            })
+        });
+        if !future_resolved() {
+            suspend(task)?;
+        }
+
+        rsx! {
+            div { "child with future resolved" }
+        }
+    }
+}
+
 /// Make sure we keep any state of components when we switch from a resolved future to a suspended future
 #[test]
 fn resolved_to_suspended() {
