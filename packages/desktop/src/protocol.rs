@@ -1,7 +1,7 @@
 use crate::{assets::*, edits::EditQueue};
 use dioxus_interpreter_js::unified_bindings::SLEDGEHAMMER_JS;
 use dioxus_interpreter_js::NATIVE_JS;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use wry::{
     http::{status::StatusCode, Request, Response},
     RequestAsyncResponder, Result,
@@ -81,8 +81,8 @@ fn assets_head() -> Option<String> {
         target_os = "openbsd"
     ))]
     {
-        let head = crate::protocol::get_asset_root_or_default();
-        let head = head.join("dist").join("__assets_head.html");
+        let assets_head_path = PathBuf::from("__assets_head.html");
+        let head = resolve_resource(&assets_head_path);
         match std::fs::read_to_string(&head) {
             Ok(s) => Some(s),
             Err(err) => {
@@ -103,6 +103,27 @@ fn assets_head() -> Option<String> {
     {
         None
     }
+}
+
+fn resolve_resource(path: &Path) -> PathBuf {
+    let mut base_path = get_asset_root_or_default();
+    if running_in_dev_mode() {
+        base_path.push(path);
+    } else {
+        let mut resource_path = PathBuf::new();
+        for component in path.components() {
+            // Tauri-bundle inserts special path segments for abnormal component paths
+            match component {
+                Component::Prefix(_) => {}
+                Component::RootDir => resource_path.push("_root_"),
+                Component::CurDir => {}
+                Component::ParentDir => resource_path.push("_up_"),
+                Component::Normal(p) => resource_path.push(p),
+            }
+        }
+        base_path.push(resource_path);
+    }
+    base_path
 }
 
 /// Handle a request from the webview
@@ -150,17 +171,11 @@ pub(super) fn desktop_handler(
 
 fn serve_from_fs(path: PathBuf) -> Result<Response<Vec<u8>>> {
     // If the path is relative, we'll try to serve it from the assets directory.
-    let mut asset = get_asset_root_or_default().join(&path);
+    let mut asset = resolve_resource(&path);
 
     // If we can't find it, make it absolute and try again
     if !asset.exists() {
         asset = PathBuf::from("/").join(&path);
-    }
-
-    // If we can't find it, add the dist directory and try again
-    // When bundling we currently copy the whole dist directory to the output directory instead of the individual files because of a limitation of cargo bundle2
-    if !asset.exists() {
-        asset = get_asset_root_or_default().join("dist").join(&path);
     }
 
     if !asset.exists() {
@@ -215,6 +230,12 @@ fn get_asset_root_or_default() -> PathBuf {
     get_asset_root().unwrap_or_else(|| std::env::current_dir().unwrap())
 }
 
+fn running_in_dev_mode() -> bool {
+    // If running under cargo, there's no bundle!
+    // There might be a smarter/more resilient way of doing this
+    std::env::var_os("CARGO").is_some()
+}
+
 /// Get the asset directory, following tauri/cargo-bundles directory discovery approach
 ///
 /// Currently supports:
@@ -226,9 +247,7 @@ fn get_asset_root_or_default() -> PathBuf {
 /// - [ ] Android
 #[allow(unreachable_code)]
 fn get_asset_root() -> Option<PathBuf> {
-    // If running under cargo, there's no bundle!
-    // There might be a smarter/more resilient way of doing this
-    if std::env::var_os("CARGO").is_some() {
+    if running_in_dev_mode() {
         return dioxus_cli_config::CURRENT_CONFIG
             .as_ref()
             .map(|c| c.out_dir())
