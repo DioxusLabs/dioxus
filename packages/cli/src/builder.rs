@@ -15,7 +15,7 @@ use manganis_cli_support::{AssetManifest, ManganisSupportGuard};
 use std::{
     env,
     fs::{copy, create_dir_all, File},
-    io::Read,
+    io::{self, IsTerminal, Read},
     panic,
     path::PathBuf,
     process::Command,
@@ -437,18 +437,56 @@ struct CargoBuildResult {
     output_location: Option<PathBuf>,
 }
 
+struct Outputter {
+    progress_bar: Option<ProgressBar>,
+}
+
+impl Outputter {
+    pub fn new() -> Self {
+        let stdout = io::stdout().lock();
+
+        let mut myself = Self { progress_bar: None };
+
+        if stdout.is_terminal() {
+            let mut pb = ProgressBar::new_spinner();
+            pb.enable_steady_tick(Duration::from_millis(200));
+            pb = PROGRESS_BARS.add(pb);
+            pb.set_style(
+                ProgressStyle::with_template("{spinner:.dim.bold} {wide_msg}")
+                    .unwrap()
+                    .tick_chars("/|\\- "),
+            );
+
+            myself.progress_bar = Some(pb);
+        }
+
+        myself
+    }
+
+    pub fn println(&self, msg: impl ToString) {
+        let msg = msg.to_string();
+        if let Some(pb) = &self.progress_bar {
+            pb.set_message(msg)
+        } else {
+            println!("{msg}");
+        }
+    }
+
+    pub fn finish_with_message(&self, msg: impl ToString) {
+        let msg = msg.to_string();
+        if let Some(pb) = &self.progress_bar {
+            pb.finish_with_message(msg)
+        } else {
+            println!("{msg}");
+        }
+    }
+}
+
 fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<CargoBuildResult> {
     let mut warning_messages: Vec<Diagnostic> = vec![];
 
-    let mut pb = ProgressBar::new_spinner();
-    pb.enable_steady_tick(Duration::from_millis(200));
-    pb = PROGRESS_BARS.add(pb);
-    pb.set_style(
-        ProgressStyle::with_template("{spinner:.dim.bold} {wide_msg}")
-            .unwrap()
-            .tick_chars("/|\\- "),
-    );
-    pb.set_message("💼 Waiting to start building the project...");
+    let output = Outputter::new();
+    output.println("💼 Waiting to start building the project...");
 
     let stdout = cmd.detached().stream_stdout()?;
     let reader = std::io::BufReader::new(stdout);
@@ -473,8 +511,7 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<CargoBuildResult> {
                 }
             }
             Message::CompilerArtifact(artifact) => {
-                pb.set_message(format!("⚙ Compiling {} ", artifact.package_id));
-                pb.tick();
+                output.println(format!("⚙ Compiling {} ", artifact.package_id));
                 if let Some(executable) = artifact.executable {
                     output_location = Some(executable.into());
                 }
@@ -484,9 +521,9 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<CargoBuildResult> {
             }
             Message::BuildFinished(finished) => {
                 if finished.success {
-                    pb.finish_with_message("👑 Build done.");
+                    output.finish_with_message("👑 Build done.");
                 } else {
-                    pb.finish_with_message("❌ Build failed.");
+                    output.finish_with_message("❌ Build failed.");
                     return Err(anyhow::anyhow!("Build failed"));
                 }
             }
