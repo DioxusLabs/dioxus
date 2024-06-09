@@ -1600,7 +1600,9 @@ builder_constructors! {
     /// Build a
     /// [`<slot>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/slot)
     /// element.
-    slot None {};
+    slot None {
+        name: String DEFAULT,
+    };
 
     /// Build a
     /// [`<template>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/template)
