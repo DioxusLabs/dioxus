@@ -291,6 +291,9 @@ mod_methods! {
     /// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/part>
     part;
 
+    /// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/popover>
+    popover;
+
     /// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/role>
     role;
 
