@@ -349,8 +349,6 @@ impl SuspenseBoundaryProps {
             nodes_created
         };
 
-        dom.runtime.scope_stack.borrow_mut().pop();
-
         nodes_created
     }
 
@@ -455,13 +453,13 @@ impl SuspenseBoundaryProps {
                 let new_children = RenderReturn { node: children };
 
                 // First diff the two children nodes in the background
+                dom.runtime.scope_stack.borrow_mut().push(scope_id);
                 old_suspended_nodes.diff_node(&new_children, dom, None::<&mut M>);
 
                 // Then replace the placeholder with the new children
                 let mount = old_placeholder.mount.get();
                 let mount = dom.mounts.get(mount.0).expect("mount should exist");
                 let parent = mount.parent;
-                dom.runtime.scope_stack.borrow_mut().push(scope_id);
                 old_placeholder.replace(std::slice::from_ref(&*new_children), parent, dom, to);
                 dom.runtime.scope_stack.borrow_mut().pop();
                 tracing::trace!("Exiting suspense: replaced placeholder with new children");
