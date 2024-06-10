@@ -49,10 +49,7 @@ impl VirtualDom {
         // If there are suspended scopes, we need to check if the scope is suspended before we diff it
         // If it is suspended, we need to diff it but write the mutations nothing
         // Note: It is important that we still diff the scope even if it is suspended, because the scope may render other child components which may change between renders
-        let mut render_to = to.filter(|_| {
-            self.runtime
-                .scope_should_render(scope, new_nodes.suspended())
-        });
+        let mut render_to = to.filter(|_| self.runtime.scope_should_render(scope));
         old.diff_node(new_real_nodes, self, render_to.as_deref_mut());
 
         self.scopes[scope.0].last_rendered_node = Some(new_nodes);
@@ -80,10 +77,7 @@ impl VirtualDom {
         // If there are suspended scopes, we need to check if the scope is suspended before we diff it
         // If it is suspended, we need to diff it but write the mutations nothing
         // Note: It is important that we still diff the scope even if it is suspended, because the scope may render other child components which may change between renders
-        let mut render_to = to.filter(|_| {
-            self.runtime
-                .scope_should_render(scope, new_nodes.suspended())
-        });
+        let mut render_to = to.filter(|_| self.runtime.scope_should_render(scope));
 
         // Create the node
         let nodes = new_nodes.create(self, parent, render_to.as_deref_mut());

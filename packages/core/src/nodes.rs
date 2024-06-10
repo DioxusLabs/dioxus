@@ -27,15 +27,6 @@ pub struct RenderReturn {
     pub(crate) node: Element,
 }
 
-impl RenderReturn {
-    pub(crate) fn suspended(&self) -> bool {
-        matches!(
-            self.node,
-            Err(crate::render_error::RenderError::Suspended(_))
-        )
-    }
-}
-
 impl From<RenderReturn> for VNode {
     fn from(val: RenderReturn) -> Self {
         match val.node {

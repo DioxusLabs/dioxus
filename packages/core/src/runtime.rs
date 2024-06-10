@@ -167,17 +167,7 @@ impl Runtime {
     }
 
     /// Check if we should render a scope
-    pub(crate) fn scope_should_render(&self, scope_id: ScopeId, return_suspended: bool) -> bool {
-        // We always render scopes that are suspended to render a placeholder we can replace with the loading template later
-        if return_suspended {
-            return true;
-        }
-
-        self.scope_mounted(scope_id)
-    }
-
-    /// Check if a scope is mounted in the real dom or if it is suspended
-    pub(crate) fn scope_mounted(&self, scope_id: ScopeId) -> bool {
+    pub(crate) fn scope_should_render(&self, scope_id: ScopeId) -> bool {
         // If there are no suspended futures, we know that there are no frozen contexts
         if self.suspended_tasks.get() == 0 {
             return true;
@@ -188,7 +178,7 @@ impl Runtime {
         scope
             .suspense_boundary()
             .filter(|suspense| suspense.suspended())
-            .is_some()
+            .is_none()
     }
 }
 

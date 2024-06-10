@@ -663,7 +663,7 @@ impl VNode {
                         // Take a dynamic node off the depth first iterator
                         nodes.next().unwrap();
                         // Then mount the node
-                        self.mount_dynamic_node(mount, *id, dom, to.as_deref_mut())
+                        self.create_dynamic_node(mount, *id, dom, to.as_deref_mut())
                     }
                     // For static text and element nodes, just load the template root. This may be a placeholder or just a static node. We now know that each root node has a unique id
                     TemplateNode::Text { .. } | TemplateNode::Element { .. } => {
@@ -710,7 +710,7 @@ impl VNode {
         }
     }
 
-    pub(crate) fn mount_dynamic_node(
+    pub(crate) fn create_dynamic_node(
         &self,
         mount: MountId,
         dynamic_node_id: usize,
@@ -775,7 +775,7 @@ impl VNode {
         // Only take nodes that are under this root node
         let from_root_node = |(_, path): &(usize, &[u8])| path.first() == Some(&root_idx);
         while let Some((dynamic_node_id, path)) = dynamic_nodes_iter.next_if(from_root_node) {
-            let m = self.mount_dynamic_node(mount, dynamic_node_id, dom, to.as_deref_mut());
+            let m = self.create_dynamic_node(mount, dynamic_node_id, dom, to.as_deref_mut());
             if let Some(to) = to.as_deref_mut() {
                 // If we actually created real new nodes, we need to replace the placeholder for this dynamic node with the new dynamic nodes
                 if m > 0 {
@@ -877,7 +877,7 @@ impl VNode {
     }
 
     /// Mount a root node and return its ID and the path to the node
-    fn mount_dynamic_node_with_path(
+    fn create_dynamic_node_with_path(
         &self,
         mount: MountId,
         idx: usize,
@@ -900,7 +900,7 @@ impl VNode {
         dom: &mut VirtualDom,
         to: &mut impl WriteMutations,
     ) -> usize {
-        let (new_id, path) = self.mount_dynamic_node_with_path(mount, idx, dom);
+        let (new_id, path) = self.create_dynamic_node_with_path(mount, idx, dom);
 
         // If this is a root node, the path is empty and we need to create a new text node
         if path.is_empty() {
@@ -922,7 +922,7 @@ impl VNode {
         dom: &mut VirtualDom,
         to: &mut impl WriteMutations,
     ) -> usize {
-        let (id, path) = self.mount_dynamic_node_with_path(mount, idx, dom);
+        let (id, path) = self.create_dynamic_node_with_path(mount, idx, dom);
 
         // If this is a root node, the path is empty and we need to create a new text node
         if path.is_empty() {

@@ -63,8 +63,6 @@ fn Doggo() -> Element {
             message: String,
         }
 
-        tokio::time::sleep(std::time::Duration::from_secs(1000)).await;
-
         reqwest::get("https://dog.ceo/api/breeds/image/random/")
             .await
             .unwrap()

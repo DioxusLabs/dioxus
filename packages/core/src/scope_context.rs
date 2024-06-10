@@ -90,7 +90,7 @@ impl Scope {
     }
 
     /// Get the suspense boundary this scope is currently in (if any)
-    pub fn suspense_boundary(&self) -> Option<SuspenseContext> {
+    pub(crate) fn suspense_boundary(&self) -> Option<SuspenseContext> {
         self.suspense_boundary.clone()
     }
 

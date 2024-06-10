@@ -270,7 +270,6 @@ use generational_box::Owner;
 #[allow(unused)]
 pub use SuspenseBoundary_completions::Component::SuspenseBoundary;
 
-/// TODO: Can this not be a special case?
 /// Suspense has a custom diffing algorithm that diffs the suspended nodes in the background without rendering them
 impl SuspenseBoundaryProps {
     pub(crate) fn downcast_from_props(props: &mut dyn AnyProps) -> Option<&mut Self> {
@@ -321,9 +320,9 @@ impl SuspenseBoundaryProps {
         children.create(dom, parent, None::<&mut M>);
         dom.runtime.scope_stack.borrow_mut().pop();
 
-        // If there are suspended futures, render the callback
         let scope_state = &mut dom.scopes[scope_id.0];
         let suspense_context = scope_state.state().suspense_boundary().unwrap();
+        // If there are suspended futures, render the fallback
         let nodes_created = if !suspense_context.suspended_futures().is_empty() {
             let props = Self::downcast_from_props(&mut *scope_state.props).unwrap();
             props.suspended_nodes = Some(children.into());
@@ -339,6 +338,7 @@ impl SuspenseBoundaryProps {
 
             nodes_created
         } else {
+            println!("No suspended futures");
             // Otherwise just render the children in the real dom
             dom.runtime.scope_stack.borrow_mut().push(scope_id);
             let nodes_created = children.create(dom, parent, to);
@@ -364,14 +364,9 @@ impl SuspenseBoundaryProps {
         let myself = Self::downcast_from_props(&mut *scope.props)
             .unwrap()
             .clone();
-        tracing::trace!("diffing {myself:?}");
 
-        let last_rendered_node = scope
-            .last_rendered_node
-            .as_ref()
-            .map(|node| node.clone_mounted())
-            .unwrap();
-        tracing::trace!("diffing {myself:?} vs {last_rendered_node:?}");
+        let last_rendered_node = scope.last_rendered_node.as_ref().unwrap().clone_mounted();
+        println!("diffing {myself:#?} vs {last_rendered_node:#?}");
 
         let Self {
             fallback,
@@ -455,8 +450,7 @@ impl SuspenseBoundaryProps {
 
                 let props = Self::downcast_from_props(&mut *dom.scopes[scope_id.0].props).unwrap();
                 props.suspended_nodes = Some(new_children);
-            }
-            // We have suspended nodes, but we just got out of suspense. Move the suspended nodes to the foreground
+            } // We have suspended nodes, but we just got out of suspense. Move the suspended nodes to the foreground
             (Some(old_suspended_nodes), false) => {
                 tracing::trace!("Suspended nodes were just resolved. Moving into foreground.");
                 let old_placeholder = last_rendered_node;
