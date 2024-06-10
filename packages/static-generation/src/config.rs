@@ -151,6 +151,7 @@ impl Config {
     #[cfg(feature = "web")]
     #[cfg_attr(docsrs, doc(cfg(feature = "web")))]
     pub fn web_cfg(self, web_cfg: dioxus_web::Config) -> Self {
+        #[allow(clippy::needless_update)]
         Self { web_cfg, ..self }
     }
 }

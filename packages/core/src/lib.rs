@@ -25,6 +25,12 @@ mod suspense;
 mod tasks;
 mod virtual_dom;
 
+/// Items exported from this module are used in macros and should not be used directly.
+#[doc(hidden)]
+pub mod internal {
+    pub use crate::properties::verify_component_called_as_component;
+}
+
 pub(crate) mod innerlude {
     pub(crate) use crate::any_props::*;
     pub use crate::arena::*;
@@ -45,7 +51,7 @@ pub(crate) mod innerlude {
     pub use crate::tasks::*;
     pub use crate::virtual_dom::*;
 
-    /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`Scope`] or [`ScopeState`].
+    /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`ScopeId`] or [`ScopeState`].
     ///
     /// An Errored [`Element`] will propagate the error to the nearest error boundary.
     pub type Element = std::result::Result<VNode, RenderError>;

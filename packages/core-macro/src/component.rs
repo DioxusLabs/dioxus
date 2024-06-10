@@ -84,6 +84,7 @@ impl ComponentBody {
         } = sig;
         let Generics { where_clause, .. } = generics;
         let (_, ty_generics, _) = generics.split_for_impl();
+        let generics_turbofish = ty_generics.as_turbofish();
 
         // We generate a struct with the same name as the component but called `Props`
         let struct_ident = Ident::new(&format!("{fn_ident}Props"), fn_ident.span());
@@ -108,6 +109,9 @@ impl ComponentBody {
             #(#attrs)*
             #(#props_docs)*
             #asyncness #vis fn #fn_ident #generics (#props_ident) #fn_output #where_clause {
+                // In debug mode we can detect if the user is calling the component like a function
+                dioxus_core::internal::verify_component_called_as_component(#fn_ident #generics_turbofish);
+
                 #expanded_struct
                 #block
             }

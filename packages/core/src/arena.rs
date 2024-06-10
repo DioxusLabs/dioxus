@@ -92,9 +92,25 @@ impl VirtualDom {
 }
 
 impl ElementPath {
-    pub(crate) fn is_decendant(&self, small: &&[u8]) -> bool {
-        small.len() <= self.path.len() && *small == &self.path[..small.len()]
+    pub(crate) fn is_decendant(&self, small: &[u8]) -> bool {
+        small.len() <= self.path.len() && small == &self.path[..small.len()]
     }
+}
+
+#[test]
+fn is_decendant() {
+    let event_path = ElementPath {
+        path: &[1, 2, 3, 4, 5],
+    };
+
+    assert!(event_path.is_decendant(&[1, 2, 3, 4, 5]));
+    assert!(event_path.is_decendant(&[1, 2, 3, 4]));
+    assert!(event_path.is_decendant(&[1, 2, 3]));
+    assert!(event_path.is_decendant(&[1, 2]));
+    assert!(event_path.is_decendant(&[1]));
+
+    assert!(!event_path.is_decendant(&[1, 2, 3, 4, 5, 6]));
+    assert!(!event_path.is_decendant(&[2, 3, 4]));
 }
 
 impl PartialEq<&[u8]> for ElementPath {

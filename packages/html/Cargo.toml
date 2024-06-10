@@ -28,6 +28,7 @@ rfd = { version = "0.14", optional = true }
 futures-channel = { workspace = true }
 serde_json = { version = "1", optional = true }
 tracing.workspace = true
+rustversion = "1.0.17"
 
 [dependencies.web-sys]
 optional = true
@@ -52,6 +53,9 @@ features = [
 
 [dev-dependencies]
 serde_json = "1"
+dioxus = { workspace = true }
+dioxus-web = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
 
 [features]
 default = ["serialize", "mounted", "eval", "file-engine"]

@@ -21,6 +21,7 @@ tracing = { workspace = true }
 slab = { workspace = true }
 futures-util = { workspace = true}
 generational-box.workspace = true
+rustversion = "1.0.17"
 
 [dev-dependencies]
 futures-util = { workspace = true, default-features = false }
@@ -28,6 +29,7 @@ dioxus-core = { workspace = true }
 dioxus = { workspace = true }
 web-sys = { version = "0.3.64", features = ["Document", "Window", "Element"] }
 tokio = { version = "1.0", features = ["full"] }
+reqwest = { workspace = true }
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

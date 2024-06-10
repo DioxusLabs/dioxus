@@ -11,10 +11,12 @@ use crate::innerlude::*;
 ///
 /// ## Example
 ///
-/// ```rust, ignore
+/// ```rust
+/// # use dioxus::prelude::*;
+/// let value = 1;
 /// rsx!{
-///     Fragment { key: "abc" }
-/// }
+///     Fragment { key: "{value}" }
+/// };
 /// ```
 ///
 /// ## Usage
@@ -61,28 +63,25 @@ impl<const A: bool> FragmentBuilder<A> {
 ///
 /// ## Example
 ///
-/// ```rust, ignore
+/// ```rust
+/// # use dioxus::prelude::*;
 /// fn app() -> Element {
 ///     rsx!{
 ///         CustomCard {
 ///             h1 {}
 ///             p {}
 ///         }
-///     })
+///     }
 /// }
 ///
-/// #[derive(PartialEq, Props)]
-/// struct CardProps {
-///     children: Element
-/// }
-///
-/// fn CustomCard(cx: CardProps) -> Element {
+/// #[component]
+/// fn CustomCard(children: Element) -> Element {
 ///     rsx!{
 ///         div {
 ///             h1 {"Title card"}
-///             {cx.children}
+///             {children}
 ///         }
-///     })
+///     }
 /// }
 /// ```
 impl Properties for FragmentProps {

@@ -238,6 +238,7 @@ mod segment;
 /// # #[component]
 /// # fn Home() -> Element { Ok(VNode::placeholder()) }
 /// ```
+#[doc(alias = "route")]
 #[proc_macro_derive(
     Routable,
     attributes(route, nest, end_nest, layout, end_layout, redirect, child)
@@ -653,9 +654,14 @@ impl RouteEnum {
 
             #[allow(non_camel_case_types)]
             #[allow(clippy::derive_partial_eq_without_eq)]
-            #[derive(Debug, PartialEq)]
             pub enum #match_error_name {
                 #(#error_variants),*
+            }
+
+            impl std::fmt::Debug for #match_error_name {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(f, "{}({})", stringify!(#match_error_name), self)
+                }
             }
 
             impl std::fmt::Display for #match_error_name {

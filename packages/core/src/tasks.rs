@@ -5,6 +5,7 @@ use crate::prelude::SuspenseContext;
 use crate::scope_context::ScopeStatus;
 use crate::ScopeId;
 use futures_util::task::ArcWake;
+use slotmap::DefaultKey;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use std::task::Waker;
@@ -18,14 +19,14 @@ use std::{pin::Pin, task::Poll};
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Task {
-    pub(crate) id: usize,
+    pub(crate) id: slotmap::DefaultKey,
     // We add a raw pointer to make this !Send + !Sync
     unsend: PhantomData<*const ()>,
 }
 
 impl Task {
     /// Create a task from a raw id
-    pub(crate) const fn from_id(id: usize) -> Self {
+    pub(crate) const fn from_id(id: slotmap::DefaultKey) -> Self {
         Self {
             id,
             unsend: PhantomData,
@@ -161,25 +162,30 @@ impl Runtime {
         let (task, task_id) = {
             let mut tasks = self.tasks.borrow_mut();
 
-            let entry = tasks.vacant_entry();
-            let task_id = Task::from_id(entry.key());
+            let mut task_id = Task::from_id(DefaultKey::default());
+            let mut local_task = None;
+            tasks.insert_with_key(|key| {
+                task_id = Task::from_id(key);
 
-            let task = Rc::new(LocalTask {
-                scope,
-                active: Cell::new(true),
-                parent: self.current_task(),
-                task: RefCell::new(Box::pin(task)),
-                waker: futures_util::task::waker(Arc::new(LocalTaskHandle {
-                    id: task_id.id,
-                    tx: self.sender.clone(),
-                })),
-                ty: RefCell::new(ty),
+                let new_task = Rc::new(LocalTask {
+                    scope,
+                    active: Cell::new(true),
+                    parent: self.current_task(),
+                    task: RefCell::new(Box::pin(task)),
+                    waker: futures_util::task::waker(Arc::new(LocalTaskHandle {
+                        id: task_id.id,
+                        tx: self.sender.clone(),
+                    })),
+                    ty: RefCell::new(ty),
+                });
+
+                local_task = Some(new_task.clone());
+
+                new_task
             });
             tracing::trace!("spawned new task {:?} on scope {:?}", task_id, scope);
 
-            entry.insert(task.clone());
-
-            (task, task_id)
+            (local_task.unwrap(), task_id)
         };
 
         // Get a borrow on the task, holding no borrows on the tasks map
@@ -291,12 +297,12 @@ impl Runtime {
         poll_result
     }
 
-    /// Drop the future with the given TaskId
+    /// Drop the future with the given Task
     ///
     /// This does not abort the task, so you'll want to wrap it in an abort handle if that's important to you
     pub(crate) fn remove_task(&self, id: Task) -> Option<Rc<LocalTask>> {
         // Remove the task from the task list
-        let task = self.tasks.borrow_mut().try_remove(id.id);
+        let task = self.tasks.borrow_mut().remove(id.id);
 
         tracing::trace!("Removing task {:?}", id);
 
@@ -370,14 +376,14 @@ pub(crate) enum SchedulerMsg {
     Immediate(ScopeId),
 
     /// A task has woken and needs to be progressed
-    TaskNotified(usize),
+    TaskNotified(slotmap::DefaultKey),
 
     /// An effect has been queued to run after the next render
     EffectQueued,
 }
 
 struct LocalTaskHandle {
-    id: usize,
+    id: slotmap::DefaultKey,
     tx: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
 }
 
