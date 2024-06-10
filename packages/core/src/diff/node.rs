@@ -632,8 +632,8 @@ impl VNode {
 
         // Walk the roots, creating nodes and assigning IDs
         // nodes in an iterator of (dynamic_node_index, path)
-        let nodes_sorted = template.breadth_first_attribute_paths();
-        let attrs_sorted = template.breadth_first_node_paths();
+        let nodes_sorted = template.breadth_first_node_paths();
+        let attrs_sorted = template.breadth_first_attribute_paths();
 
         let mut nodes = nodes_sorted.peekable();
         let mut attrs = attrs_sorted.peekable();
