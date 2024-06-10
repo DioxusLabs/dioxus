@@ -1,5 +1,6 @@
 use crate::{
     innerlude::{throw_into, CapturedError, SchedulerMsg, SuspendedFuture},
+    prelude::SuspenseContext,
     Element, Runtime, ScopeId, Task,
 };
 use rustc_hash::FxHashSet;
@@ -9,6 +10,14 @@ use std::{
     future::Future,
     sync::Arc,
 };
+
+pub(crate) enum ScopeStatus {
+    Mounted,
+    Unmounted {
+        // Before the component is mounted, we need to keep track of effects that need to be run once the scope is mounted
+        effects_queued: Vec<Box<dyn FnOnce() + 'static>>,
+    },
+}
 
 /// A component's state separate from its props.
 ///
@@ -27,6 +36,11 @@ pub(crate) struct Scope {
     pub(crate) spawned_tasks: RefCell<FxHashSet<Task>>,
     pub(crate) before_render: RefCell<Vec<Box<dyn FnMut()>>>,
     pub(crate) after_render: RefCell<Vec<Box<dyn FnMut()>>>,
+
+    /// The suspense boundary that this scope is currently in (if any)
+    suspense_boundary: Option<SuspenseContext>,
+
+    pub(crate) status: RefCell<ScopeStatus>,
 }
 
 impl Scope {
@@ -35,6 +49,7 @@ impl Scope {
         id: ScopeId,
         parent_id: Option<ScopeId>,
         height: u32,
+        suspense_boundary: Option<SuspenseContext>,
     ) -> Self {
         Self {
             name,
@@ -48,6 +63,10 @@ impl Scope {
             hook_index: Cell::new(0),
             before_render: RefCell::new(vec![]),
             after_render: RefCell::new(vec![]),
+            status: RefCell::new(ScopeStatus::Unmounted {
+                effects_queued: Vec::new(),
+            }),
+            suspense_boundary,
         }
     }
 
@@ -57,6 +76,22 @@ impl Scope {
 
     fn sender(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {
         Runtime::with(|rt| rt.sender.clone()).unwrap()
+    }
+
+    /// Mount the scope and queue any pending effects if it is not already mounted
+    pub(crate) fn mount(&self, runtime: &Runtime) {
+        let mut status = self.status.borrow_mut();
+        if let ScopeStatus::Unmounted { effects_queued } = &mut *status {
+            for f in effects_queued.drain(..) {
+                runtime.queue_effect_on_mounted_scope(self.id, f);
+            }
+            *status = ScopeStatus::Mounted;
+        }
+    }
+
+    /// Get the suspense boundary this scope is currently in (if any)
+    pub fn suspense_boundary(&self) -> Option<SuspenseContext> {
+        self.suspense_boundary.clone()
     }
 
     /// Mark this scope as dirty, and schedule a render for it.
@@ -127,11 +162,8 @@ impl Scope {
                     std::any::TypeId::of::<T>(),
                     parent.name
                 );
-                if let Some(shared) = parent.shared_contexts.borrow().iter().find_map(|any| {
-                    tracing::trace!("found context {:?}", (**any).type_id());
-                    any.downcast_ref::<T>()
-                }) {
-                    return Some(shared.clone());
+                if let Some(shared) = parent.has_context() {
+                    return Some(shared);
                 }
                 search_parent = parent.parent_id;
             }

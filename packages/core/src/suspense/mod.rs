@@ -3,7 +3,7 @@ pub use component::*;
 
 use crate::innerlude::*;
 use std::{
-    cell::{Ref, RefCell},
+    cell::{Cell, Ref, RefCell},
     fmt::Debug,
     rc::Rc,
 };
@@ -56,22 +56,9 @@ impl SuspendedFuture {
     }
 }
 
-/// A boundary that freezes rendering for all child nodes.
-/// This should be created as a child of [`SuspenseContext`] and used to wrap all child nodes.
-#[derive(Debug, Clone, Default)]
-pub struct FrozenContext {
-    inner: Rc<SuspenseBoundaryInner>,
-}
-
-impl FrozenContext {
-    pub(crate) fn frozen(&self) -> bool {
-        !self.inner.suspended_tasks.borrow().is_empty()
-    }
-}
-
 /// A boundary that will capture any errors from child components
 /// NOTE: this will not prevent rendering in child components. [`FrozenContext`] should be used instead.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct SuspenseContext {
     inner: Rc<SuspenseBoundaryInner>,
 }
@@ -83,30 +70,30 @@ impl PartialEq for SuspenseContext {
 }
 
 impl SuspenseContext {
-    /// Create a new suspense boundary
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     /// Create a new suspense boundary in a specific scope
-    pub(crate) fn new_in_scope(scope: ScopeId) -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             inner: Rc::new(SuspenseBoundaryInner {
                 suspended_tasks: RefCell::new(vec![]),
-                id: scope,
+                id: Cell::new(ScopeId::ROOT),
             }),
         }
     }
 
-    /// Get a frozen context that will freeze rendering for all child nodes
-    pub fn freeze(self) -> FrozenContext {
-        FrozenContext { inner: self.inner }
+    /// Mount the context in a specific scope
+    pub(crate) fn mount(&self, scope: ScopeId) {
+        self.inner.id.set(scope);
+    }
+
+    /// Check if there are any suspended tasks
+    pub fn suspended(&self) -> bool {
+        !self.inner.suspended_tasks.borrow().is_empty()
     }
 
     /// Add a suspended task
     pub(crate) fn add_suspended_task(&self, task: SuspendedFuture) {
         self.inner.suspended_tasks.borrow_mut().push(task);
-        self.inner.id.needs_update();
+        self.inner.id.get().needs_update();
     }
 
     /// Remove a suspended task
@@ -115,7 +102,7 @@ impl SuspenseContext {
             .suspended_tasks
             .borrow_mut()
             .retain(|t| t.task != task);
-        self.inner.id.needs_update();
+        self.inner.id.get().needs_update();
     }
 
     /// Get all suspended tasks
@@ -140,16 +127,7 @@ impl SuspenseContext {
 #[derive(Debug)]
 pub struct SuspenseBoundaryInner {
     suspended_tasks: RefCell<Vec<SuspendedFuture>>,
-    id: ScopeId,
-}
-
-impl Default for SuspenseBoundaryInner {
-    fn default() -> Self {
-        Self {
-            suspended_tasks: RefCell::new(Vec::new()),
-            id: current_scope_id().expect("to be in a dioxus runtime"),
-        }
-    }
+    id: Cell<ScopeId>,
 }
 
 /// Provides context methods to [`Result<T, RenderError>`] to show loading indicators

@@ -16,7 +16,6 @@ mod mutations;
 mod nodes;
 mod properties;
 mod render_error;
-mod render_signal;
 mod runtime;
 mod scheduler;
 mod scope_arena;
@@ -74,12 +73,11 @@ pub mod prelude {
         provide_context, provide_root_context, queue_effect, remove_future, schedule_update,
         schedule_update_any, spawn, spawn_forever, spawn_isomorphic, suspend, throw_error,
         try_consume_context, use_after_render, use_before_render, use_drop, use_error_boundary,
-        use_hook, use_hook_with_cleanup, wait_for_next_render, with_owner, AnyValue, Attribute,
-        Callback, CapturedError, Component, ComponentFunction, Context, Element, ErrorBoundary,
-        Event, EventHandler, Fragment, FrozenContext, HasAttributes, IntoAttributeValue,
-        IntoDynNode, OptionStringFromMarker, Properties, RenderError, Runtime, RuntimeGuard,
-        ScopeId, ScopeState, SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary,
-        SuspenseContext, SuspenseExtension, Task, Template, TemplateAttribute, TemplateNode, VNode,
-        VNodeInner, VirtualDom,
+        use_hook, use_hook_with_cleanup, with_owner, AnyValue, Attribute, Callback, CapturedError,
+        Component, ComponentFunction, Context, Element, ErrorBoundary, Event, EventHandler,
+        Fragment, HasAttributes, IntoAttributeValue, IntoDynNode, OptionStringFromMarker,
+        Properties, RenderError, Runtime, RuntimeGuard, ScopeId, ScopeState, SuperFrom, SuperInto,
+        SuspendedFuture, SuspenseBoundary, SuspenseContext, SuspenseExtension, Task, Template,
+        TemplateAttribute, TemplateNode, VNode, VNodeInner, VirtualDom,
     };
 }

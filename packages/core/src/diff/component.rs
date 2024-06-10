@@ -6,8 +6,8 @@ use std::{
 use crate::{
     any_props::AnyProps,
     innerlude::{
-        ElementRef, FrozenContext, MountId, ScopeOrder, SuspenseBoundaryProps,
-        SuspenseBoundaryPropsWithOwner, VComponent, WriteMutations,
+        ElementRef, MountId, ScopeOrder, SuspenseBoundaryProps, SuspenseBoundaryPropsWithOwner,
+        VComponent, WriteMutations,
     },
     nodes::VNode,
     scopes::ScopeId,
@@ -49,30 +49,19 @@ impl VirtualDom {
         // If there are suspended scopes, we need to check if the scope is suspended before we diff it
         // If it is suspended, we need to diff it but write the mutations nothing
         // Note: It is important that we still diff the scope even if it is suspended, because the scope may render other child components which may change between renders
-        let render_to = to.filter(|_| !self.scope_frozen(scope, new_nodes.suspended()));
-        old.diff_node(new_real_nodes, self, render_to);
+        let mut render_to = to.filter(|_| {
+            self.runtime
+                .scope_should_render(scope, new_nodes.suspended())
+        });
+        old.diff_node(new_real_nodes, self, render_to.as_deref_mut());
 
         self.scopes[scope.0].last_rendered_node = Some(new_nodes);
 
-        self.runtime.scope_stack.borrow_mut().pop();
-    }
+        if render_to.is_some() {
+            self.runtime.get_state(scope).unwrap().mount(&self.runtime);
+        }
 
-    fn scope_frozen(&self, scope_id: ScopeId, return_suspended: bool) -> bool {
-        // We always render scopes that are suspended to render a placeholder we can replace with the loading template later
-        if return_suspended {
-            return false;
-        }
-        // If there are no suspended futures, we know that there are no frozen contexts
-        if self.runtime.suspended_tasks.get() == 0 {
-            return false;
-        }
-        // If this is not a suspended scope, and we are under a frozen context, then we should
-        let scope = &self.scopes[scope_id.0];
-        scope
-            .state()
-            .consume_context::<FrozenContext>()
-            .filter(|frozen_context| frozen_context.frozen())
-            .is_some()
+        self.runtime.scope_stack.borrow_mut().pop();
     }
 
     /// Create a new [`ScopeState`] for a component that has been created with [`VirtualDom::create_scope`]
@@ -91,13 +80,20 @@ impl VirtualDom {
         // If there are suspended scopes, we need to check if the scope is suspended before we diff it
         // If it is suspended, we need to diff it but write the mutations nothing
         // Note: It is important that we still diff the scope even if it is suspended, because the scope may render other child components which may change between renders
-        let render_to = to.filter(|_| !self.scope_frozen(scope, new_nodes.suspended()));
+        let mut render_to = to.filter(|_| {
+            self.runtime
+                .scope_should_render(scope, new_nodes.suspended())
+        });
 
         // Create the node
-        let nodes = new_nodes.create(self, parent, render_to);
+        let nodes = new_nodes.create(self, parent, render_to.as_deref_mut());
 
         // Then set the new node as the last rendered node
         self.scopes[scope.0].last_rendered_node = Some(new_nodes);
+
+        if render_to.is_some() {
+            self.runtime.get_state(scope).unwrap().mount(&self.runtime);
+        }
 
         self.runtime.scope_stack.borrow_mut().pop();
         nodes
@@ -213,7 +209,7 @@ impl VNode {
         // If the scopeid is a placeholder, we need to load up a new scope for this vcomponent. If it's already mounted, then we can just use that
         if scope_id.is_placeholder() {
             scope_id = dom
-                .new_scope(component.props.duplicate(), component.name)
+                .new_scope(component.props.duplicate(), component.name, None)
                 .state()
                 .id;
 

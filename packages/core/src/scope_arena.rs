@@ -1,6 +1,4 @@
-use crate::innerlude::{
-    throw_error, try_consume_context, RenderError, RenderReturn, ScopeOrder, SuspenseContext,
-};
+use crate::innerlude::{throw_error, RenderError, RenderReturn, ScopeOrder, SuspenseContext};
 use crate::{
     any_props::{AnyProps, BoxedAnyProps},
     innerlude::ScopeState,
@@ -15,11 +13,17 @@ impl VirtualDom {
         &mut self,
         props: BoxedAnyProps,
         name: &'static str,
+        override_suspense_context: Option<SuspenseContext>,
     ) -> &mut ScopeState {
         let parent_id = self.runtime.current_scope_id();
-        let height = parent_id
-            .and_then(|parent_id| self.runtime.get_state(parent_id).map(|f| f.height + 1))
-            .unwrap_or(0);
+        let (height, mut suspense_boundary) =
+            match parent_id.and_then(|id| self.runtime.get_state(id)) {
+                Some(parent) => (parent.height() + 1, parent.suspense_boundary()),
+                None => (0, None),
+            };
+        if let Some(override_suspense_context) = override_suspense_context {
+            suspense_boundary = Some(override_suspense_context);
+        }
         let entry = self.scopes.vacant_entry();
         let id = ScopeId(entry.key());
 
@@ -31,7 +35,7 @@ impl VirtualDom {
         });
 
         self.runtime
-            .create_scope(Scope::new(name, id, parent_id, height));
+            .create_scope(Scope::new(name, id, parent_id, height, suspense_boundary));
         tracing::trace!("created scope {id:?} with parent {parent_id:?}");
 
         scope
@@ -96,7 +100,11 @@ impl VirtualDom {
             Err(RenderError::Suspended(e)) => {
                 let task = e.task();
                 // Insert the task into the nearest suspense boundary if it exists
-                let boundary = try_consume_context::<SuspenseContext>();
+                let boundary = self
+                    .runtime
+                    .get_state(scope_id)
+                    .unwrap()
+                    .suspense_boundary();
                 let already_suspended = self
                     .runtime
                     .tasks

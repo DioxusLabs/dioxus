@@ -325,7 +325,7 @@ impl VirtualDom {
             mounts: Default::default(),
         };
 
-        let root = dom.new_scope(Box::new(root), "app");
+        let root = dom.new_scope(Box::new(root), "app", None);
 
         // Unlike react, we provide a default error boundary that just renders the error as a string
         root.state()

@@ -270,176 +270,6 @@ use generational_box::Owner;
 #[allow(unused)]
 pub use SuspenseBoundary_completions::Component::SuspenseBoundary;
 
-#[doc = "Properties for the [`FrozenContext`] component."]
-#[derive(Clone, PartialEq)]
-#[allow(non_camel_case_types)]
-pub(crate) struct FrozenContextProps {
-    children: Element,
-}
-impl FrozenContextProps {
-    #[doc = "\nCreate a builder for building `FrozenContextProps`.\nOn the builder, call `.children(...)`(optional) to set the values of the fields.\nFinally, call `.build()` to create the instance of `FrozenContextProps`.\n                    "]
-    #[allow(dead_code, clippy::type_complexity)]
-    fn builder() -> FrozenContextPropsBuilder<((),)> {
-        FrozenContextPropsBuilder {
-            fields: ((),),
-            _phantom: ::core::default::Default::default(),
-        }
-    }
-}
-#[must_use]
-#[doc(hidden)]
-#[allow(dead_code, non_camel_case_types, non_snake_case)]
-pub(crate) struct FrozenContextPropsBuilder<TypedBuilderFields> {
-    fields: TypedBuilderFields,
-    _phantom: (),
-}
-impl Properties for FrozenContextProps
-where
-    Self: Clone,
-{
-    type Builder = FrozenContextPropsBuilder<((),)>;
-    fn builder() -> Self::Builder {
-        FrozenContextProps::builder()
-    }
-    fn memoize(&mut self, new: &Self) -> bool {
-        let equal = self == new;
-        if !equal {
-            let new_clone = new.clone();
-            self.children = new_clone.children;
-        }
-        equal
-    }
-}
-#[doc(hidden)]
-#[allow(dead_code, non_camel_case_types, non_snake_case)]
-pub trait FrozenContextPropsBuilder_Optional<T> {
-    fn into_value<F: FnOnce() -> T>(self, default: F) -> T;
-}
-impl<T> FrozenContextPropsBuilder_Optional<T> for () {
-    fn into_value<F: FnOnce() -> T>(self, default: F) -> T {
-        default()
-    }
-}
-impl<T> FrozenContextPropsBuilder_Optional<T> for (T,) {
-    fn into_value<F: FnOnce() -> T>(self, _: F) -> T {
-        self.0
-    }
-}
-#[allow(dead_code, non_camel_case_types, missing_docs)]
-impl FrozenContextPropsBuilder<((),)> {
-    #[allow(clippy::type_complexity)]
-    pub fn children(self, children: Element) -> FrozenContextPropsBuilder<((Element,),)> {
-        let children = (children,);
-        let (_,) = self.fields;
-        FrozenContextPropsBuilder {
-            fields: (children,),
-            _phantom: self._phantom,
-        }
-    }
-}
-#[doc(hidden)]
-#[allow(dead_code, non_camel_case_types, non_snake_case)]
-pub enum FrozenContextPropsBuilder_Error_Repeated_field_children {}
-
-#[doc(hidden)]
-#[allow(dead_code, non_camel_case_types, missing_docs)]
-impl FrozenContextPropsBuilder<((Element,),)> {
-    #[deprecated(note = "Repeated field children")]
-    #[allow(clippy::type_complexity)]
-    pub fn children(
-        self,
-        _: FrozenContextPropsBuilder_Error_Repeated_field_children,
-    ) -> FrozenContextPropsBuilder<((Element,),)> {
-        self
-    }
-}
-#[allow(dead_code, non_camel_case_types, missing_docs)]
-impl<__children: FrozenContextPropsBuilder_Optional<Element>>
-    FrozenContextPropsBuilder<(__children,)>
-{
-    pub fn build(self) -> FrozenContextProps {
-        let (children,) = self.fields;
-        let children = FrozenContextPropsBuilder_Optional::into_value(children, || {
-            Element::Ok(VNode::placeholder())
-        });
-        FrozenContextProps { children }
-    }
-}
-#[allow(non_snake_case)]
-fn FrozenContext(mut __props: FrozenContextProps) -> Element {
-    let FrozenContextProps { children } = __props;
-    {
-        let suspense: SuspenseContext = use_hook(consume_context);
-        provide_context(suspense.freeze());
-        children
-    }
-}
-#[allow(non_snake_case)]
-#[doc(hidden)]
-mod FrozenContext_completions {
-    #[doc(hidden)]
-    #[allow(non_camel_case_types)]
-    #[doc = r" This enum is generated to help autocomplete the braces after the component. It does nothing"]
-    pub enum Component {
-        FrozenContext {},
-    }
-}
-#[allow(unused)]
-use FrozenContext_completions::Component::FrozenContext;
-
-fn wrap_children_with_frozen_context(children: Element) -> Element {
-    Element::Ok({
-        static TEMPLATE: Template = Template {
-            name: ":281:0:0",
-            roots: &[TemplateNode::Dynamic { id: 0usize }],
-            node_paths: &[&[0u8]],
-            attr_paths: &[],
-        };
-        {
-            #[allow(clippy::let_and_return)]
-            let __vnodes = VNode::new(
-                None,
-                TEMPLATE,
-                Box::new([DynamicNode::Component({
-                    #[allow(unused_imports)]
-                    use crate::prelude::Properties;
-                    fc_to_builder(FrozenContext)
-                        .children(Element::Ok({
-                            static TEMPLATE: Template = Template {
-                                name: ":409:0:0",
-                                roots: &[TemplateNode::Dynamic { id: 0usize }],
-                                node_paths: &[&[0u8]],
-                                attr_paths: &[],
-                            };
-                            {
-                                #[allow(clippy::let_and_return)]
-                                let __vnodes = VNode::new(
-                                    None,
-                                    TEMPLATE,
-                                    Box::new([{
-                                        #[allow(clippy::let_and_return)]
-                                        let ___nodes = ({ children }).into_dyn_node();
-                                        ___nodes
-                                    }]),
-                                    Box::new([]),
-                                );
-                                __vnodes
-                            }
-                        }))
-                        .build()
-                        .into_vcomponent(FrozenContext, "FrozenContext")
-                })]),
-                Box::new([]),
-            );
-            __vnodes
-        }
-    })
-}
-
-fn suspense_context(scope: &ScopeState) -> SuspenseContext {
-    scope.state().consume_context::<SuspenseContext>().unwrap()
-}
-
 /// TODO: Can this not be a special case?
 /// Suspense has a custom diffing algorithm that diffs the suspended nodes in the background without rendering them
 impl SuspenseBoundaryProps {
@@ -461,35 +291,40 @@ impl SuspenseBoundaryProps {
         // If the scopeid is a placeholder, we need to load up a new scope for this vcomponent. If it's already mounted, then we can just use that
         if scope_id.is_placeholder() {
             {
+                let suspense_context = SuspenseContext::new();
+
                 let scope_state = dom
-                    .new_scope(component.props.duplicate(), component.name)
+                    .new_scope(
+                        component.props.duplicate(),
+                        component.name,
+                        Some(suspense_context.clone()),
+                    )
                     .state();
+                suspense_context.mount(scope_state.id);
 
                 scope_id = scope_state.id;
-
-                // Provide the suspense context to the scope
-                scope_state.provide_context(SuspenseContext::new_in_scope(scope_id));
             }
 
             // Store the scope id for the next render
             dom.mounts[mount.0].mounted_dynamic_nodes[idx] = scope_id.0;
         }
 
-        dom.runtime.scope_stack.borrow_mut().push(scope_id);
-
         let scope_state = &mut dom.scopes[scope_id.0];
-        let suspense_context = suspense_context(scope_state);
         let props = Self::downcast_from_props(&mut *scope_state.props).unwrap();
 
         let children = RenderReturn {
-            node: wrap_children_with_frozen_context(props.children.clone()),
+            node: props.children.clone(),
         };
 
+        // First always render the children in the background. Rendering the children may cause this boundary to suspend
+        dom.runtime.scope_stack.borrow_mut().push(scope_id);
+        children.create(dom, parent, None::<&mut M>);
+        dom.runtime.scope_stack.borrow_mut().pop();
+
         // If there are suspended futures, render the callback
+        let scope_state = &mut dom.scopes[scope_id.0];
+        let suspense_context = scope_state.state().suspense_boundary().unwrap();
         let nodes_created = if !suspense_context.suspended_futures().is_empty() {
-            // First render the children in the background
-            children.create(dom, parent, None::<&mut M>);
-            let scope_state = &mut dom.scopes[scope_id.0];
             let props = Self::downcast_from_props(&mut *scope_state.props).unwrap();
             props.suspended_nodes = Some(children.into());
 
@@ -504,8 +339,10 @@ impl SuspenseBoundaryProps {
 
             nodes_created
         } else {
-            // Otherwise just render the children
+            // Otherwise just render the children in the real dom
+            dom.runtime.scope_stack.borrow_mut().push(scope_id);
             let nodes_created = children.create(dom, parent, to);
+            dom.runtime.scope_stack.borrow_mut().pop();
             let scope_state = &mut dom.scopes[scope_id.0];
             scope_state.last_rendered_node = Some(children);
             let props = Self::downcast_from_props(&mut *dom.scopes[scope_id.0].props).unwrap();
@@ -523,8 +360,6 @@ impl SuspenseBoundaryProps {
         dom: &mut VirtualDom,
         to: Option<&mut M>,
     ) {
-        dom.runtime.scope_stack.borrow_mut().push(scope_id);
-
         let scope = &mut dom.scopes[scope_id.0];
         let myself = Self::downcast_from_props(&mut *scope.props)
             .unwrap()
@@ -544,9 +379,7 @@ impl SuspenseBoundaryProps {
             suspended_nodes,
         } = myself;
 
-        let children = wrap_children_with_frozen_context(children);
-
-        let suspense_context = suspense_context(scope);
+        let suspense_context = scope.state().suspense_boundary().unwrap();
         let suspended = !suspense_context.suspended_futures().is_empty();
         match (suspended_nodes, suspended) {
             // We already have suspended nodes that still need to be suspended
@@ -566,7 +399,9 @@ impl SuspenseBoundaryProps {
                 dom.scopes[scope_id.0].last_rendered_node = Some(new_placeholder);
 
                 // Diff the suspended nodes in the background
+                dom.runtime.scope_stack.borrow_mut().push(scope_id);
                 suspended_nodes.diff_node(&new_suspended_nodes, dom, None::<&mut M>);
+                dom.runtime.scope_stack.borrow_mut().pop();
 
                 let props = Self::downcast_from_props(&mut *dom.scopes[scope_id.0].props).unwrap();
                 props.suspended_nodes = Some(new_suspended_nodes);
@@ -576,7 +411,9 @@ impl SuspenseBoundaryProps {
                 let old_children = last_rendered_node;
                 let new_children = RenderReturn { node: children };
 
+                dom.runtime.scope_stack.borrow_mut().push(scope_id);
                 old_children.diff_node(&new_children, dom, to);
+                dom.runtime.scope_stack.borrow_mut().pop();
 
                 // Set the last rendered node to the new children
                 dom.scopes[scope_id.0].last_rendered_node = Some(new_children);
@@ -601,6 +438,7 @@ impl SuspenseBoundaryProps {
                 let mount = dom.mounts.get(mount.0).expect("mount should exist");
                 tracing::trace!("new children mount: {:?}", mount);
                 let parent = mount.parent;
+                dom.runtime.scope_stack.borrow_mut().push(scope_id);
                 old_children.move_node_to_background(
                     std::slice::from_ref(&*new_placeholder),
                     parent,
@@ -610,6 +448,7 @@ impl SuspenseBoundaryProps {
 
                 // Then diff the new children in the background
                 old_children.diff_node(&new_children, dom, None::<&mut M>);
+                dom.runtime.scope_stack.borrow_mut().pop();
 
                 // Set the last rendered node to the new suspense placeholder
                 dom.scopes[scope_id.0].last_rendered_node = Some(new_placeholder);
@@ -630,7 +469,9 @@ impl SuspenseBoundaryProps {
                 let mount = old_placeholder.mount.get();
                 let mount = dom.mounts.get(mount.0).expect("mount should exist");
                 let parent = mount.parent;
+                dom.runtime.scope_stack.borrow_mut().push(scope_id);
                 old_placeholder.replace(std::slice::from_ref(&*new_children), parent, dom, to);
+                dom.runtime.scope_stack.borrow_mut().pop();
                 tracing::trace!("Exiting suspense: replaced placeholder with new children");
                 tracing::trace!("Non-suspended nodes: {:?}", &*new_children);
 
@@ -641,7 +482,5 @@ impl SuspenseBoundaryProps {
                 props.suspended_nodes = None;
             }
         }
-
-        dom.runtime.scope_stack.borrow_mut().pop();
     }
 }

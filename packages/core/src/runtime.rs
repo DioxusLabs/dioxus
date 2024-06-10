@@ -1,7 +1,6 @@
 use crate::innerlude::{DirtyTasks, Effect};
 use crate::{
     innerlude::{LocalTask, SchedulerMsg},
-    render_signal::RenderSignal,
     scope_context::Scope,
     scopes::ScopeId,
     Task,
@@ -36,9 +35,6 @@ pub struct Runtime {
 
     pub(crate) sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
 
-    // Synchronous tasks need to be run after the next render. The virtual dom stores a list of those tasks to send a signal to them when the next render is done.
-    pub(crate) render_signal: RenderSignal,
-
     // The effects that need to be run after the next render
     pub(crate) pending_effects: RefCell<BTreeSet<Effect>>,
 
@@ -50,7 +46,6 @@ impl Runtime {
     pub(crate) fn new(sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>) -> Rc<Self> {
         Rc::new(Self {
             sender,
-            render_signal: RenderSignal::default(),
             rendering: Cell::new(true),
             scope_states: Default::default(),
             scope_stack: Default::default(),
@@ -169,9 +164,31 @@ impl Runtime {
                 .unbounded_send(SchedulerMsg::EffectQueued)
                 .expect("Scheduler should exist");
         }
+    }
 
-        // And send the render signal
-        self.render_signal.send();
+    /// Check if we should render a scope
+    pub(crate) fn scope_should_render(&self, scope_id: ScopeId, return_suspended: bool) -> bool {
+        // We always render scopes that are suspended to render a placeholder we can replace with the loading template later
+        if return_suspended {
+            return true;
+        }
+
+        self.scope_mounted(scope_id)
+    }
+
+    /// Check if a scope is mounted in the real dom or if it is suspended
+    pub(crate) fn scope_mounted(&self, scope_id: ScopeId) -> bool {
+        // If there are no suspended futures, we know that there are no frozen contexts
+        if self.suspended_tasks.get() == 0 {
+            return true;
+        }
+        // If this is not a suspended scope, and we are under a frozen context, then we should
+        let scopes = self.scope_states.borrow();
+        let scope = &scopes[scope_id.0].as_ref().unwrap();
+        scope
+            .suspense_boundary()
+            .filter(|suspense| suspense.suspended())
+            .is_some()
     }
 }
 

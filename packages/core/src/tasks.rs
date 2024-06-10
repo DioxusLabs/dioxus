@@ -2,6 +2,7 @@ use crate::innerlude::Effect;
 use crate::innerlude::ScopeOrder;
 use crate::innerlude::{remove_future, spawn, Runtime};
 use crate::prelude::SuspenseContext;
+use crate::scope_context::ScopeStatus;
 use crate::ScopeId;
 use futures_util::task::ArcWake;
 use std::marker::PhantomData;
@@ -194,11 +195,32 @@ impl Runtime {
 
     /// Queue an effect to run after the next render
     pub(crate) fn queue_effect(&self, id: ScopeId, f: impl FnOnce() + 'static) {
+        let effect = Box::new(f) as Box<dyn FnOnce() + 'static>;
+        let Some(scope) = self.get_state(id) else {
+            return;
+        };
+        let mut status = scope.status.borrow_mut();
+        match &mut *status {
+            ScopeStatus::Mounted => {
+                self.queue_effect_on_mounted_scope(id, effect);
+            }
+            ScopeStatus::Unmounted { effects_queued, .. } => {
+                effects_queued.push(effect);
+            }
+        }
+    }
+
+    /// Queue an effect to run after the next render without checking if the scope is mounted
+    pub(crate) fn queue_effect_on_mounted_scope(
+        &self,
+        id: ScopeId,
+        f: Box<dyn FnOnce() + 'static>,
+    ) {
         // Add the effect to the queue of effects to run after the next render for the given scope
         let mut effects = self.pending_effects.borrow_mut();
         let scope_order = ScopeOrder::new(id.height(), id);
         match effects.get(&scope_order) {
-            Some(effects) => effects.push_back(Box::new(f)),
+            Some(effects) => effects.push_back(f),
             None => {
                 effects.insert(Effect::new(scope_order, f));
             }

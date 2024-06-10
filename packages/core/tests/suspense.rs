@@ -233,13 +233,6 @@ fn suspended_nodes_dont_trigger_effects() {
 
         use_effect(|| panic!("effects should not run during suspense"));
 
-        // futures that are spawned, but not suspended should never be polled
-        use_hook(|| {
-            spawn(async move {
-                panic!("Non-suspended task was polled");
-            });
-        });
-
         let task = use_hook(|| {
             spawn(async move {
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;

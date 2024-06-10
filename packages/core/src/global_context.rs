@@ -332,21 +332,6 @@ pub fn after_render(f: impl FnMut() + 'static) {
     Runtime::with_current_scope(|cx| cx.push_after_render(f));
 }
 
-/// Wait for the next render to complete
-///
-/// This is useful if you've just triggered an update and want to wait for it to finish before proceeding with valid
-/// DOM nodes.
-///
-/// Effects rely on this to ensure that they only run effects after the DOM has been updated. Without wait_for_next_render effects
-/// are run immediately before diffing the DOM, which causes all sorts of out-of-sync weirdness.
-pub async fn wait_for_next_render() {
-    // Wait for the flush lock to be available
-    // We release it immediately, so it's impossible for the lock to be held longer than this function
-    Runtime::with(|rt| rt.render_signal.subscribe())
-        .unwrap()
-        .await;
-}
-
 /// Use a hook with a cleanup function
 pub fn use_hook_with_cleanup<T: Clone + 'static>(
     hook: impl FnOnce() -> T,
