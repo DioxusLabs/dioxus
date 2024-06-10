@@ -318,6 +318,22 @@ impl<
     }
 }
 
+#[doc(hidden)]
+pub struct UnitClosure<Marker>(PhantomData<Marker>);
+
+// Closure can be created from FnMut -> async { anything } or FnMut -> Ret
+impl<
+        Function: FnMut() -> Spawn + 'static,
+        Spawn: SpawnIfAsync<Marker, Ret> + 'static,
+        Ret: 'static,
+        Marker,
+    > SuperFrom<Function, UnitClosure<Marker>> for Callback<(), Ret>
+{
+    fn super_from(mut input: Function) -> Self {
+        Callback::new(move |()| input())
+    }
+}
+
 #[test]
 fn closure_types_infer() {
     #[allow(unused)]
@@ -333,6 +349,11 @@ fn closure_types_infer() {
         // Or pass in a value
         let callback: Callback<u32, ()> = Callback::new(|value: u32| async move {
             println!("{}", value);
+        });
+
+        // Unit closures shouldn't require an argument
+        let callback: Callback<(), ()> = Callback::super_from(|| async move {
+            println!("hello world");
         });
     }
 }
