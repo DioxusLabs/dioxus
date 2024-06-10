@@ -338,7 +338,6 @@ impl SuspenseBoundaryProps {
 
             nodes_created
         } else {
-            println!("No suspended futures");
             // Otherwise just render the children in the real dom
             dom.runtime.scope_stack.borrow_mut().push(scope_id);
             let nodes_created = children.create(dom, parent, to);
@@ -366,7 +365,6 @@ impl SuspenseBoundaryProps {
             .clone();
 
         let last_rendered_node = scope.last_rendered_node.as_ref().unwrap().clone_mounted();
-        println!("diffing {myself:#?} vs {last_rendered_node:#?}");
 
         let Self {
             fallback,
