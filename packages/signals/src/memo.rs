@@ -1,6 +1,6 @@
 use crate::read_impls;
 use crate::write::Writable;
-use crate::{read::Readable, ReactiveContext, ReadableRef, Signal};
+use crate::{read::Readable, ReadableRef, Signal};
 use crate::{CopyValue, ReadOnlySignal};
 use std::{
     cell::RefCell,
@@ -11,7 +11,7 @@ use std::{
 
 use dioxus_core::prelude::*;
 use futures_util::StreamExt;
-use generational_box::UnsyncStorage;
+use generational_box::{AnyStorage, UnsyncStorage};
 
 struct UpdateInformation<T> {
     dirty: Arc<AtomicBool>,
@@ -40,7 +40,7 @@ impl<T: 'static> Memo<T> {
     where
         T: PartialEq,
     {
-        let dirty = Arc::new(AtomicBool::new(true));
+        let dirty = Arc::new(AtomicBool::new(false));
         let (tx, mut rx) = futures_channel::mpsc::unbounded();
 
         let callback = {
@@ -57,7 +57,7 @@ impl<T: 'static> Memo<T> {
         );
 
         // Create a new signal in that context, wiring up its dependencies and subscribers
-        let mut recompute = move || rc.run_in(&mut f);
+        let mut recompute = move || rc.reset_and_run_in(&mut f);
         let value = recompute();
         let recompute = RefCell::new(Box::new(recompute) as Box<dyn FnMut() -> T>);
         let update = CopyValue::new(UpdateInformation {
@@ -124,24 +124,30 @@ where
     fn try_read_unchecked(
         &self,
     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
-        let read = self.inner.try_read_unchecked();
-        match read {
-            Ok(r) => {
-                let needs_update = self
-                    .update
-                    .read()
-                    .dirty
-                    .swap(false, std::sync::atomic::Ordering::Relaxed);
-                if needs_update {
-                    drop(r);
-                    self.recompute();
-                    self.inner.try_read_unchecked()
-                } else {
-                    Ok(r)
-                }
+        // Read the inner generational box instead of the signal so we have more fine grained control over exactly when the subscription happens
+        let read = self.inner.inner.try_read_unchecked()?;
+
+        let needs_update = self
+            .update
+            .read()
+            .dirty
+            .swap(false, std::sync::atomic::Ordering::Relaxed);
+        let result = if needs_update {
+            drop(read);
+            // We shouldn't be subscribed to the value here so we don't trigger the scope we are currently in to rerun even though that scope got the latest value because we synchronously update the value: https://github.com/DioxusLabs/dioxus/issues/2416
+            self.recompute();
+            self.inner.inner.try_read_unchecked()
+        } else {
+            Ok(read)
+        };
+        // Subscribe to the current scope before returning the value
+        if let Ok(read) = &result {
+            if let Some(reactive_context) = ReactiveContext::current() {
+                tracing::trace!("Subscribing to the reactive context {}", reactive_context);
+                reactive_context.subscribe(read.subscribers.clone());
             }
-            Err(e) => Err(e),
         }
+        result.map(|read| <UnsyncStorage as AnyStorage>::map(read, |v| &v.value))
     }
 
     /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
