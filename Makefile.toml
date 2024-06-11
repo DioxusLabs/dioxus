@@ -88,7 +88,7 @@ command = "cargo"
 args = ["build"]
 
 [tasks.test-flow]
-dependencies = ["test", "docs"]
+dependencies = ["test", "docs", "release"]
 private = true
 
 [tasks.test]
@@ -116,6 +116,26 @@ args = [
   "test",
   "--doc",
   "--workspace",
+]
+private = true
+
+[tasks.release]
+dependencies = ["build"]
+command = "cargo"
+args = [
+  "test",
+  "--profile",
+  "release-unoptimized",
+  "--lib",
+  "--bins",
+  "--tests",
+  "--examples",
+  "--workspace",
+  # These tests run on Ubuntu without a screen. Desktop tests that require a screen fail, so we skip them
+  "--exclude",
+  "dioxus-desktop",
+  "--exclude",
+  "dioxus-mobile",
 ]
 private = true
 
