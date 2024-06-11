@@ -1,13 +1,8 @@
-use std::fmt::{Display, Formatter};
-
 use super::*;
-
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::quote;
-use syn::{
-    parse::ParseBuffer, punctuated::Punctuated, spanned::Spanned, token::Brace, Expr, Ident,
-    LitStr, Token,
-};
+use std::fmt::{Display, Formatter};
+use syn::{punctuated::Punctuated, spanned::Spanned, Ident, LitStr, Token};
 
 /// Parse the VNode::Element type
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]

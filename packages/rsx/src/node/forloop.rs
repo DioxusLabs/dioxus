@@ -1,6 +1,5 @@
-use syn::braced;
-
 use super::*;
+use syn::braced;
 
 #[non_exhaustive]
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]

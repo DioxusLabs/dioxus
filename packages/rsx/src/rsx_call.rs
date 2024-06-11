@@ -20,11 +20,13 @@ use crate::{BodyNode, TemplateBody};
 ///
 /// Every callbody should be valid, so you can use it to build a template.
 /// To generate the code used to render the template, use the ToTokens impl on the Callbody, or with the `render_with_location` method.
+///
+/// Ideally we don't need the metadata here and can bake the idx-es into the templates themselves but I haven't figured out how to do that yet.
 #[derive(Debug, Clone)]
 pub struct CallBody {
     pub body: TemplateBody,
     pub ifmt_idx: Cell<usize>,
-    pub tempalte_idx: Cell<usize>,
+    pub template_idx: Cell<usize>,
 }
 
 impl Parse for CallBody {
@@ -45,14 +47,18 @@ impl ToTokens for CallBody {
 }
 
 impl CallBody {
+    /// Create a new CallBody from a TemplateBody
+    ///
+    /// This will overwrite all internal metadata regarding hotreloading.
     pub fn new(template: TemplateBody) -> Self {
         let body = CallBody {
             body: template,
             ifmt_idx: Cell::new(0),
-            tempalte_idx: Cell::new(1),
+            template_idx: Cell::new(0),
         };
 
-        body.body.template_idx.set(0);
+        body.body.template_idx.set(body.next_template_idx());
+
         body.cascade_hotreload_info(&body.body.roots);
 
         body
@@ -84,8 +90,10 @@ impl CallBody {
     fn cascade_hotreload_info(&self, nodes: &Vec<BodyNode>) {
         for node in nodes.iter() {
             match node {
-                BodyNode::RawExpr(_) => { /* one day maybe provide hr here? */ }
+                BodyNode::RawExpr(_) => { /* one day maybe provide hr here?*/ }
+
                 BodyNode::Text(text) => {
+                    // one day we could also provide HR here to allow dynamic parts on the fly
                     if !text.is_static() {
                         text.hr_idx.set(self.next_ifmt_idx());
                     }
@@ -130,8 +138,8 @@ impl CallBody {
     }
 
     fn next_template_idx(&self) -> usize {
-        let idx = self.tempalte_idx.get();
-        self.tempalte_idx.set(idx + 1);
+        let idx = self.template_idx.get();
+        self.template_idx.set(idx + 1);
         idx
     }
 }

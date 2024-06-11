@@ -184,6 +184,10 @@ impl ToTokens for TemplateBody {
 }
 
 impl TemplateBody {
+    /// Create a new TemplateBody from a set of nodes
+    ///
+    /// This will fill in all the necessary path information for the nodes in the template and will
+    /// overwrite data like dynamic indexes.
     pub fn new(nodes: Vec<BodyNode>) -> Self {
         let mut body = Self {
             roots: vec![],

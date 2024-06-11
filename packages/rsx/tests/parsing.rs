@@ -134,7 +134,7 @@ fn callbody_ctx() {
 
     let cb: CallBody = syn::parse2(item).unwrap();
 
-    dbg!(cb.tempalte_idx.get());
+    dbg!(cb.template_idx.get());
     dbg!(cb.ifmt_idx.get());
 
     let template = cb.body.to_template::<Empty>();
