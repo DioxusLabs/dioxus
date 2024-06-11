@@ -81,16 +81,39 @@ pub fn suspend(task: Task) -> Element {
 ///     }
 /// });
 /// ```
+///
+#[doc = include_str!("../docs/common_spawn_errors.md")]
 pub fn spawn_isomorphic(fut: impl Future<Output = ()> + 'static) -> Task {
     Runtime::with_current_scope(|cx| cx.spawn_isomorphic(fut)).expect("to be in a dioxus runtime")
 }
 
-/// Spawns the future but does not return the [`TaskId`]
+/// Spawns the future but does not return the [`Task`]. This task will automatically be canceled when the component is dropped.
+///
+/// # Example
+/// ```rust
+/// use dioxus::prelude::*;
+///
+/// fn App() -> Element {
+///     rsx! {
+///         button {
+///             onclick: move |_| {
+///                 spawn(async move {
+///                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+///                     println!("Hello World");
+///                 });
+///             },
+///             "Print hello in one second"
+///         }
+///     }
+/// }
+/// ```
+///
+#[doc = include_str!("../docs/common_spawn_errors.md")]
 pub fn spawn(fut: impl Future<Output = ()> + 'static) -> Task {
     Runtime::with_current_scope(|cx| cx.spawn(fut)).expect("to be in a dioxus runtime")
 }
 
-/// Queue an effect to run after the next render
+/// Queue an effect to run after the next render. You generally shouldn't need to interact with this function directly. [use_effect](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_effect.html) will call this function for you.
 pub fn queue_effect(f: impl FnOnce() + 'static) {
     Runtime::with_current_scope(|cx| cx.queue_effect(f)).expect("to be in a dioxus runtime")
 }
@@ -100,6 +123,53 @@ pub fn queue_effect(f: impl FnOnce() + 'static) {
 /// This is good for tasks that need to be run after the component has been dropped.
 ///
 /// **This will run the task in the root scope. Any calls to global methods inside the future (including `context`) will be run in the root scope.**
+///
+/// # Example
+///
+/// ```rust
+/// use dioxus::prelude::*;
+///
+/// // The parent component can create and destroy children dynamically
+/// fn App() -> Element {
+///     let mut count = use_signal(|| 0);
+///
+///     rsx! {
+///         button {
+///             onclick: move |_| count += 1,
+///             "Increment"
+///         }
+///         button {
+///             onclick: move |_| count -= 1,
+///             "Decrement"
+///         }
+///
+///         for id in 0..10 {
+///             Child { id }
+///         }
+///     }
+/// }
+///
+/// #[component]
+/// fn Child(id: i32) -> Element {
+///     rsx! {
+///         button {
+///             onclick: move |_| {
+///                 // This will spawn a task in the root scope that will run forever
+///                 // It will keep running even if you drop the child component by decreasing the count
+///                 spawn_forever(async move {
+///                     loop {
+///                         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+///                         println!("Running task spawned in child component {id}");
+///                     }
+///                 });
+///             },
+///             "Spawn background task"
+///         }
+///     }
+/// }
+/// ```
+///
+#[doc = include_str!("../docs/common_spawn_errors.md")]
 pub fn spawn_forever(fut: impl Future<Output = ()> + 'static) -> Option<Task> {
     Runtime::with_scope(ScopeId::ROOT, |cx| cx.spawn(fut))
 }
@@ -203,25 +273,23 @@ pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
 /// (created with [`use_effect`](crate::use_effect)).
 ///
 /// Example:
-/// ```rust, ignore
+/// ```rust
 /// use dioxus::prelude::*;
 ///
 /// fn app() -> Element {
-///     let state = use_signal(|| true);
+///     let mut state = use_signal(|| true);
 ///     rsx! {
 ///         for _ in 0..100 {
 ///             h1 {
 ///                 "spacer"
 ///             }
 ///         }
-///         if **state {
-///             rsx! {
-///                 child_component {}
-///             }
+///         if state() {
+///             child_component {}
 ///         }
 ///         button {
 ///             onclick: move |_| {
-///                 state.set(!*state.get());
+///                 state.toggle()
 ///             },
 ///             "Unmount element"
 ///         }
@@ -229,9 +297,9 @@ pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
 /// }
 ///
 /// fn child_component() -> Element {
-///     let original_scroll_position = use_signal(|| 0.0);
+///     let mut original_scroll_position = use_signal(|| 0.0);
 ///
-///     use_effect(move |_| async move {
+///     use_effect(move || {
 ///         let window = web_sys::window().unwrap();
 ///         let document = window.document().unwrap();
 ///         let element = document.get_element_by_id("my_element").unwrap();
@@ -242,7 +310,7 @@ pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
 ///     use_drop(move || {
 ///         /// restore scroll to the top of the page
 ///         let window = web_sys::window().unwrap();
-///         window.scroll_with_x_and_y(*original_scroll_position.current(), 0.0);
+///         window.scroll_with_x_and_y(original_scroll_position(), 0.0);
 ///     });
 ///
 ///     rsx!{
@@ -253,6 +321,7 @@ pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
 ///     }
 /// }
 /// ```
+#[doc(alias = "use_on_unmount")]
 pub fn use_drop<D: FnOnce() + 'static>(destroy: D) {
     struct LifeCycle<D: FnOnce()> {
         /// Wrap the closure in an option so that we can take it out on drop.

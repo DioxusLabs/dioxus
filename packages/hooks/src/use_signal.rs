@@ -30,6 +30,10 @@ use dioxus_signals::{Signal, SignalData, Storage, SyncStorage, UnsyncStorage};
 ///     }
 /// }
 /// ```
+///
+#[doc = include_str!("../docs/rules_of_hooks.md")]
+#[doc = include_str!("../docs/moving_state_around.md")]
+#[doc(alias = "use_state")]
 #[track_caller]
 #[must_use]
 pub fn use_signal<T: 'static>(f: impl FnOnce() -> T) -> Signal<T, UnsyncStorage> {
@@ -68,6 +72,7 @@ pub fn use_signal<T: 'static>(f: impl FnOnce() -> T) -> Signal<T, UnsyncStorage>
 ///     }
 /// }
 /// ```
+#[doc(alias = "use_rw")]
 #[must_use]
 #[track_caller]
 pub fn use_signal_sync<T: Send + Sync + 'static>(f: impl FnOnce() -> T) -> Signal<T, SyncStorage> {
@@ -79,7 +84,6 @@ pub fn use_signal_sync<T: Send + Sync + 'static>(f: impl FnOnce() -> T) -> Signa
 fn use_maybe_signal_sync<T: 'static, U: Storage<SignalData<T>>>(
     f: impl FnOnce() -> T,
 ) -> Signal<T, U> {
-    #[cfg(debug_assertions)]
     let caller = std::panic::Location::caller();
 
     // todo: (jon)
@@ -87,11 +91,5 @@ fn use_maybe_signal_sync<T: 'static, U: Storage<SignalData<T>>>(
     // any calls to .read() in the body will re-subscribe the component to the signal
     // use_before_render(move || signal.unsubscribe(current_scope_id().unwrap()));
 
-    use_hook(|| {
-        Signal::new_with_caller(
-            f(),
-            #[cfg(debug_assertions)]
-            caller,
-        )
-    })
+    use_hook(|| Signal::new_with_caller(f(), caller))
 }

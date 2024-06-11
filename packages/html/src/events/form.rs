@@ -30,7 +30,7 @@ impl FormValue {
         self.0.first().unwrap().clone()
     }
 
-    /// Convert into Vec<String>
+    /// Convert into [`Vec<String>`]
     pub fn to_vec(self) -> Vec<String> {
         self.0.clone()
     }
@@ -287,7 +287,50 @@ impl_event! {
     /// onchange
     onchange
 
-    /// oninput handler
+    /// The `oninput` event is fired when the value of a `<input>`, `<select>`, or `<textarea>` element is changed.
+    ///
+    /// There are two main approaches to updating your input element:
+    /// 1) Controlled inputs directly update the value of the input element as the user interacts with the element
+    ///
+    /// ```rust
+    /// use dioxus::prelude::*;
+    ///
+    /// fn App() -> Element {
+    ///     let mut value = use_signal(|| "hello world".to_string());
+    ///
+    ///     rsx! {
+    ///         input {
+    ///             // We directly set the value of the input element to our value signal
+    ///             value: "{value}",
+    ///             // The `oninput` event handler will run every time the user changes the value of the input element
+    ///             // We can set the `value` signal to the new value of the input element
+    ///             oninput: move |event| value.set(event.value())
+    ///         }
+    ///         // Since this is a controlled input, we can also update the value of the input element directly
+    ///         button {
+    ///             onclick: move |_| value.write().clear(),
+    ///             "Clear"
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// 2) Uncontrolled inputs just read the value of the input element as it changes
+    ///
+    /// ```rust
+    /// use dioxus::prelude::*;
+    ///
+    /// fn App() -> Element {
+    ///     rsx! {
+    ///         input {
+    ///             // In uncontrolled inputs, we don't set the value of the input element directly
+    ///             // But you can still read the value of the input element
+    ///             oninput: move |event| println!("{}", event.value()),
+    ///         }
+    ///         // Since we don't directly control the value of the input element, we can't easily modify it
+    ///     }
+    /// }
+    /// ```
     oninput
 
     /// oninvalid

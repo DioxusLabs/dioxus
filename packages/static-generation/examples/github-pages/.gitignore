@@ -1,4 +1,4 @@
-docs
+dist
 target
-static
+docs
 .dioxus

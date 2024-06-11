@@ -6,7 +6,31 @@ use crate::read::Readable;
 #[allow(type_alias_bounds)]
 pub type WritableRef<'a, T: Writable, O = <T as Readable>::Target> = T::Mut<'a, O>;
 
-/// A trait for states that can be read from like [`crate::Signal`], or [`crate::GlobalSignal`]. You may choose to accept this trait as a parameter instead of the concrete type to allow for more flexibility in your API. For example, instead of creating two functions, one that accepts a [`crate::Signal`] and one that accepts a [`crate::GlobalSignal`], you can create one function that accepts a [`Writable`] type.
+/// A trait for states that can be written to like [`crate::Signal`]. You may choose to accept this trait as a parameter instead of the concrete type to allow for more flexibility in your API.
+///
+/// # Example
+/// ```rust
+/// # use dioxus::prelude::*;
+/// enum MyEnum {
+///     String(String),
+///     Number(i32),
+/// }
+///
+/// fn MyComponent(mut count: Signal<MyEnum>) -> Element {
+///     rsx!{
+///         button {
+///             onclick: move |_| {
+///                 // You can use any methods from the Writable trait on Signals
+///                 match &mut *count.write() {
+///                     MyEnum::String(s) => s.push('a'),
+///                     MyEnum::Number(n) => *n += 1,
+///                 }
+///             },
+///             "Add value"
+///         }
+///     }
+/// }
+/// ```
 pub trait Writable: Readable {
     /// The type of the reference.
     type Mut<'a, R: ?Sized + 'static>: DerefMut<Target = R>;
@@ -112,7 +136,7 @@ pub trait Writable: Readable {
     }
 }
 
-/// An extension trait for Writable<Option<T>> that provides some convenience methods.
+/// An extension trait for [`Writable<Option<T>>`]` that provides some convenience methods.
 pub trait WritableOptionExt<T: 'static>: Writable<Target = Option<T>> {
     /// Gets the value out of the Option, or inserts the given value if the Option is empty.
     #[track_caller]
@@ -146,7 +170,7 @@ where
 {
 }
 
-/// An extension trait for Writable<Vec<T>> that provides some convenience methods.
+/// An extension trait for [`Writable<Vec<T>>`] that provides some convenience methods.
 pub trait WritableVecExt<T: 'static>: Writable<Target = Vec<T>> {
     /// Pushes a new value to the end of the vector.
     #[track_caller]
@@ -227,7 +251,7 @@ pub trait WritableVecExt<T: 'static>: Writable<Target = Vec<T>> {
     }
 }
 
-/// An iterator over the values of a `Writable<Vec<T>>`.
+/// An iterator over the values of a [`Writable<Vec<T>>`].
 pub struct WritableValueIterator<'a, R> {
     index: usize,
     value: &'a mut R,

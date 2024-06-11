@@ -14,6 +14,15 @@ mod file_watcher;
 #[cfg(feature = "custom_file_watcher")]
 pub use file_watcher::*;
 
+#[cfg(feature = "serve")]
+mod websocket;
+#[cfg(feature = "serve")]
+pub use websocket::*;
+
+#[cfg(feature = "serve")]
+/// The script to inject into the page to reconnect to server if the connection is lost
+pub const RECONNECT_SCRIPT: &str = include_str!("assets/autoreload.js");
+
 /// A message the hot reloading server sends to the client
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(bound(deserialize = "'de: 'static"))]

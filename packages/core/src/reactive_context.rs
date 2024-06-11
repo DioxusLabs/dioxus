@@ -13,12 +13,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-/// A context for signal reads and writes to be directed to
-///
-/// When a signal calls .read(), it will look for the current ReactiveContext to read from.
-/// If it doesn't find it, then it will try and insert a context into the nearest component scope via context api.
-///
-/// When the ReactiveContext drops, it will remove itself from the associated contexts attached to signal
+#[doc = include_str!("../docs/reactivity.md")]
 #[derive(Clone, Copy)]
 pub struct ReactiveContext {
     scope: ScopeId,

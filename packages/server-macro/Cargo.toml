@@ -26,3 +26,6 @@ proc-macro = true
 axum = ["server_fn_macro/axum"]
 server = ["server_fn_macro/ssr"]
 reqwest = ["server_fn_macro/reqwest"]
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

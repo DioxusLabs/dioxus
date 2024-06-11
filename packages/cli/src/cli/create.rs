@@ -1,7 +1,7 @@
 use super::*;
 use cargo_generate::{GenerateArgs, TemplatePath};
 
-static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
+pub(crate) static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 #[clap(name = "new")]
@@ -28,7 +28,10 @@ pub struct Create {
 
 impl Create {
     pub fn create(self) -> Result<()> {
-        let mut args = GenerateArgs {
+        let args = GenerateArgs {
+            define: self.option,
+            name: self.name,
+            silent: self.yes,
             template_path: TemplatePath {
                 auto_path: Some(self.template),
                 subfolder: self.subtemplate,
@@ -36,16 +39,9 @@ impl Create {
             },
             ..Default::default()
         };
-        if self.yes {
-            if self.name.is_none() {
-                return Err(
-                    "You have to provide the project's name when using `--yes` option.".into(),
-                );
-            }
-            args.silent = true;
-        };
-        args.name = self.name;
-        args.define = self.option;
+        if self.yes && args.name.is_none() {
+            return Err("You have to provide the project's name when using `--yes` option.".into());
+        }
         let path = cargo_generate::generate(args)?;
         post_create(&path)
     }

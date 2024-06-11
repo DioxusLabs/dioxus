@@ -2,7 +2,11 @@ use dioxus_lib::prelude::*;
 
 use std::{cell::RefCell, rc::Rc, str::FromStr};
 
-use crate::{prelude::Outlet, routable::Routable, router_cfg::RouterConfig};
+use crate::{
+    prelude::{provide_router_context, Outlet},
+    routable::Routable,
+    router_cfg::RouterConfig,
+};
 
 /// The config for [`Router`].
 #[derive(Clone)]
@@ -78,7 +82,7 @@ where
     use crate::prelude::{outlet::OutletContext, RouterContext};
 
     use_hook(|| {
-        provide_context(RouterContext::new(
+        provide_router_context(RouterContext::new(
             (props
                 .config
                 .config

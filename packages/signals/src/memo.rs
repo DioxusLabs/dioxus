@@ -5,7 +5,6 @@ use crate::{CopyValue, ReadOnlySignal};
 use std::{
     cell::RefCell,
     ops::Deref,
-    panic::Location,
     sync::{atomic::AtomicBool, Arc},
 };
 
@@ -18,7 +17,10 @@ struct UpdateInformation<T> {
     callback: RefCell<Box<dyn FnMut() -> T>>,
 }
 
-/// A value that is memoized. This is useful for caching the result of a computation.
+#[doc = include_str!("../docs/memo.md")]
+#[doc(alias = "Selector")]
+#[doc(alias = "UseMemo")]
+#[doc(alias = "Memorize")]
 pub struct Memo<T: 'static> {
     inner: Signal<T>,
     update: CopyValue<UpdateInformation<T>>,
@@ -36,7 +38,18 @@ where
 impl<T: 'static> Memo<T> {
     /// Create a new memo
     #[track_caller]
-    pub fn new(mut f: impl FnMut() -> T + 'static) -> Self
+    pub fn new(f: impl FnMut() -> T + 'static) -> Self
+    where
+        T: PartialEq,
+    {
+        Self::new_with_location(f, std::panic::Location::caller())
+    }
+
+    /// Create a new memo with an explicit location
+    pub fn new_with_location(
+        mut f: impl FnMut() -> T + 'static,
+        location: &'static std::panic::Location<'static>,
+    ) -> Self
     where
         T: PartialEq,
     {
@@ -50,11 +63,8 @@ impl<T: 'static> Memo<T> {
                 let _ = tx.unbounded_send(());
             }
         };
-        let rc = ReactiveContext::new_with_callback(
-            callback,
-            current_scope_id().unwrap(),
-            Location::caller(),
-        );
+        let rc =
+            ReactiveContext::new_with_callback(callback, current_scope_id().unwrap(), location);
 
         // Create a new signal in that context, wiring up its dependencies and subscribers
         let mut recompute = move || rc.reset_and_run_in(&mut f);
@@ -64,7 +74,7 @@ impl<T: 'static> Memo<T> {
             dirty,
             callback: recompute,
         });
-        let state: Signal<T> = Signal::new(value);
+        let state: Signal<T> = Signal::new_with_caller(value, location);
 
         let memo = Memo {
             inner: state,
