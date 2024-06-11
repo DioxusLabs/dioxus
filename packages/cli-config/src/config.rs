@@ -22,6 +22,11 @@ pub enum Platform {
     #[cfg_attr(feature = "cli", clap(name = "fullstack"))]
     #[serde(rename = "fullstack")]
     Fullstack,
+
+    /// Targeting the static generation platform using SSR and Dioxus-Fullstack
+    #[cfg_attr(feature = "cli", clap(name = "fullstack"))]
+    #[serde(rename = "static-generation")]
+    StaticGeneration,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -230,6 +235,7 @@ impl Default for DioxusConfig {
                     cert_path: None,
                 },
                 pre_compress: true,
+                wasm_opt: Default::default(),
             },
             bundle: BundleConfig {
                 identifier: Some(format!("io.github.{name}")),
@@ -298,6 +304,55 @@ pub struct WebConfig {
     /// Whether to enable pre-compression of assets and wasm during a web build in release mode
     #[serde(default = "true_bool")]
     pub pre_compress: bool,
+    /// The wasm-opt configuration
+    #[serde(default)]
+    pub wasm_opt: WasmOptConfig,
+}
+
+/// The wasm-opt configuration
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct WasmOptConfig {
+    /// The wasm-opt level to use for release builds [default: s]
+    /// Options:
+    /// - z: optimize aggressively for size
+    /// - s: optimize for size
+    /// - 1: optimize for speed
+    /// - 2: optimize for more for speed
+    /// - 3: optimize for even more for speed
+    /// - 4: optimize aggressively for speed
+    #[serde(default)]
+    pub level: WasmOptLevel,
+
+    /// Keep debug symbols in the wasm file
+    #[serde(default = "false_bool")]
+    pub debug: bool,
+}
+
+/// The wasm-opt level to use for release web builds [default: 4]
+#[derive(Default, Debug, Copy, Clone, Serialize, Deserialize)]
+pub enum WasmOptLevel {
+    /// Optimize aggressively for size
+    #[serde(rename = "z")]
+    Z,
+    /// Optimize for size
+    #[serde(rename = "s")]
+    S,
+    /// Don't optimize
+    #[serde(rename = "0")]
+    Zero,
+    /// Optimize for speed
+    #[serde(rename = "1")]
+    One,
+    /// Optimize for more for speed
+    #[serde(rename = "2")]
+    Two,
+    /// Optimize for even more for speed
+    #[serde(rename = "3")]
+    Three,
+    /// Optimize aggressively for speed
+    #[serde(rename = "4")]
+    #[default]
+    Four,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -598,4 +653,8 @@ impl CrateConfig {
 
 fn true_bool() -> bool {
     true
+}
+
+fn false_bool() -> bool {
+    false
 }

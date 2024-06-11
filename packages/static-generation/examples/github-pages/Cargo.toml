@@ -1,0 +1,17 @@
+[package]
+name = "github-pages-static-generation"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dioxus = { workspace = true, features = ["static-generation", "router"] }
+tower = { workspace = true, features = ["util"] }
+tracing-subscriber = "0.3.18"
+
+[features]
+default = []
+server = ["dioxus/axum"]
+web = ["dioxus/web"]

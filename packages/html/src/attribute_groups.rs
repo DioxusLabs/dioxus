@@ -7,7 +7,7 @@ use dioxus_html_internal_macro::impl_extension_attributes;
 use crate::AttributeDiscription;
 
 #[cfg(feature = "hot-reload-context")]
-macro_rules! trait_method_mapping {
+macro_rules! mod_method_mapping {
     (
         $matching:ident;
         $(#[$attr:meta])*
@@ -29,10 +29,19 @@ macro_rules! trait_method_mapping {
     (
         $matching:ident;
         $(#[$attr:meta])*
-        $name:ident: $lit:literal, $ns:literal;
+        $name:ident: $lit:literal in $ns:literal;
     ) => {
         if $matching == stringify!($name) {
             return Some(($lit, Some($ns)));
+        }
+    };
+    (
+        $matching:ident;
+        $(#[$attr:meta])*
+        $name:ident in $ns:literal;
+    ) => {
+        if $matching == stringify!($name) {
+            return Some((stringify!($name), Some($ns)));
         }
     };
 }
@@ -60,40 +69,72 @@ macro_rules! html_to_rsx_attribute_mapping {
     (
         $matching:ident;
         $(#[$attr:meta])*
-        $name:ident: $lit:literal, $ns:literal;
+        $name:ident: $lit:literal in $ns:literal;
     ) => {
         if $matching == stringify!($lit) {
             return Some(stringify!($name));
         }
     };
+    (
+        $matching:ident;
+        $(#[$attr:meta])*
+        $name:ident in $ns:literal;
+    ) => {
+        if $matching == stringify!($name) {
+            return Some(stringify!($name));
+        }
+    };
 }
 
-macro_rules! trait_methods {
+macro_rules! mod_methods {
     (
         @base
-        $(#[$trait_attr:meta])*
-        $trait:ident;
+        $(#[$mod_attr:meta])*
+        $mod:ident;
         $fn:ident;
         $fn_html_to_rsx:ident;
         $(
             $(#[$attr:meta])*
-            $name:ident $(: $($arg:literal),*)*;
+            $name:ident $(: $js_name:literal)? $(in $ns:literal)?;
         )+
     ) => {
-        $(#[$trait_attr])*
-        pub trait $trait {
+        $(#[$mod_attr])*
+        pub mod $mod {
+            use super::*;
             $(
                 $(#[$attr])*
-                const $name: AttributeDiscription = trait_methods! { $name $(: $($arg),*)*; };
+                ///
+                /// ## Usage in rsx
+                ///
+                /// ```rust, ignore
+                /// # use dioxus::prelude::*;
+                #[doc = concat!("let ", stringify!($name), " = \"value\";")]
+                ///
+                /// rsx! {
+                ///     // Attributes need to be under the element they modify
+                ///     div {
+                ///         // Attributes are followed by a colon and then the value of the attribute
+                #[doc = concat!("        ", stringify!($name), ": \"value\"")]
+                ///     }
+                ///     div {
+                ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
+                #[doc = concat!("        ", stringify!($name), ",")]
+                ///     }
+                /// };
+                /// ```
+                $(
+                    #[doc(alias = $js_name)]
+                )?
+                pub const $name: AttributeDiscription = mod_methods! { $name $(: $js_name)? $(in $ns)?; };
             )*
         }
 
         #[cfg(feature = "hot-reload-context")]
         pub(crate) fn $fn(attr: &str) -> Option<(&'static str, Option<&'static str>)> {
             $(
-                trait_method_mapping! {
+                mod_method_mapping! {
                     attr;
-                    $name$(: $($arg),*)*;
+                    $name $(: $js_name)? $(in $ns)?;
                 }
             )*
             None
@@ -105,17 +146,20 @@ macro_rules! trait_methods {
             $(
                 html_to_rsx_attribute_mapping! {
                     html;
-                    $name$(: $($arg),*)*;
+                    $name $(: $js_name)? $(in $ns)?;
                 }
             )*
             None
         }
 
-        impl_extension_attributes![GLOBAL $trait { $($name,)* }];
+        impl_extension_attributes![$mod { $($name,)* }];
     };
 
     // Rename the incoming ident and apply a custom namespace
-    ( $name:ident: $lit:literal, $ns:literal; ) => { ($lit, Some($ns), false) };
+    ( $name:ident: $lit:literal in $ns:literal; ) => { ($lit, Some($ns), false) };
+
+    // Custom namespace
+    ( $name:ident in $ns:literal; ) => { (stringify!($name), Some($ns), false) };
 
     // Rename the incoming ident
     ( $name:ident: $lit:literal; ) => { ($lit, None, false ) };
@@ -124,10 +168,10 @@ macro_rules! trait_methods {
     ( $name:ident; ) => { (stringify!($name), None, false) };
 }
 
-trait_methods! {
+mod_methods! {
     @base
 
-    GlobalAttributes;
+    global_attributes;
     map_global_attributes;
     map_html_global_attributes_to_rsx;
 
@@ -139,11 +183,11 @@ trait_methods! {
 
 
     /// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/accesskey>
-    accesskey: "accesskey";
+    accesskey;
 
 
     /// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/autocapitalize>
-    autocapitalize: "autocapitalize";
+    autocapitalize;
 
 
     /// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/autofocus>
@@ -158,25 +202,38 @@ trait_methods! {
     /// Classes allow CSS and Javascript to select and access specific elements via the class selectors or
     /// functions like the DOM method document.getElementsByClassName.
     ///
-    /// ## Example
+    /// ## Multiple Classes
     ///
-    /// ### HTML:
-    /// ```html
-    /// <p class="note editorial">Above point sounds a bit obvious. Remove/rewrite?</p>
+    /// If you include multiple classes in a single element dioxus will automatically join them with a space.
+    ///
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// rsx! {
+    ///     div {
+    ///         class: "my-class",
+    ///         class: "my-other-class"
+    ///     }
+    /// };
     /// ```
     ///
-    /// ### CSS:
-    /// ```css
-    /// .note {
-    ///     font-style: italic;
-    ///     font-weight: bold;
-    /// }
+    /// ## Optional Classes
     ///
-    /// .editorial {
-    ///     background: rgb(255, 0, 0, .25);
-    ///     padding: 10px;
-    /// }
+    /// You can include optional attributes with an unterminated if statement as the value of the attribute. This is very useful for conditionally applying css classes:
+    ///
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// rsx! {
+    ///     div {
+    ///         class: if true {
+    ///             "my-class"
+    ///         },
+    ///         class: if false {
+    ///             "my-other-class"
+    ///         }
+    ///     }
+    /// };
     /// ```
+    ///
     /// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/class>
     class;
 
@@ -234,6 +291,9 @@ trait_methods! {
     /// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/part>
     part;
 
+    /// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/popover>
+    popover;
+
     /// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/role>
     role;
 
@@ -270,1222 +330,1222 @@ trait_methods! {
     // This roughly follows the html spec
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/align-content>
-    align_content: "align-content", "style";
+    align_content: "align-content" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/align-items>
-    align_items: "align-items", "style";
+    align_items: "align-items" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/align-self>
-    align_self: "align-self", "style";
+    align_self: "align-self" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/alignment-adjust>
-    alignment_adjust: "alignment-adjust", "style";
+    alignment_adjust: "alignment-adjust" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/alignment-baseline>
-    alignment_baseline: "alignment-baseline", "style";
+    alignment_baseline: "alignment-baseline" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/all>
-    all: "all", "style";
+    all in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/alt>
-    alt: "alt", "style";
+    alt in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/animation>
-    animation: "animation", "style";
+    animation in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/animation-delay>
-    animation_delay: "animation-delay", "style";
+    animation_delay: "animation-delay" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/animation-direction>
-    animation_direction: "animation-direction", "style";
+    animation_direction: "animation-direction" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/animation-duration>
-    animation_duration: "animation-duration", "style";
+    animation_duration: "animation-duration" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/animation-fill-mode>
-    animation_fill_mode: "animation-fill-mode", "style";
+    animation_fill_mode: "animation-fill-mode" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/animation-iteration-count>
-    animation_iteration_count: "animation-iteration-count", "style";
+    animation_iteration_count: "animation-iteration-count" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/animation-name>
-    animation_name: "animation-name", "style";
+    animation_name: "animation-name" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/animation-play-state>
-    animation_play_state: "animation-play-state", "style";
+    animation_play_state: "animation-play-state" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/animation-timing-function>
-    animation_timing_function: "animation-timing-function", "style";
+    animation_timing_function: "animation-timing-function" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/azimuth>
-    azimuth: "azimuth", "style";
+    azimuth in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/backdrop-filter>
-    backdrop_filter: "backdrop-filter", "style";
+    backdrop_filter: "backdrop-filter" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/backface-visibility>
-    backface_visibility: "backface-visibility", "style";
+    backface_visibility: "backface-visibility" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/background>
-    background: "background", "style";
+    background in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/background-attachment>
-    background_attachment: "background-attachment", "style";
+    background_attachment: "background-attachment" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/background-clip>
-    background_clip: "background-clip", "style";
+    background_clip: "background-clip" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/background-color>
-    background_color: "background-color", "style";
+    background_color: "background-color" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/background-image>
-    background_image: "background-image", "style";
+    background_image: "background-image" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/background-origin>
-    background_origin: "background-origin", "style";
+    background_origin: "background-origin" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/background-position>
-    background_position: "background-position", "style";
+    background_position: "background-position" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/background-repeat>
-    background_repeat: "background-repeat", "style";
+    background_repeat: "background-repeat" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/background-size>
-    background_size: "background-size", "style";
+    background_size: "background-size" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/background-blend-mode>
-    background_blend_mode: "background-blend-mode", "style";
+    background_blend_mode: "background-blend-mode" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/baseline-shift>
-    baseline_shift: "baseline-shift", "style";
+    baseline_shift: "baseline-shift" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/bleed>
-    bleed: "bleed", "style";
+    bleed in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/bookmark-label>
-    bookmark_label: "bookmark-label", "style";
+    bookmark_label: "bookmark-label" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/bookmark-level>
-    bookmark_level: "bookmark-level", "style";
+    bookmark_level: "bookmark-level" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/bookmark-state>
-    bookmark_state: "bookmark-state", "style";
+    bookmark_state: "bookmark-state" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border>
-    border: "border", "style";
+    border in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-color>
-    border_color: "border-color", "style";
+    border_color: "border-color" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-style>
-    border_style: "border-style", "style";
+    border_style: "border-style" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-width>
-    border_width: "border-width", "style";
+    border_width: "border-width" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-bottom>
-    border_bottom: "border-bottom", "style";
+    border_bottom: "border-bottom" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-bottom-color>
-    border_bottom_color: "border-bottom-color", "style";
+    border_bottom_color: "border-bottom-color" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-bottom-style>
-    border_bottom_style: "border-bottom-style", "style";
+    border_bottom_style: "border-bottom-style" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-bottom-width>
-    border_bottom_width: "border-bottom-width", "style";
+    border_bottom_width: "border-bottom-width" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-left>
-    border_left: "border-left", "style";
+    border_left: "border-left" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-left-color>
-    border_left_color: "border-left-color", "style";
+    border_left_color: "border-left-color" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-left-style>
-    border_left_style: "border-left-style", "style";
+    border_left_style: "border-left-style" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-left-width>
-    border_left_width: "border-left-width", "style";
+    border_left_width: "border-left-width" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-right>
-    border_right: "border-right", "style";
+    border_right: "border-right" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-right-color>
-    border_right_color: "border-right-color", "style";
+    border_right_color: "border-right-color" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-right-style>
-    border_right_style: "border-right-style", "style";
+    border_right_style: "border-right-style" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-right-width>
-    border_right_width: "border-right-width", "style";
+    border_right_width: "border-right-width" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-top>
-    border_top: "border-top", "style";
+    border_top: "border-top" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-top-color>
-    border_top_color: "border-top-color", "style";
+    border_top_color: "border-top-color" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-top-style>
-    border_top_style: "border-top-style", "style";
+    border_top_style: "border-top-style" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-top-width>
-    border_top_width: "border-top-width", "style";
+    border_top_width: "border-top-width" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-collapse>
-    border_collapse: "border-collapse", "style";
+    border_collapse: "border-collapse" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-image>
-    border_image: "border-image", "style";
+    border_image: "border-image" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-image-outset>
-    border_image_outset: "border-image-outset", "style";
+    border_image_outset: "border-image-outset" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-image-repeat>
-    border_image_repeat: "border-image-repeat", "style";
+    border_image_repeat: "border-image-repeat" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-image-slice>
-    border_image_slice: "border-image-slice", "style";
+    border_image_slice: "border-image-slice" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-image-source>
-    border_image_source: "border-image-source", "style";
+    border_image_source: "border-image-source" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-image-width>
-    border_image_width: "border-image-width", "style";
+    border_image_width: "border-image-width" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-radius>
-    border_radius: "border-radius", "style";
+    border_radius: "border-radius" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-bottom-left-radius>
-    border_bottom_left_radius: "border-bottom-left-radius", "style";
+    border_bottom_left_radius: "border-bottom-left-radius" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-bottom-right-radius>
-    border_bottom_right_radius: "border-bottom-right-radius", "style";
+    border_bottom_right_radius: "border-bottom-right-radius" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-top-left-radius>
-    border_top_left_radius: "border-top-left-radius", "style";
+    border_top_left_radius: "border-top-left-radius" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-top-right-radius>
-    border_top_right_radius: "border-top-right-radius", "style";
+    border_top_right_radius: "border-top-right-radius" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/border-spacing>
-    border_spacing: "border-spacing", "style";
+    border_spacing: "border-spacing" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/bottom>
-    bottom: "bottom", "style";
+    bottom in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/box-decoration-break>
-    box_decoration_break: "box-decoration-break", "style";
+    box_decoration_break: "box-decoration-break" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/box-shadow>
-    box_shadow: "box-shadow", "style";
+    box_shadow: "box-shadow" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/box-sizing>
-    box_sizing: "box-sizing", "style";
+    box_sizing: "box-sizing" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/box-snap>
-    box_snap: "box-snap", "style";
+    box_snap: "box-snap" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/break-after>
-    break_after: "break-after", "style";
+    break_after: "break-after" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/break-before>
-    break_before: "break-before", "style";
+    break_before: "break-before" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/break-inside>
-    break_inside: "break-inside", "style";
+    break_inside: "break-inside" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/buffered-rendering>
-    buffered_rendering: "buffered-rendering", "style";
+    buffered_rendering: "buffered-rendering" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/caption-side>
-    caption_side: "caption-side", "style";
+    caption_side: "caption-side" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/clear>
-    clear: "clear", "style";
+    clear in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/clear-side>
-    clear_side: "clear-side", "style";
+    clear_side: "clear-side" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/clip>
-    clip: "clip", "style";
+    clip in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/clip-path>
-    clip_path: "clip-path", "style";
+    clip_path: "clip-path" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/clip-rule>
-    clip_rule: "clip-rule", "style";
+    clip_rule: "clip-rule" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/color>
-    color: "color", "style";
+    color in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/color-adjust>
-    color_adjust: "color-adjust", "style";
+    color_adjust: "color-adjust" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/color-correction>
-    color_correction: "color-correction", "style";
+    color_correction: "color-correction" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/color-interpolation>
-    color_interpolation: "color-interpolation", "style";
+    color_interpolation: "color-interpolation" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/color-interpolation-filters>
-    color_interpolation_filters: "color-interpolation-filters", "style";
+    color_interpolation_filters: "color-interpolation-filters" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/color-profile>
-    color_profile: "color-profile", "style";
+    color_profile: "color-profile" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/color-rendering>
-    color_rendering: "color-rendering", "style";
+    color_rendering: "color-rendering" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/column-fill>
-    column_fill: "column-fill", "style";
+    column_fill: "column-fill" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/column-gap>
-    column_gap: "column-gap", "style";
+    column_gap: "column-gap" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/column-rule>
-    column_rule: "column-rule", "style";
+    column_rule: "column-rule" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/column-rule-color>
-    column_rule_color: "column-rule-color", "style";
+    column_rule_color: "column-rule-color" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/column-rule-style>
-    column_rule_style: "column-rule-style", "style";
+    column_rule_style: "column-rule-style" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/column-rule-width>
-    column_rule_width: "column-rule-width", "style";
+    column_rule_width: "column-rule-width" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/column-span>
-    column_span: "column-span", "style";
+    column_span: "column-span" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/columns>
-    columns: "columns", "style";
+    columns in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/column-count>
-    column_count: "column-count", "style";
+    column_count: "column-count" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/column-width>
-    column_width: "column-width", "style";
+    column_width: "column-width" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/contain>
-    contain: "contain", "style";
+    contain in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/content>
-    content: "content", "style";
+    content in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/counter-increment>
-    counter_increment: "counter-increment", "style";
+    counter_increment: "counter-increment" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/counter-reset>
-    counter_reset: "counter-reset", "style";
+    counter_reset: "counter-reset" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/counter-set>
-    counter_set: "counter-set", "style";
+    counter_set: "counter-set" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/cue>
-    cue: "cue", "style";
+    cue in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/cue-after>
-    cue_after: "cue-after", "style";
+    cue_after: "cue-after" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/cue-before>
-    cue_before: "cue-before", "style";
+    cue_before: "cue-before" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/cursor>
-    cursor: "cursor", "style";
+    cursor in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/direction>
-    direction: "direction", "style";
+    direction in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/display>
-    display: "display", "style";
+    display in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/display-inside>
-    display_inside: "display-inside", "style";
+    display_inside: "display-inside" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/display-outside>
-    display_outside: "display-outside", "style";
+    display_outside: "display-outside" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/display-extras>
-    display_extras: "display-extras", "style";
+    display_extras: "display-extras" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/display-box>
-    display_box: "display-box", "style";
+    display_box: "display-box" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/dominant-baseline>
-    dominant_baseline: "dominant-baseline", "style";
+    dominant_baseline: "dominant-baseline" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/elevation>
-    elevation: "elevation", "style";
+    elevation in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/empty-cells>
-    empty_cells: "empty-cells", "style";
+    empty_cells: "empty-cells" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/enable-background>
-    enable_background: "enable-background", "style";
+    enable_background: "enable-background" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/fill>
-    fill: "fill", "style";
+    fill in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/fill-opacity>
-    fill_opacity: "fill-opacity", "style";
+    fill_opacity: "fill-opacity" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/fill-rule>
-    fill_rule: "fill-rule", "style";
+    fill_rule: "fill-rule" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/filter>
-    filter: "filter", "style";
+    filter in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/float>
-    float: "float", "style";
+    float in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/float-defer-column>
-    float_defer_column: "float-defer-column", "style";
+    float_defer_column: "float-defer-column" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/float-defer-page>
-    float_defer_page: "float-defer-page", "style";
+    float_defer_page: "float-defer-page" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/float-offset>
-    float_offset: "float-offset", "style";
+    float_offset: "float-offset" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/float-wrap>
-    float_wrap: "float-wrap", "style";
+    float_wrap: "float-wrap" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/flow-into>
-    flow_into: "flow-into", "style";
+    flow_into: "flow-into" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/flow-from>
-    flow_from: "flow-from", "style";
+    flow_from: "flow-from" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/flex>
-    flex: "flex", "style";
+    flex in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/flex-basis>
-    flex_basis: "flex-basis", "style";
+    flex_basis: "flex-basis" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/flex-grow>
-    flex_grow: "flex-grow", "style";
+    flex_grow: "flex-grow" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/flex-shrink>
-    flex_shrink: "flex-shrink", "style";
+    flex_shrink: "flex-shrink" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/flex-flow>
-    flex_flow: "flex-flow", "style";
+    flex_flow: "flex-flow" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/flex-direction>
-    flex_direction: "flex-direction", "style";
+    flex_direction: "flex-direction" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/flex-wrap>
-    flex_wrap: "flex-wrap", "style";
+    flex_wrap: "flex-wrap" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/flood-color>
-    flood_color: "flood-color", "style";
+    flood_color: "flood-color" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/flood-opacity>
-    flood_opacity: "flood-opacity", "style";
+    flood_opacity: "flood-opacity" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/font>
-    font: "font", "style";
+    font in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-family>
-    font_family: "font-family", "style";
+    font_family: "font-family" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-size>
-    font_size: "font-size", "style";
+    font_size: "font-size" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-stretch>
-    font_stretch: "font-stretch", "style";
+    font_stretch: "font-stretch" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-style>
-    font_style: "font-style", "style";
+    font_style: "font-style" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-weight>
-    font_weight: "font-weight", "style";
+    font_weight: "font-weight" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-feature-settings>
-    font_feature_settings: "font-feature-settings", "style";
+    font_feature_settings: "font-feature-settings" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-kerning>
-    font_kerning: "font-kerning", "style";
+    font_kerning: "font-kerning" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-language-override>
-    font_language_override: "font-language-override", "style";
+    font_language_override: "font-language-override" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-size-adjust>
-    font_size_adjust: "font-size-adjust", "style";
+    font_size_adjust: "font-size-adjust" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-synthesis>
-    font_synthesis: "font-synthesis", "style";
+    font_synthesis: "font-synthesis" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant>
-    font_variant: "font-variant", "style";
+    font_variant: "font-variant" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant-alternates>
-    font_variant_alternates: "font-variant-alternates", "style";
+    font_variant_alternates: "font-variant-alternates" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant-caps>
-    font_variant_caps: "font-variant-caps", "style";
+    font_variant_caps: "font-variant-caps" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant-east-asian>
-    font_variant_east_asian: "font-variant-east-asian", "style";
+    font_variant_east_asian: "font-variant-east-asian" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant-ligatures>
-    font_variant_ligatures: "font-variant-ligatures", "style";
+    font_variant_ligatures: "font-variant-ligatures" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant-numeric>
-    font_variant_numeric: "font-variant-numeric", "style";
+    font_variant_numeric: "font-variant-numeric" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant-position>
-    font_variant_position: "font-variant-position", "style";
+    font_variant_position: "font-variant-position" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/footnote-policy>
-    footnote_policy: "footnote-policy", "style";
+    footnote_policy: "footnote-policy" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/glyph-orientation-horizontal>
-    glyph_orientation_horizontal: "glyph-orientation-horizontal", "style";
+    glyph_orientation_horizontal: "glyph-orientation-horizontal" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/glyph-orientation-vertical>
-    glyph_orientation_vertical: "glyph-orientation-vertical", "style";
+    glyph_orientation_vertical: "glyph-orientation-vertical" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid>
-    grid: "grid", "style";
+    grid in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-auto-flow>
-    grid_auto_flow: "grid-auto-flow", "style";
+    grid_auto_flow: "grid-auto-flow" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-auto-columns>
-    grid_auto_columns: "grid-auto-columns", "style";
+    grid_auto_columns: "grid-auto-columns" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-auto-rows>
-    grid_auto_rows: "grid-auto-rows", "style";
+    grid_auto_rows: "grid-auto-rows" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-template>
-    grid_template: "grid-template", "style";
+    grid_template: "grid-template" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-template-areas>
-    grid_template_areas: "grid-template-areas", "style";
+    grid_template_areas: "grid-template-areas" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-template-columns>
-    grid_template_columns: "grid-template-columns", "style";
+    grid_template_columns: "grid-template-columns" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-template-rows>
-    grid_template_rows: "grid-template-rows", "style";
+    grid_template_rows: "grid-template-rows" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-area>
-    grid_area: "grid-area", "style";
+    grid_area: "grid-area" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-column>
-    grid_column: "grid-column", "style";
+    grid_column: "grid-column" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-column-start>
-    grid_column_start: "grid-column-start", "style";
+    grid_column_start: "grid-column-start" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-column-end>
-    grid_column_end: "grid-column-end", "style";
+    grid_column_end: "grid-column-end" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-row>
-    grid_row: "grid-row", "style";
+    grid_row: "grid-row" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-row-start>
-    grid_row_start: "grid-row-start", "style";
+    grid_row_start: "grid-row-start" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/grid-row-end>
-    grid_row_end: "grid-row-end", "style";
+    grid_row_end: "grid-row-end" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/hanging-punctuation>
-    hanging_punctuation: "hanging-punctuation", "style";
+    hanging_punctuation: "hanging-punctuation" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/height>
-    height: "height", "style";
+    height in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/hyphenate-character>
-    hyphenate_character: "hyphenate-character", "style";
+    hyphenate_character: "hyphenate-character" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/hyphenate-limit-chars>
-    hyphenate_limit_chars: "hyphenate-limit-chars", "style";
+    hyphenate_limit_chars: "hyphenate-limit-chars" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/hyphenate-limit-last>
-    hyphenate_limit_last: "hyphenate-limit-last", "style";
+    hyphenate_limit_last: "hyphenate-limit-last" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/hyphenate-limit-lines>
-    hyphenate_limit_lines: "hyphenate-limit-lines", "style";
+    hyphenate_limit_lines: "hyphenate-limit-lines" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/hyphenate-limit-zone>
-    hyphenate_limit_zone: "hyphenate-limit-zone", "style";
+    hyphenate_limit_zone: "hyphenate-limit-zone" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/hyphens>
-    hyphens: "hyphens", "style";
+    hyphens in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/icon>
-    icon: "icon", "style";
+    icon in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/image-orientation>
-    image_orientation: "image-orientation", "style";
+    image_orientation: "image-orientation" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/image-resolution>
-    image_resolution: "image-resolution", "style";
+    image_resolution: "image-resolution" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/image-rendering>
-    image_rendering: "image-rendering", "style";
+    image_rendering: "image-rendering" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/ime>
-    ime: "ime", "style";
+    ime in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/ime-align>
-    ime_align: "ime-align", "style";
+    ime_align: "ime-align" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/ime-mode>
-    ime_mode: "ime-mode", "style";
+    ime_mode: "ime-mode" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/ime-offset>
-    ime_offset: "ime-offset", "style";
+    ime_offset: "ime-offset" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/ime-width>
-    ime_width: "ime-width", "style";
+    ime_width: "ime-width" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/initial-letters>
-    initial_letters: "initial-letters", "style";
+    initial_letters: "initial-letters" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/inline-box-align>
-    inline_box_align: "inline-box-align", "style";
+    inline_box_align: "inline-box-align" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/isolation>
-    isolation: "isolation", "style";
+    isolation in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/justify-content>
-    justify_content: "justify-content", "style";
+    justify_content: "justify-content" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/justify-items>
-    justify_items: "justify-items", "style";
+    justify_items: "justify-items" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/justify-self>
-    justify_self: "justify-self", "style";
+    justify_self: "justify-self" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/kerning>
-    kerning: "kerning", "style";
+    kerning in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/left>
-    left: "left", "style";
+    left in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/letter-spacing>
-    letter_spacing: "letter-spacing", "style";
+    letter_spacing: "letter-spacing" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/lighting-color>
-    lighting_color: "lighting-color", "style";
+    lighting_color: "lighting-color" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/line-box-contain>
-    line_box_contain: "line-box-contain", "style";
+    line_box_contain: "line-box-contain" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/line-break>
-    line_break: "line-break", "style";
+    line_break: "line-break" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/line-grid>
-    line_grid: "line-grid", "style";
+    line_grid: "line-grid" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/line-height>
-    line_height: "line-height", "style";
+    line_height: "line-height" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/line-slack>
-    line_slack: "line-slack", "style";
+    line_slack: "line-slack" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/line-snap>
-    line_snap: "line-snap", "style";
+    line_snap: "line-snap" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/list-style>
-    list_style: "list-style", "style";
+    list_style: "list-style" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/list-style-image>
-    list_style_image: "list-style-image", "style";
+    list_style_image: "list-style-image" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/list-style-position>
-    list_style_position: "list-style-position", "style";
+    list_style_position: "list-style-position" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/list-style-type>
-    list_style_type: "list-style-type", "style";
+    list_style_type: "list-style-type" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/margin>
-    margin: "margin", "style";
+    margin in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/margin-bottom>
-    margin_bottom: "margin-bottom", "style";
+    margin_bottom: "margin-bottom" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/margin-left>
-    margin_left: "margin-left", "style";
+    margin_left: "margin-left" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/margin-right>
-    margin_right: "margin-right", "style";
+    margin_right: "margin-right" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/margin-top>
-    margin_top: "margin-top", "style";
+    margin_top: "margin-top" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/marker>
-    marker: "marker", "style";
+    marker in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/marker-end>
-    marker_end: "marker-end", "style";
+    marker_end: "marker-end" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/marker-mid>
-    marker_mid: "marker-mid", "style";
+    marker_mid: "marker-mid" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/marker-pattern>
-    marker_pattern: "marker-pattern", "style";
+    marker_pattern: "marker-pattern" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/marker-segment>
-    marker_segment: "marker-segment", "style";
+    marker_segment: "marker-segment" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/marker-start>
-    marker_start: "marker-start", "style";
+    marker_start: "marker-start" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/marker-knockout-left>
-    marker_knockout_left: "marker-knockout-left", "style";
+    marker_knockout_left: "marker-knockout-left" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/marker-knockout-right>
-    marker_knockout_right: "marker-knockout-right", "style";
+    marker_knockout_right: "marker-knockout-right" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/marker-side>
-    marker_side: "marker-side", "style";
+    marker_side: "marker-side" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/marks>
-    marks: "marks", "style";
+    marks in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/marquee-direction>
-    marquee_direction: "marquee-direction", "style";
+    marquee_direction: "marquee-direction" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/marquee-play-count>
-    marquee_play_count: "marquee-play-count", "style";
+    marquee_play_count: "marquee-play-count" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/marquee-speed>
-    marquee_speed: "marquee-speed", "style";
+    marquee_speed: "marquee-speed" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/marquee-style>
-    marquee_style: "marquee-style", "style";
+    marquee_style: "marquee-style" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask>
-    mask: "mask", "style";
+    mask in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask-image>
-    mask_image: "mask-image", "style";
+    mask_image: "mask-image" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask-repeat>
-    mask_repeat: "mask-repeat", "style";
+    mask_repeat: "mask-repeat" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask-position>
-    mask_position: "mask-position", "style";
+    mask_position: "mask-position" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask-clip>
-    mask_clip: "mask-clip", "style";
+    mask_clip: "mask-clip" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask-origin>
-    mask_origin: "mask-origin", "style";
+    mask_origin: "mask-origin" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask-size>
-    mask_size: "mask-size", "style";
+    mask_size: "mask-size" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask-box>
-    mask_box: "mask-box", "style";
+    mask_box: "mask-box" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask-box-outset>
-    mask_box_outset: "mask-box-outset", "style";
+    mask_box_outset: "mask-box-outset" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask-box-repeat>
-    mask_box_repeat: "mask-box-repeat", "style";
+    mask_box_repeat: "mask-box-repeat" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask-box-slice>
-    mask_box_slice: "mask-box-slice", "style";
+    mask_box_slice: "mask-box-slice" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask-box-source>
-    mask_box_source: "mask-box-source", "style";
+    mask_box_source: "mask-box-source" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask-box-width>
-    mask_box_width: "mask-box-width", "style";
+    mask_box_width: "mask-box-width" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/mask-type>
-    mask_type: "mask-type", "style";
+    mask_type: "mask-type" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/max-height>
-    max_height: "max-height", "style";
+    max_height: "max-height" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/max-lines>
-    max_lines: "max-lines", "style";
+    max_lines: "max-lines" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/max-width>
-    max_width: "max-width", "style";
+    max_width: "max-width" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/min-height>
-    min_height: "min-height", "style";
+    min_height: "min-height" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/min-width>
-    min_width: "min-width", "style";
+    min_width: "min-width" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/mix-blend-mode>
-    mix_blend_mode: "mix-blend-mode", "style";
+    mix_blend_mode: "mix-blend-mode" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/nav-down>
-    nav_down: "nav-down", "style";
+    nav_down: "nav-down" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/nav-index>
-    nav_index: "nav-index", "style";
+    nav_index: "nav-index" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/nav-left>
-    nav_left: "nav-left", "style";
+    nav_left: "nav-left" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/nav-right>
-    nav_right: "nav-right", "style";
+    nav_right: "nav-right" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/nav-up>
-    nav_up: "nav-up", "style";
+    nav_up: "nav-up" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/object-fit>
-    object_fit: "object-fit", "style";
+    object_fit: "object-fit" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/object-position>
-    object_position: "object-position", "style";
+    object_position: "object-position" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/offset-after>
-    offset_after: "offset-after", "style";
+    offset_after: "offset-after" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/offset-before>
-    offset_before: "offset-before", "style";
+    offset_before: "offset-before" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/offset-end>
-    offset_end: "offset-end", "style";
+    offset_end: "offset-end" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/offset-start>
-    offset_start: "offset-start", "style";
+    offset_start: "offset-start" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/opacity>
-    opacity: "opacity", "style";
+    opacity in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/order>
-    order: "order", "style";
+    order in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/orphans>
-    orphans: "orphans", "style";
+    orphans in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/outline>
-    outline: "outline", "style";
+    outline in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/outline-color>
-    outline_color: "outline-color", "style";
+    outline_color: "outline-color" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/outline-style>
-    outline_style: "outline-style", "style";
+    outline_style: "outline-style" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/outline-width>
-    outline_width: "outline-width", "style";
+    outline_width: "outline-width" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/outline-offset>
-    outline_offset: "outline-offset", "style";
+    outline_offset: "outline-offset" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/overflow>
-    overflow: "overflow", "style";
+    overflow in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/overflow-x>
-    overflow_x: "overflow-x", "style";
+    overflow_x: "overflow-x" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/overflow-y>
-    overflow_y: "overflow-y", "style";
+    overflow_y: "overflow-y" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/overflow-style>
-    overflow_style: "overflow-style", "style";
+    overflow_style: "overflow-style" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/overflow-wrap>
-    overflow_wrap: "overflow-wrap", "style";
+    overflow_wrap: "overflow-wrap" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/padding>
-    padding: "padding", "style";
+    padding in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/padding-bottom>
-    padding_bottom: "padding-bottom", "style";
+    padding_bottom: "padding-bottom" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/padding-left>
-    padding_left: "padding-left", "style";
+    padding_left: "padding-left" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/padding-right>
-    padding_right: "padding-right", "style";
+    padding_right: "padding-right" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/padding-top>
-    padding_top: "padding-top", "style";
+    padding_top: "padding-top" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/page>
-    page: "page", "style";
+    page in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/page-break-after>
-    page_break_after: "page-break-after", "style";
+    page_break_after: "page-break-after" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/page-break-before>
-    page_break_before: "page-break-before", "style";
+    page_break_before: "page-break-before" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/page-break-inside>
-    page_break_inside: "page-break-inside", "style";
+    page_break_inside: "page-break-inside" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/paint-order>
-    paint_order: "paint-order", "style";
+    paint_order: "paint-order" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/pause>
-    pause: "pause", "style";
+    pause in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/pause-after>
-    pause_after: "pause-after", "style";
+    pause_after: "pause-after" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/pause-before>
-    pause_before: "pause-before", "style";
+    pause_before: "pause-before" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/perspective>
-    perspective: "perspective", "style";
+    perspective in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/perspective-origin>
-    perspective_origin: "perspective-origin", "style";
+    perspective_origin: "perspective-origin" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/pitch>
-    pitch: "pitch", "style";
+    pitch in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/pitch-range>
-    pitch_range: "pitch-range", "style";
+    pitch_range: "pitch-range" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/play-during>
-    play_during: "play-during", "style";
+    play_during: "play-during" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/pointer-events>
-    pointer_events: "pointer-events", "style";
+    pointer_events: "pointer-events" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/position>
-    position: "position", "style";
+    position in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/quotes>
-    quotes: "quotes", "style";
+    quotes in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/region-fragment>
-    region_fragment: "region-fragment", "style";
+    region_fragment: "region-fragment" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/resize>
-    resize: "resize", "style";
+    resize in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/rest>
-    rest: "rest", "style";
+    rest in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/rest-after>
-    rest_after: "rest-after", "style";
+    rest_after: "rest-after" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/rest-before>
-    rest_before: "rest-before", "style";
+    rest_before: "rest-before" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/richness>
-    richness: "richness", "style";
+    richness in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/right>
-    right: "right", "style";
+    right in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/ruby-align>
-    ruby_align: "ruby-align", "style";
+    ruby_align: "ruby-align" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/ruby-merge>
-    ruby_merge: "ruby-merge", "style";
+    ruby_merge: "ruby-merge" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/ruby-position>
-    ruby_position: "ruby-position", "style";
+    ruby_position: "ruby-position" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/scroll-behavior>
-    scroll_behavior: "scroll-behavior", "style";
+    scroll_behavior: "scroll-behavior" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/scroll-snap-coordinate>
-    scroll_snap_coordinate: "scroll-snap-coordinate", "style";
+    scroll_snap_coordinate: "scroll-snap-coordinate" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/scroll-snap-destination>
-    scroll_snap_destination: "scroll-snap-destination", "style";
+    scroll_snap_destination: "scroll-snap-destination" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/scroll-snap-points-x>
-    scroll_snap_points_x: "scroll-snap-points-x", "style";
+    scroll_snap_points_x: "scroll-snap-points-x" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/scroll-snap-points-y>
-    scroll_snap_points_y: "scroll-snap-points-y", "style";
+    scroll_snap_points_y: "scroll-snap-points-y" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/scroll-snap-type>
-    scroll_snap_type: "scroll-snap-type", "style";
+    scroll_snap_type: "scroll-snap-type" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/shape-image-threshold>
-    shape_image_threshold: "shape-image-threshold", "style";
+    shape_image_threshold: "shape-image-threshold" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/shape-inside>
-    shape_inside: "shape-inside", "style";
+    shape_inside: "shape-inside" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/shape-margin>
-    shape_margin: "shape-margin", "style";
+    shape_margin: "shape-margin" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/shape-outside>
-    shape_outside: "shape-outside", "style";
+    shape_outside: "shape-outside" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/shape-padding>
-    shape_padding: "shape-padding", "style";
+    shape_padding: "shape-padding" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/shape-rendering>
-    shape_rendering: "shape-rendering", "style";
+    shape_rendering: "shape-rendering" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/size>
-    size: "size", "style";
+    size in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/speak>
-    speak: "speak", "style";
+    speak in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/speak-as>
-    speak_as: "speak-as", "style";
+    speak_as: "speak-as" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/speak-header>
-    speak_header: "speak-header", "style";
+    speak_header: "speak-header" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/speak-numeral>
-    speak_numeral: "speak-numeral", "style";
+    speak_numeral: "speak-numeral" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/speak-punctuation>
-    speak_punctuation: "speak-punctuation", "style";
+    speak_punctuation: "speak-punctuation" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/speech-rate>
-    speech_rate: "speech-rate", "style";
+    speech_rate: "speech-rate" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/stop-color>
-    stop_color: "stop-color", "style";
+    stop_color: "stop-color" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/stop-opacity>
-    stop_opacity: "stop-opacity", "style";
+    stop_opacity: "stop-opacity" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/stress>
-    stress: "stress", "style";
+    stress in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/string-set>
-    string_set: "string-set", "style";
+    string_set: "string-set" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/stroke>
-    stroke: "stroke", "style";
+    stroke in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/stroke-dasharray>
-    stroke_dasharray: "stroke-dasharray", "style";
+    stroke_dasharray: "stroke-dasharray" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/stroke-dashoffset>
-    stroke_dashoffset: "stroke-dashoffset", "style";
+    stroke_dashoffset: "stroke-dashoffset" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/stroke-linecap>
-    stroke_linecap: "stroke-linecap", "style";
+    stroke_linecap: "stroke-linecap" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/stroke-linejoin>
-    stroke_linejoin: "stroke-linejoin", "style";
+    stroke_linejoin: "stroke-linejoin" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/stroke-miterlimit>
-    stroke_miterlimit: "stroke-miterlimit", "style";
+    stroke_miterlimit: "stroke-miterlimit" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/stroke-opacity>
-    stroke_opacity: "stroke-opacity", "style";
+    stroke_opacity: "stroke-opacity" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/stroke-width>
-    stroke_width: "stroke-width", "style";
+    stroke_width: "stroke-width" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/tab-size>
-    tab_size: "tab-size", "style";
+    tab_size: "tab-size" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/table-layout>
-    table_layout: "table-layout", "style";
+    table_layout: "table-layout" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-align>
-    text_align: "text-align", "style";
+    text_align: "text-align" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-align-all>
-    text_align_all: "text-align-all", "style";
+    text_align_all: "text-align-all" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-align-last>
-    text_align_last: "text-align-last", "style";
+    text_align_last: "text-align-last" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-anchor>
-    text_anchor: "text-anchor", "style";
+    text_anchor: "text-anchor" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-combine-upright>
-    text_combine_upright: "text-combine-upright", "style";
+    text_combine_upright: "text-combine-upright" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration>
-    text_decoration: "text-decoration", "style";
+    text_decoration: "text-decoration" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration-color>
-    text_decoration_color: "text-decoration-color", "style";
+    text_decoration_color: "text-decoration-color" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration-line>
-    text_decoration_line: "text-decoration-line", "style";
+    text_decoration_line: "text-decoration-line" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration-style>
-    text_decoration_style: "text-decoration-style", "style";
+    text_decoration_style: "text-decoration-style" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration-skip>
-    text_decoration_skip: "text-decoration-skip", "style";
+    text_decoration_skip: "text-decoration-skip" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-emphasis>
-    text_emphasis: "text-emphasis", "style";
+    text_emphasis: "text-emphasis" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-emphasis-color>
-    text_emphasis_color: "text-emphasis-color", "style";
+    text_emphasis_color: "text-emphasis-color" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-emphasis-style>
-    text_emphasis_style: "text-emphasis-style", "style";
+    text_emphasis_style: "text-emphasis-style" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-emphasis-position>
-    text_emphasis_position: "text-emphasis-position", "style";
+    text_emphasis_position: "text-emphasis-position" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-emphasis-skip>
-    text_emphasis_skip: "text-emphasis-skip", "style";
+    text_emphasis_skip: "text-emphasis-skip" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-height>
-    text_height: "text-height", "style";
+    text_height: "text-height" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-indent>
-    text_indent: "text-indent", "style";
+    text_indent: "text-indent" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-justify>
-    text_justify: "text-justify", "style";
+    text_justify: "text-justify" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-orientation>
-    text_orientation: "text-orientation", "style";
+    text_orientation: "text-orientation" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-overflow>
-    text_overflow: "text-overflow", "style";
+    text_overflow: "text-overflow" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-rendering>
-    text_rendering: "text-rendering", "style";
+    text_rendering: "text-rendering" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-shadow>
-    text_shadow: "text-shadow", "style";
+    text_shadow: "text-shadow" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-size-adjust>
-    text_size_adjust: "text-size-adjust", "style";
+    text_size_adjust: "text-size-adjust" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-space-collapse>
-    text_space_collapse: "text-space-collapse", "style";
+    text_space_collapse: "text-space-collapse" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-spacing>
-    text_spacing: "text-spacing", "style";
+    text_spacing: "text-spacing" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-transform>
-    text_transform: "text-transform", "style";
+    text_transform: "text-transform" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-underline-position>
-    text_underline_position: "text-underline-position", "style";
+    text_underline_position: "text-underline-position" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/text-wrap>
-    text_wrap: "text-wrap", "style";
+    text_wrap: "text-wrap" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/top>
-    top: "top", "style";
+    top in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/touch-action>
-    touch_action: "touch-action", "style";
+    touch_action: "touch-action" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/transform>
-    transform: "transform", "style";
+    transform in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/transform-box>
-    transform_box: "transform-box", "style";
+    transform_box: "transform-box" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/transform-origin>
-    transform_origin: "transform-origin", "style";
+    transform_origin: "transform-origin" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/transform-style>
-    transform_style: "transform-style", "style";
+    transform_style: "transform-style" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/transition>
-    transition: "transition", "style";
+    transition in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/transition-delay>
-    transition_delay: "transition-delay", "style";
+    transition_delay: "transition-delay" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/transition-duration>
-    transition_duration: "transition-duration", "style";
+    transition_duration: "transition-duration" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/transition-property>
-    transition_property: "transition-property", "style";
+    transition_property: "transition-property" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/unicode-bidi>
-    unicode_bidi: "unicode-bidi", "style";
+    unicode_bidi: "unicode-bidi" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/vector-effect>
-    vector_effect: "vector-effect", "style";
+    vector_effect: "vector-effect" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/vertical-align>
-    vertical_align: "vertical-align", "style";
+    vertical_align: "vertical-align" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/visibility>
-    visibility: "visibility", "style";
+    visibility in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/voice-balance>
-    voice_balance: "voice-balance", "style";
+    voice_balance: "voice-balance" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/voice-duration>
-    voice_duration: "voice-duration", "style";
+    voice_duration: "voice-duration" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/voice-family>
-    voice_family: "voice-family", "style";
+    voice_family: "voice-family" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/voice-pitch>
-    voice_pitch: "voice-pitch", "style";
+    voice_pitch: "voice-pitch" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/voice-range>
-    voice_range: "voice-range", "style";
+    voice_range: "voice-range" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/voice-rate>
-    voice_rate: "voice-rate", "style";
+    voice_rate: "voice-rate" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/voice-stress>
-    voice_stress: "voice-stress", "style";
+    voice_stress: "voice-stress" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/voice-volumn>
-    voice_volumn: "voice-volumn", "style";
+    voice_volumn: "voice-volumn" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/volume>
-    volume: "volume", "style";
+    volume in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/white-space>
-    white_space: "white-space", "style";
+    white_space: "white-space" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/widows>
-    widows: "widows", "style";
+    widows in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/width>
-    width: "width", "style";
+    width in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/will-change>
-    will_change: "will-change", "style";
+    will_change: "will-change" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/word-break>
-    word_break: "word-break", "style";
+    word_break: "word-break" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/word-spacing>
-    word_spacing: "word-spacing", "style";
+    word_spacing: "word-spacing" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/word-wrap>
-    word_wrap: "word-wrap", "style";
+    word_wrap: "word-wrap" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/wrap-flow>
-    wrap_flow: "wrap-flow", "style";
+    wrap_flow: "wrap-flow" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/wrap-through>
-    wrap_through: "wrap-through", "style";
+    wrap_through: "wrap-through" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/writing-mode>
-    writing_mode: "writing-mode", "style";
+    writing_mode: "writing-mode" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/gap>
-    gap: "gap", "style";
+    gap in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/list-style-type>
-    list_styler_type: "list-style-type", "style";
+    list_styler_type: "list-style-type" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/row-gap>
-    row_gap: "row-gap", "style";
+    row_gap: "row-gap" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/transition-timing-function>
-    transition_timing_function: "transition-timing-function", "style";
+    transition_timing_function: "transition-timing-function" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/user-select>
-    user_select: "user-select", "style";
+    user_select: "user-select" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/-webkit-user-select>
-    webkit_user_select: "-webkit-user-select", "style";
+    webkit_user_select: "-webkit-user-select" in "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/z-index>
-    z_index : "z-index", "style";
+    z_index: "z-index" in "style";
 
     // area attribute
 
@@ -1640,9 +1700,9 @@ trait_methods! {
     aria_setsize: "aria-setsize";
 }
 
-trait_methods! {
+mod_methods! {
     @base
-    SvgAttributes;
+    svg_attributes;
     map_svg_attributes;
     map_html_svg_attributes_to_rsx;
 
@@ -1656,25 +1716,25 @@ trait_methods! {
     accent_height: "accent-height";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/accumulate>
-    accumulate: "accumulate";
+    accumulate;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/additive>
-    additive: "additive";
+    additive;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/alignment-baseline>
     alignment_baseline: "alignment-baseline";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/alphabetic>
-    alphabetic: "alphabetic";
+    alphabetic;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/amplitude>
-    amplitude: "amplitude";
+    amplitude;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/arabic-form>
     arabic_form: "arabic-form";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/ascent>
-    ascent: "ascent";
+    ascent;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/attributeName>
     attribute_name: "attributeName";
@@ -1683,7 +1743,7 @@ trait_methods! {
     attribute_type: "attributeType";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/azimuth>
-    azimuth: "azimuth";
+    azimuth;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/baseFrequency>
     base_frequency: "baseFrequency";
@@ -1695,16 +1755,16 @@ trait_methods! {
     base_profile: "baseProfile";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/bbox>
-    bbox: "bbox";
+    bbox;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/begin>
-    begin: "begin";
+    begin;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/bias>
-    bias: "bias";
+    bias;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/by>
-    by: "by";
+    by;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/calcMode>
     calc_mode: "calcMode";
@@ -1713,10 +1773,10 @@ trait_methods! {
     cap_height: "cap-height";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/class>
-    class: "class";
+    class;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/clip>
-    clip: "clip";
+    clip;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/clipPathUnits>
     clip_path_units: "clipPathUnits";
@@ -1728,7 +1788,7 @@ trait_methods! {
     clip_rule: "clip-rule";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/color>
-    color: "color";
+    color;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/color-interpolation>
     color_interpolation: "color-interpolation";
@@ -1749,67 +1809,67 @@ trait_methods! {
     content_style_type: "contentStyleType";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/crossorigin>
-    crossorigin: "crossorigin";
+    crossorigin;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/cursor>
-    cursor: "cursor";
+    cursor;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/cx>
-    cx: "cx";
+    cx;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/cy>
-    cy: "cy";
+    cy;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/d>
-    d: "d";
+    d;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/decelerate>
-    decelerate: "decelerate";
+    decelerate;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/descent>
-    descent: "descent";
+    descent;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/diffuseConstant>
     diffuse_constant: "diffuseConstant";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/direction>
-    direction: "direction";
+    direction;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/display>
-    display: "display";
+    display;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/divisor>
-    divisor: "divisor";
+    divisor;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/dominant-baseline>
     dominant_baseline: "dominant-baseline";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/dur>
-    dur: "dur";
+    dur;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/dx>
-    dx: "dx";
+    dx;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/dy>
-    dy: "dy";
+    dy;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/edgeMode>
     edge_mode: "edgeMode";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/elevation>
-    elevation: "elevation";
+    elevation;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/enable-background>
     enable_background: "enable-background";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/end>
-    end: "end";
+    end;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/exponent>
-    exponent: "exponent";
+    exponent;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/fill>
-    fill: "fill";
+    fill;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/fill-opacity>
     fill_opacity: "fill-opacity";
@@ -1818,13 +1878,13 @@ trait_methods! {
     fill_rule: "fill-rule";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/filter>
-    filter: "filter";
+    filter;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/filterRes>
-    filterRes: "filterRes";
+    filterRes;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/filterUnits>
-    filterUnits: "filterUnits";
+    filterUnits;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/flood-color>
     flood_color: "flood-color";
@@ -1854,25 +1914,25 @@ trait_methods! {
     font_weight: "font-weight";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/format>
-    format: "format";
+    format;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/from>
-    from: "from";
+    from;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/fr>
-    fr: "fr";
+    fr;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/fx>
-    fx: "fx";
+    fx;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/fy>
-    fy: "fy";
+    fy;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/g1>
-    g1: "g1";
+    g1;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/g2>
-    g2: "g2";
+    g2;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/glyph-name>
     glyph_name: "glyph-name";
@@ -1893,16 +1953,16 @@ trait_methods! {
     gradient_units: "gradientUnits";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/hanging>
-    hanging: "hanging";
+    hanging;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/height>
-    height: "height";
+    height;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/href>
-    href: "href";
+    href;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/hreflang>
-    hreflang: "hreflang";
+    hreflang;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/horiz-adv-x>
     horiz_adv_x: "horiz-adv-x";
@@ -1911,37 +1971,37 @@ trait_methods! {
     horiz_origin_x: "horiz-origin-x";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/id>
-    id: "id";
+    id;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/ideographic>
-    ideographic: "ideographic";
+    ideographic;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/image-rendering>
     image_rendering: "image-rendering";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/_in>
-    _in: "_in";
+    _in;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/in2>
-    in2: "in2";
+    in2;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/intercept>
-    intercept: "intercept";
+    intercept;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/k>
-    k: "k";
+    k;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/k1>
-    k1: "k1";
+    k1;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/k2>
-    k2: "k2";
+    k2;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/k3>
-    k3: "k3";
+    k3;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/k4>
-    k4: "k4";
+    k4;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/kernelMatrix>
     kernel_matrix: "kernelMatrix";
@@ -1950,7 +2010,7 @@ trait_methods! {
     kernel_unit_length: "kernelUnitLength";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/kerning>
-    kerning: "kerning";
+    kerning;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/keyPoints>
     key_points: "keyPoints";
@@ -1962,7 +2022,7 @@ trait_methods! {
     key_times: "keyTimes";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/lang>
-    lang: "lang";
+    lang;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/lengthAdjust>
     length_adjust: "lengthAdjust";
@@ -1977,7 +2037,7 @@ trait_methods! {
     limiting_cone_angle: "limitingConeAngle";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/local>
-    local: "local";
+    local;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/marker-end>
     marker_end: "marker-end";
@@ -1998,7 +2058,7 @@ trait_methods! {
     marker_width: "markerWidth";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/mask>
-    mask: "mask";
+    mask;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/maskContentUnits>
     mask_content_units: "maskContentUnits";
@@ -2007,52 +2067,52 @@ trait_methods! {
     mask_units: "maskUnits";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/mathematical>
-    mathematical: "mathematical";
+    mathematical;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/max>
-    max: "max";
+    max;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/media>
-    media: "media";
+    media;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/method>
-    method: "method";
+    method;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/min>
-    min: "min";
+    min;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/mode>
-    mode: "mode";
+    mode;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/name>
-    name: "name";
+    name;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/numOctaves>
     num_octaves: "numOctaves";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/offset>
-    offset: "offset";
+    offset;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/opacity>
-    opacity: "opacity";
+    opacity;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/operator>
-    operator: "operator";
+    operator;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/order>
-    order: "order";
+    order;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/orient>
-    orient: "orient";
+    orient;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/orientation>
-    orientation: "orientation";
+    orientation;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/origin>
-    origin: "origin";
+    origin;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/overflow>
-    overflow: "overflow";
+    overflow;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/overline-position>
     overline_position: "overline-position";
@@ -2067,7 +2127,7 @@ trait_methods! {
     paint_order: "paint-order";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/path>
-    path: "path";
+    path;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/pathLength>
     path_length: "pathLength";
@@ -2082,13 +2142,13 @@ trait_methods! {
     pattern_units: "patternUnits";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/ping>
-    ping: "ping";
+    ping;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/pointer-events>
     pointer_events: "pointer-events";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/points>
-    points: "points";
+    points;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/pointsAtX>
     points_at_x: "pointsAtX";
@@ -2109,10 +2169,10 @@ trait_methods! {
     primitive_units: "primitiveUnits";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/r>
-    r: "r";
+    r;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/radius>
-    radius: "radius";
+    radius;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/referrerPolicy>
     referrer_policy: "referrerPolicy";
@@ -2124,7 +2184,7 @@ trait_methods! {
     ref_y: "refY";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/rel>
-    rel: "rel";
+    rel;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/rendering-intent>
     rendering_intent: "rendering-intent";
@@ -2142,37 +2202,37 @@ trait_methods! {
     required_features: "requiredFeatures";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/restart>
-    restart: "restart";
+    restart;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/result>
-    result: "result";
+    result;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/role>
-    role: "role";
+    role;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/rotate>
-    rotate: "rotate";
+    rotate;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/rx>
-    rx: "rx";
+    rx;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/ry>
-    ry: "ry";
+    ry;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/scale>
-    scale: "scale";
+    scale;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/seed>
-    seed: "seed";
+    seed;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/shape-rendering>
     shape_rendering: "shape-rendering";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/slope>
-    slope: "slope";
+    slope;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/spacing>
-    spacing: "spacing";
+    spacing;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/specularConstant>
     specular_constant: "specularConstant";
@@ -2181,7 +2241,7 @@ trait_methods! {
     specular_exponent: "specularExponent";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/speed>
-    speed: "speed";
+    speed;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/spreadMethod>
     spread_method: "spreadMethod";
@@ -2193,10 +2253,10 @@ trait_methods! {
     std_deviation: "stdDeviation";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stemh>
-    stemh: "stemh";
+    stemh;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stemv>
-    stemv: "stemv";
+    stemv;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stitchTiles>
     stitch_tiles: "stitchTiles";
@@ -2214,10 +2274,10 @@ trait_methods! {
     strikethrough_thickness: "strikethrough-thickness";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/string>
-    string: "string";
+    string;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stroke>
-    stroke: "stroke";
+    stroke;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stroke-dasharray>
     stroke_dasharray: "stroke-dasharray";
@@ -2241,7 +2301,7 @@ trait_methods! {
     stroke_width: "stroke-width";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/style>
-    style: "style";
+    style;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/surfaceScale>
     surface_scale: "surfaceScale";
@@ -2250,13 +2310,13 @@ trait_methods! {
     system_language: "systemLanguage";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/tabindex>
-    tabindex: "tabindex";
+    tabindex;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/tableValues>
     table_values: "tableValues";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/target>
-    target: "target";
+    target;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/targetX>
     target_x: "targetX";
@@ -2277,22 +2337,22 @@ trait_methods! {
     text_length: "textLength";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/to>
-    to: "to";
+    to;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/transform>
-    transform: "transform";
+    transform;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/transform-origin>
     transform_origin: "transform-origin";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/type>
-    r#type: "type";
+    r#type;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/u1>
-    u1: "u1";
+    u1;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/u2>
-    u2: "u2";
+    u2;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/underline-position>
     underline_position: "underline-position";
@@ -2301,7 +2361,7 @@ trait_methods! {
     underline_thickness: "underline-thickness";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/unicode>
-    unicode: "unicode";
+    unicode;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/unicode-bidi>
     unicode_bidi: "unicode-bidi";
@@ -2325,13 +2385,13 @@ trait_methods! {
     v_mathematical: "v-mathematical";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/values>
-    values: "values";
+    values;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/vector-effect>
     vector_effect: "vector-effect";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/version>
-    version: "version";
+    version;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/vert-adv-y>
     vert_adv_y: "vert-adv-y";
@@ -2349,13 +2409,13 @@ trait_methods! {
     view_target: "viewTarget";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/visibility>
-    visibility: "visibility";
+    visibility;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/width>
-    width: "width";
+    width;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/widths>
-    widths: "widths";
+    widths;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/word-spacing>
     word_spacing: "word-spacing";
@@ -2364,37 +2424,37 @@ trait_methods! {
     writing_mode: "writing-mode";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/x>
-    x: "x";
+    x;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/x-height>
     x_height: "x-height";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/x1>
-    x1: "x1";
+    x1;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/x2>
-    x2: "x2";
+    x2;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/xmlns>
-    xmlns: "xmlns";
+    xmlns;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/xChannelSelector>
     x_channel_selector: "xChannelSelector";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/y>
-    y: "y";
+    y;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/y1>
-    y1: "y1";
+    y1;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/y2>
-    y2: "y2";
+    y2;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/yChannelSelector>
     y_channel_selector: "yChannelSelector";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/z>
-    z: "z";
+    z;
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/zoomAndPan>
     zoom_and_pan: "zoomAndPan";

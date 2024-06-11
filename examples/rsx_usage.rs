@@ -21,7 +21,7 @@
 //!
 //! ### Events
 //! - Handle events with the "onXYZ" syntax
-//! - Closures can capture their environment with the 'a lifetime
+//! - Closures can capture their environment with the 'static lifetime
 //!
 //!
 //! ### Components
@@ -294,10 +294,7 @@ fn WithInline(text: String) -> Element {
 }
 
 #[component]
-fn Label<T: Clone + PartialEq + 'static>(text: T) -> Element
-where
-    T: Display,
-{
+fn Label<T: Clone + PartialEq + Display + 'static>(text: T) -> Element {
     rsx! {
         p { "{text}" }
     }

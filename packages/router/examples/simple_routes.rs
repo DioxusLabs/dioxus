@@ -119,7 +119,7 @@ fn Route3(dynamic: String) -> Element {
 
     rsx! {
         input {
-            oninput: move |evt| {
+            oninput: move |evt: FormEvent| {
                 *current_route_str.write() = evt.value();
             },
             value: "{current_route_str}"

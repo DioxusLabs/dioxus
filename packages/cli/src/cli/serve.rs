@@ -3,7 +3,7 @@ use manganis_cli_support::AssetManifest;
 
 use super::*;
 use cargo_toml::Dependency::{Detailed, Inherited, Simple};
-use std::{fs::create_dir_all, io::Write, path::PathBuf};
+use std::fs::create_dir_all;
 
 /// Run the WASM project on dev-server
 #[derive(Clone, Debug, Parser)]
@@ -22,6 +22,9 @@ impl Serve {
         let cli_settings = crate_config.dioxus_config.cli_settings.clone().unwrap();
 
         if serve_cfg.hot_reload.is_none() {
+            // we're going to override the hot_reload setting in the project's cfg based on settings
+            // let hot_reload = self.serve.hot_reload || crate_config.dioxus_config.application.hot_reload;
+
             let value = cli_settings.always_hot_reload.unwrap_or(true);
             serve_cfg.hot_reload = Some(value);
             crate_config.with_hot_reload(value);
@@ -78,7 +81,9 @@ impl Serve {
         match platform {
             Platform::Web => web::startup(crate_config.clone(), &serve_cfg).await?,
             Platform::Desktop => desktop::startup(crate_config.clone(), &serve_cfg).await?,
-            Platform::Fullstack => fullstack::startup(crate_config.clone(), &serve_cfg).await?,
+            Platform::Fullstack | Platform::StaticGeneration => {
+                fullstack::startup(crate_config.clone(), &serve_cfg).await?
+            }
             _ => unreachable!(),
         }
 

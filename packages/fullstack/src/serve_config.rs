@@ -16,26 +16,6 @@ pub struct ServeConfigBuilder {
         Option<std::sync::Arc<dioxus_ssr::incremental::IncrementalRendererConfig>>,
 }
 
-/// A template for incremental rendering that does nothing.
-#[derive(Default, Clone)]
-pub struct EmptyIncrementalRenderTemplate;
-
-impl dioxus_ssr::incremental::WrapBody for EmptyIncrementalRenderTemplate {
-    fn render_after_body<R: std::io::Write>(
-        &self,
-        _: &mut R,
-    ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
-        Ok(())
-    }
-
-    fn render_before_body<R: std::io::Write>(
-        &self,
-        _: &mut R,
-    ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
-        Ok(())
-    }
-}
-
 impl ServeConfigBuilder {
     /// Create a new ServeConfigBuilder with the root component and props to render on the server.
     pub fn new() -> Self {
@@ -149,6 +129,12 @@ pub struct ServeConfig {
     pub(crate) assets_path: PathBuf,
     pub(crate) incremental:
         Option<std::sync::Arc<dioxus_ssr::incremental::IncrementalRendererConfig>>,
+}
+
+impl Default for ServeConfig {
+    fn default() -> Self {
+        Self::builder().build()
+    }
 }
 
 impl ServeConfig {
