@@ -213,6 +213,8 @@ mod field_info {
                     || field.ty == parse_quote!(String)
                 {
                     builder_attr.from_displayable = true;
+                    // ToString is both more general and provides a more useful error message than From<String>. If the user tries to use `#[into]`, use ToString instead.
+                    builder_attr.auto_into = false;
                 }
 
                 // extended field is automatically empty
