@@ -25,15 +25,34 @@ macro_rules! impl_event {
                 #[doc(alias = $js_name)]
             )?
             #[inline]
-            pub fn $name<E: crate::EventReturn<T>, T>(mut _f: impl FnMut(::dioxus_core::Event<$data>) -> E + 'static) -> ::dioxus_core::Attribute {
+            pub fn $name<__Marker>(mut _f: impl ::dioxus_core::prelude::SuperInto<::dioxus_core::prelude::EventHandler<::dioxus_core::Event<$data>>, __Marker>) -> ::dioxus_core::Attribute {
+                let event_handler = _f.super_into();
                 ::dioxus_core::Attribute::new(
                     impl_event!(@name $name $($js_name)?),
-::dioxus_core::AttributeValue::listener(move |e: ::dioxus_core::Event<crate::PlatformEventData>| {
-                        _f(e.map(|e|e.into())).spawn();
+                    ::dioxus_core::AttributeValue::listener(move |e: ::dioxus_core::Event<crate::PlatformEventData>| {
+                        event_handler.call(e.map(|e| e.into()));
                     }),
                     None,
                     false,
                 ).into()
+            }
+
+            #[doc(hidden)]
+            $( #[$attr] )*
+            pub mod $name {
+                use super::*;
+
+                // When expanding the macro, we use this version of the function if we see an inline closure to give better type inference
+                $( #[$attr] )*
+                pub fn call_with_explicit_closure<
+                    __Marker,
+                    Return: ::dioxus_core::SpawnIfAsync<__Marker> + 'static,
+                >(
+                    event_handler: impl FnMut(::dioxus_core::Event<$data>) -> Return + 'static,
+                ) -> ::dioxus_core::Attribute {
+                    #[allow(deprecated)]
+                    super::$name(event_handler)
+                }
             }
         )*
     };
@@ -365,33 +384,5 @@ pub fn event_bubbles(evt: &str) -> bool {
             tracing::warn!("Unknown event name: {evt}");
             true
         }
-    }
-}
-
-#[doc(hidden)]
-#[rustversion::attr(
-    since(1.78.0),
-    diagnostic::on_unimplemented(
-        message = "`EventHandlerReturn` is not implemented for `{Self}`",
-        label = "Return Value",
-        note = "Event handlers in dioxus need to return either: nothing (the unit type `()`), or an async block that dioxus will automatically spawn",
-        note = "You likely need to add a semicolon to the end of the event handler to make it return nothing",
-    )
-)]
-pub trait EventReturn<P>: Sized {
-    fn spawn(self) {}
-}
-
-impl EventReturn<()> for () {}
-#[doc(hidden)]
-pub struct AsyncMarker;
-
-impl<T> EventReturn<AsyncMarker> for T
-where
-    T: std::future::Future<Output = ()> + 'static,
-{
-    #[inline]
-    fn spawn(self) {
-        dioxus_core::prelude::spawn(self);
     }
 }
