@@ -23,6 +23,7 @@ impl Serve {
 
         if serve_cfg.hot_reload.is_none() {
             // we're going to override the hot_reload setting in the project's cfg based on settings
+            //
             // let hot_reload = self.serve.hot_reload || crate_config.dioxus_config.application.hot_reload;
 
             let value = cli_settings.always_hot_reload.unwrap_or(true);
