@@ -1,7 +1,6 @@
 use std::{cell::Cell, rc::Rc};
 
 use dioxus_core::prelude::*;
-use dioxus_signals::ReactiveContext;
 use futures_util::StreamExt;
 
 use crate::use_callback;
@@ -65,7 +64,7 @@ pub fn use_effect(callback: impl FnMut() + 'static) -> Effect {
             effect_queued.set(true);
             let effect_queued = effect_queued.clone();
             queue_effect(move || {
-                rc.run_in(&*callback);
+                rc.reset_and_run_in(&*callback);
                 effect_queued.set(false);
             });
         };

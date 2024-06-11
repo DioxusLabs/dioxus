@@ -1,4 +1,4 @@
-use crate::{write::Writable, ReactiveContext};
+use crate::write::Writable;
 use std::hash::Hash;
 
 use crate::read::Readable;
@@ -57,7 +57,7 @@ impl<R: Eq + Hash, S: Storage<SignalData<bool>>> SetCompare<R, S> {
         spawn(async move {
             loop {
                 // Recompute the value
-                rc.run_in(&mut recompute);
+                rc.reset_and_run_in(&mut recompute);
 
                 // Wait for context to change
                 let _ = changed.next().await;

@@ -1,4 +1,5 @@
 use crate::{innerlude::SchedulerMsg, Element, Runtime, ScopeId, Task};
+use generational_box::{AnyStorage, Owner};
 use rustc_hash::FxHashSet;
 use std::{
     any::Any,
@@ -89,6 +90,17 @@ impl Scope {
         Arc::new(move |id| {
             chan.unbounded_send(SchedulerMsg::Immediate(id)).unwrap();
         })
+    }
+
+    /// Get the owner for the current scope.
+    pub fn owner<S: AnyStorage>(&self) -> Owner<S> {
+        match self.has_context() {
+            Some(rt) => rt,
+            None => {
+                let owner = S::owner();
+                self.provide_context(owner)
+            }
+        }
     }
 
     /// Return any context of type T if it exists on this scope

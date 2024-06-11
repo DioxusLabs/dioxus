@@ -1,5 +1,6 @@
 use crate::{
-    any_props::BoxedAnyProps, nodes::RenderReturn, runtime::Runtime, scope_context::Scope,
+    any_props::BoxedAnyProps, nodes::RenderReturn, reactive_context::ReactiveContext,
+    runtime::Runtime, scope_context::Scope,
 };
 use std::{cell::Ref, rc::Rc};
 
@@ -53,6 +54,7 @@ pub struct ScopeState {
     pub(crate) context_id: ScopeId,
     pub(crate) last_rendered_node: Option<RenderReturn>,
     pub(crate) props: BoxedAnyProps,
+    pub(crate) reactive_context: ReactiveContext,
 }
 
 impl Drop for ScopeState {

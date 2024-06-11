@@ -1,12 +1,9 @@
 use crate::{default_impl, fmt_impls, write_impls};
-use crate::{
-    read::Readable, write::Writable, CopyValue, GlobalMemo, GlobalSignal, ReactiveContext,
-    ReadableRef,
-};
+use crate::{read::Readable, write::Writable, CopyValue, GlobalMemo, GlobalSignal, ReadableRef};
 use crate::{Memo, WritableRef};
-use dioxus_core::IntoDynNode;
-use dioxus_core::{prelude::IntoAttributeValue, ScopeId};
+use dioxus_core::prelude::*;
 use generational_box::{AnyStorage, Storage, SyncStorage, UnsyncStorage};
+use std::sync::Arc;
 use std::{
     any::Any,
     collections::HashSet,
@@ -53,7 +50,7 @@ pub type SyncSignal<T> = Signal<T, SyncStorage>;
 
 /// The data stored for tracking in a signal.
 pub struct SignalData<T> {
-    pub(crate) subscribers: Mutex<HashSet<ReactiveContext>>,
+    pub(crate) subscribers: Arc<Mutex<HashSet<ReactiveContext>>>,
     pub(crate) value: T,
 }
 
@@ -299,7 +296,7 @@ impl<T, S: Storage<SignalData<T>>> Readable for Signal<T, S> {
 
         if let Some(reactive_context) = ReactiveContext::current() {
             tracing::trace!("Subscribing to the reactive context {}", reactive_context);
-            inner.subscribers.lock().unwrap().insert(reactive_context);
+            reactive_context.subscribe(inner.subscribers.clone());
         }
 
         Ok(S::map(inner, |v| &v.value))

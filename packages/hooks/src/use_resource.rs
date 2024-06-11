@@ -82,7 +82,7 @@ where
 
     let cb = use_callback(move || {
         // Create the user's task
-        let fut = rc.run_in(&mut future);
+        let fut = rc.reset_and_run_in(&mut future);
 
         // Spawn a wrapper task that polls the inner future and watch its dependencies
         spawn(async move {
