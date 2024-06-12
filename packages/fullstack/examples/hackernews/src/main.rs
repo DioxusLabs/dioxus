@@ -14,7 +14,7 @@ fn main() {
     LaunchBuilder::new()
         .with_cfg({
             let mut config = dioxus::fullstack::Config::new().stream_page(true);
-            server_only!{
+            server_only! {
                 config = config.incremental(dioxus::ssr::incremental::IncrementalRendererConfig::new());
             }
             config
@@ -42,7 +42,7 @@ fn Homepage(story: ReadOnlySignal<PreviewState>) -> Element {
     rsx! {
         div { display: "flex", flex_direction: "row", width: "100%",
             ErrorBoundary {
-                div { width: "50%", ChildrenOrLoading { Stories {} } }
+                div { width: "50%", Stories {} }
                 div { width: "50%", Preview {} }
             }
         }
