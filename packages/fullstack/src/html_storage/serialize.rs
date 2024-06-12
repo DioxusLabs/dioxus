@@ -1,5 +1,5 @@
 use dioxus_lib::prelude::dioxus_core::DynamicNode;
-use dioxus_lib::prelude::{try_consume_context, ScopeId, VNode, VirtualDom};
+use dioxus_lib::prelude::{has_context, try_consume_context, ScopeId, VNode, VirtualDom};
 use serde::Serialize;
 
 use base64::engine::general_purpose::STANDARD;
@@ -19,7 +19,7 @@ pub(crate) fn serde_to_writable<T: Serialize>(
 }
 
 #[cfg(feature = "server")]
-/// Encode data into a element. This is inteded to be used in the server to send data to the client.
+/// Encode data into a element. This is intended to be used in the server to send data to the client.
 pub(crate) fn encode_in_element(
     data: &super::HTMLData,
     write_to: &mut impl std::fmt::Write,
@@ -46,10 +46,10 @@ impl super::HTMLData {
         vdom.in_runtime(|| {
             scope.in_runtime(|| {
                 // Insert any context from the parent first
-                let context: Option<SerializeContext> = try_consume_context();
+                let context: Option<SerializeContext> = has_context();
                 if let Some(context) = context {
-                    let mut data = context.data.clone();
-                    self.data.extend(data.take().data)
+                    let mut data = context.data.take().data;
+                    self.data.extend(data)
                 }
             });
         });

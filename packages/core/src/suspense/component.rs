@@ -312,13 +312,22 @@ impl SuspenseBoundaryProps {
         let props = Self::downcast_from_props(&mut *scope_state.props).unwrap();
 
         let children = RenderReturn {
-            node: props.children.clone(),
+            node: props
+                .children
+                .as_ref()
+                .map(|node| node.clone_mounted())
+                .map_err(Clone::clone),
         };
 
         // First always render the children in the background. Rendering the children may cause this boundary to suspend
         dom.runtime.scope_stack.borrow_mut().push(scope_id);
         children.create(dom, parent, None::<&mut M>);
         dom.runtime.scope_stack.borrow_mut().pop();
+
+        // Store the (now mounted) children back into the scope state
+        let scope_state = &mut dom.scopes[scope_id.0];
+        let props = Self::downcast_from_props(&mut *scope_state.props).unwrap();
+        props.children = children.clone().node;
 
         let scope_state = &mut dom.scopes[scope_id.0];
         let suspense_context = scope_state.state().suspense_boundary().unwrap();
@@ -340,6 +349,7 @@ impl SuspenseBoundaryProps {
         } else {
             // Otherwise just render the children in the real dom
             dom.runtime.scope_stack.borrow_mut().push(scope_id);
+            debug_assert!(children.mount.get().mounted());
             let nodes_created = children.create(dom, parent, to);
             dom.runtime.scope_stack.borrow_mut().pop();
             let scope_state = &mut dom.scopes[scope_id.0];

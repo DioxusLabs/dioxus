@@ -60,7 +60,7 @@ where
         async move {
             let user_fut = cb.call();
 
-            let currently_in_first_run = first_run.cloned();
+            let currently_in_first_run = first_run();
 
             // If this is the first run and we are on the web client, the data might be cached
             if currently_in_first_run {

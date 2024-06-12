@@ -249,6 +249,15 @@ impl<T: 'static, Ret: Default + 'static> Default for Callback<T, Ret> {
 /// accepts_fn(|x| async move { println!("{}", x) });
 /// accepts_fn(|x| println!("{}", x));
 /// ```
+#[rustversion::attr(
+    since(1.78.0),
+    diagnostic::on_unimplemented(
+        message = "`SpawnIfAsync` is not implemented for `{Self}`",
+        label = "Return Value",
+        note = "Closures (or event handlers) in dioxus need to return either: nothing (the unit type `()`), or an async block that dioxus will automatically spawn",
+        note = "You likely need to add a semicolon to the end of the event handler to make it return nothing",
+    )
+)]
 pub trait SpawnIfAsync<Marker, Ret = ()>: Sized {
     /// Spawn the value into the dioxus runtime if it is an async block
     fn spawn(self) -> Ret;

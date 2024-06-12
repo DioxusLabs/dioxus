@@ -58,6 +58,7 @@ pub fn eval(script: &str) -> UseEval {
             struct DummyProvider;
             impl EvalProvider for DummyProvider {
                 fn new_evaluator(&self, _js: String) -> GenerationalBox<Box<dyn Evaluator>> {
+                    tracing::error!("Eval is not supported on this platform. If you are using dioxus fullstack, you can wrap your code with `client! {{}}` to only include the code that runs eval in the client bundle.");
                     UnsyncStorage::owner().insert(Box::new(DummyEvaluator))
                 }
             }
@@ -103,7 +104,10 @@ impl UseEval {
 
     /// Sends a [`serde_json::Value`] to the evaluated JavaScript.
     pub fn send(&self, data: serde_json::Value) -> Result<(), EvalError> {
-        self.evaluator.read().send(data)
+        match self.evaluator.try_read() {
+            Ok(evaluator) => evaluator.send(data),
+            Err(_) => Err(EvalError::Finished),
+        }
     }
 
     /// Gets an UnboundedReceiver to receive messages from the evaluated JavaScript.
