@@ -173,16 +173,20 @@ impl Scope {
     ///
     /// # Example
     ///
-    /// ```rust, ignore
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// #[derive(Clone)]
     /// struct SharedState(&'static str);
     ///
-    /// static app: Component = |cx| {
-    ///     cx.use_hook(|| cx.provide_context(SharedState("world")));
+    /// // The parent provides context that is available in all children
+    /// fn app() -> Element {
+    ///     use_hook(|| provide_context(SharedState("world")));
     ///     rsx!(Child {})
     /// }
     ///
-    /// static Child: Component = |cx| {
-    ///     let state = cx.consume_state::<SharedState>();
+    /// // Any child elements can access the context with the `consume_context` function
+    /// fn Child() -> Element {
+    ///     let state = use_context::<SharedState>();
     ///     rsx!(div { "hello {state.0}" })
     /// }
     /// ```
@@ -258,11 +262,16 @@ impl Scope {
         id
     }
 
-    /// Spawns the future but does not return the [`TaskId`]
+    /// Spawns the future and returns the [`Task`]
     pub fn spawn(&self, fut: impl Future<Output = ()> + 'static) -> Task {
         let id = Runtime::with(|rt| rt.spawn(self.id, fut)).expect("Runtime to exist");
         self.spawned_tasks.borrow_mut().insert(id);
         id
+    }
+
+    /// Queue an effect to run after the next render
+    pub fn queue_effect(&self, f: impl FnOnce() + 'static) {
+        Runtime::with(|rt| rt.queue_effect(self.id, f)).expect("Runtime to exist");
     }
 
     /// Mark this component as suspended on a specific task and then return None
@@ -273,17 +282,45 @@ impl Scope {
 
     /// Store a value between renders. The foundational hook for all other hooks.
     ///
-    /// Accepts an `initializer` closure, which is run on the first use of the hook (typically the initial render). The return value of this closure is stored for the lifetime of the component, and a mutable reference to it is provided on every render as the return value of `use_hook`.
+    /// Accepts an `initializer` closure, which is run on the first use of the hook (typically the initial render).
+    /// `use_hook` will return a clone of the value on every render.
     ///
-    /// When the component is unmounted (removed from the UI), the value is dropped. This means you can return a custom type and provide cleanup code by implementing the [`Drop`] trait
+    /// In order to clean up resources you would need to implement the [`Drop`] trait for an inner value stored in a RC or similar (Signals for instance),
+    /// as these only drop their inner value once all references have been dropped, which only happens when the component is dropped.
     ///
     /// # Example
     ///
-    /// ```
-    /// # use dioxus::prelude::*;
+    /// ```rust
+    /// use dioxus::prelude::*;
+    ///
     /// // prints a greeting on the initial render
     /// pub fn use_hello_world() {
     ///     use_hook(|| println!("Hello, world!"));
+    /// }
+    /// ```
+    ///
+    /// # Custom Hook Example
+    ///
+    /// ```rust
+    /// use dioxus::prelude::*;
+    ///
+    /// pub struct InnerCustomState(usize);
+    ///
+    /// impl Drop for InnerCustomState {
+    ///     fn drop(&mut self){
+    ///         println!("Component has been dropped.");
+    ///     }
+    /// }
+    ///
+    /// #[derive(Clone, Copy)]
+    /// pub struct CustomState {
+    ///     inner: Signal<InnerCustomState>
+    /// }
+    ///
+    /// pub fn use_custom_state() -> CustomState {
+    ///     use_hook(|| CustomState {
+    ///         inner: Signal::new(InnerCustomState(0))
+    ///     })
     /// }
     /// ```
     pub fn use_hook<State: Clone + 'static>(&self, initializer: impl FnOnce() -> State) -> State {
@@ -377,7 +414,7 @@ impl ScopeId {
         Runtime::with_scope(self, |cx| cx.spawn(fut))
     }
 
-    /// Spawns the future but does not return the [`TaskId`]
+    /// Spawns the future but does not return the [`Task`]
     pub fn spawn(self, fut: impl Future<Output = ()> + 'static) {
         Runtime::with_scope(self, |cx| cx.spawn(fut));
     }
@@ -401,7 +438,7 @@ impl ScopeId {
 
     /// Create a subscription that schedules a future render for the reference component. Unlike [`Self::needs_update`], this function will work outside of the dioxus runtime.
     ///
-    /// ## Notice: you should prefer using [`dioxus_core::schedule_update_any`] and [`Self::scope_id`]
+    /// ## Notice: you should prefer using [`schedule_update_any`]
     pub fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
         Runtime::with_scope(*self, |cx| cx.schedule_update()).expect("to be in a dioxus runtime")
     }

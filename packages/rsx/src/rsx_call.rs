@@ -64,6 +64,31 @@ impl CallBody {
         body
     }
 
+
+    /// Parse a stream into a CallBody. Return all error immediately instead of trying to partially expand the macro
+    ///
+    /// This should be preferred over `parse` if you are outside of a macro
+    pub fn parse_strict(input: ParseStream) -> Result<Self> {]
+        todo!()
+        // Self::parse_with_options(input, false)
+    }
+
+    // fn parse_with_options(input: ParseStream, partial_completions: bool) -> Result<Self> {
+    //     let mut roots = Vec::new();
+
+    //     while !input.is_empty() {
+    //         let node = BodyNode::parse_with_options(input, partial_completions)?;
+
+    //         if input.peek(Token![,]) {
+    //             let _ = input.parse::<Token![,]>();
+    //         }
+
+    //         roots.push(node);
+    //     }
+
+    //     Ok(CallBody { roots })
+    // }
+
     /// With the entire knowledge of the macro call, wire up location information for anything hotreloading
     /// specific. It's a little bit simpler just to have a global id per callbody than to try and track it
     /// relative to each template, though we could do that if we wanted to.
@@ -142,4 +167,5 @@ impl CallBody {
         self.template_idx.set(idx + 1);
         idx
     }
+
 }

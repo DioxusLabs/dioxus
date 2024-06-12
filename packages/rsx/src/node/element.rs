@@ -86,9 +86,6 @@ impl ToTokens for Element {
                                 name: #name,
                                 namespace: #ns,
                                 value: #value,
-
-                                // todo: we don't diff these so we never apply the volatile flag
-                                // volatile: dioxus_elements::#el_name::#name.2,
                             },
                         }
                     }
@@ -97,9 +94,7 @@ impl ToTokens for Element {
                     // This will also insert the attribute into the dynamic_attributes list to assemble the final template
                     _ => {
                         let id = attr.dyn_idx.get();
-                        quote! {
-                            dioxus_core::TemplateAttribute::Dynamic { id: #id  },
-                        }
+                        quote! { dioxus_core::TemplateAttribute::Dynamic { id: #id  } }
                     }
                 }
             })
@@ -211,7 +206,7 @@ pub enum ElementName {
 impl ToTokens for ElementName {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
-            ElementName::Ident(i) => i.to_tokens(tokens),
+            ElementName::Ident(i) => tokens.append_all(quote! { dioxus_elements::elements::#i }),
             ElementName::Custom(s) => s.to_tokens(tokens),
         }
     }
@@ -238,7 +233,7 @@ impl Parse for ElementName {
 impl ElementName {
     pub(crate) fn tag_name(&self) -> TokenStream2 {
         match self {
-            ElementName::Ident(i) => quote! { dioxus_elements::#i::TAG_NAME },
+            ElementName::Ident(i) => quote! { dioxus_elements::elements::#i::TAG_NAME },
             ElementName::Custom(s) => quote! { #s },
         }
     }

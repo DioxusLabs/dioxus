@@ -2,13 +2,13 @@ use std::collections::HashMap;
 
 use dioxus::html::geometry::euclid::Vector3D;
 use dioxus::prelude::*;
-use dioxus_core::prelude::consume_context;
 use dioxus_desktop::DesktopContext;
 
 #[path = "./utils.rs"]
 mod utils;
 
 pub fn main() {
+    #[cfg(not(windows))]
     utils::check_app_exits(app);
 }
 
@@ -20,8 +20,9 @@ fn app() -> Element {
     let received = RECEIVED_EVENTS();
     let expected = utils::EXPECTED_EVENTS();
 
-    use_effect(move || {
+    use_memo(move || {
         println!("expecting {} events", utils::EXPECTED_EVENTS());
+        println!("received {} events", RECEIVED_EVENTS());
     });
 
     if expected != 0 && received == expected {
@@ -179,7 +180,10 @@ fn test_mouse_dblclick_div() -> Element {
                 println!("{:?}", event.data);
                 assert!(event.data.modifiers().is_empty());
                 assert!(
-                    event.data.held_buttons().contains(dioxus_html::input_data::MouseButton::Primary),
+                    event
+                        .data
+                        .held_buttons()
+                        .contains(dioxus_html::input_data::MouseButton::Primary),
                 );
                 assert!(
                     event
@@ -282,7 +286,8 @@ fn test_mouse_scroll_div() -> Element {
             onwheel: move |event| {
                 println!("{:?}", event.data);
                 let dioxus_html::geometry::WheelDelta::Pixels(delta) = event.data.delta() else {
-                panic!("Expected delta to be in pixels") };
+                    panic!("Expected delta to be in pixels")
+                };
                 assert_eq!(delta, Vector3D::new(1.0, 2.0, 3.0));
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
             }
@@ -476,11 +481,16 @@ fn test_form_input() -> Element {
                     r#type: "text",
                     name: "username",
                     id: "form-username",
-                    oninput: set_username,
+                    oninput: set_username
                 }
                 input { r#type: "text", name: "full-name", value: "lorem" }
                 input { r#type: "password", name: "password", value: "ipsum" }
-                input { r#type: "radio", name: "color", value: "red", checked: true }
+                input {
+                    r#type: "radio",
+                    name: "color",
+                    value: "red",
+                    checked: true
+                }
                 input { r#type: "radio", name: "color", value: "blue" }
                 button { r#type: "submit", value: "Submit", "Submit the form" }
             }
@@ -511,13 +521,21 @@ fn test_form_submit() -> Element {
     rsx! {
         div {
             h1 { "Form" }
-            form {
-                id: "form-submitter",
-                onsubmit: set_values,
-                input { r#type: "text", name: "username", id: "username", value: "goodbye" }
+            form { id: "form-submitter", onsubmit: set_values,
+                input {
+                    r#type: "text",
+                    name: "username",
+                    id: "username",
+                    value: "goodbye"
+                }
                 input { r#type: "text", name: "full-name", value: "lorem" }
                 input { r#type: "password", name: "password", value: "ipsum" }
-                input { r#type: "radio", name: "color", value: "red", checked: true }
+                input {
+                    r#type: "radio",
+                    name: "color",
+                    value: "red",
+                    checked: true
+                }
                 input { r#type: "radio", name: "color", value: "blue" }
                 button { r#type: "submit", value: "Submit", "Submit the form" }
             }
@@ -547,9 +565,9 @@ fn test_select_multiple_options() -> Element {
                 assert_eq!(values, vec!["usa", "canada"]);
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
             },
-            option { id: "usa", value: "usa",  "USA" }
-            option { id: "canada", value: "canada",  "Canada" }
-            option { id: "mexico", value: "mexico", selected: true,  "Mexico" }
+            option { id: "usa", value: "usa", "USA" }
+            option { id: "canada", value: "canada", "Canada" }
+            option { id: "mexico", value: "mexico", selected: true, "Mexico" }
         }
     }
 }

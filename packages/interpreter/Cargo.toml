@@ -12,6 +12,7 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
 wasm-bindgen = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
 js-sys = { version = "0.3.56", optional = true }
 web-sys = { version = "0.3.56", optional = true, features = [
     "Element",
@@ -34,9 +35,11 @@ sledgehammer = ["sledgehammer_bindgen", "sledgehammer_utils"]
 webonly = [
     "sledgehammer",
     "wasm-bindgen",
+    "wasm-bindgen-futures",
     "js-sys",
     "web-sys",
     "sledgehammer_bindgen/web",
 ]
 binary-protocol = ["sledgehammer", "dioxus-core", "dioxus-html"]
 minimal_bindings = []
+eval = []

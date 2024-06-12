@@ -25,6 +25,11 @@ impl FileEngine for NativeFileEngine {
             .collect()
     }
 
+    async fn file_size(&self, file: &str) -> Option<u64> {
+        let file = File::open(file).await.ok()?;
+        Some(file.metadata().await.ok()?.len())
+    }
+
     async fn read_file(&self, file: &str) -> Option<Vec<u8>> {
         let mut file = File::open(file).await.ok()?;
 

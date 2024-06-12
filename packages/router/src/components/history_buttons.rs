@@ -119,7 +119,7 @@ pub fn GoBackButton(props: HistoryButtonProps) -> Element {
 /// }
 /// #
 /// # let mut vdom = VirtualDom::new(App);
-/// # let _ = vdom.rebuild();
+/// # vdom.rebuild_in_place();
 /// # assert_eq!(
 /// #     dioxus_ssr::render(&vdom),
 /// #     r#"<button disabled="true" dioxus-prevent-default="onclick">go forward</button>"#

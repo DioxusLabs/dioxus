@@ -25,15 +25,26 @@ impl VNode {
         // If hot reloading is enabled, we need to make sure we're using the latest template
         #[cfg(debug_assertions)]
         {
-            // let (path, byte_index) = new.template.get().name.rsplit_once(':').unwrap();
-            if let Some(template) = dom.templates.get(new.template.get().name).cloned() {
-                // let byte_index = byte_index.parse::<usize>().unwrap();
-                // if let Some(&template) = map.get(&byte_index) {
-                new.template.set(template);
-                if template != self.template.get() {
-                    let mount_id = self.mount.get();
-                    let parent = dom.mounts[mount_id.0].parent;
-                    return self.replace([new], parent, dom, to);
+            //  if let Some(template) = dom.templates.get(new.template.get().name).cloned() {
+            //             // let byte_index = byte_index.parse::<usize>().unwrap();
+            //             // if let Some(&template) = map.get(&byte_index) {
+            //             new.template.set(template);
+            //             if template != self.template.get() {
+            //                 let mount_id = self.mount.get();
+            //                 let parent = dom.mounts[mount_id.0].parent;
+            //                 return self.replace([new], parent, dom, to);
+
+            let (path, byte_index) = new.template.get().name.rsplit_once(':').unwrap();
+            if let Some(map) = dom.templates.get(path) {
+                let byte_index = byte_index.parse::<usize>().unwrap();
+                if let Some(&template) = map.get(&byte_index) {
+                    new.template.set(template);
+                    if template != self.template.get() {
+                        let mount_id = self.mount.get();
+                        let parent = dom.mounts[mount_id.0].parent;
+                        self.replace([new], parent, dom, to);
+                        return;
+                    }
                 }
                 // }
             }
@@ -200,7 +211,7 @@ impl VNode {
 
         // Clean up any attributes that have claimed a static node as dynamic for mount/unmounts
         // Will not generate mutations!
-        self.reclaim_attributes(mount, dom, to);
+        self.reclaim_attributes(mount, dom);
 
         // Remove the nested dynamic nodes
         // We don't generate mutations for these, as they will be removed by the parent (in the next line)
@@ -314,17 +325,8 @@ impl VNode {
         !std::ptr::eq(self_node_name, other_node_name)
     }
 
-    pub(super) fn reclaim_attributes(
-        &self,
-        mount: MountId,
-        dom: &mut VirtualDom,
-        _to: &mut impl WriteMutations,
-    ) {
-        let mut id = None;
-
+    pub(super) fn reclaim_attributes(&self, mount: MountId, dom: &mut VirtualDom) {
         for (idx, path) in self.template.get().attr_paths.iter().enumerate() {
-            let _attr = &self.dynamic_attrs[idx];
-
             // We clean up the roots in the next step, so don't worry about them here
             if path.len() <= 1 {
                 continue;
@@ -333,10 +335,7 @@ impl VNode {
             let next_id = dom.mounts[mount.0].mounted_attributes[idx];
 
             // only reclaim the new element if it's different from the previous one
-            if id != Some(next_id) {
-                dom.reclaim(next_id);
-                id = Some(next_id);
-            }
+            _ = dom.try_reclaim(next_id);
         }
     }
 
@@ -461,27 +460,35 @@ impl VNode {
     /// This is mostly implemented to help solve the issue where the same component is rendered under two different
     /// conditions:
     ///
-    /// ```rust, ignore
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # let enabled = true;
+    /// # #[component]
+    /// # fn Component(enabled_sign: String) -> Element { todo!() }
     /// if enabled {
     ///     rsx!{ Component { enabled_sign: "abc" } }
     /// } else {
     ///     rsx!{ Component { enabled_sign: "xyz" } }
-    /// }
+    /// };
     /// ```
     ///
     /// However, we should not that it's explicit in the docs that this is not a guarantee. If you need to preserve state,
     /// then you should be passing in separate props instead.
     ///
-    /// ```rust, ignore
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # #[component]
+    /// # fn Component(enabled_sign: String) -> Element { todo!() }
+    /// # let enabled = true;
     /// let props = if enabled {
-    ///     ComponentProps { enabled_sign: "abc" }
+    ///     ComponentProps { enabled_sign: "abc".to_string() }
     /// } else {
-    ///     ComponentProps { enabled_sign: "xyz" }
+    ///     ComponentProps { enabled_sign: "xyz".to_string() }
     /// };
     ///
     /// rsx! {
     ///     Component { ..props }
-    /// }
+    /// };
     /// ```
     pub(crate) fn light_diff_templates(
         &self,
@@ -567,8 +574,12 @@ impl VNode {
 
         // If this is a debug build, we need to check that the paths are in the correct order because hot reloading can cause scrambled states
         #[cfg(debug_assertions)]
-        let (attrs_sorted, nodes_sorted) =
-            { (sort_bfs(template.attr_paths), sort_bfs(template.node_paths)) };
+        let (attrs_sorted, nodes_sorted) = {
+            (
+                crate::nodes::sort_bfo(template.attr_paths),
+                crate::nodes::sort_bfo(template.node_paths),
+            )
+        };
         #[cfg(debug_assertions)]
         let (mut attrs, mut nodes) = {
             (
@@ -704,16 +715,19 @@ impl VNode {
 
     /// Load all of the placeholder nodes for descendents of this root node
     ///
-    /// ```rust, ignore
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # let some_text = "hello world";
+    /// # let some_value = "123";
     /// rsx! {
     ///     div {
     ///         // This is a placeholder
-    ///         some_value,
+    ///         {some_value}
     ///
     ///         // Load this too
     ///         "{some_text}"
     ///     }
-    /// }
+    /// };
     /// ```
     #[allow(unused)]
     fn load_placeholders(
@@ -964,55 +978,4 @@ fn matching_components<'a>(
             Some((l, r))
         })
         .collect()
-}
-
-#[cfg(debug_assertions)]
-fn sort_bfs(paths: &[&'static [u8]]) -> Vec<(usize, &'static [u8])> {
-    let mut with_indecies = paths.iter().copied().enumerate().collect::<Vec<_>>();
-    with_indecies.sort_unstable_by(|(_, a), (_, b)| {
-        let mut a = a.iter();
-        let mut b = b.iter();
-        loop {
-            match (a.next(), b.next()) {
-                (Some(a), Some(b)) => {
-                    if a != b {
-                        return a.cmp(b);
-                    }
-                }
-                // The shorter path goes first
-                (None, Some(_)) => return std::cmp::Ordering::Less,
-                (Some(_), None) => return std::cmp::Ordering::Greater,
-                (None, None) => return std::cmp::Ordering::Equal,
-            }
-        }
-    });
-    with_indecies
-}
-
-#[test]
-#[cfg(debug_assertions)]
-fn sorting() {
-    let r: [(usize, &[u8]); 5] = [
-        (0, &[0, 1]),
-        (1, &[0, 2]),
-        (2, &[1, 0]),
-        (3, &[1, 0, 1]),
-        (4, &[1, 2]),
-    ];
-    assert_eq!(
-        sort_bfs(&[&[0, 1,], &[0, 2,], &[1, 0,], &[1, 0, 1,], &[1, 2,],]),
-        r
-    );
-    let r: [(usize, &[u8]); 6] = [
-        (0, &[0]),
-        (1, &[0, 1]),
-        (2, &[0, 1, 2]),
-        (3, &[1]),
-        (4, &[1, 2]),
-        (5, &[2]),
-    ];
-    assert_eq!(
-        sort_bfs(&[&[0], &[0, 1], &[0, 1, 2], &[1], &[1, 2], &[2],]),
-        r
-    );
 }

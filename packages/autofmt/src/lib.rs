@@ -9,7 +9,7 @@ use collect_macros::byte_offset;
 use dioxus_rsx::{BodyNode, CallBody, HotLiteral, IfmtInput, RsxLiteral, TemplateBody};
 use proc_macro2::LineColumn;
 use quote::ToTokens;
-use syn::{ExprMacro, MacroDelimiter};
+use syn::{parse::Parser, ExprMacro, MacroDelimiter};
 
 mod buffer;
 mod collect_macros;
@@ -75,8 +75,7 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
             continue;
         }
 
-        let call = item.parse_body::<CallBody>().unwrap();
-        let body = &call.body;
+        let body = item.parse_body_with(CallBody::parse_strict).unwrap();
 
         let rsx_start = macro_path.span().start();
 
@@ -152,7 +151,7 @@ fn write_body(buf: &mut Writer, body: &TemplateBody) {
 }
 
 pub fn fmt_block_from_expr(raw: &str, expr: ExprMacro) -> Option<String> {
-    let body = syn::parse2::<CallBody>(expr.mac.tokens).unwrap();
+    let body = CallBody::parse_strict.parse2(expr.mac.tokens).unwrap();
 
     let mut buf = Writer::new(raw);
 
@@ -162,7 +161,7 @@ pub fn fmt_block_from_expr(raw: &str, expr: ExprMacro) -> Option<String> {
 }
 
 pub fn fmt_block(block: &str, indent_level: usize, indent: IndentOptions) -> Option<String> {
-    let body = syn::parse_str::<dioxus_rsx::CallBody>(block).unwrap();
+    let body = CallBody::parse_strict.parse_str(block).unwrap();
 
     let mut buf = Writer::new(block);
 

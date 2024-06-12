@@ -140,6 +140,20 @@ impl Parse for BodyNode {
     }
 }
 
+// Checks if an ident looks like a component
+fn ident_looks_like_component(ident: &Ident) -> bool {
+    let as_string = ident.to_string();
+    let first_char = as_string.chars().next().unwrap();
+    // Components either start with an uppercase letter or have an underscore in them
+    first_char.is_ascii_uppercase() || as_string.contains('_')
+}
+
+impl Parse for BodyNode {
+    fn parse(stream: ParseStream) -> Result<Self> {
+        Self::parse_with_options(stream, true)
+    }
+}
+
 impl ToTokens for BodyNode {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {

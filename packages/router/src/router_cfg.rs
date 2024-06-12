@@ -1,7 +1,4 @@
-use crate::contexts::router::RoutingCallback;
-use crate::history::HistoryProvider;
 use crate::prelude::*;
-use crate::routable::Routable;
 use dioxus_lib::prelude::*;
 use std::sync::Arc;
 
@@ -20,7 +17,7 @@ use std::sync::Arc;
 ///     #[route("/")]
 ///     Index {},
 /// }
-/// let cfg = RouterConfig::default().history(WebHistory::<Route>::default());
+/// let cfg = RouterConfig::default().history(MemoryHistory::<Route>::default());
 /// ```
 pub struct RouterConfig<R: Routable> {
     pub(crate) failure_external_navigation: fn() -> Element,
@@ -49,13 +46,14 @@ where
     <R as std::str::FromStr>::Err: std::fmt::Display,
 {
     pub(crate) fn take_history(&mut self) -> Box<dyn AnyHistoryProvider> {
-        #[allow(unused)]
-        let initial_route = self.initial_route.clone().unwrap_or("/".parse().unwrap_or_else(|err|
-            panic!("index route does not exist:\n{}\n use MemoryHistory::with_initial_path or RouterConfig::initial_route to set a custom path", err)
-        ));
         self.history
             .take()
-            .unwrap_or_else(|| default_history(initial_route))
+            .unwrap_or_else(|| {
+                let initial_route = self.initial_route.clone().unwrap_or_else(|| "/".parse().unwrap_or_else(|err|
+                    panic!("index route does not exist:\n{}\n use MemoryHistory::with_initial_path or RouterConfig::initial_route to set a custom path", err)
+                ));
+                default_history(initial_route)
+    })
     }
 }
 

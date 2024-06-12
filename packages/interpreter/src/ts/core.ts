@@ -8,13 +8,13 @@ export type NodeId = number;
 export class BaseInterpreter {
   // non bubbling events listen at the element the listener was created at
   global: {
-    [key: string]: { active: number, callback: EventListener }
+    [key: string]: { active: number; callback: EventListener };
   };
   // bubbling events can listen at the root element
   local: {
     [key: string]: {
-      [key: string]: EventListener
-    }
+      [key: string]: EventListener;
+    };
   };
 
   root: HTMLElement;
@@ -22,13 +22,13 @@ export class BaseInterpreter {
   nodes: Node[];
   stack: Node[];
   templates: {
-    [key: number]: Node[]
+    [key: number]: Node[];
   };
 
   // sledgehammer is generating this...
   m: any;
 
-  constructor() { }
+  constructor() {}
 
   initialize(root: HTMLElement, handler: EventListener | null = null) {
     this.global = {};
@@ -72,7 +72,10 @@ export class BaseInterpreter {
   removeBubblingListener(event_name: string) {
     this.global[event_name].active--;
     if (this.global[event_name].active === 0) {
-      this.root.removeEventListener(event_name, this.global[event_name].callback);
+      this.root.removeEventListener(
+        event_name,
+        this.global[event_name].callback
+      );
       delete this.global[event_name];
     }
   }
@@ -123,12 +126,12 @@ export class BaseInterpreter {
   }
 
   hydrate(ids: { [key: number]: number }) {
-    const hydrateNodes = document.querySelectorAll('[data-node-hydration]');
+    const hydrateNodes = document.querySelectorAll("[data-node-hydration]");
 
     for (let i = 0; i < hydrateNodes.length; i++) {
       const hydrateNode = hydrateNodes[i] as HTMLElement;
-      const hydration = hydrateNode.getAttribute('data-node-hydration');
-      const split = hydration!.split(',');
+      const hydration = hydrateNode.getAttribute("data-node-hydration");
+      const split = hydration!.split(",");
       const id = ids[parseInt(split[0])];
 
       this.nodes[id] = hydrateNode;
@@ -136,12 +139,12 @@ export class BaseInterpreter {
       if (split.length > 1) {
         // @ts-ignore
         hydrateNode.listening = split.length - 1;
-        hydrateNode.setAttribute('data-dioxus-id', id.toString());
+        hydrateNode.setAttribute("data-dioxus-id", id.toString());
         for (let j = 1; j < split.length; j++) {
           const listener = split[j];
-          const split2 = listener.split(':');
+          const split2 = listener.split(":");
           const event_name = split2[0];
-          const bubbles = split2[1] === '1';
+          const bubbles = split2[1] === "1";
           this.createListener(event_name, hydrateNode, bubbles);
         }
       }
@@ -149,25 +152,37 @@ export class BaseInterpreter {
 
     const treeWalker = document.createTreeWalker(
       document.body,
-      NodeFilter.SHOW_COMMENT,
+      NodeFilter.SHOW_COMMENT
     );
 
     let currentNode = treeWalker.nextNode();
 
     while (currentNode) {
       const id = currentNode.textContent!;
-      const split = id.split('node-id');
+      const split = id.split("node-id");
 
       if (split.length > 1) {
-        this.nodes[ids[parseInt(split[1])]] = currentNode.nextSibling;
+        let next = currentNode.nextSibling;
+        // If we are hydrating an empty text node, we may see two comment nodes in a row instead of a comment node, text node and then comment node
+        if (next.nodeType === Node.COMMENT_NODE) {
+          next = next.parentElement.insertBefore(
+            document.createTextNode(""),
+            next
+          );
+        }
+        this.nodes[ids[parseInt(split[1])]] = next;
       }
 
       currentNode = treeWalker.nextNode();
     }
   }
 
-  setAttributeInner(node: HTMLElement, field: string, value: string, ns: string) {
+  setAttributeInner(
+    node: HTMLElement,
+    field: string,
+    value: string,
+    ns: string
+  ) {
     setAttributeInner(node, field, value, ns);
   }
 }
-

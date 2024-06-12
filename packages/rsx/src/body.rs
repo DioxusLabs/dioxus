@@ -110,7 +110,6 @@ impl ToTokens for TemplateBody {
         };
 
         let TemplateBody { roots, .. } = self;
-        let index = self.template_idx.get();
         let roots = roots.iter().map(|node| match node {
             BodyNode::Element(el) => quote! { #el },
             BodyNode::Text(text) if text.is_static() => {
@@ -158,6 +157,15 @@ impl ToTokens for TemplateBody {
             attr.rendered_as_dynamic_attr(node.el_name())
         });
 
+        // Rust analyzer will not autocomplete properly if we change the name every time you type a character
+        // If it looks like we are running in rust analyzer, we'll just use a placeholder location
+        let looks_like_rust_analyzer = first_root_span.contains("SpanData");
+        let index = if looks_like_rust_analyzer {
+            "0".to_string()
+        } else {
+            self.template_idx.get()
+        };
+
         tokens.append_all(quote! {
             Some({
                 #[doc(hidden)] // vscode please stop showing these in symbol search
@@ -170,6 +178,7 @@ impl ToTokens for TemplateBody {
 
                 {
                     // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
+                    #[allow(clippy::let_and_return)]
                     let __vnodes = dioxus_core::VNode::new(
                         #key_tokens,
                         ___TEMPLATE,

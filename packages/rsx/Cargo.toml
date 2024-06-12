@@ -35,3 +35,6 @@ html = []
 [dev-dependencies]
 insta = "1.36.1"
 prettyplease = { workspace = true }
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

@@ -11,10 +11,12 @@ use crate::innerlude::*;
 ///
 /// ## Example
 ///
-/// ```rust, ignore
+/// ```rust
+/// # use dioxus::prelude::*;
+/// let value = 1;
 /// rsx!{
-///     Fragment { key: "abc" }
-/// }
+///     Fragment { key: "{value}" }
+/// };
 /// ```
 ///
 /// ## Usage
@@ -27,7 +29,7 @@ use crate::innerlude::*;
 /// You want to use this free-function when your fragment needs a key and simply returning multiple nodes from rsx! won't cut it.
 #[allow(non_upper_case_globals, non_snake_case)]
 pub fn Fragment(cx: FragmentProps) -> Element {
-    cx.0.clone()
+    cx.0
 }
 
 #[derive(Clone, PartialEq)]
@@ -61,28 +63,25 @@ impl<const A: bool> FragmentBuilder<A> {
 ///
 /// ## Example
 ///
-/// ```rust, ignore
+/// ```rust
+/// # use dioxus::prelude::*;
 /// fn app() -> Element {
 ///     rsx!{
 ///         CustomCard {
 ///             h1 {}
 ///             p {}
 ///         }
-///     })
+///     }
 /// }
 ///
-/// #[derive(PartialEq, Props)]
-/// struct CardProps {
-///     children: Element
-/// }
-///
-/// fn CustomCard(cx: CardProps) -> Element {
+/// #[component]
+/// fn CustomCard(children: Element) -> Element {
 ///     rsx!{
 ///         div {
 ///             h1 {"Title card"}
-///             {cx.children}
+///             {children}
 ///         }
-///     })
+///     }
 /// }
 /// ```
 impl Properties for FragmentProps {
@@ -90,7 +89,12 @@ impl Properties for FragmentProps {
     fn builder() -> Self::Builder {
         FragmentBuilder(None)
     }
-    fn memoize(&mut self, _other: &Self) -> bool {
-        false
+    fn memoize(&mut self, new: &Self) -> bool {
+        let equal = self == new;
+        if !equal {
+            let new_clone = new.clone();
+            self.0 = new_clone.0;
+        }
+        equal
     }
 }

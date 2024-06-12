@@ -391,8 +391,8 @@ impl Writer<'_> {
     }
 }
 
-pub fn get_expr_length(expr: &RawExpr) -> Option<usize> {
-    let span = expr.expr.span();
+fn get_expr_length(expr: &impl Spanned) -> Option<usize> {
+    let span = expr.span();
     let (start, end) = (span.start(), span.end());
     if start.line == end.line {
         Some(end.column - start.column)

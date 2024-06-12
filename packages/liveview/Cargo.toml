@@ -49,7 +49,9 @@ hot-reload = ["dioxus-hot-reload"]
 [[example]]
 name = "axum"
 required-features = ["axum"]
+doc-scrape-examples = true
 
 [[example]]
 name = "axum_stress"
 required-features = ["axum"]
+doc-scrape-examples = true

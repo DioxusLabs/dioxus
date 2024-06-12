@@ -40,7 +40,7 @@ cargo run --example hello_world
 
 [all_events](./all_events.rs) - Basic event handling demo
 
-[filedragdrop](./filedragdrop.rs) - Handle dropped files
+[file upload](./file_upload.rs) - Handle uploading files
 
 [form](./form.rs) - Handle form submission
 

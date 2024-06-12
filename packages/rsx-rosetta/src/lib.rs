@@ -132,7 +132,7 @@ pub fn collect_svgs(children: &mut [BodyNode], out: &mut Vec<BodyNode>) {
 
                 // Replace this instance with a component
                 let mut new_comp = BodyNode::Component(Component {
-                    name: syn::Path {
+                    syn::Path {
                         leading_colon: None,
                         segments,
                     },

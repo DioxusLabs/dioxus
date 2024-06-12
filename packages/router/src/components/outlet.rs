@@ -65,7 +65,7 @@ use dioxus_lib::prelude::*;
 /// # }
 /// #
 /// # let mut vdom = VirtualDom::new(App);
-/// # let _ = vdom.rebuild();
+/// # vdom.rebuild_in_place();
 /// # assert_eq!(dioxus_ssr::render(&vdom), "<h1>App</h1><p>Child</p>");
 /// ```
 pub fn Outlet<R: Routable + Clone>() -> Element {

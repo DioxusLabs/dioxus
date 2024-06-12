@@ -1,18 +1,21 @@
 use crate::{
-    assets::{asset_manifest, create_assets_head, process_assets, AssetConfigDropGuard},
+    assets::{
+        asset_manifest, copy_assets_dir, create_assets_head, pre_compress_folder, process_assets,
+        AssetConfigDropGuard,
+    },
     error::{Error, Result},
     tools::Tool,
 };
 use anyhow::Context;
 use cargo_metadata::{diagnostic::Diagnostic, Message};
-use dioxus_cli_config::{crate_root, CrateConfig, ExecutableType};
+use dioxus_cli_config::{crate_root, CrateConfig, ExecutableType, WasmOptLevel};
 use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 use manganis_cli_support::{AssetManifest, ManganisSupportGuard};
 use std::{
     env,
     fs::{copy, create_dir_all, File},
-    io::Read,
+    io::{self, IsTerminal, Read},
     panic,
     path::PathBuf,
     process::Command,
@@ -85,13 +88,12 @@ pub fn build_web(
         ..
     } = config;
     let out_dir = config.out_dir();
-    let asset_dir = config.asset_dir();
 
     let _guard = AssetConfigDropGuard::new();
     let _manganis_support = ManganisSupportGuard::default();
 
     // start to build the assets
-    let ignore_files = build_assets(config)?;
+    build_assets(config)?;
 
     let t_start = std::time::Instant::now();
     let _guard = dioxus_cli_config::__private::save_config(config);
@@ -156,31 +158,34 @@ pub fn build_web(
         ExecutableType::Example(name) => cmd.arg("--example").arg(name),
     };
 
-    let warning_messages = prettier_build(cmd)?;
+    let CargoBuildResult {
+        warnings,
+        output_location,
+    } = prettier_build(cmd)?;
+    let output_location = output_location.context("No output location found")?;
 
     // [2] Establish the output directory structure
     let bindgen_outdir = out_dir.join("assets").join("dioxus");
 
-    let input_path = warning_messages
-        .output_location
-        .as_ref()
-        .context("No output location found")?
-        .with_extension("wasm");
+    let input_path = output_location.with_extension("wasm");
 
     tracing::info!("Running wasm-bindgen");
     let run_wasm_bindgen = || {
         // [3] Bindgen the final binary for use easy linking
         let mut bindgen_builder = Bindgen::new();
 
+        let keep_debug = dioxus_config.web.wasm_opt.debug || (!config.release);
+
         bindgen_builder
             .input_path(&input_path)
             .web(true)
             .unwrap()
-            .debug(true)
-            .demangle(true)
-            .keep_debug(true)
-            .remove_name_section(false)
-            .remove_producers_section(false)
+            .debug(keep_debug)
+            .demangle(keep_debug)
+            .keep_debug(keep_debug)
+            .reference_types(true)
+            .remove_name_section(!keep_debug)
+            .remove_producers_section(!keep_debug)
             .out_name(&dioxus_config.application.name)
             .generate(&bindgen_outdir)
             .unwrap();
@@ -195,46 +200,42 @@ pub fn build_web(
         run_wasm_bindgen();
     }
 
-    // check binaryen:wasm-opt tool
-    tracing::info!("Running optimization with wasm-opt...");
-    let dioxus_tools = dioxus_config.application.tools.clone();
-    if dioxus_tools.contains_key("binaryen") {
-        let info = dioxus_tools.get("binaryen").unwrap();
-        let binaryen = crate::tools::Tool::Binaryen;
+    // Run wasm-opt if this is a release build
+    if config.release {
+        tracing::info!("Running optimization with wasm-opt...");
+        let mut options = match dioxus_config.web.wasm_opt.level {
+            WasmOptLevel::Z => wasm_opt::OptimizationOptions::new_optimize_for_size_aggressively(),
+            WasmOptLevel::S => wasm_opt::OptimizationOptions::new_optimize_for_size(),
+            WasmOptLevel::Zero => wasm_opt::OptimizationOptions::new_opt_level_0(),
+            WasmOptLevel::One => wasm_opt::OptimizationOptions::new_opt_level_1(),
+            WasmOptLevel::Two => wasm_opt::OptimizationOptions::new_opt_level_2(),
+            WasmOptLevel::Three => wasm_opt::OptimizationOptions::new_opt_level_3(),
+            WasmOptLevel::Four => wasm_opt::OptimizationOptions::new_opt_level_4(),
+        };
+        let wasm_file = bindgen_outdir.join(format!("{}_bg.wasm", dioxus_config.application.name));
+        let old_size = wasm_file.metadata()?.len();
+        options
+            // WASM bindgen relies on reference types
+            .enable_feature(wasm_opt::Feature::ReferenceTypes)
+            .debug_info(dioxus_config.web.wasm_opt.debug)
+            .run(&wasm_file, &wasm_file)
+            .map_err(|err| Error::Other(anyhow::anyhow!(err)))?;
+        let new_size = wasm_file.metadata()?.len();
+        tracing::info!(
+            "wasm-opt reduced WASM size from {} to {} ({:2}%)",
+            old_size,
+            new_size,
+            (new_size as f64 - old_size as f64) / old_size as f64 * 100.0
+        );
+    }
 
-        if binaryen.is_installed() {
-            if let Some(sub) = info.as_table() {
-                if sub.contains_key("wasm_opt")
-                    && sub.get("wasm_opt").unwrap().as_bool().unwrap_or(false)
-                {
-                    tracing::info!("Optimizing WASM size with wasm-opt...");
-                    let target_file = out_dir
-                        .join("assets")
-                        .join("dioxus")
-                        .join(format!("{}_bg.wasm", dioxus_config.application.name));
-                    if target_file.is_file() {
-                        let mut args = vec![
-                            target_file.to_str().unwrap(),
-                            "-o",
-                            target_file.to_str().unwrap(),
-                        ];
-                        if config.release {
-                            args.push("-Oz");
-                        }
-                        binaryen.call("wasm-opt", args)?;
-                    }
-                }
-            }
-        } else {
-            tracing::warn!(
-                "Binaryen tool not found, you can use `dx tool add binaryen` to install it."
-            );
-        }
-    } else {
-        tracing::info!("Skipping optimization with wasm-opt, binaryen tool not found.");
+    // If pre-compressing is enabled, we can pre_compress the wasm-bindgen output
+    if config.should_pre_compress_web_assets() {
+        pre_compress_folder(&bindgen_outdir)?;
     }
 
     // [5][OPTIONAL] If tailwind is enabled and installed we run it to generate the CSS
+    let dioxus_tools = dioxus_config.application.tools.clone();
     if dioxus_tools.contains_key("tailwindcss") {
         let info = dioxus_tools.get("tailwindcss").unwrap();
         let tailwind = crate::tools::Tool::Tailwind;
@@ -274,38 +275,7 @@ pub fn build_web(
     }
 
     // this code will copy all public file to the output dir
-    let copy_options = fs_extra::dir::CopyOptions {
-        overwrite: true,
-        skip_exist: false,
-        buffer_size: 64000,
-        copy_inside: false,
-        content_only: false,
-        depth: 0,
-    };
-
-    tracing::info!("Copying public assets to the output directory...");
-    if asset_dir.is_dir() {
-        for entry in std::fs::read_dir(config.asset_dir())?.flatten() {
-            let path = entry.path();
-            if path.is_file() {
-                std::fs::copy(&path, out_dir.join(path.file_name().unwrap()))?;
-            } else {
-                match fs_extra::dir::copy(&path, &out_dir, &copy_options) {
-                    Ok(_) => {}
-                    Err(_e) => {
-                        tracing::warn!("Error copying dir: {}", _e);
-                    }
-                }
-                for ignore in &ignore_files {
-                    let ignore = ignore.strip_prefix(&config.asset_dir()).unwrap();
-                    let ignore = out_dir.join(ignore);
-                    if ignore.is_file() {
-                        std::fs::remove_file(ignore)?;
-                    }
-                }
-            }
-        }
-    }
+    copy_assets_dir(config, dioxus_cli_config::Platform::Web)?;
 
     let assets = if !skip_assets {
         tracing::info!("Processing assets");
@@ -317,8 +287,8 @@ pub fn build_web(
     };
 
     Ok(BuildResult {
-        warnings: warning_messages.warnings,
-        executable: warning_messages.output_location,
+        warnings,
+        executable: Some(output_location),
         elapsed_time: t_start.elapsed().as_millis(),
         assets,
     })
@@ -366,7 +336,7 @@ pub fn build_desktop(
     tracing::info!("🚅 Running build [Desktop] command...");
 
     let t_start = std::time::Instant::now();
-    let ignore_files = build_assets(config)?;
+    build_assets(config)?;
     let _guard = dioxus_cli_config::__private::save_config(config);
     let _manganis_support = ManganisSupportGuard::default();
     let _guard = AssetConfigDropGuard::new();
@@ -427,38 +397,7 @@ pub fn build_desktop(
         copy(res_path, &output_path)?;
     }
 
-    // this code will copy all public file to the output dir
-    if config.asset_dir().is_dir() {
-        let copy_options = fs_extra::dir::CopyOptions {
-            overwrite: true,
-            skip_exist: false,
-            buffer_size: 64000,
-            copy_inside: false,
-            content_only: false,
-            depth: 0,
-        };
-
-        for entry in std::fs::read_dir(config.asset_dir())?.flatten() {
-            let path = entry.path();
-            if path.is_file() {
-                std::fs::copy(&path, &config.out_dir().join(path.file_name().unwrap()))?;
-            } else {
-                match fs_extra::dir::copy(&path, &config.out_dir(), &copy_options) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        tracing::warn!("Error copying dir: {}", e);
-                    }
-                }
-                for ignore in &ignore_files {
-                    let ignore = ignore.strip_prefix(&config.asset_dir()).unwrap();
-                    let ignore = config.out_dir().join(ignore);
-                    if ignore.is_file() {
-                        std::fs::remove_file(ignore)?;
-                    }
-                }
-            }
-        }
-    }
+    copy_assets_dir(config, dioxus_cli_config::Platform::Desktop)?;
 
     let assets = if !skip_assets {
         tracing::info!("Processing assets");
@@ -492,18 +431,56 @@ struct CargoBuildResult {
     output_location: Option<PathBuf>,
 }
 
+struct Outputter {
+    progress_bar: Option<ProgressBar>,
+}
+
+impl Outputter {
+    pub fn new() -> Self {
+        let stdout = io::stdout().lock();
+
+        let mut myself = Self { progress_bar: None };
+
+        if stdout.is_terminal() {
+            let mut pb = ProgressBar::new_spinner();
+            pb.enable_steady_tick(Duration::from_millis(200));
+            pb = PROGRESS_BARS.add(pb);
+            pb.set_style(
+                ProgressStyle::with_template("{spinner:.dim.bold} {wide_msg}")
+                    .unwrap()
+                    .tick_chars("/|\\- "),
+            );
+
+            myself.progress_bar = Some(pb);
+        }
+
+        myself
+    }
+
+    pub fn println(&self, msg: impl ToString) {
+        let msg = msg.to_string();
+        if let Some(pb) = &self.progress_bar {
+            pb.set_message(msg)
+        } else {
+            println!("{msg}");
+        }
+    }
+
+    pub fn finish_with_message(&self, msg: impl ToString) {
+        let msg = msg.to_string();
+        if let Some(pb) = &self.progress_bar {
+            pb.finish_with_message(msg)
+        } else {
+            println!("{msg}");
+        }
+    }
+}
+
 fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<CargoBuildResult> {
     let mut warning_messages: Vec<Diagnostic> = vec![];
 
-    let mut pb = ProgressBar::new_spinner();
-    pb.enable_steady_tick(Duration::from_millis(200));
-    pb = PROGRESS_BARS.add(pb);
-    pb.set_style(
-        ProgressStyle::with_template("{spinner:.dim.bold} {wide_msg}")
-            .unwrap()
-            .tick_chars("/|\\- "),
-    );
-    pb.set_message("💼 Waiting to start building the project...");
+    let output = Outputter::new();
+    output.println("💼 Waiting to start building the project...");
 
     let stdout = cmd.detached().stream_stdout()?;
     let reader = std::io::BufReader::new(stdout);
@@ -528,8 +505,7 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<CargoBuildResult> {
                 }
             }
             Message::CompilerArtifact(artifact) => {
-                pb.set_message(format!("⚙️ Compiling {} ", artifact.package_id));
-                pb.tick();
+                output.println(format!("⚙ Compiling {} ", artifact.package_id));
                 if let Some(executable) = artifact.executable {
                     output_location = Some(executable.into());
                 }
@@ -539,9 +515,9 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<CargoBuildResult> {
             }
             Message::BuildFinished(finished) => {
                 if finished.success {
-                    tracing::info!("👑 Build done.");
+                    output.finish_with_message("👑 Build done.");
                 } else {
-                    tracing::info!("❌ Build failed.");
+                    output.finish_with_message("❌ Build failed.");
                     return Err(anyhow::anyhow!("Build failed"));
                 }
             }
@@ -619,14 +595,11 @@ pub fn gen_page(config: &CrateConfig, manifest: Option<&AssetManifest>, serve: b
     replace_or_insert_before("{script_include}", &script_str, "</body", &mut html);
 
     if serve {
-        html += &format!(
-            "<script>{}</script>",
-            include_str!("./assets/autoreload.js")
-        );
+        html += &format!("<script>{}</script>", dioxus_hot_reload::RECONNECT_SCRIPT);
     }
 
     let base_path = match &config.dioxus_config.web.app.base_path {
-        Some(path) => path,
+        Some(path) => path.trim_matches('/'),
         None => ".",
     };
     let app_name = &config.dioxus_config.application.name;
