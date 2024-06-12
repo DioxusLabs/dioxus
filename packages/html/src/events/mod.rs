@@ -278,7 +278,6 @@ mod wheel;
 pub use animation::*;
 pub use clipboard::*;
 pub use composition::*;
-use dioxus_core::prelude::throw_error;
 pub use drag::*;
 pub use focus::*;
 pub use form::*;
