@@ -195,8 +195,8 @@ fullstack = ["dioxus/fullstack"]
 axum = ["dioxus/axum"]
 server = ["dioxus/axum"]
 web = ["dioxus/web"]
-collect-assets = ["manganis"]
-http = ["reqwest", "http-range"]
+collect-assets = ["dep:manganis"]
+http = ["dep:reqwest", "dep:http-range"]
 
 [[example]]
 name = "login_form"
