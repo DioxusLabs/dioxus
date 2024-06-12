@@ -159,12 +159,14 @@ impl ToTokens for TemplateBody {
 
         // Rust analyzer will not autocomplete properly if we change the name every time you type a character
         // If it looks like we are running in rust analyzer, we'll just use a placeholder location
-        let looks_like_rust_analyzer = first_root_span.contains("SpanData");
-        let index = if looks_like_rust_analyzer {
-            "0".to_string()
-        } else {
-            self.template_idx.get()
-        };
+        // let looks_like_rust_analyzer = first_root_span.contains("SpanData");
+        // let index = if looks_like_rust_analyzer {
+        //     "0".to_string()
+        // } else {
+        //     self.template_idx.get().to_string()
+        // };
+        // todo: this just might be fixed?
+        let index = self.template_idx.get();
 
         tokens.append_all(quote! {
             Some({

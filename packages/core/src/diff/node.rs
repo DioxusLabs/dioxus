@@ -25,29 +25,31 @@ impl VNode {
         // If hot reloading is enabled, we need to make sure we're using the latest template
         #[cfg(debug_assertions)]
         {
-            //  if let Some(template) = dom.templates.get(new.template.get().name).cloned() {
-            //             // let byte_index = byte_index.parse::<usize>().unwrap();
-            //             // if let Some(&template) = map.get(&byte_index) {
-            //             new.template.set(template);
-            //             if template != self.template.get() {
-            //                 let mount_id = self.mount.get();
-            //                 let parent = dom.mounts[mount_id.0].parent;
-            //                 return self.replace([new], parent, dom, to);
-
-            let (path, byte_index) = new.template.get().name.rsplit_once(':').unwrap();
-            if let Some(map) = dom.templates.get(path) {
-                let byte_index = byte_index.parse::<usize>().unwrap();
-                if let Some(&template) = map.get(&byte_index) {
-                    new.template.set(template);
-                    if template != self.template.get() {
-                        let mount_id = self.mount.get();
-                        let parent = dom.mounts[mount_id.0].parent;
-                        self.replace([new], parent, dom, to);
-                        return;
-                    }
+            if let Some(template) = dom.templates.get(new.template.get().name).cloned() {
+                // let byte_index = byte_index.parse::<usize>().unwrap();
+                // if let Some(&template) = map.get(&byte_index) {
+                new.template.set(template);
+                if template != self.template.get() {
+                    let mount_id = self.mount.get();
+                    let parent = dom.mounts[mount_id.0].parent;
+                    return self.replace([new], parent, dom, to);
                 }
-                // }
             }
+
+            // let (path, byte_index) = new.template.get().name.rsplit_once(':').unwrap();
+            // if let Some(map) = dom.templates.get(path) {
+            //     let byte_index = byte_index.parse::<usize>().unwrap();
+            //     if let Some(&template) = map.get(&byte_index) {
+            //         new.template.set(template);
+            //         if template != self.template.get() {
+            //             let mount_id = self.mount.get();
+            //             let parent = dom.mounts[mount_id.0].parent;
+            //             self.replace([new], parent, dom, to);
+            //             return;
+            //         }
+            //     }
+            //     // }
+            // }
         }
 
         // If the templates are different by name, we need to replace the entire template

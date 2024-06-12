@@ -64,11 +64,10 @@ impl CallBody {
         body
     }
 
-
     /// Parse a stream into a CallBody. Return all error immediately instead of trying to partially expand the macro
     ///
     /// This should be preferred over `parse` if you are outside of a macro
-    pub fn parse_strict(input: ParseStream) -> Result<Self> {]
+    pub fn parse_strict(input: ParseStream) -> Result<Self> {
         todo!()
         // Self::parse_with_options(input, false)
     }
@@ -167,5 +166,4 @@ impl CallBody {
         self.template_idx.set(idx + 1);
         idx
     }
-
 }
