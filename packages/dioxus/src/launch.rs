@@ -15,7 +15,7 @@ pub struct LaunchBuilder<Cfg: 'static = (), ContextFn: ?Sized = ValidContext> {
     platform_config: Option<Cfg>,
 }
 
-pub type LaunchFn<Cfg, Context> = fn(fn() -> Element, Vec<Box<Context>>, Cfg);
+pub type LaunchFn<Cfg, Context> = fn(fn() -> Element, Vec<Box<Context>>, Cfg) -> !;
 
 #[cfg(any(
     feature = "fullstack",
@@ -189,7 +189,7 @@ impl<Cfg: Default + 'static, ContextFn: ?Sized> LaunchBuilder<Cfg, ContextFn> {
     }
 
     /// Launch your application.
-    pub fn launch(self, app: fn() -> Element) {
+    pub fn launch(self, app: fn() -> Element) -> ! {
         let cfg = self.platform_config.unwrap_or_default();
 
         (self.launch_fn)(app, self.contexts, cfg)
@@ -333,7 +333,7 @@ mod current_platform {
         note = "No renderer is enabled. You must enable a renderer feature on the dioxus crate before calling the launch function.\nAdd `web`, `desktop`, `mobile`, `fullstack`, or `static-generation` to the `features` of dioxus field in your Cargo.toml.\n# Example\n```toml\n# ...\n[dependencies]\ndioxus = { version = \"0.5.0\", features = [\"web\"] }\n# ...\n```"
     )
 )]
-pub fn launch(app: fn() -> Element) {
+pub fn launch(app: fn() -> Element) -> ! {
     #[allow(deprecated)]
     LaunchBuilder::new().launch(app)
 }

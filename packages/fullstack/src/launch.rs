@@ -12,7 +12,7 @@ pub fn launch(
     root: fn() -> Element,
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
     platform_config: Config,
-) {
+) -> ! {
     let virtual_dom_factory = move || {
         let mut vdom = VirtualDom::new(root);
         for context in &contexts {
@@ -34,7 +34,7 @@ pub fn launch(
         {
             // TODO: this should pull the props from the document
             let cfg = platform_config.web_cfg.hydrate(true);
-            dioxus_web::launch::launch_virtual_dom(virtual_dom_factory(), cfg);
+            dioxus_web::launch::launch_virtual_dom(virtual_dom_factory(), cfg)
         }
 
         #[cfg(feature = "desktop")]
@@ -49,4 +49,6 @@ pub fn launch(
             dioxus_mobile::launch::launch_virtual_dom(virtual_dom_factory(), cfg)
         }
     }
+
+    unreachable!("Launching a fullstack app should never return")
 }
