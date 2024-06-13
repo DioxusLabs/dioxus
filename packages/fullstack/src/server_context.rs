@@ -248,7 +248,34 @@ impl<T: 'static> std::fmt::Display for NotFoundInServerContext<T> {
 
 impl<T: 'static> std::error::Error for NotFoundInServerContext<T> {}
 
-pub struct FromContext<T: std::marker::Send + std::marker::Sync + Clone + 'static>(pub(crate) T);
+/// Extract a value from the server context provided through the launch builder context or [`DioxusServerContext::insert`]
+///
+/// Example:
+/// ```rust, no_run
+/// use dioxus::prelude::*;
+///
+/// LaunchBuilder::new()
+///     // You can provide context to your whole app (including server functions) with the `with_context` method on the launch builder
+///     .with_context(server_only! {
+///         1234567890u32
+///     })
+///     .launch(app);
+///
+/// #[server]
+/// async fn read_context() -> Result<u32, ServerFnError> {
+///     // You can extract values from the server context with the `extract` function
+///     let FromContext(value) = extract().await?;
+///     Ok(value)
+/// }
+///
+/// fn app() -> Element {
+///     let future = use_resource(read_context);
+///     rsx! {
+///         h1 { "{future:?}" }
+///     }
+/// }
+/// ```
+pub struct FromContext<T: std::marker::Send + std::marker::Sync + Clone + 'static>(pub T);
 
 #[async_trait::async_trait]
 impl<T: Send + Sync + Clone + 'static> FromServerContext for FromContext<T> {
