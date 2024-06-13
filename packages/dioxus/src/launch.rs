@@ -31,7 +31,7 @@ type ValidContext = SendContext;
 )))]
 type ValidContext = UnsendContext;
 
-type SendContext = dyn Fn() -> Box<dyn Any> + Send + Sync + 'static;
+type SendContext = dyn Fn() -> Box<dyn Any + Send + Sync> + Send + Sync + 'static;
 
 type UnsendContext = dyn Fn() -> Box<dyn Any> + 'static;
 
@@ -137,7 +137,7 @@ impl<Cfg> LaunchBuilder<Cfg, SendContext> {
     /// Inject state into the root component's context that is created on the thread that the app is launched on.
     pub fn with_context_provider(
         mut self,
-        state: impl Fn() -> Box<dyn Any> + Send + Sync + 'static,
+        state: impl Fn() -> Box<dyn Any + Send + Sync> + Send + Sync + 'static,
     ) -> Self {
         self.contexts.push(Box::new(state) as Box<SendContext>);
         self

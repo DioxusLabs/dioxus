@@ -39,7 +39,6 @@ tracing = { workspace = true }
 tracing-futures = { workspace = true, optional = true }
 once_cell = "1.17.1"
 tokio-util = { version = "0.7.8", features = ["rt"], optional = true }
-anymap = { version = "0.12.1", optional = true }
 
 serde = "1.0.159"
 serde_json = { version = "1.0.95", optional = true }
@@ -90,7 +89,6 @@ server = [
     "hyper",
     "http",
     "tower-layer",
-    "anymap",
     "tracing-futures",
     "pin-project",
     "thiserror",
