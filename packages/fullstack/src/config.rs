@@ -132,7 +132,8 @@ impl Config {
             use tower::ServiceBuilder;
 
             let ssr_state = SSRState::new(&cfg);
-            let router = axum::Router::new().register_server_fns(context_providers);
+            let router =
+                axum::Router::new().register_server_functions_with_context(context_providers);
             #[cfg(not(any(feature = "desktop", feature = "mobile")))]
             let router = {
                 let mut router = router.serve_static_assets(cfg.assets_path.clone()).await;
