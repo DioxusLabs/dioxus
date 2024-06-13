@@ -22,7 +22,7 @@
 //!                         listener,
 //!                         axum::Router::new()
 //!                             // Server side render the application, serve static assets, and register server functions
-//!                             .serve_dioxus_application("", ServerConfig::new(app, ()))
+//!                             .serve_dioxus_application(ServerConfig::new(), app)
 //!                             .into_make_service(),
 //!                     )
 //!                     .await
@@ -60,7 +60,7 @@ use axum::{
     http::{Request, Response, StatusCode},
     response::IntoResponse,
 };
-use dioxus_lib::prelude::VirtualDom;
+use dioxus_lib::prelude::{Element, VirtualDom};
 use futures_util::Future;
 use http::header::*;
 
@@ -87,14 +87,41 @@ pub trait DioxusRouterExt<S> {
     ///         .serve(
     ///             axum::Router::new()
     ///                 // Register server functions routes with the default handler
-    ///                 .register_server_fns("")
+    ///                 .register_server_functions()
     ///                 .into_make_service(),
     ///         )
     ///         .await
     ///         .unwrap();
     /// }
     /// ```
-    fn register_server_fns(self, context_providers: ContextProviders) -> Self;
+    fn register_server_functions(self) -> Self
+    where
+        Self: Sized,
+    {
+        self.register_server_functions_with_context(Default::default())
+    }
+
+    /// Registers server functions with some additional context to insert into the [`DioxusServerContext`] for that handler.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use dioxus_lib::prelude::*;
+    /// # use dioxus_fullstack::prelude::*;
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
+    ///     axum::Server::bind(&addr)
+    ///         .serve(
+    ///             axum::Router::new()
+    ///                 // Register server functions routes with the default handler
+    ///                 .register_server_functions_with_context(vec![Box::new(|| 1234567890u32)])
+    ///                 .into_make_service(),
+    ///         )
+    ///         .await
+    ///         .unwrap();
+    /// }
+    /// ```
+    fn register_server_functions_with_context(self, context_providers: ContextProviders) -> Self;
 
     /// Serves the static WASM for your Dioxus application (except the generated index.html).
     ///
@@ -145,7 +172,7 @@ pub trait DioxusRouterExt<S> {
     ///         .serve(
     ///             axum::Router::new()
     ///                 // Server side render the application, serve static assets, and register server functions
-    ///                 .serve_dioxus_application("", ServerConfig::new(app, ()))
+    ///                 .serve_dioxus_application(ServeConfig::new(), )
     ///                 .into_make_service(),
     ///         )
     ///         .await
@@ -159,8 +186,7 @@ pub trait DioxusRouterExt<S> {
     fn serve_dioxus_application(
         self,
         cfg: impl Into<ServeConfig>,
-        build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
-        context_providers: ContextProviders,
+        app: fn() -> Element,
     ) -> impl Future<Output = Self> + Send + Sync
     where
         Self: Sized;
@@ -170,7 +196,10 @@ impl<S> DioxusRouterExt<S> for Router<S>
 where
     S: Send + Sync + Clone + 'static,
 {
-    fn register_server_fns(mut self, context_providers: ContextProviders) -> Self {
+    fn register_server_functions_with_context(
+        mut self,
+        context_providers: ContextProviders,
+    ) -> Self {
         use http::method::Method;
 
         let context_providers = Arc::new(context_providers);
@@ -250,8 +279,7 @@ where
     fn serve_dioxus_application(
         self,
         cfg: impl Into<ServeConfig>,
-        build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
-        context_providers: ContextProviders,
+        app: fn() -> Element,
     ) -> impl Future<Output = Self> + Send + Sync {
         let cfg = cfg.into();
         async move {
@@ -261,7 +289,7 @@ where
             let mut server = self
                 .serve_static_assets(cfg.assets_path.clone())
                 .await
-                .register_server_fns(context_providers);
+                .register_server_functions();
 
             #[cfg(all(feature = "hot-reload", debug_assertions))]
             {
@@ -271,7 +299,7 @@ where
 
             server.fallback(get(render_handler).with_state((
                 cfg,
-                Arc::new(build_virtual_dom),
+                Arc::new(move || VirtualDom::new(app)),
                 ssr_state,
             )))
         }
