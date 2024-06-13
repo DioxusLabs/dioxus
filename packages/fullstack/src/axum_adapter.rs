@@ -210,10 +210,10 @@ where
             let handler = move |req| {
                 handle_server_fns_inner(
                     path,
-                    move || {
+                    move |server_context| {
                         for context_provider in context_providers.iter() {
                             let context = context_provider();
-                            _ = server_context().insert_any(context);
+                            _ = server_context.insert_any(context);
                         }
                     },
                     req,
@@ -428,7 +428,7 @@ fn report_err<E: std::fmt::Display>(e: E) -> Response<axum::body::Body> {
 /// A handler for Dioxus server functions. This will run the server function and return the result.
 async fn handle_server_fns_inner(
     path: &str,
-    additional_context: impl Fn() + 'static + Clone + Send,
+    additional_context: impl Fn(&DioxusServerContext) + 'static + Clone + Send,
     req: Request<Body>,
 ) -> impl IntoResponse {
     use server_fn::middleware::Service;
@@ -443,7 +443,7 @@ async fn handle_server_fns_inner(
             server_fn::axum::get_server_fn_service(&path_string)
         {
             let server_context = DioxusServerContext::new(Arc::new(tokio::sync::RwLock::new(parts)));
-            additional_context();
+            additional_context(&server_context);
 
             // store Accepts and Referrer in case we need them for redirect (below)
             let accepts_html = req

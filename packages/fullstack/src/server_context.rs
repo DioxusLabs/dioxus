@@ -65,7 +65,7 @@ mod server_fn_impl {
 
         /// Insert a value into the shared server context
         pub fn insert<T: Any + Send + Sync + 'static>(
-            &mut self,
+            &self,
             value: T,
         ) -> Result<(), PoisonError<RwLockWriteGuard<'_, SendSyncAnyMap>>> {
             self.shared_context
@@ -76,7 +76,7 @@ mod server_fn_impl {
 
         /// Insert a Boxed `Any` value into the shared server context
         pub fn insert_any(
-            &mut self,
+            &self,
             value: Box<dyn Any + Send + Sync>,
         ) -> Result<(), PoisonError<RwLockWriteGuard<'_, SendSyncAnyMap>>> {
             self.shared_context
