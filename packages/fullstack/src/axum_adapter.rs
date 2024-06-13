@@ -356,7 +356,7 @@ type AxumHandler<F> = (
 ///         .serve(
 ///             axum::Router::new()
 ///                 // Register server functions, etc.
-///                 // Note you probably want to use `register_server_fns_with_handler`
+///                 // Note you can use `register_server_functions_with_context`
 ///                 // to inject the context into server functions running outside
 ///                 // of an SSR render context.
 ///                 .fallback(get(render_handler_with_context).with_state((
