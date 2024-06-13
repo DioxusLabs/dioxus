@@ -40,7 +40,6 @@ where
     }
 }
 
-#[cfg(not(feature = "serde"))]
 impl<R: Routable + Clone> RouterConfig<R>
 where
     <R as std::str::FromStr>::Err: std::fmt::Display,
