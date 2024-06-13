@@ -68,15 +68,18 @@ use std::sync::Arc;
 
 use crate::prelude::*;
 
+pub(crate) type ContextProviders = Arc<
+    Vec<Box<dyn Fn() -> Box<dyn std::any::Any + Send + Sync + 'static> + Send + Sync + 'static>>,
+>;
+
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
 pub trait DioxusRouterExt<S> {
     /// Registers server functions with the default handler. This handler function will pass an empty [`DioxusServerContext`] to your server functions.
     ///
     /// # Example
     /// ```rust
-    /// use dioxus_lib::prelude::*;
-    /// use dioxus_fullstack::prelude::*;
-    ///
+    /// # use dioxus_lib::prelude::*;
+    /// # use dioxus_fullstack::prelude::*;
     /// #[tokio::main]
     /// async fn main() {
     ///     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
@@ -91,16 +94,15 @@ pub trait DioxusRouterExt<S> {
     ///         .unwrap();
     /// }
     /// ```
-    fn register_server_fns(self) -> Self;
+    fn register_server_fns(self, context_providers: ContextProviders) -> Self;
 
     /// Serves the static WASM for your Dioxus application (except the generated index.html).
     ///
     /// # Example
     /// ```rust
-    /// #![allow(non_snake_case)]
-    /// use dioxus_lib::prelude::*;
-    /// use dioxus_fullstack::prelude::*;
-    ///
+    /// # #![allow(non_snake_case)]
+    /// # use dioxus_lib::prelude::*;
+    /// # use dioxus_fullstack::prelude::*;
     /// #[tokio::main]
     /// async fn main() {
     ///     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
@@ -133,10 +135,9 @@ pub trait DioxusRouterExt<S> {
     ///
     /// # Example
     /// ```rust
-    /// #![allow(non_snake_case)]
-    /// use dioxus_lib::prelude::*;
-    /// use dioxus_fullstack::prelude::*;
-    ///
+    /// # #![allow(non_snake_case)]
+    /// # use dioxus_lib::prelude::*;
+    /// # use dioxus_fullstack::prelude::*;
     /// #[tokio::main]
     /// async fn main() {
     ///     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
@@ -159,6 +160,7 @@ pub trait DioxusRouterExt<S> {
         self,
         cfg: impl Into<ServeConfig>,
         build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
+        context_providers: ContextProviders,
     ) -> impl Future<Output = Self> + Send + Sync
     where
         Self: Sized;
@@ -168,12 +170,26 @@ impl<S> DioxusRouterExt<S> for Router<S>
 where
     S: Send + Sync + Clone + 'static,
 {
-    fn register_server_fns(mut self) -> Self {
+    fn register_server_fns(mut self, context_providers: ContextProviders) -> Self {
         use http::method::Method;
+
+        let context_providers = Arc::new(context_providers);
 
         for (path, method) in server_fn::axum::server_fn_paths() {
             tracing::trace!("Registering server function: {} {}", method, path);
-            let handler = move |req| handle_server_fns_inner(path, || {}, req);
+            let context_providers = context_providers.clone();
+            let handler = move |req| {
+                handle_server_fns_inner(
+                    path,
+                    move || {
+                        for context_provider in context_providers.iter() {
+                            let context = context_provider();
+                            _ = server_context().insert_any(context);
+                        }
+                    },
+                    req,
+                )
+            };
             self = match method {
                 Method::GET => self.route(path, get(handler)),
                 Method::POST => self.route(path, post(handler)),
@@ -235,6 +251,7 @@ where
         self,
         cfg: impl Into<ServeConfig>,
         build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
+        context_providers: ContextProviders,
     ) -> impl Future<Output = Self> + Send + Sync {
         let cfg = cfg.into();
         async move {
@@ -244,7 +261,7 @@ where
             let mut server = self
                 .serve_static_assets(cfg.assets_path.clone())
                 .await
-                .register_server_fns();
+                .register_server_fns(context_providers);
 
             #[cfg(all(feature = "hot-reload", debug_assertions))]
             {
