@@ -66,7 +66,7 @@ impl LaunchBuilder {
     #[cfg_attr(docsrs, doc(cfg(feature = "web")))]
     pub fn web() -> LaunchBuilder<dioxus_web::Config, UnsendContext> {
         LaunchBuilder {
-            launch_fn: |root, contexts, cfg| dioxus_web::launch::launch(root, contexts, cfg),
+            launch_fn: dioxus_web::launch::launch,
             contexts: Vec::new(),
             platform_config: None,
         }
@@ -189,7 +189,7 @@ impl<Cfg: Default + 'static, ContextFn: ?Sized> LaunchBuilder<Cfg, ContextFn> {
     }
 
     // Static generation is the only platform that may exit. We can't use the `!` type here
-    #[cfg(feature = "static-generation")]
+    #[cfg(any(feature = "static-generation", feature = "web"))]
     /// Launch your application.
     pub fn launch(self, app: fn() -> Element) {
         let cfg = self.platform_config.unwrap_or_default();
@@ -197,7 +197,7 @@ impl<Cfg: Default + 'static, ContextFn: ?Sized> LaunchBuilder<Cfg, ContextFn> {
         (self.launch_fn)(app, self.contexts, cfg)
     }
 
-    #[cfg(not(feature = "static-generation"))]
+    #[cfg(not(any(feature = "static-generation", feature = "web")))]
     /// Launch your application.
     pub fn launch(self, app: fn() -> Element) -> ! {
         let cfg = self.platform_config.unwrap_or_default();
@@ -355,9 +355,9 @@ macro_rules! impl_launch {
 }
 
 // Static generation is the only platform that may exit. We can't use the `!` type here
-#[cfg(feature = "static-generation")]
+#[cfg(any(feature = "static-generation", feature = "web"))]
 impl_launch!(());
-#[cfg(not(feature = "static-generation"))]
+#[cfg(not(any(feature = "static-generation", feature = "web")))]
 impl_launch!(!);
 
 #[cfg(feature = "web")]
