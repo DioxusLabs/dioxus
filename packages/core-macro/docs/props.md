@@ -49,6 +49,7 @@ Props also act slightly differently when used with:
 - [`Option<T>`](#optional-props) - The field is automatically optional with a default value of `None`.
 - [`ReadOnlySignal<T>`](#reactive-props) - The props macro will automatically convert `T` into `ReadOnlySignal<T>` when it is passed as a prop.
 - [`String`](#formatted-props) - The props macro will accept formatted strings for any prop field with the type `String`.
+- [`children`](#children-props) - The props macro will accept child elements if you include the `children` prop.
 
 ### Default Props
 
@@ -180,6 +181,58 @@ rsx! {
         text: "Hello {name}!"
     }
 };
+```
+
+### Children Props
+
+Rather than passing the RSX through a regular prop, you may wish to accept children similarly to how elements can have children. The "magic" children prop lets you achieve this:
+
+```rust, no_run
+# use dioxus::prelude::*;
+#[derive(PartialEq, Clone, Props)]
+struct ClickableProps {
+    href: String,
+    children: Element,
+}
+
+fn Clickable(props: ClickableProps) -> Element {
+    rsx! {
+        a {
+            href: "{props.href}",
+            class: "fancy-button",
+            {props.children}
+        }
+    }
+}
+```
+
+This makes providing children to the component much simpler: simply put the RSX inside the {} brackets:
+
+```rust, no_run
+# use dioxus::prelude::*;
+# #[derive(PartialEq, Clone, Props)]
+# struct ClickableProps {
+#     href: String,
+#     children: Element,
+# }
+#
+# fn Clickable(props: ClickableProps) -> Element {
+#     rsx! {
+#         a {
+#             href: "{props.href}",
+#             class: "fancy-button",
+#             {props.children}
+#         }
+#     }
+# }
+rsx! {
+    Clickable {
+        href: "https://www.youtube.com/watch?v=C-M2hs3sXGo",
+        "How to "
+        i { "not" }
+        " be seen"
+    }
+}
 ```
 
 ### Reactive Props
