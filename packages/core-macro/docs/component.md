@@ -187,9 +187,9 @@ fn Clickable(
 ) -> Element {
     rsx! {
         a {
-            href: "{props.href}",
+            href: "{href}",
             class: "fancy-button",
-            {props.children}
+            {children}
         }
     }
 }
@@ -206,9 +206,9 @@ This makes providing children to the component much simpler: simply put the RSX 
 # ) -> Element {
 #     rsx! {
 #         a {
-#             href: "{props.href}",
+#             href: "{href}",
 #             class: "fancy-button",
-#             {props.children}
+#             {children}
 #         }
 #     }
 # }
@@ -219,7 +219,7 @@ rsx! {
         i { "not" }
         " be seen"
     }
-}
+};
 ```
 
 ### Reactive Props

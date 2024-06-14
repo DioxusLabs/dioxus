@@ -232,7 +232,7 @@ rsx! {
         i { "not" }
         " be seen"
     }
-}
+};
 ```
 
 ### Reactive Props
