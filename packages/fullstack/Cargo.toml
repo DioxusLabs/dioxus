@@ -56,6 +56,7 @@ tower-layer = { version = "0.3.2", optional = true }
 web-sys = { version = "0.3.61", optional = true, features = ["Window", "Document", "Element", "HtmlDocument", "Storage", "console"] }
 
 dioxus-cli-config = { workspace = true, features = ["read-config"], optional = true }
+clap = { version = "4.5.7", optional = true, features = ["derive"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { workspace = true, features = ["rt", "sync"], optional = true }
@@ -92,7 +93,9 @@ server = [
     "tracing-futures",
     "pin-project",
     "thiserror",
-    "dioxus-cli-config"
+    "dioxus-cli-config",
+    "dioxus-cli-config/cli",
+    "dep:clap"
 ]
 
 [package.metadata.docs.rs]

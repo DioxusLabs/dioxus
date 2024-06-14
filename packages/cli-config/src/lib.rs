@@ -8,6 +8,10 @@ mod bundle;
 pub use bundle::*;
 mod cargo;
 pub use cargo::*;
+#[cfg(feature = "cli")]
+mod serve;
+#[cfg(feature = "cli")]
+pub use serve::*;
 
 #[doc(hidden)]
 pub mod __private {
@@ -26,6 +30,28 @@ pub mod __private {
     impl Drop for CrateConfigDropGuard {
         fn drop(&mut self) {
             std::env::remove_var(CONFIG_ENV);
+        }
+    }
+
+    #[cfg(feature = "cli")]
+    /// The environment variable that stores the CLIs serve configuration.
+    /// We use this to communicate between the CLI and the server for fullstack applications.
+    pub const SERVE_ENV: &str = "DIOXUS_SERVE_CONFIG";
+
+    #[cfg(feature = "cli")]
+    pub fn save_serve_settings(config: &crate::ServeArguments) -> ServeDropGuard {
+        std::env::set_var(SERVE_ENV, serde_json::to_string(config).unwrap());
+        ServeDropGuard
+    }
+
+    #[cfg(feature = "cli")]
+    /// A guard that removes the serve settings from the environment when dropped.
+    pub struct ServeDropGuard;
+
+    #[cfg(feature = "cli")]
+    impl Drop for ServeDropGuard {
+        fn drop(&mut self) {
+            std::env::remove_var(SERVE_ENV);
         }
     }
 }

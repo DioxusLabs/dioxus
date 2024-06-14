@@ -65,6 +65,7 @@ struct FullstackPlatform {
     serve: ConfigOptsServe,
     desktop: desktop::DesktopPlatform,
     server_rust_flags: String,
+    _guard: dioxus_cli_config::__private::ServeDropGuard,
 }
 
 impl Platform for FullstackPlatform {
@@ -72,6 +73,9 @@ impl Platform for FullstackPlatform {
     where
         Self: Sized,
     {
+        // Pass the serve arguments (port, address) to the fullstack server through environment variables
+        let _guard = dioxus_cli_config::__private::save_serve_settings(&serve.server_arguments);
+
         let thread_handle = start_web_build_thread(config, serve);
 
         let desktop_config = make_desktop_config(config, serve);
@@ -85,10 +89,23 @@ impl Platform for FullstackPlatform {
             .join()
             .map_err(|_| anyhow::anyhow!("Failed to join thread"))??;
 
+        if serve.open {
+            crate::server::web::open_browser(
+                config,
+                serve
+                    .server_arguments
+                    .addr
+                    .unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0))),
+                serve.server_arguments.port,
+                false,
+            );
+        }
+
         Ok(Self {
             desktop,
             serve: serve.clone(),
             server_rust_flags,
+            _guard,
         })
     }
 

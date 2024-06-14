@@ -238,6 +238,7 @@ fn start_desktop(
     config: &CrateConfig,
     skip_assets: bool,
     rust_flags: Option<String>,
+    args: &Vec<String>,
 ) -> Result<(RAIIChild, BuildResult)> {
     // Run the desktop application
     // Only used for the fullstack platform,
@@ -251,6 +252,7 @@ fn start_desktop(
                 .clone()
                 .ok_or(anyhow::anyhow!("No executable found after desktop build"))?,
         )
+        .args(args)
         .env(active, "true")
         .spawn()?,
     );
@@ -259,6 +261,7 @@ fn start_desktop(
 }
 
 pub(crate) struct DesktopPlatform {
+    args: Vec<String>,
     currently_running_child: RAIIChild,
     skip_assets: bool,
 }
@@ -271,7 +274,8 @@ impl DesktopPlatform {
         serve: &ConfigOptsServe,
         rust_flags: Option<String>,
     ) -> Result<Self> {
-        let (child, first_build_result) = start_desktop(config, serve.skip_assets, rust_flags)?;
+        let (child, first_build_result) =
+            start_desktop(config, serve.skip_assets, rust_flags, &serve.args)?;
 
         tracing::info!("🚀 Starting development server...");
 
@@ -287,6 +291,7 @@ impl DesktopPlatform {
         );
 
         Ok(Self {
+            args: serve.args.clone(),
             currently_running_child: child,
             skip_assets: serve.skip_assets,
         })
@@ -322,7 +327,7 @@ impl DesktopPlatform {
         // Todo: add a timeout here to kill the process if it doesn't shut down within a reasonable time
         self.currently_running_child.0.wait()?;
 
-        let (child, result) = start_desktop(config, self.skip_assets, rust_flags)?;
+        let (child, result) = start_desktop(config, self.skip_assets, rust_flags, &self.args)?;
         self.currently_running_child = child;
         Ok(result)
     }
