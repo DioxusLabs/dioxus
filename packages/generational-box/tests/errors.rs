@@ -70,14 +70,19 @@ fn write_while_writing_error() {
     let owner = UnsyncStorage::owner();
     let value = owner.insert(1);
 
+    #[allow(unused)]
     let (write, location) = write_at_location(value);
 
+    let write_result = value.try_write();
+    assert!(write_result.is_err());
+    #[cfg(debug_assertions)]
     assert_eq!(
-        value.try_write().err(),
+        write_result.err(),
         Some(BorrowMutError::AlreadyBorrowedMut(
             AlreadyBorrowedMutError::new(location)
         ))
     );
+
     drop(write);
 }
 

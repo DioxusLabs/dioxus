@@ -21,7 +21,7 @@
 //!
 //! ### Events
 //! - Handle events with the "onXYZ" syntax
-//! - Closures can capture their environment with the 'a lifetime
+//! - Closures can capture their environment with the 'static lifetime
 //!
 //!
 //! ### Components

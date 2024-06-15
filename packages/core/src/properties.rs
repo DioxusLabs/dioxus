@@ -117,6 +117,34 @@ where
     P::builder()
 }
 
+/// Make sure that this component is currently running as a component, not a function call
+#[doc(hidden)]
+#[allow(unused)]
+pub fn verify_component_called_as_component<C: ComponentFunction<P, M>, P, M>(component: C) {
+    #[cfg(debug_assertions)]
+    {
+        // We trim WithOwner from the end of the type name for component with a builder that include a special owner which may not match the function name directly
+        let mut type_name = std::any::type_name::<C>();
+        if let Some((_, after_colons)) = type_name.rsplit_once("::") {
+            type_name = after_colons;
+        }
+        let component_name = Runtime::with(|rt| {
+            current_scope_id()
+                .and_then(|id| rt.get_state(id))
+                .map(|scope| scope.name)
+        })
+        .flatten();
+
+        // If we are in a component, and the type name is the same as the active component name, then we can just return
+        if component_name == Some(type_name) {
+            return;
+        }
+
+        // Otherwise the component was called like a function, so we should log an error
+        tracing::error!("It looks like you called the component {type_name} like a function instead of a component. Components should be called with braces like `{type_name} {{ prop: value }}` instead of as a function");
+    }
+}
+
 /// Any component that implements the `ComponentFn` trait can be used as a component.
 ///
 /// This trait is automatically implemented for functions that are in one of the following forms:

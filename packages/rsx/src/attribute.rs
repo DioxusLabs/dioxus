@@ -4,7 +4,7 @@ use super::*;
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, quote_spanned};
-use syn::{parse_quote, spanned::Spanned, Expr, ExprIf, Ident, LitStr};
+use syn::{parse_quote, spanned::Spanned, Expr, ExprClosure, ExprIf, Ident, LitStr};
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum AttributeType {
@@ -246,8 +246,18 @@ impl ToTokens for ElementAttrNamed {
                 }
                 ElementAttrValue::EventTokens(tokens) => match &self.attr.name {
                     ElementAttrName::BuiltIn(name) => {
+                        let event_tokens_is_closure =
+                            syn::parse2::<ExprClosure>(tokens.to_token_stream()).is_ok();
+                        let function_name =
+                            quote_spanned! { tokens.span() => dioxus_elements::events::#name };
+                        let function = if event_tokens_is_closure {
+                            // If we see an explicit closure, we can call the `call_with_explicit_closure` version of the event for better type inference
+                            quote_spanned! { tokens.span() => #function_name::call_with_explicit_closure }
+                        } else {
+                            function_name
+                        };
                         quote_spanned! { tokens.span() =>
-                            dioxus_elements::events::#name(#tokens)
+                            #function(#tokens)
                         }
                     }
                     ElementAttrName::Custom(_) => unreachable!("Handled elsewhere in the macro"),

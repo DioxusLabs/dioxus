@@ -1369,6 +1369,8 @@ builder_constructors! {
         formnovalidate: Bool DEFAULT,
         formtarget: Target DEFAULT,
         name: Id DEFAULT,
+        popovertarget: String DEFAULT,
+        popovertargetaction: String DEFAULT,
         value: String DEFAULT,
         r#type: String "type",
     };
@@ -1425,6 +1427,8 @@ builder_constructors! {
         multiple: Bool DEFAULT,
         name: Id DEFAULT,
         pattern: String DEFAULT,
+        popovertarget: String DEFAULT,
+        popovertargetaction: String DEFAULT,
         placeholder: String DEFAULT,
         readonly: Bool DEFAULT,
         required: Bool DEFAULT,
@@ -1600,7 +1604,9 @@ builder_constructors! {
     /// Build a
     /// [`<slot>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/slot)
     /// element.
-    slot None {};
+    slot None {
+        name: String DEFAULT,
+    };
 
     /// Build a
     /// [`<template>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/template)

@@ -86,6 +86,7 @@ tracing-futures = "0.2.5"
 toml = "0.8"
 tokio = "1.28"
 slab = "0.4.2"
+slotmap = { version = "1.0.7", features = ["serde"] }
 futures-channel = "0.3.21"
 futures-util = { version = "0.3", default-features = false }
 rustc-hash = "1.1.0"
@@ -134,6 +135,10 @@ opt-level = 1
 [profile.cli-dev.package."*"]
 opt-level = 3
 
+# Disable debug assertions to check the released path of core and other packages, but build without optimizations to keep build times quick
+[profile.release-unoptimized]
+inherits = "dev"
+debug-assertions = false
 
 # This is a "virtual package"
 # It is not meant to be published, but is used so "cargo run --example XYZ" works properly
