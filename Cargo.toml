@@ -153,7 +153,7 @@ repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
-rust-version = "1.60.0"
+rust-version = "1.79.0"
 publish = false
 
 [dependencies]
@@ -210,12 +210,12 @@ doc-scrape-examples = true
 
 [[example]]
 name = "video_stream"
-required-features = ["http", "desktop"]
+required-features = ["http", "default"]
 doc-scrape-examples = true
 
 [[example]]
 name = "suspense"
-required-features = ["http", "desktop"]
+required-features = ["http", "default"]
 doc-scrape-examples = true
 
 [[example]]
@@ -235,6 +235,11 @@ doc-scrape-examples = true
 
 [[example]]
 name = "backgrounded_futures"
+required-features = ["default"]
+doc-scrape-examples = true
+
+[[example]]
+name = "custom_decorations"
 required-features = ["default"]
 doc-scrape-examples = true
 
