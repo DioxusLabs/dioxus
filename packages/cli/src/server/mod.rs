@@ -90,11 +90,26 @@ fn watch_event<F>(
 ) where
     F: Fn() -> Result<BuildResult> + Send + 'static,
 {
+    use notify::event::EventKind;
+    use notify::event::ModifyKind;
+    use notify::event::RemoveKind;
+    use notify::event::RenameMode;
     // Ensure that we're tracking only modifications
-    if !matches!(
-        event.kind,
-        notify::EventKind::Create(_) | notify::EventKind::Remove(_) | notify::EventKind::Modify(_)
-    ) {
+    let track = match event.kind {
+        // notify::EventKind::Create(_) => true,
+        notify::EventKind::Modify(x)
+            if matches!(
+                x,
+                ModifyKind::Name(RenameMode::To) | ModifyKind::Name(RenameMode::Both)
+            ) =>
+        {
+            false
+        }
+        EventKind::Remove(x) if x == RemoveKind::File => false,
+        EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_) => true,
+        _ => false,
+    };
+    if !track {
         return;
     }
 
