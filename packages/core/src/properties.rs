@@ -243,13 +243,19 @@ impl<'a> SuperFrom<Arguments<'a>, OptionArgumentsFromMarker> for Option<String> 
 }
 
 #[doc(hidden)]
-pub struct OptionHandlerMarker;
+pub struct OptionCallbackMarker<T>(std::marker::PhantomData<T>);
 
-impl<G: 'static, F: FnMut(G) + 'static> SuperFrom<F, OptionHandlerMarker>
-    for Option<EventHandler<G>>
+// Closure can be created from FnMut -> async { anything } or FnMut -> Ret
+impl<
+        Function: FnMut(Args) -> Spawn + 'static,
+        Args: 'static,
+        Spawn: SpawnIfAsync<Marker, Ret> + 'static,
+        Ret: 'static,
+        Marker,
+    > SuperFrom<Function, OptionCallbackMarker<Marker>> for Option<Callback<Args, Ret>>
 {
-    fn super_from(input: F) -> Self {
-        Some(EventHandler::new(input))
+    fn super_from(input: Function) -> Self {
+        Some(Callback::new(input))
     }
 }
 
