@@ -1,5 +1,5 @@
 //! A shared pool of renderers for efficient server side rendering.
-use crate::{render::dioxus_core::NoOpMutations, server_context::with_server_context};
+use crate::render::dioxus_core::NoOpMutations;
 use dioxus_ssr::{
     incremental::{RenderFreshness, WrapBody},
     Renderer,
@@ -45,7 +45,7 @@ impl SsrRendererPool {
         virtual_dom_factory: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
         server_context: &DioxusServerContext,
     ) -> Result<(RenderFreshness, String), dioxus_ssr::incremental::IncrementalRendererError> {
-        let wrapper = FullstackRenderer {
+        let wrapper = FullstackHTMLTemplate {
             cfg: cfg.clone(),
             server_context: server_context.clone(),
         };
@@ -210,12 +210,24 @@ impl SSRState {
     }
 }
 
-struct FullstackRenderer {
+/// The template that wraps the body of the HTML for a fullstack page. This template contains the data needed to hydrate server functions that were run on the server.
+#[derive(Default)]
+pub struct FullstackHTMLTemplate {
     cfg: ServeConfig,
     server_context: DioxusServerContext,
 }
 
-impl dioxus_ssr::incremental::WrapBody for FullstackRenderer {
+impl FullstackHTMLTemplate {
+    /// Create a new [`FullstackHTMLTemplate`].
+    pub fn new(cfg: &ServeConfig, server_context: &DioxusServerContext) -> Self {
+        Self {
+            cfg: cfg.clone(),
+            server_context: server_context.clone(),
+        }
+    }
+}
+
+impl dioxus_ssr::incremental::WrapBody for FullstackHTMLTemplate {
     fn render_before_body<R: std::io::Write>(
         &self,
         to: &mut R,
@@ -231,11 +243,6 @@ impl dioxus_ssr::incremental::WrapBody for FullstackRenderer {
         &self,
         to: &mut R,
     ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
-        // serialize the props
-        // TODO: restore props serialization
-        // crate::html_storage::serialize::encode_props_in_element(&self.cfg.props, to).map_err(
-        //     |err| dioxus_ssr::incremental::IncrementalRendererError::Other(Box::new(err)),
-        // )?;
         // serialize the server state
         crate::html_storage::serialize::encode_in_element(
             &*self.server_context.html_data().map_err(|_| {
@@ -263,38 +270,7 @@ impl dioxus_ssr::incremental::WrapBody for FullstackRenderer {
         #[cfg(all(debug_assertions, feature = "hot-reload"))]
         {
             // In debug mode, we need to add a script to the page that will reload the page if the websocket disconnects to make full recompile hot reloads work
-            // This is copied from the Dioxus-CLI package at ../packages/cli
-            let disconnect_js = r#"(function () {
-              var protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-              var url = protocol + "//" + window.location.host + "/_dioxus/ws";
-              var poll_interval = 8080;
-            
-              var reload_upon_connect = (event) => {
-                // Firefox will send a 1001 code when the connection is closed because the page is reloaded
-                // Only firefox will trigger the onclose event when the page is reloaded manually: https://stackoverflow.com/questions/10965720/should-websocket-onclose-be-triggered-by-user-navigation-or-refresh
-                // We should not reload the page in this case
-                if (event.code === 1001) {
-                  return;
-                }
-                window.setTimeout(() => {
-                  var ws = new WebSocket(url);
-                  ws.onopen = () => window.location.reload();
-                  ws.onclose = reload_upon_connect;
-                }, poll_interval);
-              };
-            
-              var ws = new WebSocket(url);
-            
-              ws.onmessage = (ev) => {
-                console.log("Received message: ", ev, ev.data);
-            
-                if (ev.data == "reload") {
-                  window.location.reload();
-                }
-              };
-            
-              ws.onclose = reload_upon_connect;
-            })();"#;
+            let disconnect_js = dioxus_hot_reload::RECONNECT_SCRIPT;
 
             to.write_all(r#"<script>"#.as_bytes())?;
             to.write_all(disconnect_js.as_bytes())?;

@@ -1,38 +1,35 @@
-use fermi::UseAtomRef;
-use gloo_storage::{LocalStorage, Storage};
-use serde::{Deserialize, Serialize};
+use dioxus::prelude::*;
+use dioxus_sdk::storage::*;
 
 use crate::{
     constants::{DIOXUS_FRONT_AUTH_REQUEST, DIOXUS_FRONT_AUTH_TOKEN},
     oidc::{AuthRequestState, AuthTokenState},
 };
 
-#[derive(Serialize, Deserialize, Clone)]
-pub struct StorageEntry<T> {
-    pub key: String,
-    pub value: T,
+pub fn use_auth_token_provider() {
+    let stored_token =
+        use_storage::<LocalStorage, _>(DIOXUS_FRONT_AUTH_TOKEN.to_owned(), AuthTokenState::default);
+
+    use_context_provider(move || stored_token);
 }
 
-pub trait PersistentWrite<T: Serialize + Clone> {
-    fn persistent_set(atom_ref: &UseAtomRef<Option<T>>, entry: Option<T>);
+pub fn use_auth_token() -> Signal<AuthTokenState> {
+    use_context()
 }
 
-impl PersistentWrite<AuthTokenState> for AuthTokenState {
-    fn persistent_set(
-        atom_ref: &UseAtomRef<Option<AuthTokenState>>,
-        entry: Option<AuthTokenState>,
-    ) {
-        *atom_ref.write() = entry.clone();
-        LocalStorage::set(DIOXUS_FRONT_AUTH_TOKEN, entry).unwrap();
-    }
+pub fn use_auth_request_provider() {
+    let stored_req = use_storage::<LocalStorage, _>(
+        DIOXUS_FRONT_AUTH_REQUEST.to_owned(),
+        AuthRequestState::default,
+    );
+
+    use_context_provider(move || stored_req);
 }
 
-impl PersistentWrite<AuthRequestState> for AuthRequestState {
-    fn persistent_set(
-        atom_ref: &UseAtomRef<Option<AuthRequestState>>,
-        entry: Option<AuthRequestState>,
-    ) {
-        *atom_ref.write() = entry.clone();
-        LocalStorage::set(DIOXUS_FRONT_AUTH_REQUEST, entry).unwrap();
-    }
+pub fn use_auth_request() -> Signal<AuthRequestState> {
+    use_context()
+}
+
+pub fn auth_request() -> Signal<AuthRequestState> {
+    consume_context()
 }

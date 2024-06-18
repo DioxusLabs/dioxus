@@ -89,7 +89,7 @@ fn app() -> Element {
 #[component]
 fn CalculatorKey(name: String, onclick: EventHandler<MouseEvent>, children: Element) -> Element {
     rsx! {
-        button { class: "calculator-key {name}", onclick: move |e| onclick.call(e), {&children} }
+        button { class: "calculator-key {name}", onclick, {children} }
     }
 }
 

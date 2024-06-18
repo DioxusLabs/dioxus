@@ -17,10 +17,18 @@ pub struct LaunchBuilder<Cfg: 'static = (), ContextFn: ?Sized = ValidContext> {
 
 pub type LaunchFn<Cfg, Context> = fn(fn() -> Element, Vec<Box<Context>>, Cfg);
 
-#[cfg(any(feature = "fullstack", feature = "liveview"))]
+#[cfg(any(
+    feature = "fullstack",
+    feature = "static-generation",
+    feature = "liveview"
+))]
 type ValidContext = SendContext;
 
-#[cfg(not(any(feature = "fullstack", feature = "liveview")))]
+#[cfg(not(any(
+    feature = "fullstack",
+    feature = "static-generation",
+    feature = "liveview"
+)))]
 type ValidContext = UnsendContext;
 
 type SendContext = dyn Fn() -> Box<dyn Any> + Send + Sync + 'static;
@@ -29,6 +37,22 @@ type UnsendContext = dyn Fn() -> Box<dyn Any> + 'static;
 
 impl LaunchBuilder {
     /// Create a new builder for your application. This will create a launch configuration for the current platform based on the features enabled on the `dioxus` crate.
+    // If you aren't using a third party renderer and this is not a docs.rs build, generate a warning about no renderer being enabled
+    #[cfg_attr(
+        all(not(any(
+            docsrs,
+            feature = "third-party-renderer",
+            feature = "liveview",
+            feature = "desktop",
+            feature = "mobile",
+            feature = "web",
+            feature = "fullstack",
+            feature = "static-generation"
+        ))),
+        deprecated(
+            note = "No renderer is enabled. You must enable a renderer feature on the dioxus crate before calling the launch function.\nAdd `web`, `desktop`, `mobile`, `fullstack`, or `static-generation` to the `features` of dioxus field in your Cargo.toml.\n# Example\n```toml\n# ...\n[dependencies]\ndioxus = { version = \"0.5.0\", features = [\"web\"] }\n# ...\n```"
+        )
+    )]
     pub fn new() -> LaunchBuilder<current_platform::Config, ValidContext> {
         LaunchBuilder {
             launch_fn: current_platform::launch,
@@ -178,6 +202,7 @@ impl<Cfg: Default + 'static, ContextFn: ?Sized> LaunchBuilder<Cfg, ContextFn> {
 /// - `fullstack`
 /// - `desktop`
 /// - `mobile`
+/// - `static-generation`
 /// - `web`
 /// - `liveview`
 mod current_platform {
@@ -195,6 +220,9 @@ mod current_platform {
     }
     use crate::prelude::TryIntoConfig;
 
+    #[cfg(feature = "fullstack")]
+    pub use dioxus_fullstack::launch::*;
+
     #[cfg(any(feature = "desktop", feature = "mobile"))]
     if_else_cfg! {
         if not(feature = "fullstack") {
@@ -211,12 +239,22 @@ mod current_platform {
         }
     }
 
-    #[cfg(feature = "fullstack")]
-    pub use dioxus_fullstack::launch::*;
+    #[cfg(feature = "static-generation")]
+    if_else_cfg! {
+        if all(not(feature = "fullstack"), not(feature = "desktop"), not(feature = "mobile")) {
+            pub use dioxus_static_site_generation::launch::*;
+        } else {
+            impl TryIntoConfig<crate::launch::current_platform::Config> for ::dioxus_static_site_generation::Config {
+                fn into_config(self) -> Option<crate::launch::current_platform::Config> {
+                    None
+                }
+            }
+        }
+    }
 
     #[cfg(feature = "web")]
     if_else_cfg! {
-        if not(any(feature = "desktop", feature = "mobile", feature = "fullstack")) {
+        if not(any(feature = "desktop", feature = "mobile", feature = "fullstack", feature = "static-generation")) {
             pub use dioxus_web::launch::*;
         } else {
             impl TryIntoConfig<crate::launch::current_platform::Config> for ::dioxus_web::Config {
@@ -234,7 +272,8 @@ mod current_platform {
                 feature = "web",
                 feature = "desktop",
                 feature = "mobile",
-                feature = "fullstack"
+                feature = "fullstack",
+                feature = "static-generation"
             ))
         {
             pub use dioxus_liveview::launch::*;
@@ -252,7 +291,8 @@ mod current_platform {
         feature = "desktop",
         feature = "mobile",
         feature = "web",
-        feature = "fullstack"
+        feature = "fullstack",
+        feature = "static-generation"
     )))]
     pub type Config = ();
 
@@ -261,7 +301,8 @@ mod current_platform {
         feature = "desktop",
         feature = "mobile",
         feature = "web",
-        feature = "fullstack"
+        feature = "fullstack",
+        feature = "static-generation"
     )))]
     pub fn launch(
         root: fn() -> dioxus_core::Element,
@@ -276,7 +317,24 @@ mod current_platform {
 }
 
 /// Launch your application without any additional configuration. See [`LaunchBuilder`] for more options.
+// If you aren't using a third party renderer and this is not a docs.rs build, generate a warning about no renderer being enabled
+#[cfg_attr(
+    all(not(any(
+        docsrs,
+        feature = "third-party-renderer",
+        feature = "liveview",
+        feature = "desktop",
+        feature = "mobile",
+        feature = "web",
+        feature = "fullstack",
+        feature = "static-generation"
+    ))),
+    deprecated(
+        note = "No renderer is enabled. You must enable a renderer feature on the dioxus crate before calling the launch function.\nAdd `web`, `desktop`, `mobile`, `fullstack`, or `static-generation` to the `features` of dioxus field in your Cargo.toml.\n# Example\n```toml\n# ...\n[dependencies]\ndioxus = { version = \"0.5.0\", features = [\"web\"] }\n# ...\n```"
+    )
+)]
 pub fn launch(app: fn() -> Element) {
+    #[allow(deprecated)]
     LaunchBuilder::new().launch(app)
 }
 
@@ -284,7 +342,7 @@ pub fn launch(app: fn() -> Element) {
 #[cfg_attr(docsrs, doc(cfg(feature = "web")))]
 /// Launch your web application without any additional configuration. See [`LaunchBuilder`] for more options.
 pub fn launch_web(app: fn() -> Element) {
-    LaunchBuilder::new().launch(app)
+    LaunchBuilder::web().launch(app)
 }
 
 #[cfg(feature = "desktop")]

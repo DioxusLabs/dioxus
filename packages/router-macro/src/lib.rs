@@ -16,6 +16,7 @@ use proc_macro2::TokenStream as TokenStream2;
 
 use crate::{layout::LayoutId, route_tree::RouteTree};
 
+mod hash;
 mod layout;
 mod nest;
 mod query;
@@ -237,6 +238,7 @@ mod segment;
 /// # #[component]
 /// # fn Home() -> Element { None }
 /// ```
+#[doc(alias = "route")]
 #[proc_macro_derive(
     Routable,
     attributes(route, nest, end_nest, layout, end_layout, redirect, child)
@@ -523,6 +525,11 @@ impl RouteEnum {
                             from_route = true
                         }
                     }
+                    if let Some(hash) = &route.hash {
+                        if hash.contains_ident(field) {
+                            from_route = true
+                        }
+                    }
                 }
             }
         }
@@ -576,9 +583,10 @@ impl RouteEnum {
 
                 fn from_str(s: &str) -> Result<Self, Self::Err> {
                     let route = s;
-                    let (route, _hash) = route.split_once('#').unwrap_or((route, ""));
+                    let (route, hash) = route.split_once('#').unwrap_or((route, ""));
                     let (route, query) = route.split_once('?').unwrap_or((route, ""));
                     let query = dioxus_router::exports::urlencoding::decode(query).unwrap_or(query.into());
+                    let hash = dioxus_router::exports::urlencoding::decode(hash).unwrap_or(hash.into());
                     let mut segments = route.split('/').map(|s| dioxus_router::exports::urlencoding::decode(s).unwrap_or(s.into()));
                     // skip the first empty segment
                     if s.starts_with('/') {
@@ -649,9 +657,14 @@ impl RouteEnum {
 
             #[allow(non_camel_case_types)]
             #[allow(clippy::derive_partial_eq_without_eq)]
-            #[derive(Debug, PartialEq)]
             pub enum #match_error_name {
                 #(#error_variants),*
+            }
+
+            impl std::fmt::Debug for #match_error_name {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(f, "{}({})", stringify!(#match_error_name), self)
+                }
             }
 
             impl std::fmt::Display for #match_error_name {
@@ -682,7 +695,7 @@ impl RouteEnum {
                     #(#site_map,)*
                 ];
 
-                fn render(&self, level: usize) -> ::dioxus::prelude::Element {
+                fn render(&self, level: usize) -> dioxus_core::Element {
                     let myself = self.clone();
                     match (level, myself) {
                         #(#matches)*

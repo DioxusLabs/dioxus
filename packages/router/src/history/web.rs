@@ -74,7 +74,9 @@ impl<R: Routable> WebHistory<R> {
         let myself = Self::new_inner(prefix, do_scroll_restoration);
 
         let current_route = myself.current_route();
-        let current_url = current_route.to_string();
+        let current_route_str = current_route.to_string();
+        let prefix_str = myself.prefix.as_deref().unwrap_or("");
+        let current_url = format!("{prefix_str}{current_route_str}");
         let state = myself.create_state(current_route);
         let _ = replace_state_with_url(&myself.history, &state, Some(&current_url));
 
@@ -128,18 +130,17 @@ where
     fn route_from_location(&self) -> R {
         let location = self.window.location();
         let path = location.pathname().unwrap_or_else(|_| "/".into())
-            + &location.search().unwrap_or("".into());
-        let path = match self.prefix {
-            None => path,
-            Some(ref prefix) => {
-                if path.starts_with(prefix) {
-                    path[prefix.len()..].to_string()
-                } else {
-                    path
-                }
-            }
+            + &location.search().unwrap_or("".into())
+            + &location.hash().unwrap_or("".into());
+        let mut path = match self.prefix {
+            None => &path,
+            Some(ref prefix) => path.strip_prefix(prefix).unwrap_or(prefix),
         };
-        R::from_str(&path).unwrap_or_else(|err| panic!("{}", err))
+        // If the path is empty, parse the root route instead
+        if path.is_empty() {
+            path = "/"
+        }
+        R::from_str(path).unwrap_or_else(|err| panic!("{}", err))
     }
 
     fn full_path(&self, state: &R) -> String {

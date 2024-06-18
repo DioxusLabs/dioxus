@@ -3,7 +3,6 @@ use generational_box::UnsyncStorage;
 use std::ops::Deref;
 
 use dioxus_core::prelude::*;
-use dioxus_core::ScopeId;
 
 use generational_box::{GenerationalBox, Storage};
 
@@ -114,6 +113,11 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
     /// Get the generational id of the value.
     pub fn id(&self) -> GenerationalBoxId {
         self.value.id()
+    }
+
+    /// Get the underlying [`GenerationalBox`] value.
+    pub fn value(&self) -> GenerationalBox<T, S> {
+        self.value
     }
 }
 

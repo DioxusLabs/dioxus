@@ -3,12 +3,8 @@ use core::pin::Pin;
 use std::future::Future;
 use std::str::FromStr;
 
-use dioxus_lib::prelude::*;
-use dioxus_ssr::incremental::{
-    IncrementalRenderer, IncrementalRendererError, RenderFreshness, WrapBody,
-};
-
 use crate::prelude::*;
+use dioxus_lib::prelude::*;
 
 /// Pre-cache all static routes.
 pub async fn pre_cache_static_routes<Rt, R: WrapBody + Send + Sync>(
@@ -19,51 +15,20 @@ where
     Rt: Routable,
     <Rt as FromStr>::Err: std::fmt::Display,
 {
-    for route in Rt::SITE_MAP
-        .iter()
-        .flat_map(|seg| seg.flatten().into_iter())
-    {
-        // check if this is a static segment
-        let mut is_static = true;
-        let mut full_path = String::new();
-        for segment in &route {
-            match segment {
-                SegmentType::Child => {}
-                SegmentType::Static(s) => {
-                    full_path += "/";
-                    full_path += s;
-                }
-                _ => {
-                    // skip routes with any dynamic segments
-                    is_static = false;
-                    break;
-                }
-            }
-        }
-
-        if is_static {
-            match Rt::from_str(&full_path) {
-                Ok(route) => {
-                    render_route(
-                        renderer,
-                        route,
-                        &mut tokio::io::sink(),
-                        |vdom| {
-                            Box::pin(async move {
-                                vdom.rebuild_in_place();
-                                vdom.wait_for_suspense().await;
-                            })
-                        },
-                        wrapper,
-                    )
-                    .await?;
-                }
-                Err(e) => {
-                    tracing::info!("@ route: {}", full_path);
-                    tracing::error!("Error pre-caching static route: {}", e);
-                }
-            }
-        }
+    for route in Rt::static_routes() {
+        render_route(
+            renderer,
+            route,
+            &mut tokio::io::sink(),
+            |vdom| {
+                Box::pin(async move {
+                    vdom.rebuild_in_place();
+                    vdom.wait_for_suspense().await;
+                })
+            },
+            wrapper,
+        )
+        .await?;
     }
 
     Ok(())

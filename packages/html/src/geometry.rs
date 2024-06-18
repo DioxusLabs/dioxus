@@ -27,8 +27,14 @@ pub type PagePoint = Point2D<f64, PageSpace>;
 
 /// A pixel unit: one unit corresponds to 1 pixel
 pub struct Pixels;
-/// A vector expressed in Pixels
-pub type PixelsVector = Vector3D<f64, Pixels>;
+/// A size expressed in Pixels
+pub type PixelsSize = Size2D<f64, Pixels>;
+/// A rectangle expressed in Pixels
+pub type PixelsRect = Rect<f64, Pixels>;
+/// A 2D vector expressed in Pixels
+pub type PixelsVector2D = Vector2D<f64, Pixels>;
+/// A 3D vector expressed in Pixels
+pub type PixelsVector3D = Vector3D<f64, Pixels>;
 
 /// A unit in terms of Lines
 ///
@@ -51,7 +57,7 @@ pub type PagesVector = Vector3D<f64, Pages>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub enum WheelDelta {
     /// Movement in Pixels
-    Pixels(PixelsVector),
+    Pixels(PixelsVector3D),
     /// Movement in Lines
     Lines(LinesVector),
     /// Movement in Pages
@@ -62,7 +68,7 @@ impl WheelDelta {
     /// Construct from the attributes of the web wheel event
     pub fn from_web_attributes(delta_mode: u32, delta_x: f64, delta_y: f64, delta_z: f64) -> Self {
         match delta_mode {
-            0 => WheelDelta::Pixels(PixelsVector::new(delta_x, delta_y, delta_z)),
+            0 => WheelDelta::Pixels(PixelsVector3D::new(delta_x, delta_y, delta_z)),
             1 => WheelDelta::Lines(LinesVector::new(delta_x, delta_y, delta_z)),
             2 => WheelDelta::Pages(PagesVector::new(delta_x, delta_y, delta_z)),
             _ => panic!("Invalid delta mode, {:?}", delta_mode),
@@ -71,7 +77,7 @@ impl WheelDelta {
 
     /// Convenience function for constructing a WheelDelta with pixel units
     pub fn pixels(x: f64, y: f64, z: f64) -> Self {
-        WheelDelta::Pixels(PixelsVector::new(x, y, z))
+        WheelDelta::Pixels(PixelsVector3D::new(x, y, z))
     }
 
     /// Convenience function for constructing a WheelDelta with line units

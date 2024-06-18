@@ -42,6 +42,11 @@ impl FileEngine for WebFileEngine {
             .collect()
     }
 
+    async fn file_size(&self, file: &str) -> Option<u64> {
+        let file = self.find(file)?;
+        Some(file.size() as u64)
+    }
+
     // read a file to bytes
     async fn read_file(&self, file: &str) -> Option<Vec<u8>> {
         let file = self.find(file)?;

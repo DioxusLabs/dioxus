@@ -18,7 +18,6 @@ use std::{
     sync::Arc,
 };
 use tao::{
-    dpi::{PhysicalPosition, PhysicalSize},
     event::Event,
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
     window::WindowId,
@@ -478,8 +477,10 @@ impl App {
                     let window = &webview.desktop_context.window;
                     let position = (state.x, state.y);
                     let size = (state.width, state.height);
-                    window.set_outer_position(PhysicalPosition::new(position.0, position.1));
-                    window.set_inner_size(PhysicalSize::new(size.0, size.1));
+                    window.set_outer_position(tao::dpi::PhysicalPosition::new(
+                        position.0, position.1,
+                    ));
+                    window.set_inner_size(tao::dpi::PhysicalSize::new(size.0, size.1));
                 }
             }
         }

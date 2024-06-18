@@ -28,7 +28,12 @@ dioxus = { workspace = true }
 tokio = { version = "1", features = ["full"] }
 tracing-subscriber = "0.3.17"
 simple_logger = "4.2.0"
+reqwest = { workspace = true }
+rand = "0.8"
 
 [features]
 default = []
 serialize = ["serde"]
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

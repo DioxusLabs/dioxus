@@ -2,17 +2,12 @@ use crate::{cfg::ConfigOptsServe, BuildResult, Result};
 use dioxus_cli_config::CrateConfig;
 
 use cargo_metadata::diagnostic::Diagnostic;
-use dioxus_core::Template;
-use dioxus_hot_reload::HotReloadMsg;
+use dioxus_hot_reload::{HotReloadMsg, HotReloadReceiver};
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;
 use fs_extra::dir::CopyOptions;
 use notify::{RecommendedWatcher, Watcher};
-use std::{
-    path::PathBuf,
-    sync::{Arc, Mutex},
-};
-use tokio::sync::broadcast::{self};
+use std::{path::PathBuf, sync::Arc};
 
 mod output;
 use output::*;
@@ -22,25 +17,14 @@ pub mod web;
 
 #[derive(Clone)]
 pub struct HotReloadState {
-    /// Pending hotreload updates to be sent to all connected clients
-    pub messages: broadcast::Sender<HotReloadMsg>,
+    /// The receiver for hot reload messages
+    pub receiver: HotReloadReceiver,
 
     /// The file map that tracks the state of the projecta
-    pub file_map: SharedFileMap,
+    pub file_map: Option<SharedFileMap>,
 }
-type SharedFileMap = Arc<Mutex<FileMap<HtmlCtx>>>;
 
-impl HotReloadState {
-    pub fn all_templates(&self) -> Vec<Template> {
-        self.file_map
-            .lock()
-            .unwrap()
-            .map
-            .values()
-            .flat_map(|v| v.templates.values().copied())
-            .collect()
-    }
-}
+type SharedFileMap = Arc<Mutex<FileMap<HtmlCtx>>>;
 
 /// Sets up a file watcher.
 ///
@@ -49,7 +33,7 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
     build_with: F,
     config: &CrateConfig,
     web_info: Option<WebServerInfo>,
-    hot_reload: Option<HotReloadState>,
+    hot_reload: HotReloadState,
 ) -> Result<RecommendedWatcher> {
     let mut last_update_time = chrono::Local::now().timestamp();
 
@@ -99,7 +83,7 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
 fn watch_event<F>(
     event: notify::Event,
     last_update_time: &mut i64,
-    hot_reload: &Option<HotReloadState>,
+    hot_reload: &HotReloadState,
     config: &CrateConfig,
     build_with: &F,
     web_info: &Option<WebServerInfo>,
@@ -122,8 +106,14 @@ fn watch_event<F>(
     // By default we want to not do a full rebuild, and instead let the hot reload system invalidate it
     let mut needs_full_rebuild = false;
 
-    if let Some(hot_reload) = &hot_reload {
-        hotreload_files(hot_reload, &mut needs_full_rebuild, &event, config);
+    if let Some(file_map) = &hot_reload.file_map {
+        hotreload_files(
+            hot_reload,
+            file_map,
+            &mut needs_full_rebuild,
+            &event,
+            config,
+        );
     }
 
     if needs_full_rebuild {
@@ -164,12 +154,13 @@ fn full_rebuild<F>(
 
 fn hotreload_files(
     hot_reload: &HotReloadState,
+    file_map: &SharedFileMap,
     needs_full_rebuild: &mut bool,
     event: &notify::Event,
     config: &CrateConfig,
 ) {
     // find changes to the rsx in the file
-    let mut rsx_file_map = hot_reload.file_map.lock().unwrap();
+    let mut rsx_file_map = file_map.lock().unwrap();
     let mut messages: Vec<HotReloadMsg> = Vec::new();
 
     for path in &event.paths {
@@ -223,7 +214,7 @@ fn hotreload_files(
     }
 
     for msg in messages {
-        let _ = hot_reload.messages.send(msg);
+        hot_reload.receiver.send_message(msg);
     }
 }
 
@@ -301,7 +292,7 @@ fn attempt_css_reload(
     _ = rsx_file_map.is_tracking_asset(&local_path)?;
 
     // copy the asset over to the output directory
-    // todo this whole css hotreloading shouldbe less hacky and more robust
+    // todo this whole css hotreloading should be less hacky and more robust
     _ = fs_extra::copy_items(
         &[path],
         config.out_dir(),

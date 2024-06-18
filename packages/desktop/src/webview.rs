@@ -229,10 +229,16 @@ impl WebviewInstance {
     pub fn poll_vdom(&mut self) {
         let mut cx = std::task::Context::from_waker(&self.waker);
 
-        // Continously poll the virtualdom until it's pending
+        // Continuously poll the virtualdom until it's pending
         // Wait for work will return Ready when it has edits to be sent to the webview
         // It will return Pending when it needs to be polled again - nothing is ready
         loop {
+            // If we're waiting for a render, wait for it to finish before we continue
+            let edits_flushed_poll = self.desktop_context.edit_queue.poll_edits_flushed(&mut cx);
+            if edits_flushed_poll.is_pending() {
+                return;
+            }
+
             {
                 let fut = self.dom.wait_for_work();
                 pin_mut!(fut);
