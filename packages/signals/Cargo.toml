@@ -33,7 +33,7 @@ rand = "0.8"
 
 [features]
 default = []
-serialize = ["serde"]
+serialize = ["dep:serde"]
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

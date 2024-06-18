@@ -30,16 +30,16 @@ md5 = "0.7.0"
 
 [features]
 default = []
-serialize = ["serde"]
-sledgehammer = ["sledgehammer_bindgen", "sledgehammer_utils"]
+serialize = ["dep:serde"]
+sledgehammer = ["dep:sledgehammer_bindgen", "dep:sledgehammer_utils"]
 webonly = [
     "sledgehammer",
-    "wasm-bindgen",
-    "wasm-bindgen-futures",
-    "js-sys",
-    "web-sys",
+    "dep:wasm-bindgen",
+    "dep:wasm-bindgen-futures",
+    "dep:js-sys",
+    "dep:web-sys",
     "sledgehammer_bindgen/web",
 ]
-binary-protocol = ["sledgehammer", "dioxus-core", "dioxus-html"]
+binary-protocol = ["sledgehammer", "dep:dioxus-core", "dep:dioxus-html"]
 minimal_bindings = []
 eval = []

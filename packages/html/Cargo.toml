@@ -58,9 +58,9 @@ tokio = { workspace = true, features = ["time"] }
 [features]
 default = ["serialize", "mounted", "eval"]
 serialize = [
-    "serde",
-    "serde_json",
-    "serde_repr",
+    "dep:serde",
+    "dep:serde_json",
+    "dep:serde_repr",
     "euclid/serde",
     "keyboard-types/serde",
     "dioxus-core/serialize",
@@ -75,12 +75,12 @@ mounted = [
     "web-sys?/HtmlElement",
 ]
 eval = [
-    "serde",
-    "serde_json"
+    "dep:serde",
+    "dep:serde_json"
 ]
-wasm-bind = ["web-sys", "wasm-bindgen"]
-native-bind = ["tokio"]
-hot-reload-context = ["dioxus-rsx"]
+wasm-bind = ["dep:web-sys", "dep:wasm-bindgen"]
+native-bind = ["dep:tokio"]
+hot-reload-context = ["dep:dioxus-rsx"]
 html-to-rsx = []
 
 [package.metadata.docs.rs]

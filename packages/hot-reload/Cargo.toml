@@ -34,10 +34,10 @@ tracing.workspace = true
 tokio = { workspace = true, features = ["full"] }
 
 [features]
-default = ["dioxus-html"]
-custom_file_watcher = ["ignore", "chrono", "notify", "execute", "once_cell", "ignore"]
+default = ["dep:dioxus-html"]
+custom_file_watcher = ["dep:ignore", "dep:chrono", "dep:notify", "dep:execute", "dep:once_cell", "dep:ignore"]
 file_watcher = ["custom_file_watcher", "dioxus-html/hot-reload-context"]
-serve = ["axum", "tokio-stream", "futures-util", "tokio", "file_watcher"]
+serve = ["dep:axum", "dep:tokio-stream", "dep:futures-util", "dep:tokio", "file_watcher"]
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
