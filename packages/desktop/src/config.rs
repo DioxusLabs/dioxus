@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::path::PathBuf;
 use tao::window::{Icon, WindowBuilder};
 use wry::http::{Request as HttpRequest, Response as HttpResponse};
+use wry::RequestAsyncResponder;
 
 use crate::menubar::{default_menu_bar, DioxusMenu};
 
@@ -22,6 +23,7 @@ pub struct Config {
     pub(crate) window: WindowBuilder,
     pub(crate) menu: Option<DioxusMenu>,
     pub(crate) protocols: Vec<WryProtocol>,
+    pub(crate) asynchronous_protocols: Vec<AsyncWryProtocol>,
     pub(crate) pre_rendered: Option<String>,
     pub(crate) disable_context_menu: bool,
     pub(crate) resource_dir: Option<PathBuf>,
@@ -36,6 +38,11 @@ pub struct Config {
 pub(crate) type WryProtocol = (
     String,
     Box<dyn Fn(HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static>,
+);
+
+pub(crate) type AsyncWryProtocol = (
+    String,
+    Box<dyn Fn(HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static>,
 );
 
 impl Config {
@@ -56,6 +63,7 @@ impl Config {
             window,
             menu: Some(default_menu_bar()),
             protocols: Vec::new(),
+            asynchronous_protocols: Vec::new(),
             pre_rendered: None,
             disable_context_menu: !cfg!(debug_assertions),
             resource_dir: None,
@@ -109,11 +117,46 @@ impl Config {
     }
 
     /// Set a custom protocol
-    pub fn with_custom_protocol<F>(mut self, name: String, handler: F) -> Self
+    pub fn with_custom_protocol<F>(mut self, name: impl ToString, handler: F) -> Self
     where
         F: Fn(HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static,
     {
-        self.protocols.push((name, Box::new(handler)));
+        self.protocols.push((name.to_string(), Box::new(handler)));
+        self
+    }
+
+    /// Set an asynchronous custom protocol
+    ///
+    /// **Example Usage**
+    /// ```rust
+    /// # use wry::http::response::Response as HTTPResponse;
+    /// # use std::borrow::Cow;
+    /// # use dioxus_desktop::Config;
+    /// #
+    /// # fn main() {
+    /// let cfg = Config::new()
+    ///     .with_asynchronous_custom_protocol("asset", |request, responder| {
+    ///         tokio::spawn(async move {
+    ///             responder.respond(
+    ///                 HTTPResponse::builder()
+    ///                     .status(404)
+    ///                     .body(Cow::Borrowed("404 - Not Found".as_bytes()))
+    ///                     .unwrap()
+    ///             );
+    ///         });
+    ///     });
+    /// # }
+    /// ```
+    /// note a key difference between Dioxus and Wry, the protocol name doesn't explicitly need to be a
+    /// [`String`], but needs to implement [`ToString`].
+    ///
+    /// See [`wry`](wry::WebViewBuilder::with_asynchronous_custom_protocol) for more details on implementation
+    pub fn with_asynchronous_custom_protocol<F>(mut self, name: impl ToString, handler: F) -> Self
+    where
+        F: Fn(HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static,
+    {
+        self.asynchronous_protocols
+            .push((name.to_string(), Box::new(handler)));
         self
     }
 

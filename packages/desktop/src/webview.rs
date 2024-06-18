@@ -169,6 +169,10 @@ impl WebviewInstance {
             webview = webview.with_custom_protocol(name, handler);
         }
 
+        for (name, handler) in cfg.asynchronous_protocols.drain(..) {
+            webview = webview.with_asynchronous_custom_protocol(name, handler);
+        }
+
         const INITIALIZATION_SCRIPT: &str = r#"
         if (document.addEventListener) {
             document.addEventListener('contextmenu', function(e) {
