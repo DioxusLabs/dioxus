@@ -26,7 +26,7 @@ fn App() -> Element {
 }
 
 #[component]
-fn Blog(id: ReactOnlySignal<i32>) -> Element {
+fn Blog(id: ReadOnlySignal<i32>) -> Element {
     async fn future(n: i32) -> i32 {
         n
     }
