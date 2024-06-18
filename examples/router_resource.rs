@@ -26,7 +26,7 @@ fn App() -> Element {
 }
 
 #[component]
-fn Blog(id: i32) -> Element {
+fn Blog(id: ReactOnlySignal<i32>) -> Element {
     async fn future(n: i32) -> i32 {
         n
     }
@@ -35,7 +35,7 @@ fn Blog(id: i32) -> Element {
     // let res = use_resource(move || future(id));
 
     // the use_reactive hook is required to properly update when clicking links to this component, from this component
-    let res = use_resource(use_reactive(&id, |id| future(id)));
+    let res = use_resource(move || future(id()));
 
     match res() {
         Some(id) => rsx! {
