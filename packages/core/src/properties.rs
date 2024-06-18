@@ -261,6 +261,21 @@ impl<
 
 #[test]
 #[allow(unused)]
+fn optional_callback_compiles() {
+    fn compiles() {
+        // Converting from closures (without type hints in the closure works)
+        let callback: Callback<i32, i32> = (|num| num * num).super_into();
+        let callback: Callback<i32, ()> = (|num| async move { println!("{num}") }).super_into();
+
+        // Converting from closures to optional callbacks works
+        let optional: Option<Callback<i32, i32>> = (|num| num * num).super_into();
+        let optional: Option<Callback<i32, ()>> =
+            (|num| async move { println!("{num}") }).super_into();
+    }
+}
+
+#[test]
+#[allow(unused)]
 fn from_props_compiles() {
     // T -> T works
     let option: i32 = 0i32.super_into();
