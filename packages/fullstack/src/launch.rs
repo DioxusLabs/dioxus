@@ -4,8 +4,10 @@ use std::{any::Any, sync::Arc};
 
 use dioxus_lib::prelude::{Element, VirtualDom};
 
-use crate::prelude::ContextProviders;
 pub use crate::Config;
+pub(crate) type ContextProviders = Arc<
+    Vec<Box<dyn Fn() -> Box<dyn std::any::Any + Send + Sync + 'static> + Send + Sync + 'static>>,
+>;
 
 fn virtual_dom_factory(
     root: fn() -> Element,

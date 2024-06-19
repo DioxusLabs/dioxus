@@ -116,7 +116,7 @@ impl Config {
     pub async fn launch_server(
         self,
         build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
-        context_providers: ContextProviders,
+        context_providers: crate::launch::ContextProviders,
     ) {
         use std::any::Any;
 
