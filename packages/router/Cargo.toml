@@ -43,11 +43,11 @@ wasm-bindgen-test = "0.3.33"
 
 [features]
 default = []
-ssr = ["dioxus-ssr/incremental", "tokio", "dioxus-fullstack?/server", "http"]
-liveview = ["dioxus-liveview", "tokio", "dep:serde", "serde_json"]
+ssr = ["dioxus-ssr/incremental", "dep:tokio", "dioxus-fullstack?/server", "dep:http"]
+liveview = ["dep:dioxus-liveview", "dep:tokio", "dep:serde", "dep:serde_json"]
 wasm_test = []
-web = ["gloo", "web-sys", "wasm-bindgen", "gloo-utils", "js-sys", "dioxus-router-macro/web"]
-fullstack = ["dioxus-fullstack"]
+web = ["dep:gloo", "dep:web-sys", "dep:wasm-bindgen", "dep:gloo-utils", "dep:js-sys", "dioxus-router-macro/web"]
+fullstack = ["dep:dioxus-fullstack"]
 
 [dev-dependencies]
 axum = { workspace = true, features = ["ws"] }

@@ -109,7 +109,7 @@ openssl = { version = "0.10", features = ["vendored"] }
 
 [features]
 default = []
-plugin = ["mlua"]
+plugin = ["dep:mlua"]
 
 [[bin]]
 path = "src/main.rs"

@@ -42,4 +42,4 @@
 //! /// }
 //! ///
 //! /// We only track this when the template changes
-//! pub discovered_templates: Vec<Template>,
+//! pub discovered_templates: Vec<crate::Template>,

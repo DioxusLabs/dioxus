@@ -12,7 +12,7 @@
 //! - `router`: exports the [router](https://dioxuslabs.com/learn/0.5/router) and enables any router features for the current platform
 //! - `third-party-renderer`: Just disables warnings about no active platform when no renderers are enabled
 //!
-//! Platform features (the current platform determines what platform the [`launch`](dioxus::prelude::launch) function runs):
+//! Platform features (the current platform determines what platform the [`launch()`] function runs):
 //!
 //! - `fullstack`: enables the fullstack platform. This must be used in combination with the `web` feature for wasm builds and `axum` feature for server builds
 //! - `desktop`: enables the desktop platform
@@ -110,6 +110,10 @@ pub mod prelude {
     #[cfg(feature = "router")]
     #[cfg_attr(docsrs, doc(cfg(feature = "router")))]
     pub use dioxus_router::prelude::*;
+
+    #[cfg(feature = "axum")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
+    pub use axum;
 }
 
 #[cfg(feature = "web")]

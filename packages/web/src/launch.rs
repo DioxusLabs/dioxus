@@ -16,7 +16,7 @@ pub fn launch(
     for context in contexts {
         vdom.insert_any_root_context(context());
     }
-    launch_virtual_dom(vdom, platform_config);
+    launch_virtual_dom(vdom, platform_config)
 }
 
 /// Launch the web application with a prebuild virtual dom
@@ -30,5 +30,5 @@ pub fn launch_virtual_dom(vdom: VirtualDom, platform_config: Config) {
 
 /// Launch the web application with the given root component and config
 pub fn launch_cfg(root: fn() -> Element, platform_config: Config) {
-    launch_virtual_dom(VirtualDom::new(root), platform_config);
+    launch_virtual_dom(VirtualDom::new(root), platform_config)
 }

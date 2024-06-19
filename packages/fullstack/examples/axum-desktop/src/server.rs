@@ -19,7 +19,7 @@ async fn main() {
     axum::serve(
         listener,
         axum::Router::new()
-            .register_server_fns()
+            .register_server_functions()
             .into_make_service(),
     )
     .await

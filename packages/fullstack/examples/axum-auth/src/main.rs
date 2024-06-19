@@ -49,9 +49,7 @@ fn main() {
                 // build our application with some routes
                 let app = Router::new()
                     // Server side render the application, serve static assets, and register server functions
-                    .serve_dioxus_application(ServeConfig::builder().build(), || {
-                        VirtualDom::new(app)
-                    })
+                    .serve_dioxus_application(ServeConfig::default(), app)
                     .await
                     .layer(
                         axum_session_auth::AuthSessionLayer::<

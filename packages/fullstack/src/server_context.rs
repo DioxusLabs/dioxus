@@ -1,6 +1,11 @@
 use crate::html_storage::HTMLData;
+use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock;
+
+type SendSyncAnyMap =
+    std::collections::HashMap<std::any::TypeId, Box<dyn Any + Send + Sync + 'static>>;
 
 /// A shared context for server functions that contains information about the request and middleware state.
 /// This allows you to pass data between your server framework and the server functions. This can be used to pass request information or information about the state of the server. For example, you could pass authentication data though this context to your server functions.
@@ -8,9 +13,7 @@ use std::sync::RwLock;
 /// You should not construct this directly inside components. Instead use the `HasServerContext` trait to get the server context from the scope.
 #[derive(Clone)]
 pub struct DioxusServerContext {
-    shared_context: std::sync::Arc<
-        std::sync::RwLock<anymap::Map<dyn anymap::any::Any + Send + Sync + 'static>>,
-    >,
+    shared_context: std::sync::Arc<std::sync::RwLock<SendSyncAnyMap>>,
     response_parts: std::sync::Arc<std::sync::RwLock<http::response::Parts>>,
     pub(crate) parts: Arc<tokio::sync::RwLock<http::request::Parts>>,
     html_data: Arc<RwLock<HTMLData>>,
@@ -20,7 +23,7 @@ pub struct DioxusServerContext {
 impl Default for DioxusServerContext {
     fn default() -> Self {
         Self {
-            shared_context: std::sync::Arc::new(std::sync::RwLock::new(anymap::Map::new())),
+            shared_context: std::sync::Arc::new(std::sync::RwLock::new(HashMap::new())),
             response_parts: std::sync::Arc::new(RwLock::new(
                 http::response::Response::new(()).into_parts().0,
             )),
@@ -34,11 +37,9 @@ impl Default for DioxusServerContext {
 
 mod server_fn_impl {
     use super::*;
+    use std::any::{Any, TypeId};
     use std::sync::LockResult;
     use std::sync::{PoisonError, RwLockReadGuard, RwLockWriteGuard};
-
-    use anymap::{any::Any, Map};
-    type SendSyncAnyMap = Map<dyn Any + Send + Sync + 'static>;
 
     impl DioxusServerContext {
         /// Create a new server context from a request
@@ -55,17 +56,32 @@ mod server_fn_impl {
 
         /// Clone a value from the shared server context
         pub fn get<T: Any + Send + Sync + Clone + 'static>(&self) -> Option<T> {
-            self.shared_context.read().ok()?.get::<T>().cloned()
+            self.shared_context
+                .read()
+                .ok()?
+                .get(&TypeId::of::<T>())
+                .map(|v| v.downcast_ref::<T>().unwrap().clone())
         }
 
         /// Insert a value into the shared server context
         pub fn insert<T: Any + Send + Sync + 'static>(
-            &mut self,
+            &self,
             value: T,
         ) -> Result<(), PoisonError<RwLockWriteGuard<'_, SendSyncAnyMap>>> {
             self.shared_context
                 .write()
-                .map(|mut map| map.insert(value))
+                .map(|mut map| map.insert(TypeId::of::<T>(), Box::new(value)))
+                .map(|_| ())
+        }
+
+        /// Insert a Boxed `Any` value into the shared server context
+        pub fn insert_any(
+            &self,
+            value: Box<dyn Any + Send + Sync>,
+        ) -> Result<(), PoisonError<RwLockWriteGuard<'_, SendSyncAnyMap>>> {
+            self.shared_context
+                .write()
+                .map(|mut map| map.insert((*value).type_id(), value))
                 .map(|_| ())
         }
 
@@ -232,14 +248,41 @@ impl<T: 'static> std::fmt::Display for NotFoundInServerContext<T> {
 
 impl<T: 'static> std::error::Error for NotFoundInServerContext<T> {}
 
-pub struct FromContext<T: std::marker::Send + std::marker::Sync + Clone + 'static>(pub(crate) T);
+/// Extract a value from the server context provided through the launch builder context or [`DioxusServerContext::insert`]
+///
+/// Example:
+/// ```rust, no_run
+/// use dioxus::prelude::*;
+///
+/// LaunchBuilder::new()
+///     // You can provide context to your whole app (including server functions) with the `with_context` method on the launch builder
+///     .with_context(server_only! {
+///         1234567890u32
+///     })
+///     .launch(app);
+///
+/// #[server]
+/// async fn read_context() -> Result<u32, ServerFnError> {
+///     // You can extract values from the server context with the `extract` function
+///     let FromContext(value) = extract().await?;
+///     Ok(value)
+/// }
+///
+/// fn app() -> Element {
+///     let future = use_resource(read_context);
+///     rsx! {
+///         h1 { "{future:?}" }
+///     }
+/// }
+/// ```
+pub struct FromContext<T: std::marker::Send + std::marker::Sync + Clone + 'static>(pub T);
 
 #[async_trait::async_trait]
 impl<T: Send + Sync + Clone + 'static> FromServerContext for FromContext<T> {
     type Rejection = NotFoundInServerContext<T>;
 
     async fn from_request(req: &DioxusServerContext) -> Result<Self, Self::Rejection> {
-        Ok(Self(req.clone().get::<T>().ok_or({
+        Ok(Self(req.get::<T>().ok_or({
             NotFoundInServerContext::<T>(std::marker::PhantomData::<T>)
         })?))
     }
