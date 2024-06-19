@@ -30,8 +30,8 @@ dioxus = { workspace = true }
 
 [features]
 default = []
-server = ["dioxus-fullstack/server", "dioxus-router/ssr", "dioxus-ssr", "tokio", "http", "dep:axum", "tower-http", "dioxus-hot-reload", "dioxus-cli-config", "tower"]
-web = ["dioxus-fullstack/web", "dioxus-router/web", "dioxus-web"]
+server = ["dioxus-fullstack/server", "dioxus-router/ssr", "dep:dioxus-ssr", "dep:tokio", "dep:http", "dep:axum", "dep:tower-http", "dep:dioxus-hot-reload", "dep:dioxus-cli-config", "dep:tower"]
+web = ["dioxus-fullstack/web", "dioxus-router/web", "dep:dioxus-web"]
 
 [[bench]]
 name = "incremental"

@@ -136,6 +136,10 @@ opt-level = 1
 [profile.cli-dev.package."*"]
 opt-level = 3
 
+# Disable debug assertions to check the released path of core and other packages, but build without optimizations to keep build times quick
+[profile.release-unoptimized]
+inherits = "dev"
+debug-assertions = false
 
 # This is a "virtual package"
 # It is not meant to be published, but is used so "cargo run --example XYZ" works properly
@@ -194,8 +198,8 @@ fullstack = ["dioxus/fullstack"]
 axum = ["dioxus/axum"]
 server = ["dioxus/axum"]
 web = ["dioxus/web"]
-collect-assets = ["manganis"]
-http = ["reqwest", "http-range"]
+collect-assets = ["dep:manganis"]
+http = ["dep:reqwest", "dep:http-range"]
 
 [[example]]
 name = "login_form"

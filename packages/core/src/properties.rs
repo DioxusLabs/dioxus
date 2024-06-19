@@ -243,13 +243,34 @@ impl<'a> SuperFrom<Arguments<'a>, OptionArgumentsFromMarker> for Option<String> 
 }
 
 #[doc(hidden)]
-pub struct OptionHandlerMarker;
+pub struct OptionCallbackMarker<T>(std::marker::PhantomData<T>);
 
-impl<G: 'static, F: FnMut(G) + 'static> SuperFrom<F, OptionHandlerMarker>
-    for Option<EventHandler<G>>
+// Closure can be created from FnMut -> async { anything } or FnMut -> Ret
+impl<
+        Function: FnMut(Args) -> Spawn + 'static,
+        Args: 'static,
+        Spawn: SpawnIfAsync<Marker, Ret> + 'static,
+        Ret: 'static,
+        Marker,
+    > SuperFrom<Function, OptionCallbackMarker<Marker>> for Option<Callback<Args, Ret>>
 {
-    fn super_from(input: F) -> Self {
-        Some(EventHandler::new(input))
+    fn super_from(input: Function) -> Self {
+        Some(Callback::new(input))
+    }
+}
+
+#[test]
+#[allow(unused)]
+fn optional_callback_compiles() {
+    fn compiles() {
+        // Converting from closures (without type hints in the closure works)
+        let callback: Callback<i32, i32> = (|num| num * num).super_into();
+        let callback: Callback<i32, ()> = (|num| async move { println!("{num}") }).super_into();
+
+        // Converting from closures to optional callbacks works
+        let optional: Option<Callback<i32, i32>> = (|num| num * num).super_into();
+        let optional: Option<Callback<i32, ()>> =
+            (|num| async move { println!("{num}") }).super_into();
     }
 }
 

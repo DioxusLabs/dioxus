@@ -1,5 +1,6 @@
 use crate::{
-    any_props::BoxedAnyProps, runtime::Runtime, scope_context::Scope, RenderReturn, VNode,
+    any_props::BoxedAnyProps, nodes::RenderReturn, reactive_context::ReactiveContext,
+    scope_context::Scope, Runtime, VNode,
 };
 use std::{cell::Ref, rc::Rc};
 
@@ -61,6 +62,7 @@ pub struct ScopeState {
     /// During suspense, this component can be rendered in the background multiple times
     pub(crate) last_rendered_node: Option<RenderReturn>,
     pub(crate) props: BoxedAnyProps,
+    pub(crate) reactive_context: ReactiveContext,
 }
 
 impl Drop for ScopeState {

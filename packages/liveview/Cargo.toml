@@ -44,7 +44,7 @@ dioxus = { workspace = true }
 default = ["hot-reload", "multi-thread"]
 axum = ["dep:axum"]
 multi-thread = ["tokio/rt-multi-thread"]
-hot-reload = ["dioxus-hot-reload"]
+hot-reload = ["dep:dioxus-hot-reload"]
 
 [[example]]
 name = "axum"

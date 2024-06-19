@@ -22,7 +22,7 @@
 //!                         listener,
 //!                         axum::Router::new()
 //!                             // Server side render the application, serve static assets, and register server functions
-//!                             .serve_dioxus_application("", ServerConfig::new(app, ()))
+//!                             .serve_dioxus_application(ServerConfig::new(), app)
 //!                             .into_make_service(),
 //!                     )
 //!                     .await
@@ -60,12 +60,13 @@ use axum::{
     http::{Request, Response, StatusCode},
     response::IntoResponse,
 };
-use dioxus_lib::prelude::VirtualDom;
+use dioxus_lib::prelude::{Element, VirtualDom};
 use futures_util::Future;
 use http::header::*;
 
 use std::sync::Arc;
 
+use crate::launch::ContextProviders;
 use crate::prelude::*;
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
@@ -74,9 +75,8 @@ pub trait DioxusRouterExt<S> {
     ///
     /// # Example
     /// ```rust
-    /// use dioxus_lib::prelude::*;
-    /// use dioxus_fullstack::prelude::*;
-    ///
+    /// # use dioxus_lib::prelude::*;
+    /// # use dioxus_fullstack::prelude::*;
     /// #[tokio::main]
     /// async fn main() {
     ///     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
@@ -84,23 +84,49 @@ pub trait DioxusRouterExt<S> {
     ///         .serve(
     ///             axum::Router::new()
     ///                 // Register server functions routes with the default handler
-    ///                 .register_server_fns("")
+    ///                 .register_server_functions()
     ///                 .into_make_service(),
     ///         )
     ///         .await
     ///         .unwrap();
     /// }
     /// ```
-    fn register_server_fns(self) -> Self;
+    fn register_server_functions(self) -> Self
+    where
+        Self: Sized,
+    {
+        self.register_server_functions_with_context(Default::default())
+    }
+
+    /// Registers server functions with some additional context to insert into the [`DioxusServerContext`] for that handler.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use dioxus_lib::prelude::*;
+    /// # use dioxus_fullstack::prelude::*;
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
+    ///     axum::Server::bind(&addr)
+    ///         .serve(
+    ///             axum::Router::new()
+    ///                 // Register server functions routes with the default handler
+    ///                 .register_server_functions_with_context(vec![Box::new(|| 1234567890u32)])
+    ///                 .into_make_service(),
+    ///         )
+    ///         .await
+    ///         .unwrap();
+    /// }
+    /// ```
+    fn register_server_functions_with_context(self, context_providers: ContextProviders) -> Self;
 
     /// Serves the static WASM for your Dioxus application (except the generated index.html).
     ///
     /// # Example
     /// ```rust
-    /// #![allow(non_snake_case)]
-    /// use dioxus_lib::prelude::*;
-    /// use dioxus_fullstack::prelude::*;
-    ///
+    /// # #![allow(non_snake_case)]
+    /// # use dioxus_lib::prelude::*;
+    /// # use dioxus_fullstack::prelude::*;
     /// #[tokio::main]
     /// async fn main() {
     ///     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
@@ -133,10 +159,9 @@ pub trait DioxusRouterExt<S> {
     ///
     /// # Example
     /// ```rust
-    /// #![allow(non_snake_case)]
-    /// use dioxus_lib::prelude::*;
-    /// use dioxus_fullstack::prelude::*;
-    ///
+    /// # #![allow(non_snake_case)]
+    /// # use dioxus_lib::prelude::*;
+    /// # use dioxus_fullstack::prelude::*;
     /// #[tokio::main]
     /// async fn main() {
     ///     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
@@ -144,7 +169,7 @@ pub trait DioxusRouterExt<S> {
     ///         .serve(
     ///             axum::Router::new()
     ///                 // Server side render the application, serve static assets, and register server functions
-    ///                 .serve_dioxus_application("", ServerConfig::new(app, ()))
+    ///                 .serve_dioxus_application(ServeConfig::new(), )
     ///                 .into_make_service(),
     ///         )
     ///         .await
@@ -158,7 +183,7 @@ pub trait DioxusRouterExt<S> {
     fn serve_dioxus_application(
         self,
         cfg: impl Into<ServeConfig>,
-        build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
+        app: fn() -> Element,
     ) -> impl Future<Output = Self> + Send + Sync
     where
         Self: Sized;
@@ -168,12 +193,29 @@ impl<S> DioxusRouterExt<S> for Router<S>
 where
     S: Send + Sync + Clone + 'static,
 {
-    fn register_server_fns(mut self) -> Self {
+    fn register_server_functions_with_context(
+        mut self,
+        context_providers: ContextProviders,
+    ) -> Self {
         use http::method::Method;
+
+        let context_providers = Arc::new(context_providers);
 
         for (path, method) in server_fn::axum::server_fn_paths() {
             tracing::trace!("Registering server function: {} {}", method, path);
-            let handler = move |req| handle_server_fns_inner(path, || {}, req);
+            let context_providers = context_providers.clone();
+            let handler = move |req| {
+                handle_server_fns_inner(
+                    path,
+                    move |server_context| {
+                        for context_provider in context_providers.iter() {
+                            let context = context_provider();
+                            _ = server_context.insert_any(context);
+                        }
+                    },
+                    req,
+                )
+            };
             self = match method {
                 Method::GET => self.route(path, get(handler)),
                 Method::POST => self.route(path, post(handler)),
@@ -234,7 +276,7 @@ where
     fn serve_dioxus_application(
         self,
         cfg: impl Into<ServeConfig>,
-        build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
+        app: fn() -> Element,
     ) -> impl Future<Output = Self> + Send + Sync {
         let cfg = cfg.into();
         async move {
@@ -244,7 +286,7 @@ where
             let mut server = self
                 .serve_static_assets(cfg.assets_path.clone())
                 .await
-                .register_server_fns();
+                .register_server_functions();
 
             #[cfg(all(feature = "hot-reload", debug_assertions))]
             {
@@ -254,7 +296,7 @@ where
 
             server.fallback(get(render_handler).with_state((
                 cfg,
-                Arc::new(build_virtual_dom),
+                Arc::new(move || VirtualDom::new(app)),
                 ssr_state,
             )))
         }
@@ -311,7 +353,7 @@ type AxumHandler<F> = (
 ///         .serve(
 ///             axum::Router::new()
 ///                 // Register server functions, etc.
-///                 // Note you probably want to use `register_server_fns_with_handler`
+///                 // Note you can use `register_server_functions_with_context`
 ///                 // to inject the context into server functions running outside
 ///                 // of an SSR render context.
 ///                 .fallback(get(render_handler_with_context).with_state((
@@ -391,7 +433,7 @@ fn report_err<E: std::fmt::Display>(e: E) -> Response<axum::body::Body> {
 /// A handler for Dioxus server functions. This will run the server function and return the result.
 async fn handle_server_fns_inner(
     path: &str,
-    additional_context: impl Fn() + 'static + Clone + Send,
+    additional_context: impl Fn(&DioxusServerContext) + 'static + Clone + Send,
     req: Request<Body>,
 ) -> impl IntoResponse {
     use server_fn::middleware::Service;
@@ -406,7 +448,7 @@ async fn handle_server_fns_inner(
             server_fn::axum::get_server_fn_service(&path_string)
         {
             let server_context = DioxusServerContext::new(parts);
-            additional_context();
+            additional_context(&server_context);
 
             // store Accepts and Referrer in case we need them for redirect (below)
             let accepts_html = req

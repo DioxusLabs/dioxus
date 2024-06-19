@@ -15,6 +15,7 @@ mod global_context;
 mod mutations;
 mod nodes;
 mod properties;
+mod reactive_context;
 mod render_error;
 mod runtime;
 mod scheduler;
@@ -43,6 +44,7 @@ pub(crate) mod innerlude {
     pub use crate::mutations::*;
     pub use crate::nodes::*;
     pub use crate::properties::*;
+    pub use crate::reactive_context::*;
     pub use crate::render_error::*;
     pub use crate::runtime::{Runtime, RuntimeGuard};
     pub use crate::scheduler::*;
@@ -82,8 +84,9 @@ pub mod prelude {
         use_hook, use_hook_with_cleanup, with_owner, AnyValue, Attribute, Callback, CapturedError,
         Component, ComponentFunction, Context, Element, ErrorBoundary, Event, EventHandler,
         Fragment, HasAttributes, IntoAttributeValue, IntoDynNode, OptionStringFromMarker,
-        Properties, RenderError, Runtime, RuntimeGuard, ScopeId, ScopeState, SuperFrom, SuperInto,
-        SuspendedFuture, SuspenseBoundary, SuspenseContext, SuspenseExtension, Task, Template,
-        TemplateAttribute, TemplateNode, VNode, VNodeInner, VirtualDom,
+        Properties, ReactiveContext, RenderError, Runtime, RuntimeGuard, ScopeId, ScopeState,
+        SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary, SuspenseContext,
+        SuspenseExtension, Task, Template, TemplateAttribute, TemplateNode, VNode, VNodeInner,
+        VirtualDom,
     };
 }

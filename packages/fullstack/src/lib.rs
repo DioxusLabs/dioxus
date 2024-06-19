@@ -51,8 +51,8 @@ pub mod prelude {
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     pub use crate::server_context::{
-        extract, server_context, with_server_context, DioxusServerContext, FromServerContext,
-        ProvideServerContext,
+        extract, server_context, with_server_context, DioxusServerContext, FromContext,
+        FromServerContext, ProvideServerContext,
     };
 
     #[cfg(feature = "server")]

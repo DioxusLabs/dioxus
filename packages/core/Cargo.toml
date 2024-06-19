@@ -40,11 +40,12 @@ version = "0.3.56"
 features = [
     "Document",
     "HtmlElement",
+    "Window"
 ]
 
 [features]
 default = ["drop-virtual-dom"]
-serialize = ["serde"]
+serialize = ["dep:serde"]
 # The drop code can take a large fraction of the total binary size. We don't always need it. On web, the virtual dom can just be forcefully deallocated
 drop-virtual-dom = []
 

@@ -2130,6 +2130,7 @@ dependencies = [
 name = "dioxus"
 version = "0.5.2"
 dependencies = [
+ "axum",
  "criterion 0.3.6",
  "dioxus",
  "dioxus-config-macro",
@@ -2271,6 +2272,7 @@ dependencies = [
 name = "dioxus-config-macro"
 version = "0.5.2"
 dependencies = [
+ "proc-macro2",
  "quote",
 ]
 
@@ -2328,6 +2330,7 @@ dependencies = [
  "quote",
  "rustversion",
  "syn 2.0.60",
+ "tokio",
  "trybuild",
 ]
 
@@ -2779,7 +2782,6 @@ dependencies = [
 name = "dioxus-web"
 version = "0.5.2"
 dependencies = [
- "async-trait",
  "console_error_panic_hook",
  "dioxus",
  "dioxus-core 0.5.2",

@@ -48,7 +48,7 @@ fs_extra = "1.2.0"
 
 [features]
 default = []
-incremental = ["dep:tokio", "chrono", "dioxus-cli-config"]
+incremental = ["dep:tokio", "dep:chrono", "dep:dioxus-cli-config"]
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

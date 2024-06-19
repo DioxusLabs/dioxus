@@ -278,7 +278,7 @@ impl Element {
                         r#"Shorthand element children are not supported.
 To pass children into elements, wrap them in curly braces.
 Like so:
-    div {{ {{children}} }}
+    div { {children} }
 
 "#,
                     ));

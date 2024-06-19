@@ -95,38 +95,19 @@ macro_rules! mod_methods {
         $fn_html_to_rsx:ident;
         $(
             $(#[$attr:meta])*
-            $name:ident $(: $js_name:literal)? $(in $ns:literal)?;
+            $name:ident $(: $(no-$alias:ident)? $js_name:literal)? $(in $ns:literal)?;
         )+
     ) => {
         $(#[$mod_attr])*
         pub mod $mod {
             use super::*;
             $(
-                $(#[$attr])*
-                ///
-                /// ## Usage in rsx
-                ///
-                /// ```rust, ignore
-                /// # use dioxus::prelude::*;
-                #[doc = concat!("let ", stringify!($name), " = \"value\";")]
-                ///
-                /// rsx! {
-                ///     // Attributes need to be under the element they modify
-                ///     div {
-                ///         // Attributes are followed by a colon and then the value of the attribute
-                #[doc = concat!("        ", stringify!($name), ": \"value\"")]
-                ///     }
-                ///     div {
-                ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
-                #[doc = concat!("        ", stringify!($name), ",")]
-                ///     }
-                /// };
-                /// ```
-                $(
-                    #[doc(alias = $js_name)]
-                )?
-                pub const $name: AttributeDiscription = mod_methods! { $name $(: $js_name)? $(in $ns)?; };
-            )*
+                mod_methods! {
+                    @attr
+                    $(#[$attr])*
+                    $name $(: $(no-$alias)? $js_name)? $(in $ns)?;
+                }
+            )+
         }
 
         #[cfg(feature = "hot-reload-context")]
@@ -153,6 +134,65 @@ macro_rules! mod_methods {
         }
 
         impl_extension_attributes![$mod { $($name,)* }];
+    };
+
+    (
+        @attr
+        $(#[$attr:meta])*
+        $name:ident $(: no-alias $js_name:literal)? $(in $ns:literal)?;
+    ) => {
+        $(#[$attr])*
+        ///
+        /// ## Usage in rsx
+        ///
+        /// ```rust, ignore
+        /// # use dioxus::prelude::*;
+        #[doc = concat!("let ", stringify!($name), " = \"value\";")]
+        ///
+        /// rsx! {
+        ///     // Attributes need to be under the element they modify
+        ///     div {
+        ///         // Attributes are followed by a colon and then the value of the attribute
+        #[doc = concat!("        ", stringify!($name), ": \"value\"")]
+        ///     }
+        ///     div {
+        ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
+        #[doc = concat!("        ", stringify!($name), ",")]
+        ///     }
+        /// };
+        /// ```
+        pub const $name: AttributeDiscription = mod_methods! { $name $(: $js_name)? $(in $ns)?; };
+    };
+
+    (
+        @attr
+        $(#[$attr:meta])*
+        $name:ident $(: $js_name:literal)? $(in $ns:literal)?;
+    ) => {
+        $(#[$attr])*
+        ///
+        /// ## Usage in rsx
+        ///
+        /// ```rust, ignore
+        /// # use dioxus::prelude::*;
+        #[doc = concat!("let ", stringify!($name), " = \"value\";")]
+        ///
+        /// rsx! {
+        ///     // Attributes need to be under the element they modify
+        ///     div {
+        ///         // Attributes are followed by a colon and then the value of the attribute
+        #[doc = concat!("        ", stringify!($name), ": \"value\"")]
+        ///     }
+        ///     div {
+        ///         // Or you can use the shorthand syntax if you have a variable in scope that has the same name as the attribute
+        #[doc = concat!("        ", stringify!($name), ",")]
+        ///     }
+        /// };
+        /// ```
+        $(
+            #[doc(alias = $js_name)]
+        )?
+        pub const $name: AttributeDiscription = mod_methods! { $name $(: $js_name)? $(in $ns)?; };
     };
 
     // Rename the incoming ident and apply a custom namespace
@@ -2346,7 +2386,7 @@ mod_methods! {
     transform_origin: "transform-origin";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/type>
-    r#type;
+    r#type: no-alias "type";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/u1>
     u1;

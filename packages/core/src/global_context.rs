@@ -294,7 +294,7 @@ pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
 
 /// Creates a callback that will be run before the component is removed.
 /// This can be used to clean up side effects from the component
-/// (created with [`use_effect`](crate::use_effect)).
+/// (created with [`use_effect`](dioxus::prelude::use_effect)).
 ///
 /// Example:
 /// ```rust

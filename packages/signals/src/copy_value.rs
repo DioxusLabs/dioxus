@@ -21,7 +21,7 @@ pub struct CopyValue<T: 'static, S: Storage<T> = UnsyncStorage> {
     origin_scope: ScopeId,
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "serialize")]
 impl<T: 'static, Store: Storage<T>> serde::Serialize for CopyValue<T, Store>
 where
     T: serde::Serialize,
@@ -31,7 +31,7 @@ where
     }
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "serialize")]
 impl<'de, T: 'static, Store: Storage<T>> serde::Deserialize<'de> for CopyValue<T, Store>
 where
     T: serde::Deserialize<'de>,

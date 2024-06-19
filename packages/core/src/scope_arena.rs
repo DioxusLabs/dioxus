@@ -1,4 +1,5 @@
 use crate::innerlude::{throw_error, RenderError, RenderReturn, ScopeOrder, SuspenseContext};
+use crate::prelude::ReactiveContext;
 use crate::{
     any_props::{AnyProps, BoxedAnyProps},
     innerlude::ScopeState,
@@ -27,15 +28,18 @@ impl VirtualDom {
         let entry = self.scopes.vacant_entry();
         let id = ScopeId(entry.key());
 
+        let scope_runtime = Scope::new(name, id, parent_id, height, suspense_boundary);
+        let reactive_context = ReactiveContext::new_for_scope(&scope_runtime, &self.runtime);
+
         let scope = entry.insert(ScopeState {
             runtime: self.runtime.clone(),
             context_id: id,
             props,
             last_rendered_node: Default::default(),
+            reactive_context,
         });
 
-        self.runtime
-            .create_scope(Scope::new(name, id, parent_id, height, suspense_boundary));
+        self.runtime.create_scope(scope_runtime);
         tracing::trace!("created scope {id:?} with parent {parent_id:?}");
 
         scope
@@ -64,9 +68,11 @@ impl VirtualDom {
 
             let span = tracing::trace_span!("render", scope = %scope.state().name);
             span.in_scope(|| {
-                let mut render_return = props.render();
-                self.handle_element_return(&mut render_return.node, scope_id, &scope.state());
-                render_return
+                scope.reactive_context.reset_and_run_in(|| {
+                    let mut render_return = props.render();
+                    self.handle_element_return(&mut render_return.node, scope_id, &scope.state());
+                    render_return
+                })
             })
         };
 
