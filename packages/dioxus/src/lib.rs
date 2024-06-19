@@ -110,6 +110,10 @@ pub mod prelude {
     #[cfg(feature = "router")]
     #[cfg_attr(docsrs, doc(cfg(feature = "router")))]
     pub use dioxus_router::prelude::*;
+
+    #[cfg(feature = "axum")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
+    pub use axum;
 }
 
 #[cfg(feature = "web")]

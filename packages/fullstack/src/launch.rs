@@ -1,18 +1,21 @@
 //! This module contains the `launch` function, which is the main entry point for dioxus fullstack
 
-use std::any::Any;
+use std::{any::Any, sync::Arc};
 
 use dioxus_lib::prelude::{Element, VirtualDom};
 
 pub use crate::Config;
+pub(crate) type ContextProviders = Arc<
+    Vec<Box<dyn Fn() -> Box<dyn std::any::Any + Send + Sync + 'static> + Send + Sync + 'static>>,
+>;
 
 fn virtual_dom_factory(
     root: fn() -> Element,
-    contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
+    contexts: ContextProviders,
 ) -> impl Fn() -> VirtualDom + 'static {
     move || {
         let mut vdom = VirtualDom::new(root);
-        for context in &contexts {
+        for context in &*contexts {
             vdom.insert_any_root_context(context());
         }
         vdom
@@ -24,15 +27,16 @@ fn virtual_dom_factory(
 #[allow(unused)]
 pub fn launch(
     root: fn() -> Element,
-    contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
+    contexts: Vec<Box<dyn Fn() -> Box<dyn Any + Send + Sync> + Send + Sync>>,
     platform_config: Config,
 ) -> ! {
-    let factory = virtual_dom_factory(root, contexts);
+    let contexts = Arc::new(contexts);
+    let factory = virtual_dom_factory(root, contexts.clone());
     #[cfg(all(feature = "server", not(target_arch = "wasm32")))]
     tokio::runtime::Runtime::new()
         .unwrap()
         .block_on(async move {
-            platform_config.launch_server(factory).await;
+            platform_config.launch_server(factory, contexts).await;
         });
 
     unreachable!("Launching a fullstack app should never return")
@@ -43,7 +47,7 @@ pub fn launch(
 #[allow(unused)]
 pub fn launch(
     root: fn() -> Element,
-    contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
+    contexts: Vec<Box<dyn Fn() -> Box<dyn Any + Send + Sync> + Send + Sync>>,
     platform_config: Config,
 ) {
     let factory = virtual_dom_factory(root, contexts);

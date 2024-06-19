@@ -27,6 +27,7 @@ dioxus-liveview = { workspace = true, optional = true }
 dioxus-ssr ={ workspace = true, optional = true }
 
 serde = { version = "1.0.136", optional = true }
+axum = { workspace = true, optional = true }
 
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "android")))'.dependencies]
 dioxus-hot-reload = { workspace = true, optional = true }
@@ -50,7 +51,7 @@ web = ["dep:dioxus-web", "dioxus-fullstack?/web", "dioxus-static-site-generation
 ssr = ["dep:dioxus-ssr", "dioxus-router?/ssr", "dioxus-config-macro/ssr"]
 liveview = ["dep:dioxus-liveview", "dioxus-config-macro/liveview", "dioxus-router?/liveview"]
 static-generation = ["dep:dioxus-static-site-generation", "dioxus-config-macro/static-generation"]
-axum = ["dioxus-fullstack?/axum", "dioxus-fullstack?/server", "dioxus-static-site-generation?/server", "ssr", "dioxus-liveview?/axum"]
+axum = ["dioxus-fullstack?/axum", "dioxus-fullstack?/server", "dioxus-static-site-generation?/server", "ssr", "dioxus-liveview?/axum", "dep:axum"]
 
 # This feature just disables the no-renderer-enabled warning
 third-party-renderer = []
