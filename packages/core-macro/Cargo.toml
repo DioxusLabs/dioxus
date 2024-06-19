@@ -24,6 +24,7 @@ prettyplease = "0.2.15"
 [dev-dependencies]
 dioxus = { workspace = true }
 rustversion = "1.0"
+tokio = { workspace = true, features = ["full", "time"] }
 trybuild = "1.0"
 
 [features]

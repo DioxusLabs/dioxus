@@ -2323,6 +2323,7 @@ dependencies = [
  "quote",
  "rustversion",
  "syn 2.0.60",
+ "tokio",
  "trybuild",
 ]
 
