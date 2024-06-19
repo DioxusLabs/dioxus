@@ -13,7 +13,7 @@ pub use proc_macro2::TokenStream;
 pub use std::collections::HashMap;
 pub use std::sync::Mutex;
 pub use std::time::SystemTime;
-use std::{collections::HashSet, ffi::OsStr, marker::PhantomData, path::PathBuf};
+use std::{collections::HashSet, ffi::OsStr, fmt::format, marker::PhantomData, path::PathBuf};
 pub use std::{fs, io, path::Path};
 pub use std::{fs::File, io::Read};
 use syn::spanned::Spanned;
@@ -304,13 +304,16 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
 pub fn template_location(old_start: proc_macro2::LineColumn, file: &Path) -> String {
     let line = old_start.line;
     let column = old_start.column + 1;
-    let location = file.display().to_string()
-                                + ":"
-                                + &line.to_string()
-                                + ":"
-                                + &column.to_string()
-                                // the byte index doesn't matter, but dioxus needs it
-                                + ":0";
+    let location = file
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().to_owned())
+        .collect::<Vec<_>>().join("/")
+            + ":"
+            + &line.to_string()
+            + ":"
+            + &column.to_string()
+            // the byte index doesn't matter, but dioxus needs it
+            + ":0";
     location
 }
 
