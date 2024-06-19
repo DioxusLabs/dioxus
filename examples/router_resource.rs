@@ -1,7 +1,7 @@
 //! Example: Updating components with use_resource
 //! -----------------
 //!
-//! This example shows how to use use_reactive to update a component properly
+//! This example shows how to use ReadOnlySignal to make props reactive
 //! when linking to it from the same component, when using use_resource
 
 use dioxus::prelude::*;
