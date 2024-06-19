@@ -89,8 +89,9 @@ module.exports = defineConfig({
       stdout: "pipe",
     },
     {
-      cwd: path.join(process.cwd(), 'fullstack'),
-      command: 'cargo run --package dioxus-cli --release -- serve --platform fullstack',
+      cwd: path.join(process.cwd(), "fullstack"),
+      command:
+        "cargo run --package dioxus-cli --release -- serve --platform fullstack --port 3333",
       port: 3333,
       timeout: 20 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
