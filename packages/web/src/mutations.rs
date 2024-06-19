@@ -79,6 +79,16 @@ impl WebsysDom {
         self.queued_mounted_events.push(id);
     }
 
+    // We originally started with a different `WriteMutations` for collecting templates during hydration.
+    // When profiling the binary size of web applications, this caused a large increase in binary size
+    // because diffing code in core is generic over the `WriteMutation` object.
+    //
+    // The fact that diffing is generic over WritMutations instead of dynamic dispatch or a vec is nice
+    // because we can directly write mutations to sledgehammer and avoid the runtime and binary size overhead
+    // of dynamic dispatch
+    //
+    // Instead we now store a flag to see if we should be writing templates at all if hydration is enabled.
+    // This has a small overhead, but it avoids dynamic dispatch and reduces the binary size
     #[inline]
     fn only_write_templates(&self) -> bool {
         #[cfg(feature = "hydrate")]
