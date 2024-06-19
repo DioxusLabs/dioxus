@@ -944,7 +944,6 @@ impl VirtualDom {
     }
 }
 
-#[cfg(feature = "drop-virtual-dom")]
 impl Drop for VirtualDom {
     fn drop(&mut self) {
         // Drop all scopes in order of height

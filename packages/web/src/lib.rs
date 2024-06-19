@@ -53,7 +53,7 @@ mod rehydrate;
 /// let app_fut = dioxus_web::run_with_props(App, RootProps { name: String::from("foo") });
 /// wasm_bindgen_futures::spawn_local(app_fut);
 /// ```
-pub async fn run(virtual_dom: VirtualDom, web_config: Config) {
+pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
     tracing::info!("Starting up");
 
     let mut dom = virtual_dom;

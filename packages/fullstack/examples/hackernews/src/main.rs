@@ -187,13 +187,13 @@ fn Preview() -> Element {
 }
 
 #[component]
-fn Comment(comment: i64) -> Element {
+fn Comment(comment: ReadOnlySignal<i64>) -> Element {
     let comment: Resource<Result<CommentData, server_fn::ServerFnError>> =
-        use_server_future(&comment, move |comment| async move {
+        use_server_future(use_reactive!(&comment, move |comment| async move {
             let url = format!("{}{}{}.json", BASE_API_URL, ITEM_API, comment);
             let mut comment = reqwest::get(&url).await?.json::<CommentData>().await?;
             Ok(comment)
-        })?;
+        }))?;
 
     let CommentData {
         by,
