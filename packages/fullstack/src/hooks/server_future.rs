@@ -1,6 +1,6 @@
 use dioxus_lib::prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{cell::Cell, future::Future, rc::Rc};
+use std::future::Future;
 
 /// Runs a future with a manual list of dependencies and returns a resource with the result if the future is finished or a suspended error if it is still running.
 ///
@@ -8,7 +8,32 @@ use std::{cell::Cell, future::Future, rc::Rc};
 /// On the server, this will wait until the future is resolved before continuing to render. When the future is resolved, the result will be serialized into the page and hydrated on the client without rerunning the future.
 ///
 ///
-/// Unlike [`use_resource`] dependencies are not automatically tracked because the future may not be run at all on the client
+/// <div class="warning">
+///
+/// Unlike [`use_resource`] dependencies are only tracked inside the function that spawns the async block, not the async block itself.
+///
+/// ```rust
+/// // ❌ The future inside of use_server_future is not reactive
+/// let id = use_signal(|| 0);
+/// use_server_future(move || {
+///     async move {
+///          // But the future is not reactive which means that the future will not subscribe to any reads here
+///          println!("{id}");
+///     }
+/// });
+/// // ✅ The closure that creates the future for use_server_future is reactive
+/// let id = use_signal(|| 0);
+/// use_server_future(move || {
+///     // The closure itself is reactive which means the future will subscribe to any signals you read here
+///     let cloned_id = id();
+///     async move {
+///          // But the future is not reactive which means that the future will not subscribe to any reads here
+///          println!("{cloned_id}");
+///     }
+/// });
+/// ```
+///
+/// </div>
 ///
 /// # Example
 ///
@@ -18,11 +43,10 @@ use std::{cell::Cell, future::Future, rc::Rc};
 ///
 /// fn App() -> Element {
 ///     let mut article_id = use_signal(|| 0);
-///     // `use_server_future` will spawn a task with the given dependencies and return the result of the future
-///     let article = use_server_future((&article_id()), move |article_id| async move {
-///         fetch_article(article_id).await
+///     // `use_server_future` will spawn a task that runs on the server and serializes the result to send to the client.
+///     // The future will rerun any time the
 ///     // Since we bubble up the suspense with `?`, the server will wait for the future to resolve before rendering
-///     })?;
+///     let article = use_server_future(move || fetch_article(article_id()))?;
 ///
 ///     rsx! {
 ///         "{article().unwrap()}"
@@ -30,24 +54,13 @@ use std::{cell::Cell, future::Future, rc::Rc};
 /// }
 /// ```
 #[must_use = "Consider using `cx.spawn` to run a future without reading its value"]
-pub fn use_server_future<T, F, D: Dependency>(
-    dependencies: D,
-    mut future: impl FnMut(D::Out) -> F + 'static,
+pub fn use_server_future<T, F>(
+    mut future: impl FnMut() -> F + 'static,
 ) -> Result<Resource<T>, RenderError>
 where
     T: Serialize + DeserializeOwned + 'static,
     F: Future<Output = T> + 'static,
 {
-    let first_run = use_hook(|| Rc::new(Cell::new(true)));
-    let mut last_state = use_signal(|| {
-        first_run.set(false);
-        dependencies.out()
-    });
-    if !first_run.get() && dependencies.changed(&*last_state.peek()) {
-        last_state.set(dependencies.out());
-    }
-
-    let cb = use_callback(move || future(last_state()));
     let mut first_run = use_hook(|| CopyValue::new(true));
 
     #[cfg(feature = "server")]
@@ -56,10 +69,9 @@ where
     let resource = use_resource(move || {
         #[cfg(feature = "server")]
         let serialize_context = serialize_context.clone();
+        let user_fut = future();
 
         async move {
-            let user_fut = cb.call();
-
             let currently_in_first_run = first_run();
 
             // If this is the first run and we are on the web client, the data might be cached

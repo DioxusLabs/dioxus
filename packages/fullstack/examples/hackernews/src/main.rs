@@ -52,7 +52,7 @@ fn Homepage(story: ReadOnlySignal<PreviewState>) -> Element {
 #[component]
 fn Stories() -> Element {
     let stories: Resource<Result<Vec<i64>, server_fn::ServerFnError>> =
-        use_server_future((), move |_| async move {
+        use_server_future(move || async move {
             let url = format!("{}topstories.json", BASE_API_URL);
             let mut stories_ids = reqwest::get(&url).await?.json::<Vec<i64>>().await?;
             stories_ids.truncate(30);
@@ -72,8 +72,8 @@ fn Stories() -> Element {
 }
 
 #[component]
-fn StoryListing(story: i64) -> Element {
-    let story = use_server_future(&story, get_story)?;
+fn StoryListing(story: ReadOnlySignal<i64>) -> Element {
+    let story = use_server_future(move || get_story(story()))?;
 
     let StoryItem {
         title,
@@ -167,7 +167,7 @@ fn Preview() -> Element {
         return rsx! {"Hover over a story to preview it here"};
     };
 
-    let story = use_server_future(&id, get_story)?;
+    let story = use_server_future(use_reactive!(|id| get_story(id)))?;
 
     let story = story()
         .unwrap()
@@ -187,9 +187,9 @@ fn Preview() -> Element {
 }
 
 #[component]
-fn Comment(comment: ReadOnlySignal<i64>) -> Element {
+fn Comment(comment: i64) -> Element {
     let comment: Resource<Result<CommentData, server_fn::ServerFnError>> =
-        use_server_future(use_reactive!(&comment, move |comment| async move {
+        use_server_future(use_reactive!(|comment| async move {
             let url = format!("{}{}{}.json", BASE_API_URL, ITEM_API, comment);
             let mut comment = reqwest::get(&url).await?.json::<CommentData>().await?;
             Ok(comment)

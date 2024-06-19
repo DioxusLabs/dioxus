@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 fn app() -> Element {
     let mut count = use_signal(|| 0);
     let mut text = use_signal(|| "...".to_string());
-    let server_future = use_server_future((), |_| get_server_data())?;
+    let server_future = use_server_future(get_server_data)?;
 
     rsx! {
         h1 { "High-Five counter: {count}" }

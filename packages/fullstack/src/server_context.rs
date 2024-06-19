@@ -6,9 +6,6 @@ use std::sync::Arc;
 type SendSyncAnyMap =
     std::collections::HashMap<std::any::TypeId, Box<dyn Any + Send + Sync + 'static>>;
 
-type SendSyncAnyMap =
-    std::collections::HashMap<std::any::TypeId, Box<dyn Any + Send + Sync + 'static>>;
-
 /// A shared context for server functions that contains information about the request and middleware state.
 /// This allows you to pass data between your server framework and the server functions. This can be used to pass request information or information about the state of the server. For example, you could pass authentication data though this context to your server functions.
 ///
