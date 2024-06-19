@@ -455,7 +455,7 @@ impl<T: Clone, S: Storage<SignalData<T>> + 'static> Deref for Signal<T, S> {
     }
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "serialize")]
 impl<T: serde::Serialize + 'static, Store: Storage<SignalData<T>>> serde::Serialize
     for Signal<T, Store>
 {
@@ -464,7 +464,7 @@ impl<T: serde::Serialize + 'static, Store: Storage<SignalData<T>>> serde::Serial
     }
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "serialize")]
 impl<'de, T: serde::Deserialize<'de> + 'static, Store: Storage<SignalData<T>>>
     serde::Deserialize<'de> for Signal<T, Store>
 {

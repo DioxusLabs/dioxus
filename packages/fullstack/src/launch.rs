@@ -2,9 +2,9 @@
 
 use std::{any::Any, sync::Arc};
 
-pub use crate::Config;
 use dioxus_lib::prelude::{Element, VirtualDom};
 
+pub use crate::Config;
 pub(crate) type ContextProviders = Arc<
     Vec<Box<dyn Fn() -> Box<dyn std::any::Any + Send + Sync + 'static> + Send + Sync + 'static>>,
 >;
@@ -36,6 +36,55 @@ pub fn launch(
     tokio::runtime::Runtime::new()
         .unwrap()
         .block_on(async move {
+            platform_config.launch_server(factory, contexts).await;
+        });
+
+    unreachable!("Launching a fullstack app should never return")
+}
+
+#[cfg(all(not(feature = "server"), feature = "web"))]
+/// Launch a fullstack app with the given root component, contexts, and config.
+#[allow(unused)]
+pub fn launch(
+    root: fn() -> Element,
+    contexts: Vec<Box<dyn Fn() -> Box<dyn Any + Send + Sync> + Send + Sync>>,
+    platform_config: Config,
+) {
+    let factory = virtual_dom_factory(root, contexts);
+    let cfg = platform_config.web_cfg.hydrate(true);
+    dioxus_web::launch::launch_virtual_dom(factory(), cfg)
+}
+
+#[cfg(all(not(any(feature = "server", feature = "web")), feature = "desktop"))]
+/// Launch a fullstack app with the given root component, contexts, and config.
+#[allow(unused)]
+pub fn launch(
+    root: fn() -> Element,
+    contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
+    platform_config: Config,
+) -> ! {
+    let factory = virtual_dom_factory(root, contexts);
+    let cfg = platform_config.desktop_cfg;
+    dioxus_desktop::launch::launch_virtual_dom(factory(), cfg)
+}
+
+#[cfg(all(
+    not(any(feature = "server", feature = "web", feature = "desktop")),
+    feature = "mobile"
+))]
+/// Launch a fullstack app with the given root component, contexts, and config.
+#[allow(unused)]
+pub fn launch(
+    root: fn() -> Element,
+    contexts: Vec<Box<dyn Fn() -> Box<dyn Any + Send + Sync> + Send + Sync>>,
+    platform_config: Config,
+) -> ! {
+    let contexts = Arc::new(contexts);
+    let factory = virtual_dom_factory(root, contexts.clone());
+    #[cfg(all(feature = "server", not(target_arch = "wasm32")))]
+    tokio::runtime::Runtime::new()
+        .unwrap()
+        .block_on(async move {
             launch_server(platform_config, factory, contexts).await;
         });
 
@@ -50,49 +99,9 @@ pub fn launch(
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any + Send + Sync> + Send + Sync>>,
     platform_config: Config,
 ) {
-    let contexts = Arc::new(contexts);
-    let virtual_dom_factory = {
-        let contexts = contexts.clone();
-        move || {
-            let mut vdom = VirtualDom::new(root);
-            for context in &*contexts {
-                vdom.insert_any_root_context(context());
-            }
-            vdom
-        }
-    };
-
-    #[cfg(all(feature = "server", not(target_arch = "wasm32")))]
-    tokio::runtime::Runtime::new()
-        .unwrap()
-        .block_on(async move {
-            launch_server(platform_config, virtual_dom_factory, contexts).await;
-        });
-
-    #[cfg(not(feature = "server"))]
-    {
-        #[cfg(feature = "web")]
-        {
-            let platform_config = platform_config.web_cfg.hydrate(true);
-            dioxus_web::launch::launch_virtual_dom(virtual_dom_factory(), platform_config);
-        }
-
-        #[cfg(feature = "desktop")]
-        {
-            dioxus_desktop::launch::launch_virtual_dom(
-                virtual_dom_factory(),
-                platform_config.desktop_cfg,
-            )
-        }
-
-        #[cfg(feature = "mobile")]
-        {
-            dioxus_mobile::launch::launch_virtual_dom(
-                virtual_dom_factory(),
-                platform_config.mobile_cfg,
-            )
-        }
-    }
+    let factory = virtual_dom_factory(root, contexts);
+    let cfg = platform_config.mobile_cfg;
+    dioxus_mobile::launch::launch_virtual_dom(factory(), cfg)
 }
 
 #[cfg(feature = "server")]
