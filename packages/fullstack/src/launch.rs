@@ -50,6 +50,7 @@ pub fn launch(
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any + Send + Sync> + Send + Sync>>,
     platform_config: Config,
 ) {
+    let contexts = Arc::new(contexts);
     let factory = virtual_dom_factory(root, contexts);
     let cfg = platform_config.web_cfg.hydrate(true);
     dioxus_web::launch::launch_virtual_dom(factory(), cfg)
@@ -63,6 +64,7 @@ pub fn launch(
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
     platform_config: Config,
 ) -> ! {
+    let contexts = Arc::new(contexts);
     let factory = virtual_dom_factory(root, contexts);
     let cfg = platform_config.desktop_cfg;
     dioxus_desktop::launch::launch_virtual_dom(factory(), cfg)
@@ -81,25 +83,6 @@ pub fn launch(
 ) -> ! {
     let contexts = Arc::new(contexts);
     let factory = virtual_dom_factory(root, contexts.clone());
-    #[cfg(all(feature = "server", not(target_arch = "wasm32")))]
-    tokio::runtime::Runtime::new()
-        .unwrap()
-        .block_on(async move {
-            launch_server(platform_config, factory, contexts).await;
-        });
-
-    unreachable!("Launching a fullstack app should never return")
-}
-
-#[cfg(all(not(feature = "server"), feature = "web"))]
-/// Launch a fullstack app with the given root component, contexts, and config.
-#[allow(unused)]
-pub fn launch(
-    root: fn() -> Element,
-    contexts: Vec<Box<dyn Fn() -> Box<dyn Any + Send + Sync> + Send + Sync>>,
-    platform_config: Config,
-) {
-    let factory = virtual_dom_factory(root, contexts);
     let cfg = platform_config.mobile_cfg;
     dioxus_mobile::launch::launch_virtual_dom(factory(), cfg)
 }
