@@ -78,7 +78,7 @@ impl<T, S: Storage<SignalData<T>>> Readable for ReadOnlySignal<T, S> {
     }
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "serialize")]
 impl<T: serde::Serialize + 'static, Store: Storage<SignalData<T>>> serde::Serialize
     for ReadOnlySignal<T, Store>
 {
@@ -87,7 +87,7 @@ impl<T: serde::Serialize + 'static, Store: Storage<SignalData<T>>> serde::Serial
     }
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "serialize")]
 impl<'de, T: serde::Deserialize<'de> + 'static, Store: Storage<SignalData<T>>>
     serde::Deserialize<'de> for ReadOnlySignal<T, Store>
 {

@@ -8,7 +8,7 @@ pub fn launch(
     root: fn() -> Element,
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
     platform_config: Config,
-) {
+) -> ! {
     #[cfg(feature = "multi-threaded")]
     let mut builder = tokio::runtime::Builder::new_multi_thread();
     #[cfg(not(feature = "multi-threaded"))]
@@ -28,4 +28,6 @@ pub fn launch(
             .launch()
             .await;
     });
+
+    panic!("Launching a liveview app should never return")
 }

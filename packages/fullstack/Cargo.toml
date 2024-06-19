@@ -69,30 +69,30 @@ dioxus = { workspace = true, features = ["fullstack"] }
 
 [features]
 default = ["hot-reload"]
-hot-reload = ["serde_json", "dioxus-hot-reload/serve"]
-web = ["dioxus-web", "web-sys"]
-desktop = ["dioxus-desktop", "server_fn/reqwest", "dioxus_server_macro/reqwest"] 
-mobile = ["dioxus-mobile"]
+hot-reload = ["dep:serde_json", "dioxus-hot-reload/serve"]
+web = ["dep:dioxus-web", "dep:web-sys"]
+desktop = ["dep:dioxus-desktop", "server_fn/reqwest", "dioxus_server_macro/reqwest"] 
+mobile = ["dep:dioxus-mobile"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls"]
-axum = ["dep:axum", "tower-http", "server", "server_fn/axum", "dioxus_server_macro/axum"]
+axum = ["dep:axum", "dep:tower-http", "server", "server_fn/axum", "dioxus_server_macro/axum"]
 static-site-generation = []
 server = [
     "server_fn/ssr",
     "dioxus_server_macro/server",
-    "tokio",
-    "tokio-util",
-    "tokio-stream",
-    "dioxus-ssr",
+    "dep:tokio",
+    "dep:tokio-util",
+    "dep:tokio-stream",
+    "dep:dioxus-ssr",
     "dioxus-ssr/incremental",
-    "tower",
-    "hyper",
-    "http",
-    "tower-layer",
-    "tracing-futures",
-    "pin-project",
-    "thiserror",
-    "dioxus-cli-config"
+    "dep:tower",
+    "dep:hyper",
+    "dep:http",
+    "dep:tower-layer",
+    "dep:tracing-futures",
+    "dep:pin-project",
+    "dep:thiserror",
+    "dep:dioxus-cli-config"
 ]
 
 [package.metadata.docs.rs]

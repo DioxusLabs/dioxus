@@ -55,7 +55,7 @@ impl LaunchBuilder {
     )]
     pub fn new() -> LaunchBuilder<current_platform::Config, ValidContext> {
         LaunchBuilder {
-            launch_fn: current_platform::launch,
+            launch_fn: |root, contexts, cfg| current_platform::launch(root, contexts, cfg),
             contexts: Vec::new(),
             platform_config: None,
         }
@@ -77,7 +77,7 @@ impl LaunchBuilder {
     #[cfg_attr(docsrs, doc(cfg(feature = "desktop")))]
     pub fn desktop() -> LaunchBuilder<dioxus_desktop::Config, UnsendContext> {
         LaunchBuilder {
-            launch_fn: dioxus_desktop::launch::launch,
+            launch_fn: |root, contexts, cfg| dioxus_desktop::launch::launch(root, contexts, cfg),
             contexts: Vec::new(),
             platform_config: None,
         }
@@ -88,7 +88,7 @@ impl LaunchBuilder {
     #[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]
     pub fn fullstack() -> LaunchBuilder<dioxus_fullstack::Config, SendContext> {
         LaunchBuilder {
-            launch_fn: dioxus_fullstack::launch::launch,
+            launch_fn: |root, contexts, cfg| dioxus_fullstack::launch::launch(root, contexts, cfg),
             contexts: Vec::new(),
             platform_config: None,
         }
@@ -99,7 +99,7 @@ impl LaunchBuilder {
     #[cfg_attr(docsrs, doc(cfg(feature = "mobile")))]
     pub fn mobile() -> LaunchBuilder<dioxus_mobile::Config, UnsendContext> {
         LaunchBuilder {
-            launch_fn: dioxus_mobile::launch::launch,
+            launch_fn: |root, contexts, cfg| dioxus_mobile::launch::launch(root, contexts, cfg),
             contexts: Vec::new(),
             platform_config: None,
         }
@@ -188,11 +188,22 @@ impl<Cfg: Default + 'static, ContextFn: ?Sized> LaunchBuilder<Cfg, ContextFn> {
         self
     }
 
+    // Static generation is the only platform that may exit. We can't use the `!` type here
+    #[cfg(any(feature = "static-generation", feature = "web"))]
     /// Launch your application.
     pub fn launch(self, app: fn() -> Element) {
         let cfg = self.platform_config.unwrap_or_default();
 
         (self.launch_fn)(app, self.contexts, cfg)
+    }
+
+    #[cfg(not(any(feature = "static-generation", feature = "web")))]
+    /// Launch your application.
+    pub fn launch(self, app: fn() -> Element) -> ! {
+        let cfg = self.platform_config.unwrap_or_default();
+
+        (self.launch_fn)(app, self.contexts, cfg);
+        unreachable!("Launching an application will never exit")
     }
 }
 
@@ -308,35 +319,46 @@ mod current_platform {
         root: fn() -> dioxus_core::Element,
         contexts: Vec<Box<super::ValidContext>>,
         platform_config: (),
-    ) {
+    ) -> ! {
         #[cfg(feature = "third-party-renderer")]
         panic!("No first party renderer feature enabled. It looks like you are trying to use a third party renderer. You will need to use the launch function from the third party renderer crate.");
 
-        panic!("No platform feature enabled. Please enable one of the following features: liveview, desktop, mobile, web, tui, fullstack to use the launch API.");
+        panic!("No platform feature enabled. Please enable one of the following features: liveview, desktop, mobile, web, tui, fullstack to use the launch API.")
     }
 }
 
-/// Launch your application without any additional configuration. See [`LaunchBuilder`] for more options.
-// If you aren't using a third party renderer and this is not a docs.rs build, generate a warning about no renderer being enabled
-#[cfg_attr(
-    all(not(any(
-        docsrs,
-        feature = "third-party-renderer",
-        feature = "liveview",
-        feature = "desktop",
-        feature = "mobile",
-        feature = "web",
-        feature = "fullstack",
-        feature = "static-generation"
-    ))),
-    deprecated(
-        note = "No renderer is enabled. You must enable a renderer feature on the dioxus crate before calling the launch function.\nAdd `web`, `desktop`, `mobile`, `fullstack`, or `static-generation` to the `features` of dioxus field in your Cargo.toml.\n# Example\n```toml\n# ...\n[dependencies]\ndioxus = { version = \"0.5.0\", features = [\"web\"] }\n# ...\n```"
-    )
-)]
-pub fn launch(app: fn() -> Element) {
-    #[allow(deprecated)]
-    LaunchBuilder::new().launch(app)
+// ! is unstable, so we can't name the type with an alias. Instead we need to generate different variants of items with macros
+macro_rules! impl_launch {
+    ($($return_type:tt),*) => {
+        /// Launch your application without any additional configuration. See [`LaunchBuilder`] for more options.
+        // If you aren't using a third party renderer and this is not a docs.rs build, generate a warning about no renderer being enabled
+        #[cfg_attr(
+            all(not(any(
+                docsrs,
+                feature = "third-party-renderer",
+                feature = "liveview",
+                feature = "desktop",
+                feature = "mobile",
+                feature = "web",
+                feature = "fullstack",
+                feature = "static-generation"
+            ))),
+            deprecated(
+                note = "No renderer is enabled. You must enable a renderer feature on the dioxus crate before calling the launch function.\nAdd `web`, `desktop`, `mobile`, `fullstack`, or `static-generation` to the `features` of dioxus field in your Cargo.toml.\n# Example\n```toml\n# ...\n[dependencies]\ndioxus = { version = \"0.5.0\", features = [\"web\"] }\n# ...\n```"
+            )
+        )]
+        pub fn launch(app: fn() -> Element) -> $($return_type)* {
+            #[allow(deprecated)]
+            LaunchBuilder::new().launch(app)
+        }
+    };
 }
+
+// Static generation is the only platform that may exit. We can't use the `!` type here
+#[cfg(any(feature = "static-generation", feature = "web"))]
+impl_launch!(());
+#[cfg(not(any(feature = "static-generation", feature = "web")))]
+impl_launch!(!);
 
 #[cfg(feature = "web")]
 #[cfg_attr(docsrs, doc(cfg(feature = "web")))]

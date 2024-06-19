@@ -438,7 +438,7 @@ impl ScopeId {
 
     /// Create a subscription that schedules a future render for the reference component. Unlike [`Self::needs_update`], this function will work outside of the dioxus runtime.
     ///
-    /// ## Notice: you should prefer using [`schedule_update_any`]
+    /// ## Notice: you should prefer using [`crate::prelude::schedule_update_any`]
     pub fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
         Runtime::with_scope(*self, |cx| cx.schedule_update()).expect("to be in a dioxus runtime")
     }
