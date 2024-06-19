@@ -86,7 +86,7 @@ impl ToTokens for Element {
                                 name: #name,
                                 namespace: #ns,
                                 value: #value,
-                            },
+                            }
                         }
                     }
 
@@ -141,7 +141,7 @@ impl ToTokens for Element {
                 dioxus_core::TemplateNode::Element {
                     tag: #el_name,
                     namespace: #ns,
-                    attrs: &[ #(#static_attrs)* ],
+                    attrs: &[ #(#static_attrs),* ],
                     children: &[ #(#children),* ],
                 }
             }
@@ -206,7 +206,7 @@ pub enum ElementName {
 impl ToTokens for ElementName {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
-            ElementName::Ident(i) => tokens.append_all(quote! { dioxus_elements::elements::#i }),
+            ElementName::Ident(i) => tokens.append_all(quote! { elements::#i }),
             ElementName::Custom(s) => s.to_tokens(tokens),
         }
     }

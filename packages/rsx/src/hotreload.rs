@@ -24,6 +24,17 @@
 //!   original in place. The idea here is that we need to keep updating the structure of the original
 //!   so that volatile things like hot literals can be updated. We keep the idea of the dynamic nodes
 //!   still baked into the original template but spit out new templates that are updated.
+//!
+//! Future work
+//!
+//! - We've proven that binary patching is feasible but has a longer path to stabilization for all platforms.
+//!   Binary patching is pretty quick, actually, and *might* remove the need to literal hotreloading.
+//!   However, you could imagine a scenario where literal hotreloading would be useful without the
+//!   compiler in the loop. Ideally we can slash most of this code once patching is stable.
+//!
+//! - We could also allow adding arbitrary nodes/attributes at runtime. The template system doesn't
+//!   quite support that, unfortunately, since the number of dynamic nodes and attributes is baked into
+//!   the template, but if that changed we'd be okay.
 
 use std::{collections::HashMap, usize};
 
@@ -252,130 +263,27 @@ impl HotReload {
         let mut node_paths = vec![vec![]; old.node_paths.len()];
 
         for new_node in new.dynamic_nodes() {
-            let score_node = move |old_node: &&BodyNode| {
-                // If they're different enums, they are not the same node
-                if std::mem::discriminant(*old_node) != std::mem::discriminant(new_node) {
-                    return 0;
-                }
+            // Find the best match for the new node - this is done by comparing the dynamic contents of the various nodes to
+            // find the best fit.
+            //
+            // We do this since two components/textnodes/attributes *might* be similar in terms of dynamic contents
+            // but not be the same node.
+            let (old_idx, score) = old_nodes.highest_score(move |old_node: &&BodyNode| {
+                score_dynamic_node(old_node, new_node)
+            })?;
 
-                use BodyNode::*;
+            // Remove it from the stack so we don't match it again - this is O(1)
+            let old_node = old_nodes.remove(old_idx)?;
 
-                match (old_node, new_node) {
-                    (Element(_), Element(_)) => unreachable!("Elements are not dynamic nodes"),
-
-                    (Text(left), Text(right)) => {
-                        // We shouldn't be seeing static text nodes here
-                        assert!(!left.input.is_static() && !right.input.is_static());
-                        left.input.hr_score(&right.input)
-                    }
-
-                    (RawExpr(expa), RawExpr(expb)) if expa == expb => usize::MAX,
-
-                    (Component(a), Component(b)) => {
-                        // First, they need to be the same name, generics, and fields - those can't be added on the fly
-                        if a.name != b.name
-                            || a.generics != b.generics
-                            || a.fields.len() != b.fields.len()
-                        {
-                            return 0;
-                        }
-
-                        // Now, the contents of the fields might've changed
-                        // That's okay... score each one
-                        // we don't actually descend into the children yet...
-                        // If you swapped two components and somehow their signatures are the same but their children are different,
-                        // it might cause an unnecessary rebuild
-                        let mut score = 1;
-
-                        let mut left_fields = a.fields.iter().collect::<Vec<_>>();
-                        left_fields.sort_by(|a, b| a.name.to_string().cmp(&b.name.to_string()));
-
-                        let mut right_fields = b.fields.iter().collect::<Vec<_>>();
-                        right_fields.sort_by(|a, b| a.name.to_string().cmp(&b.name.to_string()));
-
-                        for (left, right) in left_fields.iter().zip(right_fields.iter()) {
-                            let scored = match score_attribute(&left, &right) {
-                                usize::MAX => 3,
-                                a if a == usize::MAX - 1 => 2,
-                                a => a,
-                            };
-
-                            if scored == 0 {
-                                return 0;
-                            }
-
-                            score += scored;
-                        }
-
-                        score
-                    }
-
-                    (ForLoop(a), ForLoop(b)) => {
-                        if a.pat != b.pat || a.expr != b.expr {
-                            return 0;
-                        }
-
-                        // The bodies don't necessarily need to be the same, but we should throw some simple heuristics at them to
-                        // encourage proper selection
-                        let mut score = 1;
-
-                        if a.body.roots.len() != b.body.roots.len() {
-                            score += 1;
-                        }
-
-                        if a.body.node_paths.len() != b.body.node_paths.len() {
-                            score += 1;
-                        }
-
-                        if a.body.attr_paths.len() != b.body.attr_paths.len() {
-                            score += 1;
-                        }
-
-                        score
-                    }
-
-                    (IfChain(a), IfChain(b)) => {
-                        if a.cond != b.cond {
-                            return 0;
-                        }
-
-                        // The bodies don't necessarily need to be the same, but we should throw some simple heuristics at them to
-                        // encourage proper selection
-                        let mut score = 1;
-
-                        if a.then_branch.roots.len() != b.then_branch.roots.len() {
-                            score += 1;
-                        }
-
-                        if a.then_branch.node_paths.len() != b.then_branch.node_paths.len() {
-                            score += 1;
-                        }
-
-                        if a.then_branch.attr_paths.len() != b.then_branch.attr_paths.len() {
-                            score += 1;
-                        }
-
-                        score
-                    }
-
-                    _ => 0,
-                }
-            };
-
-            let (old_idx, score) = old_nodes.highest_score(score_node)?;
-
-            let old_node = old_nodes.remove(old_idx).unwrap();
-
+            // This old node will now need to take on the new path in the new template
             node_paths[old_node.get_dyn_idx()] = new.node_paths[new_node.get_dyn_idx()].clone();
 
+            // But we also need to make sure the new node is taking on the old node's ID
             new_node.set_dyn_idx(old_node.get_dyn_idx());
 
-            // Make sure we descend into the children, and update any ifmts
+            // Make sure we descend into the children, and then record any changed literals
             match (old_node, new_node) {
-                (BodyNode::Element(_), BodyNode::Element(_)) => {
-                    unreachable!("Elements are not dynamic nodes")
-                }
-
+                // If it's text, we might want to hotreload the lits
                 (BodyNode::Text(a), BodyNode::Text(b)) => {
                     // If the contents changed try to reload it
                     if score != usize::MAX {
@@ -387,21 +295,29 @@ impl HotReload {
                     }
                 }
 
+                // We want to hotreload the component literals and the children
                 (BodyNode::Component(a), BodyNode::Component(b)) => {
                     self.hotreload_component_fields::<Ctx>(a, b)?;
                     self.hotreload_body::<Ctx>(&a.children, &b.children)?;
                 }
 
+                // We don't reload the exprs or condition - just the bodies
                 (BodyNode::ForLoop(a), BodyNode::ForLoop(b)) => {
                     self.hotreload_body::<Ctx>(&a.body, &b.body)?;
                 }
 
+                // Ensure the if chains are the same and then hotreload the bodies
+                // We don't handle new chains or "elses" just yet - but feasibly we could allow
+                // for an `else` chain to be added/removed.
+                //
+                // Our ifchain parser would need to be better to support this.
                 (BodyNode::IfChain(a), BodyNode::IfChain(b)) => {
-                    self.hotreload_body::<Ctx>(&a.then_branch, &b.then_branch)?;
+                    self.hotreload_ifchain::<Ctx>(a, b)?;
+                }
 
-                    if a.else_if_branch.is_some() && b.else_if_branch.is_some() {
-                        todo!("else if branches")
-                    }
+                // Just assert we never get these cases - attributes are handled separately
+                (BodyNode::Element(_), BodyNode::Element(_)) => {
+                    unreachable!("Elements are not dynamic nodes")
                 }
 
                 _ => {}
@@ -525,6 +441,115 @@ impl HotReload {
     }
 }
 
+/// todo: write some tests
+fn score_dynamic_node(old_node: &BodyNode, new_node: &BodyNode) -> usize {
+    // If they're different enums, they are not the same node
+    if std::mem::discriminant(old_node) != std::mem::discriminant(new_node) {
+        return 0;
+    }
+
+    use BodyNode::*;
+
+    match (old_node, new_node) {
+        (Element(_), Element(_)) => unreachable!("Elements are not dynamic nodes"),
+
+        (Text(left), Text(right)) => {
+            // We shouldn't be seeing static text nodes here
+            assert!(!left.input.is_static() && !right.input.is_static());
+            left.input.hr_score(&right.input)
+        }
+
+        (RawExpr(expa), RawExpr(expb)) if expa == expb => usize::MAX,
+
+        (Component(a), Component(b)) => {
+            // First, they need to be the same name, generics, and fields - those can't be added on the fly
+            if a.name != b.name || a.generics != b.generics || a.fields.len() != b.fields.len() {
+                return 0;
+            }
+
+            // Now, the contents of the fields might've changed
+            // That's okay... score each one
+            // we don't actually descend into the children yet...
+            // If you swapped two components and somehow their signatures are the same but their children are different,
+            // it might cause an unnecessary rebuild
+            let mut score = 1;
+
+            let mut left_fields = a.fields.iter().collect::<Vec<_>>();
+            left_fields.sort_by(|a, b| a.name.to_string().cmp(&b.name.to_string()));
+
+            let mut right_fields = b.fields.iter().collect::<Vec<_>>();
+            right_fields.sort_by(|a, b| a.name.to_string().cmp(&b.name.to_string()));
+
+            for (left, right) in left_fields.iter().zip(right_fields.iter()) {
+                let scored = match score_attribute(&left, &right) {
+                    usize::MAX => 3,
+                    a if a == usize::MAX - 1 => 2,
+                    a => a,
+                };
+
+                if scored == 0 {
+                    return 0;
+                }
+
+                score += scored;
+            }
+
+            score
+        }
+
+        (ForLoop(a), ForLoop(b)) => {
+            if a.pat != b.pat || a.expr != b.expr {
+                return 0;
+            }
+
+            // The bodies don't necessarily need to be the same, but we should throw some simple heuristics at them to
+            // encourage proper selection
+            let mut score = 1;
+
+            if a.body.roots.len() != b.body.roots.len() {
+                score += 1;
+            }
+
+            if a.body.node_paths.len() != b.body.node_paths.len() {
+                score += 1;
+            }
+
+            if a.body.attr_paths.len() != b.body.attr_paths.len() {
+                score += 1;
+            }
+
+            score
+        }
+
+        (IfChain(a), IfChain(b)) => {
+            if a.cond != b.cond {
+                return 0;
+            }
+
+            // The bodies don't necessarily need to be the same, but we should throw some simple heuristics at them to
+            // encourage proper selection
+            let mut score = 1;
+
+            if a.then_branch.roots.len() != b.then_branch.roots.len() {
+                score += 1;
+            }
+
+            if a.then_branch.node_paths.len() != b.then_branch.node_paths.len() {
+                score += 1;
+            }
+
+            if a.then_branch.attr_paths.len() != b.then_branch.attr_paths.len() {
+                score += 1;
+            }
+
+            score
+        }
+
+        _ => 0,
+    }
+}
+
+/// todo: write some tests
 fn score_attribute(old_attr: &Attribute, new_attr: &Attribute) -> usize {
     if old_attr.name != new_attr.name {
         return 0;

@@ -57,16 +57,17 @@ mod location;
 mod node;
 mod reload_stack;
 mod rsx_call;
-
+mod scoring;
+mod utils;
 // pub(crate) mod context;
 
 // Re-export the namespaces into each other
 pub use body::TemplateBody;
-// pub use context::{CallBodyContexta, DynamicContext};
 pub use diagnostics::Diagnostics;
 pub use ifmt::*;
 pub use node::*;
 pub use rsx_call::*;
+pub use utils::*;
 
 #[cfg(feature = "hot_reload")]
 pub mod hot_reload;
@@ -75,32 +76,9 @@ pub mod hot_reload;
 use dioxus_core::{TemplateAttribute, TemplateNode};
 #[cfg(feature = "hot_reload")]
 pub use hot_reload::HotReloadingContext;
-#[cfg(feature = "hot_reload")]
-use internment::Intern;
 
-use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
-use std::{fmt::Debug, hash::Hash};
 use syn::{
     parse::{Parse, ParseStream},
     Result, Token,
 };
-
-#[cfg(feature = "hot_reload")]
-// interns a object into a static object, resusing the value if it already exists
-pub(crate) fn intern<T: Eq + Hash + Send + Sync + ?Sized + 'static>(
-    s: impl Into<Intern<T>>,
-) -> &'static T {
-    s.into().as_ref()
-}
-
-pub trait PrettyUnparse {
-    fn pretty_unparse(&self) -> String;
-}
-
-impl PrettyUnparse for TokenStream2 {
-    fn pretty_unparse(&self) -> String {
-        let parsed = syn::parse2::<syn::Expr>(self.clone()).unwrap();
-        prettier_please::unparse_expr(&parsed)
-    }
-}

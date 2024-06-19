@@ -90,6 +90,7 @@ fn how_do_spans_work_again() {
 
     let span = Span::call_site();
     dbg!(span.start(), span.end());
+    println!("{:#?}", span);
 }
 
 #[test]
@@ -247,6 +248,8 @@ fn complex_kitchen_sink() {
 
     let cb: CallBody = syn::parse2(item).unwrap();
 }
+
+// use dioxus_rsx::utils::PrettyUnparse;
 
 #[test]
 fn attrs_expand() {

@@ -84,7 +84,7 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
             .indent
             .count_indents(writer.src[rsx_start.line - 1]);
 
-        write_body(&mut writer, &body);
+        write_body(&mut writer, &body.body);
 
         // writing idents leaves the final line ended at the end of the last ident
         if writer.out.buf.contains('\n') {
@@ -107,8 +107,8 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
         let end = byte_offset(contents, span.end()) - 1;
 
         // Rustfmt will remove the space between the macro and the opening paren if the macro is a single expression
-        let body_is_solo_expr = body.roots.len() == 1
-            && matches!(body.roots[0], BodyNode::RawExpr(_) | BodyNode::Text(_));
+        let body_is_solo_expr = body.body.roots.len() == 1
+            && matches!(body.body.roots[0], BodyNode::RawExpr(_) | BodyNode::Text(_));
 
         if formatted.len() <= 80 && !formatted.contains('\n') && !body_is_solo_expr {
             formatted = format!(" {formatted} ");
