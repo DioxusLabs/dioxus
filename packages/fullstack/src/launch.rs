@@ -4,15 +4,16 @@ use std::{any::Any, sync::Arc};
 
 use dioxus_lib::prelude::{Element, VirtualDom};
 
+use crate::prelude::ContextProviders;
 pub use crate::Config;
 
 fn virtual_dom_factory(
     root: fn() -> Element,
-    contexts: Arc<Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>>,
+    contexts: ContextProviders,
 ) -> impl Fn() -> VirtualDom + 'static {
     move || {
         let mut vdom = VirtualDom::new(root);
-        for context in &contexts {
+        for context in &*contexts {
             vdom.insert_any_root_context(context());
         }
         vdom
@@ -24,7 +25,7 @@ fn virtual_dom_factory(
 #[allow(unused)]
 pub fn launch(
     root: fn() -> Element,
-    contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
+    contexts: Vec<Box<dyn Fn() -> Box<dyn Any + Send + Sync> + Send + Sync>>,
     platform_config: Config,
 ) -> ! {
     let contexts = Arc::new(contexts);
