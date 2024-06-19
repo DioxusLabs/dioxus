@@ -210,7 +210,7 @@ where
                     move |server_context| {
                         for context_provider in context_providers.iter() {
                             let context = context_provider();
-                            _ = server_context.insert_any(context);
+                            server_context.insert_any(context);
                         }
                     },
                     req,

@@ -1,4 +1,3 @@
-use crate::html_storage::HTMLData;
 use parking_lot::RwLock;
 use std::any::Any;
 use std::collections::HashMap;
@@ -16,7 +15,6 @@ pub struct DioxusServerContext {
     shared_context: std::sync::Arc<RwLock<SendSyncAnyMap>>,
     response_parts: std::sync::Arc<RwLock<http::response::Parts>>,
     pub(crate) parts: Arc<RwLock<http::request::Parts>>,
-    html_data: Arc<RwLock<HTMLData>>,
 }
 
 #[allow(clippy::derivable_impls)]
@@ -28,7 +26,6 @@ impl Default for DioxusServerContext {
                 http::response::Response::new(()).into_parts().0,
             )),
             parts: std::sync::Arc::new(RwLock::new(http::request::Request::new(()).into_parts().0)),
-            html_data: Default::default(),
         }
     }
 }
@@ -37,8 +34,6 @@ mod server_fn_impl {
     use super::*;
     use parking_lot::{RwLockReadGuard, RwLockWriteGuard};
     use std::any::{Any, TypeId};
-    use std::sync::LockResult;
-    use std::sync::PoisonError;
 
     impl DioxusServerContext {
         /// Create a new server context from a request
@@ -49,7 +44,6 @@ mod server_fn_impl {
                 response_parts: std::sync::Arc::new(RwLock::new(
                     http::response::Response::new(()).into_parts().0,
                 )),
-                html_data: Default::default(),
             }
         }
 
@@ -62,7 +56,6 @@ mod server_fn_impl {
                 response_parts: std::sync::Arc::new(RwLock::new(
                     http::response::Response::new(()).into_parts().0,
                 )),
-                html_data: Default::default(),
             }
         }
 
@@ -75,25 +68,17 @@ mod server_fn_impl {
         }
 
         /// Insert a value into the shared server context
-        pub fn insert<T: Any + Send + Sync + 'static>(
-            &self,
-            value: T,
-        ) -> Result<(), PoisonError<RwLockWriteGuard<'_, SendSyncAnyMap>>> {
+        pub fn insert<T: Any + Send + Sync + 'static>(&self, value: T) {
             self.shared_context
                 .write()
-                .insert(TypeId::of::<T>(), Box::new(value))
-                .map(|_| ())
+                .insert(TypeId::of::<T>(), Box::new(value));
         }
 
         /// Insert a Boxed `Any` value into the shared server context
-        pub fn insert_any(
-            &self,
-            value: Box<dyn Any + Send + Sync>,
-        ) -> Result<(), PoisonError<RwLockWriteGuard<'_, SendSyncAnyMap>>> {
+        pub fn insert_any(&self, value: Box<dyn Any + Send + Sync>) {
             self.shared_context
                 .write()
-                .insert((*value).type_id(), value)
-                .map(|_| ())
+                .insert((*value).type_id(), value);
         }
 
         /// Get the response parts from the server context
