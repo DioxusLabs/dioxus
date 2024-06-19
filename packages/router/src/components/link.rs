@@ -197,7 +197,7 @@ impl Debug for LinkProps {
 /// # let _ = vdom.rebuild();
 /// # assert_eq!(
 /// #     dioxus_ssr::render(&vdom),
-/// #     r#"<a href="/" dioxus-prevent-default="" class="link_class active" id="link_id" rel="link_rel" target="_blank">A fully configured link</a>"#
+/// #     r#"<a href="/" dioxus-prevent-default="" class="link_class active" rel="link_rel" target="_blank" aria-current="page" id="link_id">A fully configured link</a>"#
 /// # );
 /// ```
 #[allow(non_snake_case)]
@@ -254,6 +254,8 @@ pub fn Link(props: LinkProps) -> Element {
         Some(class_)
     };
 
+    let aria_current = (href == current_url).then_some("page");
+
     let tag_target = new_tab.then_some("_blank");
 
     let is_external = matches!(parsed_route, NavigationTarget::External(_));
@@ -288,6 +290,7 @@ pub fn Link(props: LinkProps) -> Element {
             class,
             rel,
             target: tag_target,
+            aria_current,
             ..attributes,
             {children}
         }
