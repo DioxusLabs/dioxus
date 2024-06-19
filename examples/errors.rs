@@ -19,7 +19,7 @@ fn Simple() -> Element {
     rsx! {
         GoBackButton { "Home" }
         ErrorBoundary {
-            handle_error: |error: &[CapturedError]| rsx! {
+            handle_error: |error: ErrorContext| rsx! {
                 h1 { "An error occurred" }
                 pre { "{error:#?}" }
             },
@@ -52,10 +52,10 @@ fn Show() -> Element {
         GoBackButton { "Home" }
         div {
             ErrorBoundary {
-                handle_error: |errors: &[CapturedError]| {
+                handle_error: |errors: ErrorContext| {
                     rsx! {
-                        for error in errors {
-                            if let Some(error) = error.visualize() {
+                        for error in errors.errors() {
+                            if let Some(error) = error.show() {
                                 {error}
                             } else {
                                 pre {
@@ -109,7 +109,7 @@ fn Panic() -> Element {
     rsx! {
         GoBackButton { "Home" }
         ErrorBoundary {
-            handle_error: |errors: &[CapturedError]| rsx! {
+            handle_error: |errors: ErrorContext| rsx! {
                 h1 { "Another error occurred" }
                 pre { "{errors:#?}" }
             },

@@ -56,8 +56,7 @@ impl SuspendedFuture {
     }
 }
 
-/// A boundary that will capture any errors from child components
-/// NOTE: this will not prevent rendering in child components. [`FrozenContext`] should be used instead.
+/// A context with information about suspended components
 #[derive(Debug, Clone)]
 pub struct SuspenseContext {
     inner: Rc<SuspenseBoundaryInner>,
@@ -130,7 +129,7 @@ pub struct SuspenseBoundaryInner {
     id: Cell<ScopeId>,
 }
 
-/// Provides context methods to [`Result<T, RenderError>`] to show loading indicators
+/// Provides context methods to [`Result<T, RenderError>`] to show loading indicators for suspended results
 ///
 /// This trait is sealed and cannot be implemented outside of dioxus-core
 pub trait SuspenseExtension<T>: private::Sealed {

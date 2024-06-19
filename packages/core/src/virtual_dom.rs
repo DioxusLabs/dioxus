@@ -3,13 +3,14 @@
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
 use crate::innerlude::Work;
+use crate::prelude::ErrorContext;
 use crate::Task;
 use crate::{
     any_props::AnyProps,
     arena::ElementId,
     innerlude::{
-        ElementRef, ErrorBoundary, NoOpMutations, SchedulerMsg, ScopeOrder, ScopeState, VNodeMount,
-        VProps, WriteMutations,
+        ElementRef, NoOpMutations, SchedulerMsg, ScopeOrder, ScopeState, VNodeMount, VProps,
+        WriteMutations,
     },
     nodes::{Template, TemplateId},
     runtime::{Runtime, RuntimeGuard},
@@ -333,7 +334,7 @@ impl VirtualDom {
 
         // Unlike react, we provide a default error boundary that just renders the error as a string
         root.state()
-            .provide_context(ErrorBoundary::new_in_scope(ScopeId::ROOT));
+            .provide_context(ErrorContext::new(Vec::new(), ScopeId::ROOT));
 
         // the root element is always given element ID 0 since it's the container for the entire tree
         dom.elements.insert(None);

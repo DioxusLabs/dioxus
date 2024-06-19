@@ -82,11 +82,11 @@ pub mod prelude {
         schedule_update_any, spawn, spawn_forever, spawn_isomorphic, suspend, throw_error,
         try_consume_context, use_after_render, use_before_render, use_drop, use_error_boundary,
         use_hook, use_hook_with_cleanup, with_owner, AnyValue, Attribute, Callback, CapturedError,
-        Component, ComponentFunction, Context, Element, ErrorBoundary, Event, EventHandler,
-        Fragment, HasAttributes, IntoAttributeValue, IntoDynNode, OptionStringFromMarker,
-        Properties, ReactiveContext, RenderError, Runtime, RuntimeGuard, ScopeId, ScopeState,
-        SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary, SuspenseContext,
-        SuspenseExtension, Task, Template, TemplateAttribute, TemplateNode, VNode, VNodeInner,
-        VirtualDom,
+        Component, ComponentFunction, Context, Element, ErrorBoundary, ErrorContext, Event,
+        EventHandler, Fragment, HasAttributes, IntoAttributeValue, IntoDynNode,
+        OptionStringFromMarker, Properties, ReactiveContext, RenderError, Runtime, RuntimeGuard,
+        ScopeId, ScopeState, SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary,
+        SuspenseContext, SuspenseExtension, Task, Template, TemplateAttribute, TemplateNode, VNode,
+        VNodeInner, VirtualDom,
     };
 }

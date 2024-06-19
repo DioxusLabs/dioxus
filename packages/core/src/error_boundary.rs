@@ -39,28 +39,8 @@ impl Display for CapturedPanic {
 impl Error for CapturedPanic {}
 
 /// Provide an error boundary to catch errors from child components
-pub fn use_error_boundary() -> ErrorBoundary {
-    use_hook(|| provide_context(ErrorBoundary::new()))
-}
-
-/// A boundary that will capture any errors from child components
-#[derive(Debug, Clone, Default)]
-pub struct ErrorBoundary {
-    inner: Rc<ErrorBoundaryInner>,
-}
-
-/// A boundary that will capture any errors from child components
-pub(crate) struct ErrorBoundaryInner {
-    errors: RefCell<Vec<CapturedError>>,
-    id: ScopeId,
-}
-
-impl Debug for ErrorBoundaryInner {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ErrorBoundaryInner")
-            .field("error", &self.errors)
-            .finish()
-    }
+pub fn use_error_boundary() -> ErrorContext {
+    use_hook(|| provide_context(ErrorContext::new(Vec::new(), current_scope_id().unwrap())))
 }
 
 /// A trait for any type that can be downcast to a concrete type and implements Debug. This is automatically implemented for all types that implement Any + Debug.
@@ -144,7 +124,7 @@ where
             std::result::Result::Ok(value) => Ok(value),
             Err(error) => {
                 let mut error: CapturedError = error.into();
-                error.context.push(Rc::new(ErrorContext {
+                error.context.push(Rc::new(AdditionalErrorContext {
                     backtrace: Backtrace::capture(),
                     context: Box::new(context()),
                     scope: current_scope_id(),
@@ -204,15 +184,61 @@ impl<T: Any + Error> AnyError for T {
     }
 }
 
+/// A context with information about suspended components
+#[derive(Debug, Clone)]
+pub struct ErrorContext {
+    errors: Rc<RefCell<Vec<CapturedError>>>,
+    id: ScopeId,
+}
+
+impl PartialEq for ErrorContext {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.errors, &other.errors)
+    }
+}
+
+impl ErrorContext {
+    /// Create a new suspense boundary in a specific scope
+    pub(crate) fn new(errors: Vec<CapturedError>, id: ScopeId) -> Self {
+        Self {
+            errors: Rc::new(RefCell::new(errors)),
+            id,
+        }
+    }
+
+    /// Get all errors thrown from child components
+    pub fn errors(&self) -> Ref<[CapturedError]> {
+        Ref::map(self.errors.borrow(), |errors| errors.as_slice())
+    }
+
+    /// Get the Element from the first error that can be shown
+    pub fn show(&self) -> Option<Element> {
+        self.errors.borrow().iter().find_map(|task| task.show())
+    }
+
+    /// Push an error into this Error Boundary
+    pub fn insert_error(&self, error: CapturedError) {
+        self.errors.borrow_mut().push(error);
+        if self.id != ScopeId::ROOT {
+            self.id.needs_update();
+        }
+    }
+
+    /// Clear all errors from this Error Boundary
+    pub fn clear_errors(&self) {
+        self.errors.borrow_mut().clear();
+    }
+}
+
 /// Errors can have additional context added as they bubble up the render tree
 /// This context can be used to provide additional information to the user
-struct ErrorContext {
+struct AdditionalErrorContext {
     backtrace: Backtrace,
     context: Box<dyn Display>,
     scope: Option<ScopeId>,
 }
 
-impl Debug for ErrorContext {
+impl Debug for AdditionalErrorContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ErrorContext")
             .field("backtrace", &self.backtrace)
@@ -221,9 +247,9 @@ impl Debug for ErrorContext {
     }
 }
 
-impl Display for ErrorContext {
+impl Display for AdditionalErrorContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let ErrorContext {
+        let AdditionalErrorContext {
             backtrace,
             context,
             scope,
@@ -266,7 +292,7 @@ pub struct CapturedError {
     pub(crate) render: VNode,
 
     /// Additional context that was added to the error
-    context: Vec<Rc<ErrorContext>>,
+    context: Vec<Rc<AdditionalErrorContext>>,
 }
 
 impl Debug for CapturedError {
@@ -333,7 +359,7 @@ impl CapturedError {
     }
 
     /// Get a VNode representation of the error if the error provides one
-    pub fn visualize(&self) -> Option<Element> {
+    pub fn show(&self) -> Option<Element> {
         if self.render == VNode::placeholder() {
             None
         } else {
@@ -374,54 +400,9 @@ impl CapturedError {
     }
 }
 
-impl Default for ErrorBoundaryInner {
-    fn default() -> Self {
-        Self {
-            errors: RefCell::new(Vec::new()),
-            id: current_scope_id()
-                .expect("Cannot create an error boundary outside of a component's scope."),
-        }
-    }
-}
-
-impl ErrorBoundary {
-    /// Create a new error boundary
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Create a new error boundary in the current scope
-    pub(crate) fn new_in_scope(scope: ScopeId) -> Self {
-        Self {
-            inner: Rc::new(ErrorBoundaryInner {
-                errors: RefCell::new(Vec::new()),
-                id: scope,
-            }),
-        }
-    }
-
-    /// Push an error into this Error Boundary
-    pub fn insert_error(&self, error: CapturedError) {
-        self.inner.errors.borrow_mut().push(error);
-        if self.inner.id != ScopeId::ROOT {
-            self.inner.id.needs_update();
-        }
-    }
-
-    /// Clear all errors from this Error Boundary
-    pub fn clear_errors(&self) {
-        self.inner.errors.borrow_mut().clear();
-    }
-
-    /// Return any errors that have been captured by this error boundary
-    pub fn errors(&self) -> Ref<[CapturedError]> {
-        Ref::map(self.inner.errors.borrow(), |errors| errors.as_slice())
-    }
-}
-
 pub(crate) fn throw_into(error: impl Into<CapturedError>, scope: ScopeId) {
     let error = error.into();
-    if let Some(cx) = scope.consume_context::<ErrorBoundary>() {
+    if let Some(cx) = scope.consume_context::<ErrorContext>() {
         cx.insert_error(error)
     } else {
         tracing::error!(
@@ -433,14 +414,14 @@ pub(crate) fn throw_into(error: impl Into<CapturedError>, scope: ScopeId) {
 
 #[allow(clippy::type_complexity)]
 #[derive(Clone)]
-pub struct ErrorHandler(Rc<dyn Fn(&[CapturedError]) -> Element>);
-impl<F: Fn(&[CapturedError]) -> Element + 'static> From<F> for ErrorHandler {
+pub struct ErrorHandler(Rc<dyn Fn(ErrorContext) -> Element>);
+impl<F: Fn(ErrorContext) -> Element + 'static> From<F> for ErrorHandler {
     fn from(value: F) -> Self {
         Self(Rc::new(value))
     }
 }
 
-fn default_handler(errors: &[CapturedError]) -> Element {
+fn default_handler(errors: ErrorContext) -> Element {
     static TEMPLATE: Template = Template {
         name: "error_handle.rs:42:5:884",
         roots: &[TemplateNode::Element {
@@ -460,6 +441,7 @@ fn default_handler(errors: &[CapturedError]) -> Element {
         None,
         TEMPLATE,
         Box::new([errors
+            .errors()
             .iter()
             .map(|e| {
                 static TEMPLATE: Template = Template {
@@ -629,7 +611,7 @@ impl<
 /// # fn ThrowsError() -> Element { todo!() }
 /// rsx! {
 ///     ErrorBoundary {
-///         handle_error: |errors: &[CapturedError]| rsx! { "Oops, we encountered an error. Please report {errors[0]} to the developer of this application" },
+///         handle_error: |errors: ErrorContext| rsx! { "Oops, we encountered an error. Please report {errors[0]} to the developer of this application" },
 ///         ThrowsError {}
 ///     }
 /// };
@@ -644,8 +626,8 @@ impl<
 pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
     let error_boundary = use_error_boundary();
     let errors = error_boundary.errors();
-    match &*errors {
-        [] => std::result::Result::Ok({
+    if errors.is_empty() {
+        std::result::Result::Ok({
             static TEMPLATE: Template = Template {
                 name: "examples/error_handle.rs:81:17:2342",
                 roots: &[TemplateNode::Dynamic { id: 0usize }],
@@ -658,7 +640,8 @@ pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
                 Box::new([(props.children).into_dyn_node()]),
                 Default::default(),
             )
-        }),
-        errors => (props.handle_error.0)(errors),
+        })
+    } else {
+        (props.handle_error.0)(error_boundary.clone())
     }
 }
