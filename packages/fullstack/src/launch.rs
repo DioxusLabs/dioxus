@@ -50,7 +50,7 @@ pub fn launch(
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any + Send + Sync> + Send + Sync>>,
     platform_config: Config,
 ) {
-    let factory = virtual_dom_factory(root, contexts);
+    let factory = virtual_dom_factory(root, Arc::new(contexts));
     let cfg = platform_config.web_cfg.hydrate(true);
     dioxus_web::launch::launch_virtual_dom(factory(), cfg)
 }
@@ -63,7 +63,7 @@ pub fn launch(
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
     platform_config: Config,
 ) -> ! {
-    let factory = virtual_dom_factory(root, contexts);
+    let factory = virtual_dom_factory(root, Arc::new(contexts));
     let cfg = platform_config.desktop_cfg;
     dioxus_desktop::launch::launch_virtual_dom(factory(), cfg)
 }
@@ -79,7 +79,7 @@ pub fn launch(
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
     platform_config: Config,
 ) {
-    let factory = virtual_dom_factory(root, contexts);
+    let factory = virtual_dom_factory(root, Arc::new(contexts));
     let cfg = platform_config.mobile_cfg;
     dioxus_mobile::launch::launch_virtual_dom(factory(), cfg)
 }
