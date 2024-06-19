@@ -37,23 +37,6 @@ pub mod __private {
     /// The environment variable that stores the CLIs serve configuration.
     /// We use this to communicate between the CLI and the server for fullstack applications.
     pub const SERVE_ENV: &str = "DIOXUS_SERVE_CONFIG";
-
-    #[cfg(feature = "cli")]
-    pub fn save_serve_settings(config: &crate::ServeArguments) -> ServeDropGuard {
-        std::env::set_var(SERVE_ENV, serde_json::to_string(config).unwrap());
-        ServeDropGuard
-    }
-
-    #[cfg(feature = "cli")]
-    /// A guard that removes the serve settings from the environment when dropped.
-    pub struct ServeDropGuard;
-
-    #[cfg(feature = "cli")]
-    impl Drop for ServeDropGuard {
-        fn drop(&mut self) {
-            std::env::remove_var(SERVE_ENV);
-        }
-    }
 }
 
 /// An error that occurs when the dioxus CLI was not used to build the application.
