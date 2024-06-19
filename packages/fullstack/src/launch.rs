@@ -36,7 +36,7 @@ pub fn launch(
     tokio::runtime::Runtime::new()
         .unwrap()
         .block_on(async move {
-            platform_config.launch_server(factory, contexts).await;
+            launch_server(platform_config, factory, contexts).await;
         });
 
     unreachable!("Launching a fullstack app should never return")

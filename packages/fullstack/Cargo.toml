@@ -94,6 +94,7 @@ server = [
     "dep:pin-project",
     "dep:thiserror",
     "dep:dioxus-cli-config",
+    "dep:clap",
     "dioxus-cli-config/cli"
 ]
 
