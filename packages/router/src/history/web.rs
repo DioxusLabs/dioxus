@@ -145,7 +145,16 @@ where
 
     fn full_path(&self, state: &R) -> String {
         match &self.prefix {
-            None => format!("{state}"),
+            None => {
+                // NB. `state.to_string()` may return `""`, which is a relative path. `full_path`
+                // must be absolute, so special-case that to `"/"`.
+                let state_str = state.to_string();
+                if state_str.is_empty() {
+                    "/".to_string()
+                } else {
+                    state_str
+                }
+            }
             Some(prefix) => format!("{prefix}{state}"),
         }
     }

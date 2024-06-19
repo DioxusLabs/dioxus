@@ -174,7 +174,7 @@ fn with_active_class_active() {
 
     let expected = format!(
         "<h1>App</h1><a {href} {default} {class}>Link</a>",
-        href = r#"href="/""#,
+        href = r#"href="""#,
         default = r#"dioxus-prevent-default="onclick""#,
         class = r#"class="test_class active_class""#,
     );
