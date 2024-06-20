@@ -32,7 +32,7 @@ impl Default for Config {
             #[cfg(feature = "server")]
             server_fn_route: "",
             #[cfg(feature = "server")]
-            addr: std::net::SocketAddr::from(([127, 0, 0, 1], 8080)),
+            addr: std::net::SocketAddr::from(([0, 0, 0, 0], 8080)),
             #[cfg(feature = "server")]
             server_cfg: ServeConfigBuilder::new(),
             #[cfg(feature = "web")]
@@ -116,9 +116,12 @@ impl Config {
     pub async fn launch_server(
         self,
         build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
+        context_providers: crate::launch::ContextProviders,
     ) {
+        use std::any::Any;
+
         let addr = self.addr;
-        println!("Listening on {}", addr);
+        println!("Listening on http://{}", addr);
         let cfg = self.server_cfg.build();
         let server_fn_route = self.server_fn_route;
 
@@ -129,7 +132,8 @@ impl Config {
             use tower::ServiceBuilder;
 
             let ssr_state = SSRState::new(&cfg);
-            let router = axum::Router::new().register_server_fns();
+            let router =
+                axum::Router::new().register_server_functions_with_context(context_providers);
             #[cfg(not(any(feature = "desktop", feature = "mobile")))]
             let router = {
                 let mut router = router.serve_static_assets(cfg.assets_path.clone()).await;

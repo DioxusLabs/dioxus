@@ -2,8 +2,8 @@ use dioxus::prelude::*;
 use dioxus_core::ElementId;
 use std::rc::Rc;
 
-#[test]
-fn values_memoize_in_place() {
+#[tokio::test]
+async fn values_memoize_in_place() {
     thread_local! {
         static DROP_COUNT: std::cell::RefCell<usize> = const { std::cell::RefCell::new(0) };
     }
@@ -20,9 +20,14 @@ fn values_memoize_in_place() {
         let mut count = use_signal(|| 0);
         let x = CountsDrop;
 
-        if generation() < 15 {
-            count += 1;
-        }
+        use_hook(|| {
+            spawn(async move {
+                for _ in 0..15 {
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                    count += 1;
+                }
+            });
+        });
 
         rsx! {
             TakesEventHandler {
@@ -33,7 +38,6 @@ fn values_memoize_in_place() {
                 },
                 children: count() / 2
             }
-            TakesSignal { sig: count(), children: count() / 2 }
         }
     }
 
@@ -50,12 +54,16 @@ fn values_memoize_in_place() {
             ElementId(1),
             true,
         );
+        tokio::select! {
+            _ = tokio::time::sleep(std::time::Duration::from_millis(20)) => {},
+            _ = dom.wait_for_work() => {}
+        }
         dom.render_immediate(&mut dioxus_core::NoOpMutations);
     }
     dom.render_immediate(&mut dioxus_core::NoOpMutations);
     // As we rerun the app, the drop count should be 15 one for each render of the app component
     let drop_count = DROP_COUNT.with(|c| *c.borrow());
-    assert_eq!(drop_count, 15);
+    assert_eq!(drop_count, 16);
 }
 
 // We move over event handlers in place. Make sure we do that in a way that doesn't destroy the original event handler
@@ -98,6 +106,7 @@ fn cloning_event_handler_components_work() {
 
 #[component]
 fn TakesEventHandler(click: EventHandler<usize>, children: usize) -> Element {
+    println!("children is{children}");
     let first_render_click = use_hook(move || click);
     if generation() > 0 {
         // Make sure the event handler is memoized in place and never gets dropped

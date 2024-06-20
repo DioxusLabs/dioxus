@@ -2,7 +2,6 @@ use gloo::render::{request_animation_frame, AnimationFrame};
 use web_sys::Window;
 
 #[derive(Clone, Copy, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub(crate) struct ScrollPosition {
     pub x: f64,
     pub y: f64,

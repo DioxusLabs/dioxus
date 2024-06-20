@@ -204,12 +204,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f538837af36e6f6a9be0faa67f9a314f8119e4e4b5867c6ab40ed60360142519"
 
 [[package]]
-name = "anymap"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33954243bd79057c2de7338850b85983a44588021f8a5fee574a8888c6de4344"
-
-[[package]]
 name = "anymap2"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2130,6 +2124,7 @@ dependencies = [
 name = "dioxus"
 version = "0.5.2"
 dependencies = [
+ "axum",
  "criterion 0.3.6",
  "dioxus",
  "dioxus-config-macro",
@@ -2329,6 +2324,7 @@ dependencies = [
  "quote",
  "rustversion",
  "syn 2.0.60",
+ "tokio",
  "trybuild",
 ]
 
@@ -2417,7 +2413,6 @@ dependencies = [
 name = "dioxus-fullstack"
 version = "0.5.2"
 dependencies = [
- "anymap",
  "async-trait",
  "axum",
  "base64 0.21.7",
