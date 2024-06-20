@@ -2,7 +2,7 @@
 //!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
-use crate::innerlude::Work;
+use crate::innerlude::{SuspenseBoundaryProps, Work};
 use crate::prelude::ErrorContext;
 use crate::Task;
 use crate::{
@@ -722,7 +722,7 @@ impl VirtualDom {
 
             self.wait_for_suspense_work().await;
 
-            self.render_suspense_immediate(true);
+            self.render_suspense_immediate();
         }
     }
 
@@ -789,9 +789,12 @@ impl VirtualDom {
     }
 
     /// Render any dirty scopes immediately, but don't poll any futures that are client only on that scope
-    pub fn render_suspense_immediate(&mut self, after_initial_render: bool) {
+    /// Returns a list of suspense boundaries that were resolved
+    pub fn render_suspense_immediate(&mut self) -> Vec<ScopeId> {
         // Queue any new events before we start working
         self.queue_events();
+
+        let mut resolved_scopes = Vec::new();
 
         // Render whatever work needs to be rendered, unlocking new futures and suspense leaves
         let _runtime = RuntimeGuard::new(self.runtime.clone());
@@ -804,15 +807,28 @@ impl VirtualDom {
                     }
                 }
                 Work::RerunScope(scope) => {
-                    if after_initial_render
-                        && self
-                            .runtime
-                            .get_state(scope.id)
-                            .unwrap()
-                            .should_run_during_suspense()
+                    if self
+                        .runtime
+                        .get_state(scope.id)
+                        .unwrap()
+                        .should_run_during_suspense()
                     {
+                        let scope_state = self.get_scope(scope.id).unwrap();
+                        let was_suspended =
+                            SuspenseBoundaryProps::downcast_from_props_ref(&*scope_state.props)
+                                .filter(|props| props.suspended())
+                                .is_some();
                         // If the scope is dirty, run the scope and get the mutations
                         self.run_and_diff_scope(None::<&mut NoOpMutations>, scope.id);
+                        let scope_state = self.get_scope(scope.id).unwrap();
+                        let is_now_suspended =
+                            SuspenseBoundaryProps::downcast_from_props_ref(&*scope_state.props)
+                                .filter(|props| props.suspended())
+                                .is_some();
+
+                        if was_suspended && !is_now_suspended {
+                            resolved_scopes.push(scope.id);
+                        }
                     } else {
                         tracing::warn!(
                             "Scope {:?} was marked as dirty, but will not rerun during suspense. Only nodes that are under a suspense boundary rerun during suspense",
@@ -824,6 +840,8 @@ impl VirtualDom {
             // Queue any new events
             self.queue_events();
         }
+
+        resolved_scopes
     }
 
     /// Get the current runtime

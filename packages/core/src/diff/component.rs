@@ -101,10 +101,8 @@ impl VirtualDom {
         replace_with: Option<usize>,
     ) {
         // If this is a suspense boundary, remove the suspended nodes as well
-        if let Some(suspense) = self.scopes[scope_id.0]
-            .props
-            .props_mut()
-            .downcast_mut::<SuspenseBoundaryProps>()
+        if let Some(suspense) =
+            SuspenseBoundaryProps::downcast_from_props(&mut *self.scopes[scope_id.0].props)
         {
             // Remove the suspended nodes
             if let Some(node) = suspense.suspended_nodes.take() {

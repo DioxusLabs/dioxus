@@ -38,7 +38,10 @@ fn app() -> Element {
     rsx!(
         div {
             "Waiting for... "
-            suspended_child {}
+            SuspenseBoundary {
+                fallback: |_| rsx! { "fallback" },
+                suspended_child {}
+            }
         }
     )
 }
@@ -77,7 +80,7 @@ fn suspense_keeps_state() {
         .block_on(async {
             let mut dom = VirtualDom::new(app);
             dom.rebuild(&mut dioxus_core::NoOpMutations);
-            dom.render_suspense_immediate(true);
+            dom.render_suspense_immediate();
 
             let out = dioxus_ssr::render(&dom);
 
@@ -272,7 +275,7 @@ fn resolved_to_suspended() {
 
             dom.in_runtime(|| ScopeId::ROOT.in_runtime(|| *SUSPENDED.write() = true));
 
-            dom.render_suspense_immediate(true);
+            dom.render_suspense_immediate();
             let out = dioxus_ssr::render(&dom);
 
             assert_eq!(out, "fallback");
@@ -314,6 +317,55 @@ fn resolved_to_suspended() {
 
         rsx! {
             "rendered {render_count.peek()} times"
+        }
+    }
+}
+
+/// Make sure suspense tells the renderer that a suspense boundary was resolved
+#[test]
+fn suspense_tracks_resolved() {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .unwrap()
+        .block_on(async {
+            let mut dom = VirtualDom::new(app);
+            dom.rebuild(&mut dioxus_core::NoOpMutations);
+
+            dom.render_suspense_immediate();
+            dom.wait_for_suspense_work().await;
+            assert_eq!(dom.render_suspense_immediate(), vec![ScopeId(1)]);
+        });
+
+    fn app() -> Element {
+        rsx! {
+            SuspenseBoundary {
+                fallback: |_| rsx! { "fallback" },
+                Child {}
+            }
+        }
+    }
+
+    #[component]
+    fn Child() -> Element {
+        let mut resolved = use_signal(|| false);
+        let task = use_hook(|| {
+            spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                tracing::info!("task finished");
+                resolved.set(true);
+            })
+        });
+
+        if resolved() {
+            println!("suspense is resolved");
+        } else {
+            println!("suspense is not resolved");
+            suspend(task)?;
+        }
+
+        rsx! {
+            "child"
         }
     }
 }

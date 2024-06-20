@@ -277,6 +277,15 @@ impl SuspenseBoundaryProps {
         inner.map(|inner| &mut inner.inner)
     }
 
+    pub(crate) fn downcast_from_props_ref(props: &dyn AnyProps) -> Option<&Self> {
+        let inner: Option<&SuspenseBoundaryPropsWithOwner> = props.props().downcast_ref();
+        inner.map(|inner| &inner.inner)
+    }
+
+    pub(crate) fn suspended(&self) -> bool {
+        self.suspended_nodes.is_some()
+    }
+
     pub(crate) fn create<M: WriteMutations>(
         mount: MountId,
         idx: usize,
