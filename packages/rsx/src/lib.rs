@@ -49,6 +49,7 @@
 //! dioxus_elements::elements::di
 //! ```
 
+mod attribute;
 mod component;
 mod element;
 mod forloop;
@@ -92,6 +93,7 @@ use syn::{
 };
 
 pub(crate) mod innerlude {
+    pub use crate::attribute::*;
     pub use crate::component::*;
     pub use crate::element::*;
     pub use crate::forloop::*;

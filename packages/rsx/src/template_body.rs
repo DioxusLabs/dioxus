@@ -53,10 +53,10 @@
 //! }
 //! ```
 
+use crate::innerlude::Attribute;
 use crate::*;
 use dioxus_core::prelude::Template;
 use proc_macro2::TokenStream as TokenStream2;
-use rsx_block::Attribute;
 
 use self::location::DynIdx;
 
