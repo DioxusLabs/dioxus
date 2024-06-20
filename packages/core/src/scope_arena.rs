@@ -1,4 +1,5 @@
 use crate::innerlude::ScopeOrder;
+use crate::reactive_context::ReactiveContext;
 use crate::{
     any_props::{AnyProps, BoxedAnyProps},
     innerlude::ScopeState,
@@ -17,15 +18,17 @@ impl VirtualDom {
         let entry = self.scopes.vacant_entry();
         let id = ScopeId(entry.key());
 
+        let scope_runtime = Scope::new(name, id, parent_id, height);
+        let reactive_context = ReactiveContext::new_for_scope(&scope_runtime, &self.runtime);
+        self.runtime.create_scope(scope_runtime);
+
         let scope = entry.insert(ScopeState {
             runtime: self.runtime.clone(),
             context_id: id,
             props,
             last_rendered_node: Default::default(),
+            reactive_context,
         });
-
-        self.runtime
-            .create_scope(Scope::new(name, id, parent_id, height));
 
         scope
     }
@@ -52,7 +55,7 @@ impl VirtualDom {
             let props: &dyn AnyProps = &*scope.props;
 
             let span = tracing::trace_span!("render", scope = %scope.state().name);
-            span.in_scope(|| props.render())
+            span.in_scope(|| scope.reactive_context.reset_and_run_in(|| props.render()))
         };
 
         let context = scope.state();

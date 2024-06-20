@@ -27,7 +27,7 @@ prettier-please = { version = "*" }
 
 [features]
 default = ["html", "hot_reload"]
-hot_reload = ["krates", "internment", "dioxus-core"]
+hot_reload = ["dep:krates", "dep:internment", "dep:dioxus-core"]
 serde = ["dep:serde"]
 html = []
 

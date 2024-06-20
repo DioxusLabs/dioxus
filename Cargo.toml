@@ -135,6 +135,10 @@ opt-level = 1
 [profile.cli-dev.package."*"]
 opt-level = 3
 
+# Disable debug assertions to check the released path of core and other packages, but build without optimizations to keep build times quick
+[profile.release-unoptimized]
+inherits = "dev"
+debug-assertions = false
 
 # This is a "virtual package"
 # It is not meant to be published, but is used so "cargo run --example XYZ" works properly
@@ -185,14 +189,15 @@ tokio = { version = "1.16.1", features = ["full"] }
 # To make most examples faster to compile, we split out assets and http-related stuff
 # This trims off like 270 dependencies, leading to a significant speedup in compilation time
 [features]
-default = ["dioxus/desktop"]
+default = ["desktop"]
+desktop = ["dioxus/desktop"]
 liveview = ["dioxus/liveview"]
 fullstack = ["dioxus/fullstack"]
 axum = ["dioxus/axum"]
 server = ["dioxus/axum"]
 web = ["dioxus/web"]
-collect-assets = ["manganis"]
-http = ["reqwest", "http-range"]
+collect-assets = ["dep:manganis"]
+http = ["dep:reqwest", "dep:http-range"]
 
 [[example]]
 name = "login_form"

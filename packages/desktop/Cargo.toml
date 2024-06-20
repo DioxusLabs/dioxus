@@ -72,11 +72,11 @@ objc = "0.2.7"
 
 [features]
 default = ["tokio_runtime", "wry/objc-exception", "hot-reload", "devtools"]
-tokio_runtime = ["tokio"]
+tokio_runtime = ["dep:tokio"]
 fullscreen = ["wry/fullscreen"]
 transparent = ["wry/transparent"]
 devtools = ["wry/devtools"]
-hot-reload = ["dioxus-hot-reload"]
+hot-reload = ["dep:dioxus-hot-reload"]
 gnu = []
 
 [package.metadata.docs.rs]

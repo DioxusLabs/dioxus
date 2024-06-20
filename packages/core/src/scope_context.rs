@@ -1,4 +1,5 @@
 use crate::{innerlude::SchedulerMsg, Element, Runtime, ScopeId, Task};
+use generational_box::{AnyStorage, Owner};
 use rustc_hash::FxHashSet;
 use std::{
     any::Any,
@@ -89,6 +90,17 @@ impl Scope {
         Arc::new(move |id| {
             chan.unbounded_send(SchedulerMsg::Immediate(id)).unwrap();
         })
+    }
+
+    /// Get the owner for the current scope.
+    pub fn owner<S: AnyStorage>(&self) -> Owner<S> {
+        match self.has_context() {
+            Some(rt) => rt,
+            None => {
+                let owner = S::owner();
+                self.provide_context(owner)
+            }
+        }
     }
 
     /// Return any context of type T if it exists on this scope
@@ -438,7 +450,7 @@ impl ScopeId {
 
     /// Create a subscription that schedules a future render for the reference component. Unlike [`Self::needs_update`], this function will work outside of the dioxus runtime.
     ///
-    /// ## Notice: you should prefer using [`schedule_update_any`]
+    /// ## Notice: you should prefer using [`crate::prelude::schedule_update_any`]
     pub fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
         Runtime::with_scope(*self, |cx| cx.schedule_update()).expect("to be in a dioxus runtime")
     }

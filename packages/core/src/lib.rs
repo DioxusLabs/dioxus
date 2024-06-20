@@ -16,6 +16,7 @@ mod hotreload_utils;
 mod mutations;
 mod nodes;
 mod properties;
+mod reactive_context;
 mod render_signal;
 mod runtime;
 mod scheduler;
@@ -44,6 +45,7 @@ pub(crate) mod innerlude {
     pub use crate::mutations::*;
     pub use crate::nodes::*;
     pub use crate::properties::*;
+    pub use crate::reactive_context::*;
     pub use crate::runtime::{Runtime, RuntimeGuard};
     pub use crate::scheduler::*;
     pub use crate::scopes::*;
@@ -81,8 +83,8 @@ pub mod prelude {
         use_hook_with_cleanup, wait_for_next_render, with_owner, AnyValue, Attribute, Callback,
         Component, ComponentFunction, Element, ErrorBoundary, Event, EventHandler, FmtSegment,
         FmtedSegments, Fragment, HasAttributes, HotReloadLiteral, IntoAttributeValue, IntoDynNode,
-        OptionStringFromMarker, Properties, Runtime, RuntimeGuard, ScopeId, ScopeState, SuperFrom,
-        SuperInto, Task, Template, TemplateAttribute, TemplateNode, Throw, VNode, VNodeInner,
-        VirtualDom,
+        OptionStringFromMarker, Properties, ReactiveContext, Runtime, RuntimeGuard, ScopeId,
+        ScopeState, SuperFrom, SuperInto, Task, Template, TemplateAttribute, TemplateNode, Throw,
+        VNode, VNodeInner, VirtualDom,
     };
 }

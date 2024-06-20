@@ -220,8 +220,11 @@ pub trait Readable {
                 // The real closure that we will never use.
                 &uninit_closure
             },
+            #[allow(clippy::missing_transmute_annotations)]
             // We transmute self into a reference to the closure. This is safe because we know that the closure has the same memory layout as Self so &Closure == &Self.
-            unsafe { std::mem::transmute(self) },
+            unsafe {
+                std::mem::transmute(self)
+            },
         );
 
         // Cast the closure to a trait object.
