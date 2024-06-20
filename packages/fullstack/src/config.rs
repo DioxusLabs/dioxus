@@ -32,7 +32,7 @@ impl Default for Config {
             #[cfg(feature = "server")]
             server_fn_route: "",
             #[cfg(feature = "server")]
-            addr: std::net::SocketAddr::from(([127, 0, 0, 1], 8080)),
+            addr: std::net::SocketAddr::from(([0, 0, 0, 0], 8080)),
             #[cfg(feature = "server")]
             server_cfg: ServeConfigBuilder::new(),
             #[cfg(feature = "web")]
