@@ -48,42 +48,6 @@ pub struct RsxBlock {
     pub diagnostics: Diagnostics,
 }
 
-// ..spread attribute
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
-pub struct Spread {
-    pub dots: Token![..],
-    pub expr: Expr,
-    pub dyn_idx: DynIdx,
-}
-
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
-pub enum AttributeValue {
-    /// Just a regular shorthand attribute - an ident. Makes our parsing a bit more opaque.
-    /// attribute,
-    Shorthand(Ident),
-
-    /// Any attribute that's a literal. These get hotreloading super powers
-    ///
-    /// attribute: "value"
-    /// attribute: bool,
-    /// attribute: 1,
-    AttrLiteral(RsxLiteral),
-
-    /// Unterminated expression - full expressions are handled by AttrExpr
-    ///
-    /// attribute: if bool { "value" }
-    ///
-    /// Currently these don't get hotreloading super powers, but they could, depending on how far
-    /// we want to go with it
-    AttrOptionalExpr {
-        condition: Expr,
-        value: Box<AttributeValue>,
-    },
-
-    /// attribute: some_expr
-    AttrExpr(Expr),
-}
-
 impl Parse for RsxBlock {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let content: ParseBuffer;
@@ -473,8 +437,6 @@ fn kitchen_sink_parse() {
     };
 
     let parsed: RsxBlock = syn::parse2(input).unwrap();
-    // let tokens = quote! { #parsed };
-    // println!("{}", tokens);
 }
 
 #[test]
