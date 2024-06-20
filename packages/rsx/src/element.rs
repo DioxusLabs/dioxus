@@ -12,6 +12,7 @@ use syn::{
 /// Parse the VNode::Element type
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct Element {
+    /// div { } -> div
     pub name: ElementName,
 
     /// The actual attributes that were parsed
@@ -23,9 +24,19 @@ pub struct Element {
     /// These are the actual attributes that get rendered out
     pub merged_attributes: Vec<Attribute>,
 
+    /// The `...` spread attributes.
+    /// Elements can have multiple, unlike components which can only have one
     pub spreads: Vec<Spread>,
+
+    /// The children of the element
     pub children: Vec<BodyNode>,
+
+    /// the brace of the `div { }`
     pub brace: syn::token::Brace,
+
+    /// A list of diagnostics that were generated during parsing. This element might be a valid rsx_block
+    /// but not technically a valid element - these diagnostics tell us what's wrong and then are used
+    /// when rendering
     pub diagnostics: Diagnostics,
 }
 

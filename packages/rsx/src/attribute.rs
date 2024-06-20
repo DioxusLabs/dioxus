@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use crate::{innerlude::*, HotReloadingContext};
 use dioxus_core::prelude::TemplateAttribute;
-use proc_macro2::{Literal, TokenStream};
+use proc_macro2::{Literal, TokenStream as TokenStream2};
 use proc_macro2_diagnostics::SpanDiagnosticExt;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
@@ -15,16 +15,27 @@ use syn::{
 
 use super::literal::RsxLiteral;
 
+/// A property value in the from of a `name: value` pair with an optional comma.
+/// Note that the colon and value are optional in the case of shorthand attributes. We keep them around
+/// to support "lossless" parsing in case that ever might be useful.
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct Attribute {
     pub name: AttributeName,
+    pub colon: Option<Token![:]>,
     pub value: AttributeValue,
+    pub comma: Option<Token![,]>,
     pub dyn_idx: DynIdx,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum AttributeName {
+    /// an attribute in the form of `name: value`
     BuiltIn(Ident),
+
+    /// an attribute in the form of `"name": value` - notice that the name is a string literal
+    /// this is to allow custom attributes in the case of missing built-in attributes
+    ///
+    /// we might want to change this one day to be ticked or something and simply a boolean
     Custom(LitStr),
 }
 
@@ -51,10 +62,26 @@ impl AttributeName {
             Self::BuiltIn(ident) => ident.span(),
         }
     }
+
+    /// we have some special casing for the separator of certain attributes
+    /// ... I don't really like special casing things in the rsx! macro since it's supposed to be
+    /// agnostic to the renderer. To be "correct" we'd need to get the separate from the definition.
+    ///
+    /// sooo todo: make attribute sepaerator a part of the attribute definition
+    fn multi_attribute_separator(&self) -> Option<&'static str> {
+        match &self {
+            AttributeName::BuiltIn(i) => match i.to_string().as_str() {
+                "class" => Some(" "),
+                "style" => Some(";"),
+                _ => None,
+            },
+            AttributeName::Custom(_) => None,
+        }
+    }
 }
 
 impl ToTokens for AttributeName {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
             Self::Custom(lit) => lit.to_tokens(tokens),
             Self::BuiltIn(ident) => ident.to_tokens(tokens),
@@ -171,7 +198,7 @@ impl Attribute {
         }
     }
 
-    pub fn rendered_as_dynamic_attr(&self, el_name: &ElementName) -> TokenStream {
+    pub fn rendered_as_dynamic_attr(&self, el_name: &ElementName) -> TokenStream2 {
         let ns = |name: &AttributeName| match (el_name, name) {
             (ElementName::Ident(i), AttributeName::BuiltIn(_)) => {
                 quote! { dioxus_elements::#i::#name.1 }
@@ -274,6 +301,71 @@ impl Attribute {
         }
 
         false
+    }
+
+    pub(crate) fn try_combine(&self, other: &Self) -> Option<Self> {
+        if self.name == other.name {
+            if let Some(separator) = self.name.multi_attribute_separator() {
+                todo!()
+                // return Some(ElementAttrNamed {
+                //     el_name: self.el_name.clone(),
+                //     attr: ElementAttr {
+                //         name: self.attr.name.clone(),
+                //         value: self.attr.value.combine(separator, &other.attr.value),
+                //     },
+                //     followed_by_comma: self.followed_by_comma || other.followed_by_comma,
+                // });
+            }
+        }
+
+        None
+    }
+
+    /// If this is the last attribute of an element and it doesn't have a tailing comma,
+    /// we add hints so that rust analyzer completes it either as an attribute or element
+    fn completion_hints(&self, el_name: &ElementName) -> TokenStream2 {
+        let Attribute {
+            name, value, comma, ..
+        } = self;
+
+        // If there is a trailing comma, rust analyzer does a good job of completing the attribute by itself
+        if comma.is_some() {
+            return quote! {};
+        }
+
+        // Only add hints if the attribute is:
+        // - a built in attribute (not a literal)
+        // - an build in element (not a custom element)
+        // - a shorthand attribute
+        let (ElementName::Ident(el), AttributeName::BuiltIn(name), AttributeValue::Shorthand(_)) =
+            (&el_name, &name, &value)
+        else {
+            return quote! {};
+        };
+        // If the attribute is a shorthand attribute, but it is an event handler, rust analyzer already does a good job of completing the attribute by itself
+        if name.to_string().starts_with("on") {
+            return quote! {};
+        }
+
+        quote! {
+            {
+                #[allow(dead_code)]
+                #[doc(hidden)]
+                mod __completions {
+                    // Autocomplete as an attribute
+                    pub use super::dioxus_elements::#el::*;
+                    // Autocomplete as an element
+                    pub use super::dioxus_elements::elements::completions::CompleteWithBraces::*;
+                    fn ignore() {
+                        #name
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn matches_attr_name(&self, other: &Self) -> bool {
+        self.name == other.name
     }
 }
 

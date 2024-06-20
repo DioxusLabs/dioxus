@@ -51,6 +51,7 @@ pub struct RsxBlock {
 // ..spread attribute
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct Spread {
+    pub dots: Token![..],
     pub expr: Expr,
     pub dyn_idx: DynIdx,
 }
@@ -93,6 +94,10 @@ impl Parse for RsxBlock {
         let mut attributes = vec![];
         let mut spreads = vec![];
         let mut diagnostics = Diagnostics::new();
+
+        // todo: lots of manual parsing of commas could be simplified, probably?
+        // we should also allow parsing in any order of attributes and children - there are diagnostics we can employ
+        // to allow both but also give helpful errors
         loop {
             if content.is_empty() {
                 break;
@@ -101,8 +106,9 @@ impl Parse for RsxBlock {
             // Parse spread attributes
             // These are expected forced to come after regular attributes
             if content.peek(Token![..]) {
-                let _spread = content.parse::<Token![..]>()?;
+                let dots = content.parse::<Token![..]>()?;
 
+                // in case someone tries to do ...spread which is not valid
                 if content.peek(Token![.]) {
                     let _extra = content.parse::<Token![.]>()?;
                     diagnostics.push(
@@ -115,12 +121,14 @@ impl Parse for RsxBlock {
                 let expr = content.parse::<Expr>()?;
                 spreads.push(Spread {
                     expr,
+                    dots,
                     dyn_idx: DynIdx::default(),
                 });
 
                 if !content.is_empty() {
                     content.parse::<Token![,]>()?; // <--- diagnostics...
                 }
+
                 continue;
             }
 
@@ -144,15 +152,19 @@ impl Parse for RsxBlock {
                     ));
                 }
 
+                let comma = if !content.is_empty() {
+                    Some(content.parse::<Token![,]>()?) // <--- diagnostics...
+                } else {
+                    None
+                };
+
                 attributes.push(Attribute {
                     name: AttributeName::BuiltIn(name.clone()),
+                    colon: None,
                     value: AttributeValue::Shorthand(name),
+                    comma,
                     dyn_idx: DynIdx::default(),
                 });
-
-                if !content.is_empty() {
-                    content.parse::<Token![,]>()?; // <--- diagnostics...
-                }
 
                 continue;
             }
@@ -169,7 +181,7 @@ impl Parse for RsxBlock {
                 };
 
                 // Ensure there's a colon
-                _ = content.parse::<Token![:]>()?;
+                let colon = Some(content.parse::<Token![:]>()?);
 
                 // if statements in attributes get automatic closing in some cases
                 let value = if content.peek(Token![if]) {
@@ -237,15 +249,19 @@ impl Parse for RsxBlock {
                     ));
                 }
 
+                let comma = if !content.is_empty() {
+                    Some(content.parse::<Token![,]>()?) // <--- diagnostics...
+                } else {
+                    None
+                };
+
                 attributes.push(Attribute {
                     name,
                     value,
                     dyn_idx: DynIdx::default(),
+                    colon,
+                    comma,
                 });
-
-                if !content.is_empty() {
-                    content.parse::<Token![,]>()?; // <--- diagnostics...
-                }
 
                 continue;
             }
