@@ -36,17 +36,13 @@
 //!   quite support that, unfortunately, since the number of dynamic nodes and attributes is baked into
 //!   the template, but if that changed we'd be okay.
 
-use std::{collections::HashMap, usize};
-
-use crate::{
-    intern, reload_stack::ReloadStack, Attribute, AttributeName, AttributeValue, Component,
-    ForLoop, HotLiteral, IfChain, IfmtInput, RsxLiteral, TemplateBody, TextNode,
-};
-use crate::{BodyNode, CallBody, HotReloadingContext};
+use crate::innerlude::*;
+use crate::HotReloadingContext;
 use dioxus_core::{
     prelude::{FmtSegment, FmtedSegments, HotReloadLiteral, Template},
     TemplateAttribute, TemplateNode,
 };
+use std::{collections::HashMap, usize};
 use syn::LitStr;
 
 /// The mapping of a node relative to the root of its containing template

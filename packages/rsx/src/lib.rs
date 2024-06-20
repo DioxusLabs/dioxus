@@ -49,24 +49,32 @@
 //! dioxus_elements::elements::di
 //! ```
 
-mod body;
+mod body_node;
+mod component;
+mod element;
+mod forloop;
+mod ifchain;
+mod raw_expr;
+mod rsx_block;
+mod rsx_call;
+mod template_body;
+mod text_node;
+
 mod diagnostics;
 pub mod hotreload;
 mod ifmt;
+mod literal;
 mod location;
-mod node;
 mod reload_stack;
-mod rsx_call;
 mod scoring;
 mod utils;
-// pub(crate) mod context;
 
 // Re-export the namespaces into each other
-pub use body::TemplateBody;
+pub use body_node::*;
 pub use diagnostics::Diagnostics;
 pub use ifmt::*;
-pub use node::*;
 pub use rsx_call::*;
+pub use template_body::TemplateBody;
 pub use utils::*;
 
 #[cfg(feature = "hot_reload")]
@@ -82,3 +90,26 @@ use syn::{
     parse::{Parse, ParseStream},
     Result, Token,
 };
+
+pub(crate) mod innerlude {
+    pub use crate::body_node::*;
+    pub use crate::component::*;
+    pub use crate::element::*;
+    pub use crate::forloop::*;
+    pub use crate::ifchain::*;
+    pub use crate::location::*;
+    pub use crate::raw_expr::*;
+    pub use crate::rsx_block::*;
+    pub use crate::rsx_call::*;
+    pub use crate::template_body::*;
+    pub use crate::text_node::*;
+
+    pub use crate::diagnostics::*;
+    pub use crate::hotreload::*;
+    pub use crate::ifmt::*;
+    pub use crate::literal::*;
+    pub use crate::location::*;
+    pub use crate::reload_stack::*;
+    pub use crate::scoring::*;
+    pub use crate::utils::*;
+}

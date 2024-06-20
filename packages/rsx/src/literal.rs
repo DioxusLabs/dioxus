@@ -6,7 +6,7 @@ use syn::{
     Lit, LitBool, LitFloat, LitInt, LitStr,
 };
 
-use crate::{location::CallerLocation, IfmtInput, Segment};
+use crate::{location::DynIdx, IfmtInput, Segment};
 
 /// A literal value in the rsx! macro
 ///
@@ -16,7 +16,7 @@ use crate::{location::CallerLocation, IfmtInput, Segment};
 pub struct RsxLiteral {
     pub raw: Lit,
     pub value: HotLiteral,
-    pub hr_idx: CallerLocation,
+    pub hr_idx: DynIdx,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
@@ -56,7 +56,7 @@ impl Parse for RsxLiteral {
             return Ok(RsxLiteral {
                 raw: Lit::Str(raw),
                 value,
-                hr_idx: CallerLocation::default(),
+                hr_idx: DynIdx::default(),
             });
         } else {
             let raw = input.parse::<Lit>()?;
@@ -75,7 +75,7 @@ impl Parse for RsxLiteral {
             Ok(RsxLiteral {
                 raw,
                 value,
-                hr_idx: CallerLocation::default(),
+                hr_idx: DynIdx::default(),
             })
         }
     }

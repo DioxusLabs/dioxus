@@ -56,8 +56,9 @@
 use crate::*;
 use dioxus_core::prelude::Template;
 use proc_macro2::TokenStream as TokenStream2;
+use rsx_block::Attribute;
 
-use self::location::CallerLocation;
+use self::location::DynIdx;
 
 type NodePath = Vec<u8>;
 type AttributePath = Vec<u8>;
@@ -75,7 +76,7 @@ type AttributePath = Vec<u8>;
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct TemplateBody {
     pub roots: Vec<BodyNode>,
-    pub template_idx: CallerLocation,
+    pub template_idx: DynIdx,
     pub node_paths: Vec<NodePath>,
     pub attr_paths: Vec<(AttributePath, usize)>,
     current_path: Vec<u8>,
@@ -202,7 +203,7 @@ impl TemplateBody {
     pub fn new(nodes: Vec<BodyNode>) -> Self {
         let mut body = Self {
             roots: vec![],
-            template_idx: CallerLocation::default(),
+            template_idx: DynIdx::default(),
             node_paths: Vec::new(),
             attr_paths: Vec::new(),
             current_path: Vec::new(),

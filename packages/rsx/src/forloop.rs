@@ -1,5 +1,7 @@
 use super::*;
-use syn::braced;
+use location::DynIdx;
+use proc_macro2::TokenStream as TokenStream2;
+use syn::{braced, Expr, Pat};
 
 #[non_exhaustive]
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
@@ -9,7 +11,7 @@ pub struct ForLoop {
     pub in_token: Token![in],
     pub expr: Box<Expr>,
     pub body: TemplateBody,
-    pub dyn_idx: CallerLocation,
+    pub dyn_idx: DynIdx,
 }
 
 impl Parse for ForLoop {
@@ -30,7 +32,7 @@ impl Parse for ForLoop {
             in_token,
             expr: Box::new(expr),
             body,
-            dyn_idx: CallerLocation::default(),
+            dyn_idx: DynIdx::default(),
         })
     }
 }

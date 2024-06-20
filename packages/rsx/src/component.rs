@@ -16,16 +16,16 @@
 //!
 //! If you're generally parsing things, you'll just want to parse and then check if it's valid.
 
-use std::collections::HashSet;
-
-use self::location::CallerLocation;
-
-use super::*;
-
+use crate::innerlude::*;
 use proc_macro2::TokenStream as TokenStream2;
 use proc_macro2_diagnostics::SpanDiagnosticExt;
-use quote::quote;
-use syn::{spanned::Spanned, AngleBracketedGenericArguments, Expr, Ident, PathArguments};
+use quote::{quote, ToTokens, TokenStreamExt};
+use std::collections::HashSet;
+use syn::{
+    parse::{Parse, ParseStream},
+    spanned::Spanned,
+    token, AngleBracketedGenericArguments, Expr, Ident, PathArguments, Result,
+};
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct Component {
@@ -35,7 +35,7 @@ pub struct Component {
     pub spreads: Vec<Spread>,
     pub brace: token::Brace,
     pub children: TemplateBody,
-    pub dyn_idx: CallerLocation,
+    pub dyn_idx: DynIdx,
     pub diagnostics: Diagnostics,
 }
 
@@ -53,7 +53,7 @@ impl Parse for Component {
         } = input.parse::<RsxBlock>()?;
 
         let mut component = Self {
-            dyn_idx: CallerLocation::default(),
+            dyn_idx: DynIdx::default(),
             children: TemplateBody::new(children),
             name,
             generics,
@@ -63,6 +63,8 @@ impl Parse for Component {
             diagnostics,
         };
 
+        // We've received a valid rsx block, but it's not necessarily a valid component
+        // validating it will dump diagnostics into the output
         component.validate_path();
         component.validate_fields();
         component.validate_key();
@@ -77,7 +79,7 @@ impl ToTokens for Component {
         let Self { name, generics, .. } = self;
 
         // Create props either from manual props or from the builder approach
-        let props = self.collect_props();
+        let props = self.create_props();
 
         // Make sure we stringify the component name
         let fn_name = self.fn_name().to_string();
@@ -89,8 +91,11 @@ impl ToTokens for Component {
             dioxus_core::DynamicNode::Component({
                 #diagnostics
 
-                use dioxus_core::prelude::Properties;
-                (#props).into_vcomponent(
+                // todo: ensure going through the trait actually works
+                // we want to avoid importing traits
+                // use dioxus_core::prelude::Properties;
+                dioxus_core::prelude::Properties::into_vcomponent(
+                    #props,
                     #name #generics,
                     #fn_name
                 )
@@ -210,40 +215,41 @@ impl Component {
         }
     }
 
-    fn collect_props(&self) -> TokenStream2 {
+    /// Create the tokens we'll use for the props of the component
+    ///
+    /// todo: don't create the tokenstream from scratch and instead dump it into the existing streama
+    fn create_props(&self) -> TokenStream2 {
         let manual_props = self.manual_props();
 
         let name = &self.name;
         let generics = &self.generics;
 
-        let mut toks = match manual_props.as_ref() {
+        let mut tokens = match manual_props.as_ref() {
             Some(props) => quote! { let mut __manual_props = #props; },
             None => quote! { fc_to_builder(#name #generics) },
         };
 
         for (name, value) in self.make_field_idents() {
             match manual_props.is_none() {
-                true => toks.append_all(quote! { .#name(#value) }),
-                false => toks.append_all(quote! { __manual_props.#name = #value; }),
+                true => tokens.append_all(quote! { .#name(#value) }),
+                false => tokens.append_all(quote! { __manual_props.#name = #value; }),
             }
         }
 
         if !self.children.is_empty() {
             let children = &self.children;
             match manual_props.is_none() {
-                true => toks.append_all(quote! { .children( { #children } ) }),
-                false => toks.append_all(quote! { __manual_props.children = { #children }; }),
+                true => tokens.append_all(quote! { .children( { #children } ) }),
+                false => tokens.append_all(quote! { __manual_props.children = { #children }; }),
             }
         }
 
         match manual_props.is_none() {
-            true => toks.append_all(quote! { .build() }),
-            false => toks.append_all(quote! { __manual_props }),
+            true => tokens.append_all(quote! { .build() }),
+            false => tokens.append_all(quote! { __manual_props }),
         }
 
-        quote! {
-            {#toks}
-        }
+        tokens
     }
 
     fn manual_props(&self) -> Option<&Expr> {
@@ -267,11 +273,7 @@ impl Component {
                 };
 
                 let val = match value {
-                    AttributeValue::AttrLiteral(lit) => {
-                        quote! {
-                            #lit
-                        }
-                    }
+                    AttributeValue::AttrLiteral(lit) => quote! { #lit },
                     _ => value.to_token_stream(),
                 };
 

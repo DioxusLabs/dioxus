@@ -2,7 +2,10 @@ use super::{
     hot_reload_diff::{diff_rsx, DiffResult},
     ChangedRsx,
 };
-use crate::{CallBody, HotLiteral, HotReloadingContext, RsxLiteral};
+use crate::{
+    innerlude::{CallBody, HotLiteral, RsxLiteral},
+    HotReloadingContext,
+};
 use dioxus_core::{
     prelude::{FmtedSegments, HotReloadLiteral, TemplateAttribute, TemplateNode},
     Template,

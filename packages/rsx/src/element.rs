@@ -1,15 +1,28 @@
-use super::*;
+use crate::innerlude::*;
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::quote;
+use quote::{quote, ToTokens, TokenStreamExt};
 use std::fmt::{Display, Formatter};
-use syn::{punctuated::Punctuated, spanned::Spanned, Ident, LitStr, Token};
+use syn::{
+    parse::{Parse, ParseStream},
+    punctuated::Punctuated,
+    spanned::Spanned,
+    Ident, LitStr, Result, Token,
+};
 
 /// Parse the VNode::Element type
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct Element {
     pub name: ElementName,
+
+    /// The actual attributes that were parsed
     pub raw_attributes: Vec<Attribute>,
+
+    /// The attributes after merging - basically the formatted version of the combined attributes
+    /// where possible.
+    ///
+    /// These are the actual attributes that get rendered out
     pub merged_attributes: Vec<Attribute>,
+
     pub spreads: Vec<Spread>,
     pub children: Vec<BodyNode>,
     pub brace: syn::token::Brace,
@@ -165,23 +178,44 @@ impl Element {
     /// }
     ///
     fn merge_attributes(&mut self) {
-        // Now merge the attributes into the cache
-        for new_attr in &self.raw_attributes {
-            let attr_index = self
-                .merged_attributes
+        let mut merged_attributes: Vec<Attribute> = Vec::new();
+        for attr in &self.raw_attributes {
+            let attr_index = merged_attributes
                 .iter()
-                .position(|a| a.name == new_attr.name);
+                .position(|a| a.matches_attr_name(attr));
 
             if let Some(old_attr_index) = attr_index {
-                let old_attr = &mut self.merged_attributes[old_attr_index];
+                let old_attr = &mut merged_attributes[old_attr_index];
 
-                todo!("Merge attributes properly!");
+                if let Some(combined) = old_attr.try_combine(attr) {
+                    *old_attr = combined;
+                }
 
                 continue;
             }
 
-            self.merged_attributes.push(new_attr.clone());
+            merged_attributes.push(attr.clone());
         }
+
+        // Push each attribute into the merged attributes list, and if it already exists, then
+        // push the segments into the existing attribute
+        // We might not be able to merge some types of attributes.
+        // for new_attr in &self.raw_attributes {
+        //     let attr_index = self
+        //         .merged_attributes
+        //         .iter()
+        //         .position(|a| a.name == new_attr.name);
+
+        //     if let Some(old_attr_index) = attr_index {
+        //         let old_attr = &mut self.merged_attributes[old_attr_index];
+
+        //         todo!("Merge attributes properly!");
+
+        //         continue;
+        //     }
+
+        //     self.merged_attributes.push(new_attr.clone());
+        // }
     }
 
     pub(crate) fn key(&self) -> Option<&IfmtInput> {

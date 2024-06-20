@@ -1,4 +1,7 @@
 use super::*;
+use location::DynIdx;
+use proc_macro2::TokenStream as TokenStream2;
+use syn::{Expr, ExprIf};
 
 #[non_exhaustive]
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
@@ -8,7 +11,7 @@ pub struct IfChain {
     pub then_branch: TemplateBody,
     pub else_if_branch: Option<Box<IfChain>>,
     pub else_branch: Option<TemplateBody>,
-    pub dyn_idx: CallerLocation,
+    pub dyn_idx: DynIdx,
 }
 
 impl IfChain {
@@ -64,7 +67,7 @@ impl Parse for IfChain {
             then_branch,
             else_if_branch,
             else_branch,
-            dyn_idx: CallerLocation::default(),
+            dyn_idx: DynIdx::default(),
         })
     }
 }

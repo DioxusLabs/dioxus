@@ -11,11 +11,11 @@ use std::{cell::Cell, hash::Hash};
 /// that has collision issues and is eventually relied on specifics of proc macros that aren't available
 /// in testing (like snapshot testing). So, we just need an ID for each of these items, hence this struct.
 #[derive(PartialEq, Eq, Clone, Debug, Default)]
-pub struct CallerLocation {
+pub struct DynIdx {
     idx: Cell<Option<usize>>,
 }
 
-impl CallerLocation {
+impl DynIdx {
     pub fn set(&self, idx: usize) {
         self.idx.set(Some(idx));
     }
@@ -25,7 +25,7 @@ impl CallerLocation {
     }
 }
 
-impl Hash for CallerLocation {
+impl Hash for DynIdx {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.idx.get().hash(state);
     }

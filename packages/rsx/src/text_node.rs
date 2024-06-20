@@ -1,20 +1,22 @@
-use self::literal::{HotLiteral, RsxLiteral};
+use location::DynIdx;
+use proc_macro2::TokenStream as TokenStream2;
 
+use self::literal::{HotLiteral, RsxLiteral};
 use super::*;
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct TextNode {
     pub input: IfmtInput,
-    pub hr_idx: CallerLocation,
-    pub dyn_idx: CallerLocation,
+    pub hr_idx: DynIdx,
+    pub dyn_idx: DynIdx,
 }
 
 impl Parse for TextNode {
     fn parse(input: ParseStream) -> Result<Self> {
         Ok(Self {
             input: input.parse()?,
-            hr_idx: CallerLocation::default(),
-            dyn_idx: CallerLocation::default(),
+            hr_idx: DynIdx::default(),
+            dyn_idx: DynIdx::default(),
         })
     }
 }

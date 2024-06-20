@@ -1,4 +1,4 @@
-use crate::{intern, location::CallerLocation, reload_stack::ReloadStack};
+use crate::{intern, location::DynIdx, reload_stack::ReloadStack};
 use dioxus_core::prelude::{FmtSegment, FmtedSegments};
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};

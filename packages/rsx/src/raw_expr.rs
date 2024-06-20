@@ -3,12 +3,12 @@ use quote::{quote, ToTokens, TokenStreamExt};
 use std::hash;
 use syn::{parse::Parse, spanned::Spanned};
 
-use crate::location::CallerLocation;
+use crate::location::DynIdx;
 
 #[derive(Clone, Debug)]
 pub struct RawExpr {
     pub expr: TokenStream2,
-    pub dyn_idx: CallerLocation,
+    pub dyn_idx: DynIdx,
 }
 
 impl RawExpr {
@@ -25,7 +25,7 @@ impl Parse for RawExpr {
 
         Ok(Self {
             expr: content.parse()?,
-            dyn_idx: CallerLocation::default(),
+            dyn_idx: DynIdx::default(),
         })
     }
 }

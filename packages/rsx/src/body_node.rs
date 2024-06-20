@@ -1,33 +1,13 @@
-use self::location::CallerLocation;
-use super::*;
+use crate::{innerlude::*, HotReloadingContext};
+use dioxus_core::TemplateNode;
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::quote;
+use quote::{quote, ToTokens};
 use syn::{
+    parse::{Parse, ParseStream},
     spanned::Spanned,
     token::{self, Brace},
-    Expr, ExprIf, Ident, LitStr, Pat,
+    Expr, ExprIf, Ident, LitStr, Pat, Result, Token,
 };
-
-// mod attribute;
-mod block;
-mod component;
-mod element;
-mod forloop;
-mod ifchain;
-mod literal;
-mod raw_expr;
-mod text_node;
-
-// pub use attribute::*;
-pub use block::*;
-pub use body::*;
-pub use component::*;
-pub use element::*;
-pub use forloop::*;
-pub use ifchain::*;
-pub use literal::*;
-pub use raw_expr::*;
-pub use text_node::*;
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum BodyNode {
@@ -78,7 +58,7 @@ impl Parse for BodyNode {
         if stream.peek(Token![match]) {
             return Ok(BodyNode::RawExpr(RawExpr {
                 expr: stream.parse::<Expr>()?.to_token_stream(),
-                dyn_idx: CallerLocation::default(),
+                dyn_idx: DynIdx::default(),
             }));
         }
 
@@ -86,7 +66,7 @@ impl Parse for BodyNode {
         if stream.peek(token::Brace) {
             return Ok(BodyNode::RawExpr(RawExpr {
                 expr: stream.parse::<Expr>()?.to_token_stream(),
-                dyn_idx: CallerLocation::default(),
+                dyn_idx: DynIdx::default(),
             }));
         }
 

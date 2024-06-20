@@ -8,13 +8,8 @@
 
 use std::fmt::Display;
 
-use crate::{
-    intern, is_if_chain_terminated, location::CallerLocation, node::literal::HotLiteral, BodyNode,
-    Diagnostics, ElementName, HotReloadingContext, IfmtInput,
-};
-
+use crate::{innerlude::*, HotReloadingContext};
 use dioxus_core::prelude::TemplateAttribute;
-use krates::cfg_expr::expr::lexer::Token;
 use proc_macro2::{Literal, TokenStream};
 use proc_macro2_diagnostics::SpanDiagnosticExt;
 use quote::{quote, ToTokens, TokenStreamExt};
@@ -57,7 +52,7 @@ pub struct RsxBlock {
 pub struct Attribute {
     pub name: AttributeName,
     pub value: AttributeValue,
-    pub dyn_idx: CallerLocation,
+    pub dyn_idx: DynIdx,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
@@ -70,7 +65,7 @@ pub enum AttributeName {
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct Spread {
     pub expr: Expr,
-    pub dyn_idx: CallerLocation,
+    pub dyn_idx: DynIdx,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
@@ -133,7 +128,7 @@ impl Parse for RsxBlock {
                 let expr = content.parse::<Expr>()?;
                 spreads.push(Spread {
                     expr,
-                    dyn_idx: CallerLocation::default(),
+                    dyn_idx: DynIdx::default(),
                 });
 
                 if !content.is_empty() {
@@ -165,7 +160,7 @@ impl Parse for RsxBlock {
                 attributes.push(Attribute {
                     name: AttributeName::BuiltIn(name.clone()),
                     value: AttributeValue::Shorthand(name),
-                    dyn_idx: CallerLocation::default(),
+                    dyn_idx: DynIdx::default(),
                 });
 
                 if !content.is_empty() {
@@ -258,7 +253,7 @@ impl Parse for RsxBlock {
                 attributes.push(Attribute {
                     name,
                     value,
-                    dyn_idx: CallerLocation::default(),
+                    dyn_idx: DynIdx::default(),
                 });
 
                 if !content.is_empty() {
