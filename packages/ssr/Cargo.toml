@@ -12,6 +12,7 @@ keywords = ["dom", "ui", "gui", "react", "ssr"]
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-html = { workspace = true, features = ["eval"]}
 dioxus-cli-config = { workspace = true, features = ["read-config"], optional = true }
+dioxus-interpreter-js = { workspace = true }
 generational-box = { workspace = true }
 askama_escape = "0.10.3"
 thiserror = "1.0.23"

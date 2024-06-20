@@ -1,18 +1,21 @@
 use std::collections::hash_map::DefaultHasher;
+use std::path::PathBuf;
 use std::{hash::Hasher, process::Command};
 
 fn main() {
     // If any TS changes, re-run the build script
-    println!("cargo:rerun-if-changed=src/ts/form.ts");
-    println!("cargo:rerun-if-changed=src/ts/core.ts");
-    println!("cargo:rerun-if-changed=src/ts/serialize.ts");
-    println!("cargo:rerun-if-changed=src/ts/set_attribute.ts");
-    println!("cargo:rerun-if-changed=src/ts/common.ts");
-    println!("cargo:rerun-if-changed=src/ts/eval.ts");
-    println!("cargo:rerun-if-changed=src/ts/native_eval.ts");
+    let watching = std::fs::read_dir("./src/ts").unwrap();
+    let ts_paths: Vec<_> = watching
+        .into_iter()
+        .flatten()
+        .map(|entry| entry.path())
+        .collect();
+    for path in &ts_paths {
+        println!("cargo:rerun-if-changed={}", path.display());
+    }
 
     // Compute the hash of the ts files
-    let hash = hash_ts_files();
+    let hash = hash_ts_files(ts_paths);
 
     // If the hash matches the one on disk, we're good and don't need to update bindings
     let expected = include_str!("src/js/hash.txt").trim();
@@ -27,24 +30,18 @@ fn main() {
     gen_bindings("core", "core");
     gen_bindings("eval", "eval");
     gen_bindings("native_eval", "native_eval");
+    gen_bindings("hydrate", "hydrate");
 
     std::fs::write("src/js/hash.txt", hash.to_string()).unwrap();
 }
 
 /// Hashes the contents of a directory
-fn hash_ts_files() -> u64 {
-    let files = [
-        include_str!("src/ts/common.ts"),
-        include_str!("src/ts/native.ts"),
-        include_str!("src/ts/core.ts"),
-        include_str!("src/ts/eval.ts"),
-        include_str!("src/ts/native_eval.ts"),
-    ];
-
+fn hash_ts_files(files: Vec<PathBuf>) -> u64 {
     let mut hash = DefaultHasher::new();
     for file in files {
+        let contents = std::fs::read_to_string(file).unwrap();
         // windows + git does a weird thing with line endings, so we need to normalize them
-        for line in file.lines() {
+        for line in contents.lines() {
             hash.write(line.as_bytes());
         }
     }

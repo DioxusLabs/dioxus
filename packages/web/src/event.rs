@@ -4,12 +4,12 @@ use dioxus_html::{
     point_interaction::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
-    DragData, FileEngine, FormData, FormValue, HasDragData, HasFileData, HasFormData, HasImageData,
+    DragData, FormData, FormValue, HasDragData, HasFileData, HasFormData, HasImageData,
     HasMouseData, HtmlEventConverter, ImageData, MountedData, PlatformEventData, ScrollData,
 };
 use js_sys::Array;
 use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
-use web_sys::{Document, DragEvent, Element, Event, MouseEvent};
+use web_sys::{Document, Element, Event, MouseEvent};
 
 pub(crate) struct WebEventConverter;
 

@@ -9,6 +9,9 @@ pub static INTERPRETER_JS: &str = include_str!("./js/core.js");
 /// The code explicitly for desktop/liveview that bridges the eval gap between the two
 pub static NATIVE_JS: &str = include_str!("./js/native.js");
 
+/// The code explicitly for desktop/liveview that bridges the eval gap between the two
+pub static HYDRATE_JS: &str = include_str!("./js/hydrate.js");
+
 #[cfg(all(feature = "binary-protocol", feature = "sledgehammer"))]
 mod write_native_mutations;
 

@@ -1,0 +1,1 @@
+var id_to_string=function(id){return`ds-${id}`};function hydrate(suspense_placeholder_id){const template=document.getElementById(id_to_string(suspense_placeholder_id)),target=document.getElementById(id_to_string(suspense_placeholder_id+1));template.replaceWith(target)}export{hydrate};
