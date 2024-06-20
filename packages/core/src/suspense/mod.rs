@@ -5,7 +5,7 @@
 //! - How do we know what suspense placeholder we are rehydrating? Rerun the children without hydrating?
 //! - The suspense placeholder might rely on data that is resolved by a previous server future
 //!
-//! ```rust
+//! ```rust, ignore
 //! fn ComponentSuspends() {
 //!     let user = use_synced(uuid::new);
 //!     // If JS is disabled, just show the first placeholder until it is entirely resolved?

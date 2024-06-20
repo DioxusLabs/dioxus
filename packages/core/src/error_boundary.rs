@@ -611,7 +611,7 @@ impl<
 /// # fn ThrowsError() -> Element { todo!() }
 /// rsx! {
 ///     ErrorBoundary {
-///         handle_error: |errors: ErrorContext| rsx! { "Oops, we encountered an error. Please report {errors[0]} to the developer of this application" },
+///         handle_error: |errors: ErrorContext| rsx! { "Oops, we encountered an error. Please report {errors:?} to the developer of this application" },
 ///         ThrowsError {}
 ///     }
 /// };
