@@ -1,8 +1,8 @@
 use crate::innerlude::Effect;
 use crate::innerlude::ScopeOrder;
 use crate::innerlude::{remove_future, spawn, Runtime};
-use crate::prelude::SuspenseContext;
 use crate::scope_context::ScopeStatus;
+use crate::scope_context::SuspenseLocation;
 use crate::ScopeId;
 use futures_util::task::ArcWake;
 use slotmap::DefaultKey;
@@ -267,7 +267,7 @@ impl Runtime {
         let mut cx = std::task::Context::from_waker(&task.waker);
 
         // update the scope stack
-        self.scope_stack.borrow_mut().push(task.scope);
+        self.push_scope(task.scope);
         self.rendering.set(false);
         self.current_task.set(Some(id));
 
@@ -290,7 +290,7 @@ impl Runtime {
         }
 
         // Remove the scope from the stack
-        self.scope_stack.borrow_mut().pop();
+        self.push_scope(task.scope);
         self.rendering.set(true);
         self.current_task.set(None);
 
@@ -310,7 +310,7 @@ impl Runtime {
             // Remove the task from suspense
             if let TaskType::Suspended { boundary } = &*task.ty.borrow() {
                 self.suspended_tasks.set(self.suspended_tasks.get() - 1);
-                if let Some(boundary) = boundary {
+                if let SuspenseLocation::UnderSuspense(boundary) = boundary {
                     boundary.remove_suspended_task(id);
                 }
             }
@@ -347,7 +347,7 @@ pub(crate) struct LocalTask {
 
 impl LocalTask {
     /// Suspend the task, returns true if the task was already suspended
-    pub(crate) fn suspend(&self, boundary: Option<SuspenseContext>) -> bool {
+    pub(crate) fn suspend(&self, boundary: SuspenseLocation) -> bool {
         // Make this a suspended task so it runs during suspense
         let old_type = self.ty.replace(TaskType::Suspended { boundary });
         matches!(old_type, TaskType::Suspended { .. })
@@ -357,7 +357,7 @@ impl LocalTask {
 #[derive(Clone)]
 enum TaskType {
     ClientOnly,
-    Suspended { boundary: Option<SuspenseContext> },
+    Suspended { boundary: SuspenseLocation },
     Isomorphic,
 }
 

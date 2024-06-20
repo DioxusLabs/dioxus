@@ -330,7 +330,7 @@ impl VirtualDom {
             mounts: Default::default(),
         };
 
-        let root = dom.new_scope(Box::new(root), "app", None);
+        let root = dom.new_scope(Box::new(root), "app");
 
         // Unlike react, we provide a default error boundary that just renders the error as a string
         root.state()
@@ -722,7 +722,7 @@ impl VirtualDom {
 
             self.wait_for_suspense_work().await;
 
-            self.render_suspense_immediate();
+            self.render_suspense_immediate(true);
         }
     }
 
@@ -789,7 +789,7 @@ impl VirtualDom {
     }
 
     /// Render any dirty scopes immediately, but don't poll any futures that are client only on that scope
-    pub fn render_suspense_immediate(&mut self) {
+    pub fn render_suspense_immediate(&mut self, after_initial_render: bool) {
         // Queue any new events before we start working
         self.queue_events();
 
@@ -804,8 +804,21 @@ impl VirtualDom {
                     }
                 }
                 Work::RerunScope(scope) => {
-                    // If the scope is dirty, run the scope and get the mutations
-                    self.run_and_diff_scope(None::<&mut NoOpMutations>, scope.id);
+                    if after_initial_render
+                        && self
+                            .runtime
+                            .get_state(scope.id)
+                            .unwrap()
+                            .should_run_during_suspense()
+                    {
+                        // If the scope is dirty, run the scope and get the mutations
+                        self.run_and_diff_scope(None::<&mut NoOpMutations>, scope.id);
+                    } else {
+                        tracing::warn!(
+                            "Scope {:?} was marked as dirty, but will not rerun during suspense. Only nodes that are under a suspense boundary rerun during suspense",
+                            scope.id
+                        );
+                    }
                 }
             }
             // Queue any new events

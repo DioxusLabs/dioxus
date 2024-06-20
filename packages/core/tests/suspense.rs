@@ -77,7 +77,7 @@ fn suspense_keeps_state() {
         .block_on(async {
             let mut dom = VirtualDom::new(app);
             dom.rebuild(&mut dioxus_core::NoOpMutations);
-            dom.render_suspense_immediate();
+            dom.render_suspense_immediate(true);
 
             let out = dioxus_ssr::render(&dom);
 
@@ -272,7 +272,7 @@ fn resolved_to_suspended() {
 
             dom.in_runtime(|| ScopeId::ROOT.in_runtime(|| *SUSPENDED.write() = true));
 
-            dom.render_suspense_immediate();
+            dom.render_suspense_immediate(true);
             let out = dioxus_ssr::render(&dom);
 
             assert_eq!(out, "fallback");

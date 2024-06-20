@@ -33,7 +33,7 @@ pub fn Fragment(cx: FragmentProps) -> Element {
 }
 
 #[derive(Clone, PartialEq)]
-pub struct FragmentProps(Element);
+pub struct FragmentProps(pub(crate) Element);
 
 pub struct FragmentBuilder<const BUILT: bool>(Element);
 impl FragmentBuilder<false> {
@@ -66,7 +66,7 @@ impl<const A: bool> FragmentBuilder<A> {
 /// ```rust
 /// # use dioxus::prelude::*;
 /// fn app() -> Element {
-///     rsx!{
+///     rsx! {
 ///         CustomCard {
 ///             h1 {}
 ///             p {}

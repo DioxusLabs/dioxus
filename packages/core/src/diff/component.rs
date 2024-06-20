@@ -41,7 +41,7 @@ impl VirtualDom {
             return;
         };
 
-        self.runtime.scope_stack.borrow_mut().push(scope);
+        self.runtime.push_scope(scope);
         let scope_state = &mut self.scopes[scope.0];
         // Load the old and new rendered nodes
         let old = scope_state.last_rendered_node.take().unwrap();
@@ -58,7 +58,7 @@ impl VirtualDom {
             self.runtime.get_state(scope).unwrap().mount(&self.runtime);
         }
 
-        self.runtime.scope_stack.borrow_mut().pop();
+        self.runtime.pop_scope();
     }
 
     /// Create a new [`ScopeState`] for a component that has been created with [`VirtualDom::create_scope`]
@@ -72,7 +72,7 @@ impl VirtualDom {
         new_nodes: RenderReturn,
         parent: Option<ElementRef>,
     ) -> usize {
-        self.runtime.scope_stack.borrow_mut().push(scope);
+        self.runtime.push_scope(scope);
 
         // If there are suspended scopes, we need to check if the scope is suspended before we diff it
         // If it is suspended, we need to diff it but write the mutations nothing
@@ -89,7 +89,7 @@ impl VirtualDom {
             self.runtime.get_state(scope).unwrap().mount(&self.runtime);
         }
 
-        self.runtime.scope_stack.borrow_mut().pop();
+        self.runtime.pop_scope();
         nodes
     }
 
@@ -203,7 +203,7 @@ impl VNode {
         // If the scopeid is a placeholder, we need to load up a new scope for this vcomponent. If it's already mounted, then we can just use that
         if scope_id.is_placeholder() {
             scope_id = dom
-                .new_scope(component.props.duplicate(), component.name, None)
+                .new_scope(component.props.duplicate(), component.name)
                 .state()
                 .id;
 

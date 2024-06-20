@@ -9,7 +9,6 @@ publish = false
 [dependencies]
 dioxus = { workspace = true, features = ["fullstack"]}
 serde = "1.0.159"
-simple_logger = "4.2.0"
 tracing-wasm = "0.2.1"
 tracing = { workspace = true }
 tracing-subscriber = "0.3.17"

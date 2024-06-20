@@ -697,7 +697,6 @@ dependencies = [
  "dioxus",
  "reqwest 0.11.27",
  "serde",
- "simple_logger",
  "tracing",
  "tracing-subscriber",
  "tracing-wasm",
@@ -2768,6 +2767,9 @@ dependencies = [
  "dioxus",
  "reqwest 0.12.4",
  "serde",
+ "tracing",
+ "tracing-subscriber",
+ "tracing-wasm",
 ]
 
 [[package]]

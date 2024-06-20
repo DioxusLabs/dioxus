@@ -20,6 +20,24 @@ pub(crate) enum ScopeStatus {
     },
 }
 
+#[derive(Debug, Clone, Default)]
+pub(crate) enum SuspenseLocation {
+    #[default]
+    NotSuspended,
+    InSuspensePlaceholder(SuspenseContext),
+    UnderSuspense(SuspenseContext),
+}
+
+impl SuspenseLocation {
+    pub(crate) fn suspense_context(&self) -> Option<&SuspenseContext> {
+        match self {
+            SuspenseLocation::InSuspensePlaceholder(context) => Some(context),
+            SuspenseLocation::UnderSuspense(context) => Some(context),
+            _ => None,
+        }
+    }
+}
+
 /// A component's state separate from its props.
 ///
 /// This struct exists to provide a common interface for all scopes without relying on generics.
@@ -39,7 +57,7 @@ pub(crate) struct Scope {
     pub(crate) after_render: RefCell<Vec<Box<dyn FnMut()>>>,
 
     /// The suspense boundary that this scope is currently in (if any)
-    suspense_boundary: Option<SuspenseContext>,
+    suspense_boundary: SuspenseLocation,
 
     pub(crate) status: RefCell<ScopeStatus>,
 }
@@ -50,7 +68,7 @@ impl Scope {
         id: ScopeId,
         parent_id: Option<ScopeId>,
         height: u32,
-        suspense_boundary: Option<SuspenseContext>,
+        suspense_boundary: SuspenseLocation,
     ) -> Self {
         Self {
             name,
@@ -91,8 +109,16 @@ impl Scope {
     }
 
     /// Get the suspense boundary this scope is currently in (if any)
-    pub(crate) fn suspense_boundary(&self) -> Option<SuspenseContext> {
+    pub(crate) fn suspense_boundary(&self) -> SuspenseLocation {
         self.suspense_boundary.clone()
+    }
+
+    /// Check if a node should run during suspense
+    pub(crate) fn should_run_during_suspense(&self) -> bool {
+        matches!(
+            self.suspense_boundary,
+            SuspenseLocation::UnderSuspense(_) | SuspenseLocation::InSuspensePlaceholder(_)
+        )
     }
 
     /// Mark this scope as dirty, and schedule a render for it.

@@ -9,6 +9,17 @@ use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
 fn app() -> Element {
+    rsx! {
+        SuspenseBoundary {
+            fallback: |context: SuspenseContext| rsx! {
+                "Loading..."
+            },
+            Counter {}
+        }
+    }
+}
+
+fn Counter() -> Element {
     let mut count = use_signal(|| 0);
     let mut text = use_signal(|| "...".to_string());
     let server_future = use_server_future(get_server_data)?;

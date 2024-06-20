@@ -1,4 +1,5 @@
 use crate::innerlude::{DirtyTasks, Effect};
+use crate::scope_context::SuspenseLocation;
 use crate::{
     innerlude::{LocalTask, SchedulerMsg},
     scope_context::Scope,
@@ -22,6 +23,9 @@ pub struct Runtime {
 
     // We use this to track the current scope
     pub(crate) scope_stack: RefCell<Vec<ScopeId>>,
+
+    // We use this to track the current suspense location
+    pub(crate) suspense_stack: RefCell<Vec<SuspenseLocation>>,
 
     // We use this to track the current task
     pub(crate) current_task: Cell<Option<Task>>,
@@ -50,6 +54,7 @@ impl Runtime {
             rendering: Cell::new(true),
             scope_states: Default::default(),
             scope_stack: Default::default(),
+            suspense_stack: Default::default(),
             current_task: Default::default(),
             tasks: Default::default(),
             suspended_tasks: Default::default(),
@@ -109,13 +114,32 @@ impl Runtime {
     /// Useful in a limited number of scenarios
     pub fn on_scope<O>(&self, id: ScopeId, f: impl FnOnce() -> O) -> O {
         {
-            self.scope_stack.borrow_mut().push(id);
+            self.push_scope(id);
         }
         let o = f();
         {
-            self.scope_stack.borrow_mut().pop();
+            self.pop_scope();
         }
         o
+    }
+
+    /// Push a scope onto the stack
+    pub(crate) fn push_scope(&self, scope: ScopeId) {
+        let suspense_location = self
+            .scope_states
+            .borrow()
+            .get(scope.0)
+            .and_then(|s| s.as_ref())
+            .map(|s| s.suspense_boundary())
+            .unwrap_or_default();
+        self.suspense_stack.borrow_mut().push(suspense_location);
+        self.scope_stack.borrow_mut().push(scope);
+    }
+
+    /// Pop a scope off the stack
+    pub(crate) fn pop_scope(&self) {
+        self.scope_stack.borrow_mut().pop();
+        self.suspense_stack.borrow_mut().pop();
     }
 
     /// Get the state for any scope given its ID
@@ -176,10 +200,7 @@ impl Runtime {
         // If this is not a suspended scope, and we are under a frozen context, then we should
         let scopes = self.scope_states.borrow();
         let scope = &scopes[scope_id.0].as_ref().unwrap();
-        scope
-            .suspense_boundary()
-            .filter(|suspense| suspense.suspended())
-            .is_none()
+        !matches!(scope.suspense_boundary(), SuspenseLocation::UnderSuspense(suspense) if suspense.suspended())
     }
 }
 

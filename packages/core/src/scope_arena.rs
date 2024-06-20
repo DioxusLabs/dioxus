@@ -1,5 +1,6 @@
-use crate::innerlude::{throw_error, RenderError, RenderReturn, ScopeOrder, SuspenseContext};
+use crate::innerlude::{throw_error, RenderError, RenderReturn, ScopeOrder};
 use crate::prelude::ReactiveContext;
+use crate::scope_context::SuspenseLocation;
 use crate::{
     any_props::{AnyProps, BoxedAnyProps},
     innerlude::ScopeState,
@@ -14,17 +15,19 @@ impl VirtualDom {
         &mut self,
         props: BoxedAnyProps,
         name: &'static str,
-        override_suspense_context: Option<SuspenseContext>,
     ) -> &mut ScopeState {
         let parent_id = self.runtime.current_scope_id();
-        let (height, mut suspense_boundary) =
-            match parent_id.and_then(|id| self.runtime.get_state(id)) {
-                Some(parent) => (parent.height() + 1, parent.suspense_boundary()),
-                None => (0, None),
-            };
-        if let Some(override_suspense_context) = override_suspense_context {
-            suspense_boundary = Some(override_suspense_context);
-        }
+        let height = match parent_id.and_then(|id| self.runtime.get_state(id)) {
+            Some(parent) => parent.height() + 1,
+            None => 0,
+        };
+        let suspense_boundary = self
+            .runtime
+            .suspense_stack
+            .borrow()
+            .last()
+            .cloned()
+            .unwrap_or(SuspenseLocation::NotSuspended);
         let entry = self.scopes.vacant_entry();
         let id = ScopeId(entry.key());
 
@@ -51,7 +54,7 @@ impl VirtualDom {
             crate::Runtime::current().is_some(),
             "Must be in a dioxus runtime"
         );
-        self.runtime.scope_stack.borrow_mut().push(scope_id);
+        self.runtime.push_scope(scope_id);
 
         let scope = &self.scopes[scope_id.0];
         let output = {
@@ -87,7 +90,7 @@ impl VirtualDom {
         self.dirty_scopes
             .remove(&ScopeOrder::new(scope_state.height, scope_id));
 
-        self.runtime.scope_stack.borrow_mut().pop();
+        self.runtime.pop_scope();
 
         output
     }
@@ -121,7 +124,7 @@ impl VirtualDom {
                 if !already_suspended {
                     tracing::trace!("Suspending {:?} on {:?}", scope_id, task);
                     // Add this task to the suspended tasks list of the boundary
-                    if let Some(boundary) = &boundary {
+                    if let SuspenseLocation::UnderSuspense(boundary) = &boundary {
                         boundary.add_suspended_task(e.clone());
                     }
                     self.runtime

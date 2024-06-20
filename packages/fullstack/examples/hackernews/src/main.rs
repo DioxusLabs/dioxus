@@ -11,15 +11,13 @@ use std::{
 use svg_attributes::to;
 
 fn main() {
-    LaunchBuilder::new()
-        .with_cfg({
-            let mut config = dioxus::fullstack::Config::new().stream_page(true);
-            server_only! {
-                config = config.incremental(dioxus::ssr::incremental::IncrementalRendererConfig::new());
-            }
-            config
-        })
-        .launch(|| rsx! { Router::<Route> {} });
+    #[cfg(feature = "web")]
+    tracing_wasm::set_as_global_default();
+
+    #[cfg(feature = "server")]
+    tracing_subscriber::fmt::init();
+
+    launch(|| rsx! { Router::<Route> {} });
 }
 
 #[derive(Clone, Routable)]
@@ -42,7 +40,15 @@ fn Homepage(story: ReadOnlySignal<PreviewState>) -> Element {
     rsx! {
         div { display: "flex", flex_direction: "row", width: "100%",
             ErrorBoundary {
-                div { width: "50%", Stories {} }
+                div {
+                    width: "50%",
+                    SuspenseBoundary {
+                        fallback: |context: SuspenseContext| rsx! {
+                            "Loading..."
+                        },
+                        Stories {}
+                    }
+                }
                 div { width: "50%", Preview {} }
             }
         }

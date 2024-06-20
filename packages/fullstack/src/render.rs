@@ -181,6 +181,7 @@ impl SsrRendererPool {
             tracing::info!("Rebuilding vdom");
             with_server_context(server_context.clone(), || {
                 virtual_dom.rebuild(&mut NoOpMutations);
+                virtual_dom.render_suspense_immediate(false);
             });
 
             // While we are streaming, there is no need to include hydration ids in the SSR render
@@ -208,7 +209,7 @@ impl SsrRendererPool {
                     .await;
 
                     with_server_context(server_context.clone(), || {
-                        virtual_dom.render_suspense_immediate();
+                        virtual_dom.render_suspense_immediate(true);
                     });
                 };
 
