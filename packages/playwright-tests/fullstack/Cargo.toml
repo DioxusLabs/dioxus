@@ -7,7 +7,7 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus = { workspace = true, features = ["fullstack"], default-features = true }
+dioxus = { workspace = true, features = ["fullstack"] }
 serde = "1.0.159"
 
 [features]

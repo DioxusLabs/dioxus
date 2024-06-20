@@ -13,8 +13,8 @@ keywords = ["dom", "ui", "gui", "react"]
 proc-macro = true
 
 [dependencies]
-quote = { workspace = true }
 proc-macro2 = { version = "1.0" }
+quote = { workspace = true }
 
 [features]
 default = []

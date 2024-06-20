@@ -39,7 +39,7 @@ fn prepare(path: impl Into<String>) -> VirtualDom {
         rsx! {
             h1 { "App" }
             Router::<Route> {
-                config: move || -> RouterConfig<Route> {
+                config: move |_| {
                     RouterConfig::default().history(MemoryHistory::with_initial_path(path.clone()))
                 }
             }
