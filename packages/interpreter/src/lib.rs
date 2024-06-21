@@ -9,8 +9,11 @@ pub static INTERPRETER_JS: &str = include_str!("./js/core.js");
 /// The code explicitly for desktop/liveview that bridges the eval gap between the two
 pub static NATIVE_JS: &str = include_str!("./js/native.js");
 
-/// The code explicitly for desktop/liveview that bridges the eval gap between the two
-pub static HYDRATE_JS: &str = include_str!("./js/hydrate.js");
+/// The code that handles swapping in streaming chunks
+pub static STREAMING_JS: &str = include_str!("./js/streaming.js");
+
+/// The code that handles initializing data used for fullstack data streaming
+pub static INITIALIZE_STREAMING_JS: &str = include_str!("./js/initialize_streaming.js");
 
 #[cfg(all(feature = "binary-protocol", feature = "sledgehammer"))]
 mod write_native_mutations;
@@ -42,5 +45,12 @@ pub mod minimal_bindings {
 
         /// Roll up all the values from the node into a JS object that we can deserialize
         pub fn collectFormValues(node: JsValue) -> JsValue;
+    }
+
+    #[wasm_bindgen(module = "/src/js/hydrate.js")]
+    extern "C" {
+        fn register_rehydrate_chunk_for_streaming(
+            closure: &wasm_bindgen::closure::Closure<dyn FnMut(String, js_sys::Uint8Array)>,
+        );
     }
 }

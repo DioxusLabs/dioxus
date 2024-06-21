@@ -3,6 +3,11 @@ use dioxus_core::prelude::*;
 use dioxus_core::AttributeValue;
 use dioxus_core::{DynamicNode, ElementId};
 
+// When hydrating streaming components:
+// 1. Just hydrate the template on the outside
+// 2. As we render the virtual dom initially, keep track of the server ids of the suspense boundaries
+// 3. Register a callback for dx_hydrate(id, data) that takes some new data, reruns the suspense boundary with that new data and then rehydrates the node
+
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum RehydrationError {

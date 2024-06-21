@@ -42,6 +42,11 @@ impl Renderer {
         self.render_components = Some(Arc::new(callback));
     }
 
+    /// Reset the callback that the renderer uses to render components
+    pub fn reset_render_components(&mut self) {
+        self.render_components = None;
+    }
+
     pub fn render(&mut self, dom: &VirtualDom) -> String {
         let mut buf = String::new();
         self.render_to(&mut buf, dom).unwrap();

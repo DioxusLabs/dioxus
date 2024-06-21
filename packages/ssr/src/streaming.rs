@@ -26,11 +26,11 @@
 //!     <div>Final HTML</div>
 //! </div>
 //! <script>
-//!     window.dx_hydrate(2);
+//!     window.dx_swap(2);
 //! </script>
 //! ```
 
-use dioxus_interpreter_js::HYDRATE_JS;
+use dioxus_interpreter_js::STREAMING_JS;
 use futures_channel::mpsc::Sender;
 
 use std::fmt::{Display, Write};
@@ -49,7 +49,8 @@ impl<E> StreamingRenderer<E> {
 
         Self {
             channel: render_into,
-            last_mount_id: 0,
+            // We start on id 2 because the first id is reserved for the initial html chunk sent to the client
+            last_mount_id: 2,
             has_script: false,
         }
     }
@@ -95,13 +96,13 @@ impl<E> StreamingRenderer<E> {
         let resolved_id = id.id + 1;
         write!(
             into,
-            r#"<div id="ds-{resolved_id}" hidden>{html}</div><script>window.dx_hydrate({id})</script>"#
+            r#"<div id="ds-{resolved_id}" hidden>{html}</div><script>window.dx_swap({id})</script>"#
         )
     }
 
     /// Sends the script that handles loading streaming chunks to the client
     fn send_streaming_script(&mut self) {
-        let script = format!("<script>{HYDRATE_JS}</script>");
+        let script = format!("<script>{STREAMING_JS}</script>");
         _ = self.channel.start_send(Ok(script));
     }
 
@@ -112,7 +113,7 @@ impl<E> StreamingRenderer<E> {
 }
 
 /// A mounted placeholder in the dom that may change in the future
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Mount {
     id: usize,
 }

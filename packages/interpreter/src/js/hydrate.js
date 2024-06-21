@@ -1,1 +1,1 @@
-var id_to_string=(id)=>`ds-${id}`;window.dx_hydrate=(suspense_placeholder_id)=>{const template=document.getElementById(id_to_string(suspense_placeholder_id)),target=document.getElementById(id_to_string(suspense_placeholder_id+1));target.hidden=!1,template.replaceWith(target)};
+function register_rehydrate_chunk_for_streaming(callback){window.hydration_callback=(id,data)=>{callback(`ds-${id+1}`,data)};for(let i=0;i<window.hydrate_queue.length;i++){const[id,data]=window.hydrate_queue[i];window.hydration_callback(id,data)}}export{register_rehydrate_chunk_for_streaming};

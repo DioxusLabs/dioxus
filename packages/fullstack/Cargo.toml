@@ -28,6 +28,7 @@ http = { workspace = true, optional = true }
 
 # Web Integration
 dioxus-web = { workspace = true, features = ["hydrate"], default-features = false, optional = true }
+dioxus-interpreter-js = { workspace = true, optional = true }   
 
 # Desktop Integration
 dioxus-desktop = { workspace = true, optional = true }
@@ -99,7 +100,8 @@ server = [
     "dep:thiserror",
     "dep:dioxus-cli-config",
     "dep:async-trait",
-    "dep:parking_lot"
+    "dep:parking_lot",
+    "dioxus-interpreter-js"
 ]
 
 [package.metadata.docs.rs]

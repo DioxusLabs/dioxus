@@ -51,8 +51,13 @@ fn NestedSuspendedComponent() -> Element {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         12345678
     })?;
+    let mut count = use_signal(|| 0);
     rsx! {
         "Suspended Nested"
+        button {
+            onclick: move |_| count += 1,
+            "{count}"
+        }
     }
 }
 

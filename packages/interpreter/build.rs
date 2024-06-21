@@ -35,6 +35,8 @@ fn main() {
     gen_bindings("eval", "eval");
     gen_bindings("native_eval", "native_eval");
     gen_bindings("hydrate", "hydrate");
+    gen_bindings("initialize_streaming", "initialize_streaming");
+    gen_bindings("streaming", "streaming");
 
     std::fs::write("src/js/hash.txt", hash.to_string()).unwrap();
 }

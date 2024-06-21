@@ -2424,6 +2424,7 @@ dependencies = [
  "dioxus-cli-config",
  "dioxus-desktop",
  "dioxus-hot-reload",
+ "dioxus-interpreter-js",
  "dioxus-lib",
  "dioxus-mobile",
  "dioxus-ssr",

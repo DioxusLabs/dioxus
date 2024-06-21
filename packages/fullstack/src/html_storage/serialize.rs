@@ -23,8 +23,9 @@ pub(crate) fn serde_to_writable<T: Serialize>(
 pub(crate) fn encode_in_element(
     data: &super::HTMLData,
     write_to: &mut impl std::fmt::Write,
+    mount: dioxus_ssr::streaming::Mount,
 ) -> Result<(), ciborium::ser::Error<std::fmt::Error>> {
-    write_to.write_str(r#"<script>window.dioxus_storage_data.push(""#)?;
+    write!(write_to, r#"<script>window.dx_hydrate({mount}, ""#)?;
     serde_to_writable(&data, write_to)?;
     Ok(write_to.write_str(r#"");</script>"#)?)
 }
