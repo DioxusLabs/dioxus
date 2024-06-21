@@ -826,7 +826,9 @@ impl VirtualDom {
                                 .filter(|props| props.suspended())
                                 .is_some();
 
-                        if was_suspended && !is_now_suspended {
+                        if is_now_suspended {
+                            resolved_scopes.retain(|&id| id != scope.id);
+                        } else if was_suspended {
                             resolved_scopes.push(scope.id);
                         }
                     } else {

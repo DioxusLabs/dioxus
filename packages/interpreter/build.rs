@@ -18,7 +18,11 @@ fn main() {
     let hash = hash_ts_files(ts_paths);
 
     // If the hash matches the one on disk, we're good and don't need to update bindings
-    let expected = include_str!("src/js/hash.txt").trim();
+    let fs_hash_string = std::fs::read_to_string("src/js/hash.txt");
+    let expected = fs_hash_string
+        .as_ref()
+        .map(|s| s.trim())
+        .unwrap_or_default();
     if expected == hash.to_string() {
         return;
     }
@@ -62,8 +66,7 @@ fn gen_bindings(input_name: &str, output_name: &str) {
         .arg(format!("src/ts/{input_name}.ts"))
         .arg("--outfile")
         .arg(format!("src/js/{output_name}.js"))
-        .arg("--minify-whitespace")
-        .arg("--minify-syntax")
+        .arg("--minify")
         .status()
         .unwrap();
 

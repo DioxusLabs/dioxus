@@ -26,7 +26,7 @@
 //!     <div>Final HTML</div>
 //! </div>
 //! <script>
-//!     hydrate(2);
+//!     window.dx_hydrate(2);
 //! </script>
 //! ```
 
@@ -89,13 +89,13 @@ impl<E> StreamingRenderer<E> {
         // Then replace the suspense placeholder with the new content
         let resolved_id = id.id + 1;
         _ = self.channel.start_send(Ok(format!(
-            r#"<div id="ds-{resolved_id}" hidden>{html}</div><script>hydrate({id})</script>"#
+            r#"<div id="ds-{resolved_id}" hidden>{html}</div><script>window.dx_hydrate({id})</script>"#
         )));
     }
 
     /// Sends the script that handles loading streaming chunks to the client
     fn send_streaming_script(&mut self) {
-        let script = format!("<script type=\"module\">{HYDRATE_JS}</script>");
+        let script = format!("<script>{HYDRATE_JS}</script>");
         _ = self.channel.start_send(Ok(script));
     }
 
@@ -141,6 +141,7 @@ fn render_streaming() {
                 let scope_to_mount_mapping = Arc::new(RwLock::new(HashMap::new()));
 
                 let mut ssr_renderer = crate::Renderer::new();
+                ssr_renderer.pre_render = true;
                 {
                     let scope_to_mount_mapping = scope_to_mount_mapping.clone();
                     let stream = stream.clone();
@@ -174,7 +175,7 @@ fn render_streaming() {
                             },
                             SuspendedComponent {}
                         }
-                        div {}
+                        div { "footer 123" }
                     }
                 }
 
@@ -184,8 +185,26 @@ fn render_streaming() {
                         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                     })
                     .suspend()?;
+
                     rsx! {
-                        "Suspended"
+                        "Suspended???"
+                        SuspenseBoundary {
+                            fallback: |_| rsx! {
+                                "Loading... more"
+                            },
+                            NestedSuspendedComponent {}
+                        }
+                    }
+                }
+
+                #[component]
+                fn NestedSuspendedComponent() -> Element {
+                    use_resource(move || async move {
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                    })
+                    .suspend()?;
+                    rsx! {
+                        "Suspended Nested"
                     }
                 }
 
@@ -197,9 +216,9 @@ fn render_streaming() {
 
                 // Actually resolve suspense
                 while dom.suspended_tasks_remaining() {
-                    println!("waiting for suspense");
                     dom.wait_for_suspense_work().await;
                     let resolved_suspense_nodes = dom.render_suspense_immediate();
+                    println!("{:?} suspense scopes resolved", resolved_suspense_nodes);
 
                     // Just rerender the resolved nodes
                     for scope in resolved_suspense_nodes {
