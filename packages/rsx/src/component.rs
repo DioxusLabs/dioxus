@@ -65,10 +65,10 @@ impl Parse for Component {
 
         // We've received a valid rsx block, but it's not necessarily a valid component
         // validating it will dump diagnostics into the output
-        component.validate_path();
+        component.validate_component_path();
         component.validate_fields();
         component.validate_key();
-        component.validate_spread();
+        component.validate_component_spread();
 
         Ok(component)
     }
@@ -107,7 +107,7 @@ impl ToTokens for Component {
 impl Component {
     // Make sure this a proper component path (uppercase ident, a path, or contains an underscorea)
     // This should be validated by the RsxBlock parser when it peeks bodynodes
-    fn validate_path(&mut self) {
+    fn validate_component_path(&mut self) {
         let path = &self.name;
 
         // First, ensure the path is not a single lowercase ident with no underscores
@@ -148,7 +148,7 @@ impl Component {
     }
 
     // Make sure the spread argument is being used as props spreading
-    fn validate_spread(&mut self) {
+    fn validate_component_spread(&mut self) {
         // Next, ensure that there's only one spread argument in the attributes *and* it's the last one
         for spread in self.spreads.iter().skip(1) {
             self.diagnostics.push(

@@ -92,6 +92,7 @@ use syn::{
     Result, Token,
 };
 
+pub use innerlude::*;
 pub(crate) mod innerlude {
     pub use crate::attribute::*;
     pub use crate::component::*;

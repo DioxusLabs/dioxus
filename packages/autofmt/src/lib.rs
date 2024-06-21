@@ -216,7 +216,7 @@ struct DisplayIfmt<'a>(&'a IfmtInput);
 
 impl Display for DisplayIfmt<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let inner_tokens = self.0.source.as_ref().unwrap().to_token_stream();
+        let inner_tokens = self.0.to_quoted_string_from_parts();
         inner_tokens.fmt(f)
     }
 }

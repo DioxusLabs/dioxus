@@ -6,7 +6,7 @@ use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
     token::{self, Brace},
-    Expr, ExprIf, Ident, LitStr, Pat, Result, Token,
+    Expr, Ident, LitStr, Result, Token,
 };
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
@@ -21,7 +21,7 @@ pub enum BodyNode {
     Text(TextNode),
 
     /// {expr}
-    RawExpr(RawExpr),
+    RawExpr(BracedRawExpr),
 
     /// for item in items {}
     ForLoop(ForLoop),
@@ -47,27 +47,29 @@ impl Parse for BodyNode {
         }
 
         // Match statements are special but have no special arm syntax
-        // we could allow arm syntax if we wanted
+        // we could allow arm syntax if we wanted.
+        //
+        // And it might even backwards compatible? - I think it is with the right fallback
+        // -> parse as bodynode (BracedRawExpr will kick in on multiline arms)
+        // -> if that fails parse as an expr, since that arm might be a one-liner
         //
         // ```
-        // match {
-        //  val => div {}
-        //  other_val => div {}
+        // match expr {
+        //    val => rsx! { div {} },
+        //    other_val => rsx! { div {} }
         // }
         // ```
         if stream.peek(Token![match]) {
-            return Ok(BodyNode::RawExpr(RawExpr {
+            return Ok(BodyNode::RawExpr(BracedRawExpr {
                 expr: stream.parse::<Expr>()?.to_token_stream(),
                 dyn_idx: DynIdx::default(),
+                brace: None,
             }));
         }
 
-        // Raw expressions need to be wrapped in braces
+        // Raw expressions need to be wrapped in braces - let RawBracedExpr handle partial expansion
         if stream.peek(token::Brace) {
-            return Ok(BodyNode::RawExpr(RawExpr {
-                expr: stream.parse::<Expr>()?.to_token_stream(),
-                dyn_idx: DynIdx::default(),
-            }));
+            return Ok(BodyNode::RawExpr(stream.parse()?));
         }
 
         // If there's an ident immediately followed by a dash, it's a web component
@@ -109,14 +111,7 @@ impl Parse for BodyNode {
         // crate::component{}
         // Input::<InputProps<'_, i32> {}
         // crate::Input::<InputProps<'_, i32> {}
-        if stream.fork().parse::<syn::Path>().is_ok() {
-            return Ok(BodyNode::Component(stream.parse()?));
-        }
-
-        Err(syn::Error::new(
-            stream.span(),
-            "Expected a valid body node.\nExpressions must be wrapped in curly braces.",
-        ))
+        Ok(BodyNode::Component(stream.parse()?))
     }
 }
 
@@ -244,4 +239,54 @@ impl BodyNode {
             _ => panic!("Element name not available for this node"),
         }
     }
+}
+
+#[test]
+fn parsing_matches() {
+    let element = quote! { div { class: "inline-block mr-4", icons::icon_14 {} } };
+    assert!(matches!(
+        syn::parse2::<BodyNode>(element).unwrap(),
+        BodyNode::Element(_)
+    ));
+
+    let text = quote! { "Hello, world!" };
+    assert!(matches!(
+        syn::parse2::<BodyNode>(text).unwrap(),
+        BodyNode::Text(_)
+    ));
+
+    let component = quote! { Component {} };
+    assert!(matches!(
+        syn::parse2::<BodyNode>(component).unwrap(),
+        BodyNode::Component(_)
+    ));
+
+    let raw_expr = quote! { { 1 + 1 } };
+    assert!(matches!(
+        syn::parse2::<BodyNode>(raw_expr).unwrap(),
+        BodyNode::RawExpr(_)
+    ));
+
+    let for_loop = quote! { for item in items {} };
+    assert!(matches!(
+        syn::parse2::<BodyNode>(for_loop).unwrap(),
+        BodyNode::ForLoop(_)
+    ));
+
+    let if_chain = quote! { if cond {} else if cond {} };
+    assert!(matches!(
+        syn::parse2::<BodyNode>(if_chain).unwrap(),
+        BodyNode::IfChain(_)
+    ));
+
+    let match_expr = quote! {
+        match blah {
+            val => rsx! { div {} },
+            other_val => rsx! { div {} }
+        }
+    };
+    assert!(matches!(
+        syn::parse2::<BodyNode>(match_expr).unwrap(),
+        BodyNode::RawExpr(_)
+    ),);
 }

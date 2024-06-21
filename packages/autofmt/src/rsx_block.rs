@@ -101,6 +101,8 @@ impl Writer<'_> {
 
                 self.write_attributes(attributes, spreads, true, brace, has_children)?;
 
+                write!(self.out, " ")?;
+
                 for (id, child) in children.iter().enumerate() {
                     self.write_ident(child)?;
                     if id != children.len() - 1 && children.len() > 1 {
@@ -143,7 +145,7 @@ impl Writer<'_> {
         &mut self,
         attributes: &[AttributeType],
         spreads: &[Spread],
-        sameline: bool,
+        props_same_line: bool,
         brace: &Brace,
         has_children: bool,
     ) -> Result {
@@ -161,7 +163,7 @@ impl Writer<'_> {
         while let Some(attr) = attr_iter.next() {
             self.out.indent_level += 1;
 
-            if !sameline {
+            if !props_same_line {
                 self.write_attr_comments(
                     brace,
                     match attr {
@@ -173,7 +175,7 @@ impl Writer<'_> {
 
             self.out.indent_level -= 1;
 
-            if !sameline {
+            if !props_same_line {
                 self.out.indented_tabbed_line()?;
             }
 
@@ -185,7 +187,7 @@ impl Writer<'_> {
             if attr_iter.peek().is_some() {
                 write!(self.out, ",")?;
 
-                if sameline {
+                if props_same_line {
                     write!(self.out, " ")?;
                 }
             }
@@ -194,7 +196,7 @@ impl Writer<'_> {
         let has_attributes = !attributes.is_empty() || !spreads.is_empty();
 
         if has_attributes && has_children {
-            write!(self.out, ", ")?;
+            write!(self.out, ",")?;
         }
 
         Ok(())

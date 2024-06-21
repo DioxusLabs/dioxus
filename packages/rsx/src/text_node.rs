@@ -1,5 +1,6 @@
 use location::DynIdx;
 use proc_macro2::TokenStream as TokenStream2;
+use syn::LitStr;
 
 use self::literal::{HotLiteral, RsxLiteral};
 use super::*;
@@ -47,6 +48,22 @@ impl ToTokens for TextNode {
 }
 
 impl TextNode {
+    pub fn from_text(input: &str) -> Self {
+        Self {
+            input: IfmtInput::new_static(input),
+            hr_idx: DynIdx::default(),
+            dyn_idx: DynIdx::default(),
+        }
+    }
+
+    pub fn from_listr(input: LitStr) -> Self {
+        Self {
+            input: IfmtInput::new_litstr(input),
+            hr_idx: DynIdx::default(),
+            dyn_idx: DynIdx::default(),
+        }
+    }
+
     pub fn is_static(&self) -> bool {
         self.input.is_static()
     }

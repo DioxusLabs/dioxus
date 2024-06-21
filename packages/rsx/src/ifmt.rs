@@ -31,6 +31,13 @@ impl IfmtInput {
         }
     }
 
+    pub fn new_litstr(input: LitStr) -> Self {
+        Self {
+            segments: vec![Segment::Literal(input.value())],
+            source: Some(input),
+        }
+    }
+
     pub fn join(mut self, other: Self, separator: &str) -> Self {
         if !self.segments.is_empty() {
             self.segments.push(Segment::Literal(separator.to_string()));
@@ -238,6 +245,29 @@ impl IfmtInput {
             }
         }
         single_dynamic
+    }
+
+    /// Convert the ifmt to a string, using the source if available
+    pub fn to_quoted_string_from_parts(&self) -> String {
+        if let Some(source) = &self.source {
+            return format!("\"{}\"", source.value());
+        }
+
+        let joined = self
+            .segments
+            .iter()
+            .map(|seg| match seg {
+                Segment::Literal(lit) => lit.clone(),
+                Segment::Formatted(FormattedSegment { segment, .. }) => match segment {
+                    FormattedSegmentType::Expr(expr) => expr.to_token_stream().to_string(),
+                    FormattedSegmentType::Ident(ident) => ident.to_string(),
+                },
+            })
+            .collect::<Vec<_>>()
+            .join("");
+
+        // todo: maybe escape the string?
+        format!("\"{}\"", joined)
     }
 }
 
