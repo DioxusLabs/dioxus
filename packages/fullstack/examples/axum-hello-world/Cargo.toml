@@ -13,8 +13,9 @@ tracing-wasm = "0.2.1"
 tracing = { workspace = true }
 tracing-subscriber = "0.3.17"
 reqwest = "0.11.18"
+tokio = { workspace = true, features = ["full"], optional = true }
 
 [features]
 default = []
-server = ["dioxus/axum"]
+server = ["dioxus/axum", "dep:tokio"]
 web = ["dioxus/web"]

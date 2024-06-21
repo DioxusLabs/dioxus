@@ -424,7 +424,7 @@ impl HasFormData for WebFormData {
 
 impl HasFileData for WebFormData {
     #[cfg(feature = "file_engine")]
-    fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
+    fn files(&self) -> Option<std::sync::Arc<dyn dioxus_html::FileEngine>> {
         let files = self
             .element
             .dyn_ref()
@@ -505,17 +505,20 @@ impl InteractionLocation for WebDragData {
 
 impl HasFileData for WebDragData {
     #[cfg(feature = "file_engine")]
-    fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
-        let files = self.raw.dyn_ref::<DragEvent>().and_then(|drag_event| {
-            drag_event.data_transfer().and_then(|dt| {
-                dt.files().and_then(|files| {
-                    #[allow(clippy::arc_with_non_send_sync)]
-                    dioxus_html::WebFileEngine::new(files).map(|f| {
-                        std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>
+    fn files(&self) -> Option<std::sync::Arc<dyn dioxus_html::FileEngine>> {
+        let files = self
+            .raw
+            .dyn_ref::<web_sys::DragEvent>()
+            .and_then(|drag_event| {
+                drag_event.data_transfer().and_then(|dt| {
+                    dt.files().and_then(|files| {
+                        #[allow(clippy::arc_with_non_send_sync)]
+                        dioxus_html::WebFileEngine::new(files).map(|f| {
+                            std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>
+                        })
                     })
                 })
-            })
-        });
+            });
 
         files
     }

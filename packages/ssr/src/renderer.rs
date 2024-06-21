@@ -53,7 +53,13 @@ impl Renderer {
         buf: &mut W,
         dom: &VirtualDom,
     ) -> std::fmt::Result {
+        self.reset_hydration();
         self.render_scope(buf, dom, ScopeId::ROOT)
+    }
+
+    /// Reset the renderer hydration state
+    pub fn reset_hydration(&mut self) {
+        self.dynamic_node_id = 0;
     }
 
     pub fn render_scope<W: Write + ?Sized>(
@@ -63,7 +69,6 @@ impl Renderer {
         scope: ScopeId,
     ) -> std::fmt::Result {
         let node = dom.get_scope(scope).unwrap().root_node();
-        self.dynamic_node_id = 0;
         self.render_template(buf, dom, node)?;
 
         Ok(())

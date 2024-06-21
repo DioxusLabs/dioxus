@@ -16,9 +16,19 @@ pub(crate) struct SerializeContext {
 }
 
 impl SerializeContext {
-    pub fn push<T: Serialize>(&self, value: &T) {
-        let mut data = self.data.borrow_mut();
-        data.push(value);
+    /// Create a new entry in the data that will be sent to the client without inserting any data. Returns an id that can be used to insert data into the entry once it is ready.
+    pub(crate) fn create_entry(&self) -> usize {
+        self.data.borrow_mut().create_entry()
+    }
+
+    /// Insert data into an entry that was created with [`Self::create_entry`]
+    pub(crate) fn insert<T: Serialize>(&self, id: usize, value: &T) {
+        self.data.borrow_mut().insert(id, value);
+    }
+
+    /// Push resolved data into the serialized server data
+    pub(crate) fn push<T: Serialize>(&self, data: &T) {
+        self.data.borrow_mut().push(data);
     }
 }
 
@@ -29,14 +39,29 @@ pub(crate) fn use_serialize_context() -> SerializeContext {
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 #[serde(transparent)]
 pub(crate) struct HTMLData {
-    pub data: Vec<Vec<u8>>,
+    pub data: Vec<Option<Vec<u8>>>,
 }
 
 impl HTMLData {
-    pub(crate) fn push<T: Serialize>(&mut self, value: &T) {
+    /// Create a new entry in the data that will be sent to the client without inserting any data. Returns an id that can be used to insert data into the entry once it is ready.
+    pub(crate) fn create_entry(&mut self) -> usize {
+        let id = self.data.len();
+        self.data.push(None);
+        id
+    }
+
+    /// Insert data into an entry that was created with [`Self::create_entry`]
+    pub(crate) fn insert<T: Serialize>(&mut self, id: usize, value: &T) {
         let mut serialized = Vec::new();
         ciborium::into_writer(value, &mut serialized).unwrap();
-        self.data.push(serialized);
+        self.data[id] = Some(serialized);
+    }
+
+    /// Push resolved data into the serialized server data
+    pub(crate) fn push<T: Serialize>(&mut self, data: &T) {
+        let mut serialized = Vec::new();
+        ciborium::into_writer(data, &mut serialized).unwrap();
+        self.data.push(Some(serialized));
     }
 
     pub(crate) fn cursor(self) -> HTMLDataCursor {
@@ -48,7 +73,7 @@ impl HTMLData {
 }
 
 pub(crate) struct HTMLDataCursor {
-    data: Vec<Vec<u8>>,
+    data: Vec<Option<Vec<u8>>>,
     index: AtomicUsize,
 }
 
@@ -63,7 +88,7 @@ impl HTMLDataCursor {
             );
             return None;
         }
-        let mut cursor = &self.data[current];
+        let mut cursor = self.data[current].as_ref()?;
         self.index.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         match ciborium::from_reader(Cursor::new(cursor)) {
             Ok(x) => Some(x),
@@ -116,7 +141,10 @@ fn serialized_and_deserializes() {
             );
             let mut storage = HTMLData::default();
             storage.push(&data);
-            println!("serialized size: {}", storage.data[0].len());
+            println!(
+                "serialized size: {}",
+                storage.data[0].as_ref().unwrap().len()
+            );
             let mut as_string = String::new();
             serde_to_writable(&data, &mut as_string).unwrap();
             println!("compressed size: {}", as_string.len());

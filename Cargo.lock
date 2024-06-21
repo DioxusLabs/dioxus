@@ -697,6 +697,7 @@ dependencies = [
  "dioxus",
  "reqwest 0.11.27",
  "serde",
+ "tokio",
  "tracing",
  "tracing-subscriber",
  "tracing-wasm",

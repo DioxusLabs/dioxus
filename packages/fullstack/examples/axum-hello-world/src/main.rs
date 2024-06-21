@@ -8,51 +8,52 @@
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
+// When hydrating nested suspense boundaries, we still need to run code in the unresolved suspense boundary to replicate what the server has already done:
 fn app() -> Element {
     rsx! {
+        div {
+            "Hello world"
+        }
+        // Imagine, we just resolve this suspense boundary. We pass down whatever data we resolved with it and None for any unresolved server functions in nested server functions [Some(data), None]
         SuspenseBoundary {
-            fallback: |context: SuspenseContext| rsx! {
+            fallback: |_| rsx! {
                 "Loading..."
             },
-            Counter {}
+            SuspendedComponent {}
         }
+        div { "footer 123" }
     }
 }
 
-fn Counter() -> Element {
-    let mut count = use_signal(|| 0);
-    let mut text = use_signal(|| "...".to_string());
-    let server_future = use_server_future(get_server_data)?;
+#[component]
+fn SuspendedComponent() -> Element {
+    use_server_future(move || async move {
+        #[cfg(feature = "server")]
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        1234
+    })?;
 
     rsx! {
-        h1 { "High-Five counter: {count}" }
-        button { onclick: move |_| count += 1, "Up high!" }
-        button { onclick: move |_| count -= 1, "Down low!" }
-        button {
-            onclick: move |_| async move {
-                if let Ok(data) = get_server_data().await {
-                    println!("Client received: {}", data);
-                    text.set(data.clone());
-                    post_server_data(data).await.unwrap();
-                }
+        "Suspended???"
+        SuspenseBoundary {
+            fallback: |_| rsx! {
+                "Loading... more"
             },
-            "Run a server function!"
+            NestedSuspendedComponent {}
         }
-        "Server said: {text}"
-        "{server_future.state():?}"
     }
 }
 
-#[server]
-async fn post_server_data(data: String) -> Result<(), ServerFnError> {
-    println!("Server received: {}", data);
-
-    Ok(())
-}
-
-#[server]
-async fn get_server_data() -> Result<String, ServerFnError> {
-    Ok(reqwest::get("https://httpbin.org/ip").await?.text().await?)
+#[component]
+fn NestedSuspendedComponent() -> Element {
+    use_server_future(move || async move {
+        #[cfg(feature = "server")]
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        12345678
+    })?;
+    rsx! {
+        "Suspended Nested"
+    }
 }
 
 fn main() {

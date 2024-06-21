@@ -9,8 +9,8 @@ use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
 use std::sync::Arc;
 use std::sync::RwLock;
-use std::{future::Future, time::Duration};
-use tokio::{task::JoinHandle, time::Instant};
+use std::{collections::HashMap, future::Future};
+use tokio::task::JoinHandle;
 
 use crate::prelude::*;
 use dioxus_lib::prelude::*;
@@ -168,11 +168,35 @@ impl SsrRendererPool {
                 return;
             }
 
-            let mut streaming_renderer = StreamingRenderer::new(pre_body, into);
+            let stream = Arc::new(RwLock::new(StreamingRenderer::new(pre_body, into)));
+            let scope_to_mount_mapping = Arc::new(RwLock::new(HashMap::new()));
+
+            renderer.pre_render = true;
+            {
+                let scope_to_mount_mapping = scope_to_mount_mapping.clone();
+                let stream = stream.clone();
+                renderer.set_render_components(move |renderer, to, vdom, scope| {
+                    let is_suspense_boundary = vdom
+                        .get_scope(scope)
+                        .and_then(|s| SuspenseBoundaryProps::downcast_from_scope(s))
+                        .filter(|s| s.suspended())
+                        .is_some();
+                    if is_suspense_boundary {
+                        let mount = stream.write().unwrap().render_placeholder(
+                            |to| renderer.render_scope(to, vdom, scope),
+                            &mut *to,
+                        )?;
+                        scope_to_mount_mapping.write().unwrap().insert(scope, mount);
+                    } else {
+                        renderer.render_scope(to, vdom, scope)?
+                    }
+                    Ok(())
+                });
+            }
 
             macro_rules! throw_error {
                 ($e:expr) => {
-                    streaming_renderer.close_with_error($e);
+                    stream.write().unwrap().close_with_error($e);
                     return;
                 };
             }
@@ -183,45 +207,73 @@ impl SsrRendererPool {
                 virtual_dom.rebuild(&mut NoOpMutations);
             });
 
-            // While we are streaming, there is no need to include hydration ids in the SSR render
-            renderer.pre_render = false;
+            // Render the initial frame with loading placeholders
+            let initial_frame = renderer.render(&virtual_dom);
+            stream.write().unwrap().render(initial_frame);
 
-            // We only render with a maximum frequency of 200ms to avoid forcing the client to render too much data
-            const RENDER_DEDUPLICATE_TIMEOUT: Duration = Duration::from_millis(200);
-
-            let mut last_render: Option<Instant> = None;
-
+            // After the initial render, we need to resolve suspense
             while virtual_dom.suspended_tasks_remaining() {
                 ProvideServerContext::new(
                     virtual_dom.wait_for_suspense_work(),
                     server_context.clone(),
                 )
                 .await;
-
-                with_server_context(server_context.clone(), || {
-                    virtual_dom.render_suspense_immediate();
+                let resolved_suspense_nodes = with_server_context(server_context.clone(), || {
+                    virtual_dom.render_suspense_immediate()
                 });
+                println!("{:?} suspense scopes resolved", resolved_suspense_nodes);
 
-                if last_render.is_none() && virtual_dom.suspended_tasks_remaining() {
-                    let html = renderer.render(&virtual_dom);
-                    if stream_page {
-                        streaming_renderer.render(html);
+                // if !stream_page {
+                //     continue;
+                // }
+
+                // Just rerender the resolved nodes
+                for scope in resolved_suspense_nodes {
+                    let mount = {
+                        let mut lock = scope_to_mount_mapping.write().unwrap();
+                        lock.remove(&scope).unwrap()
+                    };
+                    let mut new_html = String::new();
+                    renderer.reset_hydration();
+                    if let Err(err) = renderer.render_scope(&mut new_html, &virtual_dom, scope) {
+                        throw_error!(
+                            dioxus_ssr::incremental::IncrementalRendererError::RenderError(err)
+                        );
                     }
-                    last_render = Some(Instant::now());
+                    let mut resolved_chunk = String::new();
+                    let mut stream_mut = stream.write().unwrap();
+                    if let Err(err) =
+                        stream_mut.replace_placeholder(mount, new_html, &mut resolved_chunk)
+                    {
+                        throw_error!(
+                            dioxus_ssr::incremental::IncrementalRendererError::RenderError(err)
+                        );
+                    }
+                    // After we replace the placeholder in the dom with javascript, we need to send down the resolved data so that the client can hydrate the node
+                    // Extract any data we serialized for hydration (from server futures)
+                    let html_data = crate::html_storage::HTMLData::extract_from_suspense_boundary(
+                        &virtual_dom,
+                        scope,
+                    );
+                    // serialize the server state
+                    if let Err(err) = crate::html_storage::serialize::encode_in_element(
+                        &html_data,
+                        &mut resolved_chunk,
+                    )
+                    .map_err(|err| {
+                        dioxus_ssr::incremental::IncrementalRendererError::Other(Box::new(err))
+                    }) {
+                        throw_error!(err);
+                    }
+                    stream_mut.render(resolved_chunk);
                 }
             }
             tracing::info!("Suspense resolved");
 
-            // After suspense is done, we render one last time to get the final html that can be hydrated and then close the body
+            // After suspense is done, we render the html after the body
             let mut post_streaming = String::new();
 
-            // We need to include hydration ids in final the SSR render so that the client can hydrate the correct nodes
-            renderer.pre_render = true;
-            if let Err(err) = renderer.render_to(&mut post_streaming, &virtual_dom) {
-                throw_error!(dioxus_ssr::incremental::IncrementalRendererError::RenderError(err));
-            }
-
-            if let Err(err) = wrapper.render_after_body(&mut post_streaming, &virtual_dom) {
+            if let Err(err) = wrapper.render_after_body(&mut post_streaming) {
                 throw_error!(err);
             }
 
@@ -238,7 +290,7 @@ impl SsrRendererPool {
                 }
             }
 
-            streaming_renderer.finish_streaming(post_streaming);
+            stream.write().unwrap().render(post_streaming);
 
             myself.renderers.write().unwrap().push(renderer);
         });
@@ -319,16 +371,7 @@ impl FullstackHTMLTemplate {
     pub fn render_after_body<R: std::fmt::Write>(
         &self,
         to: &mut R,
-        vdom: &VirtualDom,
     ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
-        // Extract any data we serialized for hydration (from server futures)
-        let html_data = crate::html_storage::HTMLData::extract_from_virtual_dom(vdom);
-
-        // serialize the server state
-        crate::html_storage::serialize::encode_in_element(&html_data, to).map_err(|err| {
-            dioxus_ssr::incremental::IncrementalRendererError::Other(Box::new(err))
-        })?;
-
         #[cfg(all(debug_assertions, feature = "hot-reload"))]
         {
             // In debug mode, we need to add a script to the page that will reload the page if the websocket disconnects to make full recompile hot reloads work

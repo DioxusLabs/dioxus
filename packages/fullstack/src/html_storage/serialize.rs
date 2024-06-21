@@ -24,17 +24,17 @@ pub(crate) fn encode_in_element(
     data: &super::HTMLData,
     write_to: &mut impl std::fmt::Write,
 ) -> Result<(), ciborium::ser::Error<std::fmt::Error>> {
-    write_to.write_str(r#"<meta hidden="true" id="dioxus-storage-data" data-serialized=""#)?;
+    write_to.write_str(r#"<script>window.dioxus_storage_data.push(""#)?;
     serde_to_writable(&data, write_to)?;
-    Ok(write_to.write_str(r#"" />"#)?)
+    Ok(write_to.write_str(r#"");</script>"#)?)
 }
 
 impl super::HTMLData {
-    /// Walks through the virtual dom in a depth first order and extracts the data from the context API.
+    /// Walks through the suspense boundary in a depth first order and extracts the data from the context API.
     /// We use depth first order instead of relying on the order the hooks are called in because during suspense on the server, the order that futures are run in may be non deterministic.
-    pub(crate) fn extract_from_virtual_dom(vdom: &VirtualDom) -> Self {
+    pub(crate) fn extract_from_suspense_boundary(vdom: &VirtualDom, scope: ScopeId) -> Self {
         let mut data = Self::default();
-        data.take_from_virtual_dom(vdom);
+        data.take_from_scope(vdom, scope);
         data
     }
 
