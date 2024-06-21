@@ -159,7 +159,18 @@ pub fn WithDecorations(children: Element) -> Element {
     let mut fullscreen = use_signal(|| window().fullscreen().is_some());
     let mut moving = use_signal(|| false);
     let mut maximized = use_signal(|| window().is_maximized());
-    let mut events = use_hook(|| eval(include_str!("listeners.js")));
+    let mut events = use_hook(|| {
+        eval(
+            r#"
+    document.onkeydown = (keyDownEvent) => {
+    if (keyDownEvent.key === "F11") {
+        dioxus.send("F11");
+        console.log("f11");
+    }
+}
+"#,
+        )
+    });
     // used for making the maximized value be up to date
     #[cfg(not(target_os = "macos"))]
     {
@@ -190,10 +201,8 @@ pub fn WithDecorations(children: Element) -> Element {
         }
 
         while let Ok(evt) = events.recv().await {
-            info!("{evt}");
             match serde_json::from_value::<Evt>(evt) {
                 Ok(Evt::F11) => {
-                    info!("f11");
                     if fullscreen() {
                         window().set_fullscreen(false);
                         fullscreen.set(false)
@@ -203,7 +212,7 @@ pub fn WithDecorations(children: Element) -> Element {
                     }
                 }
                 Err(e) => {
-                    error!("failed deserializing event: {}", e);
+                    eprintln!("failed deserializing event: {}", e);
                 }
             }
         }
