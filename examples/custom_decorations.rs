@@ -159,19 +159,9 @@ pub fn WithDecorations(children: Element) -> Element {
     let mut fullscreen = use_signal(|| window().fullscreen().is_some());
     let mut moving = use_signal(|| false);
     let mut maximized = use_signal(|| window().is_maximized());
-    let mut events = use_hook(|| {
-        eval(
-            r#"
-document.onkeydown = (keyDownEvent) => {
-    if (keyDownEvent.key === "F11") {
-        dioxus.send("F11");
-        console.log("f11");
-    }
-}"#,
-        )
-    });
-
+    let mut events = use_hook(|| eval(include_str!("listeners.js")));
     // used for making the maximized value be up to date
+    #[cfg(not(target_os = "macos"))]
     {
         let desktop_window = use_window();
         use_wry_event_handler(move |e, _| {
@@ -185,13 +175,13 @@ document.onkeydown = (keyDownEvent) => {
                 if window_id != &desktop_window.window.id() {
                     return;
                 }
-
                 maximized.set(desktop_window.is_maximized());
             }
         });
     }
 
     // fullscreen logic
+    #[cfg(not(target_os = "macos"))]
     use_future(move || async move {
         #[derive(Debug, Copy, Clone, Deserialize, Serialize)]
         enum Evt {
@@ -200,8 +190,10 @@ document.onkeydown = (keyDownEvent) => {
         }
 
         while let Ok(evt) = events.recv().await {
+            info!("{evt}");
             match serde_json::from_value::<Evt>(evt) {
                 Ok(Evt::F11) => {
+                    info!("f11");
                     if fullscreen() {
                         window().set_fullscreen(false);
                         fullscreen.set(false)
@@ -211,20 +203,37 @@ document.onkeydown = (keyDownEvent) => {
                     }
                 }
                 Err(e) => {
-                    eprintln!("failed deserializing event: {}", e);
+                    error!("failed deserializing event: {}", e);
                 }
             }
         }
     });
 
+    let _ = use_coroutine(move |_: UnboundedReceiver<()>| async move {
+        loop {
+            fullscreen.set(window().fullscreen().is_some());
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+    });
+
+    let should_reverse = use_hook(|| {
+        if !cfg!(target_os = "macos") {
+            "flex-row-reverse"
+        } else {
+            ""
+        }
+    });
+
     rsx! {
-        ResizingArea { resizable: !fullscreen() && !maximized() }
-        div {
-            onmousemove: move |e| e.stop_propagation(),
-            class: "w-full h-full grid grid-rows-[2rem_calc(100vh_-_2rem)] gap-0",
-            if !fullscreen() {
+        if !cfg!(target_os = "macos") {
+            ResizingArea { resizable: !fullscreen() && !maximized() }
+        }
+        if !fullscreen() {
+            div {
+                onmousemove: move |e| e.stop_propagation(),
+                class: "w-full h-full select-none grid grid-rows-[2rem_calc(100vh_-_2rem)] gap-0",
                 div {
-                    class: "w-full bg-neutral-900 flex flex-row-reverse cursor-pointer",
+                    class: "w-full bg-window-bar flex {should_reverse} cursor-pointer",
                     ondoubleclick: move |_| {
                         if maximized() {
                             window().set_maximized(false);
@@ -244,13 +253,23 @@ document.onkeydown = (keyDownEvent) => {
                         }
                     },
                     button {
-                        onclick: move |_| { exit(0) },
-                        class: "p-2 hover:bg-red-600 transition duration-100",
+                        onclick: move |_| {
+                            exit(0);
+                        },
+                        class: "p-2 hover:bg-button-clicked transition duration-100",
                         Icon { icon: FiX, fill: "#e8e7fe", class: "w-8 h-full" }
                     }
                     button {
                         onclick: move |_| {
-                            if maximized() {
+                            if cfg!(target_os = "macos") {
+                                if fullscreen() {
+                                    window().set_fullscreen(false);
+                                    fullscreen.set(false);
+                                } else {
+                                    window().set_fullscreen(true);
+                                    fullscreen.set(true);
+                                }
+                            } else if maximized() {
                                 window().set_maximized(false);
                                 maximized.set(false);
                             } else {
@@ -258,7 +277,7 @@ document.onkeydown = (keyDownEvent) => {
                                 maximized.set(true);
                             }
                         },
-                        class: "p-2 hover:bg-neutral-600 transition duration-100",
+                        class: "p-2 hover:bg-button-hover transition duration-100",
                         if !maximized() {
                             Icon { icon: FiMaximize, fill: "#e8e7fe", class: "w-8 h-full" }
                         } else {
@@ -269,12 +288,14 @@ document.onkeydown = (keyDownEvent) => {
                         onclick: move |_| {
                             window().set_minimized(true);
                         },
-                        class: "p-2 hover:bg-neutral-600 transition duration-100",
+                        class: "p-2 hover:bg-button-hover transition duration-100",
                         Icon { icon: FiMinus, fill: "#e8e7fe", class: "w-8 h-full" }
                     }
                 }
+                div { class: "w-full", {children} }
             }
-            div { class: "w-full", {children} }
+        } else {
+            div { class: "w-full h-full", {children} }
         }
     }
 }
