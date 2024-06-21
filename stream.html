@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Dioxus</title>
+  </head>
+  <body>
+    <div>Hello world</div>
+    <dx-hydration id="ds-0"
+      ><template shadowrootmode="open">Loading...</template></dx-hydration
+    >
+    <div></div>
+    <script>
+      var id_to_string = function (id) {
+        return `ds-${id}`;
+      };
+      window.hydrate = function (suspense_placeholder_id) {
+        const template = document.getElementById(
+            id_to_string(suspense_placeholder_id)
+          ),
+          target = document.getElementById(
+            id_to_string(suspense_placeholder_id + 1)
+          );
+        (target.hidden = !1), template.replaceWith(target);
+      };
+    </script>
+    <div id="ds-1" hidden>Suspended</div>
+    <script>
+      window.hydrate(0);
+    </script>
+  </body>
+</html>

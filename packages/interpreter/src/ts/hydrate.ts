@@ -12,6 +12,7 @@ export function hydrate(suspense_placeholder_id: number) {
   const target = document.getElementById(
     id_to_string(suspense_placeholder_id + 1)
   );
+  target.hidden = false;
   // Replace the placeholder with the resolved node
   template.replaceWith(target);
 }

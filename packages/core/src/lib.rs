@@ -86,7 +86,7 @@ pub mod prelude {
         EventHandler, Fragment, HasAttributes, IntoAttributeValue, IntoDynNode,
         OptionStringFromMarker, Properties, ReactiveContext, RenderError, Runtime, RuntimeGuard,
         ScopeId, ScopeState, SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary,
-        SuspenseContext, SuspenseExtension, Task, Template, TemplateAttribute, TemplateNode, VNode,
-        VNodeInner, VirtualDom,
+        SuspenseBoundaryProps, SuspenseContext, SuspenseExtension, Task, Template,
+        TemplateAttribute, TemplateNode, VNode, VNodeInner, VirtualDom,
     };
 }

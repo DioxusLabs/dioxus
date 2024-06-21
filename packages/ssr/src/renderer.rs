@@ -6,14 +6,18 @@ use rustc_hash::FxHashMap;
 use std::fmt::Write;
 use std::sync::Arc;
 
+type ComponentRenderCallback = Arc<
+    dyn Fn(&mut Renderer, &mut dyn Write, &VirtualDom, ScopeId) -> std::fmt::Result + Send + Sync,
+>;
+
 /// A virtualdom renderer that caches the templates it has seen for faster rendering
 #[derive(Default)]
 pub struct Renderer {
     /// Choose to write ElementIDs into elements so the page can be re-hydrated later on
     pub pre_render: bool,
 
-    /// Don't proceed onto new components. Instead, put the name of the component.
-    pub skip_components: bool,
+    /// A callback used to render components. You can set this callback to control what components are rendered and add wrappers around components that are not present in CSR
+    render_components: Option<ComponentRenderCallback>,
 
     /// A cache of templates that have been rendered
     template_cache: FxHashMap<usize, Arc<StringCache>>,
@@ -27,19 +31,34 @@ impl Renderer {
         Self::default()
     }
 
+    /// Set the callback that the renderer uses to render components
+    pub fn set_render_components(
+        &mut self,
+        callback: impl Fn(&mut Renderer, &mut dyn Write, &VirtualDom, ScopeId) -> std::fmt::Result
+            + Send
+            + Sync
+            + 'static,
+    ) {
+        self.render_components = Some(Arc::new(callback));
+    }
+
     pub fn render(&mut self, dom: &VirtualDom) -> String {
         let mut buf = String::new();
         self.render_to(&mut buf, dom).unwrap();
         buf
     }
 
-    pub fn render_to(&mut self, buf: &mut impl Write, dom: &VirtualDom) -> std::fmt::Result {
+    pub fn render_to<W: Write + ?Sized>(
+        &mut self,
+        buf: &mut W,
+        dom: &VirtualDom,
+    ) -> std::fmt::Result {
         self.render_scope(buf, dom, ScopeId::ROOT)
     }
 
-    pub fn render_scope(
+    pub fn render_scope<W: Write + ?Sized>(
         &mut self,
-        buf: &mut impl Write,
+        buf: &mut W,
         dom: &VirtualDom,
         scope: ScopeId,
     ) -> std::fmt::Result {
@@ -50,9 +69,9 @@ impl Renderer {
         Ok(())
     }
 
-    fn render_template(
+    fn render_template<W: Write + ?Sized>(
         &mut self,
-        buf: &mut impl Write,
+        mut buf: &mut W,
         dom: &VirtualDom,
         template: &VNode,
     ) -> std::fmt::Result {
@@ -110,8 +129,10 @@ impl Renderer {
                 }
                 Segment::Node(idx) => match &template.dynamic_nodes[*idx] {
                     DynamicNode::Component(node) => {
-                        if self.skip_components {
-                            write!(buf, "<{}><{}/>", node.name, node.name)?;
+                        if let Some(render_components) = self.render_components.clone() {
+                            let scope_id = node.mounted_scope_id(*idx, template, dom).unwrap();
+
+                            render_components(self, &mut buf, dom, scope_id)?;
                         } else {
                             let scope = node.mounted_scope(*idx, template, dom).unwrap();
                             let node = scope.root_node();
@@ -386,7 +407,10 @@ pub(crate) fn truthy(value: &AttributeValue) -> bool {
     }
 }
 
-pub(crate) fn write_attribute(buf: &mut impl Write, attr: &Attribute) -> std::fmt::Result {
+pub(crate) fn write_attribute<W: Write + ?Sized>(
+    buf: &mut W,
+    attr: &Attribute,
+) -> std::fmt::Result {
     let name = &attr.name;
     match &attr.value {
         AttributeValue::Text(value) => write!(buf, " {name}=\"{value}\""),
@@ -397,8 +421,8 @@ pub(crate) fn write_attribute(buf: &mut impl Write, attr: &Attribute) -> std::fm
     }
 }
 
-pub(crate) fn write_value_unquoted(
-    buf: &mut impl Write,
+pub(crate) fn write_value_unquoted<W: Write + ?Sized>(
+    buf: &mut W,
     value: &AttributeValue,
 ) -> std::fmt::Result {
     match value {

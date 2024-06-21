@@ -5,7 +5,7 @@ use crate::{
     innerlude::{ElementRef, EventHandler, MountId},
     properties::ComponentFunction,
 };
-use crate::{Properties, VirtualDom};
+use crate::{Properties, ScopeId, VirtualDom};
 use core::panic;
 use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
@@ -598,6 +598,7 @@ pub struct VComponent {
     /// It is possible that components get folded at compile time, so these shouldn't be really used as a key
     pub(crate) render_fn: TypeId,
 
+    /// The props for this component
     pub(crate) props: BoxedAnyProps,
 }
 
@@ -624,6 +625,24 @@ impl VComponent {
             props,
             render_fn,
         }
+    }
+
+    /// Get the [`ScopeId`] this node is mounted to if it's mounted
+    ///
+    /// This is useful for rendering nodes outside of the VirtualDom, such as in SSR
+    ///
+    /// Returns [`None`] if the node is not mounted
+    pub fn mounted_scope_id(
+        &self,
+        dynamic_node_index: usize,
+        vnode: &VNode,
+        dom: &VirtualDom,
+    ) -> Option<ScopeId> {
+        let mount = vnode.mount.get().as_usize()?;
+
+        let scope_id = dom.mounts.get(mount)?.mounted_dynamic_nodes[dynamic_node_index];
+
+        Some(ScopeId(scope_id))
     }
 
     /// Get the scope this node is mounted to if it's mounted

@@ -33,9 +33,9 @@
 use dioxus_interpreter_js::HYDRATE_JS;
 use futures_channel::mpsc::Sender;
 
-use std::fmt::Display;
+use std::fmt::{Display, Write};
 
-pub struct StreamingRenderer<E> {
+pub struct StreamingRenderer<E = std::convert::Infallible> {
     channel: Sender<Result<String, E>>,
     last_mount_id: usize,
     has_script: bool,
@@ -55,20 +55,27 @@ impl<E> StreamingRenderer<E> {
     }
 
     /// Render a new chunk of html that will never change
-    pub fn render(&mut self, html: String) {
-        _ = self.channel.start_send(Ok(html));
+    pub fn render(&mut self, html: impl Display) {
+        _ = self.channel.start_send(Ok(html.to_string()));
     }
 
     /// Render a new chunk of html that may change
-    pub fn render_placeholder(&mut self, html: impl Display) -> (String, Mount) {
+    pub fn render_placeholder<W: Write + ?Sized>(
+        &mut self,
+        html: impl FnOnce(&mut W) -> std::fmt::Result,
+        into: &mut W,
+    ) -> Result<Mount, std::fmt::Error> {
         let id = self.last_mount_id;
         // Increment the id by 2 so that we don't re use the same id again.
         // The next id is reserved for the id that will replace this node
         self.last_mount_id += 2;
-        let result = format!(
-            r#"<dx-hydration><template id="ds-{id}" shadowrootmode="open">{html}</template></dx-hydration>"#
-        );
-        (result, Mount { id })
+        write!(
+            into,
+            r#"<dx-hydration id="ds-{id}"><template shadowrootmode="open">"#
+        )?;
+        html(into)?;
+        write!(into, r#"</template></dx-hydration>"#)?;
+        Ok(Mount { id })
     }
 
     /// Replace a placeholder that was rendered previously
@@ -82,13 +89,13 @@ impl<E> StreamingRenderer<E> {
         // Then replace the suspense placeholder with the new content
         let resolved_id = id.id + 1;
         _ = self.channel.start_send(Ok(format!(
-            r#"<div id="ds-{resolved_id}" hidden>{html}</div><script>hydrate({id}</script>"#
+            r#"<div id="ds-{resolved_id}" hidden>{html}</div><script>hydrate({id})</script>"#
         )));
     }
 
     /// Sends the script that handles loading streaming chunks to the client
     fn send_streaming_script(&mut self) {
-        let script = format!("<script>{HYDRATE_JS}</script>");
+        let script = format!("<script type=\"module\">{HYDRATE_JS}</script>");
         _ = self.channel.start_send(Ok(script));
     }
 
@@ -108,4 +115,112 @@ impl Display for Mount {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.id)
     }
+}
+
+#[test]
+fn render_streaming() {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async {
+            use dioxus::prelude::*;
+            use futures_util::StreamExt;
+            use std::collections::HashMap;
+            use std::sync::Arc;
+            use std::sync::RwLock;
+
+            let (tx, mut rx) = futures_channel::mpsc::channel(1000);
+            {
+                let stream = Arc::new(RwLock::new(
+                    StreamingRenderer::<std::convert::Infallible>::new(
+                        r#"<!DOCTYPE html><html><head><title>Dioxus</title></head><body>"#,
+                        tx,
+                    ),
+                ));
+                let scope_to_mount_mapping = Arc::new(RwLock::new(HashMap::new()));
+
+                let mut ssr_renderer = crate::Renderer::new();
+                {
+                    let scope_to_mount_mapping = scope_to_mount_mapping.clone();
+                    let stream = stream.clone();
+                    ssr_renderer.set_render_components(move |renderer, to, vdom, scope| {
+                        let is_suspense_boundary = vdom
+                            .get_scope(scope)
+                            .and_then(|s| SuspenseBoundaryProps::downcast_from_scope(s))
+                            .filter(|s| s.suspended())
+                            .is_some();
+                        if is_suspense_boundary {
+                            let mount = stream.write().unwrap().render_placeholder(
+                                |to| renderer.render_scope(to, vdom, scope),
+                                &mut *to,
+                            )?;
+                            scope_to_mount_mapping.write().unwrap().insert(scope, mount);
+                        } else {
+                            renderer.render_scope(to, vdom, scope)?
+                        }
+                        Ok(())
+                    });
+                }
+
+                fn app() -> Element {
+                    rsx! {
+                        div {
+                            "Hello world"
+                        }
+                        SuspenseBoundary {
+                            fallback: |_| rsx! {
+                                "Loading..."
+                            },
+                            SuspendedComponent {}
+                        }
+                        div {}
+                    }
+                }
+
+                #[component]
+                fn SuspendedComponent() -> Element {
+                    use_resource(move || async move {
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                    })
+                    .suspend()?;
+                    rsx! {
+                        "Suspended"
+                    }
+                }
+
+                let mut dom = VirtualDom::new(app);
+                dom.rebuild(&mut dioxus_core::NoOpMutations);
+
+                let initial_frame = ssr_renderer.render(&dom);
+                stream.write().unwrap().render(initial_frame);
+
+                // Actually resolve suspense
+                while dom.suspended_tasks_remaining() {
+                    println!("waiting for suspense");
+                    dom.wait_for_suspense_work().await;
+                    let resolved_suspense_nodes = dom.render_suspense_immediate();
+
+                    // Just rerender the resolved nodes
+                    for scope in resolved_suspense_nodes {
+                        let mount = {
+                            let mut lock = scope_to_mount_mapping.write().unwrap();
+                            lock.remove(&scope).unwrap()
+                        };
+                        let mut new_html = String::new();
+                        ssr_renderer.render_scope(&mut new_html, &dom, scope)?;
+                        stream.write().unwrap().replace_placeholder(mount, new_html);
+                    }
+                }
+
+                stream.write().unwrap().render("</body></html>");
+            }
+
+            while let Some(Ok(chunk)) = rx.next().await {
+                println!("{}", chunk);
+            }
+
+            Ok::<(), anyhow::Error>(())
+        })
+        .unwrap();
 }

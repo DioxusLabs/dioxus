@@ -192,47 +192,22 @@ impl SsrRendererPool {
             let mut last_render: Option<Instant> = None;
 
             while virtual_dom.suspended_tasks_remaining() {
-                let deadline = last_render
-                    .map(|last_render| {
-                        RENDER_DEDUPLICATE_TIMEOUT
-                            .checked_sub(last_render.elapsed())
-                            .unwrap_or(Duration::ZERO)
-                    })
-                    .unwrap_or(tokio::time::Duration::MAX);
+                ProvideServerContext::new(
+                    virtual_dom.wait_for_suspense_work(),
+                    server_context.clone(),
+                )
+                .await;
 
-                let run_virtual_dom = async {
-                    ProvideServerContext::new(
-                        virtual_dom.wait_for_suspense_work(),
-                        server_context.clone(),
-                    )
-                    .await;
+                with_server_context(server_context.clone(), || {
+                    virtual_dom.render_suspense_immediate();
+                });
 
-                    with_server_context(server_context.clone(), || {
-                        virtual_dom.render_suspense_immediate();
-                    });
-                };
-
-                let mut rerender = |last_render: &mut Option<Instant>, virtual_dom: &VirtualDom| {
-                    if virtual_dom.suspended_tasks_remaining() {
-                        let html = renderer.render(virtual_dom);
-                        if stream_page {
-                            streaming_renderer.render(html);
-                        }
-                        *last_render = Some(Instant::now());
+                if last_render.is_none() && virtual_dom.suspended_tasks_remaining() {
+                    let html = renderer.render(&virtual_dom);
+                    if stream_page {
+                        streaming_renderer.render(html);
                     }
-                };
-
-                tokio::select! {
-                    // If it has been 100ms since running a scope, we should stream the edits to the client
-                    _ = tokio::time::sleep(deadline) => {
-                        rerender(&mut last_render, &virtual_dom);
-                    }
-                    // Otherwise, just keep running the virtual dom or quit if suspense is done
-                    _ = run_virtual_dom => {
-                        if last_render.is_none() {
-                            rerender(&mut last_render, &virtual_dom);
-                        }
-                    }
+                    last_render = Some(Instant::now());
                 }
             }
             tracing::info!("Suspense resolved");

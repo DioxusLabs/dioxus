@@ -22,7 +22,7 @@ impl VirtualDom {
         scope_id: ScopeId,
     ) {
         let scope = &mut self.scopes[scope_id.0];
-        if SuspenseBoundaryProps::downcast_from_props(&mut *scope.props).is_some() {
+        if SuspenseBoundaryProps::downcast_mut_from_props(&mut *scope.props).is_some() {
             SuspenseBoundaryProps::diff(scope_id, self, to)
         } else {
             let new_nodes = self.run_scope(scope_id);
@@ -102,7 +102,7 @@ impl VirtualDom {
     ) {
         // If this is a suspense boundary, remove the suspended nodes as well
         if let Some(suspense) =
-            SuspenseBoundaryProps::downcast_from_props(&mut *self.scopes[scope_id.0].props)
+            SuspenseBoundaryProps::downcast_mut_from_props(&mut *self.scopes[scope_id.0].props)
         {
             // Remove the suspended nodes
             if let Some(node) = suspense.suspended_nodes.take() {

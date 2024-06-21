@@ -815,14 +815,14 @@ impl VirtualDom {
                     {
                         let scope_state = self.get_scope(scope.id).unwrap();
                         let was_suspended =
-                            SuspenseBoundaryProps::downcast_from_props_ref(&*scope_state.props)
+                            SuspenseBoundaryProps::downcast_ref_from_props(&*scope_state.props)
                                 .filter(|props| props.suspended())
                                 .is_some();
                         // If the scope is dirty, run the scope and get the mutations
                         self.run_and_diff_scope(None::<&mut NoOpMutations>, scope.id);
                         let scope_state = self.get_scope(scope.id).unwrap();
                         let is_now_suspended =
-                            SuspenseBoundaryProps::downcast_from_props_ref(&*scope_state.props)
+                            SuspenseBoundaryProps::downcast_ref_from_props(&*scope_state.props)
                                 .filter(|props| props.suspended())
                                 .is_some();
 
