@@ -1,1 +1,1 @@
-var b=(w)=>`ds-${w}`;window.dx_hydrate=(w)=>{const f=document.getElementById(b(w)),W=document.getElementById(b(w+1));W.hidden=!1,f.replaceWith(W)};
+var id_to_string=(id)=>`ds-${id}`;window.dx_hydrate=(suspense_placeholder_id)=>{const template=document.getElementById(id_to_string(suspense_placeholder_id)),target=document.getElementById(id_to_string(suspense_placeholder_id+1));target.hidden=!1,template.replaceWith(target)};

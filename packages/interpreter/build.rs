@@ -66,7 +66,8 @@ fn gen_bindings(input_name: &str, output_name: &str) {
         .arg(format!("src/ts/{input_name}.ts"))
         .arg("--outfile")
         .arg(format!("src/js/{output_name}.js"))
-        .arg("--minify")
+        .arg("--minify-whitespace")
+        .arg("--minify-syntax")
         .status()
         .unwrap();
 
