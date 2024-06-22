@@ -126,7 +126,7 @@ impl WebsysDom {
                         };
 
                         let _ = event_channel.unbounded_send(UiEvent {
-                            name: "resized".to_string(),
+                            name: "resize".to_string(),
                             bubbles: false,
                             element,
                             data: PlatformEventData::new(Box::new(entry)),

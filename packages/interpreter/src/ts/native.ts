@@ -280,7 +280,7 @@ export class NativeInterpreter extends JSChannel_ {
       const contents = serializeResizeObserverEntry(entry, target);
 
       const body = {
-        name: "resized",
+        name: "resize",
         data: contents,
         element: realId,
         bubbles: false,

@@ -99,9 +99,9 @@ impl HtmlEventConverter for SerializedHtmlEventConverter {
             .into()
     }
 
-    fn convert_resized_data(&self, event: &PlatformEventData) -> ResizedData {
+    fn convert_resize_data(&self, event: &PlatformEventData) -> ResizeData {
         event
-            .downcast::<SerializedResizedData>()
+            .downcast::<SerializedResizeData>()
             .cloned()
             .unwrap()
             .into()

@@ -423,9 +423,9 @@ impl From<&web_sys::Element> for MountedData {
     }
 }
 
-impl From<&web_sys::ResizeObserverEntry> for ResizedData {
+impl From<&web_sys::ResizeObserverEntry> for ResizeData {
     fn from(e: &web_sys::ResizeObserverEntry) -> Self {
-        ResizedData::new(e.clone())
+        ResizeData::new(e.clone())
     }
 }
 
@@ -501,7 +501,7 @@ impl crate::RenderedElementBacking for web_sys::Element {
 macro_rules! get_observer_entry_size {
     ($meth_name:ident, $entry_meth_name:ident, $field_name:literal) => {
         #[doc = concat!("Get the ", $field_name, " size of the observed element")]
-        fn $meth_name(&self) -> ResizedResult<Vec<PixelsSize>> {
+        fn $meth_name(&self) -> ResizeResult<Vec<PixelsSize>> {
             let sizes = web_sys::ResizeObserverEntry::$entry_meth_name(&self);
 
             let sizes = if sizes.length() > 0 {

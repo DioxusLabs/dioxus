@@ -89,7 +89,7 @@ mod js {
             if (node.listening) { node.listening += 1; } else { node.listening = 1; }
             node.setAttribute('data-dioxus-id', `\${id}`);
 
-            if (["resized"].indexOf(event_name) >= 0) {
+            if (["resize"].indexOf(event_name) >= 0) {
               this.createObserver(event_name, node);
             }
             else {
@@ -106,7 +106,7 @@ mod js {
             node.listening -= 1;
             node.removeAttribute('data-dioxus-id');
 
-            if (["resized"].indexOf(event_name) >= 0) {
+            if (["resize"].indexOf(event_name) >= 0) {
               this.removeObserver(event_name, node);
             } else {
               this.removeListener(node, event_name, bubbles);
@@ -230,7 +230,7 @@ mod js {
                 bubbles,
             })
         );
-    } else if (["resized"].indexOf(event_name) >= 0) {
+    } else if (["resize"].indexOf(event_name) >= 0) {
       this.createObserver(event_name, this_node);
     } else {
       this.createListener(event_name, this_node, bubbles, (event) => {

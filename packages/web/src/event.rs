@@ -5,7 +5,7 @@ use dioxus_html::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
     DragData, FileEngine, FormData, FormValue, HasDragData, HasFileData, HasFormData, HasImageData,
-    HasMouseData, HtmlEventConverter, ImageData, MountedData, PlatformEventData, ResizedData,
+    HasMouseData, HtmlEventConverter, ImageData, MountedData, PlatformEventData, ResizeData,
     ScrollData,
 };
 use js_sys::Array;
@@ -114,11 +114,11 @@ impl HtmlEventConverter for WebEventConverter {
     }
 
     #[inline(always)]
-    fn convert_resized_data(
+    fn convert_resize_data(
         &self,
         event: &dioxus_html::PlatformEventData,
-    ) -> dioxus_html::ResizedData {
-        ResizedData::from(
+    ) -> dioxus_html::ResizeData {
+        ResizeData::from(
             event
                 .downcast::<web_sys::ResizeObserverEntry>()
                 .expect("event should be a web_sys::ResizeObserverEntry"),

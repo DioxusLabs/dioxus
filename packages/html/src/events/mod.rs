@@ -135,7 +135,7 @@ pub trait HtmlEventConverter: Send + Sync {
     /// Convert a general event to a pointer data event
     fn convert_pointer_data(&self, event: &PlatformEventData) -> PointerData;
     /// Convert a general event to a resize data event
-    fn convert_resized_data(&self, event: &PlatformEventData) -> ResizedData;
+    fn convert_resize_data(&self, event: &PlatformEventData) -> ResizeData;
     /// Convert a general event to a scroll data event
     fn convert_scroll_data(&self, event: &PlatformEventData) -> ScrollData;
     /// Convert a general event to a selection data event
@@ -222,9 +222,9 @@ impl From<&PlatformEventData> for PointerData {
     }
 }
 
-impl From<&PlatformEventData> for ResizedData {
+impl From<&PlatformEventData> for ResizeData {
     fn from(val: &PlatformEventData) -> Self {
-        with_event_converter(|c| c.convert_resized_data(val))
+        with_event_converter(|c| c.convert_resize_data(val))
     }
 }
 
@@ -276,7 +276,7 @@ mod media;
 mod mounted;
 mod mouse;
 mod pointer;
-mod resized;
+mod resize;
 mod scroll;
 mod selection;
 mod toggle;
@@ -296,7 +296,7 @@ pub use media::*;
 pub use mounted::*;
 pub use mouse::*;
 pub use pointer::*;
-pub use resized::*;
+pub use resize::*;
 pub use scroll::*;
 pub use selection::*;
 pub use toggle::*;
@@ -377,7 +377,7 @@ pub fn event_bubbles(evt: &str) -> bool {
         "playing" => false,
         "progress" => false,
         "ratechange" => false,
-        "resized" => false,
+        "resize" => false,
         "seeked" => false,
         "seeking" => false,
         "stalled" => false,

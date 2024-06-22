@@ -55,7 +55,7 @@ export class BaseInterpreter {
 
   createObserver(event_name: string, element: HTMLElement) {
     switch (event_name) {
-      case "resized":
+      case "resize":
         if (this.resize_observer) {
           this.resize_observer.observe(element);
         }
@@ -67,7 +67,7 @@ export class BaseInterpreter {
 
   removeObserver(event_name: String, element: HTMLElement) {
     switch (event_name) {
-      case "resized":
+      case "resize":
         if (this.resize_observer) {
           this.resize_observer.unobserve(element);
         }

@@ -105,8 +105,8 @@ fn deserialize_raw(
         // Touch
         "touchcancel" | "touchend" | "touchmove" | "touchstart" => Touch(de(data)?),
 
-        // Resized
-        "resized" => Resized(de(data)?),
+        // Resize
+        "resize" => Resize(de(data)?),
 
         // Scroll
         "scroll" => Scroll(de(data)?),
@@ -168,7 +168,7 @@ pub enum EventData {
     Pointer(SerializedPointerData),
     Selection(SerializedSelectionData),
     Touch(SerializedTouchData),
-    Resized(SerializedResizedData),
+    Resize(SerializedResizeData),
     Scroll(SerializedScrollData),
     Wheel(SerializedWheelData),
     Media(SerializedMediaData),
@@ -208,7 +208,7 @@ impl EventData {
             EventData::Touch(data) => {
                 Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
             }
-            EventData::Resized(data) => {
+            EventData::Resize(data) => {
                 Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
             }
             EventData::Scroll(data) => {
@@ -374,9 +374,9 @@ impl HtmlEventConverter for SerializedHtmlEventConverter {
             .unwrap()
             .into()
     }
-    fn convert_resized_data(&self, event: &PlatformEventData) -> ResizedData {
+    fn convert_resize_data(&self, event: &PlatformEventData) -> ResizeData {
         event
-            .downcast::<SerializedResizedData>()
+            .downcast::<SerializedResizeData>()
             .cloned()
             .unwrap()
             .into()
