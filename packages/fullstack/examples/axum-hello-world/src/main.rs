@@ -15,17 +15,26 @@ fn app() -> Element {
     rsx! {
         button {
             onclick: move |_| count += 1,
-            "{count}"
+            "Increment"
+        }
+        button {
+            onclick: move |_| count -= 1,
+            "Decrement"
         }
         div {
             "Hello world"
         }
-        // Imagine, we just resolve this suspense boundary. We pass down whatever data we resolved with it and None for any unresolved server functions in nested server functions [Some(data), None]
-        SuspenseBoundary {
-            fallback: |_| rsx! {
-                "Loading..."
-            },
-            SuspendedComponent {}
+        div {
+            for i in count()..count() + 3 {
+                // Imagine, we just resolve this suspense boundary. We pass down whatever data we resolved with it and None for any unresolved server functions in nested server functions [Some(data), None]
+                SuspenseBoundary {
+                    key: "{i}",
+                    fallback: |_| rsx! {
+                        "Loading..."
+                    },
+                    SuspendedComponent {}
+                }
+            }
         }
         div { "footer 123" }
     }

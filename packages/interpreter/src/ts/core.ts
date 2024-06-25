@@ -137,7 +137,7 @@ export class BaseInterpreter {
       const split = hydration!.split(",");
       const id = ids[parseInt(split[0])];
 
-      console.log("hydrating id", id);
+      console.log("hydrating id", id, hydrateNode.outerHTML);
       this.nodes[id] = hydrateNode;
 
       if (split.length > 1) {

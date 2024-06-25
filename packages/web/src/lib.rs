@@ -79,7 +79,8 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
 
     tracing::info!("rebuilding app");
 
-    let mut hydration_receiver: Option<futures_channel::mpsc::UnboundedReceiver<(u32, Vec<u8>)>> = None;
+    let mut hydration_receiver: Option<futures_channel::mpsc::UnboundedReceiver<(u32, Vec<u8>)>> =
+        None;
 
     if should_hydrate {
         #[cfg(feature = "hydrate")]

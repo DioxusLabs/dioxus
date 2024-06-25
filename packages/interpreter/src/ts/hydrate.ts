@@ -13,8 +13,9 @@ export function register_rehydrate_chunk_for_streaming(
 }
 
 export function dx_swap(suspense_placeholder_id: number) {
-  // Get the placeholder node we are replacing
-  const template = document.getElementById(`ds-${suspense_placeholder_id}`);
+  // Get the template that marks the start of the placeholder we are replacing
+  const placeholder_id = `ds-${suspense_placeholder_id}`;
+  const startPlaceholder = document.getElementById(placeholder_id);
   // Get the node we are replacing it with
   const target = document.getElementById(`ds-${suspense_placeholder_id + 1}`);
   console.log(
@@ -23,6 +24,21 @@ export function dx_swap(suspense_placeholder_id: number) {
     }`
   );
   // Replace the placeholder with the children of the resolved div
-  template.replaceWith(...target.childNodes);
+  // First delete all nodes between the template and the comment <!--ds-{id}--> that marks the end of the placeholder
+
+  let current = startPlaceholder.nextSibling;
+  while (current) {
+    if (
+      current.nodeType === Node.COMMENT_NODE &&
+      current.textContent === placeholder_id
+    ) {
+      break;
+    }
+    current.remove();
+    current = current.nextSibling;
+  }
+
+  // Then replace the template with the children of the resolved div
+  startPlaceholder.replaceWith(...target.childNodes);
   target.remove();
 }

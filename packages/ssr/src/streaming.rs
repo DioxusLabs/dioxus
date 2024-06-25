@@ -67,12 +67,9 @@ impl<E> StreamingRenderer<E> {
         // Increment the id by 2 so that we don't re use the same id again.
         // The next id is reserved for the id that will replace this node
         self.last_mount_id += 2;
-        write!(
-            into,
-            r#"<dx-hydration id="ds-{id}"><template shadowrootmode="open">"#
-        )?;
+        write!(into, r#"<template id="ds-{id}"></template>"#)?;
         html(into)?;
-        write!(into, r#"</template></dx-hydration>"#)?;
+        write!(into, r#"<!--ds-{id}-->"#)?;
         Ok(Mount { id })
     }
 
