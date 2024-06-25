@@ -34,6 +34,8 @@ serde_json = { version = "1.0", optional = true }
 serde = { version = "1.0", optional = true }
 serde-wasm-bindgen = { version = "0.5.0", optional = true }
 
+ciborium = { workspace = true, optional = true }
+
 [dependencies.web-sys]
 version = "0.3.56"
 features = [
@@ -53,7 +55,7 @@ features = [
 [features]
 default = ["panic_hook", "mounted", "file_engine", "hot_reload", "eval"]
 panic_hook = ["dep:console_error_panic_hook"]
-hydrate = ["web-sys/Comment"]
+hydrate = ["web-sys/Comment", "ciborium"]
 mounted = ["web-sys/Element", "dioxus-html/mounted"]
 file_engine = [
     "dioxus-html/file-engine",

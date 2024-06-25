@@ -125,15 +125,19 @@ export class BaseInterpreter {
     this.templates[tmpl_id] = nodes;
   }
 
-  hydrate(ids: { [key: number]: number }) {
-    const hydrateNodes = document.querySelectorAll("[data-node-hydration]");
+  hydrate(ids: { [key: number]: number }, under: Element) {
+    console.log("hydrating to", ids);
+    console.log(`under ${under.innerHTML}`);
+    const hydrateNodes = under.querySelectorAll("[data-node-hydration]");
 
     for (let i = 0; i < hydrateNodes.length; i++) {
       const hydrateNode = hydrateNodes[i] as HTMLElement;
       const hydration = hydrateNode.getAttribute("data-node-hydration");
+      console.log("hydration", hydration);
       const split = hydration!.split(",");
       const id = ids[parseInt(split[0])];
 
+      console.log("hydrating id", id);
       this.nodes[id] = hydrateNode;
 
       if (split.length > 1) {
@@ -151,7 +155,7 @@ export class BaseInterpreter {
     }
 
     const treeWalker = document.createTreeWalker(
-      document.body,
+      under,
       NodeFilter.SHOW_COMMENT
     );
 

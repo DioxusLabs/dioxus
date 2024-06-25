@@ -10,10 +10,11 @@ publish = false
 dioxus = { workspace = true, features = ["fullstack"]}
 serde = "1.0.159"
 tracing-wasm = "0.2.1"
-tracing = { workspace = true }
+tracing.workspace = true
 tracing-subscriber = "0.3.17"
 reqwest = "0.11.18"
 tokio = { workspace = true, features = ["full"], optional = true }
+async-std = "1.12.0"
 
 [features]
 default = []

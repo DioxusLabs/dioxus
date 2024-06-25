@@ -393,6 +393,62 @@ impl SuspenseBoundaryProps {
         nodes_created
     }
 
+    #[doc(hidden)]
+    /// Manually rerun the children of this suspense boundary without diffing against the old nodes.
+    ///
+    /// This should only be called by dioxus-web after the suspense boundary has been streamed in from the server.
+    pub fn resolve_suspense<M: WriteMutations>(
+        scope_id: ScopeId,
+        dom: &mut VirtualDom,
+        to: &mut M,
+    ) {
+        let _runtime = RuntimeGuard::new(dom.runtime.clone());
+        let scope_state = &mut dom.scopes[scope_id.0];
+
+        // Reset the suspense context
+        let suspense_context = scope_state
+            .state()
+            .suspense_boundary()
+            .suspense_context()
+            .unwrap()
+            .clone();
+        suspense_context.inner.suspended_tasks.borrow_mut().clear();
+
+        let props = Self::downcast_mut_from_props(&mut *scope_state.props).unwrap();
+
+        // Unmount any children to reset any scopes under this suspense boundary
+        if let std::result::Result::Ok(node) = &props.children {
+            node.mount.take();
+        }
+        if let Some(node) = &props.suspended_nodes {
+            node.mount.take();
+        }
+
+        let children = RenderReturn {
+            node: props
+                .children
+                .as_ref()
+                .map(|node| node.clone_mounted())
+                .map_err(Clone::clone),
+        };
+
+        let currently_rendered = scope_state.last_rendered_node.as_ref().unwrap().clone();
+        let mount = currently_rendered.mount.get();
+        let parent = dom.mounts[mount.0].parent;
+
+        // First always render the children in the background. Rendering the children may cause this boundary to suspend
+        dom.runtime.push_scope(scope_id);
+        children.create(dom, parent, Some(to));
+        dom.runtime.pop_scope();
+
+        // Store the (now mounted) children back into the scope state
+        let scope_state = &mut dom.scopes[scope_id.0];
+        let props = Self::downcast_mut_from_props(&mut *scope_state.props).unwrap();
+        props.children = children.clone().node;
+        scope_state.last_rendered_node = Some(children);
+        props.suspended_nodes = None;
+    }
+
     pub(crate) fn diff<M: WriteMutations>(
         scope_id: ScopeId,
         dom: &mut VirtualDom,

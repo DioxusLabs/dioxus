@@ -41,7 +41,9 @@ mod eval;
 mod hot_reload;
 
 #[cfg(feature = "hydrate")]
-mod rehydrate;
+mod hydration;
+#[cfg(feature = "hydrate")]
+pub use hydration::*;
 
 /// Runs the app as a future that can be scheduled around the main thread.
 ///
@@ -77,6 +79,9 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
 
     tracing::info!("rebuilding app");
 
+    #[cfg(feature = "hydrate")]
+    let mut hydration_receiver = None;
+
     if should_hydrate {
         #[cfg(feature = "hydrate")]
         {
@@ -84,15 +89,8 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
             dom.rebuild(&mut websys_dom);
             websys_dom.only_write_templates = false;
 
-            if let Err(err) = websys_dom.rehydrate(&dom) {
-                tracing::error!("Rehydration failed. {:?}", err);
-                tracing::error!("Rebuild DOM into element from scratch");
-                websys_dom.root.set_text_content(None);
-
-                dom.rebuild(&mut websys_dom);
-
-                websys_dom.flush_edits();
-            }
+            let rx = websys_dom.rehydrate(&dom).unwrap();
+            hydration_receiver = Some(rx);
         }
     } else {
         dom.rebuild(&mut websys_dom);
@@ -109,12 +107,18 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
         let mut res;
         #[cfg(all(feature = "hot_reload", debug_assertions))]
         let template;
+        #[allow(unused)]
+        let mut hydration_work = None;
 
         {
             let work = dom.wait_for_work().fuse();
             pin_mut!(work);
 
             let mut rx_next = rx.select_next_some();
+            let mut fused_iter = futures_util::stream::iter(&mut hydration_receiver)
+                .fuse()
+                .flatten();
+            let mut rx_hydration = fused_iter.select_next_some();
 
             #[cfg(all(feature = "hot_reload", debug_assertions))]
             {
@@ -132,6 +136,14 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
                         res = Some(evt);
                         template = None;
                     }
+                    hydration_data = rx_hydration => {
+                        res = None;
+                        template = None;
+                        #[cfg(feature = "hydrate")]
+                        {
+                            hydration_work = Some(hydration_data);
+                        }
+                    },
                 }
             }
 
@@ -139,12 +151,25 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
             select! {
                 _ = work => res = None,
                 evt = rx_next => res = Some(evt),
+                hyd = rx_hydration => {
+                    #[cfg(feature = "hydrate")]
+                    {
+                        hydration_work = Some(hyd);
+                    }
+                    continue;
+                }
             }
         }
 
         #[cfg(all(feature = "hot_reload", debug_assertions))]
         if let Some(template) = template {
             dom.replace_template(template);
+        }
+
+        #[cfg(feature = "hydrate")]
+        if let Some(hydration_data) = hydration_work {
+            tracing::info!("Hydrating streaming... {:?}", hydration_data);
+            websys_dom.rehydrate_streaming(hydration_data, &mut dom);
         }
 
         // Dequeue all of the events from the channel in send order

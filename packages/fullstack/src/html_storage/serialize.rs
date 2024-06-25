@@ -18,18 +18,6 @@ pub(crate) fn serde_to_writable<T: Serialize>(
     Ok(())
 }
 
-#[cfg(feature = "server")]
-/// Encode data into a element. This is intended to be used in the server to send data to the client.
-pub(crate) fn encode_in_element(
-    data: &super::HTMLData,
-    write_to: &mut impl std::fmt::Write,
-    mount: dioxus_ssr::streaming::Mount,
-) -> Result<(), ciborium::ser::Error<std::fmt::Error>> {
-    write!(write_to, r#"<script>window.dx_hydrate({mount}, ""#)?;
-    serde_to_writable(&data, write_to)?;
-    Ok(write_to.write_str(r#"");</script>"#)?)
-}
-
 impl super::HTMLData {
     /// Walks through the suspense boundary in a depth first order and extracts the data from the context API.
     /// We use depth first order instead of relying on the order the hooks are called in because during suspense on the server, the order that futures are run in may be non deterministic.
@@ -79,5 +67,13 @@ impl super::HTMLData {
                 _ => {}
             }
         }
+    }
+
+    #[cfg(feature = "server")]
+    /// Encode data as base64. This is intended to be used in the server to send data to the client.
+    pub(crate) fn serialized(&self) -> String {
+        let mut serialized = Vec::new();
+        ciborium::into_writer(&self.data, &mut serialized).unwrap();
+        base64::engine::general_purpose::STANDARD.encode(serialized)
     }
 }

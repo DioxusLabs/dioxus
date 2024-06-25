@@ -26,7 +26,7 @@
 //!     <div>Final HTML</div>
 //! </div>
 //! <script>
-//!     window.dx_swap(2);
+//!     window.dx_hydrate(2, "suspenseboundarydata");
 //! </script>
 //! ```
 
@@ -84,6 +84,7 @@ impl<E> StreamingRenderer<E> {
         &mut self,
         id: Mount,
         html: impl Display,
+        data: impl Display,
         into: &mut W,
     ) -> std::fmt::Result {
         // Make sure the client has the hydration function
@@ -96,7 +97,7 @@ impl<E> StreamingRenderer<E> {
         let resolved_id = id.id + 1;
         write!(
             into,
-            r#"<div id="ds-{resolved_id}" hidden>{html}</div><script>window.dx_swap({id})</script>"#
+            r#"<div id="ds-{resolved_id}" hidden>{html}</div><script>window.dx_hydrate({id}, "{data}")</script>"#
         )
     }
 

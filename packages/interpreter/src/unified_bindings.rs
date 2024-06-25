@@ -15,7 +15,7 @@ extern "C" {
     pub fn save_template(this: &BaseInterpreter, nodes: Vec<Node>, tmpl_id: u16);
 
     #[wasm_bindgen(method)]
-    pub fn hydrate(this: &BaseInterpreter, ids: Vec<u32>);
+    pub fn hydrate(this: &BaseInterpreter, ids: Vec<u32>, under: web_sys::Element);
 
     #[wasm_bindgen(method, js_name = "getNode")]
     pub fn get_node(this: &BaseInterpreter, id: u32) -> Node;

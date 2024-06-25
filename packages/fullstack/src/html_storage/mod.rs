@@ -7,7 +7,6 @@ use std::{cell::RefCell, io::Cursor, rc::Rc, sync::atomic::AtomicUsize};
 use base64::engine::general_purpose::STANDARD;
 use serde::{de::DeserializeOwned, Serialize};
 
-pub(crate) mod deserialize;
 pub(crate) mod serialize;
 
 #[derive(Default, Clone)]
@@ -62,41 +61,6 @@ impl HTMLData {
         let mut serialized = Vec::new();
         ciborium::into_writer(data, &mut serialized).unwrap();
         self.data.push(Some(serialized));
-    }
-
-    pub(crate) fn cursor(self) -> HTMLDataCursor {
-        HTMLDataCursor {
-            data: self.data,
-            index: AtomicUsize::new(0),
-        }
-    }
-}
-
-pub(crate) struct HTMLDataCursor {
-    data: Vec<Option<Vec<u8>>>,
-    index: AtomicUsize,
-}
-
-impl HTMLDataCursor {
-    pub fn take<T: DeserializeOwned>(&self) -> Option<T> {
-        let current = self.index.load(std::sync::atomic::Ordering::SeqCst);
-        if current >= self.data.len() {
-            tracing::error!(
-                "Tried to take more data than was available, len: {}, index: {}",
-                self.data.len(),
-                current
-            );
-            return None;
-        }
-        let mut cursor = self.data[current].as_ref()?;
-        self.index.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        match ciborium::from_reader(Cursor::new(cursor)) {
-            Ok(x) => Some(x),
-            Err(e) => {
-                tracing::error!("Error deserializing data: {:?}", e);
-                None
-            }
-        }
     }
 }
 

@@ -32,6 +32,9 @@ pub struct WebsysDom {
 
     #[cfg(feature = "hydrate")]
     pub(crate) only_write_templates: bool,
+
+    #[cfg(feature = "hydrate")]
+    pub(crate) suspense_hydration_ids: crate::hydration::SuspenseHydrationIds,
 }
 
 pub struct UiEvent {
@@ -136,6 +139,8 @@ impl WebsysDom {
             queued_mounted_events: Default::default(),
             #[cfg(feature = "hydrate")]
             only_write_templates: false,
+            #[cfg(feature = "hydrate")]
+            suspense_hydration_ids: Default::default(),
         }
     }
 

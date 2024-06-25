@@ -84,7 +84,7 @@ where
                 first_run.set(false);
 
                 #[cfg(feature = "web")]
-                if let Some(o) = crate::html_storage::deserialize::take_server_data::<T>() {
+                if let Some(o) = dioxus_web::take_server_data::<T>() {
                     return o;
                 }
             }

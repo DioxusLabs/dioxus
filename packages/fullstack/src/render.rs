@@ -3,7 +3,7 @@ use crate::render::dioxus_core::NoOpMutations;
 use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
 use dioxus_ssr::{
     incremental::{CachedRender, RenderFreshness},
-    streaming::{Mount, StreamingRenderer},
+    streaming::StreamingRenderer,
     Renderer,
 };
 use futures_channel::mpsc::Sender;
@@ -217,14 +217,15 @@ impl SsrRendererPool {
             let mut initial_frame = renderer.render(&virtual_dom);
 
             // Collect the initial server data from the root node. For most apps, no use_server_futures will be resolved initially, so this will be full on `None`s.
-            if let Err(err) = push_server_data(
-                &virtual_dom,
-                ScopeId::ROOT,
-                Mount::default(),
-                &mut initial_frame,
-            ) {
-                throw_error!(err);
-            }
+            // TODO: Allow sync initial data
+            // if let Err(err) = push_server_data(
+            //     &virtual_dom,
+            //     ScopeId::ROOT,
+            //     Mount::default(),
+            //     &mut initial_frame,
+            // ) {
+            //     throw_error!(err);
+            // }
 
             // Along with the initial frame, we render the html after the main element, but before the body tag closes. This should include the script that starts loading the wasm bundle.
             if let Err(err) = wrapper.render_after_main(&mut initial_frame) {
@@ -259,25 +260,19 @@ impl SsrRendererPool {
                     }
                     let mut resolved_chunk = String::new();
                     let mut stream_mut = stream.write().unwrap();
-                    if let Err(err) =
-                        stream_mut.replace_placeholder(mount, new_html, &mut resolved_chunk)
-                    {
+                    // After we replace the placeholder in the dom with javascript, we need to send down the resolved data so that the client can hydrate the node
+                    let resolved_data = serialize_server_data(&virtual_dom, scope);
+                    if let Err(err) = stream_mut.replace_placeholder(
+                        mount,
+                        new_html,
+                        resolved_data,
+                        &mut resolved_chunk,
+                    ) {
                         throw_error!(
                             dioxus_ssr::incremental::IncrementalRendererError::RenderError(err)
                         );
                     }
-                    // After we replace the placeholder in the dom with javascript, we need to send down the resolved data so that the client can hydrate the node
-                    if let Err(err) =
-                        push_server_data(&virtual_dom, scope, mount, &mut resolved_chunk).map_err(
-                            |err| {
-                                dioxus_ssr::incremental::IncrementalRendererError::Other(Box::new(
-                                    err,
-                                ))
-                            },
-                        )
-                    {
-                        throw_error!(err);
-                    }
+
                     stream_mut.render(resolved_chunk);
                 }
             }
@@ -319,22 +314,14 @@ impl SsrRendererPool {
     }
 }
 
-fn push_server_data(
-    virtual_dom: &VirtualDom,
-    scope: ScopeId,
-    mount: Mount,
-    resolved_chunk: &mut String,
-) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
+fn serialize_server_data(virtual_dom: &VirtualDom, scope: ScopeId) -> String {
     // After we replace the placeholder in the dom with javascript, we need to send down the resolved data so that the client can hydrate the node
     // Extract any data we serialized for hydration (from server futures)
     let html_data =
         crate::html_storage::HTMLData::extract_from_suspense_boundary(virtual_dom, scope);
-    // serialize the server state
 
-    crate::html_storage::serialize::encode_in_element(&html_data, resolved_chunk, mount)
-        .map_err(|err| dioxus_ssr::incremental::IncrementalRendererError::Other(Box::new(err)))?;
-
-    Ok(())
+    // serialize the server state into a base64 string
+    html_data.serialized()
 }
 
 /// State used in server side rendering. This utilizes a pool of [`dioxus_ssr::Renderer`]s to cache static templates between renders.

@@ -4,10 +4,13 @@ import "./hydrate_types";
 window.hydrate_queue = [];
 
 // @ts-ignore
-window.dx_hydrate = (id: number, data: Uint8Array) => {
+window.dx_hydrate = (id: number, data: string) => {
+  // First convert the base64 encoded string to a Uint8Array
+  const decoded = atob(data);
+  const bytes = Uint8Array.from(decoded, (c) => c.charCodeAt(0));
   if (window.hydration_callback) {
-    window.hydration_callback(id, data);
+    window.hydration_callback(id, bytes);
   } else {
-    window.hydrate_queue.push([id, data]);
+    window.hydrate_queue.push([id, bytes]);
   }
 };

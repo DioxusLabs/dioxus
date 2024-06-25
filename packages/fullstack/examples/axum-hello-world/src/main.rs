@@ -10,7 +10,13 @@ use serde::{Deserialize, Serialize};
 
 // When hydrating nested suspense boundaries, we still need to run code in the unresolved suspense boundary to replicate what the server has already done:
 fn app() -> Element {
+    let mut count = use_signal(|| 0);
+
     rsx! {
+        button {
+            onclick: move |_| count += 1,
+            "{count}"
+        }
         div {
             "Hello world"
         }
@@ -28,13 +34,20 @@ fn app() -> Element {
 #[component]
 fn SuspendedComponent() -> Element {
     use_server_future(move || async move {
-        #[cfg(feature = "server")]
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        async_std::task::sleep(std::time::Duration::from_secs(1)).await;
+        #[cfg(feature = "web")]
+        async_std::task::sleep(std::time::Duration::from_secs(100)).await;
         1234
     })?;
 
+    let mut count = use_signal(|| 0);
+
     rsx! {
         "Suspended???"
+        button {
+            onclick: move |_| count += 1,
+            "first {count}"
+        }
         SuspenseBoundary {
             fallback: |_| rsx! {
                 "Loading... more"
@@ -47,8 +60,9 @@ fn SuspendedComponent() -> Element {
 #[component]
 fn NestedSuspendedComponent() -> Element {
     use_server_future(move || async move {
-        #[cfg(feature = "server")]
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        async_std::task::sleep(std::time::Duration::from_secs(1)).await;
+        #[cfg(feature = "web")]
+        async_std::task::sleep(std::time::Duration::from_secs(100)).await;
         12345678
     })?;
     let mut count = use_signal(|| 0);
@@ -64,9 +78,10 @@ fn NestedSuspendedComponent() -> Element {
 fn main() {
     #[cfg(feature = "web")]
     tracing_wasm::set_as_global_default();
+    tracing::info!("Starting up");
 
-    #[cfg(feature = "server")]
-    tracing_subscriber::fmt::init();
+    // #[cfg(feature = "server")]
+    // tracing_subscriber::fmt::init();
 
     launch(app);
 }
