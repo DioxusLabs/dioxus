@@ -34,6 +34,11 @@ pub fn use_server_cached<O: 'static + Clone + Serialize + DeserializeOwned>(
     }
     #[cfg(not(feature = "server"))]
     {
-        use_hook(|| dioxus_web::take_server_data().unwrap_or_else(server_fn))
+        use_hook(|| {
+            dioxus_web::take_server_data()
+                .ok()
+                .flatten()
+                .unwrap_or_else(server_fn)
+        })
     }
 }

@@ -5,8 +5,10 @@ use crate::innerlude::*;
 #[derive(Debug)]
 pub struct SuspenseBoundaryProps {
     fallback: Callback<SuspenseContext, Element>,
+    /// The children of the suspense boundary
     children: Element,
-    pub(crate) suspended_nodes: Option<VNode>,
+    /// THe nodes that are suspended under this boundary
+    pub suspended_nodes: Option<VNode>,
 }
 
 impl Clone for SuspenseBoundaryProps {
@@ -417,21 +419,25 @@ impl SuspenseBoundaryProps {
         let props = Self::downcast_mut_from_props(&mut *scope_state.props).unwrap();
 
         // Unmount any children to reset any scopes under this suspense boundary
-        if let std::result::Result::Ok(node) = &props.children {
-            node.mount.take();
+        let children = props
+            .children
+            .as_ref()
+            .map(|node| node.clone_mounted())
+            .map_err(Clone::clone);
+        let suspended = props
+            .suspended_nodes
+            .as_ref()
+            .map(|node| node.clone_mounted());
+        if let std::result::Result::Ok(node) = &children {
+            node.remove_node(&mut *dom, None::<&mut M>, None);
         }
-        if let Some(node) = &props.suspended_nodes {
-            node.mount.take();
+        if let Some(node) = suspended {
+            node.remove_node(&mut *dom, None::<&mut M>, None);
         }
 
-        let children = RenderReturn {
-            node: props
-                .children
-                .as_ref()
-                .map(|node| node.clone_mounted())
-                .map_err(Clone::clone),
-        };
+        let children = RenderReturn { node: children };
 
+        let scope_state = &mut dom.scopes[scope_id.0];
         let currently_rendered = scope_state.last_rendered_node.as_ref().unwrap().clone();
         let mount = currently_rendered.mount.get();
         let parent = dom.mounts[mount.0].parent;

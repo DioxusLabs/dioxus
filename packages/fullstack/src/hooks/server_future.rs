@@ -1,6 +1,6 @@
 use dioxus_lib::prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
-use std::future::Future;
+use std::{cell::Cell, future::Future, rc::Rc};
 
 /// Runs a future with a manual list of dependencies and returns a resource with the result if the future is finished or a suspended error if it is still running.
 ///
@@ -67,15 +67,16 @@ where
     #[cfg(feature = "server")]
     let server_storage_entry = use_hook(|| serialize_context.create_entry());
 
-    let mut first_run = use_hook(|| CopyValue::new(true));
+    let first_run = use_hook(|| Rc::new(Cell::new(true)));
 
     let resource = use_resource(move || {
         #[cfg(feature = "server")]
         let serialize_context = serialize_context.clone();
         let user_fut = future();
+        let first_run = first_run.clone();
 
         async move {
-            let currently_in_first_run = first_run();
+            let currently_in_first_run = first_run.get();
 
             // If this is the first run and we are on the web client, the data might be cached
             if currently_in_first_run {
@@ -84,8 +85,15 @@ where
                 first_run.set(false);
 
                 #[cfg(feature = "web")]
-                if let Some(o) = dioxus_web::take_server_data::<T>() {
-                    return o;
+                match dioxus_web::take_server_data::<T>() {
+                    // THe data was deserialized successfully from the server
+                    Ok(Some(o)) => return o,
+                    // The data is still pending from the server. Don't try to resolve it on the client
+                    Ok(None) => {
+                        std::future::pending::<()>().await;
+                    }
+                    // The data was not available on the server, rerun the future
+                    Err(_) => {}
                 }
             }
 

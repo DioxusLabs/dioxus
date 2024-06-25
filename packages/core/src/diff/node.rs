@@ -251,6 +251,9 @@ impl VNode {
         );
 
         let mount = self.mount.get();
+        if !mount.mounted() {
+            return;
+        }
 
         tracing::trace!("mount id: {mount:?}");
         tracing::trace!("mount: {:?}", dom.mounts[mount.0]);

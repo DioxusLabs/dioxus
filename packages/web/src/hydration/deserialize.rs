@@ -10,8 +10,11 @@ thread_local! {
 /// Try to take the next item from the server data cursor. This will only be set during the first run of a component before hydration.
 /// This will return `None` if no data was pushed for this instance or if serialization fails
 // TODO: evan better docs
-pub fn take_server_data<T: DeserializeOwned>() -> Option<T> {
-    SERVER_DATA.with_borrow(|data| data.as_ref()?.take())
+pub fn take_server_data<T: DeserializeOwned>() -> Result<Option<T>, TakeDataError> {
+    SERVER_DATA.with_borrow(|data| match data.as_ref() {
+        Some(data) => data.take(),
+        None => Ok(None),
+    })
 }
 
 pub(crate) fn set_server_data(data: HTMLDataCursor) {
@@ -38,7 +41,7 @@ impl HTMLDataCursor {
         }
     }
 
-    pub fn take<T: DeserializeOwned>(&self) -> Option<T> {
+    pub fn take<T: DeserializeOwned>(&self) -> Result<Option<T>, TakeDataError> {
         let current = self.index.get();
         if current >= self.data.len() {
             tracing::error!(
@@ -46,16 +49,27 @@ impl HTMLDataCursor {
                 self.data.len(),
                 current
             );
-            return None;
+            return Err(TakeDataError::DataNotAvailable);
         }
-        let cursor = self.data[current].as_ref()?;
+        let bytes = self.data[current].as_ref();
         self.index.set(current + 1);
-        match ciborium::from_reader(Cursor::new(cursor)) {
-            Ok(x) => Some(x),
-            Err(e) => {
-                tracing::error!("Error deserializing data: {:?}", e);
-                None
-            }
+        match bytes {
+            Some(bytes) => match ciborium::from_reader(Cursor::new(bytes)) {
+                Ok(x) => Ok(Some(x)),
+                Err(e) => {
+                    tracing::error!("Error deserializing data: {:?}", e);
+                    Err(TakeDataError::DeserializationError(e))
+                }
+            },
+            None => Ok(None),
         }
     }
+}
+
+/// An error that can occur when trying to take data from the server
+pub enum TakeDataError {
+    /// Deserializing the data failed
+    DeserializationError(ciborium::de::Error<std::io::Error>),
+    /// No data was available
+    DataNotAvailable,
 }
