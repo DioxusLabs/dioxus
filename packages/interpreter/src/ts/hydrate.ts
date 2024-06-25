@@ -27,15 +27,15 @@ export function dx_swap(suspense_placeholder_id: number) {
   // First delete all nodes between the template and the comment <!--ds-{id}--> that marks the end of the placeholder
 
   let current = startPlaceholder.nextSibling;
-  while (current) {
-    if (
-      current.nodeType === Node.COMMENT_NODE &&
-      current.textContent === placeholder_id
-    ) {
-      break;
-    }
+  const endNode = (node: Node): boolean => {
+    return (
+      node.nodeType === Node.COMMENT_NODE && node.textContent === placeholder_id
+    );
+  };
+  while (current && !endNode(current)) {
+    const next = current.nextSibling;
     current.remove();
-    current = current.nextSibling;
+    current = next;
   }
 
   // Then replace the template with the children of the resolved div

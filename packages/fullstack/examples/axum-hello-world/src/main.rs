@@ -55,12 +55,12 @@ fn SuspendedComponent() -> Element {
             onclick: move |_| count += 1,
             "first {count}"
         }
-        SuspenseBoundary {
-            fallback: |_| rsx! {
-                "Loading... more"
-            },
-            NestedSuspendedComponent {}
-        }
+        // SuspenseBoundary {
+        //     fallback: |_| rsx! {
+        //         "Loading... more"
+        //     },
+        //     NestedSuspendedComponent {}
+        // }
     }
 }
 
