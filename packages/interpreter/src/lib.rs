@@ -9,9 +9,6 @@ pub static INTERPRETER_JS: &str = include_str!("./js/core.js");
 /// The code explicitly for desktop/liveview that bridges the eval gap between the two
 pub static NATIVE_JS: &str = include_str!("./js/native.js");
 
-/// The code that handles swapping in streaming chunks
-pub static STREAMING_JS: &str = include_str!("./js/streaming.js");
-
 /// The code that handles initializing data used for fullstack data streaming
 pub static INITIALIZE_STREAMING_JS: &str = include_str!("./js/initialize_streaming.js");
 

@@ -30,7 +30,6 @@
 //! </script>
 //! ```
 
-use dioxus_interpreter_js::STREAMING_JS;
 use futures_channel::mpsc::Sender;
 
 use std::fmt::{Display, Write};
@@ -38,7 +37,6 @@ use std::fmt::{Display, Write};
 pub struct StreamingRenderer<E = std::convert::Infallible> {
     channel: Sender<Result<String, E>>,
     last_mount_id: usize,
-    has_script: bool,
 }
 
 impl<E> StreamingRenderer<E> {
@@ -51,7 +49,6 @@ impl<E> StreamingRenderer<E> {
             channel: render_into,
             // We start on id 2 because the first id is reserved for the initial html chunk sent to the client
             last_mount_id: 2,
-            has_script: false,
         }
     }
 
@@ -87,24 +84,12 @@ impl<E> StreamingRenderer<E> {
         data: impl Display,
         into: &mut W,
     ) -> std::fmt::Result {
-        // Make sure the client has the hydration function
-        if !self.has_script {
-            self.has_script = true;
-            self.send_streaming_script();
-        }
-
         // Then replace the suspense placeholder with the new content
         let resolved_id = id.id + 1;
         write!(
             into,
             r#"<div id="ds-{resolved_id}" hidden>{html}</div><script>window.dx_hydrate({id}, "{data}")</script>"#
         )
-    }
-
-    /// Sends the script that handles loading streaming chunks to the client
-    fn send_streaming_script(&mut self) {
-        let script = format!("<script>{STREAMING_JS}</script>");
-        _ = self.channel.start_send(Ok(script));
     }
 
     /// Close the stream with an error

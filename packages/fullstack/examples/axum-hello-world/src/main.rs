@@ -74,10 +74,9 @@ fn NestedSuspendedComponent() -> Element {
 fn main() {
     #[cfg(feature = "web")]
     tracing_wasm::set_as_global_default();
-    tracing::info!("Starting up");
 
-    // #[cfg(feature = "server")]
-    // tracing_subscriber::fmt::init();
+    #[cfg(feature = "server")]
+    tracing_subscriber::fmt::init();
 
     launch(app);
 }
