@@ -257,7 +257,7 @@ impl IfmtInput {
     /// Convert the ifmt to a string, using the source if available
     pub fn to_quoted_string_from_parts(&self) -> String {
         if let Some(source) = &self.source {
-            return format!("\"{}\"", source.value());
+            return source.to_token_stream().to_string();
         }
 
         let joined = self

@@ -9,7 +9,7 @@ use std::{
     fmt::Result,
     fmt::{self, Write},
 };
-use syn::{spanned::Spanned, token::Brace, Expr};
+use syn::{spanned::Spanned, token::Brace, Expr, Stmt};
 
 #[derive(Debug)]
 enum ShortOptimization {
@@ -101,7 +101,9 @@ impl Writer<'_> {
 
                 self.write_attributes(attributes, spreads, true, brace, has_children)?;
 
-                write!(self.out, " ")?;
+                if !children.is_empty() && !attributes.is_empty() {
+                    write!(self.out, " ")?;
+                }
 
                 for (id, child) in children.iter().enumerate() {
                     self.write_ident(child)?;
@@ -355,7 +357,7 @@ impl Writer<'_> {
             [BodyNode::Text(ref text)] => Some(ifmt_to_string(&text.input).len()),
 
             // TODO: let rawexprs to be inlined
-            [BodyNode::RawExpr(ref expr)] => get_expr_length(expr),
+            [BodyNode::RawExpr(ref expr)] => Some(get_expr_length(expr.span())),
 
             // TODO: let rawexprs to be inlined
             [BodyNode::Component(ref comp)] if comp.fields.is_empty() => Some(
@@ -419,12 +421,35 @@ impl Writer<'_> {
     }
 }
 
-fn get_expr_length(expr: &impl Spanned) -> Option<usize> {
-    let span = expr.span();
+fn get_expr_length(span: Span) -> usize {
     let (start, end) = (span.start(), span.end());
     if start.line == end.line {
-        Some(end.column - start.column)
+        end.column - start.column
     } else {
-        None
+        10000
     }
+}
+
+#[test]
+fn raw_braced_expr() {
+    let file = include_str!("../tests/samples/braced_expr.rs");
+    let src = syn::parse_file(file).unwrap();
+    let main_fn = &src.items[0];
+    let block = match main_fn {
+        syn::Item::Fn(ref item) => item.block.clone(),
+        _ => panic!("Expected a function"),
+    };
+
+    let raw_expr = &block.stmts[0];
+
+    let Stmt::Expr(exp, semi) = raw_expr else {
+        panic!("Expected an expression")
+    };
+
+    let tokens = exp.to_token_stream();
+    let block: Expr = syn::parse2(tokens).unwrap();
+    dbg!(block.span());
+    dbg!(block.span().start(), block.span().end());
+
+    dbg!(get_expr_length(block.span()));
 }

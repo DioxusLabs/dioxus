@@ -51,4 +51,5 @@ twoway![
     letsome,
     fat_exprs,
     nested,
+    staged,
 ];

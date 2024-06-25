@@ -60,11 +60,12 @@ impl Parse for BodyNode {
         // }
         // ```
         if stream.peek(Token![match]) {
-            return Ok(BodyNode::RawExpr(BracedRawExpr {
-                expr: stream.parse::<Expr>()?.to_token_stream(),
-                dyn_idx: DynIdx::default(),
-                brace: None,
-            }));
+            todo!()
+            // return Ok(BodyNode::RawExpr(BracedRawExpr {
+            //     expr: stream.parse::<Expr>()?.to_token_stream(),
+            //     dyn_idx: DynIdx::default(),
+            //     brace: None,
+            // }));
         }
 
         // Raw expressions need to be wrapped in braces - let RawBracedExpr handle partial expansion
