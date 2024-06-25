@@ -1,1 +1,1 @@
-window.dx_swap=(suspense_placeholder_id)=>{const template=document.getElementById(`ds-${suspense_placeholder_id}`),target=document.getElementById(`ds-${suspense_placeholder_id+1}`);target.hidden=!1,template.replaceWith(target)};
+window.dx_swap=(suspense_placeholder_id)=>{const template=document.getElementById(`ds-${suspense_placeholder_id}`),target=document.getElementById(`ds-${suspense_placeholder_id+1}`);target.hidden=!1,template.replaceWith(...target.childNodes),target.remove()};
