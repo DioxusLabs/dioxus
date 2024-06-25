@@ -79,8 +79,7 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
 
     tracing::info!("rebuilding app");
 
-    #[cfg(feature = "hydrate")]
-    let mut hydration_receiver = None;
+    let mut hydration_receiver: Option<futures_channel::mpsc::UnboundedReceiver<(u32, Vec<u8>)>> = None;
 
     if should_hydrate {
         #[cfg(feature = "hydrate")]
@@ -112,7 +111,7 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
         #[cfg(all(feature = "hot_reload", debug_assertions))]
         let template;
         #[allow(unused)]
-        let mut hydration_work = None;
+        let mut hydration_work: Option<(u32, Vec<u8>)> = None;
 
         {
             let work = dom.wait_for_work().fuse();
@@ -125,6 +124,7 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
             let mut rx_hydration = hydration_receiver_iter.select_next_some();
 
             #[cfg(all(feature = "hot_reload", debug_assertions))]
+            #[allow(unused)]
             {
                 let mut hot_reload_next = hotreload_rx.select_next_some();
                 select! {
