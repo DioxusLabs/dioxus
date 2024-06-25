@@ -280,8 +280,13 @@ impl<'a> Writer<'a> {
                 }
             }
             ElementAttrValue::EventTokens(closure) => {
-                if let Ok(exp) = closure.as_expr() {
-                    self.retrieve_formatted_expr(&exp).len()
+                if let Ok(expr) = closure.as_expr() {
+                    let out = self.retrieve_formatted_expr(&expr);
+                    if out.contains('\n') {
+                        100000
+                    } else {
+                        out.len()
+                    }
                 } else {
                     100000
                 }

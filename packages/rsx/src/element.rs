@@ -189,6 +189,8 @@ impl Element {
     /// }
     ///
     fn merge_attributes(&mut self) {
+        return;
+
         for attr in self.raw_attributes.iter() {
             // Collect all the attributes with the same name
             let matching_attrs = self

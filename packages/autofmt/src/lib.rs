@@ -12,7 +12,7 @@ use quote::ToTokens;
 use syn::{parse::Parser, ExprMacro, MacroDelimiter};
 
 mod buffer;
-mod collect_macros;
+pub mod collect_macros;
 mod indent;
 mod prettier_please;
 mod rsx_block;
@@ -84,11 +84,7 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
             .indent
             .count_indents(writer.src[rsx_start.line - 1]);
 
-        // writing might not succeed -
-        let fmt_succeeded = write_body(&mut writer, &body.body);
-        if fmt_succeeded.is_err() {
-            continue;
-        }
+        _ = write_body(&mut writer, &body.body);
 
         // writing idents leaves the final line ended at the end of the last ident
         if writer.out.buf.contains('\n') {

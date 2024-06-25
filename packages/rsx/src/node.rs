@@ -220,7 +220,7 @@ impl BodyNode {
             BodyNode::Element(el) => el.name.span(),
             BodyNode::Component(component) => component.name.span(),
             BodyNode::Text(text) => text.input.source.span(),
-            BodyNode::RawExpr(exp) => exp.expr.span(),
+            BodyNode::RawExpr(exp) => exp.span(),
             BodyNode::ForLoop(fl) => fl.for_token.span(),
             BodyNode::IfChain(f) => f.if_token.span(),
         }

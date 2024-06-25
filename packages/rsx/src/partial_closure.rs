@@ -1,11 +1,11 @@
 use proc_macro2::TokenStream;
-use quote::ToTokens;
+use quote::{ToTokens, TokenStreamExt};
 use std::hash::{Hash, Hasher};
 use syn::{
     braced,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
-    token, Attribute, Block, Expr, ExprBlock, Pat, PatType, Result, ReturnType, Token, Type,
+    token, Attribute, Block, Expr, ExprBlock, Pat, PatType, Result, ReturnType, Stmt, Token, Type,
 };
 use syn::{BoundLifetimes, ExprClosure};
 
@@ -151,8 +151,32 @@ impl PartialClosure {
     /// Convert this partial closure into a full closure if it is valid
     /// Returns err if the internal tokens can't be parsed as a closure
     pub fn as_expr_closure(&self) -> Result<ExprClosure> {
-        // Parse the body first so it's an early return
-        let body: Block = syn::parse2(self.body.clone())?;
+        // If there's a brace token, we need to parse the body as a block
+        // Otherwise we can parse it as an expression
+        let body = match self.brace_token.as_ref() {
+            Some(brace) => {
+                // parse the tokenstream into a vec of statements
+                // I'm pretty sure there's a better way to do this
+                struct StmtVec(Vec<Stmt>);
+                impl Parse for StmtVec {
+                    fn parse(input: ParseStream) -> Result<Self> {
+                        Block::parse_within(input).map(Self)
+                    }
+                }
+                let StmtVec(stmts) = syn::parse2(self.body.clone())?;
+
+                Expr::Block(ExprBlock {
+                    attrs: Vec::new(),
+                    label: None,
+                    block: Block {
+                        brace_token: brace.clone(),
+                        stmts,
+                    },
+                })
+            }
+
+            None => syn::parse2(self.body.clone())?,
+        };
 
         Ok(ExprClosure {
             attrs: self.attrs.clone(),
@@ -160,14 +184,7 @@ impl PartialClosure {
             capture: self.capture.clone(),
             inputs: self.inputs.clone(),
             output: self.output.clone(),
-            body: Box::new(Expr::Block(ExprBlock {
-                attrs: Vec::new(),
-                label: None,
-                block: Block {
-                    brace_token: self.brace_token.clone().unwrap_or_default(),
-                    stmts: body.stmts,
-                },
-            })),
+            body: Box::new(body),
             lifetimes: self.lifetimes.clone(),
             constness: self.constness.clone(),
             movability: self.movability.clone(),
@@ -261,5 +278,34 @@ mod tests {
         });
 
         // parse_non_delimited_group(syn::parse2(toks).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn parses_real_world() {
+        let parses: Result<PartialClosure> = syn::parse2(quote! {
+            move |_| {
+                let mut sidebar = SHOW_SIDEBAR.write();
+                *sidebar = !*sidebar;
+            }
+        });
+
+        // but ours can - we just can't format it out
+        let parses = parses.unwrap();
+        dbg!(parses.to_token_stream().to_string());
+        parses.as_expr().unwrap();
+
+        let parses: Result<PartialClosure> = syn::parse2(quote! {
+            move |_| {
+                rsx! {
+                    div { class: "max-w-lg lg:max-w-2xl mx-auto mb-16 text-center",
+                        "gomg"
+                        "hi!!"
+                        "womh"
+                    }
+                };
+                println!("hi")
+            }
+        });
+        parses.unwrap().as_expr().unwrap();
     }
 }

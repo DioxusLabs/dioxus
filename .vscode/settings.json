@@ -7,5 +7,6 @@
   "rust-analyzer.check.workspace": false,
   "rust-analyzer.check.features": "all",
   "rust-analyzer.cargo.features": "all",
-  "rust-analyzer.check.allTargets": true
+  "rust-analyzer.check.allTargets": true,
+  "dioxus.formatOnSave": "disabled"
 }

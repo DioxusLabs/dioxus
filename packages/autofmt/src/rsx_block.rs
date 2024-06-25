@@ -447,7 +447,7 @@ fn raw_braced_expr() {
     };
 
     let tokens = exp.to_token_stream();
-    let block: Expr = syn::parse2(tokens).unwrap();
+    let block: BracedRawExpr = syn::parse2(tokens).unwrap();
     dbg!(block.span());
     dbg!(block.span().start(), block.span().end());
 
