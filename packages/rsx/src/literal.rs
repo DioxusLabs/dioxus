@@ -1,3 +1,4 @@
+use dioxus_core::prelude::HotReloadLiteral;
 use proc_macro2::Span;
 use quote::ToTokens;
 use quote::{quote, TokenStreamExt};
@@ -92,6 +93,10 @@ impl ToTokens for RsxLiteral {
         };
 
         let val = match &self.value {
+            HotLiteral::Fmted(fmt) if fmt.is_static() => {
+                let o = fmt.to_static().unwrap().to_token_stream();
+                quote! { #o }
+            }
             HotLiteral::Fmted(fmt) => {
                 let mut idx = 0_usize;
                 let segments = fmt.segments.iter().map(|s| match s {
@@ -121,7 +126,7 @@ impl ToTokens for RsxLiteral {
         };
 
         let mapped = match &self.value {
-            HotLiteral::Fmted(f) if f.is_static() => quote! { .clone() },
+            HotLiteral::Fmted(f) if f.is_static() => quote! { .clone() as &'static str},
 
             HotLiteral::Fmted(segments) => {
                 let rendered_segments = segments.segments.iter().filter_map(|s| match s {
@@ -213,6 +218,8 @@ impl RsxLiteral {
     pub fn span(&self) -> Span {
         self.raw.span()
     }
+
+    pub fn combine(&self, other: &Self) {}
 }
 
 #[cfg(test)]
@@ -249,5 +256,17 @@ fn outputs_a_signal() {
     println!("{}", lit.to_token_stream().pretty_unparse());
 
     let lit = syn::parse2::<RsxLiteral>(quote! { "hi {world}" }).unwrap();
+    println!("{}", lit.to_token_stream().pretty_unparse());
+}
+
+#[test]
+fn static_str_becomes_str() {
+    let lit = syn::parse2::<RsxLiteral>(quote! { "hello" }).unwrap();
+    let HotLiteral::Fmted(segments) = &lit.value else {
+        panic!("expected a formatted string");
+    };
+
+    assert!(segments.is_static());
+
     println!("{}", lit.to_token_stream().pretty_unparse());
 }

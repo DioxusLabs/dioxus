@@ -354,27 +354,28 @@ impl App {
 
                         let ctx = get_global_context();
 
-                        for (id, segments) in changed_strings.iter() {
-                            println!("updating signal in desktop {:?} with {:?}", id, segments);
+                        for literal in changed_strings.iter() {
+                            // println!("updating signal in desktop {:?} with {:?}", id, segments);
+                            let id = literal.name.clone();
 
-                            match segments {
+                            match &literal.value {
                                 HotReloadLiteral::Fmted(f) => {
-                                    if let Some(mut signal) = ctx.get_signal_with_key(id) {
+                                    if let Some(mut signal) = ctx.get_signal_with_key(&id) {
                                         signal.set(f.clone());
                                     }
                                 }
                                 HotReloadLiteral::Float(f) => {
-                                    if let Some(mut signal) = ctx.get_signal_with_key::<f64>(id) {
+                                    if let Some(mut signal) = ctx.get_signal_with_key::<f64>(&id) {
                                         signal.set(f.clone());
                                     }
                                 }
                                 HotReloadLiteral::Int(f) => {
-                                    if let Some(mut signal) = ctx.get_signal_with_key::<i64>(id) {
+                                    if let Some(mut signal) = ctx.get_signal_with_key::<i64>(&id) {
                                         signal.set(f.clone());
                                     }
                                 }
                                 HotReloadLiteral::Bool(f) => {
-                                    if let Some(mut signal) = ctx.get_signal_with_key::<bool>(id) {
+                                    if let Some(mut signal) = ctx.get_signal_with_key::<bool>(&id) {
                                         signal.set(f.clone());
                                     }
                                 }

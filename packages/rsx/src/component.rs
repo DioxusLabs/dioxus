@@ -45,7 +45,7 @@ impl Parse for Component {
         let generics = normalize_path(&mut name);
 
         let RsxBlock {
-            fields,
+            attributes: fields,
             children,
             brace,
             spreads,
@@ -94,11 +94,16 @@ impl ToTokens for Component {
                 // todo: ensure going through the trait actually works
                 // we want to avoid importing traits
                 // use dioxus_core::prelude::Properties;
-                dioxus_core::prelude::Properties::into_vcomponent(
-                    #props,
+                use dioxus_core::prelude::Properties;
+                (#props).into_vcomponent(
                     #name #generics,
                     #fn_name
                 )
+                // dioxus_core::prelude::Properties::into_vcomponent(
+                //     #props,
+                //     #name #generics,
+                //     #fn_name
+                // )
             })
         })
     }
@@ -224,29 +229,33 @@ impl Component {
         let name = &self.name;
         let generics = &self.generics;
 
-        let mut tokens = match manual_props.as_ref() {
-            Some(props) => quote! { let mut __manual_props = #props; },
-            None => quote! { fc_to_builder(#name #generics) },
+        let mut tokens = if let Some(props) = manual_props.as_ref() {
+            quote! { let mut __manual_props = #props; }
+        } else {
+            quote! { fc_to_builder(#name #generics) }
         };
 
         for (name, value) in self.make_field_idents() {
-            match manual_props.is_none() {
-                true => tokens.append_all(quote! { .#name(#value) }),
-                false => tokens.append_all(quote! { __manual_props.#name = #value; }),
+            if manual_props.is_some() {
+                tokens.append_all(quote! { __manual_props.#name = #value; })
+            } else {
+                tokens.append_all(quote! { .#name(#value) })
             }
         }
 
         if !self.children.is_empty() {
             let children = &self.children;
-            match manual_props.is_none() {
-                true => tokens.append_all(quote! { .children( { #children } ) }),
-                false => tokens.append_all(quote! { __manual_props.children = { #children }; }),
+            if manual_props.is_some() {
+                tokens.append_all(quote! { __manual_props.children = { #children }; })
+            } else {
+                tokens.append_all(quote! { .children( { #children } ) })
             }
         }
 
-        match manual_props.is_none() {
-            true => tokens.append_all(quote! { .build() }),
-            false => tokens.append_all(quote! { __manual_props }),
+        if manual_props.is_some() {
+            tokens.append_all(quote! { __manual_props })
+        } else {
+            tokens.append_all(quote! { .build() })
         }
 
         tokens
@@ -346,7 +355,7 @@ fn rejects() {
         }
     };
 
-    let mut component: Component = syn::parse2(input).unwrap();
+    let component: Component = syn::parse2(input).unwrap();
     dbg!(component.diagnostics);
 }
 
@@ -390,5 +399,16 @@ fn generics_params() {
          Outlet::<R> {}
     };
     let component: CallBody = syn::parse2(input_without_children).unwrap();
+    println!("{}", component.to_token_stream().pretty_unparse());
+}
+
+#[test]
+fn fmt_passes_properly() {
+    let input = quote! {
+        Link { to: Route::List, class: "pure-button", "Go back" }
+    };
+
+    let component: Component = syn::parse2(input).unwrap();
+
     println!("{}", component.to_token_stream().pretty_unparse());
 }

@@ -170,9 +170,16 @@ impl HotReloadReceiver {
     /// Send a hot reloading message to the client
     pub fn send_message(&self, msg: HotReloadMsg) {
         // Before we send the message, update the list of changed templates
-        if let HotReloadMsg::UpdateTemplate(template) = msg {
+        if let HotReloadMsg::Update {
+            templates,
+            changed_strings,
+            assets,
+        } = &msg
+        {
             let mut template_updates = self.template_updates.lock().unwrap();
-            template_updates.insert(template.name, template);
+            for template in templates {
+                template_updates.insert(template.name, template.clone());
+            }
         }
         if let Err(err) = self.messages.send(msg) {
             tracing::error!("Failed to send hot reload message: {}", err);
@@ -245,12 +252,20 @@ async fn hotreload_loop(
             let Ok(msg) = msg else { break };
 
             match msg {
-                HotReloadMsg::UpdateTemplate(template) => {
-                    Message::Text(serde_json::to_string(&template).unwrap())
+                HotReloadMsg::Update {
+                    templates,
+                    changed_strings,
+                    assets,
+                } => {
+                    // todo: fix the assets bug
+                    Message::Text(serde_json::to_string(&templates).unwrap())
                 }
-                HotReloadMsg::UpdateAsset(asset) => {
-                    Message::Text(format!("reload-asset: {}", asset.display()))
-                }
+                // HotReloadMsg::Update(template) => {
+                //     Message::Text(serde_json::to_string(&template).unwrap())
+                // }
+                // HotReloadMsg::UpdateAsset(asset) => {
+                //     Message::Text(format!("reload-asset: {}", asset.display()))
+                // }
                 HotReloadMsg::Shutdown => {
                     tracing::info!("🔥 Hot Reload WebSocket shutting down");
                     break;

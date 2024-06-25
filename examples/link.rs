@@ -13,10 +13,10 @@ fn main() {
 }
 
 fn app() -> Element {
-    rsx! (
+    rsx! {
         style { {include_str!("./assets/links.css")} }
         Router::<Route> {}
-    )
+    }
 }
 
 #[derive(Routable, Clone)]
@@ -48,12 +48,16 @@ fn Header() -> Element {
 
 #[component]
 fn Home() -> Element {
-    rsx!( h1 { "Home" } )
+    rsx! {
+        h1 { "Home" }
+    }
 }
 
 #[component]
 fn Settings() -> Element {
-    rsx!( h1 { "Settings" } )
+    rsx! {
+        h1 { "Settings" }
+    }
 }
 
 #[component]

@@ -45,7 +45,7 @@ impl Parse for Element {
         let name = stream.parse::<ElementName>()?;
 
         let RsxBlock {
-            fields,
+            attributes: fields,
             children,
             brace,
             spreads,
@@ -181,7 +181,7 @@ impl Element {
     /// idk what else
     fn validate(&mut self) {}
 
-    /// Collapses ifmt attributes into a single dynamic attribute using a space as a delimiter
+    /// Collapses ifmt attributes into a single dynamic attribute using a space or `;` as a delimiter
     ///
     /// div {
     ///     class: "abc-def",
@@ -189,44 +189,69 @@ impl Element {
     /// }
     ///
     fn merge_attributes(&mut self) {
-        let mut merged_attributes: Vec<Attribute> = Vec::new();
-        for attr in &self.raw_attributes {
-            let attr_index = merged_attributes
+        for attr in self.raw_attributes.iter() {
+            // Collect all the attributes with the same name
+            let matching_attrs = self
+                .raw_attributes
                 .iter()
-                .position(|a| a.matches_attr_name(attr));
+                .filter(|a| a.matches_attr_name(&attr))
+                .collect::<Vec<_>>();
 
-            if let Some(old_attr_index) = attr_index {
-                let old_attr = &mut merged_attributes[old_attr_index];
-
-                if let Some(combined) = old_attr.try_combine(attr) {
-                    *old_attr = combined;
-                }
-
+            // if there's only one attribute with this name, then we don't need to merge anything
+            if matching_attrs.len() == 1 {
+                self.merged_attributes.push(attr.clone());
                 continue;
             }
 
-            merged_attributes.push(attr.clone());
+            // If there are multiple attributes with the same name, then we need to merge them
+            // This will be done by creating an ifmt attribute that combines all the segments
+            // We might want to throw a diagnostic of trying to merge things together that might not
+            // make a whole lot of sense - like merging two exprs together
+            let mut out_fmt = IfmtInput::default();
+
+            for (idx, matching_attr) in matching_attrs.iter().enumerate() {
+                // If this is the first attribute, then we don't need to add a delimiter
+                if idx != 0 {
+                    out_fmt.push_str(match attr.name.ident_to_str().as_str() {
+                        "class" => " ",
+                        "style" => ";",
+                        _ => " ",
+                    });
+                }
+
+                match &matching_attr.value {
+                    AttributeValue::Shorthand(lit) => out_fmt.push_ident(lit.clone()),
+                    AttributeValue::AttrExpr(lit) => out_fmt.push_expr(lit.clone()),
+                    AttributeValue::AttrLiteral(lit) => {
+                        // If the literal is a formatted string, then we'll just join it
+                        // Otherwise literals are just pushed as is
+                        match &lit.value {
+                            HotLiteral::Fmted(new) => out_fmt = out_fmt.join(new.clone(), ""),
+                            HotLiteral::Float(raw) => out_fmt.push_str(raw.to_string().as_str()),
+                            HotLiteral::Int(raw) => out_fmt.push_str(raw.to_string().as_str()),
+                            HotLiteral::Bool(raw) => {
+                                out_fmt.push_str(raw.value().to_string().as_str())
+                            }
+                        }
+                    }
+                    AttributeValue::AttrOptionalExpr { condition, value } => {}
+                }
+            }
+
+            let out_lit = RsxLiteral {
+                raw: syn::Lit::Str(out_fmt.source.clone().unwrap()),
+                value: HotLiteral::Fmted(out_fmt),
+                hr_idx: Default::default(),
+            };
+
+            self.merged_attributes.push(Attribute {
+                name: attr.name.clone(),
+                value: AttributeValue::AttrLiteral(out_lit),
+                colon: attr.colon.clone(),
+                dyn_idx: attr.dyn_idx.clone(),
+                comma: matching_attrs.last().unwrap().comma.clone(),
+            });
         }
-
-        // Push each attribute into the merged attributes list, and if it already exists, then
-        // push the segments into the existing attribute
-        // We might not be able to merge some types of attributes.
-        // for new_attr in &self.raw_attributes {
-        //     let attr_index = self
-        //         .merged_attributes
-        //         .iter()
-        //         .position(|a| a.name == new_attr.name);
-
-        //     if let Some(old_attr_index) = attr_index {
-        //         let old_attr = &mut self.merged_attributes[old_attr_index];
-
-        //         todo!("Merge attributes properly!");
-
-        //         continue;
-        //     }
-
-        //     self.merged_attributes.push(new_attr.clone());
-        // }
     }
 
     pub(crate) fn key(&self) -> Option<&IfmtInput> {
@@ -311,11 +336,11 @@ impl Display for ElementName {
 
 #[test]
 fn parses_name() {
-    let parsed: ElementName = syn::parse2(quote::quote! { div }).unwrap();
-    let parsed: ElementName = syn::parse2(quote::quote! { some-cool-element }).unwrap();
+    let _parsed: ElementName = syn::parse2(quote::quote! { div }).unwrap();
+    let _parsed: ElementName = syn::parse2(quote::quote! { some-cool-element }).unwrap();
 
-    let parsed: Element = syn::parse2(quote::quote! { div {} }).unwrap();
-    let parsed: Element = syn::parse2(quote::quote! { some-cool-element {} }).unwrap();
+    let _parsed: Element = syn::parse2(quote::quote! { div {} }).unwrap();
+    let _parsed: Element = syn::parse2(quote::quote! { some-cool-element {} }).unwrap();
 
     let parsed: Element = syn::parse2(quote::quote! {
         some-cool-div {
@@ -439,4 +464,37 @@ fn merges_attributes() {
 
     let parsed: Element = syn::parse2(input).unwrap();
     assert!(parsed.merged_attributes.len() == 1);
+}
+
+/// There are a number of cases where merging attributes doesn't make sense
+/// - merging two expressions together
+/// - merging two literals together
+/// - merging a literal and an expression together
+/// etc
+///
+/// We really only want to merge formatted things together
+///
+/// IE
+/// class: "hello world ",
+/// class: if some_expr { "abc" }
+///
+/// Some open questions - should the delimiter be explicit?
+#[test]
+fn merging_weird_fails() {
+    let input = quote::quote! {
+        div {
+            class: "hello world",
+            class: if some_expr { 123 },
+
+            style: "color: red;",
+            style: "color: blue;",
+
+            // hello world 123
+
+            width: "1px",
+            width: 1,
+            width: false,
+            contenteditable: true,
+        }
+    };
 }

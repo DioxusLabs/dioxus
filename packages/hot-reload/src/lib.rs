@@ -5,7 +5,7 @@ use std::{
 };
 
 use dioxus_core::{
-    prelude::{FmtedSegments, HotReloadLiteral},
+    prelude::{FmtedSegments, HotReloadLiteral, HotreloadedLiteral},
     Template,
 };
 #[cfg(feature = "file_watcher")]
@@ -34,7 +34,7 @@ pub enum HotReloadMsg {
     /// Things have changed, here's a list
     Update {
         templates: Vec<Template>,
-        changed_strings: HashMap<String, HotReloadLiteral>,
+        changed_strings: Vec<HotreloadedLiteral>,
         assets: Vec<PathBuf>,
     },
 

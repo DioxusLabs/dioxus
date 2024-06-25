@@ -41,10 +41,10 @@ use super::literal::RsxLiteral;
 /// todo: add some diagnostics
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct RsxBlock {
-    pub fields: Vec<Attribute>,
+    pub brace: token::Brace,
+    pub attributes: Vec<Attribute>,
     pub spreads: Vec<Spread>,
     pub children: Vec<BodyNode>,
-    pub brace: token::Brace,
     pub diagnostics: Diagnostics,
 }
 
@@ -107,6 +107,12 @@ impl Parse for RsxBlock {
             {
                 let name = content.parse::<Ident>()?;
 
+                let comma = if !content.is_empty() {
+                    Some(content.parse::<Token![,]>()?) // <--- diagnostics...
+                } else {
+                    None
+                };
+
                 if !spreads.is_empty() {
                     diagnostics.push(name.span().error(
                         "Spread attributes must come after regular attributes and before children",
@@ -115,12 +121,6 @@ impl Parse for RsxBlock {
                         "This spread attribute should be moved to the end of the attribute list",
                     ));
                 }
-
-                let comma = if !content.is_empty() {
-                    Some(content.parse::<Token![,]>()?) // <--- diagnostics...
-                } else {
-                    None
-                };
 
                 attributes.push(Attribute {
                     name: AttributeName::BuiltIn(name.clone()),
@@ -138,74 +138,10 @@ impl Parse for RsxBlock {
                 && content.peek2(Token![:])
                 && !content.peek3(Token![:])
             {
-                // Parse the name as either a known or custom attribute
-                let name = match content.peek(LitStr) {
-                    true => AttributeName::Custom(content.parse::<LitStr>()?),
-                    false => AttributeName::BuiltIn(content.parse::<Ident>()?),
-                };
-
-                // Ensure there's a colon
-                let colon = Some(content.parse::<Token![:]>()?);
-
-                // if statements in attributes get automatic closing in some cases
-                let value = if content.peek(Token![if]) {
-                    let if_expr = content.parse::<ExprIf>()?;
-                    if is_if_chain_terminated(&if_expr) {
-                        AttributeValue::AttrExpr(Expr::If(if_expr))
-                    } else {
-                        AttributeValue::AttrOptionalExpr {
-                            condition: *if_expr.cond,
-                            value: {
-                                let stmts = &if_expr.then_branch.stmts;
-
-                                if stmts.len() != 1 {
-                                    return Err(syn::Error::new(
-                                        if_expr.then_branch.span(),
-                                        "Expected a single statement in the if block",
-                                    ));
-                                }
-
-                                // either an ifmt or an expr in the block
-                                let stmt = &stmts[0];
-
-                                // Either it's a valid ifmt or an expression
-                                match stmt {
-                                    syn::Stmt::Expr(exp, None) => {
-                                        // Try parsing the statement as an IfmtInput by passing it through tokens
-                                        let value: Result<RsxLiteral, syn::Error> =
-                                            syn::parse2(quote! { #exp });
-
-                                        match value {
-                                            Ok(res) => Box::new(AttributeValue::AttrLiteral(res)),
-                                            Err(_) => {
-                                                Box::new(AttributeValue::AttrExpr(exp.clone()))
-                                            }
-                                        }
-                                    }
-                                    _ => {
-                                        return Err(syn::Error::new(
-                                            stmt.span(),
-                                            "Expected an expression",
-                                        ))
-                                    }
-                                }
-                            },
-                        }
-                    }
-                } else if RsxLiteral::peek(&content) {
-                    let value = content.parse()?;
-                    AttributeValue::AttrLiteral(value)
-                } else if content.peek(Token![move]) || content.peek(Token![|]) {
-                    // todo: add better partial expansion for closures - that's why we're handling them differently here
-                    let value: Expr = content.parse()?;
-                    AttributeValue::AttrExpr(value)
-                } else {
-                    let value = content.parse::<Expr>()?;
-                    AttributeValue::AttrExpr(value)
-                };
+                let attr = content.parse::<Attribute>()?;
 
                 if !spreads.is_empty() {
-                    diagnostics.push(name.span().error(
+                    diagnostics.push(attr.name.span().error(
                         "Spread attributes must come after regular attributes and before children",
                     ));
                     diagnostics.push(spreads.last().unwrap().expr.span().warning(
@@ -213,20 +149,7 @@ impl Parse for RsxBlock {
                     ));
                 }
 
-                let comma = if !content.is_empty() {
-                    Some(content.parse::<Token![,]>()?) // <--- diagnostics...
-                } else {
-                    None
-                };
-
-                attributes.push(Attribute {
-                    name,
-                    value,
-                    dyn_idx: DynIdx::default(),
-                    colon,
-                    comma,
-                });
-
+                attributes.push(attr);
                 continue;
             }
 
@@ -234,12 +157,14 @@ impl Parse for RsxBlock {
         }
 
         // Parse children
-        let mut child_nodes = vec![];
+        let mut children = vec![];
         while !content.is_empty() {
             let child: BodyNode = content.parse()?;
 
             // todo: try to give helpful diagnostic if a prop is in the wrong location
-            child_nodes.push(child);
+            // we might want to adjust this by tweaking our parser to pull spreads, attrs, and nodes
+            // in any order
+            children.push(child);
 
             if content.peek(Token![,]) {
                 _ = content.parse::<Token![,]>()?;
@@ -247,8 +172,8 @@ impl Parse for RsxBlock {
         }
 
         Ok(Self {
-            fields: attributes,
-            children: child_nodes,
+            attributes,
+            children,
             spreads,
             brace,
             diagnostics,
@@ -263,7 +188,7 @@ fn basic_cases() {
     };
 
     let block: RsxBlock = syn::parse2(input).unwrap();
-    assert_eq!(block.fields.len(), 0);
+    assert_eq!(block.attributes.len(), 0);
     assert_eq!(block.children.len(), 1);
 
     let input = quote! {

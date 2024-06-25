@@ -82,9 +82,9 @@ pub mod prelude {
         use_after_render, use_before_render, use_drop, use_error_boundary, use_hook,
         use_hook_with_cleanup, wait_for_next_render, with_owner, AnyValue, Attribute, Callback,
         Component, ComponentFunction, Element, ErrorBoundary, Event, EventHandler, FmtSegment,
-        FmtedSegments, Fragment, HasAttributes, HotReloadLiteral, IntoAttributeValue, IntoDynNode,
-        OptionStringFromMarker, Properties, ReactiveContext, Runtime, RuntimeGuard, ScopeId,
-        ScopeState, SuperFrom, SuperInto, Task, Template, TemplateAttribute, TemplateNode, Throw,
-        VNode, VNodeInner, VirtualDom,
+        FmtedSegments, Fragment, HasAttributes, HotReloadLiteral, HotreloadedLiteral,
+        IntoAttributeValue, IntoDynNode, OptionStringFromMarker, Properties, ReactiveContext,
+        Runtime, RuntimeGuard, ScopeId, ScopeState, SuperFrom, SuperInto, Task, Template,
+        TemplateAttribute, TemplateNode, Throw, VNode, VNodeInner, VirtualDom,
     };
 }

@@ -6,7 +6,7 @@ use proc_macro2::{Literal, TokenStream as TokenStream2};
 use proc_macro2_diagnostics::SpanDiagnosticExt;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
-    parse::{Parse, ParseBuffer},
+    parse::{Parse, ParseBuffer, ParseStream},
     spanned::Spanned,
     token::{self, Brace},
     AngleBracketedGenericArguments, Expr, ExprClosure, ExprIf, Ident, Lit, LitStr, PatLit,
@@ -27,112 +27,103 @@ pub struct Attribute {
     pub dyn_idx: DynIdx,
 }
 
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
-pub enum AttributeName {
-    /// an attribute in the form of `name: value`
-    BuiltIn(Ident),
+impl Parse for Attribute {
+    fn parse(content: ParseStream) -> syn::Result<Self> {
+        // if there's an ident not followed by a colon, it's a shorthand attribute
+        if content.peek(Ident) && !content.peek2(Token![:]) {
+            let ident = content.parse::<Ident>()?;
+            let comma = if !content.is_empty() {
+                Some(content.parse::<Token![,]>()?)
+            } else {
+                None
+            };
 
-    /// an attribute in the form of `"name": value` - notice that the name is a string literal
-    /// this is to allow custom attributes in the case of missing built-in attributes
-    ///
-    /// we might want to change this one day to be ticked or something and simply a boolean
-    Custom(LitStr),
-}
-
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
-pub enum AttributeValue {
-    /// Just a regular shorthand attribute - an ident. Makes our parsing a bit more opaque.
-    /// attribute,
-    Shorthand(Ident),
-
-    /// Any attribute that's a literal. These get hotreloading super powers
-    ///
-    /// attribute: "value"
-    /// attribute: bool,
-    /// attribute: 1,
-    AttrLiteral(RsxLiteral),
-
-    /// Unterminated expression - full expressions are handled by AttrExpr
-    ///
-    /// attribute: if bool { "value" }
-    ///
-    /// Currently these don't get hotreloading super powers, but they could, depending on how far
-    /// we want to go with it
-    AttrOptionalExpr {
-        condition: Expr,
-        value: Box<AttributeValue>,
-    },
-
-    /// attribute: some_expr
-    AttrExpr(Expr),
-}
-
-// ..spread attribute
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
-pub struct Spread {
-    pub dots: Token![..],
-    pub expr: Expr,
-    pub dyn_idx: DynIdx,
-}
-
-impl Display for AttributeName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Custom(lit) => write!(f, "{}", lit.value()),
-            Self::BuiltIn(ident) => write!(f, "{}", ident),
+            return Ok(Attribute {
+                name: AttributeName::BuiltIn(ident.clone()),
+                colon: None,
+                value: AttributeValue::Shorthand(ident),
+                comma,
+                dyn_idx: DynIdx::default(),
+            });
         }
-    }
-}
 
-impl AttributeName {
-    pub fn ident_to_str(&self) -> String {
-        match self {
-            Self::Custom(lit) => lit.value(),
-            Self::BuiltIn(ident) => ident.to_string(),
-        }
-    }
+        // Parse the name as either a known or custom attribute
+        let name = match content.peek(LitStr) {
+            true => AttributeName::Custom(content.parse::<LitStr>()?),
+            false => AttributeName::BuiltIn(content.parse::<Ident>()?),
+        };
 
-    pub fn span(&self) -> proc_macro2::Span {
-        match self {
-            Self::Custom(lit) => lit.span(),
-            Self::BuiltIn(ident) => ident.span(),
-        }
-    }
+        // Ensure there's a colon
+        let colon = Some(content.parse::<Token![:]>()?);
 
-    /// we have some special casing for the separator of certain attributes
-    /// ... I don't really like special casing things in the rsx! macro since it's supposed to be
-    /// agnostic to the renderer. To be "correct" we'd need to get the separate from the definition.
-    ///
-    /// sooo todo: make attribute sepaerator a part of the attribute definition
-    fn multi_attribute_separator(&self) -> Option<&'static str> {
-        match &self {
-            AttributeName::BuiltIn(i) => match i.to_string().as_str() {
-                "class" => Some(" "),
-                "style" => Some(";"),
-                _ => None,
-            },
-            AttributeName::Custom(_) => None,
-        }
-    }
-}
+        // todo: make this cleaner please
+        // if statements in attributes get automatic closing in some cases
+        let value = if content.peek(Token![if]) {
+            let if_expr = content.parse::<ExprIf>()?;
+            if is_if_chain_terminated(&if_expr) {
+                AttributeValue::AttrExpr(Expr::If(if_expr))
+            } else {
+                AttributeValue::AttrOptionalExpr {
+                    condition: *if_expr.cond,
+                    value: {
+                        let stmts = &if_expr.then_branch.stmts;
 
-impl ToTokens for AttributeName {
-    fn to_tokens(&self, tokens: &mut TokenStream2) {
-        match self {
-            Self::Custom(lit) => lit.to_tokens(tokens),
-            Self::BuiltIn(ident) => ident.to_tokens(tokens),
-        }
-    }
-}
+                        if stmts.len() != 1 {
+                            return Err(syn::Error::new(
+                                if_expr.then_branch.span(),
+                                "Expected a single statement in the if block",
+                            ));
+                        }
 
-impl AttributeValue {
-    pub fn span(&self) -> proc_macro2::Span {
-        match self {
-            Self::Shorthand(ident) => ident.span(),
-            Self::AttrLiteral(ifmt) => ifmt.span(),
-            Self::AttrOptionalExpr { value, .. } => value.span(),
-            Self::AttrExpr(expr) => expr.span(),
-        }
+                        // either an ifmt or an expr in the block
+                        let stmt = &stmts[0];
+
+                        // Either it's a valid ifmt or an expression
+                        match stmt {
+                            syn::Stmt::Expr(exp, None) => {
+                                // Try parsing the statement as an IfmtInput by passing it through tokens
+                                let value: Result<RsxLiteral, syn::Error> =
+                                    syn::parse2(quote! { #exp });
+
+                                match value {
+                                    Ok(res) => Box::new(AttributeValue::AttrLiteral(res)),
+                                    Err(_) => Box::new(AttributeValue::AttrExpr(exp.clone())),
+                                }
+                            }
+                            _ => {
+                                return Err(syn::Error::new(stmt.span(), "Expected an expression"))
+                            }
+                        }
+                    },
+                }
+            }
+        } else if RsxLiteral::peek(&content) {
+            let value = content.parse()?;
+            AttributeValue::AttrLiteral(value)
+        } else if content.peek(Token![move]) || content.peek(Token![|]) {
+            // todo: add better partial expansion for closures - that's why we're handling them differently here
+            let value: Expr = content.parse()?;
+            AttributeValue::AttrExpr(value)
+        } else {
+            let value = content.parse::<Expr>()?;
+            AttributeValue::AttrExpr(value)
+        };
+
+        let comma = if !content.is_empty() {
+            Some(content.parse::<Token![,]>()?) // <--- diagnostics...
+        } else {
+            None
+        };
+
+        let attr = Attribute {
+            name,
+            value,
+            colon,
+            comma,
+            dyn_idx: DynIdx::default(),
+        };
+
+        Ok(attr)
     }
 }
 
@@ -339,23 +330,21 @@ impl Attribute {
         false
     }
 
-    pub(crate) fn try_combine(&self, other: &Self) -> Option<Self> {
-        if self.name == other.name {
-            if let Some(separator) = self.name.multi_attribute_separator() {
-                todo!()
-                // return Some(ElementAttrNamed {
-                //     el_name: self.el_name.clone(),
-                //     attr: ElementAttr {
-                //         name: self.attr.name.clone(),
-                //         value: self.attr.value.combine(separator, &other.attr.value),
-                //     },
-                //     followed_by_comma: self.followed_by_comma || other.followed_by_comma,
-                // });
-            }
-        }
+    // pub(crate) fn try_combine(&self, other: &Self) -> Option<Self> {
+    //     if self.name == other.name {
+    //         if let Some(separator) = self.name.multi_attribute_separator() {
+    //             return Some(Attribute {
+    //                 name: self.name.clone(),
+    //                 colon: self.colon.clone(),
+    //                 value: self.value.combine(separator, &other.value),
+    //                 comma: self.comma.clone().or(other.comma.clone()),
+    //                 dyn_idx: self.dyn_idx.clone(),
+    //             });
+    //         }
+    //     }
 
-        None
-    }
+    //     None
+    // }
 
     /// If this is the last attribute of an element and it doesn't have a tailing comma,
     /// we add hints so that rust analyzer completes it either as an attribute or element
@@ -405,6 +394,265 @@ impl Attribute {
     }
 }
 
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+pub enum AttributeName {
+    /// an attribute in the form of `name: value`
+    BuiltIn(Ident),
+
+    /// an attribute in the form of `"name": value` - notice that the name is a string literal
+    /// this is to allow custom attributes in the case of missing built-in attributes
+    ///
+    /// we might want to change this one day to be ticked or something and simply a boolean
+    Custom(LitStr),
+}
+
+impl AttributeName {
+    pub fn ident_to_str(&self) -> String {
+        match self {
+            Self::Custom(lit) => lit.value(),
+            Self::BuiltIn(ident) => ident.to_string(),
+        }
+    }
+
+    pub fn span(&self) -> proc_macro2::Span {
+        match self {
+            Self::Custom(lit) => lit.span(),
+            Self::BuiltIn(ident) => ident.span(),
+        }
+    }
+
+    /// we have some special casing for the separator of certain attributes
+    /// ... I don't really like special casing things in the rsx! macro since it's supposed to be
+    /// agnostic to the renderer. To be "correct" we'd need to get the separate from the definition.
+    ///
+    /// sooo todo: make attribute sepaerator a part of the attribute definition
+    fn multi_attribute_separator(&self) -> Option<&'static str> {
+        match &self {
+            AttributeName::BuiltIn(i) => match i.to_string().as_str() {
+                "class" => Some(" "),
+                "style" => Some(";"),
+                _ => None,
+            },
+            AttributeName::Custom(_) => None,
+        }
+    }
+}
+
+impl Display for AttributeName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Custom(lit) => write!(f, "{}", lit.value()),
+            Self::BuiltIn(ident) => write!(f, "{}", ident),
+        }
+    }
+}
+
+impl ToTokens for AttributeName {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        match self {
+            Self::Custom(lit) => lit.to_tokens(tokens),
+            Self::BuiltIn(ident) => ident.to_tokens(tokens),
+        }
+    }
+}
+
+// ..spread attribute
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+pub struct Spread {
+    pub dots: Token![..],
+    pub expr: Expr,
+    pub dyn_idx: DynIdx,
+}
+
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+pub enum AttributeValue {
+    /// Just a regular shorthand attribute - an ident. Makes our parsing a bit more opaque.
+    /// attribute,
+    Shorthand(Ident),
+
+    /// Any attribute that's a literal. These get hotreloading super powers
+    ///
+    /// attribute: "value"
+    /// attribute: bool,
+    /// attribute: 1,
+    AttrLiteral(RsxLiteral),
+
+    /// Unterminated expression - full expressions are handled by AttrExpr
+    ///
+    /// attribute: if bool { "value" }
+    ///
+    /// Currently these don't get hotreloading super powers, but they could, depending on how far
+    /// we want to go with it
+    AttrOptionalExpr {
+        condition: Expr,
+        value: Box<AttributeValue>,
+    },
+
+    /// attribute: some_expr
+    AttrExpr(Expr),
+}
+
+impl AttributeValue {
+    pub fn span(&self) -> proc_macro2::Span {
+        match self {
+            Self::Shorthand(ident) => ident.span(),
+            Self::AttrLiteral(ifmt) => ifmt.span(),
+            Self::AttrOptionalExpr { value, .. } => value.span(),
+            Self::AttrExpr(expr) => expr.span(),
+        }
+    }
+
+    fn combine(&self, separator: &str, other: &Self) -> Self {
+        // // Simple case: if both are literals, we can just create a new static string
+        // // Otherwise we'll need to create a format string and join them
+        // if let Self::AttrLiteral(lit) = self {
+        //     if let Self::AttrLiteral(other_lit) = other {
+        //         if let (HotLiteral::Fmted(fmt), HotLiteral::Fmted(other_fmt)) =
+        //             (&lit.value, &other_lit.value)
+        //         {
+        //             let fmt = fmt.clone().join(other_fmt.clone(), separator);
+        //             return Self::AttrLiteral(RsxLiteral {
+        //                 raw: syn::Lit::Str(fmt.source.clone().unwrap()),
+        //                 value: HotLiteral::Fmted(fmt),
+        //                 hr_idx: lit.hr_idx.clone(),
+        //             });
+        //         }
+        //     }
+        // }
+
+        // // Otherwise, create a new format string to join these two.
+        // let mut ifmt = IfmtInput::default();
+
+        // match self {
+        //     Self::AttrLiteral(lit) => {
+        //         ifmt.push_lit(lit.clone());
+        //     }
+        //     Self::AttrExpr(expr) => {
+        //         ifmt.push_expr(expr.clone());
+        //     }
+        //     Self::AttrOptionalExpr { condition, value } => {
+        //         let first_as_string = value.to_str_expr();
+        //         ifmt.push_expr(parse_quote! {
+        //             {
+        //                 let mut __combined = String::new();
+        //                 if #condition {
+        //                     __combined.push_str(&#first_as_string);
+        //                 }
+        //                 __combined
+        //             }
+        //         });
+        //     }
+        //     _ => unreachable!("Invalid combination of attributes"),
+        // }
+
+        // match other {
+        //     Self::AttrLiteral(lit) => {
+        //         ifmt.push_lit(lit.clone());
+        //     }
+        //     Self::AttrExpr(expr) => {
+        //         ifmt.push_expr(expr.clone());
+        //     }
+        //     Self::AttrOptionalExpr { condition, value } => {
+        //         let first_as_string = value.to_str_expr();
+        //         ifmt.push_expr(parse_quote! {
+        //             {
+        //                 let mut __combined = String::new();
+        //                 if #condition {
+        //                     __combined.push_str(&#first_as_string);
+        //                 }
+        //                 __combined
+        //             }
+        //         });
+        //     }
+        //     _ => unreachable!("Invalid combination of attributes"),
+        // }
+
+        todo!()
+        // match (self, other) {
+        //     (Self::AttrLiteral(lit1), Self::AttrLiteral(lit2)) => {
+        //         let fmt = lit1.clone().join(lit2.clone(), separator);
+        //         Self::AttrLiteral(fmt)
+        //     }
+        //     (Self::AttrLiteral(expr1), Self::AttrExpr(expr2)) => {
+        //         let mut ifmt = expr1.clone();
+        //         ifmt.push_str(separator);
+        //         ifmt.push_expr(expr2.clone());
+        //         Self::AttrLiteral(ifmt)
+        //     }
+        //     (Self::AttrExpr(expr1), Self::AttrLiteral(expr2)) => {
+        //         let mut ifmt = expr2.clone();
+        //         ifmt.push_str(separator);
+        //         ifmt.push_expr(expr1.clone());
+        //         Self::AttrLiteral(ifmt)
+        //     }
+        //     (Self::AttrExpr(expr1), Self::AttrExpr(expr2)) => {
+        //         let mut ifmt = IfmtInput::default();
+        //         ifmt.push_expr(expr1.clone());
+        //         ifmt.push_str(separator);
+        //         ifmt.push_expr(expr2.clone());
+        //         Self::AttrLiteral(ifmt)
+        //     }
+        //     (
+        //         Self::AttrOptionalExpr {
+        //             condition: condition1,
+        //             value: value1,
+        //         },
+        //         Self::AttrOptionalExpr {
+        //             condition: condition2,
+        //             value: value2,
+        //         },
+        //     ) => {
+        //         let first_as_string = value1.to_str_expr();
+        //         let second_as_string = value2.to_str_expr();
+        //         Self::AttrExpr(parse_quote! {
+        //             {
+        //                 let mut __combined = String::new();
+        //                 if #condition1 {
+        //                     __combined.push_str(&#first_as_string);
+        //                 }
+        //                 if #condition2 {
+        //                     if __combined.len() > 0 {
+        //                         __combined.push_str(&#separator);
+        //                     }
+        //                     __combined.push_str(&#second_as_string);
+        //                 }
+        //                 __combined
+        //             }
+        //         })
+        //     }
+        //     (Self::AttrOptionalExpr { condition, value }, other) => {
+        //         let first_as_string = value.to_str_expr();
+        //         let second_as_string = other.to_str_expr();
+        //         Self::AttrExpr(parse_quote! {
+        //             {
+        //                 let mut __combined = #second_as_string;
+        //                 if #condition {
+        //                     __combined.push_str(&#separator);
+        //                     __combined.push_str(&#first_as_string);
+        //                 }
+        //                 __combined
+        //             }
+        //         })
+        //     }
+        //     (other, Self::AttrOptionalExpr { condition, value }) => {
+        //         let first_as_string = other.to_str_expr();
+        //         let second_as_string = value.to_str_expr();
+        //         Self::AttrExpr(parse_quote! {
+        //             {
+        //                 let mut __combined = #first_as_string;
+        //                 if #condition {
+        //                     __combined.push_str(&#separator);
+        //                     __combined.push_str(&#second_as_string);
+        //                 }
+        //                 __combined
+        //             }
+        //         })
+        //     }
+        //     _ => unreachable!("Invalid combination of attributes"),
+        // }
+    }
+}
+
 impl ToTokens for AttributeValue {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         match self {
@@ -415,5 +663,48 @@ impl ToTokens for AttributeValue {
             }
             Self::AttrExpr(expr) => expr.to_tokens(tokens),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quote::quote;
+    use syn::parse2;
+
+    #[test]
+    fn parse_attrs() {
+        let _parsed: Attribute = parse2(quote! { name: "value" }).unwrap();
+        let _parsed: Attribute = parse2(quote! { name: value }).unwrap();
+        let _parsed: Attribute = parse2(quote! { name: "value {fmt}" }).unwrap();
+        let _parsed: Attribute = parse2(quote! { name: 123 }).unwrap();
+        let _parsed: Attribute = parse2(quote! { name: false }).unwrap();
+        let _parsed: Attribute = parse2(quote! { "custom": false }).unwrap();
+
+        // with commas
+        let _parsed: Attribute = parse2(quote! { "custom": false, }).unwrap();
+        let _parsed: Attribute = parse2(quote! { name: false, }).unwrap();
+
+        // with expressions
+        let _parsed: Attribute = parse2(quote! { name: if true { "value" } }).unwrap();
+        let _parsed: Attribute =
+            parse2(quote! { name: if true { "value" } else { "other" } }).unwrap();
+
+        // with shorthand
+        let _parsed: Attribute = parse2(quote! { name }).unwrap();
+        let _parsed: Attribute = parse2(quote! { name, }).unwrap();
+    }
+
+    #[test]
+    fn merge_attrs() {
+        let a: Attribute = parse2(quote! { class: "value1" }).unwrap();
+        let b: Attribute = parse2(quote! { class: "value2" }).unwrap();
+
+        let b: Attribute = parse2(quote! { class: "value2 {something}" }).unwrap();
+        let b: Attribute = parse2(quote! { class: if value { "other thing" } }).unwrap();
+        let b: Attribute = parse2(quote! { class: if value { some_expr } }).unwrap();
+
+        // let combined = a.try_combine(&b);
+        // assert!(combined.is_some());
     }
 }

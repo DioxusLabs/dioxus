@@ -57,6 +57,13 @@ impl IfmtInput {
         self
     }
 
+    pub fn push_ident(&mut self, ident: Ident) {
+        self.segments.push(Segment::Formatted(FormattedSegment {
+            format_args: String::new(),
+            segment: FormattedSegmentType::Ident(ident),
+        }));
+    }
+
     pub fn push_expr(&mut self, expr: Expr) {
         self.segments.push(Segment::Formatted(FormattedSegment {
             format_args: String::new(),

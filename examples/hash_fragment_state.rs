@@ -2,7 +2,7 @@
 //!
 //! You can set up two way data binding between the url hash and signals.
 //!
-//! Run this example on desktop with  
+//! Run this example on desktop with
 //! ```sh
 //! dx serve --example hash_fragment_state --features=ciborium,base64
 //! ```
@@ -100,10 +100,7 @@ fn Home(url_hash: ReadOnlySignal<State>) -> Element {
     });
 
     rsx! {
-        button {
-            onclick: move |_| state.write().counters.clear(),
-            "Reset"
-        }
+        button { onclick: move |_| state.write().counters.clear(), "Reset" }
         button {
             onclick: move |_| {
                 state.write().counters.push(0);

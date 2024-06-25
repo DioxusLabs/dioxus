@@ -43,7 +43,6 @@ use dioxus_core::{
     TemplateAttribute, TemplateNode,
 };
 use std::{collections::HashMap, usize};
-use syn::LitStr;
 
 /// The mapping of a node relative to the root of its containing template
 ///

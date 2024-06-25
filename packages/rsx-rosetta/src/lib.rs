@@ -63,6 +63,8 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
                         };
                         Attribute {
                             value: AttributeValue::AttrLiteral(value),
+                            colon: Some(Default::default()),
+                            comma: Some(Default::default()),
                             name: AttributeName::BuiltIn(ident),
                             dyn_idx: Default::default(),
                         }
@@ -70,7 +72,9 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
                         // If we don't recognize the attribute, we assume it's a custom attribute
                         Attribute {
                             value: AttributeValue::AttrLiteral(value),
+                            colon: Some(Default::default()),
                             name: AttributeName::Custom(LitStr::new(name, Span::call_site())),
+                            comma: Some(Default::default()),
                             dyn_idx: Default::default(),
                         }
                     };
@@ -83,7 +87,9 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
             if !class.is_empty() {
                 attributes.push(Attribute {
                     name: AttributeName::BuiltIn(Ident::new("class", Span::call_site())),
+                    colon: Some(Default::default()),
                     value: AttributeValue::AttrLiteral(literal_from_text(&class)),
+                    comma: Some(Default::default()),
                     dyn_idx: Default::default(),
                 });
             }
@@ -91,7 +97,9 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
             if let Some(id) = &el.id {
                 attributes.push(Attribute {
                     name: AttributeName::BuiltIn(Ident::new("id", Span::call_site())),
+                    colon: Some(Default::default()),
                     value: AttributeValue::AttrLiteral(literal_from_text(id)),
+                    comma: Some(Default::default()),
                     dyn_idx: Default::default(),
                 });
             }
@@ -132,7 +140,7 @@ pub fn collect_svgs(children: &mut [BodyNode], out: &mut Vec<BodyNode>) {
 
                 // Replace this instance with a component
                 let mut new_comp = BodyNode::Component(Component {
-                    syn::Path {
+                    name: syn::Path {
                         leading_colon: None,
                         segments,
                     },
