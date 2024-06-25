@@ -602,7 +602,7 @@ impl<
 ///
 /// ## Details
 ///
-/// Error boundaries handle errors within a specific part of your application. Any errors passed in a child with [`Throw`] will be caught by the nearest error boundary.
+/// Error boundaries handle errors within a specific part of your application. Any errors passed up from a child will be caught by the nearest error boundary.
 ///
 /// ## Example
 ///
