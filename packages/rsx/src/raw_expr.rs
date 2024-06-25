@@ -16,7 +16,11 @@ pub struct BracedRawExpr {
 
 impl BracedRawExpr {
     pub fn span(&self) -> proc_macro2::Span {
-        self.expr.span()
+        if let Some(brace) = &self.brace {
+            brace.span.span()
+        } else {
+            self.expr.span()
+        }
     }
 }
 

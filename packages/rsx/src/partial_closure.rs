@@ -143,6 +143,40 @@ impl ToTokens for PartialClosure {
     }
 }
 
+impl PartialClosure {
+    pub fn as_expr(&self) -> Result<Expr> {
+        self.as_expr_closure().map(|closure| Expr::Closure(closure))
+    }
+
+    /// Convert this partial closure into a full closure if it is valid
+    /// Returns err if the internal tokens can't be parsed as a closure
+    pub fn as_expr_closure(&self) -> Result<ExprClosure> {
+        // Parse the body first so it's an early return
+        let body: Block = syn::parse2(self.body.clone())?;
+
+        Ok(ExprClosure {
+            attrs: self.attrs.clone(),
+            asyncness: self.asyncness.clone(),
+            capture: self.capture.clone(),
+            inputs: self.inputs.clone(),
+            output: self.output.clone(),
+            body: Box::new(Expr::Block(ExprBlock {
+                attrs: Vec::new(),
+                label: None,
+                block: Block {
+                    brace_token: self.brace_token.clone().unwrap_or_default(),
+                    stmts: body.stmts,
+                },
+            })),
+            lifetimes: self.lifetimes.clone(),
+            constness: self.constness.clone(),
+            movability: self.movability.clone(),
+            or1_token: self.or1_token.clone(),
+            or2_token: self.or2_token.clone(),
+        })
+    }
+}
+
 fn closure_arg(input: ParseStream) -> Result<Pat> {
     let attrs = input.call(Attribute::parse_outer)?;
     let mut pat = Pat::parse_single(input)?;

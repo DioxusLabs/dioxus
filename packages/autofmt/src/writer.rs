@@ -57,7 +57,7 @@ impl<'a> Writer<'a> {
             BodyNode::Element(el) => self.write_element(el),
             BodyNode::Component(component) => self.write_component(component),
             BodyNode::Text(text) => self.out.write_text(&text.input),
-            BodyNode::RawExpr(exp) => self.write_raw_expr(exp.expr.span()),
+            BodyNode::RawExpr(exp) => self.write_raw_expr(exp.span()),
             BodyNode::ForLoop(forloop) => self.write_for_loop(forloop),
             BodyNode::IfChain(ifchain) => self.write_if_chain(ifchain),
         }
@@ -277,6 +277,13 @@ impl<'a> Writer<'a> {
                     100000
                 } else {
                     out.len()
+                }
+            }
+            ElementAttrValue::EventTokens(closure) => {
+                if let Ok(exp) = closure.as_expr() {
+                    self.retrieve_formatted_expr(&exp).len()
+                } else {
+                    100000
                 }
             }
         }

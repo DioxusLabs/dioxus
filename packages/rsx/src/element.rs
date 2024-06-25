@@ -234,7 +234,7 @@ impl Element {
                             }
                         }
                     }
-                    AttributeValue::AttrEvent(_) => todo!(),
+                    AttributeValue::EventTokens(_) => todo!(),
                     AttributeValue::AttrOptionalExpr { condition, value } => {}
                 }
             }

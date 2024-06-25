@@ -103,7 +103,7 @@ impl Parse for Attribute {
         } else if content.peek(Token![move]) || content.peek(Token![|]) {
             // todo: add better partial expansion for closures - that's why we're handling them differently here
             let value: PartialClosure = content.parse()?;
-            AttributeValue::AttrEvent(value)
+            AttributeValue::EventTokens(value)
         } else {
             let value = content.parse::<Expr>()?;
             AttributeValue::AttrExpr(value)
@@ -547,7 +547,7 @@ pub enum AttributeValue {
     /// We use a special type here so we can get autocomplete in the closure using partial expansion.
     /// We also do some extra wrapping for improved type hinting since rust sometimes as trouble with
     /// generics and closures.
-    AttrEvent(PartialClosure),
+    EventTokens(PartialClosure),
 
     /// Unterminated expression - full expressions are handled by AttrExpr
     ///
@@ -572,7 +572,7 @@ impl AttributeValue {
             Self::AttrLiteral(ifmt) => ifmt.span(),
             Self::AttrOptionalExpr { value, .. } => value.span(),
             Self::AttrExpr(expr) => expr.span(),
-            Self::AttrEvent(closure) => closure.span(),
+            Self::EventTokens(closure) => closure.span(),
         }
     }
 
@@ -736,7 +736,7 @@ impl ToTokens for AttributeValue {
                 tokens.append_all(quote! { if #condition { Some(#value) else { None } } })
             }
             Self::AttrExpr(expr) => expr.to_tokens(tokens),
-            Self::AttrEvent(closure) => closure.to_tokens(tokens),
+            Self::EventTokens(closure) => closure.to_tokens(tokens),
         }
     }
 }

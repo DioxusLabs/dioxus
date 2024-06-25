@@ -93,3 +93,10 @@ fn to_tokens_with_hr() {
     let lit = syn::parse2::<TextNode>(quote! { "hi {world1} {world2} {world3}" }).unwrap();
     println!("{}", lit.to_token_stream().pretty_unparse());
 }
+
+#[test]
+fn raw_str() {
+    let input = syn::parse2::<TextNode>(quote! { r#"hello world"# }).unwrap();
+    println!("{}", input.to_token_stream().pretty_unparse());
+    assert_eq!(input.input.source.unwrap().value(), "hello world");
+}

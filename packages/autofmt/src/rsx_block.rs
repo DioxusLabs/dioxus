@@ -244,32 +244,58 @@ impl Writer<'_> {
             ElementAttrValue::Shorthand(value) => {
                 write!(self.out, "{value}",)?;
             }
+            ElementAttrValue::EventTokens(closure) => {
+                self.write_partial_closure(closure)?;
+            }
+
             ElementAttrValue::AttrExpr(value) => {
-                let out = self.retrieve_formatted_expr(value).to_string();
-                let mut lines = out.split('\n').peekable();
-                let first = lines.next().unwrap();
+                let pretty_expr = self.retrieve_formatted_expr(value).to_string();
+                self.write_mulitiline_tokens(pretty_expr)?;
+            }
+        }
 
-                // a one-liner for whatever reason
-                // Does not need a new line
+        Ok(())
+    }
+
+    fn write_mulitiline_tokens(&mut self, out: String) -> Result {
+        let mut lines = out.split('\n').peekable();
+        let first = lines.next().unwrap();
+
+        // a one-liner for whatever reason
+        // Does not need a new line
+        if lines.peek().is_none() {
+            write!(self.out, "{first}")?;
+        } else {
+            writeln!(self.out, "{first}")?;
+
+            while let Some(line) = lines.next() {
+                self.out.indented_tab()?;
+                write!(self.out, "{line}")?;
                 if lines.peek().is_none() {
-                    write!(self.out, "{first}")?;
+                    write!(self.out, "")?;
                 } else {
-                    writeln!(self.out, "{first}")?;
-
-                    while let Some(line) = lines.next() {
-                        self.out.indented_tab()?;
-                        write!(self.out, "{line}")?;
-                        if lines.peek().is_none() {
-                            write!(self.out, "")?;
-                        } else {
-                            writeln!(self.out)?;
-                        }
-                    }
+                    writeln!(self.out)?;
                 }
             }
         }
 
         Ok(())
+    }
+
+    /// Write out the special PartialClosure type from the rsx crate
+    /// Basically just write token by token until we hit the block and then try and format *that*
+    /// We can't just ToTokens
+    fn write_partial_closure(&mut self, closure: &PartialClosure) -> Result {
+        // Write the pretty version of the closure
+        if let Ok(expr) = closure.as_expr() {
+            let pretty_expr = self.retrieve_formatted_expr(&expr).to_string();
+            self.write_mulitiline_tokens(pretty_expr)?;
+            return Ok(());
+        }
+
+        // If we can't parse the closure, writing it is also a failure
+        // rustfmt won't be able to parse it either so no point in trying
+        Err(fmt::Error)
     }
 
     fn write_spread_attribute(&mut self, attr: &Expr) -> Result {

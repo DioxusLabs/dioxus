@@ -84,7 +84,11 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
             .indent
             .count_indents(writer.src[rsx_start.line - 1]);
 
-        write_body(&mut writer, &body.body);
+        // writing might not succeed -
+        let fmt_succeeded = write_body(&mut writer, &body.body);
+        if fmt_succeeded.is_err() {
+            continue;
+        }
 
         // writing idents leaves the final line ended at the end of the last ident
         if writer.out.buf.contains('\n') {
@@ -133,21 +137,23 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
 pub fn write_block_out(body: CallBody) -> Option<String> {
     let mut buf = Writer::new("");
 
-    write_body(&mut buf, &body.body);
+    write_body(&mut buf, &body.body).ok()?;
 
     buf.consume()
 }
 
-fn write_body(buf: &mut Writer, body: &TemplateBody) {
+fn write_body(buf: &mut Writer, body: &TemplateBody) -> std::fmt::Result {
     match body.roots.len() {
         0 => {}
         1 if matches!(body.roots[0], BodyNode::Text(_)) => {
-            write!(buf.out, " ").unwrap();
-            buf.write_ident(&body.roots[0]).unwrap();
-            write!(buf.out, " ").unwrap();
+            write!(buf.out, " ")?;
+            buf.write_ident(&body.roots[0])?;
+            write!(buf.out, " ")?;
         }
-        _ => buf.write_body_indented(&body.roots).unwrap(),
+        _ => buf.write_body_indented(&body.roots)?,
     }
+
+    Ok(())
 }
 
 pub fn fmt_block_from_expr(raw: &str, expr: ExprMacro) -> Option<String> {
@@ -155,7 +161,7 @@ pub fn fmt_block_from_expr(raw: &str, expr: ExprMacro) -> Option<String> {
 
     let mut buf = Writer::new(raw);
 
-    write_body(&mut buf, &body.body);
+    write_body(&mut buf, &body.body).ok()?;
 
     buf.consume()
 }
@@ -168,7 +174,7 @@ pub fn fmt_block(block: &str, indent_level: usize, indent: IndentOptions) -> Opt
     buf.out.indent = indent;
     buf.out.indent_level = indent_level;
 
-    write_body(&mut buf, &body.body);
+    write_body(&mut buf, &body.body).ok()?;
 
     // writing idents leaves the final line ended at the end of the last ident
     if buf.out.buf.contains('\n') {

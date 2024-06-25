@@ -75,6 +75,7 @@ mod util;
 pub use diagnostics::Diagnostics;
 pub use ifmt::*;
 pub use node::*;
+pub use partial_closure::PartialClosure;
 pub use rsx_call::*;
 pub use template_body::TemplateBody;
 pub use util::*;

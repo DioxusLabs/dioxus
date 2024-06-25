@@ -1,4 +1,4 @@
-use crate::{intern, location::DynIdx, reload_stack::ReloadStack};
+use crate::{intern, location::DynIdx, reload_stack::ReloadStack, PrettyUnparse};
 use dioxus_core::prelude::{FmtSegment, FmtedSegments};
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
@@ -571,4 +571,11 @@ fn stack_scoring() {
 
         dbg!(item, score);
     }
+}
+
+#[test]
+fn raw_tokens() {
+    let input = syn::parse2::<IfmtInput>(quote! { r#"hello world"# }).unwrap();
+    println!("{}", input.to_token_stream().pretty_unparse());
+    assert_eq!(input.source.unwrap().value(), "hello world");
 }
