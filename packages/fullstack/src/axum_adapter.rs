@@ -283,6 +283,7 @@ where
             let ssr_state = SSRState::new(&cfg);
 
             // Add server functions and render index.html
+            #[allow(unused_mut)]
             let mut server = self
                 .serve_static_assets(cfg.assets_path.clone())
                 .await

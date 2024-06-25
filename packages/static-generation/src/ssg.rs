@@ -123,7 +123,7 @@ async fn prerender_route(
 
     renderer.render_to(&mut wrapped, &virtual_dom)?;
 
-    wrapper.render_after_body(&mut wrapped, &virtual_dom)?;
+    wrapper.render_after_body(&mut wrapped)?;
 
     cache.cache(route, wrapped)
 }

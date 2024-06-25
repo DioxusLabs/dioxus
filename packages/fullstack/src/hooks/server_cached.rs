@@ -32,7 +32,7 @@ pub fn use_server_cached<O: 'static + Clone + Serialize + DeserializeOwned>(
             data
         })
     }
-    #[cfg(not(feature = "server"))]
+    #[cfg(all(not(feature = "server"), feature = "web"))]
     {
         use_hook(|| {
             dioxus_web::take_server_data()
@@ -40,5 +40,9 @@ pub fn use_server_cached<O: 'static + Clone + Serialize + DeserializeOwned>(
                 .flatten()
                 .unwrap_or_else(server_fn)
         })
+    }
+    #[cfg(not(any(feature = "server", feature = "web")))]
+    {
+        use_hook(server_fn)
     }
 }
