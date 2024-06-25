@@ -843,6 +843,7 @@ impl VirtualDom {
             self.queue_events();
         }
 
+        resolved_scopes.sort_by_key(|&id| self.runtime.get_state(id).unwrap().height);
         resolved_scopes
     }
 

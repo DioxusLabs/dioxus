@@ -49,7 +49,14 @@ fn Homepage(story: ReadOnlySignal<PreviewState>) -> Element {
                         Stories {}
                     }
                 }
-                div { width: "50%", Preview {} }
+                div { width: "50%",
+                    SuspenseBoundary {
+                        fallback: |context: SuspenseContext| rsx! {
+                            "Loading preview..."
+                        },
+                        Preview {}
+                    }
+                }
             }
         }
     }
