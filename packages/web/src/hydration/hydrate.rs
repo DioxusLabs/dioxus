@@ -4,6 +4,7 @@ use crate::HTMLDataCursor;
 use dioxus_core::prelude::*;
 use dioxus_core::AttributeValue;
 use dioxus_core::{DynamicNode, ElementId};
+use dioxus_interpreter_js::minimal_bindings::dx_swap;
 use futures_channel::mpsc::UnboundedReceiver;
 use RehydrationError::*;
 
@@ -40,6 +41,7 @@ impl SuspenseHydrationIds {
     /// Add a suspense boundary to the list of suspense boundaries. This should only be called on the root scope after the first rebuild (which happens on the server) and on suspense boundaries that are resolved from the server.
     /// Running this on a scope that is only created on the client may cause hydration issues.
     fn add_suspense_boundary(&mut self, id: ScopeId) {
+        tracing::trace!("Adding suspense boundary {:?}", id);
         self.ids.push(id);
     }
 
@@ -47,6 +49,7 @@ impl SuspenseHydrationIds {
     fn get_suspense_boundary(&self, id: u32) -> Option<ScopeId> {
         // Indexes come in groups of two. The first index is the unresolved id, the second is the id of the resolved boundary
         let index = id as usize / 2 - 1;
+        tracing::trace!("Getting suspense boundary {:?}", index);
         self.ids.get(index).copied()
     }
 }
@@ -89,6 +92,11 @@ impl WebsysDom {
             return Ok(());
         };
 
+        tracing::trace!(
+            "hydrating elements under element with id  ds-{}",
+            dom_id + 1
+        );
+
         let element = web_sys::window()
             .unwrap()
             .document()
@@ -96,7 +104,12 @@ impl WebsysDom {
             .get_element_by_id(&format!("ds-{}", dom_id + 1))
             .ok_or(RehydrationError::ElementNotFound)?;
 
-        self.start_hydration_at_scope(root_scope, dom, element)
+        self.start_hydration_at_scope(root_scope, dom, element)?;
+
+        // After the node is hydrated, swap it into the visible dom
+        dx_swap(dom_id);
+
+        Ok(())
     }
 
     fn start_hydration_at_scope(

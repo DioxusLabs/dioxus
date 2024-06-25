@@ -140,6 +140,7 @@ fn StoryListing(story: ReadOnlySignal<i64>) -> Element {
                 div { padding_left: "0.5rem", "by {by}" }
                 div { padding_left: "0.5rem", "{time}" }
                 div { padding_left: "0.5rem", "{comments}" }
+                Counter {}
             }
         }
     }
@@ -327,6 +328,18 @@ fn LoadingIndicator() -> Element {
     rsx! {
         div {
             class: "spinner",
+        }
+    }
+}
+
+fn Counter() -> Element {
+    let mut count = use_signal(|| 0);
+    let mut increment = move || count.set(count() + 1);
+
+    rsx! {
+        button {
+            onclick: move |_| increment(),
+            "Click me {count()} times"
         }
     }
 }

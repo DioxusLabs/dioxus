@@ -35,8 +35,6 @@ fn app() -> Element {
 fn SuspendedComponent() -> Element {
     use_server_future(move || async move {
         async_std::task::sleep(std::time::Duration::from_secs(1)).await;
-        #[cfg(feature = "web")]
-        async_std::task::sleep(std::time::Duration::from_secs(100)).await;
         1234
     })?;
 
@@ -61,8 +59,6 @@ fn SuspendedComponent() -> Element {
 fn NestedSuspendedComponent() -> Element {
     use_server_future(move || async move {
         async_std::task::sleep(std::time::Duration::from_secs(1)).await;
-        #[cfg(feature = "web")]
-        async_std::task::sleep(std::time::Duration::from_secs(100)).await;
         12345678
     })?;
     let mut count = use_signal(|| 0);

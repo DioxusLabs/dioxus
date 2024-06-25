@@ -115,10 +115,10 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
             pin_mut!(work);
 
             let mut rx_next = rx.select_next_some();
-            let mut fused_iter = futures_util::stream::iter(&mut hydration_receiver)
+            let mut hydration_receiver_iter = futures_util::stream::iter(&mut hydration_receiver)
                 .fuse()
                 .flatten();
-            let mut rx_hydration = fused_iter.select_next_some();
+            let mut rx_hydration = hydration_receiver_iter.select_next_some();
 
             #[cfg(all(feature = "hot_reload", debug_assertions))]
             {
