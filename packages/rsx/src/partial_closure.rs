@@ -101,11 +101,6 @@ impl Parse for PartialClosure {
             body.parse()?
         } else {
             // todo: maybe parse incomplete until a delimiter (; or , or })
-            // walk until we hit a delimiter
-            // let mut cursor = input.cursor();
-
-            // cursor
-
             let body: Expr = input.parse()?;
             body.to_token_stream()
         };

@@ -22,22 +22,22 @@ fn with_class() {
 
     #[component]
     fn Test() -> Element {
-        todo!()
+        unimplemented!()
     }
 
     #[component]
     fn Root() -> Element {
-        todo!()
+        unimplemented!()
     }
 
     #[component]
     fn ChildRoot() -> Element {
-        todo!()
+        unimplemented!()
     }
 
     #[component]
     fn NotStatic(not_static: String) -> Element {
-        todo!()
+        unimplemented!()
     }
 
     assert_eq!(
