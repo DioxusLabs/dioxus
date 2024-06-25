@@ -722,7 +722,7 @@ impl VirtualDom {
 
             self.wait_for_suspense_work().await;
 
-            self.render_suspense_immediate();
+            self.render_suspense_immediate().await;
         }
     }
 
@@ -768,17 +768,7 @@ impl VirtualDom {
                     tasks_polled += 1;
                     // Once we have polled a few tasks, we manually yield to the scheduler to give it a chance to run other pending work
                     if tasks_polled > 32 {
-                        let mut yielded = false;
-                        std::future::poll_fn::<(), _>(move |cx| {
-                            if !yielded {
-                                cx.waker().wake_by_ref();
-                                yielded = true;
-                                std::task::Poll::Pending
-                            } else {
-                                std::task::Poll::Ready(())
-                            }
-                        })
-                        .await;
+                        yield_now().await;
                         tasks_polled = 0;
                     }
                 }
@@ -790,7 +780,7 @@ impl VirtualDom {
 
     /// Render any dirty scopes immediately, but don't poll any futures that are client only on that scope
     /// Returns a list of suspense boundaries that were resolved
-    pub fn render_suspense_immediate(&mut self) -> Vec<ScopeId> {
+    pub async fn render_suspense_immediate(&mut self) -> Vec<ScopeId> {
         // Queue any new events before we start working
         self.queue_events();
 
@@ -798,6 +788,8 @@ impl VirtualDom {
 
         // Render whatever work needs to be rendered, unlocking new futures and suspense leaves
         let _runtime = RuntimeGuard::new(self.runtime.clone());
+
+        let mut work_done = 0;
         while let Some(work) = self.pop_work() {
             match work {
                 Work::PollTask(task) => {
@@ -841,6 +833,13 @@ impl VirtualDom {
             }
             // Queue any new events
             self.queue_events();
+            work_done += 1;
+            // Once we have polled a few tasks, we manually yield to the scheduler to give it a chance to run other pending work
+            if work_done > 32 {
+                yield_now().await;
+                println!("Yielded");
+                work_done = 0;
+            }
         }
 
         resolved_scopes.sort_by_key(|&id| self.runtime.get_state(id).unwrap().height);
@@ -988,4 +987,19 @@ impl Drop for VirtualDom {
             drop(scope);
         }
     }
+}
+
+/// Yield control back to the async scheduler. This is used to give the scheduler a chance to run other pending work. Or cancel the task if the client has disconnected.
+async fn yield_now() {
+    let mut yielded = false;
+    std::future::poll_fn::<(), _>(move |cx| {
+        if !yielded {
+            cx.waker().wake_by_ref();
+            yielded = true;
+            std::task::Poll::Pending
+        } else {
+            std::task::Poll::Ready(())
+        }
+    })
+    .await;
 }

@@ -240,9 +240,11 @@ impl SsrRendererPool {
                     server_context.clone(),
                 )
                 .await;
-                let resolved_suspense_nodes = with_server_context(server_context.clone(), || {
-                    virtual_dom.render_suspense_immediate()
-                });
+                let resolved_suspense_nodes = ProvideServerContext::new(
+                    virtual_dom.render_suspense_immediate(),
+                    server_context.clone(),
+                )
+                .await;
                 println!("{:?} suspense scopes resolved", resolved_suspense_nodes);
 
                 // Just rerender the resolved nodes

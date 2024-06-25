@@ -1,5 +1,5 @@
 [package]
-name = "dioxus-streaming-test"
+name = "dioxus-hackernews"
 version = "0.1.0"
 authors = ["Evan Almloff <evanalmloff@gmail.com>"]
 edition = "2021"

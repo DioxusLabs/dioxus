@@ -152,11 +152,11 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
                 _ = work => res = None,
                 evt = rx_next => res = Some(evt),
                 hyd = rx_hydration => {
+                    res = None;
                     #[cfg(feature = "hydrate")]
                     {
                         hydration_work = Some(hyd);
                     }
-                    continue;
                 }
             }
         }
