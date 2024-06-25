@@ -50,7 +50,7 @@ headers = "0.3.7"
 walkdir = "2"
 
 # tools download
-dirs = "5.0.1"
+dirs = { workspace = true }
 reqwest = { workspace = true, features = [
     "rustls-tls",
     "stream",

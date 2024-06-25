@@ -46,3 +46,7 @@ script = []
 
 [[web.proxy]]
 backend = "http://localhost:8000/api/"
+
+# [cli_settings]
+# always_hot_reload = true
+# always_open_browser = true

@@ -90,7 +90,7 @@ pub async fn serve(
     let router = setup_router(config.clone(), hot_reload_state).await?;
 
     // Start server
-    start_server(port, router, opts.open, rustls_config, &config).await?;
+    start_server(port, router, opts.open.unwrap(), rustls_config, &config).await?;
 
     Ok(())
 }

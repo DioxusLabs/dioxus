@@ -24,6 +24,33 @@ pub enum Config {
     FormatPrint {},
     /// Create a custom html file.
     CustomHtml {},
+
+    /// Set global cli settings.
+    SetGlobal { setting: Setting, value: Value },
+}
+
+#[derive(Debug, Clone, Deserialize, clap::ValueEnum)]
+pub enum Setting {
+    /// Set the value of the always-hot-reload setting.
+    AlwaysHotReload,
+    /// Set the value of the always-open-browser setting.
+    AlwaysOpenBrowser,
+}
+
+// NOTE: Unsure of an alternative to get the desired behavior with clap, if it exists.
+#[derive(Debug, Clone, Deserialize, clap::ValueEnum)]
+pub enum Value {
+    True,
+    False,
+}
+
+impl From<Value> for bool {
+    fn from(value: Value) -> Self {
+        match value {
+            Value::True => true,
+            Value::False => false,
+        }
+    }
 }
 
 impl Config {
@@ -61,6 +88,20 @@ impl Config {
                 let content = include_str!("../assets/index.html");
                 file.write_all(content.as_bytes())?;
                 tracing::info!("🚩 Create custom html file done.");
+            }
+            Config::SetGlobal { setting, value } => {
+                let mut global_settings =
+                    dioxus_cli_config::CliSettings::from_global().unwrap_or_default();
+
+                match setting {
+                    Setting::AlwaysHotReload => {
+                        global_settings.always_hot_reload = Some(value.into())
+                    }
+                    Setting::AlwaysOpenBrowser => {
+                        global_settings.always_open_browser = Some(value.into())
+                    }
+                }
+                global_settings.save().unwrap();
             }
         }
         Ok(())
