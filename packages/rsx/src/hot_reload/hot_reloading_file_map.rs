@@ -323,14 +323,24 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
 pub fn template_location(old_start: proc_macro2::LineColumn, file: &Path) -> String {
     let line = old_start.line;
     let column = old_start.column + 1;
-    let location = file.display().to_string()
-                                + ":"
-                                + &line.to_string()
-                                + ":"
-                                + &column.to_string()
-                                // the byte index doesn't matter, but dioxus needs it
-                                + ":0";
-    location
+
+    #[cfg(not(target_os = "windows"))]
+    let path = file.to_string_lossy().to_string();
+
+    #[cfg(target_os = "windows")]
+    let path = file
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/");
+
+    path
+        + ":"
+        + &line.to_string()
+        + ":"
+        + &column.to_string()
+        // the byte index doesn't matter, but dioxus needs it
+        + ":0"
 }
 
 struct FileMapSearchResult {
