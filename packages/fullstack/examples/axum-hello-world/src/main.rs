@@ -25,7 +25,7 @@ fn app() -> Element {
             "Hello world"
         }
         div {
-            for i in count()..count() + 3 {
+            for i in count()..count() + 100 {
                 // Imagine, we just resolve this suspense boundary. We pass down whatever data we resolved with it and None for any unresolved server functions in nested server functions [Some(data), None]
                 SuspenseBoundary {
                     key: "{i}",
@@ -55,12 +55,12 @@ fn SuspendedComponent() -> Element {
             onclick: move |_| count += 1,
             "first {count}"
         }
-        // SuspenseBoundary {
-        //     fallback: |_| rsx! {
-        //         "Loading... more"
-        //     },
-        //     NestedSuspendedComponent {}
-        // }
+        SuspenseBoundary {
+            fallback: |_| rsx! {
+                "Loading... more"
+            },
+            NestedSuspendedComponent {}
+        }
     }
 }
 

@@ -9098,6 +9098,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "suspense-carousel"
+version = "0.5.2"
+dependencies = [
+ "async-std",
+ "dioxus",
+ "serde",
+]
+
+[[package]]
 name = "syn"
 version = "1.0.109"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -7,7 +7,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus = { workspace = true, features = ["fullstack", "router", "minimal"], default-features = false }
+dioxus = { workspace = true, features = ["fullstack", "router"] }
 chrono = { version = "0.4.38", features = ["serde"] }
 reqwest = { version = "0.12.4", features = ["json"] }
 serde = { version = "1.0.203", features = ["derive"] }
