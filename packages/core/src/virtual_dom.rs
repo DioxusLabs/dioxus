@@ -398,7 +398,6 @@ impl VirtualDom {
     }
 
     /// Mark a task as dirty
-    #[track_caller]
     fn mark_task_dirty(&mut self, task: Task) {
         let Some(scope) = self.runtime.task_scope(task) else {
             tracing::trace!(
@@ -417,10 +416,9 @@ impl VirtualDom {
 
         tracing::event!(
             tracing::Level::TRACE,
-            "Marking task {:?} (spawned in {:?}) as dirty (called from {:?})",
+            "Marking task {:?} (spawned in {:?}) as dirty",
             task,
             scope.id,
-            std::panic::Location::caller()
         );
 
         let order = ScopeOrder::new(scope.height(), scope.id);

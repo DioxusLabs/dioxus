@@ -30,6 +30,7 @@ impl VirtualDom {
         }
     }
 
+    #[tracing::instrument(skip(self, to), level = "trace", name = "VirtualDom::diff_scope")]
     fn diff_scope<M: WriteMutations>(
         &mut self,
         to: Option<&mut M>,

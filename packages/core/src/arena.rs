@@ -67,11 +67,9 @@ impl VirtualDom {
     }
 
     pub(crate) fn try_reclaim(&mut self, el: ElementId) -> bool {
-        if el.0 == usize::MAX {
+        // We never reclaim the unmounted elements or the root element
+        if el.0 == 0 || el.0 == usize::MAX {
             return true;
-        }
-        if el.0 == 0 {
-            panic!("Cannot reclaim the root element");
         }
 
         self.elements.try_remove(el.0).is_some()

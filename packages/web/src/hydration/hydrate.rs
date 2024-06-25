@@ -82,7 +82,6 @@ impl WebsysDom {
         set_server_data(HTMLDataCursor::from_serialized(&data));
 
         // rerun the scope with the new data
-        dom.mark_dirty(id);
         self.only_write_templates = true;
         SuspenseBoundaryProps::resolve_suspense(id, dom, self);
         self.only_write_templates = false;

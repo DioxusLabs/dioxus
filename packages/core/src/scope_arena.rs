@@ -49,6 +49,7 @@ impl VirtualDom {
     }
 
     /// Run a scope and return the rendered nodes. This will not modify the DOM or update the last rendered node of the scope.
+    #[tracing::instrument(skip(self), level = "trace", name = "VirtualDom::run_scope")]
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> RenderReturn {
         debug_assert!(
             crate::Runtime::current().is_some(),

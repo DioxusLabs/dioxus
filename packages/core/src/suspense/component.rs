@@ -405,7 +405,10 @@ impl SuspenseBoundaryProps {
         to: &mut M,
     ) {
         let _runtime = RuntimeGuard::new(dom.runtime.clone());
-        let scope_state = &mut dom.scopes[scope_id.0];
+        let Some(scope_state) = dom.scopes.get_mut(scope_id.0) else {
+            tracing::error!("Tried to resolve a suspense boundary that doesn't exist");
+            return;
+        };
 
         // Reset the suspense context
         let suspense_context = scope_state
@@ -415,6 +418,16 @@ impl SuspenseBoundaryProps {
             .unwrap()
             .clone();
         suspense_context.inner.suspended_tasks.borrow_mut().clear();
+
+        // Get the parent of the suspense boundary to later create children with the right parent
+        let currently_rendered = scope_state.last_rendered_node.as_ref().unwrap().clone();
+        let mount = currently_rendered.mount.get();
+        let parent = dom
+            .mounts
+            .get(mount.0)
+            .expect("suspense placeholder is not mounted")
+            .parent;
+        tracing::trace!("Parent of suspense boundary: {:?}", parent);
 
         let props = Self::downcast_mut_from_props(&mut *scope_state.props).unwrap();
 
@@ -428,19 +441,13 @@ impl SuspenseBoundaryProps {
             .suspended_nodes
             .as_ref()
             .map(|node| node.clone_mounted());
-        if let std::result::Result::Ok(node) = &children {
-            node.remove_node(&mut *dom, None::<&mut M>, None);
-        }
         if let Some(node) = suspended {
-            node.remove_node(&mut *dom, None::<&mut M>, None);
+            node.remove_node(&mut *dom, Some(to), None);
         }
+        currently_rendered.remove_node(&mut *dom, Some(to), None);
 
         let children = RenderReturn { node: children };
-
-        let scope_state = &mut dom.scopes[scope_id.0];
-        let currently_rendered = scope_state.last_rendered_node.as_ref().unwrap().clone();
-        let mount = currently_rendered.mount.get();
-        let parent = dom.mounts[mount.0].parent;
+        children.mount.take();
 
         // First always render the children in the background. Rendering the children may cause this boundary to suspend
         dom.runtime.push_scope(scope_id);

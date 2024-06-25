@@ -20,7 +20,7 @@
 //! To purview the examples, check of the root Dioxus crate - the examples in this crate are mostly meant to provide
 //! validation of websys-specific features and not the general use of Dioxus.
 
-use std::rc::Rc;
+use std::{panic, rc::Rc};
 
 pub use crate::cfg::Config;
 use dioxus_core::VirtualDom;
@@ -91,6 +91,10 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
 
             let rx = websys_dom.rehydrate(&dom).unwrap();
             hydration_receiver = Some(rx);
+        }
+        #[cfg(not(feature = "hydrate"))]
+        {
+            panic!("Hydration is not enabled. Please enable the `hydrate` feature.");
         }
     } else {
         dom.rebuild(&mut websys_dom);
@@ -163,7 +167,7 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
 
         #[cfg(all(feature = "hot_reload", debug_assertions))]
         if let Some(template) = template {
-            dom.replace_template(template);
+            // dom.replace_template(template);
         }
 
         #[cfg(feature = "hydrate")]

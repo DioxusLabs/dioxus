@@ -144,8 +144,8 @@ opt-level = 3
 inherits = "dev"
 debug-assertions = false
 
-# [profile.release]
-# debug = true
+[profile.release]
+debug = true
 
 # This is a "virtual package"
 # It is not meant to be published, but is used so "cargo run --example XYZ" works properly
