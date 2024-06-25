@@ -66,6 +66,7 @@ pub mod hotreload;
 mod ifmt;
 mod literal;
 mod location;
+mod partial_closure;
 mod reload_stack;
 mod scoring;
 mod util;
