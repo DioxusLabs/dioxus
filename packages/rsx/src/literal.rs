@@ -3,7 +3,7 @@ use quote::ToTokens;
 use quote::{quote, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
-    Lit, LitBool, LitFloat, LitInt, LitStr,
+    Lit, LitBool, LitFloat, LitInt,
 };
 
 use crate::{location::DynIdx, IfmtInput, Segment};
@@ -46,35 +46,25 @@ pub enum HotLiteralType {
 
 impl Parse for HotLiteral {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        // If it's a string lit we need to parse it as an ifmt input
-        if input.peek(LitStr) {
-            let ifmt_input: IfmtInput = input.parse()?;
-            let raw = ifmt_input.source.clone();
-            let value = HotLiteralType::Fmted(ifmt_input);
+        let raw = input.parse::<Lit>()?;
 
-            return Ok(HotLiteral {
-                value,
-                hr_idx: DynIdx::default(),
-            });
-        } else {
-            let raw = input.parse::<Lit>()?;
-            let value = match raw.clone() {
-                Lit::Int(a) => HotLiteralType::Int(a),
-                Lit::Float(a) => HotLiteralType::Float(a),
-                Lit::Bool(a) => HotLiteralType::Bool(a),
-                _ => {
-                    return Err(syn::Error::new(
-                        raw.span(),
-                        "Only string, int, float, and bool literals are supported",
-                    ))
-                }
-            };
+        let value = match raw.clone() {
+            Lit::Int(a) => HotLiteralType::Int(a),
+            Lit::Bool(a) => HotLiteralType::Bool(a),
+            Lit::Float(a) => HotLiteralType::Float(a),
+            Lit::Str(a) => HotLiteralType::Fmted(IfmtInput::new_litstr(a)),
+            _ => {
+                return Err(syn::Error::new(
+                    raw.span(),
+                    "Only string, int, float, and bool literals are supported",
+                ))
+            }
+        };
 
-            Ok(HotLiteral {
-                value,
-                hr_idx: DynIdx::default(),
-            })
-        }
+        Ok(HotLiteral {
+            value,
+            hr_idx: DynIdx::default(),
+        })
     }
 }
 

@@ -58,61 +58,57 @@ impl Parse for Attribute {
 
         // todo: make this cleaner please
         // if statements in attributes get automatic closing in some cases
+        // we shouldn't be handling it any differently.
         let value = if content.peek(Token![if]) {
             let if_expr = content.parse::<ExprIf>()?;
+
             if is_if_chain_terminated(&if_expr) {
                 AttributeValue::AttrExpr(Expr::If(if_expr))
             } else {
+                let stmts = &if_expr.then_branch.stmts;
+
+                if stmts.len() != 1 {
+                    return Err(syn::Error::new(
+                        if_expr.then_branch.span(),
+                        "Expected a single statement in the if block",
+                    ));
+                }
+
+                // either an ifmt or an expr in the block
+                let stmt = &stmts[0];
+
+                // Either it's a valid ifmt or an expression
+                let value = match stmt {
+                    syn::Stmt::Expr(exp, None) => {
+                        // Try parsing the statement as an IfmtInput by passing it through tokens
+                        let value: Result<HotLiteral, syn::Error> = syn::parse2(quote! { #exp });
+                        match value {
+                            Ok(res) => Box::new(AttributeValue::AttrLiteral(res)),
+                            Err(_) => Box::new(AttributeValue::AttrExpr(exp.clone())),
+                        }
+                    }
+                    _ => return Err(syn::Error::new(stmt.span(), "Expected an expression")),
+                };
+
                 AttributeValue::AttrOptionalExpr {
                     condition: *if_expr.cond,
-                    value: {
-                        let stmts = &if_expr.then_branch.stmts;
-
-                        if stmts.len() != 1 {
-                            return Err(syn::Error::new(
-                                if_expr.then_branch.span(),
-                                "Expected a single statement in the if block",
-                            ));
-                        }
-
-                        // either an ifmt or an expr in the block
-                        let stmt = &stmts[0];
-
-                        // Either it's a valid ifmt or an expression
-                        match stmt {
-                            syn::Stmt::Expr(exp, None) => {
-                                // Try parsing the statement as an IfmtInput by passing it through tokens
-                                let value: Result<HotLiteral, syn::Error> =
-                                    syn::parse2(quote! { #exp });
-
-                                match value {
-                                    Ok(res) => Box::new(AttributeValue::AttrLiteral(res)),
-                                    Err(_) => Box::new(AttributeValue::AttrExpr(exp.clone())),
-                                }
-                            }
-                            _ => {
-                                return Err(syn::Error::new(stmt.span(), "Expected an expression"))
-                            }
-                        }
-                    },
+                    value,
                 }
             }
         } else if HotLiteral::peek(&content) {
             let value = content.parse()?;
             AttributeValue::AttrLiteral(value)
         } else if content.peek(Token![move]) || content.peek(Token![|]) {
-            // todo: add better partial expansion for closures - that's why we're handling them differently here
-            let value: PartialClosure = content.parse()?;
+            let value = content.parse()?;
             AttributeValue::EventTokens(value)
         } else {
             let value = content.parse::<Expr>()?;
             AttributeValue::AttrExpr(value)
         };
 
-        let comma = if !content.is_empty() {
-            Some(content.parse::<Token![,]>()?) // <--- diagnostics...
-        } else {
-            None
+        let comma = match !content.is_empty() {
+            true => Some(content.parse::<Token![,]>()?),
+            false => None,
         };
 
         let attr = Attribute {
@@ -130,31 +126,6 @@ impl Parse for Attribute {
 impl Attribute {
     pub fn span(&self) -> proc_macro2::Span {
         self.name.span()
-    }
-
-    /// Get a score of hotreloadability of this attribute with another attribute
-    ///
-    /// usize::max is a perfect score and an immediate match
-    /// 0 is no match
-    /// All other scores are relative to the other scores
-    pub fn hotreload_score(&self, other: &Attribute) -> usize {
-        if self.name != other.name {
-            return 0;
-        }
-
-        match (&self.value, &other.value) {
-            (AttributeValue::AttrLiteral(lit), AttributeValue::AttrLiteral(other_lit)) => {
-                match (&lit.value, &lit.value) {
-                    (HotLiteralType::Fmted(a), HotLiteralType::Fmted(b)) => {
-                        todo!()
-                    }
-                    (othera, otherb) if othera == otherb => usize::MAX,
-                    _ => 0,
-                }
-            }
-            (othera, otherb) if othera == otherb => 1,
-            _ => 0,
-        }
     }
 
     pub fn as_lit(&self) -> Option<&HotLiteral> {
@@ -181,6 +152,42 @@ impl Attribute {
         }
     }
 
+    pub(crate) fn merge_quote(vec: &[&Self]) -> TokenStream2 {
+        todo!()
+        // // split into spread and single attributes
+        // let mut spread = vec![];
+        // let mut single = vec![];
+        // // for attr in vec.iter() {
+        // //     match attr.value {
+        // //         AttributeValue::Named(named) => single.push(named),
+        // //         AttributeValue::Spread(expr) => spread.push(expr),
+        // //     }
+        // // }
+
+        // // If all of them are single attributes, create a static slice
+        // if spread.is_empty() {
+        //     quote! {
+        //         Box::new([
+        //             #(#single),*
+        //         ])
+        //     }
+        // } else {
+        //     // Otherwise start with the single attributes and append the spread attributes
+        //     quote! {
+        //         {
+        //             let mut __attributes = vec![
+        //                 #(#single),*
+        //             ];
+        //             #(
+        //                 let mut __spread = #spread;
+        //                 __attributes.append(&mut __spread);
+        //             )*
+        //             __attributes.into_boxed_slice()
+        //         }
+        //     }
+        // }
+    }
+
     pub fn as_static_str_literal(&self) -> Option<(&AttributeName, &IfmtInput)> {
         match &self.value {
             AttributeValue::AttrLiteral(lit) => match &lit.value {
@@ -193,6 +200,10 @@ impl Attribute {
 
     pub fn is_static_str_literal(&self) -> bool {
         self.as_static_str_literal().is_some()
+    }
+
+    pub fn matches_attr_name(&self, other: &Self) -> bool {
+        self.name == other.name
     }
 
     pub fn to_template_attribute<Ctx: HotReloadingContext>(
@@ -226,8 +237,6 @@ impl Attribute {
     }
 
     pub fn rendered_as_dynamic_attr(&self, el_name: &ElementName) -> TokenStream2 {
-        let mut tokens = TokenStream2::new();
-
         let ns = |name: &AttributeName| match (el_name, name) {
             (ElementName::Ident(i), AttributeName::BuiltIn(_)) => {
                 quote! { dioxus_elements::#i::#name.1 }
@@ -242,135 +251,80 @@ impl Attribute {
             _ => quote! { false },
         };
 
-        todo!()
-        // let attribute = {
-        //     let value = &self.value;
-        //     let is_shorthand_event = match &self.value {
-        //         AttributeValue::Shorthand(s) => s.to_string().starts_with("on"),
-        //         _ => false,
-        //     };
+        let attribute = |name: &AttributeName| match name {
+            AttributeName::BuiltIn(name) => match el_name {
+                ElementName::Ident(_) => quote! { dioxus_elements::#el_name::#name.0 },
+                ElementName::Custom(_) => {
+                    let as_string = name.to_string();
+                    quote!(#as_string)
+                }
+            },
+            AttributeName::Custom(s) => quote! { #s },
+        };
 
-        //     match &self.value {
-        //         AttributeValue::AttrLiteral(_)
-        //         | AttributeValue::AttrExpr(_)
-        //         | AttributeValue::Shorthand(_)
-        //         | AttributeValue::AttrOptionalExpr { .. }
-        //             if !is_shorthand_event =>
-        //         {
-        //             let name = &self.name;
-        //             let ns = ns(name);
-        //             let volitile = volitile(name);
-        //             let attribute = attribute(name);
-        //             let value = quote! { #value };
+        let attribute = {
+            let value = &self.value;
+            let name = &self.name;
+            let is_not_event = !self.name.ident_to_str().starts_with("on");
+            // let is_shorthand_event = match &self.value {
+            //     AttributeValue::Shorthand(s) => s.to_string().starts_with("on"),
+            //     _ => self.name.to_string().starts_with("on"),
+            // };
 
-        //             quote! {
-        //                 dioxus_core::Attribute::new(
-        //                     #attribute,
-        //                     #value,
-        //                     #ns,
-        //                     #volitile
-        //                 )
-        //             }
-        //         }
-        //         AttributeValue::EventTokens(tokens) => match &self.name {
-        //             AttributeName::BuiltIn(name) => {
-        //                 let event_tokens_is_closure =
-        //                     syn::parse2::<ExprClosure>(tokens.to_token_stream()).is_ok();
-        //                 let function_name =
-        //                     quote_spanned! { tokens.span() => dioxus_elements::events::#name };
-        //                 let function = if event_tokens_is_closure {
-        //                     // If we see an explicit closure, we can call the `call_with_explicit_closure` version of the event for better type inference
-        //                     quote_spanned! { tokens.span() => #function_name::call_with_explicit_closure }
-        //                 } else {
-        //                     function_name
-        //                 };
-        //                 quote_spanned! { tokens.span() =>
-        //                     #function(#tokens)
-        //                 }
-        //             }
-        //             AttributeName::Custom(_) => unreachable!("Handled elsewhere in the macro"),
-        //         },
-        //         _ => {
-        //             quote_spanned! { value.span() => dioxus_elements::events::#value(#value) }
-        //         }
-        //     }
-        // };
+            match &self.value {
+                AttributeValue::AttrLiteral(_)
+                | AttributeValue::AttrExpr(_)
+                | AttributeValue::Shorthand(_)
+                | AttributeValue::AttrOptionalExpr { .. }
+                    if is_not_event =>
+                {
+                    let name = &self.name;
+                    let ns = ns(name);
+                    let volatile = volatile(name);
+                    let attribute = attribute(name);
+                    let value = quote! { #value };
 
-        // let completion_hints = self.completion_hints(el_name);
-        // quote! {
-        //     {
-        //         #completion_hints
-        //         #attribute
-        //     }
-        // }
-        // .to_token_stream()
+                    quote! {
+                        dioxus_core::Attribute::new(
+                            #attribute,
+                            #value,
+                            #ns,
+                            #volatile
+                        )
+                    }
+                }
+                AttributeValue::EventTokens(tokens) => match &self.name {
+                    AttributeName::BuiltIn(name) => {
+                        let event_tokens_is_closure =
+                            syn::parse2::<ExprClosure>(tokens.to_token_stream()).is_ok();
+                        let function_name =
+                            quote_spanned! { tokens.span() => dioxus_elements::events::#name };
+                        let function = if event_tokens_is_closure {
+                            // If we see an explicit closure, we can call the `call_with_explicit_closure` version of the event for better type inference
+                            quote_spanned! { tokens.span() => #function_name::call_with_explicit_closure }
+                        } else {
+                            function_name
+                        };
+                        quote_spanned! { tokens.span() =>
+                            #function(#tokens)
+                        }
+                    }
+                    AttributeName::Custom(_) => unreachable!("Handled elsewhere in the macro"),
+                },
+                _ => {
+                    quote_spanned! { value.span() => dioxus_elements::events::#name(#value) }
+                }
+            }
+        };
 
-        // let attribute = |name: &AttributeName| match name {
-        //     AttributeName::BuiltIn(name) => match el_name {
-        //         ElementName::Ident(_) => quote! { dioxus_elements::#el_name::#name.0 },
-        //         ElementName::Custom(_) => {
-        //             let as_string = name.to_string();
-        //             quote!(#as_string)
-        //         }
-        //     },
-        //     AttributeName::Custom(s) => quote! { #s },
-        // };
-
-        // let value = &self.value;
-        // let name = &self.name;
-
-        // let is_event = match &self.name {
-        //     AttributeName::BuiltIn(name) => name.to_string().starts_with("on"),
-        //     _ => false,
-        // };
-
-        // // If all of them are single attributes, create a static slice
-        // if spread.is_empty() {
-        //     quote! {
-        //         Box::new([
-        //             #(#single),*
-        //         ])
-        //     }
-        // } else {
-        //     // Otherwise start with the single attributes and append the spread attributes
-        //     quote! {
-        //         {
-        //             let mut __attributes = vec![
-        //                 #(#single),*
-        //             ];
-        //             #(
-        //                 let mut __spread = #spread;
-        //                 __attributes.append(&mut __spread);
-        //             )*
-        //             __attributes.into_boxed_slice()
-        //         }
-        //     }
-        // }
-
-        // If it's an event, we need to wrap it in the event form and then just return that
-        // if is_event {
-        //     quote! {
-        //         Box::new([
-        //             dioxus_elements::events::#name(#value)
-        //         ])
-        //     }
-        // } else {
-        //     let ns = ns(name);
-        //     let volatile = volatile(name);
-        //     let attribute = attribute(name);
-        //     let value = quote! { #value };
-
-        //     quote! {
-        //         Box::new([
-        //             dioxus_core::Attribute::new(
-        //                 #attribute,
-        //                 #value,
-        //                 #ns,
-        //                 #volatile
-        //             )
-        //         ])
-        //     }
-        // }
+        let completion_hints = self.completion_hints(el_name);
+        quote! {
+            {
+                #completion_hints
+                #attribute
+            }
+        }
+        .to_token_stream()
     }
 
     pub fn start(&self) -> proc_macro2::Span {
@@ -394,22 +348,6 @@ impl Attribute {
 
         false
     }
-
-    // pub(crate) fn try_combine(&self, other: &Self) -> Option<Self> {
-    //     if self.name == other.name {
-    //         if let Some(separator) = self.name.multi_attribute_separator() {
-    //             return Some(Attribute {
-    //                 name: self.name.clone(),
-    //                 colon: self.colon.clone(),
-    //                 value: self.value.combine(separator, &other.value),
-    //                 comma: self.comma.clone().or(other.comma.clone()),
-    //                 dyn_idx: self.dyn_idx.clone(),
-    //             });
-    //         }
-    //     }
-
-    //     None
-    // }
 
     /// If this is the last attribute of an element and it doesn't have a tailing comma,
     /// we add hints so that rust analyzer completes it either as an attribute or element
@@ -454,8 +392,29 @@ impl Attribute {
         }
     }
 
-    pub fn matches_attr_name(&self, other: &Self) -> bool {
-        self.name == other.name
+    /// Get a score of hotreloadability of this attribute with another attribute
+    ///
+    /// usize::max is a perfect score and an immediate match
+    /// 0 is no match
+    /// All other scores are relative to the other scores
+    pub fn hotreload_score(&self, other: &Attribute) -> usize {
+        if self.name != other.name {
+            return 0;
+        }
+
+        match (&self.value, &other.value) {
+            (AttributeValue::AttrLiteral(lit), AttributeValue::AttrLiteral(other_lit)) => {
+                match (&lit.value, &lit.value) {
+                    (HotLiteralType::Fmted(a), HotLiteralType::Fmted(b)) => {
+                        todo!()
+                    }
+                    (othera, otherb) if othera == otherb => usize::MAX,
+                    _ => 0,
+                }
+            }
+            (othera, otherb) if othera == otherb => 1,
+            _ => 0,
+        }
     }
 }
 
@@ -483,22 +442,6 @@ impl AttributeName {
         match self {
             Self::Custom(lit) => lit.span(),
             Self::BuiltIn(ident) => ident.span(),
-        }
-    }
-
-    /// we have some special casing for the separator of certain attributes
-    /// ... I don't really like special casing things in the rsx! macro since it's supposed to be
-    /// agnostic to the renderer. To be "correct" we'd need to get the separate from the definition.
-    ///
-    /// sooo todo: make attribute sepaerator a part of the attribute definition
-    fn multi_attribute_separator(&self) -> Option<&'static str> {
-        match &self {
-            AttributeName::BuiltIn(i) => match i.to_string().as_str() {
-                "class" => Some(" "),
-                "style" => Some(";"),
-                _ => None,
-            },
-            AttributeName::Custom(_) => None,
         }
     }
 }

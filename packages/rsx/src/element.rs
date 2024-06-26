@@ -249,6 +249,33 @@ impl Element {
                         }
                     }
 
+                    AttributeValue::AttrOptionalExpr { condition, value } => {
+                        // If the literal is a formatted string, then we'll just join it
+                        // Otherwise literals are just pushed as is
+                        match value.as_ref() {
+                            AttributeValue::AttrLiteral(lit) => match &lit.value {
+                                HotLiteralType::Fmted(new) => {
+                                    out_raw.push_str(&new.source.value());
+                                    segments.extend(new.segments.clone());
+                                }
+                                _lit => {
+                                    self.diagnostics
+                                    .push(lit.span().error("Cannot merge non-fmt literals").help(
+                                        "Only formatted strings can be merged together. If you want to merge literals, you can use a format string.",
+                                    ));
+                                    continue;
+                                }
+                            },
+                            _ => {
+                                self.diagnostics
+                                    .push(value.span().error("Cannot merge non-literals").help(
+                                        "Only formatted strings can be merged together. If you want to merge literals, you can use a format string.",
+                                    ));
+                                continue;
+                            }
+                        }
+                    }
+
                     non_lit => {
                         self.diagnostics
                             .push(non_lit.span().error("Cannot merge non-literals").help(
@@ -299,7 +326,7 @@ pub enum ElementName {
 impl ToTokens for ElementName {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
-            ElementName::Ident(i) => tokens.append_all(quote! { elements::#i }),
+            ElementName::Ident(i) => tokens.append_all(quote! { #i }),
             ElementName::Custom(s) => s.to_tokens(tokens),
         }
     }

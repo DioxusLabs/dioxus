@@ -23,6 +23,10 @@ krates = { version = "0.16.6", optional = true }
 tracing = { workspace = true }
 proc-macro2-diagnostics = { version = "0.10", default-features = false }
 
+# todo: remove this or something
+prettier-please = { version = "*" }
+
+
 [features]
 default = ["hot_reload"]
 hot_reload = ["dep:krates", "dep:internment", "dep:dioxus-core"]
@@ -31,7 +35,6 @@ serde = ["dep:serde"]
 [dev-dependencies]
 insta = "1.36.1"
 prettyplease = { workspace = true }
-prettier-please = { version = "*" }
 
 
 [package.metadata.docs.rs]

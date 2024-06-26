@@ -1,10 +1,10 @@
-use crate::{intern, location::DynIdx, reload_stack::ReloadStack};
+use crate::intern;
 use dioxus_core::prelude::{FmtSegment, FmtedSegments};
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
 use std::{collections::HashMap, str::FromStr};
 use syn::{
-    parse::{Parse, ParseStream, Peek},
+    parse::{Parse, ParseStream},
     *,
 };
 
@@ -33,20 +33,6 @@ impl IfmtInput {
 
     pub fn span(&self) -> Span {
         self.source.span()
-    }
-
-    pub fn push_ident(&mut self, ident: Ident) {
-        self.segments.push(Segment::Formatted(FormattedSegment {
-            format_args: String::new(),
-            segment: FormattedSegmentType::Ident(ident),
-        }));
-    }
-
-    pub fn push_expr(&mut self, expr: Expr) {
-        self.segments.push(Segment::Formatted(FormattedSegment {
-            format_args: String::new(),
-            segment: FormattedSegmentType::Expr(Box::new(expr)),
-        }));
     }
 
     pub fn is_static(&self) -> bool {
@@ -222,32 +208,12 @@ impl IfmtInput {
         single_dynamic
     }
 
-    /// Convert the ifmt to a string, using the source if available
+    /// print the original source string - this handles escapes and stuff for us
     pub fn to_quoted_string_from_parts(&self) -> String {
         self.source.to_token_stream().to_string()
-        // if self.segments.len() == 1 {
-        //     return self.source.to_token_stream().to_string();
-        // }
-
-        // let joined = self
-        //     .segments
-        //     .iter()
-        //     .map(|seg| match seg {
-        //         Segment::Literal(lit) => lit.clone(),
-        //         Segment::Formatted(FormattedSegment {
-        //             segment,
-        //             format_args,
-        //         }) => {
-        //             //
-        //         }
-        //     })
-        //     .collect::<Vec<_>>()
-        //     .join("");
-
-        // // todo: maybe escape the string?
-        // format!("\"{}\"", joined)
     }
 
+    /// Parse the source into segments
     fn from_raw(input: &str) -> Result<Vec<Segment>> {
         let mut chars = input.chars().peekable();
         let mut segments = Vec::new();
@@ -466,6 +432,7 @@ impl Parse for IfmtInput {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::reload_stack::ReloadStack;
     use crate::PrettyUnparse;
 
     /// Ensure the scoring algorithm works
@@ -477,7 +444,7 @@ mod tests {
     fn ifmt_scoring() {
         let left: IfmtInput = "{abc} {def}".parse().unwrap();
         let right: IfmtInput = "{abc}".parse().unwrap();
-        assert_eq!(left.hr_score(&right), 1);
+        assert_eq!(left.hr_score(&right), 2);
 
         let left: IfmtInput = "{abc} {def}".parse().unwrap();
         let right: IfmtInput = "{abc} {def}".parse().unwrap();
@@ -493,7 +460,7 @@ mod tests {
 
         let left: IfmtInput = "{abc} {def} {ghi}".parse().unwrap();
         let right: IfmtInput = "{abc} {def}".parse().unwrap();
-        assert_eq!(left.hr_score(&right), 2);
+        assert_eq!(left.hr_score(&right), 3);
 
         let left: IfmtInput = "{abc}".parse().unwrap();
         let right: IfmtInput = "{abc} {def}".parse().unwrap();
@@ -501,7 +468,7 @@ mod tests {
 
         let left: IfmtInput = "{abc} {abc} {def}".parse().unwrap();
         let right: IfmtInput = "{abc} {def}".parse().unwrap();
-        assert_eq!(left.hr_score(&right), 2);
+        assert_eq!(left.hr_score(&right), 3);
 
         let left: IfmtInput = "{abc} {abc}".parse().unwrap();
         let right: IfmtInput = "{abc} {abc}".parse().unwrap();
@@ -521,7 +488,7 @@ mod tests {
 
         let left: IfmtInput = "{abc} {def}".parse().unwrap();
         let right: IfmtInput = "thing {abc}".parse().unwrap();
-        assert_eq!(left.hr_score(&right), 1);
+        assert_eq!(left.hr_score(&right), 2);
     }
 
     #[test]

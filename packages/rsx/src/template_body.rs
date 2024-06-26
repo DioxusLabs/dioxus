@@ -155,7 +155,12 @@ impl ToTokens for TemplateBody {
         let dyn_attr_printer = self.attr_paths.iter().map(|(path, idx)| {
             let node = self.get_dyn_node(&path);
             let attr = self.get_dyn_attr(path, *idx);
-            attr.rendered_as_dynamic_attr(node.el_name())
+            let rendered = attr.rendered_as_dynamic_attr(node.el_name());
+            quote::quote! {
+                Box::new([
+                    #rendered
+                ])
+            }
         });
 
         // Rust analyzer will not autocomplete properly if we change the name every time you type a character

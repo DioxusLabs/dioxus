@@ -1,5 +1,5 @@
 use proc_macro2::TokenStream;
-use quote::{ToTokens, TokenStreamExt};
+use quote::ToTokens;
 use std::hash::{Hash, Hasher};
 use syn::{
     braced,
@@ -60,6 +60,7 @@ impl Hash for PartialClosure {
         self.body.to_string().hash(state);
     }
 }
+
 impl Parse for PartialClosure {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let lifetimes: Option<BoundLifetimes> = input.parse()?;
@@ -126,6 +127,7 @@ impl ToTokens for PartialClosure {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         // todo: these attributes need to make their way down
         // self.attrs.to_tokens(tokens);
+
         self.lifetimes.to_tokens(tokens);
         self.constness.to_tokens(tokens);
         self.movability.to_tokens(tokens);
@@ -135,10 +137,13 @@ impl ToTokens for PartialClosure {
         self.inputs.to_tokens(tokens);
         self.or2_token.to_tokens(tokens);
         self.output.to_tokens(tokens);
+
         if let Some(brace_token) = &self.brace_token {
             brace_token.surround(tokens, |tokens| {
                 self.body.to_tokens(tokens);
             });
+        } else {
+            self.body.to_tokens(tokens);
         }
     }
 }
@@ -221,9 +226,9 @@ fn closure_arg(input: ParseStream) -> Result<Pat> {
             Pat::Struct(pat) => pat.attrs = attrs,
             Pat::Tuple(pat) => pat.attrs = attrs,
             Pat::TupleStruct(pat) => pat.attrs = attrs,
+            Pat::Wild(pat) => pat.attrs = attrs,
             Pat::Type(_) => unreachable!(),
             Pat::Verbatim(_) => {}
-            Pat::Wild(pat) => pat.attrs = attrs,
             _ => {}
         }
         Ok(pat)
@@ -233,7 +238,7 @@ fn closure_arg(input: ParseStream) -> Result<Pat> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use quote::quote;
+    use quote::{quote, TokenStreamExt};
 
     #[test]
     fn parses() {

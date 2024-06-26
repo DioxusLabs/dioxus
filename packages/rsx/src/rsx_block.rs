@@ -6,22 +6,14 @@
 //! This involves custom structs for name, attributes, and children, as well as a custom parser for the block itself.
 //! It also bubbles out diagnostics if it can to give better errors.
 
-use std::fmt::Display;
-
-use crate::{innerlude::*, HotReloadingContext};
-use dioxus_core::prelude::TemplateAttribute;
-use proc_macro2::{Literal, TokenStream};
+use crate::innerlude::*;
 use proc_macro2_diagnostics::SpanDiagnosticExt;
-use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseBuffer},
     spanned::Spanned,
     token::{self, Brace},
-    AngleBracketedGenericArguments, Expr, ExprClosure, ExprIf, Ident, Lit, LitStr, PatLit,
-    PathArguments, Token,
+    Expr, Ident, LitStr, Token,
 };
-
-use super::literal::HotLiteral;
 
 /// An item in the form of
 ///
@@ -181,194 +173,200 @@ impl Parse for RsxBlock {
     }
 }
 
-#[test]
-fn basic_cases() {
-    let input = quote! {
-        { "Hello, world!" }
-    };
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quote::quote;
 
-    let block: RsxBlock = syn::parse2(input).unwrap();
-    assert_eq!(block.attributes.len(), 0);
-    assert_eq!(block.children.len(), 1);
+    #[test]
+    fn basic_cases() {
+        let input = quote! {
+            { "Hello, world!" }
+        };
 
-    let input = quote! {
-        {
-            key: "value",
-            onclick: move |_| {
+        let block: RsxBlock = syn::parse2(input).unwrap();
+        assert_eq!(block.attributes.len(), 0);
+        assert_eq!(block.children.len(), 1);
+
+        let input = quote! {
+            {
+                key: "value",
+                onclick: move |_| {
+                    "Hello, world!"
+                },
+                ..spread,
                 "Hello, world!"
-            },
-            ..spread,
-            "Hello, world!"
-        }
-    };
+            }
+        };
 
-    let block: RsxBlock = syn::parse2(input).unwrap();
-    dbg!(block);
+        let block: RsxBlock = syn::parse2(input).unwrap();
+        dbg!(block);
 
-    let complex_element = quote! {
-        {
-            key: "value",
-            onclick2: move |_| {
+        let complex_element = quote! {
+            {
+                key: "value",
+                onclick2: move |_| {
+                    "Hello, world!"
+                },
+                thing: if true { "value" },
+                otherthing: if true { "value" } else { "value" },
+                onclick: move |_| {
+                    "Hello, world!"
+                },
+                ..spread,
+                ..spread1
+                ..spread2,
                 "Hello, world!"
-            },
-            thing: if true { "value" },
-            otherthing: if true { "value" } else { "value" },
-            onclick: move |_| {
+            }
+        };
+
+        let block: RsxBlock = syn::parse2(complex_element).unwrap();
+
+        let complex_component = quote! {
+            {
+                key: "value",
+                onclick2: move |_| {
+                    "Hello, world!"
+                },
+                ..spread,
                 "Hello, world!"
-            },
-            ..spread,
-            ..spread1
-            ..spread2,
-            "Hello, world!"
-        }
-    };
+            }
+        };
 
-    let block: RsxBlock = syn::parse2(complex_element).unwrap();
+        let block: RsxBlock = syn::parse2(complex_component).unwrap();
+    }
 
-    let complex_component = quote! {
-        {
-            key: "value",
-            onclick2: move |_| {
+    #[test]
+    fn ensure_props_before_elements() {}
+
+    /// Some tests of partial expansion to give better autocomplete
+    #[test]
+    fn partial_cases() {
+        let with_hander = quote! {
+            {
+                onclick: move |_| {
+                    some.
+                }
+            }
+        };
+
+        let block: RsxBlock = syn::parse2(with_hander).unwrap();
+    }
+
+    /// Give helpful errors in the cases where the tree is malformed but we can still give a good error
+    /// Usually this just boils down to incorrect orders
+    #[test]
+    fn proper_diagnostics() {}
+
+    /// Ensure the hotreload scoring algorithm works as expected
+    #[test]
+    fn hr_score() {
+        let block = quote! {
+            {
+                a: "value {cool}",
+                b: "{cool} value",
+                b: "{cool} {thing} value",
+                b: "{thing} value",
+            }
+        };
+
+        // loop { accumulate perfect matches }
+        // stop when all matches are equally valid
+        //
+        // Remove new attr one by one as we find its perfect match. If it doesn't have a perfect match, we
+        // score it instead.
+
+        quote! {
+            // start with
+            div {
+                div { class: "other {abc} {def} {hij}" } // 1, 1, 1
+                div { class: "thing {abc} {def}" }       // 1, 1, 1
+                // div { class: "thing {abc}" }             // 1, 0, 1
+            }
+
+            // end with
+            div {
+                h1 {
+                    class: "thing {abc}" // 1, 1, MAX
+                }
+                h1 {
+                    class: "thing {hij}" // 1, 1, MAX
+                }
+                // h2 {
+                //     class: "thing {def}" // 1, 1, 0
+                // }
+                // h3 {
+                //     class: "thing {def}" // 1, 1, 0
+                // }
+            }
+
+            // how about shuffling components, for, if, etc
+            Component {
+                class: "thing {abc}",
+                other: "other {abc} {def}",
+            }
+            Component {
+                class: "thing",
+                other: "other",
+            }
+
+            Component {
+                class: "thing {abc}",
+                other: "other",
+            }
+            Component {
+                class: "thing {abc}",
+                other: "other {abc} {def}",
+            }
+        };
+    }
+
+    #[test]
+    fn kitchen_sink_parse() {
+        let input = quote! {
+            // Elements
+            {
+                class: "hello",
+                id: "node-{node_id}",
+                ..props,
+
+                // Text Nodes
                 "Hello, world!"
-            },
-            ..spread,
-            "Hello, world!"
-        }
-    };
 
-    let block: RsxBlock = syn::parse2(complex_component).unwrap();
-}
+                // Exprs
+                {rsx! { "hi again!" }}
 
-#[test]
-fn ensure_props_before_elements() {}
 
-/// Some tests of partial expansion to give better autocomplete
-#[test]
-fn partial_cases() {
-    let with_hander = quote! {
-        {
-            onclick: move |_| {
-                some
+                for item in 0..10 {
+                    // "Second"
+                    div { "cool-{item}" }
+                }
+
+                Link {
+                    to: "/home",
+                    class: "link {is_ready}",
+                    "Home"
+                }
+
+                if false {
+                    div { "hi again!?" }
+                } else if true {
+                    div { "its cool?" }
+                } else {
+                    div { "not nice !" }
+                }
             }
-        }
-    };
+        };
 
-    let block: RsxBlock = syn::parse2(with_hander).unwrap();
-}
+        let parsed: RsxBlock = syn::parse2(input).unwrap();
+    }
 
-/// Give helpful errors in the cases where the tree is malformed but we can still give a good error
-/// Usually this just boils down to incorrect orders
-#[test]
-fn proper_diagnostics() {}
+    #[test]
+    fn simple_comp_syntax() {
+        let input = quote! {
+            { class: "inline-block mr-4", icons::icon_14 {} }
+        };
 
-/// Ensure the hotreload scoring algorithm works as expected
-#[test]
-fn hr_score() {
-    let block = quote! {
-        {
-            a: "value {cool}",
-            b: "{cool} value",
-            b: "{cool} {thing} value",
-            b: "{thing} value",
-        }
-    };
-
-    // loop { accumulate perfect matches }
-    // stop when all matches are equally valid
-    //
-    // Remove new attr one by one as we find its perfect match. If it doesn't have a perfect match, we
-    // score it instead.
-
-    quote! {
-        // start with
-        div {
-            div { class: "other {abc} {def} {hij}" } // 1, 1, 1
-            div { class: "thing {abc} {def}" }       // 1, 1, 1
-            // div { class: "thing {abc}" }             // 1, 0, 1
-        }
-
-        // end with
-        div {
-            h1 {
-                class: "thing {abc}" // 1, 1, MAX
-            }
-            h1 {
-                class: "thing {hij}" // 1, 1, MAX
-            }
-            // h2 {
-            //     class: "thing {def}" // 1, 1, 0
-            // }
-            // h3 {
-            //     class: "thing {def}" // 1, 1, 0
-            // }
-        }
-
-        // how about shuffling components, for, if, etc
-        Component {
-            class: "thing {abc}",
-            other: "other {abc} {def}",
-        }
-        Component {
-            class: "thing",
-            other: "other",
-        }
-
-        Component {
-            class: "thing {abc}",
-            other: "other",
-        }
-        Component {
-            class: "thing {abc}",
-            other: "other {abc} {def}",
-        }
-    };
-}
-
-#[test]
-fn kitchen_sink_parse() {
-    let input = quote! {
-        // Elements
-        {
-            class: "hello",
-            id: "node-{node_id}",
-            ..props,
-
-            // Text Nodes
-            "Hello, world!"
-
-            // Exprs
-            {rsx! { "hi again!" }}
-
-
-            for item in 0..10 {
-                // "Second"
-                div { "cool-{item}" }
-            }
-
-            Link {
-                to: "/home",
-                class: "link {is_ready}",
-                "Home"
-            }
-
-            if false {
-                div { "hi again!?" }
-            } else if true {
-                div { "its cool?" }
-            } else {
-                div { "not nice !" }
-            }
-        }
-    };
-
-    let parsed: RsxBlock = syn::parse2(input).unwrap();
-}
-
-#[test]
-fn simple_comp_syntax() {
-    let input = quote! {
-        { class: "inline-block mr-4", icons::icon_14 {} }
-    };
-
-    let parsed: RsxBlock = syn::parse2(input).unwrap();
+        let parsed: RsxBlock = syn::parse2(input).unwrap();
+    }
 }

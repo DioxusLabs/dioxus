@@ -6,7 +6,7 @@ use convert_case::{Case, Casing};
 use dioxus_html::{map_html_attribute_to_rsx, map_html_element_to_rsx};
 use dioxus_rsx::{
     Attribute, AttributeName, AttributeValue, BodyNode, CallBody, Component, Element, ElementName,
-    IfmtInput, HotLiteral, TemplateBody, TextNode,
+    HotLiteral, IfmtInput, TemplateBody, TextNode,
 };
 pub use html_parser::{Dom, Node};
 use proc_macro2::{Ident, Span};
@@ -167,21 +167,18 @@ pub fn collect_svgs(children: &mut [BodyNode], out: &mut Vec<BodyNode>) {
 }
 
 fn ifmt_from_text(text: &str) -> IfmtInput {
-    let lit_str = LitStr::new(text, Span::call_site());
     IfmtInput {
-        source: Some(lit_str),
+        source: LitStr::new(text, Span::call_site()),
         segments: vec![],
     }
 }
 
 fn literal_from_text(text: &str) -> HotLiteral {
-    let lit_str = LitStr::new(text, Span::call_site());
     HotLiteral {
         value: dioxus_rsx::HotLiteralType::Fmted(IfmtInput {
-            source: Some(lit_str.clone()),
+            source: LitStr::new(text, Span::call_site()),
             segments: vec![],
         }),
-        raw: syn::Lit::Str(lit_str),
         hr_idx: Default::default(),
     }
 }

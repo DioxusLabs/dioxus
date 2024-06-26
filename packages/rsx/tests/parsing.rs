@@ -260,3 +260,18 @@ fn attrs_expand() {
     let cb: CallBody = syn::parse2(item).unwrap();
     println!("{}", cb.to_token_stream().pretty_unparse());
 }
+
+#[test]
+fn basic_expansion() {
+    let item = quote::quote! {
+        button {
+            disabled: "{disabled}",
+            prevent_default: "onclick",
+            onclick: move |_| router.go_back(),
+            {children}
+        }
+    };
+
+    let cb: CallBody = syn::parse2(item).unwrap();
+    println!("{}", cb.to_token_stream().pretty_unparse());
+}
