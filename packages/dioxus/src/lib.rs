@@ -26,7 +26,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub use dioxus_core;
-pub use dioxus_core::Ok;
+pub use dioxus_core::{CapturedError, Ok, Result};
 
 #[cfg(feature = "launch")]
 #[cfg_attr(docsrs, doc(cfg(feature = "launch")))]
