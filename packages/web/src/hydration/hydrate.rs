@@ -40,9 +40,11 @@ pub(crate) struct SuspenseHydrationIds {
 impl SuspenseHydrationIds {
     /// Add a suspense boundary to the list of suspense boundaries. This should only be called on the root scope after the first rebuild (which happens on the server) and on suspense boundaries that are resolved from the server.
     /// Running this on a scope that is only created on the client may cause hydration issues.
-    fn add_suspense_boundary(&mut self, id: ScopeId) {
+    fn add_suspense_boundary(&mut self, id: ScopeId) -> usize {
         tracing::trace!("Adding suspense boundary {:?}", id);
+        let index = self.ids.len();
         self.ids.push(id);
+        index
     }
 
     /// Get the scope id of the suspense boundary from the id in the dom
@@ -162,10 +164,28 @@ impl WebsysDom {
     ) -> Result<(), RehydrationError> {
         // If this scope is a suspense boundary that is pending, add it to the list of pending suspense boundaries
         if let Some(suspense) = SuspenseBoundaryProps::downcast_from_scope(scope) {
-            tracing::trace!("suspense: {:?}", suspense);
             if suspense.suspended() {
-                self.suspense_hydration_ids
+                let suspense_placeholder_id = self
+                    .suspense_hydration_ids
                     .add_suspense_boundary(scope.id());
+                // If this suspense boundary is removed before it is resolved, we need to remove the placeholders in the dom.
+                // Removing the placeholders will prevent the server from trying to update the new nodes that took its place
+                *suspense.on_resolve.borrow_mut() = Some(Box::new(move |_| {
+                    let suspense_placeholder_id =
+                        format!("ds-{}", (suspense_placeholder_id + 1) * 2);
+                    web_sys::console::log_1(
+                        &format!("removing suspense placeholder {}", suspense_placeholder_id)
+                            .into(),
+                    );
+                    if let Some(element) = web_sys::window()
+                        .unwrap()
+                        .document()
+                        .unwrap()
+                        .get_element_by_id(&suspense_placeholder_id)
+                    {
+                        element.remove();
+                    }
+                }));
             }
         }
 

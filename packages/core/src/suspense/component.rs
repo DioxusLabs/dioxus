@@ -1,15 +1,20 @@
+use std::{cell::RefCell, rc::Rc};
+
 use crate::innerlude::*;
 
 /// Properties for the [`SuspenseBoundary()`] component.
 #[allow(non_camel_case_types)]
-#[derive(Debug)]
 pub struct SuspenseBoundaryProps {
     fallback: Callback<SuspenseContext, Element>,
     /// The children of the suspense boundary
     children: Element,
     /// THe nodes that are suspended under this boundary
     pub suspended_nodes: Option<VNode>,
+    /// A callback that will be called when the suspense boundary is resolved
+    pub on_resolve: ResolveCallback,
 }
+
+type ResolveCallback = Rc<RefCell<Option<Box<dyn for<'a> FnMut(&'a SuspenseBoundaryProps)>>>>;
 
 impl Clone for SuspenseBoundaryProps {
     fn clone(&self) -> Self {
@@ -20,6 +25,7 @@ impl Clone for SuspenseBoundaryProps {
                 .suspended_nodes
                 .as_ref()
                 .map(|node| node.clone_mounted()),
+            on_resolve: self.on_resolve.clone(),
         }
     }
 }
@@ -218,6 +224,7 @@ impl<__children: SuspenseBoundaryPropsBuilder_Optional<Element>>
                 fallback,
                 children,
                 suspended_nodes: None,
+                on_resolve: Rc::new(RefCell::new(None)),
             },
             owner: self.owner,
         }
@@ -478,6 +485,7 @@ impl SuspenseBoundaryProps {
             fallback,
             children,
             suspended_nodes,
+            ..
         } = myself;
 
         let suspense_context = scope
@@ -599,6 +607,20 @@ impl SuspenseBoundaryProps {
                     Self::downcast_mut_from_props(&mut *dom.scopes[scope_id.0].props).unwrap();
                 props.suspended_nodes = None;
             }
+        }
+    }
+
+    pub(crate) fn remove_suspended_nodes<M: WriteMutations>(
+        &mut self,
+        dom: &mut VirtualDom,
+        destroy_component_state: bool,
+    ) {
+        // Remove the suspended nodes
+        if let Some(node) = self.suspended_nodes.take() {
+            node.remove_node_inner(dom, None::<&mut M>, destroy_component_state, None)
+        }
+        if let Some(on_resolve) = self.on_resolve.borrow_mut().as_mut() {
+            on_resolve(self);
         }
     }
 }
