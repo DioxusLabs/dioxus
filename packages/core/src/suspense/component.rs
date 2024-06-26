@@ -10,8 +10,8 @@ pub struct SuspenseBoundaryProps {
     children: Element,
     /// THe nodes that are suspended under this boundary
     pub suspended_nodes: Option<VNode>,
-    /// A callback that will be called when the suspense boundary is resolved
-    pub on_resolve: ResolveCallback,
+    /// A callback that will be called when the suspense boundary is removed
+    pub on_remove: ResolveCallback,
 }
 
 type ResolveCallback = Rc<RefCell<Option<Box<dyn for<'a> FnMut(&'a SuspenseBoundaryProps)>>>>;
@@ -25,7 +25,7 @@ impl Clone for SuspenseBoundaryProps {
                 .suspended_nodes
                 .as_ref()
                 .map(|node| node.clone_mounted()),
-            on_resolve: self.on_resolve.clone(),
+            on_remove: self.on_remove.clone(),
         }
     }
 }
@@ -224,7 +224,7 @@ impl<__children: SuspenseBoundaryPropsBuilder_Optional<Element>>
                 fallback,
                 children,
                 suspended_nodes: None,
-                on_resolve: Rc::new(RefCell::new(None)),
+                on_remove: Rc::new(RefCell::new(None)),
             },
             owner: self.owner,
         }
@@ -615,11 +615,12 @@ impl SuspenseBoundaryProps {
         dom: &mut VirtualDom,
         destroy_component_state: bool,
     ) {
+        tracing::trace!("Removing suspense boundary {:?}", self.suspended_nodes);
         // Remove the suspended nodes
         if let Some(node) = self.suspended_nodes.take() {
             node.remove_node_inner(dom, None::<&mut M>, destroy_component_state, None)
         }
-        if let Some(on_resolve) = self.on_resolve.borrow_mut().as_mut() {
+        if let Some(on_resolve) = self.on_remove.borrow_mut().as_mut() {
             on_resolve(self);
         }
     }

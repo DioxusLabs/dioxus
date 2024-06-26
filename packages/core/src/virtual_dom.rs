@@ -800,8 +800,8 @@ impl VirtualDom {
                     if self
                         .runtime
                         .get_state(scope.id)
-                        .unwrap()
-                        .should_run_during_suspense()
+                        .filter(|scope| scope.should_run_during_suspense())
+                        .is_some()
                     {
                         let scope_state = self.get_scope(scope.id).unwrap();
                         let was_suspended =

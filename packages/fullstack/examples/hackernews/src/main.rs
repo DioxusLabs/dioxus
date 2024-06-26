@@ -35,8 +35,6 @@ pub fn App() -> Element {
 
 #[component]
 fn Homepage(story: ReadOnlySignal<PreviewState>) -> Element {
-    use_context_provider(|| story);
-
     rsx! {
         div { display: "flex", flex_direction: "row", width: "100%",
             ErrorBoundary {
@@ -54,7 +52,9 @@ fn Homepage(story: ReadOnlySignal<PreviewState>) -> Element {
                         fallback: |context: SuspenseContext| rsx! {
                             "Loading preview..."
                         },
-                        Preview {}
+                        Preview {
+                            story
+                        }
                     }
                 }
             }
@@ -76,7 +76,10 @@ fn Stories() -> Element {
         Ok(list) => rsx! {
             div {
                 for story in list {
-                    ChildrenOrLoading { StoryListing { story } }
+                    ChildrenOrLoading {
+                        key: "{story}",
+                        StoryListing { story }
+                    }
                 }
             }
         },
@@ -171,12 +174,11 @@ impl Display for PreviewState {
     }
 }
 
-fn Preview() -> Element {
-    let preview_state = use_context::<ReadOnlySignal<PreviewState>>();
-
+#[component]
+fn Preview(story: ReadOnlySignal<PreviewState>) -> Element {
     let PreviewState {
         active_story: Some(id),
-    } = preview_state()
+    } = story()
     else {
         return rsx! {"Hover over a story to preview it here"};
     };
@@ -190,9 +192,10 @@ fn Preview() -> Element {
     rsx! {
         div { padding: "0.5rem",
             div { font_size: "1.5rem", a { href: story.item.url, "{story.item.title}" } }
-            div { if let Some(text) = &story.item.text { "{text}" } }
+            if let Some(text) = &story.item.text { div { dangerous_inner_html: "{text}" } }
             for comment in story.item.kids.iter().copied() {
                 ChildrenOrLoading {
+                    key: "{comment}",
                     Comment { comment }
                 }
             }
@@ -226,6 +229,7 @@ fn Comment(comment: i64) -> Element {
             div { dangerous_inner_html: "{text}" }
             for comment in kids.iter().copied() {
                 ChildrenOrLoading {
+                    key: "{comment}",
                     Comment { comment }
                 }
             }

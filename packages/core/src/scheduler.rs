@@ -194,17 +194,17 @@ impl VirtualDom {
         // Find the height of the highest dirty scope
         let dirty_task = {
             let mut dirty_tasks = self.runtime.dirty_tasks.borrow_mut();
-            let mut dirty_task = dirty_tasks.first().map(|task| task.order);
+            let mut dirty_task = dirty_tasks.first();
             // Pop any invalid tasks off of each dirty scope;
             while let Some(task) = dirty_task {
-                if !self.scopes.contains(task.id.0) {
+                if task.tasks_queued.borrow().is_empty() || !self.scopes.contains(task.order.id.0) {
                     dirty_tasks.pop_first();
-                    dirty_task = dirty_tasks.first().map(|task| task.order)
+                    dirty_task = dirty_tasks.first()
                 } else {
                     break;
                 }
             }
-            dirty_task
+            dirty_task.map(|task| task.order)
         };
 
         match (dirty_scope, dirty_task) {

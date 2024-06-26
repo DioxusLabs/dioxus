@@ -137,6 +137,12 @@ impl WebsysDom {
             .get_element_by_id(&suspense_placeholder_id_formatted)
             .is_none()
         {
+            // Just remove the suspense hydration nodes and return
+            let mut resolved_suspense_id = suspense_placeholder_id_formatted.clone();
+            resolved_suspense_id.push_str("-r");
+            if let Some(element) = document.get_element_by_id(&resolved_suspense_id) {
+                element.remove();
+            }
             return Ok(());
         }
 
@@ -239,7 +245,7 @@ impl WebsysDom {
                     .add_suspense_boundary(scope.id());
                 // If this suspense boundary is removed before it is resolved, we need to remove the placeholders in the dom.
                 // Removing the placeholders will prevent the server from trying to update the new nodes that took its place
-                *suspense.on_resolve.borrow_mut() = Some(Box::new(move |_| {
+                *suspense.on_remove.borrow_mut() = Some(Box::new(move |_| {
                     let suspense_placeholder_id_formatted =
                         path_to_suspense_placeholder_id(&suspense_placeholder_id);
                     web_sys::console::log_1(

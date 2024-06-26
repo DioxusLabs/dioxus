@@ -11,22 +11,34 @@ use serde::{Deserialize, Serialize};
 
 // When hydrating nested suspense boundaries, we still need to run code in the unresolved suspense boundary to replicate what the server has already done:
 fn app() -> Element {
-    let mut count = use_signal(|| 0);
+    let mut count = use_signal(|| 1234);
+
+    if cfg!(feature = "web") {
+        match generation() {
+            0 => {
+                needs_update();
+            }
+            1 => {
+                count.set(count() + 5);
+            }
+            _ => {}
+        }
+    }
 
     rsx! {
-        button {
-            onclick: move |_| count += 1,
-            "Increment"
-        }
-        button {
-            onclick: move |_| count -= 1,
-            "Decrement"
-        }
         div {
-            "Hello world"
-        }
-        div {
-            for i in count()..count() + 100 {
+            button {
+                onclick: move |_| count += 1,
+                "Increment"
+            }
+            button {
+                onclick: move |_| count -= 1,
+                "Decrement"
+            }
+            div {
+                "Hello world"
+            }
+            for i in count()..count() + 10 {
                 // Imagine, we just resolve this suspense boundary. We pass down whatever data we resolved with it and None for any unresolved server functions in nested server functions [Some(data), None]
                 SuspenseBoundary {
                     key: "{i}",
@@ -36,22 +48,25 @@ fn app() -> Element {
                     SuspendedComponent {}
                 }
             }
+            div { "footer 123" }
         }
-        div { "footer 123" }
     }
 }
 
 #[component]
 fn SuspendedComponent() -> Element {
-    use_server_future(move || async move {
-        async_std::task::sleep(std::time::Duration::from_millis(
-            rand::thread_rng().gen_range(0..1000),
-        ))
-        .await;
-        1234
-    })?;
-
     let mut count = use_signal(|| 0);
+
+    use_server_future(move || {
+        let count = count();
+        async move {
+            async_std::task::sleep(std::time::Duration::from_millis(
+                rand::thread_rng().gen_range(100..1000),
+            ))
+            .await;
+            1234 + count
+        }
+    })?;
 
     rsx! {
         "Suspended???"
@@ -72,7 +87,7 @@ fn SuspendedComponent() -> Element {
 fn NestedSuspendedComponent() -> Element {
     use_server_future(move || async move {
         async_std::task::sleep(std::time::Duration::from_millis(
-            rand::thread_rng().gen_range(0..1000),
+            rand::thread_rng().gen_range(100..1000),
         ))
         .await;
         12345678
