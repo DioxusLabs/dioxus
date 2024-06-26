@@ -13,12 +13,16 @@ thread_local! {
 pub fn take_server_data<T: DeserializeOwned>() -> Result<Option<T>, TakeDataError> {
     SERVER_DATA.with_borrow(|data| match data.as_ref() {
         Some(data) => data.take(),
-        None => Ok(None),
+        None => Err(TakeDataError::DataNotAvailable),
     })
 }
 
 pub(crate) fn set_server_data(data: HTMLDataCursor) {
     SERVER_DATA.with_borrow_mut(|server_data| *server_data = Some(data));
+}
+
+pub(crate) fn remove_server_data() {
+    SERVER_DATA.with_borrow_mut(|server_data| server_data.take());
 }
 
 /// Data that is deserialized from the server during hydration
@@ -44,8 +48,8 @@ impl HTMLDataCursor {
     pub fn take<T: DeserializeOwned>(&self) -> Result<Option<T>, TakeDataError> {
         let current = self.index.get();
         if current >= self.data.len() {
-            tracing::error!(
-                "Tried to take more data than was available, len: {}, index: {}",
+            tracing::trace!(
+                "Tried to take more data than was available, len: {}, index: {}; This is normal if the server function was started on the client",
                 self.data.len(),
                 current
             );

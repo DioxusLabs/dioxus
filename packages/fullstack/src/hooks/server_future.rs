@@ -1,6 +1,10 @@
 use dioxus_lib::prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{cell::Cell, future::Future, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    future::Future,
+    rc::Rc,
+};
 
 /// Runs a future with a manual list of dependencies and returns a resource with the result if the future is finished or a suspended error if it is still running.
 ///
@@ -67,33 +71,43 @@ where
     #[cfg(feature = "server")]
     let server_storage_entry = use_hook(|| serialize_context.create_entry());
 
-    let first_run = use_hook(|| Rc::new(Cell::new(true)));
+    // If this is the first run and we are on the web client, the data might be cached
+    #[cfg(feature = "web")]
+    let initial_web_result = use_hook(|| {
+        tracing::info!("First run of use_server_future");
+
+        Rc::new(RefCell::new(Some(dioxus_web::take_server_data::<T>())))
+    });
 
     let resource = use_resource(move || {
         #[cfg(feature = "server")]
         let serialize_context = serialize_context.clone();
         let user_fut = future();
-        let first_run = first_run.clone();
+        #[cfg(feature = "web")]
+        let initial_web_result = initial_web_result.clone();
 
         async move {
-            let currently_in_first_run = first_run.get();
-
             // If this is the first run and we are on the web client, the data might be cached
-            if currently_in_first_run {
-                tracing::info!("First run of use_server_future");
-                // This is no longer the first run
-                first_run.set(false);
-
-                #[cfg(feature = "web")]
-                match dioxus_web::take_server_data::<T>() {
-                    // THe data was deserialized successfully from the server
-                    Ok(Some(o)) => return o,
-                    // The data is still pending from the server. Don't try to resolve it on the client
-                    Ok(None) => {
-                        std::future::pending::<()>().await;
+            #[cfg(feature = "web")]
+            {
+                let initial = initial_web_result.borrow_mut().take();
+                match initial {
+                    // This isn't the first run
+                    None => {}
+                    // This is the first run
+                    Some(first_run) => {
+                        match first_run {
+                            // THe data was deserialized successfully from the server
+                            Ok(Some(o)) => return o,
+                            // The data is still pending from the server. Don't try to resolve it on the client
+                            Ok(None) => {
+                                tracing::trace!("Waiting for server data");
+                                std::future::pending::<()>().await;
+                            }
+                            // The data was not available on the server, rerun the future
+                            Err(_) => {}
+                        }
                     }
-                    // The data was not available on the server, rerun the future
-                    Err(_) => {}
                 }
             }
 
@@ -102,9 +116,7 @@ where
 
             // If this is the first run and we are on the server, cache the data in the slot we reserved for it
             #[cfg(feature = "server")]
-            if currently_in_first_run {
-                serialize_context.insert(server_storage_entry, &out);
-            }
+            serialize_context.insert(server_storage_entry, &out);
 
             #[allow(clippy::let_and_return)]
             out

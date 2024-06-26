@@ -367,6 +367,7 @@ impl SuspenseBoundaryProps {
             .clone();
         // If there are suspended futures, render the fallback
         let nodes_created = if !suspense_context.suspended_futures().is_empty() {
+            tracing::trace!("Creating suspended nodes for suspense boundary");
             let props = Self::downcast_mut_from_props(&mut *scope_state.props).unwrap();
             props.suspended_nodes = Some(children.into());
 
@@ -387,6 +388,7 @@ impl SuspenseBoundaryProps {
 
             nodes_created
         } else {
+            tracing::trace!("Creating resolved suspense boundary");
             // Otherwise just render the children in the real dom
             dom.runtime.push_scope(scope_id);
             debug_assert!(children.mount.get().mounted());
@@ -434,7 +436,6 @@ impl SuspenseBoundaryProps {
             .get(mount.0)
             .expect("suspense placeholder is not mounted")
             .parent;
-        tracing::trace!("Parent of suspense boundary: {:?}", parent);
 
         let props = Self::downcast_mut_from_props(&mut *scope_state.props).unwrap();
 

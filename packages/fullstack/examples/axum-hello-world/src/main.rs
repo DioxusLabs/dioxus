@@ -19,7 +19,7 @@ fn app() -> Element {
                 needs_update();
             }
             1 => {
-                count.set(count() + 5);
+                count.set(count() + 100);
             }
             _ => {}
         }
@@ -38,7 +38,7 @@ fn app() -> Element {
             div {
                 "Hello world"
             }
-            for i in count()..count() + 10 {
+            for i in count()..count() + 200 {
                 // Imagine, we just resolve this suspense boundary. We pass down whatever data we resolved with it and None for any unresolved server functions in nested server functions [Some(data), None]
                 SuspenseBoundary {
                     key: "{i}",
@@ -58,13 +58,13 @@ fn SuspendedComponent() -> Element {
     let mut count = use_signal(|| 0);
 
     use_server_future(move || {
-        let count = count();
+        // let count = count();
         async move {
             async_std::task::sleep(std::time::Duration::from_millis(
-                rand::thread_rng().gen_range(100..1000),
+                rand::thread_rng().gen_range(0..1000) + 1000,
             ))
             .await;
-            1234 + count
+            1234
         }
     })?;
 
@@ -87,7 +87,7 @@ fn SuspendedComponent() -> Element {
 fn NestedSuspendedComponent() -> Element {
     use_server_future(move || async move {
         async_std::task::sleep(std::time::Duration::from_millis(
-            rand::thread_rng().gen_range(100..1000),
+            rand::thread_rng().gen_range(0..1000) + 1000,
         ))
         .await;
         12345678

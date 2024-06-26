@@ -115,6 +115,10 @@ export class BaseInterpreter {
       let end = this.m.getUint8(ptr);
       for (node = node.firstChild; end > 0; end--) {
         node = node.nextSibling;
+        // Skip any comment nodes
+        while (node instanceof Comment) {
+          node = node.nextSibling;
+        }
       }
     }
 

@@ -6,6 +6,7 @@
 use std::fmt::Write;
 
 use crate::dom::WebsysDom;
+use crate::remove_server_data;
 use crate::set_server_data;
 use crate::HTMLDataCursor;
 use dioxus_core::prelude::*;
@@ -159,6 +160,9 @@ impl WebsysDom {
         self.only_write_templates = true;
         SuspenseBoundaryProps::resolve_suspense(id, dom, self);
         self.only_write_templates = false;
+
+        // Hydrating the suspense node **should** eat all the server data, but just in case, remove it
+        remove_server_data();
 
         let Some(root_scope) = dom.get_scope(id) else {
             // If the scope was removed on the client, we may not be able to rehydrate it, but this shouldn't cause an error
