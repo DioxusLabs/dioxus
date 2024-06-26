@@ -59,20 +59,16 @@ mod js {
     fn insert_after(id: u32, n: u16) {
         "{
             let node = this.nodes[$id$];
-            // Skip any comment nodes after the node
-            while (node.nextSibling instanceof Comment) {
-                node = node.nextSibling;
-            }
+            // Skip any ignored nodes after the node. One of those nodes may be a comment node that marks the end of a suspense boundary owned by the server. If we don't insert after that, the server could swap out the nodes we insert with the server results
+            while (this.ignoreNode(node.nextSibling)) { node = node.nextSibling; }
             node.after(...this.stack.splice(this.stack.length-$n$));
         }"
     }
     fn insert_before(id: u32, n: u16) {
         "{
             let node = this.nodes[$id$];
-            // Skip any comment nodes before the node
-            while (node.previousSibling instanceof Comment) {
-                node = node.previousSibling;
-            }
+            // Skip any ignored nodes after the node. One of those nodes may be a comment node that marks the end of a suspense boundary owned by the server. If we don't insert after that, the server could swap out the nodes we insert with the server results
+            while (this.ignoreNode(node.previousSibling)) { node = node.previousSibling; }
             node.before(...this.stack.splice(this.stack.length-$n$));
         }"
     }

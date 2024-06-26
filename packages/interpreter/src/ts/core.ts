@@ -106,6 +106,18 @@ export class BaseInterpreter {
     }
   }
 
+  // Nodes that should be ignored during traversal. Comment nodes and template nodes that are used for streaming hydration should not effect traversal
+  ignoreNode(node: Node) {
+    switch (node.nodeType) {
+      case Node.COMMENT_NODE:
+        return true;
+      case Node.ELEMENT_NODE:
+        return (node as Element).id.startsWith("ds-");
+      default:
+        return false;
+    }
+  }
+
   loadChild(ptr: number, len: number): Node {
     // iterate through each number and get that child
     let node = this.stack[this.stack.length - 1] as Node;
@@ -115,8 +127,8 @@ export class BaseInterpreter {
       let end = this.m.getUint8(ptr);
       for (node = node.firstChild; end > 0; end--) {
         node = node.nextSibling;
-        // Skip any comment nodes
-        while (node instanceof Comment) {
+        // Skip any ignored nodes
+        while (this.ignoreNode(node)) {
           node = node.nextSibling;
         }
       }

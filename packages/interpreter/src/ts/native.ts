@@ -174,8 +174,8 @@ export class NativeInterpreter extends JSChannel_ {
       let end = array[i];
       for (node = node.firstChild; end > 0; end--) {
         node = node.nextSibling;
-        // Skip any comment nodes
-        while (node instanceof Comment) {
+        // Skip any ignored nodes
+        while (this.ignoreNode(node)) {
           node = node.nextSibling;
         }
       }
