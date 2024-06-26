@@ -74,6 +74,16 @@ impl WebsysDom {
             "Rehydrating streaming chunk {:?}",
             self.suspense_hydration_ids.ids
         );
+
+        let document = web_sys::window().unwrap().document().unwrap();
+        // Before we start rehydrating the suspense boundary we need to check that the suspense boundary exists. It may have been removed on the client.
+        if document
+            .get_element_by_id(&format!("ds-{}", dom_id))
+            .is_none()
+        {
+            return Ok(());
+        }
+
         // First convert the dom id into a scope id based on the discovery order of the suspense boundaries.
         // This may fail if the id is not parsable, or if the suspense boundary was removed after partial hydration on the client.
         let id = self
@@ -98,10 +108,7 @@ impl WebsysDom {
             dom_id + 1
         );
 
-        let element = web_sys::window()
-            .unwrap()
-            .document()
-            .unwrap()
+        let element = document
             .get_element_by_id(&format!("ds-{}", dom_id + 1))
             .ok_or(RehydrationError::ElementNotFound)?;
 
