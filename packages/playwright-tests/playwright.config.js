@@ -82,8 +82,8 @@ module.exports = defineConfig({
     },
     {
       cwd: path.join(process.cwd(), "web"),
-      command: "cargo run --package dioxus-cli --release -- serve",
-      port: 8080,
+      command: "cargo run --package dioxus-cli --release -- serve --port 9999",
+      port: 9999,
       timeout: 20 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",
