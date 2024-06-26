@@ -3,7 +3,7 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
 use crate::writer::*;
-use dioxus_rsx::{BodyNode, CallBody};
+use dioxus_rsx::{BodyNode, RsxBody};
 use proc_macro2::LineColumn;
 use syn::{parse::Parser, ExprMacro};
 
@@ -69,7 +69,7 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
             continue;
         }
 
-        let body = item.parse_body_with(CallBody::parse_strict).unwrap();
+        let body = item.parse_body_with(RsxBody::parse_strict).unwrap();
 
         let rsx_start = macro_path.span().start();
 
@@ -124,21 +124,21 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
 ///
 /// If the tokens can't be formatted, this returns None. This is usually due to an incomplete expression
 /// that passed partial expansion but failed to parse.
-pub fn write_block_out(body: &CallBody) -> Option<String> {
+pub fn write_block_out(body: &RsxBody) -> Option<String> {
     let mut buf = Writer::new("");
     buf.write_body(&body.body).ok()?;
     buf.consume()
 }
 
 pub fn fmt_block_from_expr(raw: &str, expr: ExprMacro) -> Option<String> {
-    let body = CallBody::parse_strict.parse2(expr.mac.tokens).unwrap();
+    let body = RsxBody::parse_strict.parse2(expr.mac.tokens).unwrap();
     let mut buf = Writer::new(raw);
     buf.write_body(&body.body).ok()?;
     buf.consume()
 }
 
 pub fn fmt_block(block: &str, indent_level: usize, indent: IndentOptions) -> Option<String> {
-    let body = CallBody::parse_strict.parse_str(block).unwrap();
+    let body = RsxBody::parse_strict.parse_str(block).unwrap();
 
     let mut buf = Writer::new(block);
     buf.out.indent = indent;

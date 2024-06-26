@@ -23,20 +23,20 @@ use crate::{BodyNode, TemplateBody};
 ///
 /// Ideally we don't need the metadata here and can bake the idx-es into the templates themselves but I haven't figured out how to do that yet.
 #[derive(Debug, Clone)]
-pub struct CallBody {
+pub struct RsxBody {
     pub body: TemplateBody,
     pub ifmt_idx: Cell<usize>,
     pub template_idx: Cell<usize>,
 }
 
-impl Parse for CallBody {
+impl Parse for RsxBody {
     fn parse(input: ParseStream) -> Result<Self> {
         let body = TemplateBody::parse(input)?;
-        Ok(CallBody::new(body))
+        Ok(RsxBody::new(body))
     }
 }
 
-impl ToTokens for CallBody {
+impl ToTokens for RsxBody {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
         if self.body.is_empty() {
             return out_tokens.append_all(quote! { None });
@@ -46,12 +46,12 @@ impl ToTokens for CallBody {
     }
 }
 
-impl CallBody {
+impl RsxBody {
     /// Create a new CallBody from a TemplateBody
     ///
     /// This will overwrite all internal metadata regarding hotreloading.
     pub fn new(template: TemplateBody) -> Self {
-        let body = CallBody {
+        let body = RsxBody {
             body: template,
             ifmt_idx: Cell::new(0),
             template_idx: Cell::new(0),

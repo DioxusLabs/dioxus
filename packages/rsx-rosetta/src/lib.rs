@@ -5,15 +5,15 @@
 use convert_case::{Case, Casing};
 use dioxus_html::{map_html_attribute_to_rsx, map_html_element_to_rsx};
 use dioxus_rsx::{
-    Attribute, AttributeName, AttributeValue, BodyNode, CallBody, Component, Element, ElementName,
-    HotLiteral, IfmtInput, TemplateBody, TextNode,
+    Attribute, AttributeName, AttributeValue, BodyNode, Component, Element, ElementName,
+    HotLiteral, IfmtInput, RsxBody, TemplateBody, TextNode,
 };
 pub use html_parser::{Dom, Node};
 use proc_macro2::{Ident, Span};
 use syn::{punctuated::Punctuated, LitStr};
 
 /// Convert an HTML DOM tree into an RSX CallBody
-pub fn rsx_from_html(dom: &Dom) -> CallBody {
+pub fn rsx_from_html(dom: &Dom) -> RsxBody {
     let nodes = dom
         .children
         .iter()
@@ -21,7 +21,7 @@ pub fn rsx_from_html(dom: &Dom) -> CallBody {
         .collect::<Vec<_>>();
 
     let template = TemplateBody::new(nodes);
-    let body = CallBody::new(template);
+    let body = RsxBody::new(template);
 
     body
 }

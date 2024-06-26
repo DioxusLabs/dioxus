@@ -7,6 +7,7 @@
 //! It also bubbles out diagnostics if it can to give better errors.
 
 use crate::innerlude::*;
+use proc_macro2::Span;
 use proc_macro2_diagnostics::SpanDiagnosticExt;
 use syn::{
     parse::{Parse, ParseBuffer},
@@ -29,8 +30,6 @@ use syn::{
 /// The name of the block is expected to be parsed by the parent parser. It will accept items out of
 /// order if possible and then bubble up diagnostics to the parent. This lets us give better errors
 /// and autocomplete
-///
-/// todo: add some diagnostics
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct RsxBlock {
     pub brace: token::Brace,
@@ -44,47 +43,87 @@ impl Parse for RsxBlock {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let content: ParseBuffer;
         let brace = syn::braced!(content in input);
+        RsxBlock::parse_inner(&content, brace)
+    }
+}
 
+impl RsxBlock {
+    pub fn parse_inner(content: &ParseBuffer, brace: token::Brace) -> syn::Result<Self> {
         // todo: toss a warning for
-        // Parse attributes
-        let mut attributes = vec![];
-        let mut spreads = vec![];
+        let mut items = vec![];
         let mut diagnostics = Diagnostics::new();
 
-        // todo: lots of manual parsing of commas could be simplified, probably?
-        // we should also allow parsing in any order of attributes and children - there are diagnostics we can employ
-        // to allow both but also give helpful errors
+        // Lots of manual parsing but it's important to do it all here to give the best diagnostics possible
+        // We can do things like lookaheads, peeking, etc. to give better errors and autocomplete
+        // We allow parsing in any order but complain if its done out of order.
+        // Autofmt will fortunately fix this for us in most cases
+        //
+        // Weo do this by parsing the unambiguous cases first and then do some clever lookahead to parse the rest
         loop {
             if content.is_empty() {
                 break;
             }
 
             // Parse spread attributes
-            // These are expected forced to come after regular attributes
             if content.peek(Token![..]) {
                 let dots = content.parse::<Token![..]>()?;
 
                 // in case someone tries to do ...spread which is not valid
-                if content.peek(Token![.]) {
-                    let _extra = content.parse::<Token![.]>()?;
+                if let Ok(extra) = content.parse::<Token![.]>() {
                     diagnostics.push(
-                        _extra
+                        extra
                             .span()
                             .error("Spread expressions only take two dots - not 3! (..spread)"),
                     );
                 }
 
                 let expr = content.parse::<Expr>()?;
-                spreads.push(Spread {
+                items.push(RsxItem::Spread(Spread {
                     expr,
                     dots,
                     dyn_idx: DynIdx::default(),
-                });
+                }));
 
                 if !content.is_empty() {
                     content.parse::<Token![,]>()?; // <--- diagnostics...
                 }
 
+                continue;
+            }
+
+            // Parse unambiguous attributes - these can't be confused with anything
+            if (content.peek(LitStr) || content.peek(Ident))
+                && content.peek2(Token![:])
+                && !content.peek3(Token![:])
+            {
+                let attr = content.parse::<Attribute>()?;
+
+                if !content.is_empty() && attr.comma.is_none() {
+                    diagnostics.push(
+                        attr.span()
+                            .error("Attributes must be separated by commas")
+                            .help("Did you forget a comma?"),
+                    );
+                }
+
+                items.push(RsxItem::Attribute(attr));
+
+                continue;
+            }
+
+            // Eagerly match on children, generally
+            if content.peek(LitStr)
+                | content.peek(Token![for])
+                | content.peek(Token![if])
+                | content.peek(Token![match])
+                | content.peek(token::Brace)
+                // web components
+                | (content.peek(Ident) && content.peek2(Token![-]))
+                // elements
+                | (content.peek(Ident) && content.peek2(token::Brace))
+            // todo: eager parse components?
+            {
+                items.push(RsxItem::Child(content.parse::<BodyNode>()?));
                 continue;
             }
 
@@ -95,71 +134,49 @@ impl Parse for RsxBlock {
                 && !content.peek2(Brace)
                 && !content.peek2(Token![:])
                 && !content.peek2(Token![-])
-                && !content.peek2(token::Brace)
             {
                 let name = content.parse::<Ident>()?;
+                let comma = content.parse().ok();
 
-                let comma = if !content.is_empty() {
-                    Some(content.parse::<Token![,]>()?) // <--- diagnostics...
-                } else {
-                    None
-                };
-
-                if !spreads.is_empty() {
-                    diagnostics.push(name.span().error(
-                        "Spread attributes must come after regular attributes and before children",
-                    ));
-                    diagnostics.push(spreads.last().unwrap().expr.span().warning(
-                        "This spread attribute should be moved to the end of the attribute list",
-                    ));
-                }
-
-                attributes.push(Attribute {
+                let attribute = Attribute {
                     name: AttributeName::BuiltIn(name.clone()),
                     colon: None,
                     value: AttributeValue::Shorthand(name),
                     comma,
                     dyn_idx: DynIdx::default(),
-                });
+                };
 
-                continue;
-            }
-
-            // Parse regular attributes
-            if (content.peek(LitStr) || content.peek(Ident))
-                && content.peek2(Token![:])
-                && !content.peek3(Token![:])
-            {
-                let attr = content.parse::<Attribute>()?;
-
-                if !spreads.is_empty() {
-                    diagnostics.push(attr.name.span().error(
-                        "Spread attributes must come after regular attributes and before children",
-                    ));
-                    diagnostics.push(spreads.last().unwrap().expr.span().warning(
-                        "This spread attribute should be moved to the end of the attribute list",
-                    ));
+                if !content.is_empty() && attribute.comma.is_none() {
+                    diagnostics.push(
+                        attribute
+                            .span()
+                            .error("Attributes must be separated by commas")
+                            .help("Did you forget a comma?"),
+                    );
                 }
 
-                attributes.push(attr);
+                items.push(RsxItem::Attribute(attribute));
+
                 continue;
             }
 
-            break;
+            // Finally just attempt a bodynode parse
+            items.push(RsxItem::Child(content.parse::<BodyNode>()?))
         }
 
-        // Parse children
+        // Validate the order of the items
+        RsxBlock::validate(&items, &mut diagnostics);
+
+        // todo: maybe make this a method such that the rsxblock is lossless
+        // Decompose into attributes, spreads, and children
+        let mut attributes = vec![];
+        let mut spreads = vec![];
         let mut children = vec![];
-        while !content.is_empty() {
-            let child: BodyNode = content.parse()?;
-
-            // todo: try to give helpful diagnostic if a prop is in the wrong location
-            // we might want to adjust this by tweaking our parser to pull spreads, attrs, and nodes
-            // in any order
-            children.push(child);
-
-            if content.peek(Token![,]) {
-                _ = content.parse::<Token![,]>()?;
+        for item in items {
+            match item {
+                RsxItem::Attribute(attr) => attributes.push(attr),
+                RsxItem::Spread(spread) => spreads.push(spread),
+                RsxItem::Child(child) => children.push(child),
             }
         }
 
@@ -170,6 +187,68 @@ impl Parse for RsxBlock {
             brace,
             diagnostics,
         })
+    }
+
+    /// Ensure the ordering of the items is correct
+    /// - Attributes must come before children
+    /// - Spreads must come before children
+    /// - Spreads must come after attributes
+    ///
+    /// div {
+    ///     key: "value",
+    ///     ..props,
+    ///     "Hello, world!"
+    /// }
+    fn validate(items: &[RsxItem], diagnostics: &mut Diagnostics) {
+        #[derive(Debug, PartialEq, Eq)]
+        enum ValidationState {
+            Attributes,
+            Spreads,
+            Children,
+        }
+        use ValidationState::*;
+        let mut state = ValidationState::Attributes;
+
+        for item in items.iter() {
+            match item {
+                RsxItem::Attribute(_) => {
+                    if state == Children || state == Spreads {
+                        diagnostics.push(
+                            item.span()
+                                .error("Attributes must come before children in an element"),
+                        );
+                    }
+                    state = Attributes;
+                }
+                RsxItem::Spread(_) => {
+                    if state == Children {
+                        diagnostics.push(
+                            item.span()
+                                .error("Spreads must come before children in an element"),
+                        );
+                    }
+                    state = Spreads;
+                }
+                RsxItem::Child(_) => {
+                    state = Children;
+                }
+            }
+        }
+    }
+}
+
+pub enum RsxItem {
+    Attribute(Attribute),
+    Spread(Spread),
+    Child(BodyNode),
+}
+impl RsxItem {
+    pub fn span(&self) -> Span {
+        match self {
+            RsxItem::Attribute(attr) => attr.span(),
+            RsxItem::Spread(spread) => spread.dots.span(),
+            RsxItem::Child(child) => child.span(),
+        }
     }
 }
 
@@ -365,6 +444,19 @@ mod tests {
     fn simple_comp_syntax() {
         let input = quote! {
             { class: "inline-block mr-4", icons::icon_14 {} }
+        };
+
+        let parsed: RsxBlock = syn::parse2(input).unwrap();
+    }
+
+    #[test]
+    fn with_sutter() {
+        let input = quote! {
+            {
+                div {}
+                d
+                div {}
+            }
         };
 
         let parsed: RsxBlock = syn::parse2(input).unwrap();

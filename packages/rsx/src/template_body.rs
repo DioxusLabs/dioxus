@@ -57,6 +57,7 @@ use crate::innerlude::Attribute;
 use crate::*;
 use dioxus_core::prelude::Template;
 use proc_macro2::TokenStream as TokenStream2;
+use syn::token::Brace;
 
 use self::location::DynIdx;
 
@@ -85,13 +86,9 @@ pub struct TemplateBody {
 impl Parse for TemplateBody {
     /// Parse the nodes of the callbody as `Body`.
     fn parse(input: ParseStream) -> Result<Self> {
-        let mut nodes = Vec::new();
-
-        while !input.is_empty() {
-            nodes.push(input.parse::<BodyNode>()?);
-        }
-
-        Ok(Self::new(nodes))
+        let brace = Brace::default();
+        let block = RsxBlock::parse_inner(input, brace)?;
+        Ok(Self::new(block.children))
     }
 }
 

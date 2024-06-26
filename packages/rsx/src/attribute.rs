@@ -580,4 +580,13 @@ mod tests {
         let b: Attribute = parse2(quote! { class: if value { "other thing" } }).unwrap();
         let b: Attribute = parse2(quote! { class: if value { some_expr } }).unwrap();
     }
+
+    #[test]
+    fn static_literals() {
+        let a: Attribute = parse2(quote! { class: "value1" }).unwrap();
+        let b: Attribute = parse2(quote! { class: "value {some}" }).unwrap();
+
+        assert!(a.is_static_str_literal());
+        assert!(!b.is_static_str_literal());
+    }
 }

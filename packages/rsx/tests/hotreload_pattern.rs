@@ -4,7 +4,7 @@ use dioxus_core::prelude::Template;
 use dioxus_rsx::{
     hot_reload::{diff_rsx, template_location, ChangedRsx, DiffResult},
     hotreload::HotReload,
-    CallBody, HotReloadingContext,
+    RsxBody, HotReloadingContext,
 };
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
@@ -37,16 +37,16 @@ impl HotReloadingContext for Mock {
 }
 
 fn boilerplate(old: TokenStream, new: TokenStream) -> Option<Vec<Template>> {
-    let old: CallBody = syn::parse2(old).unwrap();
-    let new: CallBody = syn::parse2(new).unwrap();
+    let old: RsxBody = syn::parse2(old).unwrap();
+    let new: RsxBody = syn::parse2(new).unwrap();
 
     let location = "file:line:col:0";
     hotreload_callbody::<Mock>(&old, &new, location)
 }
 
 fn full_boilerplate(old: TokenStream, new: TokenStream) -> Option<HotReload> {
-    let old: CallBody = syn::parse2(old).unwrap();
-    let new: CallBody = syn::parse2(new).unwrap();
+    let old: RsxBody = syn::parse2(old).unwrap();
+    let new: RsxBody = syn::parse2(new).unwrap();
 
     let location = "file:line:col:0";
     let results = HotReload::new::<Mock>(&old, &new, location)?;
@@ -54,8 +54,8 @@ fn full_boilerplate(old: TokenStream, new: TokenStream) -> Option<HotReload> {
 }
 
 fn hotreload_callbody<Ctx: HotReloadingContext>(
-    old: &CallBody,
-    new: &CallBody,
+    old: &RsxBody,
+    new: &RsxBody,
     location: &'static str,
 ) -> Option<Vec<Template>> {
     let results = HotReload::new::<Ctx>(old, new, location)?;
@@ -63,7 +63,7 @@ fn hotreload_callbody<Ctx: HotReloadingContext>(
 }
 
 fn callbody_to_template<Ctx: HotReloadingContext>(
-    old: &CallBody,
+    old: &RsxBody,
     location: &'static str,
 ) -> Option<Template> {
     let results = HotReload::new::<Ctx>(old, old, location)?;
@@ -83,7 +83,7 @@ fn base_stream() -> TokenStream {
     }
 }
 
-fn base() -> CallBody {
+fn base() -> RsxBody {
     syn::parse2(base_stream()).unwrap()
 }
 
@@ -116,9 +116,9 @@ fn simple_for_loop() {
     };
 
     let location = "file:line:col:0";
-    let old: CallBody = syn::parse2(old).unwrap();
-    let new_valid: CallBody = syn::parse2(new_valid).unwrap();
-    let new_invalid: CallBody = syn::parse2(new_invalid).unwrap();
+    let old: RsxBody = syn::parse2(old).unwrap();
+    let new_valid: RsxBody = syn::parse2(new_valid).unwrap();
+    let new_invalid: RsxBody = syn::parse2(new_invalid).unwrap();
 
     assert!(hotreload_callbody::<Mock>(&old, &new_valid, location).is_some());
     assert!(hotreload_callbody::<Mock>(&old, &new_invalid, location).is_none());
@@ -141,7 +141,7 @@ fn valid_reorder() {
     };
 
     let location = "file:line:col:0";
-    let new: CallBody = syn::parse2(new_valid).unwrap();
+    let new: RsxBody = syn::parse2(new_valid).unwrap();
 
     let valid = hotreload_callbody::<Mock>(&old, &new, location);
     assert!(valid.is_some());
@@ -221,11 +221,11 @@ fn invalid_cases() {
     let location = "file:line:col:0";
     let old = base();
 
-    let new_invalid: CallBody = syn::parse2(new_invalid).unwrap();
-    let new_valid_removed: CallBody = syn::parse2(new_valid_removed).unwrap();
-    let new_invalid_new_dynamic_internal: CallBody =
+    let new_invalid: RsxBody = syn::parse2(new_invalid).unwrap();
+    let new_valid_removed: RsxBody = syn::parse2(new_valid_removed).unwrap();
+    let new_invalid_new_dynamic_internal: RsxBody =
         syn::parse2(new_invalid_new_dynamic_internal).unwrap();
-    let new_invlaid_added: CallBody = syn::parse2(new_invlaid_added).unwrap();
+    let new_invlaid_added: RsxBody = syn::parse2(new_invlaid_added).unwrap();
 
     assert!(hotreload_callbody::<Mock>(&old, &new_invalid, location).is_none());
     assert!(
@@ -334,7 +334,7 @@ fn template_generates() {
         }
     };
 
-    let old: CallBody = syn::parse2(old).unwrap();
+    let old: RsxBody = syn::parse2(old).unwrap();
     let template = callbody_to_template::<Mock>(&old, "file:line:col:0");
 }
 
@@ -376,8 +376,8 @@ fn diffs_complex() {
         }
     };
 
-    let old: CallBody = syn::parse2(old).unwrap();
-    let new: CallBody = syn::parse2(new).unwrap();
+    let old: RsxBody = syn::parse2(old).unwrap();
+    let new: RsxBody = syn::parse2(new).unwrap();
 
     let location = "file:line:col:0";
     let templates = hotreload_callbody::<Mock>(&old, &new, location).unwrap();
@@ -629,7 +629,7 @@ fn assigns_ids() {
         }
     };
 
-    let parsed = syn::parse2::<CallBody>(toks).unwrap();
+    let parsed = syn::parse2::<RsxBody>(toks).unwrap();
 
     let node = parsed.body.get_dyn_node(&[0, 1]);
     dbg!(node);

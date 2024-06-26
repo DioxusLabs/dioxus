@@ -3,7 +3,7 @@ use super::{
     ChangedRsx,
 };
 use crate::{
-    innerlude::{CallBody, HotLiteral, HotLiteralType},
+    innerlude::{HotLiteral, HotLiteralType, RsxBody},
     HotReloadingContext,
 };
 use dioxus_core::{
@@ -164,8 +164,8 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
 
             let old_start = old.span().start();
 
-            let old_parsed = syn::parse2::<CallBody>(old.tokens);
-            let new_parsed = syn::parse2::<CallBody>(new);
+            let old_parsed = syn::parse2::<RsxBody>(old.tokens);
+            let new_parsed = syn::parse2::<RsxBody>(new);
             let (Ok(old_call_body), Ok(new_call_body)) = (old_parsed, new_parsed) else {
                 continue;
             };

@@ -12,6 +12,9 @@ use crate::{location::DynIdx, IfmtInput, Segment};
 ///
 /// These get hotreloading super powers, making them a bit more complex than a normal literal.
 /// In debug mode we need to generate a bunch of extra code to support hotreloading.
+///
+/// Eventually we want to remove this notion of hot literals since we're generating different code
+/// in debug than in release, which is harder to maintain and can lead to bugs.
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct HotLiteral {
     pub value: HotLiteralType,
@@ -119,9 +122,7 @@ impl ToTokens for HotLiteral {
                     Segment::Literal(_lit) => None,
                     Segment::Formatted(fmt) => {
                         // just render as a format_args! call
-                        Some(quote! {
-                            #fmt.to_string()
-                        })
+                        Some(quote! { #fmt.to_string() })
                     }
                 });
 
@@ -166,6 +167,10 @@ impl ToTokens for HotLiteral {
                             #hr_idx
                         )
                     });
+
+                    // in debug we still want these tokens to turn into fmt args such that RA can line
+                    // them up, giving us rename powersa
+                    _ = #as_lit;
 
                     // render the signal and subscribe the component to its changes
                     __SIGNAL.with(|s|  s #mapped)

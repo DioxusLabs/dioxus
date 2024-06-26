@@ -41,7 +41,7 @@ pub fn derive_typed_builder(input: TokenStream) -> TokenStream {
 #[doc = include_str!("../docs/rsx.md")]
 #[proc_macro]
 pub fn rsx(tokens: TokenStream) -> TokenStream {
-    match syn::parse::<rsx::CallBody>(tokens) {
+    match syn::parse::<rsx::RsxBody>(tokens) {
         Err(err) => err.to_compile_error().into(),
         Ok(body) => body.into_token_stream().into(),
     }

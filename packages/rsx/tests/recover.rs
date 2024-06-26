@@ -1,10 +1,10 @@
-use dioxus_rsx::CallBody;
+use dioxus_rsx::RsxBody;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::parse::ParseStream;
 
-fn parsed(item: TokenStream) -> CallBody {
-    let new_invalid: CallBody = syn::parse2(item).unwrap();
+fn parsed(item: TokenStream) -> RsxBody {
+    let new_invalid: RsxBody = syn::parse2(item).unwrap();
     new_invalid
 }
 

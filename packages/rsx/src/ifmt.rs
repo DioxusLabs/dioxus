@@ -24,11 +24,9 @@ impl PartialEq for IfmtInput {
 }
 
 impl IfmtInput {
-    pub fn new_litstr(input: LitStr) -> Self {
-        Self {
-            segments: vec![Segment::Literal(input.value())],
-            source: input,
-        }
+    pub fn new_litstr(source: LitStr) -> Self {
+        let segments = Self::from_raw(&source.value()).unwrap();
+        Self { segments, source }
     }
 
     pub fn span(&self) -> Span {
