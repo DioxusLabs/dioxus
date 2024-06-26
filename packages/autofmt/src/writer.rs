@@ -1,8 +1,8 @@
+use crate::buffer::Buffer;
 use crate::collect_macros::byte_offset;
-use crate::{buffer::Buffer, lit_to_string};
 use dioxus_rsx::{
     Attribute as AttributeType, AttributeValue as ElementAttrValue, BodyNode, Component, Element,
-    ForLoop, IfChain, Spread,
+    ForLoop, IfChain, Spread, TemplateBody,
 };
 use proc_macro2::{LineColumn, Span};
 use quote::ToTokens;
@@ -16,23 +16,9 @@ use syn::{spanned::Spanned, token::Brace, Expr};
 pub struct Writer<'a> {
     pub raw_src: &'a str,
     pub src: Vec<&'a str>,
-    pub cached_formats: HashMap<Location, String>,
+    pub cached_formats: HashMap<LineColumn, String>,
     pub comments: VecDeque<usize>,
     pub out: Buffer,
-}
-
-#[derive(Clone, Copy, Hash, PartialEq, Eq, Debug)]
-pub struct Location {
-    pub line: usize,
-    pub col: usize,
-}
-impl Location {
-    pub fn new(start: LineColumn) -> Self {
-        Self {
-            line: start.line,
-            col: start.column,
-        }
-    }
 }
 
 impl<'a> Writer<'a> {
@@ -49,6 +35,20 @@ impl<'a> Writer<'a> {
 
     pub fn consume(self) -> Option<String> {
         Some(self.out.buf)
+    }
+
+    pub fn write_body(&mut self, body: &TemplateBody) -> Result {
+        match body.roots.len() {
+            0 => {}
+            1 if matches!(body.roots[0], BodyNode::Text(_)) => {
+                write!(self.out, " ")?;
+                self.write_ident(&body.roots[0])?;
+                write!(self.out, " ")?;
+            }
+            _ => self.write_body_indented(&body.roots)?,
+        }
+
+        Ok(())
     }
 
     // Expects to be written directly into place
@@ -269,7 +269,7 @@ impl<'a> Writer<'a> {
 
                 condition_len + value_len + 6
             }
-            ElementAttrValue::AttrLiteral(lit) => lit_to_string(lit).len(),
+            ElementAttrValue::AttrLiteral(lit) => lit.to_string().len(),
             ElementAttrValue::Shorthand(expr) => expr.span().line_length(),
             ElementAttrValue::AttrExpr(expr) => {
                 let out = self.retrieve_formatted_expr(expr);
@@ -346,7 +346,7 @@ impl<'a> Writer<'a> {
 
     #[allow(clippy::map_entry)]
     pub fn retrieve_formatted_expr(&mut self, expr: &Expr) -> &str {
-        let loc = Location::new(expr.span().start());
+        let loc = expr.span().start();
 
         if !self.cached_formats.contains_key(&loc) {
             let formatted = self.unparse_expr(expr);

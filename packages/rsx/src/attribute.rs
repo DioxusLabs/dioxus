@@ -13,7 +13,7 @@ use syn::{
     PathArguments, Token,
 };
 
-use super::literal::RsxLiteral;
+use super::literal::HotLiteral;
 
 /// A property value in the from of a `name: value` pair with an optional comma.
 /// Note that the colon and value are optional in the case of shorthand attributes. We keep them around
@@ -82,7 +82,7 @@ impl Parse for Attribute {
                         match stmt {
                             syn::Stmt::Expr(exp, None) => {
                                 // Try parsing the statement as an IfmtInput by passing it through tokens
-                                let value: Result<RsxLiteral, syn::Error> =
+                                let value: Result<HotLiteral, syn::Error> =
                                     syn::parse2(quote! { #exp });
 
                                 match value {
@@ -97,7 +97,7 @@ impl Parse for Attribute {
                     },
                 }
             }
-        } else if RsxLiteral::peek(&content) {
+        } else if HotLiteral::peek(&content) {
             let value = content.parse()?;
             AttributeValue::AttrLiteral(value)
         } else if content.peek(Token![move]) || content.peek(Token![|]) {
@@ -145,7 +145,7 @@ impl Attribute {
         match (&self.value, &other.value) {
             (AttributeValue::AttrLiteral(lit), AttributeValue::AttrLiteral(other_lit)) => {
                 match (&lit.value, &lit.value) {
-                    (HotLiteral::Fmted(a), HotLiteral::Fmted(b)) => {
+                    (HotLiteralType::Fmted(a), HotLiteralType::Fmted(b)) => {
                         todo!()
                     }
                     (othera, otherb) if othera == otherb => usize::MAX,
@@ -157,7 +157,7 @@ impl Attribute {
         }
     }
 
-    pub fn as_lit(&self) -> Option<&RsxLiteral> {
+    pub fn as_lit(&self) -> Option<&HotLiteral> {
         match &self.value {
             AttributeValue::AttrLiteral(lit) => Some(lit),
             _ => None,
@@ -165,7 +165,7 @@ impl Attribute {
     }
 
     /// Run this closure against the attribute if it's hotreloadable
-    pub fn with_hr(&self, f: impl FnOnce(&RsxLiteral)) {
+    pub fn with_hr(&self, f: impl FnOnce(&HotLiteral)) {
         if let AttributeValue::AttrLiteral(ifmt) = &self.value {
             f(ifmt);
         }
@@ -174,7 +174,7 @@ impl Attribute {
     pub fn ifmt(&self) -> Option<&IfmtInput> {
         match &self.value {
             AttributeValue::AttrLiteral(lit) => match &lit.value {
-                HotLiteral::Fmted(input) => Some(input),
+                HotLiteralType::Fmted(input) => Some(input),
                 _ => None,
             },
             _ => None,
@@ -184,7 +184,7 @@ impl Attribute {
     pub fn as_static_str_literal(&self) -> Option<(&AttributeName, &IfmtInput)> {
         match &self.value {
             AttributeValue::AttrLiteral(lit) => match &lit.value {
-                HotLiteral::Fmted(input) if input.is_static() => Some((&self.name, input)),
+                HotLiteralType::Fmted(input) if input.is_static() => Some((&self.name, input)),
                 _ => None,
             },
             _ => None,
@@ -540,7 +540,7 @@ pub enum AttributeValue {
     /// attribute: "value"
     /// attribute: bool,
     /// attribute: 1,
-    AttrLiteral(RsxLiteral),
+    AttrLiteral(HotLiteral),
 
     /// A series of tokens that represent an event handler
     ///
@@ -574,156 +574,6 @@ impl AttributeValue {
             Self::AttrExpr(expr) => expr.span(),
             Self::EventTokens(closure) => closure.span(),
         }
-    }
-
-    fn combine(&self, separator: &str, other: &Self) -> Self {
-        // // Simple case: if both are literals, we can just create a new static string
-        // // Otherwise we'll need to create a format string and join them
-        // if let Self::AttrLiteral(lit) = self {
-        //     if let Self::AttrLiteral(other_lit) = other {
-        //         if let (HotLiteral::Fmted(fmt), HotLiteral::Fmted(other_fmt)) =
-        //             (&lit.value, &other_lit.value)
-        //         {
-        //             let fmt = fmt.clone().join(other_fmt.clone(), separator);
-        //             return Self::AttrLiteral(RsxLiteral {
-        //                 raw: syn::Lit::Str(fmt.source.clone().unwrap()),
-        //                 value: HotLiteral::Fmted(fmt),
-        //                 hr_idx: lit.hr_idx.clone(),
-        //             });
-        //         }
-        //     }
-        // }
-
-        // // Otherwise, create a new format string to join these two.
-        // let mut ifmt = IfmtInput::default();
-
-        // match self {
-        //     Self::AttrLiteral(lit) => {
-        //         ifmt.push_lit(lit.clone());
-        //     }
-        //     Self::AttrExpr(expr) => {
-        //         ifmt.push_expr(expr.clone());
-        //     }
-        //     Self::AttrOptionalExpr { condition, value } => {
-        //         let first_as_string = value.to_str_expr();
-        //         ifmt.push_expr(parse_quote! {
-        //             {
-        //                 let mut __combined = String::new();
-        //                 if #condition {
-        //                     __combined.push_str(&#first_as_string);
-        //                 }
-        //                 __combined
-        //             }
-        //         });
-        //     }
-        //     _ => unreachable!("Invalid combination of attributes"),
-        // }
-
-        // match other {
-        //     Self::AttrLiteral(lit) => {
-        //         ifmt.push_lit(lit.clone());
-        //     }
-        //     Self::AttrExpr(expr) => {
-        //         ifmt.push_expr(expr.clone());
-        //     }
-        //     Self::AttrOptionalExpr { condition, value } => {
-        //         let first_as_string = value.to_str_expr();
-        //         ifmt.push_expr(parse_quote! {
-        //             {
-        //                 let mut __combined = String::new();
-        //                 if #condition {
-        //                     __combined.push_str(&#first_as_string);
-        //                 }
-        //                 __combined
-        //             }
-        //         });
-        //     }
-        //     _ => unreachable!("Invalid combination of attributes"),
-        // }
-
-        todo!()
-        // match (self, other) {
-        //     (Self::AttrLiteral(lit1), Self::AttrLiteral(lit2)) => {
-        //         let fmt = lit1.clone().join(lit2.clone(), separator);
-        //         Self::AttrLiteral(fmt)
-        //     }
-        //     (Self::AttrLiteral(expr1), Self::AttrExpr(expr2)) => {
-        //         let mut ifmt = expr1.clone();
-        //         ifmt.push_str(separator);
-        //         ifmt.push_expr(expr2.clone());
-        //         Self::AttrLiteral(ifmt)
-        //     }
-        //     (Self::AttrExpr(expr1), Self::AttrLiteral(expr2)) => {
-        //         let mut ifmt = expr2.clone();
-        //         ifmt.push_str(separator);
-        //         ifmt.push_expr(expr1.clone());
-        //         Self::AttrLiteral(ifmt)
-        //     }
-        //     (Self::AttrExpr(expr1), Self::AttrExpr(expr2)) => {
-        //         let mut ifmt = IfmtInput::default();
-        //         ifmt.push_expr(expr1.clone());
-        //         ifmt.push_str(separator);
-        //         ifmt.push_expr(expr2.clone());
-        //         Self::AttrLiteral(ifmt)
-        //     }
-        //     (
-        //         Self::AttrOptionalExpr {
-        //             condition: condition1,
-        //             value: value1,
-        //         },
-        //         Self::AttrOptionalExpr {
-        //             condition: condition2,
-        //             value: value2,
-        //         },
-        //     ) => {
-        //         let first_as_string = value1.to_str_expr();
-        //         let second_as_string = value2.to_str_expr();
-        //         Self::AttrExpr(parse_quote! {
-        //             {
-        //                 let mut __combined = String::new();
-        //                 if #condition1 {
-        //                     __combined.push_str(&#first_as_string);
-        //                 }
-        //                 if #condition2 {
-        //                     if __combined.len() > 0 {
-        //                         __combined.push_str(&#separator);
-        //                     }
-        //                     __combined.push_str(&#second_as_string);
-        //                 }
-        //                 __combined
-        //             }
-        //         })
-        //     }
-        //     (Self::AttrOptionalExpr { condition, value }, other) => {
-        //         let first_as_string = value.to_str_expr();
-        //         let second_as_string = other.to_str_expr();
-        //         Self::AttrExpr(parse_quote! {
-        //             {
-        //                 let mut __combined = #second_as_string;
-        //                 if #condition {
-        //                     __combined.push_str(&#separator);
-        //                     __combined.push_str(&#first_as_string);
-        //                 }
-        //                 __combined
-        //             }
-        //         })
-        //     }
-        //     (other, Self::AttrOptionalExpr { condition, value }) => {
-        //         let first_as_string = other.to_str_expr();
-        //         let second_as_string = value.to_str_expr();
-        //         Self::AttrExpr(parse_quote! {
-        //             {
-        //                 let mut __combined = #first_as_string;
-        //                 if #condition {
-        //                     __combined.push_str(&#separator);
-        //                     __combined.push_str(&#second_as_string);
-        //                 }
-        //                 __combined
-        //             }
-        //         })
-        //     }
-        //     _ => unreachable!("Invalid combination of attributes"),
-        // }
     }
 }
 

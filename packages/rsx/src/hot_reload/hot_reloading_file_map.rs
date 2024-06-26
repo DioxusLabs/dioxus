@@ -3,11 +3,13 @@ use super::{
     ChangedRsx,
 };
 use crate::{
-    innerlude::{CallBody, HotLiteral, RsxLiteral},
+    innerlude::{CallBody, HotLiteral, HotLiteralType},
     HotReloadingContext,
 };
 use dioxus_core::{
-    prelude::{FmtedSegments, HotReloadLiteral, TemplateAttribute, TemplateNode},
+    prelude::{
+        FmtedSegments, HotReloadLiteral, HotreloadedLiteral, TemplateAttribute, TemplateNode,
+    },
     Template,
 };
 use krates::cm::MetadataCommand;
@@ -24,7 +26,7 @@ use syn::spanned::Spanned;
 pub enum UpdateResult {
     UpdatedRsx {
         templates: Vec<Template>,
-        changed_lits: HashMap<String, HotReloadLiteral>,
+        changed_lits: Vec<HotreloadedLiteral>,
     },
 
     NeedsRebuild,
@@ -155,7 +157,7 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
         };
 
         let mut template_list: Vec<Template> = Vec::new();
-        let mut changed_strings: HashMap<String, HotReloadLiteral> = HashMap::new();
+        let mut changed_strings: Vec<HotreloadedLiteral> = Vec::new();
 
         for calls in instances.into_iter() {
             let ChangedRsx { old, new } = calls;
@@ -225,7 +227,10 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
 
             // // And then any formatted strings
             for (key, value) in results.changed_lits {
-                changed_strings.insert(key, value);
+                changed_strings.push(HotreloadedLiteral {
+                    name: key,
+                    value: HotReloadLiteral::from(value),
+                });
             }
         }
 

@@ -1,7 +1,4 @@
-use crate::{ifmt_to_string, lit_to_string, prettier_please::unparse_expr, Writer};
-use dioxus_rsx::Attribute as AttributeType;
-use dioxus_rsx::AttributeName as ElementAttrName;
-use dioxus_rsx::AttributeValue as ElementAttrValue;
+use crate::{prettier_please::unparse_expr, Writer};
 use dioxus_rsx::*;
 use proc_macro2::Span;
 use quote::ToTokens;
@@ -9,7 +6,7 @@ use std::{
     fmt::Result,
     fmt::{self, Write},
 };
-use syn::{spanned::Spanned, token::Brace, Expr, Stmt};
+use syn::{spanned::Spanned, token::Brace, Expr};
 
 #[derive(Debug)]
 enum ShortOptimization {
@@ -145,7 +142,7 @@ impl Writer<'_> {
 
     fn write_attributes(
         &mut self,
-        attributes: &[AttributeType],
+        attributes: &[Attribute],
         spreads: &[Spread],
         props_same_line: bool,
         brace: &Brace,
@@ -204,7 +201,7 @@ impl Writer<'_> {
         Ok(())
     }
 
-    fn write_attribute(&mut self, attr: &AttributeType) -> Result {
+    fn write_attribute(&mut self, attr: &Attribute) -> Result {
         self.write_attribute_name(&attr.name)?;
 
         // if the attribute is a shorthand, we don't need to write the colon, just the name
@@ -216,12 +213,12 @@ impl Writer<'_> {
         Ok(())
     }
 
-    fn write_attribute_name(&mut self, attr: &ElementAttrName) -> Result {
+    fn write_attribute_name(&mut self, attr: &AttributeName) -> Result {
         match attr {
-            ElementAttrName::BuiltIn(name) => {
+            AttributeName::BuiltIn(name) => {
                 write!(self.out, "{}", name)?;
             }
-            ElementAttrName::Custom(name) => {
+            AttributeName::Custom(name) => {
                 write!(self.out, "{}", name.to_token_stream())?;
             }
         }
@@ -229,9 +226,9 @@ impl Writer<'_> {
         Ok(())
     }
 
-    fn write_attribute_value(&mut self, value: &ElementAttrValue) -> Result {
+    fn write_attribute_value(&mut self, value: &AttributeValue) -> Result {
         match value {
-            ElementAttrValue::AttrOptionalExpr { condition, value } => {
+            AttributeValue::AttrOptionalExpr { condition, value } => {
                 write!(
                     self.out,
                     "if {condition} {{ ",
@@ -240,17 +237,17 @@ impl Writer<'_> {
                 self.write_attribute_value(value)?;
                 write!(self.out, " }}")?;
             }
-            ElementAttrValue::AttrLiteral(value) => {
-                write!(self.out, "{value}", value = lit_to_string(value))?;
+            AttributeValue::AttrLiteral(value) => {
+                write!(self.out, "{value}", value = value.to_string())?;
             }
-            ElementAttrValue::Shorthand(value) => {
+            AttributeValue::Shorthand(value) => {
                 write!(self.out, "{value}",)?;
             }
-            ElementAttrValue::EventTokens(closure) => {
+            AttributeValue::EventTokens(closure) => {
                 self.write_partial_closure(closure)?;
             }
 
-            ElementAttrValue::AttrExpr(value) => {
+            AttributeValue::AttrExpr(value) => {
                 let pretty_expr = self.retrieve_formatted_expr(value).to_string();
                 self.write_mulitiline_tokens(pretty_expr)?;
             }
@@ -354,7 +351,7 @@ impl Writer<'_> {
         }
 
         match children {
-            [BodyNode::Text(ref text)] => Some(ifmt_to_string(&text.input).len()),
+            [BodyNode::Text(ref text)] => Some(text.input.to_quoted_string_from_parts().len()),
 
             // TODO: let rawexprs to be inlined
             [BodyNode::RawExpr(ref expr)] => Some(get_expr_length(expr.span())),
@@ -442,12 +439,12 @@ fn raw_braced_expr() {
 
     let raw_expr = &block.stmts[0];
 
-    let Stmt::Expr(exp, semi) = raw_expr else {
+    let syn::Stmt::Expr(exp, _semi) = raw_expr else {
         panic!("Expected an expression")
     };
 
     let tokens = exp.to_token_stream();
-    let block: BracedRawExpr = syn::parse2(tokens).unwrap();
+    let block: PartialExpr = syn::parse2(tokens).unwrap();
     dbg!(block.span());
     dbg!(block.span().start(), block.span().end());
 

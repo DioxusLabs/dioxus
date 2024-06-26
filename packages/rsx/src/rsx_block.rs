@@ -21,7 +21,7 @@ use syn::{
     PathArguments, Token,
 };
 
-use super::literal::RsxLiteral;
+use super::literal::HotLiteral;
 
 /// An item in the form of
 ///

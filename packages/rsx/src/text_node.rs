@@ -2,7 +2,7 @@ use location::DynIdx;
 use proc_macro2::TokenStream as TokenStream2;
 use syn::LitStr;
 
-use self::literal::{HotLiteral, RsxLiteral};
+use self::literal::{HotLiteral, HotLiteralType};
 use super::*;
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
@@ -34,10 +34,9 @@ impl ToTokens for TextNode {
             // todo:
             // Use the RsxLiteral implementation to spit out a hotreloadable variant of this string
             // This is not super efficient since we're doing a bit of cloning
-            let as_lit = RsxLiteral {
+            let as_lit = HotLiteral {
                 hr_idx: self.hr_idx.clone(),
-                raw: syn::Lit::Str(txt.source.as_ref().unwrap().clone()),
-                value: HotLiteral::Fmted(txt.clone()),
+                value: HotLiteralType::Fmted(txt.clone()),
             };
 
             tokens.append_all(quote! {
@@ -48,14 +47,6 @@ impl ToTokens for TextNode {
 }
 
 impl TextNode {
-    pub fn from_text(input: &str) -> Self {
-        Self {
-            input: IfmtInput::new_static(input),
-            hr_idx: DynIdx::default(),
-            dyn_idx: DynIdx::default(),
-        }
-    }
-
     pub fn from_listr(input: LitStr) -> Self {
         Self {
             input: IfmtInput::new_litstr(input),
@@ -71,7 +62,7 @@ impl TextNode {
     pub fn to_template_node(&self) -> TemplateNode {
         match self.is_static() {
             true => {
-                let text = self.input.source.as_ref().unwrap();
+                let text = self.input.source.clone();
                 let text = intern(text.value().as_str());
                 TemplateNode::Text { text }
             }
@@ -85,7 +76,7 @@ impl TextNode {
 #[test]
 fn parses() {
     let input = syn::parse2::<TextNode>(quote! { "hello world" }).unwrap();
-    assert_eq!(input.input.source.unwrap().value(), "hello world");
+    assert_eq!(input.input.source.value(), "hello world");
 }
 
 #[test]
@@ -97,15 +88,6 @@ fn to_tokens_with_hr() {
 #[test]
 fn raw_str() {
     let input = syn::parse2::<TextNode>(quote! { r#"hello world"# }).unwrap();
-    println!(
-        "{}",
-        input
-            .input
-            .source
-            .as_ref()
-            .unwrap()
-            .to_token_stream()
-            .to_string()
-    );
-    assert_eq!(input.input.source.unwrap().value(), "hello world");
+    println!("{}", input.input.source.to_token_stream().to_string());
+    assert_eq!(input.input.source.value(), "hello world");
 }

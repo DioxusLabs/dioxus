@@ -1,5 +1,6 @@
 use crate::innerlude::*;
 use proc_macro2::{Span, TokenStream as TokenStream2};
+use proc_macro2_diagnostics::SpanDiagnosticExt;
 use quote::{quote, ToTokens, TokenStreamExt};
 use std::fmt::{Display, Formatter};
 use syn::{
@@ -183,14 +184,13 @@ impl Element {
 
     /// Collapses ifmt attributes into a single dynamic attribute using a space or `;` as a delimiter
     ///
+    /// ```
     /// div {
     ///     class: "abc-def",
     ///     class: if some_expr { "abc" },
     /// }
-    ///
+    /// ```
     fn merge_attributes(&mut self) {
-        return;
-
         for attr in self.raw_attributes.iter() {
             // Collect all the attributes with the same name
             let matching_attrs = self
@@ -209,41 +209,61 @@ impl Element {
             // This will be done by creating an ifmt attribute that combines all the segments
             // We might want to throw a diagnostic of trying to merge things together that might not
             // make a whole lot of sense - like merging two exprs together
-            let mut out_fmt = IfmtInput::default();
+
+            // The segments that we'll be combining
+            let mut segments = vec![];
+
+            // And then then fake source we're going to assign to it
+            let mut out_raw = String::new();
 
             for (idx, matching_attr) in matching_attrs.iter().enumerate() {
                 // If this is the first attribute, then we don't need to add a delimiter
                 if idx != 0 {
-                    out_fmt.push_str(match attr.name.ident_to_str().as_str() {
-                        "class" => " ",
-                        "style" => ";",
-                        _ => " ",
-                    });
+                    // FIXME: I don't want to special case anything - but our delimiter is special cased to a space
+                    // We really don't want to special case anything in the macro, but the hope here is that
+                    // multiline strings can be merged with a space
+                    out_raw.push_str(" ");
+                    segments.push(Segment::Literal(" ".to_string()));
                 }
 
+                // we only allow merging of format types
+                // IE you can't merge an expression with a boolean - that doesn't make sense
+                // we in theory could support more types - merging expressions with strings is *okay* -ish
+                // but you can also just drop an expression into a format string
                 match &matching_attr.value {
-                    AttributeValue::Shorthand(lit) => out_fmt.push_ident(lit.clone()),
-                    AttributeValue::AttrExpr(lit) => out_fmt.push_expr(lit.clone()),
                     AttributeValue::AttrLiteral(lit) => {
                         // If the literal is a formatted string, then we'll just join it
                         // Otherwise literals are just pushed as is
                         match &lit.value {
-                            HotLiteral::Fmted(new) => out_fmt = out_fmt.join(new.clone(), ""),
-                            HotLiteral::Float(raw) => out_fmt.push_str(raw.to_string().as_str()),
-                            HotLiteral::Int(raw) => out_fmt.push_str(raw.to_string().as_str()),
-                            HotLiteral::Bool(raw) => {
-                                out_fmt.push_str(raw.value().to_string().as_str())
+                            HotLiteralType::Fmted(new) => {
+                                out_raw.push_str(&new.source.value());
+                                segments.extend(new.segments.clone());
+                            }
+                            _lit => {
+                                self.diagnostics
+                                    .push(lit.span().error("Cannot merge non-fmt literals").help(
+                                        "Only formatted strings can be merged together. If you want to merge literals, you can use a format string.",
+                                    ));
+                                continue;
                             }
                         }
                     }
-                    AttributeValue::EventTokens(_) => todo!(),
-                    AttributeValue::AttrOptionalExpr { condition, value } => {}
+
+                    non_lit => {
+                        self.diagnostics
+                            .push(non_lit.span().error("Cannot merge non-literals").help(
+                                "Only formatted strings can be merged together. If you want to merge literals, you can use a format string.",
+                            ));
+                        continue;
+                    }
                 }
             }
 
-            let out_lit = RsxLiteral {
-                raw: syn::Lit::Str(out_fmt.source.clone().unwrap()),
-                value: HotLiteral::Fmted(out_fmt),
+            let out_lit = HotLiteral {
+                value: HotLiteralType::Fmted(IfmtInput {
+                    source: LitStr::new(&out_raw, attr.span()),
+                    segments,
+                }),
                 hr_idx: Default::default(),
             };
 
@@ -500,4 +520,9 @@ fn merging_weird_fails() {
             contenteditable: true,
         }
     };
+
+    let parsed: Element = syn::parse2(input).unwrap();
+
+    assert!(parsed.merged_attributes.len() == 0);
+    assert!(parsed.diagnostics.len() == 4);
 }

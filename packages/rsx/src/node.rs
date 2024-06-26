@@ -21,7 +21,7 @@ pub enum BodyNode {
     Text(TextNode),
 
     /// {expr}
-    RawExpr(BracedRawExpr),
+    RawExpr(PartialExpr),
 
     /// for item in items {}
     ForLoop(ForLoop),
@@ -167,7 +167,7 @@ impl BodyNode {
                 }
             }
             BodyNode::Text(text) if text.is_static() => {
-                let text = text.input.source.as_ref().unwrap();
+                let text = text.input.source.clone();
                 let text = intern(text.value().as_str());
                 TemplateNode::Text { text }
             }

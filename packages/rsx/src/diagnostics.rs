@@ -28,6 +28,10 @@ impl Diagnostics {
     pub fn into_diagnostics(self) -> Vec<Diagnostic> {
         self.diagnostics
     }
+
+    pub fn len(&self) -> usize {
+        self.diagnostics.len()
+    }
 }
 
 impl PartialEq for Diagnostics {

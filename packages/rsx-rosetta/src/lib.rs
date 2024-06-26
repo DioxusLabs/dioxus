@@ -6,7 +6,7 @@ use convert_case::{Case, Casing};
 use dioxus_html::{map_html_attribute_to_rsx, map_html_element_to_rsx};
 use dioxus_rsx::{
     Attribute, AttributeName, AttributeValue, BodyNode, CallBody, Component, Element, ElementName,
-    IfmtInput, RsxLiteral, TemplateBody, TextNode,
+    IfmtInput, HotLiteral, TemplateBody, TextNode,
 };
 pub use html_parser::{Dom, Node};
 use proc_macro2::{Ident, Span};
@@ -174,10 +174,10 @@ fn ifmt_from_text(text: &str) -> IfmtInput {
     }
 }
 
-fn literal_from_text(text: &str) -> RsxLiteral {
+fn literal_from_text(text: &str) -> HotLiteral {
     let lit_str = LitStr::new(text, Span::call_site());
-    RsxLiteral {
-        value: dioxus_rsx::HotLiteral::Fmted(IfmtInput {
+    HotLiteral {
+        value: dioxus_rsx::HotLiteralType::Fmted(IfmtInput {
             source: Some(lit_str.clone()),
             segments: vec![],
         }),

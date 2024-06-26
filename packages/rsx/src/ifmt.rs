@@ -1,4 +1,4 @@
-use crate::{intern, location::DynIdx, reload_stack::ReloadStack, PrettyUnparse};
+use crate::{intern, location::DynIdx, reload_stack::ReloadStack};
 use dioxus_core::prelude::{FmtSegment, FmtedSegments};
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
@@ -9,9 +9,9 @@ use syn::{
 };
 
 /// A hot-reloadable formatted string, boolean, number or other literal
-#[derive(Debug, Eq, Clone, Hash, Default)]
+#[derive(Debug, Eq, Clone, Hash)]
 pub struct IfmtInput {
-    pub source: Option<LitStr>,
+    pub source: LitStr,
     pub segments: Vec<Segment>,
 }
 
@@ -24,37 +24,15 @@ impl PartialEq for IfmtInput {
 }
 
 impl IfmtInput {
-    pub fn new_static(input: &str) -> Self {
-        Self {
-            source: None,
-            segments: vec![Segment::Literal(input.to_string())],
-        }
-    }
-
     pub fn new_litstr(input: LitStr) -> Self {
         Self {
             segments: vec![Segment::Literal(input.value())],
-            source: Some(input),
+            source: input,
         }
     }
 
-    pub fn join(mut self, other: Self, separator: &str) -> Self {
-        if !self.segments.is_empty() {
-            self.segments.push(Segment::Literal(separator.to_string()));
-        }
-        self.segments.extend(other.segments);
-        if let Some(source) = &other.source {
-            self.source = Some(LitStr::new(
-                &format!(
-                    "{}{}{}",
-                    self.source.as_ref().unwrap().value(),
-                    separator,
-                    source.value()
-                ),
-                source.span(),
-            ));
-        }
-        self
+    pub fn span(&self) -> Span {
+        self.source.span()
     }
 
     pub fn push_ident(&mut self, ident: Ident) {
@@ -69,16 +47,6 @@ impl IfmtInput {
             format_args: String::new(),
             segment: FormattedSegmentType::Expr(Box::new(expr)),
         }));
-    }
-
-    pub fn push_str(&mut self, s: &str) {
-        self.segments.push(Segment::Literal(s.to_string()));
-        if let Some(source) = &self.source {
-            self.source = Some(LitStr::new(
-                &format!("{}{}", source.value(), s),
-                source.span(),
-            ));
-        }
     }
 
     pub fn is_static(&self) -> bool {
@@ -256,32 +224,31 @@ impl IfmtInput {
 
     /// Convert the ifmt to a string, using the source if available
     pub fn to_quoted_string_from_parts(&self) -> String {
-        if let Some(source) = &self.source {
-            return source.to_token_stream().to_string();
-        }
+        self.source.to_token_stream().to_string()
+        // if self.segments.len() == 1 {
+        //     return self.source.to_token_stream().to_string();
+        // }
 
-        let joined = self
-            .segments
-            .iter()
-            .map(|seg| match seg {
-                Segment::Literal(lit) => lit.clone(),
-                Segment::Formatted(FormattedSegment { segment, .. }) => match segment {
-                    FormattedSegmentType::Expr(expr) => expr.to_token_stream().to_string(),
-                    FormattedSegmentType::Ident(ident) => ident.to_string(),
-                },
-            })
-            .collect::<Vec<_>>()
-            .join("");
+        // let joined = self
+        //     .segments
+        //     .iter()
+        //     .map(|seg| match seg {
+        //         Segment::Literal(lit) => lit.clone(),
+        //         Segment::Formatted(FormattedSegment {
+        //             segment,
+        //             format_args,
+        //         }) => {
+        //             //
+        //         }
+        //     })
+        //     .collect::<Vec<_>>()
+        //     .join("");
 
-        // todo: maybe escape the string?
-        format!("\"{}\"", joined)
+        // // todo: maybe escape the string?
+        // format!("\"{}\"", joined)
     }
-}
 
-impl FromStr for IfmtInput {
-    type Err = syn::Error;
-
-    fn from_str(input: &str) -> Result<Self> {
+    fn from_raw(input: &str) -> Result<Vec<Segment>> {
         let mut chars = input.chars().peekable();
         let mut segments = Vec::new();
         let mut current_literal = String::new();
@@ -345,10 +312,7 @@ impl FromStr for IfmtInput {
             segments.push(Segment::Literal(current_literal));
         }
 
-        Ok(Self {
-            segments,
-            source: None,
-        })
+        Ok(segments)
     }
 }
 
@@ -388,10 +352,7 @@ impl ToTokens for IfmtInput {
             }
         }
 
-        let span = match self.source.as_ref() {
-            Some(source) => source.span(),
-            None => Span::call_site(),
-        };
+        let span = self.span();
 
         let positional_args = self.segments.iter().filter_map(|seg| {
             if let Segment::Formatted(FormattedSegment { segment, .. }) = seg {
@@ -482,100 +443,155 @@ impl ToTokens for FormattedSegmentType {
     }
 }
 
+impl FromStr for IfmtInput {
+    type Err = syn::Error;
+
+    fn from_str(input: &str) -> Result<Self> {
+        let segments = IfmtInput::from_raw(input)?;
+        Ok(Self {
+            source: LitStr::new(input, Span::call_site()),
+            segments,
+        })
+    }
+}
+
 impl Parse for IfmtInput {
     fn parse(input: ParseStream) -> Result<Self> {
-        let input: LitStr = input.parse()?;
-        let input_str = input.value();
-        let mut ifmt = IfmtInput::from_str(&input_str)?;
-        ifmt.source = Some(input);
-        Ok(ifmt)
+        let source: LitStr = input.parse()?;
+        let segments = IfmtInput::from_raw(&source.value())?;
+        Ok(Self { source, segments })
     }
 }
 
-/// Ensure the scoring algorithm works
-///
-/// - usize::MAX is return for perfect overlap
-/// - 0 is returned when the right case has segments not found in the first
-/// - a number for the other cases where there is some non-perfect overlap
-#[test]
-fn ifmt_scoring() {
-    let left: IfmtInput = "{abc} {def}".parse().unwrap();
-    let right: IfmtInput = "{abc}".parse().unwrap();
-    assert_eq!(left.hr_score(&right), 1);
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::PrettyUnparse;
 
-    let left: IfmtInput = "{abc} {def}".parse().unwrap();
-    let right: IfmtInput = "{abc} {def}".parse().unwrap();
-    assert_eq!(left.hr_score(&right), usize::MAX);
+    /// Ensure the scoring algorithm works
+    ///
+    /// - usize::MAX is return for perfect overlap
+    /// - 0 is returned when the right case has segments not found in the first
+    /// - a number for the other cases where there is some non-perfect overlap
+    #[test]
+    fn ifmt_scoring() {
+        let left: IfmtInput = "{abc} {def}".parse().unwrap();
+        let right: IfmtInput = "{abc}".parse().unwrap();
+        assert_eq!(left.hr_score(&right), 1);
 
-    let left: IfmtInput = "{abc} {def}".parse().unwrap();
-    let right: IfmtInput = "{abc} {ghi}".parse().unwrap();
-    assert_eq!(left.hr_score(&right), 0);
+        let left: IfmtInput = "{abc} {def}".parse().unwrap();
+        let right: IfmtInput = "{abc} {def}".parse().unwrap();
+        assert_eq!(left.hr_score(&right), usize::MAX);
 
-    let left: IfmtInput = "{abc} {def}".parse().unwrap();
-    let right: IfmtInput = "{abc} {def} {ghi}".parse().unwrap();
-    assert_eq!(left.hr_score(&right), 0);
+        let left: IfmtInput = "{abc} {def}".parse().unwrap();
+        let right: IfmtInput = "{abc} {ghi}".parse().unwrap();
+        assert_eq!(left.hr_score(&right), 0);
 
-    let left: IfmtInput = "{abc} {def} {ghi}".parse().unwrap();
-    let right: IfmtInput = "{abc} {def}".parse().unwrap();
-    assert_eq!(left.hr_score(&right), 2);
+        let left: IfmtInput = "{abc} {def}".parse().unwrap();
+        let right: IfmtInput = "{abc} {def} {ghi}".parse().unwrap();
+        assert_eq!(left.hr_score(&right), 0);
 
-    let left: IfmtInput = "{abc}".parse().unwrap();
-    let right: IfmtInput = "{abc} {def}".parse().unwrap();
-    assert_eq!(left.hr_score(&right), 0);
+        let left: IfmtInput = "{abc} {def} {ghi}".parse().unwrap();
+        let right: IfmtInput = "{abc} {def}".parse().unwrap();
+        assert_eq!(left.hr_score(&right), 2);
 
-    let left: IfmtInput = "{abc} {abc} {def}".parse().unwrap();
-    let right: IfmtInput = "{abc} {def}".parse().unwrap();
-    assert_eq!(left.hr_score(&right), 2);
+        let left: IfmtInput = "{abc}".parse().unwrap();
+        let right: IfmtInput = "{abc} {def}".parse().unwrap();
+        assert_eq!(left.hr_score(&right), 0);
 
-    let left: IfmtInput = "{abc} {abc}".parse().unwrap();
-    let right: IfmtInput = "{abc} {abc}".parse().unwrap();
-    assert_eq!(left.hr_score(&right), usize::MAX);
+        let left: IfmtInput = "{abc} {abc} {def}".parse().unwrap();
+        let right: IfmtInput = "{abc} {def}".parse().unwrap();
+        assert_eq!(left.hr_score(&right), 2);
 
-    let left: IfmtInput = "{abc} {def}".parse().unwrap();
-    let right: IfmtInput = "{hij}".parse().unwrap();
-    assert_eq!(left.hr_score(&right), 0);
+        let left: IfmtInput = "{abc} {abc}".parse().unwrap();
+        let right: IfmtInput = "{abc} {abc}".parse().unwrap();
+        assert_eq!(left.hr_score(&right), usize::MAX);
 
-    let left: IfmtInput = "{abc}".parse().unwrap();
-    let right: IfmtInput = "thing {abc}".parse().unwrap();
-    assert_eq!(left.hr_score(&right), usize::MAX - 1);
+        let left: IfmtInput = "{abc} {def}".parse().unwrap();
+        let right: IfmtInput = "{hij}".parse().unwrap();
+        assert_eq!(left.hr_score(&right), 0);
 
-    let left: IfmtInput = "thing {abc}".parse().unwrap();
-    let right: IfmtInput = "{abc}".parse().unwrap();
-    assert_eq!(left.hr_score(&right), usize::MAX - 1);
+        let left: IfmtInput = "{abc}".parse().unwrap();
+        let right: IfmtInput = "thing {abc}".parse().unwrap();
+        assert_eq!(left.hr_score(&right), usize::MAX - 1);
 
-    let left: IfmtInput = "{abc} {def}".parse().unwrap();
-    let right: IfmtInput = "thing {abc}".parse().unwrap();
-    assert_eq!(left.hr_score(&right), 1);
-}
+        let left: IfmtInput = "thing {abc}".parse().unwrap();
+        let right: IfmtInput = "{abc}".parse().unwrap();
+        assert_eq!(left.hr_score(&right), usize::MAX - 1);
 
-#[test]
-fn stack_scoring() {
-    let mut stack: ReloadStack<IfmtInput> = ReloadStack::new(
-        vec![
-            "{abc} {def}".parse().unwrap(),
-            "{def}".parse().unwrap(),
-            "{hij}".parse().unwrap(),
-        ]
-        .into_iter(),
-    );
-
-    let tests = vec![
-        //
-        "thing {def}",
-        "thing {abc}",
-        "thing {hij}",
-    ];
-
-    for item in tests {
-        let score = stack.highest_score(|f| f.hr_score(&item.parse().unwrap()));
-
-        dbg!(item, score);
+        let left: IfmtInput = "{abc} {def}".parse().unwrap();
+        let right: IfmtInput = "thing {abc}".parse().unwrap();
+        assert_eq!(left.hr_score(&right), 1);
     }
-}
 
-#[test]
-fn raw_tokens() {
-    let input = syn::parse2::<IfmtInput>(quote! { r#"hello world"# }).unwrap();
-    println!("{}", input.to_token_stream().pretty_unparse());
-    assert_eq!(input.source.unwrap().value(), "hello world");
+    #[test]
+    fn stack_scoring() {
+        let mut stack: ReloadStack<IfmtInput> = ReloadStack::new(
+            vec![
+                "{abc} {def}".parse().unwrap(),
+                "{def}".parse().unwrap(),
+                "{hij}".parse().unwrap(),
+            ]
+            .into_iter(),
+        );
+
+        let tests = vec![
+            //
+            "thing {def}",
+            "thing {abc}",
+            "thing {hij}",
+        ];
+
+        for item in tests {
+            let score = stack.highest_score(|f| f.hr_score(&item.parse().unwrap()));
+
+            dbg!(item, score);
+        }
+    }
+
+    #[test]
+    fn raw_tokens() {
+        let input = syn::parse2::<IfmtInput>(quote! { r#"hello world"# }).unwrap();
+        println!("{}", input.to_token_stream().pretty_unparse());
+        assert_eq!(input.source.value(), "hello world");
+    }
+
+    #[test]
+    fn segments_parse() {
+        let input = "blah {abc} {def}".parse::<IfmtInput>().unwrap();
+        assert_eq!(
+            input.segments,
+            vec![
+                Segment::Literal("blah ".to_string()),
+                Segment::Formatted(FormattedSegment {
+                    format_args: String::new(),
+                    segment: FormattedSegmentType::Ident(Ident::new("abc", Span::call_site()))
+                }),
+                Segment::Literal(" ".to_string()),
+                Segment::Formatted(FormattedSegment {
+                    format_args: String::new(),
+                    segment: FormattedSegmentType::Ident(Ident::new("def", Span::call_site()))
+                }),
+            ]
+        );
+    }
+
+    #[test]
+    fn printing_raw() {
+        let input = syn::parse2::<IfmtInput>(quote! { "hello {world}" }).unwrap();
+        println!("{}", input.to_quoted_string_from_parts());
+
+        let input = syn::parse2::<IfmtInput>(quote! { "hello {world} {world} {world}" }).unwrap();
+        println!("{}", input.to_quoted_string_from_parts());
+
+        let input = syn::parse2::<IfmtInput>(quote! { "hello {world} {world} {world()}" }).unwrap();
+        println!("{}", input.to_quoted_string_from_parts());
+
+        let input =
+            syn::parse2::<IfmtInput>(quote! { r#"hello {world} {world} {world()}"# }).unwrap();
+        println!("{}", input.to_quoted_string_from_parts());
+
+        let input = syn::parse2::<IfmtInput>(quote! { r#"hello"# }).unwrap();
+        println!("{}", input.to_quoted_string_from_parts());
+    }
 }

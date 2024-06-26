@@ -15,12 +15,12 @@ pub(crate) fn intern<T: Eq + Hash + Send + Sync + ?Sized + 'static>(
 }
 
 /// These are just helpful methods for tests to pretty print the token stream - they are not used in the actual code
-// #[cfg(test)]
+#[cfg(test)]
 pub trait PrettyUnparse {
     fn pretty_unparse(&self) -> String;
 }
 
-// #[cfg(test)]
+#[cfg(test)]
 impl PrettyUnparse for TokenStream2 {
     fn pretty_unparse(&self) -> String {
         let parsed = syn::parse2::<syn::Expr>(self.clone()).unwrap();

@@ -233,10 +233,10 @@ impl HotReload {
                 let idx = old_attr.as_lit().unwrap().hr_idx.get();
                 let location = self.make_location(idx);
                 let lit = match &new_attr.as_lit().unwrap().value {
-                    HotLiteral::Float(f) => HotReloadLiteral::Float(f.base10_parse().unwrap()),
-                    HotLiteral::Int(f) => HotReloadLiteral::Int(f.base10_parse().unwrap()),
-                    HotLiteral::Bool(f) => HotReloadLiteral::Bool(f.value),
-                    HotLiteral::Fmted(f) => {
+                    HotLiteralType::Float(f) => HotReloadLiteral::Float(f.base10_parse().unwrap()),
+                    HotLiteralType::Int(f) => HotReloadLiteral::Int(f.base10_parse().unwrap()),
+                    HotLiteralType::Bool(f) => HotReloadLiteral::Bool(f.value),
+                    HotLiteralType::Fmted(f) => {
                         HotReloadLiteral::Fmted(f.fmt_segments(old_attr.ifmt().unwrap())?)
                     }
                 };
@@ -348,7 +348,7 @@ impl HotReload {
                     match score_attribute(&old_attr, &new_attr) {
                         // Same - nothing to do
                         // we need to temporarily consider literals as volatile
-                        usize::MAX if !matches!(b.value, HotLiteral::Bool(_)) => {}
+                        usize::MAX if !matches!(b.value, HotLiteralType::Bool(_)) => {}
 
                         // Mismatch - we need to force a rebuild
                         0 => return None,
@@ -359,14 +359,14 @@ impl HotReload {
                                 self.make_location(old_attr.as_lit().unwrap().hr_idx.get());
 
                             let lit = match &b.value {
-                                HotLiteral::Float(f) => {
+                                HotLiteralType::Float(f) => {
                                     HotReloadLiteral::Float(f.base10_parse().unwrap())
                                 }
-                                HotLiteral::Int(f) => {
+                                HotLiteralType::Int(f) => {
                                     HotReloadLiteral::Int(f.base10_parse().unwrap())
                                 }
-                                HotLiteral::Bool(f) => HotReloadLiteral::Bool(f.value),
-                                HotLiteral::Fmted(f) => HotReloadLiteral::Fmted(
+                                HotLiteralType::Bool(f) => HotReloadLiteral::Bool(f.value),
+                                HotLiteralType::Fmted(f) => HotReloadLiteral::Fmted(
                                     f.fmt_segments(new_attr.ifmt().unwrap())?,
                                 ),
                             };
@@ -566,7 +566,7 @@ fn score_attribute(old_attr: &Attribute, new_attr: &Attribute) -> usize {
             // We assign perfect matches for token resuse, to minimize churn on the renderer
             match (&left.value, &right.value) {
                 // Quick shortcut if there's no change
-                (HotLiteral::Fmted(old), HotLiteral::Fmted(new)) => {
+                (HotLiteralType::Fmted(old), HotLiteralType::Fmted(new)) => {
                     if new == old {
                         return usize::MAX;
                     }
@@ -576,14 +576,14 @@ fn score_attribute(old_attr: &Attribute, new_attr: &Attribute) -> usize {
                     old.hr_score(new)
                 }
 
-                (HotLiteral::Float(a), HotLiteral::Float(b)) if a == b => usize::MAX,
-                (HotLiteral::Float(_), HotLiteral::Float(_)) => 1,
+                (HotLiteralType::Float(a), HotLiteralType::Float(b)) if a == b => usize::MAX,
+                (HotLiteralType::Float(_), HotLiteralType::Float(_)) => 1,
 
-                (HotLiteral::Int(a), HotLiteral::Int(b)) if a == b => usize::MAX,
-                (HotLiteral::Int(_), HotLiteral::Int(_)) => 1,
+                (HotLiteralType::Int(a), HotLiteralType::Int(b)) if a == b => usize::MAX,
+                (HotLiteralType::Int(_), HotLiteralType::Int(_)) => 1,
 
-                (HotLiteral::Bool(a), HotLiteral::Bool(b)) if a == b => usize::MAX,
-                (HotLiteral::Bool(_), HotLiteral::Bool(_)) => 1,
+                (HotLiteralType::Bool(a), HotLiteralType::Bool(b)) if a == b => usize::MAX,
+                (HotLiteralType::Bool(_), HotLiteralType::Bool(_)) => 1,
                 _ => 0,
             }
         }
