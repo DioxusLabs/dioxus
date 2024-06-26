@@ -17,11 +17,21 @@ pub fn take_server_data<T: DeserializeOwned>() -> Result<Option<T>, TakeDataErro
     })
 }
 
-pub(crate) fn set_server_data(data: HTMLDataCursor) {
+/// Run a closure with the server data
+pub(crate) fn with_server_data<O>(server_data: HTMLDataCursor, f: impl FnOnce() -> O) -> O {
+    // Set the server data that will be used during hydration
+    set_server_data(server_data);
+    let out = f();
+    // Hydrating the suspense node **should** eat all the server data, but just in case, remove it
+    remove_server_data();
+    out
+}
+
+fn set_server_data(data: HTMLDataCursor) {
     SERVER_DATA.with_borrow_mut(|server_data| *server_data = Some(data));
 }
 
-pub(crate) fn remove_server_data() {
+fn remove_server_data() {
     SERVER_DATA.with_borrow_mut(|server_data| server_data.take());
 }
 

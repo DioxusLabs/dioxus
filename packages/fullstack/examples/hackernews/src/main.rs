@@ -37,24 +37,22 @@ pub fn App() -> Element {
 fn Homepage(story: ReadOnlySignal<PreviewState>) -> Element {
     rsx! {
         div { display: "flex", flex_direction: "row", width: "100%",
-            ErrorBoundary {
-                div {
-                    width: "50%",
-                    SuspenseBoundary {
-                        fallback: |context: SuspenseContext| rsx! {
-                            "Loading..."
-                        },
-                        Stories {}
-                    }
+            div {
+                width: "50%",
+                SuspenseBoundary {
+                    fallback: |context: SuspenseContext| rsx! {
+                        "Loading..."
+                    },
+                    Stories {}
                 }
-                div { width: "50%",
-                    SuspenseBoundary {
-                        fallback: |context: SuspenseContext| rsx! {
-                            "Loading preview..."
-                        },
-                        Preview {
-                            story
-                        }
+            }
+            div { width: "50%",
+                SuspenseBoundary {
+                    fallback: |context: SuspenseContext| rsx! {
+                        "Loading preview..."
+                    },
+                    Preview {
+                        story
                     }
                 }
             }

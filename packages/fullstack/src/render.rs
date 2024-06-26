@@ -217,15 +217,11 @@ impl SsrRendererPool {
             let mut initial_frame = renderer.render(&virtual_dom);
 
             // Collect the initial server data from the root node. For most apps, no use_server_futures will be resolved initially, so this will be full on `None`s.
-            // TODO: Allow sync initial data
-            // if let Err(err) = push_server_data(
-            //     &virtual_dom,
-            //     ScopeId::ROOT,
-            //     Mount::default(),
-            //     &mut initial_frame,
-            // ) {
-            //     throw_error!(err);
-            // }
+            // Sending down those Nones are still important to tell the client not to run the use_server_futures that are already running on the backend
+            let resolved_data = serialize_server_data(&virtual_dom, ScopeId::ROOT);
+            initial_frame.push_str(&format!(
+                r#"<script>window.initial_dioxus_hydration_data="{resolved_data}";</script>"#,
+            ));
 
             // Along with the initial frame, we render the html after the main element, but before the body tag closes. This should include the script that starts loading the wasm bundle.
             if let Err(err) = wrapper.render_after_main(&mut initial_frame) {

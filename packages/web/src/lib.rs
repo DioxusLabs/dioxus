@@ -86,7 +86,21 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
         #[cfg(feature = "hydrate")]
         {
             websys_dom.only_write_templates = true;
-            dom.rebuild(&mut websys_dom);
+            // Get the initial hydration data from the client
+            #[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
+                export function get_initial_hydration_data() {
+                    const decoded = atob(window.initial_dioxus_hydration_data);
+                    return Uint8Array.from(decoded, (c) => c.charCodeAt(0))
+                }
+            "#)]
+            extern "C" {
+                fn get_initial_hydration_data() -> js_sys::Uint8Array;
+            }
+            let hydration_data = get_initial_hydration_data().to_vec();
+            let server_data = HTMLDataCursor::from_serialized(&hydration_data);
+            with_server_data(server_data, || {
+                dom.rebuild(&mut websys_dom);
+            });
             websys_dom.only_write_templates = false;
 
             let rx = websys_dom.rehydrate(&dom).unwrap();

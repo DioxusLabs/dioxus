@@ -1,9 +1,9 @@
 import "./hydrate_types";
 
 export function register_rehydrate_chunk_for_streaming(
-  callback: (id: number, data: Uint8Array) => void
+  callback: (id: number[], data: Uint8Array) => void
 ): void {
-  window.hydration_callback = (id: number, data: Uint8Array) => {
+  window.hydration_callback = (id: number[], data: Uint8Array) => {
     callback(id, data);
   };
   for (let i = 0; i < window.hydrate_queue.length; i++) {

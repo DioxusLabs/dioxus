@@ -1,10 +1,6 @@
 use dioxus_lib::prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{
-    cell::{Cell, RefCell},
-    future::Future,
-    rc::Rc,
-};
+use std::{cell::RefCell, future::Future, rc::Rc};
 
 /// Runs a future with a manual list of dependencies and returns a resource with the result if the future is finished or a suspended error if it is still running.
 ///

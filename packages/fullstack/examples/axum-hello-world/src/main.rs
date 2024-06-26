@@ -38,14 +38,16 @@ fn app() -> Element {
             div {
                 "Hello world"
             }
-            for i in count()..count() + 200 {
+            for i in count()..count() + 50 {
                 // Imagine, we just resolve this suspense boundary. We pass down whatever data we resolved with it and None for any unresolved server functions in nested server functions [Some(data), None]
                 SuspenseBoundary {
                     key: "{i}",
                     fallback: |_| rsx! {
                         "Loading..."
                     },
-                    SuspendedComponent {}
+                    div {
+                        SuspendedComponent {}
+                    }
                 }
             }
             div { "footer 123" }
@@ -57,15 +59,12 @@ fn app() -> Element {
 fn SuspendedComponent() -> Element {
     let mut count = use_signal(|| 0);
 
-    use_server_future(move || {
-        // let count = count();
-        async move {
-            async_std::task::sleep(std::time::Duration::from_millis(
-                rand::thread_rng().gen_range(0..1000) + 1000,
-            ))
-            .await;
-            1234
-        }
+    use_server_future(move || async move {
+        async_std::task::sleep(std::time::Duration::from_millis(
+            rand::thread_rng().gen_range(0..1000) + 1000,
+        ))
+        .await;
+        1234
     })?;
 
     rsx! {
@@ -78,13 +77,15 @@ fn SuspendedComponent() -> Element {
             fallback: |_| rsx! {
                 "Loading... more"
             },
-            NestedSuspendedComponent {}
+            NestedSuspendedComponent {
+                level: 10
+            }
         }
     }
 }
 
 #[component]
-fn NestedSuspendedComponent() -> Element {
+fn NestedSuspendedComponent(level: i32) -> Element {
     use_server_future(move || async move {
         async_std::task::sleep(std::time::Duration::from_millis(
             rand::thread_rng().gen_range(0..1000) + 1000,
@@ -98,6 +99,16 @@ fn NestedSuspendedComponent() -> Element {
         button {
             onclick: move |_| count += 1,
             "{count}"
+        }
+        if level > 0 {
+            SuspenseBoundary {
+                fallback: |_| rsx! {
+                    "Loading... more"
+                },
+                NestedSuspendedComponent {
+                    level: level - 1
+                }
+            }
         }
     }
 }
