@@ -23,6 +23,7 @@
 use std::{panic, rc::Rc};
 
 pub use crate::cfg::Config;
+use crate::hydration::SuspenseMessage;
 use dioxus_core::VirtualDom;
 use futures_util::{pin_mut, select, FutureExt, StreamExt};
 
@@ -40,9 +41,8 @@ mod eval;
 #[cfg(all(feature = "hot_reload", debug_assertions))]
 mod hot_reload;
 
-#[cfg(feature = "hydrate")]
 mod hydration;
-#[cfg(feature = "hydrate")]
+#[allow(unused)]
 pub use hydration::*;
 
 /// Runs the app as a future that can be scheduled around the main thread.
@@ -79,7 +79,7 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
 
     tracing::info!("rebuilding app");
 
-    let mut hydration_receiver: Option<futures_channel::mpsc::UnboundedReceiver<(u32, Vec<u8>)>> =
+    let mut hydration_receiver: Option<futures_channel::mpsc::UnboundedReceiver<SuspenseMessage>> =
         None;
 
     if should_hydrate {
@@ -112,7 +112,7 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
         #[cfg(all(feature = "hot_reload", debug_assertions))]
         let template;
         #[allow(unused)]
-        let mut hydration_work: Option<(u32, Vec<u8>)> = None;
+        let mut hydration_work: Option<SuspenseMessage> = None;
 
         {
             let work = dom.wait_for_work().fuse();

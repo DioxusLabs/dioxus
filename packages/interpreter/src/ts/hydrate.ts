@@ -12,16 +12,15 @@ export function register_rehydrate_chunk_for_streaming(
   }
 }
 
-export function dx_swap(suspense_placeholder_id: number) {
+export function dx_swap(suspense_placeholder_id: number[]) {
   // Get the template that marks the start of the placeholder we are replacing
-  const placeholder_id = `ds-${suspense_placeholder_id}`;
+  const comma_separated_id = suspense_placeholder_id.join(",");
+  const placeholder_id = `ds-${comma_separated_id}`;
   const startPlaceholder = document.getElementById(placeholder_id);
   // Get the node we are replacing it with
-  const target = document.getElementById(`ds-${suspense_placeholder_id + 1}`);
+  const target = document.getElementById(`ds-${comma_separated_id}-r`);
   console.log(
-    `swapping id ${suspense_placeholder_id} with id ${
-      suspense_placeholder_id + 1
-    }`
+    `swapping id ${suspense_placeholder_id} with id ${comma_separated_id}-r`
   );
   // Replace the placeholder with the children of the resolved div
   // First delete all nodes between the template and the comment <!--ds-{id}--> that marks the end of the placeholder

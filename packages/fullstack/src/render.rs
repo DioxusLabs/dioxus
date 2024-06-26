@@ -174,7 +174,7 @@ impl SsrRendererPool {
                 return;
             }
 
-            let stream = Arc::new(RwLock::new(StreamingRenderer::new(pre_body, into)));
+            let stream = Arc::new(StreamingRenderer::new(pre_body, into));
             let scope_to_mount_mapping = Arc::new(RwLock::new(HashMap::new()));
 
             renderer.pre_render = true;
@@ -188,7 +188,7 @@ impl SsrRendererPool {
                         .filter(|s| s.suspended())
                         .is_some();
                     if is_suspense_boundary {
-                        let mount = stream.write().unwrap().render_placeholder(
+                        let mount = stream.render_placeholder(
                             |to| renderer.render_scope(to, vdom, scope),
                             &mut *to,
                         )?;
@@ -202,7 +202,7 @@ impl SsrRendererPool {
 
             macro_rules! throw_error {
                 ($e:expr) => {
-                    stream.write().unwrap().close_with_error($e);
+                    stream.close_with_error($e);
                     return;
                 };
             }
@@ -231,7 +231,7 @@ impl SsrRendererPool {
             if let Err(err) = wrapper.render_after_main(&mut initial_frame) {
                 throw_error!(err);
             }
-            stream.write().unwrap().render(initial_frame);
+            stream.render(initial_frame);
 
             // After the initial render, we need to resolve suspense
             while virtual_dom.suspended_tasks_remaining() {
@@ -253,20 +253,16 @@ impl SsrRendererPool {
                         let mut lock = scope_to_mount_mapping.write().unwrap();
                         lock.remove(&scope).unwrap()
                     };
-                    let mut new_html = String::new();
-                    renderer.reset_hydration();
-                    if let Err(err) = renderer.render_scope(&mut new_html, &virtual_dom, scope) {
-                        throw_error!(
-                            dioxus_ssr::incremental::IncrementalRendererError::RenderError(err)
-                        );
-                    }
                     let mut resolved_chunk = String::new();
-                    let mut stream_mut = stream.write().unwrap();
                     // After we replace the placeholder in the dom with javascript, we need to send down the resolved data so that the client can hydrate the node
+                    let render_suspense = |into: &mut String| {
+                        renderer.reset_hydration();
+                        renderer.render_scope(into, &virtual_dom, scope)
+                    };
                     let resolved_data = serialize_server_data(&virtual_dom, scope);
-                    if let Err(err) = stream_mut.replace_placeholder(
+                    if let Err(err) = stream.replace_placeholder(
                         mount,
-                        new_html,
+                        render_suspense,
                         resolved_data,
                         &mut resolved_chunk,
                     ) {
@@ -274,8 +270,9 @@ impl SsrRendererPool {
                             dioxus_ssr::incremental::IncrementalRendererError::RenderError(err)
                         );
                     }
+                    println!("resolved chunk: {resolved_chunk}");
 
-                    stream_mut.render(resolved_chunk);
+                    stream.render(resolved_chunk);
                 }
             }
             tracing::info!("Suspense resolved");
@@ -300,7 +297,7 @@ impl SsrRendererPool {
                 }
             }
 
-            stream.write().unwrap().render(post_streaming);
+            stream.render(post_streaming);
 
             renderer.reset_render_components();
             myself.renderers.write().unwrap().push(renderer);

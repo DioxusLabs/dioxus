@@ -32,11 +32,39 @@
 
 use futures_channel::mpsc::Sender;
 
-use std::fmt::{Display, Write};
+use std::{
+    fmt::{Display, Write},
+    sync::{Arc, RwLock},
+};
+
+/// Sections are identified by a unique id based on the suspense path. We only track the path of suspense boundaries because the client may render different components than the server.
+#[derive(Clone, Debug, Default)]
+struct MountPath {
+    parent: Option<Arc<MountPath>>,
+    id: usize,
+}
+
+impl MountPath {
+    fn child(&self) -> Self {
+        Self {
+            parent: Some(Arc::new(self.clone())),
+            id: 0,
+        }
+    }
+}
+
+impl Display for MountPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(parent) = &self.parent {
+            write!(f, "{},", parent)?;
+        }
+        write!(f, "{}", self.id)
+    }
+}
 
 pub struct StreamingRenderer<E = std::convert::Infallible> {
-    channel: Sender<Result<String, E>>,
-    last_mount_id: usize,
+    channel: RwLock<Sender<Result<String, E>>>,
+    current_path: RwLock<MountPath>,
 }
 
 impl<E> StreamingRenderer<E> {
@@ -46,59 +74,70 @@ impl<E> StreamingRenderer<E> {
         _ = render_into.start_send(Ok(start_html));
 
         Self {
-            channel: render_into,
-            // We start on id 2 because the first id is reserved for the initial html chunk sent to the client
-            last_mount_id: 2,
+            channel: render_into.into(),
+            current_path: Default::default(),
         }
     }
 
     /// Render a new chunk of html that will never change
-    pub fn render(&mut self, html: impl Display) {
-        _ = self.channel.start_send(Ok(html.to_string()));
+    pub fn render(&self, html: impl Display) {
+        _ = self
+            .channel
+            .write()
+            .unwrap()
+            .start_send(Ok(html.to_string()));
     }
 
     /// Render a new chunk of html that may change
     pub fn render_placeholder<W: Write + ?Sized>(
-        &mut self,
+        &self,
         html: impl FnOnce(&mut W) -> std::fmt::Result,
         into: &mut W,
     ) -> Result<Mount, std::fmt::Error> {
-        let id = self.last_mount_id;
-        // Increment the id by 2 so that we don't re use the same id again.
-        // The next id is reserved for the id that will replace this node
-        self.last_mount_id += 2;
+        let id = self.current_path.read().unwrap().clone();
+        // Increment the id for the next placeholder
+        self.current_path.write().unwrap().id += 1;
         write!(into, r#"<template id="ds-{id}"></template>"#)?;
+        // While we are inside the placeholder, set the suspense path to the suspense boundary that we are rendering
+        let old_path = std::mem::replace(&mut *self.current_path.write().unwrap(), id.child());
         html(into)?;
+        // Restore the old path
+        *self.current_path.write().unwrap() = old_path;
         write!(into, r#"<!--ds-{id}-->"#)?;
         Ok(Mount { id })
     }
 
     /// Replace a placeholder that was rendered previously
     pub fn replace_placeholder<W: Write + ?Sized>(
-        &mut self,
+        &self,
         id: Mount,
-        html: impl Display,
+        html: impl FnOnce(&mut W) -> std::fmt::Result,
         data: impl Display,
         into: &mut W,
     ) -> std::fmt::Result {
         // Then replace the suspense placeholder with the new content
-        let resolved_id = id.id + 1;
+        write!(into, r#"<div id="ds-{id}-r" hidden>"#)?;
+        // While we are inside the placeholder, set the suspense path to the suspense boundary that we are rendering
+        let old_path = std::mem::replace(&mut *self.current_path.write().unwrap(), id.id.child());
+        html(into)?;
+        // Restore the old path
+        *self.current_path.write().unwrap() = old_path;
         write!(
             into,
-            r#"<div id="ds-{resolved_id}" hidden>{html}</div><script>window.dx_hydrate({id}, "{data}")</script>"#
+            r#"</div><script>window.dx_hydrate([{id}], "{data}")</script>"#
         )
     }
 
     /// Close the stream with an error
-    pub fn close_with_error(&mut self, error: E) {
-        _ = self.channel.start_send(Err(error));
+    pub fn close_with_error(&self, error: E) {
+        _ = self.channel.write().unwrap().start_send(Err(error));
     }
 }
 
 /// A mounted placeholder in the dom that may change in the future
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Mount {
-    id: usize,
+    id: MountPath,
 }
 
 impl Display for Mount {

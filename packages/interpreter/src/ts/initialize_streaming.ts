@@ -4,7 +4,7 @@ import "./hydrate_types";
 window.hydrate_queue = [];
 
 // @ts-ignore
-window.dx_hydrate = (id: number, data: string) => {
+window.dx_hydrate = (id: number[], data: string) => {
   // First convert the base64 encoded string to a Uint8Array
   const decoded = atob(data);
   const bytes = Uint8Array.from(decoded, (c) => c.charCodeAt(0));

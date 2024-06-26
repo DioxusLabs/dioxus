@@ -48,10 +48,10 @@ pub mod minimal_bindings {
     extern "C" {
         /// Register a callback that that will be called to hydrate a node at the given id with data from the server
         pub fn register_rehydrate_chunk_for_streaming(
-            closure: &wasm_bindgen::closure::Closure<dyn FnMut(u32, js_sys::Uint8Array)>,
+            closure: &wasm_bindgen::closure::Closure<dyn FnMut(Vec<u32>, js_sys::Uint8Array)>,
         );
 
         /// Swap the streaming chunk with the id into the dom
-        pub fn dx_swap(id: u32);
+        pub fn dx_swap(id: &[u32]);
     }
 }

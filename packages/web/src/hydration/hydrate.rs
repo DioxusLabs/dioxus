@@ -1,3 +1,10 @@
+//! When hydrating streaming components:
+//! 1. Just hydrate the template on the outside
+//! 2. As we render the virtual dom initially, keep track of the server ids of the suspense boundaries
+//! 3. Register a callback for dx_hydrate(id, data) that takes some new data, reruns the suspense boundary with that new data and then rehydrates the node
+
+use std::fmt::Write;
+
 use crate::dom::WebsysDom;
 use crate::set_server_data;
 use crate::HTMLDataCursor;
@@ -8,10 +15,7 @@ use dioxus_interpreter_js::minimal_bindings::dx_swap;
 use futures_channel::mpsc::UnboundedReceiver;
 use RehydrationError::*;
 
-// When hydrating streaming components:
-// 1. Just hydrate the template on the outside
-// 2. As we render the virtual dom initially, keep track of the server ids of the suspense boundaries
-// 3. Register a callback for dx_hydrate(id, data) that takes some new data, reruns the suspense boundary with that new data and then rehydrates the node
+use super::SuspenseMessage;
 
 #[derive(Debug)]
 #[non_exhaustive]
@@ -24,41 +28,89 @@ pub(crate) enum RehydrationError {
     ElementNotFound,
 }
 
+#[derive(Debug)]
+struct SuspenseHydrationIdsNode {
+    /// The scope id of the suspense boundary
+    scope_id: ScopeId,
+    /// Children of this node
+    children: Vec<SuspenseHydrationIdsNode>,
+}
+
+impl SuspenseHydrationIdsNode {
+    fn new(scope_id: ScopeId) -> Self {
+        Self {
+            scope_id,
+            children: Vec::new(),
+        }
+    }
+
+    fn traverse(&self, path: &[u32]) -> Option<&Self> {
+        match path {
+            [] => Some(self),
+            [id, rest @ ..] => self.children.get(*id as usize)?.traverse(rest),
+        }
+    }
+
+    fn traverse_mut(&mut self, path: &[u32]) -> Option<&mut Self> {
+        match path {
+            [] => Some(self),
+            [id, rest @ ..] => self.children.get_mut(*id as usize)?.traverse_mut(rest),
+        }
+    }
+}
+
 /// Streaming hydration happens in waves. The server assigns suspense hydrations ids based on the order
 /// the suspense boundaries are discovered in which should be consistent on the client and server.
 ///
 /// This struct keeps track of the order the suspense boundaries are discovered in on the client so we can map the id in the dom to the scope we need to rehydrate.
 ///
 /// Diagram: https://excalidraw.com/#json=GVECyN5gf03RtYEqVq89a,ejIUIzmECANM7bDN0n4UOg
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub(crate) struct SuspenseHydrationIds {
     /// A dense mapping from traversal order to the scope id of the suspense boundary
     /// The suspense boundary may be unmounted if the component was removed after partial hydration on the client
-    ids: Vec<ScopeId>,
+    children: Vec<SuspenseHydrationIdsNode>,
+    current_path: Vec<u32>,
 }
 
 impl SuspenseHydrationIds {
     /// Add a suspense boundary to the list of suspense boundaries. This should only be called on the root scope after the first rebuild (which happens on the server) and on suspense boundaries that are resolved from the server.
     /// Running this on a scope that is only created on the client may cause hydration issues.
-    fn add_suspense_boundary(&mut self, id: ScopeId) -> usize {
+    fn add_suspense_boundary(&mut self, id: ScopeId) -> Vec<u32> {
         tracing::trace!("Adding suspense boundary {:?}", id);
-        let index = self.ids.len();
-        self.ids.push(id);
-        index
+        let mut new_path = self.current_path.clone();
+        match self.current_path.as_slice() {
+            // This is a root node, add the new node
+            [] => {
+                let children_len = self.children.len();
+                new_path.push(children_len as u32);
+                self.children.push(SuspenseHydrationIdsNode::new(id));
+            }
+            // This isn't a root node, traverse into children and add the new node
+            [first_index, rest @ ..] => {
+                let child_node = self.children[*first_index as usize]
+                    .traverse_mut(rest)
+                    .unwrap();
+                let new_index = child_node.children.len();
+                child_node.children.push(SuspenseHydrationIdsNode::new(id));
+                new_path.push(new_index as u32);
+            }
+        }
+
+        new_path
     }
 
     /// Get the scope id of the suspense boundary from the id in the dom
-    fn get_suspense_boundary(&self, id: u32) -> Option<ScopeId> {
-        // Indexes come in groups of two. The first index is the unresolved id, the second is the id of the resolved boundary
-        let index = id as usize / 2 - 1;
-        tracing::trace!("Getting suspense boundary {:?}", index);
-        self.ids.get(index).copied()
+    fn get_suspense_boundary(&self, path: &[u32]) -> Option<ScopeId> {
+        tracing::trace!("Getting suspense boundary {:?}", path);
+        let root = self.children.get(path[0] as usize)?;
+        root.traverse(&path[1..]).map(|node| node.scope_id)
     }
 }
 
 impl WebsysDom {
-    pub fn rehydrate_streaming(&mut self, (id, data): (u32, Vec<u8>), dom: &mut VirtualDom) {
-        if let Err(err) = self.rehydrate_streaming_inner(id, data, dom) {
+    pub fn rehydrate_streaming(&mut self, message: SuspenseMessage, dom: &mut VirtualDom) {
+        if let Err(err) = self.rehydrate_streaming_inner(message, dom) {
             tracing::error!("Rehydration failed. {:?}", err);
             tracing::error!("Rebuild DOM into element from scratch");
         }
@@ -66,19 +118,23 @@ impl WebsysDom {
 
     fn rehydrate_streaming_inner(
         &mut self,
-        dom_id: u32,
-        data: Vec<u8>,
+        message: SuspenseMessage,
         dom: &mut VirtualDom,
     ) -> Result<(), RehydrationError> {
+        let SuspenseMessage {
+            suspense_path,
+            data,
+        } = message;
         tracing::trace!(
             "Rehydrating streaming chunk {:?}",
-            self.suspense_hydration_ids.ids
+            self.suspense_hydration_ids
         );
 
         let document = web_sys::window().unwrap().document().unwrap();
         // Before we start rehydrating the suspense boundary we need to check that the suspense boundary exists. It may have been removed on the client.
+        let suspense_placeholder_id_formatted = path_to_suspense_placeholder_id(&suspense_path);
         if document
-            .get_element_by_id(&format!("ds-{}", dom_id))
+            .get_element_by_id(&suspense_placeholder_id_formatted)
             .is_none()
         {
             return Ok(());
@@ -88,7 +144,7 @@ impl WebsysDom {
         // This may fail if the id is not parsable, or if the suspense boundary was removed after partial hydration on the client.
         let id = self
             .suspense_hydration_ids
-            .get_suspense_boundary(dom_id)
+            .get_suspense_boundary(&suspense_path)
             .ok_or(RehydrationError::SuspenseHydrationIdNotFound)?;
 
         set_server_data(HTMLDataCursor::from_serialized(&data));
@@ -104,18 +160,21 @@ impl WebsysDom {
         };
 
         tracing::trace!(
-            "hydrating elements under element with id  ds-{}",
-            dom_id + 1
+            "hydrating elements under element with id  {suspense_placeholder_id_formatted}-r",
         );
 
         let element = document
-            .get_element_by_id(&format!("ds-{}", dom_id + 1))
+            .get_element_by_id(&format!("{suspense_placeholder_id_formatted}-r"))
             .ok_or(RehydrationError::ElementNotFound)?;
 
+        // As we hydrate the suspense boundary, set the current path to the path of the suspense boundary
+        self.suspense_hydration_ids
+            .current_path
+            .clone_from(&suspense_path);
         self.start_hydration_at_scope(root_scope, dom, element)?;
 
         // After the node is hydrated, swap it into the visible dom
-        dx_swap(dom_id);
+        dx_swap(&suspense_path);
 
         Ok(())
     }
@@ -145,11 +204,14 @@ impl WebsysDom {
     pub fn rehydrate(
         &mut self,
         vdom: &VirtualDom,
-    ) -> Result<UnboundedReceiver<(u32, Vec<u8>)>, RehydrationError> {
-        let (tx, rx) = futures_channel::mpsc::unbounded();
-        let closure = move |id: u32, data: js_sys::Uint8Array| {
+    ) -> Result<UnboundedReceiver<SuspenseMessage>, RehydrationError> {
+        let (mut tx, rx) = futures_channel::mpsc::unbounded();
+        let closure = move |path: Vec<u32>, data: js_sys::Uint8Array| {
             let data = data.to_vec();
-            tx.unbounded_send((id, data)).unwrap();
+            _ = tx.start_send(SuspenseMessage {
+                suspense_path: path,
+                data,
+            });
         };
         let closure = wasm_bindgen::closure::Closure::new(closure);
         dioxus_interpreter_js::minimal_bindings::register_rehydrate_chunk_for_streaming(&closure);
@@ -178,17 +240,20 @@ impl WebsysDom {
                 // If this suspense boundary is removed before it is resolved, we need to remove the placeholders in the dom.
                 // Removing the placeholders will prevent the server from trying to update the new nodes that took its place
                 *suspense.on_resolve.borrow_mut() = Some(Box::new(move |_| {
-                    let suspense_placeholder_id =
-                        format!("ds-{}", (suspense_placeholder_id + 1) * 2);
+                    let suspense_placeholder_id_formatted =
+                        path_to_suspense_placeholder_id(&suspense_placeholder_id);
                     web_sys::console::log_1(
-                        &format!("removing suspense placeholder {}", suspense_placeholder_id)
-                            .into(),
+                        &format!(
+                            "removing suspense placeholder {}",
+                            suspense_placeholder_id_formatted
+                        )
+                        .into(),
                     );
                     if let Some(element) = web_sys::window()
                         .unwrap()
                         .document()
                         .unwrap()
-                        .get_element_by_id(&suspense_placeholder_id)
+                        .get_element_by_id(&suspense_placeholder_id_formatted)
                     {
                         element.remove();
                     }
@@ -310,4 +375,20 @@ impl WebsysDom {
         }
         Ok(())
     }
+}
+
+fn write_comma_separated(id: &[u32], into: &mut String) {
+    let mut iter = id.iter();
+    if let Some(first) = iter.next() {
+        write!(into, "{first}").unwrap();
+    }
+    for id in iter {
+        write!(into, ",{id}").unwrap();
+    }
+}
+
+fn path_to_suspense_placeholder_id(path: &[u32]) -> String {
+    let mut suspense_placeholder_id_formatted = String::from("ds-");
+    write_comma_separated(path, &mut suspense_placeholder_id_formatted);
+    suspense_placeholder_id_formatted
 }

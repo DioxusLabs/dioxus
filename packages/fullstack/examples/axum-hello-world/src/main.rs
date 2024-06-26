@@ -6,6 +6,7 @@
 
 #![allow(non_snake_case, unused)]
 use dioxus::prelude::*;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 // When hydrating nested suspense boundaries, we still need to run code in the unresolved suspense boundary to replicate what the server has already done:
@@ -43,7 +44,10 @@ fn app() -> Element {
 #[component]
 fn SuspendedComponent() -> Element {
     use_server_future(move || async move {
-        async_std::task::sleep(std::time::Duration::from_secs(1)).await;
+        async_std::task::sleep(std::time::Duration::from_millis(
+            rand::thread_rng().gen_range(0..1000),
+        ))
+        .await;
         1234
     })?;
 
@@ -67,7 +71,10 @@ fn SuspendedComponent() -> Element {
 #[component]
 fn NestedSuspendedComponent() -> Element {
     use_server_future(move || async move {
-        async_std::task::sleep(std::time::Duration::from_secs(1)).await;
+        async_std::task::sleep(std::time::Duration::from_millis(
+            rand::thread_rng().gen_range(0..1000),
+        ))
+        .await;
         12345678
     })?;
     let mut count = use_signal(|| 0);

@@ -15,8 +15,10 @@ tracing-subscriber = "0.3.17"
 reqwest = "0.11.18"
 tokio = { workspace = true, features = ["full"], optional = true }
 async-std = "1.12.0"
+rand = "0.8.5"
+getrandom = "0.2.15"
 
 [features]
 default = []
 server = ["dioxus/axum", "dep:tokio"]
-web = ["dioxus/web"]
+web = ["dioxus/web", "getrandom/js"]
