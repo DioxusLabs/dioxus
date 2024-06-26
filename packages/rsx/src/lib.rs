@@ -84,9 +84,6 @@ pub use util::*;
 pub mod hot_reload;
 
 #[cfg(feature = "hot_reload")]
-use dioxus_core::{TemplateAttribute, TemplateNode};
-
-#[cfg(feature = "hot_reload")]
 pub use hot_reload::HotReloadingContext;
 
 use quote::{quote, ToTokens, TokenStreamExt};
@@ -114,8 +111,6 @@ pub(crate) mod innerlude {
     pub use crate::hotreload::*;
     pub use crate::ifmt::*;
     pub use crate::literal::*;
-    pub use crate::location::*;
     pub use crate::reload_stack::*;
-    pub use crate::scoring::*;
     pub use crate::util::*;
 }

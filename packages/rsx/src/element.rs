@@ -249,7 +249,10 @@ impl Element {
                         }
                     }
 
-                    AttributeValue::AttrOptionalExpr { condition, value } => {
+                    AttributeValue::AttrOptionalExpr {
+                        condition: _,
+                        value,
+                    } => {
                         // If the literal is a formatted string, then we'll just join it
                         // Otherwise literals are just pushed as is
                         match value.as_ref() {

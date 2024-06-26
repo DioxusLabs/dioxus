@@ -2,14 +2,9 @@ use super::{
     hot_reload_diff::{diff_rsx, DiffResult},
     ChangedRsx,
 };
-use crate::{
-    innerlude::{HotLiteral, HotLiteralType, RsxBody},
-    HotReloadingContext,
-};
+use crate::{innerlude::RsxBody, HotReloadingContext};
 use dioxus_core::{
-    prelude::{
-        FmtedSegments, HotReloadLiteral, HotreloadedLiteral, TemplateAttribute, TemplateNode,
-    },
+    prelude::{HotReloadLiteral, HotreloadedLiteral, TemplateAttribute, TemplateNode},
     Template,
 };
 use krates::cm::MetadataCommand;

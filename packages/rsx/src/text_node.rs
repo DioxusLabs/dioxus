@@ -1,7 +1,15 @@
-use self::literal::{HotLiteral, HotLiteralType};
-use super::*;
-use location::DynIdx;
+use crate::{
+    intern,
+    literal::{HotLiteral, HotLiteralType},
+    location::DynIdx,
+    IfmtInput,
+};
+use dioxus_core::TemplateNode;
 use proc_macro2::TokenStream as TokenStream2;
+use quote::ToTokens;
+use quote::{quote, TokenStreamExt};
+use syn::parse::{Parse, ParseStream};
+use syn::Result;
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct TextNode {
@@ -63,21 +71,27 @@ impl TextNode {
     }
 }
 
-#[test]
-fn parses() {
-    let input = syn::parse2::<TextNode>(quote! { "hello world" }).unwrap();
-    assert_eq!(input.input.source.value(), "hello world");
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::PrettyUnparse;
 
-#[test]
-fn to_tokens_with_hr() {
-    let lit = syn::parse2::<TextNode>(quote! { "hi {world1} {world2} {world3}" }).unwrap();
-    println!("{}", lit.to_token_stream().pretty_unparse());
-}
+    #[test]
+    fn parses() {
+        let input = syn::parse2::<TextNode>(quote! { "hello world" }).unwrap();
+        assert_eq!(input.input.source.value(), "hello world");
+    }
 
-#[test]
-fn raw_str() {
-    let input = syn::parse2::<TextNode>(quote! { r#"hello world"# }).unwrap();
-    println!("{}", input.input.source.to_token_stream().to_string());
-    assert_eq!(input.input.source.value(), "hello world");
+    #[test]
+    fn to_tokens_with_hr() {
+        let lit = syn::parse2::<TextNode>(quote! { "hi {world1} {world2} {world3}" }).unwrap();
+        println!("{}", lit.to_token_stream().pretty_unparse());
+    }
+
+    #[test]
+    fn raw_str() {
+        let input = syn::parse2::<TextNode>(quote! { r#"hello world"# }).unwrap();
+        println!("{}", input.input.source.to_token_stream().to_string());
+        assert_eq!(input.input.source.value(), "hello world");
+    }
 }

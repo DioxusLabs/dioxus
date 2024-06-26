@@ -38,10 +38,7 @@
 
 use crate::innerlude::*;
 use crate::HotReloadingContext;
-use dioxus_core::{
-    prelude::{FmtSegment, FmtedSegments, HotReloadLiteral, Template},
-    TemplateAttribute, TemplateNode,
-};
+use dioxus_core::prelude::{HotReloadLiteral, Template};
 use std::{collections::HashMap, usize};
 
 /// The mapping of a node relative to the root of its containing template

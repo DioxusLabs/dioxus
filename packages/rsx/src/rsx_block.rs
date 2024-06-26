@@ -299,7 +299,7 @@ mod tests {
             }
         };
 
-        let block: RsxBlock = syn::parse2(complex_element).unwrap();
+        let _block: RsxBlock = syn::parse2(complex_element).unwrap();
 
         let complex_component = quote! {
             {
@@ -312,7 +312,7 @@ mod tests {
             }
         };
 
-        let block: RsxBlock = syn::parse2(complex_component).unwrap();
+        let _block: RsxBlock = syn::parse2(complex_component).unwrap();
     }
 
     #[test]
@@ -329,7 +329,7 @@ mod tests {
             }
         };
 
-        let block: RsxBlock = syn::parse2(with_hander).unwrap();
+        let _block: RsxBlock = syn::parse2(with_hander).unwrap();
     }
 
     /// Give helpful errors in the cases where the tree is malformed but we can still give a good error
@@ -459,6 +459,6 @@ mod tests {
             }
         };
 
-        let parsed: RsxBlock = syn::parse2(input).unwrap();
+        let _parsed: RsxBlock = syn::parse2(input).unwrap();
     }
 }

@@ -1,12 +1,12 @@
 use crate::{innerlude::*, HotReloadingContext};
 use dioxus_core::TemplateNode;
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::{quote, ToTokens};
+use quote::ToTokens;
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
     token::{self, Brace},
-    Expr, Ident, LitStr, Result, Token,
+    Ident, LitStr, Result, Token,
 };
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
@@ -114,14 +114,6 @@ impl Parse for BodyNode {
         // crate::Input::<InputProps<'_, i32> {}
         Ok(BodyNode::Component(stream.parse()?))
     }
-}
-
-// Checks if an ident looks like a component
-fn ident_looks_like_component(ident: &Ident) -> bool {
-    let as_string = ident.to_string();
-    let first_char = as_string.chars().next().unwrap();
-    // Components either start with an uppercase letter or have an underscore in them
-    first_char.is_ascii_uppercase() || as_string.contains('_')
 }
 
 impl ToTokens for BodyNode {
@@ -242,52 +234,58 @@ impl BodyNode {
     }
 }
 
-#[test]
-fn parsing_matches() {
-    let element = quote! { div { class: "inline-block mr-4", icons::icon_14 {} } };
-    assert!(matches!(
-        syn::parse2::<BodyNode>(element).unwrap(),
-        BodyNode::Element(_)
-    ));
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quote::quote;
 
-    let text = quote! { "Hello, world!" };
-    assert!(matches!(
-        syn::parse2::<BodyNode>(text).unwrap(),
-        BodyNode::Text(_)
-    ));
+    #[test]
+    fn parsing_matches() {
+        let element = quote! { div { class: "inline-block mr-4", icons::icon_14 {} } };
+        assert!(matches!(
+            syn::parse2::<BodyNode>(element).unwrap(),
+            BodyNode::Element(_)
+        ));
 
-    let component = quote! { Component {} };
-    assert!(matches!(
-        syn::parse2::<BodyNode>(component).unwrap(),
-        BodyNode::Component(_)
-    ));
+        let text = quote! { "Hello, world!" };
+        assert!(matches!(
+            syn::parse2::<BodyNode>(text).unwrap(),
+            BodyNode::Text(_)
+        ));
 
-    let raw_expr = quote! { { 1 + 1 } };
-    assert!(matches!(
-        syn::parse2::<BodyNode>(raw_expr).unwrap(),
-        BodyNode::RawExpr(_)
-    ));
+        let component = quote! { Component {} };
+        assert!(matches!(
+            syn::parse2::<BodyNode>(component).unwrap(),
+            BodyNode::Component(_)
+        ));
 
-    let for_loop = quote! { for item in items {} };
-    assert!(matches!(
-        syn::parse2::<BodyNode>(for_loop).unwrap(),
-        BodyNode::ForLoop(_)
-    ));
+        let raw_expr = quote! { { 1 + 1 } };
+        assert!(matches!(
+            syn::parse2::<BodyNode>(raw_expr).unwrap(),
+            BodyNode::RawExpr(_)
+        ));
 
-    let if_chain = quote! { if cond {} else if cond {} };
-    assert!(matches!(
-        syn::parse2::<BodyNode>(if_chain).unwrap(),
-        BodyNode::IfChain(_)
-    ));
+        let for_loop = quote! { for item in items {} };
+        assert!(matches!(
+            syn::parse2::<BodyNode>(for_loop).unwrap(),
+            BodyNode::ForLoop(_)
+        ));
 
-    let match_expr = quote! {
-        match blah {
-            val => rsx! { div {} },
-            other_val => rsx! { div {} }
-        }
-    };
-    assert!(matches!(
-        syn::parse2::<BodyNode>(match_expr).unwrap(),
-        BodyNode::RawExpr(_)
-    ),);
+        let if_chain = quote! { if cond {} else if cond {} };
+        assert!(matches!(
+            syn::parse2::<BodyNode>(if_chain).unwrap(),
+            BodyNode::IfChain(_)
+        ));
+
+        let match_expr = quote! {
+            match blah {
+                val => rsx! { div {} },
+                other_val => rsx! { div {} }
+            }
+        };
+        assert!(matches!(
+            syn::parse2::<BodyNode>(match_expr).unwrap(),
+            BodyNode::RawExpr(_)
+        ),);
+    }
 }

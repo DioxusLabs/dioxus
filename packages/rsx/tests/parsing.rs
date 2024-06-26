@@ -96,7 +96,7 @@ fn how_do_spans_work_again() {
 #[test]
 fn spans_from_files() {
     let contents = include_str!("./parsing/multiexpr.rsx");
-    let file = syn::parse_file(contents).unwrap();
+    let _file = syn::parse_file(contents).unwrap();
 }
 
 #[test]

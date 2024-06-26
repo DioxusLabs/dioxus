@@ -35,7 +35,7 @@ impl Diagnostics {
 }
 
 impl PartialEq for Diagnostics {
-    fn eq(&self, other: &Self) -> bool {
+    fn eq(&self, _other: &Self) -> bool {
         true
     }
 }
@@ -43,7 +43,7 @@ impl PartialEq for Diagnostics {
 impl Eq for Diagnostics {}
 
 impl std::hash::Hash for Diagnostics {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {}
+    fn hash<H: std::hash::Hasher>(&self, _state: &mut H) {}
 }
 
 impl ToTokens for Diagnostics {

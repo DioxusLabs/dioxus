@@ -2,15 +2,12 @@ use std::fmt::Display;
 
 use crate::{innerlude::*, partial_closure::PartialClosure, HotReloadingContext};
 use dioxus_core::prelude::TemplateAttribute;
-use proc_macro2::{Literal, TokenStream as TokenStream2};
-use proc_macro2_diagnostics::SpanDiagnosticExt;
+use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
 use syn::{
-    parse::{Parse, ParseBuffer, ParseStream},
+    parse::{Parse, ParseStream},
     spanned::Spanned,
-    token::{self, Brace},
-    AngleBracketedGenericArguments, Expr, ExprClosure, ExprIf, Ident, Lit, LitStr, PatLit,
-    PathArguments, Token,
+    Expr, ExprClosure, ExprIf, Ident, LitStr, Token,
 };
 
 use super::literal::HotLiteral;
@@ -389,31 +386,6 @@ impl Attribute {
                     }
                 }
             }
-        }
-    }
-
-    /// Get a score of hotreloadability of this attribute with another attribute
-    ///
-    /// usize::max is a perfect score and an immediate match
-    /// 0 is no match
-    /// All other scores are relative to the other scores
-    pub fn hotreload_score(&self, other: &Attribute) -> usize {
-        if self.name != other.name {
-            return 0;
-        }
-
-        match (&self.value, &other.value) {
-            (AttributeValue::AttrLiteral(lit), AttributeValue::AttrLiteral(other_lit)) => {
-                match (&lit.value, &lit.value) {
-                    (HotLiteralType::Fmted(a), HotLiteralType::Fmted(b)) => {
-                        todo!()
-                    }
-                    (othera, otherb) if othera == otherb => usize::MAX,
-                    _ => 0,
-                }
-            }
-            (othera, otherb) if othera == otherb => 1,
-            _ => 0,
         }
     }
 }

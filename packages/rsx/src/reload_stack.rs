@@ -75,34 +75,6 @@ impl<T> ReloadStack<T> {
         best.map(|idx| (idx, highest_score))
     }
 
-    /// Pops the element with the highest score
-    ///
-    /// This lets you prioritize elements in the stack based on a score function.
-    /// This is mostly designed for ifmt where we want to prioritize inputs with the most amount of
-    /// matching dynamic segments remaining.
-    pub fn pop_scored(&mut self, score: impl Fn(&T) -> usize) -> Option<T> {
-        let mut best = None;
-        let mut best_score = 0;
-
-        for (idx, x) in self.stack.iter_mut().enumerate() {
-            if let Some(x) = x {
-                let score = score(x);
-                if score > best_score {
-                    best = Some(idx);
-                    best_score = score;
-                }
-
-                // usize max shortcircuits the loop
-                if score == usize::MAX {
-                    break;
-                }
-            }
-        }
-
-        todo!()
-        // best.map(|idx| self.remove(idx)).flatten()
-    }
-
     pub fn is_empty(&self) -> bool {
         self.stack.is_empty()
     }
