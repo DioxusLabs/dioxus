@@ -217,7 +217,7 @@ impl<__children: SuspenseBoundaryPropsBuilder_Optional<Element>>
         let (fallback, children) = self.fields;
         let fallback = fallback.0;
         let children =
-            SuspenseBoundaryPropsBuilder_Optional::into_value(children, || VNode::empty());
+            SuspenseBoundaryPropsBuilder_Optional::into_value(children, VNode::empty);
         SuspenseBoundaryPropsWithOwner {
             inner: SuspenseBoundaryProps {
                 fallback,
