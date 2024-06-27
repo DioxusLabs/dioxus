@@ -23,6 +23,8 @@ mod render;
 
 #[cfg(feature = "server")]
 mod serve_config;
+#[cfg(feature = "server")]
+pub use serve_config::*;
 
 #[cfg(feature = "server")]
 mod server_context;
