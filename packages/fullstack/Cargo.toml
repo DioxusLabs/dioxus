@@ -40,7 +40,6 @@ tracing = { workspace = true }
 tracing-futures = { workspace = true, optional = true }
 once_cell = { workspace = true }
 tokio-util = { version = "0.7.8", features = ["rt"], optional = true }
-anymap = { version = "0.12.1", optional = true }
 async-trait = { version = "0.1.58", optional = true }
 
 serde = "1.0.159"
