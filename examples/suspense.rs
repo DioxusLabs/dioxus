@@ -46,7 +46,6 @@ fn app() -> Element {
                     }
                 }),
                 Doggo {}
-                Doggo {}
             }
         }
     }
@@ -74,8 +73,7 @@ fn Doggo() -> Element {
     let value = resource.suspend().with_loading_placeholder(|| {
         rsx! {
             div {
-                "Loading doggos"
-                LoadingDots {}
+                "Loading doggos..."
             }
         }
     })?;
@@ -92,20 +90,5 @@ fn Doggo() -> Element {
                 "retry"
             }
         },
-    }
-}
-
-#[component]
-fn LoadingDots() -> Element {
-    let mut state = use_signal(move || 0);
-    use_future(move || async move {
-        loop {
-            state.set((state() + 1) % 4);
-            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-        }
-    });
-    let dots = ".".repeat(state());
-    rsx! {
-        {dots}
     }
 }
