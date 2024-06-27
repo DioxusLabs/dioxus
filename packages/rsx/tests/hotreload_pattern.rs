@@ -4,7 +4,7 @@ use dioxus_core::prelude::Template;
 use dioxus_rsx::{
     hot_reload::{diff_rsx, template_location, ChangedRsx, DiffResult},
     hotreload::HotReload,
-    RsxBody, HotReloadingContext,
+    HotReloadingContext, RsxBody,
 };
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
@@ -44,7 +44,7 @@ fn boilerplate(old: TokenStream, new: TokenStream) -> Option<Vec<Template>> {
     hotreload_callbody::<Mock>(&old, &new, location)
 }
 
-fn full_boilerplate(old: TokenStream, new: TokenStream) -> Option<HotReload> {
+fn can_hotreload(old: TokenStream, new: TokenStream) -> Option<HotReload> {
     let old: RsxBody = syn::parse2(old).unwrap();
     let new: RsxBody = syn::parse2(new).unwrap();
 
@@ -660,7 +660,7 @@ fn simple_start() {
 
 #[test]
 fn complex_cases() {
-    let changed = full_boilerplate(
+    let changed = can_hotreload(
         quote! {
             div {
                 class: "Some {one}",
@@ -682,7 +682,7 @@ fn complex_cases() {
 
 #[test]
 fn attribute_cases() {
-    let changed = full_boilerplate(
+    let changed = can_hotreload(
         quote! {
             div {
                 class: "Some {one}",
@@ -699,21 +699,21 @@ fn attribute_cases() {
     );
     dbg!(changed.unwrap());
 
-    let changed = full_boilerplate(
+    let changed = can_hotreload(
         //
         quote! { div { class: 123 } },
         quote! { div { class: 456 } },
     );
     dbg!(changed.unwrap());
 
-    let changed = full_boilerplate(
+    let changed = can_hotreload(
         //
         quote! { div { class: 123.0 } },
         quote! { div { class: 456.0 } },
     );
     dbg!(changed.unwrap());
 
-    let changed = full_boilerplate(
+    let changed = can_hotreload(
         //
         quote! { div { class: "asd {123}", } },
         quote! { div { class: "def", } },
@@ -723,21 +723,21 @@ fn attribute_cases() {
 
 #[test]
 fn text_node_cases() {
-    let changed = full_boilerplate(
+    let changed = can_hotreload(
         //
         quote! { div { "hello {world}" } },
         quote! { div { "world {world}" } },
     );
     dbg!(changed.unwrap());
 
-    let changed = full_boilerplate(
+    let changed = can_hotreload(
         //
         quote! { div { "hello {world}" } },
         quote! { div { "world" } },
     );
     dbg!(changed.unwrap());
 
-    let changed = full_boilerplate(
+    let changed = can_hotreload(
         //
         quote! { div { "hello" } },
         quote! { div { "world {world}" } },
@@ -761,7 +761,7 @@ fn simple_carry() {
         "thing {hij}"
     };
 
-    let changed = full_boilerplate(a, b);
+    let changed = can_hotreload(a, b);
     dbg!(changed.unwrap());
 }
 
@@ -780,7 +780,7 @@ fn complex_carry_text() {
         "thing {hij}"
     };
 
-    let changed = full_boilerplate(a, b);
+    let changed = can_hotreload(a, b);
     dbg!(changed.unwrap());
 }
 
@@ -809,7 +809,7 @@ fn complex_carry() {
         }
     };
 
-    let changed = full_boilerplate(a, b);
+    let changed = can_hotreload(a, b);
     dbg!(changed.unwrap());
 }
 
@@ -834,6 +834,33 @@ fn component_with_lits() {
         }
     };
 
-    let changed = full_boilerplate(a, b);
+    let changed = can_hotreload(a, b);
+    dbg!(changed.unwrap());
+}
+
+#[test]
+fn component_with_handlers() {
+    let a = quote! {
+        Component {
+            class: 123,
+            id: 456.789,
+            other: true,
+            blah: "hello {world}",
+            on_click: |e| { println!("clicked") },
+        }
+    };
+
+    // changing lit values
+    let b = quote! {
+        Component {
+            class: 456,
+            id: 789.456,
+            other: false,
+            blah: "goodbye {world}",
+            on_click: |e| { println!("clicked") },
+        }
+    };
+
+    let changed = can_hotreload(a, b);
     dbg!(changed.unwrap());
 }

@@ -149,42 +149,6 @@ impl Attribute {
         }
     }
 
-    pub(crate) fn merge_quote(vec: &[&Self]) -> TokenStream2 {
-        todo!()
-        // // split into spread and single attributes
-        // let mut spread = vec![];
-        // let mut single = vec![];
-        // // for attr in vec.iter() {
-        // //     match attr.value {
-        // //         AttributeValue::Named(named) => single.push(named),
-        // //         AttributeValue::Spread(expr) => spread.push(expr),
-        // //     }
-        // // }
-
-        // // If all of them are single attributes, create a static slice
-        // if spread.is_empty() {
-        //     quote! {
-        //         Box::new([
-        //             #(#single),*
-        //         ])
-        //     }
-        // } else {
-        //     // Otherwise start with the single attributes and append the spread attributes
-        //     quote! {
-        //         {
-        //             let mut __attributes = vec![
-        //                 #(#single),*
-        //             ];
-        //             #(
-        //                 let mut __spread = #spread;
-        //                 __attributes.append(&mut __spread);
-        //             )*
-        //             __attributes.into_boxed_slice()
-        //         }
-        //     }
-        // }
-    }
-
     pub fn as_static_str_literal(&self) -> Option<(&AttributeName, &IfmtInput)> {
         match &self.value {
             AttributeValue::AttrLiteral(lit) => match &lit.value {
@@ -560,5 +524,25 @@ mod tests {
 
         assert!(a.is_static_str_literal());
         assert!(!b.is_static_str_literal());
+    }
+
+    #[test]
+    fn partial_eqs() {
+        // Basics
+        let a: Attribute = parse2(quote! { class: "value1" }).unwrap();
+        let b: Attribute = parse2(quote! { class: "value1" }).unwrap();
+        assert_eq!(a, b);
+
+        // Exprs
+        let a: Attribute = parse2(quote! { class: var }).unwrap();
+        let b: Attribute = parse2(quote! { class: var }).unwrap();
+        assert_eq!(a, b);
+
+        // Events
+        let a: Attribute = parse2(quote! { onclick: |e| {} }).unwrap();
+        let b: Attribute = parse2(quote! { onclick: |e| {} }).unwrap();
+        let c: Attribute = parse2(quote! { onclick: move |e| {} }).unwrap();
+        assert_eq!(a, b);
+        assert_ne!(a, c);
     }
 }

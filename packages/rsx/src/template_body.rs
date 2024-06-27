@@ -37,6 +37,7 @@
 //!     div {
 //!         class: "hello",
 //!         id: "node-{node_id}",    <--- hotreloadable with ID 0
+//!         ..props,                 <--- spreads are not reloadable
 //!
 //!         "Hello, world!           <--- not tracked but reloadable since it's just a string
 //!
@@ -154,9 +155,7 @@ impl ToTokens for TemplateBody {
             let attr = self.get_dyn_attr(path, *idx);
             let rendered = attr.rendered_as_dynamic_attr(node.el_name());
             quote::quote! {
-                Box::new([
-                    #rendered
-                ])
+                Box::new([ #rendered ])
             }
         });
 

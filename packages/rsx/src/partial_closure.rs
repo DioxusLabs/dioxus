@@ -313,4 +313,31 @@ mod tests {
         });
         parses.unwrap().as_expr().unwrap();
     }
+
+    #[test]
+    fn partial_eqs() {
+        let a: PartialClosure = syn::parse2(quote! {
+            move |e| {
+                println!("clicked!");
+            }
+        })
+        .unwrap();
+
+        let b: PartialClosure = syn::parse2(quote! {
+            move |e| {
+                println!("clicked!");
+            }
+        })
+        .unwrap();
+
+        let c: PartialClosure = syn::parse2(quote! {
+            move |e| {
+                println!("unclicked");
+            }
+        })
+        .unwrap();
+
+        assert_eq!(a, b);
+        assert_ne!(a, c);
+    }
 }
