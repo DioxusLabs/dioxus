@@ -272,13 +272,13 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     /// main.rs:
     /// ```rust, no_run
     /// # use dioxus::prelude::*;
-    /// # fn Child() -> Element { todo!() }
+    /// # fn Child() -> Element { unimplemented!() }
     /// fn app() -> Element {
     ///     let signal = use_context_provider(|| Signal::new(0));
-    ///     
+    ///
     ///     // We want to log the value of the signal whenever the app component reruns
     ///     println!("{}", *signal.read());
-    ///     
+    ///
     ///     rsx! {
     ///         button {
     ///             // If we don't want to rerun the app component when the button is clicked, we can use write_silent
@@ -294,7 +294,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     /// # use dioxus::prelude::*;
     /// fn Child() -> Element {
     ///     let signal: Signal<i32> = use_context();
-    ///     
+    ///
     ///     // It is difficult to tell that changing the button to use write_silent in the main.rs file will cause UI to be out of sync in a completely different file
     ///     rsx! {
     ///         "{signal}"
@@ -308,13 +308,13 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     /// main.rs:
     /// ```rust, no_run
     /// # use dioxus::prelude::*;
-    /// # fn Child() -> Element { todo!() }
+    /// # fn Child() -> Element { unimplemented!() }
     /// fn app() -> Element {
     ///     let mut signal = use_context_provider(|| Signal::new(0));
-    ///     
+    ///
     ///     // We want to log the value of the signal whenever the app component reruns, but we don't want to rerun the app component when the signal is updated so we use peek instead of read
     ///     println!("{}", *signal.peek());
-    ///     
+    ///
     ///     rsx! {
     ///         button {
     ///             // We can use write like normal and update the child component automatically
@@ -330,7 +330,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     /// # use dioxus::prelude::*;
     /// fn Child() -> Element {
     ///     let signal: Signal<i32> = use_context();
-    ///     
+    ///
     ///     rsx! {
     ///         "{signal}"
     ///     }
@@ -550,7 +550,7 @@ struct Counts {
 
 fn app() -> Element {
     let mut counts = use_signal(|| Counts { count1: 0, count2: 0 });
-    
+
     use_effect(move || {
         // This effect both reads and writes to counts
         counts.write().count1 = counts().count2;

@@ -454,7 +454,7 @@ impl VNode {
     /// # use dioxus::prelude::*;
     /// # let enabled = true;
     /// # #[component]
-    /// # fn Component(enabled_sign: String) -> Element { todo!() }
+    /// # fn Component(enabled_sign: String) -> Element { unimplemented!() }
     /// if enabled {
     ///     rsx!{ Component { enabled_sign: "abc" } }
     /// } else {
@@ -468,7 +468,7 @@ impl VNode {
     /// ```rust, no_run
     /// # use dioxus::prelude::*;
     /// # #[component]
-    /// # fn Component(enabled_sign: String) -> Element { todo!() }
+    /// # fn Component(enabled_sign: String) -> Element { unimplemented!() }
     /// # let enabled = true;
     /// let props = if enabled {
     ///     ComponentProps { enabled_sign: "abc".to_string() }
