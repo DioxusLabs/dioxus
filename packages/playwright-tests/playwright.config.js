@@ -91,7 +91,7 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "fullstack"),
       command:
-        "cargo run --package dioxus-cli --release -- serve --platform fullstack",
+        "cargo run --package dioxus-cli --release -- serve --platform fullstack --port 3333",
       port: 3333,
       timeout: 20 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -100,8 +100,8 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "suspense-carousel"),
       command:
-        "cargo run --package dioxus-cli --release -- serve --platform fullstack",
-      port: 3030,
+        "cargo run --package dioxus-cli --release -- serve --platform fullstack --port 4040",
+      port: 4040,
       timeout: 20 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",

@@ -46,7 +46,8 @@ members = [
     # Playwright tests
     "packages/playwright-tests/liveview",
     "packages/playwright-tests/web",
-    "packages/playwright-tests/fullstack", "packages/playwright-tests/suspense-carousel",
+    "packages/playwright-tests/fullstack",
+    "packages/playwright-tests/suspense-carousel",
 ]
 exclude = ["examples/mobile_demo", "examples/openid_connect_demo"]
 

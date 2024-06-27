@@ -769,13 +769,10 @@ dependencies = [
 name = "axum-hello-world"
 version = "0.1.0"
 dependencies = [
- "async-std",
  "dioxus",
- "getrandom 0.2.15",
- "rand 0.8.5",
  "reqwest 0.11.27",
  "serde",
- "tokio",
+ "simple_logger",
  "tracing",
  "tracing-subscriber",
  "tracing-wasm",

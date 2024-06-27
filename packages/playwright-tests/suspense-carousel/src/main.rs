@@ -2,7 +2,6 @@
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
-// When hydrating nested suspense boundaries, we still need to run code in the unresolved suspense boundary to replicate what the server has already done:
 fn app() -> Element {
     let mut count = use_signal(|| 0);
 
@@ -22,7 +21,6 @@ fn app() -> Element {
         }
         div {
             for i in count()..count() + 3 {
-                // Imagine, we just resolve this suspense boundary. We pass down whatever data we resolved with it and None for any unresolved server functions in nested server functions [Some(data), None]
                 SuspenseBoundary {
                     key: "{i}",
                     fallback: |_| rsx! {
