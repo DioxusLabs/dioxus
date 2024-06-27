@@ -230,7 +230,7 @@ macro_rules! impl_element {
         /// ```rust, no_run
         /// # use dioxus::prelude::*;
         /// # let attributes = vec![];
-        /// # fn ChildComponent() -> Element { todo!() }
+        /// # fn ChildComponent() -> Element { unimplemented!() }
         /// # let raw_expression: Element = rsx! {};
         /// rsx! {
         ///     // Elements are followed by braces that surround any attributes and children for that element
@@ -283,7 +283,7 @@ macro_rules! impl_element {
         /// ```rust, no_run
         /// # use dioxus::prelude::*;
         /// # let attributes = vec![];
-        /// # fn ChildComponent() -> Element { todo!() }
+        /// # fn ChildComponent() -> Element { unimplemented!() }
         /// # let raw_expression: Element = rsx! {};
         /// rsx! {
         ///     // Elements are followed by braces that surround any attributes and children for that element
@@ -337,7 +337,7 @@ macro_rules! impl_element {
         /// ```rust, no_run
         /// # use dioxus::prelude::*;
         /// # let attributes = vec![];
-        /// # fn ChildComponent() -> Element { todo!() }
+        /// # fn ChildComponent() -> Element { unimplemented!() }
         /// # let raw_expression: Element = rsx! {};
         /// rsx! {
         ///     // Elements are followed by braces that surround any attributes and children for that element
@@ -584,7 +584,7 @@ macro_rules! builder_constructors {
                     /// ```rust, no_run
                     /// # use dioxus::prelude::*;
                     /// # let attributes = vec![];
-                    /// # fn ChildComponent() -> Element { todo!() }
+                    /// # fn ChildComponent() -> Element { unimplemented!() }
                     /// # let raw_expression: Element = rsx! {};
                     /// rsx! {
                     ///     // Elements are followed by braces that surround any attributes and children for that element

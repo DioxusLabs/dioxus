@@ -455,7 +455,7 @@ impl<
 ///
 /// ```rust
 /// # use dioxus::prelude::*;
-/// # fn ThrowsError() -> Element { todo!() }
+/// # fn ThrowsError() -> Element { unimplemented!() }
 /// rsx! {
 ///     ErrorBoundary {
 ///         handle_error: |error| rsx! { "Oops, we encountered an error. Please report {error} to the developer of this application" },
