@@ -44,7 +44,6 @@ pub(crate) struct HTMLDataCursor {
 impl HTMLDataCursor {
     pub(crate) fn from_serialized(data: &[u8]) -> Self {
         let deserialized = ciborium::from_reader(Cursor::new(data)).unwrap();
-        tracing::trace!("Deserializing server data: {:?}", deserialized);
         Self::new(deserialized)
     }
 

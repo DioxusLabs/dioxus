@@ -318,13 +318,10 @@ impl RouterContext {
 
     pub(crate) fn render_error(&self) -> Option<Element> {
         let inner_read = self.inner.write_unchecked();
-        match inner_read.unresolved_error.as_ref() {
-            Some(error) => {
-                tracing::warn!("Failed to render: {error:?}");
-                Some((inner_read.failure_external_navigation)())
-            }
-            None => None,
-        }
+        inner_read
+            .unresolved_error
+            .as_ref()
+            .and_then(|_| (inner_read.failure_external_navigation)())
     }
 
     fn change_route(&self) -> Option<ExternalNavigationFailure> {

@@ -77,7 +77,6 @@ impl SuspenseHydrationIds {
     /// Add a suspense boundary to the list of suspense boundaries. This should only be called on the root scope after the first rebuild (which happens on the server) and on suspense boundaries that are resolved from the server.
     /// Running this on a scope that is only created on the client may cause hydration issues.
     fn add_suspense_boundary(&mut self, id: ScopeId) -> Vec<u32> {
-        tracing::trace!("Adding suspense boundary {:?}", id);
         let mut new_path = self.current_path.clone();
         match self.current_path.as_slice() {
             // This is a root node, add the new node
@@ -102,7 +101,6 @@ impl SuspenseHydrationIds {
 
     /// Get the scope id of the suspense boundary from the id in the dom
     fn get_suspense_boundary(&self, path: &[u32]) -> Option<ScopeId> {
-        tracing::trace!("Getting suspense boundary {:?}", path);
         let root = self.children.get(path[0] as usize)?;
         root.traverse(&path[1..]).map(|node| node.scope_id)
     }
@@ -112,7 +110,6 @@ impl WebsysDom {
     pub fn rehydrate_streaming(&mut self, message: SuspenseMessage, dom: &mut VirtualDom) {
         if let Err(err) = self.rehydrate_streaming_inner(message, dom) {
             tracing::error!("Rehydration failed. {:?}", err);
-            tracing::error!("Rebuild DOM into element from scratch");
         }
     }
 
@@ -125,10 +122,6 @@ impl WebsysDom {
             suspense_path,
             data,
         } = message;
-        tracing::trace!(
-            "Rehydrating streaming chunk {:?}",
-            self.suspense_hydration_ids
-        );
 
         let document = web_sys::window().unwrap().document().unwrap();
         // Before we start rehydrating the suspense boundary we need to check that the suspense boundary exists. It may have been removed on the client.
@@ -164,10 +157,6 @@ impl WebsysDom {
             // If the scope was removed on the client, we may not be able to rehydrate it, but this shouldn't cause an error
             return Ok(());
         };
-
-        tracing::trace!(
-            "hydrating elements under element with id  {suspense_placeholder_id_formatted}-r",
-        );
 
         let element = document
             .get_element_by_id(&format!("{suspense_placeholder_id_formatted}-r"))
@@ -248,13 +237,6 @@ impl WebsysDom {
                 *suspense.on_remove.borrow_mut() = Some(Box::new(move |_| {
                     let suspense_placeholder_id_formatted =
                         path_to_suspense_placeholder_id(&suspense_placeholder_id);
-                    web_sys::console::log_1(
-                        &format!(
-                            "removing suspense placeholder {}",
-                            suspense_placeholder_id_formatted
-                        )
-                        .into(),
-                    );
                     if let Some(element) = web_sys::window()
                         .unwrap()
                         .document()
@@ -299,7 +281,6 @@ impl WebsysDom {
         to_mount: &mut Vec<ElementId>,
         root_id: Option<ElementId>,
     ) -> Result<(), RehydrationError> {
-        tracing::trace!("rehydrate template node: {:?}", node);
         match node {
             TemplateNode::Element {
                 children, attrs, ..
@@ -357,7 +338,6 @@ impl WebsysDom {
         ids: &mut Vec<u32>,
         to_mount: &mut Vec<ElementId>,
     ) -> Result<(), RehydrationError> {
-        tracing::trace!("rehydrate dynamic node: {:?}", dynamic);
         match dynamic {
             dioxus_core::DynamicNode::Text(_) | dioxus_core::DynamicNode::Placeholder(_) => {
                 ids.push(

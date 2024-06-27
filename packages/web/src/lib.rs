@@ -187,7 +187,6 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
 
         #[cfg(feature = "hydrate")]
         if let Some(hydration_data) = hydration_work {
-            tracing::info!("Hydrating streaming... {:?}", hydration_data);
             websys_dom.rehydrate_streaming(hydration_data, &mut dom);
         }
 

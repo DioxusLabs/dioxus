@@ -26,7 +26,7 @@ impl<T: Clone> Copy for RouterProps<T> {}
 impl<R: Clone + 'static> Default for RouterProps<R> {
     fn default() -> Self {
         Self {
-            config: Callback::new(|()| RouterConfig::default()),
+            config: Callback::new(|_| RouterConfig::default()),
         }
     }
 }
