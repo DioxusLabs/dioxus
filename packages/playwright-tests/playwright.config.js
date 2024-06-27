@@ -82,7 +82,8 @@ module.exports = defineConfig({
     },
     {
       cwd: path.join(process.cwd(), "web"),
-      command: "cargo run --package dioxus-cli --release -- serve --port 9999",
+      command:
+        'cargo run --package dioxus-cli --release -- serve --addr "127.0.0.1" --port 9999',
       port: 9999,
       timeout: 20 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -91,7 +92,7 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "fullstack"),
       command:
-        "cargo run --package dioxus-cli --release -- serve --platform fullstack --port 3333",
+        'cargo run --package dioxus-cli --release -- serve --platform fullstack --addr "127.0.0.1" --port 3333',
       port: 3333,
       timeout: 20 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
