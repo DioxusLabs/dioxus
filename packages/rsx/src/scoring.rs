@@ -1,56 +1,50 @@
-use crate::{Attribute, AttributeValue, BodyNode, HotLiteralType};
+use crate::{Attribute, AttributeValue, BodyNode, HotLiteralType, IfmtInput};
 
 /// Take two nodes and return their similarity score
 ///
 /// This is not normalized or anything, so longer nodes will have higher scores
 pub fn score_dynamic_node(old_node: &BodyNode, new_node: &BodyNode) -> usize {
+    use BodyNode::*;
+
     // If they're different enums, they are not the same node
     if std::mem::discriminant(old_node) != std::mem::discriminant(new_node) {
         return 0;
     }
 
-    use BodyNode::*;
-
     match (old_node, new_node) {
         (Element(_), Element(_)) => unreachable!("Elements are not dynamic nodes"),
 
-        (Text(left), Text(right)) => {
+        (Text(old), Text(new)) => {
             // We shouldn't be seeing static text nodes here
-            assert!(!left.input.is_static() && !right.input.is_static());
-            left.input.hr_score(&right.input)
+            assert!(!old.input.is_static() && !new.input.is_static());
+            score_ifmt(&old.input, &new.input)
         }
 
-        (RawExpr(a), RawExpr(b)) if a == b => usize::MAX,
+        (RawExpr(old), RawExpr(new)) if old == new => usize::MAX,
 
-        (Component(a), Component(b)) => {
-            // First, they need to be the same name, generics, and fields - those can't be added on the fly
-            if a.name != b.name || a.generics != b.generics || a.fields.len() != b.fields.len() {
-                return 0;
-            }
-
-            // Now, the contents of the fields might've changed
-            // That's okay... score each one
-            // we don't actually descend into the children yet...
-            // If you swapped two components and somehow their signatures are the same but their children are different,
-            // it might cause an unnecessary rebuild
+        (Component(old), Component(new))
+            if old.name == new.name
+                && old.generics == new.generics
+                && old.fields.len() == new.fields.len() =>
+        {
             let mut score = 1;
 
-            let mut left_fields = a.fields.iter().collect::<Vec<_>>();
+            // todo: there might be a bug here where Idents and Strings will result in a match
+            let mut left_fields = old.fields.iter().collect::<Vec<_>>();
             left_fields.sort_by(|a, b| a.name.to_string().cmp(&b.name.to_string()));
 
-            let mut right_fields = b.fields.iter().collect::<Vec<_>>();
+            let mut right_fields = new.fields.iter().collect::<Vec<_>>();
             right_fields.sort_by(|a, b| a.name.to_string().cmp(&b.name.to_string()));
 
+            // Walk the attributes and score each one - if there's a zero we return zero
+            // circuit if we there's an attribute mismatch that can't be hotreloaded
             for (left, right) in left_fields.iter().zip(right_fields.iter()) {
                 let scored = match score_attribute(&left, &right) {
                     usize::MAX => 3,
+                    0 => return 0,
                     a if a == usize::MAX - 1 => 2,
                     a => a,
                 };
-
-                if scored == 0 {
-                    return 0;
-                }
 
                 score += scored;
             }
@@ -58,65 +52,33 @@ pub fn score_dynamic_node(old_node: &BodyNode, new_node: &BodyNode) -> usize {
             score
         }
 
-        (ForLoop(a), ForLoop(b)) => {
-            if a.pat != b.pat || a.expr != b.expr {
-                return 0;
-            }
-
+        (ForLoop(a), ForLoop(b)) if a.pat == b.pat && a.expr == b.expr => {
             // The bodies don't necessarily need to be the same, but we should throw some simple heuristics at them to
-            // encourage proper selection
-            let mut score = 1;
-
-            if a.body.roots.len() == b.body.roots.len() {
-                score += 1;
-            }
-
-            if a.body.node_paths.len() == b.body.node_paths.len() {
-                score += 1;
-            }
-
-            if a.body.attr_paths.len() == b.body.attr_paths.len() {
-                score += 1;
-            }
-
-            score
+            // encourage proper selection. For now just double check the templates are roughly the same
+            1 + (a.body.roots.len() == b.body.roots.len()) as usize
+                + (a.body.node_paths.len() == b.body.node_paths.len()) as usize
+                + (a.body.attr_paths.len() == b.body.attr_paths.len()) as usize
         }
 
-        (IfChain(a), IfChain(b)) => {
-            if a.cond != b.cond {
-                return 0;
-            }
-
+        (IfChain(a), IfChain(b)) if a.cond == b.cond => {
             // The bodies don't necessarily need to be the same, but we should throw some simple heuristics at them to
-            // encourage proper selection
-            let mut score = 1;
-
-            if a.then_branch.roots.len() == b.then_branch.roots.len() {
-                score += 1;
-            }
-
-            if a.then_branch.node_paths.len() == b.then_branch.node_paths.len() {
-                score += 1;
-            }
-
-            if a.then_branch.attr_paths.len() == b.then_branch.attr_paths.len() {
-                score += 1;
-            }
-
-            score
+            // encourage proper selection. For now just double check the templates are roughly the same
+            1 + (a.then_branch.roots.len() == b.then_branch.roots.len()) as usize
+                + (a.then_branch.node_paths.len() == b.then_branch.node_paths.len()) as usize
+                + (a.then_branch.attr_paths.len() == b.then_branch.attr_paths.len()) as usize
         }
 
         _ => 0,
     }
 }
 
-/// todo: write some tests
 pub fn score_attribute(old_attr: &Attribute, new_attr: &Attribute) -> usize {
+    use AttributeValue::*;
+    use HotLiteralType::*;
+
     if old_attr.name != new_attr.name {
         return 0;
     }
-
-    use AttributeValue::*;
 
     match (&old_attr.value, &new_attr.value) {
         // For literals, the value itself might change, but what's more important is the
@@ -132,28 +94,27 @@ pub fn score_attribute(old_attr: &Attribute, new_attr: &Attribute) -> usize {
             // We assign perfect matches for token resuse, to minimize churn on the renderer
             match (&left.value, &right.value) {
                 // Quick shortcut if there's no change
-                (HotLiteralType::Fmted(old), HotLiteralType::Fmted(new)) => {
-                    if new == old {
-                        return usize::MAX;
-                    }
+                (Fmted(old), Fmted(new)) if old == new => usize::MAX,
 
-                    // We can remove formatted bits but we can't add them. The scoring here must
-                    // realize that every bit of the new formatted segment must be in the old formatted segment
-                    old.hr_score(new)
-                }
+                // We can remove formatted bits but we can't add them. The scoring here must
+                // realize that every bit of the new formatted segment must be in the old formatted segment
+                (Fmted(old), Fmted(new)) => score_ifmt(old, new),
 
-                (HotLiteralType::Float(a), HotLiteralType::Float(b)) if a == b => usize::MAX,
-                (HotLiteralType::Float(_), HotLiteralType::Float(_)) => 1,
+                (Float(a), Float(b)) if a == b => usize::MAX,
+                (Float(_), Float(_)) => 1,
 
-                (HotLiteralType::Int(a), HotLiteralType::Int(b)) if a == b => usize::MAX,
-                (HotLiteralType::Int(_), HotLiteralType::Int(_)) => 1,
+                (Int(a), Int(b)) if a == b => usize::MAX,
+                (Int(_), Int(_)) => 1,
 
-                (HotLiteralType::Bool(a), HotLiteralType::Bool(b)) if a == b => usize::MAX,
-                (HotLiteralType::Bool(_), HotLiteralType::Bool(_)) => 1,
+                (Bool(a), Bool(b)) if a == b => usize::MAX,
+                (Bool(_), Bool(_)) => 1,
                 _ => 0,
             }
         }
 
+        // todo: we should try and score recrusively if we can - templates need to propagate up their
+        // scores. That would lead to a time complexity explosion but can be helpful in some cases.
+        //
         // If it's expression-type things, we give a perfect score if they match completely
         _ if old_attr == new_attr => usize::MAX,
 
@@ -162,14 +123,52 @@ pub fn score_attribute(old_attr: &Attribute, new_attr: &Attribute) -> usize {
     }
 }
 
-// #[cfg(test)]
+pub fn score_ifmt(left: &IfmtInput, right: &IfmtInput) -> usize {
+    // If they're the same by source, return max
+    if left == right {
+        return usize::MAX;
+    }
+
+    // Default score to 1 - an ifmt with no dynamic segments still technically has a score of 1
+    // since it's not disqualified, but it's not a perfect match
+    let mut score = 1;
+    let mut l_freq_map = left.dynamic_seg_frequency_map();
+
+    // Pluck out the dynamic segments from the other input
+    for seg in right.dynamic_segments() {
+        let Some(ct) = l_freq_map.get_mut(seg) else {
+            return 0;
+        };
+
+        *ct -= 1;
+
+        if *ct == 0 {
+            l_freq_map.remove(seg);
+        }
+
+        score += 1;
+    }
+
+    // If there's nothing remaining - a perfect match - return max -1
+    // We compared the sources to start, so we know they're different in some way
+    if l_freq_map.is_empty() {
+        usize::MAX - 1
+    } else {
+        score
+    }
+}
+
+#[cfg(test)]
 mod tests {
+    use crate::ReloadStack;
+
     use super::*;
     use quote::quote;
+    use syn::parse2;
 
     #[test]
     fn score_components() {
-        let a: BodyNode = syn::parse2(quote::quote! {
+        let a: BodyNode = parse2(quote! {
             for x in 0..1 {
                 SomeComponent {
                     count: 19999123,
@@ -188,7 +187,7 @@ mod tests {
         })
         .unwrap();
 
-        let b: BodyNode = syn::parse2(quote::quote! {
+        let b: BodyNode = parse2(quote! {
             for x in 0..1 {
                 SomeComponent {
                     count: 19999123,
@@ -209,5 +208,96 @@ mod tests {
 
         let score = score_dynamic_node(&a, &b);
         assert_eq!(score, 4);
+    }
+
+    #[test]
+    fn score_attributes() {
+        let left: Attribute = parse2(quote! { attr: 123 }).unwrap();
+        let right: Attribute = parse2(quote! { attr: 123 }).unwrap();
+        assert_eq!(score_attribute(&left, &right), usize::MAX);
+
+        let left: Attribute = parse2(quote! { attr: 123 }).unwrap();
+        let right: Attribute = parse2(quote! { attr: 456 }).unwrap();
+        assert_eq!(score_attribute(&left, &right), 1);
+    }
+
+    /// Ensure the scoring algorithm works
+    ///
+    /// - usize::MAX is return for perfect overlap
+    /// - 0 is returned when the right case has segments not found in the first
+    /// - a number for the other cases where there is some non-perfect overlap
+    #[test]
+    fn ifmt_scoring() {
+        let left: IfmtInput = "{abc} {def}".parse().unwrap();
+        let right: IfmtInput = "{abc}".parse().unwrap();
+        assert_eq!(score_ifmt(&left, &right), 2);
+
+        let left: IfmtInput = "{abc} {def}".parse().unwrap();
+        let right: IfmtInput = "{abc} {def}".parse().unwrap();
+        assert_eq!(score_ifmt(&left, &right), usize::MAX);
+
+        let left: IfmtInput = "{abc} {def}".parse().unwrap();
+        let right: IfmtInput = "{abc} {ghi}".parse().unwrap();
+        assert_eq!(score_ifmt(&left, &right), 0);
+
+        let left: IfmtInput = "{abc} {def}".parse().unwrap();
+        let right: IfmtInput = "{abc} {def} {ghi}".parse().unwrap();
+        assert_eq!(score_ifmt(&left, &right), 0);
+
+        let left: IfmtInput = "{abc} {def} {ghi}".parse().unwrap();
+        let right: IfmtInput = "{abc} {def}".parse().unwrap();
+        assert_eq!(score_ifmt(&left, &right), 3);
+
+        let left: IfmtInput = "{abc}".parse().unwrap();
+        let right: IfmtInput = "{abc} {def}".parse().unwrap();
+        assert_eq!(score_ifmt(&left, &right), 0);
+
+        let left: IfmtInput = "{abc} {abc} {def}".parse().unwrap();
+        let right: IfmtInput = "{abc} {def}".parse().unwrap();
+        assert_eq!(score_ifmt(&left, &right), 3);
+
+        let left: IfmtInput = "{abc} {abc}".parse().unwrap();
+        let right: IfmtInput = "{abc} {abc}".parse().unwrap();
+        assert_eq!(score_ifmt(&left, &right), usize::MAX);
+
+        let left: IfmtInput = "{abc} {def}".parse().unwrap();
+        let right: IfmtInput = "{hij}".parse().unwrap();
+        assert_eq!(score_ifmt(&left, &right), 0);
+
+        let left: IfmtInput = "{abc}".parse().unwrap();
+        let right: IfmtInput = "thing {abc}".parse().unwrap();
+        assert_eq!(score_ifmt(&left, &right), usize::MAX - 1);
+
+        let left: IfmtInput = "thing {abc}".parse().unwrap();
+        let right: IfmtInput = "{abc}".parse().unwrap();
+        assert_eq!(score_ifmt(&left, &right), usize::MAX - 1);
+
+        let left: IfmtInput = "{abc} {def}".parse().unwrap();
+        let right: IfmtInput = "thing {abc}".parse().unwrap();
+        assert_eq!(score_ifmt(&left, &right), 2);
+    }
+
+    #[test]
+    fn stack_scoring() {
+        let mut stack: ReloadStack<IfmtInput> = ReloadStack::new(
+            vec![
+                "{abc} {def}".parse().unwrap(),
+                "{def}".parse().unwrap(),
+                "{hij}".parse().unwrap(),
+            ]
+            .into_iter(),
+        );
+
+        let tests = vec![
+            "thing {def}".parse().unwrap(),
+            "thing {abc}".parse().unwrap(),
+            "thing {hij}".parse().unwrap(),
+        ];
+
+        for item in tests {
+            let score = stack.highest_score(|f| score_ifmt(f, &item));
+
+            dbg!(item, score);
+        }
     }
 }

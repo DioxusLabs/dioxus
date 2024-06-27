@@ -260,9 +260,8 @@ impl HotReload {
             //
             // We do this since two components/textnodes/attributes *might* be similar in terms of dynamic contents
             // but not be the same node.
-            let (old_idx, score) = old_nodes.highest_score(move |old_node: &&BodyNode| {
-                score_dynamic_node(old_node, new_node)
-            })?;
+            let (old_idx, score) =
+                old_nodes.highest_score(move |old_node| score_dynamic_node(old_node, new_node))?;
 
             // Remove it from the stack so we don't match it again - this is O(1)
             let old_node = old_nodes.remove(old_idx)?;
@@ -279,11 +278,7 @@ impl HotReload {
                 (BodyNode::Text(a), BodyNode::Text(b)) => {
                     // If the contents changed try to reload it
                     if score != usize::MAX {
-                        let idx = a.hr_idx.get();
-                        let location = self.make_location(idx);
-                        let segments = a.input.fmt_segments(&b.input)?;
-                        self.changed_lits
-                            .insert(location.to_string(), HotReloadLiteral::Fmted(segments));
+                        self.hotreload_text_node(a, b)?;
                     }
                 }
 
@@ -317,6 +312,16 @@ impl HotReload {
         }
 
         Some(node_paths)
+    }
+
+    fn hotreload_text_node(&mut self, a: &TextNode, b: &TextNode) -> Option<()> {
+        let idx = a.hr_idx.get();
+        let location = self.make_location(idx);
+        let segments = a.input.fmt_segments(&b.input)?;
+        self.changed_lits
+            .insert(location.to_string(), HotReloadLiteral::Fmted(segments));
+
+        Some(())
     }
 
     fn hotreload_component_fields<Ctx: HotReloadingContext>(

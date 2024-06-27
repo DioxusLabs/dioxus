@@ -20,18 +20,7 @@ impl<T> ReloadStack<T> {
     }
 
     pub fn remove(&mut self, idx: usize) -> Option<T> {
-        // if idx == self.stack.len() - 1 {
-        //     let out = self.stack.pop().unwrap();
-
-        //     // Clean up any trailing None values
-        //     while self.stack.last().map_or(false, Option::is_none) {
-        //         self.stack.pop();
-        //     }
-
-        //     out
-        // } else {
         self.stack.get_mut(idx).unwrap().take()
-        // }
     }
 
     pub fn pop_where<F>(&mut self, f: F) -> Option<T>

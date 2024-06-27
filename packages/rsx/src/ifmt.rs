@@ -51,7 +51,7 @@ impl IfmtInput {
             })
     }
 
-    fn dynamic_segments(&self) -> Vec<&FormattedSegment> {
+    pub fn dynamic_segments(&self) -> Vec<&FormattedSegment> {
         self.segments
             .iter()
             .filter_map(|seg| match seg {
@@ -61,47 +61,12 @@ impl IfmtInput {
             .collect::<Vec<_>>()
     }
 
-    fn dynamic_seg_frequency_map(&self) -> HashMap<&FormattedSegment, usize> {
+    pub fn dynamic_seg_frequency_map(&self) -> HashMap<&FormattedSegment, usize> {
         let mut map = HashMap::new();
         for seg in self.dynamic_segments() {
             *map.entry(seg).or_insert(0) += 1;
         }
         map
-    }
-
-    pub fn hr_score(&self, other: &Self) -> usize {
-        // If they're the same by source, return max
-        if self == other {
-            return usize::MAX;
-        }
-
-        // Default score to 1 - an ifmt with no dynamic segments still technically has a score of 1
-        // since it's not disqualified, but it's not a perfect match
-        let mut score = 1;
-        let mut l_freq_map = self.dynamic_seg_frequency_map();
-
-        // Pluck out the dynamic segments from the other input
-        for seg in other.dynamic_segments() {
-            let Some(ct) = l_freq_map.get_mut(seg) else {
-                return 0;
-            };
-
-            *ct -= 1;
-
-            if *ct == 0 {
-                l_freq_map.remove(seg);
-            }
-
-            score += 1;
-        }
-
-        // If there's nothing remaining - a perfect match - return max -1
-        // We compared the sources to start, so we know they're different in some way
-        if l_freq_map.is_empty() {
-            usize::MAX - 1
-        } else {
-            score
-        }
     }
 
     pub fn fmt_segments(&self, other: &Self) -> Option<FmtedSegments> {
@@ -432,87 +397,6 @@ mod tests {
     use super::*;
     use crate::reload_stack::ReloadStack;
     use crate::PrettyUnparse;
-
-    /// Ensure the scoring algorithm works
-    ///
-    /// - usize::MAX is return for perfect overlap
-    /// - 0 is returned when the right case has segments not found in the first
-    /// - a number for the other cases where there is some non-perfect overlap
-    #[test]
-    fn ifmt_scoring() {
-        let left: IfmtInput = "{abc} {def}".parse().unwrap();
-        let right: IfmtInput = "{abc}".parse().unwrap();
-        assert_eq!(left.hr_score(&right), 2);
-
-        let left: IfmtInput = "{abc} {def}".parse().unwrap();
-        let right: IfmtInput = "{abc} {def}".parse().unwrap();
-        assert_eq!(left.hr_score(&right), usize::MAX);
-
-        let left: IfmtInput = "{abc} {def}".parse().unwrap();
-        let right: IfmtInput = "{abc} {ghi}".parse().unwrap();
-        assert_eq!(left.hr_score(&right), 0);
-
-        let left: IfmtInput = "{abc} {def}".parse().unwrap();
-        let right: IfmtInput = "{abc} {def} {ghi}".parse().unwrap();
-        assert_eq!(left.hr_score(&right), 0);
-
-        let left: IfmtInput = "{abc} {def} {ghi}".parse().unwrap();
-        let right: IfmtInput = "{abc} {def}".parse().unwrap();
-        assert_eq!(left.hr_score(&right), 3);
-
-        let left: IfmtInput = "{abc}".parse().unwrap();
-        let right: IfmtInput = "{abc} {def}".parse().unwrap();
-        assert_eq!(left.hr_score(&right), 0);
-
-        let left: IfmtInput = "{abc} {abc} {def}".parse().unwrap();
-        let right: IfmtInput = "{abc} {def}".parse().unwrap();
-        assert_eq!(left.hr_score(&right), 3);
-
-        let left: IfmtInput = "{abc} {abc}".parse().unwrap();
-        let right: IfmtInput = "{abc} {abc}".parse().unwrap();
-        assert_eq!(left.hr_score(&right), usize::MAX);
-
-        let left: IfmtInput = "{abc} {def}".parse().unwrap();
-        let right: IfmtInput = "{hij}".parse().unwrap();
-        assert_eq!(left.hr_score(&right), 0);
-
-        let left: IfmtInput = "{abc}".parse().unwrap();
-        let right: IfmtInput = "thing {abc}".parse().unwrap();
-        assert_eq!(left.hr_score(&right), usize::MAX - 1);
-
-        let left: IfmtInput = "thing {abc}".parse().unwrap();
-        let right: IfmtInput = "{abc}".parse().unwrap();
-        assert_eq!(left.hr_score(&right), usize::MAX - 1);
-
-        let left: IfmtInput = "{abc} {def}".parse().unwrap();
-        let right: IfmtInput = "thing {abc}".parse().unwrap();
-        assert_eq!(left.hr_score(&right), 2);
-    }
-
-    #[test]
-    fn stack_scoring() {
-        let mut stack: ReloadStack<IfmtInput> = ReloadStack::new(
-            vec![
-                "{abc} {def}".parse().unwrap(),
-                "{def}".parse().unwrap(),
-                "{hij}".parse().unwrap(),
-            ]
-            .into_iter(),
-        );
-
-        let tests = vec![
-            //
-            "thing {def}",
-            "thing {abc}",
-            "thing {hij}",
-        ];
-
-        for item in tests {
-            let score = stack.highest_score(|f| f.hr_score(&item.parse().unwrap()));
-
-            dbg!(item, score);
-        }
-    }
 
     #[test]
     fn raw_tokens() {
