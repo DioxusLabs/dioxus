@@ -80,7 +80,7 @@ fn suspense_keeps_state() {
         .block_on(async {
             let mut dom = VirtualDom::new(app);
             dom.rebuild(&mut dioxus_core::NoOpMutations);
-            dom.render_suspense_immediate();
+            dom.render_suspense_immediate().await;
 
             let out = dioxus_ssr::render(&dom);
 
@@ -275,7 +275,7 @@ fn resolved_to_suspended() {
 
             dom.in_runtime(|| ScopeId::ROOT.in_runtime(|| *SUSPENDED.write() = true));
 
-            dom.render_suspense_immediate();
+            dom.render_suspense_immediate().await;
             let out = dioxus_ssr::render(&dom);
 
             assert_eq!(out, "fallback");
@@ -332,9 +332,9 @@ fn suspense_tracks_resolved() {
             let mut dom = VirtualDom::new(app);
             dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-            dom.render_suspense_immediate();
+            dom.render_suspense_immediate().await;
             dom.wait_for_suspense_work().await;
-            assert_eq!(dom.render_suspense_immediate(), vec![ScopeId(1)]);
+            assert_eq!(dom.render_suspense_immediate().await, vec![ScopeId(1)]);
         });
 
     fn app() -> Element {
