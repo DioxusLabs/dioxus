@@ -79,16 +79,13 @@ impl<'a> TemplateRenderer<'a> {
                 // Get the root:column:id tag we'll use as the ID of the template
                 let root_col = self.get_root_col_id();
 
+                // Replace `\\` to `/` and then replace `\` to `/`
                 quote! {
-                    concat!(
-                        file!(),
-                        ":",
-                        line!(),
-                        ":",
-                        column!(),
-                        ":",
-                        #root_col
-                    )
+                    {
+                        const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
+                        const NORMAL: &str = dioxus_core::const_format::str_replace!(PATH, '\\', "/");
+                        dioxus_core::const_format::concatcp!(NORMAL, ':', line!(), ':', column!(), ':', #root_col)
+                    }
                 }
             }
         }
