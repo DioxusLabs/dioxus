@@ -18,7 +18,7 @@ fn list_creates_one_by_one() {
 
     // load the div and then assign the empty fragment as a placeholder
     assert_eq!(
-        dbg!(dom.rebuild_to_vec()).santize().edits,
+        dom.rebuild_to_vec().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
             AssignId { path: &[0], id: ElementId(2,) },
@@ -29,7 +29,7 @@ fn list_creates_one_by_one() {
     // Rendering the first item should replace the placeholder with an element
     dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
-        dbg!(dom.render_immediate_to_vec()).santize().edits,
+        dom.render_immediate_to_vec().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(3,) },
             HydrateText { path: &[0], value: "0".to_string(), id: ElementId(4,) },
@@ -40,7 +40,7 @@ fn list_creates_one_by_one() {
     // Rendering the next item should insert after the previous
     dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
-        dbg!(dom.render_immediate_to_vec()).santize().edits,
+        dom.render_immediate_to_vec().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
             HydrateText { path: &[0], value: "1".to_string(), id: ElementId(5,) },
@@ -51,7 +51,7 @@ fn list_creates_one_by_one() {
     // ... and again!
     dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
-        dbg!(dom.render_immediate_to_vec()).santize().edits,
+        dom.render_immediate_to_vec().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(6,) },
             HydrateText { path: &[0], value: "2".to_string(), id: ElementId(7,) },
@@ -62,7 +62,7 @@ fn list_creates_one_by_one() {
     // once more
     dom.mark_dirty(ScopeId::ROOT);
     assert_eq!(
-        dbg!(dom.render_immediate_to_vec()).santize().edits,
+        dom.render_immediate_to_vec().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(8,) },
             HydrateText { path: &[0], value: "3".to_string(), id: ElementId(9,) },

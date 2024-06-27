@@ -30,17 +30,11 @@ fn attrs_cycle() {
     assert_eq!(
         dom.render_immediate_to_vec().santize().edits,
         [
-            // LoadTemplate { name: "template", index: 0, id: ElementId(2) },
             LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
-            // AssignId { path: [0], id: ElementId(3) },
             AssignId { path: &[0,], id: ElementId(3,) },
-            // SetAttribute { name: "class", ns: None, value: Text("1"), id: ElementId(3) },
             SetAttribute { name: "class", value: "1".into_value(), id: ElementId(3,), ns: None },
-            // AssignId { path: [0], id: ElementId(4) },
             SetAttribute { name: "id", value: "1".into_value(), id: ElementId(3,), ns: None },
-            // SetAttribute { name: "id", ns: None, value: Text("1"), id: ElementId(4) },
             ReplaceWith { id: ElementId(1,), m: 1 },
-            // ReplaceWith { id: ElementId(1), m: 1 }
         ]
     );
 

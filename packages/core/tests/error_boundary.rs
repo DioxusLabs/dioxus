@@ -20,7 +20,7 @@ fn app() -> Element {
 }
 
 fn NoneChild() -> Element {
-    Ok(VNode::default())
+    VNode::empty()
 }
 
 fn ThrowChild() -> Element {

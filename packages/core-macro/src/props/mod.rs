@@ -203,7 +203,7 @@ mod field_info {
                 if name == "children" {
                     builder_attr.default = Some(
                         syn::parse(
-                            quote!(dioxus_core::Element::Ok(dioxus_core::VNode::placeholder()))
+                            quote!(dioxus_core::VNode::empty())
                                 .into(),
                         )
                         .unwrap(),
