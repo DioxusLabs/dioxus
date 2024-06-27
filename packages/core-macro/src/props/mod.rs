@@ -201,13 +201,8 @@ mod field_info {
 
                 // children field is automatically defaulted to None
                 if name == "children" {
-                    builder_attr.default = Some(
-                        syn::parse(
-                            quote!(dioxus_core::VNode::empty())
-                                .into(),
-                        )
-                        .unwrap(),
-                    );
+                    builder_attr.default =
+                        Some(syn::parse(quote!(dioxus_core::VNode::empty()).into()).unwrap());
                 }
 
                 // String fields automatically use impl Display

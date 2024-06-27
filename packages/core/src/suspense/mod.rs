@@ -1,5 +1,5 @@
 //! Suspense allows you to render a placeholder while nodes are waiting for data in the background
-//! 
+//!
 //! During suspense on the server:
 //! - Rebuild once
 //! - Send page with loading placeholders down to the client

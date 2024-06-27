@@ -586,9 +586,7 @@ impl<
 {
     pub fn build(self) -> ErrorBoundaryProps {
         let (children, handle_error) = self.fields;
-        let children = ErrorBoundaryPropsBuilder_Optional::into_value(children, || {
-            VNode::empty()
-        });
+        let children = ErrorBoundaryPropsBuilder_Optional::into_value(children, || VNode::empty());
         let handle_error = ErrorBoundaryPropsBuilder_Optional::into_value(handle_error, || {
             ErrorHandler(Rc::new(default_handler))
         });

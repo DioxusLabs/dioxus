@@ -28,43 +28,35 @@ where
         (rc, Rc::new(Cell::new(Some(changed))))
     });
 
-    let scope = current_scope_id().expect("to be in a dioxus runtime");
-
-    let mut task = use_hook(|| Signal::new(None));
-
     let cb = use_callback(move || {
         // Create the user's task
         let fut = rc.reset_and_run_in(&mut future);
 
         // Spawn a wrapper task that polls the inner future and watch its dependencies
-        scope
-            .push_future(async move {
-                // move the future here and pin it so we can poll it
-                let fut = fut;
-                pin_mut!(fut);
+        spawn(async move {
+            // move the future here and pin it so we can poll it
+            let fut = fut;
+            pin_mut!(fut);
 
-                // Run each poll in the context of the reactive scope
-                // This ensures the scope is properly subscribed to the future's dependencies
-                let res = future::poll_fn(|cx| {
-                    rc.run_in(|| {
-                        tracing::trace_span!("polling resource", location = %location)
-                            .in_scope(|| fut.poll_unpin(cx))
-                    })
+            // Run each poll in the context of the reactive scope
+            // This ensures the scope is properly subscribed to the future's dependencies
+            let res = future::poll_fn(|cx| {
+                rc.run_in(|| {
+                    tracing::trace_span!("polling resource", location = %location)
+                        .in_scope(|| fut.poll_unpin(cx))
                 })
-                .await;
-
-                // Set the value and state
-                state.set(UseResourceState::Ready);
-                value.set(Some(res));
-
-                // Remove the task so we don't cancel it twice
-                task.set(None);
             })
-            .expect("to be in a dioxus runtime")
+            .await;
+
+            // Set the value and state
+            state.set(UseResourceState::Ready);
+            value.set(Some(res));
+        })
     });
 
+    let mut task = use_hook(|| Signal::new(cb()));
+
     use_hook(|| {
-        task.set(Some(cb()));
         let mut changed = changed.take().unwrap();
         spawn(async move {
             loop {
@@ -72,12 +64,10 @@ where
                 let _ = changed.next().await;
 
                 // Stop the old task
-                if let Some(task) = task.take() {
-                    task.cancel();
-                }
+                task.write().cancel();
 
                 // Start a new task
-                task.set(Some(cb()));
+                task.set(cb());
             }
         })
     });
@@ -118,7 +108,7 @@ where
 #[derive(Debug)]
 pub struct Resource<T: 'static> {
     value: Signal<Option<T>>,
-    task: Signal<Option<Task>>,
+    task: Signal<Task>,
     state: Signal<UseResourceState>,
     callback: UseCallback<Task>,
 }
@@ -183,12 +173,9 @@ impl<T> Resource<T> {
     /// }
     /// ```
     pub fn restart(&mut self) {
-        if let Some(task) = self.task.take() {
-            task.cancel();
-            self.state.set(UseResourceState::Pending);
-        }
+        self.task.write().cancel();
         let new_task = self.callback.call();
-        self.task.set(Some(new_task));
+        self.task.set(new_task);
     }
 
     /// Forcefully cancel the resource's future.
@@ -215,9 +202,7 @@ impl<T> Resource<T> {
     /// ```
     pub fn cancel(&mut self) {
         self.state.set(UseResourceState::Stopped);
-        if let Some(task) = self.task.take() {
-            task.cancel();
-        }
+        self.task.write().cancel();
     }
 
     /// Pause the resource's future.
@@ -250,9 +235,7 @@ impl<T> Resource<T> {
     /// ```
     pub fn pause(&mut self) {
         self.state.set(UseResourceState::Paused);
-        if let Some(task) = self.task.cloned() {
-            task.pause();
-        }
+        self.task.write().pause();
     }
 
     /// Resume the resource's future.
@@ -289,9 +272,7 @@ impl<T> Resource<T> {
         }
 
         self.state.set(UseResourceState::Pending);
-        if let Some(task) = self.task.cloned() {
-            task.resume();
-        }
+        self.task.write().resume();
     }
 
     /// Clear the resource's value. This will just reset the value. It will not modify any running tasks.
@@ -322,8 +303,8 @@ impl<T> Resource<T> {
     }
 
     /// Get a handle to the inner task backing this resource
-    /// Modifying the task through this handle will cause inconsistent state
-    pub fn task(&self) -> Option<Task> {
+    /// Modify the task through this handle will cause inconsistent state
+    pub fn task(&self) -> Task {
         self.task.cloned()
     }
 
@@ -430,9 +411,11 @@ impl<T> Resource<T> {
     pub fn suspend(&self) -> std::result::Result<MappedSignal<T>, RenderError> {
         match self.state.cloned() {
             UseResourceState::Stopped | UseResourceState::Paused | UseResourceState::Pending => {
-                match self.task() {
-                    Some(task) => Err(RenderError::Suspended(SuspendedFuture::new(task))),
-                    None => Ok(self.value.map(|v| v.as_ref().unwrap())),
+                let task = self.task();
+                if task.paused() {
+                    Ok(self.value.map(|v| v.as_ref().unwrap()))
+                } else {
+                    Err(RenderError::Suspended(SuspendedFuture::new(task)))
                 }
             }
             _ => Ok(self.value.map(|v| v.as_ref().unwrap())),

@@ -86,12 +86,7 @@ where
     // this might not be the best API
     if *coroutine.needs_regen.peek() {
         let (tx, rx) = futures_channel::mpsc::unbounded();
-        let future = init(rx);
-        let task = spawn(async move {
-            future.await;
-            // Remove the task from the coroutine so we don't accidentally try to cancel the removed future
-            coroutine.task.set(None);
-        });
+        let task = spawn(init(rx));
         coroutine.tx.set(Some(tx));
         coroutine.task.set(Some(task));
         coroutine.needs_regen.set(false);
@@ -119,8 +114,8 @@ pub struct Coroutine<T: 'static> {
 
 impl<T> Coroutine<T> {
     /// Get the underlying task handle
-    pub fn task(&self) -> Option<Task> {
-        self.task.cloned()
+    pub fn task(&self) -> Task {
+        (*self.task.read()).unwrap()
     }
 
     /// Send a message to the coroutine
@@ -137,9 +132,7 @@ impl<T> Coroutine<T> {
     /// Forces the component to re-render, which will re-invoke the coroutine.
     pub fn restart(&mut self) {
         self.needs_regen.set(true);
-        if let Some(task) = self.task() {
-            task.cancel();
-        }
+        self.task().cancel();
     }
 }
 

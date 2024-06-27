@@ -1,6 +1,6 @@
-use crate::{innerlude::SchedulerMsg, Element, Runtime, ScopeId, Task};
+use crate::{innerlude::SchedulerMsg, Runtime, ScopeId, Task};
 use crate::{
-    innerlude::{throw_into, CapturedError, SuspendedFuture},
+    innerlude::{throw_into, CapturedError},
     prelude::SuspenseContext,
 };
 use generational_box::{AnyStorage, Owner};
