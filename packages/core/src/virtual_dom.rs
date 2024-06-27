@@ -151,10 +151,10 @@ use tracing::instrument;
 /// #         Self {}
 /// #     }
 /// #     fn apply(&mut self) -> Mutations {
-/// #         todo!()
+/// #         unimplemented!()
 /// #     }
 /// #     async fn wait_for_event(&mut self) -> std::rc::Rc<dyn std::any::Any> {
-/// #         todo!()
+/// #         unimplemented!()
 /// #     }
 /// # }
 /// #

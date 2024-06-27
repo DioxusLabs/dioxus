@@ -64,7 +64,7 @@ impl<E: Display> Display for RouteParseError<E> {
 ///
 /// # #[component]
 /// # fn Home(query: CustomQuery) -> Element {
-/// #     todo!()
+/// #     unimplemented!()
 /// # }
 /// ```
 #[rustversion::attr(
@@ -132,7 +132,7 @@ impl<T: for<'a> From<&'a str>> FromQuery for T {
 ///
 /// # #[component]
 /// # fn Home(query: CustomQuery, other: i32) -> Element {
-/// #     todo!()
+/// #     unimplemented!()
 /// # }
 /// ```
 #[rustversion::attr(
@@ -190,7 +190,7 @@ where
 ///
 /// #[component]
 /// fn Home(url_hash: State) -> Element {
-///     todo!()
+///     unimplemented!()
 /// }
 ///
 ///
@@ -217,7 +217,7 @@ where
 ///
 ///         let first = first.parse().unwrap();
 ///         let second = second.parse().unwrap();
-///         
+///
 ///         State {
 ///             count: first,
 ///             other_count: second,
@@ -301,7 +301,7 @@ where
 ///
 /// # #[component]
 /// # fn Home(route_segment_one: CustomRouteSegment, route_segment_two: i32) -> Element {
-/// #     todo!()
+/// #     unimplemented!()
 /// # }
 /// ```
 #[rustversion::attr(
@@ -388,7 +388,7 @@ fn full_circle() {
 ///
 /// # #[component]
 /// # fn Home(numeric_route_segments: NumericRouteSegments) -> Element {
-/// #     todo!()
+/// #     unimplemented!()
 /// # }
 /// ```
 pub trait ToRouteSegments {
@@ -478,7 +478,7 @@ fn to_route_segments() {
 ///
 /// # #[component]
 /// # fn Home(numeric_route_segments: NumericRouteSegments) -> Element {
-/// #     todo!()
+/// #     unimplemented!()
 /// # }
 /// ```
 #[rustversion::attr(

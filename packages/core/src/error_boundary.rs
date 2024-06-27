@@ -661,7 +661,7 @@ impl<
 /// fn Counter(multiplier: String) -> Element {
 ///     // You can bubble up errors with `?` inside components
 ///     let multiplier_parsed = multiplier.parse::<usize>()?;
-///     let count = use_signal(|| multiplier_parsed);
+///     let mut count = use_signal(|| multiplier_parsed);
 ///     rsx! {
 ///         button {
 ///             // Or inside event handlers

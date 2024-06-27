@@ -53,7 +53,7 @@ use syn::__private::ToTokens;
 ///   output = Json
 /// )]
 /// pub async fn my_wacky_server_fn(input: Vec<String>) -> Result<usize, ServerFnError> {
-///   todo!()
+///   unimplemented!()
 /// }
 ///
 /// // expands to
