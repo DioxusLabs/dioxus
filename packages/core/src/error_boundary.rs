@@ -88,12 +88,51 @@ impl AnyError for DisplayError {
 /// This trait is sealed and cannot be implemented outside of dioxus-core
 pub trait Context<T, E>: private::Sealed {
     /// Add a visual representation of the error that the [`ErrorBoundary`] may render
+    ///
+    /// # Example
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// fn Component() -> Element {
+    ///     // You can bubble up errors with `?` inside components, and event handlers
+    ///     // Along with the error itself, you can provide a way to display the error by calling `show`
+    ///     let number = "1234".parse::<usize>().show(|error| rsx! {
+    ///         div {
+    ///             background_color: "red",
+    ///             color: "white",
+    ///             "Error parsing number: {error}"
+    ///         }
+    ///     })?;
+    ///     todo!()
+    /// }
+    /// ```
     fn show(self, display_error: impl FnOnce(&E) -> Element) -> Result<T>;
 
-    /// Wrap the result with context that is lazily evaluated if an error occurs and return a new boxed error
+    /// Wrap the result additional context about the error that occurred.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// fn NumberParser() -> Element {
+    ///     // You can bubble up errors with `?` inside components, and event handlers
+    ///     // Along with the error itself, you can provide a way to display the error by calling `context`
+    ///     let number = "-1234".parse::<usize>().context("Parsing number inside of the NumberParser")?;
+    ///     todo!()
+    /// }
+    /// ```
     fn context<C: Display + 'static>(self, context: C) -> Result<T>;
 
-    /// Wrap the result with context that is lazily evaluated if an error occurs and return a new boxed error
+    /// Wrap the result with additional context about the error that occurred. The closure will only be run if the Result is an error.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// fn NumberParser() -> Element {
+    ///     // You can bubble up errors with `?` inside components, and event handlers
+    ///     // Along with the error itself, you can provide a way to display the error by calling `context`
+    ///     let number = "-1234".parse::<usize>().with_context(|| format!("Timestamp: {:?}", std::time::Instant::now()))?;
+    ///     todo!()
+    /// }
+    /// ```
     fn with_context<C: Display + 'static>(self, context: impl FnOnce() -> C) -> Result<T>;
 }
 
@@ -596,6 +635,7 @@ impl<
         }
     }
 }
+
 /// Create a new error boundary component that catches any errors thrown from child components
 ///
 /// ## Details
@@ -606,13 +646,34 @@ impl<
 ///
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
-/// # fn ThrowsError() -> Element { todo!() }
-/// rsx! {
-///     ErrorBoundary {
-///         handle_error: |errors: ErrorContext| rsx! { "Oops, we encountered an error. Please report {errors:?} to the developer of this application" },
-///         ThrowsError {}
+/// fn App() -> Element {
+///     rsx! {
+///         ErrorBoundary {
+///             handle_error: |errors: ErrorContext| rsx! { "Oops, we encountered an error. Please report {errors:?} to the developer of this application" },
+///             Counter {
+///                 multiplier: "1234"
+///             }
+///         }
 ///     }
-/// };
+/// }
+///
+/// #[component]
+/// fn Counter(multiplier: String) -> Element {
+///     // You can bubble up errors with `?` inside components
+///     let multiplier_parsed = multiplier.parse::<usize>()?;
+///     let count = use_signal(|| multiplier_parsed);
+///     rsx! {
+///         button {
+///             // Or inside event handlers
+///             onclick: move |_| {
+///                 let multiplier_parsed = multiplier_parsed.parse::<usize>()?;
+///                 *count.write() *= multiplier_parsed;
+///                 Ok(())
+///             },
+///             "{count}x{multiplier}"
+///         }
+///     }
+/// }
 /// ```
 ///
 /// ## Usage
