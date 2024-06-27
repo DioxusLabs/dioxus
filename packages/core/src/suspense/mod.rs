@@ -1,65 +1,19 @@
-//! Hydration needs to change to integrate with suspense
-//! Every time we reach a suspense boundary during hydration, we need to check the data-hydration-id-suspense attribute to see if the suspense slot is resolved
-//! If it is, we can rehydrate the node and continue to children
-//! If it isn't, we need to rehydrate the suspense placeholder
-//! - How do we know what suspense placeholder we are rehydrating? Rerun the children without hydrating?
-//! - The suspense placeholder might rely on data that is resolved by a previous server future
-//!
-//! ```rust, ignore
-//! fn ComponentSuspends() {
-//!     let user = use_synced(uuid::new);
-//!     // If JS is disabled, just show the first placeholder until it is entirely resolved?
-//!     let info = use_server_future(load_user_info).with_loading_placeholder(|| {
-//!         if user == 0 {
-//!             rsx! {
-//!                 "hello!"
-//!                 div {
-//!                     "Loading user info..."
-//!                 }
-//!             }
-//!         } else {
-//!             rsx! {
-//!                 "Loading user..."
-//!             }
-//!         }
-//!     })?;
-//!     let messages = use_server_future(load_user_messages).with_loading_placeholder(|| {
-//!         if info.chat_id == 0 {
-//!             rsx! {
-//!                 "hello!"
-//!                 div {
-//!                     "Loading user messages..."
-//!                 }
-//!             }
-//!         } else {
-//!             rsx! {
-//!                 "Loading messages..."
-//!             }
-//!         }
-//!     })?;
-//!
-//!     rsx! {
-//!         "{info:?}"
-//!     }
-//! }
-//! ```
-//!
-//! We update slots more than once with the declarative shadow dom. Because of that we can't render nested suspense...
-//!
+//! Suspense allows you to render a placeholder while nodes are waiting for data in the background
+//! 
 //! During suspense on the server:
 //! - Rebuild once
 //! - Send page with loading placeholders down to the client
 //! - loop
 //!   - Poll (only) suspended futures
 //!   - If a scope is marked as dirty and that scope is a suspense boundary, under a suspended boundary, or the suspense placeholder, rerun the scope
-//!     - If it is a different scope, warn the user?
-//!   - Rerender the scope on the server and send it down as a hidden patch on the client (template node?)
+//!     - If it is a different scope, ignore it and warn the user
+//!   - Rerender the scope on the server and send down the nodes under a hidden div with serialized data
 //!
-//! During suspense on the client:
+//! During suspense on the web:
 //! - Rebuild once without running server futures
-//! - Rehydrate the placeholders that were initially sent down. At this point, no suspense nodes are resolved so the client and server pages should be the same?
+//! - Rehydrate the placeholders that were initially sent down. At this point, no suspense nodes are resolved so the client and server pages should be the same
 //! - loop
-//!   - Wait for work | Wait for suspense data
+//!   - Wait for work or suspense data
 //!   - If suspense data comes in
 //!     - replace the suspense placeholder
 //!     - get any data associated with the suspense placeholder and rebuild nodes under the suspense that was resolved

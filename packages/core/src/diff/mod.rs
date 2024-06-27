@@ -5,7 +5,7 @@
 //! - Diffing nodes that are not mounted
 //! - Mounted nodes that have already been created
 //!
-//! To support those cases, we separate node creation into initialization and mounting. We also keep track of if we should be adding mutations or not.
+//! To support those cases, we lazily create components and only optionally write to the real dom while diffing with Option<&mut impl WriteMutations>
 
 #![allow(clippy::too_many_arguments)]
 

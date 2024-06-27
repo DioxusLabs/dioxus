@@ -499,18 +499,3 @@ impl VNode {
             .sum()
     }
 }
-
-// struct ListDiffResult {
-//     /// An offset in the first diff list that marks the end of nodes that should be removed
-//     first_list_remove_offset: usize,
-//     /// The indices in the first list that should be diffed in the format:
-//     /// | remove these | diff these |
-//     first_list_indices: Vec<usize>,
-//     /// An offset in the second diff list that marks the end of nodes that should be added after the end of the list
-//     second_list_insert_after_offset: usize,
-//     /// An offset in the second diff list that marks the end of nodes that should be added before the end of the list
-//     second_list_insert_before_offset: usize,
-//     /// The indices in the second list that should be diffed in the format:
-//     /// | add these before | add these after | diff these |
-//     second_list_indices: Vec<usize>,
-// }

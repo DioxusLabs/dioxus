@@ -76,10 +76,6 @@ impl VNode {
         let mount_id = self.mount.get();
         new.mount.set(mount_id);
 
-        tracing::trace!(?self, ?new, "moving mount");
-        tracing::trace!("mount id: {mount_id:?}");
-        tracing::trace!("mounts: {:?}", dom.mounts);
-
         if mount_id.mounted() {
             let mount = &mut dom.mounts[mount_id.0];
 
@@ -238,6 +234,7 @@ impl VNode {
         self.remove_node_inner(dom, to, true, replace_with)
     }
 
+    /// Remove a node, but only maybe destroy the component state of that node. During suspense, we need to remove a node from the real dom without wiping the component state
     pub(crate) fn remove_node_inner<M: WriteMutations>(
         &self,
         dom: &mut VirtualDom,
@@ -245,18 +242,10 @@ impl VNode {
         destroy_component_state: bool,
         replace_with: Option<usize>,
     ) {
-        tracing::trace!(
-            ?self,
-            "removing node with component state {destroy_component_state}"
-        );
-
         let mount = self.mount.get();
         if !mount.mounted() {
             return;
         }
-
-        tracing::trace!("mount id: {mount:?}");
-        tracing::trace!("mount: {:?}", dom.mounts[mount.0]);
 
         // Clean up any attributes that have claimed a static node as dynamic for mount/unmounts
         // Will not generate mutations!

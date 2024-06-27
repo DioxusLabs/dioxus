@@ -367,7 +367,6 @@ impl SuspenseBoundaryProps {
             .clone();
         // If there are suspended futures, render the fallback
         let nodes_created = if !suspense_context.suspended_futures().is_empty() {
-            tracing::trace!("Creating suspended nodes for suspense boundary");
             let props = Self::downcast_mut_from_props(&mut *scope_state.props).unwrap();
             props.suspended_nodes = Some(children.into());
 
@@ -388,7 +387,6 @@ impl SuspenseBoundaryProps {
 
             nodes_created
         } else {
-            tracing::trace!("Creating resolved suspense boundary");
             // Otherwise just render the children in the real dom
             dom.runtime.push_scope(scope_id);
             debug_assert!(children.mount.get().mounted());
@@ -415,7 +413,6 @@ impl SuspenseBoundaryProps {
     ) {
         let _runtime = RuntimeGuard::new(dom.runtime.clone());
         let Some(scope_state) = dom.scopes.get_mut(scope_id.0) else {
-            tracing::error!("Tried to resolve a suspense boundary that doesn't exist");
             return;
         };
 
@@ -542,7 +539,6 @@ impl SuspenseBoundaryProps {
             }
             // We have no suspended nodes, but we just became suspended. Move the children to the background
             (None, true) => {
-                tracing::trace!("Children were just suspended. Moving into background.");
                 let old_children = last_rendered_node;
                 let new_children: VNode = RenderReturn { node: children }.into();
 
@@ -550,15 +546,9 @@ impl SuspenseBoundaryProps {
                     node: fallback.call(suspense_context.clone()),
                 };
 
-                tracing::trace!(
-                    "old children mount: {:?}",
-                    dom.mounts[old_children.mount.get().0]
-                );
-
                 // Move the children to the background
                 let mount = old_children.mount.get();
                 let mount = dom.mounts.get(mount.0).expect("mount should exist");
-                tracing::trace!("new children mount: {:?}", mount);
                 let parent = mount.parent;
                 dom.runtime.push_scope(scope_id);
                 dom.runtime.suspense_stack.borrow_mut().push(
@@ -584,7 +574,6 @@ impl SuspenseBoundaryProps {
                 props.suspended_nodes = Some(new_children);
             } // We have suspended nodes, but we just got out of suspense. Move the suspended nodes to the foreground
             (Some(old_suspended_nodes), false) => {
-                tracing::trace!("Suspended nodes were just resolved. Moving into foreground.");
                 let old_placeholder = last_rendered_node;
                 let new_children = RenderReturn { node: children };
 
@@ -598,8 +587,6 @@ impl SuspenseBoundaryProps {
                 let parent = mount.parent;
                 old_placeholder.replace(std::slice::from_ref(&*new_children), parent, dom, to);
                 dom.runtime.pop_scope();
-                tracing::trace!("Exiting suspense: replaced placeholder with new children");
-                tracing::trace!("Non-suspended nodes: {:?}", &*new_children);
 
                 // Set the last rendered node to the new children
                 dom.scopes[scope_id.0].last_rendered_node = Some(new_children);
@@ -616,10 +603,6 @@ impl SuspenseBoundaryProps {
         dom: &mut VirtualDom,
         destroy_component_state: bool,
     ) {
-        tracing::trace!(
-            "Removing suspense boundary with suspense nodes {:?}",
-            self.suspended_nodes
-        );
         // Remove the suspended nodes
         if let Some(node) = self.suspended_nodes.take() {
             node.remove_node_inner(dom, None::<&mut M>, destroy_component_state, None)
