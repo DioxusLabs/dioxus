@@ -1,6 +1,6 @@
 use dioxus_lib::prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{cell::RefCell, future::Future, rc::Rc};
+use std::future::Future;
 
 /// Runs a future with a manual list of dependencies and returns a resource with the result if the future is finished or a suspended error if it is still running.
 ///
@@ -72,7 +72,9 @@ where
     let initial_web_result = use_hook(|| {
         tracing::info!("First run of use_server_future");
 
-        Rc::new(RefCell::new(Some(dioxus_web::take_server_data::<T>())))
+        std::rc::Rc::new(std::cell::RefCell::new(Some(
+            dioxus_web::take_server_data::<T>(),
+        )))
     });
 
     let resource = use_resource(move || {
@@ -121,13 +123,14 @@ where
 
     // On the first run, force this task to be polled right away in case its value is ready
     use_hook(|| {
-        let _ = resource.task().map(|task| task.poll_now());
+        let _ = resource.task().poll_now();
     });
 
     // Suspend if the value isn't ready
     match resource.state().cloned() {
         UseResourceState::Pending => {
-            if let Some(task) = resource.task() {
+            let task = resource.task();
+            if !task.paused() {
                 return Err(suspend(task).unwrap_err());
             }
             Ok(resource)
