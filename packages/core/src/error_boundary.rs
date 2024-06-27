@@ -666,7 +666,7 @@ impl<
 ///         button {
 ///             // Or inside event handlers
 ///             onclick: move |_| {
-///                 let multiplier_parsed = multiplier_parsed.parse::<usize>()?;
+///                 let multiplier_parsed = multiplier.parse::<usize>()?;
 ///                 *count.write() *= multiplier_parsed;
 ///                 Ok(())
 ///             },
