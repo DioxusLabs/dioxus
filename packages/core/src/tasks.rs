@@ -290,7 +290,7 @@ impl Runtime {
         }
 
         // Remove the scope from the stack
-        self.push_scope(task.scope);
+        self.pop_scope();
         self.rendering.set(true);
         self.current_task.set(None);
 
