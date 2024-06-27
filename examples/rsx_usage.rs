@@ -194,7 +194,7 @@ fn app() -> Element {
             TypedInput { initial: 10.0 }
 
             // generic with the `inline_props` macro
-            Label { text: "hello generisc world!" }
+            Label { text: "hello genec world!" }
             Label { text: 99.9 }
 
             // Lowercase components work too, as long as they are access using a path
@@ -294,7 +294,7 @@ fn WithInline(text: String) -> Element {
 }
 
 #[component]
-fn Label<T: Display + Clone + PartialEq + 'static>(text: T) -> Element {
+fn Label<T: Clone + PartialEq + Display + 'static>(text: T) -> Element {
     rsx! {
         p { "{text}" }
     }
