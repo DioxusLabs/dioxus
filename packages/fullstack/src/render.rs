@@ -241,7 +241,6 @@ impl SsrRendererPool {
                     server_context.clone(),
                 )
                 .await;
-                println!("{:?} suspense scopes resolved", resolved_suspense_nodes);
 
                 // Just rerender the resolved nodes
                 for scope in resolved_suspense_nodes {
@@ -266,7 +265,6 @@ impl SsrRendererPool {
                             dioxus_ssr::incremental::IncrementalRendererError::RenderError(err)
                         );
                     }
-                    println!("resolved chunk: {resolved_chunk}");
 
                     stream.render(resolved_chunk);
                 }
