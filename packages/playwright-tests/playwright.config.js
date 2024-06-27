@@ -101,7 +101,7 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "suspense-carousel"),
       command:
-        "cargo run --package dioxus-cli --release -- serve --platform fullstack --port 4040",
+        'cargo run --package dioxus-cli --release -- serve --platform fullstack --addr "127.0.0.1" --port 4040',
       port: 4040,
       timeout: 20 * 60 * 1000,
       reuseExistingServer: !process.env.CI,

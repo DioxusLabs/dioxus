@@ -2,7 +2,7 @@
 const { test, expect } = require("@playwright/test");
 
 test("suspense resolves on server", async ({ page }) => {
-  await page.goto("http://localhost:3333");
+  await page.goto("http://localhost:4040", { waitUntil: "commit" });
 
   // On the client, we should see some loading text
   const main = page.locator("#main");
