@@ -60,7 +60,7 @@ mod js {
         "{
             let node = this.nodes[$id$];
             // Skip any ignored nodes after the node. One of those nodes may be a comment node that marks the end of a suspense boundary owned by the server. If we don't insert after that, the server could swap out the nodes we insert with the server results
-            while (this.ignoreNode(node.nextSibling)) { node = node.nextSibling; }
+            while (node.nextSibling && this.ignoreNode(node.nextSibling)) { node = node.nextSibling; }
             node.after(...this.stack.splice(this.stack.length-$n$));
         }"
     }
@@ -68,7 +68,7 @@ mod js {
         "{
             let node = this.nodes[$id$];
             // Skip any ignored nodes after the node. One of those nodes may be a comment node that marks the end of a suspense boundary owned by the server. If we don't insert after that, the server could swap out the nodes we insert with the server results
-            while (this.ignoreNode(node.previousSibling)) { node = node.previousSibling; }
+            while (node.previousSibling && this.ignoreNode(node.previousSibling)) { node = node.previousSibling; }
             node.before(...this.stack.splice(this.stack.length-$n$));
         }"
     }
