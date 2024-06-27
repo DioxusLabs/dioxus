@@ -176,7 +176,7 @@ impl Renderer {
                         if self.pre_render {
                             write!(
                                 buf,
-                                "<pre data-node-hydration={}></pre>",
+                                "<pre data-node-hydration={} hidden></pre>",
                                 self.dynamic_node_id
                             )?;
                             self.dynamic_node_id += 1;
