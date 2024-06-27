@@ -142,18 +142,14 @@ export class BaseInterpreter {
   }
 
   hydrate(ids: { [key: number]: number }, under: Element) {
-    console.log("hydrating to", ids);
-    console.log(`under ${under.innerHTML}`);
     const hydrateNodes = under.querySelectorAll("[data-node-hydration]");
 
     for (let i = 0; i < hydrateNodes.length; i++) {
       const hydrateNode = hydrateNodes[i] as HTMLElement;
       const hydration = hydrateNode.getAttribute("data-node-hydration");
-      console.log("hydration", hydration);
       const split = hydration!.split(",");
       const id = ids[parseInt(split[0])];
 
-      console.log("hydrating id", id, hydrateNode.outerHTML);
       this.nodes[id] = hydrateNode;
 
       if (split.length > 1) {

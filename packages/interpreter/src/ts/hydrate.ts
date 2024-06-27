@@ -19,12 +19,9 @@ export function dx_swap(suspense_placeholder_id: number[]) {
   const startPlaceholder = document.getElementById(placeholder_id);
   // Get the node we are replacing it with
   const target = document.getElementById(`ds-${comma_separated_id}-r`);
-  console.log(
-    `swapping id ${suspense_placeholder_id} with id ${comma_separated_id}-r`
-  );
+
   // Replace the placeholder with the children of the resolved div
   // First delete all nodes between the template and the comment <!--ds-{id}--> that marks the end of the placeholder
-
   let current = startPlaceholder.nextSibling;
   const endNode = (node: Node): boolean => {
     return (
