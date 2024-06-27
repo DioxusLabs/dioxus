@@ -50,7 +50,6 @@ impl Task {
     ///
     /// This does not abort the task, so you'll want to wrap it in an abort handle if that's important to you
     pub fn cancel(self) {
-        tracing::trace!("Cancelling task {:?}", self);
         remove_future(self);
     }
 
@@ -183,7 +182,6 @@ impl Runtime {
 
                 new_task
             });
-            tracing::trace!("spawned new task {:?} on scope {:?}", task_id, scope);
 
             (local_task.unwrap(), task_id)
         };
@@ -254,13 +252,11 @@ impl Runtime {
 
         // The task was removed from the scheduler, so we can just ignore it
         let Some(task) = task else {
-            tracing::trace!("Task {:?} doesn't exist, ignoring wakeup", id);
             return Poll::Ready(());
         };
 
         // If a task woke up but is paused, we can just ignore it
         if !task.active.get() {
-            tracing::trace!("Task {:?} is paused, ignoring wakeup", id);
             return Poll::Pending;
         }
 
@@ -281,11 +277,6 @@ impl Runtime {
                 .borrow_mut()
                 .remove(&id);
 
-            tracing::trace!(
-                "task {:?} finished, removing from scope {:?}",
-                id,
-                task.scope
-            );
             self.remove_task(id);
         }
 
@@ -303,8 +294,6 @@ impl Runtime {
     pub(crate) fn remove_task(&self, id: Task) -> Option<Rc<LocalTask>> {
         // Remove the task from the task list
         let task = self.tasks.borrow_mut().remove(id.id);
-
-        tracing::trace!("Removing task {:?}", id);
 
         if let Some(task) = &task {
             // Remove the task from suspense

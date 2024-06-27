@@ -299,7 +299,7 @@ where
     }
 }
 
-// Support for FnMut -> Result(anything) for the unit return type
+// Support for FnMut -> Result(()) for the unit return type
 impl SpawnIfAsync<()> for crate::Result<()> {
     #[inline]
     fn spawn(self) {
@@ -330,7 +330,7 @@ impl<
 #[doc(hidden)]
 pub struct UnitClosure<Marker>(PhantomData<Marker>);
 
-// Closure can be created from FnMut -> async { anything } or FnMut -> Ret
+// Closure can be created from FnMut -> async { () } or FnMut -> Ret
 impl<
         Function: FnMut() -> Spawn + 'static,
         Spawn: SpawnIfAsync<Marker, Ret> + 'static,

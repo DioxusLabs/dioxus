@@ -52,7 +52,7 @@ fn events_generate() {
                     "Click me!"
                 }
             },
-            _ => Element::Ok(Default::default()),
+            _ => VNode::empty(),
         }
     };
 

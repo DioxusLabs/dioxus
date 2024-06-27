@@ -468,13 +468,6 @@ impl ScopeId {
             .expect("to be in a dioxus runtime")
     }
 
-    /// Suspended a component on a specific task and then return None
-    pub fn suspend(self, task: Task) -> Element {
-        Element::Err(crate::innerlude::RenderError::Suspended(
-            SuspendedFuture::new(task),
-        ))
-    }
-
     /// Pushes the future onto the poll queue to be polled after the component renders.
     pub fn push_future(self, fut: impl Future<Output = ()> + 'static) -> Option<Task> {
         Runtime::with_scope(self, |cx| cx.spawn(fut))

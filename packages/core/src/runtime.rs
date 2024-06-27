@@ -24,7 +24,7 @@ pub struct Runtime {
     // We use this to track the current scope
     pub(crate) scope_stack: RefCell<Vec<ScopeId>>,
 
-    // We use this to track the current suspense location
+    // We use this to track the current suspense location. Generally this lines up with the scope stack, but it may be different for children of a suspense boundary
     pub(crate) suspense_stack: RefCell<Vec<SuspenseLocation>>,
 
     // We use this to track the current task
@@ -193,7 +193,7 @@ impl Runtime {
 
     /// Check if we should render a scope
     pub(crate) fn scope_should_render(&self, scope_id: ScopeId) -> bool {
-        // If there are no suspended futures, we know that there are no frozen contexts
+        // If there are no suspended futures, we know the scope is not  and we can skip context checks
         if self.suspended_tasks.get() == 0 {
             return true;
         }

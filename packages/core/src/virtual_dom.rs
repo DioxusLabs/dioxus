@@ -400,17 +400,9 @@ impl VirtualDom {
     /// Mark a task as dirty
     fn mark_task_dirty(&mut self, task: Task) {
         let Some(scope) = self.runtime.task_scope(task) else {
-            tracing::trace!(
-                "Task {:?} doesn't have a scope, cannot mark it as dirty",
-                task
-            );
             return;
         };
         let Some(scope) = self.runtime.get_state(scope) else {
-            tracing::trace!(
-                "Task {:?} was spawned in a scope that is no longer in the virtualdom, cannot mark it as dirty",
-                task
-            );
             return;
         };
 
@@ -750,18 +742,12 @@ impl VirtualDom {
                 let mut tasks_polled = 0;
                 while let Some(task) = self.pop_task() {
                     if self.runtime.task_runs_during_suspense(task) {
-                        tracing::trace!("Task {:?} runs during suspense, running it", task);
                         let _ = self.runtime.handle_task_wakeup(task);
                         // Running that task, may mark a scope higher up as dirty. If it does, return from the function early
                         self.queue_events();
                         if self.has_dirty_scopes() {
                             return;
                         }
-                    } else {
-                        tracing::trace!(
-                            "Task {:?} does not run during suspense, skipping it",
-                            task
-                        );
                     }
                     tasks_polled += 1;
                     // Once we have polled a few tasks, we manually yield to the scheduler to give it a chance to run other pending work
