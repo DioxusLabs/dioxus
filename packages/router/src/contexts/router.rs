@@ -321,7 +321,7 @@ impl RouterContext {
         inner_read
             .unresolved_error
             .as_ref()
-            .and_then(|_| (inner_read.failure_external_navigation)())
+            .map(|_| (inner_read.failure_external_navigation)())
     }
 
     fn change_route(&self) -> Option<ExternalNavigationFailure> {
