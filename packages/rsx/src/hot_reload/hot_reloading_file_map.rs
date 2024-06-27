@@ -305,10 +305,7 @@ pub fn template_location(old_start: proc_macro2::LineColumn, file: &Path) -> Str
     let line = old_start.line;
     let column = old_start.column + 1;
 
-    #[cfg(not(target_os = "windows"))]
-    let path = file.to_string_lossy().to_string();
-
-    #[cfg(target_os = "windows")]
+    // Always ensure the path components are separated by `/`.
     let path = file
         .components()
         .map(|c| c.as_os_str().to_string_lossy())
