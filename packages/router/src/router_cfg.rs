@@ -10,7 +10,7 @@ use std::sync::Arc;
 /// # use dioxus::prelude::*;
 /// # #[component]
 /// # fn Index() -> Element {
-/// #     Ok(VNode::placeholder())
+/// #     VNode::empty()
 /// # }
 /// #[derive(Clone, Routable)]
 /// enum Route {

@@ -18,7 +18,7 @@ loop {
     vdom.render_immediate(&mut real_dom.apply())
 }
 
-# fn app() -> Element { std::result::Result::Ok(VNode::placeholder()) }
+# fn app() -> Element { VNode::empty() }
 # struct SomeRenderer; impl SomeRenderer { fn new() -> SomeRenderer { SomeRenderer } async fn event(&self) -> std::rc::Rc<dyn std::any::Any> { unimplemented!() } fn apply(&self) -> Mutations { Mutations::default() } }
 # });
 ```

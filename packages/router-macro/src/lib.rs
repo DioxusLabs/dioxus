@@ -80,15 +80,15 @@ mod segment;
 ///     Route3 { dynamic: String },
 /// }
 /// # #[component]
-/// # fn Route1(user_id: usize, dynamic: usize, query: String) -> Element { Ok(VNode::placeholder()) }
+/// # fn Route1(user_id: usize, dynamic: usize, query: String) -> Element { VNode::empty() }
 /// # #[component]
-/// # fn Route2(user_id: usize) -> Element { Ok(VNode::placeholder()) }
+/// # fn Route2(user_id: usize) -> Element { VNode::empty() }
 /// # #[component]
-/// # fn Route3(dynamic: String) -> Element { Ok(VNode::placeholder()) }
+/// # fn Route3(dynamic: String) -> Element { VNode::empty() }
 /// # #[component]
-/// # fn UserFrame(user_id: usize) -> Element { Ok(VNode::placeholder()) }
+/// # fn UserFrame(user_id: usize) -> Element { VNode::empty() }
 /// # #[component]
-/// # fn IndexComponent() -> Element { Ok(VNode::placeholder()) }
+/// # fn IndexComponent() -> Element { VNode::empty() }
 /// ```
 ///
 /// # `#[route("path", component)]`
@@ -111,7 +111,7 @@ mod segment;
 ///     Index {},
 /// }
 /// # #[component]
-/// # fn Index() -> Element { Ok(VNode::placeholder()) }
+/// # fn Index() -> Element { VNode::empty() }
 /// ```
 ///
 /// # `#[redirect("path", function)]`
@@ -131,7 +131,7 @@ mod segment;
 ///     Index {},
 /// }
 /// # #[component]
-/// # fn Index() -> Element { Ok(VNode::placeholder()) }
+/// # fn Index() -> Element { VNode::empty() }
 /// ```
 ///
 /// Redirects allow you to redirect a route to another route. The function must take all dynamic parameters of the route and all parent nests.
@@ -157,7 +157,7 @@ mod segment;
 ///         Index {},
 /// }
 /// # #[component]
-/// # fn Index() -> Element { Ok(VNode::placeholder()) }
+/// # fn Index() -> Element { VNode::empty() }
 /// ```
 ///
 /// # `#[end_nest]`
@@ -182,9 +182,9 @@ mod segment;
 ///     Home {},
 /// }
 /// # #[component]
-/// # fn Index() -> Element { Ok(VNode::placeholder()) }
+/// # fn Index() -> Element { VNode::empty() }
 /// # #[component]
-/// # fn Home() -> Element { Ok(VNode::placeholder()) }
+/// # fn Home() -> Element { VNode::empty() }
 /// ```
 ///
 /// # `#[layout(component)]`
@@ -206,9 +206,9 @@ mod segment;
 ///         Index {},
 /// }
 /// # #[component]
-/// # fn Index() -> Element { Ok(VNode::placeholder()) }
+/// # fn Index() -> Element { VNode::empty() }
 /// # #[component]
-/// # fn BlogFrame() -> Element { Ok(VNode::placeholder()) }
+/// # fn BlogFrame() -> Element { VNode::empty() }
 /// ```
 ///
 /// # `#[end_layout]`
@@ -232,11 +232,11 @@ mod segment;
 ///     Home {},
 /// }
 /// # #[component]
-/// # fn Index() -> Element { Ok(VNode::placeholder()) }
+/// # fn Index() -> Element { VNode::empty() }
 /// # #[component]
-/// # fn BlogFrame() -> Element { Ok(VNode::placeholder()) }
+/// # fn BlogFrame() -> Element { VNode::empty() }
 /// # #[component]
-/// # fn Home() -> Element { Ok(VNode::placeholder()) }
+/// # fn Home() -> Element { VNode::empty() }
 /// ```
 #[doc(alias = "route")]
 #[proc_macro_derive(
@@ -696,7 +696,7 @@ impl RouteEnum {
                     let myself = self.clone();
                     match (level, myself) {
                         #(#matches)*
-                        _ => std::result::Result::Ok(VNode::placeholder())
+                        _ => VNode::empty()
                     }
                 }
             }

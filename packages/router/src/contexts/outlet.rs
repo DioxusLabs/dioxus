@@ -44,7 +44,7 @@ impl<R> OutletContext<R> {
             let node = if current_level == 0 {
                 error
             } else {
-                Ok(VNode::placeholder())
+                VNode::empty()
             };
             return node;
         }

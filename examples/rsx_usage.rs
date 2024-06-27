@@ -170,13 +170,13 @@ fn app() -> Element {
 
             // Can pass in props directly as an expression
             {
-                let props = TallerProps {a: "hello", children: Ok(VNode::placeholder()) };
+                let props = TallerProps {a: "hello", children: VNode::empty() };
                 rsx!(Taller { ..props })
             }
 
             // Spreading can also be overridden manually
             Taller {
-                ..TallerProps { a: "ballin!", children: Ok(VNode::placeholder()) },
+                ..TallerProps { a: "ballin!", children: VNode::empty() },
                 a: "not ballin!"
             }
 
@@ -283,7 +283,7 @@ where
         return rsx! { "{props}" };
     }
 
-    Ok(VNode::placeholder())
+    VNode::empty()
 }
 
 #[component]

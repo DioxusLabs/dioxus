@@ -87,7 +87,7 @@ impl<const A: bool> FragmentBuilder<A> {
 impl Properties for FragmentProps {
     type Builder = FragmentBuilder<false>;
     fn builder() -> Self::Builder {
-        FragmentBuilder(std::result::Result::Ok(VNode::placeholder()))
+        FragmentBuilder(VNode::empty())
     }
     fn memoize(&mut self, new: &Self) -> bool {
         let equal = self == new;
