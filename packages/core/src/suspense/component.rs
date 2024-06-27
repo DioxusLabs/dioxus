@@ -616,7 +616,10 @@ impl SuspenseBoundaryProps {
         dom: &mut VirtualDom,
         destroy_component_state: bool,
     ) {
-        tracing::trace!("Removing suspense boundary {:?}", self.suspended_nodes);
+        tracing::trace!(
+            "Removing suspense boundary with suspense nodes {:?}",
+            self.suspended_nodes
+        );
         // Remove the suspended nodes
         if let Some(node) = self.suspended_nodes.take() {
             node.remove_node_inner(dom, None::<&mut M>, destroy_component_state, None)

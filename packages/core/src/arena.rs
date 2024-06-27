@@ -62,7 +62,6 @@ impl VirtualDom {
     pub(crate) fn reclaim(&mut self, el: ElementId) {
         if !self.try_reclaim(el) {
             tracing::error!("cannot reclaim {:?}", el);
-            panic!("cannot reclaim {:?}", el)
         }
     }
 
