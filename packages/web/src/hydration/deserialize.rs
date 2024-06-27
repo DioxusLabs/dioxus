@@ -59,7 +59,7 @@ impl HTMLDataCursor {
         let current = self.index.get();
         if current >= self.data.len() {
             tracing::trace!(
-                "Tried to take more data than was available, len: {}, index: {}; This is normal if the server function was started on the client",
+                "Tried to take more data than was available, len: {}, index: {}; This is normal if the server function was started on the client, but may indicate a bug if the server function result should be deserialized from the server",
                 self.data.len(),
                 current
             );
