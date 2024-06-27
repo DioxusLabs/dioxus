@@ -52,7 +52,7 @@ fn hash_ts_files(files: Vec<PathBuf>) -> u64 {
         let contents = std::fs::read_to_string(file).unwrap();
         // windows + git does a weird thing with line endings, so we need to normalize them
         for line in contents.lines() {
-            hash.write(line.as_bytes());
+            hash.write(line.trim_matches('\r').as_bytes());
         }
     }
     hash.finish()
