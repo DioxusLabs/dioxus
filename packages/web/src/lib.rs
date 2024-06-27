@@ -182,7 +182,7 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
 
         #[cfg(all(feature = "hot_reload", debug_assertions))]
         if let Some(template) = template {
-            // dom.replace_template(template);
+            dom.replace_template(template);
         }
 
         #[cfg(feature = "hydrate")]
