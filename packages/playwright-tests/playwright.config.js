@@ -107,5 +107,14 @@ module.exports = defineConfig({
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",
     },
+    {
+      cwd: path.join(process.cwd(), "nested-suspense"),
+      command:
+        'cargo run --package dioxus-cli --release -- serve --platform fullstack --addr "127.0.0.1" --port 5050',
+      port: 5050,
+      timeout: 20 * 60 * 1000,
+      reuseExistingServer: !process.env.CI,
+      stdout: "pipe",
+    },
   ],
 });

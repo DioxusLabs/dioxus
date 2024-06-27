@@ -48,6 +48,7 @@ members = [
     "packages/playwright-tests/web",
     "packages/playwright-tests/fullstack",
     "packages/playwright-tests/suspense-carousel",
+    "packages/playwright-tests/nested-suspense",
 ]
 exclude = ["examples/mobile_demo", "examples/openid_connect_demo"]
 

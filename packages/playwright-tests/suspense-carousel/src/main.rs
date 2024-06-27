@@ -1,3 +1,9 @@
+// This test is used by playwright configured in the root of the repo
+// Tests:
+// - Streaming hydration
+// - Suspense
+// - Server futures
+
 #![allow(non_snake_case, unused)]
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};

@@ -6272,6 +6272,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nested-suspense"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "new_debug_unreachable"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
