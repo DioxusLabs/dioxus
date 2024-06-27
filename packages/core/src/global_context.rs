@@ -13,7 +13,7 @@ pub fn vdom_is_rendering() -> bool {
     Runtime::with(|rt| rt.rendering.get()).unwrap_or_default()
 }
 
-/// Throw a [`CapturedError`] into the current scope. The error will bubble up to the nearest [`ErrorBoundary`] or the root of the app.
+/// Throw a [`CapturedError`] into the current scope. The error will bubble up to the nearest [`crate::prelude::ErrorBoundary()`] or the root of the app.
 ///
 /// # Examples
 /// ```rust, no_run

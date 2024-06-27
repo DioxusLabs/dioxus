@@ -17,6 +17,7 @@ mod nodes;
 mod properties;
 mod reactive_context;
 mod render_error;
+mod root_wrapper;
 mod runtime;
 mod scheduler;
 mod scope_arena;

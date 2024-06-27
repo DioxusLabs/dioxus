@@ -602,6 +602,16 @@ pub struct VComponent {
     pub(crate) props: BoxedAnyProps,
 }
 
+impl Clone for VComponent {
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name,
+            render_fn: self.render_fn,
+            props: self.props.duplicate(),
+        }
+    }
+}
+
 impl VComponent {
     /// Create a new [`VComponent`] variant
     pub fn new<P, M: 'static>(

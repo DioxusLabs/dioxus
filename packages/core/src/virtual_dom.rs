@@ -3,10 +3,9 @@
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
 use crate::innerlude::{SuspenseBoundaryProps, Work};
-use crate::prelude::ErrorContext;
-use crate::Task;
+use crate::properties::RootProps;
+use crate::root_wrapper::RootScopeWrapper;
 use crate::{
-    any_props::AnyProps,
     arena::ElementId,
     innerlude::{
         ElementRef, NoOpMutations, SchedulerMsg, ScopeOrder, ScopeState, VNodeMount, VProps,
@@ -17,6 +16,7 @@ use crate::{
     scopes::ScopeId,
     AttributeValue, ComponentFunction, Element, Event, Mutations,
 };
+use crate::{Task, VComponent};
 use futures_util::StreamExt;
 use slab::Slab;
 use std::collections::BTreeSet;
@@ -304,7 +304,13 @@ impl VirtualDom {
         root: impl ComponentFunction<P, M>,
         root_props: P,
     ) -> Self {
-        Self::new_with_component(VProps::new(root, |_, _| true, root_props, "root"))
+        let render_fn = root.id();
+        let props = VProps::new(root, |_, _| true, root_props, "Root");
+        Self::new_with_component(VComponent {
+            name: "root",
+            render_fn,
+            props: Box::new(props),
+        })
     }
 
     /// Create a new virtualdom and build it immediately
@@ -316,7 +322,7 @@ impl VirtualDom {
 
     /// Create a new VirtualDom from something that implements [`AnyProps`]
     #[instrument(skip(root), level = "trace", name = "VirtualDom::new")]
-    pub(crate) fn new_with_component(root: impl AnyProps + 'static) -> Self {
+    pub(crate) fn new_with_component(root: VComponent) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
 
         let mut dom = Self {
@@ -330,11 +336,14 @@ impl VirtualDom {
             mounts: Default::default(),
         };
 
-        let root = dom.new_scope(Box::new(root), "app");
+        let root = VProps::new(
+            RootScopeWrapper,
+            |_, _| true,
+            RootProps(root),
+            "RootWrapper",
+        );
 
-        // Unlike react, we provide a default error boundary that just renders the error as a string
-        root.state()
-            .provide_context(ErrorContext::new(Vec::new(), ScopeId::ROOT));
+        dom.new_scope(Box::new(root), "app");
 
         // the root element is always given element ID 0 since it's the container for the entire tree
         dom.elements.insert(None);
