@@ -825,7 +825,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "miniz_oxide",
- "object",
+ "object 0.32.2",
  "rustc-demangle",
 ]
 
@@ -5758,8 +5758,6 @@ dependencies = [
 [[package]]
 name = "manganis-cli-support"
 version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d502b0db0ef8c880fecff174903815efedfacbcd5ea9a8bef96752f1e0d7eb6"
 dependencies = [
  "anyhow",
  "cargo-lock",
@@ -5768,8 +5766,9 @@ dependencies = [
  "image 0.25.1",
  "imagequant",
  "lightningcss",
- "manganis-common",
+ "manganis-common 0.2.4",
  "mozjpeg",
+ "object 0.36.0",
  "petgraph",
  "png",
  "railwind",
@@ -5777,6 +5776,22 @@ dependencies = [
  "rayon",
  "reqwest",
  "rustc-hash",
+ "serde",
+ "serde_json",
+ "toml 0.7.8",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "manganis-common"
+version = "0.2.4"
+dependencies = [
+ "anyhow",
+ "base64 0.21.7",
+ "home",
+ "infer 0.11.0",
+ "reqwest",
  "serde",
  "toml 0.7.8",
  "tracing",
@@ -5806,7 +5821,7 @@ version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "704a0123ac90fa630b21a04fde56c29dfd5a7665c5e8f3639567989daa2d29d1"
 dependencies = [
- "manganis-common",
+ "manganis-common 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "proc-macro2",
  "quote",
  "syn 2.0.60",
@@ -6383,6 +6398,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6a622008b6e321afc04970976f62ee297fdbaa6f95318ca343e3eebb9648441"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "object"
+version = "0.36.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "576dfe1fc8f9df304abb159d767a29d0476f7750fbf8aa7ad07816004a207434"
+dependencies = [
+ "flate2",
+ "memchr",
+ "ruzstd",
+ "wasmparser 0.208.1",
 ]
 
 [[package]]
@@ -7875,6 +7902,17 @@ name = "rustversion"
 version = "1.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "955d28af4278de8121b7ebeb796b6a45735dc01436d898801014aced2773a3d6"
+
+[[package]]
+name = "ruzstd"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5174a470eeb535a721ae9fdd6e291c2411a906b96592182d05217591d5c5cf7b"
+dependencies = [
+ "byteorder",
+ "derive_more",
+ "twox-hash",
+]
 
 [[package]]
 name = "ryu"
@@ -9640,6 +9678,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "twox-hash"
+version = "1.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
+dependencies = [
+ "cfg-if",
+ "static_assertions",
+]
+
+[[package]]
 name = "typenum"
 version = "1.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9866,7 +9914,7 @@ dependencies = [
  "log",
  "walrus-macro",
  "wasm-encoder",
- "wasmparser",
+ "wasmparser 0.80.2",
 ]
 
 [[package]]
@@ -10152,6 +10200,15 @@ name = "wasmparser"
 version = "0.80.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "449167e2832691a1bff24cde28d2804e90e09586a448c8e76984792c44334a6b"
+
+[[package]]
+name = "wasmparser"
+version = "0.208.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd921789c9dcc495f589cb37d200155dee65b4a4beeb853323b5e24e0a5f9c58"
+dependencies = [
+ "bitflags 2.5.0",
+]
 
 [[package]]
 name = "web-sys"
