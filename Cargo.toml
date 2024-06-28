@@ -153,7 +153,7 @@ repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
-rust-version = "1.60.0"
+rust-version = "1.79.0"
 publish = false
 
 [dependencies]
@@ -211,12 +211,12 @@ doc-scrape-examples = true
 
 [[example]]
 name = "video_stream"
-required-features = ["http", "desktop"]
+required-features = ["http", "default"]
 doc-scrape-examples = true
 
 [[example]]
 name = "suspense"
-required-features = ["http", "desktop"]
+required-features = ["http", "default"]
 doc-scrape-examples = true
 
 [[example]]
@@ -236,105 +236,110 @@ doc-scrape-examples = true
 
 [[example]]
 name = "backgrounded_futures"
-required-features = ["desktop"]
+required-features = ["default"]
+doc-scrape-examples = true
+
+[[example]]
+name = "custom_decorations"
+required-features = ["default"]
 doc-scrape-examples = true
 
 [[example]]
 name = "calculator_mutable"
-required-features = ["desktop"]
+required-features = ["default"]
 doc-scrape-examples = true
 
 [[example]]
 name = "calculator"
-required-features = ["desktop"]
+required-features = ["default"]
 doc-scrape-examples = true
 
 [[example]]
 name = "clock"
-required-features = ["desktop"]
+required-features = ["default"]
 doc-scrape-examples = true
 
 [[example]]
 name = "crm"
-required-features = ["desktop"]
+required-features = ["default"]
 doc-scrape-examples = true
 
 [[example]]
 name = "custom_html"
-required-features = ["desktop"]
+required-features = ["default"]
 doc-scrape-examples = true
 
 [[example]]
 name = "custom_menu"
-required-features = ["desktop"]
+required-features = ["default"]
 doc-scrape-examples = true
 
 [[example]]
 name = "dynamic_asset"
-required-features = ["desktop"]
+required-features = ["default"]
 doc-scrape-examples = true
 
 [[example]]
 name = "error_handle"
-required-features = ["desktop"]
+required-features = ["default"]
 doc-scrape-examples = true
 
 [[example]]
 name = "file_explorer"
-required-features = ["desktop"]
+required-features = ["default"]
 doc-scrape-examples = true
 
 [[example]]
 name = "future"
-required-features = ["desktop"]
+required-features = ["default"]
 doc-scrape-examples = true
 
 [[example]]
 name = "hydration"
-required-features = ["desktop"]
+required-features = ["default"]
 doc-scrape-examples = true
 
 [[example]]
 name = "multiwindow"
-required-features = ["desktop"]
+required-features = ["default"]
 doc-scrape-examples = true
 
 [[example]]
 name = "overlay"
-required-features = ["desktop"]
+required-features = ["default"]
 doc-scrape-examples = true
 
 [[example]]
 name = "popup"
-required-features = ["desktop"]
+required-features = ["default"]
 doc-scrape-examples = true
 
 [[example]]
 name = "read_size"
-required-features = ["desktop"]
+required-features = ["default"]
 doc-scrape-examples = true
 
 [[example]]
 name = "shortcut"
-required-features = ["desktop"]
+required-features = ["default"]
 doc-scrape-examples = true
 
 [[example]]
 name = "streams"
-required-features = ["desktop"]
+required-features = ["default"]
 doc-scrape-examples = true
 
 [[example]]
 name = "window_event"
-required-features = ["desktop"]
+required-features = ["default"]
 doc-scrape-examples = true
 
 [[example]]
 name = "window_focus"
-required-features = ["desktop"]
+required-features = ["default"]
 doc-scrape-examples = true
 
 [[example]]
 name = "window_zoom"
-required-features = ["desktop"]
+required-features = ["default"]
 doc-scrape-examples = true
