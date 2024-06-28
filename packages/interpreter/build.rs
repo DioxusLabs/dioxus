@@ -42,7 +42,9 @@ fn main() {
 }
 
 /// Hashes the contents of a directory
-fn hash_ts_files(files: Vec<PathBuf>) -> u64 {
+fn hash_ts_files(mut files: Vec<PathBuf>) -> u64 {
+    // Different systems will read the files in different orders, so we sort them to make sure the hash is consistent
+    files.sort();
     let mut hash = DefaultHasher::new();
     for file in files {
         let contents = std::fs::read_to_string(file).unwrap();
