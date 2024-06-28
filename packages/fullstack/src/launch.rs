@@ -97,6 +97,8 @@ async fn launch_server(
 ) {
     use clap::Parser;
 
+    use crate::prelude::RenderHandleState;
+
     let args = dioxus_cli_config::ServeArguments::from_cli()
         .unwrap_or_else(dioxus_cli_config::ServeArguments::parse);
     let addr = args
@@ -116,8 +118,7 @@ async fn launch_server(
 
             let cfg = platform_config.server_cfg.build();
 
-            let ssr_state = SSRState::new(&cfg);
-            let mut router = router.serve_static_assets(cfg.assets_path.clone()).await;
+            let mut router = router.serve_static_assets(cfg.assets_path.clone());
 
             #[cfg(all(feature = "hot-reload", debug_assertions))]
             {
@@ -126,11 +127,10 @@ async fn launch_server(
             }
 
             router.fallback(
-                axum::routing::get(crate::axum_adapter::render_handler).with_state((
-                    cfg,
-                    Arc::new(build_virtual_dom),
-                    ssr_state,
-                )),
+                axum::routing::get(crate::axum_adapter::render_handler).with_state(
+                    RenderHandleState::new_with_virtual_dom_factory(build_virtual_dom)
+                        .with_config(cfg),
+                ),
             )
         };
         let router = router.into_make_service();

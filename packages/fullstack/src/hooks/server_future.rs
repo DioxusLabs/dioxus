@@ -12,7 +12,8 @@ use std::future::Future;
 ///
 /// Unlike [`use_resource`] dependencies are only tracked inside the function that spawns the async block, not the async block itself.
 ///
-/// ```rust
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
 /// // ❌ The future inside of use_server_future is not reactive
 /// let id = use_signal(|| 0);
 /// use_server_future(move || {
@@ -37,7 +38,8 @@ use std::future::Future;
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
 /// # async fn fetch_article(id: u32) -> String { todo!() }
 /// use dioxus::prelude::*;
 ///

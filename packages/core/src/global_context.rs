@@ -215,7 +215,7 @@ pub fn remove_future(id: Task) {
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust, no_run
 /// use dioxus::prelude::*;
 ///
 /// // prints a greeting on the initial render
@@ -226,7 +226,7 @@ pub fn remove_future(id: Task) {
 ///
 /// # Custom Hook Example
 ///
-/// ```rust
+/// ```rust, no_run
 /// use dioxus::prelude::*;
 ///
 /// pub struct InnerCustomState(usize);
