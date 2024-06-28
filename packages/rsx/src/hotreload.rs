@@ -189,7 +189,7 @@ impl HotReload {
         // Also note that we use a vec + remove, but the idea is that in most cases we're removing from the end
         // which is an O(1) operation. We could use a linked list or a queue, but I don't want any
         // more complexity than necessary here since this can complex.
-        let mut old_attrs = ReloadStack::new(old.dynamic_attributes());
+        let mut old_attrs = PopVec::new(old.dynamic_attributes());
 
         // Now we can run through the dynamic nodes and see if we can hot reload them
         // Here we create the new attribute paths for the final template - we'll fill them in as we find matches
@@ -250,7 +250,8 @@ impl HotReload {
         old: &TemplateBody,
         new: &TemplateBody,
     ) -> Option<Vec<NodePath>> {
-        let mut old_nodes = ReloadStack::new(old.dynamic_nodes());
+        use BodyNode::*;
+        let mut old_nodes = PopVec::new(old.dynamic_nodes());
 
         let mut node_paths = vec![vec![]; old.node_paths.len()];
 
@@ -274,22 +275,19 @@ impl HotReload {
 
             // Make sure we descend into the children, and then record any changed literals
             match (old_node, new_node) {
-                // If it's text, we might want to hotreload the lits
-                (BodyNode::Text(a), BodyNode::Text(b)) => {
-                    // If the contents changed try to reload it
-                    if score != usize::MAX {
-                        self.hotreload_text_node(a, b)?;
-                    }
+                // If the contents of the text changed, then we need to hotreload the text node
+                (Text(a), Text(b)) if score != usize::MAX => {
+                    self.hotreload_text_node(a, b)?;
                 }
 
-                // We want to hotreload the component literals and the children
-                (BodyNode::Component(a), BodyNode::Component(b)) => {
+                // We want to attempt to  hotreload the component literals and the children
+                (Component(a), Component(b)) => {
                     self.hotreload_component_fields::<Ctx>(a, b)?;
                     self.hotreload_body::<Ctx>(&a.children, &b.children)?;
                 }
 
                 // We don't reload the exprs or condition - just the bodies
-                (BodyNode::ForLoop(a), BodyNode::ForLoop(b)) => {
+                (ForLoop(a), ForLoop(b)) => {
                     self.hotreload_body::<Ctx>(&a.body, &b.body)?;
                 }
 
@@ -298,14 +296,12 @@ impl HotReload {
                 // for an `else` chain to be added/removed.
                 //
                 // Our ifchain parser would need to be better to support this.
-                (BodyNode::IfChain(a), BodyNode::IfChain(b)) => {
+                (IfChain(a), IfChain(b)) => {
                     self.hotreload_ifchain::<Ctx>(a, b)?;
                 }
 
                 // Just assert we never get these cases - attributes are handled separately
-                (BodyNode::Element(_), BodyNode::Element(_)) => {
-                    unreachable!("Elements are not dynamic nodes")
-                }
+                (Element(_), Element(_)) => unreachable!("Elements are not dynamic nodes"),
 
                 _ => {}
             }

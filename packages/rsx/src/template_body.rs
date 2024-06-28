@@ -75,7 +75,7 @@ type AttributePath = Vec<u8>;
 ///
 /// The TemplateBody when needs to be parsed into a surrounding `Body` to be correctly re-indexed
 /// By default every body has a `0` default index
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct TemplateBody {
     pub roots: Vec<BodyNode>,
     pub template_idx: DynIdx,

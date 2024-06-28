@@ -160,7 +160,7 @@ pub fn score_ifmt(left: &IfmtInput, right: &IfmtInput) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use crate::ReloadStack;
+    use crate::PopVec;
 
     use super::*;
     use quote::quote;
@@ -279,7 +279,7 @@ mod tests {
 
     #[test]
     fn stack_scoring() {
-        let mut stack: ReloadStack<IfmtInput> = ReloadStack::new(
+        let stack: PopVec<IfmtInput> = PopVec::new(
             vec![
                 "{abc} {def}".parse().unwrap(),
                 "{def}".parse().unwrap(),

@@ -6,10 +6,10 @@ use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
     token::{self, Brace},
-    Ident, LitStr, Result, Token,
+    Expr, Ident, LitStr, Result, Token,
 };
 
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum BodyNode {
     /// div {}
     Element(Element),
@@ -60,12 +60,11 @@ impl Parse for BodyNode {
         // }
         // ```
         if stream.peek(Token![match]) {
-            todo!()
-            // return Ok(BodyNode::RawExpr(BracedRawExpr {
-            //     expr: stream.parse::<Expr>()?.to_token_stream(),
-            //     dyn_idx: DynIdx::default(),
-            //     brace: None,
-            // }));
+            return Ok(BodyNode::RawExpr(PartialExpr {
+                expr: stream.parse::<Expr>()?.to_token_stream(),
+                dyn_idx: DynIdx::default(),
+                brace: Brace::default(),
+            }));
         }
 
         // Raw expressions need to be wrapped in braces - let RawBracedExpr handle partial expansion

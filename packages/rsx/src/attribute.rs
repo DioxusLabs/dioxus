@@ -509,12 +509,12 @@ mod tests {
 
     #[test]
     fn merge_attrs() {
-        let a: Attribute = parse2(quote! { class: "value1" }).unwrap();
-        let b: Attribute = parse2(quote! { class: "value2" }).unwrap();
+        let _a: Attribute = parse2(quote! { class: "value1" }).unwrap();
+        let _b: Attribute = parse2(quote! { class: "value2" }).unwrap();
 
-        let b: Attribute = parse2(quote! { class: "value2 {something}" }).unwrap();
-        let b: Attribute = parse2(quote! { class: if value { "other thing" } }).unwrap();
-        let b: Attribute = parse2(quote! { class: if value { some_expr } }).unwrap();
+        let _b: Attribute = parse2(quote! { class: "value2 {something}" }).unwrap();
+        let _b: Attribute = parse2(quote! { class: if value { "other thing" } }).unwrap();
+        let _b: Attribute = parse2(quote! { class: if value { some_expr } }).unwrap();
     }
 
     #[test]

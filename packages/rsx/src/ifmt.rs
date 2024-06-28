@@ -9,6 +9,10 @@ use syn::{
 };
 
 /// A hot-reloadable formatted string, boolean, number or other literal
+///
+/// This wraps LitStr with some extra goodies like inline expressions and hot-reloading.
+/// Originally this was intended to provide named inline string interpolation but eventually Rust
+/// actualy shipped this!
 #[derive(Debug, Eq, Clone, Hash)]
 pub struct IfmtInput {
     pub source: LitStr,
@@ -24,6 +28,13 @@ impl PartialEq for IfmtInput {
 }
 
 impl IfmtInput {
+    pub fn new(span: Span) -> Self {
+        Self {
+            source: LitStr::new("", span),
+            segments: Vec::new(),
+        }
+    }
+
     pub fn new_litstr(source: LitStr) -> Self {
         let segments = Self::from_raw(&source.value()).unwrap();
         Self { segments, source }
@@ -31,6 +42,34 @@ impl IfmtInput {
 
     pub fn span(&self) -> Span {
         self.source.span()
+    }
+
+    pub fn push_raw_str(&mut self, other: String) {
+        self.segments.push(Segment::Literal(other.to_string()))
+    }
+
+    pub fn push_ifmt(&mut self, other: IfmtInput) {
+        self.segments.extend(other.segments);
+    }
+
+    pub fn push_condition(&mut self, condition: Expr, contents: IfmtInput) {
+        let desugared = quote! {
+            if #condition { #contents } else { "" }
+        };
+
+        let parsed = syn::parse2::<Expr>(desugared).unwrap();
+
+        self.segments.push(Segment::Formatted(FormattedSegment {
+            format_args: String::new(),
+            segment: FormattedSegmentType::Expr(Box::new(parsed)),
+        }));
+    }
+
+    pub fn push_expr(&mut self, expr: Expr) {
+        self.segments.push(Segment::Formatted(FormattedSegment {
+            format_args: String::new(),
+            segment: FormattedSegmentType::Expr(Box::new(expr)),
+        }));
     }
 
     pub fn is_static(&self) -> bool {
@@ -325,8 +364,8 @@ impl Segment {
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct FormattedSegment {
-    format_args: String,
-    segment: FormattedSegmentType,
+    pub format_args: String,
+    pub segment: FormattedSegmentType,
 }
 
 impl ToTokens for FormattedSegment {
@@ -395,7 +434,6 @@ impl Parse for IfmtInput {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::reload_stack::ReloadStack;
     use crate::PrettyUnparse;
 
     #[test]
@@ -439,8 +477,22 @@ mod tests {
         let input =
             syn::parse2::<IfmtInput>(quote! { r#"hello {world} {world} {world()}"# }).unwrap();
         println!("{}", input.to_quoted_string_from_parts());
+        assert!(!input.is_static());
 
         let input = syn::parse2::<IfmtInput>(quote! { r#"hello"# }).unwrap();
         println!("{}", input.to_quoted_string_from_parts());
+        assert!(input.is_static());
+    }
+
+    #[test]
+    fn pushing_conditional() {
+        let mut input = syn::parse2::<IfmtInput>(quote! { "hello " }).unwrap();
+
+        input.push_condition(
+            parse_quote! { true },
+            syn::parse2::<IfmtInput>(quote! { "world" }).unwrap(),
+        );
+        println!("{}", input.to_token_stream().pretty_unparse());
+        dbg!(input.segments);
     }
 }

@@ -11,7 +11,7 @@ use syn::{
 use crate::TemplateBody;
 
 #[non_exhaustive]
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct IfChain {
     pub if_token: Token![if],
     pub cond: Box<Expr>,

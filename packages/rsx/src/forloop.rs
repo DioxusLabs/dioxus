@@ -4,7 +4,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use syn::{braced, Expr, Pat};
 
 #[non_exhaustive]
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct ForLoop {
     pub for_token: Token![for],
     pub pat: Pat,

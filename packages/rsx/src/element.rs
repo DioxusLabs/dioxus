@@ -2,7 +2,10 @@ use crate::innerlude::*;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro2_diagnostics::SpanDiagnosticExt;
 use quote::{quote, ToTokens, TokenStreamExt};
-use std::fmt::{Display, Formatter};
+use std::{
+    collections::HashMap,
+    fmt::{Display, Formatter},
+};
 use syn::{
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
@@ -11,7 +14,7 @@ use syn::{
 };
 
 /// Parse the VNode::Element type
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Element {
     /// div { } -> div
     pub name: ElementName,
@@ -191,12 +194,18 @@ impl Element {
     /// }
     /// ```
     fn merge_attributes(&mut self) {
-        for attr in self.raw_attributes.iter() {
+        let attrs = self
+            .raw_attributes
+            .iter()
+            .map(|a| (&a.name, a))
+            .collect::<HashMap<_, _>>();
+
+        for (name, attr) in attrs {
             // Collect all the attributes with the same name
             let matching_attrs = self
                 .raw_attributes
                 .iter()
-                .filter(|a| a.matches_attr_name(&attr))
+                .filter(|a| a.name == *name)
                 .collect::<Vec<_>>();
 
             // if there's only one attribute with this name, then we don't need to merge anything
@@ -210,11 +219,7 @@ impl Element {
             // We might want to throw a diagnostic of trying to merge things together that might not
             // make a whole lot of sense - like merging two exprs together
 
-            // The segments that we'll be combining
-            let mut segments = vec![];
-
-            // And then then fake source we're going to assign to it
-            let mut out_raw = String::new();
+            let mut out = IfmtInput::new(attr.span());
 
             for (idx, matching_attr) in matching_attrs.iter().enumerate() {
                 // If this is the first attribute, then we don't need to add a delimiter
@@ -222,78 +227,35 @@ impl Element {
                     // FIXME: I don't want to special case anything - but our delimiter is special cased to a space
                     // We really don't want to special case anything in the macro, but the hope here is that
                     // multiline strings can be merged with a space
-                    out_raw.push_str(" ");
-                    segments.push(Segment::Literal(" ".to_string()));
+                    out.push_raw_str(" ".to_string());
                 }
 
-                // we only allow merging of format types
-                // IE you can't merge an expression with a boolean - that doesn't make sense
-                // we in theory could support more types - merging expressions with strings is *okay* -ish
-                // but you can also just drop an expression into a format string
-                match &matching_attr.value {
-                    AttributeValue::AttrLiteral(lit) => {
-                        // If the literal is a formatted string, then we'll just join it
-                        // Otherwise literals are just pushed as is
-                        match &lit.value {
-                            HotLiteralType::Fmted(new) => {
-                                out_raw.push_str(&new.source.value());
-                                segments.extend(new.segments.clone());
-                            }
-                            _lit => {
-                                self.diagnostics
-                                    .push(lit.span().error("Cannot merge non-fmt literals").help(
-                                        "Only formatted strings can be merged together. If you want to merge literals, you can use a format string.",
-                                    ));
-                                continue;
-                            }
-                        }
-                    }
-
-                    AttributeValue::AttrOptionalExpr {
-                        condition: _,
-                        value,
-                    } => {
-                        // If the literal is a formatted string, then we'll just join it
-                        // Otherwise literals are just pushed as is
-                        match value.as_ref() {
-                            AttributeValue::AttrLiteral(lit) => match &lit.value {
-                                HotLiteralType::Fmted(new) => {
-                                    out_raw.push_str(&new.source.value());
-                                    segments.extend(new.segments.clone());
-                                }
-                                _lit => {
-                                    self.diagnostics
-                                    .push(lit.span().error("Cannot merge non-fmt literals").help(
-                                        "Only formatted strings can be merged together. If you want to merge literals, you can use a format string.",
-                                    ));
-                                    continue;
-                                }
-                            },
-                            _ => {
-                                self.diagnostics
-                                    .push(value.span().error("Cannot merge non-literals").help(
-                                        "Only formatted strings can be merged together. If you want to merge literals, you can use a format string.",
-                                    ));
-                                continue;
-                            }
-                        }
-                    }
-
-                    non_lit => {
-                        self.diagnostics
-                            .push(non_lit.span().error("Cannot merge non-literals").help(
-                                "Only formatted strings can be merged together. If you want to merge literals, you can use a format string.",
-                            ));
+                // Merge raw literals into the output
+                if let AttributeValue::AttrLiteral(lit) = &matching_attr.value {
+                    if let HotLiteralType::Fmted(new) = &lit.value {
+                        out.push_ifmt(new.clone());
                         continue;
                     }
                 }
+
+                // Merge `if cond { "abc" }` into the output
+                if let AttributeValue::AttrOptionalExpr { condition, value } = &matching_attr.value
+                {
+                    if let AttributeValue::AttrLiteral(lit) = value.as_ref() {
+                        if let HotLiteralType::Fmted(new) = &lit.value {
+                            out.push_condition(condition.clone(), new.clone());
+                            continue;
+                        }
+                    }
+                }
+
+                self.diagnostics.push(matching_attr.span().error("Cannot merge non-fmt literals").help(
+                    "Only formatted strings can be merged together. If you want to merge literals, you can use a format string.",
+                ));
             }
 
             let out_lit = HotLiteral {
-                value: HotLiteralType::Fmted(IfmtInput {
-                    source: LitStr::new(&out_raw, attr.span()),
-                    segments,
-                }),
+                value: HotLiteralType::Fmted(out),
                 hr_idx: Default::default(),
             };
 
@@ -511,12 +473,25 @@ fn merges_attributes() {
     let input = quote::quote! {
         div {
             class: "hello world",
-            class: if some_expr { "abc" }
+            class: if some_expr { "abc {def}" }
         }
     };
 
     let parsed: Element = syn::parse2(input).unwrap();
-    assert!(parsed.merged_attributes.len() == 1);
+    assert_eq!(parsed.merged_attributes.len(), 1);
+    assert_eq!(
+        parsed.merged_attributes[0].name.to_string(),
+        "class".to_string()
+    );
+
+    let attr = &parsed.merged_attributes[0].value;
+
+    println!("{}", attr.to_token_stream().pretty_unparse());
+
+    let attr = match attr {
+        AttributeValue::AttrLiteral(lit) => lit,
+        _ => panic!("expected literal"),
+    };
 }
 
 /// There are a number of cases where merging attributes doesn't make sense

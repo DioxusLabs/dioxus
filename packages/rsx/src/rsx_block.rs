@@ -30,7 +30,7 @@ use syn::{
 /// The name of the block is expected to be parsed by the parent parser. It will accept items out of
 /// order if possible and then bubble up diagnostics to the parent. This lets us give better errors
 /// and autocomplete
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct RsxBlock {
     pub brace: token::Brace,
     pub attributes: Vec<Attribute>,

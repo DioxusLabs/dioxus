@@ -42,10 +42,6 @@ impl PartialEq for Diagnostics {
 
 impl Eq for Diagnostics {}
 
-impl std::hash::Hash for Diagnostics {
-    fn hash<H: std::hash::Hasher>(&self, _state: &mut H) {}
-}
-
 impl ToTokens for Diagnostics {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         for diagnostic in &self.diagnostics {

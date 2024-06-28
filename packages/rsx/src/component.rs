@@ -27,7 +27,7 @@ use syn::{
     token, AngleBracketedGenericArguments, Expr, Ident, PathArguments, Result,
 };
 
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Component {
     pub name: syn::Path,
     pub generics: Option<AngleBracketedGenericArguments>,
