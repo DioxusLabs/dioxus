@@ -107,16 +107,20 @@ async fn ws_handler(
     ws.on_upgrade(move |socket| ws_reload_handler(socket, state))
 }
 
-async fn ws_reload_handler(mut socket: WebSocket, state: HotReloadReceiver) {
+/// Handles full-reloads (e.g. page refresh).
+async fn ws_reload_handler(mut socket: WebSocket, mut state: HotReloadReceiver) {
     let mut rx = state.reload.subscribe();
 
     loop {
         rx.recv().await.unwrap();
 
-        let _ = socket.send(Message::Text(String::from("reload"))).await;
+        // We need to clear the cached templates because we are doing a "fresh" build
+        // and the templates may force the page to a state before the full reload.
+        state.clear_all_modified_templates();
 
         // ignore the error
-        println!("forcing reload");
+        let _ = socket.send(Message::Text(String::from("reload"))).await;
+        tracing::info!("forcing reload");
 
         // flush the errors after recompling
         rx = rx.resubscribe();
@@ -165,6 +169,11 @@ impl HotReloadReceiver {
             .values()
             .cloned()
             .collect()
+    }
+
+    /// Clears the cache of modified templates.
+    pub fn clear_all_modified_templates(&mut self) {
+        self.template_updates.lock().unwrap().clear();
     }
 
     /// Send a hot reloading message to the client

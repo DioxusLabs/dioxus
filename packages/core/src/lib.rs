@@ -85,3 +85,5 @@ pub mod prelude {
         Template, TemplateAttribute, TemplateNode, Throw, VNode, VNodeInner, VirtualDom,
     };
 }
+
+pub use const_format;
