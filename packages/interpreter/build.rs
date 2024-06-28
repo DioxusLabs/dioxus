@@ -1,18 +1,15 @@
 use std::collections::hash_map::DefaultHasher;
-use std::env;
 use std::path::PathBuf;
 use std::{hash::Hasher, process::Command};
 
 fn main() {
     // If any TS changes, re-run the build script
-    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let mut ts_path = manifest_dir.clone();
-    ts_path.push("src/ts");
-    let watching = std::fs::read_dir(ts_path).unwrap();
+    let watching = std::fs::read_dir("./src/ts").unwrap();
     let ts_paths: Vec<_> = watching
         .into_iter()
         .flatten()
         .map(|entry| entry.path())
+        .filter(|path| path.extension().map(|ext| ext == "ts").unwrap_or(false))
         .collect();
     for path in &ts_paths {
         println!("cargo:rerun-if-changed={}", path.display());
@@ -22,8 +19,7 @@ fn main() {
     let hash = hash_ts_files(ts_paths);
 
     // If the hash matches the one on disk, we're good and don't need to update bindings
-    let hash_file = manifest_dir.join("src/js/hash.txt");
-    let fs_hash_string = std::fs::read_to_string(&hash_file);
+    let fs_hash_string = std::fs::read_to_string("src/js/hash.txt");
     let expected = fs_hash_string
         .as_ref()
         .map(|s| s.trim())
@@ -42,7 +38,7 @@ fn main() {
     gen_bindings("hydrate", "hydrate");
     gen_bindings("initialize_streaming", "initialize_streaming");
 
-    std::fs::write(hash_file, hash.to_string()).unwrap();
+    std::fs::write("src/js/hash.txt", hash.to_string()).unwrap();
 }
 
 /// Hashes the contents of a directory
@@ -52,7 +48,7 @@ fn hash_ts_files(files: Vec<PathBuf>) -> u64 {
         let contents = std::fs::read_to_string(file).unwrap();
         // windows + git does a weird thing with line endings, so we need to normalize them
         for line in contents.lines() {
-            hash.write(line.trim_matches('\r').as_bytes());
+            hash.write(line.as_bytes());
         }
     }
     hash.finish()
