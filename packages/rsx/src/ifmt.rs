@@ -54,7 +54,10 @@ impl IfmtInput {
 
     pub fn push_condition(&mut self, condition: Expr, contents: IfmtInput) {
         let desugared = quote! {
-            if #condition { #contents } else { "" }
+            {
+                let _cond = if #condition { #contents.to_string() } else { String::new() };
+                _cond
+            }
         };
 
         let parsed = syn::parse2::<Expr>(desugared).unwrap();

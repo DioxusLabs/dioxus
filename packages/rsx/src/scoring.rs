@@ -73,14 +73,18 @@ pub fn score_dynamic_node(old_node: &BodyNode, new_node: &BodyNode) -> usize {
 }
 
 pub fn score_attribute(old_attr: &Attribute, new_attr: &Attribute) -> usize {
-    use AttributeValue::*;
-    use HotLiteralType::*;
-
     if old_attr.name != new_attr.name {
         return 0;
     }
 
-    match (&old_attr.value, &new_attr.value) {
+    score_attr_value(&old_attr.value, &new_attr.value)
+}
+
+fn score_attr_value(old_attr: &AttributeValue, new_attr: &AttributeValue) -> usize {
+    use AttributeValue::*;
+    use HotLiteralType::*;
+
+    match (&old_attr, &new_attr) {
         // For literals, the value itself might change, but what's more important is the
         // structure of the literal. If the structure is the same, we can hotreload it
         // Ideally the value doesn't change, but we're hoping that our stack approach
@@ -110,6 +114,20 @@ pub fn score_attribute(old_attr: &Attribute, new_attr: &Attribute) -> usize {
                 (Bool(_), Bool(_)) => 1,
                 _ => 0,
             }
+        }
+
+        (
+            AttrOptionalExpr {
+                condition: cond_a,
+                value: value_a,
+            },
+            AttrOptionalExpr {
+                condition: cond_b,
+                value: value_b,
+            },
+        ) if cond_a == cond_b => {
+            // If the condition is the same, we can hotreload it
+            score_attr_value(&*value_a, &*value_b)
         }
 
         // todo: we should try and score recrusively if we can - templates need to propagate up their
@@ -218,6 +236,10 @@ mod tests {
 
         let left: Attribute = parse2(quote! { attr: 123 }).unwrap();
         let right: Attribute = parse2(quote! { attr: 456 }).unwrap();
+        assert_eq!(score_attribute(&left, &right), 1);
+
+        let left: Attribute = parse2(quote! { class: if count > 3 { "blah {abc}" } }).unwrap();
+        let right: Attribute = parse2(quote! { class: if count > 3 { "other {abc}" } }).unwrap();
         assert_eq!(score_attribute(&left, &right), 1);
     }
 

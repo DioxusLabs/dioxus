@@ -473,7 +473,7 @@ fn merges_attributes() {
     let input = quote::quote! {
         div {
             class: "hello world",
-            class: if some_expr { "abc {def}" }
+            class: if count > 3 { "abc {def}" }
         }
     };
 

@@ -515,6 +515,9 @@ mod tests {
         let _b: Attribute = parse2(quote! { class: "value2 {something}" }).unwrap();
         let _b: Attribute = parse2(quote! { class: if value { "other thing" } }).unwrap();
         let _b: Attribute = parse2(quote! { class: if value { some_expr } }).unwrap();
+
+        let _b: Attribute = parse2(quote! { class: if value { "some_expr" } }).unwrap();
+        dbg!(_b);
     }
 
     #[test]
