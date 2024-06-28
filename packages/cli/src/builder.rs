@@ -13,7 +13,6 @@ use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 use manganis_cli_support::{AssetManifest, ManganisSupportGuard};
 use std::{
-    env,
     fs::{copy, create_dir_all, File},
     io::{self, IsTerminal, Read},
     panic,
@@ -36,7 +35,7 @@ pub struct BuildResult {
 }
 
 /// This trait is only created for the convenient and concise way to set
-/// `RUSTFLAGS` environment variable for the `subprocess::Exec`.
+/// extra rustflags when running with cargo rustc
 pub trait ExecWithRustFlagsSetter {
     fn set_rust_flags(self, rust_flags: Option<String>) -> Self;
 }
@@ -46,20 +45,18 @@ impl ExecWithRustFlagsSetter for subprocess::Exec {
     /// `rust_flags` is not `None`.
     fn set_rust_flags(self, rust_flags: Option<String>) -> Self {
         if let Some(rust_flags) = rust_flags {
-            // Some `RUSTFLAGS` might be already set in the environment or provided
-            // by the user. They should take higher priority than the default flags.
-            // If no default flags are provided, then there is no point in
-            // redefining the environment variable with the same value, if it is
-            // even set. If no custom flags are set, then there is no point in
-            // adding the unnecessary whitespace to the command.
-            self.env(
-                "RUSTFLAGS",
-                if let Ok(custom_rust_flags) = env::var("RUSTFLAGS") {
-                    rust_flags + " " + custom_rust_flags.as_str()
-                } else {
-                    rust_flags
-                },
-            )
+            // This used to attempt to read env var and append to it, but cargo will look for RUSTFLAGS
+            // in a mutally exclusive fashion. We need to use cargo rustc and then attach the args manually.
+            //
+            // Right now the solution is to use `cargo rustc` but these args will only be passed to
+            // the final executable, not the dependencies. I don't think our flags need to
+            // project anything into deps, but this is something to keep in mind.
+            //
+            // https://stackoverflow.com/questions/38040327/how-to-pass-rustc-flags-to-cargo
+            // https://doc.rust-lang.org/cargo/reference/config.html#command-line-overrides
+            // https://doc.rust-lang.org/cargo/reference/config.html#buildrustflags
+            let args = rust_flags.split_whitespace().collect::<Vec<_>>();
+            self.arg("--").args(&args)
         } else {
             self
         }
@@ -115,10 +112,9 @@ pub fn build_web(
     }
 
     let cmd = subprocess::Exec::cmd("cargo")
-        .set_rust_flags(rust_flags)
         .env("CARGO_TARGET_DIR", target_dir)
         .cwd(crate_dir)
-        .arg("build")
+        .arg("rustc")
         .arg("--target")
         .arg("wasm32-unknown-unknown")
         .arg("--message-format=json-render-diagnostics");
@@ -157,6 +153,9 @@ pub fn build_web(
         ExecutableType::Lib(name) => cmd.arg("--lib").arg(name),
         ExecutableType::Example(name) => cmd.arg("--example").arg(name),
     };
+
+    // since we're using the `cargo rustc` subcomand, we have to attach our custom rustflags to the end
+    let cmd = cmd.set_rust_flags(rust_flags);
 
     let CargoBuildResult {
         warnings,
@@ -342,10 +341,9 @@ pub fn build_desktop(
     let _guard = AssetConfigDropGuard::new();
 
     let mut cmd = subprocess::Exec::cmd("cargo")
-        .set_rust_flags(rust_flags)
         .env("CARGO_TARGET_DIR", &config.target_dir)
         .cwd(&config.crate_dir)
-        .arg("build")
+        .arg("rustc")
         .arg("--message-format=json-render-diagnostics");
 
     if config.release {
@@ -378,6 +376,9 @@ pub fn build_desktop(
         ExecutableType::Lib(name) => cmd.arg("--lib").arg(name),
         ExecutableType::Example(name) => cmd.arg("--example").arg(name),
     };
+
+    // since we're using the `cargo rustc` subcomand, we have to attach our custom rustflags to the end
+    let cmd = cmd.set_rust_flags(rust_flags);
 
     let warning_messages = prettier_build(cmd)?;
 
