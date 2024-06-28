@@ -194,7 +194,7 @@ fn app() -> Element {
             TypedInput { initial: 10.0 }
 
             // generic with the `inline_props` macro
-            Label { text: "hello genec world!" }
+            Label { text: "hello generic world!" }
             Label { text: 99.9 }
 
             // Lowercase components work too, as long as they are access using a path

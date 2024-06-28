@@ -103,15 +103,12 @@ cargo run --example hello_world
 [todomvc](./todomvc.rs) - Todo task list example
 
 # TODO
-
 Missing Features
-
 - Fine-grained reactivity
 - Refs - imperative handles to elements
 - Function-driven children: Pass functions to make VNodes
 
 Missing examples
-
 - Shared state
 - Root-less element groups
 - Custom elements
