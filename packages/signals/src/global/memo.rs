@@ -1,5 +1,5 @@
-use crate::read_impls;
 use crate::{read::Readable, Memo, ReadableRef};
+use crate::{read_impls, GlobalSignalContextKey};
 use dioxus_core::prelude::ScopeId;
 use generational_box::UnsyncStorage;
 use std::ops::Deref;
@@ -11,6 +11,7 @@ use super::get_global_context;
 /// A signal that can be accessed from anywhere in the application and created in a static
 pub struct GlobalMemo<T: 'static> {
     selector: fn() -> T,
+    key: Option<&'static str>,
 }
 
 impl<T: PartialEq + 'static> GlobalMemo<T> {
@@ -19,12 +20,22 @@ impl<T: PartialEq + 'static> GlobalMemo<T> {
     where
         T: PartialEq,
     {
-        GlobalMemo { selector }
+        GlobalMemo {
+            selector,
+            key: None,
+        }
+    }
+
+    fn key(&self) -> GlobalSignalContextKey {
+        match self.key {
+            Some(key) => GlobalSignalContextKey::Key(key),
+            None => GlobalSignalContextKey::Ptr(self as *const _ as *const ()),
+        }
     }
 
     /// Get the signal that backs this global.
     pub fn memo(&self) -> Memo<T> {
-        let key = self as *const _ as *const ();
+        let key = self.key();
 
         let context = get_global_context();
 

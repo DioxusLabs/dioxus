@@ -12,8 +12,19 @@ fn app() -> Element {
             "hello axum! {num}"
             button { class: "increment-button", onclick: move |_| num += 1, "Increment" }
         }
-        svg { circle { cx: 50, cy: 50, r: 40, stroke: "green", fill: "yellow" } }
-        div { class: "raw-attribute-div", "raw-attribute": "raw-attribute-value" }
+        svg {
+            circle {
+                cx: 50,
+                cy: 50,
+                r: 40,
+                stroke: "green",
+                fill: "yellow"
+            }
+        }
+        div {
+            class: "raw-attribute-div",
+            "raw-attribute": "raw-attribute-value"
+        }
         div { class: "hidden-attribute-div", hidden: true }
         div {
             class: "dangerous-inner-html-div",
@@ -27,11 +38,10 @@ fn app() -> Element {
             onclick: move |_| async move {
                 let mut eval = eval(
                     r#"
-                        window.document.title = 'Hello from Dioxus Eval!';
-                        dioxus.send("returned eval value");
-                    "#,
+                                window.document.title = 'Hello from Dioxus Eval!';
+                                dioxus.send("returned eval value");
+                            "#,
                 );
-
                 let result = eval.recv().await;
                 if let Ok(serde_json::Value::String(string)) = result {
                     eval_result.set(string);

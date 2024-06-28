@@ -89,5 +89,5 @@ pub fn translate_rsx(contents: String, _component: bool) -> String {
     let callbody = rsx_rosetta::rsx_from_html(&dom);
 
     // Convert the HTML to RSX
-    dioxus_autofmt::write_block_out(callbody).unwrap()
+    dioxus_autofmt::write_block_out(&callbody).unwrap()
 }

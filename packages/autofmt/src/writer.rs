@@ -1,4 +1,9 @@
-use dioxus_rsx::{AttributeType, BodyNode, ElementAttrValue, ForLoop, IfChain, IfmtInput};
+use crate::buffer::Buffer;
+use crate::collect_macros::byte_offset;
+use dioxus_rsx::{
+    Attribute as AttributeType, AttributeValue as ElementAttrValue, BodyNode, Component, Element,
+    ForLoop, IfChain, Spread, TemplateBody,
+};
 use proc_macro2::{LineColumn, Span};
 use quote::ToTokens;
 use std::{
@@ -7,30 +12,13 @@ use std::{
 };
 use syn::{spanned::Spanned, token::Brace, Expr};
 
-use crate::buffer::Buffer;
-use crate::ifmt_to_string;
-
 #[derive(Debug)]
 pub struct Writer<'a> {
     pub raw_src: &'a str,
     pub src: Vec<&'a str>,
-    pub cached_formats: HashMap<Location, String>,
+    pub cached_formats: HashMap<LineColumn, String>,
     pub comments: VecDeque<usize>,
     pub out: Buffer,
-}
-
-#[derive(Clone, Copy, Hash, PartialEq, Eq, Debug)]
-pub struct Location {
-    pub line: usize,
-    pub col: usize,
-}
-impl Location {
-    pub fn new(start: LineColumn) -> Self {
-        Self {
-            line: start.line,
-            col: start.column,
-        }
-    }
 }
 
 impl<'a> Writer<'a> {
@@ -45,20 +33,143 @@ impl<'a> Writer<'a> {
         }
     }
 
+    pub fn consume(self) -> Option<String> {
+        Some(self.out.buf)
+    }
+
+    pub fn write_body(&mut self, body: &TemplateBody) -> Result {
+        match body.roots.len() {
+            0 => {}
+            1 if matches!(body.roots[0], BodyNode::Text(_)) => {
+                write!(self.out, " ")?;
+                self.write_ident(&body.roots[0])?;
+                write!(self.out, " ")?;
+            }
+            _ => self.write_body_indented(&body.roots)?,
+        }
+
+        Ok(())
+    }
+
     // Expects to be written directly into place
     pub fn write_ident(&mut self, node: &BodyNode) -> Result {
         match node {
             BodyNode::Element(el) => self.write_element(el),
             BodyNode::Component(component) => self.write_component(component),
-            BodyNode::Text(text) => self.out.write_text(text),
+            BodyNode::Text(text) => self.out.write_text(&text.input),
             BodyNode::RawExpr(exp) => self.write_raw_expr(exp.span()),
             BodyNode::ForLoop(forloop) => self.write_for_loop(forloop),
             BodyNode::IfChain(ifchain) => self.write_if_chain(ifchain),
         }
     }
 
-    pub fn consume(self) -> Option<String> {
-        Some(self.out.buf)
+    pub fn write_element(&mut self, el: &Element) -> Result {
+        let Element {
+            name,
+            raw_attributes: attributes,
+            children,
+            spreads,
+            brace,
+            ..
+        } = el;
+
+        /*
+            1. Write the tag
+            2. Write the key
+            3. Write the attributes
+            4. Write the children
+        */
+
+        write!(self.out, "{name} {{")?;
+
+        self.write_rsx_block(attributes, &spreads, &children, brace)?;
+
+        write!(self.out, "}}")?;
+
+        Ok(())
+    }
+
+    pub fn write_component(
+        &mut self,
+        Component {
+            name,
+            fields,
+            children,
+            generics,
+            spreads,
+            brace,
+            ..
+        }: &Component,
+    ) -> Result {
+        // Write the path by to_tokensing it and then removing all whitespace
+        let mut name = name.to_token_stream().to_string();
+        name.retain(|c| !c.is_whitespace());
+        write!(self.out, "{name}")?;
+
+        // Same idea with generics, write those via the to_tokens method and then remove all whitespace
+        if let Some(generics) = generics {
+            let mut written = generics.to_token_stream().to_string();
+            written.retain(|c| !c.is_whitespace());
+            write!(self.out, "{written}")?;
+        }
+
+        write!(self.out, " {{")?;
+
+        self.write_rsx_block(&fields, spreads, &children.roots, brace)?;
+
+        write!(self.out, "}}")?;
+
+        Ok(())
+    }
+
+    pub fn write_raw_expr(&mut self, placement: Span) -> Result {
+        /*
+        We want to normalize the expr to the appropriate indent level.
+        */
+
+        let start = placement.start();
+        let end = placement.end();
+
+        // if the expr is on one line, just write it directly
+        if start.line == end.line {
+            // split counting utf8 chars
+            let start = byte_offset(self.raw_src, start);
+            let end = byte_offset(self.raw_src, end);
+            let row = self.raw_src[start..end].trim();
+            write!(self.out, "{row}")?;
+            return Ok(());
+        }
+
+        // If the expr is multiline, we want to collect all of its lines together and write them out properly
+        // This involves unshifting the first line if it's aligned
+        let first_line = &self.src[start.line - 1];
+        write!(self.out, "{}", &first_line[start.column..].trim_start())?;
+
+        let prev_block_indent_level = self.out.indent.count_indents(first_line);
+
+        for (id, line) in self.src[start.line..end.line].iter().enumerate() {
+            writeln!(self.out)?;
+
+            // check if this is the last line
+            let line = {
+                if id == (end.line - start.line) - 1 {
+                    &line[..end.column]
+                } else {
+                    line
+                }
+            };
+
+            // trim the leading whitespace
+            let previous_indent = self.out.indent.count_indents(line);
+            let offset = previous_indent.saturating_sub(prev_block_indent_level);
+            let required_indent = self.out.indent_level + offset;
+            self.out.write_tabs(required_indent)?;
+
+            let line = line.trim_start();
+            write!(self.out, "{line}")?;
+        }
+
+        Ok(())
     }
 
     pub fn write_attr_comments(&mut self, brace: &Brace, attr_span: Span) -> Result {
@@ -158,7 +269,7 @@ impl<'a> Writer<'a> {
 
                 condition_len + value_len + 6
             }
-            ElementAttrValue::AttrLiteral(lit) => ifmt_to_string(lit).len(),
+            ElementAttrValue::AttrLiteral(lit) => lit.to_string().len(),
             ElementAttrValue::Shorthand(expr) => expr.span().line_length(),
             ElementAttrValue::AttrExpr(expr) => {
                 let out = self.retrieve_formatted_expr(expr);
@@ -168,18 +279,26 @@ impl<'a> Writer<'a> {
                     out.len()
                 }
             }
-            ElementAttrValue::EventTokens(tokens) => {
-                let as_str = self.retrieve_formatted_expr(tokens);
-                if as_str.contains('\n') {
-                    100000
+            ElementAttrValue::EventTokens(closure) => {
+                if let Ok(expr) = closure.as_expr() {
+                    let out = self.retrieve_formatted_expr(&expr);
+                    if out.contains('\n') {
+                        100000
+                    } else {
+                        out.len()
+                    }
                 } else {
-                    as_str.len()
+                    100000
                 }
             }
         }
     }
 
-    pub(crate) fn is_short_attrs(&mut self, attributes: &[AttributeType]) -> usize {
+    pub(crate) fn is_short_attrs(
+        &mut self,
+        attributes: &[AttributeType],
+        spreads: &[Spread],
+    ) -> usize {
         let mut total = 0;
 
         // No more than 3 attributes before breaking the line
@@ -198,31 +317,28 @@ impl<'a> Writer<'a> {
                 }
             }
 
-            match attr {
-                AttributeType::Named(attr) => {
-                    let name_len = match &attr.attr.name {
-                        dioxus_rsx::ElementAttrName::BuiltIn(name) => {
-                            let name = name.to_string();
-                            name.len()
-                        }
-                        dioxus_rsx::ElementAttrName::Custom(name) => name.value().len() + 2,
-                    };
-                    total += name_len;
-
-                    //
-                    if attr.attr.value.is_shorthand() {
-                        total += 2;
-                    } else {
-                        total += self.attr_value_len(&attr.attr.value);
-                    }
+            let name_len = match &attr.name {
+                dioxus_rsx::AttributeName::BuiltIn(name) => {
+                    let name = name.to_string();
+                    name.len()
                 }
-                AttributeType::Spread(expr) => {
-                    let expr_len = self.retrieve_formatted_expr(expr).len();
-                    total += expr_len + 3;
-                }
+                dioxus_rsx::AttributeName::Custom(name) => name.value().len() + 2,
             };
+            total += name_len;
+
+            //
+            if attr.can_be_shorthand() {
+                total += 2;
+            } else {
+                total += self.attr_value_len(&attr.value);
+            }
 
             total += 6;
+        }
+
+        for spread in spreads {
+            let expr_len = self.retrieve_formatted_expr(&spread.expr).len();
+            total += expr_len + 3;
         }
 
         total
@@ -230,7 +346,7 @@ impl<'a> Writer<'a> {
 
     #[allow(clippy::map_entry)]
     pub fn retrieve_formatted_expr(&mut self, expr: &Expr) -> &str {
-        let loc = Location::new(expr.span().start());
+        let loc = expr.span().start();
 
         if !self.cached_formats.contains_key(&loc) {
             let formatted = self.unparse_expr(expr);
@@ -254,7 +370,7 @@ impl<'a> Writer<'a> {
             return Ok(());
         }
 
-        self.write_body_indented(&forloop.body)?;
+        self.write_body_indented(&forloop.body.roots)?;
 
         self.out.tabbed_line()?;
         write!(self.out, "}}")?;
@@ -280,7 +396,7 @@ impl<'a> Writer<'a> {
 
             self.write_inline_expr(cond)?;
 
-            self.write_body_indented(then_branch)?;
+            self.write_body_indented(&then_branch.roots)?;
 
             if let Some(else_if_branch) = else_if_branch {
                 // write the closing bracket and else
@@ -292,7 +408,7 @@ impl<'a> Writer<'a> {
                 self.out.tabbed_line()?;
                 write!(self.out, "}} else {{")?;
 
-                self.write_body_indented(else_branch)?;
+                self.write_body_indented(&else_branch.roots)?;
                 branch = None;
             } else {
                 branch = None;
@@ -328,13 +444,6 @@ impl<'a> Writer<'a> {
         }
 
         Ok(())
-    }
-
-    pub(crate) fn key_len(&self, key: Option<&IfmtInput>) -> usize {
-        match key {
-            Some(key) => ifmt_to_string(key).len() + 5,
-            None => 0,
-        }
     }
 }
 

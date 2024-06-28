@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     io::Write,
     path::PathBuf,
     str::FromStr,
@@ -209,11 +210,18 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                             .collect()
                     };
 
-                    for template in templates {
-                        if !send_msg(HotReloadMsg::UpdateTemplate(template), &mut connection) {
-                            continue;
-                        }
+                    // for template in templates {
+                    if !send_msg(
+                        HotReloadMsg::Update {
+                            templates,
+                            changed_strings: vec![],
+                            assets: vec![],
+                        },
+                        &mut connection,
+                    ) {
+                        continue;
                     }
+                    // }
                     channels.lock().unwrap().push(connection);
                     if log {
                         println!("Connected to hot reloading 🚀");
@@ -348,16 +356,25 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                     .update_rsx(path, crate_dir.as_path());
 
                 match changes {
-                    Ok(UpdateResult::UpdatedRsx(msgs)) => {
-                        for msg in msgs {
-                            let mut i = 0;
-                            while i < channels.len() {
-                                let channel = &mut channels[i];
-                                if send_msg(HotReloadMsg::UpdateTemplate(msg), channel) {
-                                    i += 1;
-                                } else {
-                                    channels.remove(i);
-                                }
+                    Ok(UpdateResult::UpdatedRsx {
+                        changed_lits,
+                        templates,
+                        ..
+                    }) => {
+                        let mut i = 0;
+                        while i < channels.len() {
+                            let channel = &mut channels[i];
+                            if send_msg(
+                                HotReloadMsg::Update {
+                                    templates: templates.clone(),
+                                    changed_strings: vec![],
+                                    assets: vec![],
+                                },
+                                channel,
+                            ) {
+                                i += 1;
+                            } else {
+                                channels.remove(i);
                             }
                         }
                     }

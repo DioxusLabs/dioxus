@@ -1,11 +1,14 @@
 #![allow(unused)]
 
+use dioxus_core::prelude::Template;
 use dioxus_rsx::{
     hot_reload::{diff_rsx, template_location, ChangedRsx, DiffResult},
-    CallBody, HotReloadingContext,
+    hotreload::HotReload,
+    HotReloadingContext, RsxBody,
 };
-use quote::quote;
-use syn::{parse::Parse, spanned::Spanned, File};
+use proc_macro2::TokenStream;
+use quote::{quote, ToTokens};
+use syn::{parse::Parse, spanned::Spanned, token::Token, File};
 
 #[derive(Debug)]
 struct Mock;
@@ -32,59 +35,832 @@ impl HotReloadingContext for Mock {
         }
     }
 }
+
+fn boilerplate(old: TokenStream, new: TokenStream) -> Option<Vec<Template>> {
+    let old: RsxBody = syn::parse2(old).unwrap();
+    let new: RsxBody = syn::parse2(new).unwrap();
+
+    let location = "file:line:col:0";
+    hotreload_callbody::<Mock>(&old, &new, location)
+}
+
+fn can_hotreload(old: TokenStream, new: TokenStream) -> Option<HotReload> {
+    let old: RsxBody = syn::parse2(old).unwrap();
+    let new: RsxBody = syn::parse2(new).unwrap();
+
+    let location = "file:line:col:0";
+    let results = HotReload::new::<Mock>(&old, &new, location)?;
+    Some(results)
+}
+
+fn hotreload_callbody<Ctx: HotReloadingContext>(
+    old: &RsxBody,
+    new: &RsxBody,
+    location: &'static str,
+) -> Option<Vec<Template>> {
+    let results = HotReload::new::<Ctx>(old, new, location)?;
+    Some(results.templates)
+}
+
+fn callbody_to_template<Ctx: HotReloadingContext>(
+    old: &RsxBody,
+    location: &'static str,
+) -> Option<Template> {
+    let results = HotReload::new::<Ctx>(old, old, location)?;
+    Some(results.templates.first().unwrap().clone())
+}
+
+fn base_stream() -> TokenStream {
+    quote! {
+        div {
+            for item in vec![1, 2, 3] {
+                div { "asasddasdasd" }
+            }
+            for item in vec![4, 5, 6] {
+                div { "asasddasdasd" }
+            }
+        }
+    }
+}
+
+fn base() -> RsxBody {
+    syn::parse2(base_stream()).unwrap()
+}
+
 #[test]
-fn testing_for_pattern() {
+fn simple_for_loop() {
     let old = quote! {
         div {
             for item in vec![1, 2, 3] {
-                div { "123" }
                 div { "asasddasdasd" }
             }
         }
     };
 
-    let new = quote! {
+    let new_valid = quote! {
         div {
             for item in vec![1, 2, 3] {
                 div { "asasddasdasd" }
+                div { "123" }
             }
         }
     };
 
-    let old: CallBody = syn::parse2(old).unwrap();
-    let new: CallBody = syn::parse2(new).unwrap();
+    let new_invalid = quote! {
+        div {
+            for item in vec![1, 2, 3, 4] {
+                div { "asasddasdasd" }
+                div { "123" }
+            }
+        }
+    };
 
-    let updated = old.update_template::<Mock>(Some(new), "testing");
+    let location = "file:line:col:0";
+    let old: RsxBody = syn::parse2(old).unwrap();
+    let new_valid: RsxBody = syn::parse2(new_valid).unwrap();
+    let new_invalid: RsxBody = syn::parse2(new_invalid).unwrap();
 
-    // currently, modifying a for loop is not hot reloadable
-    // We want to change this...
-    assert!(updated.is_none());
+    assert!(hotreload_callbody::<Mock>(&old, &new_valid, location).is_some());
+    assert!(hotreload_callbody::<Mock>(&old, &new_invalid, location).is_none());
+}
 
-    // let updated = old.update_template::<Mock>(Some(new), "testing").unwrap();
+#[test]
+fn valid_reorder() {
+    let old = base();
+    let new_valid = quote! {
+        div {
+            for item in vec![4, 5, 6] {
+                span { "asasddasdasd" }
+                span { "123" }
+            }
+            for item in vec![1, 2, 3] {
+                div { "asasddasdasd" }
+                div { "123" }
+            }
+        }
+    };
 
-    // let old = include_str!(concat!("./valid/for_.old.rsx"));
-    // let new = include_str!(concat!("./valid/for_.new.rsx"));
-    // let (old, new) = load_files(old, new);
+    let location = "file:line:col:0";
+    let new: RsxBody = syn::parse2(new_valid).unwrap();
 
-    // let DiffResult::RsxChanged { rsx_calls } = diff_rsx(&new, &old) else {
-    //     panic!("Expected a rsx call to be changed")
-    // };
+    let valid = hotreload_callbody::<Mock>(&old, &new, location);
+    assert!(valid.is_some());
+    let templates = valid.unwrap();
 
-    // for calls in rsx_calls {
-    //     let ChangedRsx { old, new } = calls;
+    // Currently we return all the templates, even if they didn't change
+    assert_eq!(templates.len(), 3);
 
-    //     let old_start = old.span().start();
+    let template = &templates[2];
 
-    //     let old_call_body = syn::parse2::<CallBody>(old.tokens).unwrap();
-    //     let new_call_body = syn::parse2::<CallBody>(new).unwrap();
+    // It's an inversion, so we should get them in reverse
+    assert_eq!(template.node_paths, &[&[0, 1], &[0, 0]]);
 
-    //     let leaked_location = Box::leak(template_location(old_start, file).into_boxed_str());
+    // And the byte index should be the original template
+    assert_eq!(template.name, "file:line:col:0");
+}
 
-    //     let hotreloadable_template =
-    //         new_call_body.update_template::<Ctx>(Some(old_call_body), leaked_location);
+#[test]
+fn invalid_cases() {
+    let new_invalid = quote! {
+        div {
+            for item in vec![1, 2, 3, 4] {
+                div { "asasddasdasd" }
+                div { "123" }
+            }
+            for item in vec![4, 5, 6] {
+                span { "asasddasdasd" }
+                span { "123" }
+            }
+        }
+    };
 
-    //     dbg!(hotreloadable_template);
-    // }
+    // just remove an entire for loop
+    let new_valid_removed = quote! {
+        div {
+            for item in vec![4, 5, 6] {
+                span { "asasddasdasd" }
+                span { "123" }
+            }
+        }
+    };
 
-    // dbg!(rsx_calls);
+    let new_invalid_new_dynamic_internal = quote! {
+        div {
+            for item in vec![1, 2, 3] {
+                div { "asasddasdasd" }
+                div { "123" }
+            }
+            for item in vec![4, 5, 6] {
+                span { "asasddasdasd" }
+
+                // this is a new dynamic node, and thus can't be hot reloaded
+                // Eventualy we might be able to do a format like this, but not right now
+                span { "123 {item}" }
+            }
+        }
+    };
+
+    let new_invlaid_added = quote! {
+        div {
+            for item in vec![1, 2, 3] {
+                div { "asasddasdasd" }
+                div { "123" }
+            }
+            for item in vec![4, 5, 6] {
+                span { "asasddasdasd" }
+                span { "123" }
+            }
+
+            for item in vec![7, 8, 9] {
+                span { "asasddasdasd" }
+                span { "123" }
+            }
+        }
+    };
+
+    let location = "file:line:col:0";
+    let old = base();
+
+    let new_invalid: RsxBody = syn::parse2(new_invalid).unwrap();
+    let new_valid_removed: RsxBody = syn::parse2(new_valid_removed).unwrap();
+    let new_invalid_new_dynamic_internal: RsxBody =
+        syn::parse2(new_invalid_new_dynamic_internal).unwrap();
+    let new_invlaid_added: RsxBody = syn::parse2(new_invlaid_added).unwrap();
+
+    assert!(hotreload_callbody::<Mock>(&old, &new_invalid, location).is_none());
+    assert!(
+        hotreload_callbody::<Mock>(&old, &new_invalid_new_dynamic_internal, location).is_none()
+    );
+
+    let removed = hotreload_callbody::<Mock>(&old, &new_valid_removed, location);
+    assert!(removed.is_some());
+    let templates = removed.unwrap();
+
+    // we don't get the removed template back
+    assert_eq!(templates.len(), 2);
+    let template = &templates[1];
+
+    // We just completely removed the dynamic node, so it should be a "dud" path and then the placement
+    assert_eq!(template.node_paths, &[&[], &[0u8, 0] as &[u8]]);
+
+    // Adding a new dynamic node should not be hot reloadable
+    let added = hotreload_callbody::<Mock>(&old, &new_invlaid_added, location);
+    assert!(added.is_none());
+}
+
+#[test]
+fn new_names() {
+    let old = quote! {
+        div {
+            for item in vec![1, 2, 3] {
+                div { "asasddasdasd" }
+                div { "123" }
+            }
+        }
+    };
+
+    // Same order, just different contents
+    let new_valid_internal = quote! {
+        div {
+            for item in vec![1, 2, 3] {
+                div { "asasddasdasd" }
+                div { "456" }
+            }
+        }
+    };
+
+    let templates = boilerplate(old, new_valid_internal).unwrap();
+
+    // Getting back all the templates even though some might not have changed
+    // This is currently just a symptom of us not checking if anything has changed, but has no bearing
+    // on output really.
+    assert_eq!(templates.len(), 2);
+
+    // The ordering is going to be inverse since its a depth-first traversal
+    let external = &templates[1];
+    assert_eq!(external.name, "file:line:col:0");
+
+    let internal = &templates[0];
+    assert_eq!(internal.name, "file:line:col:1");
+}
+
+#[test]
+fn attributes_reload() {
+    let old = quote! {
+        div {
+            class: "{class}",
+            id: "{id}",
+            name: "name",
+        }
+    };
+
+    // Same order, just different contents
+    let new_valid_internal = quote! {
+        div {
+            id: "{id}",
+            name: "name",
+            class: "{class}"
+        }
+    };
+
+    let templates = boilerplate(old, new_valid_internal).unwrap();
+
+    dbg!(templates);
+}
+
+#[test]
+fn template_generates() {
+    let old = quote! {
+        svg {
+            width: 100,
+            height: "100px",
+            "width2": 100,
+            "height2": "100px",
+            p { "hello world" }
+            {(0..10).map(|i| rsx!{"{i}"})}
+        }
+        div {
+            width: 120,
+            div {
+                height: "100px",
+                "width2": 130,
+                "height2": "100px",
+                for i in 0..10 {
+                    div {
+                        "asdasd"
+                    }
+                }
+            }
+        }
+    };
+
+    let old: RsxBody = syn::parse2(old).unwrap();
+    let template = callbody_to_template::<Mock>(&old, "file:line:col:0");
+}
+
+#[test]
+fn diffs_complex() {
+    #[allow(unused, non_snake_case)]
+    fn Comp() -> dioxus_core::Element {
+        None
+    }
+
+    let old = quote! {
+        svg {
+            width: 100,
+            height: "100px",
+            "width2": 100,
+            "height2": "100px",
+            p { "hello world" }
+            {(0..10).map(|i| rsx!{"{i}"})},
+            {(0..10).map(|i| rsx!{"{i}"})},
+            {(0..11).map(|i| rsx!{"{i}"})},
+            Comp {}
+        }
+    };
+
+    // scrambling the attributes should not cause a full rebuild
+    let new = quote! {
+        div {
+            "width2": 100,
+            height: "100px",
+            "height2": "100px",
+            width: 100,
+            Comp {}
+            {(0..11).map(|i| rsx!{"{i}"})},
+            {(0..10).map(|i| rsx!{"{i}"})},
+            {(0..10).map(|i| rsx!{"{i}"})},
+            p {
+                "hello world"
+            }
+        }
+    };
+
+    let old: RsxBody = syn::parse2(old).unwrap();
+    let new: RsxBody = syn::parse2(new).unwrap();
+
+    let location = "file:line:col:0";
+    let templates = hotreload_callbody::<Mock>(&old, &new, location).unwrap();
+}
+
+#[test]
+fn remove_node() {
+    let changed = boilerplate(
+        quote! {
+            svg {
+                Comp {}
+                {(0..10).map(|i| rsx!{"{i}"})},
+            }
+        },
+        quote! {
+            div {
+                {(0..10).map(|i| rsx!{"{i}"})},
+            }
+        },
+    )
+    .unwrap();
+
+    dbg!(changed);
+}
+
+#[test]
+fn if_chains() {
+    let changed = boilerplate(
+        quote! {
+            if cond {
+                "foo"
+            }
+        },
+        quote! {
+            if cond {
+                "baz"
+            }
+        },
+    )
+    .unwrap();
+
+    let very_complex_chain = boilerplate(
+        quote! {
+            if cond {
+                if second_cond {
+                    "foo"
+                }
+            } else if othercond {
+                "bar"
+            } else {
+                "baz"
+            }
+        },
+        quote! {
+            if cond {
+                if second_cond {
+                    span { "asasddasdasd 789" }
+                }
+            } else if othercond {
+                span { "asasddasdasd 123" }
+            } else {
+                span { "asasddasdas 456" }
+            }
+        },
+    )
+    .unwrap();
+
+    dbg!(very_complex_chain);
+}
+
+#[test]
+fn component_bodies() {
+    let changed = boilerplate(
+        quote! {
+            Comp {
+                "foo"
+            }
+        },
+        quote! {
+            Comp {
+                "baz"
+            }
+        },
+    )
+    .unwrap();
+
+    dbg!(changed);
+}
+
+/// Everything reloads!
+#[test]
+fn kitch_sink_of_reloadability() {
+    let changed = boilerplate(
+        quote! {
+            div {
+                for i in 0..10 {
+                    div { "123" }
+                    Comp {
+                        "foo"
+                    }
+                    if cond {
+                        "foo"
+                    }
+                }
+            }
+        },
+        quote! {
+            div {
+                "hi!"
+                for i in 0..10 {
+                    div { "456" }
+                    Comp { "bar" }
+                    if cond {
+                        "baz"
+                    }
+                }
+            }
+        },
+    )
+    .unwrap();
+
+    dbg!(changed);
+}
+
+/// Moving nodes inbetween multiple rsx! calls currently doesn't work
+/// Sad. Needs changes to core to work, and is technically flawed?
+#[test]
+fn entire_kitchen_sink() {
+    let changed = boilerplate(
+        quote! {
+            div {
+                for i in 0..10 {
+                    div { "123" }
+                }
+                Comp {
+                    "foo"
+                }
+                if cond {
+                    "foo"
+                }
+            }
+        },
+        quote! {
+            div {
+                "hi!"
+                Comp {
+                    for i in 0..10 {
+                        div { "456" }
+                    }
+                    "bar"
+                    if cond {
+                        "baz"
+                    }
+                }
+            }
+        },
+    );
+
+    assert!(changed.is_none());
+}
+
+#[test]
+fn tokenstreams_and_locations() {
+    let changed = boilerplate(
+        quote! {
+            div { "hhi" }
+            div {
+                {rsx! { "hi again!" }},
+                for i in 0..2 {
+                    "first"
+                    div { "hi {i}" }
+                }
+
+                for i in 0..3 {
+                    "Second"
+                    div { "hi {i}" }
+                }
+
+                if false {
+                    div { "hi again!?" }
+                } else if true {
+                    div { "its cool?" }
+                } else {
+                    div { "not nice !" }
+                }
+            }
+        },
+        quote! {
+            div { "hhi" }
+            div {
+                {rsx! { "hi again!" }},
+                for i in 0..2 {
+                    "first"
+                    div { "hi {i}" }
+                }
+
+                for i in 0..3 {
+                    "Second"
+                    div { "hi {i}" }
+                }
+
+                if false {
+                    div { "hi again?" }
+                } else if true {
+                    div { "cool?" }
+                } else {
+                    div { "nice !" }
+                }
+            }
+
+        },
+    );
+
+    dbg!(changed);
+}
+
+#[test]
+fn ide_testcase() {
+    let changed = boilerplate(
+        quote! {
+            div {
+                div { "hi!!!123 in!stant relo123a1123dasasdasdasdasd" }
+                for x in 0..5 {
+                    h3 { "For loop contents" }
+                }
+            }
+        },
+        quote! {
+            div {
+                div { "hi!!!123 in!stant relo123a1123dasasdasdasdasd" }
+                for x in 0..5 {
+                    h3 { "For loop contents" }
+                }
+            }
+        },
+    );
+
+    dbg!(changed);
+}
+
+#[test]
+fn assigns_ids() {
+    let toks = quote! {
+        div {
+            div { "hi!!!123 in!stant relo123a1123dasasdasdasdasd" }
+            for x in 0..5 {
+                h3 { "For loop contents" }
+            }
+        }
+    };
+
+    let parsed = syn::parse2::<RsxBody>(toks).unwrap();
+
+    let node = parsed.body.get_dyn_node(&[0, 1]);
+    dbg!(node);
+}
+
+#[test]
+fn simple_start() {
+    let changed = boilerplate(
+        //
+        quote! {
+            div {
+                class: "Some {one}",
+                id: "Something {two}",
+                "One"
+            }
+        },
+        quote! {
+            div {
+                id: "Something {two}",
+                class: "Some {one}",
+                "One"
+            }
+        },
+    );
+
+    dbg!(changed.unwrap());
+}
+
+#[test]
+fn complex_cases() {
+    let changed = can_hotreload(
+        quote! {
+            div {
+                class: "Some {one}",
+                id: "Something {two}",
+                "One"
+            }
+        },
+        quote! {
+            div {
+                class: "Some {one}",
+                id: "Something else {two}",
+                "One"
+            }
+        },
+    );
+
+    dbg!(changed.unwrap());
+}
+
+#[test]
+fn attribute_cases() {
+    let changed = can_hotreload(
+        quote! {
+            div {
+                class: "Some {one}",
+                id: "Something {two}",
+                "One"
+            }
+        },
+        quote! {
+            div {
+                id: "Something {two}",
+                "One"
+            }
+        },
+    );
+    dbg!(changed.unwrap());
+
+    let changed = can_hotreload(
+        //
+        quote! { div { class: 123 } },
+        quote! { div { class: 456 } },
+    );
+    dbg!(changed.unwrap());
+
+    let changed = can_hotreload(
+        //
+        quote! { div { class: 123.0 } },
+        quote! { div { class: 456.0 } },
+    );
+    dbg!(changed.unwrap());
+
+    let changed = can_hotreload(
+        //
+        quote! { div { class: "asd {123}", } },
+        quote! { div { class: "def", } },
+    );
+    dbg!(changed.unwrap());
+}
+
+#[test]
+fn text_node_cases() {
+    let changed = can_hotreload(
+        //
+        quote! { div { "hello {world}" } },
+        quote! { div { "world {world}" } },
+    );
+    dbg!(changed.unwrap());
+
+    let changed = can_hotreload(
+        //
+        quote! { div { "hello {world}" } },
+        quote! { div { "world" } },
+    );
+    dbg!(changed.unwrap());
+
+    let changed = can_hotreload(
+        //
+        quote! { div { "hello" } },
+        quote! { div { "world {world}" } },
+    );
+    assert!(changed.is_none());
+}
+
+#[test]
+fn simple_carry() {
+    let a = quote! {
+        // start with
+        "thing {abc} {def}"       // 1, 1, 1
+        "thing {def}"             // 1, 0, 1
+        "other {hij}" // 1, 1, 1
+    };
+
+    let b = quote! {
+        // end with
+        "thing {def}"
+        "thing {abc}"
+        "thing {hij}"
+    };
+
+    let changed = can_hotreload(a, b);
+    dbg!(changed.unwrap());
+}
+
+#[test]
+fn complex_carry_text() {
+    let a = quote! {
+        // start with
+        "thing {abc} {def}"       // 1, 1, 1
+        "thing {abc}"             // 1, 0, 1
+        "other {abc} {def} {hij}" // 1, 1, 1
+    };
+
+    let b = quote! {
+        // end with
+        "thing {abc}"
+        "thing {hij}"
+    };
+
+    let changed = can_hotreload(a, b);
+    dbg!(changed.unwrap());
+}
+
+#[test]
+fn complex_carry() {
+    let a = quote! {
+        Component {
+            class: "thing {abc}",
+            other: "other {abc} {def}",
+        }
+        Component {
+            class: "thing {abc}",
+            other: "other",
+        }
+    };
+
+    let b = quote! {
+        // how about shuffling components, for, if, etc
+        Component {
+            class: "thing {abc}",
+            other: "other {abc} {def}",
+        }
+        Component {
+            class: "thing",
+            other: "other",
+        }
+    };
+
+    let changed = can_hotreload(a, b);
+    dbg!(changed.unwrap());
+}
+
+#[test]
+fn component_with_lits() {
+    let a = quote! {
+        Component {
+            class: 123,
+            id: 456.789,
+            other: true,
+            blah: "hello {world}",
+        }
+    };
+
+    // changing lit values
+    let b = quote! {
+        Component {
+            class: 456,
+            id: 789.456,
+            other: false,
+            blah: "goodbye {world}",
+        }
+    };
+
+    let changed = can_hotreload(a, b);
+    dbg!(changed.unwrap());
+}
+
+#[test]
+fn component_with_handlers() {
+    let a = quote! {
+        Component {
+            class: 123,
+            id: 456.789,
+            other: true,
+            blah: "hello {world}",
+            on_click: |e| { println!("clicked") },
+        }
+    };
+
+    // changing lit values
+    let b = quote! {
+        Component {
+            class: 456,
+            id: 789.456,
+            other: false,
+            blah: "goodbye {world}",
+            on_click: |e| { println!("clicked") },
+        }
+    };
+
+    let changed = can_hotreload(a, b);
+    dbg!(changed.unwrap());
 }

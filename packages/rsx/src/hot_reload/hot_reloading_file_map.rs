@@ -2,9 +2,9 @@ use super::{
     hot_reload_diff::{diff_rsx, DiffResult},
     ChangedRsx,
 };
-use crate::{CallBody, HotReloadingContext};
+use crate::{innerlude::RsxBody, HotReloadingContext};
 use dioxus_core::{
-    prelude::{TemplateAttribute, TemplateNode},
+    prelude::{HotReloadLiteral, HotreloadedLiteral, TemplateAttribute, TemplateNode},
     Template,
 };
 use krates::cm::MetadataCommand;
@@ -19,7 +19,10 @@ pub use std::{fs::File, io::Read};
 use syn::spanned::Spanned;
 
 pub enum UpdateResult {
-    UpdatedRsx(Vec<Template>),
+    UpdatedRsx {
+        templates: Vec<Template>,
+        changed_lits: Vec<HotreloadedLiteral>,
+    },
 
     NeedsRebuild,
 }
@@ -97,9 +100,7 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
         file_path: &Path,
         crate_dir: &Path,
     ) -> Result<UpdateResult, HotreloadError> {
-        let mut file = File::open(file_path)?;
-        let mut src = String::new();
-        file.read_to_string(&mut src)?;
+        let src = std::fs::read_to_string(file_path)?;
 
         // If we can't parse the contents we want to pass it off to the build system to tell the user that there's a syntax error
         let syntax = syn::parse_file(&src).map_err(|_err| HotreloadError::Parse)?;
@@ -150,15 +151,16 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
             }
         };
 
-        let mut messages: Vec<Template> = Vec::new();
+        let mut template_list: Vec<Template> = Vec::new();
+        let mut changed_strings: Vec<HotreloadedLiteral> = Vec::new();
 
         for calls in instances.into_iter() {
             let ChangedRsx { old, new } = calls;
 
             let old_start = old.span().start();
 
-            let old_parsed = syn::parse2::<CallBody>(old.tokens);
-            let new_parsed = syn::parse2::<CallBody>(new);
+            let old_parsed = syn::parse2::<RsxBody>(old.tokens);
+            let new_parsed = syn::parse2::<RsxBody>(new);
             let (Ok(old_call_body), Ok(new_call_body)) = (old_parsed, new_parsed) else {
                 continue;
             };
@@ -179,41 +181,58 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
             // TODO: we could consider arena allocating the templates and dropping them when the connection is closed
             let leaked_location = Box::leak(template_location(old_start, file).into_boxed_str());
 
-            // Retuns Some(template) if the template is hotreloadable
-            // dynamic changes are not hot reloadable and force a rebuild
-            let hotreloadable_template =
-                new_call_body.update_template::<Ctx>(Some(old_call_body), leaked_location);
+            // Returns a list of templates that are hotreloadable
+            let templates = crate::hotreload::HotReload::new::<Ctx>(
+                &old_call_body,
+                &new_call_body,
+                leaked_location,
+            );
 
             // if the template is not hotreloadable, we need to do a full rebuild
-            let Some(template) = hotreloadable_template else {
+            let Some(results) = templates else {
                 return Ok(UpdateResult::NeedsRebuild);
             };
 
-            // dioxus cannot handle empty templates...
-            // todo: I think it can? or we just skip them nowa
-            if template.roots.is_empty() {
-                continue;
-            }
-
-            // if the template is the same, don't send it
-            if let Some(old_template) = old_cached.templates.get(template.name) {
-                if old_template == &template {
+            // Load the templates
+            for template in results.templates {
+                // dioxus cannot handle empty templates...
+                // todo: I think it can? or we just skip them nowa
+                if template.roots.is_empty() {
                     continue;
                 }
-            };
 
-            // update the cached file
-            old_cached.templates.insert(template.name, template);
+                // if the template is the same, don't send it
+                if let Some(old_template) = old_cached.templates.get(template.name) {
+                    if old_template == &template {
+                        continue;
+                    }
+                };
 
-            // Track any new assets
-            old_cached
-                .tracked_assets
-                .extend(Self::populate_assets(template));
+                // Update the most recent idea of the template
+                // This lets us know if the template has changed so we don't need to send it
+                old_cached.templates.insert(template.name, template);
 
-            messages.push(template);
+                // Track any new assets
+                old_cached
+                    .tracked_assets
+                    .extend(Self::populate_assets(template));
+
+                template_list.push(template);
+            }
+
+            // // And then any formatted strings
+            for (key, value) in results.changed_lits {
+                changed_strings.push(HotreloadedLiteral {
+                    name: key,
+                    value: HotReloadLiteral::from(value),
+                });
+            }
         }
 
-        Ok(UpdateResult::UpdatedRsx(messages))
+        Ok(UpdateResult::UpdatedRsx {
+            templates: template_list,
+            changed_lits: changed_strings,
+        })
     }
 
     fn populate_assets(template: Template) -> HashSet<PathBuf> {

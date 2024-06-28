@@ -12,6 +12,7 @@ mod events;
 mod fragment;
 mod generational_box;
 mod global_context;
+mod hotreload_utils;
 mod mutations;
 mod nodes;
 mod properties;
@@ -40,6 +41,7 @@ pub(crate) mod innerlude {
     pub use crate::fragment::*;
     pub use crate::generational_box::*;
     pub use crate::global_context::*;
+    pub use crate::hotreload_utils::*;
     pub use crate::mutations::*;
     pub use crate::nodes::*;
     pub use crate::properties::*;
@@ -79,9 +81,10 @@ pub mod prelude {
         schedule_update_any, spawn, spawn_forever, spawn_isomorphic, suspend, try_consume_context,
         use_after_render, use_before_render, use_drop, use_error_boundary, use_hook,
         use_hook_with_cleanup, wait_for_next_render, with_owner, AnyValue, Attribute, Callback,
-        Component, ComponentFunction, Element, ErrorBoundary, Event, EventHandler, Fragment,
-        HasAttributes, IntoAttributeValue, IntoDynNode, OptionStringFromMarker, Properties,
-        ReactiveContext, Runtime, RuntimeGuard, ScopeId, ScopeState, SuperFrom, SuperInto, Task,
-        Template, TemplateAttribute, TemplateNode, Throw, VNode, VNodeInner, VirtualDom,
+        Component, ComponentFunction, Element, ErrorBoundary, Event, EventHandler, FmtSegment,
+        FmtedSegments, Fragment, HasAttributes, HotReloadLiteral, HotreloadedLiteral,
+        IntoAttributeValue, IntoDynNode, OptionStringFromMarker, Properties, ReactiveContext,
+        Runtime, RuntimeGuard, ScopeId, ScopeState, SuperFrom, SuperInto, Task, Template,
+        TemplateAttribute, TemplateNode, Throw, VNode, VNodeInner, VirtualDom,
     };
 }

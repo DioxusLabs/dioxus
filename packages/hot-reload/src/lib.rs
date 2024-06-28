@@ -1,9 +1,13 @@
 use std::{
+    collections::HashMap,
     io::{BufRead, BufReader},
     path::PathBuf,
 };
 
-use dioxus_core::Template;
+use dioxus_core::{
+    prelude::{FmtedSegments, HotReloadLiteral, HotreloadedLiteral},
+    Template,
+};
 #[cfg(feature = "file_watcher")]
 pub use dioxus_html::HtmlCtx;
 use interprocess::local_socket::LocalSocketStream;
@@ -27,11 +31,12 @@ pub const RECONNECT_SCRIPT: &str = include_str!("assets/autoreload.js");
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(bound(deserialize = "'de: 'static"))]
 pub enum HotReloadMsg {
-    /// A template has been updated
-    UpdateTemplate(Template),
-
-    /// An asset discovered by rsx! has been updated
-    UpdateAsset(PathBuf),
+    /// Things have changed, here's a list
+    Update {
+        templates: Vec<Template>,
+        changed_strings: Vec<HotreloadedLiteral>,
+        assets: Vec<PathBuf>,
+    },
 
     /// The program needs to be recompiled, and the client should shut down
     Shutdown,
@@ -100,8 +105,16 @@ pub fn connect_at(socket: PathBuf, mut callback: impl FnMut(HotReloadMsg) + Send
                 }
             }
 
-            let Ok(template) = serde_json::from_str(Box::leak(buf.into_boxed_str())) else {
-                continue;
+            let from_buffer = Box::leak(buf.into_boxed_str());
+
+            println!("read from buffer: {from_buffer}");
+
+            let template = match serde_json::from_str(from_buffer) {
+                Ok(template) => template,
+                Err(err) => {
+                    println!("Could not deserialize hot reloading message: {err}");
+                    continue;
+                }
             };
 
             callback(template);

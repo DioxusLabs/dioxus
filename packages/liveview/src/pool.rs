@@ -215,11 +215,10 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
             Some(msg) = hot_reload_wait => {
                 #[cfg(all(feature = "hot-reload", debug_assertions))]
                 match msg{
-                    dioxus_hot_reload::HotReloadMsg::UpdateTemplate(new_template) => {
-                        vdom.replace_template(new_template);
+                    dioxus_hot_reload::HotReloadMsg::Update {..}=> {
+                        todo!("hotreloading for liveview")
+                        // vdom.replace_template(new_template);
                     }
-                    // todo: enable hotreloading in liveview
-                    dioxus_hot_reload::HotReloadMsg::UpdateAsset(_) => {}
                     dioxus_hot_reload::HotReloadMsg::Shutdown => {
                         std::process::exit(0);
                     },
