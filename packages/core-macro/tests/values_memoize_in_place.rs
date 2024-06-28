@@ -47,7 +47,7 @@ async fn values_memoize_in_place() {
 
     let mutations = dom.rebuild_to_vec();
     println!("{:#?}", mutations);
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     for _ in 0..40 {
         dom.handle_event(
             "click",
@@ -93,7 +93,7 @@ fn cloning_event_handler_components_work() {
 
     let mutations = dom.rebuild_to_vec();
     println!("{:#?}", mutations);
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     for _ in 0..20 {
         dom.handle_event(
             "click",

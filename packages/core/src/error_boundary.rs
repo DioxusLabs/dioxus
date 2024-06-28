@@ -258,9 +258,7 @@ impl ErrorContext {
     /// Push an error into this Error Boundary
     pub fn insert_error(&self, error: CapturedError) {
         self.errors.borrow_mut().push(error);
-        if self.id != ScopeId::ROOT {
-            self.id.needs_update();
-        }
+        self.id.needs_update();
     }
 
     /// Clear all errors from this Error Boundary

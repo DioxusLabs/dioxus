@@ -66,7 +66,7 @@ fn events_generate() {
         true,
     );
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     let edits = dom.render_immediate_to_vec();
 
     assert_eq!(

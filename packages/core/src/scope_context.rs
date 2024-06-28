@@ -524,7 +524,7 @@ impl ScopeId {
     ///         match reqwest::get("https://api.example.com").await {
     ///             Ok(_) => todo!(),
     ///             // You can explicitly throw an error into a scope with throw_error
-    ///             Err(err) => ScopeId::ROOT.throw_error(err)
+    ///             Err(err) => ScopeId::APP.throw_error(err)
     ///         }
     ///     });
     ///

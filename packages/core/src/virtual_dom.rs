@@ -336,14 +336,13 @@ impl VirtualDom {
             mounts: Default::default(),
         };
 
-        // let root = VProps::new(
-        //     RootScopeWrapper,
-        //     |_, _| true,
-        //     RootProps(root),
-        //     "RootWrapper",
-        // );
-        // dom.new_scope(Box::new(root), "app");
-        dom.new_scope(root.props, "app");
+        let root = VProps::new(
+            RootScopeWrapper,
+            |_, _| true,
+            RootProps(root),
+            "RootWrapper",
+        );
+        dom.new_scope(Box::new(root), "app");
 
         // the root element is always given element ID 0 since it's the container for the entire tree
         dom.elements.insert(None);

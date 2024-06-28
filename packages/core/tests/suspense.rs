@@ -273,7 +273,7 @@ fn resolved_to_suspended() {
 
             assert_eq!(out, "rendered 1 times");
 
-            dom.in_runtime(|| ScopeId::ROOT.in_runtime(|| *SUSPENDED.write() = true));
+            dom.in_runtime(|| ScopeId::APP.in_runtime(|| *SUSPENDED.write() = true));
 
             dom.render_suspense_immediate().await;
             let out = dioxus_ssr::render(&dom);
@@ -334,7 +334,10 @@ fn suspense_tracks_resolved() {
 
             dom.render_suspense_immediate().await;
             dom.wait_for_suspense_work().await;
-            assert_eq!(dom.render_suspense_immediate().await, vec![ScopeId(1)]);
+            assert_eq!(
+                dom.render_suspense_immediate().await,
+                vec![ScopeId(ScopeId::APP.0 + 1)]
+            );
         });
 
     fn app() -> Element {
