@@ -28,7 +28,7 @@ http = { workspace = true, optional = true }
 
 # Web Integration
 dioxus-web = { workspace = true, features = ["hydrate"], default-features = false, optional = true }
-dioxus-interpreter-js = { workspace = true, optional = true }   
+dioxus-interpreter-js = { workspace = true, optional = true }
 
 # Desktop Integration
 dioxus-desktop = { workspace = true, optional = true }
@@ -77,7 +77,7 @@ mounted = ["dioxus-web?/mounted"]
 file_engine = ["dioxus-web?/file_engine"]
 eval = ["dioxus-web?/eval"]
 web = ["dep:dioxus-web", "dep:web-sys"]
-desktop = ["dep:dioxus-desktop", "server_fn/reqwest", "dioxus_server_macro/reqwest"] 
+desktop = ["dep:dioxus-desktop", "server_fn/reqwest", "dioxus_server_macro/reqwest"]
 mobile = ["dep:dioxus-mobile"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls"]

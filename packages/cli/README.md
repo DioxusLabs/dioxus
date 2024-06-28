@@ -33,6 +33,12 @@ Note: The CLI will fail to build projects in debug profile. This is currently un
 cargo install --path . --release
 ```
 
+### Developing The CLI
+It's faster to build the CLI using the `cli-dev` profile when testing changes.
+```shell
+cargo build --profile cli-dev
+```
+
 ## Get started
 
 Use `dx new` to initialize a new Dioxus project.
