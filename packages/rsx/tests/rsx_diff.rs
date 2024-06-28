@@ -48,7 +48,7 @@ fn create_template() {
 fn diff_template() {
     #[allow(unused, non_snake_case)]
     fn Comp() -> dioxus_core::Element {
-        VNode::empty()
+        dioxus_core::VNode::empty()
     }
 
     let input = quote! {
