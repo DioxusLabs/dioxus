@@ -12,22 +12,8 @@ const LOG_ENV: &str = "DIOXUS_LOG";
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Linker handling
-    let raw_args = env::args();
-
-    if let Some((working_dir, object_files)) = manganis_cli_support::linker_intercept(raw_args)
-    {
-        let dioxus_config = DioxusConfig::load(None)?.unwrap_or_default();
-
-        let json = manganis_cli_support::get_json_from_object_files(object_files);
-        let parsed = serde_json::to_string(&json).unwrap();
-
-        let out_dir = working_dir.join(dioxus_config.application.out_dir);
-        fs::create_dir_all(&out_dir).unwrap();
-
-        let path = out_dir.join(assets::MG_JSON_OUT);
-        fs::write(path, parsed).unwrap();
-
+    // Handle any linkers
+    if linker_handler()? {
         return Ok(());
     }
 
@@ -140,4 +126,26 @@ fn get_bin(bin: Option<String>) -> Result<PathBuf> {
 /// Simplifies error messages that use the same pattern.
 fn error_wrapper(message: &str) -> String {
     format!("🚫 {message}:")
+}
+
+fn linker_handler() -> anyhow::Result<bool> {
+    // Linker handling
+    let raw_args = env::args();
+
+    if let Some((working_dir, object_files)) = manganis_cli_support::linker_intercept(raw_args) {
+        let dioxus_config = DioxusConfig::load(None)?.unwrap_or_default();
+
+        let json = manganis_cli_support::get_json_from_object_files(object_files);
+        let parsed = serde_json::to_string(&json).unwrap();
+
+        let out_dir = working_dir.join(dioxus_config.application.out_dir);
+        fs::create_dir_all(&out_dir).unwrap();
+
+        let path = out_dir.join(assets::MG_JSON_OUT);
+        fs::write(path, parsed).unwrap();
+
+        return Ok(true);
+    }
+
+    Ok(false)
 }
