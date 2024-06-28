@@ -64,7 +64,7 @@ impl SuspenseHydrationIdsNode {
 ///
 /// This struct keeps track of the order the suspense boundaries are discovered in on the client so we can map the id in the dom to the scope we need to rehydrate.
 ///
-/// Diagram: https://excalidraw.com/#json=GVECyN5gf03RtYEqVq89a,ejIUIzmECANM7bDN0n4UOg
+/// Diagram: https://excalidraw.com/#json=bY2faksLBmN3_vHhh0LGu,liC0hJ3hqQ1MKM--c031Jg
 #[derive(Default, Debug)]
 pub(crate) struct SuspenseHydrationIds {
     /// A dense mapping from traversal order to the scope id of the suspense boundary
