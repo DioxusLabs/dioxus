@@ -309,10 +309,19 @@ fn local_path_of_asset(path: &Path) -> Option<PathBuf> {
 }
 
 pub(crate) trait Platform {
-    fn start(config: &CrateConfig, serve: &ConfigOptsServe) -> Result<Self>
+    fn start(
+        config: &CrateConfig,
+        serve: &ConfigOptsServe,
+        env: Vec<(String, String)>,
+    ) -> Result<Self>
     where
         Self: Sized;
-    fn rebuild(&mut self, config: &CrateConfig) -> Result<BuildResult>;
+    fn rebuild(
+        &mut self,
+        config: &CrateConfig,
+        serve: &ConfigOptsServe,
+        env: Vec<(String, String)>,
+    ) -> Result<BuildResult>;
 }
 
 fn is_backup_file(path: &Path) -> bool {

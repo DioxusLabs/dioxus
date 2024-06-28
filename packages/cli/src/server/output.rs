@@ -1,7 +1,7 @@
 use crate::server::Diagnostic;
 use colored::Colorize;
 use dioxus_cli_config::{crate_root, CrateConfig};
-use std::{path::PathBuf, process::Command};
+use std::{net::IpAddr, path::PathBuf, process::Command};
 
 #[derive(Debug, Default)]
 pub struct PrettierOptions {
@@ -12,7 +12,7 @@ pub struct PrettierOptions {
 
 #[derive(Debug, Clone)]
 pub struct WebServerInfo {
-    pub ip: String,
+    pub ip: IpAddr,
     pub port: u16,
 }
 
@@ -77,27 +77,24 @@ pub fn print_console_info(
     }
 
     if let Some(WebServerInfo { ip, port }) = web_info {
-        if config.dioxus_config.web.https.enabled == Some(true) {
-            println!(
-                "    > Local address: {}",
-                format!("https://localhost:{}/", port).blue()
-            );
-            println!(
-                "    > Network address: {}",
-                format!("https://{}:{}/", ip, port).blue()
-            );
-            println!("    > HTTPS: {}", "Enabled".to_string().green());
-        } else {
-            println!(
-                "    > Local address: {}",
-                format!("http://localhost:{}/", port).blue()
-            );
-            println!(
-                "    > Network address: {}",
-                format!("http://{}:{}/", ip, port).blue()
-            );
-            println!("    > HTTPS status: {}", "Disabled".to_string().red());
-        }
+        let https = config.dioxus_config.web.https.enabled == Some(true);
+        let prefix = if https { "https://" } else { "http://" };
+        println!(
+            "    > Local address: {}",
+            format!("{prefix}localhost:{}/", port).blue()
+        );
+        println!(
+            "    > Network address: {}",
+            format!("{prefix}{}:{}/", ip, port).blue()
+        );
+        println!(
+            "    > HTTPS: {}",
+            if https {
+                "Enabled".to_string().green()
+            } else {
+                "Disabled".to_string().red()
+            }
+        );
     }
     println!();
 

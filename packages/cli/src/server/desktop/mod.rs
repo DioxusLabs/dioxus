@@ -91,7 +91,7 @@ async fn serve<P: Platform + Send + 'static>(
         }
     });
 
-    let platform = RwLock::new(P::start(&config, serve)?);
+    let platform = RwLock::new(P::start(&config, serve, Vec::new())?);
 
     tracing::info!("🚀 Starting development server...");
 
@@ -100,7 +100,13 @@ async fn serve<P: Platform + Send + 'static>(
     let _watcher = setup_file_watcher(
         {
             let config = config.clone();
-            move || platform.write().unwrap().rebuild(&config)
+            let serve = serve.clone();
+            move || {
+                platform
+                    .write()
+                    .unwrap()
+                    .rebuild(&config, &serve, Vec::new())
+            }
         },
         &config,
         None,
@@ -238,6 +244,8 @@ fn start_desktop(
     config: &CrateConfig,
     skip_assets: bool,
     rust_flags: Option<String>,
+    args: &Vec<String>,
+    env: Vec<(String, String)>,
 ) -> Result<(RAIIChild, BuildResult)> {
     // Run the desktop application
     // Only used for the fullstack platform,
@@ -251,7 +259,9 @@ fn start_desktop(
                 .clone()
                 .ok_or(anyhow::anyhow!("No executable found after desktop build"))?,
         )
+        .args(args)
         .env(active, "true")
+        .envs(env)
         .spawn()?,
     );
 
@@ -259,6 +269,7 @@ fn start_desktop(
 }
 
 pub(crate) struct DesktopPlatform {
+    args: Vec<String>,
     currently_running_child: RAIIChild,
     skip_assets: bool,
 }
@@ -270,8 +281,10 @@ impl DesktopPlatform {
         config: &CrateConfig,
         serve: &ConfigOptsServe,
         rust_flags: Option<String>,
+        env: Vec<(String, String)>,
     ) -> Result<Self> {
-        let (child, first_build_result) = start_desktop(config, serve.skip_assets, rust_flags)?;
+        let (child, first_build_result) =
+            start_desktop(config, serve.skip_assets, rust_flags, &serve.args, env)?;
 
         tracing::info!("🚀 Starting development server...");
 
@@ -287,6 +300,7 @@ impl DesktopPlatform {
         );
 
         Ok(Self {
+            args: serve.args.clone(),
             currently_running_child: child,
             skip_assets: serve.skip_assets,
         })
@@ -298,6 +312,7 @@ impl DesktopPlatform {
         &mut self,
         config: &CrateConfig,
         rust_flags: Option<String>,
+        env: Vec<(String, String)>,
     ) -> Result<BuildResult> {
         // Gracefully shtudown the desktop app
         // It might have a receiver to do some cleanup stuff
@@ -322,27 +337,36 @@ impl DesktopPlatform {
         // Todo: add a timeout here to kill the process if it doesn't shut down within a reasonable time
         self.currently_running_child.0.wait()?;
 
-        let (child, result) = start_desktop(config, self.skip_assets, rust_flags)?;
+        let (child, result) = start_desktop(config, self.skip_assets, rust_flags, &self.args, env)?;
         self.currently_running_child = child;
         Ok(result)
     }
 }
 
 impl Platform for DesktopPlatform {
-    fn start(config: &CrateConfig, serve: &ConfigOptsServe) -> Result<Self> {
+    fn start(
+        config: &CrateConfig,
+        serve: &ConfigOptsServe,
+        env: Vec<(String, String)>,
+    ) -> Result<Self> {
         // See `start_with_options()`'s docs for the explanation why the code
         // was moved there.
         // Since desktop platform doesn't use `rust_flags`, this argument is
         // explicitly set to `None`.
-        DesktopPlatform::start_with_options(config, serve, None)
+        DesktopPlatform::start_with_options(config, serve, None, env)
     }
 
-    fn rebuild(&mut self, config: &CrateConfig) -> Result<BuildResult> {
+    fn rebuild(
+        &mut self,
+        config: &CrateConfig,
+        _: &ConfigOptsServe,
+        env: Vec<(String, String)>,
+    ) -> Result<BuildResult> {
         // See `rebuild_with_options()`'s docs for the explanation why the code
         // was moved there.
         // Since desktop platform doesn't use `rust_flags`, this argument is
         // explicitly set to `None`.
-        DesktopPlatform::rebuild_with_options(self, config, None)
+        DesktopPlatform::rebuild_with_options(self, config, None, env)
     }
 }
 
