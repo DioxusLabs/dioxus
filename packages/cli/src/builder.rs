@@ -4,6 +4,7 @@ use crate::{
         AssetConfigDropGuard,
     },
     error::{Error, Result},
+    link::LinkCommand,
     tools::Tool,
 };
 use anyhow::Context;
@@ -172,7 +173,14 @@ pub fn build_web(
         warnings,
         output_location,
     } = prettier_build(cmd)?;
-    manganis_cli_support::start_linker_intercept(Some(&config.crate_dir), cargo_args).unwrap();
+
+    // Start Manganis linker intercept.
+    manganis_cli_support::start_linker_intercept(
+        Some(&config.crate_dir),
+        &LinkCommand::command_name(),
+        cargo_args,
+    )
+    .unwrap();
 
     let output_location = output_location.context("No output location found")?;
 
@@ -407,7 +415,13 @@ pub fn build_desktop(
 
     cmd = cmd.args(&cargo_args);
     let warning_messages = prettier_build(cmd)?;
-    manganis_cli_support::start_linker_intercept(Some(&config.crate_dir), cargo_args)?;
+
+    // Start Manganis linker intercept.
+    manganis_cli_support::start_linker_intercept(
+        Some(&config.crate_dir),
+        &LinkCommand::command_name(),
+        cargo_args,
+    )?;
 
     let file_name: String = config.executable.executable().unwrap().to_string();
 
