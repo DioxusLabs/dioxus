@@ -178,7 +178,6 @@ pub fn build_web(
     let linker_args = vec![format!("{}", config.out_dir().display())];
 
     manganis_cli_support::start_linker_intercept(
-        Some(&config.crate_dir),
         &LinkCommand::command_name(),
         cargo_args,
         Some(linker_args),
@@ -423,7 +422,6 @@ pub fn build_desktop(
     let linker_args = vec![format!("{}", config.out_dir().display())];
 
     manganis_cli_support::start_linker_intercept(
-        Some(&config.crate_dir),
         &LinkCommand::command_name(),
         cargo_args,
         Some(linker_args),
