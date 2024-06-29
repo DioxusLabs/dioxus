@@ -1,7 +1,6 @@
 use crate::{assets, error::Result};
 use clap::Parser;
-use dioxus_cli_config::DioxusConfig;
-use std::fs;
+use std::{fs, path::PathBuf};
 
 #[derive(Clone, Debug, Parser)]
 #[clap(name = "link", hide = true)]
@@ -13,19 +12,17 @@ pub struct LinkCommand {
 
 impl LinkCommand {
     pub fn link(self) -> Result<()> {
-        let Some((working_dir, object_files)) = manganis_cli_support::linker_intercept(self.args)
+        let Some((link_args, object_files)) = manganis_cli_support::linker_intercept(self.args)
         else {
             tracing::warn!("Invalid linker arguments.");
             return Ok(());
         };
 
-        let dioxus_config = DioxusConfig::load(None)?.unwrap_or_default();
-
         // Parse object files, deserialize JSON, & create a file to propogate JSON.
         let json = manganis_cli_support::get_json_from_object_files(object_files);
         let parsed = serde_json::to_string(&json).unwrap();
 
-        let out_dir = working_dir.join(dioxus_config.application.out_dir);
+        let out_dir = PathBuf::from(link_args.first().unwrap());
         fs::create_dir_all(&out_dir).unwrap();
 
         let path = out_dir.join(assets::MG_JSON_OUT);

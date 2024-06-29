@@ -23,11 +23,11 @@ use crate::plugin::PluginManager;
 
 use super::HotReloadState;
 
-pub async fn startup(config: CrateConfig, serve: &ConfigOptsServe) -> Result<()> {
-    startup_with_platform::<DesktopPlatform>(config, serve).await
+pub fn startup(config: CrateConfig, serve: &ConfigOptsServe) -> Result<()> {
+    startup_with_platform::<DesktopPlatform>(config, serve)
 }
 
-pub(crate) async fn startup_with_platform<P: Platform + Send + 'static>(
+pub(crate) fn startup_with_platform<P: Platform + Send + 'static>(
     config: CrateConfig,
     serve_cfg: &ConfigOptsServe,
 ) -> Result<()> {
@@ -54,7 +54,7 @@ pub(crate) async fn startup_with_platform<P: Platform + Send + 'static>(
         file_map,
     };
 
-    serve::<P>(config, serve_cfg, hot_reload_state).await?;
+    serve::<P>(config, serve_cfg, hot_reload_state)?;
 
     Ok(())
 }
@@ -70,47 +70,49 @@ fn set_ctrl_c(config: &CrateConfig) {
 }
 
 /// Start the server without hot reload
-async fn serve<P: Platform + Send + 'static>(
+fn serve<P: Platform + Send + 'static>(
     config: CrateConfig,
     serve: &ConfigOptsServe,
     hot_reload_state: HotReloadState,
 ) -> Result<()> {
-    let hot_reload: tokio::task::JoinHandle<Result<()>> = tokio::spawn({
-        let hot_reload_state = hot_reload_state.clone();
-        async move {
-            match hot_reload_state.file_map.clone() {
-                Some(file_map) => {
-                    // The open interprocess sockets
-                    start_desktop_hot_reload(hot_reload_state, file_map).await?;
-                }
-                None => {
-                    std::future::pending::<()>().await;
-                }
-            }
-            Ok(())
-        }
-    });
-
     let platform = RwLock::new(P::start(&config, serve)?);
 
-    tracing::info!("🚀 Starting development server...");
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async move {
+        let hot_reload: tokio::task::JoinHandle<Result<()>> = tokio::spawn({
+            let hot_reload_state = hot_reload_state.clone();
+            async move {
+                match hot_reload_state.file_map.clone() {
+                    Some(file_map) => {
+                        // The open interprocess sockets
+                        start_desktop_hot_reload(hot_reload_state, file_map).await?;
+                    }
+                    None => {
+                        std::future::pending::<()>().await;
+                    }
+                }
+                Ok(())
+            }
+        });
 
-    // We got to own watcher so that it exists for the duration of serve
-    // Otherwise full reload won't work.
-    let _watcher = setup_file_watcher(
-        {
-            let config = config.clone();
-            move || platform.write().unwrap().rebuild(&config)
-        },
-        &config,
-        None,
-        hot_reload_state,
-    )
-    .await?;
+        tracing::info!("🚀 Starting development server...");
 
-    hot_reload.await.unwrap()?;
+        // We got to own watcher so that it exists for the duration of serve
+        // Otherwise full reload won't work.
+        let _watcher = setup_file_watcher(
+            {
+                let config = config.clone();
+                move || platform.write().unwrap().rebuild(&config)
+            },
+            &config,
+            None,
+            hot_reload_state,
+        )
+        .await?;
 
-    Ok(())
+        hot_reload.await.unwrap()?;
+        Ok(())
+    })
 }
 
 async fn start_desktop_hot_reload(

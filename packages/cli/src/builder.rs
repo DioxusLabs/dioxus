@@ -175,10 +175,13 @@ pub fn build_web(
     } = prettier_build(cmd)?;
 
     // Start Manganis linker intercept.
+    let linker_args = vec![format!("{}", config.out_dir().display())];
+
     manganis_cli_support::start_linker_intercept(
         Some(&config.crate_dir),
         &LinkCommand::command_name(),
         cargo_args,
+        Some(linker_args),
     )
     .unwrap();
 
@@ -417,10 +420,13 @@ pub fn build_desktop(
     let warning_messages = prettier_build(cmd)?;
 
     // Start Manganis linker intercept.
+    let linker_args = vec![format!("{}", config.out_dir().display())];
+
     manganis_cli_support::start_linker_intercept(
         Some(&config.crate_dir),
         &LinkCommand::command_name(),
         cargo_args,
+        Some(linker_args),
     )?;
 
     let file_name: String = config.executable.executable().unwrap().to_string();

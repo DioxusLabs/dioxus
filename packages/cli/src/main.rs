@@ -10,8 +10,7 @@ use Commands::*;
 
 const LOG_ENV: &str = "DIOXUS_LOG";
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
 
     // If {LOG_ENV} is set, default to env, otherwise filter to cli
@@ -40,19 +39,13 @@ async fn main() -> anyhow::Result<()> {
             .context(error_wrapper("Configuring new project failed")),
 
         #[cfg(feature = "plugin")]
-        Plugin(opts) => opts
-            .plugin()
-            .await
-            .context(error_wrapper("Error with plugin")),
+        Plugin(opts) => opts.plugin().context(error_wrapper("Error with plugin")),
 
         Autoformat(opts) => opts
             .autoformat()
             .context(error_wrapper("Error autoformatting RSX")),
 
-        Check(opts) => opts
-            .check()
-            .await
-            .context(error_wrapper("Error checking RSX")),
+        Check(opts) => opts.check().context(error_wrapper("Error checking RSX")),
 
         Link(opts) => opts
             .link()
@@ -85,7 +78,6 @@ async fn main() -> anyhow::Result<()> {
 
                 Serve(opts) => opts
                     .serve(Some(bin.clone()))
-                    .await
                     .context(error_wrapper("Serving project failed")),
 
                 Bundle(opts) => opts
