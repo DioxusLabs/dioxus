@@ -36,7 +36,7 @@ pub fn launch(
     tokio::runtime::Runtime::new()
         .unwrap()
         .block_on(async move {
-            platform_config.launch_server(factory, contexts).await;
+            launch_server(platform_config, factory, contexts).await;
         });
 
     unreachable!("Launching a fullstack app should never return")
@@ -50,7 +50,8 @@ pub fn launch(
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any + Send + Sync> + Send + Sync>>,
     platform_config: Config,
 ) {
-    let factory = virtual_dom_factory(root, Arc::new(contexts));
+    let contexts = Arc::new(contexts);
+    let factory = virtual_dom_factory(root, contexts);
     let cfg = platform_config.web_cfg.hydrate(true);
     dioxus_web::launch::launch_virtual_dom(factory(), cfg)
 }
@@ -63,7 +64,8 @@ pub fn launch(
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
     platform_config: Config,
 ) -> ! {
-    let factory = virtual_dom_factory(root, Arc::new(contexts));
+    let contexts = Arc::new(contexts);
+    let factory = virtual_dom_factory(root, contexts);
     let cfg = platform_config.desktop_cfg;
     dioxus_desktop::launch::launch_virtual_dom(factory(), cfg)
 }
@@ -76,10 +78,67 @@ pub fn launch(
 #[allow(unused)]
 pub fn launch(
     root: fn() -> Element,
-    contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
+    contexts: Vec<Box<dyn Fn() -> Box<dyn Any + Send + Sync> + Send + Sync>>,
     platform_config: Config,
-) {
-    let factory = virtual_dom_factory(root, Arc::new(contexts));
+) -> ! {
+    let contexts = Arc::new(contexts);
+    let factory = virtual_dom_factory(root, contexts.clone());
     let cfg = platform_config.mobile_cfg;
     dioxus_mobile::launch::launch_virtual_dom(factory(), cfg)
+}
+
+#[cfg(feature = "server")]
+#[allow(unused)]
+/// Launch a server application
+async fn launch_server(
+    platform_config: Config,
+    build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
+    context_providers: ContextProviders,
+) {
+    use clap::Parser;
+
+    let args = dioxus_cli_config::ServeArguments::from_cli()
+        .unwrap_or_else(dioxus_cli_config::ServeArguments::parse);
+    let addr = args
+        .addr
+        .unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)));
+    let addr = std::net::SocketAddr::new(addr, args.port);
+    println!("Listening on http://{}", addr);
+
+    #[cfg(feature = "axum")]
+    {
+        use crate::axum_adapter::DioxusRouterExt;
+
+        let router = axum::Router::new().register_server_functions_with_context(context_providers);
+        #[cfg(not(any(feature = "desktop", feature = "mobile")))]
+        let router = {
+            use crate::prelude::SSRState;
+
+            let cfg = platform_config.server_cfg.build();
+
+            let ssr_state = SSRState::new(&cfg);
+            let mut router = router.serve_static_assets(cfg.assets_path.clone()).await;
+
+            #[cfg(all(feature = "hot-reload", debug_assertions))]
+            {
+                use dioxus_hot_reload::HotReloadRouterExt;
+                router = router.forward_cli_hot_reloading();
+            }
+
+            router.fallback(
+                axum::routing::get(crate::axum_adapter::render_handler).with_state((
+                    cfg,
+                    Arc::new(build_virtual_dom),
+                    ssr_state,
+                )),
+            )
+        };
+        let router = router.into_make_service();
+        let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+        axum::serve(listener, router).await.unwrap();
+    }
+    #[cfg(not(feature = "axum"))]
+    {
+        panic!("Launching with dioxus fullstack requires the axum feature. If you are using a community fullstack adapter, please check the documentation for that adapter to see how to launch the application.");
+    }
 }

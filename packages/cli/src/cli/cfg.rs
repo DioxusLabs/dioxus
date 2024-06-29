@@ -1,4 +1,5 @@
 use dioxus_cli_config::Platform;
+use dioxus_cli_config::ServeArguments;
 
 use super::*;
 
@@ -80,10 +81,9 @@ impl From<ConfigOptsServe> for ConfigOptsBuild {
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 #[command(group = clap::ArgGroup::new("release-incompatible").multiple(true).conflicts_with("release"))]
 pub struct ConfigOptsServe {
-    /// Port of dev server
-    #[clap(long)]
-    #[clap(default_value_t = 8080)]
-    pub port: u16,
+    /// Arguments for the serve command
+    #[clap(flatten)]
+    pub(crate) server_arguments: ServeArguments,
 
     /// Open the app in the default browser [default: true]
     #[clap(long, default_value_t = false)]
@@ -155,6 +155,10 @@ pub struct ConfigOptsServe {
     /// Rustc platform triple
     #[clap(long)]
     pub target: Option<String>,
+
+    /// Additional arguments to pass to the executable
+    #[clap(long)]
+    pub args: Vec<String>,
 
     /// Extra arguments passed to cargo build
     #[clap(last = true)]

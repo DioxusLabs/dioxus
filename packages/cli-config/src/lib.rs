@@ -8,6 +8,10 @@ mod bundle;
 pub use bundle::*;
 mod cargo;
 pub use cargo::*;
+#[cfg(feature = "cli")]
+mod serve;
+#[cfg(feature = "cli")]
+pub use serve::*;
 
 #[doc(hidden)]
 pub mod __private {
@@ -28,6 +32,11 @@ pub mod __private {
             std::env::remove_var(CONFIG_ENV);
         }
     }
+
+    #[cfg(feature = "cli")]
+    /// The environment variable that stores the CLIs serve configuration.
+    /// We use this to communicate between the CLI and the server for fullstack applications.
+    pub const SERVE_ENV: &str = "DIOXUS_SERVE_CONFIG";
 }
 
 /// An error that occurs when the dioxus CLI was not used to build the application.

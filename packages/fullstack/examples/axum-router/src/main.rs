@@ -7,11 +7,12 @@
 use dioxus::prelude::*;
 
 fn main() {
-    let cfg = server_only!(dioxus::fullstack::Config::new().incremental(
-        IncrementalRendererConfig::default().invalidate_after(std::time::Duration::from_secs(120)),
-    ));
-
-    LaunchBuilder::fullstack().with_cfg(cfg).launch(app);
+    LaunchBuilder::fullstack()
+        .with_cfg(server_only!(ServeConfig::builder().incremental(
+            IncrementalRendererConfig::default()
+                .invalidate_after(std::time::Duration::from_secs(120)),
+        )))
+        .launch(app);
 }
 
 fn app() -> Element {

@@ -220,7 +220,7 @@ where
                 Method::GET => self.route(path, get(handler)),
                 Method::POST => self.route(path, post(handler)),
                 Method::PUT => self.route(path, put(handler)),
-                _ => todo!(),
+                _ => unimplemented!("Unsupported server function method: {}", method),
             };
         }
 

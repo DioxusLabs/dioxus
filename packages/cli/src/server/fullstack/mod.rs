@@ -2,7 +2,7 @@ use dioxus_cli_config::CrateConfig;
 
 use crate::{
     cfg::{ConfigOptsBuild, ConfigOptsServe},
-    Result,
+    BuildResult, Result,
 };
 
 use super::{desktop, Platform};
@@ -61,6 +61,13 @@ fn make_desktop_config(config: &CrateConfig, serve: &ConfigOptsServe) -> CrateCo
     desktop_config
 }
 
+fn add_serve_options_to_env(serve: &ConfigOptsServe, env: &mut Vec<(String, String)>) {
+    env.push((
+        dioxus_cli_config::__private::SERVE_ENV.to_string(),
+        serde_json::to_string(&serve.server_arguments).unwrap(),
+    ));
+}
+
 struct FullstackPlatform {
     serve: ConfigOptsServe,
     desktop: desktop::DesktopPlatform,
@@ -68,7 +75,11 @@ struct FullstackPlatform {
 }
 
 impl Platform for FullstackPlatform {
-    fn start(config: &CrateConfig, serve: &ConfigOptsServe) -> Result<Self>
+    fn start(
+        config: &CrateConfig,
+        serve: &ConfigOptsServe,
+        env: Vec<(String, String)>,
+    ) -> Result<Self>
     where
         Self: Sized,
     {
@@ -76,14 +87,29 @@ impl Platform for FullstackPlatform {
 
         let desktop_config = make_desktop_config(config, serve);
         let server_rust_flags = server_rust_flags(&serve.clone().into());
+        let mut desktop_env = env.clone();
+        add_serve_options_to_env(serve, &mut desktop_env);
         let desktop = desktop::DesktopPlatform::start_with_options(
             &desktop_config,
             serve,
             Some(server_rust_flags.clone()),
+            desktop_env,
         )?;
         thread_handle
             .join()
             .map_err(|_| anyhow::anyhow!("Failed to join thread"))??;
+
+        if serve.open {
+            crate::server::web::open_browser(
+                config,
+                serve
+                    .server_arguments
+                    .addr
+                    .unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0))),
+                serve.server_arguments.port,
+                false,
+            );
+        }
 
         Ok(Self {
             desktop,
@@ -92,12 +118,21 @@ impl Platform for FullstackPlatform {
         })
     }
 
-    fn rebuild(&mut self, crate_config: &CrateConfig) -> Result<crate::BuildResult> {
+    fn rebuild(
+        &mut self,
+        crate_config: &CrateConfig,
+        serve: &ConfigOptsServe,
+        env: Vec<(String, String)>,
+    ) -> Result<BuildResult> {
         let thread_handle = start_web_build_thread(crate_config, &self.serve);
         let desktop_config = make_desktop_config(crate_config, &self.serve);
-        let result = self
-            .desktop
-            .rebuild_with_options(&desktop_config, Some(self.server_rust_flags.clone()));
+        let mut desktop_env = env.clone();
+        add_serve_options_to_env(serve, &mut desktop_env);
+        let result = self.desktop.rebuild_with_options(
+            &desktop_config,
+            Some(self.server_rust_flags.clone()),
+            desktop_env,
+        );
         thread_handle
             .join()
             .map_err(|_| anyhow::anyhow!("Failed to join thread"))??;
