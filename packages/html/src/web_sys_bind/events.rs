@@ -423,6 +423,12 @@ impl From<&web_sys::Element> for MountedData {
     }
 }
 
+impl From<&web_sys::ResizeObserverEntry> for ResizeData {
+    fn from(e: &web_sys::ResizeObserverEntry) -> Self {
+        ResizeData::new(e.clone())
+    }
+}
+
 #[cfg(feature = "mounted")]
 impl crate::RenderedElementBacking for web_sys::Element {
     fn get_scroll_offset(
@@ -490,6 +496,40 @@ impl crate::RenderedElementBacking for web_sys::Element {
             });
         Box::pin(async { result })
     }
+}
+
+macro_rules! get_observer_entry_size {
+    ($meth_name:ident, $entry_meth_name:ident, $field_name:literal) => {
+        #[doc = concat!("Get the ", $field_name, " size of the observed element")]
+        fn $meth_name(&self) -> ResizeResult<Vec<PixelsSize>> {
+            let sizes = web_sys::ResizeObserverEntry::$entry_meth_name(&self);
+
+            let sizes = sizes
+                .iter()
+                .map(|s| {
+                    let size: web_sys::ResizeObserverSize = s.into();
+                    // block_size matchs the height of the element if its writing-mode is horizontal, the width otherwise
+                    let block_size = size.block_size();
+                    // inline_size matchs the width of the element if its writing-mode is horizontal, the height otherwise
+                    let inline_size = size.inline_size();
+                    PixelsSize::new(inline_size, block_size)
+                })
+                .collect();
+
+            Ok(sizes)
+        }
+    };
+}
+
+impl crate::ObserverEntryBacking for web_sys::ResizeObserverEntry {
+    /// Return self as Any
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    get_observer_entry_size!(get_border_box_size, border_box_size, "border box");
+
+    get_observer_entry_size!(get_content_box_size, content_box_size, "content box");
 }
 
 #[derive(Debug)]
