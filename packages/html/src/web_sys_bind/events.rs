@@ -504,26 +504,17 @@ macro_rules! get_observer_entry_size {
         fn $meth_name(&self) -> ResizeResult<Vec<PixelsSize>> {
             let sizes = web_sys::ResizeObserverEntry::$entry_meth_name(&self);
 
-            let sizes = if sizes.length() > 0 {
-                sizes
-                    .iter()
-                    .map(|s| {
-                        let size: web_sys::ResizeObserverSize = s.into();
-                        // block_size matchs the height of the element if its writing-mode is horizontal, the width otherwise
-                        let block_size = size.block_size();
-                        // inline_size matchs the width of the element if its writing-mode is horizontal, the height otherwise
-                        let inline_size = size.inline_size();
-                        PixelsSize::new(inline_size, block_size)
-                    })
-                    .collect()
-            } else {
-                let mut sizes = Vec::with_capacity(1);
-
-                let rect = web_sys::ResizeObserverEntry::content_rect(&self);
-                sizes.push(PixelsSize::new(rect.width(), rect.height()));
-
-                sizes
-            };
+            let sizes = sizes
+                .iter()
+                .map(|s| {
+                    let size: web_sys::ResizeObserverSize = s.into();
+                    // block_size matchs the height of the element if its writing-mode is horizontal, the width otherwise
+                    let block_size = size.block_size();
+                    // inline_size matchs the width of the element if its writing-mode is horizontal, the height otherwise
+                    let inline_size = size.inline_size();
+                    PixelsSize::new(inline_size, block_size)
+                })
+                .collect();
 
             Ok(sizes)
         }

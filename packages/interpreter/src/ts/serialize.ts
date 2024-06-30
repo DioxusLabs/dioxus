@@ -59,17 +59,30 @@ export function serializeEvent(event: Event, target: EventTarget): SerializedEve
   return contents;
 }
 
-function toSerializableResizeObserverEntry(size: ResizeObserverSize): Object {
+function toSerializableResizeObserverEntry(size: ResizeObserverSize, is_inline_width: boolean): Object {
   return {
-    blockSize: size.blockSize,
-    inlineSize: size.inlineSize
+    width: is_inline_width ? size.inlineSize : size.blockSize,
+    height: is_inline_width ? size.blockSize : size.inlineSize,
   };
 }
 
 export function serializeResizeObserverEntry(entry: ResizeObserverEntry, target: EventTarget): SerializedEvent {
+  let is_inline_width = true;
+  if (target instanceof HTMLElement) {
+    let target_style = window.getComputedStyle(target);
+    let target_writing_mode = target_style.getPropertyValue("writing-mode");
+    if (target_writing_mode !== "horizontal-tb") {
+      is_inline_width = false;
+    }
+  }
+
   return {
-    border_box_size: entry.borderBoxSize.map(toSerializableResizeObserverEntry),
-    content_box_size: entry.contentBoxSize.map(toSerializableResizeObserverEntry),
+    border_box_size: entry.borderBoxSize.length > 0 ?
+      entry.borderBoxSize.map((e) => toSerializableResizeObserverEntry(e, is_inline_width)) :
+      [entry.contentRect],
+    content_box_size: entry.contentBoxSize.length > 0 ?
+      entry.contentBoxSize.map((e) => toSerializableResizeObserverEntry(e, is_inline_width)) :
+      [entry.contentRect],
     content_rect: entry.contentRect,
     device_pixel_content_box_size: entry.devicePixelContentBoxSize,
   };

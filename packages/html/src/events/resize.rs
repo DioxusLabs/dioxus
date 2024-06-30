@@ -61,8 +61,17 @@ impl ResizeData {
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 #[serde(rename_all = "camelCase")]
 struct SerializedResizeObserverSize {
-    block_size: f64,
-    inline_size: f64,
+    width: f64,
+    height: f64,
+}
+
+impl From<&PixelsSize> for SerializedResizeObserverSize {
+    fn from(value: &PixelsSize) -> Self {
+        Self {
+            width: value.width,
+            height: value.height,
+        }
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
@@ -88,29 +97,21 @@ pub struct SerializedResizeData {
 #[cfg(feature = "serialize")]
 impl From<&ResizeData> for SerializedResizeData {
     fn from(data: &ResizeData) -> Self {
-        let mut border_box_sizes = Vec::new();
-        if let Ok(sizes) = data.inner.get_border_box_size() {
-            for size in sizes {
-                border_box_sizes.push(SerializedResizeObserverSize {
-                    // block_size matchs the height of the element if its writing-mode is horizontal, the width otherwise
-                    block_size: size.height,
-                    // inline_size matchs the width of the element if its writing-mode is horizontal, the height otherwise
-                    inline_size: size.width,
-                });
-            }
-        }
+        let border_box_sizes = match data.inner.get_border_box_size() {
+            Ok(sizes) => sizes
+                .iter()
+                .map(SerializedResizeObserverSize::from)
+                .collect(),
+            Err(_) => Vec::new(),
+        };
 
-        let mut content_box_sizes = Vec::new();
-        if let Ok(sizes) = data.inner.get_content_box_size() {
-            for size in sizes {
-                content_box_sizes.push(SerializedResizeObserverSize {
-                    // block_size matchs the height of the element if its writing-mode is horizontal, the width otherwise
-                    block_size: size.height,
-                    // inline_size matchs the width of the element if its writing-mode is horizontal, the height otherwise
-                    inline_size: size.width,
-                });
-            }
-        }
+        let content_box_sizes = match data.inner.get_content_box_size() {
+            Ok(sizes) => sizes
+                .iter()
+                .map(SerializedResizeObserverSize::from)
+                .collect(),
+            Err(_) => Vec::new(),
+        };
 
         Self {
             border_box_size: border_box_sizes,
@@ -126,7 +127,7 @@ macro_rules! get_box_size {
                 let sizes = self
                     .$field_name
                     .iter()
-                    .map(|s| PixelsSize::new(s.inline_size, s.block_size))
+                    .map(|s| PixelsSize::new(s.width, s.height))
                     .collect();
                 Ok(sizes)
             } else {
