@@ -83,13 +83,12 @@ fn Homepage(story: ReadOnlySignal<PreviewState>) -> Element {
 
 #[component]
 fn Stories() -> Element {
-    let stories: Resource<Result<Vec<i64>, server_fn::ServerFnError>> =
-        use_server_future(move || async move {
-            let url = format!("{}topstories.json", BASE_API_URL);
-            let mut stories_ids = reqwest::get(&url).await?.json::<Vec<i64>>().await?;
-            stories_ids.truncate(30);
-            Ok(stories_ids)
-        })?;
+    let stories: Resource<dioxus::Result<Vec<i64>>> = use_server_future(move || async move {
+        let url = format!("{}topstories.json", BASE_API_URL);
+        let mut stories_ids = reqwest::get(&url).await?.json::<Vec<i64>>().await?;
+        stories_ids.truncate(30);
+        Ok(stories_ids)
+    })?;
 
     match stories().unwrap() {
         Ok(list) => rsx! {
@@ -119,10 +118,7 @@ fn StoryListing(story: ReadOnlySignal<i64>) -> Element {
         kids,
         id,
         ..
-    } = story()
-        .unwrap()
-        .map_err(dioxus_core::CapturedError::from_display)?
-        .item;
+    } = story().unwrap()?.item;
 
     let url = url.as_deref().unwrap_or_default();
     let hostname = url
@@ -203,9 +199,7 @@ fn Preview(story: ReadOnlySignal<PreviewState>) -> Element {
 
     let story = use_server_future(use_reactive!(|id| get_story(id)))?;
 
-    let story = story()
-        .unwrap()
-        .map_err(dioxus_core::CapturedError::from_display)?;
+    let story = story().unwrap()?;
 
     rsx! {
         div { padding: "0.5rem",
@@ -223,7 +217,7 @@ fn Preview(story: ReadOnlySignal<PreviewState>) -> Element {
 
 #[component]
 fn Comment(comment: i64) -> Element {
-    let comment: Resource<Result<CommentData, server_fn::ServerFnError>> =
+    let comment: Resource<dioxus::Result<CommentData>> =
         use_server_future(use_reactive!(|comment| async move {
             let url = format!("{}{}{}.json", BASE_API_URL, ITEM_API, comment);
             let mut comment = reqwest::get(&url).await?.json::<CommentData>().await?;
@@ -237,9 +231,7 @@ fn Comment(comment: i64) -> Element {
         id,
         kids,
         ..
-    } = comment()
-        .unwrap()
-        .map_err(dioxus_core::CapturedError::from_display)?;
+    } = comment().unwrap()?;
 
     rsx! {
         div { padding: "0.5rem",
@@ -302,7 +294,7 @@ pub struct StoryItem {
     pub r#type: String,
 }
 
-pub async fn get_story(id: i64) -> Result<StoryPageData, server_fn::ServerFnError> {
+pub async fn get_story(id: i64) -> dioxus::Result<StoryPageData> {
     let url = format!("{}{}{}.json", BASE_API_URL, ITEM_API, id);
     Ok(reqwest::get(&url).await?.json::<StoryPageData>().await?)
 }

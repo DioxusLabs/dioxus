@@ -9,6 +9,7 @@ use std::{
     error::Error,
     fmt::{Debug, Display},
     rc::Rc,
+    str::FromStr,
 };
 
 /// A panic in a component that was caught by an error boundary.
@@ -330,6 +331,69 @@ pub struct CapturedError {
 
     /// Additional context that was added to the error
     context: Vec<Rc<AdditionalErrorContext>>,
+}
+
+impl FromStr for CapturedError {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        std::result::Result::Ok(Self::from_display(s.to_string()))
+    }
+}
+
+#[cfg(feature = "serialize")]
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SerializedCapturedError {
+    error: String,
+    context: Vec<String>,
+}
+
+#[cfg(feature = "serialize")]
+impl serde::Serialize for CapturedError {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
+        let serialized = SerializedCapturedError {
+            error: self.error.as_error().to_string(),
+            context: self
+                .context
+                .iter()
+                .map(|context| context.to_string())
+                .collect(),
+        };
+        serialized.serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl<'de> serde::Deserialize<'de> for CapturedError {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> std::result::Result<Self, D::Error> {
+        let serialized = SerializedCapturedError::deserialize(deserializer)?;
+
+        let error = DisplayError::from(serialized.error);
+        let context = serialized
+            .context
+            .into_iter()
+            .map(|context| {
+                Rc::new(AdditionalErrorContext {
+                    scope: None,
+                    backtrace: Backtrace::disabled(),
+                    context: Box::new(context),
+                })
+            })
+            .collect();
+
+        std::result::Result::Ok(Self {
+            error: Rc::new(error),
+            context,
+            backtrace: Rc::new(Backtrace::disabled()),
+            scope: ScopeId::ROOT,
+            render: VNode::placeholder(),
+        })
+    }
 }
 
 impl Debug for CapturedError {
