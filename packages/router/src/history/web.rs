@@ -15,9 +15,11 @@ use super::{
 
 #[allow(dead_code)]
 fn base_path() -> Option<&'static str> {
-    const BASE_PATH: Option<&'static str> = dioxus_cli_config::current_config_base_path();
-    tracing::trace!("Using base_path from Dioxus.toml: {:?}", BASE_PATH);
-    BASE_PATH
+    tracing::trace!(
+        "Using base_path from Dioxus.toml: {:?}",
+        dioxus_cli_config::BASE_PATH
+    );
+    dioxus_cli_config::BASE_PATH
 }
 
 #[allow(clippy::extra_unused_type_parameters)]

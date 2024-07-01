@@ -17,10 +17,21 @@ pub use serve::*;
 pub mod __private {
     use crate::CrateConfig;
 
-    pub const CONFIG_ENV: &str = "DIOXUS_CONFIG";
+    pub(crate) const CONFIG_ENV: &str = "DIOXUS_CONFIG";
+    pub(crate) const CONFIG_BASE_PATH_ENV: &str = "DIOXUS_CONFIG_BASE_PATH";
 
     pub fn save_config(config: &CrateConfig) -> CrateConfigDropGuard {
         std::env::set_var(CONFIG_ENV, serde_json::to_string(config).unwrap());
+        std::env::set_var(
+            CONFIG_BASE_PATH_ENV,
+            config
+                .dioxus_config
+                .web
+                .app
+                .base_path
+                .clone()
+                .unwrap_or_default(),
+        );
         CrateConfigDropGuard
     }
 
@@ -30,6 +41,7 @@ pub mod __private {
     impl Drop for CrateConfigDropGuard {
         fn drop(&mut self) {
             std::env::remove_var(CONFIG_ENV);
+            std::env::remove_var(CONFIG_BASE_PATH_ENV);
         }
     }
 
@@ -65,48 +77,9 @@ pub static CURRENT_CONFIG: once_cell::sync::Lazy<
 });
 
 #[cfg(feature = "read-config")]
-/// Get just the base path from the config without pulling in serde_json
-pub const fn current_config_base_path() -> Option<&'static str> {
-    // Find "base_path": "path/to/base"
-    match CURRENT_CONFIG_JSON {
-        Some(json) => {
-            let mut index = 0;
-            let mut search_index = 0;
-            let search_for = r#""base_path":""#;
-            while index < json.len() {
-                let char = json.as_bytes()[index];
-                if char == b' ' {
-                    index += 1;
-                    continue;
-                }
-                if char == search_for.as_bytes()[search_index] {
-                    search_index += 1;
-                } else {
-                    search_index = 0;
-                }
-                if search_index == search_for.len() {
-                    // Find the end of the string
-                    let mut end_index = index + 1;
-                    while end_index < json.len() {
-                        let char = json.as_bytes()[end_index];
-                        if char == b'"' {
-                            break;
-                        }
-                        end_index += 1;
-                    }
-                    let (_, after_start) = json.as_bytes().split_at(index + 1);
-                    let (before_end, _) = after_start.split_at(end_index - index - 1);
-                    // SAFETY: We are slicing into a valid UTF-8 string
-                    return Some(unsafe { std::str::from_utf8_unchecked(before_end) });
-                }
-                index += 1
-            }
-            None
-        }
-        None => None,
-    }
-}
+/// The current crate's configuration.
+pub const CURRENT_CONFIG_JSON: Option<&str> = std::option_env!("DIOXUS_CONFIG");
 
 #[cfg(feature = "read-config")]
 /// The current crate's configuration.
-pub const CURRENT_CONFIG_JSON: Option<&str> = std::option_env!("DIOXUS_CONFIG");
+pub const BASE_PATH: Option<&str> = std::option_env!("DIOXUS_CONFIG_BASE_PATH");
