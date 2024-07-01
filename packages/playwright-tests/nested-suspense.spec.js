@@ -8,8 +8,6 @@ test("nested suspense resolves", async ({ page }) => {
   const main = page.locator("#main");
   await expect(main).toContainText("Loading 0...");
 
-  await page.waitForTimeout(90);
-
   // Expect the page to contain the suspense result from the server
   const mainMessageDiv = page.locator("#children-0");
   const mainMessageTitle = page.locator("#title-0");
@@ -23,8 +21,6 @@ test("nested suspense resolves", async ({ page }) => {
   await expect(mainMessageDiv).toContainText("Loading 1...");
   await expect(mainMessageDiv).toContainText("Loading 2...");
   await expect(mainMessageDiv).toContainText("Loading 3...");
-
-  await page.waitForTimeout(90);
 
   const nestedMessageDiv1 = page.locator("#children-1");
   const nestedMessageTitle1 = page.locator("#title-1");
@@ -50,8 +46,6 @@ test("nested suspense resolves", async ({ page }) => {
 
   // Even more loading text for the deeply nested suspense
   await expect(nestedMessageDiv1).toContainText("Loading 4...");
-
-  await page.waitForTimeout(90);
 
   const nestedMessageDiv4 = page.locator("#children-4");
   await expect(nestedMessageDiv4).toBeEmpty();
