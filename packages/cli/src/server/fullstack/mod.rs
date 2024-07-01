@@ -49,7 +49,9 @@ fn start_web_build_thread(
 
 fn make_desktop_config(config: &CrateConfig, serve: &ConfigOptsServe) -> CrateConfig {
     let mut desktop_config = config.clone();
-    desktop_config.target_dir = config.server_target_dir();
+    if !serve.force_sequential {
+        desktop_config.target_dir = config.server_target_dir();
+    }
     let desktop_feature = serve.server_feature.clone();
     let features = &mut desktop_config.features;
     match features {
@@ -157,7 +159,7 @@ fn build_web(serve: ConfigOptsServe, target_directory: &std::path::Path) -> Resu
     }
     .build(
         None,
-        Some(target_directory),
+        (!web_config.force_sequential).then_some(target_directory),
         Some(client_rust_flags(&web_config)),
     )
 }
