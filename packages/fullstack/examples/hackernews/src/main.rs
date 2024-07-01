@@ -33,9 +33,30 @@ pub fn App() -> Element {
     }
 }
 
+const STYLE: &str = r#"@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+.spinner {
+    width: 10px;
+    height: 10px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    animation: spin 2s linear infinite;
+}"#;
+
 #[component]
 fn Homepage(story: ReadOnlySignal<PreviewState>) -> Element {
     rsx! {
+        style {
+            {STYLE}
+        }
         div { display: "flex", flex_direction: "row", width: "100%",
             div {
                 width: "50%",
@@ -141,7 +162,6 @@ fn StoryListing(story: ReadOnlySignal<i64>) -> Element {
                 div { padding_left: "0.5rem", "by {by}" }
                 div { padding_left: "0.5rem", "{time}" }
                 div { padding_left: "0.5rem", "{comments}" }
-                Counter {}
             }
         }
     }
@@ -287,33 +307,12 @@ pub async fn get_story(id: i64) -> Result<StoryPageData, server_fn::ServerFnErro
     Ok(reqwest::get(&url).await?.json::<StoryPageData>().await?)
 }
 
-const STYLE: &str = r#"@keyframes spin {
-    0% {
-        transform: rotate(0deg);
-    }
-
-    100% {
-        transform: rotate(360deg);
-    }
-}
-.spinner {
-    width: 10px;
-    height: 10px;
-    border: 4px solid #f3f3f3;
-    border-top: 4px solid #3498db;
-    border-radius: 50%;
-    animation: spin 2s linear infinite;
-}"#;
-
 #[component]
 fn ChildrenOrLoading(children: Element) -> Element {
     rsx! {
         SuspenseBoundary {
             fallback: |context: SuspenseContext| {
                 rsx! {
-                    style {
-                        {STYLE}
-                    }
                     if let Some(placeholder) = context.suspense_placeholder() {
                         {placeholder}
                     } else {
@@ -330,18 +329,6 @@ fn LoadingIndicator() -> Element {
     rsx! {
         div {
             class: "spinner",
-        }
-    }
-}
-
-fn Counter() -> Element {
-    let mut count = use_signal(|| 0);
-    let mut increment = move || count.set(count() + 1);
-
-    rsx! {
-        button {
-            onclick: move |_| increment(),
-            "Click me {count()} times"
         }
     }
 }
