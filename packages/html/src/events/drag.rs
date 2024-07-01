@@ -111,16 +111,18 @@ impl PointerInteraction for DragData {
 pub struct SerializedDragData {
     pub mouse: crate::point_interaction::SerializedPointInteraction,
 
+    #[cfg(feature = "file-engine")]
     #[serde(default)]
     files: Option<crate::file_data::SerializedFileEngine>,
 }
 
 #[cfg(feature = "serialize")]
 impl SerializedDragData {
-    fn new(drag: &DragData, files: Option<crate::file_data::SerializedFileEngine>) -> Self {
+    fn new(drag: &DragData) -> Self {
         Self {
             mouse: crate::point_interaction::SerializedPointInteraction::from(drag),
-            files,
+            #[cfg(feature = "file-engine")]
+            files: None,
         }
     }
 }
@@ -196,7 +198,7 @@ impl PointerInteraction for SerializedDragData {
 #[cfg(feature = "serialize")]
 impl serde::Serialize for DragData {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        SerializedDragData::new(self, None).serialize(serializer)
+        SerializedDragData::new(self).serialize(serializer)
     }
 }
 

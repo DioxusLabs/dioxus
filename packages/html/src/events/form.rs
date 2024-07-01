@@ -176,6 +176,7 @@ pub struct SerializedFormData {
     #[serde(default)]
     valid: bool,
 
+    #[cfg(feature = "file-engine")]
     #[serde(default)]
     files: Option<crate::file_data::SerializedFileEngine>,
 }
@@ -183,17 +184,21 @@ pub struct SerializedFormData {
 #[cfg(feature = "serialize")]
 impl SerializedFormData {
     /// Create a new serialized form data object
-    pub fn new(
-        value: String,
-        values: HashMap<String, FormValue>,
-        files: Option<crate::file_data::SerializedFileEngine>,
-    ) -> Self {
+    pub fn new(value: String, values: HashMap<String, FormValue>) -> Self {
         Self {
             value,
             values,
-            files,
             valid: true,
+            #[cfg(feature = "file-engine")]
+            files: None,
         }
+    }
+
+    #[cfg(feature = "file-engine")]
+    /// Add files to the serialized form data object
+    pub fn with_files(mut self, files: crate::file_data::SerializedFileEngine) -> Self {
+        self.files = Some(files);
+        self
     }
 
     /// Create a new serialized form data object from a traditional form data object
@@ -202,8 +207,8 @@ impl SerializedFormData {
             value: data.value(),
             values: data.values(),
             valid: data.valid(),
+            #[cfg(feature = "file-engine")]
             files: {
-                #[cfg(feature = "file-engine")]
                 match data.files() {
                     Some(files) => {
                         let mut resolved_files = HashMap::new();
@@ -219,8 +224,6 @@ impl SerializedFormData {
                     }
                     None => None,
                 }
-                #[cfg(not(feature = "file-engine"))]
-                None
             },
         }
     }
@@ -230,6 +233,7 @@ impl SerializedFormData {
             value: data.value(),
             values: data.values(),
             valid: data.valid(),
+            #[cfg(feature = "file-engine")]
             files: None,
         }
     }
