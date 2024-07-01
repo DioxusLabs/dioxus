@@ -151,7 +151,6 @@ export class BaseInterpreter {
   }
 
   hydrate(ids: { [key: number]: number }, underNodes: Node[]) {
-    console.log("hydrating ids", ids, "underNodes", underNodes);
     for (let i = 0; i < underNodes.length; i++) {
       const under = underNodes[i];
       if (under instanceof HTMLElement) {
@@ -178,11 +177,12 @@ export class BaseInterpreter {
 
           if (split.length > 1) {
             // For most text nodes, this should be text
-            let next = treeWalker.nextSibling() as ChildNode;
+            let next = currentNode.nextSibling;
             // remove the comment node
             currentNode.remove();
 
             let commentAfterText;
+            let textNode;
 
             // If we are hydrating an empty text node, we may see two comment nodes in a row instead of a comment node, text node and then comment node
             if (next.nodeType === Node.COMMENT_NODE) {
@@ -191,13 +191,15 @@ export class BaseInterpreter {
                 next
               );
               commentAfterText = next;
-              next = newText;
+              textNode = newText;
             } else {
               // The node after text should be a comment node marking the end of the text node
-              commentAfterText = treeWalker.nextSibling() as ChildNode;
+              textNode = next;
+              commentAfterText = textNode.nextSibling;
             }
-            this.nodes[ids[parseInt(split[1])]] = next;
-            let exit = !treeWalker.nextSibling();
+            treeWalker.currentNode = commentAfterText;
+            this.nodes[ids[parseInt(split[1])]] = textNode;
+            let exit = !treeWalker.nextNode();
             // remove the comment node after the text node
             commentAfterText.remove();
             if (exit) {
