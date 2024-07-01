@@ -9,11 +9,7 @@
 //!     Header
 //!     <div class="flex flex-col">
 //!         // If we reach a suspense placeholder that may be replaced later, we insert a template node with a unique id to replace later
-//!         <dx-hydration>
-//!             <template id="ds-0" shadowrootmode="open">
-//!                 <div>Loading user info...</div>
-//!             </template>
-//!         </dx-hydration>
+//!         <div>Loading user info...</div>
 //!     </div>
 //!     Footer
 //! </div>
@@ -22,7 +18,7 @@
 //! <script>
 //!     // Code to hook up hydration replacement
 //! </script>
-//! <div hidden id="ds-1">
+//! <div hidden id="ds-1-r">
 //!     <div>Final HTML</div>
 //! </div>
 //! <script>
@@ -97,13 +93,11 @@ impl<E> StreamingRenderer<E> {
         let id = self.current_path.read().unwrap().clone();
         // Increment the id for the next placeholder
         self.current_path.write().unwrap().id += 1;
-        write!(into, r#"<template id="ds-{id}"></template>"#)?;
         // While we are inside the placeholder, set the suspense path to the suspense boundary that we are rendering
         let old_path = std::mem::replace(&mut *self.current_path.write().unwrap(), id.child());
         html(into)?;
         // Restore the old path
         *self.current_path.write().unwrap() = old_path;
-        write!(into, r#"<!--ds-{id}-->"#)?;
         Ok(Mount { id })
     }
 

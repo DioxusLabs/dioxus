@@ -11,7 +11,6 @@ use crate::HTMLDataCursor;
 use dioxus_core::prelude::*;
 use dioxus_core::AttributeValue;
 use dioxus_core::{DynamicNode, ElementId};
-use dioxus_interpreter_js::minimal_bindings::dx_swap;
 use futures_channel::mpsc::UnboundedReceiver;
 use RehydrationError::*;
 
@@ -76,13 +75,10 @@ pub(crate) struct SuspenseHydrationIds {
 impl SuspenseHydrationIds {
     /// Add a suspense boundary to the list of suspense boundaries. This should only be called on the root scope after the first rebuild (which happens on the server) and on suspense boundaries that are resolved from the server.
     /// Running this on a scope that is only created on the client may cause hydration issues.
-    fn add_suspense_boundary(&mut self, id: ScopeId) -> Vec<u32> {
-        let mut new_path = self.current_path.clone();
+    fn add_suspense_boundary(&mut self, id: ScopeId) {
         match self.current_path.as_slice() {
             // This is a root node, add the new node
             [] => {
-                let children_len = self.children.len();
-                new_path.push(children_len as u32);
                 self.children.push(SuspenseHydrationIdsNode::new(id));
             }
             // This isn't a root node, traverse into children and add the new node
@@ -90,13 +86,9 @@ impl SuspenseHydrationIds {
                 let child_node = self.children[*first_index as usize]
                     .traverse_mut(rest)
                     .unwrap();
-                let new_index = child_node.children.len();
                 child_node.children.push(SuspenseHydrationIdsNode::new(id));
-                new_path.push(new_index as u32);
             }
         }
-
-        new_path
     }
 
     /// Get the scope id of the suspense boundary from the id in the dom
@@ -125,19 +117,10 @@ impl WebsysDom {
 
         let document = web_sys::window().unwrap().document().unwrap();
         // Before we start rehydrating the suspense boundary we need to check that the suspense boundary exists. It may have been removed on the client.
-        let suspense_placeholder_id_formatted = path_to_suspense_placeholder_id(&suspense_path);
-        if document
-            .get_element_by_id(&suspense_placeholder_id_formatted)
-            .is_none()
-        {
-            // Just remove the suspense hydration nodes and return
-            let mut resolved_suspense_id = suspense_placeholder_id_formatted.clone();
-            resolved_suspense_id.push_str("-r");
-            if let Some(element) = document.get_element_by_id(&resolved_suspense_id) {
-                element.remove();
-            }
-            return Ok(());
-        }
+        let resolved_suspense_id = path_to_resolved_suspense_id(&suspense_path);
+        let resolved_suspense_element = document
+            .get_element_by_id(&resolved_suspense_id)
+            .ok_or(RehydrationError::ElementNotFound)?;
 
         // First convert the dom id into a scope id based on the discovery order of the suspense boundaries.
         // This may fail if the id is not parsable, or if the suspense boundary was removed after partial hydration on the client.
@@ -146,30 +129,46 @@ impl WebsysDom {
             .get_suspense_boundary(&suspense_path)
             .ok_or(RehydrationError::SuspenseHydrationIdNotFound)?;
 
+        // Push the new nodes onto the stack
+        let mut current_child = resolved_suspense_element.first_child();
+        let mut children = Vec::new();
+        while let Some(node) = current_child {
+            children.push(node.clone());
+            current_child = node.next_sibling();
+            self.interpreter.base().push_root(node);
+        }
+
         with_server_data(HTMLDataCursor::from_serialized(&data), || {
             // rerun the scope with the new data
-            self.only_write_templates = true;
-            SuspenseBoundaryProps::resolve_suspense(id, dom, self);
+            SuspenseBoundaryProps::resolve_suspense(
+                id,
+                dom,
+                self,
+                |to| {
+                    // Switch to only writing templates
+                    to.only_write_templates = true;
+                },
+                children.len(),
+            );
             self.only_write_templates = false;
         });
+
+        // Flush the mutations that will swap the placeholder nodes with the resolved nodes
+        self.flush_edits();
+
+        // Remove the streaming div
+        resolved_suspense_element.remove();
 
         let Some(root_scope) = dom.get_scope(id) else {
             // If the scope was removed on the client, we may not be able to rehydrate it, but this shouldn't cause an error
             return Ok(());
         };
 
-        let element = document
-            .get_element_by_id(&format!("{suspense_placeholder_id_formatted}-r"))
-            .ok_or(RehydrationError::ElementNotFound)?;
-
         // As we hydrate the suspense boundary, set the current path to the path of the suspense boundary
         self.suspense_hydration_ids
             .current_path
             .clone_from(&suspense_path);
-        self.start_hydration_at_scope(root_scope, dom, element)?;
-
-        // After the node is hydrated, swap it into the visible dom
-        dx_swap(&suspense_path);
+        self.start_hydration_at_scope(root_scope, dom, children)?;
 
         Ok(())
     }
@@ -178,7 +177,7 @@ impl WebsysDom {
         &mut self,
         scope: &ScopeState,
         dom: &VirtualDom,
-        element: web_sys::Element,
+        under: Vec<web_sys::Node>,
     ) -> Result<(), RehydrationError> {
         let mut ids = Vec::new();
         let mut to_mount = Vec::new();
@@ -186,7 +185,7 @@ impl WebsysDom {
         // Recursively rehydrate the nodes under the scope
         self.rehydrate_scope(scope, dom, &mut ids, &mut to_mount)?;
 
-        self.interpreter.base().hydrate(ids, element);
+        self.interpreter.base().hydrate(ids, under);
 
         #[cfg(feature = "mounted")]
         for id in to_mount {
@@ -214,7 +213,7 @@ impl WebsysDom {
 
         // Rehydrate the root scope that was rendered on the server. We will likely run into suspense boundaries.
         // Any suspense boundaries we run into are stored for hydration later.
-        self.start_hydration_at_scope(vdom.base_scope(), vdom, self.root.clone())?;
+        self.start_hydration_at_scope(vdom.base_scope(), vdom, vec![self.root.clone().into()])?;
 
         Ok(rx)
     }
@@ -229,23 +228,8 @@ impl WebsysDom {
         // If this scope is a suspense boundary that is pending, add it to the list of pending suspense boundaries
         if let Some(suspense) = SuspenseBoundaryProps::downcast_from_scope(scope) {
             if suspense.suspended() {
-                let suspense_placeholder_id = self
-                    .suspense_hydration_ids
+                self.suspense_hydration_ids
                     .add_suspense_boundary(scope.id());
-                // If this suspense boundary is removed before it is resolved, we need to remove the placeholders in the dom.
-                // Removing the placeholders will prevent the server from trying to update the new nodes that took its place
-                *suspense.on_remove.borrow_mut() = Some(Box::new(move |_| {
-                    let suspense_placeholder_id_formatted =
-                        path_to_suspense_placeholder_id(&suspense_placeholder_id);
-                    if let Some(element) = web_sys::window()
-                        .unwrap()
-                        .document()
-                        .unwrap()
-                        .get_element_by_id(&suspense_placeholder_id_formatted)
-                    {
-                        element.remove();
-                    }
-                }));
             }
         }
 
@@ -373,8 +357,9 @@ fn write_comma_separated(id: &[u32], into: &mut String) {
     }
 }
 
-fn path_to_suspense_placeholder_id(path: &[u32]) -> String {
-    let mut suspense_placeholder_id_formatted = String::from("ds-");
-    write_comma_separated(path, &mut suspense_placeholder_id_formatted);
-    suspense_placeholder_id_formatted
+fn path_to_resolved_suspense_id(path: &[u32]) -> String {
+    let mut resolved_suspense_id_formatted = String::from("ds-");
+    write_comma_separated(path, &mut resolved_suspense_id_formatted);
+    resolved_suspense_id_formatted.push_str("-r");
+    resolved_suspense_id_formatted
 }

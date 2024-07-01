@@ -98,23 +98,15 @@ export class BaseInterpreter {
     return this.nodes[id];
   }
 
+  pushRoot(node: Node) {
+    this.stack.push(node);
+  }
+
   appendChildren(id: NodeId, many: number) {
     const root = this.nodes[id];
     const els = this.stack.splice(this.stack.length - many);
     for (let k = 0; k < many; k++) {
       root.appendChild(els[k]);
-    }
-  }
-
-  // Nodes that should be ignored during traversal. Comment nodes and template nodes that are used for streaming hydration should not effect traversal
-  ignoreNode(node: Node) {
-    switch (node.nodeType) {
-      case Node.COMMENT_NODE:
-        return true;
-      case Node.ELEMENT_NODE:
-        return (node as Element).id.startsWith("ds-");
-      default:
-        return false;
     }
   }
 
@@ -127,10 +119,6 @@ export class BaseInterpreter {
       let end = this.m.getUint8(ptr);
       for (node = node.firstChild; end > 0; end--) {
         node = node.nextSibling;
-        // Skip any ignored nodes
-        while (this.ignoreNode(node)) {
-          node = node.nextSibling;
-        }
       }
     }
 
@@ -141,55 +129,66 @@ export class BaseInterpreter {
     this.templates[tmpl_id] = nodes;
   }
 
-  hydrate(ids: { [key: number]: number }, under: Element) {
-    const hydrateNodes = under.querySelectorAll("[data-node-hydration]");
+  hydrate_node(hydrateNode: HTMLElement, ids: { [key: number]: number }) {
+    const hydration = hydrateNode.getAttribute("data-node-hydration");
+    const split = hydration!.split(",");
+    const id = ids[parseInt(split[0])];
 
-    for (let i = 0; i < hydrateNodes.length; i++) {
-      const hydrateNode = hydrateNodes[i] as HTMLElement;
-      const hydration = hydrateNode.getAttribute("data-node-hydration");
-      const split = hydration!.split(",");
-      const id = ids[parseInt(split[0])];
+    this.nodes[id] = hydrateNode;
 
-      this.nodes[id] = hydrateNode;
-
-      if (split.length > 1) {
-        // @ts-ignore
-        hydrateNode.listening = split.length - 1;
-        hydrateNode.setAttribute("data-dioxus-id", id.toString());
-        for (let j = 1; j < split.length; j++) {
-          const listener = split[j];
-          const split2 = listener.split(":");
-          const event_name = split2[0];
-          const bubbles = split2[1] === "1";
-          this.createListener(event_name, hydrateNode, bubbles);
-        }
+    if (split.length > 1) {
+      // @ts-ignore
+      hydrateNode.listening = split.length - 1;
+      hydrateNode.setAttribute("data-dioxus-id", id.toString());
+      for (let j = 1; j < split.length; j++) {
+        const listener = split[j];
+        const split2 = listener.split(":");
+        const event_name = split2[0];
+        const bubbles = split2[1] === "1";
+        this.createListener(event_name, hydrateNode, bubbles);
       }
     }
+  }
 
-    const treeWalker = document.createTreeWalker(
-      under,
-      NodeFilter.SHOW_COMMENT
-    );
-
-    let currentNode = treeWalker.nextNode();
-
-    while (currentNode) {
-      const id = currentNode.textContent!;
-      const split = id.split("node-id");
-
-      if (split.length > 1) {
-        let next = currentNode.nextSibling;
-        // If we are hydrating an empty text node, we may see two comment nodes in a row instead of a comment node, text node and then comment node
-        if (next.nodeType === Node.COMMENT_NODE) {
-          next = next.parentElement.insertBefore(
-            document.createTextNode(""),
-            next
-          );
+  hydrate(ids: { [key: number]: number }, underNodes: Node[]) {
+    for (let i = 0; i < underNodes.length; i++) {
+      const under = underNodes[i];
+      if (under instanceof HTMLElement) {
+        if (under.getAttribute("data-node-hydration")) {
+          this.hydrate_node(under, ids);
         }
-        this.nodes[ids[parseInt(split[1])]] = next;
+        const hydrateNodes = under.querySelectorAll("[data-node-hydration]");
+
+        for (let i = 0; i < hydrateNodes.length; i++) {
+          this.hydrate_node(hydrateNodes[i] as HTMLElement, ids);
+        }
       }
 
-      currentNode = treeWalker.nextNode();
+      const treeWalker = document.createTreeWalker(
+        under,
+        NodeFilter.SHOW_COMMENT
+      );
+
+      let currentNode = treeWalker.currentNode;
+
+      while (currentNode) {
+        const id = currentNode.textContent!;
+        const split = id.split("node-id");
+
+        if (split.length > 1) {
+          let next = currentNode.nextSibling;
+          // If we are hydrating an empty text node, we may see two comment nodes in a row instead of a comment node, text node and then comment node
+          if (next.nodeType === Node.COMMENT_NODE) {
+            next = next.parentElement.insertBefore(
+              document.createTextNode(""),
+              next
+            );
+          }
+          this.nodes[ids[parseInt(split[1])]] = next;
+        }
+
+        currentNode = treeWalker.nextNode();
+      }
     }
   }
 

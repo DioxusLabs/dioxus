@@ -71,7 +71,8 @@ tokio = { workspace = true, features = ["rt", "sync", "rt-multi-thread"], option
 dioxus = { workspace = true, features = ["fullstack"] }
 
 [features]
-default = ["hot-reload"]
+default = ["hot-reload", "panic_hook"]
+panic_hook = ["dioxus-web?/panic_hook"]
 hot-reload = ["dioxus-web?/hot_reload", "dioxus-hot-reload/serve"]
 mounted = ["dioxus-web?/mounted"]
 file_engine = ["dioxus-web?/file_engine"]

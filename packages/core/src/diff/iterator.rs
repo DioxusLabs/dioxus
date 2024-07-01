@@ -352,7 +352,7 @@ impl VirtualDom {
                     if let Some(old_node) = old.get(old_index) {
                         old_node.diff_node(new_node, vdom, to.as_deref_mut());
                         if let Some(to) = to.as_deref_mut() {
-                            new_node.push_all_real_nodes(vdom, to)
+                            new_node.push_all_root_nodes(vdom, to)
                         } else {
                             0
                         }
@@ -461,8 +461,8 @@ impl VirtualDom {
 }
 
 impl VNode {
-    /// Push all the real nodes on the stack
-    pub(crate) fn push_all_real_nodes(
+    /// Push all the root nodes on the stack
+    pub(crate) fn push_all_root_nodes(
         &self,
         dom: &VirtualDom,
         to: &mut impl WriteMutations,
@@ -480,14 +480,14 @@ impl VNode {
                     Some((_, DynamicNode::Fragment(nodes))) => {
                         let mut accumulated = 0;
                         for node in nodes {
-                            accumulated += node.push_all_real_nodes(dom, to);
+                            accumulated += node.push_all_root_nodes(dom, to);
                         }
                         accumulated
                     }
                     Some((idx, DynamicNode::Component(_))) => {
                         let scope = ScopeId(mount.mounted_dynamic_nodes[idx]);
                         let node = dom.get_scope(scope).unwrap().root_node();
-                        node.push_all_real_nodes(dom, to)
+                        node.push_all_root_nodes(dom, to)
                     }
                     // This is a static root node or a single dynamic node, just push it
                     None | Some((_, DynamicNode::Placeholder(_) | DynamicNode::Text(_))) => {

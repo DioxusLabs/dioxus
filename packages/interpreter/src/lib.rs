@@ -50,8 +50,5 @@ pub mod minimal_bindings {
         pub fn register_rehydrate_chunk_for_streaming(
             closure: &wasm_bindgen::closure::Closure<dyn FnMut(Vec<u32>, js_sys::Uint8Array)>,
         );
-
-        /// Swap the streaming chunk with the id into the dom
-        pub fn dx_swap(id: &[u32]);
     }
 }

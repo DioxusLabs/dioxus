@@ -225,6 +225,7 @@ impl VNode {
         self.remove_node_inner(dom, to, destroy_component_state, Some(m))
     }
 
+    /// Remove a node from the dom and potentially replace it with the top m nodes from the stack
     pub(crate) fn remove_node<M: WriteMutations>(
         &self,
         dom: &mut VirtualDom,

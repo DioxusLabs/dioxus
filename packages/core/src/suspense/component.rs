@@ -1,5 +1,3 @@
-use std::{cell::RefCell, rc::Rc};
-
 use crate::innerlude::*;
 
 /// Properties for the [`SuspenseBoundary()`] component.
@@ -10,11 +8,7 @@ pub struct SuspenseBoundaryProps {
     children: Element,
     /// THe nodes that are suspended under this boundary
     pub suspended_nodes: Option<VNode>,
-    /// A callback that will be called when the suspense boundary is removed
-    pub on_remove: ResolveCallback,
 }
-
-type ResolveCallback = Rc<RefCell<Option<Box<dyn for<'a> FnMut(&'a SuspenseBoundaryProps)>>>>;
 
 impl Clone for SuspenseBoundaryProps {
     fn clone(&self) -> Self {
@@ -25,7 +19,6 @@ impl Clone for SuspenseBoundaryProps {
                 .suspended_nodes
                 .as_ref()
                 .map(|node| node.clone_mounted()),
-            on_remove: self.on_remove.clone(),
         }
     }
 }
@@ -222,7 +215,6 @@ impl<__children: SuspenseBoundaryPropsBuilder_Optional<Element>>
                 fallback,
                 children,
                 suspended_nodes: None,
-                on_remove: Rc::new(RefCell::new(None)),
             },
             owner: self.owner,
         }
@@ -408,6 +400,8 @@ impl SuspenseBoundaryProps {
         scope_id: ScopeId,
         dom: &mut VirtualDom,
         to: &mut M,
+        only_write_templates: impl FnOnce(&mut M),
+        replace_with: usize,
     ) {
         let _runtime = RuntimeGuard::new(dom.runtime.clone());
         let Some(scope_state) = dom.scopes.get_mut(scope_id.0) else {
@@ -445,9 +439,13 @@ impl SuspenseBoundaryProps {
             .as_ref()
             .map(|node| node.clone_mounted());
         if let Some(node) = suspended {
-            node.remove_node(&mut *dom, Some(to), None);
+            node.remove_node(&mut *dom, None::<&mut M>, None);
         }
-        currently_rendered.remove_node(&mut *dom, Some(to), None);
+        // Replace the rendered nodes with resolved nodes
+        currently_rendered.remove_node(&mut *dom, Some(to), Some(replace_with));
+
+        // Switch to only writing templates
+        only_write_templates(to);
 
         let children = RenderReturn { node: children };
         children.mount.take();
@@ -604,9 +602,6 @@ impl SuspenseBoundaryProps {
         // Remove the suspended nodes
         if let Some(node) = self.suspended_nodes.take() {
             node.remove_node_inner(dom, None::<&mut M>, destroy_component_state, None)
-        }
-        if let Some(on_resolve) = self.on_remove.borrow_mut().as_mut() {
-            on_resolve(self);
         }
     }
 }

@@ -1,5 +1,4 @@
 //! A shared pool of renderers for efficient server side rendering.
-use crate::render::dioxus_core::NoOpMutations;
 use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
 use dioxus_ssr::{
     incremental::{CachedRender, RenderFreshness},
@@ -209,9 +208,7 @@ impl SsrRendererPool {
 
             // poll the future, which may call server_context()
             tracing::info!("Rebuilding vdom");
-            with_server_context(server_context.clone(), || {
-                virtual_dom.rebuild(&mut NoOpMutations);
-            });
+            with_server_context(server_context.clone(), || virtual_dom.rebuild_in_place());
 
             // Render the initial frame with loading placeholders
             let mut initial_frame = renderer.render(&virtual_dom);

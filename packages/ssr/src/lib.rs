@@ -10,7 +10,6 @@ pub mod renderer;
 pub mod streaming;
 pub mod template;
 
-use dioxus_core::NoOpMutations;
 use dioxus_core::{Element, VirtualDom};
 
 pub use crate::renderer::Renderer;
@@ -24,7 +23,7 @@ pub fn render_element(element: Element) -> String {
     }
 
     let mut dom = VirtualDom::new_with_props(lazy_app, element);
-    dom.rebuild(&mut NoOpMutations);
+    dom.rebuild_in_place();
 
     Renderer::new().render(&dom)
 }
