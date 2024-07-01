@@ -20,6 +20,8 @@ pub use config::*;
 
 #[cfg(feature = "server")]
 mod render;
+#[cfg(feature = "server")]
+mod streaming;
 
 #[cfg(feature = "server")]
 mod serve_config;

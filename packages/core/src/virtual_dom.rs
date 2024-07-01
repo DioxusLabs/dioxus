@@ -829,7 +829,6 @@ impl VirtualDom {
             // Once we have polled a few tasks, we manually yield to the scheduler to give it a chance to run other pending work
             if work_done > 32 {
                 yield_now().await;
-                println!("Yielded");
                 work_done = 0;
             }
         }

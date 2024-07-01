@@ -2816,8 +2816,6 @@ dependencies = [
  "dioxus-signals",
  "fern",
  "fs_extra",
- "futures-channel",
- "futures-util",
  "generational-box 0.5.2",
  "http 1.1.0",
  "lru",

@@ -1,8 +1,8 @@
 //! A shared pool of renderers for efficient server side rendering.
+use crate::streaming::StreamingRenderer;
 use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
 use dioxus_ssr::{
     incremental::{CachedRender, RenderFreshness},
-    streaming::StreamingRenderer,
     Renderer,
 };
 use futures_channel::mpsc::Sender;

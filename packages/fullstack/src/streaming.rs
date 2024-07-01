@@ -58,14 +58,17 @@ impl Display for MountPath {
     }
 }
 
-pub struct StreamingRenderer<E = std::convert::Infallible> {
+pub(crate) struct StreamingRenderer<E = std::convert::Infallible> {
     channel: RwLock<Sender<Result<String, E>>>,
     current_path: RwLock<MountPath>,
 }
 
 impl<E> StreamingRenderer<E> {
     /// Create a new streaming renderer with the given head that renders into a channel
-    pub fn new(before_body: impl Display, mut render_into: Sender<Result<String, E>>) -> Self {
+    pub(crate) fn new(
+        before_body: impl Display,
+        mut render_into: Sender<Result<String, E>>,
+    ) -> Self {
         let start_html = before_body.to_string();
         _ = render_into.start_send(Ok(start_html));
 
@@ -76,7 +79,7 @@ impl<E> StreamingRenderer<E> {
     }
 
     /// Render a new chunk of html that will never change
-    pub fn render(&self, html: impl Display) {
+    pub(crate) fn render(&self, html: impl Display) {
         _ = self
             .channel
             .write()
@@ -85,7 +88,7 @@ impl<E> StreamingRenderer<E> {
     }
 
     /// Render a new chunk of html that may change
-    pub fn render_placeholder<W: Write + ?Sized>(
+    pub(crate) fn render_placeholder<W: Write + ?Sized>(
         &self,
         html: impl FnOnce(&mut W) -> std::fmt::Result,
         into: &mut W,
@@ -102,7 +105,7 @@ impl<E> StreamingRenderer<E> {
     }
 
     /// Replace a placeholder that was rendered previously
-    pub fn replace_placeholder<W: Write + ?Sized>(
+    pub(crate) fn replace_placeholder<W: Write + ?Sized>(
         &self,
         id: Mount,
         html: impl FnOnce(&mut W) -> std::fmt::Result,
@@ -123,14 +126,14 @@ impl<E> StreamingRenderer<E> {
     }
 
     /// Close the stream with an error
-    pub fn close_with_error(&self, error: E) {
+    pub(crate) fn close_with_error(&self, error: E) {
         _ = self.channel.write().unwrap().start_send(Err(error));
     }
 }
 
 /// A mounted placeholder in the dom that may change in the future
 #[derive(Clone, Debug)]
-pub struct Mount {
+pub(crate) struct Mount {
     id: MountPath,
 }
 
