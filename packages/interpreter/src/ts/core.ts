@@ -151,6 +151,7 @@ export class BaseInterpreter {
   }
 
   hydrate(ids: { [key: number]: number }, underNodes: Node[]) {
+    console.log("hydrating ids", ids, "underNodes", underNodes);
     for (let i = 0; i < underNodes.length; i++) {
       const under = underNodes[i];
       if (under instanceof HTMLElement) {
@@ -169,25 +170,49 @@ export class BaseInterpreter {
         NodeFilter.SHOW_COMMENT
       );
 
-      let currentNode = treeWalker.currentNode;
+      while (treeWalker.currentNode) {
+        const currentNode = treeWalker.currentNode as ChildNode;
+        if (currentNode.nodeType === Node.COMMENT_NODE) {
+          const id = currentNode.textContent!;
+          const split = id.split("node-id");
 
-      while (currentNode) {
-        const id = currentNode.textContent!;
-        const split = id.split("node-id");
+          if (split.length > 1) {
+            // For most text nodes, this should be text
+            let next = treeWalker.nextSibling() as ChildNode;
+            // remove the comment node
+            currentNode.remove();
 
-        if (split.length > 1) {
-          let next = currentNode.nextSibling;
-          // If we are hydrating an empty text node, we may see two comment nodes in a row instead of a comment node, text node and then comment node
-          if (next.nodeType === Node.COMMENT_NODE) {
-            next = next.parentElement.insertBefore(
-              document.createTextNode(""),
-              next
-            );
+            let commentAfterText;
+
+            // If we are hydrating an empty text node, we may see two comment nodes in a row instead of a comment node, text node and then comment node
+            if (next.nodeType === Node.COMMENT_NODE) {
+              const newText = next.parentElement.insertBefore(
+                document.createTextNode(""),
+                next
+              );
+              commentAfterText = next;
+              next = newText;
+            } else {
+              // The node after text should be a comment node marking the end of the text node
+              commentAfterText = treeWalker.nextSibling() as ChildNode;
+            }
+            this.nodes[ids[parseInt(split[1])]] = next;
+            let exit = !treeWalker.nextSibling();
+            // remove the comment node after the text node
+            commentAfterText.remove();
+            if (exit) {
+              break;
+            }
+          } else {
+            if (!treeWalker.nextNode()) {
+              break;
+            }
           }
-          this.nodes[ids[parseInt(split[1])]] = next;
+        } else {
+          if (!treeWalker.nextNode()) {
+            break;
+          }
         }
-
-        currentNode = treeWalker.nextNode();
       }
     }
   }
