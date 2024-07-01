@@ -95,6 +95,6 @@ async fn server_content(id: usize) -> Result<Content, ServerFnError> {
             children: vec![],
         },
     ];
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
     Ok(content_tree[id].clone())
 }
