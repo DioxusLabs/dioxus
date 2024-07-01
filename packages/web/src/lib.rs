@@ -167,14 +167,17 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
             }
 
             #[cfg(not(all(feature = "hot_reload", debug_assertions)))]
-            select! {
-                _ = work => res = None,
-                evt = rx_next => res = Some(evt),
-                hyd = rx_hydration => {
-                    res = None;
-                    #[cfg(feature = "hydrate")]
-                    {
-                        hydration_work = Some(hyd);
+            #[allow(unused)]
+            {
+                select! {
+                    _ = work => res = None,
+                    evt = rx_next => res = Some(evt),
+                    hyd = rx_hydration => {
+                        res = None;
+                        #[cfg(feature = "hydrate")]
+                        {
+                            hydration_work = Some(hyd);
+                        }
                     }
                 }
             }

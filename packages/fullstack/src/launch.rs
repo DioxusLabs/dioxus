@@ -5,10 +5,13 @@ use std::{any::Any, sync::Arc};
 use dioxus_lib::prelude::{Element, VirtualDom};
 
 pub use crate::Config;
+
+#[allow(unused)]
 pub(crate) type ContextProviders = Arc<
     Vec<Box<dyn Fn() -> Box<dyn std::any::Any + Send + Sync + 'static> + Send + Sync + 'static>>,
 >;
 
+#[allow(unused)]
 fn virtual_dom_factory(
     root: fn() -> Element,
     contexts: ContextProviders,
@@ -85,6 +88,22 @@ pub fn launch(
     let factory = virtual_dom_factory(root, contexts.clone());
     let cfg = platform_config.mobile_cfg;
     dioxus_mobile::launch::launch_virtual_dom(factory(), cfg)
+}
+
+#[cfg(not(any(
+    feature = "server",
+    feature = "web",
+    feature = "desktop",
+    feature = "mobile"
+)))]
+/// Launch a fullstack app with the given root component, contexts, and config.
+#[allow(unused)]
+pub fn launch(
+    root: fn() -> Element,
+    contexts: Vec<Box<dyn Fn() -> Box<dyn Any + Send + Sync> + Send + Sync>>,
+    platform_config: Config,
+) -> ! {
+    panic!("No platform feature enabled. Please enable one of the following features: axum, desktop, or web to use the launch API.")
 }
 
 #[cfg(feature = "server")]

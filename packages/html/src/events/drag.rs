@@ -57,8 +57,8 @@ impl DragData {
     }
 }
 
-#[cfg(feature = "file-engine")]
 impl crate::HasFileData for DragData {
+    #[cfg(feature = "file-engine")]
     fn files(&self) -> Option<std::sync::Arc<dyn crate::file_data::FileEngine>> {
         self.inner.files()
     }
