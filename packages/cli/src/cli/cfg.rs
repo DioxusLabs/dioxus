@@ -16,6 +16,11 @@ pub struct ConfigOptsBuild {
     #[serde(default)]
     pub force_debug: bool,
 
+    /// This flag only applies to fullstack builds. By default fullstack builds will run the server and client builds in parallel. This flag will force the build to run the server build first, then the client build. [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub force_sequential: bool,
+
     // Use verbose output [default: false]
     #[clap(long)]
     #[serde(default)]
@@ -73,6 +78,7 @@ impl From<ConfigOptsServe> for ConfigOptsBuild {
             server_feature: serve.server_feature,
             skip_assets: serve.skip_assets,
             force_debug: serve.force_debug,
+            force_sequential: serve.force_sequential,
             cargo_args: serve.cargo_args,
         }
     }
@@ -103,6 +109,11 @@ pub struct ConfigOptsServe {
     #[clap(long)]
     #[serde(default)]
     pub force_debug: bool,
+
+    /// This flag only applies to fullstack builds. By default fullstack builds will run the server and client builds in parallel. This flag will force the build to run the server build first, then the client build. [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub force_sequential: bool,
 
     // Use verbose output [default: false]
     #[clap(long)]

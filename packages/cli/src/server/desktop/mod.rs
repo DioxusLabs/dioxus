@@ -240,17 +240,11 @@ fn send_msg(msg: HotReloadMsg, channel: &mut impl std::io::Write) -> bool {
     }
 }
 
-fn start_desktop(
-    config: &CrateConfig,
-    skip_assets: bool,
-    rust_flags: Option<String>,
+fn run_desktop(
     args: &Vec<String>,
     env: Vec<(String, String)>,
+    result: BuildResult,
 ) -> Result<(RAIIChild, BuildResult)> {
-    // Run the desktop application
-    // Only used for the fullstack platform,
-    let result = crate::builder::build_desktop(config, true, skip_assets, rust_flags)?;
-
     let active = "DIOXUS_ACTIVE";
     let child = RAIIChild(
         Command::new(
@@ -278,13 +272,12 @@ impl DesktopPlatform {
     /// `rust_flags` argument is added because it is used by the
     /// `DesktopPlatform`'s implementation of the `Platform::start()`.
     pub fn start_with_options(
+        build_result: BuildResult,
         config: &CrateConfig,
         serve: &ConfigOptsServe,
-        rust_flags: Option<String>,
         env: Vec<(String, String)>,
     ) -> Result<Self> {
-        let (child, first_build_result) =
-            start_desktop(config, serve.skip_assets, rust_flags, &serve.args, env)?;
+        let (child, first_build_result) = run_desktop(&serve.args, env, build_result)?;
 
         tracing::info!("🚀 Starting development server...");
 
@@ -337,7 +330,9 @@ impl DesktopPlatform {
         // Todo: add a timeout here to kill the process if it doesn't shut down within a reasonable time
         self.currently_running_child.0.wait()?;
 
-        let (child, result) = start_desktop(config, self.skip_assets, rust_flags, &self.args, env)?;
+        let build_result =
+            crate::builder::build_desktop(config, true, self.skip_assets, rust_flags)?;
+        let (child, result) = run_desktop(&self.args, env, build_result)?;
         self.currently_running_child = child;
         Ok(result)
     }
@@ -349,11 +344,8 @@ impl Platform for DesktopPlatform {
         serve: &ConfigOptsServe,
         env: Vec<(String, String)>,
     ) -> Result<Self> {
-        // See `start_with_options()`'s docs for the explanation why the code
-        // was moved there.
-        // Since desktop platform doesn't use `rust_flags`, this argument is
-        // explicitly set to `None`.
-        DesktopPlatform::start_with_options(config, serve, None, env)
+        let build_result = crate::builder::build_desktop(config, true, serve.skip_assets, None)?;
+        DesktopPlatform::start_with_options(build_result, config, serve, env)
     }
 
     fn rebuild(

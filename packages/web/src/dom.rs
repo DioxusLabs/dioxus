@@ -29,6 +29,25 @@ pub struct WebsysDom {
 
     #[cfg(feature = "mounted")]
     pub(crate) queued_mounted_events: Vec<ElementId>,
+
+    // We originally started with a different `WriteMutations` for collecting templates during hydration.
+    // When profiling the binary size of web applications, this caused a large increase in binary size
+    // because diffing code in core is generic over the `WriteMutation` object.
+    //
+    // The fact that diffing is generic over WriteMutations instead of dynamic dispatch or a vec is nice
+    // because we can directly write mutations to sledgehammer and avoid the runtime and binary size overhead
+    // of dynamic dispatch
+    //
+    // Instead we now store a flag to see if we should be writing templates at all if hydration is enabled.
+    // This has a small overhead, but it avoids dynamic dispatch and reduces the binary size
+    //
+    // NOTE: running the virtual dom with the `only_write_templates` flag set to true is different from running
+    // it with no mutation writer because it still assigns ids to nodes, but it doesn't write them to the dom
+    #[cfg(feature = "hydrate")]
+    pub(crate) only_write_templates: bool,
+
+    #[cfg(feature = "hydrate")]
+    pub(crate) suspense_hydration_ids: crate::hydration::SuspenseHydrationIds,
 }
 
 pub struct UiEvent {
@@ -86,7 +105,7 @@ impl WebsysDom {
                     .map(|f| f.split_whitespace())
                 {
                     prevent_event = prevent_requests
-                        .map(|f| f.trim_start_matches("on"))
+                        .map(|f| f.strip_prefix("on").unwrap_or(f))
                         .any(|f| f == name);
                 } else {
                     prevent_event = false;
@@ -131,6 +150,10 @@ impl WebsysDom {
             event_channel,
             #[cfg(feature = "mounted")]
             queued_mounted_events: Default::default(),
+            #[cfg(feature = "hydrate")]
+            only_write_templates: false,
+            #[cfg(feature = "hydrate")]
+            suspense_hydration_ids: Default::default(),
         }
     }
 

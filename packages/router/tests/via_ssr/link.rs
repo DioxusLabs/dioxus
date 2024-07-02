@@ -41,7 +41,7 @@ where
         rsx! {
             h1 { "App" }
             Router::<R> {
-                config: || RouterConfig::default().history(MemoryHistory::default())
+                config: |_| RouterConfig::default().history(MemoryHistory::default())
             }
         }
     }

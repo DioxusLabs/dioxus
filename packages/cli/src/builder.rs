@@ -230,9 +230,7 @@ pub fn build_web(
     }
 
     // If pre-compressing is enabled, we can pre_compress the wasm-bindgen output
-    if config.should_pre_compress_web_assets() {
-        pre_compress_folder(&bindgen_outdir)?;
-    }
+    pre_compress_folder(&bindgen_outdir, config.should_pre_compress_web_assets())?;
 
     // [5][OPTIONAL] If tailwind is enabled and installed we run it to generate the CSS
     let dioxus_tools = dioxus_config.application.tools.clone();
@@ -622,6 +620,16 @@ pub fn gen_page(config: &CrateConfig, manifest: Option<&AssetManifest>, serve: b
     }});
     </script>
     </body"#
+            ),
+        );
+
+        // And try to insert preload links for the wasm and js files
+        html = html.replace(
+            "</head",
+            &format!(
+                r#"<link rel="preload" href="/{base_path}/assets/dioxus/{app_name}_bg.wasm" as="fetch" type="application/wasm" crossorigin="">
+                    <link rel="preload" href="/{base_path}/assets/dioxus/{app_name}.js" as="script">
+    </head"#
             ),
         );
     }

@@ -316,12 +316,12 @@ impl RouterContext {
         self.inner.read().site_map
     }
 
-    pub(crate) fn render_error(&self) -> Element {
+    pub(crate) fn render_error(&self) -> Option<Element> {
         let inner_read = self.inner.write_unchecked();
         inner_read
             .unresolved_error
             .as_ref()
-            .and_then(|_| (inner_read.failure_external_navigation)())
+            .map(|_| (inner_read.failure_external_navigation)())
     }
 
     fn change_route(&self) -> Option<ExternalNavigationFailure> {

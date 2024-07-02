@@ -201,9 +201,8 @@ mod field_info {
 
                 // children field is automatically defaulted to None
                 if name == "children" {
-                    builder_attr.default = Some(
-                        syn::parse(quote!(::core::default::Default::default()).into()).unwrap(),
-                    );
+                    builder_attr.default =
+                        Some(syn::parse(quote!(dioxus_core::VNode::empty()).into()).unwrap());
                 }
 
                 // String fields automatically use impl Display
@@ -1046,7 +1045,6 @@ Finally, call `.build()` to create the instance of `{name}`.
                 ty: field_type,
                 ..
             } = field;
-            // Add the bump lifetime to the generics
             let mut ty_generics: Vec<syn::GenericArgument> = self
                 .generics
                 .params
@@ -1198,7 +1196,6 @@ Finally, call `.build()` to create the instance of `{name}`.
                 name: ref field_name,
                 ..
             } = field;
-            // Add a bump lifetime to the generics
             let mut builder_generics: Vec<syn::GenericArgument> = self
                 .generics
                 .params
