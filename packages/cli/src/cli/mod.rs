@@ -7,6 +7,7 @@ pub mod clean;
 pub mod config;
 pub mod create;
 pub mod init;
+pub mod link;
 pub mod plugin;
 pub mod serve;
 pub mod translate;
@@ -85,6 +86,10 @@ pub enum Commands {
     #[cfg(feature = "plugin")]
     #[clap(subcommand)]
     Plugin(plugin::Plugin),
+
+    /// Handles parsing of linker arguments for linker-based systems
+    /// such as Manganis and binary patching.
+    Link(link::LinkCommand),
 }
 
 impl Display for Commands {
@@ -100,6 +105,7 @@ impl Display for Commands {
             Commands::Autoformat(_) => write!(f, "fmt"),
             Commands::Check(_) => write!(f, "check"),
             Commands::Bundle(_) => write!(f, "bundle"),
+            Commands::Link(_) => write!(f, "link"),
 
             #[cfg(feature = "plugin")]
             Commands::Plugin(_) => write!(f, "plugin"),

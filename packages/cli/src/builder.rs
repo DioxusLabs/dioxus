@@ -4,6 +4,7 @@ use crate::{
         AssetConfigDropGuard,
     },
     error::{Error, Result},
+    link::LinkCommand,
     tools::Tool,
 };
 use anyhow::Context;
@@ -83,13 +84,12 @@ pub fn build_web(
     let CrateConfig {
         crate_dir,
         target_dir,
-        executable,
         dioxus_config,
         ..
     } = config;
     let out_dir = config.out_dir();
 
-    let _guard = AssetConfigDropGuard::new();
+    let _asset_guard = AssetConfigDropGuard::new();
     let _manganis_support = ManganisSupportGuard::default();
 
     // start to build the assets
@@ -114,54 +114,76 @@ pub fn build_web(
         }
     }
 
-    let cmd = subprocess::Exec::cmd("cargo")
+    let mut cargo_args = vec!["--target".to_string(), "wasm32-unknown-unknown".to_string()];
+
+    let mut cmd = subprocess::Exec::cmd("cargo")
         .set_rust_flags(rust_flags)
         .env("CARGO_TARGET_DIR", target_dir)
         .cwd(crate_dir)
         .arg("build")
-        .arg("--target")
-        .arg("wasm32-unknown-unknown")
         .arg("--message-format=json-render-diagnostics");
 
     // TODO: make the initial variable mutable to simplify all the expressions
     // below. Look inside the `build_desktop()` as an example.
-    let cmd = if config.release {
-        cmd.arg("--release")
+    if config.release {
+        cargo_args.push("--release".to_string());
+    }
+    if config.verbose {
+        cargo_args.push("--verbose".to_string());
     } else {
-        cmd
-    };
-    let cmd = if config.verbose {
-        cmd.arg("--verbose")
-    } else {
-        cmd.arg("--quiet")
-    };
+        cargo_args.push("--quiet".to_string());
+    }
 
-    let cmd = if config.custom_profile.is_some() {
+    if config.custom_profile.is_some() {
         let custom_profile = config.custom_profile.as_ref().unwrap();
-        cmd.arg("--profile").arg(custom_profile)
-    } else {
-        cmd
-    };
+        cargo_args.push("--profile".to_string());
+        cargo_args.push(custom_profile.to_string());
+    }
 
-    let cmd = if config.features.is_some() {
+    if config.features.is_some() {
         let features_str = config.features.as_ref().unwrap().join(" ");
-        cmd.arg("--features").arg(features_str)
-    } else {
-        cmd
+        cargo_args.push("--features".to_string());
+        cargo_args.push(features_str);
+    }
+
+    if let Some(target) = &config.target {
+        cargo_args.push("--target".to_string());
+        cargo_args.push(target.clone());
+    }
+
+    cargo_args.append(&mut config.cargo_args.clone());
+
+    match &config.executable {
+        ExecutableType::Binary(name) => {
+            cargo_args.push("--bin".to_string());
+            cargo_args.push(name.to_string());
+        }
+        ExecutableType::Lib(name) => {
+            cargo_args.push("--lib".to_string());
+            cargo_args.push(name.to_string());
+        }
+        ExecutableType::Example(name) => {
+            cargo_args.push("--example".to_string());
+            cargo_args.push(name.to_string());
+        }
     };
 
-    let cmd = cmd.args(&config.cargo_args);
-
-    let cmd = match executable {
-        ExecutableType::Binary(name) => cmd.arg("--bin").arg(name),
-        ExecutableType::Lib(name) => cmd.arg("--lib").arg(name),
-        ExecutableType::Example(name) => cmd.arg("--example").arg(name),
-    };
-
+    cmd = cmd.args(&cargo_args);
     let CargoBuildResult {
         warnings,
         output_location,
     } = prettier_build(cmd)?;
+
+    // Start Manganis linker intercept.
+    let linker_args = vec![format!("{}", config.out_dir().display())];
+
+    manganis_cli_support::start_linker_intercept(
+        &LinkCommand::command_name(),
+        cargo_args,
+        Some(linker_args),
+    )
+    .unwrap();
+
     let output_location = output_location.context("No output location found")?;
 
     // [2] Establish the output directory structure
@@ -277,7 +299,7 @@ pub fn build_web(
 
     let assets = if !skip_assets {
         tracing::info!("Processing assets");
-        let assets = asset_manifest(executable.executable(), config);
+        let assets = asset_manifest(config);
         process_assets(config, &assets)?;
         Some(assets)
     } else {
@@ -337,7 +359,9 @@ pub fn build_desktop(
     build_assets(config)?;
     let _guard = dioxus_cli_config::__private::save_config(config);
     let _manganis_support = ManganisSupportGuard::default();
-    let _guard = AssetConfigDropGuard::new();
+    let _asset_guard = AssetConfigDropGuard::new();
+
+    let mut cargo_args = Vec::new();
 
     let mut cmd = subprocess::Exec::cmd("cargo")
         .set_rust_flags(rust_flags)
@@ -347,37 +371,59 @@ pub fn build_desktop(
         .arg("--message-format=json-render-diagnostics");
 
     if config.release {
-        cmd = cmd.arg("--release");
+        cargo_args.push("--release".to_string());
     }
     if config.verbose {
-        cmd = cmd.arg("--verbose");
+        cargo_args.push("--verbose".to_string());
     } else {
-        cmd = cmd.arg("--quiet");
+        cargo_args.push("--quiet".to_string());
     }
 
     if config.custom_profile.is_some() {
         let custom_profile = config.custom_profile.as_ref().unwrap();
-        cmd = cmd.arg("--profile").arg(custom_profile);
+        cargo_args.push("--profile".to_string());
+        cargo_args.push(custom_profile.to_string());
     }
 
     if config.features.is_some() {
         let features_str = config.features.as_ref().unwrap().join(" ");
-        cmd = cmd.arg("--features").arg(features_str);
+        cargo_args.push("--features".to_string());
+        cargo_args.push(features_str);
     }
 
     if let Some(target) = &config.target {
-        cmd = cmd.arg("--target").arg(target);
+        cargo_args.push("--target".to_string());
+        cargo_args.push(target.clone());
     }
 
-    cmd = cmd.args(&config.cargo_args);
+    cargo_args.append(&mut config.cargo_args.clone());
 
-    let cmd = match &config.executable {
-        ExecutableType::Binary(name) => cmd.arg("--bin").arg(name),
-        ExecutableType::Lib(name) => cmd.arg("--lib").arg(name),
-        ExecutableType::Example(name) => cmd.arg("--example").arg(name),
+    match &config.executable {
+        ExecutableType::Binary(name) => {
+            cargo_args.push("--bin".to_string());
+            cargo_args.push(name.to_string());
+        }
+        ExecutableType::Lib(name) => {
+            cargo_args.push("--lib".to_string());
+            cargo_args.push(name.to_string());
+        }
+        ExecutableType::Example(name) => {
+            cargo_args.push("--example".to_string());
+            cargo_args.push(name.to_string());
+        }
     };
 
+    cmd = cmd.args(&cargo_args);
     let warning_messages = prettier_build(cmd)?;
+
+    // Start Manganis linker intercept.
+    let linker_args = vec![format!("{}", config.out_dir().display())];
+
+    manganis_cli_support::start_linker_intercept(
+        &LinkCommand::command_name(),
+        cargo_args,
+        Some(linker_args),
+    )?;
 
     let file_name: String = config.executable.executable().unwrap().to_string();
 
@@ -399,7 +445,7 @@ pub fn build_desktop(
 
     let assets = if !skip_assets {
         tracing::info!("Processing assets");
-        let assets = asset_manifest(config.executable.executable(), config);
+        let assets = asset_manifest(config);
         // Collect assets
         process_assets(config, &assets)?;
         // Create the __assets_head.html file for bundling
