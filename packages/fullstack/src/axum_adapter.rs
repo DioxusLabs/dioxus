@@ -381,7 +381,11 @@ pub async fn render_handler(
     let build_virtual_dom = state.build_virtual_dom.clone();
 
     let (parts, _) = request.into_parts();
-    let url = parts.uri.path_and_query().unwrap().to_string();
+    let url = parts
+        .uri
+        .path_and_query()
+        .ok_or(StatusCode::BAD_REQUEST)?
+        .to_string();
     let parts: Arc<parking_lot::RwLock<http::request::Parts>> =
         Arc::new(parking_lot::RwLock::new(parts));
     let server_context = DioxusServerContext::from_shared_parts(parts.clone());
