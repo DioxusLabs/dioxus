@@ -1,14 +1,14 @@
-use crate::location::DynIdx;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
 use std::hash;
 use syn::{parse::Parse, spanned::Spanned, token::Brace};
 
-/// A raw expression wrapped in curly braces that is parsed from the input stream.
+/// A raw expression potentially wrapped in curly braces that is parsed from the input stream.
+///
+/// If there are no braces, it tries to parse as an expression without partial expansion. If there
+/// are braces, it parses the contents as a `TokenStream2` and stores it as such.
 #[derive(Clone, Debug)]
 pub struct PartialExpr {
-    // todo: rstml uses the syn `Block` type which is more flexible on the receiving end than our
-    // partially-complete TokenStream approach
     pub brace: Brace,
     pub expr: TokenStream2,
 }
@@ -25,11 +25,13 @@ impl Parse for PartialExpr {
         }
 
         // Pull the brace and then parse the innards as TokenStream2 - not expr
+        //
+        // todo: rstml uses the syn `Block` type which is more flexible on the receiving end than our
+        // partially-complete TokenStream approach
         let content;
-        let brace = syn::braced!(content in input);
 
         Ok(Self {
-            brace,
+            brace: syn::braced!(content in input),
             expr: content.parse()?,
         })
     }
@@ -41,7 +43,10 @@ impl ToTokens for PartialExpr {
 
         // Make sure we bind the expression to a variable so the lifetimes are relaxed
         tokens.append_all(quote! {
-            { #exp }
+            {
+                let ___expr = { #exp };
+                ___expr
+            }
         })
     }
 }

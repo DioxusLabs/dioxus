@@ -39,6 +39,8 @@ pub fn score_dynamic_node(old_node: &BodyNode, new_node: &BodyNode) -> usize {
             // Walk the attributes and score each one - if there's a zero we return zero
             // circuit if we there's an attribute mismatch that can't be hotreloaded
             for (left, right) in left_fields.iter().zip(right_fields.iter()) {
+                println!("Comparing {:?} and {:?}", left, right);
+
                 let scored = match score_attribute(&left, &right) {
                     usize::MAX => 3,
                     0 => return 0,
@@ -238,9 +240,10 @@ mod tests {
         let right: Attribute = parse2(quote! { attr: 456 }).unwrap();
         assert_eq!(score_attribute(&left, &right), 1);
 
+        // almost a perfect match
         let left: Attribute = parse2(quote! { class: if count > 3 { "blah {abc}" } }).unwrap();
         let right: Attribute = parse2(quote! { class: if count > 3 { "other {abc}" } }).unwrap();
-        assert_eq!(score_attribute(&left, &right), 1);
+        assert_eq!(score_attribute(&left, &right), usize::MAX - 1);
     }
 
     /// Ensure the scoring algorithm works

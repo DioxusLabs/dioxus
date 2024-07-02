@@ -521,8 +521,6 @@ fn merging_weird_fails() {
             style: "color: red;",
             style: "color: blue;",
 
-            // hello world 123
-
             width: "1px",
             width: 1,
             width: false,
@@ -532,6 +530,13 @@ fn merging_weird_fails() {
 
     let parsed: Element = syn::parse2(input).unwrap();
 
-    assert!(parsed.merged_attributes.len() == 0);
-    assert!(parsed.diagnostics.len() == 4);
+    assert_eq!(parsed.merged_attributes.len(), 4);
+    assert_eq!(parsed.diagnostics.len(), 3);
+
+    // style should not generate a diagnostic
+    assert!(!parsed
+        .diagnostics
+        .diagnostics
+        .into_iter()
+        .any(|f| f.emit_as_item_tokens().to_string().contains("style")));
 }

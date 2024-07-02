@@ -1,3 +1,4 @@
+#[doc(hidden)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 #[derive(Debug, PartialEq, Clone)]
@@ -6,6 +7,7 @@ pub struct HotreloadedLiteral {
     pub value: HotReloadLiteral,
 }
 
+#[doc(hidden)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 #[derive(Debug, PartialEq, Clone)]
@@ -16,6 +18,7 @@ pub enum HotReloadLiteral {
     Bool(bool),
 }
 
+#[doc(hidden)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -53,6 +56,7 @@ impl FmtedSegments {
 #[cfg(feature = "serialize")]
 use crate::nodes::deserialize_string_leaky;
 
+#[doc(hidden)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum FmtSegment {

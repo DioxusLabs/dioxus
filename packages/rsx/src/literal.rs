@@ -73,19 +73,12 @@ impl Parse for HotLiteral {
 
 impl ToTokens for HotLiteral {
     fn to_tokens(&self, out: &mut proc_macro2::TokenStream) {
-        // let ty = match &self.value {
-        //     HotLiteralType::Fmted(f) if f.is_static() => quote! { &'static str  },
-        //     HotLiteralType::Fmted(_) => quote! { FmtedSegments },
-        //     HotLiteralType::Float(_) => quote! { f64 },
-        //     HotLiteralType::Int(_) => quote! { i128 },
-        //     HotLiteralType::Bool(_) => quote! { bool },
-        // };
-
         let val = match &self.value {
             HotLiteralType::Fmted(fmt) if fmt.is_static() => {
                 let o = fmt.to_static().unwrap().to_token_stream();
                 quote! { #o }
             }
+
             HotLiteralType::Fmted(fmt) => {
                 let mut idx = 0_usize;
                 let segments = fmt.segments.iter().map(|s| match s {
@@ -102,19 +95,14 @@ impl ToTokens for HotLiteral {
                     }
                 });
 
+                // The static segments with idxs for locations
                 quote! {
-                    FmtedSegments::new(
-                        // The static segments with idxs for locations
-                        vec![ #(#segments),* ],
-                    )
+                    FmtedSegments::new( vec![ #(#segments),* ], )
                 }
             }
             HotLiteralType::Float(a) => quote! { #a },
             HotLiteralType::Int(a) => quote! { #a },
             HotLiteralType::Bool(a) => quote! { #a },
-            // HotLiteralType::Float(a) => quote! { #a as f64 },
-            // HotLiteralType::Int(a) => quote! { #a as i128 },
-            // HotLiteralType::Bool(a) => quote! { #a as bool },
         };
 
         let mapped = match &self.value {
@@ -159,10 +147,12 @@ impl ToTokens for HotLiteral {
             {
                 #[cfg(debug_assertions)]
                 {
-
                     // in debug we still want these tokens to turn into fmt args such that RA can line
                     // them up, giving us rename powersa
                     _ = #as_lit;
+
+                    // The key is important here - we're creating a new GlobalSignal each call to this/
+                    // But the key is what's keeping it stable
                     GlobalSignal::with_key(
                         || #val, {
                         concat!(
@@ -235,60 +225,63 @@ impl HotLiteral {
 }
 
 #[cfg(test)]
-use crate::PrettyUnparse;
+mod tests {
+    use super::*;
+    use crate::PrettyUnparse;
 
-#[test]
-fn parses_lits() {
-    let _ = syn::parse2::<HotLiteral>(quote! { "hello" }).unwrap();
-    let _ = syn::parse2::<HotLiteral>(quote! { "hello {world}" }).unwrap();
-    let _ = syn::parse2::<HotLiteral>(quote! { 1 }).unwrap();
-    let _ = syn::parse2::<HotLiteral>(quote! { 1.0 }).unwrap();
-    let _ = syn::parse2::<HotLiteral>(quote! { false }).unwrap();
-    let _ = syn::parse2::<HotLiteral>(quote! { true }).unwrap();
+    #[test]
+    fn parses_lits() {
+        let _ = syn::parse2::<HotLiteral>(quote! { "hello" }).unwrap();
+        let _ = syn::parse2::<HotLiteral>(quote! { "hello {world}" }).unwrap();
+        let _ = syn::parse2::<HotLiteral>(quote! { 1 }).unwrap();
+        let _ = syn::parse2::<HotLiteral>(quote! { 1.0 }).unwrap();
+        let _ = syn::parse2::<HotLiteral>(quote! { false }).unwrap();
+        let _ = syn::parse2::<HotLiteral>(quote! { true }).unwrap();
 
-    // Refuses the other unsupported types - we could add them if we wanted to
-    assert!(syn::parse2::<HotLiteral>(quote! { b"123" }).is_err());
-    assert!(syn::parse2::<HotLiteral>(quote! { 'a' }).is_err());
+        // Refuses the other unsupported types - we could add them if we wanted to
+        assert!(syn::parse2::<HotLiteral>(quote! { b"123" }).is_err());
+        assert!(syn::parse2::<HotLiteral>(quote! { 'a' }).is_err());
 
-    let lit = syn::parse2::<HotLiteral>(quote! { "hello" }).unwrap();
-    assert!(matches!(lit.value, HotLiteralType::Fmted(_)));
+        let lit = syn::parse2::<HotLiteral>(quote! { "hello" }).unwrap();
+        assert!(matches!(lit.value, HotLiteralType::Fmted(_)));
 
-    let lit = syn::parse2::<HotLiteral>(quote! { "hello {world}" }).unwrap();
-    assert!(matches!(lit.value, HotLiteralType::Fmted(_)));
-}
+        let lit = syn::parse2::<HotLiteral>(quote! { "hello {world}" }).unwrap();
+        assert!(matches!(lit.value, HotLiteralType::Fmted(_)));
+    }
 
-#[test]
-fn outputs_a_signal() {
-    // Should output a type of f64 which we convert into whatever the expected type is via "into"
-    // todo: hmmmmmmmmmmmm might not always work
-    let lit = syn::parse2::<HotLiteral>(quote! { 1.0 }).unwrap();
-    println!("{}", lit.to_token_stream().pretty_unparse());
+    #[test]
+    fn outputs_a_signal() {
+        // Should output a type of f64 which we convert into whatever the expected type is via "into"
+        // todo: hmmmmmmmmmmmm might not always work
+        let lit = syn::parse2::<HotLiteral>(quote! { 1.0 }).unwrap();
+        println!("{}", lit.to_token_stream().pretty_unparse());
 
-    let lit = syn::parse2::<HotLiteral>(quote! { "hi" }).unwrap();
-    println!("{}", lit.to_token_stream().pretty_unparse());
+        let lit = syn::parse2::<HotLiteral>(quote! { "hi" }).unwrap();
+        println!("{}", lit.to_token_stream().pretty_unparse());
 
-    let lit = syn::parse2::<HotLiteral>(quote! { "hi {world}" }).unwrap();
-    println!("{}", lit.to_token_stream().pretty_unparse());
-}
+        let lit = syn::parse2::<HotLiteral>(quote! { "hi {world}" }).unwrap();
+        println!("{}", lit.to_token_stream().pretty_unparse());
+    }
 
-#[test]
-fn static_str_becomes_str() {
-    let lit = syn::parse2::<HotLiteral>(quote! { "hello" }).unwrap();
-    let HotLiteralType::Fmted(segments) = &lit.value else {
-        panic!("expected a formatted string");
-    };
-    assert!(segments.is_static());
-    println!("{}", lit.to_token_stream().pretty_unparse());
-}
+    #[test]
+    fn static_str_becomes_str() {
+        let lit = syn::parse2::<HotLiteral>(quote! { "hello" }).unwrap();
+        let HotLiteralType::Fmted(segments) = &lit.value else {
+            panic!("expected a formatted string");
+        };
+        assert!(segments.is_static());
+        println!("{}", lit.to_token_stream().pretty_unparse());
+    }
 
-#[test]
-fn formatted_prints_as_formatted() {
-    let lit = syn::parse2::<HotLiteral>(quote! { "hello {world}" }).unwrap();
-    let HotLiteralType::Fmted(segments) = &lit.value else {
-        panic!("expected a formatted string");
-    };
-    assert!(!segments.is_static());
-    println!("{}", lit.to_token_stream().pretty_unparse());
+    #[test]
+    fn formatted_prints_as_formatted() {
+        let lit = syn::parse2::<HotLiteral>(quote! { "hello {world}" }).unwrap();
+        let HotLiteralType::Fmted(segments) = &lit.value else {
+            panic!("expected a formatted string");
+        };
+        assert!(!segments.is_static());
+        println!("{}", lit.to_token_stream().pretty_unparse());
 
-    println!("{}", segments.to_quoted_string_from_parts());
+        println!("{}", segments.to_quoted_string_from_parts());
+    }
 }

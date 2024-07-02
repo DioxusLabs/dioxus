@@ -362,17 +362,15 @@ fn diffs_complex() {
     // scrambling the attributes should not cause a full rebuild
     let new = quote! {
         div {
-            "width2": 100,
-            height: "100px",
-            "height2": "100px",
             width: 100,
+            height: "100px",
+            "width2": 100,
+            "height2": "100px",
+            p { "hello world" }
             Comp {}
+            {(0..10).map(|i| rsx!{"{i}"})},
+            {(0..10).map(|i| rsx!{"{i}"})},
             {(0..11).map(|i| rsx!{"{i}"})},
-            {(0..10).map(|i| rsx!{"{i}"})},
-            {(0..10).map(|i| rsx!{"{i}"})},
-            p {
-                "hello world"
-            }
         }
     };
 

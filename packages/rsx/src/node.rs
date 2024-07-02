@@ -6,7 +6,7 @@ use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
     token::{self, Brace},
-    Expr, Ident, LitStr, Result, Token,
+    Ident, LitStr, Result, Token,
 };
 
 #[derive(PartialEq, Eq, Clone, Debug)]

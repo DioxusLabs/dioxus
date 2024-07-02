@@ -83,8 +83,6 @@ pub use util::*;
 
 pub mod hot_reload;
 
-#[cfg(feature = "hot_reload")]
-use dioxus_core::{Template, TemplateAttribute, TemplateNode};
 #[cfg(feature = "hot_reload_traits")]
 pub use hot_reload::HotReloadingContext;
 
