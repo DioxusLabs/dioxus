@@ -11,4 +11,4 @@ crate-type = ["cdylib"]
 [dependencies]
 dioxus-cli-plugin = { path = "../.." }
 minifier = "0.3.0"
-wit-bindgen = "0.15.0"
+wit-bindgen = "0.27.0"

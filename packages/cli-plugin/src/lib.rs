@@ -3,5 +3,8 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![allow(unused_macros)]
 
-#[macro_use]
-mod export_plugin;
+::wit_bindgen::generate!({
+    path: "./wit/plugin.wit",
+    world: "plugin-world",
+    pub_export_macro: false,
+});

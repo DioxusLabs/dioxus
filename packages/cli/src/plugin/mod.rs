@@ -3,6 +3,7 @@ use crate::plugin::convert::Convert;
 use crate::plugin::interface::{PluginRuntimeState, PluginWorld};
 use cargo_toml::Manifest;
 use dioxus_cli_config::{ApplicationConfig, DioxusConfig, PluginConfigInfo};
+use slotmap::SlotMap;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -11,8 +12,7 @@ use tokio::sync::broadcast::Sender;
 use tokio::sync::Mutex;
 use wasmtime::component::*;
 use wasmtime::{Config, Engine, Store};
-use wasmtime_wasi::preview2::{self, DirPerms, FilePerms, ResourceTable, WasiCtx, WasiCtxBuilder};
-use wasmtime_wasi::{ambient_authority, Dir};
+use wasmtime_wasi::{DirPerms, FilePerms, ResourceTable, WasiCtx, WasiCtxBuilder};
 
 use self::interface::plugins::main::types::{
     CommandEvent, PluginInfo, ResponseEvent, RuntimeEvent,
@@ -116,7 +116,7 @@ macro_rules! call_plugins {
         let mut successful = vec![];
         for plugin in $crate::plugin::PLUGINS.lock().await.iter_mut() {
             let Ok(success) = plugin.$func($event).await else {
-                log::warn!(
+                tracing::warn!(
                     "Could not call {} {:?} on: {}!",
                     stringify!($func),
                     $event,
@@ -124,7 +124,7 @@ macro_rules! call_plugins {
                 );
                 continue;
             };
-            log::info!(
+            tracing::info!(
                 "Called {} {:?} on: {}",
                 stringify!($func),
                 $event,
@@ -158,7 +158,7 @@ pub(crate) fn handle_change(
     match change {
         ResponseEvent::Rebuild if reload_tx.is_some() => {
             if let Err(err) = reload_tx.as_ref().unwrap().send(WsMessage::Reload) {
-                log::error!("Failed to send reload message: {}", err);
+                tracing::error!("Failed to send reload message: {}", err);
             }
         }
         ResponseEvent::Refresh(assets) if reload_tx.is_some() => {
@@ -167,7 +167,7 @@ pub(crate) fn handle_change(
                 .unwrap()
                 .send(WsMessage::RefreshAssets { urls: assets })
             {
-                log::error!("Failed to send refresh asset message: {}", err);
+                tracing::error!("Failed to send refresh asset message: {}", err);
             }
         }
         ResponseEvent::Rebuild => *needs_full_rebuild = true,
@@ -188,7 +188,7 @@ pub async fn plugins_watched_paths_changed(
         .filter_map(|f| match f.strip_prefix(crate_dir) {
             Ok(val) => val.to_str().map(|f| f.to_string()),
             Err(_) => {
-                log::warn!(
+                tracing::warn!(
                     "Path won't be available to plugins: {}! Plugins can only access paths under {}, Skipping..",
                     f.display(),
                     crate_dir.display(),
@@ -258,7 +258,7 @@ pub fn get_dependency_paths(crate_dir: &PathBuf) -> crate::Result<Vec<PathBuf>> 
     .map(|e| e.path());
 
     if let None = registry_path {
-        log::warn!("Could not find registry path for dependencies, skipping..");
+        tracing::warn!("Could not find registry path for dependencies, skipping..");
         return Ok(out);
     }
 
@@ -266,7 +266,7 @@ pub fn get_dependency_paths(crate_dir: &PathBuf) -> crate::Result<Vec<PathBuf>> 
 
     if let Ok(mut manifest) = Manifest::<Manifest>::from_path_with_metadata(&toml_path) {
         if let Err(err) = manifest.complete_from_path_and_workspace::<u8>(&toml_path, None) {
-            log::warn!("Could not complete cargo manifest: {err}");
+            tracing::warn!("Could not complete cargo manifest: {err}");
             return Ok(out);
         };
         for (name, dependency) in manifest.dependencies.into_iter() {
@@ -275,19 +275,21 @@ pub fn get_dependency_paths(crate_dir: &PathBuf) -> crate::Result<Vec<PathBuf>> 
                     PackageSource::Version(name.clone(), version)
                 }
                 cargo_toml::Dependency::Inherited(_) => {
-                    log::warn!("Could not get path for dependency: {name}, inheritted crate from workspace");
+                    tracing::warn!("Could not get path for dependency: {name}, inheritted crate from workspace");
                     continue;
                 }
                 cargo_toml::Dependency::Detailed(detail) => {
                     if let Some(version) = detail.version {
                         PackageSource::Version(name.clone(), version)
                     } else if let Some(_git) = detail.git {
-                        log::warn!("Git dependencies not supported yet!");
+                        tracing::warn!("Git dependencies not supported yet!");
                         continue;
                     } else if let Some(path) = detail.path {
                         PackageSource::Path(path)
                     } else {
-                        log::warn!("Could not get path for dependency: {name}, too complex path");
+                        tracing::warn!(
+                            "Could not get path for dependency: {name}, too complex path"
+                        );
                         continue;
                     }
                 }
@@ -300,7 +302,7 @@ pub fn get_dependency_paths(crate_dir: &PathBuf) -> crate::Result<Vec<PathBuf>> 
                 PackageSource::Path(path) => crate_dir.join(path),
             };
 
-            log::info!("Found source dir for {name}: {}", source_path.display());
+            tracing::info!("Found source dir for {name}: {}", source_path.display());
 
             out.push(source_path);
         }
@@ -348,7 +350,7 @@ pub async fn save_plugin_config(bin: PathBuf) -> crate::Result<()> {
     dioxus_lock.save(Some(PLUGINS.lock().await.as_ref()))?;
 
     std::fs::write(toml_path, diox_doc.to_string())?;
-    log::info!("✔️  Successfully saved config");
+    tracing::info!("✔️  Successfully saved config");
     Ok(())
 }
 
@@ -364,54 +366,44 @@ async fn wasi_context(
         .inherit_stderr()
         .inherit_stdin()
         .inherit_stdio()
-        .inherit_stdout()
-        .preopened_dir(
-            Dir::open_ambient_dir(crate_dir, ambient_authority())?,
-            DirPerms::all(),
-            FilePerms::all(),
-            ".",
-        );
+        .inherit_stdout();
 
     // If the application has these directories they might be seperate from the crate root
     if !config.out_dir.is_dir() {
         tokio::fs::create_dir(&config.out_dir).await?;
     }
 
-    ctx_pointer = ctx_pointer.preopened_dir(
-        Dir::open_ambient_dir(&config.out_dir, ambient_authority())?,
-        DirPerms::all(),
-        FilePerms::all(),
-        "./dist",
-    );
+    ctx_pointer =
+        ctx_pointer.preopened_dir(&config.out_dir, "./dist", DirPerms::all(), FilePerms::all())?;
 
     if !config.asset_dir.is_dir() {
         tokio::fs::create_dir(&config.asset_dir).await?;
     }
 
     ctx_pointer = ctx_pointer.preopened_dir(
-        Dir::open_ambient_dir(&config.asset_dir, ambient_authority())?,
+        &config.asset_dir,
+        "./assets",
         DirPerms::all(),
         FilePerms::all(),
-        "./assets",
-    );
+    )?;
 
     for path in dependency_paths {
         let Some(dep_name) = path.file_name() else {
-            log::warn!(
+            tracing::warn!(
                 "Invalid path to add as plugin dependency: {}, skipping..",
                 path.display()
             );
             continue;
         };
         ctx_pointer = ctx_pointer.preopened_dir(
-            Dir::open_ambient_dir(path, ambient_authority())?,
-            DirPerms::all(),
-            FilePerms::all(),
+            path,
             PathBuf::from("/deps")
                 .join(dep_name)
                 .to_str()
-                .unwrap_or("/deps/unknown"), // TODO Check if this is possible
-        )
+                .unwrap_or("/deps/unknown"),
+            DirPerms::all(),
+            FilePerms::all(),
+        )?
     }
 
     Ok(ctx_pointer.build())
@@ -429,7 +421,7 @@ pub async fn load_plugin(
     let component = Component::from_file(&ENGINE, path)?;
 
     let mut linker = Linker::new(&ENGINE);
-    preview2::command::add_to_linker(&mut linker)?;
+    wasmtime_wasi::add_to_linker_async(&mut linker)?;
     PluginWorld::add_to_linker(&mut linker, |state: &mut PluginRuntimeState| state)?;
 
     let ctx = wasi_context(crate_dir, &config.application, dependency_paths).await?;
@@ -440,7 +432,7 @@ pub async fn load_plugin(
         PluginRuntimeState {
             table,
             ctx,
-            // tomls: Slab::new(),
+            tomls: SlotMap::new(),
             metadata: PluginInfo {
                 name: "".into(),
                 version: "".into(),
@@ -462,7 +454,7 @@ pub async fn load_plugin(
     }
 
     let Ok(version) = semver::Version::from_str(&metadata.version) else {
-        log::warn!(
+        tracing::warn!(
             "Couldn't parse version from plugin: {} >> {}",
             metadata.name,
             metadata.version

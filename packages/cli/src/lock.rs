@@ -104,7 +104,7 @@ impl DioxusLock {
                         state.initialized = true;
                     }
                     Err(_) => {
-                        log::warn!("Couldn't initialize plugin: {}", &plugin.metadata.name);
+                        tracing::warn!("Couldn't initialize plugin: {}", &plugin.metadata.name);
                     }
                 }
             }
@@ -131,7 +131,7 @@ impl DioxusLock {
                     state.initialized = true;
                 }
                 Err(_) => {
-                    log::warn!("Couldn't initialize plugin: {}", plugin.metadata.name);
+                    tracing::warn!("Couldn't initialize plugin: {}", plugin.metadata.name);
                 }
             }
         }

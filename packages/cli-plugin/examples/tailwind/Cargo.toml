@@ -12,4 +12,4 @@ crate-type = ["cdylib"]
 dioxus-cli-plugin = { path = "../.." }
 railwind = "0.1.5"
 regex = "1.10.2"
-wit-bindgen = "0.16.0"
+wit-bindgen = "0.27.0"

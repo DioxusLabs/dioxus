@@ -8,4 +8,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 dioxus-cli-plugin = { path = "../.." }
-wit-bindgen = "0.16.0"
+wit-bindgen = "0.27.0"

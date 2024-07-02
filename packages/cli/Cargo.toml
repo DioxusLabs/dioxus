@@ -19,7 +19,6 @@ colored = "2.0.0"
 dioxus-cli-config = { workspace = true, features = ["cli"], default-features = false }
 
 # features
-log = "0.4.14"
 fern = { version = "0.6.0", features = ["colored"] }
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
@@ -50,6 +49,7 @@ headers = "0.3.7"
 
 walkdir = "2"
 
+
 reqwest = { workspace = true, features = [
     "rustls-tls",
     "stream",
@@ -65,11 +65,12 @@ ctrlc = "3.2.3"
 open = "5.0.1"
 cargo-generate = "0.20.0"
 toml_edit = "0.22.5"
-wasmtime = { version = "17.0.0", features = ['component-model'] }
-wasmtime-wasi = { version = "17.0.0", features = ['preview2'] }
+wasmtime = { version = "22.0.0", features = ['component-model'] }
+wasmtime-wasi = { version = "22.0.0" }
 futures = "0.3.30"
 async-trait = "0.1.73"
 semver = "1.0"
+slotmap = { version = "1.0.7" }
 
 # bundling
 tauri-bundler = { version = "=1.4.*", features = ["native-tls-vendored"] }
@@ -93,7 +94,6 @@ interprocess = { workspace = true }
 gitignore = "1.0.8"
 base64 = "0.21.5"
 ignore = "0.4.22"
-env_logger = "0.11.3"
 
 tracing-subscriber = { version = "0.3.18", features = ["std", "env-filter"] }
 tracing = { workspace = true }

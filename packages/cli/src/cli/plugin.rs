@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 // use super::*;
 use crate::lock::DioxusLock;
-use crate::plugin::get_dependency_paths;
 use crate::plugin::load_plugin;
 use crate::plugin::PLUGINS_CONFIG;
 use clap::Parser;
@@ -49,14 +48,14 @@ impl Plugin {
             Plugin::List => {
                 let plugins = &PLUGINS_CONFIG.lock().await.plugins.plugins;
                 if plugins.is_empty() {
-                    log::warn!(
+                    tracing::warn!(
                         "No plugins found! Run `dx config init` and then run `dx add --path /path/to/.wasm"
                     );
                     return Ok(());
                 };
 
                 for (name, data) in plugins.iter() {
-                    log::info!("Found Plugin: {name} | Version {}", data.version);
+                    tracing::info!("Found Plugin: {name} | Version {}", data.version);
                 }
             }
             Plugin::Add(data) => match data {
@@ -75,7 +74,7 @@ impl Plugin {
                     // Add the plugin to the lock file
                     dioxus_lock.add_plugin(&mut plugin).await?;
 
-                    log::info!("✔️  Successfully added {}", plugin.metadata.name);
+                    tracing::info!("✔️  Successfully added {}", plugin.metadata.name);
                 }
             },
         }

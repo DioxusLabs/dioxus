@@ -11,5 +11,4 @@ keywords = ["react", "gui", "cli", "dioxus", "wasm", "plugins"]
 [dependencies]
 inventory = "0.3.13"
 once_cell = "1.18.0"
-wit-bindgen = "0.16.0"
-
+wit-bindgen = "0.27.0"
