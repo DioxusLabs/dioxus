@@ -1,11 +1,8 @@
 {
     "rust-analyzer.check.workspace": false,
     // "rust-analyzer.check.extraArgs": [
-    // "--tests",
-    // "--features",
-    // "html-compat"
-    // "--features",
-    // "hot_reload"
+    //     "--features",
+    //     "hot_reload"
     // ],
     "rust-analyzer.cargo.features": "all"
 }
