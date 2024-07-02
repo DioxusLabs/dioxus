@@ -87,8 +87,8 @@ pub struct HotReload {
 impl HotReload {
     /// Calculate the hotreload diff between two callbodies
     pub fn new<Ctx: HotReloadingContext>(
-        old: &RsxBody,
-        new: &RsxBody,
+        old: &CallBody,
+        new: &CallBody,
         location: &'static str,
     ) -> Option<Self> {
         let mut s = Self {

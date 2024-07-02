@@ -2,7 +2,7 @@ use super::{
     hot_reload_diff::{diff_rsx, DiffResult},
     ChangedRsx,
 };
-use crate::{innerlude::RsxBody, HotReloadingContext};
+use crate::{innerlude::CallBody, HotReloadingContext};
 use dioxus_core::{
     prelude::{HotReloadLiteral, HotreloadedLiteral, TemplateAttribute, TemplateNode},
     Template,
@@ -159,8 +159,8 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
 
             let old_start = old.span().start();
 
-            let old_parsed = syn::parse2::<RsxBody>(old.tokens);
-            let new_parsed = syn::parse2::<RsxBody>(new);
+            let old_parsed = syn::parse2::<CallBody>(old.tokens);
+            let new_parsed = syn::parse2::<CallBody>(new);
             let (Ok(old_call_body), Ok(new_call_body)) = (old_parsed, new_parsed) else {
                 continue;
             };

@@ -1,4 +1,4 @@
-use dioxus_rsx::{hot_reload::Empty, RsxBody};
+use dioxus_rsx::{hot_reload::Empty, CallBody};
 use proc_macro2::{Span, TokenStream};
 use quote::ToTokens;
 use syn::Item;
@@ -35,7 +35,7 @@ fn rsx_writeout_snapshot() {
     // );
 }
 
-fn parse_from_str(contents: &str) -> RsxBody {
+fn parse_from_str(contents: &str) -> CallBody {
     // Parse the file
     let file = syn::parse_file(contents).unwrap();
 
@@ -51,7 +51,7 @@ fn parse_from_str(contents: &str) -> RsxBody {
 #[test]
 fn how_do_spans_work_again() {
     fn print_spans(item: TokenStream) {
-        let new_invalid: RsxBody = syn::parse2(item).unwrap();
+        let new_invalid: CallBody = syn::parse2(item).unwrap();
         let root = &new_invalid.body.roots[0];
         let hi = &new_invalid.body.roots[0].children()[0];
         let goodbye = &new_invalid.body.roots[0].children()[1];
@@ -133,7 +133,7 @@ fn callbody_ctx() {
         {some_expr}
     };
 
-    let cb: RsxBody = syn::parse2(item).unwrap();
+    let cb: CallBody = syn::parse2(item).unwrap();
 
     dbg!(cb.template_idx.get());
     dbg!(cb.ifmt_idx.get());
@@ -168,7 +168,7 @@ fn simple_case() {
         }
     };
 
-    let cb: RsxBody = syn::parse2(item).unwrap();
+    let cb: CallBody = syn::parse2(item).unwrap();
     println!("{}", cb.to_token_stream().pretty_unparse());
 }
 
@@ -246,7 +246,7 @@ fn complex_kitchen_sink() {
         }
     };
 
-    let cb: RsxBody = syn::parse2(item).unwrap();
+    let cb: CallBody = syn::parse2(item).unwrap();
 }
 
 // use dioxus_rsx::utils::PrettyUnparse;
@@ -257,7 +257,7 @@ fn attrs_expand() {
         button { disabled: "{disabled}", prevent_default: "onclick", onclick: move |_| router.go_back(), {children} }
     };
 
-    let cb: RsxBody = syn::parse2(item).unwrap();
+    let cb: CallBody = syn::parse2(item).unwrap();
     println!("{}", cb.to_token_stream().pretty_unparse());
 }
 
@@ -272,6 +272,6 @@ fn basic_expansion() {
         }
     };
 
-    let cb: RsxBody = syn::parse2(item).unwrap();
+    let cb: CallBody = syn::parse2(item).unwrap();
     println!("{}", cb.to_token_stream().pretty_unparse());
 }
