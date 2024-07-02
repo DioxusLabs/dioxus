@@ -27,26 +27,26 @@ fn state_shares() {
         ]
     );
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     _ = dom.render_immediate_to_vec();
     dom.in_runtime(|| {
-        assert_eq!(ScopeId::ROOT.consume_context::<i32>().unwrap(), 1);
+        assert_eq!(ScopeId::APP.consume_context::<i32>().unwrap(), 1);
     });
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     _ = dom.render_immediate_to_vec();
     dom.in_runtime(|| {
-        assert_eq!(ScopeId::ROOT.consume_context::<i32>().unwrap(), 2);
+        assert_eq!(ScopeId::APP.consume_context::<i32>().unwrap(), 2);
     });
 
-    dom.mark_dirty(ScopeId(2));
+    dom.mark_dirty(ScopeId(ScopeId::APP.0 + 2));
     assert_eq!(
         dom.render_immediate_to_vec().santize().edits,
         [SetText { value: "Value is 2".to_string(), id: ElementId(1,) },]
     );
 
-    dom.mark_dirty(ScopeId::ROOT);
-    dom.mark_dirty(ScopeId(2));
+    dom.mark_dirty(ScopeId::APP);
+    dom.mark_dirty(ScopeId(ScopeId::APP.0 + 2));
     let edits = dom.render_immediate_to_vec();
     assert_eq!(
         edits.santize().edits,

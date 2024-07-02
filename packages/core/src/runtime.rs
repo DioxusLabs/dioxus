@@ -1,13 +1,12 @@
-use slotmap::DefaultKey;
-
-use crate::innerlude::Effect;
+use crate::innerlude::{DirtyTasks, Effect};
+use crate::scope_context::SuspenseLocation;
 use crate::{
     innerlude::{LocalTask, SchedulerMsg},
-    render_signal::RenderSignal,
     scope_context::Scope,
     scopes::ScopeId,
     Task,
 };
+use slotmap::DefaultKey;
 use std::collections::BTreeSet;
 use std::{
     cell::{Cell, Ref, RefCell},
@@ -25,6 +24,9 @@ pub struct Runtime {
     // We use this to track the current scope
     pub(crate) scope_stack: RefCell<Vec<ScopeId>>,
 
+    // We use this to track the current suspense location. Generally this lines up with the scope stack, but it may be different for children of a suspense boundary
+    pub(crate) suspense_stack: RefCell<Vec<SuspenseLocation>>,
+
     // We use this to track the current task
     pub(crate) current_task: Cell<Option<Task>>,
 
@@ -38,25 +40,26 @@ pub struct Runtime {
 
     pub(crate) sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
 
-    // Synchronous tasks need to be run after the next render. The virtual dom stores a list of those tasks to send a signal to them when the next render is done.
-    pub(crate) render_signal: RenderSignal,
-
     // The effects that need to be run after the next render
     pub(crate) pending_effects: RefCell<BTreeSet<Effect>>,
+
+    // Tasks that are waiting to be polled
+    pub(crate) dirty_tasks: RefCell<BTreeSet<DirtyTasks>>,
 }
 
 impl Runtime {
     pub(crate) fn new(sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>) -> Rc<Self> {
         Rc::new(Self {
             sender,
-            render_signal: RenderSignal::default(),
             rendering: Cell::new(true),
             scope_states: Default::default(),
             scope_stack: Default::default(),
+            suspense_stack: Default::default(),
             current_task: Default::default(),
             tasks: Default::default(),
             suspended_tasks: Default::default(),
             pending_effects: Default::default(),
+            dirty_tasks: Default::default(),
         })
     }
 
@@ -112,13 +115,32 @@ impl Runtime {
     pub fn on_scope<O>(self: &Rc<Self>, id: ScopeId, f: impl FnOnce() -> O) -> O {
         let _runtime_guard = RuntimeGuard::new(self.clone());
         {
-            self.scope_stack.borrow_mut().push(id);
+            self.push_scope(id);
         }
         let o = f();
         {
-            self.scope_stack.borrow_mut().pop();
+            self.pop_scope();
         }
         o
+    }
+
+    /// Push a scope onto the stack
+    pub(crate) fn push_scope(&self, scope: ScopeId) {
+        let suspense_location = self
+            .scope_states
+            .borrow()
+            .get(scope.0)
+            .and_then(|s| s.as_ref())
+            .map(|s| s.suspense_boundary())
+            .unwrap_or_default();
+        self.suspense_stack.borrow_mut().push(suspense_location);
+        self.scope_stack.borrow_mut().push(scope);
+    }
+
+    /// Pop a scope off the stack
+    pub(crate) fn pop_scope(&self) {
+        self.scope_stack.borrow_mut().pop();
+        self.suspense_stack.borrow_mut().pop();
     }
 
     /// Get the state for any scope given its ID
@@ -168,9 +190,18 @@ impl Runtime {
                 .unbounded_send(SchedulerMsg::EffectQueued)
                 .expect("Scheduler should exist");
         }
+    }
 
-        // And send the render signal
-        self.render_signal.send();
+    /// Check if we should render a scope
+    pub(crate) fn scope_should_render(&self, scope_id: ScopeId) -> bool {
+        // If there are no suspended futures, we know the scope is not  and we can skip context checks
+        if self.suspended_tasks.get() == 0 {
+            return true;
+        }
+        // If this is not a suspended scope, and we are under a frozen context, then we should
+        let scopes = self.scope_states.borrow();
+        let scope = &scopes[scope_id.0].as_ref().unwrap();
+        !matches!(scope.suspense_boundary(), SuspenseLocation::UnderSuspense(suspense) if suspense.suspended())
     }
 }
 

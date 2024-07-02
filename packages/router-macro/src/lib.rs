@@ -80,15 +80,15 @@ mod segment;
 ///     Route3 { dynamic: String },
 /// }
 /// # #[component]
-/// # fn Route1(user_id: usize, dynamic: usize, query: String) -> Element { None }
+/// # fn Route1(user_id: usize, dynamic: usize, query: String) -> Element { VNode::empty() }
 /// # #[component]
-/// # fn Route2(user_id: usize) -> Element { None }
+/// # fn Route2(user_id: usize) -> Element { VNode::empty() }
 /// # #[component]
-/// # fn Route3(dynamic: String) -> Element { None }
+/// # fn Route3(dynamic: String) -> Element { VNode::empty() }
 /// # #[component]
-/// # fn UserFrame(user_id: usize) -> Element { None }
+/// # fn UserFrame(user_id: usize) -> Element { VNode::empty() }
 /// # #[component]
-/// # fn IndexComponent() -> Element { None }
+/// # fn IndexComponent() -> Element { VNode::empty() }
 /// ```
 ///
 /// # `#[route("path", component)]`
@@ -111,7 +111,7 @@ mod segment;
 ///     Index {},
 /// }
 /// # #[component]
-/// # fn Index() -> Element { None }
+/// # fn Index() -> Element { VNode::empty() }
 /// ```
 ///
 /// # `#[redirect("path", function)]`
@@ -131,7 +131,7 @@ mod segment;
 ///     Index {},
 /// }
 /// # #[component]
-/// # fn Index() -> Element { None }
+/// # fn Index() -> Element { VNode::empty() }
 /// ```
 ///
 /// Redirects allow you to redirect a route to another route. The function must take all dynamic parameters of the route and all parent nests.
@@ -157,7 +157,7 @@ mod segment;
 ///         Index {},
 /// }
 /// # #[component]
-/// # fn Index() -> Element { None }
+/// # fn Index() -> Element { VNode::empty() }
 /// ```
 ///
 /// # `#[end_nest]`
@@ -182,9 +182,9 @@ mod segment;
 ///     Home {},
 /// }
 /// # #[component]
-/// # fn Index() -> Element { None }
+/// # fn Index() -> Element { VNode::empty() }
 /// # #[component]
-/// # fn Home() -> Element { None }
+/// # fn Home() -> Element { VNode::empty() }
 /// ```
 ///
 /// # `#[layout(component)]`
@@ -206,9 +206,9 @@ mod segment;
 ///         Index {},
 /// }
 /// # #[component]
-/// # fn Index() -> Element { None }
+/// # fn Index() -> Element { VNode::empty() }
 /// # #[component]
-/// # fn BlogFrame() -> Element { None }
+/// # fn BlogFrame() -> Element { VNode::empty() }
 /// ```
 ///
 /// # `#[end_layout]`
@@ -232,11 +232,11 @@ mod segment;
 ///     Home {},
 /// }
 /// # #[component]
-/// # fn Index() -> Element { None }
+/// # fn Index() -> Element { VNode::empty() }
 /// # #[component]
-/// # fn BlogFrame() -> Element { None }
+/// # fn BlogFrame() -> Element { VNode::empty() }
 /// # #[component]
-/// # fn Home() -> Element { None }
+/// # fn Home() -> Element { VNode::empty() }
 /// ```
 #[doc(alias = "route")]
 #[proc_macro_derive(
@@ -255,7 +255,6 @@ pub fn routable(input: TokenStream) -> TokenStream {
     let parse_impl = route_enum.parse_impl();
     let display_impl = route_enum.impl_display();
     let routable_impl = route_enum.routable_impl();
-    let component_impl = route_enum.component_impl();
 
     (quote! {
         #error_type
@@ -263,8 +262,6 @@ pub fn routable(input: TokenStream) -> TokenStream {
         #display_impl
 
         #routable_impl
-
-        #component_impl
 
         #parse_impl
     })
@@ -699,25 +696,7 @@ impl RouteEnum {
                     let myself = self.clone();
                     match (level, myself) {
                         #(#matches)*
-                        _ => None
-                    }
-                }
-            }
-        }
-    }
-
-    fn component_impl(&self) -> TokenStream2 {
-        let name = &self.name;
-        let props = quote! { ::std::rc::Rc<::std::cell::Cell<dioxus_router::prelude::RouterConfig<#name>>> };
-
-        quote! {
-            impl dioxus_core::ComponentFunction<#props> for #name {
-                fn rebuild(&self, props: #props) -> dioxus_core::Element {
-                    let initial_route = self.clone();
-                    rsx! {
-                        dioxus_router::prelude::Router::<#name> {
-                            config: move || props.take().initial_route(initial_route)
-                        }
+                        _ => VNode::empty()
                     }
                 }
             }

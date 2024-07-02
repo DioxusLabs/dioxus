@@ -170,13 +170,13 @@ fn app() -> Element {
 
             // Can pass in props directly as an expression
             {
-                let props = TallerProps {a: "hello", children: None };
+                let props = TallerProps {a: "hello", children: VNode::empty() };
                 rsx!(Taller { ..props })
             }
 
             // Spreading can also be overridden manually
             Taller {
-                ..TallerProps { a: "ballin!", children: None },
+                ..TallerProps { a: "ballin!", children: VNode::empty() },
                 a: "not ballin!"
             }
 
@@ -193,8 +193,8 @@ fn app() -> Element {
             // Type inference can be used too
             TypedInput { initial: 10.0 }
 
-            // geneircs with the `inline_props` macro
-            Label { text: "hello geneirc world!" }
+            // generic with the `inline_props` macro
+            Label { text: "hello generic world!" }
             Label { text: 99.9 }
 
             // Lowercase components work too, as long as they are access using a path
@@ -283,7 +283,7 @@ where
         return rsx! { "{props}" };
     }
 
-    None
+    VNode::empty()
 }
 
 #[component]

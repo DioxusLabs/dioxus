@@ -607,9 +607,9 @@ pub trait Routable: FromStr + Display + Clone + 'static {
     /// use dioxus::prelude::*;
     ///
     /// #[component]
-    /// fn Home() -> Element { None }
+    /// fn Home() -> Element { VNode::empty() }
     /// #[component]
-    /// fn About() -> Element { None }
+    /// fn About() -> Element { VNode::empty() }
     ///
     /// #[derive(Routable, Clone, PartialEq, Debug)]
     /// enum Route {
@@ -649,9 +649,9 @@ pub trait Routable: FromStr + Display + Clone + 'static {
     /// use dioxus::prelude::*;
     ///
     /// #[component]
-    /// fn Home() -> Element { None }
+    /// fn Home() -> Element { VNode::empty() }
     /// #[component]
-    /// fn About() -> Element { None }
+    /// fn About() -> Element { VNode::empty() }
     ///
     /// #[derive(Routable, Clone, PartialEq, Debug)]
     /// enum Route {

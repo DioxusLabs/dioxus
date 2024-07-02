@@ -1,17 +1,19 @@
 use std::any::Any;
 
-use dioxus_html::FileEngine;
+use crate::FileEngine;
 use futures_channel::oneshot;
 use js_sys::Uint8Array;
 use wasm_bindgen::{prelude::Closure, JsCast};
 use web_sys::{File, FileList, FileReader};
 
-pub(crate) struct WebFileEngine {
+/// A file engine for the web platform
+pub struct WebFileEngine {
     file_reader: FileReader,
     file_list: FileList,
 }
 
 impl WebFileEngine {
+    /// Create a new file engine from a file list
     pub fn new(file_list: FileList) -> Option<Self> {
         Some(Self {
             file_list,

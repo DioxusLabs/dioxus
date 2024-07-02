@@ -20,9 +20,13 @@ pub use config::*;
 
 #[cfg(feature = "server")]
 mod render;
+#[cfg(feature = "server")]
+mod streaming;
 
 #[cfg(feature = "server")]
 mod serve_config;
+#[cfg(feature = "server")]
+pub use serve_config::*;
 
 #[cfg(feature = "server")]
 mod server_context;
@@ -30,7 +34,7 @@ mod server_context;
 /// A prelude of commonly used items in dioxus-fullstack.
 pub mod prelude {
     use crate::hooks;
-    pub use hooks::{server_cached::server_cached, server_future::use_server_future};
+    pub use hooks::{server_cached::use_server_cached, server_future::use_server_future};
 
     #[cfg(feature = "axum")]
     #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
@@ -39,10 +43,6 @@ pub mod prelude {
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     pub use crate::render::{FullstackHTMLTemplate, SSRState};
-
-    #[cfg(feature = "router")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "router")))]
-    pub use crate::router::FullstackRouterConfig;
 
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]

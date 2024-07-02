@@ -17,12 +17,14 @@ mod mutations;
 mod nodes;
 mod properties;
 mod reactive_context;
-mod render_signal;
+mod render_error;
+mod root_wrapper;
 mod runtime;
 mod scheduler;
 mod scope_arena;
 mod scope_context;
 mod scopes;
+mod suspense;
 mod tasks;
 mod virtual_dom;
 
@@ -46,16 +48,18 @@ pub(crate) mod innerlude {
     pub use crate::nodes::*;
     pub use crate::properties::*;
     pub use crate::reactive_context::*;
+    pub use crate::render_error::*;
     pub use crate::runtime::{Runtime, RuntimeGuard};
     pub use crate::scheduler::*;
     pub use crate::scopes::*;
+    pub use crate::suspense::*;
     pub use crate::tasks::*;
     pub use crate::virtual_dom::*;
 
     /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`ScopeId`] or [`ScopeState`].
     ///
     /// An Errored [`Element`] will propagate the error to the nearest error boundary.
-    pub type Element = Option<VNode>;
+    pub type Element = std::result::Result<VNode, RenderError>;
 
     /// A [`Component`] is a function that takes [`Properties`] and returns an [`Element`].
     pub type Component<P = ()> = fn(P) -> Element;
@@ -65,9 +69,9 @@ pub use crate::innerlude::{
     fc_to_builder, generation, schedule_update, schedule_update_any, use_hook, vdom_is_rendering,
     AnyValue, Attribute, AttributeValue, CapturedError, Component, ComponentFunction, DynamicNode,
     Element, ElementId, Event, Fragment, HasAttributes, IntoDynNode, MarkerWrapper, Mutation,
-    Mutations, NoOpMutations, Properties, RenderReturn, Runtime, ScopeId, ScopeState, SpawnIfAsync,
-    Task, Template, TemplateAttribute, TemplateNode, VComponent, VNode, VNodeInner, VPlaceholder,
-    VText, VirtualDom, WriteMutations,
+    Mutations, NoOpMutations, Ok, Properties, RenderReturn, Result, Runtime, ScopeId, ScopeState,
+    SpawnIfAsync, Task, Template, TemplateAttribute, TemplateNode, VComponent, VNode, VNodeInner,
+    VPlaceholder, VText, VirtualDom, WriteMutations,
 };
 
 /// The purpose of this module is to alleviate imports of many common types
@@ -84,7 +88,8 @@ pub mod prelude {
         Component, ComponentFunction, Element, ErrorBoundary, Event, EventHandler, FmtSegment,
         FmtedSegments, Fragment, HasAttributes, HotReloadLiteral, HotreloadedLiteral,
         IntoAttributeValue, IntoDynNode, OptionStringFromMarker, Properties, ReactiveContext,
-        Runtime, RuntimeGuard, ScopeId, ScopeState, SuperFrom, SuperInto, Task, Template,
-        TemplateAttribute, TemplateNode, Throw, VNode, VNodeInner, VirtualDom,
+        Runtime, RuntimeGuard, ScopeId, ScopeState, SuperFrom, SuperInto, SuspendedFuture,
+        SuspenseBoundary, SuspenseBoundaryProps, SuspenseContext, SuspenseExtension, Task,
+        Template, TemplateAttribute, TemplateNode, Throw, VNode, VNodeInner, VirtualDom,
     };
 }

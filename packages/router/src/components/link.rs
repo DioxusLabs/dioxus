@@ -222,7 +222,7 @@ pub fn Link(props: LinkProps) -> Element {
             error!("{msg}, will be inactive");
             #[cfg(debug_assertions)]
             panic!("{}", msg);
-            return None;
+            return VNode::empty();
         }
     };
 

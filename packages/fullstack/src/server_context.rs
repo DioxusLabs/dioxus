@@ -1,8 +1,7 @@
-use crate::html_storage::HTMLData;
+use parking_lot::RwLock;
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::RwLock;
 
 type SendSyncAnyMap =
     std::collections::HashMap<std::any::TypeId, Box<dyn Any + Send + Sync + 'static>>;
@@ -13,44 +12,50 @@ type SendSyncAnyMap =
 /// You should not construct this directly inside components. Instead use the `HasServerContext` trait to get the server context from the scope.
 #[derive(Clone)]
 pub struct DioxusServerContext {
-    shared_context: std::sync::Arc<std::sync::RwLock<SendSyncAnyMap>>,
-    response_parts: std::sync::Arc<std::sync::RwLock<http::response::Parts>>,
-    pub(crate) parts: Arc<tokio::sync::RwLock<http::request::Parts>>,
-    html_data: Arc<RwLock<HTMLData>>,
+    shared_context: std::sync::Arc<RwLock<SendSyncAnyMap>>,
+    response_parts: std::sync::Arc<RwLock<http::response::Parts>>,
+    pub(crate) parts: Arc<RwLock<http::request::Parts>>,
 }
 
 #[allow(clippy::derivable_impls)]
 impl Default for DioxusServerContext {
     fn default() -> Self {
         Self {
-            shared_context: std::sync::Arc::new(std::sync::RwLock::new(HashMap::new())),
+            shared_context: std::sync::Arc::new(RwLock::new(HashMap::new())),
             response_parts: std::sync::Arc::new(RwLock::new(
                 http::response::Response::new(()).into_parts().0,
             )),
-            parts: std::sync::Arc::new(tokio::sync::RwLock::new(
-                http::request::Request::new(()).into_parts().0,
-            )),
-            html_data: Arc::new(RwLock::new(HTMLData::default())),
+            parts: std::sync::Arc::new(RwLock::new(http::request::Request::new(()).into_parts().0)),
         }
     }
 }
 
 mod server_fn_impl {
     use super::*;
+    use parking_lot::{RwLockReadGuard, RwLockWriteGuard};
     use std::any::{Any, TypeId};
-    use std::sync::LockResult;
-    use std::sync::{PoisonError, RwLockReadGuard, RwLockWriteGuard};
 
     impl DioxusServerContext {
         /// Create a new server context from a request
-        pub fn new(parts: impl Into<Arc<tokio::sync::RwLock<http::request::Parts>>>) -> Self {
+        pub fn new(parts: http::request::Parts) -> Self {
             Self {
-                parts: parts.into(),
+                parts: Arc::new(RwLock::new(parts)),
                 shared_context: Arc::new(RwLock::new(SendSyncAnyMap::new())),
                 response_parts: std::sync::Arc::new(RwLock::new(
                     http::response::Response::new(()).into_parts().0,
                 )),
-                html_data: Arc::new(RwLock::new(HTMLData::default())),
+            }
+        }
+
+        /// Create a server context from a shared parts
+        #[allow(unused)]
+        pub(crate) fn from_shared_parts(parts: Arc<RwLock<http::request::Parts>>) -> Self {
+            Self {
+                parts,
+                shared_context: Arc::new(RwLock::new(SendSyncAnyMap::new())),
+                response_parts: std::sync::Arc::new(RwLock::new(
+                    http::response::Response::new(()).into_parts().0,
+                )),
             }
         }
 
@@ -58,79 +63,46 @@ mod server_fn_impl {
         pub fn get<T: Any + Send + Sync + Clone + 'static>(&self) -> Option<T> {
             self.shared_context
                 .read()
-                .ok()?
                 .get(&TypeId::of::<T>())
                 .map(|v| v.downcast_ref::<T>().unwrap().clone())
         }
 
         /// Insert a value into the shared server context
-        pub fn insert<T: Any + Send + Sync + 'static>(
-            &self,
-            value: T,
-        ) -> Result<(), PoisonError<RwLockWriteGuard<'_, SendSyncAnyMap>>> {
+        pub fn insert<T: Any + Send + Sync + 'static>(&self, value: T) {
             self.shared_context
                 .write()
-                .map(|mut map| map.insert(TypeId::of::<T>(), Box::new(value)))
-                .map(|_| ())
+                .insert(TypeId::of::<T>(), Box::new(value));
         }
 
         /// Insert a Boxed `Any` value into the shared server context
-        pub fn insert_any(
-            &self,
-            value: Box<dyn Any + Send + Sync>,
-        ) -> Result<(), PoisonError<RwLockWriteGuard<'_, SendSyncAnyMap>>> {
+        pub fn insert_any(&self, value: Box<dyn Any + Send + Sync>) {
             self.shared_context
                 .write()
-                .map(|mut map| map.insert((*value).type_id(), value))
-                .map(|_| ())
+                .insert((*value).type_id(), value);
         }
 
         /// Get the response parts from the server context
-        pub fn response_parts(&self) -> LockResult<RwLockReadGuard<'_, http::response::Parts>> {
+        pub fn response_parts(&self) -> RwLockReadGuard<'_, http::response::Parts> {
             self.response_parts.read()
         }
 
         /// Get the response parts from the server context
-        pub fn response_parts_mut(
-            &self,
-        ) -> LockResult<RwLockWriteGuard<'_, http::response::Parts>> {
+        pub fn response_parts_mut(&self) -> RwLockWriteGuard<'_, http::response::Parts> {
             self.response_parts.write()
         }
 
         /// Get the request that triggered:
         /// - The initial SSR render if called from a ScopeState or ServerFn
         /// - The server function to be called if called from a server function after the initial render
-        pub async fn request_parts(
-            &self,
-        ) -> tokio::sync::RwLockReadGuard<'_, http::request::Parts> {
-            self.parts.read().await
+        pub fn request_parts(&self) -> parking_lot::RwLockReadGuard<'_, http::request::Parts> {
+            self.parts.read()
         }
 
         /// Get the request that triggered:
         /// - The initial SSR render if called from a ScopeState or ServerFn
         /// - The server function to be called if called from a server function after the initial render
-        pub fn request_parts_blocking(
-            &self,
-        ) -> tokio::sync::RwLockReadGuard<'_, http::request::Parts> {
-            self.parts.blocking_read()
-        }
-
-        /// Get the request that triggered:
-        /// - The initial SSR render if called from a ScopeState or ServerFn
-        /// - The server function to be called if called from a server function after the initial render
-        pub async fn request_parts_mut(
-            &self,
-        ) -> tokio::sync::RwLockWriteGuard<'_, http::request::Parts> {
-            self.parts.write().await
-        }
-
-        /// Get the request that triggered:
-        /// - The initial SSR render if called from a ScopeState or ServerFn
-        /// - The server function to be called if called from a server function after the initial render
-        pub fn request_parts_mut_blocking(
-            &self,
-        ) -> tokio::sync::RwLockWriteGuard<'_, http::request::Parts> {
-            self.parts.blocking_write()
+        pub fn request_parts_mut(&self) -> parking_lot::RwLockWriteGuard<'_, http::request::Parts> {
+            self.parts.write()
         }
 
         /// Extract some part from the request
@@ -138,21 +110,6 @@ mod server_fn_impl {
             &self,
         ) -> Result<T, R> {
             T::from_request(self).await
-        }
-
-        /// Insert some data into the html data store
-        pub(crate) fn push_html_data<T: serde::Serialize>(
-            &self,
-            value: &T,
-        ) -> Result<(), PoisonError<RwLockWriteGuard<'_, HTMLData>>> {
-            self.html_data.write().map(|mut map| {
-                map.push(value);
-            })
-        }
-
-        /// Get the html data store
-        pub(crate) fn html_data(&self) -> LockResult<RwLockReadGuard<'_, HTMLData>> {
-            self.html_data.read()
         }
     }
 }
@@ -189,7 +146,7 @@ pub fn with_server_context<O>(context: DioxusServerContext, f: impl FnOnce() -> 
 /// A future that provides the server context to the inner future
 #[pin_project::pin_project]
 pub struct ProvideServerContext<F: std::future::Future> {
-    context: Option<DioxusServerContext>,
+    context: DioxusServerContext,
     #[pin]
     f: F,
 }
@@ -197,10 +154,7 @@ pub struct ProvideServerContext<F: std::future::Future> {
 impl<F: std::future::Future> ProvideServerContext<F> {
     /// Create a new future that provides the server context to the inner future
     pub fn new(f: F, context: DioxusServerContext) -> Self {
-        Self {
-            context: Some(context),
-            f,
-        }
+        Self { f, context }
     }
 }
 
@@ -212,10 +166,8 @@ impl<F: std::future::Future> std::future::Future for ProvideServerContext<F> {
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
         let this = self.project();
-        let context = this.context.take().unwrap();
-        let result = with_server_context(context.clone(), || this.f.poll(cx));
-        *this.context = Some(context);
-        result
+        let context = this.context.clone();
+        with_server_context(context, || this.f.poll(cx))
     }
 }
 
@@ -302,7 +254,9 @@ impl<
 {
     type Rejection = R;
 
+    #[allow(clippy::all)]
     async fn from_request(req: &DioxusServerContext) -> Result<Self, Self::Rejection> {
-        Ok(I::from_request_parts(&mut *req.request_parts_mut().await, &()).await?)
+        let mut lock = req.request_parts_mut();
+        I::from_request_parts(&mut lock, &()).await
     }
 }

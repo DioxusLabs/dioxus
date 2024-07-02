@@ -1,4 +1,8 @@
-use crate::{innerlude::SchedulerMsg, Element, Runtime, ScopeId, Task};
+use crate::{innerlude::SchedulerMsg, Runtime, ScopeId, Task};
+use crate::{
+    innerlude::{throw_into, CapturedError},
+    prelude::SuspenseContext,
+};
 use generational_box::{AnyStorage, Owner};
 use rustc_hash::FxHashSet;
 use std::{
@@ -7,6 +11,32 @@ use std::{
     future::Future,
     sync::Arc,
 };
+
+pub(crate) enum ScopeStatus {
+    Mounted,
+    Unmounted {
+        // Before the component is mounted, we need to keep track of effects that need to be run once the scope is mounted
+        effects_queued: Vec<Box<dyn FnOnce() + 'static>>,
+    },
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) enum SuspenseLocation {
+    #[default]
+    NotSuspended,
+    InSuspensePlaceholder(SuspenseContext),
+    UnderSuspense(SuspenseContext),
+}
+
+impl SuspenseLocation {
+    pub(crate) fn suspense_context(&self) -> Option<&SuspenseContext> {
+        match self {
+            SuspenseLocation::InSuspensePlaceholder(context) => Some(context),
+            SuspenseLocation::UnderSuspense(context) => Some(context),
+            _ => None,
+        }
+    }
+}
 
 /// A component's state separate from its props.
 ///
@@ -23,10 +53,13 @@ pub(crate) struct Scope {
     pub(crate) hook_index: Cell<usize>,
     pub(crate) shared_contexts: RefCell<Vec<Box<dyn Any>>>,
     pub(crate) spawned_tasks: RefCell<FxHashSet<Task>>,
-    /// The task that was last spawned that may suspend. We use this task to check what task to suspend in the event of an early None return from a component
-    pub(crate) last_suspendable_task: Cell<Option<Task>>,
     pub(crate) before_render: RefCell<Vec<Box<dyn FnMut()>>>,
     pub(crate) after_render: RefCell<Vec<Box<dyn FnMut()>>>,
+
+    /// The suspense boundary that this scope is currently in (if any)
+    suspense_boundary: SuspenseLocation,
+
+    pub(crate) status: RefCell<ScopeStatus>,
 }
 
 impl Scope {
@@ -35,6 +68,7 @@ impl Scope {
         id: ScopeId,
         parent_id: Option<ScopeId>,
         height: u32,
+        suspense_boundary: SuspenseLocation,
     ) -> Self {
         Self {
             name,
@@ -44,11 +78,14 @@ impl Scope {
             render_count: Cell::new(0),
             shared_contexts: RefCell::new(vec![]),
             spawned_tasks: RefCell::new(FxHashSet::default()),
-            last_suspendable_task: Cell::new(None),
             hooks: RefCell::new(vec![]),
             hook_index: Cell::new(0),
             before_render: RefCell::new(vec![]),
             after_render: RefCell::new(vec![]),
+            status: RefCell::new(ScopeStatus::Unmounted {
+                effects_queued: Vec::new(),
+            }),
+            suspense_boundary,
         }
     }
 
@@ -58,6 +95,30 @@ impl Scope {
 
     fn sender(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {
         Runtime::with(|rt| rt.sender.clone()).unwrap()
+    }
+
+    /// Mount the scope and queue any pending effects if it is not already mounted
+    pub(crate) fn mount(&self, runtime: &Runtime) {
+        let mut status = self.status.borrow_mut();
+        if let ScopeStatus::Unmounted { effects_queued } = &mut *status {
+            for f in effects_queued.drain(..) {
+                runtime.queue_effect_on_mounted_scope(self.id, f);
+            }
+            *status = ScopeStatus::Mounted;
+        }
+    }
+
+    /// Get the suspense boundary this scope is currently in (if any)
+    pub(crate) fn suspense_boundary(&self) -> SuspenseLocation {
+        self.suspense_boundary.clone()
+    }
+
+    /// Check if a node should run during suspense
+    pub(crate) fn should_run_during_suspense(&self) -> bool {
+        matches!(
+            self.suspense_boundary,
+            SuspenseLocation::UnderSuspense(_) | SuspenseLocation::InSuspensePlaceholder(_)
+        )
     }
 
     /// Mark this scope as dirty, and schedule a render for it.
@@ -129,18 +190,18 @@ impl Scope {
         let mut search_parent = self.parent_id;
         let cur_runtime = Runtime::with(|runtime| {
             while let Some(parent_id) = search_parent {
-                let parent = runtime.get_state(parent_id).unwrap();
+                let Some(parent) = runtime.get_state(parent_id) else {
+                    tracing::error!("Parent scope {:?} not found", parent_id);
+                    return None;
+                };
                 tracing::trace!(
                     "looking for context {} ({:?}) in {}",
                     std::any::type_name::<T>(),
                     std::any::TypeId::of::<T>(),
                     parent.name
                 );
-                if let Some(shared) = parent.shared_contexts.borrow().iter().find_map(|any| {
-                    tracing::trace!("found context {:?}", (**any).type_id());
-                    any.downcast_ref::<T>()
-                }) {
-                    return Some(shared.clone());
+                if let Some(shared) = parent.has_context() {
+                    return Some(shared);
                 }
                 search_parent = parent.parent_id;
             }
@@ -286,12 +347,6 @@ impl Scope {
         Runtime::with(|rt| rt.queue_effect(self.id, f)).expect("Runtime to exist");
     }
 
-    /// Mark this component as suspended on a specific task and then return None
-    pub fn suspend(&self, task: Task) -> Option<Element> {
-        self.last_suspendable_task.set(Some(task));
-        None
-    }
-
     /// Store a value between renders. The foundational hook for all other hooks.
     ///
     /// Accepts an `initializer` closure, which is run on the first use of the hook (typically the initial render).
@@ -413,14 +468,6 @@ impl ScopeId {
             .expect("to be in a dioxus runtime")
     }
 
-    /// Suspended a component on a specific task and then return None
-    pub fn suspend(self, task: Task) -> Option<Element> {
-        Runtime::with_scope(self, |cx| {
-            cx.suspend(task);
-        });
-        None
-    }
-
     /// Pushes the future onto the poll queue to be polled after the component renders.
     pub fn push_future(self, fut: impl Future<Output = ()> + 'static) -> Option<Task> {
         Runtime::with_scope(self, |cx| cx.spawn(fut))
@@ -465,5 +512,26 @@ impl ScopeId {
         Runtime::current()
             .expect("to be in a dioxus runtime")
             .on_scope(self, f)
+    }
+
+    /// Throw a [`CapturedError`] into a scope. The error will bubble up to the nearest [`ErrorBoundary`] or the root of the app.
+    ///
+    /// # Examples
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// fn Component() -> Element {
+    ///     let request = spawn(async move {
+    ///         match reqwest::get("https://api.example.com").await {
+    ///             Ok(_) => todo!(),
+    ///             // You can explicitly throw an error into a scope with throw_error
+    ///             Err(err) => ScopeId::APP.throw_error(err)
+    ///         }
+    ///     });
+    ///
+    ///     todo!()
+    /// }
+    /// ```
+    pub fn throw_error(self, error: impl Into<CapturedError> + 'static) {
+        throw_into(error, self)
     }
 }

@@ -80,10 +80,11 @@ pub use rsx_call::*;
 pub use template_body::TemplateBody;
 pub use util::*;
 
-#[cfg(feature = "hot_reload")]
 pub mod hot_reload;
 
 #[cfg(feature = "hot_reload")]
+use dioxus_core::{Template, TemplateAttribute, TemplateNode};
+#[cfg(feature = "hot_reload_traits")]
 pub use hot_reload::HotReloadingContext;
 
 use quote::{quote, ToTokens, TokenStreamExt};

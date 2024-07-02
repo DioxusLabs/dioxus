@@ -8,15 +8,30 @@ mod bundle;
 pub use bundle::*;
 mod cargo;
 pub use cargo::*;
+#[cfg(feature = "cli")]
+mod serve;
+#[cfg(feature = "cli")]
+pub use serve::*;
 
 #[doc(hidden)]
 pub mod __private {
     use crate::CrateConfig;
 
-    pub const CONFIG_ENV: &str = "DIOXUS_CONFIG";
+    pub(crate) const CONFIG_ENV: &str = "DIOXUS_CONFIG";
+    pub(crate) const CONFIG_BASE_PATH_ENV: &str = "DIOXUS_CONFIG_BASE_PATH";
 
     pub fn save_config(config: &CrateConfig) -> CrateConfigDropGuard {
         std::env::set_var(CONFIG_ENV, serde_json::to_string(config).unwrap());
+        std::env::set_var(
+            CONFIG_BASE_PATH_ENV,
+            config
+                .dioxus_config
+                .web
+                .app
+                .base_path
+                .clone()
+                .unwrap_or_default(),
+        );
         CrateConfigDropGuard
     }
 
@@ -26,8 +41,14 @@ pub mod __private {
     impl Drop for CrateConfigDropGuard {
         fn drop(&mut self) {
             std::env::remove_var(CONFIG_ENV);
+            std::env::remove_var(CONFIG_BASE_PATH_ENV);
         }
     }
+
+    #[cfg(feature = "cli")]
+    /// The environment variable that stores the CLIs serve configuration.
+    /// We use this to communicate between the CLI and the server for fullstack applications.
+    pub const SERVE_ENV: &str = "DIOXUS_SERVE_CONFIG";
 }
 
 /// An error that occurs when the dioxus CLI was not used to build the application.
@@ -58,3 +79,7 @@ pub static CURRENT_CONFIG: once_cell::sync::Lazy<
 #[cfg(feature = "read-config")]
 /// The current crate's configuration.
 pub const CURRENT_CONFIG_JSON: Option<&str> = std::option_env!("DIOXUS_CONFIG");
+
+#[cfg(feature = "read-config")]
+/// The current crate's configuration.
+pub const BASE_PATH: Option<&str> = std::option_env!("DIOXUS_CONFIG_BASE_PATH");

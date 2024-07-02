@@ -7,6 +7,8 @@ use dioxus::prelude::*;
 
 #[test]
 fn attrs_cycle() {
+    tracing_subscriber::fmt::init();
+
     let mut dom = VirtualDom::new(|| {
         let id = generation();
         match id % 2 {
@@ -26,7 +28,7 @@ fn attrs_cycle() {
         ]
     );
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
         dom.render_immediate_to_vec().santize().edits,
         [
@@ -38,7 +40,7 @@ fn attrs_cycle() {
         ]
     );
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
         dom.render_immediate_to_vec().santize().edits,
         [
@@ -47,7 +49,7 @@ fn attrs_cycle() {
         ]
     );
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
         dom.render_immediate_to_vec().santize().edits,
         [
@@ -70,7 +72,7 @@ fn attrs_cycle() {
     );
 
     // we take the node taken by attributes since we reused it
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
         dom.render_immediate_to_vec().santize().edits,
         [

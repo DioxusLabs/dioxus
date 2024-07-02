@@ -33,6 +33,8 @@ pub mod point_interaction;
 mod render_template;
 #[cfg(feature = "wasm-bind")]
 mod web_sys_bind;
+#[cfg(feature = "wasm-bind")]
+pub use web_sys_bind::*;
 
 #[cfg(feature = "serialize")]
 mod transit;

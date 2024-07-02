@@ -33,5 +33,10 @@ default = []
 server = ["dioxus-fullstack/server", "dioxus-router/ssr", "dep:dioxus-ssr", "dep:tokio", "dep:http", "dep:axum", "dep:tower-http", "dep:dioxus-hot-reload", "dep:dioxus-cli-config", "dep:tower"]
 web = ["dioxus-fullstack/web", "dioxus-router/web", "dep:dioxus-web"]
 
+[[bench]]
+name = "incremental"
+required-features = ["ssr"]
+harness = false
+
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

@@ -15,10 +15,13 @@ extern "C" {
     pub fn save_template(this: &BaseInterpreter, nodes: Vec<Node>, tmpl_id: u16);
 
     #[wasm_bindgen(method)]
-    pub fn hydrate(this: &BaseInterpreter, ids: Vec<u32>);
+    pub fn hydrate(this: &BaseInterpreter, ids: Vec<u32>, under: Vec<Node>);
 
     #[wasm_bindgen(method, js_name = "getNode")]
     pub fn get_node(this: &BaseInterpreter, id: u32) -> Node;
+
+    #[wasm_bindgen(method, js_name = "pushRoot")]
+    pub fn push_root(this: &BaseInterpreter, node: Node);
 }
 
 // Note that this impl is for the sledgehammer interpreter to allow us dropping down to the base interpreter
@@ -45,7 +48,7 @@ mod js {
         "{this.appendChildren(this.root, this.stack.length-1);}"
     }
     fn push_root(root: u32) {
-        "{this.stack.push(this.nodes[$root$]);}"
+        "{this.pushRoot(this.nodes[$root$]);}"
     }
     fn append_children(id: u32, many: u16) {
         "{this.appendChildren($id$, $many$);}"
@@ -57,10 +60,10 @@ mod js {
         "{const root = this.nodes[$id$]; let els = this.stack.splice(this.stack.length-$n$); if (root.listening) { this.removeAllNonBubblingListeners(root); } root.replaceWith(...els);}"
     }
     fn insert_after(id: u32, n: u16) {
-        "{this.nodes[$id$].after(...this.stack.splice(this.stack.length-$n$));}"
+        "{let node = this.nodes[$id$];node.after(...this.stack.splice(this.stack.length-$n$));}"
     }
     fn insert_before(id: u32, n: u16) {
-        "{this.nodes[$id$].before(...this.stack.splice(this.stack.length-$n$));}"
+        "{let node = this.nodes[$id$];node.before(...this.stack.splice(this.stack.length-$n$));}"
     }
     fn remove(id: u32) {
         "{let node = this.nodes[$id$]; if (node !== undefined) { if (node.listening) { this.removeAllNonBubblingListeners(node); } node.remove(); }}"

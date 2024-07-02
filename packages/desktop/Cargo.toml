@@ -156,8 +156,8 @@ path = "../../examples/dynamic_asset.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "error_handle"
-path = "../../examples/error_handle.rs"
+name = "errors"
+path = "../../examples/errors.rs"
 doc-scrape-examples = true
 
 [[example]]
