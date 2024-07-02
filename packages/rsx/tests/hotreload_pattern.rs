@@ -1,10 +1,10 @@
 #![allow(unused)]
 
-use dioxus_core::prelude::Template;
+use dioxus_core::{prelude::Template, VNode};
 use dioxus_rsx::{
     hot_reload::{diff_rsx, template_location, ChangedRsx, DiffResult},
     hotreload::HotReload,
-    HotReloadingContext, CallBody,
+    CallBody, HotReloadingContext,
 };
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
@@ -342,7 +342,7 @@ fn template_generates() {
 fn diffs_complex() {
     #[allow(unused, non_snake_case)]
     fn Comp() -> dioxus_core::Element {
-        None
+        VNode::empty()
     }
 
     let old = quote! {

@@ -162,7 +162,7 @@ impl BodyNode {
                 let text = intern(text.value().as_str());
                 TemplateNode::Text { text }
             }
-            BodyNode::Text(text) => TemplateNode::DynamicText {
+            BodyNode::Text(text) => TemplateNode::Dynamic {
                 id: text.dyn_idx.get(),
             },
             BodyNode::RawExpr(exp) => TemplateNode::Dynamic {

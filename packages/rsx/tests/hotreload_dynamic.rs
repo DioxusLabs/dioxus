@@ -7,23 +7,23 @@ use dioxus_core::prelude::Template;
 use dioxus_rsx::{
     hot_reload::{diff_rsx, template_location, ChangedRsx, DiffResult, Empty},
     hotreload::HotReload,
-    RsxBody, HotReloadingContext,
+    CallBody, HotReloadingContext,
 };
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use syn::{parse::Parse, spanned::Spanned, token::Token, File};
 
 fn boilerplate(old: TokenStream, new: TokenStream) -> Option<HotReload> {
-    let old: RsxBody = syn::parse2(old).unwrap();
-    let new: RsxBody = syn::parse2(new).unwrap();
+    let old: CallBody = syn::parse2(old).unwrap();
+    let new: CallBody = syn::parse2(new).unwrap();
 
     let location = "file:line:col:0";
     hotreload_callbody::<Empty>(&old, &new, location)
 }
 
 fn hotreload_callbody<Ctx: HotReloadingContext>(
-    old: &RsxBody,
-    new: &RsxBody,
+    old: &CallBody,
+    new: &CallBody,
     location: &'static str,
 ) -> Option<HotReload> {
     let results = HotReload::new::<Ctx>(old, new, location)?;
@@ -31,7 +31,7 @@ fn hotreload_callbody<Ctx: HotReloadingContext>(
 }
 
 fn prettyprint(tokens: TokenStream) -> String {
-    let old: RsxBody = syn::parse2(tokens).unwrap();
+    let old: CallBody = syn::parse2(tokens).unwrap();
     let as_file: syn::File = syn::parse_quote!(
         fn main() {
             #old

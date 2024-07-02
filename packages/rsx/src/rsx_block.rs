@@ -461,4 +461,19 @@ mod tests {
 
         let _parsed: RsxBlock = syn::parse2(input).unwrap();
     }
+
+    #[test]
+    fn looks_like_prop_but_is_expr() {
+        let input = quote! {
+            {
+                a: "asd".to_string(),
+                // b can be omitted, and it will be filled with its default value
+                c: "asd".to_string(),
+                d: Some("asd".to_string()),
+                e: Some("asd".to_string()),
+            }
+        };
+
+        let parsed: RsxBlock = syn::parse2(input).unwrap();
+    }
 }

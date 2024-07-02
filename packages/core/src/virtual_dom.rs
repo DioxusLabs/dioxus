@@ -18,6 +18,7 @@ use crate::{
 };
 use crate::{Task, VComponent};
 use futures_util::StreamExt;
+use rustc_hash::FxHashMap;
 use slab::Slab;
 use std::collections::BTreeSet;
 use std::{any::Any, rc::Rc};

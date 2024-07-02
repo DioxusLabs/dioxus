@@ -2,12 +2,13 @@ use std::fmt::Display;
 
 use crate::{innerlude::*, partial_closure::PartialClosure, HotReloadingContext};
 use dioxus_core::prelude::TemplateAttribute;
+use krates::cfg_expr::expr::lexer::Token;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    Expr, ExprClosure, ExprIf, Ident, LitStr, Token,
+    Expr, ExprClosure, ExprIf, Ident, Lit, LitBool, LitFloat, LitInt, LitStr, Token,
 };
 
 use super::literal::HotLiteral;
@@ -56,52 +57,7 @@ impl Parse for Attribute {
         // todo: make this cleaner please
         // if statements in attributes get automatic closing in some cases
         // we shouldn't be handling it any differently.
-        let value = if content.peek(Token![if]) {
-            let if_expr = content.parse::<ExprIf>()?;
-
-            if is_if_chain_terminated(&if_expr) {
-                AttributeValue::AttrExpr(Expr::If(if_expr))
-            } else {
-                let stmts = &if_expr.then_branch.stmts;
-
-                if stmts.len() != 1 {
-                    return Err(syn::Error::new(
-                        if_expr.then_branch.span(),
-                        "Expected a single statement in the if block",
-                    ));
-                }
-
-                // either an ifmt or an expr in the block
-                let stmt = &stmts[0];
-
-                // Either it's a valid ifmt or an expression
-                let value = match stmt {
-                    syn::Stmt::Expr(exp, None) => {
-                        // Try parsing the statement as an IfmtInput by passing it through tokens
-                        let value: Result<HotLiteral, syn::Error> = syn::parse2(quote! { #exp });
-                        match value {
-                            Ok(res) => Box::new(AttributeValue::AttrLiteral(res)),
-                            Err(_) => Box::new(AttributeValue::AttrExpr(exp.clone())),
-                        }
-                    }
-                    _ => return Err(syn::Error::new(stmt.span(), "Expected an expression")),
-                };
-
-                AttributeValue::AttrOptionalExpr {
-                    condition: *if_expr.cond,
-                    value,
-                }
-            }
-        } else if HotLiteral::peek(&content) {
-            let value = content.parse()?;
-            AttributeValue::AttrLiteral(value)
-        } else if content.peek(Token![move]) || content.peek(Token![|]) {
-            let value = content.parse()?;
-            AttributeValue::EventTokens(value)
-        } else {
-            let value = content.parse::<Expr>()?;
-            AttributeValue::AttrExpr(value)
-        };
+        let value = Attribute::parse_value(content)?;
 
         let comma = match !content.is_empty() {
             true => Some(content.parse::<Token![,]>()?),
@@ -121,6 +77,70 @@ impl Parse for Attribute {
 }
 
 impl Attribute {
+    pub fn parse_value(content: ParseStream) -> syn::Result<AttributeValue> {
+        // Attempt to parse the unterminated if statement
+        if content.peek(Token![if]) {
+            let if_expr = content.parse::<ExprIf>()?;
+
+            if is_if_chain_terminated(&if_expr) {
+                return Ok(AttributeValue::AttrExpr(Expr::If(if_expr)));
+            }
+
+            let stmts = &if_expr.then_branch.stmts;
+
+            if stmts.len() != 1 {
+                return Err(syn::Error::new(
+                    if_expr.then_branch.span(),
+                    "Expected a single statement in the if block",
+                ));
+            }
+
+            // either an ifmt or an expr in the block
+            let stmt = &stmts[0];
+
+            // Either it's a valid ifmt or an expression
+            let value = match stmt {
+                syn::Stmt::Expr(exp, None) => {
+                    // Try parsing the statement as an IfmtInput by passing it through tokens
+                    let value: Result<HotLiteral, syn::Error> = syn::parse2(quote! { #exp });
+                    match value {
+                        Ok(res) => Box::new(AttributeValue::AttrLiteral(res)),
+                        Err(_) => Box::new(AttributeValue::AttrExpr(exp.clone())),
+                    }
+                }
+                _ => return Err(syn::Error::new(stmt.span(), "Expected an expression")),
+            };
+
+            return Ok(AttributeValue::AttrOptionalExpr {
+                condition: *if_expr.cond,
+                value,
+            });
+        }
+
+        // Use the move and/or bars as an indicator that we have an event handler
+        if content.peek(Token![move]) || content.peek(Token![|]) {
+            let value = content.parse()?;
+            return Ok(AttributeValue::EventTokens(value));
+        }
+
+        if content.peek(LitStr)
+            || content.peek(LitBool)
+            || content.peek(LitFloat)
+            || content.peek(LitInt)
+        {
+            let fork = content.fork();
+            _ = fork.parse::<Lit>().unwrap();
+
+            if content.peek2(Token![,]) || fork.is_empty() {
+                let value = content.parse()?;
+                return Ok(AttributeValue::AttrLiteral(value));
+            }
+        }
+
+        let value = content.parse::<Expr>()?;
+        Ok(AttributeValue::AttrExpr(value))
+    }
+
     pub fn span(&self) -> proc_macro2::Span {
         self.name.span()
     }
@@ -484,6 +504,7 @@ mod tests {
         let _parsed: Attribute = parse2(quote! { name: 123 }).unwrap();
         let _parsed: Attribute = parse2(quote! { name: false }).unwrap();
         let _parsed: Attribute = parse2(quote! { "custom": false }).unwrap();
+        let _parsed: Attribute = parse2(quote! { prop: "blah".to_string() }).unwrap();
 
         // with commas
         let _parsed: Attribute = parse2(quote! { "custom": false, }).unwrap();

@@ -99,7 +99,7 @@ impl ToTokens for TemplateBody {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         // If there are no roots, this is an empty template, so just return None
         if self.roots.is_empty() {
-            return tokens.append_all(quote! { Option::<dioxus_core::VNode>::None });
+            return tokens.append_all(quote! { dioxus_core::VNode::empty() });
         }
 
         // If we have an implicit key, then we need to write its tokens
@@ -117,7 +117,7 @@ impl ToTokens for TemplateBody {
             }
             BodyNode::Text(text) => {
                 let id = text.dyn_idx.get();
-                quote! { dioxus_core::TemplateNode::DynamicText { id: #id } }
+                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
             }
             BodyNode::ForLoop(floop) => {
                 let id = floop.dyn_idx.get();
@@ -171,7 +171,7 @@ impl ToTokens for TemplateBody {
         let index = self.template_idx.get();
 
         tokens.append_all(quote! {
-            Some({
+            dioxus_core::Element::Ok({
                 #[doc(hidden)] // vscode please stop showing these in symbol search
                 static ___TEMPLATE: dioxus_core::Template = dioxus_core::Template {
                     name: concat!( file!(), ":", line!(), ":", column!(), ":", #index ) ,

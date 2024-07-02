@@ -28,7 +28,7 @@ prettier-please = { version = "*" }
 
 
 [features]
-default = ["html"]
+default = ["hot_reload"]
 hot_reload_traits = []
 hot_reload = ["dep:krates", "dep:internment", "dep:dioxus-core", "hot_reload_traits"]
 serde = ["dep:serde"]

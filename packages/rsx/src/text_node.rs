@@ -64,7 +64,7 @@ impl TextNode {
                 let text = intern(text.value().as_str());
                 TemplateNode::Text { text }
             }
-            false => TemplateNode::DynamicText {
+            false => TemplateNode::Dynamic {
                 id: self.dyn_idx.get(),
             },
         }

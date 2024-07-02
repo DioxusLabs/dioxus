@@ -201,6 +201,7 @@ impl HotLiteral {
     pub fn peek(input: ParseStream) -> bool {
         if input.peek(Lit) {
             let lit = input.fork().parse::<Lit>().unwrap();
+
             match lit {
                 Lit::Str(_) | Lit::Int(_) | Lit::Float(_) | Lit::Bool(_) => true,
                 _ => false,

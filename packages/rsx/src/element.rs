@@ -137,7 +137,7 @@ impl ToTokens for Element {
             }
             BodyNode::Text(text) => {
                 let id = text.dyn_idx.get();
-                quote! { dioxus_core::TemplateNode::DynamicText { id: #id } }
+                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
             }
             BodyNode::ForLoop(floop) => {
                 let id = floop.dyn_idx.get();

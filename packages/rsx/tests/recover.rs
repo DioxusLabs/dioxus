@@ -1,4 +1,4 @@
-use dioxus_rsx::RsxBody;
+use dioxus_rsx::CallBody as RsxBody;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::parse::ParseStream;

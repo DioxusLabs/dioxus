@@ -39,7 +39,7 @@ impl Parse for CallBody {
 impl ToTokens for CallBody {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
         if self.body.is_empty() {
-            return out_tokens.append_all(quote! { None });
+            return out_tokens.append_all(quote! { dioxus_core::VNode::empty() });
         }
 
         self.body.to_tokens(out_tokens);

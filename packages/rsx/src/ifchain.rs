@@ -122,7 +122,7 @@ impl ToTokens for IfChain {
 
         if !terminated {
             body.append_all(quote! {
-                else { None }
+                else { dioxus_core::VNode::empty() }
             });
         }
 
