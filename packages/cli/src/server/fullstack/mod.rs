@@ -5,7 +5,10 @@ use crate::{
     BuildResult, Result,
 };
 
-use super::{desktop, Platform};
+use super::{
+    desktop::{self, DesktopPlatform},
+    Platform,
+};
 
 static CLIENT_RUST_FLAGS: &str = "-C debuginfo=none -C strip=debuginfo";
 // The `opt-level=2` increases build times, but can noticeably decrease time
@@ -91,15 +94,19 @@ impl Platform for FullstackPlatform {
         let server_rust_flags = server_rust_flags(&serve.clone().into());
         let mut desktop_env = env.clone();
         add_serve_options_to_env(serve, &mut desktop_env);
-        let desktop = desktop::DesktopPlatform::start_with_options(
+        let build_result = crate::builder::build_desktop(
             &desktop_config,
-            serve,
+            true,
+            serve.skip_assets,
             Some(server_rust_flags.clone()),
-            desktop_env,
         )?;
         thread_handle
             .join()
             .map_err(|_| anyhow::anyhow!("Failed to join thread"))??;
+
+        // Only start the server after the web build is finished
+        let desktop =
+            DesktopPlatform::start_with_options(build_result, &desktop_config, serve, desktop_env)?;
 
         if serve.open {
             crate::server::web::open_browser(
