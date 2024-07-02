@@ -347,7 +347,6 @@ impl App {
 
                     // if there's a signal runtime, we're gonna try updating the signals using the IDs
                     // as the name for the global signal
-
                     webview.dom.runtime().on_scope(ScopeId::ROOT, || {
                         // dioxus_signals::GlobalSignal;
                         use dioxus_signals::get_global_context;

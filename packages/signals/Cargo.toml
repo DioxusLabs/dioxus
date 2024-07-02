@@ -22,6 +22,7 @@ once_cell = "1.18.0"
 rustc-hash = { workspace = true }
 futures-channel = { workspace = true }
 futures-util = { workspace = true }
+uuid = { workspace = true, features = ["v3","v5","v8"]}
 
 [dev-dependencies]
 dioxus = { workspace = true }

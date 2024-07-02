@@ -124,6 +124,7 @@ owo-colors = "4.0.0"
 ciborium = "0.2.1"
 base64 = "0.21.0"
 once_cell = "1.17.1"
+uuid = "1.9.1"
 
 # speed up some macros by optimizing them
 [profile.dev.package.insta]

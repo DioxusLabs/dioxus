@@ -1,8 +1,10 @@
+use crate::read_impls;
+use crate::UUID_NAMESPACE;
 use crate::{read::Readable, Memo, ReadableRef};
-use crate::{read_impls, GlobalSignalContextKey};
 use dioxus_core::prelude::ScopeId;
 use generational_box::UnsyncStorage;
 use std::ops::Deref;
+use uuid::Uuid;
 
 use crate::Signal;
 
@@ -26,10 +28,15 @@ impl<T: PartialEq + 'static> GlobalMemo<T> {
         }
     }
 
-    fn key(&self) -> GlobalSignalContextKey {
+    /// Get the UUID key of the signal
+    pub fn key(&self) -> Uuid {
+        let ptr = std::ptr::addr_of!(*self);
+        let ptr = ptr as u64;
+        let as_bytes = ptr.to_ne_bytes();
+
         match self.key {
-            Some(key) => GlobalSignalContextKey::Key(key),
-            None => GlobalSignalContextKey::Ptr(self as *const _ as *const ()),
+            Some(key) => uuid::Uuid::new_v3(&UUID_NAMESPACE, key.as_bytes()),
+            None => uuid::Uuid::new_v3(&UUID_NAMESPACE, &as_bytes),
         }
     }
 

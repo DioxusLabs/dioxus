@@ -43,10 +43,7 @@ impl ToTokens for PartialExpr {
 
         // Make sure we bind the expression to a variable so the lifetimes are relaxed
         tokens.append_all(quote! {
-            {
-                let ___expr = { #exp };
-                ___expr
-            }
+            { #exp }
         })
     }
 }

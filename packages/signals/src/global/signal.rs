@@ -1,9 +1,10 @@
+use crate::write::Writable;
+use crate::UUID_NAMESPACE;
 use crate::{read::Readable, ReadableRef};
-use crate::{write::Writable, GlobalSignalContextKey};
 use crate::{WritableRef, Write};
 use dioxus_core::prelude::ScopeId;
 use generational_box::UnsyncStorage;
-use std::{ops::Deref, panic::Location};
+use std::ops::Deref;
 
 use super::get_global_context;
 use crate::read_impls;
@@ -12,7 +13,7 @@ use crate::Signal;
 /// A signal that can be accessed from anywhere in the application and created in a static
 pub struct GlobalSignal<T> {
     initializer: fn() -> T,
-    key: Option<&'static str>,
+    named_key: Option<&'static str>,
 }
 
 impl<T: 'static> GlobalSignal<T> {
@@ -21,25 +22,34 @@ impl<T: 'static> GlobalSignal<T> {
     pub const fn new(initializer: fn() -> T) -> GlobalSignal<T> {
         GlobalSignal {
             initializer,
-            key: None,
+            named_key: None,
         }
     }
 
+    /// Create this global signal with a specific key.
+    /// This is useful for ensuring that the signal is unique across the application and accessible from
+    /// outside the application too.
     pub const fn with_key(initializer: fn() -> T, key: &'static str) -> GlobalSignal<T> {
         GlobalSignal {
             initializer,
-            key: Some(key),
+            named_key: Some(key),
         }
     }
 
-    fn key(&self) -> GlobalSignalContextKey {
-        match self.key {
-            Some(key) => GlobalSignalContextKey::Key(key),
-            None => GlobalSignalContextKey::Ptr(self as *const _ as *const ()),
+    /// Get the Uuid key for this signal.
+    pub fn key(&self) -> uuid::Uuid {
+        // Make sure we use the static ptr - there should be no references beyond the static one
+        let ptr: *const GlobalSignal<T> = std::ptr::addr_of!(*self);
+        let ptr = ptr as u64;
+        let as_bytes = ptr.to_ne_bytes();
+
+        match self.named_key {
+            Some(key) => uuid::Uuid::new_v3(&UUID_NAMESPACE, key.as_bytes()),
+            None => uuid::Uuid::new_v3(&UUID_NAMESPACE, &as_bytes),
         }
     }
 
-    /// Get the signal that backs this global.
+    /// Get the signal that backs this .
     pub fn signal(&self) -> Signal<T> {
         let key = self.key();
         let context = get_global_context();

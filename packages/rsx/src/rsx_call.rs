@@ -67,6 +67,7 @@ impl CallBody {
     ///
     /// This should be preferred over `parse` if you are outside of a macro
     pub fn parse_strict(input: ParseStream) -> Result<Self> {
+        // todo: actually throw warnings if there are any
         Self::parse(input)
     }
 

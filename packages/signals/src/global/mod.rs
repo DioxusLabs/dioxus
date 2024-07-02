@@ -1,5 +1,6 @@
 use dioxus_core::prelude::{provide_root_context, try_consume_context};
 use std::{any::Any, cell::RefCell, collections::HashMap, rc::Rc};
+use uuid::Uuid;
 
 mod memo;
 pub use memo::*;
@@ -9,32 +10,28 @@ pub use signal::*;
 
 use crate::Signal;
 
+pub(crate) static UUID_NAMESPACE: uuid::Uuid = uuid::Uuid::NAMESPACE_URL;
+
+/// The context for global signals
 #[derive(Clone)]
 pub struct GlobalSignalContext {
-    signal: Rc<RefCell<HashMap<GlobalSignalContextKey, Box<dyn Any>>>>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum GlobalSignalContextKey {
-    Ptr(*const ()),
-    Key(&'static str),
+    signal: Rc<RefCell<HashMap<Uuid, Box<dyn Any>>>>,
 }
 
 impl GlobalSignalContext {
+    /// Get a signal with the given string key
+    /// The key will be converted to a UUID with the appropriate internal namespace
     pub fn get_signal_with_key<T>(&self, key: &str) -> Option<Signal<T>> {
-        // temporarily pretend it's a static str
-        // todo: maybe don't do this! use a string for a key or something
-        let _key = unsafe { std::mem::transmute::<&str, &'static str>(key) };
-
-        dbg!(self.signal.borrow().keys().collect::<Vec<_>>());
+        let id = uuid::Uuid::new_v3(&uuid::Uuid::NAMESPACE_URL, key.as_bytes());
 
         self.signal
             .borrow()
-            .get(&GlobalSignalContextKey::Key(_key))
+            .get(&id)
             .map(|f| f.downcast_ref::<Signal<T>>().unwrap().clone())
     }
 }
 
+/// Get the global context for signals
 pub fn get_global_context() -> GlobalSignalContext {
     match try_consume_context() {
         Some(context) => context,
@@ -44,5 +41,34 @@ pub fn get_global_context() -> GlobalSignalContext {
             };
             provide_root_context(context)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Test that keys of global signals are correctly generated and different from one another.
+    /// We don't want signals to merge, but we also want them to use both string IDs and memory addresses.
+    #[test]
+    fn test_global_keys() {
+        static MYSIGNAL: GlobalSignal<i32> = GlobalSignal::new(|| 42);
+        static MYSIGNAL2: GlobalSignal<i32> = GlobalSignal::new(|| 42);
+        static MYSIGNAL3: GlobalSignal<i32> = GlobalSignal::with_key(|| 42, "custom-keyed");
+
+        let a = MYSIGNAL.key();
+        let b = MYSIGNAL.key();
+        let c = (&&&&MYSIGNAL).key();
+        assert_eq!(a, b);
+        assert_eq!(b, c);
+
+        let d = MYSIGNAL2.key();
+        assert_ne!(a, d);
+
+        let e = MYSIGNAL3.key();
+        assert_ne!(a, e);
+
+        let key = Uuid::new_v3(&UUID_NAMESPACE, "custom-keyed".as_bytes());
+        assert_eq!(e, key);
     }
 }
