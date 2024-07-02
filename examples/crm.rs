@@ -105,7 +105,7 @@ fn New() -> Element {
                         // when the form mounts, focus the first name input
                         onmounted: move |e| async move {
                             _ = e.set_focus(true).await;
-                        }
+                        },
                     }
                 }
 

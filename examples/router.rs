@@ -96,6 +96,7 @@ fn BlogList() -> Element {
                 "Read the second blog post"
             }
         }
+    }
 }
 
 // We can use the `name` slug to show a specific blog post

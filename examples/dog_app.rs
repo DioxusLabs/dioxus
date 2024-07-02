@@ -85,7 +85,7 @@ fn BreedPic(breed: Signal<String>) -> Element {
             button { onclick: move |_| fut.restart(), "Click to fetch another doggo" }
             img { max_width: "500px", max_height: "500px", src: "{resp.message}" }
         },
-        Some(Err(_)) => rsx! {"loading image failed"},
-        None => rsx! {"loading image..."},
+        Some(Err(_)) => rsx! { "loading image failed" },
+        None => rsx! { "loading image..." },
     }
 }

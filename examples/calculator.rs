@@ -116,7 +116,7 @@ fn app() -> Element {
                             }
                         }
                         div { class: "operator-keys",
-                            for (key , class) in [("/", "key-divide"), ("*", "key-multiply"), ("-", "key-subtract"), ("+", "key-add")] {
+                            for (key, class) in [("/", "key-divide"), ("*", "key-multiply"), ("-", "key-subtract"), ("+", "key-add")] {
                                 button {
                                     class: "calculator-key {class}",
                                     onclick: move |_| input_operator(key),
