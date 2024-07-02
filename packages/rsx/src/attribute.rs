@@ -88,7 +88,7 @@ impl Attribute {
     }
 
     /// Run this closure against the attribute if it's hotreloadable
-    pub fn with_hr(&self, f: impl FnOnce(&HotLiteral)) {
+    pub fn with_literal(&self, f: impl FnOnce(&HotLiteral)) {
         if let AttributeValue::AttrLiteral(ifmt) = &self.value {
             f(ifmt);
         }

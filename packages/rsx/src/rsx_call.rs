@@ -4,7 +4,7 @@
 //! Currently the additional tooling doesn't do much.
 
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{quote, ToTokens};
 use std::{cell::Cell, fmt::Debug};
 use syn::{
     parse::{Parse, ParseStream},
@@ -31,18 +31,17 @@ pub struct CallBody {
 
 impl Parse for CallBody {
     fn parse(input: ParseStream) -> Result<Self> {
-        let body = TemplateBody::parse(input)?;
-        Ok(CallBody::new(body))
+        // Defer to the `new` method such that we can wire up hotreload information
+        Ok(CallBody::new(input.parse()?))
     }
 }
 
 impl ToTokens for CallBody {
-    fn to_tokens(&self, out_tokens: &mut TokenStream2) {
-        if self.body.is_empty() {
-            return out_tokens.append_all(quote! { dioxus_core::VNode::empty() });
+    fn to_tokens(&self, out: &mut TokenStream2) {
+        match self.body.is_empty() {
+            true => quote! { dioxus_core::VNode::empty() }.to_tokens(out),
+            false => self.body.to_tokens(out),
         }
-
-        self.body.to_tokens(out_tokens);
     }
 }
 
@@ -50,9 +49,9 @@ impl CallBody {
     /// Create a new CallBody from a TemplateBody
     ///
     /// This will overwrite all internal metadata regarding hotreloading.
-    pub fn new(template: TemplateBody) -> Self {
+    pub fn new(body: TemplateBody) -> Self {
         let body = CallBody {
-            body: template,
+            body,
             ifmt_idx: Cell::new(0),
             template_idx: Cell::new(0),
         };
@@ -69,24 +68,7 @@ impl CallBody {
     /// This should be preferred over `parse` if you are outside of a macro
     pub fn parse_strict(input: ParseStream) -> Result<Self> {
         Self::parse(input)
-        // Self::parse_with_options(input, false)
     }
-
-    // fn parse_with_options(input: ParseStream, partial_completions: bool) -> Result<Self> {
-    //     let mut roots = Vec::new();
-
-    //     while !input.is_empty() {
-    //         let node = BodyNode::parse_with_options(input, partial_completions)?;
-
-    //         if input.peek(Token![,]) {
-    //             let _ = input.parse::<Token![,]>();
-    //         }
-
-    //         roots.push(node);
-    //     }
-
-    //     Ok(CallBody { roots })
-    // }
 
     /// With the entire knowledge of the macro call, wire up location information for anything hotreloading
     /// specific. It's a little bit simpler just to have a global id per callbody than to try and track it
@@ -126,7 +108,7 @@ impl CallBody {
                 BodyNode::Element(el) => {
                     // Walk the attributes looking for hotreload opportunities
                     for attr in &el.merged_attributes {
-                        attr.with_hr(|lit| lit.hr_idx.set(self.next_ifmt_idx()));
+                        attr.with_literal(|lit| lit.hr_idx.set(self.next_ifmt_idx()));
                     }
 
                     self.cascade_hotreload_info(&el.children);
@@ -135,7 +117,7 @@ impl CallBody {
                 BodyNode::Component(comp) => {
                     // walk the props looking for hotreload opportunities
                     for prop in comp.fields.iter() {
-                        prop.with_hr(|lit| lit.hr_idx.set(self.next_ifmt_idx()));
+                        prop.with_literal(|lit| lit.hr_idx.set(self.next_ifmt_idx()));
                     }
 
                     comp.children.template_idx.set(self.next_template_idx());
