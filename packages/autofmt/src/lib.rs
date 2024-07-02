@@ -132,7 +132,7 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
     formatted_blocks
 }
 
-pub fn write_block_out(body: CallBody) -> Option<String> {
+pub fn write_block_out(body: &CallBody) -> Option<String> {
     let mut buf = Writer::new("");
 
     write_body(&mut buf, &body);
