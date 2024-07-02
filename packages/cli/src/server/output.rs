@@ -48,7 +48,7 @@ pub fn print_console_info(
     } else {
         "None"
     };
-    let url_rewrite = if config.dioxus_config.web.index_on_404 {
+    let url_rewrite = if config.dioxus_config.web.watcher.index_on_404 {
         "True"
     } else {
         "False"

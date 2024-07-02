@@ -1,8 +1,6 @@
 use crate::lock::DioxusLock;
 use crate::plugin::convert::Convert;
-// use crate::plugin::convert::Convert;
 use crate::plugin::interface::{PluginRuntimeState, PluginWorld};
-use crate::server::WsMessage;
 use cargo_toml::Manifest;
 use dioxus_cli_config::{ApplicationConfig, DioxusConfig, PluginConfigInfo};
 
@@ -16,8 +14,6 @@ use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::preview2::{self, DirPerms, FilePerms, ResourceTable, WasiCtx, WasiCtxBuilder};
 use wasmtime_wasi::{ambient_authority, Dir};
 
-// use self::convert::ConvertWithState;
-// use self::interface::plugins::main::toml::Toml;
 use self::interface::plugins::main::types::{
     CommandEvent, PluginInfo, ResponseEvent, RuntimeEvent,
 };
@@ -330,7 +326,7 @@ pub async fn save_plugin_config(bin: PathBuf) -> crate::Result<()> {
     let toml_path = crate_root.join("Dioxus.toml");
 
     let toml_string = std::fs::read_to_string(&toml_path)?;
-    let mut diox_doc: toml_edit::Document = match toml_string.parse() {
+    let mut diox_doc: toml_edit::DocumentMut = match toml_string.parse() {
         Ok(doc) => doc,
         Err(err) => {
             return Err(crate::Error::Unique(format!(
@@ -340,7 +336,7 @@ pub async fn save_plugin_config(bin: PathBuf) -> crate::Result<()> {
         }
     };
 
-    let watcher_info = toml::Value::try_from(&PLUGINS_CONFIG.lock().await.watcher)
+    let watcher_info = toml::Value::try_from(&PLUGINS_CONFIG.lock().await.web.watcher)
         .expect("Invalid Watcher Config!");
     diox_doc["watcher"] = watcher_info.convert();
 

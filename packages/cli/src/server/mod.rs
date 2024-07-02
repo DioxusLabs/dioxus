@@ -12,20 +12,17 @@ use futures::executor::block_on;
 use cargo_metadata::diagnostic::Diagnostic;
 use dioxus_cli_config::CrateConfig;
 use dioxus_core::Template;
+use dioxus_hot_reload::{HotReloadMsg, HotReloadReceiver};
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;
+use dioxus_rsx::hot_reload::*;
+use fs_extra::dir::CopyOptions;
 use notify::{EventKind, RecommendedWatcher, Watcher};
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
 };
 use tokio::sync::broadcast::{self, Sender};
-use dioxus_hot_reload::{HotReloadMsg, HotReloadReceiver};
-use dioxus_html::HtmlCtx;
-use dioxus_rsx::hot_reload::*;
-use fs_extra::dir::CopyOptions;
-use notify::{RecommendedWatcher, Watcher};
-use std::{path::PathBuf, sync::Arc};
 
 mod output;
 use output::*;
@@ -140,7 +137,7 @@ fn watch_event<F>(
             config,
         );
         let change = block_on(plugins_after_runtime(HotReload));
-            handle_change(change, &reload_tx, &mut needs_full_rebuild);
+        handle_change(change, &reload_tx, &mut needs_full_rebuild);
     }
 
     if needs_full_rebuild {
@@ -388,13 +385,4 @@ fn test_is_backup_file() {
         "/Users/jonkelley/Development/Tinkering/basic_05_example/src/lib.rs"
     )));
     assert!(!is_backup_file(&PathBuf::from("exmaples/val.rs")));
-}
-
-#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
-#[serde(tag = "method", content = "params")]
-pub enum WsMessage {
-    #[serde(rename = "reload")]
-    Reload,
-    #[serde(rename = "refresh_assets")]
-    RefreshAssets { urls: Vec<String> },
 }

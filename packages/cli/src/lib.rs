@@ -17,7 +17,4 @@ pub use lock::*;
 pub mod error;
 pub use error::*;
 
-pub mod logging;
-pub use logging::*;
-
 pub mod plugin;

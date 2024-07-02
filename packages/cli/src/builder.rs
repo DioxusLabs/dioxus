@@ -76,8 +76,6 @@ pub fn build_web(
     // [2] Generate the appropriate build folders
     // [3] Wasm-bindgen the .wasm file, and move it into the {builddir}/modules/xxxx/xxxx_bg.wasm
     // [4] Wasm-opt the .wasm file with whatever optimizations need to be done
-    // [5][OPTIONAL] Builds the Tailwind CSS file using the Tailwind standalone binary
-    // [6] Link up the html page to the wasm module
 
     let CrateConfig {
         crate_dir,
@@ -90,9 +88,6 @@ pub fn build_web(
 
     let _guard = AssetConfigDropGuard::new();
     let _manganis_support = ManganisSupportGuard::default();
-
-    // start to build the assets
-    build_assets(config)?;
 
     let t_start = std::time::Instant::now();
     let _guard = dioxus_cli_config::__private::save_config(config);
@@ -231,46 +226,6 @@ pub fn build_web(
     // If pre-compressing is enabled, we can pre_compress the wasm-bindgen output
     pre_compress_folder(&bindgen_outdir, config.should_pre_compress_web_assets())?;
 
-    // [5][OPTIONAL] If tailwind is enabled and installed we run it to generate the CSS
-    let dioxus_tools = dioxus_config.application.tools.clone();
-    if dioxus_tools.contains_key("tailwindcss") {
-        let info = dioxus_tools.get("tailwindcss").unwrap();
-        let tailwind = crate::tools::Tool::Tailwind;
-
-        if tailwind.is_installed() {
-            if let Some(sub) = info.as_table() {
-                tracing::info!("Building Tailwind bundle CSS file...");
-
-                let input_path = match sub.get("input") {
-                    Some(val) => val.as_str().unwrap(),
-                    None => "./public",
-                };
-                let config_path = match sub.get("config") {
-                    Some(val) => val.as_str().unwrap(),
-                    None => "./src/tailwind.config.js",
-                };
-                let mut args = vec![
-                    "-i",
-                    input_path,
-                    "-o",
-                    "dist/tailwind.css",
-                    "-c",
-                    config_path,
-                ];
-
-                if config.release {
-                    args.push("--minify");
-                }
-
-                tailwind.call("tailwindcss", args)?;
-            }
-        } else {
-            tracing::warn!(
-                "Tailwind tool not found, you can use `dx tool add tailwindcss` to install it."
-            );
-        }
-    }
-
     // this code will copy all public file to the output dir
     copy_assets_dir(config, dioxus_cli_config::Platform::Web)?;
 
@@ -333,7 +288,6 @@ pub fn build_desktop(
     tracing::info!("🚅 Running build [Desktop] command...");
 
     let t_start = std::time::Instant::now();
-    build_assets(config)?;
     let _guard = dioxus_cli_config::__private::save_config(config);
     let _manganis_support = ManganisSupportGuard::default();
     let _guard = AssetConfigDropGuard::new();
@@ -566,6 +520,9 @@ pub fn gen_page(config: &CrateConfig, manifest: Option<&AssetManifest>, serve: b
             &style.to_str().unwrap(),
         ))
     }
+    if let Some(manifest) = manifest {
+        style_str.push_str(&manifest.head());
+    }
 
     replace_or_insert_before("{style_include}", &style_str, "</head", &mut html);
 
@@ -639,150 +596,4 @@ fn replace_or_insert_before(
     } else {
         *content = content.replace(or_insert_before, &format!("{}{}", with, or_insert_before));
     }
-}
-
-// this function will build some assets file
-// like sass tool resources
-// this function will return a array which file don't need copy to out_dir.
-fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
-    let mut result = vec![];
-
-    let dioxus_config = &config.dioxus_config;
-    let dioxus_tools = dioxus_config.application.tools.clone();
-
-    // check sass tool state
-    let sass = Tool::Sass;
-    if sass.is_installed() && dioxus_tools.contains_key("sass") {
-        let sass_conf = dioxus_tools.get("sass").unwrap();
-        if let Some(tab) = sass_conf.as_table() {
-            let source_map = tab.contains_key("source_map");
-            let source_map = if source_map && tab.get("source_map").unwrap().is_bool() {
-                if tab.get("source_map").unwrap().as_bool().unwrap_or_default() {
-                    "--source-map"
-                } else {
-                    "--no-source-map"
-                }
-            } else {
-                "--source-map"
-            };
-
-            if tab.contains_key("input") {
-                if tab.get("input").unwrap().is_str() {
-                    let file = tab.get("input").unwrap().as_str().unwrap().trim();
-
-                    if file == "*" {
-                        // if the sass open auto, we need auto-check the assets dir.
-                        let asset_dir = config.asset_dir().clone();
-                        if asset_dir.is_dir() {
-                            for entry in walkdir::WalkDir::new(&asset_dir)
-                                .into_iter()
-                                .filter_map(|e| e.ok())
-                            {
-                                let temp = entry.path();
-                                if temp.is_file() {
-                                    let suffix = temp.extension();
-                                    if suffix.is_none() {
-                                        continue;
-                                    }
-                                    let suffix = suffix.unwrap().to_str().unwrap();
-                                    if suffix == "scss" || suffix == "sass" {
-                                        // if file suffix is `scss` / `sass` we need transform it.
-                                        let out_file = format!(
-                                            "{}.css",
-                                            temp.file_stem().unwrap().to_str().unwrap()
-                                        );
-                                        let target_path = config
-                                            .out_dir()
-                                            .join(
-                                                temp.strip_prefix(&asset_dir)
-                                                    .unwrap()
-                                                    .parent()
-                                                    .unwrap(),
-                                            )
-                                            .join(out_file);
-                                        let res = sass.call(
-                                            "sass",
-                                            vec![
-                                                temp.to_str().unwrap(),
-                                                target_path.to_str().unwrap(),
-                                                source_map,
-                                            ],
-                                        );
-                                        if res.is_ok() {
-                                            result.push(temp.to_path_buf());
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        // just transform one file.
-                        let relative_path = if &file[0..1] == "/" {
-                            &file[1..file.len()]
-                        } else {
-                            file
-                        };
-                        let path = config.asset_dir().join(relative_path);
-                        let out_file =
-                            format!("{}.css", path.file_stem().unwrap().to_str().unwrap());
-                        let target_path = config
-                            .out_dir()
-                            .join(PathBuf::from(relative_path).parent().unwrap())
-                            .join(out_file);
-                        if path.is_file() {
-                            let res = sass.call(
-                                "sass",
-                                vec![
-                                    path.to_str().unwrap(),
-                                    target_path.to_str().unwrap(),
-                                    source_map,
-                                ],
-                            );
-                            if res.is_ok() {
-                                result.push(path);
-                            } else {
-                                tracing::error!("{:?}", res);
-                            }
-                        }
-                    }
-                } else if tab.get("input").unwrap().is_array() {
-                    // check files list.
-                    let list = tab.get("input").unwrap().as_array().unwrap();
-                    for i in list {
-                        if i.is_str() {
-                            let path = i.as_str().unwrap();
-                            let relative_path = if &path[0..1] == "/" {
-                                &path[1..path.len()]
-                            } else {
-                                path
-                            };
-                            let path = config.asset_dir().join(relative_path);
-                            let out_file =
-                                format!("{}.css", path.file_stem().unwrap().to_str().unwrap());
-                            let target_path = config
-                                .out_dir()
-                                .join(PathBuf::from(relative_path).parent().unwrap())
-                                .join(out_file);
-                            if path.is_file() {
-                                let res = sass.call(
-                                    "sass",
-                                    vec![
-                                        path.to_str().unwrap(),
-                                        target_path.to_str().unwrap(),
-                                        source_map,
-                                    ],
-                                );
-                                if res.is_ok() {
-                                    result.push(path);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    // SASS END
-
-    Ok(result)
 }

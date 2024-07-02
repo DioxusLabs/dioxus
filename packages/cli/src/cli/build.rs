@@ -19,7 +19,7 @@ impl Build {
         self,
         bin: Option<PathBuf>,
         target_dir: Option<&std::path::Path>,
-        rust_flags: Option<String>
+        rust_flags: Option<String>,
     ) -> Result<()> {
         let mut crate_config = dioxus_cli_config::CrateConfig::new(bin)?;
         if let Some(target_dir) = target_dir {

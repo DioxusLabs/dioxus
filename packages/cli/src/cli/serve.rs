@@ -4,9 +4,8 @@ use manganis_cli_support::AssetManifest;
 
 use super::*;
 use crate::plugin::interface::plugins::main::types::CommandEvent::Serve as ServeEvent;
-use std::{fs::create_dir_all, io::Write, path::PathBuf};
 use cargo_toml::Dependency::{Detailed, Inherited, Simple};
-use std::fs::create_dir_all;
+use std::{fs::create_dir_all, io::Write, path::PathBuf};
 
 /// Run the WASM project on dev-server
 #[derive(Clone, Debug, Parser)]

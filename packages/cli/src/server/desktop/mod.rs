@@ -18,7 +18,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use super::{HotReloadState, Platform};
+use super::HotReloadState;
 
 pub async fn startup(config: CrateConfig, serve: &ConfigOptsServe) -> Result<()> {
     startup_with_platform::<DesktopPlatform>(config, serve).await

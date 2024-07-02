@@ -48,18 +48,14 @@ tower-http = { workspace = true, features = ["full"] }
 
 headers = "0.3.7"
 
-# walkdir = "2"
+walkdir = "2"
 
-# tools download
-# dirs = "5.0.1"
-# reqwest = { version = "0.11", features = [
-#     "rustls-tls",
-#     "stream",
-#     "trust-dns",
-#     "blocking",
-# ] }
-# flate2 = "1.0.22"
-# tar = "0.4.38"
+reqwest = { workspace = true, features = [
+    "rustls-tls",
+    "stream",
+    "trust-dns",
+    "blocking",
+] }
 zip = "0.6.2"
 tower = { workspace = true }
 lazy_static = "1.4.0"
@@ -72,8 +68,6 @@ toml_edit = "0.22.5"
 wasmtime = { version = "17.0.0", features = ['component-model'] }
 wasmtime-wasi = { version = "17.0.0", features = ['preview2'] }
 futures = "0.3.30"
-# slab = "0.4.9"
-# toml = "0.8.8"
 async-trait = "0.1.73"
 semver = "1.0"
 

@@ -34,9 +34,6 @@ pub enum Platform {
 pub struct DioxusConfig {
     pub application: ApplicationConfig,
 
-    #[serde(default)]
-    pub watcher: WatcherConfig,
-
     pub web: WebConfig,
 
     #[serde(default)]
@@ -190,13 +187,13 @@ impl Default for DioxusConfig {
 
                 sub_package: None,
             },
-            watcher: Default::default(),
             web: WebConfig {
                 app: WebAppConfig {
                     title: default_title(),
                     base_path: None,
                 },
                 proxy: vec![],
+                watcher: Default::default(),
                 resource: WebResourceConfig {
                     dev: WebDevResourceConfig {
                         style: vec![],
@@ -275,6 +272,8 @@ pub struct WebConfig {
     pub app: WebAppConfig,
     #[serde(default)]
     pub proxy: Vec<WebProxyConfig>,
+    #[serde(default)]
+    pub watcher: WebWatcherConfig,
     #[serde(default)]
     pub resource: WebResourceConfig,
     #[serde(default)]
@@ -649,6 +648,10 @@ pub struct PluginConfigInfo {
     // pub config: toml::Value,
     pub config: HashMap<String, String>,
     pub priority: Option<usize>,
+}
+
+fn true_bool() -> bool {
+    true
 }
 
 fn false_bool() -> bool {

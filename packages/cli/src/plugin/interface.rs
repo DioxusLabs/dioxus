@@ -120,41 +120,30 @@ impl ImportHost for PluginRuntimeState {
     async fn watch_path(&mut self, path: String) -> wasmtime::Result<()> {
         let mut config = PLUGINS_CONFIG.lock().await;
         let pathbuf = path.into();
-        match config.watcher.watch_path.as_mut() {
-            Some(watched_paths) => watched_paths.push(pathbuf),
-            None => config.watcher.watch_path = Some(vec![pathbuf]),
-        }
+        config.web.watcher.watch_path.push(pathbuf);
         Ok(())
     }
 
     async fn remove_watched_path(&mut self, path: String) -> wasmtime::Result<Result<(), ()>> {
         let mut config = PLUGINS_CONFIG.lock().await;
 
-        let Some(paths) = config.watcher.watch_path.as_mut() else {
-            return Ok(Err(()));
-        };
-
         let pathbuf: std::path::PathBuf = path.into();
 
-        let Some(index) = paths.iter().position(|f| f == &pathbuf) else {
-            return Ok(Err(()));
-        };
-
-        paths.remove(index);
+        config.web.watcher.watch_path.retain(|f| f != &pathbuf);
 
         Ok(Ok(()))
     }
 
     async fn watched_paths(&mut self) -> wasmtime::Result<Vec<String>> {
-        Ok(
-            match PLUGINS_CONFIG.lock().await.watcher.watch_path.as_ref() {
-                Some(paths) => paths
-                    .iter()
-                    .filter_map(|f| f.to_str().map(ToString::to_string))
-                    .collect(),
-                None => vec![],
-            },
-        )
+        Ok(PLUGINS_CONFIG
+            .lock()
+            .await
+            .web
+            .watcher
+            .watch_path
+            .iter()
+            .filter_map(|f| f.to_str().map(ToString::to_string))
+            .collect())
     }
 
     async fn set_data(&mut self, key: String, data: Vec<u8>) -> wasmtime::Result<()> {
