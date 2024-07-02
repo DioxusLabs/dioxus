@@ -1,25 +1,22 @@
-use crate::server::ServerReloadState;
+use crate::server::SharedFileMap;
 use crate::{
     cfg::ConfigOptsServe,
     server::{
         output::{print_console_info, PrettierOptions},
-        setup_file_watcher,
+        setup_file_watcher, Platform,
     },
     BuildResult, Result,
 };
 use dioxus_cli_config::CrateConfig;
-use dioxus_cli_config::ExecutableType;
-
 use dioxus_hot_reload::HotReloadMsg;
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;
-use interprocess_docfix::local_socket::LocalSocketListener;
-use std::fs::create_dir_all;
+use interprocess::local_socket::LocalSocketListener;
 use std::{
+    fs::create_dir_all,
     process::{Child, Command},
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, RwLock},
 };
-use tokio::sync::broadcast::{self};
 
 use super::{HotReloadState, Platform};
 
@@ -31,86 +28,113 @@ pub(crate) async fn startup_with_platform<P: Platform + Send + Sync + 'static>(
     config: CrateConfig,
     serve_cfg: &ConfigOptsServe,
 ) -> Result<()> {
-    // ctrl-c shutdown checker
-    let _crate_config = config.clone();
-    let _ = ctrlc::set_handler(move || {
-        std::process::exit(0);
-    });
+    set_ctrl_c(&config);
 
-    let hot_reload_state = match config.hot_reload {
+    let file_map = match config.hot_reload {
         true => {
             let FileMapBuildResult { map, errors } =
                 FileMap::<HtmlCtx>::create(config.crate_dir.clone()).unwrap();
 
             for err in errors {
-                log::error!("{}", err);
+                tracing::error!("{}", err);
             }
 
             let file_map = Arc::new(Mutex::new(map));
 
-            let hot_reload_tx = broadcast::channel(100).0;
-
-            Some(HotReloadState {
-                messages: hot_reload_tx.clone(),
-                file_map: file_map.clone(),
-            })
+            Some(file_map.clone())
         }
         false => None,
     };
 
-    let reload_state = ServerReloadState::new(hot_reload_state);
+    let hot_reload_state = HotReloadState {
+        receiver: Default::default(),
+        file_map,
+    };
 
-    serve::<P>(config, serve_cfg, reload_state).await?;
+    serve::<P>(config, serve_cfg, hot_reload_state).await?;
 
     Ok(())
+}
+
+fn set_ctrl_c(config: &CrateConfig) {
+    // ctrl-c shutdown checker
+    let _crate_config = config.clone();
+    let _ = ctrlc::set_handler(move || {
+        #[cfg(feature = "plugin")]
+        let _ = PluginManager::on_serve_shutdown(&_crate_config);
+        std::process::exit(0);
+    });
 }
 
 /// Start the server without hot reload
 async fn serve<P: Platform + Send + Sync + 'static>(
     config: CrateConfig,
     serve: &ConfigOptsServe,
-    reload_state: ServerReloadState,
+    hot_reload_state: HotReloadState,
 ) -> Result<()> {
-    let platform = RwLock::new(P::start(&config, serve)?);
+    let hot_reload: tokio::task::JoinHandle<Result<()>> = tokio::spawn({
+        let hot_reload_state = hot_reload_state.clone();
+        async move {
+            match hot_reload_state.file_map.clone() {
+                Some(file_map) => {
+                    // The open interprocess sockets
+                    start_desktop_hot_reload(hot_reload_state, file_map).await?;
+                }
+                None => {
+                    std::future::pending::<()>().await;
+                }
+            }
+            Ok(())
+        }
+    });
 
-    log::info!("🚀 Starting development server...");
+    let platform = RwLock::new(P::start(&config, serve, Vec::new())?);
+
+    tracing::info!("🚀 Starting development server...");
 
     // We got to own watcher so that it exists for the duration of serve
     // Otherwise full reload won't work.
     let _watcher = setup_file_watcher(
         {
             let config = config.clone();
-            move || platform.write().unwrap().rebuild(&config)
+            let serve = serve.clone();
+            move || {
+                platform
+                    .write()
+                    .unwrap()
+                    .rebuild(&config, &serve, Vec::new())
+            }
         },
         &config,
         None,
-        reload_state.clone(),
+        hot_reload_state,
     )
     .await?;
 
-    match reload_state.hot_reload {
-        Some(hot_reload_state) => {
-            // The open interprocess sockets
-            start_desktop_hot_reload(hot_reload_state).await?;
-        }
-        None => {
-            std::future::pending::<()>().await;
-        }
-    }
+    hot_reload.await.unwrap()?;
 
     Ok(())
 }
 
-async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()> {
+async fn start_desktop_hot_reload(
+    hot_reload_state: HotReloadState,
+    file_map: SharedFileMap,
+) -> Result<()> {
     let metadata = cargo_metadata::MetadataCommand::new()
         .no_deps()
         .exec()
         .unwrap();
     let target_dir = metadata.target_directory.as_std_path();
+
     let _ = create_dir_all(target_dir); // `_all` is for good measure and future-proofness.
     let path = target_dir.join("dioxusin");
     clear_paths(&path);
-    match LocalSocketListener::bind(path) {
+    let listener = if cfg!(windows) {
+        LocalSocketListener::bind("@dioxusin")
+    } else {
+        LocalSocketListener::bind(path)
+    };
+    match listener {
         Ok(local_socket_stream) => {
             let aborted = Arc::new(Mutex::new(false));
             // States
@@ -119,7 +143,6 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
 
             // listen for connections
             std::thread::spawn({
-                let file_map = hot_reload_state.file_map.clone();
                 let channels = channels.clone();
                 let aborted = aborted.clone();
                 move || {
@@ -134,9 +157,10 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
                                         .unwrap()
                                         .map
                                         .values()
-                                        .filter_map(|(_, template_slot)| *template_slot)
+                                        .flat_map(|v| v.templates.values().copied())
                                         .collect()
                                 };
+
                                 for template in templates {
                                     if !send_msg(
                                         HotReloadMsg::UpdateTemplate(template),
@@ -165,14 +189,15 @@ async fn start_desktop_hot_reload(hot_reload_state: HotReloadState) -> Result<()
                 }
             });
 
-            let mut hot_reload_rx = hot_reload_state.messages.subscribe();
+            let mut hot_reload_rx = hot_reload_state.receiver.subscribe();
 
-            while let Ok(template) = hot_reload_rx.recv().await {
+            while let Ok(msg) = hot_reload_rx.recv().await {
                 let channels = &mut *channels.lock().unwrap();
                 let mut i = 0;
+
                 while i < channels.len() {
                     let channel = &mut channels[i];
-                    if send_msg(HotReloadMsg::UpdateTemplate(template), channel) {
+                    if send_msg(msg.clone(), channel) {
                         i += 1;
                     } else {
                         channels.remove(i);
@@ -212,36 +237,30 @@ fn send_msg(msg: HotReloadMsg, channel: &mut impl std::io::Write) -> bool {
     }
 }
 
-fn start_desktop(
-    config: &CrateConfig,
-    skip_assets: bool,
-    rust_flags: Option<String>,
+fn run_desktop(
+    args: &Vec<String>,
+    env: Vec<(String, String)>,
+    result: BuildResult,
 ) -> Result<(RAIIChild, BuildResult)> {
-    // Run the desktop application
-    // Only used for the fullstack platform,
-    let result = crate::builder::build_desktop(config, true, skip_assets, rust_flags)?;
+    let active = "DIOXUS_ACTIVE";
+    let child = RAIIChild(
+        Command::new(
+            result
+                .executable
+                .clone()
+                .ok_or(anyhow::anyhow!("No executable found after desktop build"))?,
+        )
+        .args(args)
+        .env(active, "true")
+        .envs(env)
+        .spawn()?,
+    );
 
-    match &config.executable {
-        ExecutableType::Binary(name)
-        | ExecutableType::Lib(name)
-        | ExecutableType::Example(name) => {
-            let mut file = config.out_dir().join(name);
-            if cfg!(windows) {
-                file.set_extension("exe");
-            }
-            let active = "DIOXUS_ACTIVE";
-            let child = RAIIChild(
-                Command::new(file.to_str().unwrap())
-                    .env(active, "true")
-                    .spawn()?,
-            );
-
-            Ok((child, result))
-        }
-    }
+    Ok((child, result))
 }
 
 pub(crate) struct DesktopPlatform {
+    args: Vec<String>,
     currently_running_child: RAIIChild,
     skip_assets: bool,
 }
@@ -250,13 +269,14 @@ impl DesktopPlatform {
     /// `rust_flags` argument is added because it is used by the
     /// `DesktopPlatform`'s implementation of the `Platform::start()`.
     pub fn start_with_options(
+        build_result: BuildResult,
         config: &CrateConfig,
         serve: &ConfigOptsServe,
-        rust_flags: Option<String>,
+        env: Vec<(String, String)>,
     ) -> Result<Self> {
-        let (child, first_build_result) = start_desktop(config, serve.skip_assets, rust_flags)?;
+        let (child, first_build_result) = run_desktop(&serve.args, env, build_result)?;
 
-        log::info!("🚀 Starting development server...");
+        tracing::info!("🚀 Starting development server...");
 
         // Print serve info
         print_console_info(
@@ -270,6 +290,7 @@ impl DesktopPlatform {
         );
 
         Ok(Self {
+            args: serve.args.clone(),
             currently_running_child: child,
             skip_assets: serve.skip_assets,
         })
@@ -281,29 +302,60 @@ impl DesktopPlatform {
         &mut self,
         config: &CrateConfig,
         rust_flags: Option<String>,
+        env: Vec<(String, String)>,
     ) -> Result<BuildResult> {
-        self.currently_running_child.0.kill()?;
-        let (child, result) = start_desktop(config, self.skip_assets, rust_flags)?;
+        // Gracefully shtudown the desktop app
+        // It might have a receiver to do some cleanup stuff
+        let pid = self.currently_running_child.0.id();
+
+        // on unix, we can send a signal to the process to shut down
+        #[cfg(unix)]
+        {
+            _ = Command::new("kill")
+                .args(["-s", "TERM", &pid.to_string()])
+                .spawn();
+        }
+
+        // on windows, use the `taskkill` command
+        #[cfg(windows)]
+        {
+            _ = Command::new("taskkill")
+                .args(["/F", "/PID", &pid.to_string()])
+                .spawn();
+        }
+
+        // Todo: add a timeout here to kill the process if it doesn't shut down within a reasonable time
+        self.currently_running_child.0.wait()?;
+
+        let build_result =
+            crate::builder::build_desktop(config, true, self.skip_assets, rust_flags)?;
+        let (child, result) = run_desktop(&self.args, env, build_result)?;
         self.currently_running_child = child;
         Ok(result)
     }
 }
 
 impl Platform for DesktopPlatform {
-    fn start(config: &CrateConfig, serve: &ConfigOptsServe) -> Result<Self> {
-        // See `start_with_options()`'s docs for the explanation why the code
-        // was moved there.
-        // Since desktop platform doesn't use `rust_flags`, this argument is
-        // explicitly set to `None`.
-        DesktopPlatform::start_with_options(config, serve, None)
+    fn start(
+        config: &CrateConfig,
+        serve: &ConfigOptsServe,
+        env: Vec<(String, String)>,
+    ) -> Result<Self> {
+        let build_result = crate::builder::build_desktop(config, true, serve.skip_assets, None)?;
+        DesktopPlatform::start_with_options(build_result, config, serve, env)
     }
 
-    fn rebuild(&mut self, config: &CrateConfig) -> Result<BuildResult> {
+    fn rebuild(
+        &mut self,
+        config: &CrateConfig,
+        _: &ConfigOptsServe,
+        env: Vec<(String, String)>,
+    ) -> Result<BuildResult> {
         // See `rebuild_with_options()`'s docs for the explanation why the code
         // was moved there.
         // Since desktop platform doesn't use `rust_flags`, this argument is
         // explicitly set to `None`.
-        DesktopPlatform::rebuild_with_options(self, config, None)
+        DesktopPlatform::rebuild_with_options(self, config, None, env)
     }
 }
 

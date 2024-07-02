@@ -64,50 +64,46 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
                         }
                     };
 
-                    AttributeType::Named(ElementAttrNamed {
-                        el_name: el_name.clone(),
-                        attr,
-                    })
+                    AttributeType::Named(ElementAttrNamed::new(el_name.clone(), attr))
                 })
                 .collect();
 
             let class = el.classes.join(" ");
             if !class.is_empty() {
-                attributes.push(AttributeType::Named(ElementAttrNamed {
-                    el_name: el_name.clone(),
-                    attr: ElementAttr {
+                attributes.push(AttributeType::Named(ElementAttrNamed::new(
+                    el_name.clone(),
+                    ElementAttr {
                         name: dioxus_rsx::ElementAttrName::BuiltIn(Ident::new(
                             "class",
                             Span::call_site(),
                         )),
                         value: dioxus_rsx::ElementAttrValue::AttrLiteral(ifmt_from_text(&class)),
                     },
-                }));
+                )));
             }
 
             if let Some(id) = &el.id {
-                attributes.push(AttributeType::Named(ElementAttrNamed {
-                    el_name: el_name.clone(),
-                    attr: ElementAttr {
+                attributes.push(AttributeType::Named(ElementAttrNamed::new(
+                    el_name.clone(),
+                    ElementAttr {
                         name: dioxus_rsx::ElementAttrName::BuiltIn(Ident::new(
                             "id",
                             Span::call_site(),
                         )),
                         value: dioxus_rsx::ElementAttrValue::AttrLiteral(ifmt_from_text(id)),
                     },
-                }));
+                )));
             }
 
             let children = el.children.iter().filter_map(rsx_node_from_html).collect();
 
-            Some(BodyNode::Element(Element {
-                name: el_name,
-                children,
+            Some(BodyNode::Element(Element::new(
+                None,
+                el_name,
                 attributes,
-                merged_attributes: Default::default(),
-                key: None,
-                brace: Default::default(),
-            }))
+                children,
+                Default::default(),
+            )))
         }
 
         // We ignore comments
@@ -132,17 +128,18 @@ pub fn collect_svgs(children: &mut [BodyNode], out: &mut Vec<BodyNode>) {
                 segments.push(new_name.clone().into());
 
                 // Replace this instance with a component
-                let mut new_comp = BodyNode::Component(Component {
-                    name: syn::Path {
+                let mut new_comp = BodyNode::Component(Component::new(
+                    syn::Path {
                         leading_colon: None,
                         segments,
                     },
-                    prop_gen_args: None,
-                    fields: vec![],
-                    children: vec![],
-                    manual_props: None,
-                    brace: Default::default(),
-                });
+                    None,
+                    vec![],
+                    vec![],
+                    None,
+                    None,
+                    Default::default(),
+                ));
 
                 std::mem::swap(child, &mut new_comp);
 

@@ -37,6 +37,7 @@ pub fn check_file(path: PathBuf, file_content: &str) -> IssueReport {
     )
 }
 
+#[allow(unused)]
 #[derive(Debug, Clone)]
 enum Node {
     If(IfInfo),
@@ -77,8 +78,8 @@ fn is_component_fn(item_fn: &syn::ItemFn) -> bool {
 fn get_closure_hook_body(local: &syn::Local) -> Option<&syn::Expr> {
     if let Pat::Ident(ident) = &local.pat {
         if is_hook_ident(&ident.ident) {
-            if let Some((_, expr)) = &local.init {
-                if let syn::Expr::Closure(closure) = &**expr {
+            if let Some(init) = &local.init {
+                if let syn::Expr::Closure(closure) = init.expr.as_ref() {
                     return Some(&closure.body);
                 }
             }

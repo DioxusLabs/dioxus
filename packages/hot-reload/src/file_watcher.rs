@@ -10,7 +10,7 @@ use dioxus_rsx::{
     hot_reload::{FileMap, FileMapBuildResult, UpdateResult},
     HotReloadingContext,
 };
-use interprocess_docfix::local_socket::LocalSocketListener;
+use interprocess::local_socket::LocalSocketListener;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 
 #[cfg(feature = "file_watcher")]
@@ -109,21 +109,26 @@ impl<Ctx: HotReloadingContext> Config<Ctx> {
 }
 
 /// Initialize the hot reloading listener
+///
+/// This is designed to be called by hot_reload_Init!() which will pass in information about the project
+///
+/// Notes:
+/// - We don't wannt to watch the
 pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
     let Config {
+        mut rebuild_with,
         root_path,
         listening_paths,
         log,
-        mut rebuild_with,
         excluded_paths,
-        phantom: _,
+        ..
     } = cfg;
 
     let Ok(crate_dir) = PathBuf::from_str(root_path) else {
         return;
     };
 
-    // try to find the gitingore file
+    // try to find the gitignore file
     let gitignore_file_path = crate_dir.join(".gitignore");
     let (gitignore, _) = ignore::gitignore::Gitignore::new(gitignore_file_path);
 
@@ -140,40 +145,46 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
     } = FileMap::<Ctx>::create_with_filter(crate_dir.clone(), |path| {
         // skip excluded paths
         excluded_paths.iter().any(|p| path.starts_with(p)) ||
-                // respect .gitignore
-                gitignore
-                    .matched_path_or_any_parents(path, path.is_dir())
-                    .is_ignore()
+            // respect .gitignore
+            gitignore
+                .matched_path_or_any_parents(path, path.is_dir())
+                .is_ignore()
     })
     .unwrap();
+
     for err in errors {
         if log {
             println!("hot reloading failed to initialize:\n{err:?}");
         }
     }
+
     let file_map = Arc::new(Mutex::new(file_map));
 
-    #[cfg(target_os = "macos")]
+    let target_dir = crate_dir.join("target");
+    let hot_reload_socket_path = target_dir.join("dioxusin");
+
+    #[cfg(unix)]
     {
         // On unix, if you force quit the application, it can leave the file socket open
         // This will cause the local socket listener to fail to open
         // We check if the file socket is already open from an old session and then delete it
-        let paths = ["./dioxusin", "./@dioxusin"];
-        for path in paths {
-            let path = PathBuf::from(path);
-            if path.exists() {
-                let _ = std::fs::remove_file(path);
-            }
+        if hot_reload_socket_path.exists() {
+            let _ = std::fs::remove_file(hot_reload_socket_path.clone());
         }
     }
 
-    let binding = LocalSocketListener::bind("@dioxusin");
-    let Ok(local_socket_stream) = binding else {
-        let err = binding.unwrap_err();
-        if log {
+    let listener = if cfg!(windows) {
+        LocalSocketListener::bind("@dioxusin")
+    } else {
+        LocalSocketListener::bind(hot_reload_socket_path)
+    };
+
+    let local_socket_stream = match listener {
+        Ok(local_socket_stream) => local_socket_stream,
+        Err(err) => {
             println!("failed to connect to hot reloading\n{err}");
+            return;
         }
-        return;
     };
 
     let aborted = Arc::new(Mutex::new(false));
@@ -194,9 +205,10 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                             .unwrap()
                             .map
                             .values()
-                            .filter_map(|(_, template_slot)| *template_slot)
+                            .flat_map(|v| v.templates.values().copied())
                             .collect()
                     };
+
                     for template in templates {
                         if !send_msg(HotReloadMsg::UpdateTemplate(template), &mut connection) {
                             continue;
@@ -222,8 +234,42 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
 
         let mut watcher = RecommendedWatcher::new(tx, notify::Config::default()).unwrap();
 
-        for path in listening_paths {
-            let full_path = crate_dir.join(path);
+        let mut listening_pathbufs = vec![];
+
+        // We're attempting to watch the root path... which contains a target directory...
+        // And on some platforms the target directory is really really large and can cause the watcher to crash
+        // since it runs out of file handles
+        // So we're going to iterate through its children and watch them instead of the root path, skipping the target
+        // directory.
+        //
+        // In reality, this whole approach of doing embedded file watching is kinda hairy since you want full knowledge
+        // of where rust code is. We could just use the filemap we generated above as an indication of where the rust
+        // code is in this project and deduce the subfolders under the root path from that.
+        //
+        // FIXME: use a more robust system here for embedded discovery
+        //
+        // https://github.com/DioxusLabs/dioxus/issues/1914
+        if listening_paths == [""] {
+            for entry in std::fs::read_dir(&crate_dir)
+                .expect("failed to read rust crate directory. Are you running with cargo?")
+            {
+                let entry = entry.expect("failed to read directory entry");
+                let path = entry.path();
+                if path.is_dir() {
+                    if path == target_dir {
+                        continue;
+                    }
+                    listening_pathbufs.push(path);
+                }
+            }
+        } else {
+            for path in listening_paths {
+                let full_path = crate_dir.join(path);
+                listening_pathbufs.push(full_path);
+            }
+        }
+
+        for full_path in listening_pathbufs {
             if let Err(err) = watcher.watch(&full_path, RecursiveMode::Recursive) {
                 if log {
                     println!("hot reloading failed to start watching {full_path:?}:\n{err:?}",);
@@ -261,25 +307,26 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
             if chrono::Local::now().timestamp_millis() < last_update_time {
                 continue;
             }
+
             let Ok(evt) = evt else {
-                last_update_time = chrono::Local::now().timestamp_millis();
                 continue;
             };
+
             let real_paths = evt
                 .paths
                 .iter()
                 .filter(|path| {
                     // skip non rust files
                     matches!(
-                      path.extension().and_then(|p| p.to_str()),
-                      Some("rs" | "toml" | "css" | "html" | "js")
-                    )
+                        path.extension().and_then(|p| p.to_str()),
+                        Some("rs" | "toml" | "css" | "html" | "js")
+                    ) &&
                     // skip excluded paths
-                    && !excluded_paths.iter().any(|p| path.starts_with(p))
+                    !excluded_paths.iter().any(|p| path.starts_with(p)) &&
                     // respect .gitignore
-                    && !gitignore
-                      .matched_path_or_any_parents(path, false)
-                      .is_ignore()
+                    !gitignore
+                        .matched_path_or_any_parents(path, false)
+                        .is_ignore()
                 })
                 .collect::<Vec<_>>();
 
@@ -295,11 +342,12 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                     return;
                 }
                 // find changes to the rsx in the file
-                match file_map
+                let changes = file_map
                     .lock()
                     .unwrap()
-                    .update_rsx(path, crate_dir.as_path())
-                {
+                    .update_rsx(path, crate_dir.as_path());
+
+                match changes {
                     Ok(UpdateResult::UpdatedRsx(msgs)) => {
                         for msg in msgs {
                             let mut i = 0;
@@ -327,6 +375,8 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                     }
                 }
             }
+
+            last_update_time = chrono::Local::now().timestamp_millis();
         }
     });
 }

@@ -9,10 +9,36 @@ use dioxus_lib::prelude::*;
 
 use crate::{
     navigation::NavigationTarget,
-    prelude::{AnyHistoryProvider, IntoRoutable},
+    prelude::{AnyHistoryProvider, IntoRoutable, SiteMapSegment},
     routable::Routable,
     router_cfg::RouterConfig,
 };
+
+/// This context is set in the root of the virtual dom if there is a router present.
+#[derive(Clone, Copy)]
+struct RootRouterContext(Signal<Option<RouterContext>>);
+
+/// Try to get the router that was created closest to the root of the virtual dom. This may be called outside of the router.
+///
+/// This will return `None` if there is no router present or the router has not been created yet.
+pub fn root_router() -> Option<RouterContext> {
+    if let Some(ctx) = ScopeId::ROOT.consume_context::<RootRouterContext>() {
+        ctx.0.cloned()
+    } else {
+        ScopeId::ROOT.provide_context(RootRouterContext(Signal::new_in_scope(None, ScopeId::ROOT)));
+        None
+    }
+}
+
+pub(crate) fn provide_router_context(ctx: RouterContext) {
+    if root_router().is_none() {
+        ScopeId::ROOT.provide_context(RootRouterContext(Signal::new_in_scope(
+            Some(ctx),
+            ScopeId::ROOT,
+        )));
+    }
+    provide_context(ctx);
+}
 
 /// An error that can occur when navigating.
 #[derive(Debug, Clone)]
@@ -39,6 +65,8 @@ struct RouterContextInner {
     failure_external_navigation: fn() -> Element,
 
     any_route_to_string: fn(&dyn Any) -> String,
+
+    site_map: &'static [SiteMapSegment],
 }
 
 impl RouterContextInner {
@@ -76,7 +104,6 @@ impl RouterContext {
         mark_dirty: Arc<dyn Fn(ScopeId) + Sync + Send>,
     ) -> Self
     where
-        R: Clone,
         <R as std::str::FromStr>::Err: std::fmt::Display,
     {
         let subscriber_update = mark_dirty.clone();
@@ -120,6 +147,8 @@ impl RouterContext {
                     })
                     .to_string()
             },
+
+            site_map: R::SITE_MAP,
         };
 
         // set the updater
@@ -157,7 +186,7 @@ impl RouterContext {
     /// Will fail silently if there is no previous location to go to.
     pub fn go_back(&self) {
         {
-            self.inner.clone().write().history.go_back();
+            self.inner.write_unchecked().history.go_back();
         }
 
         self.change_route();
@@ -168,7 +197,7 @@ impl RouterContext {
     /// Will fail silently if there is no next location to go to.
     pub fn go_forward(&self) {
         {
-            self.inner.clone().write().history.go_forward();
+            self.inner.write_unchecked().history.go_forward();
         }
 
         self.change_route();
@@ -179,7 +208,7 @@ impl RouterContext {
         target: NavigationTarget<Rc<dyn Any>>,
     ) -> Option<ExternalNavigationFailure> {
         {
-            let mut write = self.inner.clone().write();
+            let mut write = self.inner.write_unchecked();
             match target {
                 NavigationTarget::Internal(p) => write.history.push(p),
                 NavigationTarget::External(e) => return write.external(e),
@@ -195,7 +224,7 @@ impl RouterContext {
     pub fn push(&self, target: impl Into<IntoRoutable>) -> Option<ExternalNavigationFailure> {
         let target = self.resolve_into_routable(target.into());
         {
-            let mut write = self.inner.clone().write();
+            let mut write = self.inner.write_unchecked();
             match target {
                 NavigationTarget::Internal(p) => write.history.push(p),
                 NavigationTarget::External(e) => return write.external(e),
@@ -212,7 +241,7 @@ impl RouterContext {
         let target = self.resolve_into_routable(target.into());
 
         {
-            let mut state = self.inner.clone().write();
+            let mut state = self.inner.write_unchecked();
             match target {
                 NavigationTarget::Internal(p) => state.history.replace(p),
                 NavigationTarget::External(e) => return state.external(e),
@@ -276,18 +305,23 @@ impl RouterContext {
 
     /// Clear any unresolved errors
     pub fn clear_error(&self) {
-        let mut write_inner = self.inner.clone().write();
+        let mut write_inner = self.inner.write_unchecked();
         write_inner.unresolved_error = None;
 
         write_inner.update_subscribers();
     }
 
-    pub(crate) fn render_error(&self) -> Element {
-        let inner_read = self.inner.clone().write();
+    /// Get the site map of the router.
+    pub fn site_map(&self) -> &'static [SiteMapSegment] {
+        self.inner.read().site_map
+    }
+
+    pub(crate) fn render_error(&self) -> Option<Element> {
+        let inner_read = self.inner.write_unchecked();
         inner_read
             .unresolved_error
             .as_ref()
-            .and_then(|_| (inner_read.failure_external_navigation)())
+            .map(|_| (inner_read.failure_external_navigation)())
     }
 
     fn change_route(&self) -> Option<ExternalNavigationFailure> {
@@ -297,7 +331,7 @@ impl RouterContext {
             let callback = callback.clone();
             drop(self_read);
             if let Some(new) = callback(myself) {
-                let mut self_write = self.inner.clone().write();
+                let mut self_write = self.inner.write_unchecked();
                 match new {
                     NavigationTarget::Internal(p) => self_write.history.replace(p),
                     NavigationTarget::External(e) => return self_write.external(e),

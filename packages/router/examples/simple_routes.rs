@@ -65,17 +65,16 @@ fn UserFrame(user_id: usize) -> Element {
 }
 
 #[component]
-fn Route1(user_id: usize, dynamic: usize, query: String, extra: String) -> Element {
+fn Route1(user_id: usize, dynamic: usize, query: String) -> Element {
     rsx! {
         pre {
-            "Route1{{\n\tuser_id:{user_id},\n\tdynamic:{dynamic},\n\tquery:{query},\n\textra:{extra}\n}}"
+            "Route1{{\n\tuser_id:{user_id},\n\tdynamic:{dynamic},\n\tquery:{query}\n}}"
         }
         Link {
             to: Route::Route1 {
                 user_id,
                 dynamic,
                 query: String::new(),
-                extra: extra.clone() + ".",
             },
             "Route1 with extra+\".\""
         }
@@ -120,10 +119,10 @@ fn Route3(dynamic: String) -> Element {
 
     rsx! {
         input {
-            oninput: move |evt| {
+            oninput: move |evt: FormEvent| {
                 *current_route_str.write() = evt.value();
             },
-            value: "{current_route_str.read()}"
+            value: "{current_route_str}"
         }
         "dynamic: {dynamic}"
         Link { to: Route::Route2 { user_id: 8888 }, "hello world link" }
@@ -161,7 +160,7 @@ fn Route3(dynamic: String) -> Element {
                     }
                 }
                 else {
-                    None
+                    VNode::empty()
                 }
             }
             Err(err) => {
@@ -191,7 +190,6 @@ enum Route {
                     user_id: usize,
                     dynamic: usize,
                     query: String,
-                    extra: String,
                 },
                 #[route("/hello_world")]
                 // You can opt out of the layout by using the `!` prefix

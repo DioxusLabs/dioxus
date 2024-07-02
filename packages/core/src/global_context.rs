@@ -1,5 +1,5 @@
-use crate::{runtime::Runtime, Element, ScopeId, Task};
-use futures_util::Future;
+use crate::{innerlude::SuspendedFuture, runtime::Runtime, CapturedError, Element, ScopeId, Task};
+use std::future::Future;
 use std::sync::Arc;
 
 /// Get the current scope id
@@ -11,6 +11,29 @@ pub fn current_scope_id() -> Option<ScopeId> {
 /// Check if the virtual dom is currently inside of the body of a component
 pub fn vdom_is_rendering() -> bool {
     Runtime::with(|rt| rt.rendering.get()).unwrap_or_default()
+}
+
+/// Throw a [`CapturedError`] into the current scope. The error will bubble up to the nearest [`crate::prelude::ErrorBoundary()`] or the root of the app.
+///
+/// # Examples
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
+/// fn Component() -> Element {
+///     let request = spawn(async move {
+///         match reqwest::get("https://api.example.com").await {
+///             Ok(_) => todo!(),
+///             // You can explicitly throw an error into a scope with throw_error
+///             Err(err) => ScopeId::APP.throw_error(err)
+///         }
+///     });
+///
+///     todo!()
+/// }
+/// ```
+pub fn throw_error(error: impl Into<CapturedError> + 'static) {
+    current_scope_id()
+        .expect("to be in a dioxus runtime")
+        .throw_error(error)
 }
 
 /// Consume context from the current scope
@@ -50,22 +73,129 @@ pub fn provide_root_context<T: 'static + Clone>(value: T) -> T {
         .expect("to be in a dioxus runtime")
 }
 
-/// Suspends the current component
-pub fn suspend() -> Option<Element> {
-    Runtime::with_current_scope(|cx| cx.suspend());
-    None
+/// Suspended the current component on a specific task and then return None
+pub fn suspend(task: Task) -> Element {
+    Err(crate::innerlude::RenderError::Suspended(
+        SuspendedFuture::new(task),
+    ))
 }
 
-/// Spawns the future but does not return the [`TaskId`]
+/// Start a new future on the same thread as the rest of the VirtualDom.
+///
+/// **You should generally use `spawn` instead of this method unless you specifically need to run a task during suspense**
+///
+/// This future will not contribute to suspense resolving but it will run during suspense.
+///
+/// Because this future runs during suspense, you need to be careful to work with hydration. It is not recommended to do any async IO work in this future, as it can easily cause hydration issues. However, you can use isomorphic tasks to do work that can be consistently replicated on the server and client like logging or responding to state changes.
+///
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
+/// // ❌ Do not do requests in isomorphic tasks. It may resolve at a different time on the server and client, causing hydration issues.
+/// let mut state = use_signal(|| None);
+/// spawn_isomorphic(async move {
+///     state.set(Some(reqwest::get("https://api.example.com").await));
+/// });
+///
+/// // ✅ You may wait for a signal to change and then log it
+/// let mut state = use_signal(|| 0);
+/// spawn_isomorphic(async move {
+///     loop {
+///         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+///         println!("State is {state}");
+///     }
+/// });
+/// ```
+///
+#[doc = include_str!("../docs/common_spawn_errors.md")]
+pub fn spawn_isomorphic(fut: impl Future<Output = ()> + 'static) -> Task {
+    Runtime::with_current_scope(|cx| cx.spawn_isomorphic(fut)).expect("to be in a dioxus runtime")
+}
+
+/// Spawns the future but does not return the [`Task`]. This task will automatically be canceled when the component is dropped.
+///
+/// # Example
+/// ```rust
+/// use dioxus::prelude::*;
+///
+/// fn App() -> Element {
+///     rsx! {
+///         button {
+///             onclick: move |_| {
+///                 spawn(async move {
+///                     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+///                     println!("Hello World");
+///                 });
+///             },
+///             "Print hello in one second"
+///         }
+///     }
+/// }
+/// ```
+///
+#[doc = include_str!("../docs/common_spawn_errors.md")]
 pub fn spawn(fut: impl Future<Output = ()> + 'static) -> Task {
     Runtime::with_current_scope(|cx| cx.spawn(fut)).expect("to be in a dioxus runtime")
+}
+
+/// Queue an effect to run after the next render. You generally shouldn't need to interact with this function directly. [use_effect](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_effect.html) will call this function for you.
+pub fn queue_effect(f: impl FnOnce() + 'static) {
+    Runtime::with_current_scope(|cx| cx.queue_effect(f)).expect("to be in a dioxus runtime")
 }
 
 /// Spawn a future that Dioxus won't clean up when this component is unmounted
 ///
 /// This is good for tasks that need to be run after the component has been dropped.
+///
+/// **This will run the task in the root scope. Any calls to global methods inside the future (including `context`) will be run in the root scope.**
+///
+/// # Example
+///
+/// ```rust
+/// use dioxus::prelude::*;
+///
+/// // The parent component can create and destroy children dynamically
+/// fn App() -> Element {
+///     let mut count = use_signal(|| 0);
+///
+///     rsx! {
+///         button {
+///             onclick: move |_| count += 1,
+///             "Increment"
+///         }
+///         button {
+///             onclick: move |_| count -= 1,
+///             "Decrement"
+///         }
+///
+///         for id in 0..10 {
+///             Child { id }
+///         }
+///     }
+/// }
+///
+/// #[component]
+/// fn Child(id: i32) -> Element {
+///     rsx! {
+///         button {
+///             onclick: move |_| {
+///                 // This will spawn a task in the root scope that will run forever
+///                 // It will keep running even if you drop the child component by decreasing the count
+///                 spawn_forever(async move {
+///                     loop {
+///                         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+///                         println!("Running task spawned in child component {id}");
+///                     }
+///                 });
+///             },
+///             "Spawn background task"
+///         }
+///     }
+/// }
+/// ```
+///
+#[doc = include_str!("../docs/common_spawn_errors.md")]
 pub fn spawn_forever(fut: impl Future<Output = ()> + 'static) -> Option<Task> {
-    Runtime::with_current_scope(|cx| cx.spawn_forever(fut))
+    Runtime::with_scope(ScopeId::ROOT, |cx| cx.spawn(fut))
 }
 
 /// Informs the scheduler that this task is no longer needed and should be removed.
@@ -77,18 +207,45 @@ pub fn remove_future(id: Task) {
 
 /// Store a value between renders. The foundational hook for all other hooks.
 ///
-/// Accepts an `initializer` closure, which is run on the first use of the hook (typically the initial render). The return value of this closure is stored for the lifetime of the component, and a mutable reference to it is provided on every render as the return value of `use_hook`.
+/// Accepts an `initializer` closure, which is run on the first use of the hook (typically the initial render).
+/// `use_hook` will return a clone of the value on every render.
 ///
-/// When the component is unmounted (removed from the UI), the value is dropped. This means you can return a custom type and provide cleanup code by implementing the [`Drop`] trait
+/// In order to clean up resources you would need to implement the [`Drop`] trait for an inner value stored in a RC or similar (Signals for instance),
+/// as these only drop their inner value once all references have been dropped, which only happens when the component is dropped.
 ///
 /// # Example
 ///
-/// ```
-/// use dioxus_core::use_hook;
+/// ```rust, no_run
+/// use dioxus::prelude::*;
 ///
 /// // prints a greeting on the initial render
 /// pub fn use_hello_world() {
 ///     use_hook(|| println!("Hello, world!"));
+/// }
+/// ```
+///
+/// # Custom Hook Example
+///
+/// ```rust, no_run
+/// use dioxus::prelude::*;
+///
+/// pub struct InnerCustomState(usize);
+///
+/// impl Drop for InnerCustomState {
+///     fn drop(&mut self){
+///         println!("Component has been dropped.");
+///     }
+/// }
+///
+/// #[derive(Clone, Copy)]
+/// pub struct CustomState {
+///     inner: Signal<InnerCustomState>
+/// }
+///
+/// pub fn use_custom_state() -> CustomState {
+///     use_hook(|| CustomState {
+///         inner: Signal::new(InnerCustomState(0))
+///     })
 /// }
 /// ```
 pub fn use_hook<State: Clone + 'static>(initializer: impl FnOnce() -> State) -> State {
@@ -137,28 +294,26 @@ pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
 
 /// Creates a callback that will be run before the component is removed.
 /// This can be used to clean up side effects from the component
-/// (created with [`use_effect`](crate::use_effect)).
+/// (created with [`use_effect`](dioxus::prelude::use_effect)).
 ///
 /// Example:
-/// ```rust, ignore
+/// ```rust
 /// use dioxus::prelude::*;
 ///
 /// fn app() -> Element {
-///     let state = use_signal(|| true);
+///     let mut state = use_signal(|| true);
 ///     rsx! {
 ///         for _ in 0..100 {
 ///             h1 {
 ///                 "spacer"
 ///             }
 ///         }
-///         if **state {
-///             rsx! {
-///                 child_component {}
-///             }
+///         if state() {
+///             child_component {}
 ///         }
 ///         button {
 ///             onclick: move |_| {
-///                 state.set(!*state.get());
+///                 state.toggle()
 ///             },
 ///             "Unmount element"
 ///         }
@@ -166,25 +321,20 @@ pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
 /// }
 ///
 /// fn child_component() -> Element {
-///     let original_scroll_position = use_signal(|| 0.0);
-///     use_effect((), move |_| {
-///         to_owned![original_scroll_position];
-///         async move {
-///             let window = web_sys::window().unwrap();
-///             let document = window.document().unwrap();
-///             let element = document.get_element_by_id("my_element").unwrap();
-///             element.scroll_into_view();
-///             original_scroll_position.set(window.scroll_y().unwrap());
-///         }
+///     let mut original_scroll_position = use_signal(|| 0.0);
+///
+///     use_effect(move || {
+///         let window = web_sys::window().unwrap();
+///         let document = window.document().unwrap();
+///         let element = document.get_element_by_id("my_element").unwrap();
+///         element.scroll_into_view();
+///         original_scroll_position.set(window.scroll_y().unwrap());
 ///     });
 ///
-///     use_drop({
-///         to_owned![original_scroll_position];
+///     use_drop(move || {
 ///         /// restore scroll to the top of the page
-///         move || {
-///             let window = web_sys::window().unwrap();
-///             window.scroll_with_x_and_y(*original_scroll_position.current(), 0.0);
-///         }
+///         let window = web_sys::window().unwrap();
+///         window.scroll_with_x_and_y(original_scroll_position(), 0.0);
 ///     });
 ///
 ///     rsx!{
@@ -195,6 +345,7 @@ pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
 ///     }
 /// }
 /// ```
+#[doc(alias = "use_on_unmount")]
 pub fn use_drop<D: FnOnce() + 'static>(destroy: D) {
     struct LifeCycle<D: FnOnce()> {
         /// Wrap the closure in an option so that we can take it out on drop.
@@ -248,22 +399,6 @@ pub fn before_render(f: impl FnMut() + 'static) {
 /// Push a function to be run after the render is complete, even if it didn't complete successfully
 pub fn after_render(f: impl FnMut() + 'static) {
     Runtime::with_current_scope(|cx| cx.push_after_render(f));
-}
-
-/// Wait for the virtualdom to finish its sync work before proceeding
-///
-/// This is useful if you've just triggered an update and want to wait for it to finish before proceeding with valid
-/// DOM nodes.
-///
-/// Effects rely on this to ensure that they only run effects after the DOM has been updated. Without flush_sync effects
-/// are run immediately before diffing the DOM, which causes all sorts of out-of-sync weirdness.
-pub async fn flush_sync() {
-    // Wait for the flush lock to be available
-    // We release it immediately, so it's impossible for the lock to be held longer than this function
-    Runtime::with(|rt| rt.flush_mutex.clone())
-        .unwrap()
-        .lock()
-        .await;
 }
 
 /// Use a hook with a cleanup function

@@ -1,33 +1,14 @@
-use crate::file_data::FileEngine;
 use crate::file_data::HasFileData;
-use std::ops::Deref;
-use std::{collections::HashMap, fmt::Debug};
+use std::{collections::HashMap, fmt::Debug, ops::Deref};
 
 use dioxus_core::Event;
 
 pub type FormEvent = Event<FormData>;
 
 /// A form value that may either be a list of values or a single value
-#[cfg_attr(
-    feature = "serialize",
-    derive(serde::Serialize, serde::Deserialize),
-    // this will serialize Text(String) -> String and VecText(Vec<String>) to Vec<String>
-    serde(untagged)
-)]
-#[derive(Debug, Clone, PartialEq)]
-pub enum FormValue {
-    Text(String),
-    VecText(Vec<String>),
-}
-
-impl From<FormValue> for Vec<String> {
-    fn from(value: FormValue) -> Self {
-        match value {
-            FormValue::Text(s) => vec![s],
-            FormValue::VecText(vec) => vec,
-        }
-    }
-}
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct FormValue(pub Vec<String>);
 
 impl Deref for FormValue {
     type Target = [String];
@@ -40,14 +21,23 @@ impl Deref for FormValue {
 impl FormValue {
     /// Convenient way to represent Value as slice
     pub fn as_slice(&self) -> &[String] {
-        match self {
-            FormValue::Text(s) => std::slice::from_ref(s),
-            FormValue::VecText(vec) => vec.as_slice(),
-        }
+        &self.0
     }
-    /// Convert into Vec<String>
+
+    /// Return the first value, panicking if there are none
+    pub fn as_value(&self) -> String {
+        self.0.first().unwrap().clone()
+    }
+
+    /// Convert into [`Vec<String>`]
     pub fn to_vec(self) -> Vec<String> {
-        self.into()
+        self.0.clone()
+    }
+}
+
+impl PartialEq<str> for FormValue {
+    fn eq(&self, other: &str) -> bool {
+        self.0.len() == 1 && self.0.first().map(|s| s.as_str()) == Some(other)
     }
 }
 
@@ -73,6 +63,7 @@ impl Debug for FormData {
         f.debug_struct("FormEvent")
             .field("value", &self.value())
             .field("values", &self.values())
+            .field("valid", &self.valid())
             .finish()
     }
 }
@@ -106,13 +97,16 @@ impl FormData {
         self.value().parse().unwrap_or(false)
     }
 
-    /// Get the values of the form event
+    /// Collect all the named form values from the containing form.
+    ///
+    /// Every input must be named!
     pub fn values(&self) -> HashMap<String, FormValue> {
         self.inner.values()
     }
 
     /// Get the files of the form event
-    pub fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
+    #[cfg(feature = "file-engine")]
+    pub fn files(&self) -> Option<std::sync::Arc<dyn crate::file_data::FileEngine>> {
         self.inner.files()
     }
 
@@ -120,12 +114,21 @@ impl FormData {
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         self.inner.as_any().downcast_ref::<T>()
     }
+
+    /// Did this form pass its own validation?
+    pub fn valid(&self) -> bool {
+        self.inner.value().is_empty()
+    }
 }
 
 /// An object that has all the data for a form event
 pub trait HasFormData: HasFileData + std::any::Any {
     fn value(&self) -> String {
         Default::default()
+    }
+
+    fn valid(&self) -> bool {
+        true
     }
 
     fn values(&self) -> HashMap<String, FormValue> {
@@ -164,24 +167,38 @@ impl FormData {
 /// A serialized form data object
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedFormData {
+    #[serde(default)]
     value: String,
+
+    #[serde(default)]
     values: HashMap<String, FormValue>,
+
+    #[serde(default)]
+    valid: bool,
+
+    #[cfg(feature = "file-engine")]
+    #[serde(default)]
     files: Option<crate::file_data::SerializedFileEngine>,
 }
 
 #[cfg(feature = "serialize")]
 impl SerializedFormData {
     /// Create a new serialized form data object
-    pub fn new(
-        value: String,
-        values: HashMap<String, FormValue>,
-        files: Option<crate::file_data::SerializedFileEngine>,
-    ) -> Self {
+    pub fn new(value: String, values: HashMap<String, FormValue>) -> Self {
         Self {
             value,
             values,
-            files,
+            valid: true,
+            #[cfg(feature = "file-engine")]
+            files: None,
         }
+    }
+
+    #[cfg(feature = "file-engine")]
+    /// Add files to the serialized form data object
+    pub fn with_files(mut self, files: crate::file_data::SerializedFileEngine) -> Self {
+        self.files = Some(files);
+        self
     }
 
     /// Create a new serialized form data object from a traditional form data object
@@ -189,20 +206,24 @@ impl SerializedFormData {
         Self {
             value: data.value(),
             values: data.values(),
-            files: match data.files() {
-                Some(files) => {
-                    let mut resolved_files = HashMap::new();
+            valid: data.valid(),
+            #[cfg(feature = "file-engine")]
+            files: {
+                match data.files() {
+                    Some(files) => {
+                        let mut resolved_files = HashMap::new();
 
-                    for file in files.files() {
-                        let bytes = files.read_file(&file).await;
-                        resolved_files.insert(file, bytes.unwrap_or_default());
+                        for file in files.files() {
+                            let bytes = files.read_file(&file).await;
+                            resolved_files.insert(file, bytes.unwrap_or_default());
+                        }
+
+                        Some(crate::file_data::SerializedFileEngine {
+                            files: resolved_files,
+                        })
                     }
-
-                    Some(crate::file_data::SerializedFileEngine {
-                        files: resolved_files,
-                    })
+                    None => None,
                 }
-                None => None,
             },
         }
     }
@@ -211,6 +232,8 @@ impl SerializedFormData {
         Self {
             value: data.value(),
             values: data.values(),
+            valid: data.valid(),
+            #[cfg(feature = "file-engine")]
             files: None,
         }
     }
@@ -226,6 +249,10 @@ impl HasFormData for SerializedFormData {
         self.values.clone()
     }
 
+    fn valid(&self) -> bool {
+        self.valid
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -233,10 +260,18 @@ impl HasFormData for SerializedFormData {
 
 #[cfg(feature = "serialize")]
 impl HasFileData for SerializedFormData {
-    fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
+    #[cfg(feature = "file-engine")]
+    fn files(&self) -> Option<std::sync::Arc<dyn crate::FileEngine>> {
         self.files
             .as_ref()
             .map(|files| std::sync::Arc::new(files.clone()) as _)
+    }
+}
+
+#[cfg(feature = "file-engine")]
+impl HasFileData for FormData {
+    fn files(&self) -> Option<std::sync::Arc<dyn crate::FileEngine>> {
+        self.inner.files()
     }
 }
 
@@ -263,7 +298,50 @@ impl_event! {
     /// onchange
     onchange
 
-    /// oninput handler
+    /// The `oninput` event is fired when the value of a `<input>`, `<select>`, or `<textarea>` element is changed.
+    ///
+    /// There are two main approaches to updating your input element:
+    /// 1) Controlled inputs directly update the value of the input element as the user interacts with the element
+    ///
+    /// ```rust
+    /// use dioxus::prelude::*;
+    ///
+    /// fn App() -> Element {
+    ///     let mut value = use_signal(|| "hello world".to_string());
+    ///
+    ///     rsx! {
+    ///         input {
+    ///             // We directly set the value of the input element to our value signal
+    ///             value: "{value}",
+    ///             // The `oninput` event handler will run every time the user changes the value of the input element
+    ///             // We can set the `value` signal to the new value of the input element
+    ///             oninput: move |event| value.set(event.value())
+    ///         }
+    ///         // Since this is a controlled input, we can also update the value of the input element directly
+    ///         button {
+    ///             onclick: move |_| value.write().clear(),
+    ///             "Clear"
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// 2) Uncontrolled inputs just read the value of the input element as it changes
+    ///
+    /// ```rust
+    /// use dioxus::prelude::*;
+    ///
+    /// fn App() -> Element {
+    ///     rsx! {
+    ///         input {
+    ///             // In uncontrolled inputs, we don't set the value of the input element directly
+    ///             // But you can still read the value of the input element
+    ///             oninput: move |event| println!("{}", event.value()),
+    ///         }
+    ///         // Since we don't directly control the value of the input element, we can't easily modify it
+    ///     }
+    /// }
+    /// ```
     oninput
 
     /// oninvalid

@@ -1,4 +1,4 @@
-use crate::{ifmt_to_string, Writer};
+use crate::{ifmt_to_string, prettier_please::unparse_expr, Writer};
 use dioxus_rsx::*;
 use proc_macro2::Span;
 use quote::ToTokens;
@@ -52,6 +52,10 @@ impl Writer<'_> {
             ..
         } = el;
 
+        let brace = brace
+            .as_ref()
+            .expect("braces should always be present in strict mode");
+
         /*
             1. Write the tag
             2. Write the key
@@ -71,12 +75,13 @@ impl Writer<'_> {
         let children_len = self.is_short_children(children);
         let is_small_children = children_len.is_some();
 
-        // if we have few attributes and a lot of children, place the attrs on top
+        // if we have one long attribute and a lot of children, place the attrs on top
         if is_short_attr_list && !is_small_children {
             opt_level = ShortOptimization::PropsOnTop;
         }
 
         // even if the attr is long, it should be put on one line
+        // However if we have childrne we need to just spread them out for readability
         if !is_short_attr_list && attributes.len() <= 1 {
             if children.is_empty() {
                 opt_level = ShortOptimization::Oneliner;
@@ -112,7 +117,7 @@ impl Writer<'_> {
             ShortOptimization::Oneliner => {
                 write!(self.out, " ")?;
 
-                self.write_attributes(attributes, key, true)?;
+                self.write_attributes(brace, attributes, key, true)?;
 
                 if !children.is_empty() && (!attributes.is_empty() || key.is_some()) {
                     write!(self.out, ", ")?;
@@ -132,7 +137,7 @@ impl Writer<'_> {
                 if !attributes.is_empty() || key.is_some() {
                     write!(self.out, " ")?;
                 }
-                self.write_attributes(attributes, key, true)?;
+                self.write_attributes(brace, attributes, key, true)?;
 
                 if !children.is_empty() && (!attributes.is_empty() || key.is_some()) {
                     write!(self.out, ",")?;
@@ -145,7 +150,7 @@ impl Writer<'_> {
             }
 
             ShortOptimization::NoOpt => {
-                self.write_attributes(attributes, key, false)?;
+                self.write_attributes(brace, attributes, key, false)?;
 
                 if !children.is_empty() && (!attributes.is_empty() || key.is_some()) {
                     write!(self.out, ",")?;
@@ -166,6 +171,7 @@ impl Writer<'_> {
 
     fn write_attributes(
         &mut self,
+        brace: &Brace,
         attributes: &[AttributeType],
         key: &Option<IfmtInput>,
         sameline: bool,
@@ -187,9 +193,11 @@ impl Writer<'_> {
 
         while let Some(attr) = attr_iter.next() {
             self.out.indent_level += 1;
+
             if !sameline {
-                self.write_comments(attr.start())?;
+                self.write_attr_comments(brace, attr.start())?;
             }
+
             self.out.indent_level -= 1;
 
             if !sameline {
@@ -229,7 +237,7 @@ impl Writer<'_> {
                 write!(
                     self.out,
                     "if {condition} {{ ",
-                    condition = prettyplease::unparse_expr(condition),
+                    condition = unparse_expr(condition),
                 )?;
                 self.write_attribute_value(value)?;
                 write!(self.out, " }}")?;
@@ -241,7 +249,7 @@ impl Writer<'_> {
                 write!(self.out, "{value}",)?;
             }
             ElementAttrValue::AttrExpr(value) => {
-                let out = prettyplease::unparse_expr(value);
+                let out = self.unparse_expr(value);
                 let mut lines = out.split('\n').peekable();
                 let first = lines.next().unwrap();
 
@@ -300,15 +308,19 @@ impl Writer<'_> {
 
     fn write_named_attribute(&mut self, attr: &ElementAttrNamed) -> Result {
         self.write_attribute_name(&attr.attr.name)?;
-        write!(self.out, ": ")?;
-        self.write_attribute_value(&attr.attr.value)?;
+
+        // if the attribute is a shorthand, we don't need to write the colon, just the name
+        if !attr.attr.can_be_shorthand() {
+            write!(self.out, ": ")?;
+            self.write_attribute_value(&attr.attr.value)?;
+        }
 
         Ok(())
     }
 
     fn write_spread_attribute(&mut self, attr: &Expr) -> Result {
         write!(self.out, "..")?;
-        write!(self.out, "{}", prettyplease::unparse_expr(attr))?;
+        write!(self.out, "{}", unparse_expr(attr))?;
 
         Ok(())
     }
@@ -329,10 +341,6 @@ impl Writer<'_> {
         beginning.is_empty()
     }
 
-    pub fn is_empty_children(&self, children: &[BodyNode]) -> bool {
-        children.is_empty()
-    }
-
     // check if the children are short enough to be on the same line
     // We don't have the notion of current line depth - each line tries to be < 80 total
     // returns the total line length if it's short
@@ -349,11 +357,39 @@ impl Writer<'_> {
             return Some(0);
         }
 
+        // Any comments push us over the limit automatically
+        if self.children_have_comments(children) {
+            return None;
+        }
+
+        match children {
+            [BodyNode::Text(ref text)] => Some(ifmt_to_string(text).len()),
+
+            // TODO: let rawexprs to be inlined
+            [BodyNode::RawExpr(ref expr)] => get_expr_length(expr),
+
+            // TODO: let rawexprs to be inlined
+            [BodyNode::Component(ref comp)] if comp.fields.is_empty() => Some(
+                comp.name
+                    .segments
+                    .iter()
+                    .map(|s| s.ident.to_string().len() + 2)
+                    .sum::<usize>(),
+            ),
+
+            // Feedback on discord indicates folks don't like combining multiple children on the same line
+            // We used to do a lot of math to figure out if we should expand out the line, but folks just
+            // don't like it.
+            _ => None,
+        }
+    }
+
+    fn children_have_comments(&self, children: &[BodyNode]) -> bool {
         for child in children {
             if self.current_span_is_primary(child.span()) {
                 'line: for line in self.src[..child.span().start().line - 1].iter().rev() {
                     match (line.trim().starts_with("//"), line.is_empty()) {
-                        (true, _) => return None,
+                        (true, _) => return true,
                         (_, true) => continue 'line,
                         _ => break 'line,
                     }
@@ -361,62 +397,7 @@ impl Writer<'_> {
             }
         }
 
-        match children {
-            [BodyNode::Text(ref text)] => Some(ifmt_to_string(text).len()),
-            [BodyNode::Component(ref comp)] => {
-                let attr_len = self.field_len(&comp.fields, &comp.manual_props);
-
-                if attr_len > 80 {
-                    None
-                } else if comp.children.is_empty() {
-                    Some(attr_len)
-                } else {
-                    None
-                }
-            }
-            // TODO: let rawexprs to be inlined
-            [BodyNode::RawExpr(ref expr)] => get_expr_length(expr),
-            [BodyNode::Element(ref el)] => {
-                let attr_len = self.is_short_attrs(&el.attributes);
-
-                if el.children.is_empty() && attr_len < 80 {
-                    return Some(el.name.to_string().len());
-                }
-
-                if el.children.len() == 1 {
-                    if let BodyNode::Text(ref text) = el.children[0] {
-                        let value = ifmt_to_string(text);
-
-                        if value.len() + el.name.to_string().len() + attr_len < 80 {
-                            return Some(value.len() + el.name.to_string().len() + attr_len);
-                        }
-                    }
-                }
-
-                None
-            }
-            // todo, allow non-elements to be on the same line
-            items => {
-                let mut total_count = 0;
-
-                for item in items {
-                    match item {
-                        BodyNode::Component(_) | BodyNode::Element(_) => return None,
-                        BodyNode::Text(text) => {
-                            total_count += ifmt_to_string(text).len();
-                        }
-                        BodyNode::RawExpr(expr) => match get_expr_length(expr) {
-                            Some(len) => total_count += len,
-                            None => return None,
-                        },
-                        BodyNode::ForLoop(_forloop) => return None,
-                        BodyNode::IfChain(_chain) => return None,
-                    }
-                }
-
-                Some(total_count)
-            }
-        }
+        false
     }
 
     /// empty everything except for some comments
@@ -449,7 +430,7 @@ impl Writer<'_> {
     }
 }
 
-fn get_expr_length(expr: &Expr) -> Option<usize> {
+fn get_expr_length(expr: &impl Spanned) -> Option<usize> {
     let span = expr.span();
     let (start, end) = (span.start(), span.end());
     if start.line == end.line {

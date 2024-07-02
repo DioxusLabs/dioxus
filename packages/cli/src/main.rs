@@ -1,5 +1,6 @@
 use dioxus_cli_config::DioxusConfig;
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
+use tracing_subscriber::EnvFilter;
 
 use anyhow::{anyhow, Context};
 use clap::Parser;
@@ -9,57 +10,28 @@ use dioxus_cli::{
 };
 use Commands::*;
 
-fn get_bin(bin: Option<String>) -> Result<PathBuf> {
-    let metadata = cargo_metadata::MetadataCommand::new()
-        .exec()
-        .map_err(Error::CargoMetadata)?;
-    let package = if let Some(bin) = bin {
-        metadata
-            .workspace_packages()
-            .into_iter()
-            .find(|p| p.name == bin)
-            .ok_or(Error::CargoError(format!("no such package: {}", bin)))?
-    } else {
-        metadata
-            .root_package()
-            .ok_or(Error::CargoError("no root package?".to_string()))?
-    };
-
-    let crate_dir = package
-        .manifest_path
-        .parent()
-        .ok_or(Error::CargoError("couldn't take parent dir".to_string()))?;
-
-    Ok(crate_dir.into())
-}
-
-/// Simplifies error messages that use the same pattern.
-fn error_wrapper(message: &str) -> String {
-    format!("🚫 {message}:")
-}
+const LOG_ENV: &str = "DIOXUS_LOG";
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
 
-    set_up_logging();
+    // If {LOG_ENV} is set, default to env, otherwise filter to cli
+    // and manganis warnings and errors from other crates
+    let mut filter = EnvFilter::new("error,dx=info,dioxus-cli=info,manganis-cli-support=info");
+    if env::var(LOG_ENV).is_ok() {
+        filter = EnvFilter::from_env(LOG_ENV);
+    }
+    tracing_subscriber::fmt().with_env_filter(filter).init();
 
     let mut project_command = None;
 
     match args.action {
         Translate(opts) => opts
             .translate()
-            .await
-            .map_err(|e| anyhow!("🚫 Translation of HTML into RSX failed: {}", e)),
-        Version(opt) => {
-            let version = opt.version();
-            println!("{}", version);
-            Ok(())
-        }
-        Config(opts) => opts
-            .config()
-            .map_err(|e| anyhow!("🚫 Configuring new project failed: {}", e)),
-        Create(opts) => opts
+            .context(error_wrapper("Translation of HTML into RSX failed")),
+
+        New(opts) => opts
             .create()
             .context(error_wrapper("Creating new project failed")),
         Init(opts) => opts
@@ -72,8 +44,15 @@ async fn main() -> anyhow::Result<()> {
             .check()
             .await
             .context(error_wrapper("Error checking RSX")),
-        other => {
+
+        action => {
             let bin = get_bin(args.bin)?;
+            let _dioxus_config = DioxusConfig::load(Some(bin.clone()))
+                .context("Failed to load Dioxus config because")?
+                .unwrap_or_else(|| {
+                    tracing::info!("You appear to be creating a Dioxus project from scratch; we will use the default config");
+                    DioxusConfig::default()
+                });
 
             let dioxus_config = DioxusConfig::load(Some(bin.clone()))
           .map_err(|e| anyhow!("Failed to load Dioxus config because: {e}"))?
@@ -118,4 +97,33 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn get_bin(bin: Option<String>) -> Result<PathBuf> {
+    let metadata = cargo_metadata::MetadataCommand::new()
+        .exec()
+        .map_err(Error::CargoMetadata)?;
+    let package = if let Some(bin) = bin {
+        metadata
+            .workspace_packages()
+            .into_iter()
+            .find(|p| p.name == bin)
+            .ok_or(Error::CargoError(format!("no such package: {}", bin)))?
+    } else {
+        metadata
+            .root_package()
+            .ok_or(Error::CargoError("no root package?".to_string()))?
+    };
+
+    let crate_dir = package
+        .manifest_path
+        .parent()
+        .ok_or(Error::CargoError("couldn't take parent dir".to_string()))?;
+
+    Ok(crate_dir.into())
+}
+
+/// Simplifies error messages that use the same pattern.
+fn error_wrapper(message: &str) -> String {
+    format!("🚫 {message}:")
 }

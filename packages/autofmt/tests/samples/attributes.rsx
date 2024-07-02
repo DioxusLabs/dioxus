@@ -1,6 +1,6 @@
 rsx! {
     div {
-        key: "ddd",
+        key: "{ddd}",
         class: "asd",
         class: "asd",
         class: "asd",

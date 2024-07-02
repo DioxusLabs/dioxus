@@ -14,7 +14,7 @@ pub fn use_sorted<V: 'static, T: PartialEq>(
 //     I: DerefMut<Target = [T]> + Clone + PartialEq,
 {
     use_memo(move || {
-        todo!()
+        unimplemented!()
         // let mut iterable = collection();
         // iterable.sort();
         // iterable

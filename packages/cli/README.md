@@ -1,4 +1,4 @@
-<div style="text-align: center">
+<div>
   <h1>📦✨ Dioxus CLI</h1>
   <p><strong>Tooling to supercharge Dioxus projects</strong></p>
 </div>
@@ -28,20 +28,26 @@ This will download the CLI from the master branch,
 and install it in Cargo's global binary directory (`~/.cargo/bin/` by default).
 
 ### Install from local folder
-
+Note: The CLI will fail to build projects in debug profile. This is currently under investigation.
 ```shell
-cargo install --path . --debug
+cargo install --path . --release
+```
+
+### Developing The CLI
+It's faster to build the CLI using the `cli-dev` profile when testing changes.
+```shell
+cargo build --profile cli-dev
 ```
 
 ## Get started
 
-Use `dx create` to initialize a new Dioxus project.
+Use `dx new` to initialize a new Dioxus project.
 It will be cloned from the [dioxus-template](https://github.com/DioxusLabs/dioxus-template) repository.
 
 Alternatively, you can specify the template path:
 
 ```shell
-dx create --template gh:dioxuslabs/dioxus-template
+dx new --template gh:dioxuslabs/dioxus-template
 ```
 
 Run `dx --help` for a list of all the available commands.
@@ -68,4 +74,4 @@ title = "Hello"
 [web.resource.dev]
 ```
 
-The full anatomy of `Dioxus.toml` is shown on the [Dioxus website](https://dioxuslabs.com/learn/0.4/CLI/configure).
+The full anatomy of `Dioxus.toml` is shown on the [Dioxus website](https://dioxuslabs.com/learn/0.5/CLI/configure).

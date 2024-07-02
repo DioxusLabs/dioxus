@@ -1,17 +1,13 @@
+use crate::menubar::DioxusMenu;
 use crate::{
-    app::SharedContext,
-    assets::AssetHandlerRegistry,
-    edits::EditQueue,
-    eval::DesktopEvalProvider,
-    ipc::{EventData, UserWindowEvent},
-    protocol::{self},
-    waker::tao_waker,
-    Config, DesktopContext, DesktopService,
+    app::SharedContext, assets::AssetHandlerRegistry, edits::EditQueue, eval::DesktopEvalProvider,
+    file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, waker::tao_waker, Config,
+    DesktopContext, DesktopService,
 };
 use dioxus_core::{ScopeId, VirtualDom};
 use dioxus_html::prelude::EvalProvider;
 use futures_util::{pin_mut, FutureExt};
-use std::{any::Any, rc::Rc, task::Waker};
+use std::{rc::Rc, task::Waker};
 use wry::{RequestAsyncResponder, WebContext, WebViewBuilder};
 
 pub(crate) struct WebviewInstance {
@@ -24,11 +20,11 @@ pub(crate) struct WebviewInstance {
     _web_context: WebContext,
 
     // Same with the menu.
-    // Currently it's a box<dyn any> because 1) we don't touch it and 2) we support a number of platforms
+    // Currently it's a DioxusMenu because 1) we don't touch it and 2) we support a number of platforms
     // like ios where muda does not give us a menu type. It sucks but alas.
     //
     // This would be a good thing for someone looking to contribute to fix.
-    _menu: Option<Box<dyn Any>>,
+    _menu: Option<DioxusMenu>,
 }
 
 impl WebviewInstance {
@@ -58,20 +54,35 @@ impl WebviewInstance {
 
         let window = window.build(&shared.target).unwrap();
 
+        // https://developer.apple.com/documentation/appkit/nswindowcollectionbehavior/nswindowcollectionbehaviormanaged
+        #[cfg(target_os = "macos")]
+        {
+            use cocoa::appkit::NSWindowCollectionBehavior;
+            use cocoa::base::id;
+            use objc::{msg_send, sel, sel_impl};
+            use tao::platform::macos::WindowExtMacOS;
+
+            unsafe {
+                let window: id = window.ns_window() as id;
+                let _: () = msg_send![window, setCollectionBehavior: NSWindowCollectionBehavior::NSWindowCollectionBehaviorManaged];
+            }
+        }
+
         let mut web_context = WebContext::new(cfg.data_dir.clone());
         let edit_queue = EditQueue::default();
+        let file_hover = NativeFileHover::default();
         let asset_handlers = AssetHandlerRegistry::new(dom.runtime());
         let headless = !cfg.window.window.visible;
 
         // Rust :(
         let window_id = window.id();
-        let file_handler = cfg.file_drop_handler.take();
         let custom_head = cfg.custom_head.clone();
         let index_file = cfg.custom_index.clone();
         let root_name = cfg.root_name.clone();
         let asset_handlers_ = asset_handlers.clone();
         let edit_queue_ = edit_queue.clone();
         let proxy_ = shared.proxy.clone();
+        let file_hover_ = file_hover.clone();
 
         let request_handler = move |request, responder: RequestAsyncResponder| {
             // Try to serve the index file first
@@ -97,9 +108,16 @@ impl WebviewInstance {
 
         let ipc_handler = move |payload: String| {
             // defer the event to the main thread
-            if let Ok(message) = serde_json::from_str(&payload) {
-                _ = proxy_.send_event(UserWindowEvent(EventData::Ipc(message), window_id));
+            if let Ok(msg) = serde_json::from_str(&payload) {
+                _ = proxy_.send_event(UserWindowEvent::Ipc { id: window_id, msg });
             }
+        };
+
+        let file_drop_handler = move |evt| {
+            // Update the most recent file drop event - when the event comes in from the webview we can use the
+            // most recent event to build a new event with the files in it.
+            file_hover_.set(evt);
+            false
         };
 
         #[cfg(any(
@@ -126,14 +144,22 @@ impl WebviewInstance {
         webview = webview
             .with_transparent(cfg.window.window.transparent)
             .with_url("dioxus://index.html/")
-            .unwrap()
             .with_ipc_handler(ipc_handler)
+            .with_navigation_handler(|var| {
+                // We don't want to allow any navigation
+                // We only want to serve the index file and assets
+                if var.starts_with("dioxus://") || var.starts_with("http://dioxus.") {
+                    true
+                } else {
+                    if var.starts_with("http://") || var.starts_with("https://") {
+                        _ = webbrowser::open(&var);
+                    }
+                    false
+                }
+            }) // prevent all navigations
             .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler)
-            .with_web_context(&mut web_context);
-
-        if let Some(handler) = file_handler {
-            webview = webview.with_file_drop_handler(move |evt| handler(window_id, evt))
-        }
+            .with_web_context(&mut web_context)
+            .with_file_drop_handler(file_drop_handler);
 
         if let Some(color) = cfg.background_color {
             webview = webview.with_background_color(color);
@@ -143,17 +169,21 @@ impl WebviewInstance {
             webview = webview.with_custom_protocol(name, handler);
         }
 
+        for (name, handler) in cfg.asynchronous_protocols.drain(..) {
+            webview = webview.with_asynchronous_custom_protocol(name, handler);
+        }
+
         const INITIALIZATION_SCRIPT: &str = r#"
         if (document.addEventListener) {
-        document.addEventListener('contextmenu', function(e) {
-            e.preventDefault();
-        }, false);
+            document.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+            }, false);
         } else {
-        document.attachEvent('oncontextmenu', function() {
-            window.event.returnValue = false;
-        });
+            document.attachEvent('oncontextmenu', function() {
+                window.event.returnValue = false;
+            });
         }
-    "#;
+        "#;
 
         if cfg.disable_context_menu {
             // in release mode, we don't want to show the dev tool or reload menus
@@ -165,9 +195,11 @@ impl WebviewInstance {
 
         let webview = webview.build().unwrap();
 
-        // TODO: allow users to specify their own menubars, again :/
         let menu = if cfg!(not(any(target_os = "android", target_os = "ios"))) {
-            crate::menubar::build_menu(&window, cfg.enable_default_menu_bar)
+            if let Some(menu) = &cfg.menu {
+                crate::menubar::init_menu_bar(menu, &window);
+            }
+            cfg.menu
         } else {
             None
         };
@@ -178,6 +210,7 @@ impl WebviewInstance {
             shared.clone(),
             edit_queue,
             asset_handlers,
+            file_hover,
         ));
 
         let provider: Rc<dyn EvalProvider> =
@@ -200,10 +233,16 @@ impl WebviewInstance {
     pub fn poll_vdom(&mut self) {
         let mut cx = std::task::Context::from_waker(&self.waker);
 
-        // Continously poll the virtualdom until it's pending
+        // Continuously poll the virtualdom until it's pending
         // Wait for work will return Ready when it has edits to be sent to the webview
         // It will return Pending when it needs to be polled again - nothing is ready
         loop {
+            // If we're waiting for a render, wait for it to finish before we continue
+            let edits_flushed_poll = self.desktop_context.edit_queue.poll_edits_flushed(&mut cx);
+            if edits_flushed_poll.is_pending() {
+                return;
+            }
+
             {
                 let fut = self.dom.wait_for_work();
                 pin_mut!(fut);
@@ -218,5 +257,15 @@ impl WebviewInstance {
                 .render_immediate(&mut *self.desktop_context.mutation_state.borrow_mut());
             self.desktop_context.send_edits();
         }
+    }
+
+    #[cfg(all(feature = "hot-reload", debug_assertions))]
+    pub fn kick_stylsheets(&self) {
+        // run eval in the webview to kick the stylesheets by appending a query string
+        // we should do something less clunky than this
+        _ = self
+            .desktop_context
+            .webview
+            .evaluate_script("window.interpreter.kickAllStylesheetsOnPage()");
     }
 }

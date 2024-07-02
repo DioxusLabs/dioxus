@@ -11,26 +11,54 @@
 //! - [ ] Keys
 //! - [ ] Properties spreading with with `..` syntax
 
+use self::{location::CallerLocation, util::try_parse_braces};
+
 use super::*;
 
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{quote, quote_spanned};
 use syn::{
-    ext::IdentExt,
-    parse::{Parse, ParseBuffer, ParseStream},
-    spanned::Spanned,
-    token::Brace,
-    AngleBracketedGenericArguments, Error, Expr, Ident, LitStr, PathArguments, Result, Token,
+    ext::IdentExt, spanned::Spanned, token::Brace, AngleBracketedGenericArguments, Error, Expr,
+    Ident, LitStr, PathArguments, Token,
 };
 
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+#[derive(Clone, Debug)]
 pub struct Component {
     pub name: syn::Path,
     pub prop_gen_args: Option<AngleBracketedGenericArguments>,
+    pub key: Option<IfmtInput>,
     pub fields: Vec<ComponentField>,
     pub children: Vec<BodyNode>,
     pub manual_props: Option<Expr>,
-    pub brace: syn::token::Brace,
+    pub brace: Option<syn::token::Brace>,
+    pub location: CallerLocation,
+    errors: Vec<syn::Error>,
+}
+
+impl PartialEq for Component {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.prop_gen_args == other.prop_gen_args
+            && self.key == other.key
+            && self.fields == other.fields
+            && self.children == other.children
+            && self.manual_props == other.manual_props
+            && self.brace == other.brace
+    }
+}
+
+impl Eq for Component {}
+
+impl Hash for Component {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.prop_gen_args.hash(state);
+        self.key.hash(state);
+        self.fields.hash(state);
+        self.children.hash(state);
+        self.manual_props.hash(state);
+        self.brace.hash(state);
+    }
 }
 
 impl Parse for Component {
@@ -41,12 +69,15 @@ impl Parse for Component {
         // extract the path arguments from the path into prop_gen_args
         let prop_gen_args = normalize_path(&mut name);
 
-        let content: ParseBuffer;
-        let brace = syn::braced!(content in stream);
+        let Ok((brace, content)) = try_parse_braces(stream) else {
+            // If there are no braces, this is an incomplete component. We still parse it so that we can autocomplete it, but we don't need to parse the children
+            return Ok(Self::incomplete(name));
+        };
 
         let mut fields = Vec::new();
         let mut children = Vec::new();
         let mut manual_props = None;
+        let mut key = None;
 
         while !content.is_empty() {
             // if we splat into a component then we're merging properties
@@ -56,14 +87,26 @@ impl Parse for Component {
             } else if
             // Named fields
             (content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]))
-            // shorthand struct initialization
+                // shorthand struct initialization
                 // Not a div {}, mod::Component {}, or web-component {}
                 || (content.peek(Ident)
                     && !content.peek2(Brace)
                     && !content.peek2(Token![:])
                     && !content.peek2(Token![-]))
             {
-                fields.push(content.parse()?);
+                // If it is a key, make sure it isn't static and then add it to the component
+                if content.fork().parse::<Ident>()? == "key" {
+                    _ = content.parse::<Ident>()?;
+                    _ = content.parse::<Token![:]>()?;
+
+                    let _key: IfmtInput = content.parse()?;
+                    if _key.is_static() {
+                        invalid_key!(_key);
+                    }
+                    key = Some(_key);
+                } else {
+                    fields.push(content.parse()?);
+                }
             } else {
                 children.push(content.parse()?);
             }
@@ -74,12 +117,15 @@ impl Parse for Component {
         }
 
         Ok(Self {
+            location: CallerLocation::default(),
             name,
             prop_gen_args,
             fields,
             children,
             manual_props,
-            brace,
+            brace: Some(brace),
+            key,
+            errors: Vec::new(),
         })
     }
 }
@@ -100,19 +146,78 @@ impl ToTokens for Component {
 
         let fn_name = self.fn_name();
 
-        tokens.append_all(quote! {
+        let errors = self.errors();
+
+        let component_node = quote_spanned! { name.span() =>
             dioxus_core::DynamicNode::Component({
+                #[allow(unused_imports)]
                 use dioxus_core::prelude::Properties;
                 (#builder).into_vcomponent(
                     #name #prop_gen_args,
                     #fn_name
                 )
             })
-        })
+        };
+
+        let component = if errors.is_empty() {
+            component_node
+        } else {
+            quote_spanned! {
+                name.span() => {
+                    #errors
+                    #component_node
+                }
+            }
+        };
+
+        tokens.append_all(component);
     }
 }
 
 impl Component {
+    /// Create a new Component
+    pub fn new(
+        name: syn::Path,
+        prop_gen_args: Option<AngleBracketedGenericArguments>,
+        fields: Vec<ComponentField>,
+        children: Vec<BodyNode>,
+        manual_props: Option<Expr>,
+        key: Option<IfmtInput>,
+        brace: syn::token::Brace,
+    ) -> Self {
+        Self {
+            errors: vec![],
+            name,
+            prop_gen_args,
+            fields,
+            children,
+            manual_props,
+            brace: Some(brace),
+            key,
+            location: CallerLocation::default(),
+        }
+    }
+
+    pub(crate) fn incomplete(name: syn::Path) -> Self {
+        Self {
+            errors: vec![syn::Error::new(
+                name.span(),
+                format!(
+                    "Missing braces after component name `{}`",
+                    name.segments.last().unwrap().ident
+                ),
+            )],
+            name,
+            prop_gen_args: None,
+            fields: Vec::new(),
+            children: Vec::new(),
+            manual_props: None,
+            brace: None,
+            key: None,
+            location: CallerLocation::default(),
+        }
+    }
+
     fn validate_component_path(path: &syn::Path) -> Result<()> {
         // ensure path segments doesn't have PathArguments, only the last
         // segment is allowed to have one.
@@ -137,27 +242,22 @@ impl Component {
     }
 
     pub fn key(&self) -> Option<&IfmtInput> {
-        match self
-            .fields
-            .iter()
-            .find(|f| f.name == "key")
-            .map(|f| &f.content)
-        {
-            Some(ContentField::Formatted(fmt)) => Some(fmt),
-            _ => None,
-        }
+        self.key.as_ref()
     }
 
     fn collect_manual_props(&self, manual_props: &Expr) -> TokenStream2 {
-        let mut toks = quote! { let mut __manual_props = #manual_props; };
+        let mut toks =
+            quote_spanned! { manual_props.span() => let mut __manual_props = #manual_props; };
         for field in &self.fields {
             if field.name == "key" {
                 continue;
             }
             let ComponentField { name, content } = field;
-            toks.append_all(quote! { __manual_props.#name = #content; });
+            toks.append_all(
+                quote_spanned! { manual_props.span() => __manual_props.#name = #content; },
+            );
         }
-        toks.append_all(quote! { __manual_props });
+        toks.append_all(quote_spanned! { manual_props.span() => __manual_props });
         quote! {{ #toks }}
     }
 
@@ -165,35 +265,34 @@ impl Component {
         let name = &self.name;
 
         let mut toks = match &self.prop_gen_args {
-            Some(gen_args) => quote! { fc_to_builder(#name #gen_args) },
-            None => quote! { fc_to_builder(#name) },
+            Some(gen_args) => quote_spanned! { name.span() => fc_to_builder(#name #gen_args) },
+            None => quote_spanned! { name.span() => fc_to_builder(#name) },
         };
         for field in &self.fields {
-            match field.name.to_string().as_str() {
-                "key" => {}
-                _ => toks.append_all(quote! {#field}),
-            }
+            toks.append_all(quote! {#field})
         }
         if !self.children.is_empty() {
-            let renderer: TemplateRenderer = TemplateRenderer {
-                roots: &self.children,
-                location: None,
-            };
-
-            toks.append_all(quote! {
-                .children(
-                    Some({ #renderer })
-                )
-            });
+            let renderer = TemplateRenderer::as_tokens(&self.children, None);
+            toks.append_all(quote_spanned! { name.span() => .children( #renderer ) });
         }
-        toks.append_all(quote! {
-            .build()
-        });
+        toks.append_all(quote_spanned! { name.span() => .build() });
         toks
     }
 
     fn fn_name(&self) -> String {
         self.name.segments.last().unwrap().ident.to_string()
+    }
+
+    /// If this element is only partially complete, return the errors that occurred during parsing
+    pub(crate) fn errors(&self) -> TokenStream2 {
+        let Self { errors, .. } = self;
+
+        let mut tokens = quote! {};
+        for error in errors {
+            tokens.append_all(error.to_compile_error());
+        }
+
+        tokens
     }
 }
 
@@ -209,19 +308,10 @@ pub enum ContentField {
     Shorthand(Ident),
     ManExpr(Expr),
     Formatted(IfmtInput),
-    OnHandlerRaw(Expr),
 }
 
 impl ContentField {
-    fn new_from_name(name: &Ident, input: ParseStream) -> Result<Self> {
-        if name.to_string().starts_with("on") {
-            return Ok(ContentField::OnHandlerRaw(input.parse()?));
-        }
-
-        if *name == "key" {
-            return Ok(ContentField::Formatted(input.parse()?));
-        }
-
+    fn new(input: ParseStream) -> Result<Self> {
         if input.peek(LitStr) {
             let forked = input.fork();
             let t: LitStr = forked.parse()?;
@@ -243,16 +333,10 @@ impl ContentField {
 impl ToTokens for ContentField {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match self {
-            ContentField::Shorthand(i) if i.to_string().starts_with("on") => {
-                tokens.append_all(quote! { EventHandler::new(#i) })
-            }
             ContentField::Shorthand(i) => tokens.append_all(quote! { #i }),
             ContentField::ManExpr(e) => e.to_tokens(tokens),
             ContentField::Formatted(s) => tokens.append_all(quote! {
                 #s
-            }),
-            ContentField::OnHandlerRaw(e) => tokens.append_all(quote! {
-                EventHandler::new(#e)
             }),
         }
     }
@@ -270,7 +354,7 @@ impl Parse for ComponentField {
             });
         };
 
-        let content = ContentField::new_from_name(&name, input)?;
+        let content = ContentField::new(input)?;
 
         if input.peek(LitStr) || input.peek(Ident) {
             missing_trailing_comma!(content.span());
@@ -311,5 +395,23 @@ fn normalize_path(name: &mut syn::Path) -> Option<AngleBracketedGenericArguments
             Some(args)
         }
         _ => None,
+    }
+}
+
+impl ComponentField {
+    pub fn can_be_shorthand(&self) -> bool {
+        // If it's a shorthand...
+        if matches!(self.content, ContentField::Shorthand(_)) {
+            return true;
+        }
+
+        // If it's in the form of attr: attr, return true
+        if let ContentField::ManExpr(Expr::Path(path)) = &self.content {
+            if path.path.segments.len() == 1 && path.path.segments[0].ident == self.name {
+                return true;
+            }
+        }
+
+        false
     }
 }

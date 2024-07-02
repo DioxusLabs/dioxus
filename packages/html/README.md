@@ -15,7 +15,7 @@
 [discord-url]: https://discord.gg/XgGxMSkvUM
 
 [Website](https://dioxuslabs.com) |
-[Guides](https://dioxuslabs.com/learn/0.4/) |
+[Guides](https://dioxuslabs.com/learn/0.5/) |
 [API Docs](https://docs.rs/dioxus-html/latest/dioxus_html) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 
@@ -25,7 +25,7 @@ The Dioxus `rsx!` and `html!` macros can accept any compile-time correct namespa
 
 However, this abstraction enables you to add any namespace of elements, provided they're in scope when rsx! is called. For an example, a UI that is designed for Augmented Reality might use different primitives than HTML:
 
-```rust
+```rust, ignore
 use ar_namespace::*;
 
 rsx! {
@@ -46,7 +46,7 @@ This is currently a not-very-explored part of Dioxus. However, the namespacing s
 
 Elements for dioxus must implement the (simple) DioxusElement trait to be used in the rsx! macro.
 
-```rust
+```rust, ignore
 struct div;
 impl DioxusElement for div {
     const TAG_NAME: &'static str = "div";
@@ -60,7 +60,7 @@ Attributes would then be implemented as constants on these unit structs.
 
 The HTML namespace is defined mostly with macros. However, the expanded form would look something like this:
 
-```rust
+```rust, ignore
 struct base;
 impl DioxusElement for base {
     const TAG_NAME: &'static str = "base";
@@ -78,7 +78,7 @@ Because attributes are defined as methods on the unit struct, they guard the att
 
 Whenever the rsx! macro is called, it relies on a module `dioxus_elements` to be in scope. When you enable the `html` feature in dioxus, this module gets imported in the prelude. However, you can extend this with your own set of custom elements by making your own `dioxus_elements` module and re-exporting the html namespace.
 
-```rust
+```rust, ignore
 mod dioxus_elements {
     use dioxus::prelude::dioxus_elements::*;
     struct my_element;

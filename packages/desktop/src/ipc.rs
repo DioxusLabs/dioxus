@@ -1,28 +1,39 @@
 use serde::{Deserialize, Serialize};
 use tao::window::WindowId;
 
-/// A pair of data
+#[non_exhaustive]
 #[derive(Debug, Clone)]
-pub struct UserWindowEvent(pub EventData, pub WindowId);
+pub enum UserWindowEvent {
+    /// A global hotkey event
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    GlobalHotKeyEvent(global_hotkey::GlobalHotKeyEvent),
 
-/// The data that might eminate from any window/webview
-#[derive(Debug, Clone)]
-pub enum EventData {
+    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    MudaMenuEvent(muda::MenuEvent),
+
     /// Poll the virtualdom
-    Poll,
+    Poll(WindowId),
 
     /// Handle an ipc message eminating from the window.postMessage of a given webview
-    Ipc(IpcMessage),
+    Ipc { id: WindowId, msg: IpcMessage },
 
     /// Handle a hotreload event, basically telling us to update our templates
-    #[cfg(all(feature = "hot-reload", debug_assertions))]
+    #[cfg(all(
+        feature = "hot-reload",
+        debug_assertions,
+        not(target_os = "android"),
+        not(target_os = "ios")
+    ))]
     HotReloadEvent(dioxus_hot_reload::HotReloadMsg),
 
     /// Create a new window
     NewWindow,
 
     /// Close a given window (could be any window!)
-    CloseWindow,
+    CloseWindow(WindowId),
+
+    /// Gracefully shutdown the entire app
+    Shutdown,
 }
 
 /// A message struct that manages the communication between the webview and the eventloop code
@@ -48,8 +59,7 @@ pub enum IpcMethod<'a> {
 impl IpcMessage {
     pub(crate) fn method(&self) -> IpcMethod {
         match self.method.as_str() {
-            // todo: this is a misspelling, needs to be fixed
-            "file_diolog" => IpcMethod::FileDialog,
+            "file_dialog" => IpcMethod::FileDialog,
             "user_event" => IpcMethod::UserEvent,
             "query" => IpcMethod::Query,
             "browser_open" => IpcMethod::BrowserOpen,

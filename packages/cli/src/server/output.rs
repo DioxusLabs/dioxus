@@ -1,9 +1,7 @@
 use crate::server::Diagnostic;
 use colored::Colorize;
-use dioxus_cli_config::crate_root;
-use dioxus_cli_config::CrateConfig;
-use std::path::PathBuf;
-use std::process::Command;
+use dioxus_cli_config::{crate_root, CrateConfig};
+use std::{net::IpAddr, path::PathBuf, process::Command};
 
 #[derive(Debug, Default)]
 pub struct PrettierOptions {
@@ -14,7 +12,7 @@ pub struct PrettierOptions {
 
 #[derive(Debug, Clone)]
 pub struct WebServerInfo {
-    pub ip: String,
+    pub ip: IpAddr,
     pub port: u16,
 }
 
@@ -48,7 +46,7 @@ pub fn print_console_info(
     let custom_html_file = if crate_root.join("index.html").is_file() {
         "Custom [index.html]"
     } else {
-        "Default"
+        "None"
     };
     let url_rewrite = if config.dioxus_config.web.index_on_404 {
         "True"
@@ -60,9 +58,9 @@ pub fn print_console_info(
 
     if options.changed.is_empty() {
         println!(
-            "{} @ v{} [{}] \n",
+            "{} @ v{} [{}]",
             "Dioxus".bold().green(),
-            crate::DIOXUS_CLI_VERSION,
+            clap::crate_version!(),
             chrono::Local::now().format("%H:%M:%S").to_string().dimmed()
         );
     } else {
@@ -79,50 +77,74 @@ pub fn print_console_info(
     }
 
     if let Some(WebServerInfo { ip, port }) = web_info {
-        if config.dioxus_config.web.https.enabled == Some(true) {
-            println!(
-                "\t> Local : {}",
-                format!("https://localhost:{}/", port).blue()
-            );
-            println!(
-                "\t> Network : {}",
-                format!("https://{}:{}/", ip, port).blue()
-            );
-            println!("\t> HTTPS : {}", "Enabled".to_string().green());
-        } else {
-            println!(
-                "\t> Local : {}",
-                format!("http://localhost:{}/", port).blue()
-            );
-            println!(
-                "\t> Network : {}",
-                format!("http://{}:{}/", ip, port).blue()
-            );
-            println!("\t> HTTPS : {}", "Disabled".to_string().red());
-        }
+        let https = config.dioxus_config.web.https.enabled == Some(true);
+        let prefix = if https { "https://" } else { "http://" };
+        println!(
+            "    > Local address: {}",
+            format!("{prefix}localhost:{}/", port).blue()
+        );
+        println!(
+            "    > Network address: {}",
+            format!("{prefix}{}:{}/", ip, port).blue()
+        );
+        println!(
+            "    > HTTPS: {}",
+            if https {
+                "Enabled".to_string().green()
+            } else {
+                "Disabled".to_string().red()
+            }
+        );
     }
     println!();
-    println!("\t> Profile : {}", profile.green());
-    println!("\t> Hot Reload : {}", hot_reload.cyan());
+
+    println!("    > Hot Reload Mode: {}", hot_reload.cyan());
+
+    println!(
+        "    > Watching: [ {} ]",
+        config
+            .dioxus_config
+            .web
+            .watcher
+            .watch_path
+            .iter()
+            .cloned()
+            .chain(["Cargo.toml", "Dioxus.toml"].iter().map(PathBuf::from))
+            .map(|f| f.display().to_string())
+            .collect::<Vec<String>>()
+            .join(", ")
+            .cyan()
+    );
+
     if !proxies.is_empty() {
-        println!("\t> Proxies :");
+        println!("    > Proxies :");
         for proxy in proxies {
-            println!("\t\t- {}", proxy.backend.blue());
+            println!("    - {}", proxy.backend.blue());
         }
     }
-    println!("\t> Index Template : {}", custom_html_file.green());
-    println!("\t> URL Rewrite [index_on_404] : {}", url_rewrite.purple());
+    println!("    > Custom index.html: {}", custom_html_file.green());
+    println!("    > Serve index.html on 404: {}", url_rewrite.purple());
     println!();
     println!(
-        "\t> Build Time Use : {} millis",
+        "    > Build Features: [ {} ]",
+        config
+            .features
+            .clone()
+            .unwrap_or_default()
+            .join(", ")
+            .green()
+    );
+    println!("    > Build Profile: {}", profile.green());
+    println!(
+        "    > Build took: {} millis",
         options.elapsed_time.to_string().green().bold()
     );
     println!();
 
     if options.warnings.is_empty() {
-        log::info!("{}\n", "A perfect compilation!".green().bold());
+        tracing::info!("{}\n", "A perfect compilation!".green().bold());
     } else {
-        log::warn!(
+        tracing::warn!(
             "{}",
             format!(
                 "There were {} warning messages during the build. Run `cargo check` to see them.",

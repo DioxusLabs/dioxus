@@ -1,20 +1,23 @@
 use crate::{
-    assets::{asset_manifest, create_assets_head, process_assets, AssetConfigDropGuard},
+    assets::{
+        asset_manifest, copy_assets_dir, create_assets_head, pre_compress_folder, process_assets,
+        AssetConfigDropGuard,
+    },
     error::{Error, Result},
 };
+use anyhow::Context;
 use cargo_metadata::{diagnostic::Diagnostic, Message};
-use dioxus_cli_config::crate_root;
-use dioxus_cli_config::CrateConfig;
-use dioxus_cli_config::ExecutableType;
+use dioxus_cli_config::{crate_root, CrateConfig, ExecutableType, WasmOptLevel};
 use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 use manganis_cli_support::{AssetManifest, ManganisSupportGuard};
 use std::{
     env,
     fs::{copy, create_dir_all, File},
-    io::Read,
+    io::{self, IsTerminal, Read},
     panic,
     path::PathBuf,
+    process::Command,
     time::Duration,
 };
 use wasm_bindgen_cli_support::Bindgen;
@@ -26,6 +29,7 @@ lazy_static! {
 #[derive(Debug, Clone)]
 pub struct BuildResult {
     pub warnings: Vec<Diagnostic>,
+    pub executable: Option<PathBuf>,
     pub elapsed_time: u128,
     pub assets: Option<AssetManifest>,
 }
@@ -63,9 +67,8 @@ impl ExecWithRustFlagsSetter for subprocess::Exec {
 
 /// Build client (WASM).
 /// Note: `rust_flags` argument is only used for the fullstack platform.
-pub fn build(
+pub fn build_web(
     config: &CrateConfig,
-    _: bool,
     skip_assets: bool,
     rust_flags: Option<String>,
 ) -> Result<BuildResult> {
@@ -84,26 +87,30 @@ pub fn build(
         ..
     } = config;
     let out_dir = config.out_dir();
-    let asset_dir = config.asset_dir();
 
     let _guard = AssetConfigDropGuard::new();
     let _manganis_support = ManganisSupportGuard::default();
+
+    // start to build the assets
+    build_assets(config)?;
 
     let t_start = std::time::Instant::now();
     let _guard = dioxus_cli_config::__private::save_config(config);
 
     // [1] Build the .wasm module
-    log::info!("🚅 Running build command...");
+    tracing::info!("🚅 Running build command...");
 
-    let wasm_check_command = std::process::Command::new("rustup")
-        .args(["show"])
-        .output()?;
-    let wasm_check_output = String::from_utf8(wasm_check_command.stdout).unwrap();
-    if !wasm_check_output.contains("wasm32-unknown-unknown") {
-        log::info!("wasm32-unknown-unknown target not detected, installing..");
-        let _ = std::process::Command::new("rustup")
-            .args(["target", "add", "wasm32-unknown-unknown"])
-            .output()?;
+    // If the user has rustup, we can check if the wasm32-unknown-unknown target is installed
+    // Otherwise we can just assume it is installed - which i snot great...
+    // Eventually we can poke at the errors and let the user know they need to install the target
+    if let Ok(wasm_check_command) = Command::new("rustup").args(["show"]).output() {
+        let wasm_check_output = String::from_utf8(wasm_check_command.stdout).unwrap();
+        if !wasm_check_output.contains("wasm32-unknown-unknown") {
+            tracing::info!("wasm32-unknown-unknown target not detected, installing..");
+            let _ = Command::new("rustup")
+                .args(["target", "add", "wasm32-unknown-unknown"])
+                .output()?;
+        }
     }
 
     let cmd = subprocess::Exec::cmd("cargo")
@@ -113,7 +120,7 @@ pub fn build(
         .arg("build")
         .arg("--target")
         .arg("wasm32-unknown-unknown")
-        .arg("--message-format=json");
+        .arg("--message-format=json-render-diagnostics");
 
     // TODO: make the initial variable mutable to simplify all the expressions
     // below. Look inside the `build_desktop()` as an example.
@@ -150,82 +157,126 @@ pub fn build(
         ExecutableType::Example(name) => cmd.arg("--example").arg(name),
     };
 
-    let warning_messages = prettier_build(cmd)?;
+    let CargoBuildResult {
+        warnings,
+        output_location,
+    } = prettier_build(cmd)?;
+    let output_location = output_location.context("No output location found")?;
 
     // [2] Establish the output directory structure
     let bindgen_outdir = out_dir.join("assets").join("dioxus");
 
-    let build_target = if config.custom_profile.is_some() {
-        let build_profile = config.custom_profile.as_ref().unwrap();
-        if build_profile == "dev" {
-            "debug"
-        } else {
-            build_profile
-        }
-    } else if config.release {
-        "release"
-    } else {
-        "debug"
-    };
+    let input_path = output_location.with_extension("wasm");
 
-    let input_path = match executable {
-        ExecutableType::Binary(name) | ExecutableType::Lib(name) => target_dir
-            .join(format!("wasm32-unknown-unknown/{}", build_target))
-            .join(format!("{}.wasm", name)),
-
-        ExecutableType::Example(name) => target_dir
-            .join(format!("wasm32-unknown-unknown/{}/examples", build_target))
-            .join(format!("{}.wasm", name)),
-    };
-
-    let bindgen_result = panic::catch_unwind(move || {
+    tracing::info!("Running wasm-bindgen");
+    let run_wasm_bindgen = || {
         // [3] Bindgen the final binary for use easy linking
         let mut bindgen_builder = Bindgen::new();
 
+        let keep_debug = dioxus_config.web.wasm_opt.debug || (!config.release);
+
         bindgen_builder
-            .input_path(input_path)
+            .input_path(&input_path)
             .web(true)
             .unwrap()
-            .debug(true)
-            .demangle(true)
-            .keep_debug(true)
-            .remove_name_section(false)
-            .remove_producers_section(false)
+            .debug(keep_debug)
+            .demangle(keep_debug)
+            .keep_debug(keep_debug)
+            .reference_types(true)
+            .remove_name_section(!keep_debug)
+            .remove_producers_section(!keep_debug)
             .out_name(&dioxus_config.application.name)
             .generate(&bindgen_outdir)
             .unwrap();
-    });
-    if bindgen_result.is_err() {
-        return Err(Error::BuildFailed("Bindgen build failed! \nThis is probably due to the Bindgen version, dioxus-cli using `0.2.81` Bindgen crate.".to_string()));
+    };
+    let bindgen_result = panic::catch_unwind(run_wasm_bindgen);
+
+    // WASM bindgen requires the exact version of the bindgen schema to match the version the CLI was built with
+    // If we get an error, we can try to recover by pinning the user's wasm-bindgen version to the version we used
+    if let Err(err) = bindgen_result {
+        tracing::error!("Bindgen build failed: {:?}", err);
+        update_wasm_bindgen_version()?;
+        run_wasm_bindgen();
     }
 
-    // this code will copy all public file to the output dir
-    let copy_options = fs_extra::dir::CopyOptions {
-        overwrite: true,
-        skip_exist: false,
-        buffer_size: 64000,
-        copy_inside: false,
-        content_only: false,
-        depth: 0,
-    };
-    if asset_dir.is_dir() {
-        for entry in std::fs::read_dir(asset_dir)? {
-            let path = entry?.path();
-            if path.is_file() {
-                std::fs::copy(&path, out_dir.join(path.file_name().unwrap()))?;
-            } else {
-                match fs_extra::dir::copy(&path, &out_dir, &copy_options) {
-                    Ok(_) => {}
-                    Err(_e) => {
-                        log::warn!("Error copying dir: {}", _e);
-                    }
+    // Run wasm-opt if this is a release build
+    if config.release {
+        tracing::info!("Running optimization with wasm-opt...");
+        let mut options = match dioxus_config.web.wasm_opt.level {
+            WasmOptLevel::Z => wasm_opt::OptimizationOptions::new_optimize_for_size_aggressively(),
+            WasmOptLevel::S => wasm_opt::OptimizationOptions::new_optimize_for_size(),
+            WasmOptLevel::Zero => wasm_opt::OptimizationOptions::new_opt_level_0(),
+            WasmOptLevel::One => wasm_opt::OptimizationOptions::new_opt_level_1(),
+            WasmOptLevel::Two => wasm_opt::OptimizationOptions::new_opt_level_2(),
+            WasmOptLevel::Three => wasm_opt::OptimizationOptions::new_opt_level_3(),
+            WasmOptLevel::Four => wasm_opt::OptimizationOptions::new_opt_level_4(),
+        };
+        let wasm_file = bindgen_outdir.join(format!("{}_bg.wasm", dioxus_config.application.name));
+        let old_size = wasm_file.metadata()?.len();
+        options
+            // WASM bindgen relies on reference types
+            .enable_feature(wasm_opt::Feature::ReferenceTypes)
+            .debug_info(dioxus_config.web.wasm_opt.debug)
+            .run(&wasm_file, &wasm_file)
+            .map_err(|err| Error::Other(anyhow::anyhow!(err)))?;
+        let new_size = wasm_file.metadata()?.len();
+        tracing::info!(
+            "wasm-opt reduced WASM size from {} to {} ({:2}%)",
+            old_size,
+            new_size,
+            (new_size as f64 - old_size as f64) / old_size as f64 * 100.0
+        );
+    }
+
+    // If pre-compressing is enabled, we can pre_compress the wasm-bindgen output
+    pre_compress_folder(&bindgen_outdir, config.should_pre_compress_web_assets())?;
+
+    // [5][OPTIONAL] If tailwind is enabled and installed we run it to generate the CSS
+    let dioxus_tools = dioxus_config.application.tools.clone();
+    if dioxus_tools.contains_key("tailwindcss") {
+        let info = dioxus_tools.get("tailwindcss").unwrap();
+        let tailwind = crate::tools::Tool::Tailwind;
+
+        if tailwind.is_installed() {
+            if let Some(sub) = info.as_table() {
+                tracing::info!("Building Tailwind bundle CSS file...");
+
+                let input_path = match sub.get("input") {
+                    Some(val) => val.as_str().unwrap(),
+                    None => "./public",
+                };
+                let config_path = match sub.get("config") {
+                    Some(val) => val.as_str().unwrap(),
+                    None => "./src/tailwind.config.js",
+                };
+                let mut args = vec![
+                    "-i",
+                    input_path,
+                    "-o",
+                    "dist/tailwind.css",
+                    "-c",
+                    config_path,
+                ];
+
+                if config.release {
+                    args.push("--minify");
                 }
+
+                tailwind.call("tailwindcss", args)?;
             }
+        } else {
+            tracing::warn!(
+                "Tailwind tool not found, you can use `dx tool add tailwindcss` to install it."
+            );
         }
     }
 
+    // this code will copy all public file to the output dir
+    copy_assets_dir(config, dioxus_cli_config::Platform::Web)?;
+
     let assets = if !skip_assets {
-        let assets = asset_manifest(config);
+        tracing::info!("Processing assets");
+        let assets = asset_manifest(executable.executable(), config);
         process_assets(config, &assets)?;
         Some(assets)
     } else {
@@ -233,10 +284,42 @@ pub fn build(
     };
 
     Ok(BuildResult {
-        warnings: warning_messages,
+        warnings,
+        executable: Some(output_location),
         elapsed_time: t_start.elapsed().as_millis(),
         assets,
     })
+}
+
+// Attempt to automatically recover from a bindgen failure by updating the wasm-bindgen version
+fn update_wasm_bindgen_version() -> Result<()> {
+    let cli_bindgen_version = wasm_bindgen_shared::version();
+    tracing::info!("Attempting to recover from bindgen failure by setting the wasm-bindgen version to {cli_bindgen_version}...");
+
+    let output = Command::new("cargo")
+        .args([
+            "update",
+            "-p",
+            "wasm-bindgen",
+            "--precise",
+            &cli_bindgen_version,
+        ])
+        .output();
+    let mut error_message = None;
+    if let Ok(output) = output {
+        if output.status.success() {
+            tracing::info!("Successfully updated wasm-bindgen to {cli_bindgen_version}");
+            return Ok(());
+        } else {
+            error_message = Some(output);
+        }
+    }
+
+    if let Some(output) = error_message {
+        tracing::error!("Failed to update wasm-bindgen: {:#?}", output);
+    }
+
+    Err(Error::BuildFailed(format!("WASM bindgen build failed!\nThis is probably due to the Bindgen version, dioxus-cli is using `{cli_bindgen_version}` which is not compatible with your crate.\nPlease reinstall the dioxus cli to fix this issue.\nYou can reinstall the dioxus cli by running `cargo install dioxus-cli --force` and then rebuild your project")))
 }
 
 /// Note: `rust_flags` argument is only used for the fullstack platform
@@ -247,9 +330,10 @@ pub fn build_desktop(
     skip_assets: bool,
     rust_flags: Option<String>,
 ) -> Result<BuildResult> {
-    log::info!("🚅 Running build [Desktop] command...");
+    tracing::info!("🚅 Running build [Desktop] command...");
 
     let t_start = std::time::Instant::now();
+    build_assets(config)?;
     let _guard = dioxus_cli_config::__private::save_config(config);
     let _manganis_support = ManganisSupportGuard::default();
     let _guard = AssetConfigDropGuard::new();
@@ -259,7 +343,7 @@ pub fn build_desktop(
         .env("CARGO_TARGET_DIR", &config.target_dir)
         .cwd(&config.crate_dir)
         .arg("build")
-        .arg("--message-format=json");
+        .arg("--message-format=json-render-diagnostics");
 
     if config.release {
         cmd = cmd.arg("--release");
@@ -284,8 +368,6 @@ pub fn build_desktop(
         cmd = cmd.arg("--target").arg(target);
     }
 
-    let target_platform = config.target.as_deref().unwrap_or("");
-
     cmd = cmd.args(&config.cargo_args);
 
     let cmd = match &config.executable {
@@ -296,34 +378,9 @@ pub fn build_desktop(
 
     let warning_messages = prettier_build(cmd)?;
 
-    let release_type = match config.release {
-        true => "release",
-        false => "debug",
-    };
-
-    let file_name: String;
-    let mut res_path = match &config.executable {
-        ExecutableType::Binary(name) | ExecutableType::Lib(name) => {
-            file_name = name.clone();
-            config
-                .target_dir
-                .join(target_platform)
-                .join(release_type)
-                .join(name)
-        }
-        ExecutableType::Example(name) => {
-            file_name = name.clone();
-            config
-                .target_dir
-                .join(target_platform)
-                .join(release_type)
-                .join("examples")
-                .join(name)
-        }
-    };
+    let file_name: String = config.executable.executable().unwrap().to_string();
 
     let target_file = if cfg!(windows) {
-        res_path.set_extension("exe");
         format!("{}.exe", &file_name)
     } else {
         file_name
@@ -332,36 +389,16 @@ pub fn build_desktop(
     if !config.out_dir().is_dir() {
         create_dir_all(config.out_dir())?;
     }
-    copy(res_path, config.out_dir().join(target_file))?;
-
-    // this code will copy all public file to the output dir
-    if config.asset_dir().is_dir() {
-        let copy_options = fs_extra::dir::CopyOptions {
-            overwrite: true,
-            skip_exist: false,
-            buffer_size: 64000,
-            copy_inside: false,
-            content_only: false,
-            depth: 0,
-        };
-
-        for entry in std::fs::read_dir(config.asset_dir())? {
-            let path = entry?.path();
-            if path.is_file() {
-                std::fs::copy(&path, &config.out_dir().join(path.file_name().unwrap()))?;
-            } else {
-                match fs_extra::dir::copy(&path, &config.out_dir(), &copy_options) {
-                    Ok(_) => {}
-                    Err(e) => {
-                        log::warn!("Error copying dir: {}", e);
-                    }
-                }
-            }
-        }
+    let output_path = config.out_dir().join(target_file);
+    if let Some(res_path) = &warning_messages.output_location {
+        copy(res_path, &output_path)?;
     }
 
+    copy_assets_dir(config, dioxus_cli_config::Platform::Desktop)?;
+
     let assets = if !skip_assets {
-        let assets = asset_manifest(config);
+        tracing::info!("Processing assets");
+        let assets = asset_manifest(config.executable.executable(), config);
         // Collect assets
         process_assets(config, &assets)?;
         // Create the __assets_head.html file for bundling
@@ -371,7 +408,7 @@ pub fn build_desktop(
         None
     };
 
-    log::info!(
+    tracing::info!(
         "🚩 Build completed: [./{}]",
         config.dioxus_config.application.out_dir.clone().display()
     );
@@ -379,27 +416,72 @@ pub fn build_desktop(
     println!("build desktop done");
 
     Ok(BuildResult {
-        warnings: warning_messages,
+        warnings: warning_messages.warnings,
+        executable: Some(output_path),
         elapsed_time: t_start.elapsed().as_millis(),
         assets,
     })
 }
 
-fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
+struct CargoBuildResult {
+    warnings: Vec<Diagnostic>,
+    output_location: Option<PathBuf>,
+}
+
+struct Outputter {
+    progress_bar: Option<ProgressBar>,
+}
+
+impl Outputter {
+    pub fn new() -> Self {
+        let stdout = io::stdout().lock();
+
+        let mut myself = Self { progress_bar: None };
+
+        if stdout.is_terminal() {
+            let mut pb = ProgressBar::new_spinner();
+            pb.enable_steady_tick(Duration::from_millis(200));
+            pb = PROGRESS_BARS.add(pb);
+            pb.set_style(
+                ProgressStyle::with_template("{spinner:.dim.bold} {wide_msg}")
+                    .unwrap()
+                    .tick_chars("/|\\- "),
+            );
+
+            myself.progress_bar = Some(pb);
+        }
+
+        myself
+    }
+
+    pub fn println(&self, msg: impl ToString) {
+        let msg = msg.to_string();
+        if let Some(pb) = &self.progress_bar {
+            pb.set_message(msg)
+        } else {
+            println!("{msg}");
+        }
+    }
+
+    pub fn finish_with_message(&self, msg: impl ToString) {
+        let msg = msg.to_string();
+        if let Some(pb) = &self.progress_bar {
+            pb.finish_with_message(msg)
+        } else {
+            println!("{msg}");
+        }
+    }
+}
+
+fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<CargoBuildResult> {
     let mut warning_messages: Vec<Diagnostic> = vec![];
 
-    let mut pb = ProgressBar::new_spinner();
-    pb.enable_steady_tick(Duration::from_millis(200));
-    pb = PROGRESS_BARS.add(pb);
-    pb.set_style(
-        ProgressStyle::with_template("{spinner:.dim.bold} {wide_msg}")
-            .unwrap()
-            .tick_chars("/|\\- "),
-    );
-    pb.set_message("💼 Waiting to start building the project...");
+    let output = Outputter::new();
+    output.println("💼 Waiting to start building the project...");
 
     let stdout = cmd.detached().stream_stdout()?;
     let reader = std::io::BufReader::new(stdout);
+    let mut output_location = None;
 
     for message in cargo_metadata::Message::parse_stream(reader) {
         match message.unwrap() {
@@ -420,17 +502,20 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
                 }
             }
             Message::CompilerArtifact(artifact) => {
-                pb.set_message(format!("⚙️ Compiling {} ", artifact.package_id));
-                pb.tick();
+                output.println(format!("⚙ Compiling {} ", artifact.package_id));
+                if let Some(executable) = artifact.executable {
+                    output_location = Some(executable.into());
+                }
             }
             Message::BuildScriptExecuted(script) => {
                 let _package_id = script.package_id.to_string();
             }
             Message::BuildFinished(finished) => {
                 if finished.success {
-                    log::info!("👑 Build done.");
+                    output.finish_with_message("👑 Build done.");
                 } else {
-                    std::process::exit(1);
+                    output.finish_with_message("❌ Build failed.");
+                    return Err(anyhow::anyhow!("Build failed"));
                 }
             }
             _ => {
@@ -438,7 +523,11 @@ fn prettier_build(cmd: subprocess::Exec) -> anyhow::Result<Vec<Diagnostic>> {
             }
         }
     }
-    Ok(warning_messages)
+
+    Ok(CargoBuildResult {
+        warnings: warning_messages,
+        output_location,
+    })
 }
 
 pub fn gen_page(config: &CrateConfig, manifest: Option<&AssetManifest>, serve: bool) -> String {
@@ -491,14 +580,11 @@ pub fn gen_page(config: &CrateConfig, manifest: Option<&AssetManifest>, serve: b
     replace_or_insert_before("{script_include}", &script_str, "</body", &mut html);
 
     if serve {
-        html += &format!(
-            "<script>{}</script>",
-            include_str!("./assets/autoreload.js")
-        );
+        html += &format!("<script>{}</script>", dioxus_hot_reload::RECONNECT_SCRIPT);
     }
 
     let base_path = match &config.dioxus_config.web.app.base_path {
-        Some(path) => path,
+        Some(path) => path.trim_matches('/'),
         None => ".",
     };
     let app_name = &config.dioxus_config.application.name;
@@ -523,6 +609,16 @@ pub fn gen_page(config: &CrateConfig, manifest: Option<&AssetManifest>, serve: b
     </body"#
             ),
         );
+
+        // And try to insert preload links for the wasm and js files
+        html = html.replace(
+            "</head",
+            &format!(
+                r#"<link rel="preload" href="/{base_path}/assets/dioxus/{app_name}_bg.wasm" as="fetch" type="application/wasm" crossorigin="">
+                    <link rel="preload" href="/{base_path}/assets/dioxus/{app_name}.js" as="script">
+    </head"#
+            ),
+        );
     }
 
     let title = config.dioxus_config.web.app.title.clone();
@@ -543,4 +639,150 @@ fn replace_or_insert_before(
     } else {
         *content = content.replace(or_insert_before, &format!("{}{}", with, or_insert_before));
     }
+}
+
+// this function will build some assets file
+// like sass tool resources
+// this function will return a array which file don't need copy to out_dir.
+fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
+    let mut result = vec![];
+
+    let dioxus_config = &config.dioxus_config;
+    let dioxus_tools = dioxus_config.application.tools.clone();
+
+    // check sass tool state
+    let sass = Tool::Sass;
+    if sass.is_installed() && dioxus_tools.contains_key("sass") {
+        let sass_conf = dioxus_tools.get("sass").unwrap();
+        if let Some(tab) = sass_conf.as_table() {
+            let source_map = tab.contains_key("source_map");
+            let source_map = if source_map && tab.get("source_map").unwrap().is_bool() {
+                if tab.get("source_map").unwrap().as_bool().unwrap_or_default() {
+                    "--source-map"
+                } else {
+                    "--no-source-map"
+                }
+            } else {
+                "--source-map"
+            };
+
+            if tab.contains_key("input") {
+                if tab.get("input").unwrap().is_str() {
+                    let file = tab.get("input").unwrap().as_str().unwrap().trim();
+
+                    if file == "*" {
+                        // if the sass open auto, we need auto-check the assets dir.
+                        let asset_dir = config.asset_dir().clone();
+                        if asset_dir.is_dir() {
+                            for entry in walkdir::WalkDir::new(&asset_dir)
+                                .into_iter()
+                                .filter_map(|e| e.ok())
+                            {
+                                let temp = entry.path();
+                                if temp.is_file() {
+                                    let suffix = temp.extension();
+                                    if suffix.is_none() {
+                                        continue;
+                                    }
+                                    let suffix = suffix.unwrap().to_str().unwrap();
+                                    if suffix == "scss" || suffix == "sass" {
+                                        // if file suffix is `scss` / `sass` we need transform it.
+                                        let out_file = format!(
+                                            "{}.css",
+                                            temp.file_stem().unwrap().to_str().unwrap()
+                                        );
+                                        let target_path = config
+                                            .out_dir()
+                                            .join(
+                                                temp.strip_prefix(&asset_dir)
+                                                    .unwrap()
+                                                    .parent()
+                                                    .unwrap(),
+                                            )
+                                            .join(out_file);
+                                        let res = sass.call(
+                                            "sass",
+                                            vec![
+                                                temp.to_str().unwrap(),
+                                                target_path.to_str().unwrap(),
+                                                source_map,
+                                            ],
+                                        );
+                                        if res.is_ok() {
+                                            result.push(temp.to_path_buf());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // just transform one file.
+                        let relative_path = if &file[0..1] == "/" {
+                            &file[1..file.len()]
+                        } else {
+                            file
+                        };
+                        let path = config.asset_dir().join(relative_path);
+                        let out_file =
+                            format!("{}.css", path.file_stem().unwrap().to_str().unwrap());
+                        let target_path = config
+                            .out_dir()
+                            .join(PathBuf::from(relative_path).parent().unwrap())
+                            .join(out_file);
+                        if path.is_file() {
+                            let res = sass.call(
+                                "sass",
+                                vec![
+                                    path.to_str().unwrap(),
+                                    target_path.to_str().unwrap(),
+                                    source_map,
+                                ],
+                            );
+                            if res.is_ok() {
+                                result.push(path);
+                            } else {
+                                tracing::error!("{:?}", res);
+                            }
+                        }
+                    }
+                } else if tab.get("input").unwrap().is_array() {
+                    // check files list.
+                    let list = tab.get("input").unwrap().as_array().unwrap();
+                    for i in list {
+                        if i.is_str() {
+                            let path = i.as_str().unwrap();
+                            let relative_path = if &path[0..1] == "/" {
+                                &path[1..path.len()]
+                            } else {
+                                path
+                            };
+                            let path = config.asset_dir().join(relative_path);
+                            let out_file =
+                                format!("{}.css", path.file_stem().unwrap().to_str().unwrap());
+                            let target_path = config
+                                .out_dir()
+                                .join(PathBuf::from(relative_path).parent().unwrap())
+                                .join(out_file);
+                            if path.is_file() {
+                                let res = sass.call(
+                                    "sass",
+                                    vec![
+                                        path.to_str().unwrap(),
+                                        target_path.to_str().unwrap(),
+                                        source_map,
+                                    ],
+                                );
+                                if res.is_ok() {
+                                    result.push(path);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // SASS END
+
+    Ok(result)
 }

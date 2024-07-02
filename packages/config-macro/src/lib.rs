@@ -6,122 +6,33 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 
-#[proc_macro]
-pub fn server_only(input: TokenStream) -> TokenStream {
-    if cfg!(any(feature = "ssr", feature = "liveview")) {
-        let input = TokenStream2::from(input);
-        quote! {
-            #input
+macro_rules! define_config_macro {
+    ($name:ident if $($cfg:tt)+) => {
+        #[proc_macro]
+        pub fn $name(input: TokenStream) -> TokenStream {
+            if cfg!($($cfg)+) {
+                let input = TokenStream2::from(input);
+                quote! {
+                    {
+                        #input
+                    }
+                }
+            } else {
+                quote! {
+                    {}
+                }
+            }
+            .into()
         }
-    } else {
-        quote! {
-            ()
-        }
-    }
-    .into()
+    };
 }
 
-#[proc_macro]
-pub fn client(input: TokenStream) -> TokenStream {
-    if cfg!(any(feature = "desktop", feature = "web", feature = "tui")) {
-        let input = TokenStream2::from(input);
-        quote! {
-            #input
-        }
-    } else {
-        quote! {
-            ()
-        }
-    }
-    .into()
-}
-
-#[proc_macro]
-pub fn web(input: TokenStream) -> TokenStream {
-    if cfg!(feature = "web") {
-        let input = TokenStream2::from(input);
-        quote! {
-            #input
-        }
-    } else {
-        quote! {
-            ()
-        }
-    }
-    .into()
-}
-
-#[proc_macro]
-pub fn desktop(input: TokenStream) -> TokenStream {
-    if cfg!(feature = "desktop") {
-        let input = TokenStream2::from(input);
-        quote! {
-            #input
-        }
-    } else {
-        quote! {
-            ()
-        }
-    }
-    .into()
-}
-
-#[proc_macro]
-pub fn fullstack(input: TokenStream) -> TokenStream {
-    if cfg!(feature = "web") {
-        let input = TokenStream2::from(input);
-        quote! {
-            #input
-        }
-    } else {
-        quote! {
-            ()
-        }
-    }
-    .into()
-}
-
-#[proc_macro]
-pub fn ssr(input: TokenStream) -> TokenStream {
-    if cfg!(feature = "ssr") {
-        let input = TokenStream2::from(input);
-        quote! {
-            #input
-        }
-    } else {
-        quote! {
-            ()
-        }
-    }
-    .into()
-}
-
-#[proc_macro]
-pub fn liveview(input: TokenStream) -> TokenStream {
-    if cfg!(feature = "liveview") {
-        let input = TokenStream2::from(input);
-        quote! {
-            #input
-        }
-    } else {
-        quote! {
-            ()
-        }
-    }
-    .into()
-}
-
-#[proc_macro]
-pub fn tui(input: TokenStream) -> TokenStream {
-    if cfg!(feature = "tui") {
-        let input = TokenStream2::from(input);
-        quote! {
-            #input
-        }
-    } else {
-        quote! {
-            ()
-        }
-    }
-    .into()
-}
+define_config_macro!(server_only if any(feature = "ssr", feature = "liveview"));
+define_config_macro!(client if any(feature = "desktop", feature = "web"));
+define_config_macro!(web if feature = "web");
+define_config_macro!(desktop if feature = "desktop");
+define_config_macro!(mobile if feature = "mobile");
+define_config_macro!(fullstack if feature = "fullstack");
+define_config_macro!(static_generation if feature = "static-generation");
+define_config_macro!(ssr if feature = "ssr");
+define_config_macro!(liveview if feature = "liveview");

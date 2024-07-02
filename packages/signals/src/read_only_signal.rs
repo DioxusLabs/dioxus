@@ -1,6 +1,8 @@
 use crate::{read::Readable, ReadableRef, Signal, SignalData};
+use dioxus_core::IntoDynNode;
 use std::ops::Deref;
 
+use crate::{default_impl, read_impls};
 use dioxus_core::{prelude::IntoAttributeValue, ScopeId};
 use generational_box::{Storage, UnsyncStorage};
 
@@ -50,7 +52,9 @@ impl<T: 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
     #[doc(hidden)]
     /// This should only be used by the `rsx!` macro.
     pub fn __take(&self) -> T {
-        self.inner.take()
+        self.inner
+            .manually_drop()
+            .expect("Signal has already been dropped")
     }
 }
 
@@ -59,20 +63,22 @@ impl<T, S: Storage<SignalData<T>>> Readable for ReadOnlySignal<T, S> {
     type Storage = S;
 
     #[track_caller]
-    fn try_read(&self) -> Result<ReadableRef<Self>, generational_box::BorrowError> {
-        self.inner.try_read()
+    fn try_read_unchecked(
+        &self,
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+        self.inner.try_read_unchecked()
     }
 
     /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
     ///
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    fn peek(&self) -> S::Ref<T> {
-        self.inner.peek()
+    fn peek_unchecked(&self) -> S::Ref<'static, T> {
+        self.inner.peek_unchecked()
     }
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "serialize")]
 impl<T: serde::Serialize + 'static, Store: Storage<SignalData<T>>> serde::Serialize
     for ReadOnlySignal<T, Store>
 {
@@ -81,7 +87,7 @@ impl<T: serde::Serialize + 'static, Store: Storage<SignalData<T>>> serde::Serial
     }
 }
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "serialize")]
 impl<'de, T: serde::Deserialize<'de> + 'static, Store: Storage<SignalData<T>>>
     serde::Deserialize<'de> for ReadOnlySignal<T, Store>
 {
@@ -101,6 +107,15 @@ where
     }
 }
 
+impl<T> IntoDynNode for ReadOnlySignal<T>
+where
+    T: Clone + IntoDynNode,
+{
+    fn into_dyn_node(self) -> dioxus_core::DynamicNode {
+        self().into_dyn_node()
+    }
+}
+
 impl<T: 'static, S: Storage<SignalData<T>>> PartialEq for ReadOnlySignal<T, S> {
     fn eq(&self, other: &Self) -> bool {
         self.inner == other.inner
@@ -114,3 +129,20 @@ impl<T: Clone, S: Storage<SignalData<T>> + 'static> Deref for ReadOnlySignal<T, 
         Readable::deref_impl(self)
     }
 }
+
+read_impls!(
+    ReadOnlySignal<T, S> where
+        S: Storage<SignalData<T>>
+);
+default_impl!(
+    ReadOnlySignal<T, S> where
+    S: Storage<SignalData<T>>
+);
+
+impl<T: 'static, S: Storage<SignalData<T>>> Clone for ReadOnlySignal<T, S> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T: 'static, S: Storage<SignalData<T>>> Copy for ReadOnlySignal<T, S> {}

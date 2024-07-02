@@ -34,12 +34,6 @@ pub enum Plugin {
     #[command(flatten)]
     Add(PluginAdd),
 
-    // Go through each plugin and check for updates
-    // Update {
-    //   #[clap(long)]
-    //   #[serde(default)]
-    //   ignore_error: bool
-    // },
     /// List all of the plugins installed
     List,
 }
@@ -52,7 +46,6 @@ impl Plugin {
         dependency_paths: &[PathBuf],
     ) -> super::Result<()> {
         match self {
-            // Plugin::Update { ignore_error } => todo!(),
             Plugin::List => {
                 let plugins = &PLUGINS_CONFIG.lock().await.plugins.plugins;
                 if plugins.is_empty() {

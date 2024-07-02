@@ -1,13 +1,16 @@
+use crate::innerlude::{DirtyTasks, Effect};
+use crate::scope_context::SuspenseLocation;
 use crate::{
     innerlude::{LocalTask, SchedulerMsg},
     scope_context::Scope,
     scopes::ScopeId,
     Task,
 };
+use slotmap::DefaultKey;
+use std::collections::BTreeSet;
 use std::{
     cell::{Cell, Ref, RefCell},
     rc::Rc,
-    sync::Arc,
 };
 
 thread_local! {
@@ -21,33 +24,42 @@ pub struct Runtime {
     // We use this to track the current scope
     pub(crate) scope_stack: RefCell<Vec<ScopeId>>,
 
+    // We use this to track the current suspense location. Generally this lines up with the scope stack, but it may be different for children of a suspense boundary
+    pub(crate) suspense_stack: RefCell<Vec<SuspenseLocation>>,
+
     // We use this to track the current task
     pub(crate) current_task: Cell<Option<Task>>,
 
-    pub(crate) rendering: Cell<bool>,
-
     /// Tasks created with cx.spawn
-    pub(crate) tasks: RefCell<slab::Slab<Rc<LocalTask>>>,
+    pub(crate) tasks: RefCell<slotmap::SlotMap<DefaultKey, Rc<LocalTask>>>,
+
+    // Currently suspended tasks
+    pub(crate) suspended_tasks: Cell<usize>,
+
+    pub(crate) rendering: Cell<bool>,
 
     pub(crate) sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
 
-    // the virtualdom will hold this lock while it's doing syncronous work
-    // when the lock is lifted, tasks waiting for the lock will be able to run
-    pub(crate) flush_mutex: Arc<futures_util::lock::Mutex<()>>,
-    pub(crate) flush_lock: Cell<Option<futures_util::lock::OwnedMutexGuard<()>>>,
+    // The effects that need to be run after the next render
+    pub(crate) pending_effects: RefCell<BTreeSet<Effect>>,
+
+    // Tasks that are waiting to be polled
+    pub(crate) dirty_tasks: RefCell<BTreeSet<DirtyTasks>>,
 }
 
 impl Runtime {
     pub(crate) fn new(sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>) -> Rc<Self> {
         Rc::new(Self {
             sender,
-            flush_mutex: Default::default(),
-            flush_lock: Default::default(),
             rendering: Cell::new(true),
             scope_states: Default::default(),
             scope_stack: Default::default(),
+            suspense_stack: Default::default(),
             current_task: Default::default(),
             tasks: Default::default(),
+            suspended_tasks: Default::default(),
+            pending_effects: Default::default(),
+            dirty_tasks: Default::default(),
         })
     }
 
@@ -102,13 +114,32 @@ impl Runtime {
     /// Useful in a limited number of scenarios
     pub fn on_scope<O>(&self, id: ScopeId, f: impl FnOnce() -> O) -> O {
         {
-            self.scope_stack.borrow_mut().push(id);
+            self.push_scope(id);
         }
         let o = f();
         {
-            self.scope_stack.borrow_mut().pop();
+            self.pop_scope();
         }
         o
+    }
+
+    /// Push a scope onto the stack
+    pub(crate) fn push_scope(&self, scope: ScopeId) {
+        let suspense_location = self
+            .scope_states
+            .borrow()
+            .get(scope.0)
+            .and_then(|s| s.as_ref())
+            .map(|s| s.suspense_boundary())
+            .unwrap_or_default();
+        self.suspense_stack.borrow_mut().push(suspense_location);
+        self.scope_stack.borrow_mut().push(scope);
+    }
+
+    /// Pop a scope off the stack
+    pub(crate) fn pop_scope(&self) {
+        self.scope_stack.borrow_mut().pop();
+        self.suspense_stack.borrow_mut().pop();
     }
 
     /// Get the state for any scope given its ID
@@ -150,23 +181,26 @@ impl Runtime {
         Self::with(|rt| rt.get_state(scope).map(|sc| f(&sc))).flatten()
     }
 
-    /// Acquire the flush lock and store it interally
-    ///
-    /// This means the virtual dom is currently doing syncronous work
-    /// The lock will be held until `release_flush_lock` is called - and then the OwnedLock will be dropped
-    pub(crate) fn acquire_flush_lock(&self) {
-        // The flush lock might already be held...
-        if let Some(lock) = self.flush_mutex.try_lock_owned() {
-            self.flush_lock.set(Some(lock));
+    /// Finish a render. This will mark all effects as ready to run and send the render signal.
+    pub(crate) fn finish_render(&self) {
+        // If there are new effects we can run, send a message to the scheduler to run them (after the renderer has applied the mutations)
+        if !self.pending_effects.borrow().is_empty() {
+            self.sender
+                .unbounded_send(SchedulerMsg::EffectQueued)
+                .expect("Scheduler should exist");
         }
     }
 
-    /// Release the flush lock
-    ///
-    /// On the drop of the flush lock, all tasks waiting on `flush_sync` will spring to life via their wakers.
-    /// You can now freely poll those tasks and they can progress
-    pub(crate) fn release_flush_lock(&self) {
-        self.flush_lock.take();
+    /// Check if we should render a scope
+    pub(crate) fn scope_should_render(&self, scope_id: ScopeId) -> bool {
+        // If there are no suspended futures, we know the scope is not  and we can skip context checks
+        if self.suspended_tasks.get() == 0 {
+            return true;
+        }
+        // If this is not a suspended scope, and we are under a frozen context, then we should
+        let scopes = self.scope_states.borrow();
+        let scope = &scopes[scope_id.0].as_ref().unwrap();
+        !matches!(scope.suspense_boundary(), SuspenseLocation::UnderSuspense(suspense) if suspense.suspended())
     }
 }
 

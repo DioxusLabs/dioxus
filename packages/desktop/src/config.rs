@@ -1,14 +1,14 @@
 use std::borrow::Cow;
 use std::path::PathBuf;
+use tao::window::{Icon, WindowBuilder};
+use wry::http::{Request as HttpRequest, Response as HttpResponse};
+use wry::RequestAsyncResponder;
 
-use tao::window::{Icon, WindowBuilder, WindowId};
-use wry::{
-    http::{Request as HttpRequest, Response as HttpResponse},
-    FileDropEvent,
-};
+use crate::menubar::{default_menu_bar, DioxusMenu};
 
 /// The behaviour of the application when the last window is closed.
 #[derive(Copy, Clone, Eq, PartialEq)]
+#[non_exhaustive]
 pub enum WindowCloseBehaviour {
     /// Default behaviour, closing the last window exits the app
     LastWindowExitsApp,
@@ -21,8 +21,9 @@ pub enum WindowCloseBehaviour {
 /// The configuration for the desktop application.
 pub struct Config {
     pub(crate) window: WindowBuilder,
-    pub(crate) file_drop_handler: Option<DropHandler>,
+    pub(crate) menu: Option<DioxusMenu>,
     pub(crate) protocols: Vec<WryProtocol>,
+    pub(crate) asynchronous_protocols: Vec<AsyncWryProtocol>,
     pub(crate) pre_rendered: Option<String>,
     pub(crate) disable_context_menu: bool,
     pub(crate) resource_dir: Option<PathBuf>,
@@ -31,32 +32,38 @@ pub struct Config {
     pub(crate) custom_index: Option<String>,
     pub(crate) root_name: String,
     pub(crate) background_color: Option<(u8, u8, u8, u8)>,
-    pub(crate) last_window_close_behaviour: WindowCloseBehaviour,
-    pub(crate) enable_default_menu_bar: bool,
+    pub(crate) last_window_close_behavior: WindowCloseBehaviour,
 }
-
-type DropHandler = Box<dyn Fn(WindowId, FileDropEvent) -> bool>;
 
 pub(crate) type WryProtocol = (
     String,
     Box<dyn Fn(HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static>,
 );
 
+pub(crate) type AsyncWryProtocol = (
+    String,
+    Box<dyn Fn(HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static>,
+);
+
 impl Config {
     /// Initializes a new `WindowBuilder` with default values.
     #[inline]
     pub fn new() -> Self {
-        let window = WindowBuilder::new().with_title(
-            dioxus_cli_config::CURRENT_CONFIG
-                .as_ref()
-                .map(|c| c.dioxus_config.application.name.clone())
-                .unwrap_or("Dioxus App".to_string()),
-        );
+        let window: WindowBuilder = WindowBuilder::new()
+            .with_title(
+                dioxus_cli_config::CURRENT_CONFIG
+                    .as_ref()
+                    .map(|c| c.dioxus_config.application.name.clone())
+                    .unwrap_or("Dioxus App".to_string()),
+            )
+            // During development we want the window to be on top so we can see it while we work
+            .with_always_on_top(cfg!(debug_assertions));
 
         Self {
             window,
+            menu: Some(default_menu_bar()),
             protocols: Vec::new(),
-            file_drop_handler: None,
+            asynchronous_protocols: Vec::new(),
             pre_rendered: None,
             disable_context_menu: !cfg!(debug_assertions),
             resource_dir: None,
@@ -65,17 +72,8 @@ impl Config {
             custom_index: None,
             root_name: "main".to_string(),
             background_color: None,
-            last_window_close_behaviour: WindowCloseBehaviour::LastWindowExitsApp,
-            enable_default_menu_bar: true,
+            last_window_close_behavior: WindowCloseBehaviour::LastWindowExitsApp,
         }
-    }
-
-    /// Set whether the default menu bar should be enabled.
-    ///
-    /// > Note: `enable` is `true` by default. To disable the default menu bar pass `false`.
-    pub fn with_default_menu_bar(mut self, enable: bool) -> Self {
-        self.enable_default_menu_bar = enable;
-        self
     }
 
     /// set the directory from which assets will be searched in release mode
@@ -114,25 +112,51 @@ impl Config {
 
     /// Sets the behaviour of the application when the last window is closed.
     pub fn with_close_behaviour(mut self, behaviour: WindowCloseBehaviour) -> Self {
-        self.last_window_close_behaviour = behaviour;
-        self
-    }
-
-    /// Set a file drop handler. If this is enabled, html drag events will be disabled.
-    pub fn with_file_drop_handler(
-        mut self,
-        handler: impl Fn(WindowId, FileDropEvent) -> bool + 'static,
-    ) -> Self {
-        self.file_drop_handler = Some(Box::new(handler));
+        self.last_window_close_behavior = behaviour;
         self
     }
 
     /// Set a custom protocol
-    pub fn with_custom_protocol<F>(mut self, name: String, handler: F) -> Self
+    pub fn with_custom_protocol<F>(mut self, name: impl ToString, handler: F) -> Self
     where
         F: Fn(HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static,
     {
-        self.protocols.push((name, Box::new(handler)));
+        self.protocols.push((name.to_string(), Box::new(handler)));
+        self
+    }
+
+    /// Set an asynchronous custom protocol
+    ///
+    /// **Example Usage**
+    /// ```rust
+    /// # use wry::http::response::Response as HTTPResponse;
+    /// # use std::borrow::Cow;
+    /// # use dioxus_desktop::Config;
+    /// #
+    /// # fn main() {
+    /// let cfg = Config::new()
+    ///     .with_asynchronous_custom_protocol("asset", |request, responder| {
+    ///         tokio::spawn(async move {
+    ///             responder.respond(
+    ///                 HTTPResponse::builder()
+    ///                     .status(404)
+    ///                     .body(Cow::Borrowed("404 - Not Found".as_bytes()))
+    ///                     .unwrap()
+    ///             );
+    ///         });
+    ///     });
+    /// # }
+    /// ```
+    /// note a key difference between Dioxus and Wry, the protocol name doesn't explicitly need to be a
+    /// [`String`], but needs to implement [`ToString`].
+    ///
+    /// See [`wry`](wry::WebViewBuilder::with_asynchronous_custom_protocol) for more details on implementation
+    pub fn with_asynchronous_custom_protocol<F>(mut self, name: impl ToString, handler: F) -> Self
+    where
+        F: Fn(HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static,
+    {
+        self.asynchronous_protocols
+            .push((name.to_string(), Box::new(handler)));
         self
     }
 
@@ -163,7 +187,7 @@ impl Config {
 
     /// Set the name of the element that Dioxus will use as the root.
     ///
-    /// This is akint to calling React.render() on the element with the specified name.
+    /// This is akin to calling React.render() on the element with the specified name.
     pub fn with_root_name(mut self, name: impl Into<String>) -> Self {
         self.root_name = name.into();
         self
@@ -174,6 +198,18 @@ impl Config {
     /// Accepts a color in RGBA format
     pub fn with_background_color(mut self, color: (u8, u8, u8, u8)) -> Self {
         self.background_color = Some(color);
+        self
+    }
+
+    /// Sets the menu the window will use. This will override the default menu bar.
+    ///
+    /// > Note: A default menu bar will be enabled unless the menu is overridden or set to `None`.
+    #[allow(unused)]
+    pub fn with_menu(mut self, menu: impl Into<Option<DioxusMenu>>) -> Self {
+        #[cfg(not(any(target_os = "ios", target_os = "android")))]
+        {
+            self.menu = menu.into();
+        }
         self
     }
 }

@@ -1,4 +1,5 @@
 use dioxus_cli_config::Platform;
+use dioxus_cli_config::ServeArguments;
 
 use super::*;
 
@@ -14,6 +15,11 @@ pub struct ConfigOptsBuild {
     #[clap(long)]
     #[serde(default)]
     pub force_debug: bool,
+
+    /// This flag only applies to fullstack builds. By default fullstack builds will run the server and client builds in parallel. This flag will force the build to run the server build first, then the client build. [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub force_sequential: bool,
 
     // Use verbose output [default: false]
     #[clap(long)]
@@ -72,6 +78,7 @@ impl From<ConfigOptsServe> for ConfigOptsBuild {
             server_feature: serve.server_feature,
             skip_assets: serve.skip_assets,
             force_debug: serve.force_debug,
+            force_sequential: serve.force_sequential,
             cargo_args: serve.cargo_args,
         }
     }
@@ -80,13 +87,12 @@ impl From<ConfigOptsServe> for ConfigOptsBuild {
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 #[command(group = clap::ArgGroup::new("release-incompatible").multiple(true).conflicts_with("release"))]
 pub struct ConfigOptsServe {
-    /// Port of dev server
-    #[clap(long)]
-    #[clap(default_value_t = 8080)]
-    pub port: u16,
+    /// Arguments for the serve command
+    #[clap(flatten)]
+    pub(crate) server_arguments: ServeArguments,
 
-    /// Open the app in the default browser [default: false]
-    #[clap(long)]
+    /// Open the app in the default browser [default: true]
+    #[clap(long, default_value_t = false)]
     #[serde(default)]
     pub open: bool,
 
@@ -104,6 +110,11 @@ pub struct ConfigOptsServe {
     #[serde(default)]
     pub force_debug: bool,
 
+    /// This flag only applies to fullstack builds. By default fullstack builds will run the server and client builds in parallel. This flag will force the build to run the server build first, then the client build. [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub force_sequential: bool,
+
     // Use verbose output [default: false]
     #[clap(long)]
     #[serde(default)]
@@ -117,8 +128,14 @@ pub struct ConfigOptsServe {
     #[clap(long, value_enum)]
     pub platform: Option<Platform>,
 
-    /// Build with hot reloading rsx. Will not work with release builds. [default: false]
+    /// Build with hot reloading rsx. Will not work with release builds. [default: true]
     #[clap(long)]
+    #[clap(default_missing_value("true"),
+        default_value("true"),
+        num_args(0..=1),
+        require_equals(true),
+        action = clap::ArgAction::Set,
+    )]
     #[clap(group = "release-incompatible")]
     #[serde(default)]
     pub hot_reload: bool,
@@ -150,6 +167,10 @@ pub struct ConfigOptsServe {
     #[clap(long)]
     pub target: Option<String>,
 
+    /// Additional arguments to pass to the executable
+    #[clap(long)]
+    pub args: Vec<String>,
+
     /// Extra arguments passed to cargo build
     #[clap(last = true)]
     pub cargo_args: Vec<String>,
@@ -178,7 +199,7 @@ pub struct ConfigOptsBundle {
 
     /// Build platform: support Web & Desktop [default: "default_platform"]
     #[clap(long)]
-    pub platform: Option<String>,
+    pub platform: Option<Platform>,
 
     /// Space separated list of features to activate
     #[clap(long)]

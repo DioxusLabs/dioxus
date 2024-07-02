@@ -5,7 +5,7 @@ authors = ["Jonathan Kelley"]
 edition = "2021"
 description = "Mobile-compatible renderer for Dioxus"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com/learn/0.4/getting_started/mobile"
+homepage = "https://dioxuslabs.com/learn/0.5/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
 license = "MIT OR Apache-2.0"
 
@@ -16,3 +16,6 @@ dioxus-desktop = { workspace = true, features = ["tokio_runtime"] }
 doctest = false
 # tests suspended until package ready
 test = false
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

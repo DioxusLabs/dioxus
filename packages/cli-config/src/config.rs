@@ -7,16 +7,27 @@ use std::path::PathBuf;
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Debug)]
 #[cfg_attr(feature = "cli", derive(clap::ValueEnum))]
+#[non_exhaustive]
 pub enum Platform {
+    /// Targeting the web platform using WASM
     #[cfg_attr(feature = "cli", clap(name = "web"))]
     #[serde(rename = "web")]
     Web,
+
+    /// Targeting the desktop platform using Tao/Wry-based webview
     #[cfg_attr(feature = "cli", clap(name = "desktop"))]
     #[serde(rename = "desktop")]
     Desktop,
+
+    /// Targeting the server platform using Axum and Dioxus-Fullstack
     #[cfg_attr(feature = "cli", clap(name = "fullstack"))]
     #[serde(rename = "fullstack")]
     Fullstack,
+
+    /// Targeting the static generation platform using SSR and Dioxus-Fullstack
+    #[cfg_attr(feature = "cli", clap(name = "fullstack"))]
+    #[serde(rename = "static-generation")]
+    StaticGeneration,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,6 +61,7 @@ impl std::fmt::Display for LoadDioxusConfigError {
 impl std::error::Error for LoadDioxusConfigError {}
 
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum CrateConfigError {
     Cargo(CargoError),
     Io(std::io::Error),
@@ -100,6 +112,7 @@ impl std::error::Error for CrateConfigError {}
 impl DioxusConfig {
     #[cfg(feature = "cli")]
     /// Load the dioxus config from a path
+    #[tracing::instrument]
     pub fn load(bin: Option<PathBuf>) -> Result<Option<DioxusConfig>, CrateConfigError> {
         let crate_dir = crate::cargo::crate_root();
 
@@ -116,6 +129,7 @@ impl DioxusConfig {
         let crate_dir = crate_dir.as_path();
 
         let Some(dioxus_conf_file) = acquire_dioxus_toml(crate_dir) else {
+            tracing::warn!(?crate_dir, "no dioxus config found for");
             return Ok(None);
         };
 
@@ -149,20 +163,15 @@ impl DioxusConfig {
 }
 
 #[cfg(feature = "cli")]
+#[tracing::instrument]
 fn acquire_dioxus_toml(dir: &std::path::Path) -> Option<PathBuf> {
-    // prefer uppercase
-    let uppercase_conf = dir.join("Dioxus.toml");
-    if uppercase_conf.is_file() {
-        return Some(uppercase_conf);
-    }
+    use tracing::trace;
 
-    // lowercase is fine too
-    let lowercase_conf = dir.join("dioxus.toml");
-    if lowercase_conf.is_file() {
-        return Some(lowercase_conf);
-    }
-
-    None
+    ["Dioxus.toml", "dioxus.toml"]
+        .into_iter()
+        .map(|file| dir.join(file))
+        .inspect(|path| trace!("checking [{path:?}]"))
+        .find(|path| path.is_file())
 }
 
 impl Default for DioxusConfig {
@@ -174,6 +183,7 @@ impl Default for DioxusConfig {
                 default_platform: default_platform(),
                 out_dir: out_dir_default(),
                 asset_dir: asset_dir_default(),
+                hot_reload: hot_reload_default(),
 
                 #[cfg(feature = "cli")]
                 tools: Default::default(),
@@ -201,7 +211,8 @@ impl Default for DioxusConfig {
                     key_path: None,
                     cert_path: None,
                 },
-                index_on_404: false,
+                pre_compress: true,
+                wasm_opt: Default::default(),
             },
             bundle: BundleConfig {
                 identifier: Some(format!("io.github.{name}")),
@@ -217,12 +228,18 @@ impl Default for DioxusConfig {
 pub struct ApplicationConfig {
     #[serde(default = "default_name")]
     pub name: String,
+
     #[serde(default = "default_platform")]
     pub default_platform: Platform,
+
     #[serde(default = "out_dir_default")]
     pub out_dir: PathBuf,
+
     #[serde(default = "asset_dir_default")]
     pub asset_dir: PathBuf,
+
+    #[serde(default = "hot_reload_default")]
+    pub hot_reload: bool,
 
     #[cfg(feature = "cli")]
     #[serde(default)]
@@ -238,6 +255,10 @@ fn default_name() -> String {
 
 fn default_platform() -> Platform {
     Platform::Web
+}
+
+fn hot_reload_default() -> bool {
+    true
 }
 
 fn asset_dir_default() -> PathBuf {
@@ -258,7 +279,58 @@ pub struct WebConfig {
     pub resource: WebResourceConfig,
     #[serde(default)]
     pub https: WebHttpsConfig,
-    pub index_on_404: bool,
+    /// Whether to enable pre-compression of assets and wasm during a web build in release mode
+    #[serde(default = "true_bool")]
+    pub pre_compress: bool,
+    /// The wasm-opt configuration
+    #[serde(default)]
+    pub wasm_opt: WasmOptConfig,
+}
+
+/// The wasm-opt configuration
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct WasmOptConfig {
+    /// The wasm-opt level to use for release builds [default: s]
+    /// Options:
+    /// - z: optimize aggressively for size
+    /// - s: optimize for size
+    /// - 1: optimize for speed
+    /// - 2: optimize for more for speed
+    /// - 3: optimize for even more for speed
+    /// - 4: optimize aggressively for speed
+    #[serde(default)]
+    pub level: WasmOptLevel,
+
+    /// Keep debug symbols in the wasm file
+    #[serde(default = "false_bool")]
+    pub debug: bool,
+}
+
+/// The wasm-opt level to use for release web builds [default: 4]
+#[derive(Default, Debug, Copy, Clone, Serialize, Deserialize)]
+pub enum WasmOptLevel {
+    /// Optimize aggressively for size
+    #[serde(rename = "z")]
+    Z,
+    /// Optimize for size
+    #[serde(rename = "s")]
+    S,
+    /// Don't optimize
+    #[serde(rename = "0")]
+    Zero,
+    /// Optimize for speed
+    #[serde(rename = "1")]
+    One,
+    /// Optimize for more for speed
+    #[serde(rename = "2")]
+    Two,
+    /// Optimize for even more for speed
+    #[serde(rename = "3")]
+    Three,
+    /// Optimize aggressively for speed
+    #[serde(rename = "4")]
+    #[default]
+    Four,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -286,11 +358,30 @@ pub struct WebProxyConfig {
     pub backend: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct WatcherConfig {
-    pub watch_path: Option<Vec<PathBuf>>,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebWatcherConfig {
+    #[serde(default = "watch_path_default")]
+    pub watch_path: Vec<PathBuf>,
+
     #[serde(default)]
     pub reload_html: bool,
+
+    #[serde(default = "true_bool")]
+    pub index_on_404: bool,
+}
+
+impl Default for WebWatcherConfig {
+    fn default() -> Self {
+        Self {
+            watch_path: watch_path_default(),
+            reload_html: false,
+            index_on_404: true,
+        }
+    }
+}
+
+fn watch_path_default() -> Vec<PathBuf> {
+    vec![PathBuf::from("src"), PathBuf::from("examples")]
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
@@ -340,6 +431,16 @@ pub enum ExecutableType {
     Binary(String),
     Lib(String),
     Example(String),
+}
+
+impl ExecutableType {
+    /// Get the name of the executable if it is a binary or an example.
+    pub fn executable(&self) -> Option<&str> {
+        match self {
+            Self::Binary(bin) | Self::Example(bin) => Some(bin),
+            _ => None,
+        }
+    }
 }
 
 impl CrateConfig {
@@ -493,6 +594,39 @@ impl CrateConfig {
         self.cargo_args = cargo_args;
         self
     }
+
+    pub fn add_features(&mut self, feature: Vec<String>) -> &mut Self {
+        if let Some(features) = &mut self.features {
+            features.extend(feature);
+        } else {
+            self.features = Some(feature);
+        }
+        self
+    }
+
+    #[cfg(feature = "cli")]
+    pub fn extend_with_platform(&mut self, platform: Platform) -> &mut Self {
+        let manifest = &self.manifest;
+        let features = match platform {
+            Platform::Web if manifest.features.contains_key("web") => {
+                vec!["web".to_string()]
+            }
+            Platform::Desktop if manifest.features.contains_key("desktop") => {
+                vec!["desktop".to_string()]
+            }
+            _ => {
+                // fullstack has its own feature insertion - we use a different featureset for the client and server
+                vec![]
+            }
+        };
+        self.add_features(features);
+        self
+    }
+
+    /// Check if assets should be pre_compressed. This will only be true in release mode if the user has enabled pre_compress in the web config.
+    pub fn should_pre_compress_web_assets(&self) -> bool {
+        self.dioxus_config.web.pre_compress && self.release
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -515,4 +649,8 @@ pub struct PluginConfigInfo {
     // pub config: toml::Value,
     pub config: HashMap<String, String>,
     pub priority: Option<usize>,
+}
+
+fn false_bool() -> bool {
+    false
 }

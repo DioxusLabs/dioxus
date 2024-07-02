@@ -1,0 +1,42 @@
+[package]
+name = "dioxus-static-site-generation"
+authors = ["Evan Almloff"]
+version = { workspace = true }
+edition = "2021"
+description = "Static site generation for Dioxus"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+keywords = ["ui", "gui", "react", "ssg"]
+resolver = "2"
+
+[dependencies]
+dioxus-fullstack = { workspace = true }
+dioxus-lib.workspace = true
+dioxus-router = { workspace = true, features = ["fullstack"]}
+dioxus-ssr = { workspace = true, features = ["incremental"], optional = true }
+axum = { workspace = true, features = ["ws", "macros"], optional = true }
+tower-http = { workspace = true, features = ["fs"], optional = true }
+dioxus-hot-reload = { workspace = true, features = ["serve"], optional = true }
+dioxus-cli-config = { workspace = true, features = ["read-config"], optional = true }
+dioxus-web = { workspace = true, features = ["hydrate"], optional = true }
+tokio = { workspace = true, optional = true }
+http = { workspace = true, optional = true }
+tower = { workspace = true, features = ["util"], optional = true }
+tracing.workspace = true
+
+[dev-dependencies]
+dioxus = { workspace = true }
+
+[features]
+default = []
+server = ["dioxus-fullstack/server", "dioxus-router/ssr", "dep:dioxus-ssr", "dep:tokio", "dep:http", "dep:axum", "dep:tower-http", "dep:dioxus-hot-reload", "dep:dioxus-cli-config", "dep:tower"]
+web = ["dioxus-fullstack/web", "dioxus-router/web", "dep:dioxus-web"]
+
+[[bench]]
+name = "incremental"
+required-features = ["ssr"]
+harness = false
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

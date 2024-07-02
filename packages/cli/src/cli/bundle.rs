@@ -1,6 +1,6 @@
 use core::panic;
 use dioxus_cli_config::ExecutableType;
-use std::{fs::create_dir_all, str::FromStr};
+use std::{env::current_dir, fs::create_dir_all, str::FromStr};
 
 use tauri_bundler::{BundleSettings, PackageSettings, SettingsBuilder};
 
@@ -73,7 +73,7 @@ impl Bundle {
         plugins_before_command(BundleEvent).await;
 
         // change the release state.
-        crate_config.with_release(self.build.release);
+        crate_config.with_release(true);
         crate_config.with_verbose(self.build.verbose);
 
         if self.build.example.is_some() {
@@ -89,6 +89,13 @@ impl Bundle {
         }
 
         crate_config.set_cargo_args(self.build.cargo_args);
+        if let Some(platform) = self.build.platform {
+            crate_config.extend_with_platform(platform);
+        }
+
+        if let Some(features) = self.build.features {
+            crate_config.set_features(features);
+        }
 
         // build the desktop app
         // Since the `bundle()` function is only run for the desktop platform,
@@ -144,16 +151,39 @@ impl Bundle {
             }
         }
 
-        // Add all assets from collect assets to the bundle
-        {
-            let config = manganis_cli_support::Config::current();
-            let location = config.assets_serve_location().to_string();
-            let location = format!("./{}", location);
-            println!("Adding assets from {} to bundle", location);
-            if let Some(resources) = &mut bundle_settings.resources {
-                resources.push(location);
+        // Copy the assets in the dist directory to the bundle
+        let static_asset_output_dir = &crate_config.dioxus_config.application.out_dir;
+        // Make sure the dist directory is relative to the crate directory
+        let static_asset_output_dir = static_asset_output_dir
+            .strip_prefix(&crate_config.crate_dir)
+            .unwrap_or(static_asset_output_dir);
+
+        let static_asset_output_dir = static_asset_output_dir.display().to_string();
+        println!("Adding assets from {} to bundle", static_asset_output_dir);
+
+        // Don't copy the executable or the old bundle directory
+        let ignored_files = [
+            crate_config.out_dir().join("bundle"),
+            crate_config.out_dir().join(name),
+        ];
+
+        for entry in std::fs::read_dir(&static_asset_output_dir)?.flatten() {
+            let path = entry.path().canonicalize()?;
+            if ignored_files.iter().any(|f| path.starts_with(f)) {
+                continue;
+            }
+
+            // Tauri bundle will add a __root__ prefix if the input path is absolute even though the output path is relative?
+            // We strip the prefix here to make sure the input path is relative so that the bundler puts the output path in the right place
+            let path = path
+                .strip_prefix(&current_dir()?)
+                .unwrap()
+                .display()
+                .to_string();
+            if let Some(resources) = &mut bundle_settings.resources_map {
+                resources.insert(path, "".to_string());
             } else {
-                bundle_settings.resources = Some(vec![location]);
+                bundle_settings.resources_map = Some([(path, "".to_string())].into());
             }
         }
 

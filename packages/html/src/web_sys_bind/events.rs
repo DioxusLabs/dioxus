@@ -3,13 +3,13 @@ use crate::events::{
     AnimationData, CompositionData, KeyboardData, MouseData, PointerData, TouchData,
     TransitionData, WheelData,
 };
-use crate::file_data::{FileEngine, HasFileData};
+use crate::file_data::HasFileData;
 use crate::geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint};
 use crate::input_data::{decode_key_location, decode_mouse_button_set, MouseButton};
 use crate::prelude::*;
 use keyboard_types::{Code, Key, Modifiers};
 use std::str::FromStr;
-use wasm_bindgen::{JsCast, JsValue};
+use wasm_bindgen::JsCast;
 use web_sys::{
     AnimationEvent, CompositionEvent, Event, KeyboardEvent, MouseEvent, PointerEvent, Touch,
     TouchEvent, TransitionEvent, WheelEvent,
@@ -423,13 +423,43 @@ impl From<&web_sys::Element> for MountedData {
 
 #[cfg(feature = "mounted")]
 impl crate::RenderedElementBacking for web_sys::Element {
+    fn get_scroll_offset(
+        &self,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<Output = crate::MountedResult<crate::geometry::PixelsVector2D>>,
+        >,
+    > {
+        let left = self.scroll_left();
+        let top = self.scroll_top();
+        let result = Ok(crate::geometry::PixelsVector2D::new(
+            left as f64,
+            top as f64,
+        ));
+        Box::pin(async { result })
+    }
+
+    fn get_scroll_size(
+        &self,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = crate::MountedResult<crate::geometry::PixelsSize>>>,
+    > {
+        let width = self.scroll_width();
+        let height = self.scroll_height();
+        let result = Ok(crate::geometry::PixelsSize::new(
+            width as f64,
+            height as f64,
+        ));
+        Box::pin(async { result })
+    }
+
     fn get_client_rect(
         &self,
     ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = crate::MountedResult<euclid::Rect<f64, f64>>>>,
+        Box<dyn std::future::Future<Output = crate::MountedResult<crate::geometry::PixelsRect>>>,
     > {
         let rect = self.get_bounding_client_rect();
-        let result = Ok(euclid::Rect::new(
+        let result = Ok(crate::geometry::PixelsRect::new(
             euclid::Point2D::new(rect.left(), rect.top()),
             euclid::Size2D::new(rect.width(), rect.height()),
         ));
@@ -460,6 +490,17 @@ impl crate::RenderedElementBacking for web_sys::Element {
         &self,
         focus: bool,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::MountedResult<()>>>> {
+        #[derive(Debug)]
+        struct FocusError(wasm_bindgen::JsValue);
+
+        impl std::fmt::Display for FocusError {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "failed to focus element {:?}", self.0)
+            }
+        }
+
+        impl std::error::Error for FocusError {}
+
         let result = self
             .dyn_ref::<web_sys::HtmlElement>()
             .ok_or_else(|| crate::MountedError::OperationFailed(Box::new(FocusError(self.into()))))
@@ -470,17 +511,6 @@ impl crate::RenderedElementBacking for web_sys::Element {
         Box::pin(async { result })
     }
 }
-
-#[derive(Debug)]
-struct FocusError(JsValue);
-
-impl std::fmt::Display for FocusError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "failed to focus element {:?}", self.0)
-    }
-}
-
-impl std::error::Error for FocusError {}
 
 impl HasScrollData for Event {
     fn as_any(&self) -> &dyn std::any::Any {
@@ -525,18 +555,15 @@ impl HasMediaData for web_sys::Event {
 }
 
 impl HasFileData for web_sys::Event {
-    fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
-        #[cfg(not(feature = "file_engine"))]
-        let files = None;
-        #[cfg(feature = "file_engine")]
-        let files = element
+    #[cfg(feature = "file-engine")]
+    fn files(&self) -> Option<std::sync::Arc<dyn crate::file_data::FileEngine>> {
+        let files = self
             .dyn_ref()
             .and_then(|input: &web_sys::HtmlInputElement| {
                 input.files().and_then(|files| {
                     #[allow(clippy::arc_with_non_send_sync)]
-                    crate::file_engine::WebFileEngine::new(files).map(|f| {
-                        std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>
-                    })
+                    crate::web_sys_bind::file_engine::WebFileEngine::new(files)
+                        .map(|f| std::sync::Arc::new(f) as std::sync::Arc<dyn crate::FileEngine>)
                 })
             });
 

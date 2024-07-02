@@ -5,16 +5,10 @@
 mod cache;
 pub mod config;
 #[cfg(feature = "incremental")]
-mod fs_cache;
-#[cfg(feature = "incremental")]
 pub mod incremental;
-#[cfg(feature = "incremental")]
-mod incremental_cfg;
-
 pub mod renderer;
 pub mod template;
 
-use dioxus_core::NoOpMutations;
 use dioxus_core::{Element, VirtualDom};
 
 pub use crate::renderer::Renderer;
@@ -28,7 +22,7 @@ pub fn render_element(element: Element) -> String {
     }
 
     let mut dom = VirtualDom::new_with_props(lazy_app, element);
-    dom.rebuild(&mut NoOpMutations);
+    dom.rebuild_in_place();
 
     Renderer::new().render(&dom)
 }

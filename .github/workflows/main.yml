@@ -53,7 +53,6 @@ jobs:
         with:
           cache-all-crates: "true"
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - uses: ilammy/setup-nasm@v1
       - run: cargo check --all --examples --tests --all-features --all-targets
 
   test:
@@ -69,7 +68,6 @@ jobs:
         with:
           cache-all-crates: "true"
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - uses: ilammy/setup-nasm@v1
       - uses: davidB/rust-cargo-make@v1
       - uses: browser-actions/setup-firefox@latest
       - uses: jetli/wasm-pack-action@v0.4.0
@@ -81,13 +79,36 @@ jobs:
           swap-storage: false
       - run: cargo make tests
 
+  release-test:
+    if: github.event.pull_request.draft == false
+    name: Test Suite with Optimizations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update
+      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: davidB/rust-cargo-make@v1
+      - uses: browser-actions/setup-firefox@latest
+      - uses: jetli/wasm-pack-action@v0.4.0
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with: # speed things up a bit
+          large-packages: false
+          docker-images: false
+          swap-storage: false
+      - run: cargo test --profile release-unoptimized --lib --bins --tests --examples --workspace --exclude dioxus-desktop --exclude dioxus-mobile
+
   fmt:
     if: github.event.pull_request.draft == false
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: ilammy/setup-nasm@v1
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -105,7 +126,6 @@ jobs:
       - uses: actions/checkout@v4
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
-      - uses: ilammy/setup-nasm@v1
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -149,7 +169,6 @@ jobs:
     steps:
       # Do our best to cache the toolchain and node install steps
       - uses: actions/checkout@v4
-      - uses: ilammy/setup-nasm@v1
       - uses: actions/setup-node@v4
         with:
           node-version: 16
@@ -235,7 +254,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: ilammy/setup-nasm@v1
       - name: install stable
         uses: dtolnay/rust-toolchain@master
         with:

@@ -9,7 +9,7 @@ use collect_macros::byte_offset;
 use dioxus_rsx::{BodyNode, CallBody, IfmtInput};
 use proc_macro2::LineColumn;
 use quote::ToTokens;
-use syn::{ExprMacro, MacroDelimiter};
+use syn::{parse::Parser, ExprMacro, MacroDelimiter};
 
 mod buffer;
 mod collect_macros;
@@ -17,6 +17,7 @@ mod component;
 mod element;
 mod expr;
 mod indent;
+mod prettier_please;
 mod writer;
 
 pub use indent::{IndentOptions, IndentType};
@@ -76,7 +77,7 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
             continue;
         }
 
-        let body = item.parse_body::<CallBody>().unwrap();
+        let body = item.parse_body_with(CallBody::parse_strict).unwrap();
 
         let rsx_start = macro_path.span().start();
 
@@ -131,35 +132,28 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
     formatted_blocks
 }
 
-pub fn write_block_out(body: CallBody) -> Option<String> {
+pub fn write_block_out(body: &CallBody) -> Option<String> {
     let mut buf = Writer::new("");
 
-    write_body(&mut buf, &body);
+    write_body(&mut buf, body);
 
     buf.consume()
 }
 
 fn write_body(buf: &mut Writer, body: &CallBody) {
-    let is_short = buf.is_short_children(&body.roots).is_some();
-    let is_empty = buf.is_empty_children(&body.roots);
-    if (is_short && !buf.out.indent.split_line_attributes()) || is_empty {
-        // write all the indents with spaces and commas between
-        for idx in 0..body.roots.len() - 1 {
-            let ident = &body.roots[idx];
-            buf.write_ident(ident).unwrap();
-            write!(&mut buf.out.buf, ", ").unwrap();
+    match body.roots.len() {
+        0 => {}
+        1 if matches!(body.roots[0], BodyNode::Text(_)) => {
+            write!(buf.out, " ").unwrap();
+            buf.write_ident(&body.roots[0]).unwrap();
+            write!(buf.out, " ").unwrap();
         }
-
-        // write the last ident without a comma
-        let ident = &body.roots[body.roots.len() - 1];
-        buf.write_ident(ident).unwrap();
-    } else {
-        buf.write_body_indented(&body.roots).unwrap();
+        _ => buf.write_body_indented(&body.roots).unwrap(),
     }
 }
 
 pub fn fmt_block_from_expr(raw: &str, expr: ExprMacro) -> Option<String> {
-    let body = syn::parse2::<CallBody>(expr.mac.tokens).unwrap();
+    let body = CallBody::parse_strict.parse2(expr.mac.tokens).unwrap();
 
     let mut buf = Writer::new(raw);
 
@@ -169,7 +163,7 @@ pub fn fmt_block_from_expr(raw: &str, expr: ExprMacro) -> Option<String> {
 }
 
 pub fn fmt_block(block: &str, indent_level: usize, indent: IndentOptions) -> Option<String> {
-    let body = syn::parse_str::<dioxus_rsx::CallBody>(block).unwrap();
+    let body = CallBody::parse_strict.parse_str(block).unwrap();
 
     let mut buf = Writer::new(block);
 

@@ -4,13 +4,12 @@ use dioxus_html::{
     point_interaction::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
-    prelude::FormValue,
-    DragData, FileEngine, FormData, HasDragData, HasFileData, HasFormData, HasImageData,
+    DragData, FormData, FormValue, HasDragData, HasFileData, HasFormData, HasImageData,
     HasMouseData, HtmlEventConverter, ImageData, MountedData, PlatformEventData, ScrollData,
 };
 use js_sys::Array;
 use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
-use web_sys::{Document, DragEvent, Element, Event, MouseEvent};
+use web_sys::{Document, Element, Event, MouseEvent};
 
 pub(crate) struct WebEventConverter;
 
@@ -389,21 +388,7 @@ impl HasFormData for WebFormData {
         let mut values = HashMap::new();
 
         fn insert_value(map: &mut HashMap<String, FormValue>, key: String, new_value: String) {
-            match map.entry(key) {
-                std::collections::hash_map::Entry::Occupied(mut o) => {
-                    let first_value = match o.get_mut() {
-                        FormValue::Text(data) => std::mem::take(data),
-                        FormValue::VecText(vec) => {
-                            vec.push(new_value);
-                            return;
-                        }
-                    };
-                    let _ = o.insert(FormValue::VecText(vec![first_value, new_value]));
-                }
-                std::collections::hash_map::Entry::Vacant(v) => {
-                    let _ = v.insert(FormValue::Text(new_value));
-                }
-            }
+            map.entry(key.clone()).or_default().0.push(new_value);
         }
 
         // try to fill in form values
@@ -426,7 +411,7 @@ impl HasFormData for WebFormData {
         } else if let Some(select) = self.element.dyn_ref::<web_sys::HtmlSelectElement>() {
             // try to fill in select element values
             let options = get_select_data(select);
-            values.insert("options".to_string(), FormValue::VecText(options));
+            values.insert("options".to_string(), FormValue(options));
         }
 
         values
@@ -438,17 +423,15 @@ impl HasFormData for WebFormData {
 }
 
 impl HasFileData for WebFormData {
-    fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
-        #[cfg(not(feature = "file_engine"))]
-        let files = None;
-        #[cfg(feature = "file_engine")]
+    #[cfg(feature = "file_engine")]
+    fn files(&self) -> Option<std::sync::Arc<dyn dioxus_html::FileEngine>> {
         let files = self
             .element
             .dyn_ref()
             .and_then(|input: &web_sys::HtmlInputElement| {
                 input.files().and_then(|files| {
                     #[allow(clippy::arc_with_non_send_sync)]
-                    crate::file_engine::WebFileEngine::new(files).map(|f| {
+                    dioxus_html::WebFileEngine::new(files).map(|f| {
                         std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>
                     })
                 })
@@ -521,20 +504,21 @@ impl InteractionLocation for WebDragData {
 }
 
 impl HasFileData for WebDragData {
-    fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
-        #[cfg(not(feature = "file_engine"))]
-        let files = None;
-        #[cfg(feature = "file_engine")]
-        let files = self.raw.dyn_ref::<DragEvent>().and_then(|drag_event| {
-            drag_event.data_transfer().and_then(|dt| {
-                dt.files().and_then(|files| {
-                    #[allow(clippy::arc_with_non_send_sync)]
-                    crate::file_engine::WebFileEngine::new(files).map(|f| {
-                        std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>
+    #[cfg(feature = "file_engine")]
+    fn files(&self) -> Option<std::sync::Arc<dyn dioxus_html::FileEngine>> {
+        let files = self
+            .raw
+            .dyn_ref::<web_sys::DragEvent>()
+            .and_then(|drag_event| {
+                drag_event.data_transfer().and_then(|dt| {
+                    dt.files().and_then(|files| {
+                        #[allow(clippy::arc_with_non_send_sync)]
+                        dioxus_html::WebFileEngine::new(files).map(|f| {
+                            std::sync::Arc::new(f) as std::sync::Arc<dyn dioxus_html::FileEngine>
+                        })
                     })
                 })
-            })
-        });
+            });
 
         files
     }

@@ -1,11 +1,11 @@
-use dioxus_rsx::{AttributeType, BodyNode, ElementAttrValue, ForLoop, IfChain};
+use dioxus_rsx::{AttributeType, BodyNode, ElementAttrValue, ForLoop, IfChain, IfmtInput};
 use proc_macro2::{LineColumn, Span};
 use quote::ToTokens;
 use std::{
     collections::{HashMap, VecDeque},
     fmt::{Result, Write},
 };
-use syn::{spanned::Spanned, Expr};
+use syn::{spanned::Spanned, token::Brace, Expr};
 
 use crate::buffer::Buffer;
 use crate::ifmt_to_string;
@@ -61,8 +61,26 @@ impl<'a> Writer<'a> {
         Some(self.out.buf)
     }
 
+    pub fn write_attr_comments(&mut self, brace: &Brace, attr_span: Span) -> Result {
+        // There's a chance this line actually shares the same line as the previous
+        // Only write comments if the comments actually belong to this line
+        //
+        // to do this, we check if the attr span starts on the same line as the brace
+        // if it doesn't, we write the comments
+        let brace_line = brace.span.span().start().line;
+        let attr_line = attr_span.start().line;
+
+        if brace_line != attr_line {
+            self.write_comments(attr_span)?;
+        }
+
+        Ok(())
+    }
+
     pub fn write_comments(&mut self, child: Span) -> Result {
         // collect all comments upwards
+        // make sure we don't collect the comments of the node that we're currently under.
+
         let start = child.start();
         let line_start = start.line - 1;
 
@@ -141,33 +159,33 @@ impl<'a> Writer<'a> {
                 condition_len + value_len + 6
             }
             ElementAttrValue::AttrLiteral(lit) => ifmt_to_string(lit).len(),
-            ElementAttrValue::AttrExpr(expr) => expr.span().line_length(),
             ElementAttrValue::Shorthand(expr) => expr.span().line_length(),
-            ElementAttrValue::EventTokens(tokens) => {
-                let location = Location::new(tokens.span().start());
-
-                let len = if let std::collections::hash_map::Entry::Vacant(e) =
-                    self.cached_formats.entry(location)
-                {
-                    let formatted = prettyplease::unparse_expr(tokens);
-                    let len = if formatted.contains('\n') {
-                        10000
-                    } else {
-                        formatted.len()
-                    };
-                    e.insert(formatted);
-                    len
+            ElementAttrValue::AttrExpr(expr) => {
+                let out = self.retrieve_formatted_expr(expr);
+                if out.contains('\n') {
+                    100000
                 } else {
-                    self.cached_formats[&location].len()
-                };
-
-                len
+                    out.len()
+                }
+            }
+            ElementAttrValue::EventTokens(tokens) => {
+                let as_str = self.retrieve_formatted_expr(tokens);
+                if as_str.contains('\n') {
+                    100000
+                } else {
+                    as_str.len()
+                }
             }
         }
     }
 
     pub(crate) fn is_short_attrs(&mut self, attributes: &[AttributeType]) -> usize {
         let mut total = 0;
+
+        // No more than 3 attributes before breaking the line
+        if attributes.len() > 3 {
+            return 100000;
+        }
 
         for attr in attributes {
             if self.current_span_is_primary(attr.start()) {
@@ -190,7 +208,13 @@ impl<'a> Writer<'a> {
                         dioxus_rsx::ElementAttrName::Custom(name) => name.value().len() + 2,
                     };
                     total += name_len;
-                    total += self.attr_value_len(&attr.attr.value);
+
+                    //
+                    if attr.attr.value.is_shorthand() {
+                        total += 2;
+                    } else {
+                        total += self.attr_value_len(&attr.attr.value);
+                    }
                 }
                 AttributeType::Spread(expr) => {
                     let expr_len = self.retrieve_formatted_expr(expr).len();
@@ -204,20 +228,26 @@ impl<'a> Writer<'a> {
         total
     }
 
+    #[allow(clippy::map_entry)]
     pub fn retrieve_formatted_expr(&mut self, expr: &Expr) -> &str {
-        self.cached_formats
-            .entry(Location::new(expr.span().start()))
-            .or_insert_with(|| prettyplease::unparse_expr(expr))
-            .as_str()
+        let loc = Location::new(expr.span().start());
+
+        if !self.cached_formats.contains_key(&loc) {
+            let formatted = self.unparse_expr(expr);
+            self.cached_formats.insert(loc, formatted);
+        }
+
+        self.cached_formats.get(&loc).unwrap().as_str()
     }
 
     fn write_for_loop(&mut self, forloop: &ForLoop) -> std::fmt::Result {
         write!(
             self.out,
-            "for {} in {} {{",
+            "for {} in ",
             forloop.pat.clone().into_token_stream(),
-            prettyplease::unparse_expr(&forloop.expr)
         )?;
+
+        self.write_inline_expr(&forloop.expr)?;
 
         if forloop.body.is_empty() {
             write!(self.out, "}}")?;
@@ -243,14 +273,12 @@ impl<'a> Writer<'a> {
                 then_branch,
                 else_if_branch,
                 else_branch,
+                ..
             } = chain;
 
-            write!(
-                self.out,
-                "{} {} {{",
-                if_token.to_token_stream(),
-                prettyplease::unparse_expr(cond)
-            )?;
+            write!(self.out, "{} ", if_token.to_token_stream(),)?;
+
+            self.write_inline_expr(cond)?;
 
             self.write_body_indented(then_branch)?;
 
@@ -275,6 +303,38 @@ impl<'a> Writer<'a> {
         write!(self.out, "}}")?;
 
         Ok(())
+    }
+
+    /// An expression within a for or if block that might need to be spread out across several lines
+    fn write_inline_expr(&mut self, expr: &Expr) -> std::fmt::Result {
+        let unparsed = self.unparse_expr(expr);
+        let mut lines = unparsed.lines();
+        let first_line = lines.next().unwrap();
+        write!(self.out, "{first_line}")?;
+
+        let mut was_multiline = false;
+
+        for line in lines {
+            was_multiline = true;
+            self.out.tabbed_line()?;
+            write!(self.out, "{line}")?;
+        }
+
+        if was_multiline {
+            self.out.tabbed_line()?;
+            write!(self.out, "{{")?;
+        } else {
+            write!(self.out, " {{")?;
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn key_len(&self, key: Option<&IfmtInput>) -> usize {
+        match key {
+            Some(key) => ifmt_to_string(key).len() + 5,
+            None => 0,
+        }
     }
 }
 

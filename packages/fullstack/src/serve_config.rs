@@ -12,28 +12,7 @@ pub struct ServeConfigBuilder {
     pub(crate) index_html: Option<String>,
     pub(crate) index_path: Option<PathBuf>,
     pub(crate) assets_path: Option<PathBuf>,
-    pub(crate) incremental:
-        Option<std::sync::Arc<dioxus_ssr::incremental::IncrementalRendererConfig>>,
-}
-
-/// A template for incremental rendering that does nothing.
-#[derive(Default, Clone)]
-pub struct EmptyIncrementalRenderTemplate;
-
-impl dioxus_ssr::incremental::WrapBody for EmptyIncrementalRenderTemplate {
-    fn render_after_body<R: std::io::Write>(
-        &self,
-        _: &mut R,
-    ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
-        Ok(())
-    }
-
-    fn render_before_body<R: std::io::Write>(
-        &self,
-        _: &mut R,
-    ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
-        Ok(())
-    }
+    pub(crate) incremental: Option<dioxus_ssr::incremental::IncrementalRendererConfig>,
 }
 
 impl ServeConfigBuilder {
@@ -50,7 +29,7 @@ impl ServeConfigBuilder {
 
     /// Enable incremental static generation
     pub fn incremental(mut self, cfg: dioxus_ssr::incremental::IncrementalRendererConfig) -> Self {
-        self.incremental = Some(std::sync::Arc::new(cfg));
+        self.incremental = Some(cfg);
         self
     }
 
@@ -128,9 +107,15 @@ fn load_index_html(contents: String, root_id: &'static str) -> IndexHtml {
         post_main.1.to_string(),
     );
 
+    let (post_main, after_closing_body_tag) =
+        post_main.split_once("</body>").unwrap_or_else(|| {
+            panic!("Failed to find closing </body> tag after id=\"{root_id}\" in index.html.")
+        });
+
     IndexHtml {
         pre_main,
-        post_main,
+        post_main: post_main.to_string(),
+        after_closing_body_tag: "</body>".to_string() + after_closing_body_tag,
     }
 }
 
@@ -138,6 +123,7 @@ fn load_index_html(contents: String, root_id: &'static str) -> IndexHtml {
 pub(crate) struct IndexHtml {
     pub(crate) pre_main: String,
     pub(crate) post_main: String,
+    pub(crate) after_closing_body_tag: String,
 }
 
 /// Used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
@@ -147,8 +133,13 @@ pub struct ServeConfig {
     pub(crate) index: IndexHtml,
     #[allow(dead_code)]
     pub(crate) assets_path: PathBuf,
-    pub(crate) incremental:
-        Option<std::sync::Arc<dioxus_ssr::incremental::IncrementalRendererConfig>>,
+    pub(crate) incremental: Option<dioxus_ssr::incremental::IncrementalRendererConfig>,
+}
+
+impl Default for ServeConfig {
+    fn default() -> Self {
+        Self::builder().build()
+    }
 }
 
 impl ServeConfig {

@@ -65,10 +65,10 @@ impl Drop for GenerationalRefBorrowInfo {
 pub struct GenerationalRefMut<W> {
     pub(crate) inner: W,
     #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-    pub(crate) borrow: GenerationalRefMutBorrowInfo,
+    pub(crate) borrow: GenerationalRefBorrowMutGuard,
 }
 
-impl<T: 'static, R: DerefMut<Target = T>> GenerationalRefMut<R> {
+impl<T, R: DerefMut<Target = T>> GenerationalRefMut<R> {
     pub(crate) fn new(
         inner: R,
         #[cfg(any(debug_assertions, feature = "debug_borrows"))]
@@ -77,12 +77,12 @@ impl<T: 'static, R: DerefMut<Target = T>> GenerationalRefMut<R> {
         Self {
             inner,
             #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-            borrow,
+            borrow: borrow.into(),
         }
     }
 }
 
-impl<T: ?Sized + 'static, W: DerefMut<Target = T>> Deref for GenerationalRefMut<W> {
+impl<T: ?Sized, W: DerefMut<Target = T>> Deref for GenerationalRefMut<W> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -90,7 +90,7 @@ impl<T: ?Sized + 'static, W: DerefMut<Target = T>> Deref for GenerationalRefMut<
     }
 }
 
-impl<T: ?Sized + 'static, W: DerefMut<Target = T>> DerefMut for GenerationalRefMut<W> {
+impl<T: ?Sized, W: DerefMut<Target = T>> DerefMut for GenerationalRefMut<W> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.inner.deref_mut()
     }
@@ -105,8 +105,24 @@ pub struct GenerationalRefMutBorrowInfo {
 }
 
 #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-impl Drop for GenerationalRefMutBorrowInfo {
+pub(crate) struct GenerationalRefBorrowMutGuard {
+    borrow_info: GenerationalRefMutBorrowInfo,
+}
+
+#[cfg(any(debug_assertions, feature = "debug_borrows"))]
+impl From<GenerationalRefMutBorrowInfo> for GenerationalRefBorrowMutGuard {
+    fn from(borrow_info: GenerationalRefMutBorrowInfo) -> Self {
+        Self { borrow_info }
+    }
+}
+
+#[cfg(any(debug_assertions, feature = "debug_borrows"))]
+impl Drop for GenerationalRefBorrowMutGuard {
     fn drop(&mut self) {
-        self.borrowed_from.borrowed_mut_at.write().take();
+        self.borrow_info
+            .borrowed_from
+            .borrowed_mut_at
+            .write()
+            .take();
     }
 }

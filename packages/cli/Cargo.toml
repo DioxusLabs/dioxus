@@ -1,6 +1,7 @@
 [package]
 name = "dioxus-cli"
-version = { workspace = true }
+version = "0.5.2"
+# version = { workspace = true }
 authors = ["Jonathan Kelley"]
 edition = "2021"
 description = "CLI tool for developing, testing, and publishing Dioxus apps"
@@ -10,21 +11,22 @@ keywords = ["react", "gui", "cli", "dioxus", "wasm"]
 
 [dependencies]
 # cli core
-clap = { version = "4.2", features = ["derive"] }
+clap = { version = "4.2", features = ["derive", "cargo"] }
 thiserror = { workspace = true }
 wasm-bindgen-cli-support = "0.2"
+wasm-bindgen-shared = "0.2"
 colored = "2.0.0"
-dioxus-cli-config = { workspace = true, features = ["cli"] }
+dioxus-cli-config = { workspace = true, features = ["cli"], default-features = false }
 
 # features
 log = "0.4.14"
 fern = { version = "0.6.0", features = ["colored"] }
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
-toml = {workspace = true}
+toml = { workspace = true }
 fs_extra = "1.2.0"
 cargo_toml = "0.19.1"
-futures-util = { workspace = true }
+futures-util = { workspace = true, features = ["async-await-macro"] }
 notify = { version = "5.0.0-pre.16", features = ["serde"] }
 html_parser = { workspace = true }
 cargo_metadata = "0.18.1"
@@ -65,7 +67,7 @@ lazy_static = "1.4.0"
 # plugin packages
 ctrlc = "3.2.3"
 open = "5.0.1"
-cargo-generate = "0.19.0"
+cargo-generate = "0.20.0"
 toml_edit = "0.22.5"
 wasmtime = { version = "17.0.0", features = ['component-model'] }
 wasmtime-wasi = { version = "17.0.0", features = ['preview2'] }
@@ -79,10 +81,12 @@ semver = "1.0"
 tauri-bundler = { version = "=1.4.*", features = ["native-tls-vendored"] }
 
 # formatting
-syn = { version = "2.0" }
+syn = { workspace = true }
 prettyplease = { workspace = true }
 
-manganis-cli-support = { workspace = true, features = ["webp", "html"] }
+# Assets
+manganis-cli-support = { workspace = true, features = ["html"] }
+brotli = "5.0.0"
 
 dioxus-autofmt = { workspace = true }
 dioxus-check = { workspace = true }
@@ -90,11 +94,20 @@ rsx-rosetta = { workspace = true }
 dioxus-rsx = { workspace = true }
 dioxus-html = { workspace = true, features = ["hot-reload-context"] }
 dioxus-core = { workspace = true, features = ["serialize"] }
-dioxus-hot-reload = { workspace = true }
-interprocess-docfix = { version = "1.2.2" }
+dioxus-hot-reload = { workspace = true, features = ["serve"] }
+interprocess = { workspace = true }
 gitignore = "1.0.8"
 base64 = "0.21.5"
 ignore = "0.4.22"
+env_logger = "0.11.3"
+
+tracing-subscriber = { version = "0.3.18", features = ["std", "env-filter"] }
+tracing = { workspace = true }
+wasm-opt = "0.116.1"
+
+# on maco, we need to specify the vendored feature on ssl when cross compiling
+[target.'cfg(target_os = "macos")'.dependencies]
+openssl = { version = "0.10", features = ["vendored"] }
 
 [features]
 default = []
@@ -107,7 +120,11 @@ name = "dx"
 tempfile = "3.3"
 
 [package.metadata.binstall]
-pkg-url = "{ repo }/releases/download/v{ version }/dx-{ target }{ archive-suffix }"
+# temporarily, we're going to use the 0.5.0 download page for all binaries
+pkg-url = "{ repo }/releases/download/v0.5.0/dx-{ target }-v{ version }{ archive-suffix }"
+
+# pkg-url = "{ repo }/releases/download/v{ version }/dx-{ target }{ archive-suffix }"
+pkg-fmt = "tgz"
 
 [package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
 pkg-fmt = "zip"

@@ -6,7 +6,7 @@ edition = "2021"
 description = "Portable, performant, and ergonomic framework for building cross-platform user interfaces in Rust"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com/learn/0.4/"
+homepage = "https://dioxuslabs.com/learn/0.5/"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 rust-version = "1.65.0"
 
@@ -19,9 +19,15 @@ dioxus-hooks = { workspace = true, optional = true }
 dioxus-rsx = { workspace = true, optional = true }
 dioxus-signals = { workspace = true, optional = true }
 
+[dev-dependencies]
+dioxus = { workspace = true }
+
 [features]
 default = ["macro", "html", "signals", "hooks"]
-signals = ["dioxus-signals"]
-macro = ["dioxus-core-macro", "dioxus-rsx"]
-html = ["dioxus-html"]
-hooks = ["dioxus-hooks"]
+signals = ["dep:dioxus-signals"]
+macro = ["dep:dioxus-core-macro", "dep:dioxus-rsx", "dep:dioxus-config-macro"]
+html = ["dep:dioxus-html"]
+hooks = ["dep:dioxus-hooks"]
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

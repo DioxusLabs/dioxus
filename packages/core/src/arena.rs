@@ -1,4 +1,5 @@
-use crate::{innerlude::DirtyScope, virtual_dom::VirtualDom, ScopeId};
+use crate::innerlude::ScopeOrder;
+use crate::{virtual_dom::VirtualDom, ScopeId};
 
 /// An Element's unique identifier.
 ///
@@ -18,17 +19,24 @@ pub(crate) struct MountId(pub(crate) usize);
 
 impl Default for MountId {
     fn default() -> Self {
-        Self(usize::MAX)
+        Self::PLACEHOLDER
     }
 }
 
 impl MountId {
+    pub(crate) const PLACEHOLDER: Self = Self(usize::MAX);
+
     pub(crate) fn as_usize(self) -> Option<usize> {
-        if self.0 == usize::MAX {
+        if self == Self::PLACEHOLDER {
             None
         } else {
             Some(self.0)
         }
+    }
+
+    #[allow(unused)]
+    pub(crate) fn mounted(self) -> bool {
+        self != Self::PLACEHOLDER
     }
 }
 
@@ -52,16 +60,18 @@ impl VirtualDom {
     }
 
     pub(crate) fn reclaim(&mut self, el: ElementId) {
-        self.try_reclaim(el)
-            .unwrap_or_else(|| panic!("cannot reclaim {:?}", el));
+        if !self.try_reclaim(el) {
+            tracing::error!("cannot reclaim {:?}", el);
+        }
     }
 
-    pub(crate) fn try_reclaim(&mut self, el: ElementId) -> Option<()> {
-        if el.0 == 0 {
-            panic!("Cannot reclaim the root element",);
+    pub(crate) fn try_reclaim(&mut self, el: ElementId) -> bool {
+        // We never reclaim the unmounted elements or the root element
+        if el.0 == 0 || el.0 == usize::MAX {
+            return true;
         }
 
-        self.elements.try_remove(el.0).map(|_| ())
+        self.elements.try_remove(el.0).is_some()
     }
 
     // Drop a scope without dropping its children
@@ -74,14 +84,30 @@ impl VirtualDom {
             context.height
         };
 
-        self.dirty_scopes.remove(&DirtyScope { height, id });
+        self.dirty_scopes.remove(&ScopeOrder::new(height, id));
     }
 }
 
 impl ElementPath {
-    pub(crate) fn is_decendant(&self, small: &&[u8]) -> bool {
-        small.len() <= self.path.len() && *small == &self.path[..small.len()]
+    pub(crate) fn is_decendant(&self, small: &[u8]) -> bool {
+        small.len() <= self.path.len() && small == &self.path[..small.len()]
     }
+}
+
+#[test]
+fn is_decendant() {
+    let event_path = ElementPath {
+        path: &[1, 2, 3, 4, 5],
+    };
+
+    assert!(event_path.is_decendant(&[1, 2, 3, 4, 5]));
+    assert!(event_path.is_decendant(&[1, 2, 3, 4]));
+    assert!(event_path.is_decendant(&[1, 2, 3]));
+    assert!(event_path.is_decendant(&[1, 2]));
+    assert!(event_path.is_decendant(&[1]));
+
+    assert!(!event_path.is_decendant(&[1, 2, 3, 4, 5, 6]));
+    assert!(!event_path.is_decendant(&[2, 3, 4]));
 }
 
 impl PartialEq<&[u8]> for ElementPath {

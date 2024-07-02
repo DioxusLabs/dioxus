@@ -3,7 +3,7 @@ name = "dioxus-liveview"
 version = { workspace = true }
 edition = "2021"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com/learn/0.4/getting_started/liveview"
+homepage = "https://dioxuslabs.com/learn/0.5/getting_started"
 keywords = ["dom", "ui", "gui", "react", "liveview"]
 description = "Build server-side apps with Dioxus"
 authors = ["Jonathan Kelley", "Evan Almloff"]
@@ -24,11 +24,10 @@ serde = { version = "1.0.151", features = ["derive"] }
 serde_json = "1.0.91"
 dioxus-html = { workspace = true, features = ["serialize", "eval", "mounted"] }
 rustc-hash = { workspace = true }
-minify-js = "0.5.6"
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
 dioxus-hot-reload = { workspace = true, optional = true }
-dioxus-cli-config = { workspace = true }
+dioxus-cli-config = { workspace = true, features = ["read-config"] }
 generational-box = { workspace = true }
 
 # axum
@@ -42,14 +41,17 @@ tower = { workspace = true }
 dioxus = { workspace = true }
 
 [features]
-default = ["hot-reload"]
+default = ["hot-reload", "multi-thread"]
 axum = ["dep:axum"]
-hot-reload = ["dioxus-hot-reload"]
+multi-thread = ["tokio/rt-multi-thread"]
+hot-reload = ["dep:dioxus-hot-reload"]
 
 [[example]]
 name = "axum"
 required-features = ["axum"]
+doc-scrape-examples = true
 
 [[example]]
 name = "axum_stress"
 required-features = ["axum"]
+doc-scrape-examples = true

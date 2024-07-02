@@ -16,6 +16,7 @@ impl NativeFileEngine {
     }
 }
 
+#[cfg(feature = "file-engine")]
 #[async_trait::async_trait(?Send)]
 impl FileEngine for NativeFileEngine {
     fn files(&self) -> Vec<String> {
@@ -23,6 +24,11 @@ impl FileEngine for NativeFileEngine {
             .iter()
             .filter_map(|f| Some(f.to_str()?.to_string()))
             .collect()
+    }
+
+    async fn file_size(&self, file: &str) -> Option<u64> {
+        let file = File::open(file).await.ok()?;
+        Some(file.metadata().await.ok()?.len())
     }
 
     async fn read_file(&self, file: &str) -> Option<Vec<u8>> {

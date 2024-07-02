@@ -3,7 +3,7 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
 #[macro_export]
-/// A helper macro for using hooks and properties in async environments.
+/// A helper macro for cloning multiple values at once
 ///
 /// # Usage
 ///
@@ -26,7 +26,7 @@
 ///     });
 /// };
 /// # handle_thing(());
-/// # None }
+/// # VNode::empty() }
 /// ```
 macro_rules! to_owned {
     // Rule matching simple symbols without a path
@@ -53,8 +53,6 @@ macro_rules! to_owned {
         $(to_owned![$($rest)*])?
     };
 }
-mod dependency;
-pub use dependency::*;
 
 mod use_callback;
 pub use use_callback::*;
@@ -71,6 +69,9 @@ pub use use_coroutine::*;
 mod use_future;
 pub use use_future::*;
 
+mod use_reactive;
+pub use use_reactive::*;
+
 // mod use_sorted;
 // pub use use_sorted::*;
 
@@ -83,9 +84,6 @@ pub use use_effect::*;
 mod use_memo;
 pub use use_memo::*;
 
-// mod use_on_create;
-// pub use use_on_create::*;
-
 mod use_root_context;
 pub use use_root_context::*;
 
@@ -94,3 +92,6 @@ pub use use_hook_did_run::*;
 
 mod use_signal;
 pub use use_signal::*;
+
+mod use_set_compare;
+pub use use_set_compare::*;

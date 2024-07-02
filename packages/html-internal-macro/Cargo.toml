@@ -13,7 +13,7 @@ description = "HTML function macros for Dioxus"
 
 [dependencies]
 proc-macro2 = "1.0.66"
-syn = { version = "2", features = ["full"] }
+syn = { workspace = true, features = ["full"] }
 quote = "^1.0.26"
 convert_case = "^0.6.0"
 

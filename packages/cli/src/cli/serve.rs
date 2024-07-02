@@ -5,6 +5,8 @@ use manganis_cli_support::AssetManifest;
 use super::*;
 use crate::plugin::interface::plugins::main::types::CommandEvent::Serve as ServeEvent;
 use std::{fs::create_dir_all, io::Write, path::PathBuf};
+use cargo_toml::Dependency::{Detailed, Inherited, Simple};
+use std::fs::create_dir_all;
 
 /// Run the WASM project on dev-server
 #[derive(Clone, Debug, Parser)]
@@ -19,8 +21,9 @@ impl Serve {
         let mut crate_config = dioxus_cli_config::CrateConfig::new(bin)?;
         let serve_cfg = self.serve.clone();
 
-        // change the relase state.
-        crate_config.with_hot_reload(self.serve.hot_reload);
+        // change the release state.
+        let hot_reload = self.serve.hot_reload || crate_config.dioxus_config.application.hot_reload;
+        crate_config.with_hot_reload(hot_reload);
         crate_config.with_cross_origin_policy(self.serve.cross_origin_policy);
         crate_config.with_release(self.serve.release);
         crate_config.with_verbose(self.serve.verbose);
@@ -43,30 +46,36 @@ impl Serve {
 
         crate_config.set_cargo_args(self.serve.cargo_args);
 
-        let platform = self
-            .serve
-            .platform
-            .unwrap_or(crate_config.dioxus_config.application.default_platform);
+        let mut platform = self.serve.platform;
 
         plugins_before_command(ServeEvent).await;
 
+        if platform.is_none() {
+            if let Some(dependency) = &crate_config.manifest.dependencies.get("dioxus") {
+                let features = match dependency {
+                    Inherited(detail) => detail.features.to_vec(),
+                    Detailed(detail) => detail.features.to_vec(),
+                    Simple(_) => vec![],
+                };
+
+                platform = features
+                    .iter()
+                    .find_map(|platform| serde_json::from_str(&format!(r#""{}""#, platform)).ok());
+            }
+        }
+
+        let platform = platform.unwrap_or(crate_config.dioxus_config.application.default_platform);
+        crate_config.extend_with_platform(platform);
+
+        // start the develop server
+        use server::{desktop, fullstack, web};
         match platform {
-            Platform::Web => {
-                // start the develop server
-                server::web::startup(
-                    self.serve.port,
-                    crate_config.clone(),
-                    self.serve.open,
-                    self.serve.skip_assets,
-                )
-                .await?;
+            Platform::Web => web::startup(crate_config.clone(), &serve_cfg).await?,
+            Platform::Desktop => desktop::startup(crate_config.clone(), &serve_cfg).await?,
+            Platform::Fullstack | Platform::StaticGeneration => {
+                fullstack::startup(crate_config.clone(), &serve_cfg).await?
             }
-            Platform::Desktop => {
-                server::desktop::startup(crate_config.clone(), &serve_cfg).await?;
-            }
-            Platform::Fullstack => {
-                server::fullstack::startup(crate_config.clone(), &serve_cfg).await?;
-            }
+            _ => unreachable!(),
         }
 
         plugins_after_command(ServeEvent).await;

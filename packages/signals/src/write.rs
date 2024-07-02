@@ -1,33 +1,85 @@
-use std::ops::DerefMut;
-use std::ops::IndexMut;
+use std::ops::{DerefMut, IndexMut};
 
 use crate::read::Readable;
 
-/// A trait for states that can be read from like [`crate::Signal`], or [`crate::GlobalSignal`]. You may choose to accept this trait as a parameter instead of the concrete type to allow for more flexibility in your API. For example, instead of creating two functions, one that accepts a [`crate::Signal`] and one that accepts a [`crate::GlobalSignal`], you can create one function that accepts a [`Writable`] type.
+/// A reference to a value that can be read from.
+#[allow(type_alias_bounds)]
+pub type WritableRef<'a, T: Writable, O = <T as Readable>::Target> = T::Mut<'a, O>;
+
+/// A trait for states that can be written to like [`crate::Signal`]. You may choose to accept this trait as a parameter instead of the concrete type to allow for more flexibility in your API.
+///
+/// # Example
+/// ```rust
+/// # use dioxus::prelude::*;
+/// enum MyEnum {
+///     String(String),
+///     Number(i32),
+/// }
+///
+/// fn MyComponent(mut count: Signal<MyEnum>) -> Element {
+///     rsx!{
+///         button {
+///             onclick: move |_| {
+///                 // You can use any methods from the Writable trait on Signals
+///                 match &mut *count.write() {
+///                     MyEnum::String(s) => s.push('a'),
+///                     MyEnum::Number(n) => *n += 1,
+///                 }
+///             },
+///             "Add value"
+///         }
+///     }
+/// }
+/// ```
 pub trait Writable: Readable {
     /// The type of the reference.
-    type Mut<R: ?Sized + 'static>: DerefMut<Target = R> + 'static;
+    type Mut<'a, R: ?Sized + 'static>: DerefMut<Target = R>;
 
     /// Map the reference to a new type.
     fn map_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> &mut U>(
-        ref_: Self::Mut<I>,
+        ref_: Self::Mut<'_, I>,
         f: F,
-    ) -> Self::Mut<U>;
+    ) -> Self::Mut<'_, U>;
 
     /// Try to map the reference to a new type.
     fn try_map_mut<I: ?Sized, U: ?Sized, F: FnOnce(&mut I) -> Option<&mut U>>(
-        ref_: Self::Mut<I>,
+        ref_: Self::Mut<'_, I>,
         f: F,
-    ) -> Option<Self::Mut<U>>;
+    ) -> Option<Self::Mut<'_, U>>;
+
+    /// Downcast a mutable reference in a RefMut to a more specific lifetime
+    ///
+    /// This function enforces the variance of the lifetime parameter `'a` in Ref.
+    fn downcast_lifetime_mut<'a: 'b, 'b, T: ?Sized + 'static>(
+        mut_: Self::Mut<'a, T>,
+    ) -> Self::Mut<'b, T>;
 
     /// Get a mutable reference to the value. If the value has been dropped, this will panic.
     #[track_caller]
-    fn write(&mut self) -> Self::Mut<Self::Target> {
+    fn write(&mut self) -> WritableRef<'_, Self> {
         self.try_write().unwrap()
     }
 
-    /// Try to get a mutable reference to the value. If the value has been dropped, this will panic.
-    fn try_write(&self) -> Result<Self::Mut<Self::Target>, generational_box::BorrowMutError>;
+    /// Try to get a mutable reference to the value.
+    #[track_caller]
+    fn try_write(&mut self) -> Result<WritableRef<'_, Self>, generational_box::BorrowMutError> {
+        self.try_write_unchecked().map(Self::downcast_lifetime_mut)
+    }
+
+    /// Try to get a mutable reference to the value without checking the lifetime. This will update any subscribers.
+    ///
+    /// NOTE: This method is completely safe because borrow checking is done at runtime.
+    fn try_write_unchecked(
+        &self,
+    ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError>;
+
+    /// Get a mutable reference to the value without checking the lifetime. This will update any subscribers.
+    ///
+    /// NOTE: This method is completely safe because borrow checking is done at runtime.
+    #[track_caller]
+    fn write_unchecked(&self) -> WritableRef<'static, Self> {
+        self.try_write_unchecked().unwrap()
+    }
 
     /// Run a function with a mutable reference to the value. If the value has been dropped, this will panic.
     #[track_caller]
@@ -55,7 +107,10 @@ pub trait Writable: Readable {
 
     /// Index into the inner value and return a reference to the result.
     #[track_caller]
-    fn index_mut<I>(&mut self, index: I) -> Self::Mut<<Self::Target as std::ops::Index<I>>::Output>
+    fn index_mut<I>(
+        &mut self,
+        index: I,
+    ) -> WritableRef<'_, Self, <Self::Target as std::ops::Index<I>>::Output>
     where
         Self::Target: std::ops::IndexMut<I>,
     {
@@ -81,18 +136,19 @@ pub trait Writable: Readable {
     }
 }
 
-/// An extension trait for Writable<Option<T>> that provides some convenience methods.
+/// An extension trait for [`Writable<Option<T>>`]` that provides some convenience methods.
 pub trait WritableOptionExt<T: 'static>: Writable<Target = Option<T>> {
     /// Gets the value out of the Option, or inserts the given value if the Option is empty.
-    fn get_or_insert(&mut self, default: T) -> Self::Mut<T> {
+    #[track_caller]
+    fn get_or_insert(&mut self, default: T) -> WritableRef<'_, Self, T> {
         self.get_or_insert_with(|| default)
     }
 
     /// Gets the value out of the Option, or inserts the value returned by the given function if the Option is empty.
-    fn get_or_insert_with(&mut self, default: impl FnOnce() -> T) -> Self::Mut<T> {
-        let borrow = self.read();
-        if borrow.is_none() {
-            drop(borrow);
+    #[track_caller]
+    fn get_or_insert_with(&mut self, default: impl FnOnce() -> T) -> WritableRef<'_, Self, T> {
+        let is_none = self.read().is_none();
+        if is_none {
             self.with_mut(|v| *v = Some(default()));
             Self::map_mut(self.write(), |v| v.as_mut().unwrap())
         } else {
@@ -102,7 +158,7 @@ pub trait WritableOptionExt<T: 'static>: Writable<Target = Option<T>> {
 
     /// Attempts to write the inner value of the Option.
     #[track_caller]
-    fn as_mut(&mut self) -> Option<Self::Mut<T>> {
+    fn as_mut(&mut self) -> Option<WritableRef<'_, Self, T>> {
         Self::try_map_mut(self.write(), |v: &mut Option<T>| v.as_mut())
     }
 }
@@ -114,7 +170,7 @@ where
 {
 }
 
-/// An extension trait for Writable<Vec<T>> that provides some convenience methods.
+/// An extension trait for [`Writable<Vec<T>>`] that provides some convenience methods.
 pub trait WritableVecExt<T: 'static>: Writable<Target = Vec<T>> {
     /// Pushes a new value to the end of the vector.
     #[track_caller]
@@ -178,36 +234,40 @@ pub trait WritableVecExt<T: 'static>: Writable<Target = Vec<T>> {
 
     /// Try to mutably get an element from the vector.
     #[track_caller]
-    fn get_mut(&mut self, index: usize) -> Option<Self::Mut<T>> {
+    fn get_mut(&mut self, index: usize) -> Option<WritableRef<'_, Self, T>> {
         Self::try_map_mut(self.write(), |v: &mut Vec<T>| v.get_mut(index))
     }
 
     /// Gets an iterator over the values of the vector.
     #[track_caller]
-    fn iter_mut(&self) -> WritableValueIterator<Self>
+    fn iter_mut(&mut self) -> WritableValueIterator<'_, Self>
     where
         Self: Sized + Clone,
     {
         WritableValueIterator {
             index: 0,
-            value: self.clone(),
+            value: self,
         }
     }
 }
 
-/// An iterator over the values of a `Writable<Vec<T>>`.
-pub struct WritableValueIterator<R> {
+/// An iterator over the values of a [`Writable<Vec<T>>`].
+pub struct WritableValueIterator<'a, R> {
     index: usize,
-    value: R,
+    value: &'a mut R,
 }
 
-impl<T: 'static, R: Writable<Target = Vec<T>>> Iterator for WritableValueIterator<R> {
-    type Item = R::Mut<T>;
+impl<'a, T: 'static, R: Writable<Target = Vec<T>>> Iterator for WritableValueIterator<'a, R> {
+    type Item = WritableRef<'a, R, T>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let index = self.index;
         self.index += 1;
-        self.value.get_mut(index)
+        R::try_map_mut(
+            self.value.try_write_unchecked().unwrap(),
+            |v: &mut Vec<T>| v.get_mut(index),
+        )
+        .map(R::downcast_lifetime_mut)
     }
 }
 

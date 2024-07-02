@@ -80,10 +80,4 @@ pub struct GlobalHotKeyEvent {
     pub id: u32,
 }
 
-impl GlobalHotKeyEvent {
-    pub fn receiver() -> crossbeam_channel::Receiver<GlobalHotKeyEvent> {
-        crossbeam_channel::unbounded().1
-    }
-}
-
 pub(crate) type Code = dioxus_html::input_data::keyboard_types::Code;

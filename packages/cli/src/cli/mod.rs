@@ -10,7 +10,6 @@ pub mod init;
 pub mod plugin;
 pub mod serve;
 pub mod translate;
-pub mod version;
 
 use crate::{
     cfg::{ConfigOptsBuild, ConfigOptsServe},
@@ -41,43 +40,40 @@ pub struct Cli {
     #[clap(short)]
     pub v: bool,
 
-    /// Specify bin target
+    /// Specify a binary target.
     #[clap(global = true, long)]
     pub bin: Option<String>,
 }
 
 #[derive(Parser)]
 pub enum Commands {
-    /// Build the Rust WASM app and all of its assets.
+    /// Build the Dioxus project and all of its assets.
     Build(build::Build),
 
-    /// Translate some source file into Dioxus code.
+    /// Translate a source file into Dioxus code.
     Translate(translate::Translate),
 
-    /// Build, watch & serve the Rust WASM app and all of its assets.
+    /// Build, watch & serve the Dioxus project and all of its assets.
     Serve(serve::Serve),
 
     /// Create a new project for Dioxus.
-    Create(create::Create),
+    New(create::Create),
 
-    /// Init a new project for Dioxus
+    /// Init a new project for Dioxus in an existing directory.
+    /// Will attempt to keep your project in a good state.
     Init(init::Init),
 
     /// Clean output artifacts.
     Clean(clean::Clean),
 
-    /// Bundle the Rust desktop app and all of its assets.
+    /// Bundle the Dioxus app into a shippable object.
     Bundle(bundle::Bundle),
 
-    /// Print the version of this extension
-    #[clap(name = "version")]
-    Version(version::Version),
-
-    /// Format some rsx
+    /// Automatically format RSX.
     #[clap(name = "fmt")]
     Autoformat(autoformat::Autoformat),
 
-    /// Check the Rust files in the project for issues.
+    /// Check the project for any issues.
     #[clap(name = "check")]
     Check(check::Check),
 
@@ -96,11 +92,10 @@ impl Display for Commands {
             Commands::Build(_) => write!(f, "build"),
             Commands::Translate(_) => write!(f, "translate"),
             Commands::Serve(_) => write!(f, "serve"),
-            Commands::Create(_) => write!(f, "create"),
+            Commands::New(_) => write!(f, "create"),
             Commands::Init(_) => write!(f, "init"),
             Commands::Clean(_) => write!(f, "clean"),
             Commands::Config(_) => write!(f, "config"),
-            Commands::Version(_) => write!(f, "version"),
             Commands::Autoformat(_) => write!(f, "fmt"),
             Commands::Check(_) => write!(f, "check"),
             Commands::Bundle(_) => write!(f, "bundle"),

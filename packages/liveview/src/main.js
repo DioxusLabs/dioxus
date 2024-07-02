@@ -1,4 +1,4 @@
-const config = new InterpreterConfig(false);
+const intercept_link_redirects = false;
 
 function main() {
   let root = window.document.getElementById("main");
@@ -9,7 +9,9 @@ function main() {
 
 class IPC {
   constructor(root) {
+    window.interpreter = new NativeInterpreter();
     window.interpreter.initialize(root);
+    window.interpreter.ipc = this;
     const ws = new WebSocket(WS_ADDR);
     ws.binaryType = "arraybuffer";
 
@@ -34,14 +36,14 @@ class IPC {
       // The first byte tells the shim if this is a binary of text frame
       if (binaryFrame) {
         // binary frame
-        run_from_bytes(messageData);
+        window.interpreter.run_from_bytes(messageData);
       }
       else {
         // text frame
 
         let decoder = new TextDecoder("utf-8");
 
-        // Using decode method to get string output 
+        // Using decode method to get string output
         let str = decoder.decode(messageData);
         // Ignore pongs
         if (str != "__pong__") {

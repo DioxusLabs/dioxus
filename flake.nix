@@ -5,8 +5,8 @@
     systems.url = "github:nix-systems/default";
 
     rust-overlay.url = "github:oxalica/rust-overlay";
-    crane.url = "github:ipetkov/crane";
-    crane.inputs.nixpkgs.follows = "nixpkgs";
+    # crane.url = "github:ipetkov/crane";
+    # crane.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = inputs:
@@ -26,6 +26,11 @@
             pkgs.openssl
             pkgs.libiconv
             pkgs.pkg-config
+            pkgs.glib
+            pkgs.gtk3
+            pkgs.libsoup_3
+            pkgs.webkitgtk_4_1
+            pkgs.xdotool
           ] ++ lib.optionals pkgs.stdenv.isDarwin (with pkgs.darwin.apple_sdk.frameworks; [
             IOKit
             Carbon

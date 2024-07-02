@@ -1,25 +1,42 @@
 rsx! {
     div { "hello world!" }
-    div { "hello world!", "goodbye world!" }
+    div {
+        "hello world!"
+        "goodbye world!"
+    }
 
     // Simple div
     div { "hello world!" }
 
     // Compression with attributes
-    div { key: "a", class: "ban", style: "color: red" }
+    div { key: "{a}", class: "ban", style: "color: red" }
+
+    // But not too many attributes (3 max)
+    div {
+        id: "{a}",
+        class: "ban",
+        style: "color: red",
+        value: "{b}"
+    }
 
     // Nested one level
-    div { div { "nested" } }
+    div {
+        div { "nested" }
+    }
 
     // Nested two level
     div {
-        div { h1 { "highly nested" } }
+        div {
+            h1 { "highly nested" }
+        }
     }
 
     // Anti-Nested two level
     div {
         div {
-            div { h1 { "highly nested" } }
+            div {
+                h1 { "highly nested" }
+            }
         }
     }
 

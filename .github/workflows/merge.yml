@@ -30,7 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Create backport pull requests
-        uses: korthout/backport-action@v2
+        uses: korthout/backport-action@v3
 
   # Upload nightly docs to the website
   docs:
@@ -48,13 +48,12 @@ jobs:
         with:
           cache-all-crates: "true"
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - uses: ilammy/setup-nasm@v1
 
       - name: cargo doc
         run: cargo doc --no-deps --workspace --all-features
 
       - name: Deploy
-        uses: JamesIves/github-pages-deploy-action@v4.5.0
+        uses: JamesIves/github-pages-deploy-action@v4.6.1
         with:
           branch: gh-pages
           folder: target/doc

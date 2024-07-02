@@ -75,7 +75,7 @@ fn create_random_template_node(
         1 => TemplateNode::Text {
             text: Box::leak(format!("{}", rand::random::<usize>()).into_boxed_str()),
         },
-        2 => TemplateNode::DynamicText {
+        2 => TemplateNode::Dynamic {
             id: {
                 let old_idx = *template_idx;
                 *template_idx += 1;
@@ -118,9 +118,6 @@ fn generate_paths(
             }
         }
         TemplateNode::Text { .. } => {}
-        TemplateNode::DynamicText { .. } => {
-            node_paths.push(current_path.to_vec());
-        }
         TemplateNode::Dynamic { .. } => {
             node_paths.push(current_path.to_vec());
         }
@@ -266,12 +263,11 @@ fn create_random_element(cx: DepthProps) -> Element {
                     .map(|_| Box::new([create_random_dynamic_attr()]) as Box<[Attribute]>)
                     .collect(),
             );
-            Some(node)
+            node
         }
-        _ => None,
+        _ => VNode::default(),
     };
-    // println!("{node:#?}");
-    node
+    Element::Ok(node)
 }
 
 // test for panics when creating random nodes and templates

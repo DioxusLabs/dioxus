@@ -3,7 +3,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    launch_desktop(app);
+    launch(app);
 }
 
 fn app() -> Element {
@@ -22,26 +22,23 @@ fn app() -> Element {
     rsx! {
         div { class, id, {&children} }
         Component { a, b, c, children, onclick }
-        Component {
-            ..ComponentProps {
-                a: 1,
-                b: 2,
-                c: 3,
-                children: None,
-                onclick: Default::default(),
-            }
-            a
-        }
+        Component { a, ..ComponentProps { a: 1, b: 2, c: 3, children: VNode::empty(), onclick: Default::default() } }
     }
 }
 
 #[component]
-fn Component(a: i32, b: i32, c: i32, children: Element, onclick: EventHandler) -> Element {
+fn Component(
+    a: i32,
+    b: i32,
+    c: i32,
+    children: Element,
+    onclick: EventHandler<MouseEvent>,
+) -> Element {
     rsx! {
         div { "{a}" }
         div { "{b}" }
         div { "{c}" }
         div { {children} }
-        div { onclick: move |_| onclick.call(()) }
+        div { onclick }
     }
 }

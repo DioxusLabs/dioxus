@@ -51,7 +51,7 @@ pub fn convert_html_to_formatted_rsx(dom: &Dom, component: bool) -> String {
 
     match component {
         true => write_callbody_with_icon_section(callbody),
-        false => dioxus_autofmt::write_block_out(callbody).unwrap(),
+        false => dioxus_autofmt::write_block_out(&callbody).unwrap(),
     }
 }
 
@@ -60,7 +60,7 @@ fn write_callbody_with_icon_section(mut callbody: CallBody) -> String {
 
     rsx_rosetta::collect_svgs(&mut callbody.roots, &mut svgs);
 
-    let mut out = write_component_body(dioxus_autofmt::write_block_out(callbody).unwrap());
+    let mut out = write_component_body(dioxus_autofmt::write_block_out(&callbody).unwrap());
 
     if !svgs.is_empty() {
         write_svg_section(&mut out, svgs);
@@ -80,7 +80,7 @@ fn write_svg_section(out: &mut String, svgs: Vec<BodyNode>) {
     out.push_str("\n\nmod icons {");
     out.push_str("\n    use super::*;");
     for (idx, icon) in svgs.into_iter().enumerate() {
-        let raw = dioxus_autofmt::write_block_out(CallBody { roots: vec![icon] }).unwrap();
+        let raw = dioxus_autofmt::write_block_out(&CallBody { roots: vec![icon] }).unwrap();
         out.push_str("\n\n    pub fn icon_");
         out.push_str(&idx.to_string());
         out.push_str("() -> Element {\n        rsx! {");
@@ -104,7 +104,7 @@ fn indent_and_write(raw: &str, idx: usize, out: &mut String) {
 fn determine_input(file: Option<String>, raw: Option<String>) -> Result<String> {
     // Make sure not both are specified
     if file.is_some() && raw.is_some() {
-        log::error!("Only one of --file or --raw should be specified.");
+        tracing::error!("Only one of --file or --raw should be specified.");
         exit(0);
     }
 

@@ -3,12 +3,15 @@ use std::fmt::{Display, Formatter};
 use super::*;
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::{quote, ToTokens, TokenStreamExt};
-use syn::{parse_quote, spanned::Spanned, Expr, ExprIf, Ident, LitStr};
+use quote::{quote, quote_spanned};
+use syn::{parse_quote, spanned::Spanned, Expr, ExprClosure, ExprIf, Ident, LitStr};
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum AttributeType {
+    /// An attribute that is known
     Named(ElementAttrNamed),
+
+    /// An attribute that's being spread in via the `..` syntax
     Spread(Expr),
 }
 
@@ -68,12 +71,33 @@ impl AttributeType {
             }
         }
     }
+
+    pub fn as_static_str_literal(&self) -> Option<(&ElementAttrName, &IfmtInput)> {
+        match self {
+            AttributeType::Named(ElementAttrNamed {
+                attr:
+                    ElementAttr {
+                        value: ElementAttrValue::AttrLiteral(value),
+                        name,
+                    },
+                ..
+            }) if value.is_static() => Some((name, value)),
+            _ => None,
+        }
+    }
+
+    pub fn is_static_str_literal(&self) -> bool {
+        self.as_static_str_literal().is_some()
+    }
 }
 
 #[derive(Clone, Debug)]
 pub struct ElementAttrNamed {
     pub el_name: ElementName,
     pub attr: ElementAttr,
+    // If this is the last attribute of an element and it doesn't have a tailing comma,
+    // we add hints so that rust analyzer completes it either as an attribute or element
+    pub(crate) followed_by_comma: bool,
 }
 
 impl Hash for ElementAttrNamed {
@@ -91,6 +115,15 @@ impl PartialEq for ElementAttrNamed {
 impl Eq for ElementAttrNamed {}
 
 impl ElementAttrNamed {
+    /// Create a new ElementAttrNamed
+    pub fn new(el_name: ElementName, attr: ElementAttr) -> Self {
+        Self {
+            el_name,
+            attr,
+            followed_by_comma: true,
+        }
+    }
+
     pub(crate) fn try_combine(&self, other: &Self) -> Option<Self> {
         if self.el_name == other.el_name && self.attr.name == other.attr.name {
             if let Some(separator) = self.attr.name.multi_attribute_separator() {
@@ -100,16 +133,64 @@ impl ElementAttrNamed {
                         name: self.attr.name.clone(),
                         value: self.attr.value.combine(separator, &other.attr.value),
                     },
+                    followed_by_comma: self.followed_by_comma || other.followed_by_comma,
                 });
             }
         }
         None
     }
+
+    /// If this is the last attribute of an element and it doesn't have a tailing comma,
+    /// we add hints so that rust analyzer completes it either as an attribute or element
+    fn completion_hints(&self) -> TokenStream2 {
+        let ElementAttrNamed {
+            el_name,
+            attr,
+            followed_by_comma,
+        } = self;
+
+        // If there is a trailing comma, rust analyzer does a good job of completing the attribute by itself
+        if *followed_by_comma {
+            return quote! {};
+        }
+        // Only add hints if the attribute is:
+        // - a built in attribute (not a literal)
+        // - an build in element (not a custom element)
+        // - a shorthand attribute
+        let (
+            ElementName::Ident(el),
+            ElementAttrName::BuiltIn(name),
+            ElementAttrValue::Shorthand(_),
+        ) = (el_name, &attr.name, &attr.value)
+        else {
+            return quote! {};
+        };
+        // If the attribute is a shorthand attribute, but it is an event handler, rust analyzer already does a good job of completing the attribute by itself
+        if name.to_string().starts_with("on") {
+            return quote! {};
+        }
+
+        quote! {
+            {
+                #[allow(dead_code)]
+                #[doc(hidden)]
+                mod __completions {
+                    // Autocomplete as an attribute
+                    pub use super::dioxus_elements::#el::*;
+                    // Autocomplete as an element
+                    pub use super::dioxus_elements::elements::completions::CompleteWithBraces::*;
+                    fn ignore() {
+                        #name
+                    }
+                }
+            }
+        }
+    }
 }
 
 impl ToTokens for ElementAttrNamed {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let ElementAttrNamed { el_name, attr } = self;
+        let ElementAttrNamed { el_name, attr, .. } = self;
 
         let ns = |name: &ElementAttrName| match (el_name, name) {
             (ElementName::Ident(i), ElementAttrName::BuiltIn(_)) => {
@@ -165,19 +246,35 @@ impl ToTokens for ElementAttrNamed {
                 }
                 ElementAttrValue::EventTokens(tokens) => match &self.attr.name {
                     ElementAttrName::BuiltIn(name) => {
-                        quote! {
-                            dioxus_elements::events::#name(#tokens)
+                        let event_tokens_is_closure =
+                            syn::parse2::<ExprClosure>(tokens.to_token_stream()).is_ok();
+                        let function_name =
+                            quote_spanned! { tokens.span() => dioxus_elements::events::#name };
+                        let function = if event_tokens_is_closure {
+                            // If we see an explicit closure, we can call the `call_with_explicit_closure` version of the event for better type inference
+                            quote_spanned! { tokens.span() => #function_name::call_with_explicit_closure }
+                        } else {
+                            function_name
+                        };
+                        quote_spanned! { tokens.span() =>
+                            #function(#tokens)
                         }
                     }
                     ElementAttrName::Custom(_) => unreachable!("Handled elsewhere in the macro"),
                 },
                 _ => {
-                    quote! { dioxus_elements::events::#value(#value) }
+                    quote_spanned! { value.span() => dioxus_elements::events::#value(#value) }
                 }
             }
         };
 
-        tokens.append_all(attribute);
+        let completion_hints = self.completion_hints();
+        tokens.append_all(quote! {
+            {
+                #completion_hints
+                #attribute
+            }
+        });
     }
 }
 
@@ -185,6 +282,26 @@ impl ToTokens for ElementAttrNamed {
 pub struct ElementAttr {
     pub name: ElementAttrName,
     pub value: ElementAttrValue,
+}
+
+impl ElementAttr {
+    pub fn can_be_shorthand(&self) -> bool {
+        // If it's a shorthand...
+        if matches!(self.value, ElementAttrValue::Shorthand(_)) {
+            return true;
+        }
+
+        // If it's in the form of attr: attr, return true
+        if let ElementAttrValue::AttrExpr(Expr::Path(path)) = &self.value {
+            if let ElementAttrName::BuiltIn(name) = &self.name {
+                if path.path.segments.len() == 1 && &path.path.segments[0].ident == name {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
@@ -248,6 +365,15 @@ impl ToTokens for ElementAttrValue {
 }
 
 impl ElementAttrValue {
+    /// Create a new ElementAttrValue::Shorthand from an Ident and normalize the identifier
+    pub(crate) fn shorthand(name: &Ident) -> Self {
+        Self::Shorthand(normalize_raw_ident(name))
+    }
+
+    pub fn is_shorthand(&self) -> bool {
+        matches!(self, ElementAttrValue::Shorthand(_))
+    }
+
     fn to_str_expr(&self) -> Option<TokenStream2> {
         match self {
             ElementAttrValue::AttrLiteral(lit) => Some(quote!(#lit.to_string())),
@@ -343,6 +469,16 @@ impl ElementAttrValue {
     }
 }
 
+// Create and normalize a built-in attribute name
+// If the identifier is a reserved keyword, this method will create a raw identifier
+fn normalize_raw_ident(ident: &Ident) -> Ident {
+    if syn::parse2::<syn::Ident>(ident.to_token_stream()).is_err() {
+        syn::Ident::new_raw(&ident.to_string(), ident.span())
+    } else {
+        ident.clone()
+    }
+}
+
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum ElementAttrName {
     BuiltIn(Ident),
@@ -350,6 +486,10 @@ pub enum ElementAttrName {
 }
 
 impl ElementAttrName {
+    pub(crate) fn built_in(name: &Ident) -> Self {
+        Self::BuiltIn(normalize_raw_ident(name))
+    }
+
     fn multi_attribute_separator(&self) -> Option<&'static str> {
         match self {
             ElementAttrName::BuiltIn(i) => match i.to_string().as_str() {

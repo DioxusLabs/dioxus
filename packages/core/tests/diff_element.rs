@@ -12,19 +12,19 @@ fn text_diff() {
     let mut vdom = VirtualDom::new(app);
     vdom.rebuild(&mut NoOpMutations);
 
-    vdom.mark_dirty(ScopeId::ROOT);
+    vdom.mark_dirty(ScopeId::APP);
     assert_eq!(
         vdom.render_immediate_to_vec().edits,
         [SetText { value: "hello 1".to_string(), id: ElementId(2) }]
     );
 
-    vdom.mark_dirty(ScopeId::ROOT);
+    vdom.mark_dirty(ScopeId::APP);
     assert_eq!(
         vdom.render_immediate_to_vec().edits,
         [SetText { value: "hello 2".to_string(), id: ElementId(2) }]
     );
 
-    vdom.mark_dirty(ScopeId::ROOT);
+    vdom.mark_dirty(ScopeId::APP);
     assert_eq!(
         vdom.render_immediate_to_vec().edits,
         [SetText { value: "hello 3".to_string(), id: ElementId(2) }]
@@ -46,7 +46,7 @@ fn element_swap() {
     let mut vdom = VirtualDom::new(app);
     vdom.rebuild(&mut NoOpMutations);
 
-    vdom.mark_dirty(ScopeId::ROOT);
+    vdom.mark_dirty(ScopeId::APP);
     assert_eq!(
         vdom.render_immediate_to_vec().santize().edits,
         [
@@ -55,7 +55,7 @@ fn element_swap() {
         ]
     );
 
-    vdom.mark_dirty(ScopeId::ROOT);
+    vdom.mark_dirty(ScopeId::APP);
     assert_eq!(
         vdom.render_immediate_to_vec().santize().edits,
         [
@@ -64,7 +64,7 @@ fn element_swap() {
         ]
     );
 
-    vdom.mark_dirty(ScopeId::ROOT);
+    vdom.mark_dirty(ScopeId::APP);
     assert_eq!(
         vdom.render_immediate_to_vec().santize().edits,
         [
@@ -73,7 +73,7 @@ fn element_swap() {
         ]
     );
 
-    vdom.mark_dirty(ScopeId::ROOT);
+    vdom.mark_dirty(ScopeId::APP);
     assert_eq!(
         vdom.render_immediate_to_vec().santize().edits,
         [
@@ -126,7 +126,7 @@ fn attribute_diff() {
     let mut vdom = VirtualDom::new(app);
     vdom.rebuild(&mut NoOpMutations);
 
-    vdom.mark_dirty(ScopeId::ROOT);
+    vdom.mark_dirty(ScopeId::APP);
     assert_eq!(
         vdom.render_immediate_to_vec().santize().edits,
         [
@@ -145,7 +145,7 @@ fn attribute_diff() {
         ]
     );
 
-    vdom.mark_dirty(ScopeId::ROOT);
+    vdom.mark_dirty(ScopeId::APP);
     assert_eq!(
         vdom.render_immediate_to_vec().santize().edits,
         [
@@ -166,7 +166,7 @@ fn attribute_diff() {
         ]
     );
 
-    vdom.mark_dirty(ScopeId::ROOT);
+    vdom.mark_dirty(ScopeId::APP);
     assert_eq!(
         vdom.render_immediate_to_vec().santize().edits,
         [
@@ -180,4 +180,29 @@ fn attribute_diff() {
             SetAttribute { name: "e", value: AttributeValue::None, id: ElementId(1,), ns: None },
         ]
     );
+}
+
+#[test]
+fn diff_empty() {
+    fn app() -> Element {
+        match generation() % 2 {
+            0 => rsx! { div { "hello" } },
+            1 => rsx! {},
+            _ => unreachable!(),
+        }
+    }
+
+    let mut vdom = VirtualDom::new(app);
+    vdom.rebuild(&mut NoOpMutations);
+
+    vdom.mark_dirty(ScopeId::APP);
+    let edits = vdom.render_immediate_to_vec().santize().edits;
+
+    assert_eq!(
+        edits,
+        [
+            CreatePlaceholder { id: ElementId(2,) },
+            ReplaceWith { id: ElementId(1,), m: 1 },
+        ]
+    )
 }

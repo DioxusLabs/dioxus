@@ -26,3 +26,7 @@ twoway!("multi-tab" => multi_tab (IndentOptions::new(IndentType::Tabs, 4, false)
 
 twoway!("multiexpr-4sp" => multiexpr_4sp (IndentOptions::new(IndentType::Spaces, 4, false)));
 twoway!("multiexpr-tab" => multiexpr_tab (IndentOptions::new(IndentType::Tabs, 4, false)));
+twoway!("multiexpr-many" => multiexpr_many (IndentOptions::new(IndentType::Spaces, 4, false)));
+twoway!("simple-combo-expr" => simple_combo_expr (IndentOptions::new(IndentType::Spaces, 4, false)));
+twoway!("oneline-expand" => online_expand (IndentOptions::new(IndentType::Spaces, 4, false)));
+twoway!("shortened" => shortened (IndentOptions::new(IndentType::Spaces, 4, false)));

@@ -8,7 +8,7 @@
 
 use dioxus_core::ElementId;
 use dioxus_html::PlatformEventData;
-use dioxus_interpreter_js::Channel;
+use dioxus_interpreter_js::unified_bindings::Interpreter;
 use futures_channel::mpsc;
 use rustc_hash::FxHashMap;
 use wasm_bindgen::{closure::Closure, JsCast};
@@ -17,16 +17,37 @@ use web_sys::{Document, Element, Event};
 use crate::{load_document, virtual_event_from_websys_event, Config, WebEventConverter};
 
 pub struct WebsysDom {
-    pub(crate) document: Document,
     #[allow(dead_code)]
     pub(crate) root: Element,
+    pub(crate) document: Document,
     pub(crate) templates: FxHashMap<String, u16>,
     pub(crate) max_template_id: u16,
-    pub(crate) interpreter: Channel,
+    pub(crate) interpreter: Interpreter,
+
     #[cfg(feature = "mounted")]
     pub(crate) event_channel: mpsc::UnboundedSender<UiEvent>,
+
     #[cfg(feature = "mounted")]
     pub(crate) queued_mounted_events: Vec<ElementId>,
+
+    // We originally started with a different `WriteMutations` for collecting templates during hydration.
+    // When profiling the binary size of web applications, this caused a large increase in binary size
+    // because diffing code in core is generic over the `WriteMutation` object.
+    //
+    // The fact that diffing is generic over WriteMutations instead of dynamic dispatch or a vec is nice
+    // because we can directly write mutations to sledgehammer and avoid the runtime and binary size overhead
+    // of dynamic dispatch
+    //
+    // Instead we now store a flag to see if we should be writing templates at all if hydration is enabled.
+    // This has a small overhead, but it avoids dynamic dispatch and reduces the binary size
+    //
+    // NOTE: running the virtual dom with the `only_write_templates` flag set to true is different from running
+    // it with no mutation writer because it still assigns ids to nodes, but it doesn't write them to the dom
+    #[cfg(feature = "hydrate")]
+    pub(crate) only_write_templates: bool,
+
+    #[cfg(feature = "hydrate")]
+    pub(crate) suspense_hydration_ids: crate::hydration::SuspenseHydrationIds,
 }
 
 pub struct UiEvent {
@@ -35,8 +56,6 @@ pub struct UiEvent {
     pub element: ElementId,
     pub data: PlatformEventData,
 }
-
-//fn get_document(elem: &web_sys::Element) ->
 
 impl WebsysDom {
     pub fn new(cfg: Config, event_channel: mpsc::UnboundedSender<UiEvent>) -> Self {
@@ -66,55 +85,61 @@ impl WebsysDom {
             }
         };
 
-        let interpreter = Channel::default();
+        let interpreter = Interpreter::default();
 
         let handler: Closure<dyn FnMut(&Event)> = Closure::wrap(Box::new({
             let event_channel = event_channel.clone();
             move |event: &web_sys::Event| {
                 let name = event.type_();
                 let element = walk_event_for_id(event);
-                let bubbles = dioxus_html::event_bubbles(name.as_str());
-                if let Some((element, target)) = element {
-                    let prevent_event;
-                    if let Some(prevent_requests) = target
-                        .get_attribute("dioxus-prevent-default")
-                        .as_deref()
-                        .map(|f| f.split_whitespace())
-                    {
-                        prevent_event = prevent_requests
-                            .map(|f| f.trim_start_matches("on"))
-                            .any(|f| f == name);
-                    } else {
-                        prevent_event = false;
-                    }
+                let bubbles = event.bubbles();
 
-                    // Prevent forms from submitting and redirecting
-                    if name == "submit" {
-                        // On forms the default behavior is not to submit, if prevent default is set then we submit the form
-                        if !prevent_event {
-                            event.prevent_default();
-                        }
-                    } else if prevent_event {
+                let Some((element, target)) = element else {
+                    return;
+                };
+
+                let prevent_event;
+                if let Some(prevent_requests) = target
+                    .get_attribute("dioxus-prevent-default")
+                    .as_deref()
+                    .map(|f| f.split_whitespace())
+                {
+                    prevent_event = prevent_requests
+                        .map(|f| f.strip_prefix("on").unwrap_or(f))
+                        .any(|f| f == name);
+                } else {
+                    prevent_event = false;
+                }
+
+                // Prevent forms from submitting and redirecting
+                if name == "submit" {
+                    // On forms the default behavior is not to submit, if prevent default is set then we submit the form
+                    if !prevent_event {
                         event.prevent_default();
                     }
-
-                    let data = virtual_event_from_websys_event(event.clone(), target);
-                    let _ = event_channel.unbounded_send(UiEvent {
-                        name,
-                        bubbles,
-                        element,
-                        data,
-                    });
+                } else if prevent_event {
+                    event.prevent_default();
                 }
+
+                let data = virtual_event_from_websys_event(event.clone(), target);
+                let _ = event_channel.unbounded_send(UiEvent {
+                    name,
+                    bubbles,
+                    element,
+                    data,
+                });
             }
         }));
 
-        dioxus_interpreter_js::initialize(
+        let _interpreter = interpreter.base();
+        _interpreter.initialize(
             root.clone().unchecked_into(),
             handler.as_ref().unchecked_ref(),
         );
+
         dioxus_html::set_event_converter(Box::new(WebEventConverter));
         handler.forget();
+
         Self {
             document,
             root,
@@ -125,6 +150,10 @@ impl WebsysDom {
             event_channel,
             #[cfg(feature = "mounted")]
             queued_mounted_events: Default::default(),
+            #[cfg(feature = "hydrate")]
+            only_write_templates: false,
+            #[cfg(feature = "hydrate")]
+            suspense_hydration_ids: Default::default(),
         }
     }
 

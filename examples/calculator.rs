@@ -13,7 +13,7 @@ use dioxus::html::input_data::keyboard_types::Key;
 use dioxus::prelude::*;
 
 fn main() {
-    LaunchBuilder::new()
+    LaunchBuilder::desktop()
         .with_cfg(desktop!({
             use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
             Config::new().with_window(

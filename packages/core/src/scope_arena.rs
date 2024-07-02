@@ -1,86 +1,145 @@
+use crate::innerlude::{throw_error, RenderError, RenderReturn, ScopeOrder};
+use crate::prelude::ReactiveContext;
+use crate::scope_context::SuspenseLocation;
 use crate::{
     any_props::{AnyProps, BoxedAnyProps},
-    innerlude::{DirtyScope, ScopeState},
-    nodes::RenderReturn,
+    innerlude::ScopeState,
     scope_context::Scope,
     scopes::ScopeId,
     virtual_dom::VirtualDom,
 };
+use crate::{Element, VNode};
 
 impl VirtualDom {
-    pub(super) fn new_scope(&mut self, props: BoxedAnyProps, name: &'static str) -> &ScopeState {
+    pub(super) fn new_scope(
+        &mut self,
+        props: BoxedAnyProps,
+        name: &'static str,
+    ) -> &mut ScopeState {
         let parent_id = self.runtime.current_scope_id();
-        let height = parent_id
-            .and_then(|parent_id| self.runtime.get_state(parent_id).map(|f| f.height + 1))
-            .unwrap_or(0);
+        let height = match parent_id.and_then(|id| self.runtime.get_state(id)) {
+            Some(parent) => parent.height() + 1,
+            None => 0,
+        };
+        let suspense_boundary = self
+            .runtime
+            .suspense_stack
+            .borrow()
+            .last()
+            .cloned()
+            .unwrap_or(SuspenseLocation::NotSuspended);
         let entry = self.scopes.vacant_entry();
         let id = ScopeId(entry.key());
+
+        let scope_runtime = Scope::new(name, id, parent_id, height, suspense_boundary);
+        let reactive_context = ReactiveContext::new_for_scope(&scope_runtime, &self.runtime);
 
         let scope = entry.insert(ScopeState {
             runtime: self.runtime.clone(),
             context_id: id,
             props,
             last_rendered_node: Default::default(),
+            reactive_context,
         });
 
-        self.runtime
-            .create_scope(Scope::new(name, id, parent_id, height));
+        self.runtime.create_scope(scope_runtime);
+        tracing::trace!("created scope {id:?} with parent {parent_id:?}");
 
         scope
     }
 
+    /// Run a scope and return the rendered nodes. This will not modify the DOM or update the last rendered node of the scope.
+    #[tracing::instrument(skip(self), level = "trace", name = "VirtualDom::run_scope")]
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> RenderReturn {
         debug_assert!(
             crate::Runtime::current().is_some(),
             "Must be in a dioxus runtime"
         );
+        self.runtime.push_scope(scope_id);
 
-        self.runtime.scope_stack.borrow_mut().push(scope_id);
         let scope = &self.scopes[scope_id.0];
-        let new_nodes = {
-            let context = scope.state();
+        let output = {
+            let scope_state = scope.state();
 
-            context.suspended.set(false);
-            context.hook_index.set(0);
+            scope_state.hook_index.set(0);
 
             // Run all pre-render hooks
-            for pre_run in context.before_render.borrow_mut().iter_mut() {
+            for pre_run in scope_state.before_render.borrow_mut().iter_mut() {
                 pre_run();
             }
 
-            // safety: due to how we traverse the tree, we know that the scope is not currently aliased
             let props: &dyn AnyProps = &*scope.props;
 
             let span = tracing::trace_span!("render", scope = %scope.state().name);
-            span.in_scope(|| props.render())
+            span.in_scope(|| {
+                scope.reactive_context.reset_and_run_in(|| {
+                    let mut render_return = props.render();
+                    self.handle_element_return(&mut render_return.node, scope_id, &scope.state());
+                    render_return
+                })
+            })
         };
 
-        let context = scope.state();
+        let scope_state = scope.state();
 
         // Run all post-render hooks
-        for post_run in context.after_render.borrow_mut().iter_mut() {
+        for post_run in scope_state.after_render.borrow_mut().iter_mut() {
             post_run();
         }
 
-        // And move the render generation forward by one
-        context.render_count.set(context.render_count.get() + 1);
-
         // remove this scope from dirty scopes
-        self.dirty_scopes.remove(&DirtyScope {
-            height: context.height,
-            id: context.id,
-        });
+        self.dirty_scopes
+            .remove(&ScopeOrder::new(scope_state.height, scope_id));
 
-        if context.suspended.get() {
-            if matches!(new_nodes, RenderReturn::Aborted(_)) {
-                self.suspended_scopes.insert(context.id);
+        self.runtime.pop_scope();
+
+        output
+    }
+
+    /// Insert any errors, or suspended tasks from an element return into the runtime
+    fn handle_element_return(&self, node: &mut Element, scope_id: ScopeId, scope_state: &Scope) {
+        match node {
+            Err(RenderError::Aborted(e)) => {
+                tracing::error!(
+                    "Error while rendering component `{}`: {e:?}",
+                    scope_state.name
+                );
+                throw_error(e.clone_mounted());
+                e.render = VNode::placeholder();
             }
-        } else if !self.suspended_scopes.is_empty() {
-            _ = self.suspended_scopes.remove(&context.id);
+            Err(RenderError::Suspended(e)) => {
+                let task = e.task();
+                // Insert the task into the nearest suspense boundary if it exists
+                let boundary = self
+                    .runtime
+                    .get_state(scope_id)
+                    .unwrap()
+                    .suspense_boundary();
+                let already_suspended = self
+                    .runtime
+                    .tasks
+                    .borrow()
+                    .get(task.id)
+                    .expect("Suspended on a task that no longer exists")
+                    .suspend(boundary.clone());
+                if !already_suspended {
+                    tracing::trace!("Suspending {:?} on {:?}", scope_id, task);
+                    // Add this task to the suspended tasks list of the boundary
+                    if let SuspenseLocation::UnderSuspense(boundary) = &boundary {
+                        boundary.add_suspended_task(e.clone());
+                    }
+                    self.runtime
+                        .suspended_tasks
+                        .set(self.runtime.suspended_tasks.get() + 1);
+                }
+                e.placeholder = VNode::placeholder();
+            }
+            Ok(_) => {
+                // If the render was successful, we can move the render generation forward by one
+                scope_state
+                    .render_count
+                    .set(scope_state.render_count.get() + 1);
+            }
         }
-
-        self.runtime.scope_stack.borrow_mut().pop();
-
-        new_nodes
     }
 }

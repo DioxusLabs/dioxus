@@ -50,7 +50,7 @@ pub trait ModifiersInteraction {
 
 #[cfg(feature = "serialize")]
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone, Default)]
-pub(crate) struct SerializedPointInteraction {
+pub struct SerializedPointInteraction {
     pub alt_key: bool,
 
     /// The button number that was pressed (if applicable) when the mouse event was fired.

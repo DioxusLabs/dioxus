@@ -9,6 +9,7 @@ use syn::{Ident, LitStr};
 
 use proc_macro2::TokenStream as TokenStream2;
 
+use crate::hash::HashFragment;
 use crate::layout::Layout;
 use crate::layout::LayoutId;
 use crate::nest::Nest;
@@ -56,6 +57,7 @@ pub(crate) struct Route {
     pub route: String,
     pub segments: Vec<RouteSegment>,
     pub query: Option<QuerySegment>,
+    pub hash: Option<HashFragment>,
     pub nests: Vec<NestId>,
     pub layouts: Vec<LayoutId>,
     fields: Vec<(Ident, Type)>,
@@ -144,7 +146,7 @@ impl Route {
             _ => Vec::new(),
         };
 
-        let (route_segments, query) = {
+        let (route_segments, query, hash) = {
             parse_route_segments(
                 variant.ident.span(),
                 fields.iter().map(|f| (&f.0, &f.1)),
@@ -158,6 +160,7 @@ impl Route {
             segments: route_segments,
             route,
             query,
+            hash,
             nests,
             layouts,
             fields,
@@ -167,7 +170,8 @@ impl Route {
     pub fn display_match(&self, nests: &[Nest]) -> TokenStream2 {
         let name = &self.route_name;
         let dynamic_segments = self.dynamic_segments();
-        let write_query = self.query.as_ref().map(|q| q.write());
+        let write_query: Option<TokenStream2> = self.query.as_ref().map(|q| q.write());
+        let write_hash = self.hash.as_ref().map(|q| q.write());
 
         match &self.ty {
             RouteType::Child(field) => {
@@ -200,6 +204,7 @@ impl Route {
                         #(#write_nests)*
                         #(#write_segments)*
                         #write_query
+                        #write_hash
                     }
                 }
             }
@@ -286,6 +291,11 @@ impl Route {
                     from_route = true
                 }
             }
+            if let Some(hash) = &self.hash {
+                if hash.contains_ident(name) {
+                    from_route = true
+                }
+            }
 
             if from_route {
                 quote! {#name}
@@ -334,6 +344,13 @@ impl Route {
     pub fn parse_query(&self) -> TokenStream2 {
         match &self.query {
             Some(query) => query.parse(),
+            None => quote! {},
+        }
+    }
+
+    pub fn parse_hash(&self) -> TokenStream2 {
+        match &self.hash {
+            Some(hash) => hash.parse(),
             None => quote! {},
         }
     }

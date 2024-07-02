@@ -1,5 +1,4 @@
-use crate::assets::AssetConfigDropGuard;
-use crate::server::fullstack;
+use crate::{assets::AssetConfigDropGuard, server::fullstack};
 use dioxus_cli_config::Platform;
 
 use super::*;
@@ -53,20 +52,21 @@ impl Build {
         }
 
         crate_config.set_cargo_args(self.build.cargo_args.clone());
+        crate_config.extend_with_platform(platform);
 
         plugins_before_command(BuildEvent).await;
 
         let build_result = match platform {
             Platform::Web => {
                 // `rust_flags` are used by fullstack's client build.
-                crate::builder::build(&crate_config, false, self.build.skip_assets, rust_flags)?
+                crate::builder::build_web(&crate_config, self.build.skip_assets, rust_flags)?
             }
             Platform::Desktop => {
                 // Since desktop platform doesn't use `rust_flags`, this
                 // argument is explicitly set to `None`.
                 crate::builder::build_desktop(&crate_config, false, self.build.skip_assets, None)?
             }
-            Platform::Fullstack => {
+            Platform::Fullstack | Platform::StaticGeneration => {
                 // Fullstack mode must be built with web configs on the desktop
                 // (server) binary as well as the web binary
                 let _config = AssetConfigDropGuard::new();
@@ -82,9 +82,8 @@ impl Build {
                         }
                         None => web_config.features = Some(vec![web_feature]),
                     };
-                    crate::builder::build(
+                    crate::builder::build_web(
                         &web_config,
-                        false,
                         self.build.skip_assets,
                         Some(client_rust_flags),
                     )?;
@@ -107,6 +106,7 @@ impl Build {
                     )?
                 }
             }
+            _ => unreachable!(),
         };
 
         let temp = gen_page(&crate_config, build_result.assets.as_ref(), false);

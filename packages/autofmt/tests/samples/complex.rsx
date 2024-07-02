@@ -48,5 +48,24 @@ rsx! {
         }
     }
 
-    div { "asdbascasdbasd", "asbdasbdabsd", {asbdabsdbasdbas} }
+    for i in 0..10 {
+        Component { key: "{i}", blah: 120 }
+    }
+    for i in 0..10 {
+        Component { key: "{i}" }
+    }
+
+    for i in 0..10 {
+        div { key: "{i}", blah: 120 }
+    }
+
+    for i in 0..10 {
+        div { key: "{i}" }
+    }
+
+    div {
+        "asdbascasdbasd"
+        "asbdasbdabsd"
+        {asbdabsdbasdbas}
+    }
 }

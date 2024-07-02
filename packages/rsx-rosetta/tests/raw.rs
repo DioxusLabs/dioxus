@@ -13,9 +13,11 @@ fn raw_attribute() {
 
     let body = rsx_rosetta::rsx_from_html(&dom);
 
-    let out = dioxus_autofmt::write_block_out(body).unwrap();
+    let out = dioxus_autofmt::write_block_out(&body).unwrap();
 
     let expected = r#"
-    div { div { "unrecognizedattribute": "asd", "hello world!" } }"#;
+    div {
+        div { "unrecognizedattribute": "asd", "hello world!" }
+    }"#;
     pretty_assertions::assert_eq!(&out, &expected);
 }

@@ -1,28 +1,64 @@
-use dioxus_core::prelude::*;
-use dioxus_signals::ReactiveContext;
+use std::{cell::Cell, rc::Rc};
 
-/// Create a new effect. The effect will be run immediately and whenever any signal it reads changes.
-/// The signal will be owned by the current component and will be dropped when the component is dropped.
-///
-/// If the use_effect call was skipped due to an early return, the effect will no longer activate.
-pub fn use_effect(mut callback: impl FnMut() + 'static) {
-    // let mut run_effect = use_hook(|| CopyValue::new(true));
-    // use_hook_did_run(move |did_run| run_effect.set(did_run));
+use dioxus_core::prelude::*;
+use futures_util::StreamExt;
+
+use crate::use_callback;
+
+#[doc = include_str!("../docs/side_effects.md")]
+#[doc = include_str!("../docs/rules_of_hooks.md")]
+#[track_caller]
+pub fn use_effect(callback: impl FnMut() + 'static) -> Effect {
+    let callback = use_callback(callback);
+
+    let location = std::panic::Location::caller();
 
     use_hook(|| {
-        spawn(async move {
-            let rc = ReactiveContext::new();
+        // Inside the effect, we track any reads so that we can rerun the effect if a value the effect reads changes
+        let (rc, mut changed) = ReactiveContext::new_with_origin(location);
 
+        // Deduplicate queued effects
+        let effect_queued = Rc::new(Cell::new(false));
+
+        // Spawn a task that will run the effect when:
+        // 1) The component is first run
+        // 2) The effect is rerun due to an async read at any time
+        // 3) The effect is rerun in the same tick that the component is rerun: we need to wait for the component to rerun before we can run the effect again
+        let queue_effect_for_next_render = move || {
+            if effect_queued.get() {
+                return;
+            }
+            effect_queued.set(true);
+            let effect_queued = effect_queued.clone();
+            queue_effect(move || {
+                rc.reset_and_run_in(&*callback);
+                effect_queued.set(false);
+            });
+        };
+
+        queue_effect_for_next_render();
+        spawn(async move {
             loop {
-                // Wait for the dom the be finished with sync work
-                flush_sync().await;
+                // Wait for context to change
+                let _ = changed.next().await;
 
                 // Run the effect
-                rc.run_in(&mut callback);
-
-                // Wait for context to change
-                rc.changed().await;
+                queue_effect_for_next_render();
             }
         });
-    });
+        Effect { rc }
+    })
+}
+
+/// A handle to an effect.
+#[derive(Clone, Copy)]
+pub struct Effect {
+    rc: ReactiveContext,
+}
+
+impl Effect {
+    /// Marks the effect as dirty, causing it to rerun on the next render.
+    pub fn mark_dirty(&mut self) {
+        self.rc.mark_dirty();
+    }
 }

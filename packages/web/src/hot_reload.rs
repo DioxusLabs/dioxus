@@ -3,6 +3,7 @@
 use futures_channel::mpsc::UnboundedReceiver;
 
 use dioxus_core::Template;
+use web_sys::Element;
 
 pub(crate) fn init() -> UnboundedReceiver<Template> {
     use wasm_bindgen::closure::Closure;
@@ -31,11 +32,30 @@ pub(crate) fn init() -> UnboundedReceiver<Template> {
     let cl = Closure::wrap(Box::new(move |e: MessageEvent| {
         if let Ok(text) = e.data().dyn_into::<js_sys::JsString>() {
             let string: String = text.into();
-            let val = serde_json::from_str::<serde_json::Value>(&string).unwrap();
-            // leak the value
-            let val: &'static serde_json::Value = Box::leak(Box::new(val));
-            let template: Template = Template::deserialize(val).unwrap();
-            tx.unbounded_send(template).unwrap();
+
+            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&string) {
+                // leak the value
+                let val: &'static serde_json::Value = Box::leak(Box::new(val));
+                let template: Template = Template::deserialize(val).unwrap();
+                tx.unbounded_send(template).unwrap();
+            } else {
+                // it might be triggering a reload of assets
+                // invalidate all the stylesheets on the page
+                let links = web_sys::window()
+                    .unwrap()
+                    .document()
+                    .unwrap()
+                    .query_selector_all("link[rel=stylesheet]")
+                    .unwrap();
+
+                let noise = js_sys::Math::random();
+
+                for x in 0..links.length() {
+                    let link: Element = links.get(x).unwrap().unchecked_into();
+                    let href = link.get_attribute("href").unwrap();
+                    _ = link.set_attribute("href", &format!("{}?{}", href, noise));
+                }
+            }
         }
     }) as Box<dyn FnMut(MessageEvent)>);
 

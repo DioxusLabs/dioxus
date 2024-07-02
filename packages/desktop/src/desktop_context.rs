@@ -2,7 +2,8 @@ use crate::{
     app::SharedContext,
     assets::AssetHandlerRegistry,
     edits::EditQueue,
-    ipc::{EventData, UserWindowEvent},
+    file_upload::NativeFileHover,
+    ipc::UserWindowEvent,
     query::QueryEngine,
     shortcut::{HotKey, ShortcutHandle, ShortcutRegistryError},
     webview::WebviewInstance,
@@ -13,7 +14,10 @@ use dioxus_core::{
     VirtualDom,
 };
 use dioxus_interpreter_js::MutationState;
-use std::{cell::RefCell, rc::Rc, rc::Weak};
+use std::{
+    cell::RefCell,
+    rc::{Rc, Weak},
+};
 use tao::{
     event::Event,
     event_loop::EventLoopWindowTarget,
@@ -62,6 +66,7 @@ pub struct DesktopService {
     pub(crate) edit_queue: EditQueue,
     pub(crate) mutation_state: RefCell<MutationState>,
     pub(crate) asset_handlers: AssetHandlerRegistry,
+    pub(crate) file_hover: NativeFileHover,
 
     #[cfg(target_os = "ios")]
     pub(crate) views: Rc<RefCell<Vec<*mut objc::runtime::Object>>>,
@@ -85,14 +90,16 @@ impl DesktopService {
         shared: Rc<SharedContext>,
         edit_queue: EditQueue,
         asset_handlers: AssetHandlerRegistry,
+        file_hover: NativeFileHover,
     ) -> Self {
         Self {
             window,
             webview,
             shared,
             edit_queue,
-            mutation_state: Default::default(),
             asset_handlers,
+            file_hover,
+            mutation_state: Default::default(),
             query: Default::default(),
             #[cfg(target_os = "ios")]
             views: Default::default(),
@@ -124,12 +131,7 @@ impl DesktopService {
 
         self.shared
             .proxy
-            .send_event(UserWindowEvent(EventData::NewWindow, cx.id()))
-            .unwrap();
-
-        self.shared
-            .proxy
-            .send_event(UserWindowEvent(EventData::Poll, cx.id()))
+            .send_event(UserWindowEvent::NewWindow)
             .unwrap();
 
         self.shared.pending_webviews.borrow_mut().push(window);
@@ -161,7 +163,7 @@ impl DesktopService {
         let _ = self
             .shared
             .proxy
-            .send_event(UserWindowEvent(EventData::CloseWindow, self.id()));
+            .send_event(UserWindowEvent::CloseWindow(self.id()));
     }
 
     /// Close a particular window, given its ID
@@ -169,7 +171,7 @@ impl DesktopService {
         let _ = self
             .shared
             .proxy
-            .send_event(UserWindowEvent(EventData::CloseWindow, id));
+            .send_event(UserWindowEvent::CloseWindow(id));
     }
 
     /// change window to fullscreen

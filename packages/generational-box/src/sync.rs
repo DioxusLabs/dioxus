@@ -20,13 +20,25 @@ fn sync_runtime() -> &'static Arc<Mutex<Vec<MemoryLocation<SyncStorage>>>> {
 }
 
 impl AnyStorage for SyncStorage {
-    type Ref<R: ?Sized + 'static> = GenerationalRef<MappedRwLockReadGuard<'static, R>>;
-    type Mut<W: ?Sized + 'static> = GenerationalRefMut<MappedRwLockWriteGuard<'static, W>>;
+    type Ref<'a, R: ?Sized + 'static> = GenerationalRef<MappedRwLockReadGuard<'a, R>>;
+    type Mut<'a, W: ?Sized + 'static> = GenerationalRefMut<MappedRwLockWriteGuard<'a, W>>;
 
-    fn try_map<I: ?Sized, U: ?Sized + 'static>(
-        ref_: Self::Ref<I>,
+    fn downcast_lifetime_ref<'a: 'b, 'b, T: ?Sized + 'static>(
+        ref_: Self::Ref<'a, T>,
+    ) -> Self::Ref<'b, T> {
+        ref_
+    }
+
+    fn downcast_lifetime_mut<'a: 'b, 'b, T: ?Sized + 'static>(
+        mut_: Self::Mut<'a, T>,
+    ) -> Self::Mut<'b, T> {
+        mut_
+    }
+
+    fn try_map<I: ?Sized + 'static, U: ?Sized + 'static>(
+        ref_: Self::Ref<'_, I>,
         f: impl FnOnce(&I) -> Option<&U>,
-    ) -> Option<Self::Ref<U>> {
+    ) -> Option<Self::Ref<'_, U>> {
         let GenerationalRef {
             inner,
             #[cfg(any(debug_assertions, feature = "debug_borrows"))]
@@ -46,10 +58,10 @@ impl AnyStorage for SyncStorage {
             })
     }
 
-    fn try_map_mut<I: ?Sized, U: ?Sized + 'static>(
-        mut_ref: Self::Mut<I>,
+    fn try_map_mut<I: ?Sized + 'static, U: ?Sized + 'static>(
+        mut_ref: Self::Mut<'_, I>,
         f: impl FnOnce(&mut I) -> Option<&mut U>,
-    ) -> Option<Self::Mut<U>> {
+    ) -> Option<Self::Mut<'_, U>> {
         let GenerationalRefMut {
             inner,
             #[cfg(any(debug_assertions, feature = "debug_borrows"))]
@@ -61,10 +73,7 @@ impl AnyStorage for SyncStorage {
             .map(|inner| GenerationalRefMut {
                 inner,
                 #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-                borrow: crate::GenerationalRefMutBorrowInfo {
-                    borrowed_from: borrow.borrowed_from,
-                    created_at: borrow.created_at,
-                },
+                borrow,
             })
     }
 
@@ -91,8 +100,9 @@ impl AnyStorage for SyncStorage {
     }
 
     fn recycle(location: &MemoryLocation<Self>) {
+        let location = *location;
         location.drop();
-        sync_runtime().lock().push(*location);
+        sync_runtime().lock().push(location);
     }
 }
 
@@ -101,16 +111,8 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
         &'static self,
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         at: crate::GenerationalRefBorrowInfo,
-    ) -> Result<Self::Ref<T>, error::BorrowError> {
-        let read = self.0.try_read();
-
-        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-        let read = read.ok_or_else(|| at.borrowed_from.borrow_error())?;
-
-        #[cfg(not(any(debug_assertions, feature = "debug_ownership")))]
-        let read = read.ok_or_else(|| {
-            error::BorrowError::AlreadyBorrowedMut(error::AlreadyBorrowedMutError {})
-        })?;
+    ) -> Result<Self::Ref<'static, T>, error::BorrowError> {
+        let read = self.0.read();
 
         RwLockReadGuard::try_map(read, |any| any.as_ref()?.downcast_ref())
             .map_err(|_| {
@@ -132,31 +134,20 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
         &'static self,
         #[cfg(any(debug_assertions, feature = "debug_ownership"))]
         at: crate::GenerationalRefMutBorrowInfo,
-    ) -> Result<Self::Mut<T>, error::BorrowMutError> {
-        let write = self.0.try_write();
+    ) -> Result<Self::Mut<'static, T>, error::BorrowMutError> {
+        let write = self.0.write();
 
-        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-        let write = write.ok_or_else(|| at.borrowed_from.borrow_mut_error())?;
-
-        #[cfg(not(any(debug_assertions, feature = "debug_ownership")))]
-        let write = write.ok_or_else(|| {
-            error::BorrowMutError::AlreadyBorrowed(error::AlreadyBorrowedError {})
-        })?;
-
-        RwLockWriteGuard::try_map(write, |any| any.as_mut()?.downcast_mut())
-            .map_err(|_| {
-                error::BorrowMutError::Dropped(ValueDroppedError {
-                    #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-                    created_at: at.created_at,
-                })
-            })
-            .map(|guard| {
-                GenerationalRefMut::new(
-                    guard,
-                    #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-                    at,
-                )
-            })
+        match RwLockWriteGuard::try_map(write, |any| any.as_mut()?.downcast_mut()) {
+            Ok(guard) => Ok(GenerationalRefMut::new(
+                guard,
+                #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+                at,
+            )),
+            Err(_) => Err(error::BorrowMutError::Dropped(ValueDroppedError {
+                #[cfg(any(debug_assertions, feature = "debug_ownership"))]
+                created_at: at.created_at,
+            })),
+        }
     }
 
     fn set(&self, value: T) {

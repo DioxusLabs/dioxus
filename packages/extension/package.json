@@ -2,7 +2,7 @@
     "name": "dioxus",
     "displayName": "Dioxus",
     "description": "Useful tools for working with Dioxus",
-    "version": "0.4.0",
+    "version": "0.5.1",
     "publisher": "DioxusLabs",
     "private": true,
     "license": "MIT",
@@ -73,8 +73,7 @@
     },
     "scripts": {
         "vscode:prepublish": "npm run build-base",
-        "// package": "vsce package -o rust-analyzer.vsix",
-        "// build-base": "node src/build.js",
+        "vsix": "vsce package",
         "build-wasm": "cargo build --target wasm32-unknown-unknown --release && cp ../../target/wasm32-unknown-unknown/release/dioxus_ext.wasm pkg/",
         "bind-wasm": "wasm-bindgen --out-dir=pkg --target=web --omit-default-module-path --omit-imports pkg/dioxus_ext.wasm",
         "build-base": "npm run build-wasm && npm run bind-wasm && webpack",

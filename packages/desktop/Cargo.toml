@@ -6,7 +6,7 @@ edition = "2021"
 description = "WebView renderer for Dioxus"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com/learn/0.4/getting_started/desktop"
+homepage = "https://dioxuslabs.com/learn/0.5/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
@@ -17,16 +17,15 @@ dioxus-html = { workspace = true, features = [
     "mounted",
     "eval",
 ] }
-dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
-dioxus-hot-reload = { workspace = true, optional = true }
-dioxus-cli-config = { workspace = true }
+dioxus-interpreter-js = { workspace = true, features = ["binary-protocol", "eval"] }
+dioxus-cli-config = { workspace = true, features = ["read-config"] }
 generational-box = { workspace = true }
 
 serde = "1.0.136"
 serde_json = "1.0.79"
 thiserror = { workspace = true }
 tracing = { workspace = true }
-wry = { version = "0.35.0", default-features = false, features = [
+wry = { version = "0.37.0", default-features = false, features = [
     "os-webview",
     "protocol",
     "file-drop",
@@ -46,42 +45,52 @@ dunce = "1.0.2"
 slab = { workspace = true }
 rustc-hash = { workspace = true }
 dioxus-hooks = { workspace = true }
-
 futures-util = { workspace = true }
 urlencoding = "2.1.2"
 async-trait = "0.1.68"
-crossbeam-channel = "0.5.8"
-tao = { version = "0.24.0", features = ["rwh_05"] }
+tao = { version = "0.26.1", features = ["rwh_05"] }
+
+[target.'cfg(unix)'.dependencies]
+signal-hook = "0.3.17"
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
-rfd = "0.12"
-global-hotkey = "0.4.1"
+global-hotkey = "0.5.0"
+rfd = "0.14"
 muda = "0.11.3"
+# hotreload only works on desktop platforms.... mobile is still wip
+dioxus-hot-reload = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc = "0.2.7"
 objc_id = "0.1.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
+cocoa = "0.25"
 core-foundation = "0.9.3"
 objc = "0.2.7"
 
 [features]
-default = ["tokio_runtime", "hot-reload", "wry/objc-exception"]
-tokio_runtime = ["tokio"]
+default = ["tokio_runtime", "wry/objc-exception", "hot-reload", "devtools"]
+tokio_runtime = ["dep:tokio"]
 fullscreen = ["wry/fullscreen"]
 transparent = ["wry/transparent"]
 devtools = ["wry/devtools"]
-hot-reload = ["dioxus-hot-reload"]
+hot-reload = ["dep:dioxus-hot-reload"]
 gnu = []
 
 [package.metadata.docs.rs]
 default-features = false
 features = ["tokio_runtime", "hot-reload"]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["desktop"] }
 exitcode = "1.1.2"
+reqwest = { version = "0.11.9", features = ["json"] }
+http-range = { version = "0.1.5" }
+dioxus-ssr = { workspace = true, version = "0.5.0", default-features = false }
+separator = "0.4.1"
+rand = { version = "0.8.4", features = ["small_rng"] }
 
 # These tests need to be run on the main thread, so they cannot use rust's test harness.
 [[test]]
@@ -93,3 +102,119 @@ harness = false
 name = "check_rendering"
 path = "headless_tests/rendering.rs"
 harness = false
+
+[[test]]
+name = "check_eval"
+path = "headless_tests/eval.rs"
+harness = false
+
+# Most of the examples live in the workspace. We include some here so that docs.rs can scrape our examples for better inline docs
+[[example]]
+name = "video_stream"
+path = "../../examples/video_stream.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "suspense"
+path = "../../examples/suspense.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "calculator_mutable"
+path = "../../examples/calculator_mutable.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "calculator"
+path = "../../examples/calculator.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "clock"
+path = "../../examples/clock.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "crm"
+path = "../../examples/crm.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "custom_html"
+path = "../../examples/custom_html.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "custom_menu"
+path = "../../examples/custom_menu.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "dynamic_asset"
+path = "../../examples/dynamic_asset.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "errors"
+path = "../../examples/errors.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "file_explorer"
+path = "../../examples/file_explorer.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "future"
+path = "../../examples/future.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "hydration"
+path = "../../examples/hydration.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "multiwindow"
+path = "../../examples/multiwindow.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "overlay"
+path = "../../examples/overlay.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "popup"
+path = "../../examples/popup.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "read_size"
+path = "../../examples/read_size.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "shortcut"
+path = "../../examples/shortcut.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "streams"
+path = "../../examples/streams.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "window_event"
+path = "../../examples/window_event.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "window_focus"
+path = "../../examples/window_focus.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "window_zoom"
+path = "../../examples/window_zoom.rs"
+doc-scrape-examples = true
