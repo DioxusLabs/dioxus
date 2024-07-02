@@ -108,7 +108,9 @@ interface types {
   enum platform {
     web,
     desktop,
-    fullstack
+    mobile,
+    fullstack,
+    static-generation
   }
 
   /// General information given to the host project about the plugin

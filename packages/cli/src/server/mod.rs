@@ -50,13 +50,6 @@ async fn setup_file_watcher<F: Fn() -> Result<BuildResult> + Send + 'static>(
     web_info: Option<WebServerInfo>,
     hot_reload: HotReloadState,
 ) -> Result<RecommendedWatcher> {
-    let build_with = Arc::new(build_with);
-
-    let ServerReloadState {
-        hot_reload,
-        reload_tx,
-    } = reload;
-
     let mut last_update_time = chrono::Local::now().timestamp();
 
     // file watcher: check file change

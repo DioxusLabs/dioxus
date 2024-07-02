@@ -111,7 +111,9 @@ impl ImportHost for PluginRuntimeState {
         let default_platform = match application.default_platform {
             dioxus_cli_config::Platform::Web => Platform::Web,
             dioxus_cli_config::Platform::Desktop => Platform::Desktop,
-            dioxus_cli_config::Platform::Fullstack => todo!(),
+            dioxus_cli_config::Platform::Fullstack => Platform::Fullstack,
+            dioxus_cli_config::Platform::StaticGeneration => Platform::StaticGeneration,
+            _ => return Err(wasmtime::Error::msg("unknown platform")),
         };
 
         Ok(ProjectInfo { default_platform })

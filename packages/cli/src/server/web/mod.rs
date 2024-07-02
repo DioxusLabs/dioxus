@@ -1,5 +1,3 @@
-use crate::server::ServerReloadState;
-use crate::server::WsMessage;
 use crate::{
     builder,
     cfg::ConfigOptsServe,
@@ -15,13 +13,6 @@ use dioxus_rsx::hot_reload::*;
 use std::{
     net::{IpAddr, SocketAddr, UdpSocket},
     sync::Arc,
-};
-use tokio::sync::broadcast::{self, Sender};
-use tower::ServiceBuilder;
-use tower_http::services::fs::{ServeDir, ServeFileSystemResponseBody};
-use tower_http::{
-    cors::{Any, CorsLayer},
-    ServiceBuilderExt,
 };
 mod proxy;
 mod server;
