@@ -92,7 +92,7 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "fullstack"),
       command:
-        'cargo run --package dioxus-cli --release --force-sequential -- serve --platform fullstack --addr "127.0.0.1" --port 3333',
+        'cargo run --package dioxus-cli --release -- serve --force-sequential --platform fullstack --addr "127.0.0.1" --port 3333',
       port: 3333,
       timeout: 30 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -101,7 +101,7 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "suspense-carousel"),
       command:
-        'cargo run --package dioxus-cli --release --force-sequential -- serve --platform fullstack --addr "127.0.0.1" --port 4040',
+        'cargo run --package dioxus-cli --release -- serve --force-sequential --platform fullstack --addr "127.0.0.1" --port 4040',
       port: 4040,
       timeout: 30 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
@@ -110,7 +110,7 @@ module.exports = defineConfig({
     {
       cwd: path.join(process.cwd(), "nested-suspense"),
       command:
-        'cargo run --package dioxus-cli --release --force-sequential -- serve --platform fullstack --addr "127.0.0.1" --port 5050',
+        'cargo run --package dioxus-cli --release -- serve --force-sequential --platform fullstack --addr "127.0.0.1" --port 5050',
       port: 5050,
       timeout: 30 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
