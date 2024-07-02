@@ -5759,6 +5759,7 @@ dependencies = [
 [[package]]
 name = "manganis-cli-support"
 version = "0.2.4"
+source = "git+https://github.com/DioxusLabs/collect-assets#9d340f330953d39885602494a13190c927649fe0"
 dependencies = [
  "anyhow",
  "cargo-lock",
@@ -5767,7 +5768,7 @@ dependencies = [
  "image 0.25.1",
  "imagequant",
  "lightningcss",
- "manganis-common 0.2.4",
+ "manganis-common 0.2.4 (git+https://github.com/DioxusLabs/collect-assets)",
  "mozjpeg",
  "object 0.36.0",
  "petgraph",
@@ -5787,6 +5788,8 @@ dependencies = [
 [[package]]
 name = "manganis-common"
 version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "542300f1e7d9313de5b7e5b92d273ba42ab547c068d773559d616aa14987de43"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
@@ -5802,8 +5805,7 @@ dependencies = [
 [[package]]
 name = "manganis-common"
 version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "542300f1e7d9313de5b7e5b92d273ba42ab547c068d773559d616aa14987de43"
+source = "git+https://github.com/DioxusLabs/collect-assets#9d340f330953d39885602494a13190c927649fe0"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
