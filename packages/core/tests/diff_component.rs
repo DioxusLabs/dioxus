@@ -39,7 +39,12 @@ fn component_swap() {
 
     fn nav_bar() -> Element {
         rsx! {
-            h1 { "NavBar", {(0..3).map(|_| rsx!(nav_link {}))} }
+            h1 {
+                "NavBar"
+                for _ in 0..3 {
+                    nav_link {}
+                }
+            }
         }
     }
 

@@ -1076,15 +1076,31 @@ impl IntoAttributeValue for String {
     }
 }
 
+impl IntoAttributeValue for f32 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Float(self as _)
+    }
+}
 impl IntoAttributeValue for f64 {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Float(self)
     }
 }
 
+impl IntoAttributeValue for i32 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
 impl IntoAttributeValue for i64 {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Int(self)
+    }
+}
+
+impl IntoAttributeValue for i128 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
     }
 }
 

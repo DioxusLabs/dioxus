@@ -59,11 +59,7 @@ impl RsxBlock {
         // Autofmt will fortunately fix this for us in most cases
         //
         // Weo do this by parsing the unambiguous cases first and then do some clever lookahead to parse the rest
-        loop {
-            if content.is_empty() {
-                break;
-            }
-
+        while !content.is_empty() {
             // Parse spread attributes
             if content.peek(Token![..]) {
                 let dots = content.parse::<Token![..]>()?;
@@ -124,6 +120,14 @@ impl RsxBlock {
             // todo: eager parse components?
             {
                 items.push(RsxItem::Child(content.parse::<BodyNode>()?));
+                if !content.is_empty() && content.peek(Token![,]) {
+                    let comma = content.parse::<Token![,]>()?;
+                    diagnostics.push(
+                        comma.span().warning(
+                            "Elements and text nodes do not need to be separated by commas.",
+                        ),
+                    );
+                }
                 continue;
             }
 
@@ -162,6 +166,17 @@ impl RsxBlock {
 
             // Finally just attempt a bodynode parse
             items.push(RsxItem::Child(content.parse::<BodyNode>()?))
+
+            // if !content.is_empty() && content.peek(Token![,]) {
+            //     let comma = content.parse::<Token![,]>()?;
+            //     diagnostics.push(
+            //         comma
+            //             .span()
+            //             .warning("Elements and text nodes do not need to be separated by commas."),
+            //     );
+            // }
+
+            // node
         }
 
         // Validate the order of the items
@@ -475,5 +490,35 @@ mod tests {
         };
 
         let parsed: RsxBlock = syn::parse2(input).unwrap();
+    }
+
+    #[test]
+    fn no_comma_diagnostics() {
+        let input = quote! {
+            { a, ..ComponentProps { a: 1, b: 2, c: 3, children: VNode::empty(), onclick: Default::default() } }
+        };
+
+        let parsed: RsxBlock = syn::parse2(input).unwrap();
+        assert!(parsed.diagnostics.is_empty());
+    }
+    #[test]
+    fn proper_attributes() {
+        let input = quote! {
+            {
+                onclick: action,
+                href,
+                onmounted: onmounted,
+                prevent_default,
+                class,
+                rel,
+                target: tag_target,
+                aria_current,
+                ..attributes,
+                {children}
+            }
+        };
+
+        let parsed: RsxBlock = syn::parse2(input).unwrap();
+        dbg!(parsed.attributes);
     }
 }

@@ -201,6 +201,10 @@ impl Element {
             .collect::<HashMap<_, _>>();
 
         for (name, attr) in attrs {
+            if name.to_string() == "key" {
+                continue;
+            }
+
             // Collect all the attributes with the same name
             let matching_attrs = self
                 .raw_attributes

@@ -62,6 +62,7 @@ mod template_body;
 mod text_node;
 
 mod diagnostics;
+mod expr_node;
 pub mod hotreload;
 mod ifmt;
 mod literal;
@@ -98,6 +99,7 @@ pub(crate) mod innerlude {
     pub use crate::attribute::*;
     pub use crate::component::*;
     pub use crate::element::*;
+    pub use crate::expr_node::*;
     pub use crate::forloop::*;
     pub use crate::ifchain::*;
     pub use crate::location::*;

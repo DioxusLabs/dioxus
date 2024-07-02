@@ -73,13 +73,13 @@ impl Parse for HotLiteral {
 
 impl ToTokens for HotLiteral {
     fn to_tokens(&self, out: &mut proc_macro2::TokenStream) {
-        let ty = match &self.value {
-            HotLiteralType::Fmted(f) if f.is_static() => quote! { &'static str  },
-            HotLiteralType::Fmted(_) => quote! { FmtedSegments },
-            HotLiteralType::Float(_) => quote! { f64 },
-            HotLiteralType::Int(_) => quote! { i64 },
-            HotLiteralType::Bool(_) => quote! { bool },
-        };
+        // let ty = match &self.value {
+        //     HotLiteralType::Fmted(f) if f.is_static() => quote! { &'static str  },
+        //     HotLiteralType::Fmted(_) => quote! { FmtedSegments },
+        //     HotLiteralType::Float(_) => quote! { f64 },
+        //     HotLiteralType::Int(_) => quote! { i128 },
+        //     HotLiteralType::Bool(_) => quote! { bool },
+        // };
 
         let val = match &self.value {
             HotLiteralType::Fmted(fmt) if fmt.is_static() => {
@@ -109,9 +109,12 @@ impl ToTokens for HotLiteral {
                     )
                 }
             }
-            HotLiteralType::Float(a) => quote! { #a as f64 },
-            HotLiteralType::Int(a) => quote! { #a as i64 },
-            HotLiteralType::Bool(a) => quote! { #a as bool },
+            HotLiteralType::Float(a) => quote! { #a },
+            HotLiteralType::Int(a) => quote! { #a },
+            HotLiteralType::Bool(a) => quote! { #a },
+            // HotLiteralType::Float(a) => quote! { #a as f64 },
+            // HotLiteralType::Int(a) => quote! { #a as i128 },
+            // HotLiteralType::Bool(a) => quote! { #a as bool },
         };
 
         let mapped = match &self.value {
@@ -143,11 +146,11 @@ impl ToTokens for HotLiteral {
         };
 
         let map_lit = match &self.value {
-            HotLiteralType::Fmted(f) if f.is_static() => quote! { .clone().into() },
+            HotLiteralType::Fmted(f) if f.is_static() => quote! { .clone() },
             HotLiteralType::Fmted(_) => quote! { .to_string() },
-            HotLiteralType::Float(_) => quote! { .clone().into() },
-            HotLiteralType::Int(_) => quote! { .clone().into() },
-            HotLiteralType::Bool(_) => quote! { .clone().into() },
+            HotLiteralType::Float(_) => quote! { .clone() },
+            HotLiteralType::Int(_) => quote! { .clone() },
+            HotLiteralType::Bool(_) => quote! { .clone() },
         };
 
         let hr_idx = self.hr_idx.get().to_string();
@@ -156,7 +159,12 @@ impl ToTokens for HotLiteral {
             {
                 #[cfg(debug_assertions)]
                 {
-                    static __SIGNAL: GlobalSignal<#ty> = GlobalSignal::with_key(|| #val, {
+
+                    // in debug we still want these tokens to turn into fmt args such that RA can line
+                    // them up, giving us rename powersa
+                    _ = #as_lit;
+                    GlobalSignal::with_key(
+                        || #val, {
                         concat!(
                             file!(),
                             ":",
@@ -166,14 +174,8 @@ impl ToTokens for HotLiteral {
                             ":",
                             #hr_idx
                         )
-                    });
-
-                    // in debug we still want these tokens to turn into fmt args such that RA can line
-                    // them up, giving us rename powersa
-                    _ = #as_lit;
-
-                    // render the signal and subscribe the component to its changes
-                    __SIGNAL.with(|s|  s #mapped)
+                    })
+                    .with(|s| s #mapped)
                 }
 
                 // just render the literal directly

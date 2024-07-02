@@ -248,7 +248,11 @@ impl Writer<'_> {
             }
 
             AttributeValue::AttrExpr(value) => {
-                let pretty_expr = self.retrieve_formatted_expr(value).to_string();
+                let Ok(expr) = value.as_expr() else {
+                    return Err(fmt::Error);
+                };
+
+                let pretty_expr = self.retrieve_formatted_expr(&expr).to_string();
                 self.write_mulitiline_tokens(pretty_expr)?;
             }
         }

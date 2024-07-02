@@ -11,11 +11,19 @@ pub struct PartialExpr {
     // partially-complete TokenStream approach
     pub brace: Brace,
     pub expr: TokenStream2,
-    pub dyn_idx: DynIdx,
 }
 
 impl Parse for PartialExpr {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        // Parse as an expression if there is no brace
+        if !input.peek(syn::token::Brace) {
+            let expr = input.parse::<syn::Expr>()?;
+            return Ok(Self {
+                brace: Brace::default(),
+                expr: quote! { #expr },
+            });
+        }
+
         // Pull the brace and then parse the innards as TokenStream2 - not expr
         let content;
         let brace = syn::braced!(content in input);
@@ -23,7 +31,6 @@ impl Parse for PartialExpr {
         Ok(Self {
             brace,
             expr: content.parse()?,
-            dyn_idx: DynIdx::default(),
         })
     }
 }
@@ -34,10 +41,7 @@ impl ToTokens for PartialExpr {
 
         // Make sure we bind the expression to a variable so the lifetimes are relaxed
         tokens.append_all(quote! {
-            {
-                let ___nodes = (#exp).into_dyn_node();
-                ___nodes
-            }
+            { #exp }
         })
     }
 }
@@ -45,6 +49,10 @@ impl ToTokens for PartialExpr {
 impl PartialExpr {
     pub fn span(&self) -> proc_macro2::Span {
         self.brace.span.span()
+    }
+
+    pub fn as_expr(&self) -> syn::Result<syn::Expr> {
+        syn::parse2(self.expr.clone())
     }
 }
 

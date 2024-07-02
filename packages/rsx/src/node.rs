@@ -21,7 +21,7 @@ pub enum BodyNode {
     Text(TextNode),
 
     /// {expr}
-    RawExpr(PartialExpr),
+    RawExpr(ExprNode),
 
     /// for item in items {}
     ForLoop(ForLoop),
@@ -60,11 +60,7 @@ impl Parse for BodyNode {
         // }
         // ```
         if stream.peek(Token![match]) {
-            return Ok(BodyNode::RawExpr(PartialExpr {
-                expr: stream.parse::<Expr>()?.to_token_stream(),
-                dyn_idx: DynIdx::default(),
-                brace: Brace::default(),
-            }));
+            return Ok(BodyNode::RawExpr(stream.parse()?));
         }
 
         // Raw expressions need to be wrapped in braces - let RawBracedExpr handle partial expansion

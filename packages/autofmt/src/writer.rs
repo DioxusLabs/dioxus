@@ -272,11 +272,15 @@ impl<'a> Writer<'a> {
             ElementAttrValue::AttrLiteral(lit) => lit.to_string().len(),
             ElementAttrValue::Shorthand(expr) => expr.span().line_length(),
             ElementAttrValue::AttrExpr(expr) => {
-                let out = self.retrieve_formatted_expr(expr);
-                if out.contains('\n') {
-                    100000
+                if let Ok(expr) = expr.as_expr() {
+                    let out = self.retrieve_formatted_expr(&expr);
+                    if out.contains('\n') {
+                        100000
+                    } else {
+                        out.len()
+                    }
                 } else {
-                    out.len()
+                    100000
                 }
             }
             ElementAttrValue::EventTokens(closure) => {

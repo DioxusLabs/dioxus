@@ -83,7 +83,9 @@ impl Attribute {
             let if_expr = content.parse::<ExprIf>()?;
 
             if is_if_chain_terminated(&if_expr) {
-                return Ok(AttributeValue::AttrExpr(Expr::If(if_expr)));
+                return Ok(AttributeValue::AttrExpr(
+                    syn::parse2(if_expr.to_token_stream()).unwrap(),
+                ));
             }
 
             let stmts = &if_expr.then_branch.stmts;
@@ -105,7 +107,9 @@ impl Attribute {
                     let value: Result<HotLiteral, syn::Error> = syn::parse2(quote! { #exp });
                     match value {
                         Ok(res) => Box::new(AttributeValue::AttrLiteral(res)),
-                        Err(_) => Box::new(AttributeValue::AttrExpr(exp.clone())),
+                        Err(_) => Box::new(AttributeValue::AttrExpr(
+                            syn::parse2(if_expr.to_token_stream()).unwrap(),
+                        )),
                     }
                 }
                 _ => return Err(syn::Error::new(stmt.span(), "Expected an expression")),
@@ -137,7 +141,7 @@ impl Attribute {
             }
         }
 
-        let value = content.parse::<Expr>()?;
+        let value = content.parse::<PartialExpr>()?;
         Ok(AttributeValue::AttrExpr(value))
     }
 
@@ -318,13 +322,8 @@ impl Attribute {
             return true;
         }
 
-        // If it's in the form of attr: attr, return true
-        if let AttributeValue::AttrExpr(Expr::Path(path)) = &self.value {
-            if let AttributeName::BuiltIn(name) = &self.name {
-                if path.path.segments.len() == 1 && &path.path.segments[0].ident == name {
-                    return true;
-                }
-            }
+        if self.value.to_token_stream().to_string() == self.value.to_token_stream().to_string() {
+            return true;
         }
 
         false
@@ -461,7 +460,7 @@ pub enum AttributeValue {
 
     /// attribute: some_expr
     /// attribute: {some_expr} ?
-    AttrExpr(Expr),
+    AttrExpr(PartialExpr),
 }
 
 impl AttributeValue {
@@ -481,9 +480,15 @@ impl ToTokens for AttributeValue {
         match self {
             Self::Shorthand(ident) => ident.to_tokens(tokens),
             Self::AttrLiteral(ifmt) => ifmt.to_tokens(tokens),
-            Self::AttrOptionalExpr { condition, value } => {
-                tokens.append_all(quote! { if #condition { Some(#value) else { None } } })
-            }
+            Self::AttrOptionalExpr { condition, value } => tokens.append_all(quote! {
+                {
+                    if #condition {
+                        Some(#value)
+                    } else {
+                        None
+                    }
+                }
+            }),
             Self::AttrExpr(expr) => expr.to_tokens(tokens),
             Self::EventTokens(closure) => closure.to_tokens(tokens),
         }

@@ -95,7 +95,9 @@ impl ToTokens for Component {
                 // we want to avoid importing traits
                 // use dioxus_core::prelude::Properties;
                 use dioxus_core::prelude::Properties;
-                (#props).into_vcomponent(
+                ({
+                    #props
+                }).into_vcomponent(
                     #name #generics,
                     #fn_name
                 )
@@ -282,7 +284,14 @@ impl Component {
                 };
 
                 let val = match value {
-                    AttributeValue::AttrLiteral(lit) => quote! { #lit },
+                    AttributeValue::AttrLiteral(lit) => {
+                        // due to hotreloading being funky, we we need to map these to the concrete types
+                        match &lit.value {
+                            HotLiteralType::Int(_) => quote! { #lit },
+                            HotLiteralType::Float(_) => quote! { #lit },
+                            _ => quote! { #lit },
+                        }
+                    }
                     _ => value.to_token_stream(),
                 };
 

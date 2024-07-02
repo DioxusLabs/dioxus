@@ -12,7 +12,7 @@ fn main() {
 
 fn app() -> Element {
     rsx! {
-        generic_child { data: 0 }
+        generic_child { data: 0 as i32 }
     }
 }
 
