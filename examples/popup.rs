@@ -54,10 +54,7 @@ fn popup(send: Rc<dyn Fn(String)>) -> Element {
                 },
                 "Send"
             }
-            input {
-                oninput: move |e| user_input.set(e.value()),
-                value: "{user_input}"
-            }
+            input { oninput: move |e| user_input.set(e.value()), value: "{user_input}" }
         }
     }
 }

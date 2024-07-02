@@ -40,7 +40,9 @@ fn app() -> Element {
         rsx! {
             for cur_breed in breeds.message.keys().take(20).cloned() {
                 li { key: "{cur_breed}",
-                    button { onclick: move |_| breed.set(cur_breed.clone()), "{cur_breed}" }
+                    button { onclick: move |_| breed.set(cur_breed.clone()),
+                        "{cur_breed}"
+                    }
                 }
             }
         }
@@ -57,9 +59,7 @@ fn app() -> Element {
         h1 { "Select a dog breed!" }
         div { height: "500px", display: "flex",
             ul { width: "100px", {breed_list} }
-            div { flex: 1,
-                BreedPic { breed }
-            }
+            div { flex: 1, BreedPic { breed } }
         }
     }
 }
@@ -83,11 +83,7 @@ fn BreedPic(breed: Signal<String>) -> Element {
     match fut.read_unchecked().as_ref() {
         Some(Ok(resp)) => rsx! {
             button { onclick: move |_| fut.restart(), "Click to fetch another doggo" }
-            img {
-                max_width: "500px",
-                max_height: "500px",
-                src: "{resp.message}"
-            }
+            img { max_width: "500px", max_height: "500px", src: "{resp.message}" }
         },
         Some(Err(_)) => rsx! { "loading image failed" },
         None => rsx! { "loading image..." },

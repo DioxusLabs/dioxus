@@ -105,7 +105,7 @@ fn New() -> Element {
                         // when the form mounts, focus the first name input
                         onmounted: move |e| async move {
                             _ = e.set_focus(true).await;
-                        }
+                        },
                     }
                 }
 
@@ -132,11 +132,7 @@ fn New() -> Element {
                 }
 
                 div { class: "pure-controls",
-                    button {
-                        r#type: "submit",
-                        class: "pure-button pure-button-primary",
-                        "Save"
-                    }
+                    button { r#type: "submit", class: "pure-button pure-button-primary", "Save" }
                     Link { to: Route::List, class: "pure-button pure-button-primary red", "Cancel" }
                 }
             }
@@ -156,12 +152,6 @@ fn Settings() -> Element {
             },
             "Remove all Clients"
         }
-        Link { to: Route::List, class: "pure-button", "Go back" }
-    }
-}
-
-fn link_test() -> Element {
-    rsx! {
         Link { to: Route::List, class: "pure-button", "Go back" }
     }
 }

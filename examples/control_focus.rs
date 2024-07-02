@@ -40,8 +40,7 @@ fn app() -> Element {
         style { {include_str!("./assets/roulette.css")} }
         h1 { "Input Roulette" }
         button { onclick: move |_| running.toggle(), "Toggle roulette" }
-        div {
-            id: "roulette-grid",
+        div { id: "roulette-grid",
             // Restart the roulette if the user presses escape
             onkeydown: move |event| {
                 if event.code().to_string() == "Escape" {
@@ -55,7 +54,7 @@ fn app() -> Element {
                     r#type: "number",
                     value: "{i}",
                     onmounted: move |cx| elements.write().push(cx.data()),
-                    oninput: move |_| running.set(false)
+                    oninput: move |_| running.set(false),
                 }
             }
         }
