@@ -46,6 +46,7 @@ features = [
     "HtmlTextAreaElement",
     "HtmlFormElement",
     "Text",
+    "Comment",
     "Window",
     "DataTransfer",
     "console",

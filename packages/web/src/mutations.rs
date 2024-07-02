@@ -44,9 +44,8 @@ impl WebsysDom {
             }
             Text { text } => self.document.create_text_node(text).dyn_into().unwrap(),
             Dynamic { .. } => {
-                let el = self.document.create_element("pre").unwrap();
-                let _ = el.toggle_attribute("hidden");
-                el.dyn_into().unwrap()
+                let placeholder = self.document.create_comment("placeholder");
+                placeholder.dyn_into().unwrap()
             }
         }
     }

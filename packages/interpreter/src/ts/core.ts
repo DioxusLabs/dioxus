@@ -173,9 +173,22 @@ export class BaseInterpreter {
         const currentNode = treeWalker.currentNode as ChildNode;
         if (currentNode.nodeType === Node.COMMENT_NODE) {
           const id = currentNode.textContent!;
-          const split = id.split("node-id");
 
-          if (split.length > 1) {
+          // First try to hydrate the comment node as a placeholder
+          const placeholderSplit = id.split("placeholder");
+
+          if (placeholderSplit.length > 1) {
+            this.nodes[ids[parseInt(placeholderSplit[1])]] = currentNode;
+            if (!treeWalker.nextNode()) {
+              break;
+            }
+            continue;
+          }
+
+          // Then try to hydrate the comment node as a marker for the next text node
+          const textNodeSplit = id.split("node-id");
+
+          if (textNodeSplit.length > 1) {
             // For most text nodes, this should be text
             let next = currentNode.nextSibling;
             // remove the comment node
@@ -198,22 +211,18 @@ export class BaseInterpreter {
               commentAfterText = textNode.nextSibling;
             }
             treeWalker.currentNode = commentAfterText;
-            this.nodes[ids[parseInt(split[1])]] = textNode;
+            this.nodes[ids[parseInt(textNodeSplit[1])]] = textNode;
             let exit = !treeWalker.nextNode();
             // remove the comment node after the text node
             commentAfterText.remove();
             if (exit) {
               break;
             }
-          } else {
-            if (!treeWalker.nextNode()) {
-              break;
-            }
+            continue;
           }
-        } else {
-          if (!treeWalker.nextNode()) {
-            break;
-          }
+        }
+        if (!treeWalker.nextNode()) {
+          break;
         }
       }
     }

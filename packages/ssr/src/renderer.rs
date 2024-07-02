@@ -174,11 +174,7 @@ impl Renderer {
 
                     DynamicNode::Placeholder(_) => {
                         if self.pre_render {
-                            write!(
-                                buf,
-                                "<pre data-node-hydration={} hidden></pre>",
-                                self.dynamic_node_id
-                            )?;
+                            write!(buf, "<!--placeholder{}-->", self.dynamic_node_id)?;
                             self.dynamic_node_id += 1;
                         }
                     }

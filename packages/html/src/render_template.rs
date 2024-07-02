@@ -34,7 +34,7 @@ fn render_template_node(node: &TemplateNode, out: &mut String) -> std::fmt::Resu
             write!(out, "</{tag}>")?;
         }
         TemplateNode::Text { text: t } => write!(out, "{t}")?,
-        TemplateNode::Dynamic { id: _ } => write!(out, "<pre hidden />")?,
+        TemplateNode::Dynamic { id: _ } => write!(out, "<!--placeholder-->")?,
     };
     Ok(())
 }
