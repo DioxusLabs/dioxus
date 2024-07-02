@@ -5759,7 +5759,7 @@ dependencies = [
 [[package]]
 name = "manganis-cli-support"
 version = "0.2.4"
-source = "git+https://github.com/DioxusLabs/collect-assets#9d340f330953d39885602494a13190c927649fe0"
+source = "git+https://github.com/DogeDark/dioxus-collect-assets/#290448b1c7d3a4cb2b10d3d8ac33be64ee022d93"
 dependencies = [
  "anyhow",
  "cargo-lock",
@@ -5768,7 +5768,7 @@ dependencies = [
  "image 0.25.1",
  "imagequant",
  "lightningcss",
- "manganis-common 0.2.4 (git+https://github.com/DioxusLabs/collect-assets)",
+ "manganis-common 0.2.4 (git+https://github.com/DogeDark/dioxus-collect-assets/)",
  "mozjpeg",
  "object 0.36.0",
  "petgraph",
@@ -5805,7 +5805,7 @@ dependencies = [
 [[package]]
 name = "manganis-common"
 version = "0.2.4"
-source = "git+https://github.com/DioxusLabs/collect-assets#9d340f330953d39885602494a13190c927649fe0"
+source = "git+https://github.com/DogeDark/dioxus-collect-assets/#290448b1c7d3a4cb2b10d3d8ac33be64ee022d93"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
