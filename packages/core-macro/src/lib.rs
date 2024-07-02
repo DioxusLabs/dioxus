@@ -15,7 +15,7 @@ use dioxus_rsx as rsx;
 
 #[doc = include_str!("../docs/props.md")]
 #[proc_macro_derive(Props, attributes(props))]
-pub fn derive_typed_builder(input: TokenStream) -> TokenStream {
+pub fn derive_props(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as syn::DeriveInput);
     match props::impl_my_derive(&input) {
         Ok(output) => output.into(),
