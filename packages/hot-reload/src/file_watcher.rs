@@ -361,6 +361,7 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                             }
                         }
                     }
+
                     Ok(UpdateResult::NeedsRebuild) => {
                         drop(channels);
                         if rebuild() {
