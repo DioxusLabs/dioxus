@@ -79,7 +79,7 @@ fn app() -> Element {
             }
             div {
                 // pass simple rust expressions in
-                class: lazy_fmt,
+                class: "{lazy_fmt}",
                 id: format_args!("attributes can be passed lazily with std::fmt::Arguments"),
                 class: "asd",
                 class: "{asd}",
@@ -97,7 +97,7 @@ fn app() -> Element {
             {rsx!(p { "More templating!" })},
 
             // Iterators
-            {(0..10).map(|i| rsx!(li { "{i}" }))},
+            {(0..10).map(|i| rsx!(li { "{i}" }))}
 
             // Iterators within expressions
             {
@@ -117,7 +117,7 @@ fn app() -> Element {
             // Conditional rendering
             // Dioxus conditional rendering is based around None/Some. We have no special syntax for conditionals.
             // You can convert a bool condition to rsx! with .then and .or
-            {true.then(|| rsx!(div {}))},
+            {true.then(|| rsx!(div {}))}
 
             // Alternatively, you can use the "if" syntax - but both branches must be resolve to Element
             if false {
@@ -135,7 +135,7 @@ fn app() -> Element {
             }}
 
             // returning "None" without a diverging branch is a bit noisy... but rare in practice
-            {None as Option<()>},
+            {None as Option<()>}
 
             // can also just use empty fragments
             Fragment {}
@@ -176,8 +176,8 @@ fn app() -> Element {
 
             // Spreading can also be overridden manually
             Taller {
-                ..TallerProps { a: "ballin!", children: VNode::empty() },
-                a: "not ballin!"
+                a: "not ballin!",
+                ..TallerProps { a: "ballin!", children: VNode::empty() }
             }
 
             // Can take children too!
