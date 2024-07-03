@@ -588,10 +588,10 @@ pub fn gen_page(config: &CrateConfig, manifest: Option<&AssetManifest>, serve: b
         if file.read_to_string(&mut buf).is_ok() {
             buf
         } else {
-            String::from(include_str!("./assets/index.html"))
+            String::from(include_str!("../assets/index.html"))
         }
     } else {
-        String::from(include_str!("./assets/index.html"))
+        String::from(include_str!("../assets/index.html"))
     };
 
     let resources = config.dioxus_config.web.resource.clone();

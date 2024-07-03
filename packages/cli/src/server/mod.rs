@@ -2,16 +2,16 @@ use crate::{cfg::ConfigOptsServe, Result};
 use dioxus_cli_config::CrateConfig;
 use tokio::task::yield_now;
 
-mod build_engine;
-mod fs_watcher;
+mod builder;
 mod proxy;
-mod tui_output;
-mod web_server;
+mod server;
+mod tui;
+mod watcher;
 
-use build_engine::*;
-use fs_watcher::*;
-use tui_output::*;
-use web_server::*;
+use builder::*;
+use server::*;
+use tui::*;
+use watcher::*;
 
 /// For *all* builds the CLI spins up a dedicated webserver, file watcher, and build infrastructure to serve the project.
 ///
@@ -101,7 +101,7 @@ pub async fn serve_all(srv: ConfigOptsServe, crt: CrateConfig) -> Result<()> {
             // Handle input from the user using our settings
             input = screen.wait() => {
                 // If the user wants to shutdown the server, break the loop
-                if matches!(input, tui_output::TuiInput::Shutdown) {
+                if matches!(input, tui::TuiInput::Shutdown) {
                     break;
                 }
 

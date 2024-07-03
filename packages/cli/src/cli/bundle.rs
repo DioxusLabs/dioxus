@@ -135,7 +135,7 @@ impl Bundle {
                     if !path.exists() {
                         create_dir_all(path.parent().unwrap()).unwrap();
                         let mut file = File::create(&path).unwrap();
-                        file.write_all(include_bytes!("../assets/icon.ico"))
+                        file.write_all(include_bytes!("../../assets/icon.ico"))
                             .unwrap();
                     }
                     path

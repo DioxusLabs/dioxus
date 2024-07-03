@@ -16,10 +16,9 @@ use crate::{
     cfg::{ConfigOptsBuild, ConfigOptsServe},
     custom_error,
     error::Result,
-    gen_page, server, Error,
+    gen_page, Error,
 };
 use clap::{Parser, Subcommand};
-use dioxus_cli_config::CrateConfig;
 use html_parser::Dom;
 use serde::Deserialize;
 use std::{
