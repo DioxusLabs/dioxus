@@ -40,6 +40,7 @@ hyper-rustls = { workspace = true }
 indicatif = "0.17.5"
 subprocess = "0.2.9"
 rayon = "1.8.0"
+futures-channel = { workspace = true }
 
 axum = { workspace = true, features = ["ws"] }
 axum-server = { workspace = true, features = ["tls-rustls"] }
@@ -90,7 +91,7 @@ brotli = "5.0.0"
 dioxus-autofmt = { workspace = true }
 dioxus-check = { workspace = true }
 rsx-rosetta = { workspace = true }
-dioxus-rsx = { workspace = true }
+dioxus-rsx = { workspace = true, features = ["serde"]}
 dioxus-html = { workspace = true, features = ["hot-reload-context"] }
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-hot-reload = { workspace = true, features = ["serve"] }

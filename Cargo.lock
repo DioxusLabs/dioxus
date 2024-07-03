@@ -2289,6 +2289,7 @@ dependencies = [
  "fern",
  "flate2",
  "fs_extra",
+ "futures-channel",
  "futures-util",
  "headers 0.3.9",
  "html_parser",

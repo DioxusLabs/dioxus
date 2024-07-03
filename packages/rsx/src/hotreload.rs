@@ -71,6 +71,7 @@ type AttributePath = Vec<u8>;
 /// A result of hot reloading
 ///
 /// This contains information about what has changed so the hotreloader can apply the right changes
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 #[derive(Debug, PartialEq, Clone)]
 pub struct HotReload {

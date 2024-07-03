@@ -69,41 +69,42 @@ impl Build {
                 // Fullstack mode must be built with web configs on the desktop
                 // (server) binary as well as the web binary
                 let _config = AssetConfigDropGuard::new();
-                let client_rust_flags = fullstack::client_rust_flags(&self.build);
-                let server_rust_flags = fullstack::server_rust_flags(&self.build);
-                {
-                    let mut web_config = crate_config.clone();
-                    let web_feature = self.build.client_feature;
-                    let features = &mut web_config.features;
-                    match features {
-                        Some(features) => {
-                            features.push(web_feature);
-                        }
-                        None => web_config.features = Some(vec![web_feature]),
-                    };
-                    crate::builder::build_web(
-                        &web_config,
-                        self.build.skip_assets,
-                        Some(client_rust_flags),
-                    )?;
-                }
-                {
-                    let mut desktop_config = crate_config.clone();
-                    let desktop_feature = self.build.server_feature;
-                    let features = &mut desktop_config.features;
-                    match features {
-                        Some(features) => {
-                            features.push(desktop_feature);
-                        }
-                        None => desktop_config.features = Some(vec![desktop_feature]),
-                    };
-                    crate::builder::build_desktop(
-                        &desktop_config,
-                        false,
-                        self.build.skip_assets,
-                        Some(server_rust_flags),
-                    )?
-                }
+                todo!()
+                // let client_rust_flags = fullstack::client_rust_flags(&self.build);
+                // let server_rust_flags = fullstack::server_rust_flags(&self.build);
+                // {
+                //     let mut web_config = crate_config.clone();
+                //     let web_feature = self.build.client_feature;
+                //     let features = &mut web_config.features;
+                //     match features {
+                //         Some(features) => {
+                //             features.push(web_feature);
+                //         }
+                //         None => web_config.features = Some(vec![web_feature]),
+                //     };
+                //     crate::builder::build_web(
+                //         &web_config,
+                //         self.build.skip_assets,
+                //         Some(client_rust_flags),
+                //     )?;
+                // }
+                // {
+                //     let mut desktop_config = crate_config.clone();
+                //     let desktop_feature = self.build.server_feature;
+                //     let features = &mut desktop_config.features;
+                //     match features {
+                //         Some(features) => {
+                //             features.push(desktop_feature);
+                //         }
+                //         None => desktop_config.features = Some(vec![desktop_feature]),
+                //     };
+                //     crate::builder::build_desktop(
+                //         &desktop_config,
+                //         false,
+                //         self.build.skip_assets,
+                //         Some(server_rust_flags),
+                //     )?
+                // }
             }
             _ => unreachable!(),
         };

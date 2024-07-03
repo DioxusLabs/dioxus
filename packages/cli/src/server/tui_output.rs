@@ -1,6 +1,8 @@
 use dioxus_cli_config::CrateConfig;
 
-use crate::cfg::ConfigOptsServe;
+use crate::{build, cfg::ConfigOptsServe};
+
+use super::{BuildEngine, DevServer, FileWatcher};
 
 pub struct TuiOutput {}
 
@@ -10,7 +12,7 @@ pub enum TuiInput {
 }
 
 impl TuiOutput {
-    pub fn start() -> Self {
+    pub fn start(cfg: &ConfigOptsServe, crate_config: &CrateConfig) -> Self {
         // Wire the handler to ping the handle_input
         // This will give us some time to handle the input
         ctrlc::set_handler(|| {
@@ -26,5 +28,14 @@ impl TuiOutput {
 
     pub fn handle_input(&mut self, input: TuiInput) {}
 
-    pub fn draw(&self, cfg: &ConfigOptsServe, crate_config: &CrateConfig) {}
+    pub fn draw(
+        &self,
+        cfg: &ConfigOptsServe,
+        crate_config: &CrateConfig,
+        build_engine: &BuildEngine,
+        server: &DevServer,
+        watcher: &FileWatcher,
+    ) {
+        println!("Drawing the screen");
+    }
 }

@@ -50,7 +50,6 @@ impl Serve {
         crate_config.set_cargo_args(self.serve.cargo_args);
         crate_config.set_platform_auto_detect(self.serve.platform);
 
-        // Run the server on a tokio runtime
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()

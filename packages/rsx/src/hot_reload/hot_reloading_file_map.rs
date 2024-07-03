@@ -13,7 +13,7 @@ pub use proc_macro2::TokenStream;
 pub use std::collections::HashMap;
 pub use std::sync::Mutex;
 pub use std::time::SystemTime;
-use std::{collections::HashSet, ffi::OsStr, marker::PhantomData, path::PathBuf};
+use std::{collections::HashSet, ffi::OsStr,  path::PathBuf};
 pub use std::{fs, io, path::Path};
 pub use std::{fs::File, io::Read};
 use syn::spanned::Spanned;
@@ -27,21 +27,13 @@ pub enum UpdateResult {
     NeedsRebuild,
 }
 
-/// The result of building a FileMap
-pub struct FileMapBuildResult<Ctx: HotReloadingContext> {
-    /// The FileMap that was built
-    pub map: FileMap<Ctx>,
+pub struct FileMap {
+    pub map: HashMap<PathBuf, CachedSynFile>,
 
     /// Any errors that occurred while building the FileMap that were not fatal
     pub errors: Vec<io::Error>,
-}
 
-pub struct FileMap<Ctx: HotReloadingContext> {
-    pub map: HashMap<PathBuf, CachedSynFile>,
-
-    in_workspace: HashMap<PathBuf, Option<PathBuf>>,
-
-    phantom: PhantomData<Ctx>,
+    pub in_workspace: HashMap<PathBuf, Option<PathBuf>>,
 }
 
 /// A cached file that has been parsed
@@ -54,12 +46,12 @@ pub struct CachedSynFile {
     pub tracked_assets: HashSet<PathBuf>,
 }
 
-impl<Ctx: HotReloadingContext> FileMap<Ctx> {
+impl FileMap {
     /// Create a new FileMap from a crate directory
     ///
     /// TODO: this should be created with a gitignore filter
-    pub fn create(path: PathBuf) -> io::Result<FileMapBuildResult<Ctx>> {
-        Self::create_with_filter(path, |p| {
+    pub fn create<Ctx: HotReloadingContext>(path: PathBuf) -> io::Result<FileMap> {
+        Self::create_with_filter::<Ctx>(path, |p| {
             // skip some stuff we know is large by default
             p.file_name() == Some(OsStr::new("target"))
                 || p.file_name() == Some(OsStr::new("node_modules"))
@@ -67,35 +59,35 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
     }
 
     /// Create a new FileMap from a crate directory
-    pub fn create_with_filter(
+    pub fn create_with_filter<Ctx: HotReloadingContext>(
         crate_dir: PathBuf,
         mut filter: impl FnMut(&Path) -> bool,
-    ) -> io::Result<FileMapBuildResult<Ctx>> {
+    ) -> io::Result<FileMap> {
         let FileMapSearchResult { map, errors } = find_rs_files(crate_dir.clone(), &mut filter);
 
         let mut map = Self {
             map,
+            errors,
             in_workspace: HashMap::new(),
-            phantom: PhantomData,
         };
 
-        map.load_assets(crate_dir.as_path());
+        map.load_assets::<Ctx>(crate_dir.as_path());
 
-        Ok(FileMapBuildResult { errors, map })
+        Ok(map)
     }
 
     /// Start watching assets for changes
     ///
     /// This just diffs every file against itself and populates the tracked assets as it goes
-    pub fn load_assets(&mut self, crate_dir: &Path) {
+    pub fn load_assets<Ctx: HotReloadingContext>(&mut self, crate_dir: &Path) {
         let keys = self.map.keys().cloned().collect::<Vec<_>>();
         for file in keys {
-            _ = self.update_rsx(file.as_path(), crate_dir);
+            _ = self.update_rsx::<Ctx>(file.as_path(), crate_dir);
         }
     }
 
     /// Try to update the rsx in a file
-    pub fn update_rsx(
+    pub fn update_rsx<Ctx: HotReloadingContext>(
         &mut self,
         file_path: &Path,
         crate_dir: &Path,
@@ -110,10 +102,9 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
         // Get the cached file if it exists, otherwise try to create it
         let Some(old_cached) = self.map.get_mut(file_path) else {
             // if this is a new file, rebuild the project
-            let FileMapBuildResult { map, mut errors } =
-                FileMap::<Ctx>::create(crate_dir.to_path_buf())?;
+            let mut map = FileMap::create::<Ctx>(crate_dir.to_path_buf())?;
 
-            if let Some(err) = errors.pop() {
+            if let Some(err) = map.errors.pop() {
                 return Err(HotreloadError::Failure(err));
             }
 
