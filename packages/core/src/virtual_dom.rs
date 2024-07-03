@@ -14,7 +14,7 @@ use crate::{
     nodes::{Template, TemplateId},
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
-    AttributeValue, ComponentFunction, Event, Mutations, Element
+    AttributeValue, ComponentFunction, Element, Event, Mutations,
 };
 use crate::{Task, VComponent};
 use futures_util::StreamExt;
