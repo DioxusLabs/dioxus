@@ -5,6 +5,7 @@ use cargo_toml::Manifest;
 use dioxus_cli_config::{ApplicationConfig, DioxusConfig, PluginConfigInfo};
 
 use std::collections::HashMap;
+use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use tokio::sync::Mutex;
@@ -12,9 +13,7 @@ use wasmtime::component::*;
 use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::{DirPerms, FilePerms, ResourceTable, WasiCtx, WasiCtxBuilder};
 
-use self::interface::plugins::main::types::{
-    CommandEvent, PluginInfo, ResponseEvent, RuntimeEvent,
-};
+use self::interface::plugins::main::types::{CommandEvent, PluginInfo, Response, RuntimeEvent};
 
 pub mod convert;
 pub mod interface;
@@ -30,20 +29,167 @@ lazy_static::lazy_static!(
   pub static ref PLUGINS_CONFIG: Mutex<DioxusConfig> = Default::default();
 );
 
-fn fold_changes(iter: impl IntoIterator<Item = ResponseEvent>) -> ResponseEvent {
-    iter.into_iter()
-        .fold(ResponseEvent::None, |option, change| {
-            match (option, change) {
-                (ResponseEvent::Refresh(assets), ResponseEvent::Refresh(mut new_assets)) => {
-                    new_assets.extend(assets);
-                    ResponseEvent::Refresh(new_assets)
-                }
-                (a, b) => a.max(b),
-            }
-        })
+fn flatten_result<T>(result: wasmtime::Result<Result<T, String>>) -> wasmtime::Result<T> {
+    match result {
+        Ok(Ok(response)) => Result::Ok(response),
+        Ok(Err(err)) => Result::Err(wasmtime::Error::msg(err)),
+        Err(err) => Result::Err(err.into()),
+    }
 }
 
-impl PartialEq for ResponseEvent {
+struct Plugins {
+    plugins: Vec<CliPlugin>,
+    config: DioxusConfig,
+}
+
+impl Plugins {
+    async fn call_plugin_and_log_result<
+        'a,
+        T,
+        F: Fn(&'a mut CliPlugin, T) -> Fut,
+        Fut: Future<Output = wasmtime::Result<O>> + 'a,
+        O,
+    >(
+        plugin: &'a mut CliPlugin,
+        method: F,
+        event: T,
+    ) -> wasmtime::Result<O> {
+        let method_name = std::any::type_name::<F>().split("::").last().unwrap();
+        let plugin_name = plugin.metadata.name.clone();
+
+        let result = method(plugin, event).await;
+        match result {
+            Ok(success) => {
+                tracing::trace!("Called {} on: {}", method_name, plugin_name);
+                Ok(success)
+            }
+            Err(err) => {
+                tracing::warn!("Failed to call {} on: {}!", method_name, plugin_name);
+                Err(err)
+            }
+        }
+    }
+
+    async fn call<
+        'a,
+        T: Clone,
+        F: Fn(&'a mut CliPlugin, T) -> Fut,
+        Fut: Future<Output = wasmtime::Result<O>> + 'a,
+        O,
+    >(
+        &'a mut self,
+        method: F,
+        event: T,
+    ) {
+        for plugin in self.plugins.iter_mut() {
+            Self::call_plugin_and_log_result(plugin, &method, event.clone()).await;
+        }
+    }
+
+    async fn call_with_response<
+        'a,
+        T: Clone,
+        F: Fn(&'a mut CliPlugin, T) -> Fut,
+        Fut: Future<Output = wasmtime::Result<Response>> + 'a,
+    >(
+        &'a mut self,
+        method: F,
+        event: T,
+    ) -> Response {
+        let mut current = Response::None;
+        for plugin in self.plugins.iter_mut() {
+            if let Ok(success) =
+                Self::call_plugin_and_log_result(plugin, &method, event.clone()).await
+            {
+                current = fold_change(current, success);
+            }
+        }
+        current
+    }
+
+    pub async fn plugins_before_command(&mut self, compile_event: CommandEvent) {
+        self.call(
+            |plugin, event| async move { flatten_result(plugin.before_command_event(event).await) },
+            compile_event,
+        )
+        .await;
+    }
+
+    pub async fn plugins_after_command(&mut self, compile_event: CommandEvent) {
+        self.call(
+            |plugin, event| async move { flatten_result(plugin.after_command_event(event).await) },
+            compile_event,
+        )
+        .await;
+    }
+
+    pub async fn plugins_before_runtime(&mut self, runtime_event: RuntimeEvent) -> Response {
+        self.call_with_response(
+            |plugin, event| async move { flatten_result(plugin.before_runtime_event(event).await) },
+            runtime_event,
+        )
+        .await
+    }
+
+    pub async fn plugins_after_runtime(&mut self, runtime_event: RuntimeEvent) -> Response {
+        self.call_with_response(
+            |plugin, event| async move { flatten_result(plugin.after_runtime_event(event).await) },
+            runtime_event,
+        )
+        .await
+    }
+
+    pub async fn plugins_on_watched_paths_change(&mut self, paths: &[String]) -> Response {
+        self.call_with_response(
+            |plugin, event| async move { plugin.on_watched_paths_change(event).await },
+            paths,
+        )
+        .await
+    }
+
+    pub async fn plugins_watched_paths_changed(
+        &mut self,
+        paths: &[PathBuf],
+        crate_dir: &PathBuf,
+    ) -> Response {
+        if self.plugins.is_empty() {
+            return Response::None;
+        }
+
+        let paths: Vec<String> = paths
+        .iter()
+        .filter_map(|f| match f.strip_prefix(crate_dir) {
+            Ok(val) => val.to_str().map(|f| f.to_string()),
+            Err(_) => {
+                tracing::warn!(
+                    "Path won't be available to plugins: {}! Plugins can only access paths under {}, Skipping..",
+                    f.display(),
+                    crate_dir.display(),
+                );
+                None
+            }
+        })
+        .collect();
+
+        self.plugins_on_watched_paths_change(&paths).await
+    }
+}
+
+fn fold_change(current: Response, new: Response) -> Response {
+    match (current, new) {
+        (Response::Refresh(assets), Response::Refresh(mut new_assets)) => {
+            new_assets.extend(assets);
+            Response::Refresh(new_assets)
+        }
+        (a, b) => a.max(b),
+    }
+}
+
+fn fold_changes(iter: impl IntoIterator<Item = Response>) -> Response {
+    iter.into_iter().fold(Response::None, fold_change)
+}
+
+impl PartialEq for Response {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Refresh(l0), Self::Refresh(r0)) => l0 == r0,
@@ -52,12 +198,12 @@ impl PartialEq for ResponseEvent {
     }
 }
 
-impl Eq for ResponseEvent {}
+impl Eq for Response {}
 
-impl Ord for ResponseEvent {
+impl Ord for Response {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         match (self, other) {
-            (ResponseEvent::Refresh(_), ResponseEvent::Refresh(_)) => std::cmp::Ordering::Equal,
+            (Response::Refresh(_), Response::Refresh(_)) => std::cmp::Ordering::Equal,
             (Self::Rebuild, Self::Rebuild) => std::cmp::Ordering::Equal,
             (Self::Reload, Self::Reload) => std::cmp::Ordering::Equal,
             (Self::None, Self::None) => std::cmp::Ordering::Equal,
@@ -93,75 +239,10 @@ impl Ord for ResponseEvent {
     }
 }
 
-impl PartialOrd for ResponseEvent {
+impl PartialOrd for Response {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
-}
-
-/// Calls the global plugins with the function given
-/// It will return a Vec of the results of the function
-macro_rules! call_plugins {
-    ($func:ident $event:expr) => {{
-        let mut successful = vec![];
-        for plugin in $crate::plugin::PLUGINS.lock().await.iter_mut() {
-            let Ok(success) = plugin.$func($event).await else {
-                tracing::warn!(
-                    "Could not call {} {:?} on: {}!",
-                    stringify!($func),
-                    $event,
-                    plugin.metadata.name
-                );
-                continue;
-            };
-            tracing::info!(
-                "Called {} {:?} on: {}",
-                stringify!($func),
-                $event,
-                plugin.metadata.name
-            );
-            successful.push(success);
-        }
-        successful.into_iter().flatten()
-    }};
-}
-
-pub async fn plugins_before_command(compile_event: CommandEvent) {
-    call_plugins!(before_command_event compile_event);
-}
-pub async fn plugins_after_command(compile_event: CommandEvent) {
-    call_plugins!(after_command_event compile_event);
-}
-pub async fn plugins_before_runtime(runtime_event: RuntimeEvent) -> ResponseEvent {
-    fold_changes(call_plugins!(before_runtime_event runtime_event))
-}
-pub async fn plugins_after_runtime(runtime_event: RuntimeEvent) -> ResponseEvent {
-    fold_changes(call_plugins!(after_runtime_event runtime_event))
-}
-
-pub async fn plugins_watched_paths_changed(
-    paths: &[PathBuf],
-    crate_dir: &PathBuf,
-) -> ResponseEvent {
-    if crate::plugin::PLUGINS.lock().await.is_empty() {
-        return ResponseEvent::None;
-    }
-
-    let paths: Vec<String> = paths
-        .iter()
-        .filter_map(|f| match f.strip_prefix(crate_dir) {
-            Ok(val) => val.to_str().map(|f| f.to_string()),
-            Err(_) => {
-                tracing::warn!(
-                    "Path won't be available to plugins: {}! Plugins can only access paths under {}, Skipping..",
-                    f.display(),
-                    crate_dir.display(),
-                );
-                None
-            }
-        })
-        .collect();
-    fold_changes(call_plugins!(on_watched_paths_change & paths))
 }
 
 /// Returns a sorted list of plugins that are loaded in order
@@ -485,7 +566,7 @@ impl CliPlugin {
     //         .await
     // }
 
-    pub async fn register(&mut self) -> wasmtime::Result<Result<(), ()>> {
+    pub async fn register(&mut self) -> wasmtime::Result<Result<(), String>> {
         self.bindings
             .plugins_main_definitions()
             .call_register(&mut self.store)
@@ -494,7 +575,7 @@ impl CliPlugin {
     pub async fn before_command_event(
         &mut self,
         event: CommandEvent,
-    ) -> wasmtime::Result<Result<(), ()>> {
+    ) -> wasmtime::Result<Result<(), String>> {
         self.bindings
             .plugins_main_definitions()
             .call_before_command_event(&mut self.store, event)
@@ -503,7 +584,7 @@ impl CliPlugin {
     pub async fn after_command_event(
         &mut self,
         event: CommandEvent,
-    ) -> wasmtime::Result<Result<(), ()>> {
+    ) -> wasmtime::Result<Result<(), String>> {
         self.bindings
             .plugins_main_definitions()
             .call_after_command_event(&mut self.store, event)
@@ -512,7 +593,7 @@ impl CliPlugin {
     pub async fn before_runtime_event(
         &mut self,
         event: RuntimeEvent,
-    ) -> wasmtime::Result<Result<ResponseEvent, ()>> {
+    ) -> wasmtime::Result<Result<Response, String>> {
         self.bindings
             .plugins_main_definitions()
             .call_before_runtime_event(&mut self.store, event)
@@ -521,7 +602,7 @@ impl CliPlugin {
     pub async fn after_runtime_event(
         &mut self,
         event: RuntimeEvent,
-    ) -> wasmtime::Result<Result<ResponseEvent, ()>> {
+    ) -> wasmtime::Result<Result<Response, String>> {
         self.bindings
             .plugins_main_definitions()
             .call_after_runtime_event(&mut self.store, event)
@@ -531,7 +612,7 @@ impl CliPlugin {
     pub async fn on_watched_paths_change(
         &mut self,
         paths: &[String],
-    ) -> wasmtime::Result<Result<ResponseEvent, ()>> {
+    ) -> wasmtime::Result<Response> {
         self.bindings
             .plugins_main_definitions()
             .call_on_watched_paths_change(&mut self.store, paths)

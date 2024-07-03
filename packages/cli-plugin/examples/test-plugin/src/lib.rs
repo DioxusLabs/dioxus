@@ -2,7 +2,7 @@ use dioxus_cli_plugin::*;
 use exports::plugins::main::definitions::Guest;
 use plugins::main::{
     imports::{get_config, log, set_config},
-    types::{CommandEvent, PluginInfo, ResponseEvent, RuntimeEvent},
+    types::{CommandEvent, PluginInfo, Response, RuntimeEvent},
 };
 
 struct Plugin;
@@ -35,27 +35,27 @@ impl Guest for Plugin {
         Ok(())
     }
 
-    fn before_runtime_event(_event: RuntimeEvent) -> Result<ResponseEvent, ()> {
+    fn before_runtime_event(_event: RuntimeEvent) -> Result<Response, ()> {
         let Some(data) = get_config("test") else {
             log("Error ahhhhhh!");
             return Err(());
         };
         log(&data);
-        Ok(ResponseEvent::None)
+        Ok(Response::None)
     }
 
     fn after_command_event(_event: CommandEvent) -> Result<(), ()> {
         Ok(())
     }
 
-    fn after_runtime_event(_event: RuntimeEvent) -> Result<ResponseEvent, ()> {
-        Ok(ResponseEvent::None)
+    fn after_runtime_event(_event: RuntimeEvent) -> Result<Response, ()> {
+        Ok(Response::None)
     }
 
     fn on_watched_paths_change(
         _path: wit_bindgen::rt::vec::Vec<wit_bindgen::rt::string::String>,
-    ) -> Result<ResponseEvent, ()> {
-        Ok(ResponseEvent::None)
+    ) -> Result<Response, ()> {
+        Ok(Response::None)
     }
 }
 

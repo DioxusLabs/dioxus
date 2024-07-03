@@ -1,7 +1,7 @@
 package plugins:main;
 
 interface definitions {
-  use types.{platform, plugin-info, command-event, runtime-event, response-event};
+  use types.{platform, plugin-info, command-event, runtime-event, response};
   use toml.{toml, toml-value};
 
   /// Returns the plugin's default configuration as a TOML value. 
@@ -11,30 +11,30 @@ interface definitions {
   /// Applies the resolved configuration value for this plugin from the main configuration file. 
   /// Plugins should validate the passed config and store relevant values as these could be changed from the default. 
   /// Return an Error if the config is invalid.
-  apply-config: func(config: toml) -> result;
+  apply-config: func(config: toml) -> result<_, string>;
   
   /// Performs one-time initialization when the plugin is first loaded. 
   /// Return an Error to fail registration.
-  register: func() -> result;
+  register: func() -> result<_, string>;
 
   /// Get the metadata of the plugin
   metadata: func() -> plugin-info;
 
   /// Called before build commands like build, bundle, etc
-  before-command-event: func(event: command-event) -> result;
+  before-command-event: func(event: command-event) -> result<_, string>;
   /// Called before runtime events like when a served application is being hot-reloaded
   /// or being rebuilt, and the plugin can perform additional steps inbetween
-  before-runtime-event: func(event: runtime-event) -> result<response-event>;
+  before-runtime-event: func(event: runtime-event) -> result<response, string>;
 
   /// Called after build commands like build, bundle, etc
-  after-command-event: func(event: command-event) -> result;
+  after-command-event: func(event: command-event) -> result<_, string>;
   /// Called after runtime events like when a served application is being hot-reloaded
   /// or being rebuilt, and the plugin can perform additional steps inbetween
-  after-runtime-event: func(event: runtime-event) -> result<response-event>;
+  after-runtime-event: func(event: runtime-event) -> result<response, string>;
   
   /// Notifies the plugin when watched file(s) change.
   /// Plugins can watch additional paths with `watch_path`
-  on-watched-paths-change: func(path: list<string>) -> result<response-event>;
+  on-watched-paths-change: func(path: list<string>) -> response;
 
   
 
@@ -131,17 +131,17 @@ interface types {
   }
 
   /// When the project is being served, the plugin can be called with a
-  /// `RuntimeEvent` to affect the project at runtime using a `ResponseEvent`
+  /// `RuntimeEvent` to affect the project at runtime using a `Response`
   enum runtime-event {
     rebuild,
     hot-reload
   }
 
-  /// A `ResponseEvent` object is only ever returned from a plugin call with
+  /// A `Response` object is only ever returned from a plugin call with
   /// a runtime event, when the project calls the plugins during runtime the 
   /// most 'destructive' event is going to be called. E.g. two plugins return 
   /// a reload event and a rebuild event, the rebuild event would take precedence
-  variant response-event {
+  variant response {
     none,
     reload,
     rebuild,

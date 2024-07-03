@@ -5,7 +5,7 @@ use exports::plugins::main::definitions::Guest;
 use plugins::main::{
     imports::{get_config, log, set_config, watched_paths},
     toml::{Toml, TomlValue},
-    types::{CommandEvent, PluginInfo, ResponseEvent, RuntimeEvent},
+    types::{CommandEvent, PluginInfo, Response, RuntimeEvent},
 };
 use railwind::parse_to_string;
 use regex::Regex;
@@ -55,10 +55,10 @@ fn get_parsable_files(path: &PathBuf) -> Option<Vec<PathBuf>> {
     )
 }
 
-fn parse_and_save_css(paths: Vec<PathBuf>) -> Result<ResponseEvent, ()> {
+fn parse_and_save_css(paths: Vec<PathBuf>) -> Result<Response, ()> {
     if paths.is_empty() {
         log("Skipping tailwind reload, no change necessary");
-        return Ok(ResponseEvent::None);
+        return Ok(Response::None);
     };
 
     let paths: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
@@ -100,7 +100,7 @@ fn parse_and_save_css(paths: Vec<PathBuf>) -> Result<ResponseEvent, ()> {
     // If it's empty then nothing will change
     if classes.is_empty() {
         log("Skipping tailwind reload, no change necessary");
-        return Ok(ResponseEvent::None);
+        return Ok(Response::None);
     }
 
     let classes = classes.join(" ");
@@ -125,19 +125,19 @@ fn parse_and_save_css(paths: Vec<PathBuf>) -> Result<ResponseEvent, ()> {
         log(&warning.to_string())
     }
 
-    Ok(ResponseEvent::Refresh(vec!["tailwind.css".into()]))
+    Ok(Response::Refresh(vec!["tailwind.css".into()]))
 }
 
-fn gen_tailwind() -> Result<ResponseEvent, ()> {
+fn gen_tailwind() -> Result<Response, ()> {
     let watched_paths: Vec<_> = watched_paths().into_iter().map(PathBuf::from).collect();
-    let mut event = ResponseEvent::None;
+    let mut event = Response::None;
     for path in watched_paths.iter() {
         let Some(paths) = get_parsable_files(path) else {
             log(&format!("Found no watchable files in {}", path.display()));
             continue;
         };
-        if let ResponseEvent::Refresh(paths) = parse_and_save_css(paths)? {
-            event = ResponseEvent::Refresh(paths);
+        if let Response::Refresh(paths) = parse_and_save_css(paths)? {
+            event = Response::Refresh(paths);
         }
     }
     Ok(event)
@@ -152,9 +152,7 @@ impl Guest for Plugin {
         Ok(())
     }
 
-    fn on_watched_paths_change(
-        _paths: std::vec::Vec<std::string::String>,
-    ) -> Result<ResponseEvent, ()> {
+    fn on_watched_paths_change(_paths: std::vec::Vec<std::string::String>) -> Result<Response, ()> {
         gen_tailwind()
     }
 
@@ -174,8 +172,8 @@ impl Guest for Plugin {
     fn before_command_event(_event: CommandEvent) -> Result<(), ()> {
         Ok(())
     }
-    fn before_runtime_event(_event: RuntimeEvent) -> Result<ResponseEvent, ()> {
-        Ok(ResponseEvent::None)
+    fn before_runtime_event(_event: RuntimeEvent) -> Result<Response, ()> {
+        Ok(Response::None)
     }
 
     fn after_command_event(_event: CommandEvent) -> Result<(), ()> {
@@ -183,7 +181,7 @@ impl Guest for Plugin {
         Ok(())
     }
 
-    fn after_runtime_event(_event: RuntimeEvent) -> Result<ResponseEvent, ()> {
+    fn after_runtime_event(_event: RuntimeEvent) -> Result<Response, ()> {
         gen_tailwind()
     }
 }

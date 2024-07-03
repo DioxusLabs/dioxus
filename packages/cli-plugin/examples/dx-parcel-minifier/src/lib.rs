@@ -5,12 +5,12 @@ use exports::plugins::main::definitions::Guest;
 use plugins::main::{
     imports::log,
     toml::{Toml, TomlValue},
-    types::{CommandEvent, PluginInfo, ResponseEvent, RuntimeEvent},
+    types::{CommandEvent, PluginInfo, Response, RuntimeEvent},
 };
 
 struct CSSMinifer;
 
-fn minify_css() -> Result<ResponseEvent, ()> {
+fn minify_css() -> Result<Response, ()> {
     for entry in fs::read_dir("/dist").unwrap() {
         let entry = entry.unwrap();
         if !entry.file_name().as_encoded_bytes().ends_with(b".css") {
@@ -51,7 +51,7 @@ fn minify_css() -> Result<ResponseEvent, ()> {
         };
     }
 
-    Ok(ResponseEvent::None)
+    Ok(Response::None)
 }
 
 impl Guest for CSSMinifer {
@@ -77,19 +77,19 @@ impl Guest for CSSMinifer {
     fn before_command_event(_event: CommandEvent) -> Result<(), ()> {
         Ok(())
     }
-    fn before_runtime_event(_event: RuntimeEvent) -> Result<ResponseEvent, ()> {
-        Ok(ResponseEvent::None)
+    fn before_runtime_event(_event: RuntimeEvent) -> Result<Response, ()> {
+        Ok(Response::None)
     }
     fn after_command_event(_event: CommandEvent) -> Result<(), ()> {
         minify_css()?;
         Ok(())
     }
-    fn after_runtime_event(_event: RuntimeEvent) -> Result<ResponseEvent, ()> {
+    fn after_runtime_event(_event: RuntimeEvent) -> Result<Response, ()> {
         minify_css()
     }
     fn on_watched_paths_change(
         _path: wit_bindgen::rt::vec::Vec<wit_bindgen::rt::string::String>,
-    ) -> Result<ResponseEvent, ()> {
+    ) -> Result<Response, ()> {
         minify_css()
     }
 }
