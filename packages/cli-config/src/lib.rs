@@ -4,14 +4,22 @@
 
 mod config;
 pub use config::*;
+
 mod bundle;
 pub use bundle::*;
+
 mod cargo;
 pub use cargo::*;
 #[cfg(feature = "cli")]
 mod serve;
 #[cfg(feature = "cli")]
 pub use serve::*;
+
+#[cfg(feature = "cli")]
+mod settings;
+
+#[cfg(feature = "cli")]
+pub use settings::*;
 
 #[doc(hidden)]
 pub mod __private {

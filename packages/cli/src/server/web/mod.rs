@@ -22,7 +22,7 @@ use server::*;
 
 use super::HotReloadState;
 
-pub async fn startup(config: CrateConfig, serve_cfg: &ConfigOptsServe) -> Result<()> {
+pub fn startup(config: CrateConfig, serve_cfg: &ConfigOptsServe) -> Result<()> {
     set_ctrlc_handler(&config);
 
     let ip = serve_cfg
@@ -33,11 +33,11 @@ pub async fn startup(config: CrateConfig, serve_cfg: &ConfigOptsServe) -> Result
 
     let hot_reload_state = build_hotreload_filemap(&config);
 
-    serve(ip, config, hot_reload_state, serve_cfg).await
+    serve(ip, config, hot_reload_state, serve_cfg)
 }
 
 /// Start the server without hot reload
-pub async fn serve(
+pub fn serve(
     ip: IpAddr,
     config: CrateConfig,
     hot_reload_state: HotReloadState,
@@ -55,42 +55,53 @@ pub async fn serve(
 
     tracing::info!("🚀 Starting development server...");
 
-    // We got to own watcher so that it exists for the duration of serve
-    // Otherwise full reload won't work.
-    let _watcher = setup_file_watcher(
-        {
-            let config = config.clone();
-            let hot_reload_state = hot_reload_state.clone();
-            move || build(&config, &hot_reload_state, skip_assets)
-        },
-        &config,
-        Some(WebServerInfo { ip, port }),
-        hot_reload_state.clone(),
-    )
-    .await?;
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async move {
+        // We got to own watcher so that it exists for the duration of serve
+        // Otherwise full reload won't work.
+        let _watcher = setup_file_watcher(
+            {
+                let config = config.clone();
+                let hot_reload_state = hot_reload_state.clone();
+                move || build(&config, &hot_reload_state, skip_assets)
+            },
+            &config,
+            Some(WebServerInfo { ip, port }),
+            hot_reload_state.clone(),
+        )
+        .await?;
 
-    // HTTPS
-    // Before console info so it can stop if mkcert isn't installed or fails
-    let rustls_config = get_rustls(&config).await?;
+        // HTTPS
+        // Before console info so it can stop if mkcert isn't installed or fails
+        let rustls_config = get_rustls(&config).await?;
 
-    // Print serve info
-    print_console_info(
-        &config,
-        PrettierOptions {
-            changed: vec![],
-            warnings: first_build_result.warnings,
-            elapsed_time: first_build_result.elapsed_time,
-        },
-        Some(WebServerInfo { ip, port }),
-    );
+        // Print serve info
+        print_console_info(
+            &config,
+            PrettierOptions {
+                changed: vec![],
+                warnings: first_build_result.warnings,
+                elapsed_time: first_build_result.elapsed_time,
+            },
+            Some(WebServerInfo { ip, port }),
+        );
 
-    // Router
-    let router = setup_router(config.clone(), hot_reload_state).await?;
+        // Router
+        let router = setup_router(config.clone(), hot_reload_state).await?;
 
-    // Start server
-    start_server(ip, port, router, opts.open, rustls_config, &config).await?;
+        // Start server
+        start_server(
+            ip,
+            port,
+            router,
+            opts.open.unwrap_or_default(),
+            rustls_config,
+            &config,
+        )
+        .await?;
 
-    Ok(())
+        Ok(())
+    })
 }
 
 /// Starts dx serve with no hot reload

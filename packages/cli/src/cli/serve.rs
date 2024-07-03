@@ -13,13 +13,28 @@ pub struct Serve {
 }
 
 impl Serve {
-    pub async fn serve(self, bin: Option<PathBuf>) -> Result<()> {
+    pub fn serve(self, bin: Option<PathBuf>) -> Result<()> {
         let mut crate_config = dioxus_cli_config::CrateConfig::new(bin)?;
-        let serve_cfg = self.serve.clone();
+        let mut serve_cfg = self.serve.clone();
 
-        // change the release state.
-        let hot_reload = self.serve.hot_reload || crate_config.dioxus_config.application.hot_reload;
-        crate_config.with_hot_reload(hot_reload);
+        // Handle cli settings
+        let cli_settings = crate_config.dioxus_config.cli_settings.clone().unwrap();
+
+        if serve_cfg.hot_reload.is_none() {
+            // we're going to override the hot_reload setting in the project's cfg based on settings
+            //
+            // let hot_reload = self.serve.hot_reload || crate_config.dioxus_config.application.hot_reload;
+
+            let value = cli_settings.always_hot_reload.unwrap_or(true);
+            serve_cfg.hot_reload = Some(value);
+            crate_config.with_hot_reload(value);
+        }
+
+        if serve_cfg.open.is_none() {
+            serve_cfg.open = Some(cli_settings.always_open_browser.unwrap_or(false));
+        }
+
+        // Set config settings
         crate_config.with_cross_origin_policy(self.serve.cross_origin_policy);
         crate_config.with_release(self.serve.release);
         crate_config.with_verbose(self.serve.verbose);

@@ -183,7 +183,7 @@ fn app() -> Element {
             // Can take children too!
             Taller { a: "asd", div {"hello world!"} }
 
-            // This component's props are defined *inline* with the `inline_props` macro
+            // This component's props are defined *inline* with the `component` macro
             WithInline { text: "using functionc all syntax" }
 
             // Components can be generic too
@@ -193,7 +193,7 @@ fn app() -> Element {
             // Type inference can be used too
             TypedInput { initial: 10.0 }
 
-            // generic with the `inline_props` macro
+            // generic with the `component` macro
             Label { text: "hello generic world!" }
             Label { text: 99.9 }
 
