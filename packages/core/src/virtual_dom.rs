@@ -14,7 +14,7 @@ use crate::{
     nodes::{Template, TemplateId},
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
-    AttributeValue, ComponentFunction, Element, Event, Mutations,
+    AttributeValue, ComponentFunction, Event, Mutations,
 };
 use crate::{Task, VComponent};
 use futures_util::StreamExt;
@@ -255,7 +255,7 @@ impl VirtualDom {
     /// ```
     ///
     /// Note: the VirtualDom is not progressed, you must either "run_with_deadline" or use "rebuild" to progress it.
-    pub fn new(app: impl Fn() -> Element) -> Self {
+    pub fn new<M: 'static>(app: impl ComponentFunction<(), M>) -> Self {
         Self::new_with_props(app, ())
     }
 
@@ -314,7 +314,7 @@ impl VirtualDom {
     }
 
     /// Create a new virtualdom and build it immediately
-    pub fn prebuilt(app: impl Fn() -> Element) -> Self {
+    pub fn prebuilt<M: 'static>(app: impl ComponentFunction<(), M>) -> Self {
         let mut dom = Self::new(app);
         dom.rebuild_in_place();
         dom
