@@ -89,6 +89,12 @@ impl FileWatcher {
     pub fn attempt_binary_patch(&mut self) -> Option<Vec<u8>> {
         todo!("Attempt to binary patch the project")
     }
+
+    /// Ensure the changes we've received from the queue are actually legit changes to either assets or
+    /// rust code. We don't care about changes otherwise, unless we get a signle elsewhere to do a full rebuild
+    pub fn pending_changes(&mut self) -> bool {
+        !self.queued_events.is_empty()
+    }
 }
 
 // fn watch_event<F>(

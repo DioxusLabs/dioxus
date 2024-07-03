@@ -19,7 +19,12 @@ use dioxus_cli_config::CrateConfig;
 use dioxus_cli_config::WebHttpsConfig;
 use dioxus_rsx::HotReload;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use std::{convert::Infallible, fs, io, process::Command};
+use std::{
+    convert::Infallible,
+    fs, io,
+    net::{IpAddr, SocketAddr, UdpSocket},
+    process::Command,
+};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
 use tower_http::{
@@ -32,20 +37,65 @@ use crate::cfg::ConfigOptsServe;
 
 pub struct DevServer {
     pub sockets: Vec<WebSocket>,
+    pub ip: IpAddr,
     pub new_socket: UnboundedReceiver<WebSocket>,
-    pub server_task: JoinHandle<()>,
+    pub server_task: JoinHandle<Result<()>>,
 }
 
 impl DevServer {
-    pub fn start(cfg: &ConfigOptsServe, crate_config: &CrateConfig) -> Self {
+    pub async fn start(opts: &ConfigOptsServe, cfg: &CrateConfig) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
 
-        let server_task = spawn_server(cfg, crate_config, tx);
+        let router = setup_router(&cfg, tx).await.unwrap();
+        let port = opts.server_arguments.port;
+        let start_browser = opts.open.unwrap_or(false);
+
+        let ip = opts
+            .server_arguments
+            .addr
+            .or_else(get_ip)
+            .unwrap_or(IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)));
+
+        // #[cfg(feature = "plugin")]
+        // crate::plugin::PluginManager::on_serve_start(&cfg)?;
+
+        let addr: SocketAddr = SocketAddr::from((ip, port));
+
+        // HTTPS
+        // Before console info so it can stop if mkcert isn't installed or fails
+        // todo: this is the only async thing here - might be nice to
+        let rustls = get_rustls(&cfg).await.unwrap();
+
+        // Open the browser
+        if start_browser {
+            open_browser(&cfg, ip, port, rustls.is_some());
+        }
+
+        // Actually just start the server
+        // todo: we might just be able to poll this future instead
+        let server_task = tokio::spawn(async move {
+            // Start the server with or without rustls
+            if let Some(rustls) = rustls {
+                axum_server::bind_rustls(addr, rustls)
+                    .serve(router.into_make_service())
+                    .await?
+            } else {
+                // Create a TCP listener bound to the address
+                axum::serve(
+                    tokio::net::TcpListener::bind(&addr).await?,
+                    router.into_make_service(),
+                )
+                .await?
+            }
+
+            Ok(())
+        });
 
         Self {
             sockets: vec![],
             new_socket: rx,
             server_task,
+            ip,
         }
     }
 
@@ -74,101 +124,97 @@ impl DevServer {
     }
 }
 
-pub fn spawn_server(
-    cfg: &ConfigOptsServe,
-    crate_config: &CrateConfig,
-    tx: UnboundedSender<WebSocket>,
-) -> JoinHandle<()> {
-    // Start the server
-    // Whenever we get a new WS connection, we send it to the new_socket rx so we can use it later
-    let _cfg = cfg.clone();
-    let _ccfg = crate_config.clone();
-    let server_task = tokio::spawn(async move {
-        let router = setup_router(_ccfg, tx).await.unwrap();
-    });
-
-    server_task
-}
-
 /// Sets up and returns a router
-pub async fn setup_router(config: CrateConfig, tx: UnboundedSender<WebSocket>) -> Result<Router> {
-    // Setup cors
-    let cors = CorsLayer::new()
-        // allow `GET` and `POST` when accessing the resource
-        .allow_methods([Method::GET, Method::POST])
-        // allow requests from any origin
-        .allow_origin(Any)
-        .allow_headers(Any);
-
-    let (coep, coop) = match config.cross_origin_policy {
-        true => (
-            HeaderValue::from_static("require-corp"),
-            HeaderValue::from_static("same-origin"),
-        ),
-        false => (
-            HeaderValue::from_static("unsafe-none"),
-            HeaderValue::from_static("unsafe-none"),
-        ),
-    };
-
-    // Create file service
-    let file_service_config = config.clone();
-    let file_service = ServiceBuilder::new()
-        .override_response_header(
-            HeaderName::from_static("cross-origin-embedder-policy"),
-            coep,
-        )
-        .override_response_header(HeaderName::from_static("cross-origin-opener-policy"), coop)
-        .and_then(move |response| async move { Ok(no_cache(file_service_config, response)) })
-        .service(ServeDir::new(config.out_dir()));
-
-    // Setup router
+///
+/// Steps include:
+/// - Setting up cors
+/// - Setting up the proxy to the /api/ endpoint specifed in the config
+/// - Setting up the file serve service
+/// - Setting up the websocket endpoint for devtools
+pub async fn setup_router(config: &CrateConfig, tx: UnboundedSender<WebSocket>) -> Result<Router> {
     let mut router = Router::new();
 
-    // Setup proxy
-    for proxy_config in config.dioxus_config.web.proxy {
+    // Setup cors
+    router = router.layer(
+        CorsLayer::new()
+            // allow `GET` and `POST` when accessing the resource
+            .allow_methods([Method::GET, Method::POST])
+            // allow requests from any origin
+            .allow_origin(Any)
+            .allow_headers(Any),
+    );
+
+    // Setup proxy for the /api/ endpoint
+    for proxy_config in config.dioxus_config.web.proxy.iter() {
         todo!("Configure proxy");
         // router = super::proxy::add_proxy(router, &proxy_config)?;
     }
 
-    // Route file service
-    router = router.fallback(get_service(file_service).handle_error(
-        |error: Infallible| async move {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Unhandled internal error: {}", error),
-            )
-        },
-    ));
+    // Setup websocket endpoint
+    // todo: we used to have multiple routes here but we just need the one
+    router = router.layer(Extension(tx));
+    router = router.nest(
+        "/_dioxus",
+        Router::new().route(
+            "/ws",
+            get(
+                // Simply bounce the websocket handle up to the webserver handle
+                |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<WebSocket>>| async move {
+                    ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(socket) })
+                },
+            ),
+        ),
+    );
 
-    // Set the base a
+    // Route file service to output the .wasm and assets
+    router = router.fallback(builder_serve_dir(config));
+
+    // Setup base path redirection
     if let Some(base_path) = config.dioxus_config.web.app.base_path.clone() {
         let base_path = format!("/{}", base_path.trim_matches('/'));
-
         router = Router::new()
             .nest(&base_path, router)
-            .fallback(get(move || {
-                let base_path = base_path.clone();
-                async move { format!("Outside of the base path: {}", base_path) }
+            .fallback(get(move || async move {
+                format!("Outside of the base path: {}", base_path)
             }));
     }
-
-    // Setup websocket
-    router = router.nest("/_dioxus", Router::new().route("/ws", get(ws_handler)));
-
-    // Setup routes
-    router = router.layer(cors).layer(Extension(tx));
 
     Ok(router)
 }
 
-/// Simply bounce the websocket handle up to the webserver handle
-async fn ws_handler(
-    ws: WebSocketUpgrade,
-    ext: Extension<UnboundedSender<WebSocket>>,
-) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| async move {
-        _ = ext.0.unbounded_send(socket);
+fn builder_serve_dir(cfg: &CrateConfig) -> axum::routing::MethodRouter {
+    const CORS_UNSAFE: (HeaderValue, HeaderValue) = (
+        HeaderValue::from_static("unsafe-none"),
+        HeaderValue::from_static("unsafe-none"),
+    );
+
+    const CORS_REQUIRE: (HeaderValue, HeaderValue) = (
+        HeaderValue::from_static("require-corp"),
+        HeaderValue::from_static("same-origin"),
+    );
+
+    let (coep, coop) = match cfg.cross_origin_policy {
+        true => CORS_REQUIRE,
+        false => CORS_UNSAFE,
+    };
+
+    let _cfg = cfg.clone();
+
+    get_service(
+        ServiceBuilder::new()
+            .override_response_header(
+                HeaderName::from_static("cross-origin-embedder-policy"),
+                coep,
+            )
+            .override_response_header(HeaderName::from_static("cross-origin-opener-policy"), coop)
+            .and_then(move |response| async move { Ok(no_cache(_cfg, response)) })
+            .service(ServeDir::new(cfg.out_dir())),
+    )
+    .handle_error(|error: Infallible| async move {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Unhandled internal error: {}", error),
+        )
     })
 }
 
@@ -275,6 +321,23 @@ pub fn get_rustls_without_mkcert(web_config: &WebHttpsConfig) -> Result<(String,
         // missing cert or key
         Err("https is enabled but cert or key path is missing".into())
     }
+}
+
+/// Open the browser to the address
+pub(crate) fn open_browser(config: &CrateConfig, ip: IpAddr, port: u16, https: bool) {
+    let protocol = if https { "https" } else { "http" };
+    let base_path = match config.dioxus_config.web.app.base_path.as_deref() {
+        Some(base_path) => format!("/{}", base_path.trim_matches('/')),
+        None => "".to_owned(),
+    };
+    _ = open::that(format!("{protocol}://{ip}:{port}{base_path}"));
+}
+
+/// Get the network ip
+fn get_ip() -> Option<IpAddr> {
+    let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
+    socket.connect("8.8.8.8:80").ok()?;
+    socket.local_addr().map(|addr| addr.ip()).ok()
 }
 
 mod old {

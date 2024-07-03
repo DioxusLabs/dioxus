@@ -42,7 +42,7 @@ use web_server::*;
 ///   to a dynamic one on the fly.
 pub async fn dev_server(srv: ConfigOptsServe, crt: CrateConfig) -> Result<()> {
     let mut file_watcher = FileWatcher::start(&crt);
-    let mut web_server = DevServer::start(&srv, &crt);
+    let mut web_server = DevServer::start(&srv, &crt).await;
     let mut screen = TuiOutput::start(&srv, &crt);
 
     // Starting the build engine will also start the build process
@@ -63,6 +63,10 @@ pub async fn dev_server(srv: ConfigOptsServe, crt: CrateConfig) -> Result<()> {
         tokio::select! {
             // rebuild the project or hotreload it
             _ = file_watcher.wait() => {
+                if !file_watcher.pending_changes() {
+                    continue;
+                }
+
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients
                 if let Some(hr) = file_watcher.attempt_hot_reload() {
@@ -103,6 +107,7 @@ pub async fn dev_server(srv: ConfigOptsServe, crt: CrateConfig) -> Result<()> {
                     break;
                 }
 
+                // Maybe handle manually reloading?
                 screen.handle_input(input);
             }
         }
