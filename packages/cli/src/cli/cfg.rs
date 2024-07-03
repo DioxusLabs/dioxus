@@ -107,10 +107,26 @@ pub struct ConfigOptsServe {
     pub args: Vec<String>,
 }
 
+impl Deref for ConfigOptsServe {
+    type Target = ConfigOptsBuild;
+
+    fn deref(&self) -> &Self::Target {
+        &self.build_arguments
+    }
+}
+
 /// Config options for the bundling system.
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 pub struct ConfigOptsBundle {
     /// The arguments for the dioxus build
     #[clap(flatten)]
     pub build_arguments: ConfigOptsBuild,
+}
+
+impl Deref for ConfigOptsBundle {
+    type Target = ConfigOptsBuild;
+
+    fn deref(&self) -> &Self::Target {
+        &self.build_arguments
+    }
 }
