@@ -649,6 +649,31 @@ impl CrateConfig {
     pub fn should_pre_compress_web_assets(&self) -> bool {
         self.dioxus_config.web.pre_compress && self.release
     }
+
+    pub fn set_platform_auto_detect(&mut self, platform: Option<Platform>) -> &mut Self {
+        self.extend_with_platform(self.auto_detect_platform(platform));
+        self
+    }
+
+    pub fn auto_detect_platform(&self, mut platform: Option<Platform>) -> Platform {
+        use cargo_toml::Dependency::{Detailed, Inherited, Simple};
+
+        if platform.is_none() {
+            if let Some(dependency) = &self.manifest.dependencies.get("dioxus") {
+                let features = match dependency {
+                    Inherited(detail) => detail.features.to_vec(),
+                    Detailed(detail) => detail.features.to_vec(),
+                    Simple(_) => vec![],
+                };
+
+                platform = features
+                    .iter()
+                    .find_map(|platform| serde_json::from_str(&format!(r#""{}""#, platform)).ok());
+            }
+        }
+
+        platform.unwrap_or(self.dioxus_config.application.default_platform)
+    }
 }
 
 fn true_bool() -> bool {

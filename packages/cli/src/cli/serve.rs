@@ -1,8 +1,4 @@
-use dioxus_cli_config::Platform;
-use manganis_cli_support::AssetManifest;
-
 use super::*;
-use cargo_toml::Dependency::{Detailed, Inherited, Simple};
 
 /// Run the WASM project on dev-server
 #[derive(Clone, Debug, Parser)]
@@ -21,10 +17,6 @@ impl Serve {
         let cli_settings = crate_config.dioxus_config.cli_settings.clone().unwrap();
 
         if serve_cfg.hot_reload.is_none() {
-            // we're going to override the hot_reload setting in the project's cfg based on settings
-            //
-            // let hot_reload = self.serve.hot_reload || crate_config.dioxus_config.application.hot_reload;
-
             let value = cli_settings.always_hot_reload.unwrap_or(true);
             serve_cfg.hot_reload = Some(value);
             crate_config.with_hot_reload(value);
@@ -56,28 +48,13 @@ impl Serve {
         }
 
         crate_config.set_cargo_args(self.serve.cargo_args);
+        crate_config.set_platform_auto_detect(self.serve.platform);
 
-        let mut platform = self.serve.platform;
-
-        if platform.is_none() {
-            if let Some(dependency) = &crate_config.manifest.dependencies.get("dioxus") {
-                let features = match dependency {
-                    Inherited(detail) => detail.features.to_vec(),
-                    Detailed(detail) => detail.features.to_vec(),
-                    Simple(_) => vec![],
-                };
-
-                platform = features
-                    .iter()
-                    .find_map(|platform| serde_json::from_str(&format!(r#""{}""#, platform)).ok());
-            }
-        }
-
-        let platform = platform.unwrap_or(crate_config.dioxus_config.application.default_platform);
-        crate_config.extend_with_platform(platform);
-
-        crate::server::dev_server(serve_cfg).await?;
-
-        Ok(())
+        // Run the server on a tokio runtime
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(crate::server::dev_server(serve_cfg, crate_config))
     }
 }

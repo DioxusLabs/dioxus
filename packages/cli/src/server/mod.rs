@@ -1,86 +1,92 @@
 use crate::{cfg::ConfigOptsServe, Result};
+use dioxus_cli_config::CrateConfig;
 
-pub async fn dev_server(cfg: ConfigOptsServe) -> Result<()> {
-    let mut file_watcher = FileWatcher::start();
-    let mut dev_server = DevServer::start();
+mod build_engine;
+mod connection;
+mod fs_watcher;
+mod tui_output;
+mod web_server;
+use build_engine::*;
+use fs_watcher::*;
+use tui_output::*;
+use web_server::*;
+
+/// For *all* builds the CLI spins up a dedicated webserver, file watcher, and build infrastructure to serve the project.
+///
+/// This includes web, desktop, mobile, fullstack, etc.
+///
+/// Platform specifics:
+/// - Desktop:   We spin up the dev server but without a filesystem server.
+/// - Mobile:    Basically the same as desktop.
+/// - Web:       we need to attach a filesystem server to our devtools webserver to serve the project. We
+///              want to emulate GithubPages here since most folks are deploying there and expect things like
+///              basepath to match.
+/// - Fullstack: We spin up the same dev server but in this case the fullstack server itself needs to
+///              proxy all dev requests to our dev server
+///
+/// Notes:
+/// - All filesystem changes are tracked here
+/// - We send all updates to connected websocket connections. Even desktop connects via the websocket
+/// - Right now desktop compiles tokio-tungstenite to do the connection but we could in theory reuse
+///   the websocket logic from the webview for thinner builds.
+///
+/// Todos(Jon):
+/// - I'd love to be able to configure the CLI while it's running so we can change settingaon the fly.
+///   This would require some light refactoring and potentially pulling in something like ratatui.
+/// - Build a custom subscriber for logs by tools within this
+/// - Handle logs from the build engine separately?
+/// - Consume logs from the wasm for web/fullstack
+pub async fn dev_server(server_cfg: ConfigOptsServe, crate_config: CrateConfig) -> Result<()> {
+    let mut file_watcher = FileWatcher::start(&crate_config);
+    let mut web_server = WsServer::start(&server_cfg, &crate_config);
+    let mut build_engine = BuildEngine::start();
+    let mut screen = TuiOutput::start();
 
     loop {
         tokio::select! {
-            _ = file_watcher.wait_for_change() => {
-                // rebuild the project
+            // rebuild the project or hotreload it
+            _ = file_watcher.wait() => {
+                // if change is hotreloadable, hotreload it
+                // and then send that update to all connected clients
+
+                // If the change is not hotreloadable, attempt to binary patch it
+                // If that change is successful, send that update to all connected clients
+
+                // If the change is not binary patchable, rebuild the project
+                // We're going to kick off a new build if it already isn't ongoing
             }
 
-            _ = dev_server.wait_for_connection() => {
-                // reload the page
+            // reload the page
+            _ = web_server.wait() => {
+                // Run the server in the background
+                // Waiting for updates here lets us tap into when clients are added/removed
+            }
+
+            // Handle updates from the build engine
+            _ = build_engine.wait() => {
+                // Wait for logs from the build engine
+                // These will cause us to update the screen
+                // We also can check the status of the builds here in case we have multiple ongoing builds
+            }
+
+            // Handle input from the user using our settings
+            input = screen.wait() => {
+                // If the user wants to shutdown the server, break the loop
+                if matches!(input, tui_output::TuiInput::Shutdown) {
+                    break;
+                }
+
+                screen.handle_input(input);
             }
         }
+
+        // Now that the updates are handled, draw the screen
+        screen.draw(&server_cfg, &crate_config);
     }
+
+    // Run our cleanup logic here - maybe printing as we go?
+    // - Stop the file watcher
+    // - tell our clients that we're shutting down (web pages)
 
     Ok(())
-}
-
-struct FileWatcher {}
-
-impl FileWatcher {
-    fn start() -> Self {
-        let mut last_update_time = chrono::Local::now().timestamp();
-
-        // file watcher: check file change
-        let mut allow_watch_path = config.dioxus_config.web.watcher.watch_path.clone();
-
-        // Extend the watch path to include the assets directory - this is so we can hotreload CSS and other assets by default
-        allow_watch_path.push(config.dioxus_config.application.asset_dir.clone());
-
-        // Extend the watch path to include Cargo.toml and Dioxus.toml
-        allow_watch_path.push("Cargo.toml".to_string().into());
-        allow_watch_path.push("Dioxus.toml".to_string().into());
-        allow_watch_path.dedup();
-
-        // Create the file watcher
-        let mut watcher = notify::recommended_watcher({
-        let watcher_config = config.clone();
-        move |info: notify::Result<notify::Event>| {
-            let Ok(e) = info else {
-                return;
-            };
-            watch_event(
-                e,
-                &mut last_update_time,
-                &hot_reload,
-                &watcher_config,
-                &build_with,
-                &web_info,
-            );
-        }
-    })
-    .expect("Failed to create file watcher - please ensure you have the required permissions to watch the specified directories.");
-
-        // Watch the specified paths
-        for sub_path in allow_watch_path {
-            let path = &config.crate_dir.join(sub_path);
-            let mode = notify::RecursiveMode::Recursive;
-
-            if let Err(err) = watcher.watch(path, mode) {
-                tracing::warn!("Failed to watch path: {}", err);
-            }
-        }
-
-        Self {}
-    }
-
-    async fn wait_for_change(&mut self) {
-        todo!()
-    }
-}
-
-struct DevServer {}
-
-impl DevServer {
-    fn start() -> Self {
-        Self {}
-    }
-
-    async fn wait_for_connection(&mut self) {
-        todo!()
-    }
 }
