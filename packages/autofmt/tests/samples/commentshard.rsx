@@ -38,5 +38,9 @@ rsx! {
             // todo some work in here
             class: "hello world"
         }
+
+        div {
+            div {}
+        }
     }
 }

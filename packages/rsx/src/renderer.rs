@@ -69,7 +69,7 @@ impl<'a> TemplateRenderer<'a> {
             }
         };
 
-        quote! { Some({ #vnode }) }
+        quote! { dioxus_core::Element::Ok({ #vnode }) }
     }
 
     fn get_template_id_tokens(&self) -> TokenStream2 {

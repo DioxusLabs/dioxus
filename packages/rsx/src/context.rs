@@ -54,6 +54,7 @@ impl<'a> DynamicContext<'a> {
     /// they'll get picked up after codegen for compilation. Cool stuff.
     ///
     /// If updating fails (IE the root is a dynamic node that has changed), then we return None.
+    #[cfg(feature = "hot_reload")]
     pub fn populate_by_updating<Ctx: HotReloadingContext>(
         &mut self,
         roots: &'a [BodyNode],
@@ -104,10 +105,7 @@ impl<'a> DynamicContext<'a> {
         let ct = self.dynamic_nodes.len();
         self.dynamic_nodes.push(root);
         self.node_paths.push(self.current_path.clone());
-        match root {
-            BodyNode::Text(_) => quote! { dioxus_core::TemplateNode::DynamicText { id: #ct } },
-            _ => quote! { dioxus_core::TemplateNode::Dynamic { id: #ct } },
-        }
+        quote! { dioxus_core::TemplateNode::Dynamic { id: #ct } }
     }
 
     fn render_static_element(&mut self, el: &'a Element) -> TokenStream2 {
@@ -254,6 +252,7 @@ impl<'a> DynamicContext<'a> {
     /// If the change between the old and new template results in a mapping that doesn't exist, then we need to bail out.
     /// Basically if we *had* a mapping of `[0, 1]` and the new template is `[1, 2]`, then we need to bail out, since
     /// the new mapping doesn't exist in the original.
+    #[cfg(feature = "hot_reload")]
     fn update_dynamic_node(&mut self, root: &'a BodyNode) -> Option<TemplateNode> {
         let idx = match self.has_tracked_nodes() {
             //    Bail out if the mapping doesn't exist
@@ -274,11 +273,12 @@ impl<'a> DynamicContext<'a> {
         self.node_paths[idx].clone_from(&self.current_path);
 
         Some(match root {
-            BodyNode::Text(_) => TemplateNode::DynamicText { id: idx },
+            BodyNode::Text(_) => TemplateNode::Dynamic { id: idx },
             _ => TemplateNode::Dynamic { id: idx },
         })
     }
 
+    #[cfg(feature = "hot_reload")]
     fn update_element<Ctx: HotReloadingContext>(
         &mut self,
         el: &'a Element,
@@ -321,6 +321,7 @@ impl<'a> DynamicContext<'a> {
         })
     }
 
+    #[cfg(feature = "hot_reload")]
     fn update_dynamic_attribute(&mut self, attr: &'a AttributeType) -> Option<usize> {
         let idx = match self.has_tracked_nodes() {
             true => self.tracked_attribute_idx(attr)?,
@@ -337,6 +338,7 @@ impl<'a> DynamicContext<'a> {
         Some(idx)
     }
 
+    #[cfg(feature = "hot_reload")]
     fn make_static_attribute<Ctx: HotReloadingContext>(
         value: &IfmtInput,
         name: &ElementAttrName,
@@ -356,6 +358,7 @@ impl<'a> DynamicContext<'a> {
         static_attr
     }
 
+    #[cfg(feature = "hot_reload")]
     /// Check if we're tracking any nodes
     ///
     /// If we're tracking, then we'll attempt to use the old mapping
@@ -414,12 +417,14 @@ impl<'a> DynamicContext<'a> {
         idx
     }
 
+    #[cfg(feature = "hot_reload")]
     pub(crate) fn tracked_attribute_idx(&mut self, attr: &AttributeType) -> Option<usize> {
         self.attribute_to_idx
             .get_mut(attr)
             .and_then(|idxs| idxs.pop())
     }
 
+    #[cfg(feature = "hot_reload")]
     pub(crate) fn tracked_node_idx(&mut self, node: &BodyNode) -> Option<usize> {
         self.node_to_idx.get_mut(node).and_then(|idxs| idxs.pop())
     }

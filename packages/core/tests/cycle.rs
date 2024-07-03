@@ -21,7 +21,7 @@ fn cycling_elements() {
         );
     }
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
         dom.render_immediate_to_vec().santize().edits,
         [
@@ -31,7 +31,7 @@ fn cycling_elements() {
     );
 
     // notice that the IDs cycle back to ElementId(1), preserving a minimal memory footprint
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
         dom.render_immediate_to_vec().santize().edits,
         [
@@ -40,7 +40,7 @@ fn cycling_elements() {
         ]
     );
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
         dom.render_immediate_to_vec().santize().edits,
         [

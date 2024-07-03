@@ -1,5 +1,5 @@
-use crate::{runtime::Runtime, Element, ScopeId, Task};
-use futures_util::Future;
+use crate::{innerlude::SuspendedFuture, runtime::Runtime, CapturedError, Element, ScopeId, Task};
+use std::future::Future;
 use std::sync::Arc;
 
 /// Get the current scope id
@@ -11,6 +11,29 @@ pub fn current_scope_id() -> Option<ScopeId> {
 /// Check if the virtual dom is currently inside of the body of a component
 pub fn vdom_is_rendering() -> bool {
     Runtime::with(|rt| rt.rendering.get()).unwrap_or_default()
+}
+
+/// Throw a [`CapturedError`] into the current scope. The error will bubble up to the nearest [`crate::prelude::ErrorBoundary()`] or the root of the app.
+///
+/// # Examples
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
+/// fn Component() -> Element {
+///     let request = spawn(async move {
+///         match reqwest::get("https://api.example.com").await {
+///             Ok(_) => todo!(),
+///             // You can explicitly throw an error into a scope with throw_error
+///             Err(err) => ScopeId::APP.throw_error(err)
+///         }
+///     });
+///
+///     todo!()
+/// }
+/// ```
+pub fn throw_error(error: impl Into<CapturedError> + 'static) {
+    current_scope_id()
+        .expect("to be in a dioxus runtime")
+        .throw_error(error)
 }
 
 /// Consume context from the current scope
@@ -52,8 +75,9 @@ pub fn provide_root_context<T: 'static + Clone>(value: T) -> T {
 
 /// Suspended the current component on a specific task and then return None
 pub fn suspend(task: Task) -> Element {
-    Runtime::with_current_scope(|cx| cx.suspend(task));
-    None
+    Err(crate::innerlude::RenderError::Suspended(
+        SuspendedFuture::new(task),
+    ))
 }
 
 /// Start a new future on the same thread as the rest of the VirtualDom.
@@ -191,7 +215,7 @@ pub fn remove_future(id: Task) {
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust, no_run
 /// use dioxus::prelude::*;
 ///
 /// // prints a greeting on the initial render
@@ -202,7 +226,7 @@ pub fn remove_future(id: Task) {
 ///
 /// # Custom Hook Example
 ///
-/// ```rust
+/// ```rust, no_run
 /// use dioxus::prelude::*;
 ///
 /// pub struct InnerCustomState(usize);
@@ -375,21 +399,6 @@ pub fn before_render(f: impl FnMut() + 'static) {
 /// Push a function to be run after the render is complete, even if it didn't complete successfully
 pub fn after_render(f: impl FnMut() + 'static) {
     Runtime::with_current_scope(|cx| cx.push_after_render(f));
-}
-
-/// Wait for the next render to complete
-///
-/// This is useful if you've just triggered an update and want to wait for it to finish before proceeding with valid
-/// DOM nodes.
-///
-/// Effects rely on this to ensure that they only run effects after the DOM has been updated. Without wait_for_next_render effects
-/// are run immediately before diffing the DOM, which causes all sorts of out-of-sync weirdness.
-pub async fn wait_for_next_render() {
-    // Wait for the flush lock to be available
-    // We release it immediately, so it's impossible for the lock to be held longer than this function
-    Runtime::with(|rt| rt.render_signal.subscribe())
-        .unwrap()
-        .await;
 }
 
 /// Use a hook with a cleanup function

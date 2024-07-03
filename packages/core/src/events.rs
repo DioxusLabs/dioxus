@@ -209,7 +209,7 @@ pub struct Callback<Args = (), Ret = ()> {
     /// fn Child(onclick: EventHandler<MouseEvent>) -> Element {
     ///     rsx!{
     ///         button {
-    ///             // Diffing Child will not rerun this component, it will just update the EventHandler in place so that if this callback is called, it will run the latest version of the callback
+    ///             // Diffing Child will not rerun this component, it will just update the callback in place so that if this callback is called, it will run the latest version of the callback
     ///             onclick: move |evt| onclick(evt),
     ///         }
     ///     }
@@ -270,14 +270,42 @@ impl<Ret> SpawnIfAsync<(), Ret> for Ret {
     }
 }
 
-// Support for FnMut -> async { anything } for the unit return type
+// Support for FnMut -> async { unit } for the unit return type
 #[doc(hidden)]
-pub struct AsyncMarker<O>(PhantomData<O>);
-impl<F: std::future::Future<Output = O> + 'static, O> SpawnIfAsync<AsyncMarker<O>, ()> for F {
+pub struct AsyncMarker;
+impl<F: std::future::Future<Output = ()> + 'static> SpawnIfAsync<AsyncMarker> for F {
     fn spawn(self) {
         crate::prelude::spawn(async move {
             self.await;
         });
+    }
+}
+
+// Support for FnMut -> async { Result(()) } for the unit return type
+#[doc(hidden)]
+pub struct AsyncResultMarker;
+
+impl<T> SpawnIfAsync<AsyncResultMarker> for T
+where
+    T: std::future::Future<Output = crate::Result<()>> + 'static,
+{
+    #[inline]
+    fn spawn(self) {
+        crate::prelude::spawn(async move {
+            if let Err(err) = self.await {
+                crate::prelude::throw_error(err)
+            }
+        });
+    }
+}
+
+// Support for FnMut -> Result(()) for the unit return type
+impl SpawnIfAsync<()> for crate::Result<()> {
+    #[inline]
+    fn spawn(self) {
+        if let Err(err) = self {
+            crate::prelude::throw_error(err)
+        }
     }
 }
 
@@ -299,6 +327,22 @@ impl<
     }
 }
 
+#[doc(hidden)]
+pub struct UnitClosure<Marker>(PhantomData<Marker>);
+
+// Closure can be created from FnMut -> async { () } or FnMut -> Ret
+impl<
+        Function: FnMut() -> Spawn + 'static,
+        Spawn: SpawnIfAsync<Marker, Ret> + 'static,
+        Ret: 'static,
+        Marker,
+    > SuperFrom<Function, UnitClosure<Marker>> for Callback<(), Ret>
+{
+    fn super_from(mut input: Function) -> Self {
+        Callback::new(move |()| input())
+    }
+}
+
 #[test]
 fn closure_types_infer() {
     #[allow(unused)]
@@ -314,6 +358,11 @@ fn closure_types_infer() {
         // Or pass in a value
         let callback: Callback<u32, ()> = Callback::new(|value: u32| async move {
             println!("{}", value);
+        });
+
+        // Unit closures shouldn't require an argument
+        let callback: Callback<(), ()> = Callback::super_from(|| async move {
+            println!("hello world");
         });
     }
 }
@@ -369,12 +418,12 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
     /// This borrows the callback using a RefCell. Recursively calling a callback will cause a panic.
     pub fn call(&self, arguments: Args) -> Ret {
         if let Some(callback) = self.callback.read().as_ref() {
-            Runtime::with(|rt| rt.scope_stack.borrow_mut().push(self.origin));
+            Runtime::with(|rt| rt.push_scope(self.origin));
             let value = {
                 let mut callback = callback.borrow_mut();
                 callback(arguments)
             };
-            Runtime::with(|rt| rt.scope_stack.borrow_mut().pop());
+            Runtime::with(|rt| rt.pop_scope());
             value
         } else {
             panic!("Callback was manually dropped")

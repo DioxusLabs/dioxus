@@ -22,7 +22,7 @@ fn bubbles_error() {
         let _edits = dom.rebuild_to_vec().santize();
     }
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
 
     _ = dom.render_immediate_to_vec();
 }
