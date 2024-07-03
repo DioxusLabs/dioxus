@@ -3,12 +3,10 @@ use crate::plugin::convert::Convert;
 use crate::plugin::interface::{PluginRuntimeState, PluginWorld};
 use cargo_toml::Manifest;
 use dioxus_cli_config::{ApplicationConfig, DioxusConfig, PluginConfigInfo};
-use slab::Slab;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use tokio::sync::broadcast::Sender;
 use tokio::sync::Mutex;
 use wasmtime::component::*;
 use wasmtime::{Config, Engine, Store};
@@ -32,25 +30,17 @@ lazy_static::lazy_static!(
   pub static ref PLUGINS_CONFIG: Mutex<DioxusConfig> = Default::default();
 );
 
-pub trait ChangeFold {
-    fn fold_changes(self) -> ResponseEvent;
-}
-
-impl ChangeFold for Vec<ResponseEvent> {
-    fn fold_changes(self) -> ResponseEvent {
-        let mut option = ResponseEvent::None;
-        for change in self.into_iter() {
-            match (&mut option, change) {
-                (ResponseEvent::Rebuild, _) | (_, ResponseEvent::Rebuild) => break,
-                (ResponseEvent::Refresh(assets), ResponseEvent::Refresh(new_assets)) => {
-                    assets.extend(new_assets);
+fn fold_changes(iter: impl IntoIterator<Item = ResponseEvent>) -> ResponseEvent {
+    iter.into_iter()
+        .fold(ResponseEvent::None, |option, change| {
+            match (option, change) {
+                (ResponseEvent::Refresh(assets), ResponseEvent::Refresh(mut new_assets)) => {
+                    new_assets.extend(assets);
+                    ResponseEvent::Refresh(new_assets)
                 }
-                (a, b) if *a < b => *a = b,
-                _ => (),
+                (a, b) => a.max(b),
             }
-        }
-        option
-    }
+        })
 }
 
 impl PartialEq for ResponseEvent {
@@ -132,8 +122,7 @@ macro_rules! call_plugins {
             );
             successful.push(success);
         }
-        let successful = successful.into_iter().flatten().collect::<Vec<_>>();
-        successful
+        successful.into_iter().flatten()
     }};
 }
 
@@ -144,35 +133,10 @@ pub async fn plugins_after_command(compile_event: CommandEvent) {
     call_plugins!(after_command_event compile_event);
 }
 pub async fn plugins_before_runtime(runtime_event: RuntimeEvent) -> ResponseEvent {
-    call_plugins!(before_runtime_event runtime_event).fold_changes()
+    fold_changes(call_plugins!(before_runtime_event runtime_event))
 }
 pub async fn plugins_after_runtime(runtime_event: RuntimeEvent) -> ResponseEvent {
-    call_plugins!(after_runtime_event runtime_event).fold_changes()
-}
-
-pub(crate) fn handle_change(
-    change: ResponseEvent,
-    reload_tx: &Option<Sender<WsMessage>>,
-    needs_full_rebuild: &mut bool,
-) {
-    match change {
-        ResponseEvent::Rebuild if reload_tx.is_some() => {
-            if let Err(err) = reload_tx.as_ref().unwrap().send(WsMessage::Reload) {
-                tracing::error!("Failed to send reload message: {}", err);
-            }
-        }
-        ResponseEvent::Refresh(assets) if reload_tx.is_some() => {
-            if let Err(err) = reload_tx
-                .as_ref()
-                .unwrap()
-                .send(WsMessage::RefreshAssets { urls: assets })
-            {
-                tracing::error!("Failed to send refresh asset message: {}", err);
-            }
-        }
-        ResponseEvent::Rebuild => *needs_full_rebuild = true,
-        _ => (),
-    }
+    fold_changes(call_plugins!(after_runtime_event runtime_event))
 }
 
 pub async fn plugins_watched_paths_changed(
@@ -197,14 +161,13 @@ pub async fn plugins_watched_paths_changed(
             }
         })
         .collect();
-    call_plugins!(on_watched_paths_change & paths).fold_changes()
+    fold_changes(call_plugins!(on_watched_paths_change & paths))
 }
 
 /// Returns a sorted list of plugins that are loaded in order
 /// of priority from the dioxus config
 async fn load_plugins(
     config: &DioxusConfig,
-    crate_dir: &PathBuf,
     dioxus_lock: &mut DioxusLock,
     dependency_paths: &[PathBuf],
 ) -> wasmtime::Result<Vec<CliPlugin>> {
@@ -218,7 +181,6 @@ async fn load_plugins(
             &plugin.path,
             config,
             plugin.priority,
-            crate_dir,
             dioxus_lock,
             dependency_paths,
         )
@@ -312,11 +274,10 @@ pub fn get_dependency_paths(crate_dir: &PathBuf) -> crate::Result<Vec<PathBuf>> 
 
 pub async fn init_plugins(
     config: &DioxusConfig,
-    crate_dir: &PathBuf,
     dependency_paths: &[PathBuf],
 ) -> crate::Result<()> {
     let mut dioxus_lock = DioxusLock::load()?;
-    let plugins = load_plugins(config, crate_dir, &mut dioxus_lock, dependency_paths).await?;
+    let plugins = load_plugins(config, &mut dioxus_lock, dependency_paths).await?;
     *PLUGINS.lock().await = plugins;
     *PLUGINS_CONFIG.lock().await = config.clone();
     Ok(())
@@ -355,7 +316,6 @@ pub async fn save_plugin_config(bin: PathBuf) -> crate::Result<()> {
 }
 
 async fn wasi_context(
-    crate_dir: &PathBuf,
     config: &ApplicationConfig,
     dependency_paths: &[PathBuf],
 ) -> crate::Result<WasiCtx> {
@@ -413,7 +373,6 @@ pub async fn load_plugin(
     path: impl AsRef<Path>,
     config: &DioxusConfig,
     priority: Option<usize>,
-    crate_dir: &PathBuf,
     dioxus_lock: &mut DioxusLock,
     dependency_paths: &[PathBuf],
 ) -> crate::Result<CliPlugin> {
@@ -424,7 +383,7 @@ pub async fn load_plugin(
     wasmtime_wasi::add_to_linker_async(&mut linker)?;
     PluginWorld::add_to_linker(&mut linker, |state: &mut PluginRuntimeState| state)?;
 
-    let ctx = wasi_context(crate_dir, &config.application, dependency_paths).await?;
+    let ctx = wasi_context(&config.application, dependency_paths).await?;
     let table = ResourceTable::new();
 
     let mut store = Store::new(
