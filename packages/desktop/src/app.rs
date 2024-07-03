@@ -328,8 +328,8 @@ impl App {
         not(target_os = "ios")
     ))]
     pub fn handle_hot_reload_msg(&mut self, msg: dioxus_hot_reload::HotReloadMsg) {
-        use dioxus_core::prelude::{FmtedSegments, HotReloadLiteral, ScopeId};
-        use dioxus_signals::{Signal, Writable};
+        use dioxus_core::prelude::{HotReloadLiteral, ScopeId};
+        use dioxus_signals::Writable;
 
         println!("hotreloading {msg:?}");
 
@@ -348,13 +348,9 @@ impl App {
                     // if there's a signal runtime, we're gonna try updating the signals using the IDs
                     // as the name for the global signal
                     webview.dom.runtime().on_scope(ScopeId::ROOT, || {
-                        // dioxus_signals::GlobalSignal;
-                        use dioxus_signals::get_global_context;
-
-                        let ctx = get_global_context();
+                        let ctx = dioxus_signals::get_global_context();
 
                         for literal in changed_strings.iter() {
-                            // println!("updating signal in desktop {:?} with {:?}", id, segments);
                             let id = literal.name.clone();
 
                             match &literal.value {
@@ -379,12 +375,7 @@ impl App {
                                     }
                                 }
                             }
-
-                            // let mut sig: Signal<FmtedSegments> = ctx.get_signal_with_key(&id);
-                            // sig.set(segments.clone());
                         }
-
-                        // dioxus_core::prelude::needs_update();
                     });
 
                     webview.poll_vdom();
