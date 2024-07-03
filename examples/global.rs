@@ -41,8 +41,8 @@ fn Decrement() -> Element {
 #[component]
 fn Display() -> Element {
     rsx! {
-        p { "Count: ", "{COUNT}" }
-        p { "Doubled: ", "{DOUBLED_COUNT}" }
+        p { "Count: {COUNT}" }
+        p { "Doubled: {DOUBLED_COUNT}" }
     }
 }
 

@@ -54,7 +54,7 @@ fn app() -> Element {
                 id: "directory-upload",
                 checked: enable_directory_upload,
                 oninput: move |evt| enable_directory_upload.set(evt.checked()),
-            },
+            }
         }
 
         div {

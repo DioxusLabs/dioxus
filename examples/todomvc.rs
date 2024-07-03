@@ -225,7 +225,7 @@ fn ListFooter(
                         match active_todo_count() {
                             1 => "item",
                             _ => "items",
-                        },
+                        }
                         " left"
                     }
                 }

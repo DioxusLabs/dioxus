@@ -4,8 +4,8 @@ macro_rules! twoway {
 
             // doc attrs
             $( #[doc = $doc:expr] )*
-            $name:ident,
-        )*
+            $name:ident
+        ),*
     ) => {
         $(
             $( #[doc = $doc] )*
@@ -51,4 +51,6 @@ twoway![
     letsome,
     fat_exprs,
     nested,
+    staged,
+    misplaced
 ];
