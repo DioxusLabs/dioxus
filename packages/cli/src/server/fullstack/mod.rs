@@ -36,8 +36,8 @@ pub fn server_rust_flags(build: &ConfigOptsBuild) -> String {
     rust_flags(build, SERVER_RUST_FLAGS)
 }
 
-pub async fn startup(config: CrateConfig, serve: &ConfigOptsServe) -> Result<()> {
-    desktop::startup_with_platform::<FullstackPlatform>(config, serve).await
+pub fn startup(config: CrateConfig, serve: &ConfigOptsServe) -> Result<()> {
+    desktop::startup_with_platform::<FullstackPlatform>(config, serve)
 }
 
 fn start_web_build_thread(
