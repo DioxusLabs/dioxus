@@ -1,6 +1,5 @@
 use slotmap::DefaultKey;
 
-use crate::innerlude::Effect;
 use crate::{
     innerlude::{LocalTask, SchedulerMsg},
     render_signal::RenderSignal,
