@@ -14,7 +14,6 @@ use std::{
     net::{IpAddr, SocketAddr, UdpSocket},
     sync::Arc,
 };
-
 mod proxy;
 mod server;
 
@@ -102,10 +101,6 @@ async fn start_server(
     rustls: Option<axum_server::tls_rustls::RustlsConfig>,
     config: &CrateConfig,
 ) -> Result<()> {
-    // If plugins, call on_serve_start event
-    #[cfg(feature = "plugin")]
-    crate::plugin::PluginManager::on_serve_start(config)?;
-
     let addr: SocketAddr = SocketAddr::from((ip, port));
 
     // Open the browser

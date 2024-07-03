@@ -2,10 +2,12 @@ use dioxus_cli_config::DioxusConfig;
 use std::{env, path::PathBuf};
 use tracing_subscriber::EnvFilter;
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use clap::Parser;
-use dioxus_cli::*;
-
+use dioxus_cli::{
+    plugin::{get_dependency_paths, init_plugins, save_plugin_config},
+    *,
+};
 use Commands::*;
 
 const LOG_ENV: &str = "DIOXUS_LOG";
@@ -22,6 +24,8 @@ async fn main() -> anyhow::Result<()> {
     }
     tracing_subscriber::fmt().with_env_filter(filter).init();
 
+    let mut project_command = None;
+
     match args.action {
         Translate(opts) => opts
             .translate()
@@ -30,25 +34,12 @@ async fn main() -> anyhow::Result<()> {
         New(opts) => opts
             .create()
             .context(error_wrapper("Creating new project failed")),
-
         Init(opts) => opts
             .init()
             .context(error_wrapper("Initialising a new project failed")),
-
-        Config(opts) => opts
-            .config()
-            .context(error_wrapper("Configuring new project failed")),
-
-        #[cfg(feature = "plugin")]
-        Plugin(opts) => opts
-            .plugin()
-            .await
-            .context(error_wrapper("Error with plugin")),
-
         Autoformat(opts) => opts
             .autoformat()
             .context(error_wrapper("Error autoformatting RSX")),
-
         Check(opts) => opts
             .check()
             .await
@@ -63,35 +54,48 @@ async fn main() -> anyhow::Result<()> {
                     DioxusConfig::default()
                 });
 
-            #[cfg(feature = "plugin")]
-            use dioxus_cli::plugin::PluginManager;
+            let dioxus_config = DioxusConfig::load(Some(bin.clone()))
+          .map_err(|e| anyhow!("Failed to load Dioxus config because: {e}"))?
+          .unwrap_or_else(|| {
+            log::warn!("You appear to be creating a Dioxus project from scratch; we will use the default config");
+            DioxusConfig::default()
+          });
+            let crate_dir = dioxus_cli_config::crate_root()?;
+            let dependency_paths = get_dependency_paths(&crate_dir)?;
+            init_plugins(&dioxus_config, &dependency_paths).await?;
 
-            #[cfg(feature = "plugin")]
-            PluginManager::init(_dioxus_config.plugin)
-                .context(error_wrapper("Plugin system initialization failed"))?;
-
-            match action {
+            let out = match other {
                 Build(opts) => opts
                     .build(Some(bin.clone()), None, None)
-                    .context(error_wrapper("Building project failed")),
-
+                    .await
+                    .map_err(|e| anyhow!("🚫 Building project failed: {}", e)),
                 Clean(opts) => opts
                     .clean(Some(bin.clone()))
-                    .context(error_wrapper("Cleaning project failed")),
-
+                    .map_err(|e| anyhow!("🚫 Cleaning project failed: {}", e)),
                 Serve(opts) => opts
                     .serve(Some(bin.clone()))
                     .await
-                    .context(error_wrapper("Serving project failed")),
-
+                    .map_err(|e| anyhow!("🚫 Serving project failed: {}", e)),
+                Plugin(opts) => opts
+                    .plugin(&dioxus_config, &dependency_paths)
+                    .await
+                    .map_err(|e| anyhow!("🚫 Plugin manager failed: {}", e)),
                 Bundle(opts) => opts
                     .bundle(Some(bin.clone()))
-                    .context(error_wrapper("Bundling project failed")),
-
-                _ => unreachable!(),
-            }
+                    .await
+                    .map_err(|e| anyhow!("🚫 Bundling project failed: {}", e)),
+                _ => unreachable!("Caught by previous match"),
+            };
+            project_command = Some(bin);
+            out
         }
+    }?;
+
+    if let Some(bin) = project_command {
+        save_plugin_config(bin).await?;
     }
+
+    Ok(())
 }
 
 fn get_bin(bin: Option<String>) -> Result<PathBuf> {

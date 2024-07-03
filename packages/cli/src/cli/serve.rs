@@ -2,8 +2,9 @@ use dioxus_cli_config::Platform;
 use manganis_cli_support::AssetManifest;
 
 use super::*;
+use crate::plugin::interface::plugins::main::types::CommandEvent::Serve as ServeEvent;
 use cargo_toml::Dependency::{Detailed, Inherited, Simple};
-use std::fs::create_dir_all;
+use std::{fs::create_dir_all, io::Write, path::PathBuf};
 
 /// Run the WASM project on dev-server
 #[derive(Clone, Debug, Parser)]
@@ -45,6 +46,8 @@ impl Serve {
 
         let mut platform = self.serve.platform;
 
+        plugins_before_command(ServeEvent).await;
+
         if platform.is_none() {
             if let Some(dependency) = &crate_config.manifest.dependencies.get("dioxus") {
                 let features = match dependency {
@@ -72,6 +75,8 @@ impl Serve {
             }
             _ => unreachable!(),
         }
+
+        plugins_after_command(ServeEvent).await;
 
         Ok(())
     }

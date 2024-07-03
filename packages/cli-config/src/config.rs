@@ -2,6 +2,7 @@ use crate::BundleConfig;
 use crate::CargoError;
 use core::fmt::{Display, Formatter};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Debug)]
@@ -38,14 +39,8 @@ pub struct DioxusConfig {
     #[serde(default)]
     pub bundle: BundleConfig,
 
-    #[cfg(feature = "cli")]
-    #[serde(default = "default_plugin")]
-    pub plugin: toml::Value,
-}
-
-#[cfg(feature = "cli")]
-fn default_plugin() -> toml::Value {
-    toml::Value::Boolean(true)
+    #[serde(default)]
+    pub plugins: PluginConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -221,8 +216,7 @@ impl Default for DioxusConfig {
                 publisher: Some(name),
                 ..Default::default()
             },
-            #[cfg(feature = "cli")]
-            plugin: toml::Value::Table(toml::map::Map::new()),
+            plugins: Default::default(),
         }
     }
 }
@@ -632,6 +626,28 @@ impl CrateConfig {
     pub fn should_pre_compress_web_assets(&self) -> bool {
         self.dioxus_config.web.pre_compress && self.release
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct PluginConfig {
+    #[serde(flatten)]
+    pub plugins: HashMap<String, PluginConfigInfo>,
+}
+
+impl PluginConfig {
+    pub fn set_plugin_info(&mut self, plugin_name: String, plugin_info: PluginConfigInfo) {
+        self.plugins.insert(plugin_name, plugin_info);
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginConfigInfo {
+    pub version: semver::Version,
+    pub path: PathBuf,
+    // #[serde(default = "default_plugin_config")]
+    // pub config: toml::Value,
+    pub config: HashMap<String, String>,
+    pub priority: Option<usize>,
 }
 
 fn true_bool() -> bool {

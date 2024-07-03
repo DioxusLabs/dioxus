@@ -18,16 +18,13 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-#[cfg(feature = "plugin")]
-use crate::plugin::PluginManager;
-
 use super::HotReloadState;
 
 pub async fn startup(config: CrateConfig, serve: &ConfigOptsServe) -> Result<()> {
     startup_with_platform::<DesktopPlatform>(config, serve).await
 }
 
-pub(crate) async fn startup_with_platform<P: Platform + Send + 'static>(
+pub(crate) async fn startup_with_platform<P: Platform + Send + Sync + 'static>(
     config: CrateConfig,
     serve_cfg: &ConfigOptsServe,
 ) -> Result<()> {
@@ -70,7 +67,7 @@ fn set_ctrl_c(config: &CrateConfig) {
 }
 
 /// Start the server without hot reload
-async fn serve<P: Platform + Send + 'static>(
+async fn serve<P: Platform + Send + Sync + 'static>(
     config: CrateConfig,
     serve: &ConfigOptsServe,
     hot_reload_state: HotReloadState,

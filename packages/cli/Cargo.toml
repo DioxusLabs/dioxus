@@ -19,13 +19,12 @@ colored = "2.0.0"
 dioxus-cli-config = { workspace = true, features = ["cli"], default-features = false }
 
 # features
-log = "0.4.14"
 fern = { version = "0.6.0", features = ["colored"] }
 serde = { version = "1.0.136", features = ["derive"] }
 serde_json = "1.0.79"
 toml = { workspace = true }
 fs_extra = "1.2.0"
-cargo_toml = "0.18.0"
+cargo_toml = "0.19.1"
 futures-util = { workspace = true, features = ["async-await-macro"] }
 notify = { version = "5.0.0-pre.16", features = ["serde"] }
 html_parser = { workspace = true }
@@ -47,34 +46,31 @@ axum-extra = { workspace = true, features = ["typed-header"] }
 tower-http = { workspace = true, features = ["full"] }
 
 headers = "0.3.7"
+
 walkdir = "2"
 
-# tools download
-dirs = "5.0.1"
+
 reqwest = { workspace = true, features = [
     "rustls-tls",
     "stream",
     "trust-dns",
     "blocking",
 ] }
-flate2 = "1.0.22"
-tar = "0.4.38"
 zip = "0.6.2"
 tower = { workspace = true }
 lazy_static = "1.4.0"
 
 # plugin packages
-mlua = { version = "0.8.1", features = [
-    "lua54",
-    "vendored",
-    "async",
-    "send",
-    "macros",
-], optional = true }
 ctrlc = "3.2.3"
 open = "5.0.1"
 cargo-generate = "0.20.0"
-toml_edit = "0.21.0"
+toml_edit = "0.22.5"
+wasmtime = { version = "22.0.0", features = ['component-model'] }
+wasmtime-wasi = { version = "22.0.0" }
+futures = "0.3.30"
+async-trait = "0.1.73"
+semver = "1.0"
+slab = { workspace = true }
 
 # bundling
 tauri-bundler = { version = "=1.4.*", features = ["native-tls-vendored"] }
@@ -95,9 +91,9 @@ dioxus-html = { workspace = true, features = ["hot-reload-context"] }
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-hot-reload = { workspace = true, features = ["serve"] }
 interprocess = { workspace = true }
-# interprocess-docfix = { version = "1.2.2" }
+gitignore = "1.0.8"
+base64 = "0.21.5"
 ignore = "0.4.22"
-env_logger = "0.11.3"
 
 tracing-subscriber = { version = "0.3.18", features = ["std", "env-filter"] }
 tracing = { workspace = true }
@@ -109,7 +105,6 @@ openssl = { version = "0.10", features = ["vendored"] }
 
 [features]
 default = []
-plugin = ["dep:mlua"]
 
 [[bin]]
 path = "src/main.rs"

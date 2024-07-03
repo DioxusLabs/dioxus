@@ -5,15 +5,16 @@
 mod assets;
 pub mod builder;
 pub mod server;
-pub mod tools;
 
 pub use builder::*;
 
 pub mod cli;
 pub use cli::*;
 
+mod lock;
+pub use lock::*;
+
 pub mod error;
 pub use error::*;
 
-#[cfg(feature = "plugin")]
 pub mod plugin;

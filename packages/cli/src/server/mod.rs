@@ -1,13 +1,21 @@
-use crate::{cfg::ConfigOptsServe, BuildResult, Result};
-use dioxus_cli_config::CrateConfig;
+use crate::{
+    cfg::ConfigOptsServe,
+    plugin::interface::plugins::main::types::RuntimeEvent::{HotReload, Rebuild},
+    BuildResult, Result,
+};
+use futures::executor::block_on;
 
 use cargo_metadata::diagnostic::Diagnostic;
+use dioxus_cli_config::CrateConfig;
 use dioxus_hot_reload::{HotReloadMsg, HotReloadReceiver};
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;
 use fs_extra::dir::CopyOptions;
 use notify::{RecommendedWatcher, Watcher};
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 mod output;
 use output::*;
@@ -114,10 +122,15 @@ fn watch_event<F>(
             &event,
             config,
         );
+        let change = block_on(plugins_after_runtime(HotReload));
+        handle_change(change, &reload_tx, &mut needs_full_rebuild);
     }
 
     if needs_full_rebuild {
         full_rebuild(build_with, last_update_time, config, event, web_info);
+        let change = block_on(plugins_after_runtime(Rebuild));
+        // Todo handle plugins requesting rebuild here
+        handle_change(change, &reload_tx, &mut needs_full_rebuild);
     }
 }
 
