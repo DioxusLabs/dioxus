@@ -4,11 +4,13 @@ use ext_toml::Value;
 use toml as ext_toml;
 use wasmtime::component::Resource;
 
+/// Convert to a new type with plugin state
 #[async_trait]
-pub trait ConvertWithState<T> {
+pub trait ConvertWithPlugin<T> {
     async fn convert_with_state(self, state: &mut PluginRuntimeState) -> T;
 }
 
+/// Convert a value to a new type. This trait is identical to [`Into`]. We duplicate it here to allow us to implement it with two foreign types.
 pub trait Convert<T> {
     fn convert(self) -> T;
 }
@@ -200,7 +202,7 @@ impl Convert<Offset> for ext_toml::value::Offset {
 }
 
 #[async_trait]
-impl ConvertWithState<Value> for TomlValue {
+impl ConvertWithPlugin<Value> for TomlValue {
     async fn convert_with_state(self, state: &mut PluginRuntimeState) -> Value {
         match self {
             TomlValue::String(string) => Value::String(string),
@@ -228,7 +230,7 @@ impl ConvertWithState<Value> for TomlValue {
 }
 
 #[async_trait]
-impl ConvertWithState<TomlValue> for Value {
+impl ConvertWithPlugin<TomlValue> for Value {
     async fn convert_with_state(self, state: &mut PluginRuntimeState) -> TomlValue {
         match self {
             Value::String(string) => TomlValue::String(string),
@@ -255,7 +257,7 @@ impl ConvertWithState<TomlValue> for Value {
 }
 
 #[async_trait]
-impl ConvertWithState<Resource<Toml>> for Value {
+impl ConvertWithPlugin<Resource<Toml>> for Value {
     async fn convert_with_state(self, state: &mut PluginRuntimeState) -> Resource<Toml> {
         let toml_value: TomlValue = self.convert_with_state(state).await;
         toml_value.convert_with_state(state).await
@@ -263,7 +265,7 @@ impl ConvertWithState<Resource<Toml>> for Value {
 }
 
 #[async_trait]
-impl ConvertWithState<Resource<Toml>> for TomlValue {
+impl ConvertWithPlugin<Resource<Toml>> for TomlValue {
     async fn convert_with_state(self, state: &mut PluginRuntimeState) -> Resource<Toml> {
         // This impl causes the set function add whole new toml's, check if it's
         // already in state somehow?

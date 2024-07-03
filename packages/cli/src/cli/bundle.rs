@@ -4,12 +4,8 @@ use std::{env::current_dir, fs::create_dir_all, str::FromStr};
 
 use tauri_bundler::{BundleSettings, PackageSettings, SettingsBuilder};
 
-use crate::plugin::{
-    interface::plugins::main::types::CommandEvent::Bundle as BundleEvent, plugins_after_command,
-    plugins_before_command,
-};
-
 use super::*;
+use crate::plugin::interface::plugins::main::types::CommandEvent::Bundle as BundleEvent;
 use crate::{build_desktop, cfg::ConfigOptsBundle};
 
 /// Bundle the Rust desktop app and all of its assets

@@ -151,6 +151,7 @@ interface types {
 
 interface imports {
   use types.{project-info, parse-project-info-error};
+  use toml.{toml};
 
   /// Returns whether the project has 'output' and 'asset' 
   /// directories written in the `Dioxus.toml`, and the 
@@ -167,11 +168,11 @@ interface imports {
   /// Get list of currently watched paths
   watched-paths: func() -> list<string>;
 
-  /// Set data in a map, is saved between sessions in the lock file
-  set-data: func(key: string, data: list<u8>);
+  /// Set the table of data for this plugin in the lock file
+  set-data: func(data: toml);
 
-  /// Grab data from map, returns none if key not in map
-  get-data: func(key: string) -> option<list<u8>>;
+  /// Grab data from the table of data for this plugin, returns none if key not in table
+  get-data: func() -> option<toml>;
   
   /// Set data in a map, is saved between sessions in the dioxus.toml file
   set-config: func(key: string, config: string);

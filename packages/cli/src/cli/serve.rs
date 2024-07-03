@@ -1,4 +1,3 @@
-use crate::plugin::{plugins_after_command, plugins_before_command};
 use dioxus_cli_config::Platform;
 use manganis_cli_support::AssetManifest;
 

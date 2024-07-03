@@ -1,10 +1,11 @@
+use crate::plugin::convert::ConvertWithPlugin;
 use crate::plugin::interface::plugins::main::types::ParseProjectInfoError;
+use crate::PluginLockData;
 use async_trait::async_trait;
 use plugins::main::imports::Host as ImportHost;
 use plugins::main::toml::{Host as TomlHost, *};
 use plugins::main::types::Host as TypeHost;
 use slab::Slab;
-use std::collections::HashMap;
 use wasmtime::component::*;
 use wasmtime_wasi::{WasiCtx, WasiView};
 
@@ -17,7 +18,7 @@ pub struct PluginRuntimeState {
     pub ctx: WasiCtx,
     pub metadata: PluginInfo,
     pub tomls: Slab<TomlValue>,
-    pub map: HashMap<String, Vec<u8>>,
+    pub lock_data: PluginLockData,
 }
 
 impl PluginRuntimeState {
@@ -146,12 +147,12 @@ impl ImportHost for PluginRuntimeState {
             .collect()
     }
 
-    async fn set_data(&mut self, key: String, data: Vec<u8>) {
-        self.map.insert(key, data);
+    async fn set_data(&mut self, data: Resource<plugins::main::toml::Toml>) {
+        self.lock_data = Some(data.convert_with_state(self).await);
     }
 
-    async fn get_data(&mut self, key: String) -> Option<Vec<u8>> {
-        self.map.get(&key).cloned()
+    async fn get_data(&mut self) -> Option<Resource<plugins::main::toml::Toml>> {
+        self.lock_data
     }
 
     async fn set_config(&mut self, key: String, config: String) {

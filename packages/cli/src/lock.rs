@@ -1,9 +1,8 @@
 use std::{
-    collections::HashMap,
+    collections::{hash_map::Entry, HashMap},
     path::{Path, PathBuf},
 };
 
-use base64::Engine;
 use serde::{Deserialize, Serialize};
 
 use crate::plugin::CliPlugin;
@@ -12,7 +11,7 @@ use crate::plugin::CliPlugin;
 pub struct DioxusLock {
     #[serde(skip)]
     pub path: PathBuf,
-    pub plugins: HashMap<String, PluginLockState>,
+    pub plugins: HashMap<String, PluginLockData>,
 }
 
 impl DioxusLock {
@@ -59,22 +58,10 @@ impl DioxusLock {
 
         if let Some(plugins) = plugins {
             for plugin in plugins.iter() {
-                let state = self
-                    .plugins
-                    .entry(plugin.metadata.name.clone())
-                    .or_default();
-                if !state.initialized {
-                    continue;
-                }
-
-                state.map = plugin
-                    .store
-                    .data()
-                    .map
-                    .clone()
-                    .into_iter()
-                    .map(|(a, b)| (a, PluginData(b)))
-                    .collect();
+                self.plugins.insert(
+                    plugin.metadata.name.clone(),
+                    plugin.store.data().lock_data.clone(),
+                );
             }
         }
 
@@ -92,58 +79,38 @@ impl DioxusLock {
         &mut self,
         plugins: &mut Vec<CliPlugin>,
     ) -> crate::error::Result<()> {
-        let mut new_plugins = HashMap::new();
-        for plugin in plugins.iter_mut() {
-            let state = self
-                .plugins
-                .entry(plugin.metadata.name.clone())
-                .or_default();
-            if !state.initialized {
-                match plugin.register().await? {
-                    Ok(()) => {
-                        state.initialized = true;
-                    }
-                    Err(_) => {
-                        tracing::warn!("Couldn't initialize plugin: {}", &plugin.metadata.name);
-                    }
-                }
-            }
-            new_plugins.insert(plugin.metadata.name.clone(), state.clone());
-        }
-
-        self.plugins = new_plugins;
-
         if !plugins.is_empty() {
-            self.save(Some(plugins))?;
+            return Ok(());
         }
+
+        for plugin in plugins.iter_mut() {
+            self.initialize_plugin(plugin).await?;
+        }
+
+        self.save(Some(plugins))?;
 
         Ok(())
     }
 
-    pub async fn add_plugin(&mut self, plugin: &mut CliPlugin) -> crate::error::Result<()> {
-        let state = self
-            .plugins
-            .entry(plugin.metadata.name.clone())
-            .or_default();
-        if !state.initialized {
-            match plugin.register().await? {
-                Ok(()) => {
-                    state.initialized = true;
-                }
-                Err(_) => {
-                    tracing::warn!("Couldn't initialize plugin: {}", plugin.metadata.name);
-                }
+    pub async fn initialize_plugin(&mut self, plugin: &mut CliPlugin) -> crate::error::Result<()> {
+        let entry = self.plugins.entry(plugin.metadata.name.clone());
+        if matches!(entry, Entry::Vacant(_)) {
+            if let Err(err) = plugin.register().await? {
+                tracing::warn!(
+                    "Couldn't initialize plugin {}: {}",
+                    plugin.metadata.name,
+                    err
+                );
             }
         }
+        let state = entry.or_default();
 
-        state.map = plugin
-            .store
-            .data()
-            .map
-            .clone()
-            .into_iter()
-            .map(|(a, b)| (a, PluginData(b)))
-            .collect();
+        *state = plugin.store.data().lock_data.clone();
+        Ok(())
+    }
+
+    pub async fn add_plugin(&mut self, plugin: &mut CliPlugin) -> crate::error::Result<()> {
+        self.initialize_plugin(plugin).await?;
 
         self.save(None)?;
 
@@ -169,34 +136,7 @@ fn acquire_dioxus_lock(crate_dir: &Path) -> Option<PathBuf> {
     None
 }
 
-#[derive(Clone, Debug)]
-pub struct PluginData(pub Vec<u8>);
-
-impl Serialize for PluginData {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let encoded = base64::engine::general_purpose::STANDARD.encode(&self.0);
-        serializer.serialize_str(&encoded)
-    }
-}
-
-impl<'de> Deserialize<'de> for PluginData {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let bytes = String::deserialize(deserializer)?;
-        let decoded = base64::engine::general_purpose::STANDARD
-            .decode(bytes)
-            .expect("Message not encoded properly!");
-        Ok(Self(decoded))
-    }
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
-pub struct PluginLockState {
-    pub initialized: bool,
-    pub map: HashMap<String, PluginData>,
+#[derive(Default, Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct PluginLockData {
+    state: Option<toml::Value>,
 }

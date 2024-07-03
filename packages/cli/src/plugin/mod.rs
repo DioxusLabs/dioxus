@@ -1,6 +1,7 @@
 use crate::lock::DioxusLock;
 use crate::plugin::convert::Convert;
 use crate::plugin::interface::{PluginRuntimeState, PluginWorld};
+use crate::PluginLockData;
 use cargo_toml::Manifest;
 use dioxus_cli_config::{ApplicationConfig, DioxusConfig, PluginConfigInfo};
 
@@ -477,7 +478,7 @@ pub async fn load_plugin(
                 name: "".into(),
                 version: "".into(),
             },
-            map: std::collections::HashMap::new(),
+            lock_data: Default::default(),
         },
     );
 
@@ -490,7 +491,7 @@ pub async fn load_plugin(
         .await?;
 
     if let Some(existing) = dioxus_lock.plugins.remove(&metadata.name) {
-        store.data_mut().map = existing.map.into_iter().map(|(a, b)| (a, b.0)).collect();
+        store.data_mut().lock_data = existing.map.into_iter().map(|(a, b)| (a, b.0)).collect();
     }
 
     let Ok(version) = semver::Version::from_str(&metadata.version) else {
