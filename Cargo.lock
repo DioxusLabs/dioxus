@@ -2375,6 +2375,7 @@ dependencies = [
 name = "dioxus-core"
 version = "0.5.2"
 dependencies = [
+ "const_format",
  "dioxus",
  "dioxus-html",
  "dioxus-ssr",
