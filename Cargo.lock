@@ -1855,7 +1855,7 @@ dependencies = [
  "cssparser-macros",
  "dtoa-short",
  "itoa 1.0.11",
- "phf 0.11.2",
+ "phf 0.8.0",
  "smallvec",
 ]
 
@@ -5759,7 +5759,7 @@ dependencies = [
 [[package]]
 name = "manganis-cli-support"
 version = "0.2.4"
-source = "git+https://github.com/DogeDark/dioxus-collect-assets/#290448b1c7d3a4cb2b10d3d8ac33be64ee022d93"
+source = "git+https://github.com/DogeDark/dioxus-collect-assets/#6b6077150c854af6497d8b96d3a070635ab9b6c4"
 dependencies = [
  "anyhow",
  "cargo-lock",
@@ -5805,7 +5805,7 @@ dependencies = [
 [[package]]
 name = "manganis-common"
 version = "0.2.4"
-source = "git+https://github.com/DogeDark/dioxus-collect-assets/#290448b1c7d3a4cb2b10d3d8ac33be64ee022d93"
+source = "git+https://github.com/DogeDark/dioxus-collect-assets/#6b6077150c854af6497d8b96d3a070635ab9b6c4"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
