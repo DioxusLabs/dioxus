@@ -27,7 +27,6 @@ pub(crate) fn Nav() -> Element {
 #[component]
 fn SidebarSection(chapter: &'static SummaryItem<BookRoute>) -> Element {
     let link = chapter.maybe_link()?;
-
     let sections = link.nested_items.iter().map(|chapter| {
         rsx! {
             SidebarChapter { chapter }
