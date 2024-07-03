@@ -2299,13 +2299,12 @@ dependencies = [
  "ignore",
  "indicatif",
  "interprocess-docfix",
- "lazy_static",
  "log",
  "manganis-cli-support",
  "mlua",
  "notify",
+ "once_cell",
  "open",
- "openssl",
  "prettyplease",
  "rayon",
  "reqwest 0.11.27",
@@ -2568,7 +2567,6 @@ dependencies = [
 name = "dioxus-hot-reload"
 version = "0.5.2"
 dependencies = [
- "axum",
  "chrono",
  "dioxus-core 0.5.2",
  "dioxus-html",
@@ -2576,13 +2574,13 @@ dependencies = [
  "execute",
  "futures-util",
  "ignore",
- "interprocess-docfix",
  "notify",
  "once_cell",
  "serde",
  "serde_json",
  "tokio",
  "tokio-stream",
+ "tokio-tungstenite 0.23.1",
  "tracing",
 ]
 
@@ -2875,8 +2873,10 @@ dependencies = [
  "console_error_panic_hook",
  "dioxus",
  "dioxus-core 0.5.2",
+ "dioxus-hot-reload",
  "dioxus-html",
  "dioxus-interpreter-js",
+ "dioxus-signals",
  "dioxus-ssr",
  "dioxus-web",
  "futures-channel",

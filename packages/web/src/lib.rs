@@ -24,7 +24,7 @@ use std::{panic, rc::Rc};
 
 pub use crate::cfg::Config;
 use crate::hydration::SuspenseMessage;
-use dioxus_core::VirtualDom;
+use dioxus_core::{prelude::HotReloadLiteral, ScopeId, VirtualDom};
 use futures_util::{pin_mut, select, FutureExt, StreamExt};
 
 mod cfg;
@@ -184,8 +184,65 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
         }
 
         #[cfg(all(feature = "hot_reload", debug_assertions))]
-        if let Some(template) = template {
-            dom.replace_template(template);
+        if let Some(hr_msg) = template {
+            // Replace all templates
+            for templates in hr_msg.templates {
+                for template in templates.templates {
+                    dom.replace_template(template);
+                }
+
+                dom.runtime().on_scope(ScopeId::ROOT, || {
+                    let ctx = dioxus_signals::get_global_context();
+
+                    for (id, literal) in templates.changed_lits.iter() {
+                        match &literal {
+                            HotReloadLiteral::Fmted(f) => {
+                                if let Some(mut signal) = ctx.get_signal_with_key(&id) {
+                                    signal.set(f.clone());
+                                }
+                            }
+                            HotReloadLiteral::Float(f) => {
+                                if let Some(mut signal) = ctx.get_signal_with_key::<f64>(&id) {
+                                    signal.set(f.clone());
+                                }
+                            }
+                            HotReloadLiteral::Int(f) => {
+                                if let Some(mut signal) = ctx.get_signal_with_key::<i64>(&id) {
+                                    signal.set(f.clone());
+                                }
+                            }
+                            HotReloadLiteral::Bool(f) => {
+                                if let Some(mut signal) = ctx.get_signal_with_key::<bool>(&id) {
+                                    signal.set(f.clone());
+                                }
+                            }
+                        }
+                    }
+                });
+
+                for (id, literal) in templates.changed_lits {
+                    todo!("swap literals")
+                }
+            }
+            if !hr_msg.assets.is_empty() {
+                // it might be triggering a reload of assets
+                // invalidate all the stylesheets on the page
+                let links = web_sys::window()
+                    .unwrap()
+                    .document()
+                    .unwrap()
+                    .query_selector_all("link[rel=stylesheet]")
+                    .unwrap();
+
+                let noise = js_sys::Math::random();
+
+                for x in 0..links.length() {
+                    use wasm_bindgen::JsCast;
+                    let link: web_sys::Element = links.get(x).unwrap().unchecked_into();
+                    let href = link.get_attribute("href").unwrap();
+                    _ = link.set_attribute("href", &format!("{}?{}", href, noise));
+                }
+            }
         }
 
         #[cfg(feature = "hydrate")]

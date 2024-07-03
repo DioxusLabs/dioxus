@@ -74,18 +74,20 @@ type AttributePath = Vec<u8>;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 #[derive(Debug, PartialEq, Clone)]
-pub struct HotReload {
+pub struct HotReloadedTemplate {
+    /// List of inner templates that changed (nested blocks like for/if/component bodies)
     pub templates: Vec<Template>,
+
+    /// A map of Signal IDs to the new literals
+    /// Eventually we'll want to move this to a more efficient data structure to have one signal per rsx! call
+    pub changed_lits: HashMap<String, HotReloadLiteral>,
 
     // The location of the original call
     // This should be in the form of `file:line:col:0` - 0 since this will be the base template
     pub location: &'static str,
-
-    /// A map of Signal IDs to the new literals
-    pub changed_lits: HashMap<String, HotReloadLiteral>,
 }
 
-impl HotReload {
+impl HotReloadedTemplate {
     /// Calculate the hotreload diff between two callbodies
     pub fn new<Ctx: HotReloadingContext>(
         old: &CallBody,

@@ -8,7 +8,6 @@ pub mod config;
 pub mod create;
 pub mod init;
 pub mod link;
-pub mod plugin;
 pub mod serve;
 pub mod translate;
 
@@ -16,7 +15,7 @@ use crate::{
     cfg::{ConfigOptsBuild, ConfigOptsServe},
     custom_error,
     error::Result,
-    gen_page, Error,
+    Error,
 };
 use clap::{Parser, Subcommand};
 use html_parser::Dom;
@@ -81,11 +80,6 @@ pub enum Commands {
     #[clap(subcommand)]
     Config(config::Config),
 
-    /// Manage plugins for dioxus cli
-    #[cfg(feature = "plugin")]
-    #[clap(subcommand)]
-    Plugin(plugin::Plugin),
-
     /// Handles parsing of linker arguments for linker-based systems
     /// such as Manganis and binary patching.
     Link(link::LinkCommand),
@@ -105,9 +99,6 @@ impl Display for Commands {
             Commands::Check(_) => write!(f, "check"),
             Commands::Bundle(_) => write!(f, "bundle"),
             Commands::Link(_) => write!(f, "link"),
-
-            #[cfg(feature = "plugin")]
-            Commands::Plugin(_) => write!(f, "plugin"),
         }
     }
 }

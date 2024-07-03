@@ -362,6 +362,16 @@ pub struct WebAppConfig {
     pub base_path: Option<String>,
 }
 
+impl WebAppConfig {
+    /// Get the normalized base path for the application with `/` trimmed from both ends. If the base path is not set, this will return `.`.
+    pub fn base_path(&self) -> &str {
+        match &self.base_path {
+            Some(path) => path.trim_matches('/'),
+            None => ".",
+        }
+    }
+}
+
 impl Default for WebAppConfig {
     fn default() -> Self {
         Self {
@@ -650,11 +660,13 @@ impl CrateConfig {
         self.dioxus_config.web.pre_compress && self.release
     }
 
+    #[cfg(feature = "cli")]
     pub fn set_platform_auto_detect(&mut self, platform: Option<Platform>) -> &mut Self {
         self.extend_with_platform(self.auto_detect_platform(platform));
         self
     }
 
+    #[cfg(feature = "cli")]
     pub fn auto_detect_platform(&self, mut platform: Option<Platform>) -> Platform {
         use cargo_toml::Dependency::{Detailed, Inherited, Simple};
 

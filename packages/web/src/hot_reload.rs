@@ -1,16 +1,12 @@
 #![allow(dead_code)]
 
+use dioxus_hot_reload::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::UnboundedReceiver;
 
-use dioxus_core::Template;
-use web_sys::{console, Element};
-
-pub(crate) fn init() -> UnboundedReceiver<Template> {
+pub(crate) fn init() -> UnboundedReceiver<HotReloadMsg> {
     use wasm_bindgen::closure::Closure;
     use wasm_bindgen::JsCast;
     use web_sys::{MessageEvent, WebSocket};
-
-    use serde::Deserialize;
 
     let window = web_sys::window().unwrap();
 
@@ -30,41 +26,28 @@ pub(crate) fn init() -> UnboundedReceiver<Template> {
 
     // change the rsx when new data is received
     let cl = Closure::wrap(Box::new(move |e: MessageEvent| {
-        if let Ok(text) = e.data().dyn_into::<js_sys::JsString>() {
-            console::log_1(&text.clone().into());
+        let Ok(text) = e.data().dyn_into::<js_sys::JsString>() else {
+            return;
+        };
 
-            let string: String = text.into();
+        let string: String = text.into();
+        let leaked: &'static str = Box::leak(Box::new(string));
 
-            // tracing::info!("received: {}", string);
+        let Ok(msg) = serde_json::from_str::<DevserverMsg>(&leaked) else {
+            return;
+        };
 
-            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&string) {
-                todo!()
-                // leak the value
-                // let val: &'static serde_json::Value = Box::leak(Box::new(val));
-                // let template: Template = Template::deserialize(val).unwrap();
-                // tx.unbounded_send(template).unwrap();
-            } else {
-                // it might be triggering a reload of assets
-                // invalidate all the stylesheets on the page
-                let links = web_sys::window()
-                    .unwrap()
-                    .document()
-                    .unwrap()
-                    .query_selector_all("link[rel=stylesheet]")
-                    .unwrap();
-
-                let noise = js_sys::Math::random();
-
-                for x in 0..links.length() {
-                    let link: Element = links.get(x).unwrap().unchecked_into();
-                    let href = link.get_attribute("href").unwrap();
-                    _ = link.set_attribute("href", &format!("{}?{}", href, noise));
-                }
+        match msg {
+            DevserverMsg::HotReload(hr) => {
+                tx.unbounded_send(hr);
             }
+            DevserverMsg::Reload => {}
+            DevserverMsg::Shutdown => {}
         }
     }) as Box<dyn FnMut(MessageEvent)>);
 
     ws.set_onmessage(Some(cl.as_ref().unchecked_ref()));
+
     cl.forget();
 
     rx

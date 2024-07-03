@@ -62,7 +62,7 @@ flate2 = "1.0.22"
 tar = "0.4.38"
 zip = "0.6.2"
 tower = { workspace = true }
-lazy_static = "1.4.0"
+once_cell = "1.19.0"
 
 # plugin packages
 mlua = { version = "0.8.1", features = [
@@ -104,8 +104,8 @@ tracing = { workspace = true }
 wasm-opt = "0.116.1"
 
 # on maco, we need to specify the vendored feature on ssl when cross compiling
-[target.'cfg(target_os = "macos")'.dependencies]
-openssl = { version = "0.10", features = ["vendored"] }
+# [target.'cfg(target_os = "macos")'.dependencies]
+# openssl = { version = "0.10", features = ["vendored"] }
 
 [features]
 default = []

@@ -3,7 +3,7 @@
 use dioxus_core::{prelude::Template, VNode};
 use dioxus_rsx::{
     hot_reload::{diff_rsx, template_location, ChangedRsx, DiffResult},
-    hotreload::HotReload,
+    hotreload::HotReloadedTemplate,
     CallBody, HotReloadingContext,
 };
 use proc_macro2::TokenStream;
@@ -44,12 +44,12 @@ fn boilerplate(old: TokenStream, new: TokenStream) -> Option<Vec<Template>> {
     hotreload_callbody::<Mock>(&old, &new, location)
 }
 
-fn can_hotreload(old: TokenStream, new: TokenStream) -> Option<HotReload> {
+fn can_hotreload(old: TokenStream, new: TokenStream) -> Option<HotReloadedTemplate> {
     let old: CallBody = syn::parse2(old).unwrap();
     let new: CallBody = syn::parse2(new).unwrap();
 
     let location = "file:line:col:0";
-    let results = HotReload::new::<Mock>(&old, &new, location)?;
+    let results = HotReloadedTemplate::new::<Mock>(&old, &new, location)?;
     Some(results)
 }
 
@@ -58,7 +58,7 @@ fn hotreload_callbody<Ctx: HotReloadingContext>(
     new: &CallBody,
     location: &'static str,
 ) -> Option<Vec<Template>> {
-    let results = HotReload::new::<Ctx>(old, new, location)?;
+    let results = HotReloadedTemplate::new::<Ctx>(old, new, location)?;
     Some(results.templates)
 }
 
@@ -66,7 +66,7 @@ fn callbody_to_template<Ctx: HotReloadingContext>(
     old: &CallBody,
     location: &'static str,
 ) -> Option<Template> {
-    let results = HotReload::new::<Ctx>(old, old, location)?;
+    let results = HotReloadedTemplate::new::<Ctx>(old, old, location)?;
     Some(results.templates.first().unwrap().clone())
 }
 

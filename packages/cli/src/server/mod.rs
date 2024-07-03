@@ -3,14 +3,14 @@ use dioxus_cli_config::CrateConfig;
 use tokio::task::yield_now;
 
 mod builder;
+mod output;
 mod proxy;
 mod server;
-mod tui;
 mod watcher;
 
 use builder::*;
+use output::*;
 use server::*;
-use tui::*;
 use watcher::*;
 
 /// For *all* builds the CLI spins up a dedicated webserver, file watcher, and build infrastructure to serve the project.
@@ -18,13 +18,13 @@ use watcher::*;
 /// This includes web, desktop, mobile, fullstack, etc.
 ///
 /// Platform specifics:
-/// - Desktop:   We spin up the dev server but without a filesystem server.
-/// - Mobile:    Basically the same as desktop.
 /// - Web:       we need to attach a filesystem server to our devtools webserver to serve the project. We
 ///              want to emulate GithubPages here since most folks are deploying there and expect things like
 ///              basepath to match.
 /// - Fullstack: We spin up the same dev server but in this case the fullstack server itself needs to
 ///              proxy all dev requests to our dev server
+/// - Desktop:   We spin up the dev server but without a filesystem server.
+/// - Mobile:    Basically the same as desktop.
 ///
 /// Notes:
 /// - All filesystem changes are tracked here
@@ -41,10 +41,10 @@ use watcher::*;
 /// - I want us to be able to detect a `server_fn` in the project and then upgrade from a static server
 ///   to a dynamic one on the fly.
 pub async fn serve_all(srv: ConfigOptsServe, crt: CrateConfig) -> Result<()> {
-    let mut watchr = FileWatcher::start(&crt);
-    let mut server = DevServer::start(&srv, &crt).await;
-    let mut screen = TuiOutput::start(&srv, &crt);
-    let mut buildr = BuildEngine::start(&srv, &crt);
+    let mut server = Server::start(&srv, &crt).await;
+    let mut watchr = Watcher::start(&crt);
+    let mut screen = Output::start(&srv, &crt);
+    let mut buildr = Builder::start(&srv, &crt);
 
     loop {
         // Make sure we don't hog the CPU: these loop { select! {} } blocks can starve the executor
@@ -67,15 +67,8 @@ pub async fn serve_all(srv: ConfigOptsServe, crt: CrateConfig) -> Result<()> {
 
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients
-                if let Some(hr) = watchr.attempt_hot_reload() {
+                if let Some(hr) = watchr.attempt_hot_reload(&crt) {
                     server.send_hotreload(hr).await;
-                    continue;
-                }
-
-                // If the change is not hotreloadable, attempt to binary patch it
-                // If that change is successful, send that update to all connected clients
-                if let Some(bp) = watchr.attempt_binary_patch() {
-                    server.send_binary_patch(bp).await;
                     continue;
                 }
 
@@ -86,7 +79,7 @@ pub async fn serve_all(srv: ConfigOptsServe, crt: CrateConfig) -> Result<()> {
             }
 
             // reload the page
-            _ = server.wait() => {
+            new_socket = server.wait() => {
                 // Run the server in the background
                 // Waiting for updates here lets us tap into when clients are added/removed
             }
@@ -101,7 +94,7 @@ pub async fn serve_all(srv: ConfigOptsServe, crt: CrateConfig) -> Result<()> {
             // Handle input from the user using our settings
             input = screen.wait() => {
                 // If the user wants to shutdown the server, break the loop
-                if matches!(input, tui::TuiInput::Shutdown) {
+                if matches!(input, output::TuiInput::Shutdown) {
                     break;
                 }
 

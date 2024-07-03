@@ -2,7 +2,7 @@ use super::{
     hot_reload_diff::{diff_rsx, DiffResult},
     ChangedRsx,
 };
-use crate::{innerlude::CallBody, HotReloadingContext};
+use crate::{innerlude::CallBody, HotReloadedTemplate, HotReloadingContext};
 use dioxus_core::{
     prelude::{HotReloadLiteral, HotreloadedLiteral, TemplateAttribute, TemplateNode},
     Template,
@@ -13,19 +13,10 @@ pub use proc_macro2::TokenStream;
 pub use std::collections::HashMap;
 pub use std::sync::Mutex;
 pub use std::time::SystemTime;
-use std::{collections::HashSet, ffi::OsStr,  path::PathBuf};
+use std::{collections::HashSet, ffi::OsStr, path::PathBuf};
 pub use std::{fs, io, path::Path};
 pub use std::{fs::File, io::Read};
 use syn::spanned::Spanned;
-
-pub enum UpdateResult {
-    UpdatedRsx {
-        templates: Vec<Template>,
-        changed_lits: Vec<HotreloadedLiteral>,
-    },
-
-    NeedsRebuild,
-}
 
 pub struct FileMap {
     pub map: HashMap<PathBuf, CachedSynFile>,
@@ -43,7 +34,6 @@ pub struct CachedSynFile {
     pub raw: String,
     pub path: PathBuf,
     pub templates: HashMap<&'static str, Template>,
-    pub tracked_assets: HashSet<PathBuf>,
 }
 
 impl FileMap {
@@ -91,7 +81,7 @@ impl FileMap {
         &mut self,
         file_path: &Path,
         crate_dir: &Path,
-    ) -> Result<UpdateResult, HotreloadError> {
+    ) -> Result<Vec<HotReloadedTemplate>, HotreloadError> {
         let src = std::fs::read_to_string(file_path)?;
 
         // If we can't parse the contents we want to pass it off to the build system to tell the user that there's a syntax error
@@ -111,7 +101,7 @@ impl FileMap {
             // merge the new map into the old map
             self.map.extend(map.map);
 
-            return Ok(UpdateResult::NeedsRebuild);
+            return Err(HotreloadError::Notreloadable);
         };
 
         // If the cached file is not a valid rsx file, rebuild the project, forcing errors
@@ -132,16 +122,14 @@ impl FileMap {
                     raw: src.clone(),
                     path: file_path.to_path_buf(),
                     templates: HashMap::new(),
-                    tracked_assets: HashSet::new(),
                 };
 
                 self.map.insert(file_path.to_path_buf(), cached_file);
-                return Ok(UpdateResult::NeedsRebuild);
+                return Err(HotreloadError::Notreloadable);
             }
         };
 
-        let mut template_list: Vec<Template> = Vec::new();
-        let mut changed_strings: Vec<HotreloadedLiteral> = Vec::new();
+        let mut out_templates = vec![];
 
         for calls in instances.into_iter() {
             let ChangedRsx { old, new } = calls;
@@ -171,96 +159,47 @@ impl FileMap {
             let leaked_location = Box::leak(template_location(old_start, file).into_boxed_str());
 
             // Returns a list of templates that are hotreloadable
-            let templates = crate::hotreload::HotReload::new::<Ctx>(
+            let hotreload_result = crate::hotreload::HotReloadedTemplate::new::<Ctx>(
                 &old_call_body,
                 &new_call_body,
                 leaked_location,
             );
 
             // if the template is not hotreloadable, we need to do a full rebuild
-            let Some(results) = templates else {
-                return Ok(UpdateResult::NeedsRebuild);
+            let Some(mut results) = hotreload_result else {
+                return Err(HotreloadError::Notreloadable);
             };
 
-            // Load the templates
-            for template in results.templates {
+            // Be careful to not send the bad templates
+            results.templates.retain(|template| {
                 // dioxus cannot handle empty templates...
-                // todo: I think it can? or we just skip them nowa
                 if template.roots.is_empty() {
-                    continue;
+                    return false;
                 }
 
                 // if the template is the same, don't send it
-                if let Some(old_template) = old_cached.templates.get(template.name) {
-                    if old_template == &template {
-                        continue;
-                    }
+                if old_cached.templates.get(template.name) == Some(template) {
+                    return false;
                 };
 
                 // Update the most recent idea of the template
                 // This lets us know if the template has changed so we don't need to send it
-                old_cached.templates.insert(template.name, template);
+                old_cached.templates.insert(template.name, template.clone());
 
-                // Track any new assets
-                old_cached
-                    .tracked_assets
-                    .extend(Self::populate_assets(template));
+                true
+            });
 
-                template_list.push(template);
-            }
-
-            // // And then any formatted strings
-            for (key, value) in results.changed_lits {
-                changed_strings.push(HotreloadedLiteral {
-                    name: key,
-                    value: HotReloadLiteral::from(value),
-                });
-            }
+            out_templates.push(results);
         }
 
-        Ok(UpdateResult::UpdatedRsx {
-            templates: template_list,
-            changed_lits: changed_strings,
-        })
-    }
-
-    fn populate_assets(template: Template) -> HashSet<PathBuf> {
-        fn collect_assetlike_attrs(node: &TemplateNode, asset_urls: &mut HashSet<PathBuf>) {
-            if let TemplateNode::Element {
-                attrs, children, ..
-            } = node
-            {
-                for attr in attrs.iter() {
-                    if let TemplateAttribute::Static { name, value, .. } = attr {
-                        if *name == "src" || *name == "href" {
-                            asset_urls.insert(PathBuf::from(*value));
-                        }
-                    }
-                }
-
-                for child in children.iter() {
-                    collect_assetlike_attrs(child, asset_urls);
-                }
-            }
-        }
-
-        let mut asset_urls = HashSet::new();
-
-        for node in template.roots {
-            collect_assetlike_attrs(node, &mut asset_urls);
-        }
-
-        asset_urls
+        Ok(out_templates)
     }
 
     /// add the template to an existing file in the filemap if it exists
     /// create a new file if it doesn't exist
     pub fn insert(&mut self, path: PathBuf, template: Template) {
-        let tracked_assets = Self::populate_assets(template);
-
         if self.map.contains_key(&path) {
             let entry = self.map.get_mut(&path).unwrap();
-            entry.tracked_assets.extend(tracked_assets);
             entry.templates.insert(template.name, template);
         } else {
             self.map.insert(
@@ -268,24 +207,10 @@ impl FileMap {
                 CachedSynFile {
                     raw: String::new(),
                     path,
-                    tracked_assets,
                     templates: HashMap::from([(template.name, template)]),
                 },
             );
         }
-    }
-
-    pub fn tracked_assets(&self) -> HashSet<PathBuf> {
-        self.map
-            .values()
-            .flat_map(|file| file.tracked_assets.iter().cloned())
-            .collect()
-    }
-
-    pub fn is_tracking_asset(&self, path: &PathBuf) -> Option<&CachedSynFile> {
-        self.map
-            .values()
-            .find(|file| file.tracked_assets.contains(path))
     }
 
     fn child_in_workspace(&mut self, crate_dir: &Path) -> io::Result<Option<PathBuf>> {
@@ -367,7 +292,6 @@ fn find_rs_files(root: PathBuf, filter: &mut impl FnMut(&Path) -> bool) -> FileM
                         raw: src.clone(),
                         path: root.clone(),
                         templates: HashMap::new(),
-                        tracked_assets: HashSet::new(),
                     };
 
                     // track assets while we're here
@@ -388,6 +312,7 @@ pub enum HotreloadError {
     Failure(io::Error),
     Parse,
     NoPreviousBuild,
+    Notreloadable,
 }
 
 impl std::fmt::Display for HotreloadError {
@@ -396,6 +321,7 @@ impl std::fmt::Display for HotreloadError {
             Self::Failure(err) => write!(f, "Failed to parse file: {}", err),
             Self::Parse => write!(f, "Failed to parse file"),
             Self::NoPreviousBuild => write!(f, "No previous build found"),
+            Self::Notreloadable => write!(f, "Template is not hotreloadable"),
         }
     }
 }

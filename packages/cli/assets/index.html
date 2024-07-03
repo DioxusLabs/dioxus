@@ -1,38 +1,14 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <title>{app_title}</title>
-    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta charset="UTF-8" />
-    <link
-      rel="preload"
-      href="/{base_path}/assets/dioxus/{app_name}.js"
-      as="style"
-    />
-    <link
-      rel="preload"
-      href="/{base_path}/assets/dioxus/{app_name}_bg.wasm"
-      as="fetch"
-      type="application/wasm"
-      crossorigin=""
-    />
-    {style_include}
-  </head>
-  <body>
-    <div id="main"></div>
-    <script>
-      // We can't use a module script here because we need to start the script immediately when streaming
-      import("/{base_path}/assets/dioxus/{app_name}.js").then(
-        ({ default: init }) => {
-          init("/{base_path}/assets/dioxus/{app_name}_bg.wasm").then((wasm) => {
-            if (wasm.__wbindgen_start == undefined) {
-              wasm.main();
-            }
-          });
-        }
-      );
-    </script>
-    {script_include}
-  </body>
+    <head>
+        <title>{app_title}</title>
+        <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta charset="UTF-8">
+        {style_include}
+    </head>
+    <body>
+        <div id="main"></div>
+        {script_include}
+    </body>
 </html>

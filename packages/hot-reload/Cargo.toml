@@ -10,11 +10,10 @@ description = "Hot reloading utilities for Dioxus"
 keywords = ["dom", "ui", "gui", "react", "hot-reloading"]
 
 [dependencies]
-dioxus-rsx = { workspace = true }
+dioxus-rsx = { workspace = true, features = ["serde"] }
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-html = { workspace = true, optional = true }
 
-interprocess = { workspace = true }
 notify = { version = "5.0.0", optional = true }
 chrono = { version = "0.4.24", default-features = false, features = ["clock"], optional = true }
 serde_json = "1.0.91"
@@ -24,11 +23,11 @@ once_cell = { version = "1.17.0", optional = true }
 ignore = { version = "0.4.19", optional = true }
 
 # hot reloading serve
-axum = { workspace = true, features = ["ws"], optional = true }
 tokio-stream = { version = "0.1.12", features = ["sync"], optional = true }
 futures-util = { workspace = true, features = ["async-await-macro"], optional = true }
 tokio = { workspace = true, features = ["sync"], optional = true }
-tracing.workspace = true
+tracing = { workspace = true }
+tokio-tungstenite = { version = "0.23.1", optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
@@ -37,7 +36,7 @@ tokio = { workspace = true, features = ["full"] }
 default = ["dioxus-html"]
 custom_file_watcher = ["dep:ignore", "dep:chrono", "dep:notify", "dep:execute", "dep:once_cell", "dep:ignore"]
 file_watcher = ["custom_file_watcher", "dioxus-html/hot-reload-context", "dioxus-rsx/hot_reload"]
-serve = ["dep:axum", "dep:tokio-stream", "dep:futures-util", "dep:tokio", "file_watcher"]
+serve = [ "dep:tokio-stream", "dep:futures-util", "dep:tokio", "file_watcher", "dep:tokio-tungstenite"]
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

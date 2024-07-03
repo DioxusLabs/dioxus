@@ -68,14 +68,14 @@ impl Drop for AssetConfigDropGuard {
     }
 }
 
-pub fn copy_assets_dir(config: &CrateConfig, platform: Platform) -> anyhow::Result<()> {
+pub fn copy_assets_dir(config: &CrateConfig, precomprsess_assets: bool) -> anyhow::Result<()> {
     tracing::info!("Copying public assets to the output directory...");
     let out_dir = config.out_dir();
     let asset_dir = config.asset_dir();
 
     if asset_dir.is_dir() {
         // Only pre-compress the assets from the web build. Desktop assets are not served, so they don't need to be pre_compressed
-        let pre_compress = platform == Platform::Web && config.should_pre_compress_web_assets();
+        let pre_compress = precomprsess_assets && config.should_pre_compress_web_assets();
 
         copy_dir_to(asset_dir, out_dir, pre_compress)?;
     }

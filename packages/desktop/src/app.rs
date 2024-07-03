@@ -152,9 +152,9 @@ impl App {
             return;
         };
 
-        tokio::spawn(async move {
-            //
-        });
+        // tokio::spawn(async move {
+        //     //
+        // });
 
         // dioxus_hot_reload::connect_at(cfg.target_dir.join("dioxusin"), {
         //     let proxy = self.shared.proxy.clone();
@@ -330,53 +330,56 @@ impl App {
         not(target_os = "android"),
         not(target_os = "ios")
     ))]
-    pub fn handle_hot_reload_msg(&mut self, msg: dioxus_hot_reload::HotReloadMsg) {
+    pub fn handle_hot_reload_msg(&mut self, msg: dioxus_hot_reload::DevserverMsg) {
         use dioxus_core::prelude::{HotReloadLiteral, ScopeId};
+        use dioxus_hot_reload::HotReloadMsg;
         use dioxus_signals::Writable;
 
         match msg {
-            dioxus_hot_reload::HotReloadMsg::Update {
-                assets,
-                templates,
-                changed_strings,
-            } => {
+            dioxus_hot_reload::DevserverMsg::HotReload(HotReloadMsg { templates, assets }) => {
                 for webview in self.webviews.values_mut() {
                     for template in templates.iter() {
-                        webview.dom.replace_template(*template);
-                    }
+                        for template in template.templates.iter() {
+                            webview.dom.replace_template(*template);
+                        }
 
-                    // if there's a signal runtime, we're gonna try updating the signals using the IDs
-                    // as the name for the global signal
-                    webview.dom.runtime().on_scope(ScopeId::ROOT, || {
-                        let ctx = dioxus_signals::get_global_context();
+                        // if there's a signal runtime, we're gonna try updating the signals using the IDs
+                        // as the name for the global signal
+                        webview.dom.runtime().on_scope(ScopeId::ROOT, || {
+                            let ctx = dioxus_signals::get_global_context();
 
-                        for literal in changed_strings.iter() {
-                            let id = literal.name.clone();
-
-                            match &literal.value {
-                                HotReloadLiteral::Fmted(f) => {
-                                    if let Some(mut signal) = ctx.get_signal_with_key(&id) {
-                                        signal.set(f.clone());
+                            for (id, literal) in template.changed_lits.iter() {
+                                match &literal {
+                                    HotReloadLiteral::Fmted(f) => {
+                                        if let Some(mut signal) = ctx.get_signal_with_key(&id) {
+                                            signal.set(f.clone());
+                                        }
                                     }
-                                }
-                                HotReloadLiteral::Float(f) => {
-                                    if let Some(mut signal) = ctx.get_signal_with_key::<f64>(&id) {
-                                        signal.set(f.clone());
+                                    HotReloadLiteral::Float(f) => {
+                                        if let Some(mut signal) =
+                                            ctx.get_signal_with_key::<f64>(&id)
+                                        {
+                                            signal.set(f.clone());
+                                        }
                                     }
-                                }
-                                HotReloadLiteral::Int(f) => {
-                                    if let Some(mut signal) = ctx.get_signal_with_key::<i64>(&id) {
-                                        signal.set(f.clone());
+                                    HotReloadLiteral::Int(f) => {
+                                        if let Some(mut signal) =
+                                            ctx.get_signal_with_key::<i64>(&id)
+                                        {
+                                            signal.set(f.clone());
+                                        }
                                     }
-                                }
-                                HotReloadLiteral::Bool(f) => {
-                                    if let Some(mut signal) = ctx.get_signal_with_key::<bool>(&id) {
-                                        signal.set(f.clone());
+                                    HotReloadLiteral::Bool(f) => {
+                                        if let Some(mut signal) =
+                                            ctx.get_signal_with_key::<bool>(&id)
+                                        {
+                                            signal.set(f.clone());
+                                        }
                                     }
                                 }
                             }
-                        }
-                    });
+                        });
+                    }
 
                     webview.poll_vdom();
                 }
@@ -387,7 +390,8 @@ impl App {
                     }
                 }
             }
-            dioxus_hot_reload::HotReloadMsg::Shutdown => {
+            dioxus_hot_reload::DevserverMsg::Reload => {}
+            dioxus_hot_reload::DevserverMsg::Shutdown => {
                 self.control_flow = ControlFlow::Exit;
             }
         }
