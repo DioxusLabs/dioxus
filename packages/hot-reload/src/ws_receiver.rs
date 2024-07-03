@@ -1,43 +1,52 @@
-use futures_util::StreamExt;
-use serde::{Deserialize, Serialize};
-use tokio::net::TcpStream;
-use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
-
 use crate::DevserverMsg;
+use futures_util::{SinkExt, StreamExt};
+use tokio::net::TcpStream;
+use tokio_tungstenite::{
+    tungstenite::{Message, Result as TtResult},
+    MaybeTlsStream, WebSocketStream,
+};
 
+/// A receiver for messages from the devserver
+///
+/// Calling `next` will watch the channel for the next valid message from the devserver
 pub struct NativeReceiver {
     socket: WebSocketStream<MaybeTlsStream<TcpStream>>,
 }
 
 impl NativeReceiver {
-    pub async fn connect(uri: String) -> Self {
-        let (socket, ws) = tokio_tungstenite::connect_async(&uri).await.unwrap();
-
-        Self { socket }
+    /// Connect to the devserver
+    pub async fn connect(url: String) -> TtResult<Self> {
+        let (socket, _ws) = tokio_tungstenite::connect_async(&url).await?;
+        Ok(Self { socket })
     }
 
-    pub async fn next(
-        &mut self,
-    ) -> Option<Result<DevserverMsg, tokio_tungstenite::tungstenite::Error>> {
-        let res = self.socket.next().await;
+    /// Wait for the next message from the devserver
+    ///
+    /// Returns None when the connection is closed or socket.next() returns None
+    pub async fn next(&mut self) -> Option<TtResult<DevserverMsg>> {
+        loop {
+            let res = self.socket.next().await?;
 
-        // res.map(|f| {
-        //     f.map(|f| {
-        //         println!("Received message: {:?}", f);
-
-        //         match f {
-        //             Message::Text(_) => todo!(),
-        //             Message::Binary(_) => todo!(),
-        //             Message::Ping(_) => todo!(),
-        //             Message::Pong(_) => todo!(),
-        //             Message::Close(_) => todo!(),
-        //             Message::Frame(_) => todo!(),
-        //         }
-
-        //         f
-        //     })
-        // });
-
-        todo!()
+            match res {
+                Ok(res) => match res {
+                    Message::Text(text) => {
+                        let leaked: &'static str = Box::leak(text.into_boxed_str());
+                        let msg = serde_json::from_str::<DevserverMsg>(&leaked);
+                        if let Ok(msg) = msg {
+                            return Some(Ok(msg));
+                        }
+                    }
+                    // send a pong
+                    Message::Ping(_) => {
+                        let _ = self.socket.send(Message::Pong(vec![])).await;
+                    }
+                    Message::Close(_) => return None,
+                    Message::Binary(_) => {}
+                    Message::Pong(_) => {}
+                    Message::Frame(_) => {}
+                },
+                Err(e) => return Some(Err(e)),
+            };
+        }
     }
 }

@@ -1,20 +1,19 @@
-use std::{
-    io::{BufRead, BufReader},
-    path::PathBuf,
-};
-
-use dioxus_core::{prelude::HotreloadedLiteral, Template};
-#[cfg(feature = "file_watcher")]
-pub use dioxus_html::HtmlCtx;
 use dioxus_rsx::HotReloadedTemplate;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 #[cfg(feature = "serve")]
 mod ws_receiver;
 
+#[cfg(feature = "serve")]
+pub use ws_receiver::*;
+
 /// The script to inject into the page to reconnect to server if the connection is lost
 #[cfg(feature = "serve")]
 pub const RECONNECT_SCRIPT: &str = include_str!("assets/autoreload.js");
+
+#[cfg(feature = "file_watcher")]
+pub use dioxus_html::HtmlCtx;
 
 /// A message the hot reloading server sends to the client
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
