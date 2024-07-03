@@ -256,10 +256,11 @@ where
             .serve_static_assets(cfg.assets_path.clone())
             .register_server_functions();
 
-        #[cfg(all(feature = "hot-reload", debug_assertions))]
+        // #[cfg(all(feature = "hot-reload", debug_assertions))]
         {
-            use dioxus_hot_reload::HotReloadRouterExt;
-            server = server.forward_cli_hot_reloading();
+            server = server;
+            //     use dioxus_hot_reload::HotReloadRouterExt;
+            //     server = server.forward_cli_hot_reloading();
         }
 
         server.fallback(

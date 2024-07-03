@@ -132,13 +132,11 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
             // If the changes were just some rsx, we can just update the template
             //
             // However... if the changes involved code in the rsx itself, this should actually be a CodeChanged
-            DiffResult::RsxChanged {
-                rsx_calls: instances,
-            } => instances,
+            DiffResult::RsxChanged { rsx_calls } => rsx_calls,
 
             // If the changes were some code, we should insert the file into the map and rebuild
             // todo: not sure we even need to put the cached file into the map, but whatever
-            DiffResult::CodeChanged(_) => {
+            DiffResult::CodeChanged => {
                 let cached_file = CachedSynFile {
                     raw: src.clone(),
                     path: file_path.to_path_buf(),
@@ -160,7 +158,7 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
             let old_start = old.span().start();
 
             let old_parsed = syn::parse2::<CallBody>(old.tokens);
-            let new_parsed = syn::parse2::<CallBody>(new);
+            let new_parsed = syn::parse2::<CallBody>(new.tokens);
             let (Ok(old_call_body), Ok(new_call_body)) = (old_parsed, new_parsed) else {
                 continue;
             };

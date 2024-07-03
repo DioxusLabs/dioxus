@@ -3,7 +3,7 @@
 use futures_channel::mpsc::UnboundedReceiver;
 
 use dioxus_core::Template;
-use web_sys::Element;
+use web_sys::{console, Element};
 
 pub(crate) fn init() -> UnboundedReceiver<Template> {
     use wasm_bindgen::closure::Closure;
@@ -31,13 +31,18 @@ pub(crate) fn init() -> UnboundedReceiver<Template> {
     // change the rsx when new data is received
     let cl = Closure::wrap(Box::new(move |e: MessageEvent| {
         if let Ok(text) = e.data().dyn_into::<js_sys::JsString>() {
+            console::log_1(&text.clone().into());
+
             let string: String = text.into();
 
+            // tracing::info!("received: {}", string);
+
             if let Ok(val) = serde_json::from_str::<serde_json::Value>(&string) {
+                todo!()
                 // leak the value
-                let val: &'static serde_json::Value = Box::leak(Box::new(val));
-                let template: Template = Template::deserialize(val).unwrap();
-                tx.unbounded_send(template).unwrap();
+                // let val: &'static serde_json::Value = Box::leak(Box::new(val));
+                // let template: Template = Template::deserialize(val).unwrap();
+                // tx.unbounded_send(template).unwrap();
             } else {
                 // it might be triggering a reload of assets
                 // invalidate all the stylesheets on the page

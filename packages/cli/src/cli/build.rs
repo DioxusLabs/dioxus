@@ -1,4 +1,4 @@
-use crate::{assets::AssetConfigDropGuard, server::fullstack};
+use crate::assets::AssetConfigDropGuard;
 use dioxus_cli_config::Platform;
 
 use super::*;

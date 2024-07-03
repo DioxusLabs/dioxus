@@ -3,7 +3,6 @@ use manganis_cli_support::AssetManifest;
 
 use super::*;
 use cargo_toml::Dependency::{Detailed, Inherited, Simple};
-use std::fs::create_dir_all;
 
 /// Run the WASM project on dev-server
 #[derive(Clone, Debug, Parser)]
@@ -62,33 +61,7 @@ impl Serve {
         let platform = platform.unwrap_or(crate_config.dioxus_config.application.default_platform);
         crate_config.extend_with_platform(platform);
 
-        // start the develop server
-        use server::{desktop, fullstack, web};
-        match platform {
-            Platform::Web => web::startup(crate_config.clone(), &serve_cfg).await?,
-            Platform::Desktop => desktop::startup(crate_config.clone(), &serve_cfg).await?,
-            Platform::Fullstack | Platform::StaticGeneration => {
-                fullstack::startup(crate_config.clone(), &serve_cfg).await?
-            }
-            _ => unreachable!(),
-        }
-
-        Ok(())
-    }
-
-    pub fn regen_dev_page(
-        crate_config: &CrateConfig,
-        manifest: Option<&AssetManifest>,
-    ) -> anyhow::Result<()> {
-        let serve_html = gen_page(crate_config, manifest, true);
-
-        let dist_path = crate_config.out_dir();
-        if !dist_path.is_dir() {
-            create_dir_all(&dist_path)?;
-        }
-        let index_path = dist_path.join("index.html");
-        let mut file = std::fs::File::create(index_path)?;
-        file.write_all(serve_html.as_bytes())?;
+        crate::server::dev_server(serve_cfg).await?;
 
         Ok(())
     }

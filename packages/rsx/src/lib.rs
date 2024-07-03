@@ -61,6 +61,7 @@ mod rsx_call;
 mod template_body;
 mod text_node;
 
+mod collector;
 mod diagnostics;
 mod expr_node;
 pub mod hotreload;

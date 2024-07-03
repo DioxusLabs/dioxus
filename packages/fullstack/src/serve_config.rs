@@ -1,5 +1,5 @@
-#![allow(non_snake_case)]
 //! Configuration for how to serve a Dioxus application
+#![allow(non_snake_case)]
 
 use std::fs::File;
 use std::io::Read;
@@ -78,6 +78,7 @@ impl ServeConfigBuilder {
             .unwrap_or_else(|| load_index_path(index_path));
 
         let index = load_index_html(index_html, root_id);
+
         ServeConfig {
             index,
             assets_path,
@@ -131,7 +132,6 @@ pub(crate) struct IndexHtml {
 #[derive(Clone)]
 pub struct ServeConfig {
     pub(crate) index: IndexHtml,
-    #[allow(dead_code)]
     pub(crate) assets_path: PathBuf,
     pub(crate) incremental: Option<dioxus_ssr::incremental::IncrementalRendererConfig>,
 }

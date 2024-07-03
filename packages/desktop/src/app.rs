@@ -152,12 +152,16 @@ impl App {
             return;
         };
 
-        dioxus_hot_reload::connect_at(cfg.target_dir.join("dioxusin"), {
-            let proxy = self.shared.proxy.clone();
-            move |template| {
-                let _ = proxy.send_event(UserWindowEvent::HotReloadEvent(template));
-            }
+        tokio::spawn(async move {
+            //
         });
+
+        // dioxus_hot_reload::connect_at(cfg.target_dir.join("dioxusin"), {
+        //     let proxy = self.shared.proxy.clone();
+        //     move |template| {
+        //         let _ = proxy.send_event(UserWindowEvent::HotReloadEvent(template));
+        //     }
+        // });
     }
 
     pub fn handle_new_window(&mut self) {

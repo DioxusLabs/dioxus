@@ -9,15 +9,16 @@ pub use dioxus_html::HtmlCtx;
 use interprocess::local_socket::LocalSocketStream;
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "custom_file_watcher")]
-mod file_watcher;
-#[cfg(feature = "custom_file_watcher")]
-pub use file_watcher::*;
+// #[cfg(feature = "custom_file_watcher")]
+// mod file_watcher;
+// #[cfg(feature = "custom_file_watcher")]
+// pub use file_watcher::*;
 
-#[cfg(feature = "serve")]
-mod websocket;
-#[cfg(feature = "serve")]
-pub use websocket::*;
+// #[cfg(feature = "serve")]
+// mod websocket;
+
+// #[cfg(feature = "serve")]
+// pub use websocket::*;
 
 #[cfg(feature = "serve")]
 /// The script to inject into the page to reconnect to server if the connection is lost
@@ -75,44 +76,45 @@ pub fn connect(callback: impl FnMut(HotReloadMsg) + Send + 'static) {
 }
 
 pub fn connect_at(socket: PathBuf, mut callback: impl FnMut(HotReloadMsg) + Send + 'static) {
-    std::thread::spawn(move || {
-        // There might be a socket since the we're not running under the hot reloading server
-        let stream = if cfg!(windows) {
-            LocalSocketStream::connect("@dioxusin")
-        } else {
-            LocalSocketStream::connect(socket.clone())
-        };
-        let Ok(socket) = stream else {
-            println!(
-                "could not find hot reloading server at {:?}, make sure it's running",
-                socket
-            );
-            return;
-        };
+    todo!();
+    // std::thread::spawn(move || {
+    //     // There might be a socket since the we're not running under the hot reloading server
+    //     let stream = if cfg!(windows) {
+    //         LocalSocketStream::connect("@dioxusin")
+    //     } else {
+    //         LocalSocketStream::connect(socket.clone())
+    //     };
+    //     let Ok(socket) = stream else {
+    //         println!(
+    //             "could not find hot reloading server at {:?}, make sure it's running",
+    //             socket
+    //         );
+    //         return;
+    //     };
 
-        let mut buf_reader = BufReader::new(socket);
+    //     let mut buf_reader = BufReader::new(socket);
 
-        loop {
-            let mut buf = String::new();
+    //     loop {
+    //         let mut buf = String::new();
 
-            if let Err(err) = buf_reader.read_line(&mut buf) {
-                if err.kind() != std::io::ErrorKind::WouldBlock {
-                    break;
-                }
-            }
+    //         if let Err(err) = buf_reader.read_line(&mut buf) {
+    //             if err.kind() != std::io::ErrorKind::WouldBlock {
+    //                 break;
+    //             }
+    //         }
 
-            let from_buffer = Box::leak(buf.into_boxed_str());
+    //         let from_buffer = Box::leak(buf.into_boxed_str());
 
-            let template = match serde_json::from_str(from_buffer) {
-                Ok(template) => template,
-                Err(_err) => {
-                    continue;
-                }
-            };
+    //         let template = match serde_json::from_str(from_buffer) {
+    //             Ok(template) => template,
+    //             Err(_err) => {
+    //                 continue;
+    //             }
+    //         };
 
-            callback(template);
-        }
-    });
+    //         callback(template);
+    //     }
+    // });
 }
 
 /// Start the hot reloading server with the current directory as the root

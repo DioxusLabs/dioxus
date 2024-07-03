@@ -1,11 +1,10 @@
-use proc_macro2::TokenStream;
 use quote::ToTokens;
 use syn::{Expr, File, Item, Macro, Stmt, TraitItem};
 
 #[derive(Debug)]
 pub enum DiffResult {
     /// Non-rsx was changed in the file
-    CodeChanged(NotreloadableReason),
+    CodeChanged,
 
     /// Rsx was changed in the file
     ///
@@ -14,19 +13,12 @@ pub enum DiffResult {
 }
 
 #[derive(Debug)]
-pub enum NotreloadableReason {
-    RootMismatch,
-
-    RsxMismatch,
-}
-
-#[derive(Debug)]
 pub struct ChangedRsx {
     /// The macro that was changed
     pub old: Macro,
 
     /// The new tokens for the macro
-    pub new: TokenStream,
+    pub new: Macro,
 }
 
 /// Find any rsx calls in the given file and return a list of all the rsx calls that have changed.
@@ -45,7 +37,7 @@ pub fn diff_rsx(new: &File, old: &File) -> DiffResult {
                 .map(|i| i.to_token_stream().to_string())
                 .collect::<Vec<_>>()
         );
-        return DiffResult::CodeChanged(NotreloadableReason::RootMismatch);
+        return DiffResult::CodeChanged;
     }
 
     for (new, old) in new.items.iter().zip(old.items.iter()) {
@@ -56,7 +48,7 @@ pub fn diff_rsx(new: &File, old: &File) -> DiffResult {
                 old.to_token_stream().to_string()
             );
 
-            return DiffResult::CodeChanged(NotreloadableReason::RsxMismatch);
+            return DiffResult::CodeChanged;
         }
     }
 
@@ -658,7 +650,7 @@ fn find_rsx_macro(
     ) {
         rsx_calls.push(ChangedRsx {
             old: old_mac.clone(),
-            new: new_mac.tokens.clone(),
+            new: new_mac.clone(),
         });
         false
     } else {
