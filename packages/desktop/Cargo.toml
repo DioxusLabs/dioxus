@@ -17,7 +17,7 @@ dioxus-html = { workspace = true, features = [
     "mounted",
     "eval",
 ] }
-dioxus-signals = { workspace = true }
+dioxus-signals = { workspace = true, optional = true }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol", "eval"] }
 dioxus-cli-config = { workspace = true, features = ["read-config"] }
 generational-box = { workspace = true }
@@ -76,7 +76,7 @@ tokio_runtime = ["dep:tokio"]
 fullscreen = ["wry/fullscreen"]
 transparent = ["wry/transparent"]
 devtools = ["wry/devtools"]
-hot-reload = ["dep:dioxus-hot-reload"]
+hot-reload = ["dep:dioxus-hot-reload", "dioxus-signals"]
 gnu = []
 
 [package.metadata.docs.rs]

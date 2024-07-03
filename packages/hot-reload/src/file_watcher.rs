@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     io::Write,
     path::PathBuf,
     str::FromStr,
@@ -367,7 +366,7 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                             if send_msg(
                                 HotReloadMsg::Update {
                                     templates: templates.clone(),
-                                    changed_strings: vec![],
+                                    changed_strings: changed_lits.clone(),
                                     assets: vec![],
                                 },
                                 channel,

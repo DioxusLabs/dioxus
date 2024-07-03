@@ -21,18 +21,6 @@ fn rsx_writeout_snapshot() {
     assert_eq!(el.name, "circle");
 
     assert_eq!(el.raw_attributes.len(), 5);
-
-    // let mut context = DynamicContext::default();
-    // let o = context.render_static_node(&body.roots[0]);
-
-    // hi!!!!!
-    // you're probably here because you changed something in how rsx! generates templates and need to update the snapshot
-    // This is a snapshot test. Make sure the contents are checked before committing a new snapshot.
-    // let stability_tested = o.to_string();
-    // assert_eq!(
-    //     stability_tested.trim(),
-    //     include_str!("./parsing/multiexpr.expanded.rsx").trim()
-    // );
 }
 
 fn parse_from_str(contents: &str) -> CallBody {
@@ -78,10 +66,6 @@ fn how_do_spans_work_again() {
             div {
                 h1 {}
                 for item in items {}
-                // something-cool {}
-                // if true {
-                //     div {}
-                // }
                 "hi!"
                 "goodbye!"
             }
@@ -138,15 +122,7 @@ fn callbody_ctx() {
     dbg!(cb.template_idx.get());
     dbg!(cb.ifmt_idx.get());
 
-    let template = cb.body.to_template::<Empty>();
-
-    // for attr in body.attr_paths.iter() {
-    //     dbg!(body.get_dyn_attr(&attr));
-    // }
-
-    // for root in body.node_paths.iter() {
-    //     dbg!(body.get_dyn_node(&root));
-    // }
+    let _template = cb.body.to_template::<Empty>();
 }
 
 #[test]
@@ -246,10 +222,8 @@ fn complex_kitchen_sink() {
         }
     };
 
-    let cb: CallBody = syn::parse2(item).unwrap();
+    let _cb: CallBody = syn::parse2(item).unwrap();
 }
-
-// use dioxus_rsx::utils::PrettyUnparse;
 
 #[test]
 fn attrs_expand() {

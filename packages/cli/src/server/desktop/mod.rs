@@ -172,7 +172,6 @@ async fn start_desktop_hot_reload(
                                     },
                                     &mut connection,
                                 ) {
-                                    panic!("failed to serialize hot reload message at root");
                                     continue;
                                 }
                                 channels.lock().unwrap().push(connection);

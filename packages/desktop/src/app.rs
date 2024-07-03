@@ -155,7 +155,6 @@ impl App {
         dioxus_hot_reload::connect_at(cfg.target_dir.join("dioxusin"), {
             let proxy = self.shared.proxy.clone();
             move |template| {
-                println!("Proxying message {template:?}");
                 let _ = proxy.send_event(UserWindowEvent::HotReloadEvent(template));
             }
         });
@@ -331,8 +330,6 @@ impl App {
         use dioxus_core::prelude::{HotReloadLiteral, ScopeId};
         use dioxus_signals::Writable;
 
-        println!("hotreloading {msg:?}");
-
         match msg {
             dioxus_hot_reload::HotReloadMsg::Update {
                 assets,
@@ -341,7 +338,6 @@ impl App {
             } => {
                 for webview in self.webviews.values_mut() {
                     for template in templates.iter() {
-                        println!("updating template in desktop {:?}", template);
                         webview.dom.replace_template(*template);
                     }
 

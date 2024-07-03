@@ -2399,7 +2399,6 @@ version = "0.5.2"
 dependencies = [
  "convert_case 0.6.0",
  "dioxus",
- "dioxus-html",
  "dioxus-rsx",
  "prettyplease",
  "proc-macro2",

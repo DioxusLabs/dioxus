@@ -41,13 +41,7 @@ fn load_files(old: &str, new: &str) -> (File, File) {
 
 assert_rsx_changed![combo];
 assert_rsx_changed![expr];
-
-// Assert that the two files are the same enough that we should attempt to hotreload them
-//
-// The contents of the rsx themselves might be different, but that doesn't mean we shouldn't try to
-// attempt to hotreload them
 assert_rsx_changed![for_];
-
 assert_rsx_changed![if_];
 assert_rsx_changed![let_];
 assert_rsx_changed![nested];
