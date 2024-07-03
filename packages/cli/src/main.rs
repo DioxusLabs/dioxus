@@ -60,10 +60,9 @@ async fn main() -> anyhow::Result<()> {
             log::warn!("You appear to be creating a Dioxus project from scratch; we will use the default config");
             DioxusConfig::default()
           });
-
             let crate_dir = dioxus_cli_config::crate_root()?;
             let dependency_paths = get_dependency_paths(&crate_dir)?;
-            init_plugins(&dioxus_config, &crate_dir, &dependency_paths).await?;
+            init_plugins(&dioxus_config, &dependency_paths).await?;
 
             let out = match other {
                 Build(opts) => opts
@@ -78,7 +77,7 @@ async fn main() -> anyhow::Result<()> {
                     .await
                     .map_err(|e| anyhow!("🚫 Serving project failed: {}", e)),
                 Plugin(opts) => opts
-                    .plugin(&dioxus_config, &crate_dir, &dependency_paths)
+                    .plugin(&dioxus_config, &dependency_paths)
                     .await
                     .map_err(|e| anyhow!("🚫 Plugin manager failed: {}", e)),
                 Bundle(opts) => opts

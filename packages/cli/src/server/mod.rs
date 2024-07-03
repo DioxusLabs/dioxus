@@ -1,7 +1,6 @@
 use crate::{
     cfg::ConfigOptsServe,
     plugin::{
-        handle_change,
         interface::plugins::main::types::RuntimeEvent::{HotReload, Rebuild},
         plugins_after_runtime, plugins_before_runtime, plugins_watched_paths_changed,
     },
@@ -11,18 +10,15 @@ use futures::executor::block_on;
 
 use cargo_metadata::diagnostic::Diagnostic;
 use dioxus_cli_config::CrateConfig;
-use dioxus_core::Template;
 use dioxus_hot_reload::{HotReloadMsg, HotReloadReceiver};
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;
-use dioxus_rsx::hot_reload::*;
 use fs_extra::dir::CopyOptions;
-use notify::{EventKind, RecommendedWatcher, Watcher};
+use notify::{RecommendedWatcher, Watcher};
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
 };
-use tokio::sync::broadcast::{self, Sender};
 
 mod output;
 use output::*;

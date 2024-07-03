@@ -41,7 +41,6 @@ impl Plugin {
     pub async fn plugin(
         self,
         dx_config: &DioxusConfig,
-        crate_dir: &PathBuf,
         dependency_paths: &[PathBuf],
     ) -> super::Result<()> {
         match self {
@@ -65,7 +64,6 @@ impl Plugin {
                         &path,
                         dx_config,
                         priority,
-                        crate_dir,
                         &mut dioxus_lock,
                         dependency_paths,
                     )
