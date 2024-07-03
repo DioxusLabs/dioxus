@@ -54,6 +54,6 @@ impl Serve {
             .enable_all()
             .build()
             .unwrap()
-            .block_on(crate::server::dev_server(serve_cfg, crate_config))
+            .block_on(crate::server::serve_all(serve_cfg, crate_config))
     }
 }
