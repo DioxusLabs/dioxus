@@ -70,12 +70,14 @@ impl Process {
 pub struct BuildRequest {
     /// Whether the build is for serving the application
     pub serve: bool,
+    /// Whether to pre-compress assets
+    pub precompress_assets: bool,
+    /// Whether this is a web build
+    pub web: bool,
     /// The configuration for the crate we are building
     pub config: CrateConfig,
     /// The arguments for the build
     pub build_arguments: ConfigOptsBuild,
-    /// Wether to pre-compress assets
-    pub precompress_assets: bool,
 }
 
 /// A handle to ongoing builds and then the spawned tasks themselves

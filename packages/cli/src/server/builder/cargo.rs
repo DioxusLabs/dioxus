@@ -65,207 +65,92 @@ impl BuildRequest {
 
         Ok(cmd)
     }
-}
 
-/// Note: `rust_flags` argument is only used for the fullstack platform
-/// (server).
-pub fn build_desktop(
-    config: &CrateConfig,
-    _is_serve: bool,
-    skip_assets: bool,
-    rust_flags: Option<String>,
-) -> Result<BuildResult> {
-    tracing::info!("🚅 Running build [Desktop] command...");
+    pub fn build(&self) -> Result<BuildResult> {
+        tracing::info!("🚅 Running build [Desktop] command...");
 
-    let t_start = std::time::Instant::now();
-    let _guard = dioxus_cli_config::__private::save_config(config);
-    let _manganis_support = ManganisSupportGuard::default();
-    let _asset_guard = AssetConfigDropGuard::new();
+        // Set up runtime guards
+        let t_start = std::time::Instant::now();
+        let _guard = dioxus_cli_config::__private::save_config(config);
+        let _manganis_support = ManganisSupportGuard::default();
+        let _asset_guard = AssetConfigDropGuard::new();
 
-    let warning_messages = prettier_build(cmd)?;
+        // If this is a web, build make sure we have the web build tooling set up
+        install_web_build_tooling()?;
 
-    // Start Manganis linker intercept.
-    let linker_args = vec![format!("{}", self.config.out_dir().display())];
+        // Create the build command
+        let cmd = self.build_command()?;
 
-    manganis_cli_support::start_linker_intercept(
-        &LinkCommand::command_name(),
-        cargo_args,
-        Some(linker_args),
-    )?;
+        // Run the build command with a pretty loader
+        let warning_messages = build_cargo(cmd)?;
 
-    let file_name: String = self.config.executable.executable().unwrap().to_string();
+        // Post process the build result
 
-    let target_file = if cfg!(windows) {
-        format!("{}.exe", &file_name)
-    } else {
-        file_name
-    };
+        // Start Manganis linker intercept.
+        let linker_args = vec![format!("{}", self.config.out_dir().display())];
 
-    if !config.out_dir().is_dir() {
-        create_dir_all(config.out_dir())?;
-    }
-    let output_path = self.config.out_dir().join(target_file);
-    if let Some(res_path) = &warning_messages.output_location {
-        copy(res_path, &output_path)?;
-    }
+        manganis_cli_support::start_linker_intercept(
+            &LinkCommand::command_name(),
+            cargo_args,
+            Some(linker_args),
+        )?;
 
-    copy_assets_dir(config, self.compress_assets)?;
+        let file_name: String = self.config.executable.executable().unwrap().to_string();
 
-    let assets = if !skip_assets {
-        tracing::info!("Processing assets");
-        let assets = asset_manifest(config);
-        // Collect assets
-        process_assets(config, &assets)?;
-        // Create the __assets_head.html file for bundling
-        create_assets_head(config, &assets)?;
-        Some(assets)
-    } else {
-        None
-    };
+        let target_file = if cfg!(windows) {
+            format!("{}.exe", &file_name)
+        } else {
+            file_name
+        };
 
-    tracing::info!(
-        "🚩 Build completed: [./{}]",
-        self.config
-            .dioxus_config
-            .application
-            .out_dir
-            .clone()
-            .display()
-    );
-
-    println!("build desktop done");
-
-    Ok(BuildResult {
-        warnings: warning_messages.warnings,
-        executable: Some(output_path),
-        elapsed_time: t_start.elapsed(),
-        assets,
-    })
-}
-
-/// Build client (WASM).
-/// Note: `rust_flags` argument is only used for the fullstack platform.
-pub fn build_web(
-    config: &CrateConfig,
-    skip_assets: bool,
-    rust_flags: Option<String>,
-) -> Result<BuildResult> {
-    // [1] Build the project with cargo, generating a wasm32-unknown-unknown target (is there a more specific, better target to leverage?)
-    // [2] Generate the appropriate build folders
-    // [3] Wasm-bindgen the .wasm file, and move it into the {builddir}/modules/xxxx/xxxx_bg.wasm
-    // [4] Wasm-opt the .wasm file with whatever optimizations need to be done
-    // [5][OPTIONAL] Builds the Tailwind CSS file using the Tailwind standalone binary
-    // [6] Link up the html page to the wasm module
-
-    let CrateConfig {
-        crate_dir,
-        target_dir,
-        dioxus_config,
-        ..
-    } = config;
-    let out_dir = self.config.out_dir();
-
-    let _asset_guard = AssetConfigDropGuard::new();
-    let _manganis_support = ManganisSupportGuard::default();
-
-    let t_start = std::time::Instant::now();
-    let _guard = dioxus_cli_config::__private::save_config(config);
-
-    // [1] Build the .wasm module
-    tracing::info!("🚅 Running build command...");
-
-    check_wasm_target()?;
-
-    let mut cargo_args = vec!["--target".to_string(), "wasm32-unknown-unknown".to_string()];
-
-    let mut cmd = subprocess::Exec::cmd("cargo")
-        .set_rust_flags(rust_flags)
-        .env("CARGO_TARGET_DIR", target_dir)
-        .cwd(crate_dir)
-        .arg("build")
-        .arg("--message-format=json-render-diagnostics");
-
-    // TODO: make the initial variable mutable to simplify all the expressions
-    // below. Look inside the `build_desktop()` as an example.
-    if self.config.release {
-        cargo_args.push("--release".to_string());
-    }
-    if self.config.verbose {
-        cargo_args.push("--verbose".to_string());
-    } else {
-        cargo_args.push("--quiet".to_string());
-    }
-
-    if self.config.custom_profile.is_some() {
-        let custom_profile = self.config.custom_profile.as_ref().unwrap();
-        cargo_args.push("--profile".to_string());
-        cargo_args.push(custom_profile.to_string());
-    }
-
-    if self.config.features.is_some() {
-        let features_str = self.config.features.as_ref().unwrap().join(" ");
-        cargo_args.push("--features".to_string());
-        cargo_args.push(features_str);
-    }
-
-    if let Some(target) = &self.config.target {
-        cargo_args.push("--target".to_string());
-        cargo_args.push(target.clone());
-    }
-
-    cargo_args.append(&mut self.config.cargo_args.clone());
-
-    match &self.config.executable {
-        ExecutableType::Binary(name) => {
-            cargo_args.push("--bin".to_string());
-            cargo_args.push(name.to_string());
+        if !config.out_dir().is_dir() {
+            create_dir_all(config.out_dir())?;
         }
-        ExecutableType::Lib(name) => {
-            cargo_args.push("--lib".to_string());
-            cargo_args.push(name.to_string());
+        let output_path = self.config.out_dir().join(target_file);
+        if let Some(res_path) = &warning_messages.output_location {
+            copy(res_path, &output_path)?;
         }
-        ExecutableType::Example(name) => {
-            cargo_args.push("--example".to_string());
-            cargo_args.push(name.to_string());
+
+        // Create the build result
+        let build_result = BuildResult {
+            warnings: warning_messages.warnings,
+            executable: Some(output_path),
+            elapsed_time: t_start.elapsed(),
+            assets,
+        };
+
+        // If this is a web build, run web post processing steps
+        if self.web {
+            self.post_process_web_build(&build_result)
         }
-    };
 
-    cmd = cmd.args(&cargo_args);
-    let CargoBuildResult {
-        warnings,
-        output_location,
-    } = prettier_build(cmd)?;
+        copy_assets_dir(config, self.compress_assets)?;
 
-    // Start Manganis linker intercept.
-    let linker_args = vec![format!("{}", self.config.out_dir().display())];
+        let assets = if !skip_assets {
+            tracing::info!("Processing assets");
+            let assets = asset_manifest(config);
+            // Collect assets
+            process_assets(config, &assets)?;
+            // Create the __assets_head.html file for bundling
+            create_assets_head(config, &assets)?;
+            Some(assets)
+        } else {
+            None
+        };
 
-    manganis_cli_support::start_linker_intercept(
-        &LinkCommand::command_name(),
-        cargo_args,
-        Some(linker_args),
-    )
-    .unwrap();
+        tracing::info!(
+            "🚩 Build completed: [./{}]",
+            self.config
+                .dioxus_config
+                .application
+                .out_dir
+                .clone()
+                .display()
+        );
 
-    // this code will copy all public file to the output dir
-    copy_assets_dir(config, dioxus_cli_config::Platform::Web)?;
-
-    let assets = if !skip_assets {
-        tracing::info!("Processing assets");
-        let assets = asset_manifest(config);
-        process_assets(config, &assets)?;
-        Some(assets)
-    } else {
-        None
-    };
-
-    Ok(BuildResult {
-        warnings,
-        executable: Some(output_location),
-        elapsed_time: t_start.elapsed(),
-        assets,
-    })
+        Ok(build_result)
+    }
 }
-
 /// This trait is only created for the convenient and concise way to set
 /// `RUSTFLAGS` environment variable for the `subprocess::Exec`.
 pub trait ExecWithRustFlagsSetter {

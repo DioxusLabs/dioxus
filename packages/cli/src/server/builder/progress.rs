@@ -55,7 +55,7 @@ impl BuildProgress {
     }
 }
 
-fn build_cargo(cmd: subprocess::Exec) -> anyhow::Result<CargoBuildResult> {
+pub(crate) fn build_cargo(cmd: subprocess::Exec) -> anyhow::Result<CargoBuildResult> {
     let mut warning_messages: Vec<Diagnostic> = vec![];
 
     let output = BuildProgress::new();
