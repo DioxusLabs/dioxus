@@ -16,22 +16,26 @@ pub struct Check {
 
 impl Check {
     // Todo: check the entire crate
-    pub async fn check(self) -> Result<()> {
-        match self.file {
-            // Default to checking the project
-            None => {
-                if let Err(e) = check_project_and_report().await {
-                    eprintln!("error checking project: {}", e);
-                    exit(1);
+    pub fn check(self) -> Result<()> {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+
+        rt.block_on(async move {
+            match self.file {
+                // Default to checking the project
+                None => {
+                    if let Err(e) = check_project_and_report().await {
+                        eprintln!("error checking project: {}", e);
+                        exit(1);
+                    }
+                }
+                Some(file) => {
+                    if let Err(e) = check_file_and_report(file).await {
+                        eprintln!("failed to check file: {}", e);
+                        exit(1);
+                    }
                 }
             }
-            Some(file) => {
-                if let Err(e) = check_file_and_report(file).await {
-                    eprintln!("failed to check file: {}", e);
-                    exit(1);
-                }
-            }
-        }
+        });
 
         Ok(())
     }

@@ -91,10 +91,16 @@ pub struct ConfigOptsServe {
     #[clap(flatten)]
     pub(crate) server_arguments: ServeArguments,
 
-    /// Open the app in the default browser [default: true]
-    #[clap(long, default_value_t = false)]
-    #[serde(default)]
-    pub open: bool,
+    // TODO: Somehow make this default to `true` if the flag was provided. e.g. `dx serve --open`
+    // Currently it requires a value: `dx serve --open true`
+    /// Open the app in the default browser [default: false - unless project or global settings are set]
+    #[clap(long)]
+    pub open: Option<bool>,
+
+    // TODO: See `open` field
+    /// Enable full hot reloading for the app [default: true - unless project or global settings are set]
+    #[clap(long, group = "release-incompatible")]
+    pub hot_reload: Option<bool>,
 
     /// Build a example [default: ""]
     #[clap(long)]
@@ -136,9 +142,6 @@ pub struct ConfigOptsServe {
         require_equals(true),
         action = clap::ArgAction::Set,
     )]
-    #[clap(group = "release-incompatible")]
-    #[serde(default)]
-    pub hot_reload: bool,
 
     /// Set cross-origin-policy to same-origin [default: false]
     #[clap(name = "cross-origin-policy")]
