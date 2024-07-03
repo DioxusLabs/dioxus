@@ -1,13 +1,23 @@
 use dioxus_cli_plugin::*;
 use exports::plugins::main::definitions::Guest;
 use plugins::main::{
-    imports::{get_config, get_data, log, set_config},
+    imports::{get_config, log, set_config},
     types::{CommandEvent, PluginInfo, ResponseEvent, RuntimeEvent},
 };
 
 struct Plugin;
 
 impl Guest for Plugin {
+    fn get_default_config() -> exports::plugins::main::definitions::Toml {
+        exports::plugins::main::definitions::Toml::new(plugins::main::toml::TomlValue::Table(
+            Vec::new(),
+        ))
+    }
+
+    fn apply_config(_: exports::plugins::main::definitions::Toml) -> Result<(), ()> {
+        Ok(())
+    }
+
     fn register() -> Result<(), ()> {
         set_config("test", "false");
         log("Registered Tailwind!");
@@ -49,4 +59,4 @@ impl Guest for Plugin {
     }
 }
 
-export_plugin!(Plugin);
+export!(Plugin);

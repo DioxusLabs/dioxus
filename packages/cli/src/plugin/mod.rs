@@ -3,7 +3,7 @@ use crate::plugin::convert::Convert;
 use crate::plugin::interface::{PluginRuntimeState, PluginWorld};
 use cargo_toml::Manifest;
 use dioxus_cli_config::{ApplicationConfig, DioxusConfig, PluginConfigInfo};
-use slotmap::SlotMap;
+use slab::Slab;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -432,7 +432,7 @@ pub async fn load_plugin(
         PluginRuntimeState {
             table,
             ctx,
-            tomls: SlotMap::new(),
+            tomls: Default::default(),
             metadata: PluginInfo {
                 name: "".into(),
                 version: "".into(),

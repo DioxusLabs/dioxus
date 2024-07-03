@@ -70,7 +70,7 @@ wasmtime-wasi = { version = "22.0.0" }
 futures = "0.3.30"
 async-trait = "0.1.73"
 semver = "1.0"
-slotmap = { version = "1.0.7" }
+slab = { workspace = true }
 
 # bundling
 tauri-bundler = { version = "=1.4.*", features = ["native-tls-vendored"] }

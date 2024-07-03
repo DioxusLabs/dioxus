@@ -2516,7 +2516,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
- "slotmap",
+ "slab",
  "subprocess",
  "syn 2.0.60",
  "tauri-bundler",

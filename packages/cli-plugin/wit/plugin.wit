@@ -117,6 +117,11 @@ interface types {
     default-platform: platform,
   }
 
+  /// Error returned when parsing the project info
+  enum parse-project-info-error {
+    unknown-platform,
+  }
+
   /// Command events are used to notify the plugin when the project is 
   /// being built, served, translated, or bundled. 
   enum command-event {
@@ -145,12 +150,12 @@ interface types {
 }
 
 interface imports {
-  use types.{project-info};
+  use types.{project-info, parse-project-info-error};
 
   /// Returns whether the project has 'output' and 'asset' 
   /// directories written in the `Dioxus.toml`, and the 
   /// default platform for the project
-  get-project-info: func() -> project-info;
+  get-project-info: func() -> result<project-info, parse-project-info-error>;
 
   /// Add path to list of watched paths
   watch-path: func(path: string);

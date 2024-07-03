@@ -1,10 +1,12 @@
+use crate::plugin::interface::plugins::main::types::ParseProjectInfoError;
 use async_trait::async_trait;
 use plugins::main::imports::Host as ImportHost;
 use plugins::main::toml::{Host as TomlHost, *};
 use plugins::main::types::Host as TypeHost;
+use slab::Slab;
 use std::collections::HashMap;
 use wasmtime::component::*;
-use wasmtime_wasi::preview2::{WasiCtx, WasiView};
+use wasmtime_wasi::{WasiCtx, WasiView};
 
 use self::plugins::main::types::{Platform, PluginInfo, ProjectInfo};
 
@@ -22,7 +24,7 @@ impl PluginRuntimeState {
     pub fn get_toml(&self, value: Resource<Toml>) -> TomlValue {
         self.tomls
             .get(value.rep() as usize)
-            .expect("Resource gaurantees existence")
+            .expect("Resource guarantees existence")
             .clone()
     }
 
@@ -30,7 +32,7 @@ impl PluginRuntimeState {
         *self
             .tomls
             .get_mut(key.rep() as usize)
-            .expect("Resource gaurantees existence") = value;
+            .expect("Resource guarantees existence") = value;
     }
 
     pub fn insert_toml(&mut self, value: TomlValue) -> usize {
@@ -102,7 +104,7 @@ impl TypeHost for PluginRuntimeState {}
 
 #[async_trait]
 impl ImportHost for PluginRuntimeState {
-    async fn get_project_info(&mut self) -> wasmtime::Result<ProjectInfo> {
+    async fn get_project_info(&mut self) -> Result<ProjectInfo, ParseProjectInfoError> {
         let application = &PLUGINS_CONFIG.lock().await.application;
 
         let default_platform = match application.default_platform {
@@ -110,31 +112,30 @@ impl ImportHost for PluginRuntimeState {
             dioxus_cli_config::Platform::Desktop => Platform::Desktop,
             dioxus_cli_config::Platform::Fullstack => Platform::Fullstack,
             dioxus_cli_config::Platform::StaticGeneration => Platform::StaticGeneration,
-            _ => return Err(wasmtime::Error::msg("unknown platform")),
+            _ => return Err(ParseProjectInfoError::UnknownPlatform),
         };
 
         Ok(ProjectInfo { default_platform })
     }
 
-    async fn watch_path(&mut self, path: String) -> wasmtime::Result<()> {
+    async fn watch_path(&mut self, path: String) {
         let mut config = PLUGINS_CONFIG.lock().await;
         let pathbuf = path.into();
         config.web.watcher.watch_path.push(pathbuf);
-        Ok(())
     }
 
-    async fn remove_watched_path(&mut self, path: String) -> wasmtime::Result<Result<(), ()>> {
+    async fn remove_watched_path(&mut self, path: String) -> Result<(), ()> {
         let mut config = PLUGINS_CONFIG.lock().await;
 
         let pathbuf: std::path::PathBuf = path.into();
 
         config.web.watcher.watch_path.retain(|f| f != &pathbuf);
 
-        Ok(Ok(()))
+        Ok(())
     }
 
-    async fn watched_paths(&mut self) -> wasmtime::Result<Vec<String>> {
-        Ok(PLUGINS_CONFIG
+    async fn watched_paths(&mut self) -> Vec<String> {
+        PLUGINS_CONFIG
             .lock()
             .await
             .web
@@ -142,57 +143,46 @@ impl ImportHost for PluginRuntimeState {
             .watch_path
             .iter()
             .filter_map(|f| f.to_str().map(ToString::to_string))
-            .collect())
+            .collect()
     }
 
-    async fn set_data(&mut self, key: String, data: Vec<u8>) -> wasmtime::Result<()> {
+    async fn set_data(&mut self, key: String, data: Vec<u8>) {
         self.map.insert(key, data);
-        Ok(())
     }
 
-    async fn get_data(&mut self, key: String) -> wasmtime::Result<Option<Vec<u8>>> {
-        Ok(self.map.get(&key).cloned())
+    async fn get_data(&mut self, key: String) -> Option<Vec<u8>> {
+        self.map.get(&key).cloned()
     }
 
-    async fn set_config(&mut self, key: String, config: String) -> wasmtime::Result<()> {
+    async fn set_config(&mut self, key: String, config: String) {
         let mut lock = PLUGINS_CONFIG.lock().await;
         let Some(entry) = lock.plugins.plugins.get_mut(&self.metadata.name) else {
             tracing::warn!("Plugin not initalized correctly! {}", self.metadata.name);
-            return Ok(());
+            return;
         };
         entry.config.insert(key, config);
-        Ok(())
     }
 
-    async fn get_config(&mut self, key: String) -> wasmtime::Result<Option<String>> {
+    async fn get_config(&mut self, key: String) -> Option<String> {
         let config = PLUGINS_CONFIG.lock().await;
         let Some(entry) = config.plugins.plugins.get(&self.metadata.name) else {
             tracing::warn!("Plugin not initalized correctly! {}", self.metadata.name);
-            return Ok(None);
+            return None;
         };
-        Ok(entry.config.get(&key).cloned())
+        entry.config.get(&key).cloned()
     }
 
-    async fn log(&mut self, info: String) -> wasmtime::Result<()> {
+    async fn log(&mut self, info: String) {
         tracing::info!("{info}");
-        Ok(())
     }
 }
 
 impl WasiView for PluginRuntimeState {
-    fn table(&self) -> &ResourceTable {
-        &self.table
-    }
-
-    fn table_mut(&mut self) -> &mut ResourceTable {
+    fn table(&mut self) -> &mut ResourceTable {
         &mut self.table
     }
 
-    fn ctx(&self) -> &WasiCtx {
-        &self.ctx
-    }
-
-    fn ctx_mut(&mut self) -> &mut WasiCtx {
+    fn ctx(&mut self) -> &mut WasiCtx {
         &mut self.ctx
     }
 }

@@ -6,5 +6,5 @@
 ::wit_bindgen::generate!({
     path: "./wit/plugin.wit",
     world: "plugin-world",
-    pub_export_macro: false,
+    pub_export_macro: true,
 });

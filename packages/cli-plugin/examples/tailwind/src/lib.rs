@@ -3,14 +3,14 @@ use std::{fs::File, io::Write, path::PathBuf};
 use dioxus_cli_plugin::*;
 use exports::plugins::main::definitions::Guest;
 use plugins::main::{
-    imports::{get_config, get_data, log, set_config, watched_paths},
-    // toml::{Toml, TomlValue},
+    imports::{get_config, log, set_config, watched_paths},
+    toml::{Toml, TomlValue},
     types::{CommandEvent, PluginInfo, ResponseEvent, RuntimeEvent},
 };
 use railwind::parse_to_string;
 use regex::Regex;
 
-const PREFLIGHT: &'static str = include_str!("./tailwind_preflight.css");
+const PREFLIGHT: &str = include_str!("./tailwind_preflight.css");
 const PREFLIGHT_LEN: usize = PREFLIGHT.len();
 
 struct Plugin;
@@ -144,6 +144,14 @@ fn gen_tailwind() -> Result<ResponseEvent, ()> {
 }
 
 impl Guest for Plugin {
+    fn get_default_config() -> Toml {
+        Toml::new(TomlValue::Table(Vec::new()))
+    }
+
+    fn apply_config(_: Toml) -> Result<(), ()> {
+        Ok(())
+    }
+
     fn on_watched_paths_change(
         _paths: std::vec::Vec<std::string::String>,
     ) -> Result<ResponseEvent, ()> {
@@ -180,4 +188,4 @@ impl Guest for Plugin {
     }
 }
 
-export_plugin!(Plugin);
+export!(Plugin);

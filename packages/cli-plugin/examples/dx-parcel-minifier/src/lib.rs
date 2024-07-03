@@ -3,7 +3,8 @@ use std::fs;
 use dioxus_cli_plugin::*;
 use exports::plugins::main::definitions::Guest;
 use plugins::main::{
-    imports::{get_project_info, log},
+    imports::log,
+    toml::{Toml, TomlValue},
     types::{CommandEvent, PluginInfo, ResponseEvent, RuntimeEvent},
 };
 
@@ -54,6 +55,14 @@ fn minify_css() -> Result<ResponseEvent, ()> {
 }
 
 impl Guest for CSSMinifer {
+    fn get_default_config() -> Toml {
+        Toml::new(TomlValue::Table(Vec::new()))
+    }
+
+    fn apply_config(_: Toml) -> Result<(), ()> {
+        Ok(())
+    }
+
     fn register() -> Result<(), ()> {
         Ok(())
     }
@@ -85,4 +94,4 @@ impl Guest for CSSMinifer {
     }
 }
 
-export_plugin!(CSSMinifer);
+export!(CSSMinifer);
