@@ -25,7 +25,7 @@ impl VNode {
         #[cfg(debug_assertions)]
         {
             let name = new.template.get().name;
-            if let Some(template) = dom.templates.get(path) {
+            if let Some(template) = dom.templates.get(name).cloned() {
                 new.template.set(template);
                 if template != self.template.get() {
                     let mount_id = self.mount.get();
