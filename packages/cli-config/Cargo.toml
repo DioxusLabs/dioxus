@@ -21,9 +21,11 @@ tracing = { workspace = true }
 tauri-bundler = { version = "=1.4.0", features = ["native-tls-vendored"], optional = true }
 tauri-utils = { version = "=1.5.*", optional = true }
 
+dirs = { workspace = true, optional = true }
+
 [features]
 default = ["read-config"]
-cli = ["dep:tauri-bundler", "dep:tauri-utils", "dep:clap", "dep:toml", "dep:cargo_toml"]
+cli = ["dep:tauri-bundler", "dep:tauri-utils", "dep:clap", "dep:toml", "dep:cargo_toml", "dep:dirs"]
 read-config = []
 
 [package.metadata.docs.rs]

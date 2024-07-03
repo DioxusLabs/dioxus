@@ -36,8 +36,8 @@ pub fn server_rust_flags(build: &ConfigOptsBuild) -> String {
     rust_flags(build, SERVER_RUST_FLAGS)
 }
 
-pub async fn startup(config: CrateConfig, serve: &ConfigOptsServe) -> Result<()> {
-    desktop::startup_with_platform::<FullstackPlatform>(config, serve).await
+pub fn startup(config: CrateConfig, serve: &ConfigOptsServe) -> Result<()> {
+    desktop::startup_with_platform::<FullstackPlatform>(config, serve)
 }
 
 fn start_web_build_thread(
@@ -108,7 +108,7 @@ impl Platform for FullstackPlatform {
         let desktop =
             DesktopPlatform::start_with_options(build_result, &desktop_config, serve, desktop_env)?;
 
-        if serve.open {
+        if serve.open.unwrap_or_default() {
             crate::server::web::open_browser(
                 config,
                 serve

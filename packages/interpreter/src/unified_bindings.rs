@@ -75,7 +75,7 @@ mod js {
         "{let node = document.createTextNode($text$); this.nodes[$id$] = node; this.stack.push(node);}"
     }
     fn create_placeholder(id: u32) {
-        "{let node = document.createElement('pre'); node.hidden = true; this.stack.push(node); this.nodes[$id$] = node;}"
+        "{let node = document.createComment('placeholder'); this.stack.push(node); this.nodes[$id$] = node;}"
     }
     fn new_event_listener(event_name: &str<u8, evt>, id: u32, bubbles: u8) {
         r#"
@@ -164,7 +164,7 @@ mod js {
 
     #[cfg(feature = "binary-protocol")]
     fn add_placeholder() {
-        "{let node = document.createElement('pre'); node.hidden = true; this.stack.push(node);}"
+        "{let node = document.createComment('placeholder'); this.stack.push(node);}"
     }
 
     #[cfg(feature = "binary-protocol")]

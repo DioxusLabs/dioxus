@@ -1,4 +1,5 @@
 use brotli::enc::BrotliEncoderParams;
+use std::fs;
 use std::path::Path;
 use std::{ffi::OsString, path::PathBuf};
 use walkdir::WalkDir;
@@ -10,12 +11,16 @@ use dioxus_cli_config::CrateConfig;
 use dioxus_cli_config::Platform;
 use manganis_cli_support::{AssetManifest, AssetManifestExt};
 
-pub fn asset_manifest(bin: Option<&str>, crate_config: &CrateConfig) -> AssetManifest {
-    AssetManifest::load_from_path(
-        bin,
-        crate_config.crate_dir.join("Cargo.toml"),
-        crate_config.workspace_dir.join("Cargo.lock"),
-    )
+/// The temp file name for passing manganis json from linker to current exec.
+pub const MG_JSON_OUT: &str = "mg-out";
+
+pub fn asset_manifest(config: &CrateConfig) -> AssetManifest {
+    let file_path = config.out_dir().join(MG_JSON_OUT);
+    let read = fs::read_to_string(&file_path).unwrap();
+    _ = fs::remove_file(file_path);
+    let json: Vec<String> = serde_json::from_str(&read).unwrap();
+
+    AssetManifest::load(json)
 }
 
 /// Create a head file that contains all of the imports for assets that the user project uses

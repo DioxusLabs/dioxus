@@ -584,8 +584,9 @@ impl VirtualDom {
                 // Recurse into the dynamic nodes of the existing mounted node to see if the template is alive in the tree
                 fn check_node_for_templates(node: &crate::VNode, template: Template) -> bool {
                     let this_template_name = node.template.get().name.rsplit_once(':').unwrap().0;
+                    let other_template_name = template.name.rsplit_once(':').unwrap().0;
 
-                    if this_template_name == template.name.rsplit_once(':').unwrap().0 {
+                    if this_template_name == other_template_name {
                         return true;
                     }
 

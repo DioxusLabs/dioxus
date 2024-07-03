@@ -98,9 +98,10 @@ wasm-bindgen-futures = "0.4.42"
 html_parser = "0.7.0"
 thiserror = "1.0.40"
 prettyplease = { version = "0.2.16", features = ["verbatim"] }
-manganis-cli-support = { version = "0.2.1", features = ["html"] }
+manganis-cli-support = { git = "https://github.com/DogeDark/dioxus-collect-assets/", features = ["html"] }
 manganis = { version = "0.2.1" }
 interprocess = { version = "1.2.2", package = "interprocess-docfix" }
+const_format = "0.2.32"
 
 lru = "0.12.2"
 async-trait = "0.1.77"
@@ -124,6 +125,9 @@ owo-colors = "4.0.0"
 ciborium = "0.2.1"
 base64 = "0.21.0"
 once_cell = "1.17.1"
+
+# cli, cli-config
+dirs = "5.0.1"
 
 # speed up some macros by optimizing them
 [profile.dev.package.insta]
