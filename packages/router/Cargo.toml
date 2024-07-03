@@ -43,8 +43,8 @@ wasm-bindgen-test = "0.3.33"
 
 [features]
 default = []
-ssr = ["dioxus-ssr/incremental", "dep:tokio", "dioxus-fullstack?/server", "dep:http"]
-liveview = ["dep:dioxus-liveview", "dep:tokio", "dep:serde", "dep:serde_json"]
+ssr = []
+liveview = ["dioxus-liveview", "dep:tokio", "dep:serde", "dep:serde_json"]
 wasm_test = []
 web = ["dep:gloo", "dep:web-sys", "dep:wasm-bindgen", "dep:gloo-utils", "dep:js-sys", "dioxus-router-macro/web"]
 fullstack = ["dep:dioxus-fullstack"]
@@ -60,12 +60,6 @@ serde = { version = "1", features = ["derive"] }
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
-
-[[bench]]
-name = "incremental"
-required-features = ["ssr"]
-harness = false
-
 # Most of the examples live in the workspace. We include some here so that docs.rs can scrape our examples for better inline docs
 [[example]]
 name = "crm"
@@ -100,9 +94,4 @@ doc-scrape-examples = true
 [[example]]
 name = "simple_router"
 path = "../../examples/simple_router.rs"
-doc-scrape-examples = true
-
-[[example]]
-name = "static_generation"
-required-features = ["ssr"]
 doc-scrape-examples = true

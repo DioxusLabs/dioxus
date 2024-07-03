@@ -8,11 +8,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    LaunchBuilder::fullstack()
-        .with_cfg(ssr! {
-            dioxus::fullstack::Config::default().addr(std::net::SocketAddr::from(([127, 0, 0, 1], 3333)))
-        })
-        .launch(app);
+    LaunchBuilder::fullstack().launch(app);
 }
 
 fn app() -> Element {

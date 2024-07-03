@@ -15,7 +15,7 @@ pub enum Plugin {
 }
 
 impl Plugin {
-    pub async fn plugin(self) -> Result<()> {
+    pub fn plugin(self) -> Result<()> {
         match self {
             Plugin::List {} => {
                 for item in crate::plugin::PluginManager::plugin_list() {

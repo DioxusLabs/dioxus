@@ -11,7 +11,7 @@ use crate::{
 use dioxus_cli_config::CrateConfig;
 use dioxus_rsx::hot_reload::*;
 use std::{
-    net::{SocketAddr, UdpSocket},
+    net::{IpAddr, SocketAddr, UdpSocket},
     sync::Arc,
 };
 
@@ -22,25 +22,29 @@ use server::*;
 
 use super::HotReloadState;
 
-pub async fn startup(config: CrateConfig, serve_cfg: &ConfigOptsServe) -> Result<()> {
+pub fn startup(config: CrateConfig, serve_cfg: &ConfigOptsServe) -> Result<()> {
     set_ctrlc_handler(&config);
 
-    let ip = get_ip().unwrap_or(String::from("0.0.0.0"));
+    let ip = serve_cfg
+        .server_arguments
+        .addr
+        .or_else(get_ip)
+        .unwrap_or(IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)));
 
     let hot_reload_state = build_hotreload_filemap(&config);
 
-    serve(ip, config, hot_reload_state, serve_cfg).await
+    serve(ip, config, hot_reload_state, serve_cfg)
 }
 
 /// Start the server without hot reload
-pub async fn serve(
-    ip: String,
+pub fn serve(
+    ip: IpAddr,
     config: CrateConfig,
     hot_reload_state: HotReloadState,
     opts: &ConfigOptsServe,
 ) -> Result<()> {
     let skip_assets = opts.skip_assets;
-    let port = opts.port;
+    let port = opts.server_arguments.port;
 
     // Since web platform doesn't use `rust_flags`, this argument is explicitly
     // set to `None`.
@@ -51,52 +55,58 @@ pub async fn serve(
 
     tracing::info!("🚀 Starting development server...");
 
-    // We got to own watcher so that it exists for the duration of serve
-    // Otherwise full reload won't work.
-    let _watcher = setup_file_watcher(
-        {
-            let config = config.clone();
-            let hot_reload_state = hot_reload_state.clone();
-            move || build(&config, &hot_reload_state, skip_assets)
-        },
-        &config,
-        Some(WebServerInfo {
-            ip: ip.clone(),
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async move {
+        // We got to own watcher so that it exists for the duration of serve
+        // Otherwise full reload won't work.
+        let _watcher = setup_file_watcher(
+            {
+                let config = config.clone();
+                let hot_reload_state = hot_reload_state.clone();
+                move || build(&config, &hot_reload_state, skip_assets)
+            },
+            &config,
+            Some(WebServerInfo { ip, port }),
+            hot_reload_state.clone(),
+        )
+        .await?;
+
+        // HTTPS
+        // Before console info so it can stop if mkcert isn't installed or fails
+        let rustls_config = get_rustls(&config).await?;
+
+        // Print serve info
+        print_console_info(
+            &config,
+            PrettierOptions {
+                changed: vec![],
+                warnings: first_build_result.warnings,
+                elapsed_time: first_build_result.elapsed_time,
+            },
+            Some(WebServerInfo { ip, port }),
+        );
+
+        // Router
+        let router = setup_router(config.clone(), hot_reload_state).await?;
+
+        // Start server
+        start_server(
+            ip,
             port,
-        }),
-        hot_reload_state.clone(),
-    )
-    .await?;
+            router,
+            opts.open.unwrap_or_default(),
+            rustls_config,
+            &config,
+        )
+        .await?;
 
-    // HTTPS
-    // Before console info so it can stop if mkcert isn't installed or fails
-    let rustls_config = get_rustls(&config).await?;
-
-    // Print serve info
-    print_console_info(
-        &config,
-        PrettierOptions {
-            changed: vec![],
-            warnings: first_build_result.warnings,
-            elapsed_time: first_build_result.elapsed_time,
-        },
-        Some(WebServerInfo {
-            ip: ip.clone(),
-            port,
-        }),
-    );
-
-    // Router
-    let router = setup_router(config.clone(), hot_reload_state).await?;
-
-    // Start server
-    start_server(port, router, opts.open.unwrap(), rustls_config, &config).await?;
-
-    Ok(())
+        Ok(())
+    })
 }
 
 /// Starts dx serve with no hot reload
 async fn start_server(
+    ip: IpAddr,
     port: u16,
     router: axum::Router,
     start_browser: bool,
@@ -107,20 +117,11 @@ async fn start_server(
     #[cfg(feature = "plugin")]
     crate::plugin::PluginManager::on_serve_start(config)?;
 
-    // Bind the server to `[::]` and it will LISTEN for both IPv4 and IPv6. (required IPv6 dual stack)
-    let addr: SocketAddr = format!("0.0.0.0:{}", port).parse().unwrap();
+    let addr: SocketAddr = SocketAddr::from((ip, port));
 
     // Open the browser
     if start_browser {
-        let protocol = match rustls {
-            Some(_) => "https",
-            None => "http",
-        };
-        let base_path = match config.dioxus_config.web.app.base_path.as_deref() {
-            Some(base_path) => format!("/{}", base_path.trim_matches('/')),
-            None => "".to_owned(),
-        };
-        _ = open::that(format!("{protocol}://localhost:{port}{base_path}"));
+        open_browser(config, ip, port, rustls.is_some());
     }
 
     let svc = router.into_make_service();
@@ -138,8 +139,18 @@ async fn start_server(
     Ok(())
 }
 
+/// Open the browser to the address
+pub(crate) fn open_browser(config: &CrateConfig, ip: IpAddr, port: u16, https: bool) {
+    let protocol = if https { "https" } else { "http" };
+    let base_path = match config.dioxus_config.web.app.base_path.as_deref() {
+        Some(base_path) => format!("/{}", base_path.trim_matches('/')),
+        None => "".to_owned(),
+    };
+    _ = open::that(format!("{protocol}://{ip}:{port}{base_path}"));
+}
+
 /// Get the network ip
-fn get_ip() -> Option<String> {
+fn get_ip() -> Option<IpAddr> {
     let socket = match UdpSocket::bind("0.0.0.0:0") {
         Ok(s) => s,
         Err(_) => return None,
@@ -151,7 +162,7 @@ fn get_ip() -> Option<String> {
     };
 
     match socket.local_addr() {
-        Ok(addr) => Some(addr.ip().to_string()),
+        Ok(addr) => Some(addr.ip()),
         Err(_) => None,
     }
 }

@@ -23,8 +23,9 @@ krates = { version = "0.16.6", optional = true }
 tracing = { workspace = true }
 
 [features]
-default = ["html", "hot_reload"]
-hot_reload = ["dep:krates", "dep:internment", "dep:dioxus-core"]
+default = ["html"]
+hot_reload_traits = []
+hot_reload = ["dep:krates", "dep:internment", "dep:dioxus-core", "hot_reload_traits"]
 serde = ["dep:serde"]
 html = []
 

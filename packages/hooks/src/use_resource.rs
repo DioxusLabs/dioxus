@@ -149,8 +149,7 @@ pub enum UseResourceState {
 impl<T> Resource<T> {
     /// Restart the resource's future.
     ///
-    /// Will not cancel the previous future, but will ignore any values that it
-    /// generates.
+    /// This will cancel the current future and start a new one.
     ///
     /// ## Example
     /// ```rust, no_run
@@ -406,6 +405,21 @@ impl<T> Resource<T> {
     /// ```
     pub fn value(&self) -> ReadOnlySignal<Option<T>> {
         self.value.into()
+    }
+
+    /// Suspend the resource's future and only continue rendering when the future is ready
+    pub fn suspend(&self) -> std::result::Result<MappedSignal<T>, RenderError> {
+        match self.state.cloned() {
+            UseResourceState::Stopped | UseResourceState::Paused | UseResourceState::Pending => {
+                let task = self.task();
+                if task.paused() {
+                    Ok(self.value.map(|v| v.as_ref().unwrap()))
+                } else {
+                    Err(RenderError::Suspended(SuspendedFuture::new(task)))
+                }
+            }
+            _ => Ok(self.value.map(|v| v.as_ref().unwrap())),
+        }
     }
 }
 

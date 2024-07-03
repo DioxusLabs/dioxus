@@ -41,11 +41,11 @@ impl<R> OutletContext<R> {
         });
 
         if let Some(error) = router.render_error() {
-            if current_level == 0 {
-                return Some(error);
+            return if current_level == 0 {
+                error
             } else {
-                return None;
-            }
+                VNode::empty()
+            };
         }
 
         router.current::<R>().render(current_level)

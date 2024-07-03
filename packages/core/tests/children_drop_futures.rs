@@ -34,7 +34,7 @@ async fn child_futures_drop_first() {
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     // Here the parent and task could resolve at the same time, but because the task is in the child, dioxus should run the parent first because the child might be dropped
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
 
     tokio::select! {
         _ = dom.wait_for_work() => {}

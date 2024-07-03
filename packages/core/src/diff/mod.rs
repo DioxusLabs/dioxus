@@ -1,10 +1,18 @@
+//! This module contains all the code for creating and diffing nodes.
+//!
+//! For suspense there are three different cases we need to handle:
+//! - Creating nodes/scopes without mounting them
+//! - Diffing nodes that are not mounted
+//! - Mounted nodes that have already been created
+//!
+//! To support those cases, we lazily create components and only optionally write to the real dom while diffing with Option<&mut impl WriteMutations>
+
 #![allow(clippy::too_many_arguments)]
 
 use crate::{
     arena::ElementId,
     innerlude::{ElementRef, MountId, WriteMutations},
     nodes::VNode,
-    scopes::ScopeId,
     virtual_dom::VirtualDom,
     Template, TemplateNode,
 };
@@ -14,34 +22,36 @@ mod iterator;
 mod node;
 
 impl VirtualDom {
-    pub(crate) fn create_children<'a>(
+    pub(crate) fn create_children(
         &mut self,
-        to: &mut impl WriteMutations,
-        nodes: impl IntoIterator<Item = &'a VNode>,
+        mut to: Option<&mut impl WriteMutations>,
+        nodes: &[VNode],
         parent: Option<ElementRef>,
     ) -> usize {
         nodes
-            .into_iter()
-            .map(|child| child.create(self, to, parent))
+            .iter()
+            .map(|child| child.create(self, parent, to.as_deref_mut()))
             .sum()
     }
 
     /// Simply replace a placeholder with a list of nodes
-    fn replace_placeholder<'a>(
+    fn replace_placeholder(
         &mut self,
-        to: &mut impl WriteMutations,
+        mut to: Option<&mut impl WriteMutations>,
         placeholder_id: ElementId,
-        r: impl IntoIterator<Item = &'a VNode>,
+        r: &[VNode],
         parent: Option<ElementRef>,
     ) {
-        let m = self.create_children(to, r, parent);
-        to.replace_node_with(placeholder_id, m);
-        self.reclaim(placeholder_id);
+        let m = self.create_children(to.as_deref_mut(), r, parent);
+        if let Some(to) = to {
+            to.replace_node_with(placeholder_id, m);
+            self.reclaim(placeholder_id);
+        }
     }
 
     fn nodes_to_placeholder(
         &mut self,
-        to: &mut impl WriteMutations,
+        mut to: Option<&mut impl WriteMutations>,
         mount: MountId,
         dyn_node_idx: usize,
         old_nodes: &[VNode],
@@ -52,13 +62,15 @@ impl VirtualDom {
         // Set the id of the placeholder
         self.mounts[mount.0].mounted_dynamic_nodes[dyn_node_idx] = placeholder.0;
 
-        to.create_placeholder(placeholder);
+        if let Some(to) = to.as_deref_mut() {
+            to.create_placeholder(placeholder);
+        }
 
         self.replace_nodes(to, old_nodes, 1);
     }
 
     /// Replace many nodes with a number of nodes on the stack
-    fn replace_nodes(&mut self, to: &mut impl WriteMutations, nodes: &[VNode], m: usize) {
+    fn replace_nodes(&mut self, to: Option<&mut impl WriteMutations>, nodes: &[VNode], m: usize) {
         debug_assert!(
             !nodes.is_empty(),
             "replace_nodes must have at least one node"
@@ -73,30 +85,14 @@ impl VirtualDom {
     /// Wont generate mutations for the inner nodes
     fn remove_nodes(
         &mut self,
-        to: &mut impl WriteMutations,
+        mut to: Option<&mut impl WriteMutations>,
         nodes: &[VNode],
         replace_with: Option<usize>,
     ) {
         for (i, node) in nodes.iter().rev().enumerate() {
             let last_node = i == nodes.len() - 1;
-            node.remove_node(self, to, replace_with.filter(|_| last_node), true);
+            node.remove_node(self, to.as_deref_mut(), replace_with.filter(|_| last_node));
         }
-    }
-
-    pub(crate) fn remove_component_node(
-        &mut self,
-        to: &mut impl WriteMutations,
-        scope: ScopeId,
-        replace_with: Option<usize>,
-        gen_muts: bool,
-    ) {
-        // Remove the component from the dom
-        if let Some(node) = self.scopes[scope.0].last_rendered_node.take() {
-            node.remove_node(self, to, replace_with, gen_muts)
-        };
-
-        // Now drop all the resources
-        self.drop_scope(scope);
     }
 
     /// Insert a new template into the VirtualDom's template registry
@@ -107,40 +103,37 @@ impl VirtualDom {
         to: &mut impl WriteMutations,
         mut template: Template,
     ) {
-        let (path, byte_index) = template.name.rsplit_once(':').unwrap();
-
-        let byte_index = byte_index.parse::<usize>().unwrap();
-        // First, check if we've already seen this template
-        if self
-            .templates
-            .get(&path)
-            .filter(|set| set.contains_key(&byte_index))
-            .is_none()
+        // In debug mode, we check the more complete hashmap by byte index
+        #[cfg(debug_assertions)]
         {
-            // if hot reloading is enabled, then we need to check for a template that has overriten this one
-            #[cfg(debug_assertions)]
-            if let Some(mut new_template) = self
-                .templates
-                .get_mut(path)
-                .and_then(|map| map.remove(&usize::MAX))
-            {
-                // the byte index of the hot reloaded template could be different
-                new_template.name = template.name;
-                template = new_template;
+            let (path, byte_index) = template.name.rsplit_once(':').unwrap();
+
+            let byte_index = byte_index.parse::<usize>().unwrap();
+            let mut entry = self.templates.entry(path);
+            // If we've already seen this template, just return
+            if let std::collections::hash_map::Entry::Occupied(occupied) = &entry {
+                if occupied.get().contains_key(&byte_index) {
+                    return;
+                }
             }
 
-            self.templates
-                .entry(path)
-                .or_default()
-                .insert(byte_index, template);
+            // Otherwise, insert it and register it
+            entry.or_default().insert(byte_index, template);
+        }
 
-            // If it's all dynamic nodes, then we don't need to register it
-            if !template.is_completely_dynamic() {
-                to.register_template(template)
-            }
+        // In release mode, everything is built into the &'static str
+        #[cfg(not(debug_assertions))]
+        if !self.templates.insert(template.name) {
+            return;
+        }
+
+        // If it's all dynamic nodes, then we don't need to register it
+        if !template.is_completely_dynamic() {
+            to.register_template(template)
         }
     }
 
+    #[cfg(debug_assertions)]
     /// Insert a new template into the VirtualDom's template registry
     pub(crate) fn register_template_first_byte_index(&mut self, mut template: Template) {
         // First, make sure we mark the template as seen, regardless if we process it

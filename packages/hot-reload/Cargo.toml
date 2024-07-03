@@ -34,9 +34,9 @@ tracing.workspace = true
 tokio = { workspace = true, features = ["full"] }
 
 [features]
-default = ["dep:dioxus-html"]
+default = ["dioxus-html"]
 custom_file_watcher = ["dep:ignore", "dep:chrono", "dep:notify", "dep:execute", "dep:once_cell", "dep:ignore"]
-file_watcher = ["custom_file_watcher", "dioxus-html/hot-reload-context"]
+file_watcher = ["custom_file_watcher", "dioxus-html/hot-reload-context", "dioxus-rsx/hot_reload"]
 serve = ["dep:axum", "dep:tokio-stream", "dep:futures-util", "dep:tokio", "file_watcher"]
 
 [package.metadata.docs.rs]

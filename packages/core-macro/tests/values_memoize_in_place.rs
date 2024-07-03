@@ -23,7 +23,7 @@ async fn values_memoize_in_place() {
         use_hook(|| {
             spawn(async move {
                 for _ in 0..15 {
-                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                    tokio::time::sleep(std::time::Duration::from_millis(1)).await;
                     count += 1;
                 }
             });
@@ -36,8 +36,9 @@ async fn values_memoize_in_place() {
                     let _ = &x;
                     println!("num is {num}");
                 },
-                children: count() / 2
+                number: count() / 2
             }
+            TakesSignal { sig: count(), number: count() / 2 }
         }
     }
 
@@ -46,8 +47,8 @@ async fn values_memoize_in_place() {
 
     let mutations = dom.rebuild_to_vec();
     println!("{:#?}", mutations);
-    dom.mark_dirty(ScopeId::ROOT);
-    for _ in 0..20 {
+    dom.mark_dirty(ScopeId::APP);
+    for _ in 0..40 {
         dom.handle_event(
             "click",
             Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())),
@@ -74,7 +75,8 @@ fn cloning_event_handler_components_work() {
             TakesEventHandler {
                 click: move |evt| {
                     println!("Clicked {evt:?}!");
-                }
+                },
+                number: 0
             }
         };
 
@@ -91,7 +93,7 @@ fn cloning_event_handler_components_work() {
 
     let mutations = dom.rebuild_to_vec();
     println!("{:#?}", mutations);
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     for _ in 0..20 {
         dom.handle_event(
             "click",
@@ -105,24 +107,23 @@ fn cloning_event_handler_components_work() {
 }
 
 #[component]
-fn TakesEventHandler(click: EventHandler<usize>, children: usize) -> Element {
-    println!("children is{children}");
+fn TakesEventHandler(click: EventHandler<usize>, number: usize) -> Element {
     let first_render_click = use_hook(move || click);
     if generation() > 0 {
         // Make sure the event handler is memoized in place and never gets dropped
-        first_render_click(children);
+        first_render_click(number);
     }
 
     rsx! {
         button {
-            onclick: move |_| click(children),
-            "{children}"
+            onclick: move |_| click(number),
+            "{number}"
         }
     }
 }
 
 #[component]
-fn TakesSignal(sig: ReadOnlySignal<usize>, children: usize) -> Element {
+fn TakesSignal(sig: ReadOnlySignal<usize>, number: usize) -> Element {
     let first_render_sig = use_hook(move || sig);
     if generation() > 0 {
         // Make sure the signal is memoized in place and never gets dropped
@@ -130,6 +131,6 @@ fn TakesSignal(sig: ReadOnlySignal<usize>, children: usize) -> Element {
     }
 
     rsx! {
-        button { "{children}" }
+        button { "{number}" }
     }
 }

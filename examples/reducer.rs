@@ -20,7 +20,7 @@ fn app() -> Element {
 
         // Add some cute animations if the radio is playing!
         div { class: if state.read().is_playing { "bounce" },
-            "The radio is... ", {state.read().is_playing()}, "!"
+            "The radio is... " {state.read().is_playing()} "!"
         }
 
         button { id: "play", onclick: move |_| state.write().reduce(PlayerAction::Pause), "Pause" }

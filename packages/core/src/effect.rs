@@ -16,9 +16,9 @@ pub(crate) struct Effect {
 }
 
 impl Effect {
-    pub(crate) fn new(order: ScopeOrder, f: impl FnOnce() + 'static) -> Self {
+    pub(crate) fn new(order: ScopeOrder, f: Box<dyn FnOnce() + 'static>) -> Self {
         let mut effect = VecDeque::new();
-        effect.push_back(Box::new(f) as Box<dyn FnOnce() + 'static>);
+        effect.push_back(f);
         Self {
             order,
             effect: RefCell::new(effect),

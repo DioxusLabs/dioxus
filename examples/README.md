@@ -74,7 +74,7 @@ cargo run --example hello_world
 
 [disabled](./disabled.rs) - Disable buttons conditionally
 
-[error_handle](./error_handle.rs) - Handle errors with early return
+[errors](./errors.rs) - Handle errors with early return
 
 ## Routing
 

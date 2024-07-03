@@ -72,7 +72,7 @@ fn component_swap() {
         );
     }
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
         dom.render_immediate_to_vec().santize().edits,
         [
@@ -81,7 +81,7 @@ fn component_swap() {
         ]
     );
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
         dom.render_immediate_to_vec().santize().edits,
         [
@@ -90,7 +90,7 @@ fn component_swap() {
         ]
     );
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
         dom.render_immediate_to_vec().santize().edits,
         [

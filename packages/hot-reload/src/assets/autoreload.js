@@ -31,8 +31,6 @@
   var ws = new WebSocket(url);
 
   ws.onmessage = (ev) => {
-    console.log("Received message: ", ev, ev.data);
-
     if (ev.data == "reload") {
       window.location.reload();
     }

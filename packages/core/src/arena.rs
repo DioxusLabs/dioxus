@@ -19,17 +19,24 @@ pub(crate) struct MountId(pub(crate) usize);
 
 impl Default for MountId {
     fn default() -> Self {
-        Self(usize::MAX)
+        Self::PLACEHOLDER
     }
 }
 
 impl MountId {
+    pub(crate) const PLACEHOLDER: Self = Self(usize::MAX);
+
     pub(crate) fn as_usize(self) -> Option<usize> {
-        if self.0 == usize::MAX {
+        if self == Self::PLACEHOLDER {
             None
         } else {
             Some(self.0)
         }
+    }
+
+    #[allow(unused)]
+    pub(crate) fn mounted(self) -> bool {
+        self != Self::PLACEHOLDER
     }
 }
 
@@ -53,16 +60,18 @@ impl VirtualDom {
     }
 
     pub(crate) fn reclaim(&mut self, el: ElementId) {
-        self.try_reclaim(el)
-            .unwrap_or_else(|| panic!("cannot reclaim {:?}", el));
+        if !self.try_reclaim(el) {
+            tracing::error!("cannot reclaim {:?}", el);
+        }
     }
 
-    pub(crate) fn try_reclaim(&mut self, el: ElementId) -> Option<()> {
-        if el.0 == 0 {
-            panic!("Cannot reclaim the root element",);
+    pub(crate) fn try_reclaim(&mut self, el: ElementId) -> bool {
+        // We never reclaim the unmounted elements or the root element
+        if el.0 == 0 || el.0 == usize::MAX {
+            return true;
         }
 
-        self.elements.try_remove(el.0).map(|_| ())
+        self.elements.try_remove(el.0).is_some()
     }
 
     // Drop a scope without dropping its children

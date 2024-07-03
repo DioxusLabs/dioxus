@@ -79,7 +79,7 @@ fn app() -> Element {
             }
             div {
                 // pass simple rust expressions in
-                class: lazy_fmt,
+                class: "{lazy_fmt}",
                 id: format_args!("attributes can be passed lazily with std::fmt::Arguments"),
                 class: "asd",
                 class: "{asd}",
@@ -97,7 +97,7 @@ fn app() -> Element {
             {rsx!(p { "More templating!" })},
 
             // Iterators
-            {(0..10).map(|i| rsx!(li { "{i}" }))},
+            {(0..10).map(|i| rsx!(li { "{i}" }))}
 
             // Iterators within expressions
             {
@@ -117,7 +117,7 @@ fn app() -> Element {
             // Conditional rendering
             // Dioxus conditional rendering is based around None/Some. We have no special syntax for conditionals.
             // You can convert a bool condition to rsx! with .then and .or
-            {true.then(|| rsx!(div {}))},
+            {true.then(|| rsx!(div {}))}
 
             // Alternatively, you can use the "if" syntax - but both branches must be resolve to Element
             if false {
@@ -135,7 +135,7 @@ fn app() -> Element {
             }}
 
             // returning "None" without a diverging branch is a bit noisy... but rare in practice
-            {None as Option<()>},
+            {None as Option<()>}
 
             // can also just use empty fragments
             Fragment {}
@@ -170,14 +170,14 @@ fn app() -> Element {
 
             // Can pass in props directly as an expression
             {
-                let props = TallerProps {a: "hello", children: None };
+                let props = TallerProps {a: "hello", children: VNode::empty() };
                 rsx!(Taller { ..props })
             }
 
             // Spreading can also be overridden manually
             Taller {
-                ..TallerProps { a: "ballin!", children: None },
-                a: "not ballin!"
+                a: "not ballin!",
+                ..TallerProps { a: "ballin!", children: VNode::empty() }
             }
 
             // Can take children too!
@@ -193,8 +193,8 @@ fn app() -> Element {
             // Type inference can be used too
             TypedInput { initial: 10.0 }
 
-            // geneircs with the `inline_props` macro
-            Label { text: "hello geneirc world!" }
+            // generic with the `inline_props` macro
+            Label { text: "hello generic world!" }
             Label { text: 99.9 }
 
             // Lowercase components work too, as long as they are access using a path
@@ -283,7 +283,7 @@ where
         return rsx! { "{props}" };
     }
 
-    None
+    VNode::empty()
 }
 
 #[component]

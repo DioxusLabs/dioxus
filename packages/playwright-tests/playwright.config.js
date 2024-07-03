@@ -76,23 +76,43 @@ module.exports = defineConfig({
       command:
         "cargo run --package dioxus-playwright-liveview-test --bin dioxus-playwright-liveview-test",
       port: 3030,
-      timeout: 20 * 60 * 1000,
+      timeout: 30 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",
     },
     {
       cwd: path.join(process.cwd(), "web"),
-      command: "cargo run --package dioxus-cli --release -- serve",
-      port: 8080,
-      timeout: 20 * 60 * 1000,
+      command:
+        'cargo run --package dioxus-cli --release -- serve --addr "127.0.0.1" --port 9999',
+      port: 9999,
+      timeout: 30 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",
     },
     {
-      cwd: path.join(process.cwd(), 'fullstack'),
-      command: 'cargo run --package dioxus-cli --release -- serve --platform fullstack',
+      cwd: path.join(process.cwd(), "fullstack"),
+      command:
+        'cargo run --package dioxus-cli --release -- serve --force-sequential --platform fullstack --addr "127.0.0.1" --port 3333',
       port: 3333,
-      timeout: 20 * 60 * 1000,
+      timeout: 30 * 60 * 1000,
+      reuseExistingServer: !process.env.CI,
+      stdout: "pipe",
+    },
+    {
+      cwd: path.join(process.cwd(), "suspense-carousel"),
+      command:
+        'cargo run --package dioxus-cli --release -- serve --force-sequential --platform fullstack --addr "127.0.0.1" --port 4040',
+      port: 4040,
+      timeout: 30 * 60 * 1000,
+      reuseExistingServer: !process.env.CI,
+      stdout: "pipe",
+    },
+    {
+      cwd: path.join(process.cwd(), "nested-suspense"),
+      command:
+        'cargo run --package dioxus-cli --release -- serve --force-sequential --platform fullstack --addr "127.0.0.1" --port 5050',
+      port: 5050,
+      timeout: 30 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",
     },

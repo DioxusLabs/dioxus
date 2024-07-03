@@ -14,7 +14,7 @@ pub struct Serve {
 }
 
 impl Serve {
-    pub async fn serve(self, bin: Option<PathBuf>) -> Result<()> {
+    pub fn serve(self, bin: Option<PathBuf>) -> Result<()> {
         let mut crate_config = dioxus_cli_config::CrateConfig::new(bin)?;
         let mut serve_cfg = self.serve.clone();
 
@@ -80,10 +80,10 @@ impl Serve {
         // start the develop server
         use server::{desktop, fullstack, web};
         match platform {
-            Platform::Web => web::startup(crate_config.clone(), &serve_cfg).await?,
-            Platform::Desktop => desktop::startup(crate_config.clone(), &serve_cfg).await?,
+            Platform::Web => web::startup(crate_config.clone(), &serve_cfg)?,
+            Platform::Desktop => desktop::startup(crate_config.clone(), &serve_cfg)?,
             Platform::Fullstack | Platform::StaticGeneration => {
-                fullstack::startup(crate_config.clone(), &serve_cfg).await?
+                fullstack::startup(crate_config.clone(), &serve_cfg)?
             }
             _ => unreachable!(),
         }

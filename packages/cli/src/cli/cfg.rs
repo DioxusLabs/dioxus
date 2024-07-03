@@ -1,4 +1,5 @@
 use dioxus_cli_config::Platform;
+use dioxus_cli_config::ServeArguments;
 
 use super::*;
 
@@ -14,6 +15,11 @@ pub struct ConfigOptsBuild {
     #[clap(long)]
     #[serde(default)]
     pub force_debug: bool,
+
+    /// This flag only applies to fullstack builds. By default fullstack builds will run the server and client builds in parallel. This flag will force the build to run the server build first, then the client build. [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub force_sequential: bool,
 
     // Use verbose output [default: false]
     #[clap(long)]
@@ -72,6 +78,7 @@ impl From<ConfigOptsServe> for ConfigOptsBuild {
             server_feature: serve.server_feature,
             skip_assets: serve.skip_assets,
             force_debug: serve.force_debug,
+            force_sequential: serve.force_sequential,
             cargo_args: serve.cargo_args,
         }
     }
@@ -80,10 +87,9 @@ impl From<ConfigOptsServe> for ConfigOptsBuild {
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 #[command(group = clap::ArgGroup::new("release-incompatible").multiple(true).conflicts_with("release"))]
 pub struct ConfigOptsServe {
-    /// Port of dev server
-    #[clap(long)]
-    #[clap(default_value_t = 8080)]
-    pub port: u16,
+    /// Arguments for the serve command
+    #[clap(flatten)]
+    pub(crate) server_arguments: ServeArguments,
 
     // TODO: Somehow make this default to `true` if the flag was provided. e.g. `dx serve --open`
     // Currently it requires a value: `dx serve --open true`
@@ -109,6 +115,11 @@ pub struct ConfigOptsServe {
     #[clap(long)]
     #[serde(default)]
     pub force_debug: bool,
+
+    /// This flag only applies to fullstack builds. By default fullstack builds will run the server and client builds in parallel. This flag will force the build to run the server build first, then the client build. [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub force_sequential: bool,
 
     // Use verbose output [default: false]
     #[clap(long)]
@@ -158,6 +169,10 @@ pub struct ConfigOptsServe {
     /// Rustc platform triple
     #[clap(long)]
     pub target: Option<String>,
+
+    /// Additional arguments to pass to the executable
+    #[clap(long)]
+    pub args: Vec<String>,
 
     /// Extra arguments passed to cargo build
     #[clap(last = true)]
