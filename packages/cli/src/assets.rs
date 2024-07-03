@@ -68,21 +68,11 @@ impl Drop for AssetConfigDropGuard {
     }
 }
 
-pub fn copy_assets_dir(config: &CrateConfig, precomprsess_assets: bool) -> anyhow::Result<()> {
-    tracing::info!("Copying public assets to the output directory...");
-    let out_dir = config.out_dir();
-    let asset_dir = config.asset_dir();
-
-    if asset_dir.is_dir() {
-        // Only pre-compress the assets from the web build. Desktop assets are not served, so they don't need to be pre_compressed
-        let pre_compress = precomprsess_assets && config.should_pre_compress_web_assets();
-
-        copy_dir_to(asset_dir, out_dir, pre_compress)?;
-    }
-    Ok(())
-}
-
-fn copy_dir_to(src_dir: PathBuf, dest_dir: PathBuf, pre_compress: bool) -> std::io::Result<()> {
+pub(crate) fn copy_dir_to(
+    src_dir: PathBuf,
+    dest_dir: PathBuf,
+    pre_compress: bool,
+) -> std::io::Result<()> {
     let entries = std::fs::read_dir(&src_dir)?;
     let mut children: Vec<std::thread::JoinHandle<std::io::Result<()>>> = Vec::new();
 

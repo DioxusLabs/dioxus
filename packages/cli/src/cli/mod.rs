@@ -1,7 +1,6 @@
 pub mod autoformat;
 pub mod build;
 pub mod bundle;
-pub mod cfg;
 pub mod check;
 pub mod clean;
 pub mod config;
@@ -11,12 +10,7 @@ pub mod link;
 pub mod serve;
 pub mod translate;
 
-use crate::{
-    cfg::{ConfigOptsBuild, ConfigOptsServe},
-    custom_error,
-    error::Result,
-    Error,
-};
+use crate::{custom_error, error::Result, Error};
 use clap::{Parser, Subcommand};
 use html_parser::Dom;
 use serde::Deserialize;

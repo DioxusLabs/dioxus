@@ -1,4 +1,4 @@
-use crate::{cfg::ConfigOptsServe, BuildResult, Result};
+use crate::{ BuildResult, Result};
 use dioxus_cli_config::CrateConfig;
 
 use cargo_metadata::diagnostic::Diagnostic;
@@ -322,7 +322,7 @@ fn local_path_of_asset(path: &Path) -> Option<PathBuf> {
 pub(crate) trait Platform {
     fn start(
         config: &CrateConfig,
-        serve: &ConfigOptsServe,
+        serve: &Serve,
         env: Vec<(String, String)>,
     ) -> Result<Self>
     where
@@ -330,7 +330,7 @@ pub(crate) trait Platform {
     fn rebuild(
         &mut self,
         config: &CrateConfig,
-        serve: &ConfigOptsServe,
+        serve: &Serve,
         env: Vec<(String, String)>,
     ) -> Result<BuildResult>;
 }

@@ -1,6 +1,6 @@
 use crate::server::SharedFileMap;
 use crate::{
-    cfg::ConfigOptsServe,
+
     server::{
         output::{print_console_info, PrettierOptions},
         setup_file_watcher, Platform,
@@ -23,13 +23,13 @@ use crate::plugin::PluginManager;
 
 use super::HotReloadState;
 
-pub fn startup(config: CrateConfig, serve: &ConfigOptsServe) -> Result<()> {
+pub fn startup(config: CrateConfig, serve: &Serve) -> Result<()> {
     startup_with_platform::<DesktopPlatform>(config, serve)
 }
 
 pub(crate) fn startup_with_platform<P: Platform + Send + 'static>(
     config: CrateConfig,
-    serve_cfg: &ConfigOptsServe,
+    serve_cfg: &Serve,
 ) -> Result<()> {
     set_ctrl_c(&config);
 
@@ -72,7 +72,7 @@ fn set_ctrl_c(config: &CrateConfig) {
 /// Start the server without hot reload
 fn serve<P: Platform + Send + 'static>(
     config: CrateConfig,
-    serve: &ConfigOptsServe,
+    serve: &Serve,
     hot_reload_state: HotReloadState,
 ) -> Result<()> {
     let platform = RwLock::new(P::start(&config, serve, Vec::new())?);
@@ -279,7 +279,7 @@ impl DesktopPlatform {
     pub fn start_with_options(
         build_result: BuildResult,
         config: &CrateConfig,
-        serve: &ConfigOptsServe,
+        serve: &Serve,
         env: Vec<(String, String)>,
     ) -> Result<Self> {
         let (child, first_build_result) = run_desktop(&serve.args, env, build_result)?;
@@ -346,7 +346,7 @@ impl DesktopPlatform {
 impl Platform for DesktopPlatform {
     fn start(
         config: &CrateConfig,
-        serve: &ConfigOptsServe,
+        serve: &Serve,
         env: Vec<(String, String)>,
     ) -> Result<Self> {
         let build_result = crate::builder::build_desktop(config, true, serve.skip_assets, None)?;
@@ -356,7 +356,7 @@ impl Platform for DesktopPlatform {
     fn rebuild(
         &mut self,
         config: &CrateConfig,
-        _: &ConfigOptsServe,
+        _: &Serve,
         env: Vec<(String, String)>,
     ) -> Result<BuildResult> {
         // See `rebuild_with_options()`'s docs for the explanation why the code

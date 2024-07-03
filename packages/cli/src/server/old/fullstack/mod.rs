@@ -1,7 +1,7 @@
 use dioxus_cli_config::CrateConfig;
 
 use crate::{
-    cfg::{ConfigOptsBuild, ConfigOptsServe},
+
     BuildResult, Result,
 };
 
@@ -19,7 +19,7 @@ static CLIENT_RUST_FLAGS: &str = "-C debuginfo=none -C strip=debuginfo";
 static SERVER_RUST_FLAGS: &str = "-C opt-level=2";
 static DEBUG_RUST_FLAG: &str = "-C debug-assertions";
 
-fn rust_flags(build: &ConfigOptsBuild, base_flags: &str) -> String {
+fn rust_flags(build: &Build, base_flags: &str) -> String {
     let mut rust_flags = base_flags.to_string();
     if !build.release {
         rust_flags += " ";
@@ -28,21 +28,21 @@ fn rust_flags(build: &ConfigOptsBuild, base_flags: &str) -> String {
     rust_flags
 }
 
-pub fn client_rust_flags(build: &ConfigOptsBuild) -> String {
+pub fn client_rust_flags(build: &Build) -> String {
     rust_flags(build, CLIENT_RUST_FLAGS)
 }
 
-pub fn server_rust_flags(build: &ConfigOptsBuild) -> String {
+pub fn server_rust_flags(build: &Build) -> String {
     rust_flags(build, SERVER_RUST_FLAGS)
 }
 
-pub fn startup(config: CrateConfig, serve: &ConfigOptsServe) -> Result<()> {
+pub fn startup(config: CrateConfig, serve: &Serve) -> Result<()> {
     desktop::startup_with_platform::<FullstackPlatform>(config, serve)
 }
 
 fn start_web_build_thread(
     config: &CrateConfig,
-    serve: &ConfigOptsServe,
+    serve: &Serve,
 ) -> std::thread::JoinHandle<Result<()>> {
     let serve = serve.clone();
     let target_directory = config.client_target_dir();
@@ -50,7 +50,7 @@ fn start_web_build_thread(
     std::thread::spawn(move || build_web(serve, &target_directory))
 }
 
-fn make_desktop_config(config: &CrateConfig, serve: &ConfigOptsServe) -> CrateConfig {
+fn make_desktop_config(config: &CrateConfig, serve: &Serve) -> CrateConfig {
     let mut desktop_config = config.clone();
     if !serve.force_sequential {
         desktop_config.target_dir = config.server_target_dir();
@@ -66,7 +66,7 @@ fn make_desktop_config(config: &CrateConfig, serve: &ConfigOptsServe) -> CrateCo
     desktop_config
 }
 
-fn add_serve_options_to_env(serve: &ConfigOptsServe, env: &mut Vec<(String, String)>) {
+fn add_serve_options_to_env(serve: &Serve, env: &mut Vec<(String, String)>) {
     env.push((
         dioxus_cli_config::__private::SERVE_ENV.to_string(),
         serde_json::to_string(&serve.server_arguments).unwrap(),
@@ -74,7 +74,7 @@ fn add_serve_options_to_env(serve: &ConfigOptsServe, env: &mut Vec<(String, Stri
 }
 
 struct FullstackPlatform {
-    serve: ConfigOptsServe,
+    serve: Serve,
     desktop: desktop::DesktopPlatform,
     server_rust_flags: String,
 }
@@ -82,7 +82,7 @@ struct FullstackPlatform {
 impl Platform for FullstackPlatform {
     fn start(
         config: &CrateConfig,
-        serve: &ConfigOptsServe,
+        serve: &Serve,
         env: Vec<(String, String)>,
     ) -> Result<Self>
     where
@@ -130,7 +130,7 @@ impl Platform for FullstackPlatform {
     fn rebuild(
         &mut self,
         crate_config: &CrateConfig,
-        serve: &ConfigOptsServe,
+        serve: &Serve,
         env: Vec<(String, String)>,
     ) -> Result<BuildResult> {
         let thread_handle = start_web_build_thread(crate_config, &self.serve);
@@ -149,8 +149,8 @@ impl Platform for FullstackPlatform {
     }
 }
 
-fn build_web(serve: ConfigOptsServe, target_directory: &std::path::Path) -> Result<()> {
-    let mut web_config: ConfigOptsBuild = serve.into();
+fn build_web(serve: Serve, target_directory: &std::path::Path) -> Result<()> {
+    let mut web_config: Build = serve.into();
     let web_feature = web_config.client_feature.clone();
     let features = &mut web_config.features;
     match features {

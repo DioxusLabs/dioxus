@@ -1,3 +1,4 @@
+use crate::server::Serve;
 use crate::Result;
 use axum::{
     body::Body,
@@ -35,8 +36,6 @@ use tower_http::{
     ServiceBuilderExt,
 };
 
-use crate::cfg::ConfigOptsServe;
-
 pub struct Server {
     pub sockets: Vec<WebSocket>,
     pub ip: IpAddr,
@@ -45,7 +44,7 @@ pub struct Server {
 }
 
 impl Server {
-    pub async fn start(opts: &ConfigOptsServe, cfg: &CrateConfig) -> Self {
+    pub async fn start(opts: &Serve, cfg: &CrateConfig) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
 
         let router = setup_router(&cfg, tx).await.unwrap();
@@ -101,7 +100,7 @@ impl Server {
         }
     }
 
-    pub fn update(&mut self, cfg: &ConfigOptsServe, crate_config: &CrateConfig) {}
+    pub fn update(&mut self, cfg: &Serve, crate_config: &CrateConfig) {}
 
     pub async fn send_hotreload(&mut self, reload: HotReloadMsg) {
         let msg = serde_json::to_string(&reload).unwrap();

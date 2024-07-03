@@ -1,6 +1,6 @@
 use crate::{
     builder,
-    cfg::ConfigOptsServe,
+
     serve::Serve,
     server::{
         output::{print_console_info, PrettierOptions, WebServerInfo},
@@ -22,7 +22,7 @@ use server::*;
 
 use super::HotReloadState;
 
-pub fn startup(config: CrateConfig, serve_cfg: &ConfigOptsServe) -> Result<()> {
+pub fn startup(config: CrateConfig, serve_cfg: &Serve) -> Result<()> {
     set_ctrlc_handler(&config);
 
     let ip = serve_cfg
@@ -41,7 +41,7 @@ pub fn serve(
     ip: IpAddr,
     config: CrateConfig,
     hot_reload_state: HotReloadState,
-    opts: &ConfigOptsServe,
+    opts: &Serve,
 ) -> Result<()> {
     let skip_assets = opts.skip_assets;
     let port = opts.server_arguments.port;

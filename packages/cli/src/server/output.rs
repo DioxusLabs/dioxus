@@ -1,7 +1,8 @@
+use crate::serve::Serve;
 use cargo_metadata::diagnostic::Diagnostic;
 use dioxus_cli_config::CrateConfig;
 
-use crate::{build, cfg::ConfigOptsServe};
+use crate::build;
 
 use super::{Builder, Server, Watcher};
 
@@ -13,7 +14,7 @@ pub enum TuiInput {
 }
 
 impl Output {
-    pub fn start(cfg: &ConfigOptsServe, crate_config: &CrateConfig) -> Self {
+    pub fn start(cfg: &Serve, crate_config: &CrateConfig) -> Self {
         // Wire the handler to ping the handle_input
         // This will give us some time to handle the input
         ctrlc::set_handler(|| {
@@ -31,7 +32,7 @@ impl Output {
 
     pub fn draw(
         &self,
-        opts: &ConfigOptsServe,
+        opts: &Serve,
         config: &CrateConfig,
         build_engine: &Builder,
         server: &Server,

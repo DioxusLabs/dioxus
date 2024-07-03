@@ -4,6 +4,7 @@ use crate::assets::{asset_manifest, copy_assets_dir, process_assets, AssetConfig
 use crate::Result;
 use dioxus_cli_config::{CrateConfig, ExecutableType, Platform};
 use manganis_cli_support::{AssetManifest, ManganisSupportGuard};
+use std::fs::create_dir_all;
 use std::{env, path::PathBuf};
 
 impl BuildRequest {
@@ -82,10 +83,25 @@ impl BuildRequest {
         let cmd = self.build_command()?;
 
         // Run the build command with a pretty loader
-        let warning_messages = build_cargo(cmd)?;
+        let cargo_result = build_cargo(cmd)?;
 
         // Post process the build result
+        let build_result = self.post_process_cargo_build(&cargo_result)?;
 
+        tracing::info!(
+            "🚩 Build completed: [./{}]",
+            self.config
+                .dioxus_config
+                .application
+                .out_dir
+                .clone()
+                .display()
+        );
+
+        Ok(build_result)
+    }
+
+    fn post_process_build(&self, cargo_build_result: &CargoBuildResult) -> Result<BuildResult> {
         // Start Manganis linker intercept.
         let linker_args = vec![format!("{}", self.config.out_dir().display())];
 
@@ -103,10 +119,11 @@ impl BuildRequest {
             file_name
         };
 
-        if !config.out_dir().is_dir() {
-            create_dir_all(config.out_dir())?;
+        let out_dir = self.config.out_dir();
+        if !out_dir.is_dir() {
+            create_dir_all(out_dir)?;
         }
-        let output_path = self.config.out_dir().join(target_file);
+        let output_path = out_dir.join(target_file);
         if let Some(res_path) = &warning_messages.output_location {
             copy(res_path, &output_path)?;
         }
@@ -124,10 +141,9 @@ impl BuildRequest {
             self.post_process_web_build(&build_result)
         }
 
-        copy_assets_dir(config, self.compress_assets)?;
+        self.copy_assets_dir()?;
 
         let assets = if !skip_assets {
-            tracing::info!("Processing assets");
             let assets = asset_manifest(config);
             // Collect assets
             process_assets(config, &assets)?;
@@ -138,17 +154,29 @@ impl BuildRequest {
             None
         };
 
-        tracing::info!(
-            "🚩 Build completed: [./{}]",
-            self.config
-                .dioxus_config
-                .application
-                .out_dir
-                .clone()
-                .display()
-        );
+        // Create the build result
+        let build_result = BuildResult {
+            warnings: warning_messages.warnings,
+            executable: Some(output_path),
+            elapsed_time: t_start.elapsed(),
+            assets,
+        };
 
         Ok(build_result)
+    }
+
+    pub fn copy_assets_dir(&self) -> anyhow::Result<()> {
+        tracing::info!("Copying public assets to the output directory...");
+        let out_dir = self.config.out_dir();
+        let asset_dir = self.config.asset_dir();
+
+        if asset_dir.is_dir() {
+            // Only pre-compress the assets from the web build. Desktop assets are not served, so they don't need to be pre_compressed
+            let pre_compress = self.web && self.config.should_pre_compress_web_assets();
+
+            copy_dir_to(asset_dir, out_dir, pre_compress)?;
+        }
+        Ok(())
     }
 }
 /// This trait is only created for the convenient and concise way to set

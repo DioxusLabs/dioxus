@@ -1,4 +1,3 @@
-use crate::cfg::ConfigOptsBuild;
 use crate::Result;
 use cargo_metadata::diagnostic::Diagnostic;
 use dioxus_cli_config::CrateConfig;
@@ -61,7 +60,7 @@ impl Process {
 
         // Then kill the process
         match self {
-            Process::Web(web) => web.kill().await,
+            Process::Web(web) => todo!(),
             Process::Native(native) => native.kill().await,
         }
     }
@@ -70,14 +69,28 @@ impl Process {
 pub struct BuildRequest {
     /// Whether the build is for serving the application
     pub serve: bool,
-    /// Whether to pre-compress assets
-    pub precompress_assets: bool,
     /// Whether this is a web build
     pub web: bool,
     /// The configuration for the crate we are building
     pub config: CrateConfig,
     /// The arguments for the build
-    pub build_arguments: ConfigOptsBuild,
+    pub build_arguments: Build,
+}
+
+impl BuildRequest {
+    pub fn start_build(
+        &self,
+        platform: Platform,
+        config: CrateConfig,
+        build_arguments: impl Into<Build>,
+    ) -> Result<BuildResult> {
+        match platform {
+            Platform::Web => self.build_web(config, build_arguments),
+            Platform::Desktop => self.build_desktop(config, build_arguments),
+            Platform::Fullstack => self.build_fullstack(config, build_arguments),
+            Platform::StaticGeneration => self.build_fullstack(config, build_arguments),
+        }
+    }
 }
 
 /// A handle to ongoing builds and then the spawned tasks themselves

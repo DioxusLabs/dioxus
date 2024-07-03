@@ -1,11 +1,13 @@
+use crate::build::Build;
 use core::panic;
 use dioxus_cli_config::ExecutableType;
+use std::ops::Deref;
 use std::{env::current_dir, fs::create_dir_all, str::FromStr};
 
 use tauri_bundler::{BundleSettings, PackageSettings, SettingsBuilder};
 
 use super::*;
-use crate::{build_desktop, cfg::ConfigOptsBundle};
+use crate::build_desktop;
 
 /// Bundle the Rust desktop app and all of its assets
 #[derive(Clone, Debug, Parser)]
@@ -13,8 +15,17 @@ use crate::{build_desktop, cfg::ConfigOptsBundle};
 pub struct Bundle {
     #[clap(long)]
     pub package: Option<Vec<String>>,
+    /// The arguments for the dioxus build
     #[clap(flatten)]
-    pub build: ConfigOptsBundle,
+    pub build_arguments: Build,
+}
+
+impl Deref for Bundle {
+    type Target = Build;
+
+    fn deref(&self) -> &Self::Target {
+        &self_arguments
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -67,26 +78,26 @@ impl Bundle {
 
         // change the release state.
         crate_config.with_release(true);
-        crate_config.with_verbose(self.build.verbose);
+        crate_config.with_verbose(self.verbose);
 
-        if self.build.example.is_some() {
-            crate_config.as_example(self.build.example.unwrap());
+        if self.example.is_some() {
+            crate_config.as_example(self.example.unwrap());
         }
 
-        if self.build.profile.is_some() {
-            crate_config.set_profile(self.build.profile.unwrap());
+        if self.profile.is_some() {
+            crate_config.set_profile(self.profile.unwrap());
         }
 
-        if let Some(target) = &self.build.target {
+        if let Some(target) = &self.target {
             crate_config.set_target(target.to_string());
         }
 
-        crate_config.set_cargo_args(self.build.cargo_args);
-        if let Some(platform) = self.build.platform {
+        crate_config.set_cargo_args(self.cargo_args);
+        if let Some(platform) = self.platform {
             crate_config.extend_with_platform(platform);
         }
 
-        if let Some(features) = self.build.features {
+        if let Some(features) = self.features {
             crate_config.set_features(features);
         }
 
@@ -201,7 +212,7 @@ impl Bundle {
             );
         }
 
-        if let Some(target) = &self.build.target {
+        if let Some(target) = &self.target {
             settings = settings.target(target.to_string());
         }
 

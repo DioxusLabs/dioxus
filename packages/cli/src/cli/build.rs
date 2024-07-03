@@ -4,11 +4,69 @@ use dioxus_cli_config::Platform;
 use super::*;
 
 /// Build the Rust WASM app and all of its assets.
-#[derive(Clone, Debug, Parser)]
+#[derive(Clone, Debug, Default, Deserialize, Parser)]
 #[clap(name = "build")]
 pub struct Build {
-    #[clap(flatten)]
-    pub build: ConfigOptsBuild,
+    /// Build in release mode [default: false]
+    #[clap(long, short)]
+    #[serde(default)]
+    pub release: bool,
+
+    /// This flag only applies to fullstack builds. By default fullstack builds will run with something in between debug and release mode. This flag will force the build to run in debug mode. [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub force_debug: bool,
+
+    /// This flag only applies to fullstack builds. By default fullstack builds will run the server and client builds in parallel. This flag will force the build to run the server build first, then the client build. [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub force_sequential: bool,
+
+    // Use verbose output [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub verbose: bool,
+
+    /// Build a example [default: ""]
+    #[clap(long)]
+    pub example: Option<String>,
+
+    /// Build with custom profile
+    #[clap(long)]
+    pub profile: Option<String>,
+
+    /// Build platform: support Web & Desktop [default: "default_platform"]
+    #[clap(long, value_enum)]
+    pub platform: Option<Platform>,
+
+    /// Skip collecting assets from dependencies [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub skip_assets: bool,
+
+    /// Space separated list of features to activate
+    #[clap(long)]
+    pub features: Option<Vec<String>>,
+
+    /// The feature to use for the client in a fullstack app [default: "web"]
+    #[clap(long, default_value_t = { "web".to_string() })]
+    pub client_feature: String,
+
+    /// The feature to use for the server in a fullstack app [default: "server"]
+    #[clap(long, default_value_t = { "server".to_string() })]
+    pub server_feature: String,
+
+    /// Rustc platform triple
+    #[clap(long)]
+    pub target: Option<String>,
+
+    /// Extra arguments passed to cargo build
+    #[clap(last = true)]
+    pub cargo_args: Vec<String>,
+
+    /// Inject scripts to load the wasm and js files for your dioxus app if they are not already present [default: true]
+    #[clap(long, default_value_t = true)]
+    pub inject_loading_scripts: bool,
 }
 
 impl Build {
@@ -25,31 +83,30 @@ impl Build {
         }
 
         // change the release state.
-        crate_config.with_release(self.build.release);
-        crate_config.with_verbose(self.build.verbose);
+        crate_config.with_release(self.release);
+        crate_config.with_verbose(self.verbose);
 
-        if self.build.example.is_some() {
-            crate_config.as_example(self.build.example.clone().unwrap());
+        if self.example.is_some() {
+            crate_config.as_example(self.example.clone().unwrap());
         }
 
-        if self.build.profile.is_some() {
-            crate_config.set_profile(self.build.profile.clone().unwrap());
+        if self.profile.is_some() {
+            crate_config.set_profile(self.profile.clone().unwrap());
         }
 
-        if self.build.features.is_some() {
-            crate_config.set_features(self.build.features.clone().unwrap());
+        if self.features.is_some() {
+            crate_config.set_features(self.features.clone().unwrap());
         }
 
         let platform = self
-            .build
             .platform
             .unwrap_or(crate_config.dioxus_config.application.default_platform);
 
-        if let Some(target) = self.build.target.clone() {
+        if let Some(target) = self.target.clone() {
             crate_config.set_target(target);
         }
 
-        crate_config.set_cargo_args(self.build.cargo_args.clone());
+        crate_config.set_cargo_args(self.cargo_args.clone());
         crate_config.extend_with_platform(platform);
 
         // #[cfg(feature = "plugin")]
@@ -58,12 +115,12 @@ impl Build {
         let build_result = match platform {
             Platform::Web => {
                 // `rust_flags` are used by fullstack's client build.
-                crate::builder::build_web(&crate_config, self.build.skip_assets, rust_flags)?
+                crate::builder::build_web(&crate_config, self.skip_assets, rust_flags)?
             }
             Platform::Desktop => {
                 // Since desktop platform doesn't use `rust_flags`, this
                 // argument is explicitly set to `None`.
-                crate::builder::build_desktop(&crate_config, false, self.build.skip_assets, None)?
+                crate::builder::build_desktop(&crate_config, false, self.skip_assets, None)?
             }
             Platform::Fullstack | Platform::StaticGeneration => {
                 // Fullstack mode must be built with web configs on the desktop
