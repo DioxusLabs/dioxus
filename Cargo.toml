@@ -125,6 +125,9 @@ ciborium = "0.2.1"
 base64 = "0.21.0"
 once_cell = "1.17.1"
 
+# cli, cli-config
+dirs = "5.0.1"
+
 # speed up some macros by optimizing them
 [profile.dev.package.insta]
 opt-level = 3

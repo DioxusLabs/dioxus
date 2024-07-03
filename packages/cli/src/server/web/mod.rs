@@ -90,7 +90,15 @@ pub fn serve(
         let router = setup_router(config.clone(), hot_reload_state).await?;
 
         // Start server
-        start_server(ip, port, router, opts.open, rustls_config, &config).await?;
+        start_server(
+            ip,
+            port,
+            router,
+            opts.open.unwrap_or_default(),
+            rustls_config,
+            &config,
+        )
+        .await?;
 
         Ok(())
     })

@@ -41,6 +41,9 @@ pub struct DioxusConfig {
     #[cfg(feature = "cli")]
     #[serde(default = "default_plugin")]
     pub plugin: toml::Value,
+
+    #[cfg(feature = "cli")]
+    pub cli_settings: Option<crate::CliSettings>,
 }
 
 #[cfg(feature = "cli")]
@@ -116,6 +119,8 @@ impl DioxusConfig {
     /// Load the dioxus config from a path
     #[tracing::instrument]
     pub fn load(bin: Option<PathBuf>) -> Result<Option<DioxusConfig>, CrateConfigError> {
+        use crate::CliSettings;
+
         let crate_dir = crate::cargo::crate_root();
 
         let crate_dir = match crate_dir {
@@ -157,6 +162,23 @@ impl DioxusConfig {
                 if cfg.bundle.publisher.is_none() {
                     cfg.bundle.publisher = Some(name);
                 }
+
+                // Handle Cli Settings
+                if cfg.cli_settings.is_none() {
+                    cfg.cli_settings = Some(CliSettings::default());
+                }
+
+                let cli_settings = cfg.cli_settings.as_mut().unwrap();
+                // If the project-level settings doesn't exist, let's grab it from global.
+                if let Some(global_cli_settings) = crate::CliSettings::from_global() {
+                    if cli_settings.always_hot_reload.is_none() {
+                        cli_settings.always_hot_reload = global_cli_settings.always_hot_reload;
+                    }
+                    if cli_settings.always_open_browser.is_none() {
+                        cli_settings.always_open_browser = global_cli_settings.always_open_browser;
+                    }
+                }
+
                 Ok(Some(cfg))
             }
             cfg => cfg,
@@ -185,7 +207,6 @@ impl Default for DioxusConfig {
                 default_platform: default_platform(),
                 out_dir: out_dir_default(),
                 asset_dir: asset_dir_default(),
-                hot_reload: hot_reload_default(),
 
                 #[cfg(feature = "cli")]
                 tools: Default::default(),
@@ -223,6 +244,9 @@ impl Default for DioxusConfig {
             },
             #[cfg(feature = "cli")]
             plugin: toml::Value::Table(toml::map::Map::new()),
+
+            #[cfg(feature = "cli")]
+            cli_settings: Some(crate::CliSettings::default()),
         }
     }
 }
@@ -241,9 +265,6 @@ pub struct ApplicationConfig {
     #[serde(default = "asset_dir_default")]
     pub asset_dir: PathBuf,
 
-    #[serde(default = "hot_reload_default")]
-    pub hot_reload: bool,
-
     #[cfg(feature = "cli")]
     #[serde(default)]
     pub tools: std::collections::HashMap<String, toml::Value>,
@@ -258,10 +279,6 @@ fn default_name() -> String {
 
 fn default_platform() -> Platform {
     Platform::Web
-}
-
-fn hot_reload_default() -> bool {
-    true
 }
 
 fn asset_dir_default() -> PathBuf {
