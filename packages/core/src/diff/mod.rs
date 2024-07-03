@@ -103,86 +103,16 @@ impl VirtualDom {
         to: &mut impl WriteMutations,
         mut template: Template,
     ) {
-        // First, check if we've already seen this template
-        if self.templates.get(&template.name).is_none() {
-            self.templates.insert(template.name, template);
-            // // if hot reloading is enabled, then we need to check for a template that has overriten this one
-            // #[cfg(debug_assertions)]
-            // if let Some(mut new_template) = self
-            //     .templates
-            //     .get_mut(path)
-            //     .and_then(|map| map.remove(&usize::MAX))
-            // {
-            //     // the byte index of the hot reloaded template could be different
-            //     new_template.name = template.name;
-            //     template = new_template;
-            // }
-
-            // self.templates
-            //     .entry(path)
-            //     .or_default()
-            //     .insert(byte_index, template);
-            // In debug mode, we check the more complete hashmap by byte index
-            // #[cfg(debug_assertions)]
-            // {
-            //     let (path, byte_index) = template.name.rsplit_once(':').unwrap();
-
-            //     let byte_index = byte_index.parse::<usize>().unwrap();
-            //     let mut entry = self.templates.entry(path);
-            //     // If we've already seen this template, just return
-            //     if let std::collections::hash_map::Entry::Occupied(occupied) = &entry {
-            //         if occupied.get().contains_key(&byte_index) {
-            //             return;
-            //         }
-            //     }
-
-            //     // Otherwise, insert it and register it
-            //     entry.or_default().insert(byte_index, template);
-            // }
-
-            // In release mode, everything is built into the &'static str
-            #[cfg(not(debug_assertions))]
-            if !self.templates.insert(template.name) {
-                return;
-            }
-
-            // If it's all dynamic nodes, then we don't need to register it
-            if !template.is_completely_dynamic() {
-                to.register_template(template)
-            }
+        if self.templates.contains_key(template.name) {
+            return;
         }
 
-        // / Insert a new template into the VirtualDom's template registry
-        // pub(crate) fn register_template_first_byte_index(&mut self, mut template: Template) {
-        // First, make sure we mark the template as seen, regardless if we process it
-
-        // self.templates.entry(template.name).or_insert(template);
-
-        // let (path, _) = template.name.rsplit_once(':').unwrap();
-        // if let Some((_, old_template)) = self
-        //     .templates
-        //     .entry(path)
-        //     .or_default()
-        //     .iter_mut()
-        //     .min_by_key(|(byte_index, _)| **byte_index)
-        // {
-        //     // the byte index of the hot reloaded template could be different
-        //     template.name = old_template.name;
-        //     *old_template = template;
-        // } else {
-        //     // This is a template without any current instances
-        //     self.templates
-        //         .entry(path)
-        //         .or_default()
-        //         .insert(usize::MAX, template);
-        // }
+        _ = self.templates.insert(template.name, template);
 
         // If it's all dynamic nodes, then we don't need to register it
-        //     if !template.is_completely_dynamic() {
-        //         self.queued_templates.push(template);
-        //     }
-        // }
-        // }
+        if !template.is_completely_dynamic() {
+            to.register_template(template)
+        }
     }
 }
 

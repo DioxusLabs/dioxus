@@ -569,21 +569,23 @@ impl VirtualDom {
     /// This will only replace the parent template, not any nested templates.
     #[instrument(skip(self), level = "trace", name = "VirtualDom::replace_template")]
     pub fn replace_template(&mut self, template: Template) {
-        self.queued_templates.push(template);
-        self.templates.insert(template.name, template);
         // we only replace templates if hot reloading is enabled
         #[cfg(debug_assertions)]
         {
-            // self.register_template_first_byte_index(template);
+            // Save the template ID
+            self.templates.insert(template.name, template);
+
+            // Only queue the template to be written if its not completely dynamic
+            if !template.is_completely_dynamic() {
+                self.queued_templates.push(template);
+            }
 
             // iterating a slab is very inefficient, but this is a rare operation that will only happen during development so it's fine
             let mut dirty = Vec::new();
             for (id, scope) in self.scopes.iter() {
                 // Recurse into the dynamic nodes of the existing mounted node to see if the template is alive in the tree
                 fn check_node_for_templates(node: &crate::VNode, template: Template) -> bool {
-                    let this_template_name = node.template.get().name.rsplit_once(':').unwrap().0;
-
-                    if this_template_name == template.name.rsplit_once(':').unwrap().0 {
+                    if node.template.get().name == template.name {
                         return true;
                     }
 
