@@ -430,27 +430,3 @@ fn get_expr_length(span: Span) -> usize {
         10000
     }
 }
-
-#[test]
-fn raw_braced_expr() {
-    let file = include_str!("../tests/samples/braced_expr.rs");
-    let src = syn::parse_file(file).unwrap();
-    let main_fn = &src.items[0];
-    let block = match main_fn {
-        syn::Item::Fn(ref item) => item.block.clone(),
-        _ => panic!("Expected a function"),
-    };
-
-    let raw_expr = &block.stmts[0];
-
-    let syn::Stmt::Expr(exp, _semi) = raw_expr else {
-        panic!("Expected an expression")
-    };
-
-    let tokens = exp.to_token_stream();
-    let block: PartialExpr = syn::parse2(tokens).unwrap();
-    dbg!(block.span());
-    dbg!(block.span().start(), block.span().end());
-
-    dbg!(get_expr_length(block.span()));
-}

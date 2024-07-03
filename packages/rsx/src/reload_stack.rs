@@ -81,10 +81,6 @@ impl<T> PopVec<T> {
         // next free is 0 when stack len = 1
         self.next_free == self.stack.len() - 1
     }
-
-    pub fn raw_len(&self) -> usize {
-        self.stack.len()
-    }
 }
 
 #[test]
