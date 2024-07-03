@@ -113,10 +113,6 @@ pub fn spawn(fut: impl Future<Output = ()> + 'static) -> Task {
     Runtime::with_current_scope(|cx| cx.spawn(fut)).expect("to be in a dioxus runtime")
 }
 
-/// Queue an effect to run after the next render. You generally shouldn't need to interact with this function directly. [use_effect](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_effect.html) will call this function for you.
-pub fn queue_effect(f: impl FnOnce() + 'static) {
-    Runtime::with_current_scope(|cx| cx.queue_effect(f)).expect("to be in a dioxus runtime")
-}
 
 /// Spawn a future that Dioxus won't clean up when this component is unmounted
 ///
