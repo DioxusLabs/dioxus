@@ -108,7 +108,7 @@ impl Platform for FullstackPlatform {
         let desktop =
             DesktopPlatform::start_with_options(build_result, &desktop_config, serve, desktop_env)?;
 
-        if serve.open {
+        if serve.open.unwrap_or_default() {
             crate::server::web::open_browser(
                 config,
                 serve
