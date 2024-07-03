@@ -21,21 +21,23 @@ impl NativeReceiver {
     ) -> Option<Result<DevserverMsg, tokio_tungstenite::tungstenite::Error>> {
         let res = self.socket.next().await;
 
-        res.map(|f| {
-            f.map(|f| {
-                println!("Received message: {:?}", f);
+        // res.map(|f| {
+        //     f.map(|f| {
+        //         println!("Received message: {:?}", f);
 
-                match f {
-                    Message::Text(_) => todo!(),
-                    Message::Binary(_) => todo!(),
-                    Message::Ping(_) => todo!(),
-                    Message::Pong(_) => todo!(),
-                    Message::Close(_) => todo!(),
-                    Message::Frame(_) => todo!(),
-                }
+        //         match f {
+        //             Message::Text(_) => todo!(),
+        //             Message::Binary(_) => todo!(),
+        //             Message::Ping(_) => todo!(),
+        //             Message::Pong(_) => todo!(),
+        //             Message::Close(_) => todo!(),
+        //             Message::Frame(_) => todo!(),
+        //         }
 
-                f
-            })
-        });
+        //         f
+        //     })
+        // });
+
+        todo!()
     }
 }
