@@ -1,12 +1,9 @@
-use std::{
-    collections::HashSet,
-    path::{PathBuf},
-};
+use std::{collections::HashSet, path::PathBuf};
 
 use dioxus_cli_config::CrateConfig;
 use dioxus_hot_reload::HotReloadMsg;
 use dioxus_html::HtmlCtx;
-use dioxus_rsx::{hot_reload::FileMap};
+use dioxus_rsx::hot_reload::FileMap;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
 use notify::{event::ModifyKind, EventKind, FsEventWatcher};

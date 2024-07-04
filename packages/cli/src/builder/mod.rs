@@ -1,5 +1,5 @@
+use crate::build::Build;
 use crate::Result;
-use crate::{build::Build};
 use cargo_metadata::diagnostic::Diagnostic;
 use dioxus_cli_config::CrateConfig;
 use dioxus_cli_config::Platform;
@@ -8,7 +8,7 @@ use std::{path::PathBuf, time::Duration};
 use tokio::process::Child;
 
 mod cargo;
-// mod fullstack;
+mod fullstack;
 mod prepare_html;
 mod progress;
 mod web;
@@ -89,6 +89,7 @@ impl BuildRequest {
         config: CrateConfig,
         build_arguments: impl Into<Build>,
     ) -> Vec<BuildRequest> {
+        let build_arguments = build_arguments.into();
         match platform {
             Platform::Web | Platform::Desktop => {
                 let web = platform == Platform::Web;
@@ -96,12 +97,12 @@ impl BuildRequest {
                     serve,
                     web,
                     config,
-                    build_arguments: build_arguments.into(),
+                    build_arguments,
                     rust_flags: Default::default(),
                 }]
             }
             Platform::StaticGeneration | Platform::Fullstack => {
-                todo!()
+                Self::new_fullstack(config, build_arguments, serve)
             }
             _ => unimplemented!("Unknown platform: {platform:?}"),
         }

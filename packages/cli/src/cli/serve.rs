@@ -16,27 +16,6 @@ pub struct Serve {
     /// Arguments for the dioxus build
     #[clap(flatten)]
     pub(crate) build_arguments: Build,
-
-    // TODO: Somehow make this default to `true` if the flag was provided. e.g. `dx serve --open`
-    // Currently it requires a value: `dx serve --open true`
-    /// Open the app in the default browser [default: false - unless project or global settings are set]
-    #[clap(long)]
-    pub open: Option<bool>,
-
-    // TODO: See `open` field
-    /// Enable full hot reloading for the app [default: true - unless project or global settings are set]
-    #[clap(long, group = "release-incompatible")]
-    pub hot_reload: Option<bool>,
-
-    /// Set cross-origin-policy to same-origin [default: false]
-    #[clap(name = "cross-origin-policy")]
-    #[clap(long)]
-    #[serde(default)]
-    pub cross_origin_policy: bool,
-
-    /// Additional arguments to pass to the executable
-    #[clap(long)]
-    pub args: Vec<String>,
 }
 
 impl Deref for Serve {
@@ -54,18 +33,14 @@ impl Serve {
         // Handle cli settings
         let cli_settings = crate_config.dioxus_config.cli_settings.clone().unwrap();
 
-        if self.hot_reload.is_none() {
-            let value = cli_settings.always_hot_reload.unwrap_or(true);
-            self.hot_reload = Some(value);
-            crate_config.with_hot_reload(value);
+        if self.server_arguments.hot_reload.is_none() {
+            self.server_arguments.hot_reload = Some(cli_settings.always_hot_reload.unwrap_or(true));
         }
 
-        if self.open.is_none() {
-            self.open = Some(cli_settings.always_open_browser.unwrap_or(false));
-        }
+        self.server_arguments.open |= cli_settings.always_open_browser.unwrap_or_default();
 
         // Set config settings
-        crate_config.with_cross_origin_policy(self.cross_origin_policy);
+        crate_config.with_cross_origin_policy(self.server_arguments.cross_origin_policy);
         crate_config.with_release(self.release);
         crate_config.with_verbose(self.verbose);
 

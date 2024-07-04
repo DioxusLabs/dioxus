@@ -453,7 +453,8 @@ pub struct CrateConfig {
     pub cross_origin_policy: bool,
     pub verbose: bool,
     pub custom_profile: Option<String>,
-    pub features: Option<Vec<String>>,
+    #[serde(default)]
+    pub features: Vec<String>,
     pub target: Option<String>,
     pub cargo_args: Vec<String>,
 }
@@ -529,7 +530,7 @@ impl CrateConfig {
         let cross_origin_policy = false;
         let verbose = false;
         let custom_profile = None;
-        let features = None;
+        let features = vec![];
         let target = None;
         let cargo_args = vec![];
 
@@ -613,7 +614,7 @@ impl CrateConfig {
     }
 
     pub fn set_features(&mut self, features: Vec<String>) -> &mut Self {
-        self.features = Some(features);
+        self.features = features;
         self
     }
 
@@ -627,12 +628,8 @@ impl CrateConfig {
         self
     }
 
-    pub fn add_features(&mut self, feature: Vec<String>) -> &mut Self {
-        if let Some(features) = &mut self.features {
-            features.extend(feature);
-        } else {
-            self.features = Some(feature);
-        }
+    pub fn add_features(&mut self, features: Vec<String>) -> &mut Self {
+        self.features.extend(features);
         self
     }
 

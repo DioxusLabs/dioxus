@@ -47,7 +47,7 @@ impl Server {
 
         let router = setup_router(cfg, tx).await.unwrap();
         let port = opts.server_arguments.port;
-        let start_browser = opts.open.unwrap_or(false);
+        let start_browser = opts.server_arguments.open;
 
         let ip = opts
             .server_arguments

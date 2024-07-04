@@ -8,11 +8,11 @@ use crate::builder::progress::build_cargo;
 use crate::builder::progress::CargoBuildResult;
 use crate::link::LinkCommand;
 use crate::Result;
-use dioxus_cli_config::{ExecutableType};
-use manganis_cli_support::{ManganisSupportGuard};
+use dioxus_cli_config::ExecutableType;
+use manganis_cli_support::ManganisSupportGuard;
+use std::env;
 use std::fs::create_dir_all;
 use std::time::Instant;
-use std::{env};
 
 impl BuildRequest {
     /// Create a build command for cargo
@@ -41,8 +41,8 @@ impl BuildRequest {
             cargo_args.push(custom_profile.to_string());
         }
 
-        if self.config.features.is_some() {
-            let features_str = self.config.features.as_ref().unwrap().join(" ");
+        if !self.config.features.is_empty() {
+            let features_str = self.config.features.join(" ");
             cargo_args.push("--features".to_string());
             cargo_args.push(features_str);
         }

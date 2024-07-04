@@ -1,7 +1,6 @@
 use crate::serve::Serve;
 use dioxus_cli_config::CrateConfig;
 
-
 use super::{Builder, Server, Watcher};
 
 pub struct Output {}

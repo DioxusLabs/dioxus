@@ -1,7 +1,6 @@
 use crate::build::Build;
 use std::ops::Deref;
-use std::{str::FromStr};
-
+use std::str::FromStr;
 
 use super::*;
 

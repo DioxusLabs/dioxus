@@ -10,6 +10,24 @@ pub struct ServeArguments {
     /// The address the server will run on
     #[clap(long)]
     pub addr: Option<std::net::IpAddr>,
+
+    /// Open the app in the default browser [default: false - unless project or global settings are set]
+    #[clap(long)]
+    pub open: bool,
+
+    /// Enable full hot reloading for the app [default: true - unless project or global settings are set]
+    #[clap(long, group = "release-incompatible")]
+    pub hot_reload: Option<bool>,
+
+    /// Set cross-origin-policy to same-origin [default: false]
+    #[clap(name = "cross-origin-policy")]
+    #[clap(long)]
+    #[serde(default)]
+    pub cross_origin_policy: bool,
+
+    /// Additional arguments to pass to the executable
+    #[clap(long)]
+    pub args: Vec<String>,
 }
 
 impl Default for ServeArguments {
@@ -17,6 +35,10 @@ impl Default for ServeArguments {
         Self {
             port: default_port(),
             addr: None,
+            open: false,
+            hot_reload: None,
+            cross_origin_policy: false,
+            args: vec![],
         }
     }
 }
