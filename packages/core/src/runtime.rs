@@ -1,3 +1,5 @@
+use slotmap::DefaultKey;
+
 use crate::innerlude::Effect;
 use crate::{
     innerlude::{LocalTask, SchedulerMsg},
@@ -27,7 +29,7 @@ pub struct Runtime {
     pub(crate) current_task: Cell<Option<Task>>,
 
     /// Tasks created with cx.spawn
-    pub(crate) tasks: RefCell<slab::Slab<Rc<LocalTask>>>,
+    pub(crate) tasks: RefCell<slotmap::SlotMap<DefaultKey, Rc<LocalTask>>>,
 
     // Currently suspended tasks
     pub(crate) suspended_tasks: Cell<usize>,
