@@ -92,7 +92,7 @@ impl Files {
         let paths = match std::fs::read_dir(cur_path) {
             Ok(e) => e,
             Err(err) => {
-                let err = format!("An error occured: {err:?}");
+                let err = format!("An error occurred: {err:?}");
                 self.err = Some(err);
                 self.path_stack.pop();
                 return;

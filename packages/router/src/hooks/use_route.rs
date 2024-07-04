@@ -37,7 +37,7 @@ use crate::utils::use_router_internal::use_router_internal;
 /// }
 /// #
 /// # let mut vdom = VirtualDom::new(App);
-/// # let _ = vdom.rebuild();
+/// # vdom.rebuild_in_place();
 /// # assert_eq!(dioxus_ssr::render(&vdom), "<h1>App</h1><h2>Current Path</h2><p>/</p>")
 /// ```
 #[doc(alias = "use_url")]

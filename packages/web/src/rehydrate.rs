@@ -2,7 +2,7 @@ use crate::dom::WebsysDom;
 use dioxus_core::prelude::*;
 use dioxus_core::AttributeValue;
 use dioxus_core::WriteMutations;
-use dioxus_core::{DynamicNode, ElementId, ScopeState, TemplateNode, VNode, VirtualDom};
+use dioxus_core::{DynamicNode, ElementId};
 
 #[derive(Debug)]
 #[non_exhaustive]

@@ -178,23 +178,21 @@ impl Debug for LinkProps {
 /// #[component]
 /// fn Index() -> Element {
 ///     rsx! {
-///         rsx! {
-///             Link {
-///                 active_class: "active",
-///                 class: "link_class",
-///                 id: "link_id",
-///                 new_tab: true,
-///                 rel: "link_rel",
-///                 to: Route::Index {},
+///         Link {
+///             active_class: "active",
+///             class: "link_class",
+///             id: "link_id",
+///             new_tab: true,
+///             rel: "link_rel",
+///             to: Route::Index {},
 ///
-///                 "A fully configured link"
-///             }
+///             "A fully configured link"
 ///         }
 ///     }
 /// }
 /// #
 /// # let mut vdom = VirtualDom::new(App);
-/// # let _ = vdom.rebuild();
+/// # vdom.rebuild_in_place();
 /// # assert_eq!(
 /// #     dioxus_ssr::render(&vdom),
 /// #     r#"<a href="/" dioxus-prevent-default="" class="link_class active" rel="link_rel" target="_blank" aria-current="page" id="link_id">A fully configured link</a>"#

@@ -82,7 +82,7 @@ pub trait FromQuery {
 
 impl<T: for<'a> From<&'a str>> FromQuery for T {
     fn from_query(query: &str) -> Self {
-        T::from(&*urlencoding::decode(query).expect("Failed to decode url encoding"))
+        T::from(query)
     }
 }
 
@@ -158,18 +158,87 @@ where
     type Err = <T as FromStr>::Err;
 
     fn from_query_argument(argument: &str) -> Result<Self, Self::Err> {
-        let result = match urlencoding::decode(argument) {
-            Ok(argument) => T::from_str(&argument),
-            Err(err) => {
-                tracing::error!("Failed to decode url encoding: {}", err);
-                T::from_str(argument)
-            }
-        };
-        match result {
+        match T::from_str(argument) {
             Ok(result) => Ok(result),
             Err(err) => {
                 tracing::error!("Failed to parse query argument: {}", err);
                 Err(err)
+            }
+        }
+    }
+}
+
+/// Something that can be created from an entire hash fragment.
+///
+/// This trait needs to be implemented if you want to turn a hash fragment into a struct.
+///
+/// # Example
+///
+/// ```rust
+/// use dioxus::prelude::*;
+///
+/// #[derive(Routable, Clone)]
+/// #[rustfmt::skip]
+/// enum Route {
+///     // State is stored in the url hash
+///     #[route("/#:url_hash")]
+///     Home {
+///         url_hash: State,
+///     },
+/// }
+///
+/// #[component]
+/// fn Home(url_hash: State) -> Element {
+///     todo!()
+/// }
+///
+///
+/// #[derive(Clone, PartialEq, Default)]
+/// struct State {
+///     count: usize,
+///     other_count: usize
+/// }
+///
+/// // The hash segment will be displayed as a string (this will be url encoded automatically)
+/// impl std::fmt::Display for State {
+///     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+///         write!(f, "{}-{}", self.count, self.other_count)
+///     }
+/// }
+///
+/// // We need to parse the hash fragment into a struct from the string (this will be url decoded automatically)
+/// impl FromHashFragment for State {
+///     fn from_hash_fragment(hash: &str) -> Self {
+///         let Some((first, second)) = hash.split_once('-') else {
+///             // URL fragment parsing shouldn't fail. You can return a default value if you want
+///             return Default::default();
+///         };
+///
+///         let first = first.parse().unwrap();
+///         let second = second.parse().unwrap();
+///         
+///         State {
+///             count: first,
+///             other_count: second,
+///         }
+///     }
+/// }
+pub trait FromHashFragment {
+    /// Create an instance of `Self` from a hash fragment.
+    fn from_hash_fragment(hash: &str) -> Self;
+}
+
+impl<T> FromHashFragment for T
+where
+    T: FromStr + Default,
+    T::Err: std::fmt::Display,
+{
+    fn from_hash_fragment(hash: &str) -> Self {
+        match T::from_str(hash) {
+            Ok(value) => value,
+            Err(err) => {
+                tracing::error!("Failed to parse hash fragment: {}", err);
+                Default::default()
             }
         }
     }
@@ -191,13 +260,7 @@ where
     type Err = <T as FromStr>::Err;
 
     fn from_route_segment(route: &str) -> Result<Self, Self::Err> {
-        match urlencoding::decode(route) {
-            Ok(segment) => T::from_str(&segment),
-            Err(err) => {
-                tracing::error!("Failed to decode url encoding: {}", err);
-                T::from_str(route)
-            }
-        }
+        T::from_str(route)
     }
 }
 
@@ -270,7 +333,7 @@ fn full_circle() {
     )
 )]
 pub trait ToRouteSegments {
-    /// Display the route segments.
+    /// Display the route segments. You must url encode the segments.
     fn display_route_segments(self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
 }
 
@@ -282,13 +345,8 @@ where
         for segment in self {
             write!(f, "/")?;
             let segment = segment.to_string();
-            match urlencoding::decode(&segment) {
-                Ok(segment) => write!(f, "{}", segment)?,
-                Err(err) => {
-                    tracing::error!("Failed to decode url encoding: {}", err);
-                    write!(f, "{}", segment)?
-                }
-            }
+            let encoded = urlencoding::encode(&segment);
+            write!(f, "{}", encoded)?;
         }
         Ok(())
     }

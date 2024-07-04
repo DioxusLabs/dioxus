@@ -17,6 +17,7 @@ use std::{
 ///
 /// NOTE: WASM currently does not support caching unwinds, so this struct will not be created in WASM.
 pub struct CapturedPanic {
+    #[allow(dead_code)]
     /// The error that was caught
     pub error: Box<dyn Any + 'static>,
 }
@@ -90,7 +91,7 @@ impl Error for CapturedError {}
 impl CapturedError {
     /// Downcast the error type into a concrete error type
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
-        if TypeId::of::<T>() == self.error.type_id() {
+        if TypeId::of::<T>() == (*self.error).type_id() {
             self.error.as_any().downcast_ref::<T>()
         } else {
             None
@@ -350,7 +351,8 @@ impl Properties for ErrorBoundaryProps {
     fn builder() -> Self::Builder {
         ErrorBoundaryProps::builder()
     }
-    fn memoize(&mut self, _: &Self) -> bool {
+    fn memoize(&mut self, other: &Self) -> bool {
+        *self = other.clone();
         false
     }
 }

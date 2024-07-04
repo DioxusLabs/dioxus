@@ -26,7 +26,7 @@ fn app() -> Element {
 }
 
 let mut vdom = VirtualDom::new(app);
-let _ = vdom.rebuild();
+vdom.rebuild_in_place();
 
 let text = dioxus_ssr::render(&vdom);
 assert_eq!(text, "<div>hello world!</div>")
@@ -53,7 +53,7 @@ let content = dioxus_ssr::render_element(rsx!{
 # use dioxus::prelude::*;
 # fn app() -> Element { todo!() }
 let mut vdom = VirtualDom::new(app);
-let _ = vdom.rebuild();
+vdom.rebuild_in_place();
 
 let content = dioxus_ssr::render(&vdom);
 ```
@@ -73,7 +73,7 @@ To enable pre-rendering, simply set the pre-rendering flag to true.
 # fn App() -> Element { todo!() }
 let mut vdom = VirtualDom::new(App);
 
-let _ = vdom.rebuild();
+vdom.rebuild_in_place();
 
 let mut renderer = dioxus_ssr::Renderer::new();
 renderer.pre_render = true;

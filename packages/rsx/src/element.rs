@@ -3,13 +3,10 @@ use std::fmt::{Display, Formatter};
 use super::*;
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::quote;
 use syn::{
-    parse::{Parse, ParseBuffer, ParseStream},
-    punctuated::Punctuated,
-    spanned::Spanned,
-    token::Brace,
-    Expr, Ident, LitStr, Result, Token,
+    parse::ParseBuffer, punctuated::Punctuated, spanned::Spanned, token::Brace, Expr, Ident,
+    LitStr, Token,
 };
 
 // =======================================

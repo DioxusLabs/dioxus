@@ -2,7 +2,6 @@ use crate::read_impls;
 use crate::write::Writable;
 use crate::{read::Readable, ReactiveContext, ReadableRef, Signal};
 use crate::{CopyValue, ReadOnlySignal};
-use std::rc::Rc;
 use std::{
     cell::RefCell,
     ops::Deref,
@@ -12,7 +11,6 @@ use std::{
 use dioxus_core::prelude::*;
 use futures_util::StreamExt;
 use generational_box::UnsyncStorage;
-use once_cell::sync::OnceCell;
 
 struct UpdateInformation<T> {
     dirty: Arc<AtomicBool>,
@@ -58,8 +56,6 @@ impl<T: 'static> Memo<T> {
         let dirty = Arc::new(AtomicBool::new(true));
         let (tx, mut rx) = futures_channel::mpsc::unbounded();
 
-        let myself: Rc<OnceCell<Memo<T>>> = Rc::new(OnceCell::new());
-
         let callback = {
             let dirty = dirty.clone();
             move || {
@@ -84,7 +80,6 @@ impl<T: 'static> Memo<T> {
             inner: state,
             update,
         };
-        let _ = myself.set(memo);
 
         spawn_isomorphic(async move {
             while rx.next().await.is_some() {

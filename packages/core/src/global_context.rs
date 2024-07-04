@@ -58,7 +58,7 @@ pub fn suspend(task: Task) -> Element {
 
 /// Start a new future on the same thread as the rest of the VirtualDom.
 ///
-/// **You should generally use `spawn` instead of this method unless you specifically need to need to run a task during suspense**
+/// **You should generally use `spawn` instead of this method unless you specifically need to run a task during suspense**
 ///
 /// This future will not contribute to suspense resolving but it will run during suspense.
 ///
@@ -113,6 +113,10 @@ pub fn spawn(fut: impl Future<Output = ()> + 'static) -> Task {
     Runtime::with_current_scope(|cx| cx.spawn(fut)).expect("to be in a dioxus runtime")
 }
 
+/// Queue an effect to run after the next render
+pub fn queue_effect(f: impl FnOnce() + 'static) {
+    Runtime::with_current_scope(|cx| cx.queue_effect(f)).expect("to be in a dioxus runtime")
+}
 
 /// Spawn a future that Dioxus won't clean up when this component is unmounted
 ///
@@ -179,18 +183,45 @@ pub fn remove_future(id: Task) {
 
 /// Store a value between renders. The foundational hook for all other hooks.
 ///
-/// Accepts an `initializer` closure, which is run on the first use of the hook (typically the initial render). The return value of this closure is stored for the lifetime of the component, and a mutable reference to it is provided on every render as the return value of `use_hook`.
+/// Accepts an `initializer` closure, which is run on the first use of the hook (typically the initial render).
+/// `use_hook` will return a clone of the value on every render.
 ///
-/// When the component is unmounted (removed from the UI), the value is dropped. This means you can return a custom type and provide cleanup code by implementing the [`Drop`] trait
+/// In order to clean up resources you would need to implement the [`Drop`] trait for an inner value stored in a RC or similar (Signals for instance),
+/// as these only drop their inner value once all references have been dropped, which only happens when the component is dropped.
 ///
 /// # Example
 ///
-/// ```
-/// use dioxus_core::use_hook;
+/// ```rust
+/// use dioxus::prelude::*;
 ///
 /// // prints a greeting on the initial render
 /// pub fn use_hello_world() {
 ///     use_hook(|| println!("Hello, world!"));
+/// }
+/// ```
+///
+/// # Custom Hook Example
+///
+/// ```rust
+/// use dioxus::prelude::*;
+///
+/// pub struct InnerCustomState(usize);
+///
+/// impl Drop for InnerCustomState {
+///     fn drop(&mut self){
+///         println!("Component has been dropped.");
+///     }
+/// }
+///
+/// #[derive(Clone, Copy)]
+/// pub struct CustomState {
+///     inner: Signal<InnerCustomState>
+/// }
+///
+/// pub fn use_custom_state() -> CustomState {
+///     use_hook(|| CustomState {
+///         inner: Signal::new(InnerCustomState(0))
+///     })
 /// }
 /// ```
 pub fn use_hook<State: Clone + 'static>(initializer: impl FnOnce() -> State) -> State {

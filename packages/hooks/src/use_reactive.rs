@@ -90,7 +90,7 @@ impl_dep!(A = a1 a2, B = b1 b2, C = c1 c2, D = d1 d2, E = e1 e2, F = f1 f2, G = 
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust, no_run
 /// use dioxus::prelude::*;
 ///
 /// let data = 5;
@@ -121,7 +121,7 @@ pub fn use_reactive<O, D: Dependency>(
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust, no_run
 /// use dioxus::prelude::*;
 ///
 /// let data = 5;

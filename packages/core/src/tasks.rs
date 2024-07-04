@@ -1,3 +1,5 @@
+use crate::innerlude::Effect;
+use crate::innerlude::ScopeOrder;
 use crate::innerlude::{remove_future, spawn, Runtime};
 use crate::ScopeId;
 use futures_util::task::ArcWake;
@@ -174,6 +176,19 @@ impl Runtime {
         task_id
     }
 
+    /// Queue an effect to run after the next render
+    pub(crate) fn queue_effect(&self, id: ScopeId, f: impl FnOnce() + 'static) {
+        // Add the effect to the queue of effects to run after the next render for the given scope
+        let mut effects = self.pending_effects.borrow_mut();
+        let scope_order = ScopeOrder::new(id.height(), id);
+        match effects.get(&scope_order) {
+            Some(effects) => effects.push_back(Box::new(f)),
+            None => {
+                effects.insert(Effect::new(scope_order, f));
+            }
+        }
+    }
+
     /// Get the currently running task
     pub fn current_task(&self) -> Option<Task> {
         self.current_task.get()
@@ -288,13 +303,15 @@ impl TaskType {
 /// The type of message that can be sent to the scheduler.
 ///
 /// These messages control how the scheduler will process updates to the UI.
-#[derive(Debug)]
 pub(crate) enum SchedulerMsg {
     /// Immediate updates from Components that mark them as dirty
     Immediate(ScopeId),
 
     /// A task has woken and needs to be progressed
     TaskNotified(Task),
+
+    /// An effect has been queued to run after the next render
+    EffectQueued,
 }
 
 struct LocalTaskHandle {

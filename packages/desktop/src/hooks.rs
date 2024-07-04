@@ -18,7 +18,7 @@ pub fn use_window() -> DesktopContext {
     use_hook(consume_context::<DesktopContext>)
 }
 
-/// Get a closure that executes any JavaScript in the WebView context.
+/// Register an event handler that runs when a wry event is processed.
 pub fn use_wry_event_handler(
     handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
 ) -> WryEventHandler {
@@ -26,6 +26,22 @@ pub fn use_wry_event_handler(
         move || window().create_wry_event_handler(handler),
         move |handler| handler.remove(),
     )
+}
+
+/// Register an event handler that runs when a muda event is processed.
+#[cfg_attr(
+    docsrs,
+    doc(cfg(any(target_os = "windows", target_os = "linux", target_os = "macos")))
+)]
+#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+pub fn use_muda_event_handler(
+    mut handler: impl FnMut(&muda::MenuEvent) + 'static,
+) -> WryEventHandler {
+    use_wry_event_handler(move |event, _| {
+        if let Event::UserEvent(UserWindowEvent::MudaMenuEvent(event)) = event {
+            handler(event);
+        }
+    })
 }
 
 /// Provide a callback to handle asset loading yourself.

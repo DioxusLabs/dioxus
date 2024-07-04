@@ -317,7 +317,7 @@ pub fn launch(app: fn() -> Element) {
 #[cfg_attr(docsrs, doc(cfg(feature = "web")))]
 /// Launch your web application without any additional configuration. See [`LaunchBuilder`] for more options.
 pub fn launch_web(app: fn() -> Element) {
-    LaunchBuilder::new().launch(app)
+    LaunchBuilder::web().launch(app)
 }
 
 #[cfg(feature = "desktop")]

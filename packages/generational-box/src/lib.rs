@@ -200,15 +200,19 @@ impl<T, S: Storage<T>> GenerationalBox<T, S> {
 
     /// Recycle the generationalbox, dropping the value.
     pub fn recycle(&self) {
-        _ = Storage::take(&self.raw.0.data);
-        <S as AnyStorage>::recycle(&self.raw);
+        if self.validate() {
+            <S as AnyStorage>::recycle(&self.raw);
+        }
     }
 
     /// Drop the value out of the generational box and invalidate the generational box.
     /// This will return the value if the value was taken.
     pub fn manually_drop(&self) -> Option<T> {
         if self.validate() {
-            Storage::take(&self.raw.0.data)
+            // TODO: Next breaking release we should change the take method to automatically recycle the box
+            let value = Storage::take(&self.raw.0.data)?;
+            <S as AnyStorage>::recycle(&self.raw);
+            Some(value)
         } else {
             None
         }
@@ -371,9 +375,10 @@ impl<S> MemoryLocation<S> {
     where
         S: AnyStorage,
     {
-        let old = self.0.data.manually_drop();
+        self.0.data.manually_drop();
+
         #[cfg(any(debug_assertions, feature = "check_generation"))]
-        if old {
+        {
             let new_generation = self.0.generation.load(std::sync::atomic::Ordering::Relaxed) + 1;
             self.0
                 .generation
@@ -402,14 +407,52 @@ impl<S> MemoryLocation<S> {
     }
 }
 
+// We track the generation along with the memory location so that when generational boxes are dropped early, we don't end up dropping the new occupant of the slot
+struct LocationKey<S: 'static> {
+    #[cfg(any(debug_assertions, feature = "check_generation"))]
+    generation: u32,
+    location: MemoryLocation<S>,
+}
+
+impl<S: AnyStorage> LocationKey<S> {
+    fn exists(&self) -> bool {
+        #[cfg(any(debug_assertions, feature = "check_generation"))]
+        return self.generation
+            == self
+                .location
+                .0
+                .generation
+                .load(std::sync::atomic::Ordering::Relaxed);
+        #[cfg(not(any(debug_assertions, feature = "check_generation")))]
+        return true;
+    }
+
+    fn drop(self) {
+        // If this is the same box we own, we can just drop it
+        if self.exists() {
+            S::recycle(&self.location);
+        }
+    }
+}
+
+impl<T, S: AnyStorage> From<GenerationalBox<T, S>> for LocationKey<S> {
+    fn from(value: GenerationalBox<T, S>) -> Self {
+        Self {
+            #[cfg(any(debug_assertions, feature = "check_generation"))]
+            generation: value.generation,
+            location: value.raw,
+        }
+    }
+}
+
 struct OwnerInner<S: AnyStorage + 'static> {
-    owned: Vec<MemoryLocation<S>>,
+    owned: Vec<LocationKey<S>>,
 }
 
 impl<S: AnyStorage> Drop for OwnerInner<S> {
     fn drop(&mut self) {
-        for location in &self.owned {
-            S::recycle(location)
+        for key in self.owned.drain(..) {
+            key.drop();
         }
     }
 }
@@ -459,7 +502,7 @@ impl<S: AnyStorage> Owner<S> {
             #[cfg(any(debug_assertions, feature = "debug_borrows"))]
             caller,
         );
-        self.0.lock().owned.push(location);
+        self.0.lock().owned.push(key.into());
         key
     }
 
@@ -477,7 +520,7 @@ impl<S: AnyStorage> Owner<S> {
             created_at: std::panic::Location::caller(),
             _marker: PhantomData,
         };
-        self.0.lock().owned.push(location);
+        self.0.lock().owned.push(generational_box.into());
         generational_box
     }
 }

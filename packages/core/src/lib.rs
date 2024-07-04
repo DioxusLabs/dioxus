@@ -6,7 +6,7 @@
 mod any_props;
 mod arena;
 mod diff;
-mod dirty_scope;
+mod effect;
 mod error_boundary;
 mod events;
 mod fragment;
@@ -17,6 +17,7 @@ mod nodes;
 mod properties;
 mod render_signal;
 mod runtime;
+mod scheduler;
 mod scope_arena;
 mod scope_context;
 mod scopes;
@@ -26,7 +27,7 @@ mod virtual_dom;
 pub(crate) mod innerlude {
     pub(crate) use crate::any_props::*;
     pub use crate::arena::*;
-    pub use crate::dirty_scope::*;
+    pub(crate) use crate::effect::*;
     pub use crate::error_boundary::*;
     pub use crate::events::*;
     pub use crate::fragment::*;
@@ -36,6 +37,7 @@ pub(crate) mod innerlude {
     pub use crate::nodes::*;
     pub use crate::properties::*;
     pub use crate::runtime::{Runtime, RuntimeGuard};
+    pub use crate::scheduler::*;
     pub use crate::scopes::*;
     pub use crate::tasks::*;
     pub use crate::virtual_dom::*;
@@ -65,13 +67,13 @@ pub mod prelude {
     pub use crate::innerlude::{
         consume_context, consume_context_from_scope, current_owner, current_scope_id,
         fc_to_builder, generation, has_context, needs_update, needs_update_any, parent_scope,
-        provide_context, provide_root_context, remove_future, schedule_update, schedule_update_any,
-        spawn, spawn_forever, spawn_isomorphic, suspend, try_consume_context, use_after_render,
-        use_before_render, use_drop, use_error_boundary, use_hook, use_hook_with_cleanup,
-        wait_for_next_render, with_owner, AnyValue, Attribute, Component, ComponentFunction,
-        Element, ErrorBoundary, Event, EventHandler, Fragment, HasAttributes, IntoAttributeValue,
-        IntoDynNode, OptionStringFromMarker, Properties, Runtime, RuntimeGuard, ScopeId,
-        ScopeState, SuperFrom, SuperInto, Task, Template, TemplateAttribute, TemplateNode, Throw,
-        VNode, VNodeInner, VirtualDom,
+        provide_context, provide_root_context, queue_effect, remove_future, schedule_update,
+        schedule_update_any, spawn, spawn_forever, spawn_isomorphic, suspend, try_consume_context,
+        use_after_render, use_before_render, use_drop, use_error_boundary, use_hook,
+        use_hook_with_cleanup, wait_for_next_render, with_owner, AnyValue, Attribute, Component,
+        ComponentFunction, Element, ErrorBoundary, Event, EventHandler, Fragment, HasAttributes,
+        IntoAttributeValue, IntoDynNode, OptionStringFromMarker, Properties, Runtime, RuntimeGuard,
+        ScopeId, ScopeState, SuperFrom, SuperInto, Task, Template, TemplateAttribute, TemplateNode,
+        Throw, VNode, VNodeInner, VirtualDom,
     };
 }

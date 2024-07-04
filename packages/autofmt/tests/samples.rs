@@ -50,4 +50,5 @@ twoway![
     docsite,
     letsome,
     fat_exprs,
+    nested,
 ];

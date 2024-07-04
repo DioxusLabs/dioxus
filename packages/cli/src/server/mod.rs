@@ -8,10 +8,7 @@ use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::*;
 use fs_extra::dir::CopyOptions;
 use notify::{RecommendedWatcher, Watcher};
-use std::{
-    path::PathBuf,
-    sync::{Arc, Mutex},
-};
+use std::{path::PathBuf, sync::Arc};
 use tokio::sync::broadcast::{self};
 
 mod output;

@@ -291,7 +291,7 @@ impl VirtualDom {
     /// #     rsx!{ div { "hello {cx.name}" } }
     /// # }
     /// let mut dom = VirtualDom::new_with_props(Example, SomeProps { name: "jane" });
-    /// let mutations = dom.rebuild();
+    /// dom.rebuild_in_place();
     /// ```
     pub fn new_with_props<P: Clone + 'static, M: 'static>(
         root: impl ComponentFunction<P, M>,
@@ -307,7 +307,36 @@ impl VirtualDom {
         dom
     }
 
-    /// Create a new VirtualDom from something that implements [`AnyProps`]
+    /// Create a new VirtualDom with the given properties for the root component.
+    ///
+    /// # Description
+    ///
+    /// Later, the props can be updated by calling "update" with a new set of props, causing a set of re-renders.
+    ///
+    /// This is useful when a component tree can be driven by external state (IE SSR) but it would be too expensive
+    /// to toss out the entire tree.
+    ///
+    ///
+    /// # Example
+    /// ```rust, ignore
+    /// #[derive(PartialEq, Props)]
+    /// struct SomeProps {
+    ///     name: &'static str
+    /// }
+    ///
+    /// fn Example(cx: SomeProps) -> Element  {
+    ///     rsx!{ div{ "hello {cx.name}" } }
+    /// }
+    ///
+    /// let dom = VirtualDom::new(Example);
+    /// ```
+    ///
+    /// Note: the VirtualDom is not progressed on creation. You must either "run_with_deadline" or use "rebuild" to progress it.
+    ///
+    /// ```rust, ignore
+    /// let mut dom = VirtualDom::new_from_root(VComponent::new(Example, SomeProps { name: "jane" }, "Example"));
+    /// dom.rebuild(to_writer);
+    /// ```
     #[instrument(skip(root), level = "trace", name = "VirtualDom::new")]
     pub(crate) fn new_with_component(root: impl AnyProps + 'static) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
@@ -487,6 +516,7 @@ impl VirtualDom {
                 // The task may be marked dirty at the same time as the scope that owns the task is dropped.
                 self.mark_task_dirty(id);
             }
+            SchedulerMsg::EffectQueued => {}
         };
     }
 
@@ -497,6 +527,7 @@ impl VirtualDom {
             match msg {
                 SchedulerMsg::Immediate(id) => self.mark_dirty(id),
                 SchedulerMsg::TaskNotified(task) => self.mark_task_dirty(task),
+                SchedulerMsg::EffectQueued => {}
             }
         }
     }
@@ -519,21 +550,36 @@ impl VirtualDom {
     fn poll_tasks(&mut self) {
         // Make sure we set the runtime since we're running user code
         let _runtime = RuntimeGuard::new(self.runtime.clone());
-        // Next, run any queued tasks
-        // We choose not to poll the deadline since we complete pretty quickly anyways
-        while let Some(task) = self.pop_task() {
-            // Then poll any tasks that might be pending
-            let mut tasks = task.tasks_queued.into_inner();
-            while let Some(task) = tasks.pop() {
-                let _ = self.runtime.handle_task_wakeup(task);
 
-                // Running that task, may mark a scope higher up as dirty. If it does, return from the function early
+        // Keep polling tasks until there are no more effects or tasks to run
+        // Or until we have no more dirty scopes
+        while !self.dirty_tasks.is_empty() || !self.runtime.pending_effects.borrow().is_empty() {
+            // Next, run any queued tasks
+            // We choose not to poll the deadline since we complete pretty quickly anyways
+            while let Some(task) = self.pop_task() {
+                // Then poll any tasks that might be pending
+                let mut tasks = task.tasks_queued.into_inner();
+                while let Some(task) = tasks.pop_front() {
+                    let _ = self.runtime.handle_task_wakeup(task);
+
+                    // Running that task, may mark a scope higher up as dirty. If it does, return from the function early
+                    self.queue_events();
+                    if self.has_dirty_scopes() {
+                        // requeue any remaining tasks
+                        for task in tasks {
+                            self.mark_task_dirty(task);
+                        }
+                        return;
+                    }
+                }
+            }
+
+            // At this point, we have finished running all tasks that are pending and we haven't found any scopes to rerun. This means it is safe to run our lowest priority work: effects
+            while let Some(effect) = self.pop_effect() {
+                effect.run(&self.runtime);
+                // Check if any new scopes are queued for rerun
                 self.queue_events();
                 if self.has_dirty_scopes() {
-                    // requeue any remaining tasks
-                    for task in tasks {
-                        self.mark_task_dirty(task);
-                    }
                     return;
                 }
             }
@@ -644,7 +690,7 @@ impl VirtualDom {
 
         // Process any events that might be pending in the queue
         // Signals marked with .write() need a chance to be handled by the effect driver
-        // This also processes futures which might progress into immediates
+        // This also processes futures which might progress into immediately rerunning a scope
         self.process_events();
 
         // Next, diff any dirty scopes
@@ -669,7 +715,7 @@ impl VirtualDom {
             }
         }
 
-        self.runtime.render_signal.send();
+        self.runtime.finish_render();
     }
 
     /// [`Self::render_immediate`] to a vector of mutations for testing purposes
@@ -711,7 +757,7 @@ impl VirtualDom {
                     while let Some(task) = self.pop_task() {
                         // Then poll any tasks that might be pending
                         let mut tasks = task.tasks_queued.into_inner();
-                        while let Some(task) = tasks.pop() {
+                        while let Some(task) = tasks.pop_front() {
                             if self.runtime.task_runs_during_suspense(task) {
                                 let _ = self.runtime.handle_task_wakeup(task);
                                 // Running that task, may mark a scope higher up as dirty. If it does, return from the function early

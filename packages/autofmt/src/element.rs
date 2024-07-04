@@ -245,7 +245,7 @@ impl Writer<'_> {
                 write!(self.out, "{value}",)?;
             }
             ElementAttrValue::AttrExpr(value) => {
-                let out = unparse_expr(value);
+                let out = self.unparse_expr(value);
                 let mut lines = out.split('\n').peekable();
                 let first = lines.next().unwrap();
 

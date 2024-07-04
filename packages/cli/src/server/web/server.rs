@@ -62,8 +62,8 @@ pub async fn setup_router(
         .and_then(move |response| async move { Ok(no_cache(file_service_config, response)) })
         .service(ServeDir::new(config.out_dir()));
 
-    // Setup websocket
-    let mut router = Router::new().route("/_dioxus/ws", get(ws_handler));
+    // Setup router
+    let mut router = Router::new();
 
     // Setup proxy
     for proxy_config in config.dioxus_config.web.proxy {
@@ -83,7 +83,7 @@ pub async fn setup_router(
     router = if let Some(base_path) = config.dioxus_config.web.app.base_path.clone() {
         let base_path = format!("/{}", base_path.trim_matches('/'));
         Router::new()
-            .route(&base_path, axum::routing::any_service(router))
+            .nest(&base_path, router)
             .fallback(get(move || {
                 let base_path = base_path.clone();
                 async move { format!("Outside of the base path: {}", base_path) }
@@ -91,6 +91,9 @@ pub async fn setup_router(
     } else {
         router
     };
+
+    // Setup websocket
+    router = router.route("/_dioxus/ws", get(ws_handler));
 
     // Setup routes
     router = router
@@ -220,7 +223,7 @@ pub fn get_rustls_with_mkcert(web_config: &WebHttpsConfig) -> Result<(String, St
         Err(e) => {
             match e.kind() {
                 io::ErrorKind::NotFound => tracing::error!("mkcert is not installed. See https://github.com/FiloSottile/mkcert#installation for installation instructions."),
-                e => tracing::error!("an error occured while generating mkcert certificates: {}", e.to_string()),
+                e => tracing::error!("an error occurred while generating mkcert certificates: {}", e.to_string()),
             };
             return Err("failed to generate mkcert certificates".into());
         }

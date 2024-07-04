@@ -23,6 +23,9 @@ impl std::fmt::Display for ReactiveContext {
         {
             use crate::Readable;
             if let Ok(read) = self.inner.try_read() {
+                if let Some(scope) = read.scope {
+                    return write!(f, "ReactiveContext(for scope: {:?})", scope);
+                }
                 return write!(f, "ReactiveContext created at {}", read.origin);
             }
         }
@@ -61,6 +64,8 @@ impl ReactiveContext {
             update: Box::new(callback),
             #[cfg(debug_assertions)]
             origin,
+            #[cfg(debug_assertions)]
+            scope: None,
         };
 
         let mut self_ = Self {
@@ -100,11 +105,18 @@ impl ReactiveContext {
         };
 
         // Otherwise, create a new context at the current scope
-        Some(provide_context(ReactiveContext::new_with_callback(
+        #[allow(unused_mut)]
+        let mut reactive_context = ReactiveContext::new_with_callback(
             update_scope,
             scope_id,
             std::panic::Location::caller(),
-        )))
+        );
+        #[cfg(debug_assertions)]
+        {
+            // Associate the reactive context with the current scope for debugging
+            reactive_context.inner.write().scope = Some(scope_id);
+        }
+        Some(provide_context(reactive_context))
     }
 
     /// Run this function in the context of this reactive context
@@ -162,4 +174,8 @@ struct Inner {
     // Debug information for signal subscriptions
     #[cfg(debug_assertions)]
     origin: &'static std::panic::Location<'static>,
+
+    #[cfg(debug_assertions)]
+    // The scope that this reactive context is associated with
+    scope: Option<ScopeId>,
 }
