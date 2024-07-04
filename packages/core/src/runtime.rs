@@ -1,7 +1,7 @@
 use slotmap::DefaultKey;
 
 use crate::{
-    innerlude::{LocalTask, SchedulerMsg},
+    innerlude::{Effect, LocalTask, SchedulerMsg},
     render_signal::RenderSignal,
     scope_context::Scope,
     scopes::ScopeId,
