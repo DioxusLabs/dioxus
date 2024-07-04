@@ -7,7 +7,6 @@ use std::{env::current_dir, fs::create_dir_all, str::FromStr};
 use tauri_bundler::{BundleSettings, PackageSettings, SettingsBuilder};
 
 use super::*;
-use crate::build_desktop;
 
 /// Bundle the Rust desktop app and all of its assets
 #[derive(Clone, Debug, Parser)]
@@ -24,7 +23,7 @@ impl Deref for Bundle {
     type Target = Build;
 
     fn deref(&self) -> &Self::Target {
-        &self_arguments
+        &self.build_arguments
     }
 }
 
@@ -74,161 +73,162 @@ impl From<PackageType> for tauri_bundler::PackageType {
 
 impl Bundle {
     pub fn bundle(self, bin: Option<PathBuf>) -> Result<()> {
-        let mut crate_config = dioxus_cli_config::CrateConfig::new(bin)?;
+        todo!()
+        // let mut crate_config = dioxus_cli_config::CrateConfig::new(bin)?;
 
-        // change the release state.
-        crate_config.with_release(true);
-        crate_config.with_verbose(self.verbose);
+        // // change the release state.
+        // crate_config.with_release(true);
+        // crate_config.with_verbose(self.verbose);
 
-        if self.example.is_some() {
-            crate_config.as_example(self.example.unwrap());
-        }
+        // if self.example.is_some() {
+        //     crate_config.as_example(self.example.unwrap());
+        // }
 
-        if self.profile.is_some() {
-            crate_config.set_profile(self.profile.unwrap());
-        }
+        // if self.profile.is_some() {
+        //     crate_config.set_profile(self.profile.unwrap());
+        // }
 
-        if let Some(target) = &self.target {
-            crate_config.set_target(target.to_string());
-        }
+        // if let Some(target) = &self.target {
+        //     crate_config.set_target(target.to_string());
+        // }
 
-        crate_config.set_cargo_args(self.cargo_args);
-        if let Some(platform) = self.platform {
-            crate_config.extend_with_platform(platform);
-        }
+        // crate_config.set_cargo_args(self.cargo_args);
+        // if let Some(platform) = self.platform {
+        //     crate_config.extend_with_platform(platform);
+        // }
 
-        if let Some(features) = self.features {
-            crate_config.set_features(features);
-        }
+        // if let Some(features) = self.features {
+        //     crate_config.set_features(features);
+        // }
 
-        // build the desktop app
-        // Since the `bundle()` function is only run for the desktop platform,
-        // the `rust_flags` argument is set to `None`.
-        build_desktop(&crate_config, false, false, None)?;
+        // // build the desktop app
+        // // Since the `bundle()` function is only run for the desktop platform,
+        // // the `rust_flags` argument is set to `None`.
+        // build_desktop(&crate_config, false, false, None)?;
 
-        // copy the binary to the out dir
-        let package = crate_config.manifest.package.as_ref().unwrap();
+        // // copy the binary to the out dir
+        // let package = crate_config.manifest.package.as_ref().unwrap();
 
-        let mut name: PathBuf = match &crate_config.executable {
-            ExecutableType::Binary(name)
-            | ExecutableType::Lib(name)
-            | ExecutableType::Example(name) => name,
-        }
-        .into();
-        if cfg!(windows) {
-            name.set_extension("exe");
-        }
+        // let mut name: PathBuf = match &crate_config.executable {
+        //     ExecutableType::Binary(name)
+        //     | ExecutableType::Lib(name)
+        //     | ExecutableType::Example(name) => name,
+        // }
+        // .into();
+        // if cfg!(windows) {
+        //     name.set_extension("exe");
+        // }
 
-        // bundle the app
-        let binaries = vec![
-            tauri_bundler::BundleBinary::new(name.display().to_string(), true)
-                .set_src_path(Some(crate_config.crate_dir.display().to_string())),
-        ];
+        // // bundle the app
+        // let binaries = vec![
+        //     tauri_bundler::BundleBinary::new(name.display().to_string(), true)
+        //         .set_src_path(Some(crate_config.crate_dir.display().to_string())),
+        // ];
 
-        let mut bundle_settings: BundleSettings = crate_config.dioxus_config.bundle.clone().into();
-        if cfg!(windows) {
-            let windows_icon_override = crate_config
-                .dioxus_config
-                .bundle
-                .windows
-                .as_ref()
-                .map(|w| &w.icon_path);
-            if windows_icon_override.is_none() {
-                let icon_path = bundle_settings
-                    .icon
-                    .as_ref()
-                    .and_then(|icons| icons.first());
-                let icon_path = if let Some(icon_path) = icon_path {
-                    icon_path.into()
-                } else {
-                    let path = PathBuf::from("./icons/icon.ico");
-                    // create the icon if it doesn't exist
-                    if !path.exists() {
-                        create_dir_all(path.parent().unwrap()).unwrap();
-                        let mut file = File::create(&path).unwrap();
-                        file.write_all(include_bytes!("../../assets/icon.ico"))
-                            .unwrap();
-                    }
-                    path
-                };
-                bundle_settings.windows.icon_path = icon_path;
-            }
-        }
+        // let mut bundle_settings: BundleSettings = crate_config.dioxus_config.bundle.clone().into();
+        // if cfg!(windows) {
+        //     let windows_icon_override = crate_config
+        //         .dioxus_config
+        //         .bundle
+        //         .windows
+        //         .as_ref()
+        //         .map(|w| &w.icon_path);
+        //     if windows_icon_override.is_none() {
+        //         let icon_path = bundle_settings
+        //             .icon
+        //             .as_ref()
+        //             .and_then(|icons| icons.first());
+        //         let icon_path = if let Some(icon_path) = icon_path {
+        //             icon_path.into()
+        //         } else {
+        //             let path = PathBuf::from("./icons/icon.ico");
+        //             // create the icon if it doesn't exist
+        //             if !path.exists() {
+        //                 create_dir_all(path.parent().unwrap()).unwrap();
+        //                 let mut file = File::create(&path).unwrap();
+        //                 file.write_all(include_bytes!("../../assets/icon.ico"))
+        //                     .unwrap();
+        //             }
+        //             path
+        //         };
+        //         bundle_settings.windows.icon_path = icon_path;
+        //     }
+        // }
 
-        // Copy the assets in the dist directory to the bundle
-        let static_asset_output_dir = &crate_config.dioxus_config.application.out_dir;
-        // Make sure the dist directory is relative to the crate directory
-        let static_asset_output_dir = static_asset_output_dir
-            .strip_prefix(&crate_config.crate_dir)
-            .unwrap_or(static_asset_output_dir);
+        // // Copy the assets in the dist directory to the bundle
+        // let static_asset_output_dir = &crate_config.dioxus_config.application.out_dir;
+        // // Make sure the dist directory is relative to the crate directory
+        // let static_asset_output_dir = static_asset_output_dir
+        //     .strip_prefix(&crate_config.crate_dir)
+        //     .unwrap_or(static_asset_output_dir);
 
-        let static_asset_output_dir = static_asset_output_dir.display().to_string();
-        println!("Adding assets from {} to bundle", static_asset_output_dir);
+        // let static_asset_output_dir = static_asset_output_dir.display().to_string();
+        // println!("Adding assets from {} to bundle", static_asset_output_dir);
 
-        // Don't copy the executable or the old bundle directory
-        let ignored_files = [
-            crate_config.out_dir().join("bundle"),
-            crate_config.out_dir().join(name),
-        ];
+        // // Don't copy the executable or the old bundle directory
+        // let ignored_files = [
+        //     crate_config.out_dir().join("bundle"),
+        //     crate_config.out_dir().join(name),
+        // ];
 
-        for entry in std::fs::read_dir(&static_asset_output_dir)?.flatten() {
-            let path = entry.path().canonicalize()?;
-            if ignored_files.iter().any(|f| path.starts_with(f)) {
-                continue;
-            }
+        // for entry in std::fs::read_dir(&static_asset_output_dir)?.flatten() {
+        //     let path = entry.path().canonicalize()?;
+        //     if ignored_files.iter().any(|f| path.starts_with(f)) {
+        //         continue;
+        //     }
 
-            // Tauri bundle will add a __root__ prefix if the input path is absolute even though the output path is relative?
-            // We strip the prefix here to make sure the input path is relative so that the bundler puts the output path in the right place
-            let path = path
-                .strip_prefix(&current_dir()?)
-                .unwrap()
-                .display()
-                .to_string();
-            if let Some(resources) = &mut bundle_settings.resources_map {
-                resources.insert(path, "".to_string());
-            } else {
-                bundle_settings.resources_map = Some([(path, "".to_string())].into());
-            }
-        }
+        //     // Tauri bundle will add a __root__ prefix if the input path is absolute even though the output path is relative?
+        //     // We strip the prefix here to make sure the input path is relative so that the bundler puts the output path in the right place
+        //     let path = path
+        //         .strip_prefix(&current_dir()?)
+        //         .unwrap()
+        //         .display()
+        //         .to_string();
+        //     if let Some(resources) = &mut bundle_settings.resources_map {
+        //         resources.insert(path, "".to_string());
+        //     } else {
+        //         bundle_settings.resources_map = Some([(path, "".to_string())].into());
+        //     }
+        // }
 
-        let mut settings = SettingsBuilder::new()
-            .project_out_directory(crate_config.out_dir())
-            .package_settings(PackageSettings {
-                product_name: crate_config.dioxus_config.application.name.clone(),
-                version: package.version().to_string(),
-                description: package.description().unwrap_or_default().to_string(),
-                homepage: Some(package.homepage().unwrap_or_default().to_string()),
-                authors: Some(Vec::from(package.authors())),
-                default_run: Some(crate_config.dioxus_config.application.name.clone()),
-            })
-            .binaries(binaries)
-            .bundle_settings(bundle_settings);
-        if let Some(packages) = self.package {
-            settings = settings.package_types(
-                packages
-                    .into_iter()
-                    .map(|p| p.parse::<PackageType>().unwrap().into())
-                    .collect(),
-            );
-        }
+        // let mut settings = SettingsBuilder::new()
+        //     .project_out_directory(crate_config.out_dir())
+        //     .package_settings(PackageSettings {
+        //         product_name: crate_config.dioxus_config.application.name.clone(),
+        //         version: package.version().to_string(),
+        //         description: package.description().unwrap_or_default().to_string(),
+        //         homepage: Some(package.homepage().unwrap_or_default().to_string()),
+        //         authors: Some(Vec::from(package.authors())),
+        //         default_run: Some(crate_config.dioxus_config.application.name.clone()),
+        //     })
+        //     .binaries(binaries)
+        //     .bundle_settings(bundle_settings);
+        // if let Some(packages) = self.package {
+        //     settings = settings.package_types(
+        //         packages
+        //             .into_iter()
+        //             .map(|p| p.parse::<PackageType>().unwrap().into())
+        //             .collect(),
+        //     );
+        // }
 
-        if let Some(target) = &self.target {
-            settings = settings.target(target.to_string());
-        }
+        // if let Some(target) = &self.target {
+        //     settings = settings.target(target.to_string());
+        // }
 
-        let settings = settings.build();
+        // let settings = settings.build();
 
-        // on macos we need to set CI=true (https://github.com/tauri-apps/tauri/issues/2567)
-        #[cfg(target_os = "macos")]
-        std::env::set_var("CI", "true");
+        // // on macos we need to set CI=true (https://github.com/tauri-apps/tauri/issues/2567)
+        // #[cfg(target_os = "macos")]
+        // std::env::set_var("CI", "true");
 
-        tauri_bundler::bundle::bundle_project(settings.unwrap()).unwrap_or_else(|err|{
-            #[cfg(target_os = "macos")]
-            panic!("Failed to bundle project: {:#?}\nMake sure you have automation enabled in your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208) and full disk access enabled for your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208)", err);
-            #[cfg(not(target_os = "macos"))]
-            panic!("Failed to bundle project: {:#?}", err);
-        });
+        // tauri_bundler::bundle::bundle_project(settings.unwrap()).unwrap_or_else(|err|{
+        //     #[cfg(target_os = "macos")]
+        //     panic!("Failed to bundle project: {:#?}\nMake sure you have automation enabled in your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208) and full disk access enabled for your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208)", err);
+        //     #[cfg(not(target_os = "macos"))]
+        //     panic!("Failed to bundle project: {:#?}", err);
+        // });
 
-        Ok(())
+        // Ok(())
     }
 }

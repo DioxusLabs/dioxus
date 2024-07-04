@@ -8,7 +8,7 @@ mod proxy;
 mod server;
 mod watcher;
 
-use builder::*;
+use crate::builder::*;
 use output::*;
 use server::*;
 use watcher::*;
@@ -44,7 +44,7 @@ pub async fn serve_all(srv: Serve, crt: CrateConfig) -> Result<()> {
     let mut server = Server::start(&srv, &crt).await;
     let mut watchr = Watcher::start(&crt);
     let mut screen = Output::start(&srv, &crt);
-    let mut buildr = Builder::start(&srv, &crt);
+    let mut buildr = Builder::new();
 
     loop {
         // Make sure we don't hog the CPU: these loop { select! {} } blocks can starve the executor
@@ -75,7 +75,7 @@ pub async fn serve_all(srv: Serve, crt: CrateConfig) -> Result<()> {
                 // If the change is not binary patchable, rebuild the project
                 // We're going to kick off a new build if it already isn't ongoing
                 // todo: we need to know which project to build here - either the frontend or the backend
-                buildr.queue_build();
+                // buildr.queue_build();
             }
 
             // reload the page

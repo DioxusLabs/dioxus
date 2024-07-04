@@ -1,19 +1,26 @@
+use super::web::install_web_build_tooling;
 use super::BuildRequest;
 use super::BuildResult;
-use crate::assets::{asset_manifest, copy_assets_dir, process_assets, AssetConfigDropGuard};
+use crate::assets::copy_dir_to;
+use crate::assets::create_assets_head;
+use crate::assets::{asset_manifest, process_assets, AssetConfigDropGuard};
+use crate::builder::progress::build_cargo;
+use crate::builder::progress::CargoBuildResult;
+use crate::link::LinkCommand;
 use crate::Result;
 use dioxus_cli_config::{CrateConfig, ExecutableType, Platform};
 use manganis_cli_support::{AssetManifest, ManganisSupportGuard};
 use std::fs::create_dir_all;
+use std::time::Instant;
 use std::{env, path::PathBuf};
 
 impl BuildRequest {
     /// Create a build command for cargo
-    pub fn prepare_build_command(&self) -> Result<subprocess::Exec> {
+    pub fn prepare_build_command(&self) -> Result<(subprocess::Exec, Vec<String>)> {
         let mut cargo_args = Vec::new();
 
         let mut cmd = subprocess::Exec::cmd("cargo")
-            .set_rust_flags(self.build_arguments.rust_flags)
+            .set_rust_flags(self.rust_flags.clone())
             .env("CARGO_TARGET_DIR", &self.config.target_dir)
             .cwd(&self.config.crate_dir)
             .arg("build")
@@ -64,15 +71,15 @@ impl BuildRequest {
 
         cmd = cmd.args(&cargo_args);
 
-        Ok(cmd)
+        Ok((cmd, cargo_args))
     }
 
     pub fn build(&self) -> Result<BuildResult> {
         tracing::info!("🚅 Running build [Desktop] command...");
 
         // Set up runtime guards
-        let t_start = std::time::Instant::now();
-        let _guard = dioxus_cli_config::__private::save_config(config);
+        let start_time = std::time::Instant::now();
+        let _guard = dioxus_cli_config::__private::save_config(&self.config);
         let _manganis_support = ManganisSupportGuard::default();
         let _asset_guard = AssetConfigDropGuard::new();
 
@@ -80,13 +87,13 @@ impl BuildRequest {
         install_web_build_tooling()?;
 
         // Create the build command
-        let cmd = self.build_command()?;
+        let (cmd, cargo_args) = self.prepare_build_command()?;
 
         // Run the build command with a pretty loader
         let cargo_result = build_cargo(cmd)?;
 
         // Post process the build result
-        let build_result = self.post_process_cargo_build(&cargo_result)?;
+        let build_result = self.post_process_build(cargo_args, &cargo_result, start_time)?;
 
         tracing::info!(
             "🚩 Build completed: [./{}]",
@@ -101,7 +108,12 @@ impl BuildRequest {
         Ok(build_result)
     }
 
-    fn post_process_build(&self, cargo_build_result: &CargoBuildResult) -> Result<BuildResult> {
+    fn post_process_build(
+        &self,
+        cargo_args: Vec<String>,
+        cargo_build_result: &CargoBuildResult,
+        t_start: Instant,
+    ) -> Result<BuildResult> {
         // Start Manganis linker intercept.
         let linker_args = vec![format!("{}", self.config.out_dir().display())];
 
@@ -121,34 +133,21 @@ impl BuildRequest {
 
         let out_dir = self.config.out_dir();
         if !out_dir.is_dir() {
-            create_dir_all(out_dir)?;
+            create_dir_all(&out_dir)?;
         }
         let output_path = out_dir.join(target_file);
-        if let Some(res_path) = &warning_messages.output_location {
-            copy(res_path, &output_path)?;
-        }
-
-        // Create the build result
-        let build_result = BuildResult {
-            warnings: warning_messages.warnings,
-            executable: Some(output_path),
-            elapsed_time: t_start.elapsed(),
-            assets,
-        };
-
-        // If this is a web build, run web post processing steps
-        if self.web {
-            self.post_process_web_build(&build_result)
+        if let Some(res_path) = &cargo_build_result.output_location {
+            std::fs::copy(res_path, &output_path)?;
         }
 
         self.copy_assets_dir()?;
 
-        let assets = if !skip_assets {
-            let assets = asset_manifest(config);
+        let assets = if !self.build_arguments.skip_assets {
+            let assets = asset_manifest(&self.config);
             // Collect assets
-            process_assets(config, &assets)?;
+            process_assets(&self.config, &assets)?;
             // Create the __assets_head.html file for bundling
-            create_assets_head(config, &assets)?;
+            create_assets_head(&self.config, &assets)?;
             Some(assets)
         } else {
             None
@@ -156,11 +155,16 @@ impl BuildRequest {
 
         // Create the build result
         let build_result = BuildResult {
-            warnings: warning_messages.warnings,
+            warnings: cargo_build_result.warnings.clone(),
             executable: Some(output_path),
             elapsed_time: t_start.elapsed(),
             assets,
         };
+
+        // If this is a web build, run web post processing steps
+        if self.web {
+            self.post_process_web_build(&build_result)?;
+        }
 
         Ok(build_result)
     }

@@ -6,7 +6,7 @@ use manganis_cli_support::AssetManifest;
 use std::fmt::Write;
 use std::path::Path;
 
-const DEFAULT_HTML: &str = include_str!("../../../assets/index.html");
+const DEFAULT_HTML: &str = include_str!("../../assets/index.html");
 
 impl BuildRequest {
     pub fn prepare_html(&self, assets: Option<&AssetManifest>) -> Result<String> {

@@ -112,7 +112,7 @@ pub(crate) fn build_cargo(cmd: subprocess::Exec) -> anyhow::Result<CargoBuildRes
     })
 }
 
-struct CargoBuildResult {
-    warnings: Vec<Diagnostic>,
-    output_location: Option<PathBuf>,
+pub(crate) struct CargoBuildResult {
+    pub(crate) warnings: Vec<Diagnostic>,
+    pub(crate) output_location: Option<PathBuf>,
 }
