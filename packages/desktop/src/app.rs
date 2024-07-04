@@ -148,20 +148,24 @@ impl App {
         not(target_os = "ios")
     ))]
     pub fn connect_hotreload(&self) {
-        let Ok(cfg) = dioxus_cli_config::CURRENT_CONFIG.as_ref() else {
-            return;
-        };
+        // let Ok(cfg) = dioxus_cli_config::CURRENT_CONFIG.as_ref() else {
+        //     return;
+        // };
 
-        // tokio::spawn(async move {
-        //     //
-        // });
+        let proxy = self.shared.proxy.clone();
 
-        // dioxus_hot_reload::connect_at(cfg.target_dir.join("dioxusin"), {
-        //     let proxy = self.shared.proxy.clone();
-        //     move |template| {
-        //         let _ = proxy.send_event(UserWindowEvent::HotReloadEvent(template));
-        //     }
-        // });
+        tokio::task::spawn(async move {
+            let receiver =
+                dioxus_hot_reload::NativeReceiver::create("ws://0.0.0.0:6478".to_string()).await;
+
+            if let Ok(mut receiver) = receiver {
+                while let Some(Ok(msg)) = receiver.next().await {
+                    println!("HotReload: {:?}", msg);
+
+                    _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
+                }
+            }
+        });
     }
 
     pub fn handle_new_window(&mut self) {
@@ -331,66 +335,19 @@ impl App {
         not(target_os = "ios")
     ))]
     pub fn handle_hot_reload_msg(&mut self, msg: dioxus_hot_reload::DevserverMsg) {
-        use dioxus_core::prelude::{HotReloadLiteral, ScopeId};
-        use dioxus_hot_reload::HotReloadMsg;
-        use dioxus_signals::Writable;
-
         match msg {
-            dioxus_hot_reload::DevserverMsg::HotReload(HotReloadMsg { templates, assets }) => {
+            dioxus_hot_reload::DevserverMsg::HotReload(hr_msg) => {
                 for webview in self.webviews.values_mut() {
-                    for template in templates.iter() {
-                        for template in template.templates.iter() {
-                            webview.dom.replace_template(*template);
-                        }
-
-                        // if there's a signal runtime, we're gonna try updating the signals using the IDs
-                        // as the name for the global signal
-                        webview.dom.runtime().on_scope(ScopeId::ROOT, || {
-                            let ctx = dioxus_signals::get_global_context();
-
-                            for (id, literal) in template.changed_lits.iter() {
-                                match &literal {
-                                    HotReloadLiteral::Fmted(f) => {
-                                        if let Some(mut signal) = ctx.get_signal_with_key(&id) {
-                                            signal.set(f.clone());
-                                        }
-                                    }
-                                    HotReloadLiteral::Float(f) => {
-                                        if let Some(mut signal) =
-                                            ctx.get_signal_with_key::<f64>(&id)
-                                        {
-                                            signal.set(f.clone());
-                                        }
-                                    }
-                                    HotReloadLiteral::Int(f) => {
-                                        if let Some(mut signal) =
-                                            ctx.get_signal_with_key::<i64>(&id)
-                                        {
-                                            signal.set(f.clone());
-                                        }
-                                    }
-                                    HotReloadLiteral::Bool(f) => {
-                                        if let Some(mut signal) =
-                                            ctx.get_signal_with_key::<bool>(&id)
-                                        {
-                                            signal.set(f.clone());
-                                        }
-                                    }
-                                }
-                            }
-                        });
-                    }
-
+                    dioxus_hot_reload::apply_changes(&mut webview.dom, &hr_msg);
                     webview.poll_vdom();
                 }
 
-                if !assets.is_empty() {
+                if !hr_msg.assets.is_empty() {
                     for webview in self.webviews.values_mut() {
                         webview.kick_stylsheets();
                     }
                 }
             }
-            dioxus_hot_reload::DevserverMsg::Reload => {}
             dioxus_hot_reload::DevserverMsg::Shutdown => {
                 self.control_flow = ControlFlow::Exit;
             }

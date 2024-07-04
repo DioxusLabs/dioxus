@@ -2,30 +2,27 @@
 
 use dioxus_hot_reload::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::UnboundedReceiver;
+use wasm_bindgen::closure::Closure;
+use wasm_bindgen::JsCast;
+use web_sys::{MessageEvent, WebSocket};
 
 pub(crate) fn init() -> UnboundedReceiver<HotReloadMsg> {
-    use wasm_bindgen::closure::Closure;
-    use wasm_bindgen::JsCast;
-    use web_sys::{MessageEvent, WebSocket};
-
     let window = web_sys::window().unwrap();
-
-    let protocol = match window.location().protocol().unwrap() {
-        prot if prot == "https:" => "wss:",
-        _ => "ws:",
-    };
 
     let url = format!(
         "{protocol}//{}/_dioxus/hot_reload",
-        window.location().host().unwrap()
+        window.location().host().unwrap(),
+        protocol = match window.location().protocol().unwrap() {
+            prot if prot == "https:" => "wss:",
+            _ => "ws:",
+        }
     );
 
     let ws = WebSocket::new(&url).unwrap();
-
     let (tx, rx) = futures_channel::mpsc::unbounded();
 
     // change the rsx when new data is received
-    let cl = Closure::wrap(Box::new(move |e: MessageEvent| {
+    let callback = Closure::wrap(Box::new(move |e: MessageEvent| {
         let Ok(text) = e.data().dyn_into::<js_sys::JsString>() else {
             return;
         };
@@ -38,17 +35,14 @@ pub(crate) fn init() -> UnboundedReceiver<HotReloadMsg> {
         };
 
         match msg {
-            DevserverMsg::HotReload(hr) => {
-                tx.unbounded_send(hr);
-            }
-            DevserverMsg::Reload => {}
+            DevserverMsg::HotReload(hr) => _ = tx.unbounded_send(hr),
             DevserverMsg::Shutdown => {}
         }
     }) as Box<dyn FnMut(MessageEvent)>);
 
-    ws.set_onmessage(Some(cl.as_ref().unchecked_ref()));
+    ws.set_onmessage(Some(callback.as_ref().unchecked_ref()));
 
-    cl.forget();
+    callback.forget();
 
     rx
 }

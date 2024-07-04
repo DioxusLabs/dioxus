@@ -186,44 +186,8 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
         #[cfg(all(feature = "hot_reload", debug_assertions))]
         if let Some(hr_msg) = template {
             // Replace all templates
-            for templates in hr_msg.templates {
-                for template in templates.templates {
-                    dom.replace_template(template);
-                }
+            dioxus_hot_reload::apply_changes(&mut dom, &hr_msg);
 
-                dom.runtime().on_scope(ScopeId::ROOT, || {
-                    let ctx = dioxus_signals::get_global_context();
-
-                    for (id, literal) in templates.changed_lits.iter() {
-                        match &literal {
-                            HotReloadLiteral::Fmted(f) => {
-                                if let Some(mut signal) = ctx.get_signal_with_key(&id) {
-                                    signal.set(f.clone());
-                                }
-                            }
-                            HotReloadLiteral::Float(f) => {
-                                if let Some(mut signal) = ctx.get_signal_with_key::<f64>(&id) {
-                                    signal.set(f.clone());
-                                }
-                            }
-                            HotReloadLiteral::Int(f) => {
-                                if let Some(mut signal) = ctx.get_signal_with_key::<i64>(&id) {
-                                    signal.set(f.clone());
-                                }
-                            }
-                            HotReloadLiteral::Bool(f) => {
-                                if let Some(mut signal) = ctx.get_signal_with_key::<bool>(&id) {
-                                    signal.set(f.clone());
-                                }
-                            }
-                        }
-                    }
-                });
-
-                for (id, literal) in templates.changed_lits {
-                    todo!("swap literals")
-                }
-            }
             if !hr_msg.assets.is_empty() {
                 // it might be triggering a reload of assets
                 // invalidate all the stylesheets on the page

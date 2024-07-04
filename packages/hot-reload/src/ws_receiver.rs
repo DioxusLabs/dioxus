@@ -6,6 +6,21 @@ use tokio_tungstenite::{
     MaybeTlsStream, WebSocketStream,
 };
 
+pub fn connect(mut callback: impl FnMut(DevserverMsg) + Send + 'static) {
+    tokio::spawn(async move {
+        let mut recv = NativeReceiver::create("ws://0.0.0.0:6478".to_string())
+            .await
+            .unwrap();
+
+        while let Some(msg) = recv.next().await {
+            match msg {
+                Ok(msg) => callback(msg),
+                Err(_e) => {}
+            }
+        }
+    });
+}
+
 /// A receiver for messages from the devserver
 ///
 /// Calling `next` will watch the channel for the next valid message from the devserver
@@ -13,9 +28,11 @@ pub struct NativeReceiver {
     socket: WebSocketStream<MaybeTlsStream<TcpStream>>,
 }
 
+pub const SERVER_ADDR: &str = "ws://0.0.0.0:6478";
+
 impl NativeReceiver {
     /// Connect to the devserver
-    pub async fn connect(url: String) -> TtResult<Self> {
+    pub async fn create(url: String) -> TtResult<Self> {
         let (socket, _ws) = tokio_tungstenite::connect_async(&url).await?;
         Ok(Self { socket })
     }

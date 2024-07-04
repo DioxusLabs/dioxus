@@ -2571,6 +2571,7 @@ dependencies = [
  "dioxus-core 0.5.2",
  "dioxus-html",
  "dioxus-rsx",
+ "dioxus-signals",
  "execute",
  "futures-util",
  "ignore",
