@@ -7,7 +7,6 @@ use axum::{
         Extension, WebSocketUpgrade,
     },
     http::{
-        self,
         header::{HeaderName, HeaderValue, CACHE_CONTROL, EXPIRES, PRAGMA},
         Method, Response, StatusCode,
     },
@@ -19,7 +18,6 @@ use axum_server::tls_rustls::RustlsConfig;
 use dioxus_cli_config::CrateConfig;
 use dioxus_cli_config::WebHttpsConfig;
 use dioxus_hot_reload::HotReloadMsg;
-use dioxus_rsx::HotReloadedTemplate;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
 use std::{
@@ -47,7 +45,7 @@ impl Server {
     pub async fn start(opts: &Serve, cfg: &CrateConfig) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
 
-        let router = setup_router(&cfg, tx).await.unwrap();
+        let router = setup_router(cfg, tx).await.unwrap();
         let port = opts.server_arguments.port;
         let start_browser = opts.open.unwrap_or(false);
 
@@ -65,11 +63,11 @@ impl Server {
         // HTTPS
         // Before console info so it can stop if mkcert isn't installed or fails
         // todo: this is the only async thing here - might be nice to
-        let rustls = get_rustls(&cfg).await.unwrap();
+        let rustls = get_rustls(cfg).await.unwrap();
 
         // Open the browser
         if start_browser {
-            open_browser(&cfg, ip, port, rustls.is_some());
+            open_browser(cfg, ip, port, rustls.is_some());
         }
 
         // Actually just start the server

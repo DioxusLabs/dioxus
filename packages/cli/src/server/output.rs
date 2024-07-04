@@ -1,8 +1,6 @@
 use crate::serve::Serve;
-use cargo_metadata::diagnostic::Diagnostic;
 use dioxus_cli_config::CrateConfig;
 
-use crate::build;
 
 use super::{Builder, Server, Watcher};
 
@@ -175,9 +173,6 @@ impl Output {
 }
 
 // use crate::server::Diagnostic;
-use colored::Colorize;
-use dioxus_cli_config::crate_root;
-use std::{net::IpAddr, path::PathBuf, process::Command};
 
 // #[derive(Debug, Default)]
 // pub struct PrettierOptions {

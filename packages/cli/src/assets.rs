@@ -8,7 +8,6 @@ use std::{fs::File, io::Write};
 
 use crate::Result;
 use dioxus_cli_config::CrateConfig;
-use dioxus_cli_config::Platform;
 use manganis_cli_support::{AssetManifest, AssetManifestExt};
 
 /// The temp file name for passing manganis json from linker to current exec.

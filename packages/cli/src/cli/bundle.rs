@@ -1,10 +1,7 @@
 use crate::build::Build;
-use core::panic;
-use dioxus_cli_config::ExecutableType;
 use std::ops::Deref;
-use std::{env::current_dir, fs::create_dir_all, str::FromStr};
+use std::{str::FromStr};
 
-use tauri_bundler::{BundleSettings, PackageSettings, SettingsBuilder};
 
 use super::*;
 

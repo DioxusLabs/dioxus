@@ -1,12 +1,12 @@
 use std::{
     collections::HashSet,
-    path::{Path, PathBuf},
+    path::{PathBuf},
 };
 
 use dioxus_cli_config::CrateConfig;
 use dioxus_hot_reload::HotReloadMsg;
 use dioxus_html::HtmlCtx;
-use dioxus_rsx::{hot_reload::FileMap, HotReloadedTemplate};
+use dioxus_rsx::{hot_reload::FileMap};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
 use notify::{event::ModifyKind, EventKind, FsEventWatcher};
@@ -103,7 +103,7 @@ impl Watcher {
         // Decompose the events into a list of all the files that have changed
         for evt in self.queued_events.drain(..) {
             for modi in evt.paths {
-                all_mods.push((evt.kind.clone(), modi.clone()));
+                all_mods.push((evt.kind, modi.clone()));
             }
         }
 
@@ -142,16 +142,12 @@ impl Watcher {
             // todo: handle gitignore
 
             // Only handle .rs files that are changed since adds/removes don't necessarily change a rust project itself
-            if ext == "rs" {
-                if kind == &EventKind::Modify(ModifyKind::Any) {
-                    edited_rust_files.insert(path);
-                }
+            if ext == "rs" && kind == &EventKind::Modify(ModifyKind::Any) {
+                edited_rust_files.insert(path);
             }
 
-            if ext != "rs" {
-                if path.starts_with(&asset_dir) {
-                    changed_assets.insert(path);
-                }
+            if ext != "rs" && path.starts_with(&asset_dir) {
+                changed_assets.insert(path);
             }
         }
 
@@ -162,7 +158,7 @@ impl Watcher {
         for rust_file in edited_rust_files {
             let hotreloaded_templates = self
                 .file_map
-                .update_rsx::<HtmlCtx>(&rust_file, &crate_dir)
+                .update_rsx::<HtmlCtx>(rust_file, &crate_dir)
                 .ok()?;
 
             changed_templates.extend(hotreloaded_templates);

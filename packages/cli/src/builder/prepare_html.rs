@@ -43,18 +43,18 @@ impl BuildRequest {
         let mut head_resources = String::new();
         // Add all styles to the head
         for style in style_list {
-            write!(
+            writeln!(
                 &mut head_resources,
-                "<link rel=\"stylesheet\" href=\"{}\">\n",
+                "<link rel=\"stylesheet\" href=\"{}\">",
                 &style.to_str().unwrap(),
             )?;
         }
 
         // Add all scripts to the head
         for script in script_list {
-            write!(
+            writeln!(
                 &mut head_resources,
-                "<script src=\"{}\"></script>\n",
+                "<script src=\"{}\"></script>",
                 &script.to_str().unwrap(),
             )?;
         }
@@ -88,7 +88,7 @@ impl BuildRequest {
         // If not, insert the script
         *html = html.replace(
             "</body",
-            &r#"<script>
+            r#"<script>
             // We can't use a module script here because we need to start the script immediately when streaming
             import("/{base_path}/assets/dioxus/{app_name}.js").then(
                 ({ default: init }) => {
@@ -135,9 +135,7 @@ fn replace_or_insert_before(
 ) {
     if content.contains(replace) {
         *content = content.replace(replace, with);
-    } else {
-        if let Some(pos) = content.find(or_insert_before) {
-            content.insert_str(pos, with);
-        }
+    } else if let Some(pos) = content.find(or_insert_before) {
+        content.insert_str(pos, with);
     }
 }

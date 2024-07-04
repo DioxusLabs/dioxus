@@ -1,6 +1,5 @@
 use build::Build;
 use dioxus_cli_config::ServeArguments;
-use dioxus_cli_config::{CrateConfig, ExecutableType, Platform};
 use std::ops::Deref;
 
 use super::*;
@@ -87,7 +86,7 @@ impl Serve {
         }
 
         crate_config.set_cargo_args(self.cargo_args.clone());
-        crate_config.set_platform_auto_detect(self.platform.clone());
+        crate_config.set_platform_auto_detect(self.platform);
 
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()

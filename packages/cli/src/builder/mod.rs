@@ -1,5 +1,5 @@
 use crate::Result;
-use crate::{build::Build, serve::Serve};
+use crate::{build::Build};
 use cargo_metadata::diagnostic::Diagnostic;
 use dioxus_cli_config::CrateConfig;
 use dioxus_cli_config::Platform;

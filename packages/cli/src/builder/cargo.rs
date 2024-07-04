@@ -8,11 +8,11 @@ use crate::builder::progress::build_cargo;
 use crate::builder::progress::CargoBuildResult;
 use crate::link::LinkCommand;
 use crate::Result;
-use dioxus_cli_config::{CrateConfig, ExecutableType, Platform};
-use manganis_cli_support::{AssetManifest, ManganisSupportGuard};
+use dioxus_cli_config::{ExecutableType};
+use manganis_cli_support::{ManganisSupportGuard};
 use std::fs::create_dir_all;
 use std::time::Instant;
-use std::{env, path::PathBuf};
+use std::{env};
 
 impl BuildRequest {
     /// Create a build command for cargo
