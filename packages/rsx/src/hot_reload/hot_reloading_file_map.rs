@@ -1,7 +1,4 @@
-use super::{
-    hot_reload_diff::{diff_rsx, DiffResult},
-    ChangedRsx,
-};
+use super::{hot_reload_diff::diff_rsx, ChangedRsx};
 use crate::{innerlude::CallBody, HotReloadedTemplate, HotReloadingContext};
 use dioxus_core::{
     prelude::{HotReloadLiteral, HotreloadedLiteral, TemplateAttribute, TemplateNode},
@@ -113,11 +110,11 @@ impl FileMap {
             // If the changes were just some rsx, we can just update the template
             //
             // However... if the changes involved code in the rsx itself, this should actually be a CodeChanged
-            DiffResult::RsxChanged { rsx_calls } => rsx_calls,
+            Some(rsx_calls) => rsx_calls,
 
             // If the changes were some code, we should insert the file into the map and rebuild
             // todo: not sure we even need to put the cached file into the map, but whatever
-            DiffResult::CodeChanged => {
+            None => {
                 let cached_file = CachedSynFile {
                     raw: src.clone(),
                     path: file_path.to_path_buf(),
