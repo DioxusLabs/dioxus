@@ -65,9 +65,12 @@ pub async fn serve_all(srv: Serve, crt: CrateConfig) -> Result<()> {
                     continue;
                 }
 
+                println!("Changes detected! Reloading...");
+
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients
                 if let Some(hr) = watchr.attempt_hot_reload(&crt) {
+                    println!("Hotreloading... {hr:?}");
                     server.send_hotreload(hr).await;
                     continue;
                 }
@@ -85,11 +88,11 @@ pub async fn serve_all(srv: Serve, crt: CrateConfig) -> Result<()> {
             }
 
             // Handle updates from the build engine
-            _ = buildr.wait() => {
+            // _ = buildr.wait() => {
                 // Wait for logs from the build engine
                 // These will cause us to update the screen
                 // We also can check the status of the builds here in case we have multiple ongoing builds
-            }
+            // }
 
             // Handle input from the user using our settings
             input = screen.wait() => {

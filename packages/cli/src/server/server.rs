@@ -11,13 +11,13 @@ use axum::{
         Method, Response, StatusCode,
     },
     response::IntoResponse,
-    routing::{get, get_service},
+    routing::{any, get, get_service},
     Router,
 };
 use axum_server::tls_rustls::RustlsConfig;
 use dioxus_cli_config::CrateConfig;
 use dioxus_cli_config::WebHttpsConfig;
-use dioxus_hot_reload::HotReloadMsg;
+use dioxus_hot_reload::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
 use std::{
@@ -63,29 +63,46 @@ impl Server {
         // HTTPS
         // Before console info so it can stop if mkcert isn't installed or fails
         // todo: this is the only async thing here - might be nice to
-        let rustls = get_rustls(cfg).await.unwrap();
+        let rustls: Option<RustlsConfig> = get_rustls(cfg).await.unwrap();
+        let rustls: Option<RustlsConfig> = None;
 
         // Open the browser
         if start_browser {
             open_browser(cfg, ip, port, rustls.is_some());
         }
 
+        println!("Listening on: {}", addr);
+
         // Actually just start the server
         // todo: we might just be able to poll this future instead
         let server_task = tokio::spawn(async move {
             // Start the server with or without rustls
-            if let Some(rustls) = rustls {
-                axum_server::bind_rustls(addr, rustls)
-                    .serve(router.into_make_service())
-                    .await?
-            } else {
-                // Create a TCP listener bound to the address
-                axum::serve(
-                    tokio::net::TcpListener::bind(&addr).await?,
-                    router.into_make_service(),
-                )
-                .await?
-            }
+            // if let Some(rustls) = rustls {
+            //     axum_server::bind_rustls(addr, rustls)
+            //         .serve(router.into_make_service())
+            //         .await?
+            // } else {
+            // Create a TCP listener bound to the address
+            axum::serve(
+                tokio::net::TcpListener::bind(&addr).await.unwrap(),
+                router.into_make_service(),
+            )
+            .await
+            .unwrap();
+            // }
+            // // Start the server with or without rustls
+            // if let Some(rustls) = rustls {
+            //     axum_server::bind_rustls(addr, rustls)
+            //         .serve(router.into_make_service())
+            //         .await?
+            // } else {
+            //     // Create a TCP listener bound to the address
+            //     axum::serve(
+            //         tokio::net::TcpListener::bind(&addr).await?,
+            //         router.into_make_service(),
+            //     )
+            //     .await?
+            // }
 
             Ok(())
         });
@@ -101,7 +118,8 @@ impl Server {
     pub fn update(&mut self, cfg: &Serve, crate_config: &CrateConfig) {}
 
     pub async fn send_hotreload(&mut self, reload: HotReloadMsg) {
-        let msg = serde_json::to_string(&reload).unwrap();
+        let msg = DevserverMsg::HotReload(reload);
+        let msg = serde_json::to_string(&msg).unwrap();
 
         // to our connected clients, send the changes to the sockets
         for socket in self.sockets.iter_mut() {
@@ -114,10 +132,14 @@ impl Server {
 
     /// Wait for new clients to be connected and then save them
     pub async fn wait(&mut self) {
-        let new_socket = self.new_socket.next().await;
-        if let Some(socket) = new_socket {
-            self.sockets.push(socket);
-        }
+        let new_socket = self
+            .new_socket
+            .next()
+            .await
+            .expect("receiver to receive a socket");
+        println!("new socket connected: {:?}", new_socket);
+
+        self.sockets.push(new_socket);
     }
 
     pub async fn shutdown(&self) {
@@ -135,40 +157,11 @@ impl Server {
 pub async fn setup_router(config: &CrateConfig, tx: UnboundedSender<WebSocket>) -> Result<Router> {
     let mut router = Router::new();
 
-    // Setup cors
-    router = router.layer(
-        CorsLayer::new()
-            // allow `GET` and `POST` when accessing the resource
-            .allow_methods([Method::GET, Method::POST])
-            // allow requests from any origin
-            .allow_origin(Any)
-            .allow_headers(Any),
-    );
-
     // Setup proxy for the /api/ endpoint
     for proxy_config in config.dioxus_config.web.proxy.iter() {
         todo!("Configure proxy");
         // router = super::proxy::add_proxy(router, &proxy_config)?;
     }
-
-    // Setup websocket endpoint
-    // todo: we used to have multiple routes here but we just need the one
-    router = router.layer(Extension(tx));
-    router = router.nest(
-        "/_dioxus",
-        Router::new().route(
-            "/ws",
-            get(
-                // Simply bounce the websocket handle up to the webserver handle
-                |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<WebSocket>>| async move {
-                    ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(socket) })
-                },
-            ),
-        ),
-    );
-
-    // Route file service to output the .wasm and assets
-    router = router.fallback(build_serve_dir(config));
 
     // Setup base path redirection
     if let Some(base_path) = config.dioxus_config.web.app.base_path.clone() {
@@ -179,6 +172,39 @@ pub async fn setup_router(config: &CrateConfig, tx: UnboundedSender<WebSocket>) 
                 format!("Outside of the base path: {}", base_path)
             }));
     }
+
+    // Route file service to output the .wasm and assets
+    router = router.fallback(build_serve_dir(config));
+
+    // Setup websocket endpoint
+    // todo: we used to have multiple routes here but we just need the one
+    router = router.route(
+        "/_dioxus",
+        get(
+            // Simply bounce the websocket handle up to the webserver handle
+            // |ws: WebSocketUpgrade| a
+            |ws: WebSocketUpgrade, mut ext: Extension<UnboundedSender<WebSocket>>| {
+                println!("new websocket connection");
+                async move {
+                    println!("upgrading connection");
+                    ws.on_upgrade(move |socket| async move {
+                        println!("socket sent");
+                        ext.0.unbounded_send(socket).unwrap();
+                    })
+                }
+            },
+        ),
+    );
+    router = router.layer(Extension(tx));
+    // Setup cors
+    router = router.layer(
+        CorsLayer::new()
+            // allow `GET` and `POST` when accessing the resource
+            .allow_methods([Method::GET, Method::POST])
+            // allow requests from any origin
+            .allow_origin(Any)
+            .allow_headers(Any),
+    );
 
     Ok(router)
 }

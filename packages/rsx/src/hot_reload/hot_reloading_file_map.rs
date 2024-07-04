@@ -167,6 +167,8 @@ impl FileMap {
                 return Err(HotreloadError::Notreloadable);
             };
 
+            println!("Hotreloading... {results:?}");
+
             // Be careful to not send the bad templates
             results.templates.retain(|template| {
                 // dioxus cannot handle empty templates...

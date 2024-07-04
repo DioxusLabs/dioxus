@@ -1,5 +1,5 @@
 use dioxus_core::prelude::{provide_root_context, try_consume_context};
-use std::{any::Any, cell::RefCell, collections::HashMap, rc::Rc};
+use std::{any::Any, cell::RefCell, collections::HashMap, panic::Location, rc::Rc};
 use uuid::Uuid;
 
 mod memo;
@@ -15,19 +15,35 @@ pub(crate) static UUID_NAMESPACE: uuid::Uuid = uuid::Uuid::NAMESPACE_URL;
 /// The context for global signals
 #[derive(Clone)]
 pub struct GlobalSignalContext {
-    signal: Rc<RefCell<HashMap<Uuid, Box<dyn Any>>>>,
+    signal: Rc<RefCell<HashMap<GlobalKey, Box<dyn Any>>>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum GlobalKey {
+    Static(&'static Location<'static>),
+    Dynamic(&'static str),
 }
 
 impl GlobalSignalContext {
     /// Get a signal with the given string key
     /// The key will be converted to a UUID with the appropriate internal namespace
     pub fn get_signal_with_key<T>(&self, key: &str) -> Option<Signal<T>> {
-        let id = uuid::Uuid::new_v3(&uuid::Uuid::NAMESPACE_URL, key.as_bytes());
+        // temporarily extend the lifetime
+        let key = unsafe { std::mem::transmute::<&str, &'static str>(key) };
 
-        self.signal
-            .borrow()
-            .get(&id)
-            .map(|f| f.downcast_ref::<Signal<T>>().unwrap().clone())
+        let id = GlobalKey::Dynamic(key);
+
+        self.signal.borrow().get(&id).map(|f| {
+            f.downcast_ref::<Signal<T>>()
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Global signal with key {:?} is not of the expected type. Keys are {:?}",
+                        key,
+                        self.signal.borrow().keys()
+                    )
+                })
+                .clone()
+        })
     }
 }
 

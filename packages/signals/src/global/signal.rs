@@ -1,6 +1,6 @@
-use crate::write::Writable;
 use crate::UUID_NAMESPACE;
 use crate::{read::Readable, ReadableRef};
+use crate::{write::Writable, GlobalKey};
 use crate::{WritableRef, Write};
 use dioxus_core::prelude::ScopeId;
 use generational_box::UnsyncStorage;
@@ -13,17 +13,23 @@ use crate::Signal;
 /// A signal that can be accessed from anywhere in the application and created in a static
 pub struct GlobalSignal<T> {
     initializer: fn() -> T,
-    named_key: Option<&'static str>,
+    key: GlobalKey,
 }
 
 impl<T: 'static> GlobalSignal<T> {
     /// Create a new global signal with the given initializer.
     #[track_caller]
     pub const fn new(initializer: fn() -> T) -> GlobalSignal<T> {
+        let key = std::panic::Location::caller();
         GlobalSignal {
             initializer,
-            named_key: None,
+            key: GlobalKey::Static(key),
         }
+    }
+
+    /// Get the key for this global
+    pub fn key(&self) -> GlobalKey {
+        self.key.clone()
     }
 
     /// Create this global signal with a specific key.
@@ -32,20 +38,7 @@ impl<T: 'static> GlobalSignal<T> {
     pub const fn with_key(initializer: fn() -> T, key: &'static str) -> GlobalSignal<T> {
         GlobalSignal {
             initializer,
-            named_key: Some(key),
-        }
-    }
-
-    /// Get the Uuid key for this signal.
-    pub fn key(&self) -> uuid::Uuid {
-        // Make sure we use the static ptr - there should be no references beyond the static one
-        let ptr: *const GlobalSignal<T> = std::ptr::addr_of!(*self);
-        let ptr = ptr as u64;
-        let as_bytes = ptr.to_ne_bytes();
-
-        match self.named_key {
-            Some(key) => uuid::Uuid::new_v3(&UUID_NAMESPACE, key.as_bytes()),
-            None => uuid::Uuid::new_v3(&UUID_NAMESPACE, &as_bytes),
+            key: GlobalKey::Dynamic(key),
         }
     }
 

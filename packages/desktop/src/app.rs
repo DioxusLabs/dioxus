@@ -156,13 +156,19 @@ impl App {
 
         tokio::task::spawn(async move {
             let receiver =
-                dioxus_hot_reload::NativeReceiver::create("ws://0.0.0.0:6478".to_string()).await;
+                dioxus_hot_reload::NativeReceiver::create("ws://0.0.0.0:6478/_dioxus".to_string())
+                    .await;
 
-            if let Ok(mut receiver) = receiver {
-                while let Some(Ok(msg)) = receiver.next().await {
-                    println!("HotReload: {:?}", msg);
+            match receiver {
+                Ok(mut receiver) => {
+                    while let Some(Ok(msg)) = receiver.next().await {
+                        println!("HotReload: {:?}", msg);
 
-                    _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
+                        _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
+                    }
+                }
+                Err(err) => {
+                    panic!("HotReload failed to start {}", err);
                 }
             }
         });

@@ -44,6 +44,8 @@ impl NativeReceiver {
         loop {
             let res = self.socket.next().await?;
 
+            println!("{:?}", res);
+
             match res {
                 Ok(res) => match res {
                     Message::Text(text) => {

@@ -6,7 +6,10 @@ use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::FileMap;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
-use notify::{event::ModifyKind, EventKind, FsEventWatcher};
+use notify::{
+    event::{DataChange, ModifyKind},
+    EventKind, FsEventWatcher,
+};
 
 /// This struct stores the file watcher and the filemap for the project.
 ///
@@ -92,10 +95,12 @@ impl Watcher {
     }
 
     pub fn attempt_hot_reload(&mut self, config: &CrateConfig) -> Option<HotReloadMsg> {
-        let mut edited_rust_files = HashSet::new();
-        let mut changed_assets = HashSet::new();
+        let mut edited_rust_files = Vec::new();
+        let mut changed_assets = Vec::new();
 
         let mut all_mods: Vec<(EventKind, PathBuf)> = vec![];
+
+        println!("dequeuing events: {:#?}", self.queued_events);
 
         // Decompose the events into a list of all the files that have changed
         for evt in self.queued_events.drain(..) {
@@ -119,32 +124,33 @@ impl Watcher {
             // for various assets that might be linked in, we just try to hotreloading them forcefully
             // That is, unless they appear in an include! macro, in which case we need to a full rebuild....
             let ext = path.extension().and_then(|v| v.to_str())?;
+            println!("{:?}{:?}{:?}", ext, path, kind);
 
-            // Workaround for notify and vscode-like editor:
-            // when edit & save a file in vscode, there will be two notifications,
-            // the first one is a file with empty content.
-            // filter the empty file notification to avoid false rebuild during hot-reload
-            if let Ok(metadata) = std::fs::metadata(path) {
-                if metadata.len() == 0 {
-                    continue;
-                }
-            }
+            // // Workaround for notify and vscode-like editor:
+            // // when edit & save a file in vscode, there will be two notifications,
+            // // the first one is a file with empty content.
+            // // filter the empty file notification to avoid false rebuild during hot-reload
+            // if let Ok(metadata) = std::fs::metadata(path) {
+            //     if metadata.len() == 0 {
+            //         continue;
+            //     }
+            // }
 
-            // If the extension is a backup file, or a hidden file, ignore it completely (no rebuilds)
-            if is_backup_file(path.to_path_buf()) {
-                tracing::trace!("Ignoring backup file: {:?}", path);
-                continue;
-            }
+            // // If the extension is a backup file, or a hidden file, ignore it completely (no rebuilds)
+            // if is_backup_file(path.to_path_buf()) {
+            //     tracing::trace!("Ignoring backup file: {:?}", path);
+            //     continue;
+            // }
 
             // todo: handle gitignore
 
             // Only handle .rs files that are changed since adds/removes don't necessarily change a rust project itself
-            if ext == "rs" && kind == &EventKind::Modify(ModifyKind::Any) {
-                edited_rust_files.insert(path);
+            if ext == "rs" && kind == &EventKind::Modify(ModifyKind::Data(DataChange::Content)) {
+                edited_rust_files.push(path);
             }
 
             if ext != "rs" && path.starts_with(&asset_dir) {
-                changed_assets.insert(path);
+                changed_assets.push(path);
             }
         }
 
@@ -153,10 +159,13 @@ impl Watcher {
         let mut changed_templates = vec![];
 
         for rust_file in edited_rust_files {
+            println!("Updating file map for: {:?}", rust_file);
             let hotreloaded_templates = self
                 .file_map
                 .update_rsx::<HtmlCtx>(rust_file, &crate_dir)
                 .ok()?;
+
+            println!("Hotreloaded templates: {:#?}", hotreloaded_templates);
 
             changed_templates.extend(hotreloaded_templates);
         }

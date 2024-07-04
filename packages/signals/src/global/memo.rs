@@ -1,9 +1,9 @@
-use crate::read_impls;
 use crate::UUID_NAMESPACE;
 use crate::{read::Readable, Memo, ReadableRef};
+use crate::{read_impls, GlobalKey};
 use dioxus_core::prelude::ScopeId;
 use generational_box::UnsyncStorage;
-use std::ops::Deref;
+use std::{ops::Deref, panic::Location};
 use uuid::Uuid;
 
 use crate::Signal;
@@ -13,31 +13,26 @@ use super::get_global_context;
 /// A signal that can be accessed from anywhere in the application and created in a static
 pub struct GlobalMemo<T: 'static> {
     selector: fn() -> T,
-    key: Option<&'static str>,
+    key: GlobalKey,
 }
 
 impl<T: PartialEq + 'static> GlobalMemo<T> {
+    #[track_caller]
     /// Create a new global signal
     pub const fn new(selector: fn() -> T) -> GlobalMemo<T>
     where
         T: PartialEq,
     {
+        let key = std::panic::Location::caller();
         GlobalMemo {
             selector,
-            key: None,
+            key: GlobalKey::Static(key),
         }
     }
 
-    /// Get the UUID key of the signal
-    pub fn key(&self) -> Uuid {
-        let ptr = std::ptr::addr_of!(*self);
-        let ptr = ptr as u64;
-        let as_bytes = ptr.to_ne_bytes();
-
-        match self.key {
-            Some(key) => uuid::Uuid::new_v3(&UUID_NAMESPACE, key.as_bytes()),
-            None => uuid::Uuid::new_v3(&UUID_NAMESPACE, &as_bytes),
-        }
+    /// Get the key for this global
+    pub fn key(&self) -> GlobalKey {
+        self.key.clone()
     }
 
     /// Get the signal that backs this global.

@@ -2,10 +2,10 @@ use dioxus_rsx::HotReloadedTemplate;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-#[cfg(feature = "serve")]
+#[cfg(feature = "apply")]
 mod apply;
 
-#[cfg(feature = "serve")]
+#[cfg(feature = "apply")]
 pub use apply::*;
 
 #[cfg(feature = "serve")]

@@ -22,7 +22,7 @@ dioxus-interpreter-js = { workspace = true, features = ["binary-protocol", "eval
 dioxus-cli-config = { workspace = true, features = ["read-config"] }
 generational-box = { workspace = true }
 # hotreload only works on desktop platforms.... mobile is still wip
-dioxus-hot-reload = { workspace = true, optional = true, features = ["serve"]}
+dioxus-hot-reload = { workspace = true, optional = true, features = ["serve", "apply"]}
 
 serde = "1.0.136"
 serde_json = "1.0.79"

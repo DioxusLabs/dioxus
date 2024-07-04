@@ -1,9 +1,12 @@
 use crate::serve::Serve;
 use dioxus_cli_config::CrateConfig;
+use futures_util::StreamExt;
 
 use super::{Builder, Server, Watcher};
 
-pub struct Output {}
+pub struct Output {
+    rx: futures_channel::mpsc::UnboundedReceiver<TuiInput>,
+}
 
 pub enum TuiInput {
     Shutdown,
@@ -14,15 +17,19 @@ impl Output {
     pub fn start(cfg: &Serve, crate_config: &CrateConfig) -> Self {
         // Wire the handler to ping the handle_input
         // This will give us some time to handle the input
-        ctrlc::set_handler(|| {
-            //
-        });
+        let (tx, rx) = futures_channel::mpsc::unbounded();
+        ctrlc::set_handler(move || {
+            tx.unbounded_send(TuiInput::Shutdown).unwrap();
+        })
+        .unwrap();
 
-        Self {}
+        Self { rx }
     }
 
     pub async fn wait(&mut self) -> TuiInput {
-        todo!()
+        // todo!()
+        // pending
+        self.rx.next().await.unwrap()
     }
 
     pub fn handle_input(&mut self, input: TuiInput) {}
