@@ -2,6 +2,7 @@ use dioxus_html::prelude::{EvalError, EvalProvider, Evaluator};
 use dioxus_interpreter_js::eval::{JSOwner, WeakDioxusChannel, WebDioxusChannel};
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 use js_sys::Function;
+use serde::Serialize;
 use serde_json::Value;
 use std::future::Future;
 use std::pin::Pin;
@@ -105,7 +106,9 @@ impl Evaluator for WebEvaluator {
 
     /// Sends a message to the evaluated JavaScript.
     fn send(&self, data: serde_json::Value) -> Result<(), EvalError> {
-        let data = match serde_wasm_bindgen::to_value::<serde_json::Value>(&data) {
+        let serializer = serde_wasm_bindgen::Serializer::json_compatible();
+
+        let data = match data.serialize(&serializer) {
             Ok(d) => d,
             Err(e) => return Err(EvalError::Communication(e.to_string())),
         };
