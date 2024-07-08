@@ -38,9 +38,6 @@ async fn main() -> anyhow::Result<()> {
             .config()
             .context(error_wrapper("Configuring new project failed")),
 
-        #[cfg(feature = "plugin")]
-        Plugin(opts) => opts.plugin().context(error_wrapper("Error with plugin")),
-
         Autoformat(opts) => opts
             .autoformat()
             .context(error_wrapper("Error autoformatting RSX")),

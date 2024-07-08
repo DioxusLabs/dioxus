@@ -47,12 +47,6 @@ script = []
 # serve: [dev-server] only
 script = []
 
-[application.plugins]
-
-available = true
-
-required = []
-
 [bundler]
 # Bundle identifier
 identifier = "io.github.{{project-name}}"

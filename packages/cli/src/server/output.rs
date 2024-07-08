@@ -27,7 +27,6 @@ impl Output {
     }
 
     pub async fn wait(&mut self) -> TuiInput {
-        // todo!()
         // pending
         self.rx.next().await.unwrap()
     }

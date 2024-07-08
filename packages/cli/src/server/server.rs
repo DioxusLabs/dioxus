@@ -55,9 +55,6 @@ impl Server {
             .or_else(get_ip)
             .unwrap_or(IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)));
 
-        // #[cfg(feature = "plugin")]
-        // crate::plugin::PluginManager::on_serve_start(&cfg)?;
-
         let addr: SocketAddr = SocketAddr::from((ip, port));
 
         // HTTPS
