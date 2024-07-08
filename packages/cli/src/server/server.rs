@@ -61,45 +61,28 @@ impl Server {
         // Before console info so it can stop if mkcert isn't installed or fails
         // todo: this is the only async thing here - might be nice to
         let rustls: Option<RustlsConfig> = get_rustls(cfg).await.unwrap();
-        let rustls: Option<RustlsConfig> = None;
 
         // Open the browser
         if start_browser {
             open_browser(cfg, ip, port, rustls.is_some());
         }
 
-        println!("Listening on: {}", addr);
-
         // Actually just start the server
         // todo: we might just be able to poll this future instead
         let server_task = tokio::spawn(async move {
             // Start the server with or without rustls
-            // if let Some(rustls) = rustls {
-            //     axum_server::bind_rustls(addr, rustls)
-            //         .serve(router.into_make_service())
-            //         .await?
-            // } else {
-            // Create a TCP listener bound to the address
-            axum::serve(
-                tokio::net::TcpListener::bind(&addr).await.unwrap(),
-                router.into_make_service(),
-            )
-            .await
-            .unwrap();
-            // }
-            // // Start the server with or without rustls
-            // if let Some(rustls) = rustls {
-            //     axum_server::bind_rustls(addr, rustls)
-            //         .serve(router.into_make_service())
-            //         .await?
-            // } else {
-            //     // Create a TCP listener bound to the address
-            //     axum::serve(
-            //         tokio::net::TcpListener::bind(&addr).await?,
-            //         router.into_make_service(),
-            //     )
-            //     .await?
-            // }
+            if let Some(rustls) = rustls {
+                axum_server::bind_rustls(addr, rustls)
+                    .serve(router.into_make_service())
+                    .await?
+            } else {
+                // Create a TCP listener bound to the address
+                axum::serve(
+                    tokio::net::TcpListener::bind(&addr).await?,
+                    router.into_make_service(),
+                )
+                .await?
+            }
 
             Ok(())
         });
@@ -177,26 +160,18 @@ pub async fn setup_router(
     // Route file service to output the .wasm and assets
     router = router.fallback(build_serve_dir(serve, config));
 
-    // Setup websocket endpoint
-    // todo: we used to have multiple routes here but we just need the one
-    router = router.route(
-        "/_dioxus",
-        get(
-            // Simply bounce the websocket handle up to the webserver handle
-            // |ws: WebSocketUpgrade| a
-            |ws: WebSocketUpgrade, mut ext: Extension<UnboundedSender<WebSocket>>| {
-                println!("new websocket connection");
-                async move {
-                    println!("upgrading connection");
-                    ws.on_upgrade(move |socket| async move {
-                        println!("socket sent");
-                        ext.0.unbounded_send(socket).unwrap();
-                    })
-                }
-            },
-        ),
-    );
-    router = router.layer(Extension(tx));
+    // Setup websocket endpoint - and pass in the extension layer immediately after
+    router = router
+        .route(
+            "/_dioxus",
+            get(
+                |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<WebSocket>>| async move {
+                    ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(socket) })
+                },
+            ),
+        )
+        .layer(Extension(tx));
+
     // Setup cors
     router = router.layer(
         CorsLayer::new()

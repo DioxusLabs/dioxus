@@ -22,6 +22,8 @@ pub struct FileMap {
     pub errors: Vec<io::Error>,
 
     pub in_workspace: HashMap<PathBuf, Option<PathBuf>>,
+
+    pub changed_lits: HashMap<String, HotReloadLiteral>,
 }
 
 /// A cached file that has been parsed
@@ -56,6 +58,7 @@ impl FileMap {
             map,
             errors,
             in_workspace: HashMap::new(),
+            changed_lits: HashMap::new(),
         };
 
         map.load_assets::<Ctx>(crate_dir.as_path());
@@ -160,6 +163,7 @@ impl FileMap {
                 &old_call_body,
                 &new_call_body,
                 leaked_location,
+                self.changed_lits.clone(),
             );
 
             // if the template is not hotreloadable, we need to do a full rebuild
@@ -167,7 +171,7 @@ impl FileMap {
                 return Err(HotreloadError::Notreloadable);
             };
 
-            println!("Hotreloading... {results:?}");
+            self.changed_lits = std::mem::take(&mut results.changed_lits);
 
             // Be careful to not send the bad templates
             results.templates.retain(|template| {

@@ -74,15 +74,21 @@ impl RsxBlock {
                 }
 
                 let expr = content.parse::<Expr>()?;
-                items.push(RsxItem::Spread(Spread {
+                let attr = Spread {
                     expr,
                     dots,
                     dyn_idx: DynIdx::default(),
-                }));
+                    comma: content.parse().ok(),
+                };
 
-                if !content.is_empty() {
-                    content.parse::<Token![,]>()?; // <--- diagnostics...
+                if !content.is_empty() && attr.comma.is_none() {
+                    diagnostics.push(
+                        attr.span()
+                            .error("Attributes must be separated by commas")
+                            .help("Did you forget a comma?"),
+                    );
                 }
+                items.push(RsxItem::Spread(attr));
 
                 continue;
             }

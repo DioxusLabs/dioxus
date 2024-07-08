@@ -28,10 +28,9 @@ pub struct Element {
     /// These are the actual attributes that get rendered out
     pub merged_attributes: Vec<Attribute>,
 
-    /// The `...` spread attributes.
-    /// Elements can have multiple, unlike components which can only have one
-    pub spreads: Vec<Spread>,
-
+    // /// The `...` spread attributes.
+    // /// Elements can have multiple, unlike components which can only have one
+    // pub spreads: Vec<Spread>,
     /// The children of the element
     pub children: Vec<BodyNode>,
 
@@ -61,12 +60,22 @@ impl Parse for Element {
             raw_attributes: fields,
             children,
             brace,
-            spreads,
             diagnostics,
             merged_attributes: Vec::new(),
         };
 
         element.merge_attributes();
+
+        for spread in spreads.iter() {
+            element.merged_attributes.push(Attribute {
+                name: AttributeName::Spread(spread.dots.clone()),
+                colon: None,
+                value: AttributeValue::AttrExpr(PartialExpr::from_expr(&spread.expr)),
+                comma: spread.comma.clone(),
+                dyn_idx: spread.dyn_idx.clone(),
+            });
+        }
+
         element.validate();
 
         Ok(element)
@@ -96,6 +105,9 @@ impl ToTokens for Element {
                         let ns = match name {
                             AttributeName::BuiltIn(name) => ns(quote!(#name.1)),
                             AttributeName::Custom(_) => quote!(None),
+                            AttributeName::Spread(_) => {
+                                unreachable!("spread attributes should not be static")
+                            }
                         };
 
                         let name = match (el_name, name) {

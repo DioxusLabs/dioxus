@@ -218,6 +218,9 @@ impl Component {
                         );
                     }
                 },
+                AttributeName::Spread(_) => {
+                    unreachable!("Spread attributes should be handled in the spread validation step.")
+                }
             }
         }
     }
@@ -281,6 +284,7 @@ impl Component {
                         quote! { #k }
                     }
                     AttributeName::Custom(_) => return None,
+                    AttributeName::Spread(_) => return None,
                 };
 
                 let val = match value {

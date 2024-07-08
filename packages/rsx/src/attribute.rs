@@ -153,6 +153,14 @@ impl Attribute {
     }
 
     pub fn rendered_as_dynamic_attr(&self, el_name: &ElementName) -> TokenStream2 {
+        // Shortcut out with spreads
+        if let AttributeName::Spread(_) = self.name {
+            let AttributeValue::AttrExpr(expr) = &self.value else {
+                unreachable!("Spread attributes should always be expressions")
+            };
+            return quote! { {#expr}.into_boxed_slice() };
+        }
+
         let ns = |name: &AttributeName| match (el_name, name) {
             (ElementName::Ident(i), AttributeName::BuiltIn(_)) => {
                 quote! { dioxus_elements::#i::#name.1 }
@@ -176,16 +184,13 @@ impl Attribute {
                 }
             },
             AttributeName::Custom(s) => quote! { #s },
+            AttributeName::Spread(_) => unreachable!("Spread attributes are handled elsewhere"),
         };
 
         let attribute = {
             let value = &self.value;
             let name = &self.name;
             let is_not_event = !self.name.ident_to_str().starts_with("on");
-            // let is_shorthand_event = match &self.value {
-            //     AttributeValue::Shorthand(s) => s.to_string().starts_with("on"),
-            //     _ => self.name.to_string().starts_with("on"),
-            // };
 
             match &self.value {
                 AttributeValue::AttrLiteral(_)
@@ -226,6 +231,7 @@ impl Attribute {
                         }
                     }
                     AttributeName::Custom(_) => unreachable!("Handled elsewhere in the macro"),
+                    AttributeName::Spread(_) => unreachable!("Handled elsewhere in the macro"),
                 },
                 _ => {
                     quote_spanned! { value.span() => dioxus_elements::events::#name(#value) }
@@ -235,10 +241,12 @@ impl Attribute {
 
         let completion_hints = self.completion_hints(el_name);
         quote! {
-            {
-                #completion_hints
-                #attribute
-            }
+            Box::new([
+                {
+                    #completion_hints
+                    #attribute
+                }
+            ])
         }
         .to_token_stream()
     }
@@ -306,6 +314,8 @@ impl Attribute {
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum AttributeName {
+    Spread(Token![..]),
+
     /// an attribute in the form of `name: value`
     BuiltIn(Ident),
 
@@ -321,6 +331,7 @@ impl AttributeName {
         match self {
             Self::Custom(lit) => lit.value(),
             Self::BuiltIn(ident) => ident.to_string(),
+            Self::Spread(_) => "..".to_string(),
         }
     }
 
@@ -328,6 +339,7 @@ impl AttributeName {
         match self {
             Self::Custom(lit) => lit.span(),
             Self::BuiltIn(ident) => ident.span(),
+            Self::Spread(dots) => dots.span(),
         }
     }
 }
@@ -337,6 +349,7 @@ impl Display for AttributeName {
         match self {
             Self::Custom(lit) => write!(f, "{}", lit.value()),
             Self::BuiltIn(ident) => write!(f, "{}", ident),
+            Self::Spread(_) => write!(f, ".."),
         }
     }
 }
@@ -346,6 +359,7 @@ impl ToTokens for AttributeName {
         match self {
             Self::Custom(lit) => lit.to_tokens(tokens),
             Self::BuiltIn(ident) => ident.to_tokens(tokens),
+            Self::Spread(dots) => dots.to_tokens(tokens),
         }
     }
 }
@@ -356,6 +370,13 @@ pub struct Spread {
     pub dots: Token![..],
     pub expr: Expr,
     pub dyn_idx: DynIdx,
+    pub comma: Option<Token![,]>,
+}
+
+impl Spread {
+    pub fn span(&self) -> proc_macro2::Span {
+        self.dots.span()
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]

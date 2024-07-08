@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
 use std::hash;
-use syn::{parse::Parse, spanned::Spanned, token::Brace};
+use syn::{parse::Parse, spanned::Spanned, token::Brace, Expr};
 
 /// A raw expression potentially wrapped in curly braces that is parsed from the input stream.
 ///
@@ -42,9 +42,7 @@ impl ToTokens for PartialExpr {
         let exp = &self.expr;
 
         // Make sure we bind the expression to a variable so the lifetimes are relaxed
-        tokens.append_all(quote! {
-            { #exp }
-        })
+        tokens.append_all(quote! { { #exp } })
     }
 }
 
@@ -55,6 +53,13 @@ impl PartialExpr {
 
     pub fn as_expr(&self) -> syn::Result<syn::Expr> {
         syn::parse2(self.expr.clone())
+    }
+
+    pub fn from_expr(expr: &Expr) -> Self {
+        Self {
+            brace: Brace::default(),
+            expr: quote! { #expr },
+        }
     }
 }
 

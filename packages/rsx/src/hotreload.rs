@@ -78,6 +78,9 @@ pub struct HotReloadedTemplate {
     /// List of inner templates that changed (nested blocks like for/if/component bodies)
     pub templates: Vec<Template>,
 
+    /// Previously changed lits that we're going to use to invalidate the old literals
+    pub prev_lits: HashMap<String, HotReloadLiteral>,
+
     /// A map of Signal IDs to the new literals
     /// Eventually we'll want to move this to a more efficient data structure to have one signal per rsx! call
     pub changed_lits: HashMap<String, HotReloadLiteral>,
@@ -93,10 +96,12 @@ impl HotReloadedTemplate {
         old: &CallBody,
         new: &CallBody,
         location: &'static str,
+        old_lits: HashMap<String, HotReloadLiteral>,
     ) -> Option<Self> {
         let mut s = Self {
             templates: Default::default(),
             changed_lits: Default::default(),
+            prev_lits: old_lits,
             location,
         };
 
@@ -229,20 +234,7 @@ impl HotReloadedTemplate {
 
             // While we're here, if it's a literal and not a perfect score, it's a mismatch and we need to
             // hotreload the literal
-            if score != usize::MAX {
-                let idx = old_attr.as_lit().unwrap().hr_idx.get();
-                let location = self.make_location(idx);
-                let lit = match &new_attr.as_lit().unwrap().value {
-                    HotLiteralType::Float(f) => HotReloadLiteral::Float(f.base10_parse().unwrap()),
-                    HotLiteralType::Int(f) => HotReloadLiteral::Int(f.base10_parse().unwrap()),
-                    HotLiteralType::Bool(f) => HotReloadLiteral::Bool(f.value),
-                    HotLiteralType::Fmted(f) => {
-                        HotReloadLiteral::Fmted(f.fmt_segments(old_attr.ifmt().unwrap())?)
-                    }
-                };
-
-                self.changed_lits.insert(location, lit);
-            }
+            self.hotreload_attribute(old_attr, new_attr, Some(score))?;
         }
 
         Some(attr_paths)
@@ -343,52 +335,51 @@ impl HotReloadedTemplate {
         // Those will have plumbing in the hotreloading code
         // All others just get diffed via tokensa
         for (old_attr, new_attr) in left_fields.iter().zip(right_fields.iter()) {
-            self.hotreload_component_field(old_attr, new_attr)?;
+            self.hotreload_attribute(old_attr, new_attr, None)?;
         }
 
         Some(())
     }
 
-    fn hotreload_component_field(
+    fn hotreload_attribute(
         &mut self,
         old_attr: &Attribute,
         new_attr: &Attribute,
+        score: Option<usize>,
     ) -> Option<()> {
-        match (&old_attr.value, &new_attr.value) {
-            (_, _) if old_attr.name != new_attr.name => return None,
-            (AttributeValue::AttrLiteral(_), AttributeValue::AttrLiteral(b)) => {
-                match score_attribute(&old_attr, &new_attr) {
-                    // Same - nothing to do
-                    // we need to temporarily consider literals as volatile
-                    usize::MAX if !matches!(b.value, HotLiteralType::Bool(_)) => {}
+        let score = score.unwrap_or_else(|| score_attribute(&old_attr, &new_attr));
 
-                    // Mismatch - we need to force a rebuild
-                    0 => return None,
+        // If the score is 0, the name didn't match or the values didn't match
+        // A score of usize::MAX means the attributes are the same
+        if score == 0 {
+            return None;
+        }
 
-                    // Literal mismatch - we need to hotreload the literal
-                    _score => {
-                        let location = self.make_location(old_attr.as_lit().unwrap().hr_idx.get());
+        // If it's a perfect match, we don't need to do anything special
+        // ... well actually if it's a lit we need to invalidate the old lit
+        // this is because a lit going from true -> false -> true doesn't count as a change from the diffing perspective
+        if score == usize::MAX && new_attr.as_lit().is_none() {
+            return Some(());
+        }
 
-                        let lit = match &b.value {
-                            HotLiteralType::Float(f) => {
-                                HotReloadLiteral::Float(f.base10_parse().unwrap())
-                            }
-                            HotLiteralType::Int(f) => {
-                                HotReloadLiteral::Int(f.base10_parse().unwrap())
-                            }
-                            HotLiteralType::Bool(f) => HotReloadLiteral::Bool(f.value),
-                            HotLiteralType::Fmted(f) => {
-                                HotReloadLiteral::Fmted(f.fmt_segments(new_attr.ifmt().unwrap())?)
-                            }
-                        };
+        // Prep the new literal
+        let location = self.make_location(old_attr.as_lit().unwrap().hr_idx.get());
 
-                        self.changed_lits.insert(location, lit);
-                    }
-                }
+        // If we have a perfect match and no old lit exists, then this didn't change
+        if score == usize::MAX && self.prev_lits.remove(&location).is_none() {
+            return Some(());
+        }
+
+        let out = match &new_attr.as_lit().unwrap().value {
+            HotLiteralType::Float(f) => HotReloadLiteral::Float(f.base10_parse().unwrap()),
+            HotLiteralType::Int(f) => HotReloadLiteral::Int(f.base10_parse().unwrap()),
+            HotLiteralType::Bool(f) => HotReloadLiteral::Bool(f.value),
+            HotLiteralType::Fmted(f) => {
+                HotReloadLiteral::Fmted(f.fmt_segments(old_attr.ifmt().unwrap())?)
             }
-            (left_attr, right_attr) if left_attr != right_attr => return None,
-            _ => {}
         };
+
+        self.changed_lits.insert(location, out);
 
         Some(())
     }

@@ -1,3 +1,4 @@
+use dioxus_core::prelude::HotReloadLiteral;
 use proc_macro2::Span;
 use quote::ToTokens;
 use quote::{quote, TokenStreamExt};
