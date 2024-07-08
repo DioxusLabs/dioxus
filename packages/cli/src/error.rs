@@ -1,3 +1,4 @@
+use dioxus_cli_config::CrateConfigError;
 use thiserror::Error as ThisError;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -84,8 +85,8 @@ impl From<dioxus_cli_config::CargoError> for Error {
     }
 }
 
-impl From<dioxus_cli_config::CrateConfigError> for Error {
-    fn from(e: dioxus_cli_config::CrateConfigError) -> Self {
+impl From<CrateConfigError> for Error {
+    fn from(e: CrateConfigError) -> Self {
         Self::RuntimeError(e.to_string())
     }
 }

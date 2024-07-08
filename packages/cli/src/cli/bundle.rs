@@ -70,7 +70,7 @@ impl From<PackageType> for tauri_bundler::PackageType {
 impl Bundle {
     pub fn bundle(self, bin: Option<PathBuf>) -> Result<()> {
         todo!()
-        // let mut crate_config = dioxus_cli_config::CrateConfig::new(bin)?;
+        // let mut crate_config = crate::resolved::CrateConfig::new(bin)?;
 
         // // change the release state.
         // crate_config.with_release(true);

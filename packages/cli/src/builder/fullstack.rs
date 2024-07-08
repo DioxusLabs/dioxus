@@ -1,6 +1,6 @@
 use crate::builder::Build;
 use crate::builder::BuildResult;
-use dioxus_cli_config::CrateConfig;
+use crate::dioxus_crate::DioxusCrate;
 
 use crate::{build, Result};
 
@@ -42,7 +42,7 @@ fn fullstack_rust_flags(build: &Build, base_flags: &str) -> String {
 
 // Fullstack builds run the server and client builds parallel by default
 // To make them run in parallel, we need to set up different target directories for the server and client within /.dioxus
-fn set_target_directory(build: &Build, config: &mut CrateConfig, target: PathBuf) {
+fn set_target_directory(build: &Build, config: &mut DioxusCrate, target: PathBuf) {
     if !build.force_sequential {
         config.target_dir = target;
     }
@@ -50,7 +50,7 @@ fn set_target_directory(build: &Build, config: &mut CrateConfig, target: PathBuf
 
 impl BuildRequest {
     pub(crate) fn new_fullstack(
-        config: CrateConfig,
+        config: DioxusCrate,
         build_arguments: Build,
         serve: bool,
     ) -> Vec<Self> {
@@ -62,7 +62,7 @@ impl BuildRequest {
 
     fn new_with_target_directory_rust_flags_and_features(
         serve: bool,
-        config: &CrateConfig,
+        config: &DioxusCrate,
         build: &Build,
         target_directory: PathBuf,
         rust_flags: &str,
@@ -70,13 +70,14 @@ impl BuildRequest {
         web: bool,
     ) -> Self {
         let mut config = config.clone();
+        let mut build = build.clone();
         // Set the target directory we are building the server in
-        set_target_directory(build, &mut config, target_directory);
+        set_target_directory(&build, &mut config, target_directory);
         // Add the server feature to the features we pass to the build
-        config.features.push(feature);
+        build.features.push(feature);
 
         // Add the server flags to the build arguments
-        let rust_flags = fullstack_rust_flags(build, rust_flags);
+        let rust_flags = fullstack_rust_flags(&build, rust_flags);
 
         Self {
             web,
@@ -87,7 +88,7 @@ impl BuildRequest {
         }
     }
 
-    fn new_server(serve: bool, config: &CrateConfig, build: &Build) -> Self {
+    fn new_server(serve: bool, config: &DioxusCrate, build: &Build) -> Self {
         Self::new_with_target_directory_rust_flags_and_features(
             serve,
             config,
@@ -99,7 +100,7 @@ impl BuildRequest {
         )
     }
 
-    fn new_client(serve: bool, config: &CrateConfig, build: &Build) -> Self {
+    fn new_client(serve: bool, config: &DioxusCrate, build: &Build) -> Self {
         Self::new_with_target_directory_rust_flags_and_features(
             serve,
             config,

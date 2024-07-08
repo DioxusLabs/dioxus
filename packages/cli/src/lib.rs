@@ -13,3 +13,9 @@ pub mod error;
 pub use error::*;
 
 pub(crate) mod builder;
+
+mod dioxus_crate;
+pub use dioxus_crate::*;
+
+mod settings;
+pub(crate) use settings::*;

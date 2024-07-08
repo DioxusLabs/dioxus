@@ -64,7 +64,8 @@ impl BuildRequest {
             // [3] Bindgen the final binary for use easy linking
             let mut bindgen_builder = Bindgen::new();
 
-            let keep_debug = self.config.dioxus_config.web.wasm_opt.debug || (!self.config.release);
+            let keep_debug =
+                self.config.dioxus_config.web.wasm_opt.debug || (!self.build_arguments.release);
 
             bindgen_builder
                 .input_path(input_path)
@@ -109,7 +110,7 @@ impl BuildRequest {
         self.run_wasm_bindgen(&input_path, &bindgen_outdir)?;
 
         // Run wasm-opt if this is a release build
-        if self.config.release {
+        if self.build_arguments.release {
             tracing::info!("Running optimization with wasm-opt...");
             let mut options = match self.config.dioxus_config.web.wasm_opt.level {
                 WasmOptLevel::Z => {
@@ -145,7 +146,8 @@ impl BuildRequest {
         // If pre-compressing is enabled, we can pre_compress the wasm-bindgen output
         pre_compress_folder(
             &bindgen_outdir,
-            self.config.should_pre_compress_web_assets(),
+            self.config
+                .should_pre_compress_web_assets(self.build_arguments.release),
         )?;
 
         Ok(())

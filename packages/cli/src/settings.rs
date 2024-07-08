@@ -1,4 +1,4 @@
-use crate::CrateConfigError;
+use dioxus_cli_config::CrateConfigError;
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -25,6 +25,11 @@ pub struct CliSettings {
 }
 
 impl CliSettings {
+    /// Load the settings from the local, global, or default config in that order
+    pub fn load() -> Self {
+        Self::from_global().unwrap_or_default()
+    }
+
     /// Get the current settings structure from global.
     pub fn from_global() -> Option<Self> {
         let Some(path) = dirs::data_local_dir() else {
@@ -83,5 +88,14 @@ impl CliSettings {
         };
 
         Some(path.join(GLOBAL_SETTINGS_FILE_NAME))
+    }
+
+    /// Modify the settings toml file
+    pub fn modify_settings(with: impl FnOnce(&mut CliSettings)) -> Result<(), CrateConfigError> {
+        let mut settings = Self::load();
+        with(&mut settings);
+        settings.save()?;
+
+        Ok(())
     }
 }

@@ -1,4 +1,3 @@
-use dioxus_cli_config::DioxusConfig;
 use std::{env, path::PathBuf};
 use tracing_subscriber::EnvFilter;
 
@@ -53,32 +52,23 @@ fn main() -> anyhow::Result<()> {
 
         action => {
             let bin = get_bin(args.bin)?;
-            let _dioxus_config = DioxusConfig::load(Some(bin.clone()))
-                .context("Failed to load Dioxus config because")?
-                .unwrap_or_else(|| {
-                    tracing::info!("You appear to be creating a Dioxus project from scratch; we will use the default config");
-                    DioxusConfig::default()
-                });
-
-            #[cfg(feature = "plugin")]
-            use dioxus_cli::plugin::PluginManager;
-
-            #[cfg(feature = "plugin")]
-            PluginManager::init(_dioxus_config.plugin)
-                .context(error_wrapper("Plugin system initialization failed"))?;
+            let mut dioxus_crate =
+                DioxusCrate::new(Some(bin.clone())).context("Failed to load Dioxus workspace")?;
 
             match action {
-                Build(opts) => opts
-                    .build(Some(bin.clone()), None, None)
+                Build(mut opts) => opts
+                    .resolve(&mut dioxus_crate)
                     .context(error_wrapper("Building project failed")),
 
                 Clean(opts) => opts
                     .clean(Some(bin.clone()))
                     .context(error_wrapper("Cleaning project failed")),
 
-                Serve(opts) => opts
-                    .serve(Some(bin.clone()))
-                    .context(error_wrapper("Serving project failed")),
+                Serve(mut opts) => {
+                    opts.resolve(&mut dioxus_crate)?;
+                    opts.serve(Some(bin.clone()))
+                        .context(error_wrapper("Serving project failed"))
+                }
 
                 Bundle(opts) => opts
                     .bundle(Some(bin.clone()))

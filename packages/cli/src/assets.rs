@@ -6,14 +6,14 @@ use walkdir::WalkDir;
 
 use std::{fs::File, io::Write};
 
+use crate::dioxus_crate::DioxusCrate;
 use crate::Result;
-use dioxus_cli_config::CrateConfig;
 use manganis_cli_support::{AssetManifest, AssetManifestExt};
 
 /// The temp file name for passing manganis json from linker to current exec.
 pub const MG_JSON_OUT: &str = "mg-out";
 
-pub fn asset_manifest(config: &CrateConfig) -> AssetManifest {
+pub fn asset_manifest(config: &DioxusCrate) -> AssetManifest {
     let file_path = config.out_dir().join(MG_JSON_OUT);
     let read = fs::read_to_string(&file_path).unwrap();
     _ = fs::remove_file(file_path);
@@ -23,14 +23,14 @@ pub fn asset_manifest(config: &CrateConfig) -> AssetManifest {
 }
 
 /// Create a head file that contains all of the imports for assets that the user project uses
-pub fn create_assets_head(config: &CrateConfig, manifest: &AssetManifest) -> Result<()> {
+pub fn create_assets_head(config: &DioxusCrate, manifest: &AssetManifest) -> Result<()> {
     let mut file = File::create(config.out_dir().join("__assets_head.html"))?;
     file.write_all(manifest.head().as_bytes())?;
     Ok(())
 }
 
 /// Process any assets collected from the binary
-pub(crate) fn process_assets(config: &CrateConfig, manifest: &AssetManifest) -> anyhow::Result<()> {
+pub(crate) fn process_assets(config: &DioxusCrate, manifest: &AssetManifest) -> anyhow::Result<()> {
     let static_asset_output_dir = PathBuf::from(
         config
             .dioxus_config

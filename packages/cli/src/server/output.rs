@@ -1,5 +1,5 @@
+use crate::dioxus_crate::DioxusCrate;
 use crate::serve::Serve;
-use dioxus_cli_config::CrateConfig;
 use futures_util::StreamExt;
 
 use super::{Builder, Server, Watcher};
@@ -14,7 +14,7 @@ pub enum TuiInput {
 }
 
 impl Output {
-    pub fn start(cfg: &Serve, crate_config: &CrateConfig) -> Self {
+    pub fn start(cfg: &Serve, crate_config: &DioxusCrate) -> Self {
         // Wire the handler to ping the handle_input
         // This will give us some time to handle the input
         let (tx, rx) = futures_channel::mpsc::unbounded();
@@ -37,7 +37,7 @@ impl Output {
     pub fn draw(
         &self,
         opts: &Serve,
-        config: &CrateConfig,
+        config: &DioxusCrate,
         build_engine: &Builder,
         server: &Server,
         watcher: &Watcher,

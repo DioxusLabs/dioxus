@@ -1,3 +1,4 @@
+use crate::dioxus_crate::DioxusCrate;
 use crate::server::Serve;
 use crate::Result;
 use axum::{
@@ -15,7 +16,6 @@ use axum::{
     Router,
 };
 use axum_server::tls_rustls::RustlsConfig;
-use dioxus_cli_config::CrateConfig;
 use dioxus_cli_config::WebHttpsConfig;
 use dioxus_hot_reload::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -42,14 +42,14 @@ pub struct Server {
 }
 
 impl Server {
-    pub async fn start(opts: &Serve, cfg: &CrateConfig) -> Self {
+    pub async fn start(serve: &Serve, cfg: &DioxusCrate) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
 
-        let router = setup_router(cfg, tx).await.unwrap();
-        let port = opts.server_arguments.port;
-        let start_browser = opts.server_arguments.open;
+        let router = setup_router(serve, cfg, tx).await.unwrap();
+        let port = serve.server_arguments.port;
+        let start_browser = serve.server_arguments.open.unwrap_or_default();
 
-        let ip = opts
+        let ip = serve
             .server_arguments
             .addr
             .or_else(get_ip)
@@ -115,7 +115,7 @@ impl Server {
         }
     }
 
-    pub fn update(&mut self, cfg: &Serve, crate_config: &CrateConfig) {}
+    pub fn update(&mut self, cfg: &Serve, crate_config: &DioxusCrate) {}
 
     pub async fn send_hotreload(&mut self, reload: HotReloadMsg) {
         let msg = DevserverMsg::HotReload(reload);
@@ -154,7 +154,11 @@ impl Server {
 /// - Setting up the proxy to the /api/ endpoint specifed in the config
 /// - Setting up the file serve service
 /// - Setting up the websocket endpoint for devtools
-pub async fn setup_router(config: &CrateConfig, tx: UnboundedSender<WebSocket>) -> Result<Router> {
+pub async fn setup_router(
+    serve: &Serve,
+    config: &DioxusCrate,
+    tx: UnboundedSender<WebSocket>,
+) -> Result<Router> {
     let mut router = Router::new();
 
     // Setup proxy for the /api/ endpoint
@@ -174,7 +178,7 @@ pub async fn setup_router(config: &CrateConfig, tx: UnboundedSender<WebSocket>) 
     }
 
     // Route file service to output the .wasm and assets
-    router = router.fallback(build_serve_dir(config));
+    router = router.fallback(build_serve_dir(serve, config));
 
     // Setup websocket endpoint
     // todo: we used to have multiple routes here but we just need the one
@@ -209,7 +213,7 @@ pub async fn setup_router(config: &CrateConfig, tx: UnboundedSender<WebSocket>) 
     Ok(router)
 }
 
-fn build_serve_dir(cfg: &CrateConfig) -> axum::routing::MethodRouter {
+fn build_serve_dir(serve: &Serve, cfg: &DioxusCrate) -> axum::routing::MethodRouter {
     const CORS_UNSAFE: (HeaderValue, HeaderValue) = (
         HeaderValue::from_static("unsafe-none"),
         HeaderValue::from_static("unsafe-none"),
@@ -220,7 +224,7 @@ fn build_serve_dir(cfg: &CrateConfig) -> axum::routing::MethodRouter {
         HeaderValue::from_static("same-origin"),
     );
 
-    let (coep, coop) = match cfg.cross_origin_policy {
+    let (coep, coop) = match serve.server_arguments.cross_origin_policy {
         true => CORS_REQUIRE,
         false => CORS_UNSAFE,
     };
@@ -245,7 +249,7 @@ fn build_serve_dir(cfg: &CrateConfig) -> axum::routing::MethodRouter {
     })
 }
 
-fn no_cache(cfg: CrateConfig, response: Response<ServeFileSystemResponseBody>) -> Response<Body> {
+fn no_cache(cfg: DioxusCrate, response: Response<ServeFileSystemResponseBody>) -> Response<Body> {
     let index_on_404 = cfg.dioxus_config.web.watcher.index_on_404;
 
     // By default we just decompose into the response
@@ -274,7 +278,7 @@ fn no_cache(cfg: CrateConfig, response: Response<ServeFileSystemResponseBody>) -
 }
 
 /// Returns an enum of rustls config
-pub async fn get_rustls(config: &CrateConfig) -> Result<Option<RustlsConfig>> {
+pub async fn get_rustls(config: &DioxusCrate) -> Result<Option<RustlsConfig>> {
     let web_config = &config.dioxus_config.web.https;
 
     if web_config.enabled != Some(true) {
@@ -351,7 +355,7 @@ pub fn get_rustls_without_mkcert(web_config: &WebHttpsConfig) -> Result<(String,
 }
 
 /// Open the browser to the address
-pub(crate) fn open_browser(config: &CrateConfig, ip: IpAddr, port: u16, https: bool) {
+pub(crate) fn open_browser(config: &DioxusCrate, ip: IpAddr, port: u16, https: bool) {
     let protocol = if https { "https" } else { "http" };
     let base_path = match config.dioxus_config.web.app.base_path.as_deref() {
         Some(base_path) => format!("/{}", base_path.trim_matches('/')),

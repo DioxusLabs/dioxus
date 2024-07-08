@@ -7,8 +7,8 @@ use crate::assets::{asset_manifest, process_assets, AssetConfigDropGuard};
 use crate::builder::progress::build_cargo;
 use crate::builder::progress::CargoBuildResult;
 use crate::link::LinkCommand;
+use crate::ExecutableType;
 use crate::Result;
-use dioxus_cli_config::ExecutableType;
 use manganis_cli_support::ManganisSupportGuard;
 use std::env;
 use std::fs::create_dir_all;
@@ -26,33 +26,32 @@ impl BuildRequest {
             .arg("build")
             .arg("--message-format=json-render-diagnostics");
 
-        if self.config.release {
+        if self.build_arguments.release {
             cargo_args.push("--release".to_string());
         }
-        if self.config.verbose {
+        if self.build_arguments.verbose {
             cargo_args.push("--verbose".to_string());
         } else {
             cargo_args.push("--quiet".to_string());
         }
 
-        if self.config.custom_profile.is_some() {
-            let custom_profile = self.config.custom_profile.as_ref().unwrap();
+        if let Some(custom_profile) = &self.build_arguments.profile {
             cargo_args.push("--profile".to_string());
             cargo_args.push(custom_profile.to_string());
         }
 
-        if !self.config.features.is_empty() {
-            let features_str = self.config.features.join(" ");
+        if !self.build_arguments.features.is_empty() {
+            let features_str = self.build_arguments.features.join(" ");
             cargo_args.push("--features".to_string());
             cargo_args.push(features_str);
         }
 
-        if let Some(target) = &self.config.target {
+        if let Some(target) = &self.build_arguments.target {
             cargo_args.push("--target".to_string());
             cargo_args.push(target.clone());
         }
 
-        cargo_args.append(&mut self.config.cargo_args.clone());
+        cargo_args.append(&mut self.build_arguments.cargo_args.clone());
 
         match &self.config.executable {
             ExecutableType::Binary(name) => {
@@ -79,7 +78,7 @@ impl BuildRequest {
 
         // Set up runtime guards
         let start_time = std::time::Instant::now();
-        let _guard = dioxus_cli_config::__private::save_config(&self.config);
+        let _guard = dioxus_cli_config::__private::save_config(&self.config.dioxus_config);
         let _manganis_support = ManganisSupportGuard::default();
         let _asset_guard = AssetConfigDropGuard::new();
 
@@ -176,7 +175,10 @@ impl BuildRequest {
 
         if asset_dir.is_dir() {
             // Only pre-compress the assets from the web build. Desktop assets are not served, so they don't need to be pre_compressed
-            let pre_compress = self.web && self.config.should_pre_compress_web_assets();
+            let pre_compress = self.web
+                && self
+                    .config
+                    .should_pre_compress_web_assets(self.build_arguments.release);
 
             copy_dir_to(asset_dir, out_dir, pre_compress)?;
         }

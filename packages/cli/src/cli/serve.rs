@@ -1,3 +1,7 @@
+use crate::{
+    settings::{self, CliSettings},
+    DioxusCrate,
+};
 use build::Build;
 use dioxus_cli_config::ServeArguments;
 use std::ops::Deref;
@@ -18,6 +22,25 @@ pub struct Serve {
     pub(crate) build_arguments: Build,
 }
 
+impl Serve {
+    /// Resolve the serve arguments from the arguments or the config
+    pub fn resolve(&mut self, crate_config: &mut DioxusCrate) -> Result<()> {
+        // Set config settings
+        let settings = settings::CliSettings::load();
+        if self.server_arguments.hot_reload.is_none() {
+            self.server_arguments.hot_reload = Some(settings.always_hot_reload.unwrap_or(true));
+        }
+        if self.server_arguments.open.is_none() {
+            self.server_arguments.open = Some(settings.always_open_browser.unwrap_or_default());
+        }
+
+        // Resolve the build arguments
+        self.build_arguments.resolve(crate_config)?;
+
+        Ok(())
+    }
+}
+
 impl Deref for Serve {
     type Target = Build;
 
@@ -28,40 +51,7 @@ impl Deref for Serve {
 
 impl Serve {
     pub fn serve(mut self, bin: Option<PathBuf>) -> Result<()> {
-        let mut crate_config = dioxus_cli_config::CrateConfig::new(bin)?;
-
-        // Handle cli settings
-        let cli_settings = crate_config.dioxus_config.cli_settings.clone().unwrap();
-
-        if self.server_arguments.hot_reload.is_none() {
-            self.server_arguments.hot_reload = Some(cli_settings.always_hot_reload.unwrap_or(true));
-        }
-
-        self.server_arguments.open |= cli_settings.always_open_browser.unwrap_or_default();
-
-        // Set config settings
-        crate_config.with_cross_origin_policy(self.server_arguments.cross_origin_policy);
-        crate_config.with_release(self.release);
-        crate_config.with_verbose(self.verbose);
-
-        if let Some(example) = self.example.clone() {
-            crate_config.as_example(example);
-        }
-
-        if let Some(profile) = self.profile.clone() {
-            crate_config.set_profile(profile);
-        }
-
-        if let Some(features) = self.features.clone() {
-            crate_config.set_features(features);
-        }
-
-        if let Some(target) = self.target.clone() {
-            crate_config.set_target(target);
-        }
-
-        crate_config.set_cargo_args(self.cargo_args.clone());
-        crate_config.set_platform_auto_detect(self.platform);
+        let mut crate_config = crate::dioxus_crate::DioxusCrate::new(bin)?;
 
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()

@@ -1,6 +1,6 @@
+use crate::dioxus_crate::DioxusCrate;
 use crate::serve::Serve;
 use crate::Result;
-use dioxus_cli_config::CrateConfig;
 use tokio::task::yield_now;
 
 mod output;
@@ -40,7 +40,7 @@ use watcher::*;
 /// - Consume logs from the wasm for web/fullstack
 /// - I want us to be able to detect a `server_fn` in the project and then upgrade from a static server
 ///   to a dynamic one on the fly.
-pub async fn serve_all(srv: Serve, crt: CrateConfig) -> Result<()> {
+pub async fn serve_all(srv: Serve, crt: DioxusCrate) -> Result<()> {
     let mut server = Server::start(&srv, &crt).await;
     let mut watchr = Watcher::start(&crt);
     let mut screen = Output::start(&srv, &crt);

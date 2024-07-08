@@ -1,6 +1,6 @@
 use std::{collections::HashSet, path::PathBuf};
 
-use dioxus_cli_config::CrateConfig;
+use crate::dioxus_crate::DioxusCrate;
 use dioxus_hot_reload::HotReloadMsg;
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::FileMap;
@@ -25,7 +25,7 @@ pub struct Watcher {
 }
 
 impl Watcher {
-    pub fn start(config: &CrateConfig) -> Self {
+    pub fn start(config: &DioxusCrate) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
 
         // Extend the watch path to include:
@@ -94,7 +94,7 @@ impl Watcher {
         }
     }
 
-    pub fn attempt_hot_reload(&mut self, config: &CrateConfig) -> Option<HotReloadMsg> {
+    pub fn attempt_hot_reload(&mut self, config: &DioxusCrate) -> Option<HotReloadMsg> {
         let mut edited_rust_files = Vec::new();
         let mut changed_assets = Vec::new();
 

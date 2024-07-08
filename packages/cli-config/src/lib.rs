@@ -15,30 +15,18 @@ mod serve;
 #[cfg(feature = "cli")]
 pub use serve::*;
 
-#[cfg(feature = "cli")]
-mod settings;
-
-#[cfg(feature = "cli")]
-pub use settings::*;
-
 #[doc(hidden)]
 pub mod __private {
-    use crate::CrateConfig;
+    use crate::DioxusConfig;
 
     pub(crate) const CONFIG_ENV: &str = "DIOXUS_CONFIG";
     pub(crate) const CONFIG_BASE_PATH_ENV: &str = "DIOXUS_CONFIG_BASE_PATH";
 
-    pub fn save_config(config: &CrateConfig) -> CrateConfigDropGuard {
+    pub fn save_config(config: &DioxusConfig) -> CrateConfigDropGuard {
         std::env::set_var(CONFIG_ENV, serde_json::to_string(config).unwrap());
         std::env::set_var(
             CONFIG_BASE_PATH_ENV,
-            config
-                .dioxus_config
-                .web
-                .app
-                .base_path
-                .clone()
-                .unwrap_or_default(),
+            config.web.app.base_path.clone().unwrap_or_default(),
         );
         CrateConfigDropGuard
     }
@@ -74,7 +62,7 @@ impl std::error::Error for DioxusCLINotUsed {}
 #[cfg(feature = "read-config")]
 /// The current crate's configuration.
 pub static CURRENT_CONFIG: once_cell::sync::Lazy<
-    Result<crate::config::CrateConfig, DioxusCLINotUsed>,
+    Result<crate::config::DioxusConfig, DioxusCLINotUsed>,
 > = once_cell::sync::Lazy::new(|| {
     CURRENT_CONFIG_JSON
         .and_then(|config| serde_json::from_str(config).ok())

@@ -1,7 +1,7 @@
 use crate::build::Build;
+use crate::dioxus_crate::DioxusCrate;
 use crate::Result;
 use cargo_metadata::diagnostic::Diagnostic;
-use dioxus_cli_config::CrateConfig;
 use dioxus_cli_config::Platform;
 use manganis_cli_support::AssetManifest;
 use std::{path::PathBuf, time::Duration};
@@ -75,7 +75,7 @@ pub struct BuildRequest {
     /// Whether this is a web build
     pub web: bool,
     /// The configuration for the crate we are building
-    pub config: CrateConfig,
+    pub config: DioxusCrate,
     /// The arguments for the build
     pub build_arguments: Build,
     /// The rustc flags to pass to the build
@@ -86,7 +86,7 @@ impl BuildRequest {
     pub fn create(
         serve: bool,
         platform: Platform,
-        config: CrateConfig,
+        config: DioxusCrate,
         build_arguments: impl Into<Build>,
     ) -> Vec<BuildRequest> {
         let build_arguments = build_arguments.into();

@@ -13,7 +13,7 @@ pub struct ServeArguments {
 
     /// Open the app in the default browser [default: false - unless project or global settings are set]
     #[clap(long)]
-    pub open: bool,
+    pub open: Option<bool>,
 
     /// Enable full hot reloading for the app [default: true - unless project or global settings are set]
     #[clap(long, group = "release-incompatible")]
@@ -35,7 +35,7 @@ impl Default for ServeArguments {
         Self {
             port: default_port(),
             addr: None,
-            open: false,
+            open: None,
             hot_reload: None,
             cross_origin_policy: false,
             args: vec![],

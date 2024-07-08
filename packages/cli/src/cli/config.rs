@@ -1,5 +1,7 @@
 use dioxus_cli_config::crate_root;
 
+use crate::CliSettings;
+
 use super::*;
 
 /// Dioxus config file controls
@@ -79,7 +81,7 @@ impl Config {
             Config::FormatPrint {} => {
                 println!(
                     "{:#?}",
-                    dioxus_cli_config::CrateConfig::new(None)?.dioxus_config
+                    crate::dioxus_crate::DioxusCrate::new(None)?.dioxus_config
                 );
             }
             Config::CustomHtml {} => {
@@ -90,18 +92,10 @@ impl Config {
                 tracing::info!("🚩 Create custom html file done.");
             }
             Config::SetGlobal { setting, value } => {
-                let mut global_settings =
-                    dioxus_cli_config::CliSettings::from_global().unwrap_or_default();
-
-                match setting {
-                    Setting::AlwaysHotReload => {
-                        global_settings.always_hot_reload = Some(value.into())
-                    }
-                    Setting::AlwaysOpenBrowser => {
-                        global_settings.always_open_browser = Some(value.into())
-                    }
-                }
-                global_settings.save().unwrap();
+                CliSettings::modify_settings(|settings| match setting {
+                    Setting::AlwaysHotReload => settings.always_hot_reload = Some(value.into()),
+                    Setting::AlwaysOpenBrowser => settings.always_open_browser = Some(value.into()),
+                })?;
             }
         }
         Ok(())

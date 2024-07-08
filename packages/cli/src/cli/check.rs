@@ -51,7 +51,7 @@ async fn check_file_and_report(path: PathBuf) -> Result<()> {
 ///
 /// Doesn't do mod-descending, so it will still try to check unreachable files. TODO.
 async fn check_project_and_report() -> Result<()> {
-    let crate_config = dioxus_cli_config::CrateConfig::new(None)?;
+    let crate_config = crate::dioxus_crate::DioxusCrate::new(None)?;
 
     let mut files_to_check = vec![];
     collect_rs_files(&crate_config.crate_dir, &mut files_to_check);
