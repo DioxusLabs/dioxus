@@ -230,7 +230,7 @@ jobs:
           - {
               target: x86_64-apple-darwin,
               os: macos-latest,
-              toolchain: "1.76.0",
+              toolchain: "1.79.0",
               cross: false,
               command: "test",
               args: "--all --tests",
@@ -238,7 +238,7 @@ jobs:
           - {
               target: aarch64-apple-ios,
               os: macos-latest,
-              toolchain: "1.76.0",
+              toolchain: "1.79.0",
               cross: false,
               command: "build",
               args: "--package dioxus-mobile",
@@ -246,7 +246,7 @@ jobs:
           - {
               target: aarch64-linux-android,
               os: ubuntu-latest,
-              toolchain: "1.76.0",
+              toolchain: "1.79.0",
               cross: true,
               command: "build",
               args: "--package dioxus-mobile",
