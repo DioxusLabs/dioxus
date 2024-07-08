@@ -68,7 +68,7 @@ pub(crate) struct BuildResult {
 
 impl BuildResult {
     /// Open the executable if this is a native build
-    pub fn open(&self, address: impl Into<std::net::SocketAddr>) -> std::io::Result<Option<Child>> {
+    pub fn open(&self) -> std::io::Result<Option<Child>> {
         if self.web {
             return Ok(None);
         }

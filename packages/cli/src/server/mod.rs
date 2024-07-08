@@ -88,10 +88,13 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
             }
 
             // Handle updates from the build engine
-            _ = buildr.wait() => {
+            application = buildr.wait() => {
                 // Wait for logs from the build engine
                 // These will cause us to update the screen
                 // We also can check the status of the builds here in case we have multiple ongoing builds
+                for build_result in application? {
+                    build_result.open()
+                }
             }
 
             // Handle input from the user using our settings
