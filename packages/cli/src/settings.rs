@@ -1,4 +1,3 @@
-use dioxus_cli_config::CrateConfigError;
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -6,6 +5,8 @@ use std::{
     path::PathBuf,
 };
 use tracing::{debug, error, warn};
+
+use crate::CrateConfigError;
 
 const GLOBAL_SETTINGS_FILE_NAME: &str = "dioxus/settings.toml";
 

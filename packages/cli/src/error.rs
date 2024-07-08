@@ -1,5 +1,6 @@
-use dioxus_cli_config::CrateConfigError;
 use thiserror::Error as ThisError;
+
+use crate::{metadata::CargoError, CrateConfigError, LoadDioxusConfigError};
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -73,14 +74,14 @@ impl From<hyper::Error> for Error {
     }
 }
 
-impl From<dioxus_cli_config::LoadDioxusConfigError> for Error {
-    fn from(e: dioxus_cli_config::LoadDioxusConfigError) -> Self {
+impl From<LoadDioxusConfigError> for Error {
+    fn from(e: LoadDioxusConfigError) -> Self {
         Self::RuntimeError(e.to_string())
     }
 }
 
-impl From<dioxus_cli_config::CargoError> for Error {
-    fn from(e: dioxus_cli_config::CargoError) -> Self {
+impl From<CargoError> for Error {
+    fn from(e: CargoError) -> Self {
         Self::CargoError(e.to_string())
     }
 }

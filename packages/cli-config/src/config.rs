@@ -1,6 +1,4 @@
 use crate::BundleConfig;
-use crate::CargoError;
-use core::fmt::{Display, Formatter};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -81,144 +79,6 @@ pub struct DioxusConfig {
 
     #[serde(default)]
     pub bundle: BundleConfig,
-
-    #[cfg(feature = "cli")]
-    #[serde(default = "default_plugin")]
-    pub plugin: toml::Value,
-}
-
-#[cfg(feature = "cli")]
-fn default_plugin() -> toml::Value {
-    toml::Value::Boolean(true)
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LoadDioxusConfigError {
-    location: String,
-    error: String,
-}
-
-impl std::fmt::Display for LoadDioxusConfigError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {}", self.location, self.error)
-    }
-}
-
-impl std::error::Error for LoadDioxusConfigError {}
-
-#[derive(Debug)]
-#[non_exhaustive]
-pub enum CrateConfigError {
-    Cargo(CargoError),
-    Io(std::io::Error),
-    #[cfg(feature = "cli")]
-    Toml(toml::de::Error),
-    LoadDioxusConfig(LoadDioxusConfigError),
-}
-
-impl From<CargoError> for CrateConfigError {
-    fn from(err: CargoError) -> Self {
-        Self::Cargo(err)
-    }
-}
-
-impl From<std::io::Error> for CrateConfigError {
-    fn from(err: std::io::Error) -> Self {
-        Self::Io(err)
-    }
-}
-
-#[cfg(feature = "cli")]
-impl From<toml::de::Error> for CrateConfigError {
-    fn from(err: toml::de::Error) -> Self {
-        Self::Toml(err)
-    }
-}
-
-impl From<LoadDioxusConfigError> for CrateConfigError {
-    fn from(err: LoadDioxusConfigError) -> Self {
-        Self::LoadDioxusConfig(err)
-    }
-}
-
-impl Display for CrateConfigError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Cargo(err) => write!(f, "{}", err),
-            Self::Io(err) => write!(f, "{}", err),
-            #[cfg(feature = "cli")]
-            Self::Toml(err) => write!(f, "{}", err),
-            Self::LoadDioxusConfig(err) => write!(f, "{}", err),
-        }
-    }
-}
-
-impl std::error::Error for CrateConfigError {}
-
-impl DioxusConfig {
-    #[cfg(feature = "cli")]
-    /// Load the dioxus config from a path
-    #[tracing::instrument]
-    pub fn load(bin: Option<PathBuf>) -> Result<Option<DioxusConfig>, CrateConfigError> {
-        let crate_dir = crate::cargo::crate_root();
-
-        let crate_dir = match crate_dir {
-            Ok(dir) => {
-                if let Some(bin) = bin {
-                    dir.join(bin)
-                } else {
-                    dir
-                }
-            }
-            Err(_) => return Ok(None),
-        };
-        let crate_dir = crate_dir.as_path();
-
-        let Some(dioxus_conf_file) = acquire_dioxus_toml(crate_dir) else {
-            tracing::warn!(?crate_dir, "no dioxus config found for");
-            return Ok(None);
-        };
-
-        let dioxus_conf_file = dioxus_conf_file.as_path();
-        let cfg = toml::from_str::<DioxusConfig>(&std::fs::read_to_string(dioxus_conf_file)?)
-            .map_err(|err| {
-                let error_location = dioxus_conf_file
-                    .strip_prefix(crate_dir)
-                    .unwrap_or(dioxus_conf_file)
-                    .display();
-                CrateConfigError::LoadDioxusConfig(LoadDioxusConfigError {
-                    location: error_location.to_string(),
-                    error: err.to_string(),
-                })
-            })
-            .map(Some);
-        match cfg {
-            Ok(Some(mut cfg)) => {
-                let name = cfg.application.name.clone();
-                if cfg.bundle.identifier.is_none() {
-                    cfg.bundle.identifier = Some(format!("io.github.{name}"));
-                }
-                if cfg.bundle.publisher.is_none() {
-                    cfg.bundle.publisher = Some(name);
-                }
-
-                Ok(Some(cfg))
-            }
-            cfg => cfg,
-        }
-    }
-}
-
-#[cfg(feature = "cli")]
-#[tracing::instrument]
-fn acquire_dioxus_toml(dir: &std::path::Path) -> Option<PathBuf> {
-    use tracing::trace;
-
-    ["Dioxus.toml", "dioxus.toml"]
-        .into_iter()
-        .map(|file| dir.join(file))
-        .inspect(|path| trace!("checking [{path:?}]"))
-        .find(|path| path.is_file())
 }
 
 impl Default for DioxusConfig {
@@ -230,9 +90,6 @@ impl Default for DioxusConfig {
                 default_platform: default_platform(),
                 out_dir: out_dir_default(),
                 asset_dir: asset_dir_default(),
-
-                #[cfg(feature = "cli")]
-                tools: Default::default(),
 
                 sub_package: None,
             },
@@ -265,8 +122,6 @@ impl Default for DioxusConfig {
                 publisher: Some(name),
                 ..Default::default()
             },
-            #[cfg(feature = "cli")]
-            plugin: toml::Value::Table(toml::map::Map::new()),
         }
     }
 }
@@ -284,10 +139,6 @@ pub struct ApplicationConfig {
 
     #[serde(default = "asset_dir_default")]
     pub asset_dir: PathBuf,
-
-    #[cfg(feature = "cli")]
-    #[serde(default)]
-    pub tools: std::collections::HashMap<String, toml::Value>,
 
     #[serde(default)]
     pub sub_package: Option<String>,

@@ -19,3 +19,5 @@ pub use dioxus_crate::*;
 
 mod settings;
 pub(crate) use settings::*;
+
+pub(crate) mod metadata;

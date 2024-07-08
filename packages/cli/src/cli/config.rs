@@ -1,6 +1,4 @@
-use dioxus_cli_config::crate_root;
-
-use crate::CliSettings;
+use crate::{metadata::crate_root, CliSettings};
 
 use super::*;
 

@@ -8,8 +8,6 @@ pub use config::*;
 mod bundle;
 pub use bundle::*;
 
-mod cargo;
-pub use cargo::*;
 #[cfg(feature = "cli")]
 mod serve;
 #[cfg(feature = "cli")]

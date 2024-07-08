@@ -1,6 +1,11 @@
-use dioxus_cli_config::{crate_root, CrateConfigError, DioxusConfig, Metadata, Platform};
+use dioxus_cli_config::{DioxusConfig, Platform};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::{
+    fmt::{Display, Formatter},
+    path::PathBuf,
+};
+
+use crate::metadata::{crate_root, CargoError, Metadata};
 
 // Contains information about the crate we are currently in and the dioxus config for that crate
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -15,7 +20,7 @@ pub struct DioxusCrate {
 
 impl DioxusCrate {
     pub fn new(bin: Option<PathBuf>) -> Result<Self, CrateConfigError> {
-        let dioxus_config = DioxusConfig::load(bin.clone())?.unwrap_or_default();
+        let dioxus_config = load_dioxus_config(bin.clone())?.unwrap_or_default();
 
         let crate_root = crate_root()?;
 
@@ -149,3 +154,125 @@ impl ExecutableType {
         }
     }
 }
+
+/// Load the dioxus config from a path
+#[tracing::instrument]
+fn load_dioxus_config(bin: Option<PathBuf>) -> Result<Option<DioxusConfig>, CrateConfigError> {
+    #[tracing::instrument]
+    fn acquire_dioxus_toml(dir: &std::path::Path) -> Option<PathBuf> {
+        use tracing::trace;
+
+        ["Dioxus.toml", "dioxus.toml"]
+            .into_iter()
+            .map(|file| dir.join(file))
+            .inspect(|path| trace!("checking [{path:?}]"))
+            .find(|path| path.is_file())
+    }
+
+    let crate_dir = crate_root();
+
+    let crate_dir = match crate_dir {
+        Ok(dir) => {
+            if let Some(bin) = bin {
+                dir.join(bin)
+            } else {
+                dir
+            }
+        }
+        Err(_) => return Ok(None),
+    };
+    let crate_dir = crate_dir.as_path();
+
+    let Some(dioxus_conf_file) = acquire_dioxus_toml(crate_dir) else {
+        tracing::warn!(?crate_dir, "no dioxus config found for");
+        return Ok(None);
+    };
+
+    let dioxus_conf_file = dioxus_conf_file.as_path();
+    let cfg = toml::from_str::<DioxusConfig>(&std::fs::read_to_string(dioxus_conf_file)?)
+        .map_err(|err| {
+            let error_location = dioxus_conf_file
+                .strip_prefix(crate_dir)
+                .unwrap_or(dioxus_conf_file)
+                .display();
+            CrateConfigError::LoadDioxusConfig(LoadDioxusConfigError {
+                location: error_location.to_string(),
+                error: err.to_string(),
+            })
+        })
+        .map(Some);
+    match cfg {
+        Ok(Some(mut cfg)) => {
+            let name = cfg.application.name.clone();
+            if cfg.bundle.identifier.is_none() {
+                cfg.bundle.identifier = Some(format!("io.github.{name}"));
+            }
+            if cfg.bundle.publisher.is_none() {
+                cfg.bundle.publisher = Some(name);
+            }
+
+            Ok(Some(cfg))
+        }
+        cfg => cfg,
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoadDioxusConfigError {
+    location: String,
+    error: String,
+}
+
+impl std::fmt::Display for LoadDioxusConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}", self.location, self.error)
+    }
+}
+
+impl std::error::Error for LoadDioxusConfigError {}
+
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum CrateConfigError {
+    Cargo(CargoError),
+    Io(std::io::Error),
+    Toml(toml::de::Error),
+    LoadDioxusConfig(LoadDioxusConfigError),
+}
+
+impl From<CargoError> for CrateConfigError {
+    fn from(err: CargoError) -> Self {
+        Self::Cargo(err)
+    }
+}
+
+impl From<std::io::Error> for CrateConfigError {
+    fn from(err: std::io::Error) -> Self {
+        Self::Io(err)
+    }
+}
+
+impl From<toml::de::Error> for CrateConfigError {
+    fn from(err: toml::de::Error) -> Self {
+        Self::Toml(err)
+    }
+}
+
+impl From<LoadDioxusConfigError> for CrateConfigError {
+    fn from(err: LoadDioxusConfigError) -> Self {
+        Self::LoadDioxusConfig(err)
+    }
+}
+
+impl Display for CrateConfigError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Cargo(err) => write!(f, "{}", err),
+            Self::Io(err) => write!(f, "{}", err),
+            Self::Toml(err) => write!(f, "{}", err),
+            Self::LoadDioxusConfig(err) => write!(f, "{}", err),
+        }
+    }
+}
+
+impl std::error::Error for CrateConfigError {}
