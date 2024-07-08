@@ -16,8 +16,6 @@ use tokio::task::JoinSet;
 
 /// A handle to ongoing builds and then the spawned tasks themselves
 pub struct Builder {
-    /// The process that is building the application
-    build_processes: Vec<std::thread::JoinHandle<()>>,
     /// The results of the build
     build_results: JoinSet<Result<BuildResult>>,
     /// The application we are building
@@ -32,7 +30,6 @@ impl Builder {
         let config = config.clone();
         let build_arguments = serve.build_arguments.clone();
         Self {
-            build_processes: Default::default(),
             build_results: Default::default(),
             config,
             build_arguments,
@@ -46,13 +43,7 @@ impl Builder {
             BuildRequest::create(false, self.config.clone(), self.build_arguments.clone());
 
         for build_request in build_requests {
-            let (tx, mut rx) = tokio::sync::oneshot::channel();
-            let thread = std::thread::spawn(move || _ = tx.send(build_request.build()));
-            self.build_processes.push(thread);
-            self.build_results.spawn(async move {
-                let result = rx.await.unwrap()?;
-                Ok(result)
-            });
+            self.build_results.spawn(build_request.build());
         }
 
         Ok(())
@@ -65,9 +56,7 @@ impl Builder {
 
     /// Shutdown the current build process
     pub(crate) async fn shutdown(&mut self) -> Result<()> {
-        for mut build_process in self.build_processes.drain(..) {
-            todo!()
-        }
+        self.build_results.abort_all();
         Ok(())
     }
 }

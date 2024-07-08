@@ -93,14 +93,13 @@ impl Build {
     pub async fn build(mut self, mut dioxus_crate: DioxusCrate) -> Result<()> {
         self.resolve(&mut dioxus_crate)?;
         let build_requests = BuildRequest::create(false, dioxus_crate, self);
-        let mut tasks = Vec::new();
+        let mut tasks = tokio::task::JoinSet::new();
         for build_request in build_requests {
-            let task = std::thread::spawn(move || build_request.build());
-            tasks.push(task);
+            tasks.spawn(build_request.build());
         }
 
-        for task in tasks {
-            task.join().map_err(|err| {
+        while let Some(result) = tasks.join_next().await {
+            result.join().map_err(|err| {
                 crate::Error::Unique("Panic while building project".to_string())
             })??;
         }

@@ -6,11 +6,11 @@ use anyhow::Context;
 use dioxus_cli_config::WasmOptLevel;
 use std::panic;
 use std::path::Path;
-use std::process::Command;
+use tokio::process::Command;
 use wasm_bindgen_cli_support::Bindgen;
 
 // Attempt to automatically recover from a bindgen failure by updating the wasm-bindgen version
-fn update_wasm_bindgen_version() -> Result<()> {
+async fn update_wasm_bindgen_version() -> Result<()> {
     let cli_bindgen_version = wasm_bindgen_shared::version();
     tracing::info!("Attempting to recover from bindgen failure by setting the wasm-bindgen version to {cli_bindgen_version}...");
 
@@ -22,7 +22,8 @@ fn update_wasm_bindgen_version() -> Result<()> {
             "--precise",
             &cli_bindgen_version,
         ])
-        .output();
+        .output()
+        .await;
     let mut error_message = None;
     if let Ok(output) = output {
         if output.status.success() {
@@ -41,11 +42,11 @@ fn update_wasm_bindgen_version() -> Result<()> {
 }
 
 /// Check if the wasm32-unknown-unknown target is installed and try to install it if not
-pub(crate) fn install_web_build_tooling() -> Result<()> {
+pub(crate) async fn install_web_build_tooling() -> Result<()> {
     // If the user has rustup, we can check if the wasm32-unknown-unknown target is installed
     // Otherwise we can just assume it is installed - which is not great...
     // Eventually we can poke at the errors and let the user know they need to install the target
-    if let Ok(wasm_check_command) = Command::new("rustup").args(["show"]).output() {
+    if let Ok(wasm_check_command) = Command::new("rustup").args(["show"]).output().await {
         let wasm_check_output = String::from_utf8(wasm_check_command.stdout).unwrap();
         if !wasm_check_output.contains("wasm32-unknown-unknown") {
             tracing::info!("wasm32-unknown-unknown target not detected, installing..");
@@ -59,7 +60,7 @@ pub(crate) fn install_web_build_tooling() -> Result<()> {
 }
 
 impl BuildRequest {
-    fn run_wasm_bindgen(&self, input_path: &Path, bindgen_outdir: &Path) -> Result<()> {
+    async fn run_wasm_bindgen(&self, input_path: &Path, bindgen_outdir: &Path) -> Result<()> {
         tracing::info!("Running wasm-bindgen");
         let run_wasm_bindgen = || {
             // [3] Bindgen the final binary for use easy linking
@@ -82,7 +83,7 @@ impl BuildRequest {
                 .generate(bindgen_outdir)
                 .unwrap();
         };
-        let bindgen_result = panic::catch_unwind(run_wasm_bindgen);
+        let bindgen_result = tokio::task::spawn_blocking(run_wasm_bindgen).await;
 
         // WASM bindgen requires the exact version of the bindgen schema to match the version the CLI was built with
         // If we get an error, we can try to recover by pinning the user's wasm-bindgen version to the version we used
@@ -96,7 +97,7 @@ impl BuildRequest {
     }
 
     /// Post process the WASM build artifacts
-    pub(crate) fn post_process_web_build(&self, build_result: &BuildResult) -> Result<()> {
+    pub(crate) async fn post_process_web_build(&self, build_result: &BuildResult) -> Result<()> {
         // Find the wasm file
         let output_location = build_result.executable.clone();
         let input_path = output_location.with_extension("wasm");
@@ -105,7 +106,7 @@ impl BuildRequest {
         let bindgen_outdir = self.config.out_dir().join("assets").join("dioxus");
 
         // Run wasm-bindgen
-        self.run_wasm_bindgen(&input_path, &bindgen_outdir)?;
+        self.run_wasm_bindgen(&input_path, &bindgen_outdir).await?;
 
         // Run wasm-opt if this is a release build
         if self.build_arguments.release {
@@ -142,11 +143,15 @@ impl BuildRequest {
         }
 
         // If pre-compressing is enabled, we can pre_compress the wasm-bindgen output
-        pre_compress_folder(
-            &bindgen_outdir,
-            self.config
-                .should_pre_compress_web_assets(self.build_arguments.release),
-        )?;
+        tokio::spawn_blocking(move || {
+            pre_compress_folder(
+                &bindgen_outdir,
+                self.config
+                    .should_pre_compress_web_assets(self.build_arguments.release),
+            )
+        })
+        .await
+        .unwrap()?;
 
         Ok(())
     }

@@ -16,10 +16,10 @@ use std::time::Instant;
 
 impl BuildRequest {
     /// Create a build command for cargo
-    fn prepare_build_command(&self) -> Result<(subprocess::Exec, Vec<String>)> {
+    fn prepare_build_command(&self) -> Result<(tokio::process::Command, Vec<String>)> {
         let mut cargo_args = Vec::new();
 
-        let mut cmd = subprocess::Exec::cmd("cargo")
+        let mut cmd = tokio::process::Command::new("cargo")
             .set_rust_flags(self.rust_flags.clone())
             .env("CARGO_TARGET_DIR", &self.config.target_dir)
             .cwd(&self.config.crate_dir)
@@ -73,7 +73,7 @@ impl BuildRequest {
         Ok((cmd, cargo_args))
     }
 
-    pub fn build(&self) -> Result<BuildResult> {
+    pub async fn build(&self) -> Result<BuildResult> {
         tracing::info!("🚅 Running build [Desktop] command...");
 
         // Set up runtime guards
@@ -84,17 +84,19 @@ impl BuildRequest {
 
         // If this is a web, build make sure we have the web build tooling set up
         if self.web {
-            install_web_build_tooling()?;
+            install_web_build_tooling().await?;
         }
 
         // Create the build command
         let (cmd, cargo_args) = self.prepare_build_command()?;
 
         // Run the build command with a pretty loader
-        let cargo_result = build_cargo(cmd)?;
+        let cargo_result = build_cargo(cmd).await?;
 
         // Post process the build result
-        let build_result = self.post_process_build(cargo_args, &cargo_result, start_time)?;
+        let build_result = self
+            .post_process_build(cargo_args, &cargo_result, start_time)
+            .await?;
 
         tracing::info!(
             "🚩 Build completed: [./{}]",

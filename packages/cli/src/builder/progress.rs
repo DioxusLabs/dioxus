@@ -6,6 +6,7 @@ use once_cell::sync::Lazy;
 use std::io::{self, IsTerminal};
 use std::path::PathBuf;
 use std::time::Duration;
+use tokio::io::AsyncBufReadExt;
 
 static PROGRESS_BARS: Lazy<indicatif::MultiProgress> = Lazy::new(indicatif::MultiProgress::new);
 
@@ -55,17 +56,21 @@ impl BuildProgress {
     }
 }
 
-pub(crate) fn build_cargo(cmd: subprocess::Exec) -> anyhow::Result<CargoBuildResult> {
+pub(crate) fn build_cargo(cmd: tokio::process::Command) -> anyhow::Result<CargoBuildResult> {
     let mut warning_messages: Vec<Diagnostic> = vec![];
 
     let output = BuildProgress::new();
     output.display("💼 Waiting to start building the project...");
 
-    let stdout = cmd.detached().stream_stdout()?;
-    let reader = std::io::BufReader::new(stdout);
+    let stdout = cmd.spawn()?.stdout.take().unwrap();
+    let reader = tokio::io::BufReader::new(stdout);
     let mut output_location = None;
 
-    for message in cargo_metadata::Message::parse_stream(reader).flatten() {
+    let mut lines = reader.lines();
+    while let Ok(Some(line)) = lines.next_line().await {
+        let mut deserializer = serde_json::Deserializer::from_str(&line);
+        deserializer.disable_recursion_limit();
+        let message = Message::deserialize(&mut deserializer).unwrap_or(Message::TextLine(line));
         match message {
             Message::CompilerMessage(msg) => {
                 let message = msg.message;
