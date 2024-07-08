@@ -4,8 +4,9 @@ use crate::assets::pre_compress_folder;
 use crate::error::{Error, Result};
 use anyhow::Context;
 use dioxus_cli_config::WasmOptLevel;
+use std::panic;
 use std::path::Path;
-use std::{panic, process::Command};
+use std::process::Command;
 use wasm_bindgen_cli_support::Bindgen;
 
 // Attempt to automatically recover from a bindgen failure by updating the wasm-bindgen version
@@ -97,10 +98,7 @@ impl BuildRequest {
     /// Post process the WASM build artifacts
     pub(crate) fn post_process_web_build(&self, build_result: &BuildResult) -> Result<()> {
         // Find the wasm file
-        let output_location = build_result
-            .executable
-            .clone()
-            .context("No output location found")?;
+        let output_location = build_result.executable.clone();
         let input_path = output_location.with_extension("wasm");
 
         // Create the directory where the bindgen output will be placed

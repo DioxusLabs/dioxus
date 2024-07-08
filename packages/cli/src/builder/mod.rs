@@ -1,5 +1,6 @@
 use crate::build::{self, Build};
 use crate::dioxus_crate::DioxusCrate;
+use crate::serve::Serve;
 use crate::Result;
 use cargo_metadata::diagnostic::Diagnostic;
 use dioxus_cli_config::Platform;
@@ -8,7 +9,7 @@ use manganis_cli_support::AssetManifest;
 use std::cell::RefCell;
 use std::sync::RwLock;
 use std::{path::PathBuf, time::Duration};
-use tokio::process::Child;
+use tokio::process::{Child, Command};
 
 mod cargo;
 mod fullstack;
@@ -16,6 +17,7 @@ mod prepare_html;
 mod progress;
 mod web;
 
+/// A request for a project to be built
 pub struct BuildRequest {
     /// Whether the build is for serving the application
     pub serve: bool,
@@ -34,7 +36,7 @@ impl BuildRequest {
         serve: bool,
         config: DioxusCrate,
         build_arguments: impl Into<Build>,
-    ) -> Vec<BuildRequest> {
+    ) -> Vec<Self> {
         let build_arguments = build_arguments.into();
         let platform = build_arguments.platform.unwrap_or(Platform::Web);
         match platform {
@@ -56,53 +58,20 @@ impl BuildRequest {
     }
 }
 
-/// A handle to ongoing builds and then the spawned tasks themselves
-#[derive(Default)]
-pub struct Builder {
-    /// The process that is building the application
-    build_processes: RwLock<Vec<Child>>,
-}
-
-impl Builder {
-    /// Create a new builder
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Start a new build - killing the current one if it exists
-    pub fn build(&self, build_request: BuildRequest) -> impl Future<Output = Result<BuildResult>> {
-        async move {
-            let result = tokio::task::spawn_blocking(move || build_request.build())
-                .await
-                .map_err(|err| {
-                    crate::Error::Unique(
-                        "Failed to build project with an unknown error {err:?}".to_string(),
-                    )
-                })??;
-
-            Ok(result)
-        }
-    }
-
-    /// Wait for any new updates to the builder - either it completed or gave us a mesage etc
-    pub async fn wait(&mut self) {
-        todo!()
-    }
-
-    /// Shutdown the current build process
-    pub(crate) async fn shutdown(&self) -> Result<()> {
-        let processes = std::mem::take(&mut *self.build_processes.write().unwrap());
-        for mut build_process in processes {
-            build_process.kill().await?;
-        }
-        Ok(())
-    }
-}
-
 #[derive(Debug, Clone)]
-pub struct BuildResult {
+pub(crate) struct BuildResult {
     pub warnings: Vec<Diagnostic>,
-    pub executable: Option<PathBuf>,
+    pub executable: PathBuf,
     pub elapsed_time: Duration,
-    pub assets: Option<AssetManifest>,
+    pub web: bool,
+}
+
+impl BuildResult {
+    /// Open the executable if this is a native build
+    pub fn open(&self, address: impl Into<std::net::SocketAddr>) -> std::io::Result<Option<Child>> {
+        if self.web {
+            return Ok(None);
+        }
+        Ok(Some(Command::new(&self.executable).spawn()?))
+    }
 }

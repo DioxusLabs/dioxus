@@ -1,9 +1,6 @@
 use dioxus_cli_config::{DioxusConfig, Platform};
 
-use crate::{
-    builder::{BuildRequest, Builder},
-    dioxus_crate::DioxusCrate,
-};
+use crate::{builder::BuildRequest, dioxus_crate::DioxusCrate};
 
 use super::*;
 
@@ -96,14 +93,16 @@ impl Build {
     pub async fn build(mut self, mut dioxus_crate: DioxusCrate) -> Result<()> {
         self.resolve(&mut dioxus_crate)?;
         let build_requests = BuildRequest::create(false, dioxus_crate, self);
-        let mut builder = Builder::new();
-        let mut build_tasks = tokio::task::JoinSet::new();
+        let mut tasks = Vec::new();
         for build_request in build_requests {
-            build_tasks.spawn(builder.build(build_request));
+            let task = std::thread::spawn(move || build_request.build());
+            tasks.push(task);
         }
 
-        while let Some(result) = build_tasks.join_next().await {
-            result.map_err(|err| crate::Error::Unique(err.to_string()))??;
+        for task in tasks {
+            task.join().map_err(|err| {
+                crate::Error::Unique("Panic while building project".to_string())
+            })??;
         }
         Ok(())
     }

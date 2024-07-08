@@ -65,8 +65,8 @@ pub(crate) fn build_cargo(cmd: subprocess::Exec) -> anyhow::Result<CargoBuildRes
     let reader = std::io::BufReader::new(stdout);
     let mut output_location = None;
 
-    for message in cargo_metadata::Message::parse_stream(reader) {
-        match message.unwrap() {
+    for message in cargo_metadata::Message::parse_stream(reader).flatten() {
+        match message {
             Message::CompilerMessage(msg) => {
                 let message = msg.message;
                 match message.level {

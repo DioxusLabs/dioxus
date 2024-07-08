@@ -63,11 +63,9 @@ async fn main() -> anyhow::Result<()> {
                     .clean(Some(bin.clone()))
                     .context(error_wrapper("Cleaning project failed")),
 
-                Serve(mut opts) => {
-                    opts.resolve(&mut dioxus_crate)?;
-                    opts.serve(Some(bin.clone()))
-                        .context(error_wrapper("Serving project failed"))
-                }
+                Serve(mut opts) => opts
+                    .serve(dioxus_crate)
+                    .context(error_wrapper("Serving project failed")),
 
                 Bundle(opts) => opts
                     .bundle(Some(bin.clone()))

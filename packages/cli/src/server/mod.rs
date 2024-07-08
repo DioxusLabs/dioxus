@@ -3,12 +3,13 @@ use crate::serve::Serve;
 use crate::Result;
 use tokio::task::yield_now;
 
+mod builder;
 mod output;
 mod proxy;
 mod server;
 mod watcher;
 
-use crate::builder::*;
+use builder::*;
 use output::*;
 use server::*;
 use watcher::*;
@@ -40,22 +41,22 @@ use watcher::*;
 /// - Consume logs from the wasm for web/fullstack
 /// - I want us to be able to detect a `server_fn` in the project and then upgrade from a static server
 ///   to a dynamic one on the fly.
-pub async fn serve_all(srv: Serve, crt: DioxusCrate) -> Result<()> {
-    let mut server = Server::start(&srv, &crt).await;
-    let mut watchr = Watcher::start(&crt);
-    let mut screen = Output::start(&srv, &crt);
-    let mut buildr = Builder::new();
+pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
+    let mut server = Server::start(&serve, &dioxus_crate).await;
+    let mut watchr = Watcher::start(&dioxus_crate);
+    let mut screen = Output::start(&serve, &dioxus_crate);
+    let mut buildr = Builder::new(&dioxus_crate, &serve);
 
     loop {
         // Make sure we don't hog the CPU: these loop { select! {} } blocks can starve the executor
         yield_now().await;
 
         // Draw the state of the server to the screen
-        screen.draw(&srv, &crt, &buildr, &server, &watchr);
+        screen.draw(&serve, &dioxus_crate, &buildr, &server, &watchr);
 
         // Also update the webserver page if we need to
         // This will send updates about the current status of the build
-        server.update(&srv, &crt);
+        server.update(&serve, &dioxus_crate);
 
         // And then wait for any updates before redrawing
         tokio::select! {
@@ -69,16 +70,15 @@ pub async fn serve_all(srv: Serve, crt: DioxusCrate) -> Result<()> {
 
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients
-                if let Some(hr) = watchr.attempt_hot_reload(&crt) {
+                if let Some(hr) = watchr.attempt_hot_reload(&dioxus_crate) {
                     println!("Hotreloading... {hr:?}");
                     server.send_hotreload(hr).await;
                     continue;
                 }
 
                 // If the change is not binary patchable, rebuild the project
-                // We're going to kick off a new build if it already isn't ongoing
-                // todo: we need to know which project to build here - either the frontend or the backend
-                // buildr.queue_build();
+                // We're going to kick off a new build, interrupting the current build if it's ongoing
+                buildr.build();
             }
 
             // reload the page
@@ -88,11 +88,11 @@ pub async fn serve_all(srv: Serve, crt: DioxusCrate) -> Result<()> {
             }
 
             // Handle updates from the build engine
-            // _ = buildr.wait() => {
+            _ = buildr.wait() => {
                 // Wait for logs from the build engine
                 // These will cause us to update the screen
                 // We also can check the status of the builds here in case we have multiple ongoing builds
-            // }
+            }
 
             // Handle input from the user using our settings
             input = screen.wait() => {

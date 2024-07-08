@@ -24,7 +24,7 @@ pub struct Serve {
 
 impl Serve {
     /// Resolve the serve arguments from the arguments or the config
-    pub fn resolve(&mut self, crate_config: &mut DioxusCrate) -> Result<()> {
+    fn resolve(&mut self, crate_config: &mut DioxusCrate) -> Result<()> {
         // Set config settings
         let settings = settings::CliSettings::load();
         if self.server_arguments.hot_reload.is_none() {
@@ -39,6 +39,16 @@ impl Serve {
 
         Ok(())
     }
+
+    pub fn serve(mut self, mut dioxus_crate: DioxusCrate) -> Result<()> {
+        self.resolve(&mut dioxus_crate)?;
+
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(crate::server::serve_all(self, dioxus_crate))
+    }
 }
 
 impl Deref for Serve {
@@ -46,17 +56,5 @@ impl Deref for Serve {
 
     fn deref(&self) -> &Self::Target {
         &self.build_arguments
-    }
-}
-
-impl Serve {
-    pub fn serve(mut self, bin: Option<PathBuf>) -> Result<()> {
-        let mut crate_config = crate::dioxus_crate::DioxusCrate::new(bin)?;
-
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap()
-            .block_on(crate::server::serve_all(self, crate_config))
     }
 }

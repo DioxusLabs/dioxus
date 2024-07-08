@@ -157,9 +157,9 @@ impl BuildRequest {
         // Create the build result
         let build_result = BuildResult {
             warnings: cargo_build_result.warnings.clone(),
-            executable: Some(output_path),
+            executable: output_path,
             elapsed_time: t_start.elapsed(),
-            assets,
+            web: self.web,
         };
 
         // If this is a web build, run web post processing steps
