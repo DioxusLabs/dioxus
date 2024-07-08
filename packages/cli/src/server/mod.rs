@@ -78,7 +78,7 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
 
                 // If the change is not binary patchable, rebuild the project
                 // We're going to kick off a new build, interrupting the current build if it's ongoing
-                buildr.build();
+                buildr.build().await;
             }
 
             // reload the page

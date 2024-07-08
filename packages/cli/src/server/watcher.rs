@@ -1,4 +1,4 @@
-use std::{collections::HashSet, path::PathBuf};
+use std::path::PathBuf;
 
 use crate::dioxus_crate::DioxusCrate;
 use dioxus_hot_reload::HotReloadMsg;

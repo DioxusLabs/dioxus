@@ -1,5 +1,5 @@
 use crate::{
-    settings::{self, CliSettings},
+    settings::{self},
     DioxusCrate,
 };
 use build::Build;

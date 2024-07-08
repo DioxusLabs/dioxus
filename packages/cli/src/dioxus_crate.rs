@@ -115,14 +115,16 @@ impl DioxusCrate {
         // Try to find the feature that activates the dioxus feature for the given platform
         let dioxus_feature = platform.feature_name();
         let feature = manifest.features.iter().find_map(|(key, features)| {
-            // Find a key that starts with dioxus/ or dioxus?/
-            if let Some((_, after_dioxus)) = key.split_once("dioxus") {
-                if let Some(dioxus_feature_enabled) =
-                    after_dioxus.trim_start_matches("?").strip_prefix("/")
-                {
-                    // If that enables the feature we are looking for, return that feature
-                    if dioxus_feature_enabled == dioxus_feature {
-                        return Some(key.clone());
+            // Find a feature that starts with dioxus/ or dioxus?/
+            for feature in features {
+                if let Some((_, after_dioxus)) = feature.split_once("dioxus") {
+                    if let Some(dioxus_feature_enabled) =
+                        after_dioxus.trim_start_matches("?").strip_prefix("/")
+                    {
+                        // If that enables the feature we are looking for, return that feature
+                        if dioxus_feature_enabled == dioxus_feature {
+                            return Some(key.clone());
+                        }
                     }
                 }
             }

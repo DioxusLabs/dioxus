@@ -12,7 +12,7 @@ use axum::{
         Method, Response, StatusCode,
     },
     response::IntoResponse,
-    routing::{any, get, get_service},
+    routing::{get, get_service},
     Router,
 };
 use axum_server::tls_rustls::RustlsConfig;

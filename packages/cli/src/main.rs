@@ -50,11 +50,11 @@ async fn main() -> anyhow::Result<()> {
 
         action => {
             let bin = get_bin(args.bin)?;
-            let mut dioxus_crate =
+            let dioxus_crate =
                 DioxusCrate::new(Some(bin.clone())).context("Failed to load Dioxus workspace")?;
 
             match action {
-                Build(mut opts) => opts
+                Build(opts) => opts
                     .build(dioxus_crate)
                     .await
                     .context(error_wrapper("Building project failed")),
@@ -63,7 +63,7 @@ async fn main() -> anyhow::Result<()> {
                     .clean(Some(bin.clone()))
                     .context(error_wrapper("Cleaning project failed")),
 
-                Serve(mut opts) => opts
+                Serve(opts) => opts
                     .serve(dioxus_crate)
                     .context(error_wrapper("Serving project failed")),
 

@@ -1,17 +1,10 @@
 use crate::builder::Build;
-use crate::builder::BuildResult;
 use crate::dioxus_crate::DioxusCrate;
 
-use crate::{build, Result};
 
-use super::Platform;
 use crate::builder::BuildRequest;
 use crate::serve::Serve;
-use cargo_metadata::diagnostic::Diagnostic;
-use dioxus_cli_config::ServeArguments;
-use manganis_cli_support::AssetManifest;
-use std::{path::PathBuf, time::Duration};
-use tokio::process::Child;
+use std::path::PathBuf;
 
 static CLIENT_RUST_FLAGS: &str = "-C debuginfo=none -C strip=debuginfo";
 // The `opt-level=2` increases build times, but can noticeably decrease time

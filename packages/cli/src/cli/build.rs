@@ -1,4 +1,4 @@
-use dioxus_cli_config::{DioxusConfig, Platform};
+use dioxus_cli_config::Platform;
 
 use crate::{builder::BuildRequest, dioxus_crate::DioxusCrate};
 
@@ -80,7 +80,7 @@ impl Build {
         // Inherit the platform from the defaults
         let platform = self
             .platform
-            .unwrap_or_else(|| self.auto_detect_platform(&dioxus_crate));
+            .unwrap_or_else(|| self.auto_detect_platform(dioxus_crate));
         self.platform = Some(platform);
 
         // Add any features required to turn on the platform we are building for
