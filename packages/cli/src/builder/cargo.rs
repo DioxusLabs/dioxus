@@ -83,7 +83,9 @@ impl BuildRequest {
         let _asset_guard = AssetConfigDropGuard::new();
 
         // If this is a web, build make sure we have the web build tooling set up
-        install_web_build_tooling()?;
+        if self.web {
+            install_web_build_tooling()?;
+        }
 
         // Create the build command
         let (cmd, cargo_args) = self.prepare_build_command()?;
