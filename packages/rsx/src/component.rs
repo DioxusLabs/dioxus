@@ -164,8 +164,8 @@ impl ToTokens for Component {
         } else {
             quote_spanned! {
                 name.span() => {
-                    #errors
                     #component_node
+                    #errors
                 }
             }
         };
