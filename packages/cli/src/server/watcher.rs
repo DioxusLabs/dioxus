@@ -8,7 +8,7 @@ use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
 use notify::{
     event::{DataChange, ModifyKind},
-    EventKind, FsEventWatcher,
+    EventKind, RecommendedWatcher,
 };
 
 /// This struct stores the file watcher and the filemap for the project.
@@ -19,7 +19,7 @@ pub struct Watcher {
     tx: UnboundedSender<notify::Event>,
     rx: UnboundedReceiver<notify::Event>,
     last_update_time: i64,
-    watcher: FsEventWatcher,
+    watcher: RecommendedWatcher,
     queued_events: Vec<notify::Event>,
     file_map: FileMap,
 }
