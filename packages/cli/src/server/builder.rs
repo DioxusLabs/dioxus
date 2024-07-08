@@ -12,12 +12,12 @@ use std::cell::RefCell;
 use std::{path::PathBuf, time::Duration};
 use tokio::process::Child;
 use tokio::sync::RwLock;
-use tokio::task::JoinSet;
+use tokio::task::{JoinHandle, JoinSet};
 
 /// A handle to ongoing builds and then the spawned tasks themselves
 pub struct Builder {
     /// The results of the build
-    build_results: JoinSet<Result<BuildResult>>,
+    build_results: Option<JoinHandle<Vec<Result<BuildResult>>>>,
     /// The application we are building
     config: DioxusCrate,
     /// The arguments for the build
@@ -30,7 +30,7 @@ impl Builder {
         let config = config.clone();
         let build_arguments = serve.build_arguments.clone();
         Self {
-            build_results: Default::default(),
+            build_results: None,
             config,
             build_arguments,
         }
@@ -42,16 +42,31 @@ impl Builder {
         let build_requests =
             BuildRequest::create(false, self.config.clone(), self.build_arguments.clone());
 
+        let mut set = tokio::task::JoinSet::new();
         for build_request in build_requests {
-            self.build_results.spawn(build_request.build());
+            set.spawn(build_request.build());
         }
+
+        self.build_results = Some(tokio::spawn({
+            async move {
+                let mut all_results = Vec::new();
+                while let Some(result) = set.join_next().await {
+                    all_results.push(result.map_err(|err| {
+                        Error::Unique(format!("Panic while building project: {err:?}"))
+                    })?);
+                }
+                Ok(all_results)
+            }
+        }));
 
         Ok(())
     }
 
     /// Wait for any new updates to the builder - either it completed or gave us a message etc
-    pub async fn wait(&mut self) {
-        _ = self.build_results.join_next().await;
+    pub async fn wait(&mut self) -> Result<Vec<BuildResult>> {
+        self.build_results
+            .await
+            .map_err(|_| Error::BuildFailed("Build failed".to_string()))
     }
 
     /// Shutdown the current build process
