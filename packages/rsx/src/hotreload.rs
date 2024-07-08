@@ -358,7 +358,8 @@ impl HotReloadedTemplate {
         // If it's a perfect match, we don't need to do anything special
         // ... well actually if it's a lit we need to invalidate the old lit
         // this is because a lit going from true -> false -> true doesn't count as a change from the diffing perspective
-        if score == usize::MAX && new_attr.as_lit().is_none() {
+        if score == usize::MAX {
+            // if score == usize::MAX && new_attr.as_lit().is_none() {
             return Some(());
         }
 

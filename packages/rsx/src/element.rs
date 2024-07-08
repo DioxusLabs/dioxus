@@ -28,7 +28,9 @@ pub struct Element {
     /// These are the actual attributes that get rendered out
     pub merged_attributes: Vec<Attribute>,
 
-    // /// The `...` spread attributes.
+    /// The `...` spread attributes.
+    pub spreads: Vec<Spread>,
+
     // /// Elements can have multiple, unlike components which can only have one
     // pub spreads: Vec<Spread>,
     /// The children of the element
@@ -61,6 +63,7 @@ impl Parse for Element {
             children,
             brace,
             diagnostics,
+            spreads: spreads.clone(),
             merged_attributes: Vec::new(),
         };
 

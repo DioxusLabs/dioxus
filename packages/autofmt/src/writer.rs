@@ -1,8 +1,8 @@
 use crate::buffer::Buffer;
 use crate::collect_macros::byte_offset;
 use dioxus_rsx::{
-    Attribute as AttributeType, AttributeValue as ElementAttrValue, BodyNode, Component, Element,
-    ForLoop, IfChain, Spread, TemplateBody,
+    Attribute as AttributeType, AttributeName, AttributeValue as ElementAttrValue, BodyNode,
+    Component, Element, ForLoop, IfChain, Spread, TemplateBody,
 };
 use proc_macro2::{LineColumn, Span};
 use quote::ToTokens;
@@ -322,11 +322,12 @@ impl<'a> Writer<'a> {
             }
 
             let name_len = match &attr.name {
-                dioxus_rsx::AttributeName::BuiltIn(name) => {
+                AttributeName::BuiltIn(name) => {
                     let name = name.to_string();
                     name.len()
                 }
-                dioxus_rsx::AttributeName::Custom(name) => name.value().len() + 2,
+                AttributeName::Custom(name) => name.value().len() + 2,
+                AttributeName::Spread(_) => unreachable!(),
             };
             total += name_len;
 

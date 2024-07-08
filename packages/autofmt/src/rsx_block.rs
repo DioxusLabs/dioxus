@@ -221,6 +221,7 @@ impl Writer<'_> {
             AttributeName::Custom(name) => {
                 write!(self.out, "{}", name.to_token_stream())?;
             }
+            AttributeName::Spread(_) => unreachable!(),
         }
 
         Ok(())

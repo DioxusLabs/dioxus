@@ -10,7 +10,7 @@ pub use proc_macro2::TokenStream;
 pub use std::collections::HashMap;
 pub use std::sync::Mutex;
 pub use std::time::SystemTime;
-use std::{collections::HashSet, ffi::OsStr, path::PathBuf};
+use std::{ffi::OsStr, path::PathBuf};
 pub use std::{fs, io, path::Path};
 pub use std::{fs::File, io::Read};
 use syn::spanned::Spanned;
@@ -171,7 +171,8 @@ impl FileMap {
                 return Err(HotreloadError::Notreloadable);
             };
 
-            self.changed_lits = std::mem::take(&mut results.changed_lits);
+            // self.changed_lits
+            //     .extend(std::mem::take(&mut results.changed_lits));
 
             // Be careful to not send the bad templates
             results.templates.retain(|template| {
