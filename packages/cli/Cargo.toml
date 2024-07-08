@@ -40,6 +40,8 @@ hyper-rustls = { workspace = true }
 indicatif = "0.17.5"
 subprocess = "0.2.9"
 rayon = "1.8.0"
+console = "0.15.8"
+ctrlc = "3.2.3"
 
 axum = { workspace = true, features = ["ws"] }
 axum-server = { workspace = true, features = ["tls-rustls"] }
@@ -71,7 +73,6 @@ mlua = { version = "0.8.1", features = [
     "send",
     "macros",
 ], optional = true }
-ctrlc = "3.2.3"
 open = "5.0.1"
 cargo-generate = "0.20.0"
 toml_edit = "0.21.0"

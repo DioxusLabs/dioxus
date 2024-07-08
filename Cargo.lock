@@ -2276,6 +2276,7 @@ dependencies = [
  "chrono",
  "clap 4.5.8",
  "colored 2.1.0",
+ "console",
  "ctrlc",
  "dioxus-autofmt",
  "dioxus-check",
