@@ -93,7 +93,7 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                 // These will cause us to update the screen
                 // We also can check the status of the builds here in case we have multiple ongoing builds
                 for build_result in application? {
-                    build_result.open()
+                    build_result.open()?;
                 }
             }
 

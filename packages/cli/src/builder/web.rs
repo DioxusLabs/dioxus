@@ -52,7 +52,8 @@ pub(crate) async fn install_web_build_tooling() -> Result<()> {
             tracing::info!("wasm32-unknown-unknown target not detected, installing..");
             let _ = Command::new("rustup")
                 .args(["target", "add", "wasm32-unknown-unknown"])
-                .output()?;
+                .output()
+                .await?;
         }
     }
 
@@ -62,15 +63,17 @@ pub(crate) async fn install_web_build_tooling() -> Result<()> {
 impl BuildRequest {
     async fn run_wasm_bindgen(&self, input_path: &Path, bindgen_outdir: &Path) -> Result<()> {
         tracing::info!("Running wasm-bindgen");
-        let run_wasm_bindgen = || {
+        let input_path = input_path.to_path_buf();
+        let bindgen_outdir = bindgen_outdir.to_path_buf();
+        let keep_debug =
+            self.config.dioxus_config.web.wasm_opt.debug || (!self.build_arguments.release);
+        let name = self.config.dioxus_config.application.name.clone();
+        let run_wasm_bindgen = move || {
             // [3] Bindgen the final binary for use easy linking
             let mut bindgen_builder = Bindgen::new();
 
-            let keep_debug =
-                self.config.dioxus_config.web.wasm_opt.debug || (!self.build_arguments.release);
-
             bindgen_builder
-                .input_path(input_path)
+                .input_path(&input_path)
                 .web(true)
                 .unwrap()
                 .debug(keep_debug)
@@ -79,17 +82,17 @@ impl BuildRequest {
                 .reference_types(true)
                 .remove_name_section(!keep_debug)
                 .remove_producers_section(!keep_debug)
-                .out_name(&self.config.dioxus_config.application.name)
-                .generate(bindgen_outdir)
+                .out_name(&name)
+                .generate(&bindgen_outdir)
                 .unwrap();
         };
-        let bindgen_result = tokio::task::spawn_blocking(run_wasm_bindgen).await;
+        let bindgen_result = tokio::task::spawn_blocking(run_wasm_bindgen.clone()).await;
 
         // WASM bindgen requires the exact version of the bindgen schema to match the version the CLI was built with
         // If we get an error, we can try to recover by pinning the user's wasm-bindgen version to the version we used
         if let Err(err) = bindgen_result {
             tracing::error!("Bindgen build failed: {:?}", err);
-            update_wasm_bindgen_version()?;
+            update_wasm_bindgen_version().await?;
             run_wasm_bindgen();
         }
 
@@ -143,15 +146,12 @@ impl BuildRequest {
         }
 
         // If pre-compressing is enabled, we can pre_compress the wasm-bindgen output
-        tokio::spawn_blocking(move || {
-            pre_compress_folder(
-                &bindgen_outdir,
-                self.config
-                    .should_pre_compress_web_assets(self.build_arguments.release),
-            )
-        })
-        .await
-        .unwrap()?;
+        let pre_compress = self
+            .config
+            .should_pre_compress_web_assets(self.build_arguments.release);
+        tokio::task::spawn_blocking(move || pre_compress_folder(&bindgen_outdir, pre_compress))
+            .await
+            .unwrap()?;
 
         Ok(())
     }

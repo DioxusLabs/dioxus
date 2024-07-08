@@ -95,11 +95,11 @@ impl Build {
         let build_requests = BuildRequest::create(false, dioxus_crate, self);
         let mut tasks = tokio::task::JoinSet::new();
         for build_request in build_requests {
-            tasks.spawn(build_request.build());
+            tasks.spawn(async move { build_request.build().await });
         }
 
         while let Some(result) = tasks.join_next().await {
-            result.join().map_err(|err| {
+            result.map_err(|err| {
                 crate::Error::Unique("Panic while building project".to_string())
             })??;
         }

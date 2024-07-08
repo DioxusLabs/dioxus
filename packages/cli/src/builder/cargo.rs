@@ -13,18 +13,20 @@ use manganis_cli_support::ManganisSupportGuard;
 use std::env;
 use std::fs::create_dir_all;
 use std::time::Instant;
+use tokio::process::Command;
 
 impl BuildRequest {
     /// Create a build command for cargo
     fn prepare_build_command(&self) -> Result<(tokio::process::Command, Vec<String>)> {
         let mut cargo_args = Vec::new();
 
-        let mut cmd = tokio::process::Command::new("cargo")
-            .set_rust_flags(self.rust_flags.clone())
-            .env("CARGO_TARGET_DIR", &self.config.target_dir)
-            .cwd(&self.config.crate_dir)
+        let mut cmd = tokio::process::Command::new("cargo");
+        cmd.env("CARGO_TARGET_DIR", &self.config.target_dir)
+            .current_dir(&self.config.crate_dir)
             .arg("build")
             .arg("--message-format=json-render-diagnostics");
+
+        set_rust_flags(&mut cmd, self.rust_flags.clone());
 
         if self.build_arguments.release {
             cargo_args.push("--release".to_string());
@@ -68,7 +70,7 @@ impl BuildRequest {
             }
         };
 
-        cmd = cmd.args(&cargo_args);
+        cmd.args(&cargo_args);
 
         Ok((cmd, cargo_args))
     }
@@ -111,7 +113,7 @@ impl BuildRequest {
         Ok(build_result)
     }
 
-    fn post_process_build(
+    async fn post_process_build(
         &self,
         cargo_args: Vec<String>,
         cargo_build_result: &CargoBuildResult,
@@ -166,7 +168,7 @@ impl BuildRequest {
 
         // If this is a web build, run web post processing steps
         if self.web {
-            self.post_process_web_build(&build_result)?;
+            self.post_process_web_build(&build_result).await?;
         }
 
         Ok(build_result)
@@ -189,33 +191,24 @@ impl BuildRequest {
         Ok(())
     }
 }
-/// This trait is only created for the convenient and concise way to set
-/// `RUSTFLAGS` environment variable for the `subprocess::Exec`.
-pub trait ExecWithRustFlagsSetter {
-    fn set_rust_flags(self, rust_flags: Option<String>) -> Self;
-}
 
-impl ExecWithRustFlagsSetter for subprocess::Exec {
-    /// Sets (appends to, if already set) `RUSTFLAGS` environment variable if
-    /// `rust_flags` is not `None`.
-    fn set_rust_flags(self, rust_flags: Option<String>) -> Self {
-        if let Some(rust_flags) = rust_flags {
-            // Some `RUSTFLAGS` might be already set in the environment or provided
-            // by the user. They should take higher priority than the default flags.
-            // If no default flags are provided, then there is no point in
-            // redefining the environment variable with the same value, if it is
-            // even set. If no custom flags are set, then there is no point in
-            // adding the unnecessary whitespace to the command.
-            self.env(
-                "RUSTFLAGS",
-                if let Ok(custom_rust_flags) = env::var("RUSTFLAGS") {
-                    rust_flags + " " + custom_rust_flags.as_str()
-                } else {
-                    rust_flags
-                },
-            )
-        } else {
-            self
-        }
+/// Sets (appends to, if already set) `RUSTFLAGS` environment variable if
+/// `rust_flags` is not `None`.
+fn set_rust_flags(command: &mut Command, rust_flags: Option<String>) {
+    if let Some(rust_flags) = rust_flags {
+        // Some `RUSTFLAGS` might be already set in the environment or provided
+        // by the user. They should take higher priority than the default flags.
+        // If no default flags are provided, then there is no point in
+        // redefining the environment variable with the same value, if it is
+        // even set. If no custom flags are set, then there is no point in
+        // adding the unnecessary whitespace to the command.
+        command.env(
+            "RUSTFLAGS",
+            if let Ok(custom_rust_flags) = env::var("RUSTFLAGS") {
+                rust_flags + " " + custom_rust_flags.as_str()
+            } else {
+                rust_flags
+            },
+        );
     }
 }

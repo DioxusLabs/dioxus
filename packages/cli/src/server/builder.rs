@@ -17,7 +17,7 @@ use tokio::task::{JoinHandle, JoinSet};
 /// A handle to ongoing builds and then the spawned tasks themselves
 pub struct Builder {
     /// The results of the build
-    build_results: Option<JoinHandle<Vec<Result<BuildResult>>>>,
+    build_results: Option<JoinHandle<Result<Vec<BuildResult>>>>,
     /// The application we are building
     config: DioxusCrate,
     /// The arguments for the build
@@ -44,7 +44,7 @@ impl Builder {
 
         let mut set = tokio::task::JoinSet::new();
         for build_request in build_requests {
-            set.spawn(build_request.build());
+            set.spawn(async move { build_request.build().await });
         }
 
         self.build_results = Some(tokio::spawn({
@@ -52,8 +52,8 @@ impl Builder {
                 let mut all_results = Vec::new();
                 while let Some(result) = set.join_next().await {
                     all_results.push(result.map_err(|err| {
-                        Error::Unique(format!("Panic while building project: {err:?}"))
-                    })?);
+                        crate::Error::Unique(format!("Panic while building project: {err:?}"))
+                    })??);
                 }
                 Ok(all_results)
             }
@@ -64,14 +64,20 @@ impl Builder {
 
     /// Wait for any new updates to the builder - either it completed or gave us a message etc
     pub async fn wait(&mut self) -> Result<Vec<BuildResult>> {
-        self.build_results
-            .await
-            .map_err(|_| Error::BuildFailed("Build failed".to_string()))
+        if let Some(tasks) = self.build_results.take() {
+            tasks
+                .await
+                .map_err(|_| crate::Error::BuildFailed("Build failed".to_string()))?
+        } else {
+            std::future::pending().await
+        }
     }
 
     /// Shutdown the current build process
     pub(crate) async fn shutdown(&mut self) -> Result<()> {
-        self.build_results.abort_all();
+        if let Some(tasks) = self.build_results.take() {
+            tasks.abort();
+        }
         Ok(())
     }
 }

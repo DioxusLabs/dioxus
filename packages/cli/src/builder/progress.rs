@@ -3,6 +3,7 @@
 use cargo_metadata::{diagnostic::Diagnostic, Message};
 use indicatif::{ProgressBar, ProgressStyle};
 use once_cell::sync::Lazy;
+use serde::Deserialize;
 use std::io::{self, IsTerminal};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -56,7 +57,9 @@ impl BuildProgress {
     }
 }
 
-pub(crate) fn build_cargo(cmd: tokio::process::Command) -> anyhow::Result<CargoBuildResult> {
+pub(crate) async fn build_cargo(
+    mut cmd: tokio::process::Command,
+) -> anyhow::Result<CargoBuildResult> {
     let mut warning_messages: Vec<Diagnostic> = vec![];
 
     let output = BuildProgress::new();
