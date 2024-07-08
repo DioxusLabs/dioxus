@@ -9,7 +9,8 @@ use Commands::*;
 
 const LOG_ENV: &str = "DIOXUS_LOG";
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
 
     // If {LOG_ENV} is set, default to env, otherwise filter to cli
@@ -57,7 +58,8 @@ fn main() -> anyhow::Result<()> {
 
             match action {
                 Build(mut opts) => opts
-                    .resolve(&mut dioxus_crate)
+                    .build(dioxus_crate)
+                    .await
                     .context(error_wrapper("Building project failed")),
 
                 Clean(opts) => opts

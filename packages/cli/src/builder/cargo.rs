@@ -16,7 +16,7 @@ use std::time::Instant;
 
 impl BuildRequest {
     /// Create a build command for cargo
-    pub fn prepare_build_command(&self) -> Result<(subprocess::Exec, Vec<String>)> {
+    fn prepare_build_command(&self) -> Result<(subprocess::Exec, Vec<String>)> {
         let mut cargo_args = Vec::new();
 
         let mut cmd = subprocess::Exec::cmd("cargo")

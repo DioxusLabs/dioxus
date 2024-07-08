@@ -1,6 +1,9 @@
 use dioxus_cli_config::{DioxusConfig, Platform};
 
-use crate::dioxus_crate::DioxusCrate;
+use crate::{
+    builder::{BuildRequest, Builder},
+    dioxus_crate::DioxusCrate,
+};
 
 use super::*;
 
@@ -87,6 +90,21 @@ impl Build {
         self.features
             .extend(dioxus_crate.features_for_platform(platform));
 
+        Ok(())
+    }
+
+    pub async fn build(mut self, mut dioxus_crate: DioxusCrate) -> Result<()> {
+        self.resolve(&mut dioxus_crate)?;
+        let build_requests = BuildRequest::create(false, dioxus_crate, self);
+        let mut builder = Builder::new();
+        let mut build_tasks = tokio::task::JoinSet::new();
+        for build_request in build_requests {
+            build_tasks.spawn(builder.build(build_request));
+        }
+
+        while let Some(result) = build_tasks.join_next().await {
+            result.map_err(|err| crate::Error::Unique(err.to_string()))??;
+        }
         Ok(())
     }
 
