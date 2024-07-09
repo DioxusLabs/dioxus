@@ -6,84 +6,6 @@ use syn::Item;
 use dioxus_rsx::PrettyUnparse;
 
 #[test]
-fn rsx_writeout_snapshot() {
-    let body = parse_from_str(include_str!("./parsing/multiexpr.rsx"));
-
-    assert_eq!(body.body.roots.len(), 1);
-
-    let root = &body.body.roots[0];
-
-    let el = match root {
-        dioxus_rsx::BodyNode::Element(el) => el,
-        _ => panic!("Expected an element"),
-    };
-
-    assert_eq!(el.name, "circle");
-
-    assert_eq!(el.raw_attributes.len(), 5);
-}
-
-fn parse_from_str(contents: &str) -> CallBody {
-    // Parse the file
-    let file = syn::parse_file(contents).unwrap();
-
-    // The first token should be the macro call
-    let Item::Macro(call) = file.items.first().unwrap() else {
-        panic!("Expected a macro call");
-    };
-
-    call.mac.parse_body().unwrap()
-}
-
-/// are spans just byte offsets? can't we just use the byte offset relative to the root?
-#[test]
-fn how_do_spans_work_again() {
-    fn print_spans(item: TokenStream) {
-        let new_invalid: CallBody = syn::parse2(item).unwrap();
-        let root = &new_invalid.body.roots[0];
-        let hi = &new_invalid.body.roots[0].children()[0];
-        let goodbye = &new_invalid.body.roots[0].children()[1];
-
-        dbg!(root.span(), hi.span(), goodbye.span());
-        dbg!(
-            root.span().start(),
-            hi.span().start(),
-            goodbye.span().start()
-        );
-        dbg!(root, hi, goodbye);
-
-        // dbg!(second.span());
-        // dbg!(first);
-        // let third = new_invalid.roots[0].children().first().unwrap();
-        // dbg!(third.span());
-        // let last = new_invalid.roots.last().unwrap().children().last().unwrap();
-        // dbg!(last.span());
-        println!();
-    }
-
-    for _ in 0..5 {
-        print_spans(quote::quote! {
-            div {
-                h1 {}
-                for item in items {}
-                "hi!"
-                "goodbye!"
-            }
-        });
-    }
-
-    let span = Span::call_site();
-    dbg!(span.start(), span.end());
-    println!("{:#?}", span);
-}
-
-#[test]
-fn spans_from_files() {
-    let contents = include_str!("./parsing/multiexpr.rsx");
-    let _file = syn::parse_file(contents).unwrap();
-}
-
-#[test]
 fn callbody_ctx() {
     let item = quote::quote! {
         div {
@@ -223,29 +145,4 @@ fn complex_kitchen_sink() {
     };
 
     let _cb: CallBody = syn::parse2(item).unwrap();
-}
-
-#[test]
-fn attrs_expand() {
-    let item = quote::quote! {
-        button { disabled: "{disabled}", prevent_default: "onclick", onclick: move |_| router.go_back(), {children} }
-    };
-
-    let cb: CallBody = syn::parse2(item).unwrap();
-    println!("{}", cb.to_token_stream().pretty_unparse());
-}
-
-#[test]
-fn basic_expansion() {
-    let item = quote::quote! {
-        button {
-            disabled: "{disabled}",
-            prevent_default: "onclick",
-            onclick: move |_| router.go_back(),
-            {children}
-        }
-    };
-
-    let cb: CallBody = syn::parse2(item).unwrap();
-    println!("{}", cb.to_token_stream().pretty_unparse());
 }

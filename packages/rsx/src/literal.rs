@@ -1,4 +1,3 @@
-use dioxus_core::prelude::HotReloadLiteral;
 use proc_macro2::Span;
 use quote::ToTokens;
 use quote::{quote, TokenStreamExt};
@@ -271,6 +270,7 @@ mod tests {
             panic!("expected a formatted string");
         };
         assert!(segments.is_static());
+        assert_eq!(r##""hello""##, segments.to_quoted_string_from_parts());
         println!("{}", lit.to_token_stream().pretty_unparse());
     }
 
@@ -281,8 +281,10 @@ mod tests {
             panic!("expected a formatted string");
         };
         assert!(!segments.is_static());
+        assert_eq!(
+            r##""hello {world}""##,
+            segments.to_quoted_string_from_parts()
+        );
         println!("{}", lit.to_token_stream().pretty_unparse());
-
-        println!("{}", segments.to_quoted_string_from_parts());
     }
 }
