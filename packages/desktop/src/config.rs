@@ -211,8 +211,8 @@ impl Config {
     /// Sets the menu the window will use. This will override the default menu bar.
     ///
     /// > Note: Menu will be hidden if
-    /// [`with_decorations(false)`](tao::window::WindowBuilder::with_decorations)
-    /// is false when passed into [`with_window`](Config::with_window)
+    /// [`with_decorations`](tao::window::WindowBuilder::with_decorations)
+    /// is set to false and passed into [`with_window`](Config::with_window)
     #[allow(unused)]
     pub fn with_menu(mut self, menu: impl Into<Option<DioxusMenu>>) -> Self {
         #[cfg(not(any(target_os = "ios", target_os = "android")))]
