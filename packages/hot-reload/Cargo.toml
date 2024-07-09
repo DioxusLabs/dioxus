@@ -15,7 +15,7 @@ dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-html = { workspace = true, optional = true }
 dioxus-signals = { workspace = true, optional = true }
 
-notify = { version = "5.0.0", optional = true }
+notify = { workspace = true, optional = true }
 chrono = { version = "0.4.24", default-features = false, features = ["clock"], optional = true }
 serde_json = "1.0.91"
 serde = { version = "1", features = ["derive"] }

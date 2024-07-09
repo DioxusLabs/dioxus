@@ -110,6 +110,7 @@ axum = "0.7.0"
 axum-server = { version = "0.6.0", default-features = false }
 tower = "0.4.13"
 http = "1.0.0"
+notify = { version = "6.1.1" }
 tower-http = "0.5.2"
 hyper = "1.0.0"
 hyper-rustls = "0.27.2"
