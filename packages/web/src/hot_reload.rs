@@ -10,12 +10,12 @@ pub(crate) fn init() -> UnboundedReceiver<HotReloadMsg> {
     let window = web_sys::window().unwrap();
 
     let url = format!(
-        "{protocol}//{}/_dioxus",
-        window.location().host().unwrap(),
+        "{protocol}//{host}/_dioxus",
         protocol = match window.location().protocol().unwrap() {
             prot if prot == "https:" => "wss:",
             _ => "ws:",
-        }
+        },
+        host = window.location().host().unwrap(),
     );
 
     let ws = WebSocket::new(&url).unwrap();

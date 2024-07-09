@@ -18,6 +18,10 @@ pub use ws_receiver::*;
 #[cfg(feature = "serve")]
 pub const RECONNECT_SCRIPT: &str = include_str!("assets/autoreload.js");
 
+/// The endpoint the dev server listens on
+/// Not configurable
+pub const HOTRELOAD_ENDPOINT: &str = "/_dioxus";
+
 /// A message the hot reloading server sends to the client
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(bound(deserialize = "'de: 'static"))]

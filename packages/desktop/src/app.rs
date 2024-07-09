@@ -155,9 +155,12 @@ impl App {
         let proxy = self.shared.proxy.clone();
 
         tokio::task::spawn(async move {
-            let receiver =
-                dioxus_hot_reload::NativeReceiver::create("ws://0.0.0.0:6478/_dioxus".to_string())
-                    .await;
+            let receiver = dioxus_hot_reload::NativeReceiver::create(format!(
+                "ws://0.0.0.0:{}/{}",
+                dioxus_cli_config::ServeArguments::from_cli().unwrap().port,
+                dioxus_hot_reload::HOTRELOAD_ENDPOINT,
+            ))
+            .await;
 
             match receiver {
                 Ok(mut receiver) => {
