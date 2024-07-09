@@ -54,7 +54,7 @@ async fn main() -> anyhow::Result<()> {
                 DioxusCrate::new(Some(bin.clone())).context("Failed to load Dioxus workspace")?;
 
             match action {
-                Build(opts) => opts
+                Build(mut opts) => opts
                     .build(dioxus_crate)
                     .await
                     .context(error_wrapper("Building project failed")),
@@ -68,7 +68,8 @@ async fn main() -> anyhow::Result<()> {
                     .context(error_wrapper("Serving project failed")),
 
                 Bundle(opts) => opts
-                    .bundle(Some(bin.clone()))
+                    .bundle(dioxus_crate)
+                    .await
                     .context(error_wrapper("Bundling project failed")),
 
                 _ => unreachable!(),

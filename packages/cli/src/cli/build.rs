@@ -90,19 +90,10 @@ impl Build {
         Ok(())
     }
 
-    pub async fn build(mut self, mut dioxus_crate: DioxusCrate) -> Result<()> {
+    pub async fn build(&mut self, mut dioxus_crate: DioxusCrate) -> Result<()> {
         self.resolve(&mut dioxus_crate)?;
-        let build_requests = BuildRequest::create(false, dioxus_crate, self);
-        let mut tasks = tokio::task::JoinSet::new();
-        for build_request in build_requests {
-            tasks.spawn(async move { build_request.build().await });
-        }
-
-        while let Some(result) = tasks.join_next().await {
-            result.map_err(|err| {
-                crate::Error::Unique("Panic while building project".to_string())
-            })??;
-        }
+        let build_requests = BuildRequest::create(false, dioxus_crate, self.clone());
+        BuildRequest::build_all_parallel(build_requests).await?;
         Ok(())
     }
 

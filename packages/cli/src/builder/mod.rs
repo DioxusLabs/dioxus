@@ -1,5 +1,6 @@
 use crate::build::Build;
 use crate::dioxus_crate::DioxusCrate;
+use crate::Result;
 use cargo_metadata::diagnostic::Diagnostic;
 use dioxus_cli_config::Platform;
 use std::{path::PathBuf, time::Duration};
@@ -49,6 +50,23 @@ impl BuildRequest {
             }
             _ => unimplemented!("Unknown platform: {platform:?}"),
         }
+    }
+
+    pub async fn build_all_parallel(build_requests: Vec<BuildRequest>) -> Result<Vec<BuildResult>> {
+        let mut tasks = tokio::task::JoinSet::new();
+        for build_request in build_requests {
+            tasks.spawn(async move { build_request.build().await });
+        }
+
+        let mut all_results = Vec::new();
+        while let Some(result) = tasks.join_next().await {
+            let result = result.map_err(|err| {
+                crate::Error::Unique("Panic while building project".to_string())
+            })??;
+            all_results.push(result);
+        }
+
+        Ok(all_results)
     }
 }
 

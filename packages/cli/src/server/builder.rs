@@ -1,4 +1,4 @@
-use crate::build::{Build};
+use crate::build::Build;
 use crate::builder::BuildRequest;
 use crate::builder::BuildResult;
 use crate::dioxus_crate::DioxusCrate;
