@@ -473,10 +473,10 @@ impl App {
 
             if let Ok(state) = serde_json::to_string(&state) {
                 // Write this to the target dir so we can pick back up in resume_from_state
-                if let Ok(cfg) = dioxus_cli_config::CURRENT_CONFIG.as_ref() {
-                    let path = cfg.target_dir.join("window_state.json");
-                    _ = std::fs::write(path, state);
-                }
+                // if let Ok(cfg) = dioxus_cli_config::CURRENT_CONFIG.as_ref() {
+                //     let path = cfg.target_dir.join("window_state.json");
+                //     _ = std::fs::write(path, state);
+                // }
             }
         }
     }
@@ -485,18 +485,18 @@ impl App {
     #[cfg(debug_assertions)]
     fn resume_from_state(&mut self, webview: &WebviewInstance) {
         if let Ok(cfg) = dioxus_cli_config::CURRENT_CONFIG.as_ref() {
-            let path = cfg.target_dir.join("window_state.json");
-            if let Ok(state) = std::fs::read_to_string(path) {
-                if let Ok(state) = serde_json::from_str::<PreservedWindowState>(&state) {
-                    let window = &webview.desktop_context.window;
-                    let position = (state.x, state.y);
-                    let size = (state.width, state.height);
-                    window.set_outer_position(tao::dpi::PhysicalPosition::new(
-                        position.0, position.1,
-                    ));
-                    window.set_inner_size(tao::dpi::PhysicalSize::new(size.0, size.1));
-                }
-            }
+            // let path = cfg.target_dir.join("window_state.json");
+            // if let Ok(state) = std::fs::read_to_string(path) {
+            //     if let Ok(state) = serde_json::from_str::<PreservedWindowState>(&state) {
+            //         let window = &webview.desktop_context.window;
+            //         let position = (state.x, state.y);
+            //         let size = (state.width, state.height);
+            //         window.set_outer_position(tao::dpi::PhysicalPosition::new(
+            //             position.0, position.1,
+            //         ));
+            //         window.set_inner_size(tao::dpi::PhysicalSize::new(size.0, size.1));
+            //     }
+            // }
         }
     }
 

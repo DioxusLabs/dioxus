@@ -62,7 +62,7 @@ impl ServeConfigBuilder {
         let assets_path = self.assets_path.unwrap_or(
             dioxus_cli_config::CURRENT_CONFIG
                 .as_ref()
-                .map(|c| c.dioxus_config.application.out_dir.clone())
+                .map(|c| c.application.out_dir.clone())
                 .unwrap_or("dist".into()),
         );
 
