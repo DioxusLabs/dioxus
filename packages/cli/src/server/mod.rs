@@ -45,7 +45,9 @@ use watcher::*;
 pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
     let mut server = Server::start(&serve, &dioxus_crate).await;
     let mut watchr = Watcher::start(&dioxus_crate);
-    let mut screen = Output::start(&serve, &dioxus_crate);
+    let mut screen = Output::start(&serve, &dioxus_crate)
+        .await
+        .expect("Failed to open terminal logger");
     let mut buildr = Builder::new(&dioxus_crate, &serve);
 
     loop {
@@ -83,7 +85,7 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
             }
 
             // reload the page
-            new_socket = server.wait() => {
+            _new_socket = server.wait() => {
                 // Run the server in the background
                 // Waiting for updates here lets us tap into when clients are added/removed
             }
@@ -98,21 +100,19 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                 }
             }
 
+
             // Handle input from the user using our settings
             input = screen.wait() => {
-                // If the user wants to shutdown the server, break the loop
-                if matches!(input, output::TuiInput::Shutdown) {
+                if screen.handle_input(input).is_err() {
                     break;
                 }
-
-                // Maybe handle manually reloading?
-                screen.handle_input(input);
             }
         }
     }
 
     // Run our cleanup logic here - maybe printing as we go?
     // todo: more printing, logging, error handling in this phase
+    _ = screen.shutdown();
     _ = server.shutdown().await;
     _ = buildr.shutdown().await;
 

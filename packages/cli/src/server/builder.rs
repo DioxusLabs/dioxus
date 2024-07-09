@@ -23,6 +23,7 @@ impl Builder {
     /// Create a new builder
     pub fn new(config: &DioxusCrate, serve: &Serve) -> Self {
         let build_arguments = serve.build_arguments.clone();
+        let config = config.clone();
         Self {
             build_results: None,
             config: config.clone(),

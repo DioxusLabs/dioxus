@@ -1968,6 +1968,7 @@ checksum = "f476fe445d41c9e991fd07515a6f463074b782242ccf4a5b7b1d1012e70824df"
 dependencies = [
  "bitflags 2.6.0",
  "crossterm_winapi",
+ "futures-core",
  "libc",
  "mio",
  "parking_lot",
@@ -2360,6 +2361,7 @@ dependencies = [
  "chrono",
  "clap 4.5.9",
  "colored 2.1.0",
+ "crossterm",
  "ctrlc",
  "dioxus-autofmt",
  "dioxus-check",

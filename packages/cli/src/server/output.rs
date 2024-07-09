@@ -1,46 +1,160 @@
 use crate::dioxus_crate::DioxusCrate;
 use crate::serve::Serve;
-use futures_util::StreamExt;
+use crossterm::{
+    event::{self, Event, EventStream, KeyCode},
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    ExecutableCommand,
+};
+use futures_channel::mpsc::UnboundedReceiver;
+use futures_util::{future::FutureExt, select, StreamExt};
+use ratatui::{prelude::*, widgets::*, TerminalOptions, Viewport};
+use std::io::{self, stdout};
 
 use super::{Builder, Server, Watcher};
 
 pub struct Output {
-    rx: futures_channel::mpsc::UnboundedReceiver<TuiInput>,
+    term: TerminalBackend,
+    events: EventStream,
+    command_list: ListState,
+    rustc_version: String,
 }
 
-pub enum TuiInput {
-    Shutdown,
-    Keydown,
-}
+type TerminalBackend = Terminal<CrosstermBackend<io::Stdout>>;
 
 impl Output {
-    pub fn start(cfg: &Serve, crate_config: &DioxusCrate) -> Self {
-        // Wire the handler to ping the handle_input
-        // This will give us some time to handle the input
-        let (tx, rx) = futures_channel::mpsc::unbounded();
-        ctrlc::set_handler(move || {
-            tx.unbounded_send(TuiInput::Shutdown).unwrap();
+    pub async fn start(cfg: &Serve, crate_config: &DioxusCrate) -> io::Result<Self> {
+        enable_raw_mode()?;
+        stdout().execute(EnterAlternateScreen)?;
+        let events = EventStream::new();
+        let term: TerminalBackend = Terminal::with_options(
+            CrosstermBackend::new(stdout()),
+            TerminalOptions {
+                viewport: Viewport::Fullscreen,
+            },
+        )?;
+
+        let command_list = ListState::default();
+
+        // get the rustc version
+        let rustc_version = rustc_version().await;
+
+        Ok(Self {
+            term,
+            events,
+            command_list,
+            rustc_version,
         })
-        .unwrap();
-
-        Self { rx }
     }
 
-    pub async fn wait(&mut self) -> TuiInput {
-        // pending
-        self.rx.next().await.unwrap()
+    /// Wait for either the ctrl_c handler or the next event
+    ///
+    /// Why is the ctrl_c handler here?
+    pub async fn wait(&mut self) -> Event {
+        let event = self.events.next().await;
+        event.unwrap().unwrap()
     }
 
-    pub fn handle_input(&mut self, input: TuiInput) {}
+    pub fn shutdown(&mut self) -> io::Result<()> {
+        disable_raw_mode()?;
+        stdout().execute(LeaveAlternateScreen)?;
+        Ok(())
+    }
+
+    pub fn handle_input(&mut self, input: Event) -> io::Result<()> {
+        // handle ctrlc
+        if let Event::Key(key) = input {
+            if let KeyCode::Char('c') = key.code {
+                return Err(io::Error::new(io::ErrorKind::Interrupted, "Ctrl-C"));
+            }
+        }
+
+        Ok(())
+    }
 
     pub fn draw(
-        &self,
+        &mut self,
         opts: &Serve,
         config: &DioxusCrate,
         build_engine: &Builder,
         server: &Server,
         watcher: &Watcher,
     ) {
+        _ = self.term.draw(|frame| {
+            // a layout that has a title with stats about the program and then the actual console itself
+            let chunks = Layout::default()
+                .direction(Direction::Vertical)
+                // .margin(1)
+                .constraints([Constraint::Length(0), Constraint::Min(0)].as_ref())
+                .split(frame.size());
+
+            // Render just a paragraph into the top chunks
+            frame.render_widget(
+                Paragraph::new(format!(
+                    "dx serve | rust {version} | stable | dx 0.5.2",
+                    version = self.rustc_version
+                )),
+                chunks[0],
+            );
+
+            // Render a two-column layout
+            let chunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Max(20), Constraint::Min(0)].as_ref())
+                .split(chunks[1]);
+
+            // The left column is a list of commands that we can interact with
+            let commands = vec![
+                "Commands",
+                "  Console",
+                "  Configure",
+                "  Edit",
+                "  Add dep",
+                "  Simulator",
+                "  Bundle",
+                "  Deploy",
+                "  Lookbook",
+                "  HTML to RSX",
+                "  Builds",
+                "  Debug",
+                "  Visualize",
+                "  Lint/Check",
+                "  Share",
+                "  Shortcuts",
+                "  Learn",
+                "  Help",
+            ];
+
+            let commands = commands.iter().map(|c| Span::styled(*c, Style::default()));
+
+            let commands = List::new(commands)
+                .block(Block::default().borders(Borders::ALL))
+                .style(Style::default().fg(Color::White))
+                .highlight_style(Style::default().add_modifier(Modifier::BOLD))
+                .highlight_symbol("> ");
+
+            frame.render_stateful_widget(commands, chunks[0], &mut self.command_list);
+
+            // The right is the output of that command
+            let output = vec![
+                "Output",
+                "  Compiling dioxus v0.1.0 (/Users/kevin/Projects/dioxus)",
+                "    Finished dev [unoptimized + debuginfo] target(s) in 0.23s",
+                "  Running `target/debug/dioxus`",
+                "    dx run -i | rust 1.70 | stable | dx 0.5.2
+                    ",
+            ];
+
+            let output = output.iter().map(|c| Span::styled(*c, Style::default()));
+
+            let output = List::new(output)
+                .block(Block::default().borders(Borders::ALL))
+                .style(Style::default().fg(Color::White))
+                .highlight_style(Style::default().add_modifier(Modifier::BOLD))
+                .highlight_symbol("> ");
+
+            frame.render_widget(output, chunks[1]);
+        });
+
         // // Don't clear the screen if the user has set the DIOXUS_LOG environment variable to "trace" so that we can see the logs
         // if Some("trace") != std::env::var("DIOXUS_LOG").ok().as_deref() {
         //     if let Ok(native_clearseq) = Command::new(if cfg!(target_os = "windows") {
@@ -175,6 +289,21 @@ impl Output {
         //     );
         // }
     }
+}
+
+async fn rustc_version() -> String {
+    tokio::process::Command::new("rustc")
+        .arg("--version")
+        .output()
+        .await
+        .ok()
+        .map(|o| o.stdout)
+        .map(|o| {
+            let out = String::from_utf8(o).unwrap();
+            out.split_ascii_whitespace().nth(2).map(|v| v.to_string())
+        })
+        .flatten()
+        .unwrap_or_else(|| "<unknown>".to_string())
 }
 
 // use crate::server::Diagnostic;
