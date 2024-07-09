@@ -28,7 +28,7 @@ tokio-stream = { version = "0.1.12", features = ["sync"], optional = true }
 futures-util = { workspace = true, features = ["async-await-macro"], optional = true }
 tokio = { workspace = true, features = ["sync"], optional = true }
 tracing = { workspace = true }
-tokio-tungstenite = { version = "0.23.1", optional = true }
+tokio-tungstenite = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
