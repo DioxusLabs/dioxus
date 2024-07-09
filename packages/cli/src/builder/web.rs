@@ -114,7 +114,7 @@ impl BuildRequest {
         progress: &Sender<UpdateBuildProgress>,
     ) -> Result<()> {
         _ = progress.try_send(UpdateBuildProgress {
-            stage: Stage::OptimizingAssets,
+            stage: Stage::OptimizingWasm,
             update: UpdateStage::Start,
         });
 

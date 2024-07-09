@@ -54,9 +54,14 @@ impl BuildRequest {
             cargo_args.push(features_str);
         }
 
-        if let Some(target) = &self.build_arguments.target_args.target {
+        if let Some(target) = self.web.then_some("wasm32-unknown-unknown").or(self
+            .build_arguments
+            .target_args
+            .target
+            .as_deref())
+        {
             cargo_args.push("--target".to_string());
-            cargo_args.push(target.clone());
+            cargo_args.push(target.to_string());
         }
 
         cargo_args.append(&mut self.build_arguments.cargo_args.clone());

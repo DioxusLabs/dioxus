@@ -25,7 +25,7 @@ impl Builder {
         let build_arguments = serve.build_arguments.clone();
         Self {
             build_results: None,
-            config: todo!(),
+            config: config.clone(),
             build_arguments,
         }
     }
