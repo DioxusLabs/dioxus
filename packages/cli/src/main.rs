@@ -51,33 +51,24 @@ async fn main() -> anyhow::Result<()> {
             .link()
             .context(error_wrapper("Error with linker passthrough")),
 
-        action => {
-            let mut dioxus_crate = DioxusCrate::new(None, None, None, Vec::new())
-                .context("Failed to load Dioxus workspace")?;
+        Build(mut opts) => opts
+            .run()
+            .await
+            .context(error_wrapper("Building project failed")),
 
-            match action {
-                Build(mut opts) => opts
-                    .build(&mut dioxus_crate)
-                    .await
-                    .context(error_wrapper("Building project failed")),
+        Clean(opts) => opts
+            .clean()
+            .context(error_wrapper("Cleaning project failed")),
 
-                Clean(opts) => opts
-                    .clean(dioxus_crate)
-                    .context(error_wrapper("Cleaning project failed")),
+        Serve(opts) => opts
+            .serve()
+            .await
+            .context(error_wrapper("Serving project failed")),
 
-                Serve(opts) => opts
-                    .serve(dioxus_crate)
-                    .await
-                    .context(error_wrapper("Serving project failed")),
-
-                Bundle(opts) => opts
-                    .bundle(dioxus_crate)
-                    .await
-                    .context(error_wrapper("Bundling project failed")),
-
-                _ => unreachable!(),
-            }
-        }
+        Bundle(opts) => opts
+            .bundle()
+            .await
+            .context(error_wrapper("Bundling project failed")),
     }
 }
 

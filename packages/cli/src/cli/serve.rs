@@ -2,6 +2,7 @@ use crate::{
     settings::{self},
     DioxusCrate,
 };
+use anyhow::Context;
 use build::Build;
 use dioxus_cli_config::ServeArguments;
 use std::ops::Deref;
@@ -40,10 +41,14 @@ impl Serve {
         Ok(())
     }
 
-    pub async fn serve(mut self, mut dioxus_crate: DioxusCrate) -> Result<()> {
+    pub async fn serve(mut self) -> anyhow::Result<()> {
+        let mut dioxus_crate = DioxusCrate::new(&self.build_arguments.target_args)
+            .context("Failed to load Dioxus workspace")?;
+
         self.resolve(&mut dioxus_crate)?;
 
-        crate::server::serve_all(self, dioxus_crate).await
+        crate::server::serve_all(self, dioxus_crate).await?;
+        Ok(())
     }
 }
 

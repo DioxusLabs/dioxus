@@ -1,6 +1,7 @@
 use crate::DioxusCrate;
 use crate::ExecutableType;
 use crate::{build::Build, dioxus_crate};
+use anyhow::Context;
 use std::env::current_dir;
 use std::fs::create_dir_all;
 use std::ops::Deref;
@@ -73,7 +74,10 @@ impl From<PackageType> for tauri_bundler::PackageType {
 }
 
 impl Bundle {
-    pub async fn bundle(mut self, mut dioxus_crate: DioxusCrate) -> Result<()> {
+    pub async fn bundle(mut self) -> anyhow::Result<()> {
+        let mut dioxus_crate = DioxusCrate::new(&self.build_arguments.target_args)
+            .context("Failed to load Dioxus workspace")?;
+
         self.build_arguments.resolve(&mut dioxus_crate)?;
 
         // Build the app
@@ -180,7 +184,7 @@ impl Bundle {
             );
         }
 
-        if let Some(target) = &self.target {
+        if let Some(target) = &self.target_args.target {
             settings = settings.target(target.to_string());
         }
 

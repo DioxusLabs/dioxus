@@ -68,7 +68,7 @@ impl BuildRequest {
         // Set the target directory we are building the server in
         let target_dir = get_target_directory(&build, &mut config, target_directory);
         // Add the server feature to the features we pass to the build
-        build.features.push(feature);
+        build.target_args.features.push(feature);
 
         // Add the server flags to the build arguments
         let rust_flags = fullstack_rust_flags(&build, rust_flags);
@@ -90,7 +90,7 @@ impl BuildRequest {
             build,
             config.server_target_dir(),
             SERVER_RUST_FLAGS,
-            build.server_feature.clone(),
+            build.target_args.server_feature.clone(),
             false,
         )
     }
@@ -102,7 +102,7 @@ impl BuildRequest {
             build,
             config.client_target_dir(),
             CLIENT_RUST_FLAGS,
-            build.client_feature.clone(),
+            build.target_args.client_feature.clone(),
             true,
         )
     }

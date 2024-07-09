@@ -1,4 +1,6 @@
 use crate::DioxusCrate;
+use anyhow::Context;
+use build::TargetArgs;
 
 use super::*;
 
@@ -8,7 +10,10 @@ use super::*;
 pub struct Clean {}
 
 impl Clean {
-    pub fn clean(self, crate_config: DioxusCrate) -> Result<()> {
+    pub fn clean(self) -> anyhow::Result<()> {
+        let mut dioxus_crate =
+            DioxusCrate::new(&TargetArgs::default()).context("Failed to load Dioxus workspace")?;
+
         let output = Command::new("cargo")
             .arg("clean")
             .stdout(Stdio::piped())
@@ -16,15 +21,15 @@ impl Clean {
             .output()?;
 
         if !output.status.success() {
-            return custom_error!("Cargo clean failed.");
+            return Err(anyhow::anyhow!("Cargo clean failed."));
         }
 
-        let out_dir = &crate_config.out_dir();
+        let out_dir = &dioxus_crate.out_dir();
         if out_dir.is_dir() {
             remove_dir_all(out_dir)?;
         }
 
-        let fullstack_out_dir = crate_config.fullstack_out_dir();
+        let fullstack_out_dir = dioxus_crate.fullstack_out_dir();
 
         if fullstack_out_dir.is_dir() {
             remove_dir_all(fullstack_out_dir)?;

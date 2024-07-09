@@ -1,3 +1,4 @@
+use crate::build::TargetArgs;
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use std::{path::Path, process::exit};
 
@@ -15,21 +16,9 @@ pub struct Check {
     #[clap(short, long)]
     pub file: Option<PathBuf>,
 
-    /// The binary to check
-    #[clap(long)]
-    pub bin: Option<String>,
-
-    /// The example to check
-    #[clap(long)]
-    pub example: Option<String>,
-
-    /// Features to activate
-    #[clap(long)]
-    pub features: Vec<String>,
-
-    /// The package to check
-    #[clap(long)]
-    pub package: Option<String>,
+    /// Information about the target to check
+    #[clap(flatten)]
+    pub target_args: TargetArgs,
 }
 
 impl Check {
@@ -38,8 +27,7 @@ impl Check {
         match self.file {
             // Default to checking the project
             None => {
-                let dioxus_crate =
-                    DioxusCrate::new(self.bin, self.example, self.package, self.features)?;
+                let dioxus_crate = DioxusCrate::new(&self.target_args)?;
                 if let Err(e) = check_project_and_report(dioxus_crate).await {
                     eprintln!("error checking project: {}", e);
                     exit(1);

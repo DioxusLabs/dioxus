@@ -1,3 +1,4 @@
+use crate::build::TargetArgs;
 use dioxus_cli_config::{DioxusConfig, Platform};
 use krates::cm::Target;
 use krates::{cm::TargetKind, Cmd, Kid, Krates, NodeId};
@@ -153,28 +154,28 @@ pub struct DioxusCrate {
 }
 
 impl DioxusCrate {
-    pub fn new(
-        bin: Option<String>,
-        example: Option<String>,
-        package: Option<String>,
-        features: Vec<String>,
-    ) -> Result<Self, CrateConfigError> {
+    pub fn new(target: &TargetArgs) -> Result<Self, CrateConfigError> {
         let mut cmd = Cmd::new();
-        cmd.features(features);
+        cmd.features(target.features.clone());
         let builder = krates::Builder::new();
         let krates = builder.build(cmd, |_| {})?;
-        let package = find_main_package(package, &krates)?;
+        let package = find_main_package(target.package.clone(), &krates)?;
 
         let dioxus_config = load_dioxus_config(&krates, package)?.unwrap_or_default();
 
-        let target_name = example.or(bin);
+        let target_kind = if target.example.is_some() {
+            TargetKind::Example
+        } else {
+            TargetKind::Bin
+        };
+        let target_name = target.example.clone().or(target.bin.clone());
         let main_package = &krates[package];
         let target = main_package
             .targets
             .iter()
             .find(|target| {
                 target_name.as_deref() == Some(target.name.as_str())
-                    || target.kind.contains(&TargetKind::Bin)
+                    && target.kind.contains(&target_kind)
             })
             .ok_or(CrateConfigError::TargetNotFound(
                 target_name.unwrap_or_else(|| main_package.name.clone()),
@@ -247,7 +248,7 @@ impl DioxusCrate {
 
     /// Get the name of the package we are compiling
     pub fn executable_name(&self) -> &str {
-        &self.package().name
+        &self.target.name
     }
 
     /// Get the type of executable we are compiling

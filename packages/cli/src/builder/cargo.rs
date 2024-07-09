@@ -48,13 +48,13 @@ impl BuildRequest {
             cargo_args.push(custom_profile.to_string());
         }
 
-        if !self.build_arguments.features.is_empty() {
-            let features_str = self.build_arguments.features.join(" ");
+        if !self.build_arguments.target_args.features.is_empty() {
+            let features_str = self.build_arguments.target_args.features.join(" ");
             cargo_args.push("--features".to_string());
             cargo_args.push(features_str);
         }
 
-        if let Some(target) = &self.build_arguments.target {
+        if let Some(target) = &self.build_arguments.target_args.target {
             cargo_args.push("--target".to_string());
             cargo_args.push(target.clone());
         }

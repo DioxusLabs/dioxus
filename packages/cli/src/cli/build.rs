@@ -1,10 +1,43 @@
+use anyhow::Context;
 use dioxus_cli_config::Platform;
 
 use crate::{builder::BuildRequest, dioxus_crate::DioxusCrate};
 
 use super::*;
 
-/// Build the Rust WASM app and all of its assets.
+/// Information about the target to build
+#[derive(Clone, Debug, Default, Deserialize, Parser)]
+pub struct TargetArgs {
+    /// Build a example [default: ""]
+    #[clap(long)]
+    pub example: Option<String>,
+
+    /// Build a binary [default: ""]
+    #[clap(long)]
+    pub bin: Option<String>,
+
+    /// The package to build
+    #[clap(long)]
+    pub package: Option<String>,
+
+    /// Space separated list of features to activate
+    #[clap(long)]
+    pub features: Vec<String>,
+
+    /// The feature to use for the client in a fullstack app [default: "web"]
+    #[clap(long, default_value_t = { "web".to_string() })]
+    pub client_feature: String,
+
+    /// The feature to use for the server in a fullstack app [default: "server"]
+    #[clap(long, default_value_t = { "server".to_string() })]
+    pub server_feature: String,
+
+    /// Rustc platform triple
+    #[clap(long)]
+    pub target: Option<String>,
+}
+
+/// Build the Rust Dioxus app and all of its assets.
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 #[clap(name = "build")]
 pub struct Build {
@@ -28,10 +61,6 @@ pub struct Build {
     #[serde(default)]
     pub verbose: bool,
 
-    /// Build a example [default: ""]
-    #[clap(long)]
-    pub example: Option<String>,
-
     /// Build with custom profile
     #[clap(long)]
     pub profile: Option<String>,
@@ -45,22 +74,6 @@ pub struct Build {
     #[serde(default)]
     pub skip_assets: bool,
 
-    /// Space separated list of features to activate
-    #[clap(long)]
-    pub features: Vec<String>,
-
-    /// The feature to use for the client in a fullstack app [default: "web"]
-    #[clap(long, default_value_t = { "web".to_string() })]
-    pub client_feature: String,
-
-    /// The feature to use for the server in a fullstack app [default: "server"]
-    #[clap(long, default_value_t = { "server".to_string() })]
-    pub server_feature: String,
-
-    /// Rustc platform triple
-    #[clap(long)]
-    pub target: Option<String>,
-
     /// Extra arguments passed to cargo build
     #[clap(last = true)]
     pub cargo_args: Vec<String>,
@@ -68,6 +81,10 @@ pub struct Build {
     /// Inject scripts to load the wasm and js files for your dioxus app if they are not already present [default: true]
     #[clap(long, default_value_t = true)]
     pub inject_loading_scripts: bool,
+
+    /// Information about the target to build
+    #[clap(flatten)]
+    pub target_args: TargetArgs,
 }
 
 impl Build {
@@ -79,7 +96,8 @@ impl Build {
         self.platform = Some(platform);
 
         // Add any features required to turn on the platform we are building for
-        self.features
+        self.target_args
+            .features
             .extend(dioxus_crate.features_for_platform(platform));
 
         Ok(())
@@ -89,6 +107,13 @@ impl Build {
         self.resolve(&mut dioxus_crate)?;
         let build_requests = BuildRequest::create(false, dioxus_crate, self.clone());
         BuildRequest::build_all_parallel(build_requests).await?;
+        Ok(())
+    }
+
+    pub async fn run(&mut self) -> anyhow::Result<()> {
+        let mut dioxus_crate =
+            DioxusCrate::new(&self.target_args).context("Failed to load Dioxus workspace")?;
+        self.build(&mut dioxus_crate).await?;
         Ok(())
     }
 
