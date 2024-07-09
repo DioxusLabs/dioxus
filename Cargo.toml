@@ -100,7 +100,6 @@ thiserror = "1.0.40"
 prettyplease = { version = "0.2.16", features = ["verbatim"] }
 manganis-cli-support = { git = "https://github.com/DogeDark/dioxus-collect-assets/", features = ["html"] }
 manganis = { version = "0.2.1" }
-interprocess = { version = "1.2.2", package = "interprocess-docfix" }
 const_format = "0.2.32"
 
 lru = "0.12.2"

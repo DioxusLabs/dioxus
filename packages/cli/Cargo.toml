@@ -88,7 +88,6 @@ dioxus-rsx = { workspace = true, features = ["serde"]}
 dioxus-html = { workspace = true, features = ["hot-reload-context"] }
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-hot-reload = { workspace = true, features = ["serve"] }
-interprocess = { workspace = true }
 ignore = "0.4.22"
 env_logger = "0.11.3"
 

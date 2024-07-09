@@ -2289,7 +2289,6 @@ dependencies = [
  "hyper-util",
  "ignore",
  "indicatif",
- "interprocess-docfix",
  "log",
  "manganis-cli-support",
  "notify",
@@ -5236,32 +5235,6 @@ dependencies = [
  "quote",
  "syn 2.0.68",
 ]
-
-[[package]]
-name = "interprocess-docfix"
-version = "1.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b84ee245c606aeb0841649a9288e3eae8c61b853a8cd5c0e14450e96d53d28f"
-dependencies = [
- "blocking",
- "cfg-if",
- "futures-core",
- "futures-io",
- "intmap",
- "libc",
- "once_cell",
- "rustc_version",
- "spinning",
- "thiserror",
- "to_method",
- "winapi",
-]
-
-[[package]]
-name = "intmap"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae52f28f45ac2bc96edb7714de995cffc174a395fb0abf5bff453587c980d7b9"
 
 [[package]]
 name = "inventory"
@@ -8751,15 +8724,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "spinning"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d4f0e86297cad2658d92a707320d87bf4e6ae1050287f51d19b67ef3f153a7b"
-dependencies = [
- "lock_api",
-]
-
-[[package]]
 name = "spki"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9517,12 +9481,6 @@ name = "tinyvec_macros"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
-
-[[package]]
-name = "to_method"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7c4ceeeca15c8384bbc3e011dbd8fccb7f068a440b752b7d9b32ceb0ca0e2e8"
 
 [[package]]
 name = "tokio"
