@@ -4,7 +4,10 @@ use crate::builder::BuildResult;
 use crate::dioxus_crate::DioxusCrate;
 use crate::serve::Serve;
 use crate::Result;
+use futures_util::stream::FuturesUnordered;
+use futures_util::StreamExt;
 use tokio::task::JoinHandle;
+use tokio::task::JoinSet;
 
 /// A handle to ongoing builds and then the spawned tasks themselves
 pub struct Builder {
@@ -30,26 +33,21 @@ impl Builder {
 
     /// Start a new build - killing the current one if it exists
     pub async fn build(&mut self) -> Result<()> {
-        self.shutdown().await?;
-        let build_requests =
-            BuildRequest::create(false, self.config.clone(), self.build_arguments.clone());
+        // self.shutdown().await?;
+        // let build_requests =
+        //     BuildRequest::create(false, self.config.clone(), self.build_arguments.clone());
 
-        let mut set = tokio::task::JoinSet::new();
-        for build_request in build_requests {
-            set.spawn(async move { build_request.build().await });
-        }
-
-        self.build_results = Some(tokio::spawn({
-            async move {
-                let mut all_results = Vec::new();
-                while let Some(result) = set.join_next().await {
-                    all_results.push(result.map_err(|err| {
-                        crate::Error::Unique(format!("Panic while building project: {err:?}"))
-                    })??);
-                }
-                Ok(all_results)
-            }
-        }));
+        // self.build_results = Some(tokio::spawn({
+        //     async move {
+        //         let mut all_results = Vec::new();
+        //         while let Some(result) = set.join_next().await {
+        //             all_results.push(result.map_err(|err| {
+        //                 crate::Error::Unique(format!("Panic while building project: {err:?}"))
+        //             })??);
+        //         }
+        //         Ok(all_results)
+        //     }
+        // }));
 
         Ok(())
     }

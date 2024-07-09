@@ -3,6 +3,7 @@ use crate::dioxus_crate::DioxusCrate;
 use crate::Result;
 use cargo_metadata::diagnostic::Diagnostic;
 use dioxus_cli_config::Platform;
+use futures_util::{stream::FuturesUnordered, StreamExt};
 use std::{path::PathBuf, time::Duration};
 use tokio::process::{Child, Command};
 
@@ -53,16 +54,46 @@ impl BuildRequest {
     }
 
     pub async fn build_all_parallel(build_requests: Vec<BuildRequest>) -> Result<Vec<BuildResult>> {
-        let mut tasks = tokio::task::JoinSet::new();
+        let multi_platform_build = build_requests.len() > 1;
+        let mut build_progress = Vec::new();
+        let mut set = tokio::task::JoinSet::new();
         for build_request in build_requests {
-            tasks.spawn(async move { build_request.build().await });
+            let (tx, rx) = tokio::sync::mpsc::channel(5000);
+            build_progress.push((
+                build_request.build_arguments.platform.unwrap_or_default(),
+                rx,
+            ));
+            set.spawn(async move { build_request.build(tx).await });
+        }
+
+        // Watch the build progress as it comes in
+        loop {
+            let mut next = FuturesUnordered::new();
+            for (platform, rx) in build_progress.iter_mut() {
+                if !rx.is_closed() {
+                    next.push(async { rx.recv().await.map(|update| (*platform, update)) });
+                }
+            }
+            match next.next().await.flatten() {
+                Some((platform, update)) => {
+                    if multi_platform_build {
+                        print!("{platform} build: ");
+                        update.to_std_out();
+                    } else {
+                        update.to_std_out();
+                    }
+                }
+                None => {
+                    break;
+                }
+            }
         }
 
         let mut all_results = Vec::new();
-        while let Some(result) = tasks.join_next().await {
-            let result = result.map_err(|err| {
-                crate::Error::Unique("Panic while building project".to_string())
-            })??;
+
+        while let Some(result) = set.join_next().await {
+            let result = result
+                .map_err(|err| crate::Error::Unique("Failed to build project".to_owned()))??;
             all_results.push(result);
         }
 
@@ -72,7 +103,6 @@ impl BuildRequest {
 
 #[derive(Debug, Clone)]
 pub(crate) struct BuildResult {
-    pub warnings: Vec<Diagnostic>,
     pub executable: PathBuf,
     pub elapsed_time: Duration,
     pub web: bool,

@@ -1,15 +1,17 @@
 use crate::BundleConfig;
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Debug, Default)]
 #[cfg_attr(feature = "cli", derive(clap::ValueEnum))]
 #[non_exhaustive]
 pub enum Platform {
     /// Targeting the web platform using WASM
     #[cfg_attr(feature = "cli", clap(name = "web"))]
     #[serde(rename = "web")]
+    #[default]
     Web,
 
     /// Targeting the desktop platform using Tao/Wry-based webview
@@ -48,6 +50,13 @@ impl FromStr for Platform {
             "static-generation" => Ok(Self::StaticGeneration),
             _ => Err(UnknownPlatformError),
         }
+    }
+}
+
+impl Display for Platform {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let feature = self.feature_name();
+        f.write_str(feature)
     }
 }
 

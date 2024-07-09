@@ -1,71 +1,117 @@
-//! Report progress about the build to the user. We use indicatif to report progress.
+//! Report progress about the build to the user. We use channels to report progress back to the CLI.
 
+use cargo_metadata::CompilerMessage;
 use cargo_metadata::{diagnostic::Diagnostic, Message};
-use indicatif::{ProgressBar, ProgressStyle};
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use std::io::{self, IsTerminal};
 use std::path::PathBuf;
+use std::process::Stdio;
 use std::time::Duration;
-use tokio::io::AsyncBufReadExt;
+use tokio::io::{AsyncBufReadExt, Stdout};
+use tokio::sync::mpsc::Sender;
+use tracing::Level;
 
-static PROGRESS_BARS: Lazy<indicatif::MultiProgress> = Lazy::new(indicatif::MultiProgress::new);
+use crate::build::Build;
 
-struct BuildProgress {
-    progress_bar: Option<ProgressBar>,
+pub struct ActiveBuild {
+    stage: Stage,
+    messages: Vec<BuildMessage>,
+    progress: f64,
 }
 
-impl BuildProgress {
-    pub fn new() -> Self {
-        let stdout = io::stdout().lock();
-
-        let mut myself = Self { progress_bar: None };
-
-        if stdout.is_terminal() {
-            let mut pb = ProgressBar::new_spinner();
-            pb.enable_steady_tick(Duration::from_millis(200));
-            pb = PROGRESS_BARS.add(pb);
-            pb.set_style(
-                ProgressStyle::with_template("{spinner:.dim.bold} {wide_msg}")
-                    .unwrap()
-                    .tick_chars("/|\\- "),
-            );
-
-            myself.progress_bar = Some(pb);
-        }
-
-        myself
-    }
-
-    /// Display a message to the user while the build is running
-    pub fn display(&self, msg: impl ToString) {
-        let msg = msg.to_string();
-        if let Some(pb) = &self.progress_bar {
-            pb.set_message(msg)
-        } else {
-            println!("{msg}");
+impl ActiveBuild {
+    fn update(&mut self, update: UpdateBuildProgress) {
+        match update.update {
+            UpdateStage::Start => {
+                self.stage = update.stage;
+                self.progress = 0.0;
+            }
+            UpdateStage::AddMessage(message) => {
+                self.messages.push(message);
+            }
+            UpdateStage::SetProgress(progress) => {
+                self.progress = progress;
+            }
         }
     }
+}
 
-    pub fn finish_with_message(&self, msg: impl ToString) {
-        let msg = msg.to_string();
-        if let Some(pb) = &self.progress_bar {
-            pb.finish_with_message(msg)
-        } else {
-            println!("{msg}");
+pub enum Stage {
+    InstallingWasmTooling,
+    Compiling,
+    OptimizingWasm,
+    OptimizingAssets,
+}
+
+pub struct UpdateBuildProgress {
+    pub stage: Stage,
+    pub update: UpdateStage,
+}
+
+impl UpdateBuildProgress {
+    pub fn to_std_out(&self) {
+        match &self.update {
+            UpdateStage::Start => match self.stage {
+                Stage::InstallingWasmTooling => {
+                    println!("--- Installing wasm tooling ---");
+                }
+                Stage::Compiling => {
+                    println!("--- Compiling ---");
+                }
+                Stage::OptimizingWasm => {
+                    println!("--- Optimizing wasm ---");
+                }
+                Stage::OptimizingAssets => {
+                    println!("--- Optimizing assets ---");
+                }
+            },
+            UpdateStage::AddMessage(message) => {
+                println!("{}", message.message);
+            }
+            UpdateStage::SetProgress(progress) => {}
+        }
+    }
+}
+
+pub enum UpdateStage {
+    Start,
+    AddMessage(BuildMessage),
+    SetProgress(f64),
+}
+
+struct BuildMessage {
+    level: Level,
+    message: String,
+}
+
+impl From<Diagnostic> for BuildMessage {
+    fn from(message: Diagnostic) -> Self {
+        Self {
+            level: match message.level {
+                cargo_metadata::diagnostic::DiagnosticLevel::Ice
+                | cargo_metadata::diagnostic::DiagnosticLevel::FailureNote
+                | cargo_metadata::diagnostic::DiagnosticLevel::Error => Level::ERROR,
+                cargo_metadata::diagnostic::DiagnosticLevel::Warning => Level::WARN,
+                cargo_metadata::diagnostic::DiagnosticLevel::Note => Level::INFO,
+                cargo_metadata::diagnostic::DiagnosticLevel::Help => Level::DEBUG,
+                _ => Level::DEBUG,
+            },
+            message: message.rendered.unwrap_or_default(),
         }
     }
 }
 
 pub(crate) async fn build_cargo(
     mut cmd: tokio::process::Command,
+    progress: &Sender<UpdateBuildProgress>,
 ) -> anyhow::Result<CargoBuildResult> {
-    let mut warning_messages: Vec<Diagnostic> = vec![];
+    _ = progress.try_send(UpdateBuildProgress {
+        stage: Stage::Compiling,
+        update: UpdateStage::Start,
+    });
 
-    let output = BuildProgress::new();
-    output.display("💼 Waiting to start building the project...");
-
-    let stdout = cmd.spawn()?.stdout.take().unwrap();
+    let stdout = cmd.stdout(Stdio::piped()).spawn()?.stdout.take().unwrap();
     let reader = tokio::io::BufReader::new(stdout);
     let mut output_location = None;
 
@@ -86,27 +132,27 @@ pub(crate) async fn build_cargo(
                         };
                     }
                     cargo_metadata::diagnostic::DiagnosticLevel::Warning => {
-                        warning_messages.push(message.clone());
+                        _ = progress.try_send(UpdateBuildProgress {
+                            stage: Stage::Compiling,
+                            update: UpdateStage::AddMessage(message.clone().into()),
+                        });
                     }
                     _ => {}
                 }
             }
-            Message::CompilerArtifact(artifact) => {
-                output.display(format!("⚙ Compiling {} ", artifact.package_id));
-                if let Some(executable) = artifact.executable {
-                    output_location = Some(executable.into());
-                }
-            }
-            Message::BuildScriptExecuted(script) => {
-                let _package_id = script.package_id.to_string();
-            }
             Message::BuildFinished(finished) => {
-                if finished.success {
-                    output.finish_with_message("👑 Build done.");
-                } else {
-                    output.finish_with_message("❌ Build failed.");
+                if !finished.success {
                     return Err(anyhow::anyhow!("Build failed"));
                 }
+            }
+            Message::TextLine(line) => {
+                _ = progress.try_send(UpdateBuildProgress {
+                    stage: Stage::Compiling,
+                    update: UpdateStage::AddMessage(BuildMessage {
+                        level: Level::DEBUG,
+                        message: line,
+                    }),
+                });
             }
             _ => {
                 // Unknown message
@@ -114,13 +160,9 @@ pub(crate) async fn build_cargo(
         }
     }
 
-    Ok(CargoBuildResult {
-        warnings: warning_messages,
-        output_location,
-    })
+    Ok(CargoBuildResult { output_location })
 }
 
 pub(crate) struct CargoBuildResult {
-    pub(crate) warnings: Vec<Diagnostic>,
     pub(crate) output_location: Option<PathBuf>,
 }

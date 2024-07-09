@@ -6,6 +6,9 @@ use crate::assets::create_assets_head;
 use crate::assets::{asset_manifest, process_assets, AssetConfigDropGuard};
 use crate::builder::progress::build_cargo;
 use crate::builder::progress::CargoBuildResult;
+use crate::builder::progress::Stage;
+use crate::builder::progress::UpdateBuildProgress;
+use crate::builder::progress::UpdateStage;
 use crate::link::LinkCommand;
 use crate::ExecutableType;
 use crate::Result;
@@ -14,6 +17,7 @@ use std::env;
 use std::fs::create_dir_all;
 use std::time::Instant;
 use tokio::process::Command;
+use tokio::sync::mpsc::Sender;
 
 impl BuildRequest {
     /// Create a build command for cargo
@@ -75,7 +79,7 @@ impl BuildRequest {
         Ok((cmd, cargo_args))
     }
 
-    pub async fn build(&self) -> Result<BuildResult> {
+    pub async fn build(&self, progress: Sender<UpdateBuildProgress>) -> Result<BuildResult> {
         tracing::info!("🚅 Running build [Desktop] command...");
 
         // Set up runtime guards
@@ -86,18 +90,18 @@ impl BuildRequest {
 
         // If this is a web, build make sure we have the web build tooling set up
         if self.web {
-            install_web_build_tooling().await?;
+            install_web_build_tooling(&progress).await?;
         }
 
         // Create the build command
         let (cmd, cargo_args) = self.prepare_build_command()?;
 
         // Run the build command with a pretty loader
-        let cargo_result = build_cargo(cmd).await?;
+        let cargo_result = build_cargo(cmd, &progress).await?;
 
         // Post process the build result
         let build_result = self
-            .post_process_build(cargo_args, &cargo_result, start_time)
+            .post_process_build(cargo_args, &cargo_result, start_time, &progress)
             .await?;
 
         tracing::info!(
@@ -118,7 +122,13 @@ impl BuildRequest {
         cargo_args: Vec<String>,
         cargo_build_result: &CargoBuildResult,
         t_start: Instant,
+        progress: &Sender<UpdateBuildProgress>,
     ) -> Result<BuildResult> {
+        _ = progress.try_send(UpdateBuildProgress {
+            stage: Stage::OptimizingWasm,
+            update: UpdateStage::Start,
+        });
+
         // Start Manganis linker intercept.
         let linker_args = vec![format!("{}", self.config.out_dir().display())];
 
@@ -160,7 +170,6 @@ impl BuildRequest {
 
         // Create the build result
         let build_result = BuildResult {
-            warnings: cargo_build_result.warnings.clone(),
             executable: output_path,
             elapsed_time: t_start.elapsed(),
             web: self.web,

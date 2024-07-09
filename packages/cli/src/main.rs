@@ -32,7 +32,7 @@ async fn main() -> anyhow::Result<()> {
 
         Init(opts) => opts
             .init()
-            .context(error_wrapper("Initialising a new project failed")),
+            .context(error_wrapper("Initializing a new project failed")),
 
         Config(opts) => opts
             .config()

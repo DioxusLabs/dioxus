@@ -1,10 +1,14 @@
 use super::BuildRequest;
 use super::BuildResult;
 use crate::assets::pre_compress_folder;
+use crate::builder::progress::Stage;
+use crate::builder::progress::UpdateBuildProgress;
+use crate::builder::progress::UpdateStage;
 use crate::error::{Error, Result};
 use dioxus_cli_config::WasmOptLevel;
 use std::path::Path;
 use tokio::process::Command;
+use tokio::sync::mpsc::Sender;
 use wasm_bindgen_cli_support::Bindgen;
 
 // Attempt to automatically recover from a bindgen failure by updating the wasm-bindgen version
@@ -40,13 +44,19 @@ async fn update_wasm_bindgen_version() -> Result<()> {
 }
 
 /// Check if the wasm32-unknown-unknown target is installed and try to install it if not
-pub(crate) async fn install_web_build_tooling() -> Result<()> {
+pub(crate) async fn install_web_build_tooling(
+    progress: &Sender<UpdateBuildProgress>,
+) -> Result<()> {
     // If the user has rustup, we can check if the wasm32-unknown-unknown target is installed
     // Otherwise we can just assume it is installed - which is not great...
     // Eventually we can poke at the errors and let the user know they need to install the target
     if let Ok(wasm_check_command) = Command::new("rustup").args(["show"]).output().await {
         let wasm_check_output = String::from_utf8(wasm_check_command.stdout).unwrap();
         if !wasm_check_output.contains("wasm32-unknown-unknown") {
+            _ = progress.try_send(UpdateBuildProgress {
+                stage: Stage::InstallingWasmTooling,
+                update: UpdateStage::Start,
+            });
             tracing::info!("wasm32-unknown-unknown target not detected, installing..");
             let _ = Command::new("rustup")
                 .args(["target", "add", "wasm32-unknown-unknown"])
