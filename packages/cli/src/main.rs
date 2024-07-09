@@ -42,7 +42,10 @@ async fn main() -> anyhow::Result<()> {
             .autoformat()
             .context(error_wrapper("Error autoformatting RSX")),
 
-        Check(opts) => opts.check().context(error_wrapper("Error checking RSX")),
+        Check(opts) => opts
+            .check()
+            .await
+            .context(error_wrapper("Error checking RSX")),
 
         Link(opts) => opts
             .link()
