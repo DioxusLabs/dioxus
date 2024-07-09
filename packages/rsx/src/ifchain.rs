@@ -149,3 +149,18 @@ pub(crate) fn is_if_chain_terminated(chain: &ExprIf) -> bool {
         }
     }
 }
+
+#[test]
+fn parses_if_chain() {
+    let input = quote! {
+        if true {
+            "one"
+        } else if false {
+            "two"
+        } else {
+            "three"
+        }
+    };
+
+    let chain: IfChain = syn::parse2(input).unwrap();
+}

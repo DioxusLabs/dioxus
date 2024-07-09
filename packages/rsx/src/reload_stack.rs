@@ -54,8 +54,6 @@ impl<T> PopVec<T> {
         let mut highest_score = 0;
         let mut best = None;
 
-        // todo: this reload stack is actually meant to allow quick jumps from the start to the nearest
-        // non-none item for searching, making it, on average, O(1) when the input is sorted.
         for (idx, x) in self.stack.iter().enumerate().skip(self.next_free) {
             if let Some(x) = x {
                 let scored = score(x);
