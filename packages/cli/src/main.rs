@@ -65,6 +65,7 @@ async fn main() -> anyhow::Result<()> {
 
                 Serve(opts) => opts
                     .serve(dioxus_crate)
+                    .await
                     .context(error_wrapper("Serving project failed")),
 
                 Bundle(opts) => opts

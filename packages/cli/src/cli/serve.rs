@@ -40,14 +40,10 @@ impl Serve {
         Ok(())
     }
 
-    pub fn serve(mut self, mut dioxus_crate: DioxusCrate) -> Result<()> {
+    pub async fn serve(mut self, mut dioxus_crate: DioxusCrate) -> Result<()> {
         self.resolve(&mut dioxus_crate)?;
 
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap()
-            .block_on(crate::server::serve_all(self, dioxus_crate))
+        crate::server::serve_all(self, dioxus_crate).await
     }
 }
 
