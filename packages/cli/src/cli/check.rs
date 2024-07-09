@@ -1,6 +1,8 @@
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use std::{path::Path, process::exit};
 
+use crate::DioxusCrate;
+
 use super::*;
 
 // For reference, the rustfmt main.rs file
@@ -12,6 +14,22 @@ pub struct Check {
     /// Input file
     #[clap(short, long)]
     pub file: Option<PathBuf>,
+
+    /// The binary to check
+    #[clap(long)]
+    pub bin: Option<String>,
+
+    /// The example to check
+    #[clap(long)]
+    pub example: Option<String>,
+
+    /// Features to activate
+    #[clap(long)]
+    pub features: Vec<String>,
+
+    /// The package to check
+    #[clap(long)]
+    pub package: Option<String>,
 }
 
 impl Check {
@@ -20,7 +38,9 @@ impl Check {
         match self.file {
             // Default to checking the project
             None => {
-                if let Err(e) = check_project_and_report().await {
+                let dioxus_crate =
+                    DioxusCrate::new(self.bin, self.example, self.package, self.features)?;
+                if let Err(e) = check_project_and_report(dioxus_crate).await {
                     eprintln!("error checking project: {}", e);
                     exit(1);
                 }
@@ -46,11 +66,9 @@ async fn check_file_and_report(path: PathBuf) -> Result<()> {
 /// Runs using Tokio for multithreading, so it should be really really fast
 ///
 /// Doesn't do mod-descending, so it will still try to check unreachable files. TODO.
-async fn check_project_and_report() -> Result<()> {
-    let crate_config = crate::dioxus_crate::DioxusCrate::new(None)?;
-
-    let mut files_to_check = vec![];
-    collect_rs_files(&crate_config.crate_dir, &mut files_to_check);
+async fn check_project_and_report(dioxus_crate: DioxusCrate) -> Result<()> {
+    let mut files_to_check = vec![dioxus_crate.main_source_file()];
+    collect_rs_files(&dioxus_crate.crate_dir(), &mut files_to_check);
     check_files_and_report(files_to_check).await
 }
 

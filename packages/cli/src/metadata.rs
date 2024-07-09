@@ -40,7 +40,7 @@ pub struct Metadata {
 /// Returns the root of the crate that the command is run from
 ///
 /// If the command is run from the workspace root, this will return the top-level Cargo.toml
-pub fn crate_root() -> Result<PathBuf, CargoError> {
+pub(crate) fn crate_root() -> Result<PathBuf, CargoError> {
     // From the current directory we work our way up, looking for `Cargo.toml`
     env::current_dir()
         .ok()

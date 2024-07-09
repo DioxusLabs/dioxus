@@ -25,8 +25,10 @@ impl BuildRequest {
         let mut cargo_args = Vec::new();
 
         let mut cmd = tokio::process::Command::new("cargo");
-        cmd.env("CARGO_TARGET_DIR", &self.config.target_dir)
-            .current_dir(&self.config.crate_dir)
+        if let Some(target_dir) = &self.target_dir {
+            cmd.env("CARGO_TARGET_DIR", target_dir);
+        }
+        cmd.current_dir(&self.config.crate_dir())
             .arg("build")
             .arg("--message-format=json-render-diagnostics");
 
@@ -59,20 +61,19 @@ impl BuildRequest {
 
         cargo_args.append(&mut self.build_arguments.cargo_args.clone());
 
-        match &self.config.executable {
-            ExecutableType::Binary(name) => {
+        match self.config.executable_type() {
+            krates::cm::TargetKind::Bin => {
                 cargo_args.push("--bin".to_string());
-                cargo_args.push(name.to_string());
             }
-            ExecutableType::Lib(name) => {
+            krates::cm::TargetKind::Lib => {
                 cargo_args.push("--lib".to_string());
-                cargo_args.push(name.to_string());
             }
-            ExecutableType::Example(name) => {
+            krates::cm::TargetKind::Example => {
                 cargo_args.push("--example".to_string());
-                cargo_args.push(name.to_string());
             }
+            _ => {}
         };
+        cargo_args.push(self.config.executable_name().to_string());
 
         cmd.args(&cargo_args);
 
@@ -138,19 +139,18 @@ impl BuildRequest {
             Some(linker_args),
         )?;
 
-        let file_name: String = self.config.executable.executable().unwrap().to_string();
-
-        let target_file = if cfg!(windows) {
-            format!("{}.exe", &file_name)
-        } else {
-            file_name
-        };
+        let file_name = self.config.executable_name();
 
         let out_dir = self.config.out_dir();
         if !out_dir.is_dir() {
             create_dir_all(&out_dir)?;
         }
-        let output_path = out_dir.join(target_file);
+        let mut output_path = out_dir.join(file_name);
+        if self.web {
+            output_path.set_extension("wasm");
+        } else if cfg!(windows) {
+            output_path.set_extension("exe");
+        }
         if let Some(res_path) = &cargo_build_result.output_location {
             std::fs::copy(res_path, &output_path)?;
         }

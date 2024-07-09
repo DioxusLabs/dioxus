@@ -20,6 +20,7 @@ use dioxus_cli_config::WebHttpsConfig;
 use dioxus_hot_reload::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
+use std::path::{Path, PathBuf};
 use std::{
     convert::Infallible,
     fs, io,
@@ -201,7 +202,8 @@ fn build_serve_dir(serve: &Serve, cfg: &DioxusCrate) -> axum::routing::MethodRou
         false => CORS_UNSAFE,
     };
 
-    let _cfg = cfg.clone();
+    let out_dir = cfg.out_dir();
+    let index_on_404 = cfg.dioxus_config.web.watcher.index_on_404;
 
     get_service(
         ServiceBuilder::new()
@@ -210,8 +212,11 @@ fn build_serve_dir(serve: &Serve, cfg: &DioxusCrate) -> axum::routing::MethodRou
                 coep,
             )
             .override_response_header(HeaderName::from_static("cross-origin-opener-policy"), coop)
-            .and_then(move |response| async move { Ok(no_cache(_cfg, response)) })
-            .service(ServeDir::new(cfg.out_dir())),
+            .and_then({
+                let out_dir = out_dir.clone();
+                move |response| async move { Ok(no_cache(index_on_404, &out_dir, response)) }
+            })
+            .service(ServeDir::new(out_dir)),
     )
     .handle_error(|error: Infallible| async move {
         (
@@ -221,9 +226,11 @@ fn build_serve_dir(serve: &Serve, cfg: &DioxusCrate) -> axum::routing::MethodRou
     })
 }
 
-fn no_cache(cfg: DioxusCrate, response: Response<ServeFileSystemResponseBody>) -> Response<Body> {
-    let index_on_404 = cfg.dioxus_config.web.watcher.index_on_404;
-
+fn no_cache(
+    index_on_404: bool,
+    out_dir: &Path,
+    response: Response<ServeFileSystemResponseBody>,
+) -> Response<Body> {
     // By default we just decompose into the response
     let mut response = response.into_response();
 
@@ -231,7 +238,7 @@ fn no_cache(cfg: DioxusCrate, response: Response<ServeFileSystemResponseBody>) -
     // We migth want to isnert a header here saying we *did* that but oh well
     if response.status() == StatusCode::NOT_FOUND && index_on_404 {
         let body = Body::from(
-            std::fs::read_to_string(cfg.out_dir().join("index.html"))
+            std::fs::read_to_string(out_dir.join("index.html"))
                 .ok()
                 .unwrap(),
         );

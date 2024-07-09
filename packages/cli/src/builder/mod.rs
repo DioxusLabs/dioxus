@@ -25,15 +25,18 @@ pub struct BuildRequest {
     pub build_arguments: Build,
     /// The rustc flags to pass to the build
     pub rust_flags: Option<String>,
+    /// The target directory for the build
+    pub target_dir: Option<PathBuf>,
 }
 
 impl BuildRequest {
     pub fn create(
         serve: bool,
-        config: DioxusCrate,
+        config: &DioxusCrate,
         build_arguments: impl Into<Build>,
     ) -> Vec<Self> {
         let build_arguments = build_arguments.into();
+        let config = config.clone();
         let platform = build_arguments.platform.unwrap_or(Platform::Web);
         match platform {
             Platform::Web | Platform::Desktop => {
@@ -44,6 +47,7 @@ impl BuildRequest {
                     config,
                     build_arguments,
                     rust_flags: Default::default(),
+                    target_dir: Default::default(),
                 }]
             }
             Platform::StaticGeneration | Platform::Fullstack => {

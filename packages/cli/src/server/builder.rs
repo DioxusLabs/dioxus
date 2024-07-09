@@ -22,11 +22,10 @@ pub struct Builder {
 impl Builder {
     /// Create a new builder
     pub fn new(config: &DioxusCrate, serve: &Serve) -> Self {
-        let config = config.clone();
         let build_arguments = serve.build_arguments.clone();
         Self {
             build_results: None,
-            config,
+            config: todo!(),
             build_arguments,
         }
     }

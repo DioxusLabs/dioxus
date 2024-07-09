@@ -34,10 +34,12 @@ fn fullstack_rust_flags(build: &Build, base_flags: &str) -> String {
 
 // Fullstack builds run the server and client builds parallel by default
 // To make them run in parallel, we need to set up different target directories for the server and client within /.dioxus
-fn set_target_directory(build: &Build, config: &mut DioxusCrate, target: PathBuf) {
-    if !build.force_sequential {
-        config.target_dir = target;
-    }
+fn get_target_directory(
+    build: &Build,
+    config: &mut DioxusCrate,
+    target: PathBuf,
+) -> Option<PathBuf> {
+    (!build.force_sequential).then_some(target)
 }
 
 impl BuildRequest {
@@ -64,7 +66,7 @@ impl BuildRequest {
         let mut config = config.clone();
         let mut build = build.clone();
         // Set the target directory we are building the server in
-        set_target_directory(&build, &mut config, target_directory);
+        let target_dir = get_target_directory(&build, &mut config, target_directory);
         // Add the server feature to the features we pass to the build
         build.features.push(feature);
 
@@ -77,6 +79,7 @@ impl BuildRequest {
             build_arguments: build.clone(),
             config,
             rust_flags: Some(rust_flags),
+            target_dir,
         }
     }
 

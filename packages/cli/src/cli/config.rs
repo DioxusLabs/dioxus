@@ -79,7 +79,8 @@ impl Config {
             Config::FormatPrint {} => {
                 println!(
                     "{:#?}",
-                    crate::dioxus_crate::DioxusCrate::new(None)?.dioxus_config
+                    crate::dioxus_crate::DioxusCrate::new(None, None, None, Vec::new())?
+                        .dioxus_config
                 );
             }
             Config::CustomHtml {} => {

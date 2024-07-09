@@ -52,13 +52,12 @@ async fn main() -> anyhow::Result<()> {
             .context(error_wrapper("Error with linker passthrough")),
 
         action => {
-            let bin = get_bin(args.bin)?;
-            let dioxus_crate =
-                DioxusCrate::new(Some(bin.clone())).context("Failed to load Dioxus workspace")?;
+            let mut dioxus_crate = DioxusCrate::new(None, None, None, Vec::new())
+                .context("Failed to load Dioxus workspace")?;
 
             match action {
                 Build(mut opts) => opts
-                    .build(dioxus_crate)
+                    .build(&mut dioxus_crate)
                     .await
                     .context(error_wrapper("Building project failed")),
 
@@ -80,30 +79,6 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     }
-}
-
-fn get_bin(bin: Option<String>) -> Result<PathBuf> {
-    let metadata = cargo_metadata::MetadataCommand::new()
-        .exec()
-        .map_err(Error::CargoMetadata)?;
-    let package = if let Some(bin) = bin {
-        metadata
-            .workspace_packages()
-            .into_iter()
-            .find(|p| p.name == bin)
-            .ok_or(Error::CargoError(format!("no such package: {}", bin)))?
-    } else {
-        metadata
-            .root_package()
-            .ok_or(Error::CargoError("no root package?".to_string()))?
-    };
-
-    let crate_dir = package
-        .manifest_path
-        .parent()
-        .ok_or(Error::CargoError("couldn't take parent dir".to_string()))?;
-
-    Ok(crate_dir.into())
 }
 
 /// Simplifies error messages that use the same pattern.

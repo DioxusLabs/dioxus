@@ -52,7 +52,7 @@ impl Watcher {
         // Watch the specified paths
         // todo: make sure we don't double-watch paths if they're nested
         for sub_path in allow_watch_path {
-            let path = &config.crate_dir.join(sub_path);
+            let path = &config.crate_dir().join(sub_path);
             let mode = notify::RecursiveMode::Recursive;
 
             use notify::Watcher;
@@ -63,7 +63,7 @@ impl Watcher {
 
         // Probe the entire project looking for our rsx calls
         // Whenever we get an update from the file watcher, we'll try to hotreload against this file map
-        let file_map = FileMap::create::<HtmlCtx>(config.crate_dir.clone()).unwrap();
+        let file_map = FileMap::create::<HtmlCtx>(config.crate_dir()).unwrap();
 
         Self {
             tx,
@@ -155,7 +155,7 @@ impl Watcher {
         }
 
         // If we have any changes to the rust files, we need to update the file map
-        let crate_dir = config.crate_dir.clone();
+        let crate_dir = config.crate_dir();
         let mut changed_templates = vec![];
 
         for rust_file in edited_rust_files {

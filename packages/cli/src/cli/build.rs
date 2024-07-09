@@ -72,11 +72,6 @@ pub struct Build {
 
 impl Build {
     pub fn resolve(&mut self, dioxus_crate: &mut DioxusCrate) -> Result<()> {
-        // Forward the build arguments to the resolved config
-        if self.example.is_some() {
-            dioxus_crate.as_example(self.example.clone().unwrap());
-        }
-
         // Inherit the platform from the defaults
         let platform = self
             .platform
@@ -90,7 +85,7 @@ impl Build {
         Ok(())
     }
 
-    pub async fn build(&mut self, mut dioxus_crate: DioxusCrate) -> Result<()> {
+    pub async fn build(&mut self, mut dioxus_crate: &mut DioxusCrate) -> Result<()> {
         self.resolve(&mut dioxus_crate)?;
         let build_requests = BuildRequest::create(false, dioxus_crate, self.clone());
         BuildRequest::build_all_parallel(build_requests).await?;
@@ -100,11 +95,9 @@ impl Build {
     fn auto_detect_platform(&self, resolved: &DioxusCrate) -> Platform {
         use cargo_toml::Dependency::{Detailed, Inherited, Simple};
 
-        if let Some(dependency) = &resolved.manifest.dependencies.get("dioxus") {
-            let features = match dependency {
-                Inherited(detail) => detail.features.to_vec(),
-                Detailed(detail) => detail.features.to_vec(),
-                Simple(_) => vec![],
+        for dioxus in resolved.krates.krates_by_name("dioxus") {
+            let Some(features) = resolved.krates.get_enabled_features(dioxus.kid) else {
+                continue;
             };
 
             if let Some(platform) = features

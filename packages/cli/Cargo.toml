@@ -40,7 +40,7 @@ hyper-rustls = { workspace = true }
 subprocess = "0.2.9"
 rayon = "1.8.0"
 futures-channel = { workspace = true }
-krates = { version = "0.16.6" }
+krates = { version = "0.17.0" }
 axum = { workspace = true, features = ["ws"] }
 axum-server = { workspace = true, features = ["tls-rustls"] }
 axum-extra = { workspace = true, features = ["typed-header"] }

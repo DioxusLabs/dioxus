@@ -77,17 +77,12 @@ impl Bundle {
         self.build_arguments.resolve(&mut dioxus_crate)?;
 
         // Build the app
-        self.build_arguments.build(dioxus_crate.clone()).await?;
+        self.build_arguments.build(&mut dioxus_crate).await?;
 
         // copy the binary to the out dir
-        let package = dioxus_crate.manifest.package.as_ref().unwrap();
+        let package = dioxus_crate.package();
 
-        let mut name: PathBuf = match &dioxus_crate.executable {
-            ExecutableType::Binary(name)
-            | ExecutableType::Lib(name)
-            | ExecutableType::Example(name) => name,
-        }
-        .into();
+        let mut name: PathBuf = dioxus_crate.executable_name().into();
         if cfg!(windows) {
             name.set_extension("exe");
         }
@@ -95,7 +90,7 @@ impl Bundle {
         // bundle the app
         let binaries = vec![
             tauri_bundler::BundleBinary::new(name.display().to_string(), true)
-                .set_src_path(Some(dioxus_crate.crate_dir.display().to_string())),
+                .set_src_path(Some(dioxus_crate.workspace_dir().display().to_string())),
         ];
 
         let mut bundle_settings: BundleSettings = dioxus_crate.dioxus_config.bundle.clone().into();
@@ -132,7 +127,7 @@ impl Bundle {
         let static_asset_output_dir = &dioxus_crate.dioxus_config.application.out_dir;
         // Make sure the dist directory is relative to the crate directory
         let static_asset_output_dir = static_asset_output_dir
-            .strip_prefix(&dioxus_crate.crate_dir)
+            .strip_prefix(&dioxus_crate.workspace_dir())
             .unwrap_or(static_asset_output_dir);
 
         let static_asset_output_dir = static_asset_output_dir.display().to_string();
@@ -168,10 +163,10 @@ impl Bundle {
             .project_out_directory(dioxus_crate.out_dir())
             .package_settings(PackageSettings {
                 product_name: dioxus_crate.dioxus_config.application.name.clone(),
-                version: package.version().to_string(),
-                description: package.description().unwrap_or_default().to_string(),
-                homepage: Some(package.homepage().unwrap_or_default().to_string()),
-                authors: Some(Vec::from(package.authors())),
+                version: package.version.to_string(),
+                description: package.description.clone().unwrap_or_default(),
+                homepage: Some(package.homepage.clone().unwrap_or_default()),
+                authors: Some(package.authors.clone()),
                 default_run: Some(dioxus_crate.dioxus_config.application.name.clone()),
             })
             .binaries(binaries)
