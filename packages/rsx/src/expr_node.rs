@@ -23,10 +23,7 @@ impl ToTokens for ExprNode {
         let expr = &self.expr;
         tokens.append_all(quote! {
             {
-                let ___nodes = ({
-                    #expr
-                }).into_dyn_node();
-
+                let ___nodes = ({ #expr }).into_dyn_node();
                 ___nodes
             }
         })

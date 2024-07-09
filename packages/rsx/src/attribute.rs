@@ -118,10 +118,6 @@ impl Attribute {
         self.as_static_str_literal().is_some()
     }
 
-    pub fn matches_attr_name(&self, other: &Self) -> bool {
-        self.name == other.name
-    }
-
     pub fn to_template_attribute<Ctx: HotReloadingContext>(
         &self,
         rust_name: &str,

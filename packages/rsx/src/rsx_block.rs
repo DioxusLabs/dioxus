@@ -263,6 +263,7 @@ pub enum RsxItem {
     Spread(Spread),
     Child(BodyNode),
 }
+
 impl RsxItem {
     pub fn span(&self) -> Span {
         match self {

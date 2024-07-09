@@ -10,6 +10,7 @@ use syn::{
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
     spanned::Spanned,
+    token::Brace,
     Ident, LitStr, Result, Token,
 };
 
@@ -37,7 +38,7 @@ pub struct Element {
     pub children: Vec<BodyNode>,
 
     /// the brace of the `div { }`
-    pub brace: syn::token::Brace,
+    pub brace: Brace,
 
     /// A list of diagnostics that were generated during parsing. This element might be a valid rsx_block
     /// but not technically a valid element - these diagnostics tell us what's wrong and then are used
@@ -79,8 +80,6 @@ impl Parse for Element {
             });
         }
 
-        element.validate();
-
         Ok(element)
     }
 }
@@ -88,8 +87,8 @@ impl Parse for Element {
 impl ToTokens for Element {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let el = self;
-
         let el_name = &el.name;
+
         let ns = |name| match el_name {
             ElementName::Ident(i) => quote! { dioxus_elements::#i::#name },
             ElementName::Custom(_) => quote! { None },
@@ -100,44 +99,38 @@ impl ToTokens for Element {
             .iter()
             .map(|attr| {
                 // Rendering static attributes requires a bit more work than just a dynamic attrs
-                match attr.as_static_str_literal() {
-                    // If it's static, we'll take this little optimization
-                    Some((name, value)) => {
-                        let value = value.to_static().unwrap();
+                // Early return for dynamic attributes
+                let Some((name, value)) = attr.as_static_str_literal() else {
+                    let id = attr.dyn_idx.get();
+                    return quote! { dioxus_core::TemplateAttribute::Dynamic { id: #id  } };
+                };
 
-                        let ns = match name {
-                            AttributeName::BuiltIn(name) => ns(quote!(#name.1)),
-                            AttributeName::Custom(_) => quote!(None),
-                            AttributeName::Spread(_) => {
-                                unreachable!("spread attributes should not be static")
-                            }
-                        };
-
-                        let name = match (el_name, name) {
-                            (ElementName::Ident(_), AttributeName::BuiltIn(_)) => {
-                                quote! { dioxus_elements::#el_name::#name.0 }
-                            }
-                            //hmmmm I think we could just totokens this, but the to_string might be inserting quotes
-                            _ => {
-                                let as_string = name.to_string();
-                                quote! { #as_string }
-                            }
-                        };
-
-                        quote! {
-                            dioxus_core::TemplateAttribute::Static {
-                                name: #name,
-                                namespace: #ns,
-                                value: #value,
-                            }
-                        }
+                let ns = match name {
+                    AttributeName::BuiltIn(name) => ns(quote!(#name.1)),
+                    AttributeName::Custom(_) => quote!(None),
+                    AttributeName::Spread(_) => {
+                        unreachable!("spread attributes should not be static")
                     }
+                };
 
-                    // Otherwise, we'll just render it as a dynamic attribute
-                    // This will also insert the attribute into the dynamic_attributes list to assemble the final template
+                let name = match (el_name, name) {
+                    (ElementName::Ident(_), AttributeName::BuiltIn(_)) => {
+                        quote! { dioxus_elements::#el_name::#name.0 }
+                    }
+                    //hmmmm I think we could just totokens this, but the to_string might be inserting quotes
                     _ => {
-                        let id = attr.dyn_idx.get();
-                        quote! { dioxus_core::TemplateAttribute::Dynamic { id: #id  } }
+                        let as_string = name.to_string();
+                        quote! { #as_string }
+                    }
+                };
+
+                let value = value.to_static().unwrap();
+
+                quote! {
+                    dioxus_core::TemplateAttribute::Static {
+                        name: #name,
+                        namespace: #ns,
+                        value: #value,
                     }
                 }
             })
@@ -193,13 +186,6 @@ impl ToTokens for Element {
 }
 
 impl Element {
-    /// Throw warnings if there are any issues with the element
-    /// - invalid names
-    /// - issues merging attributes
-    /// - reserved keywords
-    /// idk what else
-    fn validate(&mut self) {}
-
     /// Collapses ifmt attributes into a single dynamic attribute using a space or `;` as a delimiter
     ///
     /// ```
