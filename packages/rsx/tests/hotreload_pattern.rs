@@ -2,7 +2,7 @@
 
 use dioxus_core::{prelude::Template, VNode};
 use dioxus_rsx::{
-    hot_reload::{diff_rsx, template_location, ChangedRsx, DiffResult},
+    hot_reload::{diff_rsx, template_location, ChangedRsx},
     hotreload::HotReloadedTemplate,
     CallBody, HotReloadingContext,
 };
@@ -49,7 +49,7 @@ fn can_hotreload(old: TokenStream, new: TokenStream) -> Option<HotReloadedTempla
     let new: CallBody = syn::parse2(new).unwrap();
 
     let location = "file:line:col:0";
-    let results = HotReloadedTemplate::new::<Mock>(&old, &new, location)?;
+    let results = HotReloadedTemplate::new::<Mock>(&old, &new, location, Default::default())?;
     Some(results)
 }
 
@@ -58,7 +58,7 @@ fn hotreload_callbody<Ctx: HotReloadingContext>(
     new: &CallBody,
     location: &'static str,
 ) -> Option<Vec<Template>> {
-    let results = HotReloadedTemplate::new::<Ctx>(old, new, location)?;
+    let results = HotReloadedTemplate::new::<Ctx>(old, new, location, Default::default())?;
     Some(results.templates)
 }
 
@@ -66,7 +66,7 @@ fn callbody_to_template<Ctx: HotReloadingContext>(
     old: &CallBody,
     location: &'static str,
 ) -> Option<Template> {
-    let results = HotReloadedTemplate::new::<Ctx>(old, old, location)?;
+    let results = HotReloadedTemplate::new::<Ctx>(old, old, location, Default::default())?;
     Some(results.templates.first().unwrap().clone())
 }
 
@@ -844,7 +844,7 @@ fn component_with_handlers() {
             id: 456.789,
             other: true,
             blah: "hello {world}",
-            on_click: |e| { println!("clicked") },
+            onclick: |e| { println!("clicked") },
         }
     };
 
@@ -855,7 +855,7 @@ fn component_with_handlers() {
             id: 789.456,
             other: false,
             blah: "goodbye {world}",
-            on_click: |e| { println!("clicked") },
+            onclick: |e| { println!("clicked") },
         }
     };
 

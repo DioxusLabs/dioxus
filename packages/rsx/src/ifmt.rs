@@ -111,13 +111,10 @@ impl IfmtInput {
         map
     }
 
-    pub fn fmt_segments(&self, other: &Self) -> Option<FmtedSegments> {
-        let a = self;
-        let b = other;
-
+    pub fn fmt_segments(old: &Self, new: &Self) -> Option<FmtedSegments> {
         // Make sure all the dynamic segments of b show up in a
-        for segment in b.segments.iter() {
-            if segment.is_formatted() && !a.segments.contains(segment) {
+        for segment in new.segments.iter() {
+            if segment.is_formatted() && !old.segments.contains(segment) {
                 return None;
             }
         }
@@ -126,7 +123,7 @@ impl IfmtInput {
         let mut out = vec![];
 
         // the original list of formatted segments
-        let mut fmted = a
+        let mut fmted = old
             .segments
             .iter()
             .flat_map(|f| match f {
@@ -137,7 +134,7 @@ impl IfmtInput {
             .map(|f| Some(f))
             .collect::<Vec<_>>();
 
-        for segment in b.segments.iter() {
+        for segment in new.segments.iter() {
             match segment {
                 crate::Segment::Literal(lit) => {
                     // create a &'static str by leaking the string
@@ -497,5 +494,12 @@ mod tests {
         );
         println!("{}", input.to_token_stream().pretty_unparse());
         dbg!(input.segments);
+    }
+
+    #[test]
+    fn fmt_segments() {
+        let left = syn::parse2::<IfmtInput>(quote! { "thing {abc}" }).unwrap();
+        let right = syn::parse2::<IfmtInput>(quote! { "thing" }).unwrap();
+        let segments = IfmtInput::fmt_segments(&left, &right).unwrap();
     }
 }

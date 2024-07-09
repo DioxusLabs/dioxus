@@ -1,4 +1,4 @@
-use dioxus_rsx::hot_reload::{diff_rsx, DiffResult};
+use dioxus_rsx::hot_reload::diff_rsx;
 use syn::File;
 
 macro_rules! assert_rsx_changed {
@@ -12,7 +12,7 @@ macro_rules! assert_rsx_changed {
             let old = include_str!(concat!("./valid/", stringify!($name), ".old.rsx"));
             let new = include_str!(concat!("./valid/", stringify!($name), ".new.rsx"));
             let (old, new) = load_files(old, new);
-            assert!(matches!( diff_rsx(&new, &old), DiffResult::RsxChanged { .. }));
+            assert!(diff_rsx(&new, &old).is_some());
         }
     };
 }
@@ -28,7 +28,7 @@ macro_rules! assert_code_changed {
             let old = include_str!(concat!("./invalid/", stringify!($name), ".old.rsx"));
             let new = include_str!(concat!("./invalid/", stringify!($name), ".new.rsx"));
             let (old, new) = load_files(old, new);
-            assert!(matches!(diff_rsx(&new, &old), DiffResult::CodeChanged(_) ));
+            assert!(diff_rsx(&new, &old).is_none());
         }
     };
 }

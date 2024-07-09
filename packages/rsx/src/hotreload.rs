@@ -308,7 +308,7 @@ impl HotReloadedTemplate {
     fn hotreload_text_node(&mut self, a: &TextNode, b: &TextNode) -> Option<()> {
         let idx = a.hr_idx.get();
         let location = self.make_location(idx);
-        let segments = a.input.fmt_segments(&b.input)?;
+        let segments = IfmtInput::fmt_segments(&a.input, &b.input)?;
         self.changed_lits
             .insert(location.to_string(), HotReloadLiteral::Fmted(segments));
 
@@ -352,6 +352,7 @@ impl HotReloadedTemplate {
         // If the score is 0, the name didn't match or the values didn't match
         // A score of usize::MAX means the attributes are the same
         if score == 0 {
+            panic!("Mismatched attributes: {:?} != {:?}", old_attr, new_attr);
             return None;
         }
 
@@ -375,9 +376,10 @@ impl HotReloadedTemplate {
             HotLiteralType::Float(f) => HotReloadLiteral::Float(f.base10_parse().unwrap()),
             HotLiteralType::Int(f) => HotReloadLiteral::Int(f.base10_parse().unwrap()),
             HotLiteralType::Bool(f) => HotReloadLiteral::Bool(f.value),
-            HotLiteralType::Fmted(f) => {
-                HotReloadLiteral::Fmted(f.fmt_segments(old_attr.ifmt().unwrap())?)
-            }
+            HotLiteralType::Fmted(new) => HotReloadLiteral::Fmted(
+                IfmtInput::fmt_segments(&old_attr.ifmt().unwrap(), &new)
+                    .expect("Fmt segments to generate"),
+            ),
         };
 
         self.changed_lits.insert(location, out);
