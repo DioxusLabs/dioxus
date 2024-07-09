@@ -163,23 +163,25 @@ impl DioxusCrate {
 
         let dioxus_config = load_dioxus_config(&krates, package)?.unwrap_or_default();
 
+        let package_name = krates[package].name.clone();
         let target_kind = if target.example.is_some() {
             TargetKind::Example
         } else {
             TargetKind::Bin
         };
-        let target_name = target.example.clone().or(target.bin.clone());
+        let target_name = target
+            .example
+            .clone()
+            .or(target.bin.clone())
+            .unwrap_or(package_name);
         let main_package = &krates[package];
         let target = main_package
             .targets
             .iter()
             .find(|target| {
-                target_name.as_deref() == Some(target.name.as_str())
-                    && target.kind.contains(&target_kind)
+                target_name == target.name.as_str() && target.kind.contains(&target_kind)
             })
-            .ok_or(CrateConfigError::TargetNotFound(
-                target_name.unwrap_or_else(|| main_package.name.clone()),
-            ))?
+            .ok_or(CrateConfigError::TargetNotFound(target_name))?
             .clone();
 
         Ok(Self {
