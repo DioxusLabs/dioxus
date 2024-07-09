@@ -14,6 +14,7 @@ use dioxus_html::{native_bind::NativeFileEngine, HasFileData, HtmlEvent, Platfor
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
+    path::PathBuf,
     rc::Rc,
     sync::Arc,
 };
@@ -148,31 +149,28 @@ impl App {
         not(target_os = "ios")
     ))]
     pub fn connect_hotreload(&self) {
-        // let Ok(cfg) = dioxus_cli_config::CURRENT_CONFIG.as_ref() else {
-        //     return;
-        // };
+        let Some(cfg) = dioxus_cli_config::ServeArguments::from_cli() else {
+            return;
+        };
 
         let proxy = self.shared.proxy.clone();
+        let port = cfg.port;
 
         tokio::task::spawn(async move {
             let receiver = dioxus_hot_reload::NativeReceiver::create(format!(
                 "ws://0.0.0.0:{}/{}",
-                dioxus_cli_config::ServeArguments::from_cli().unwrap().port,
+                port,
                 dioxus_hot_reload::HOTRELOAD_ENDPOINT,
             ))
             .await;
 
-            match receiver {
-                Ok(mut receiver) => {
-                    while let Some(Ok(msg)) = receiver.next().await {
-                        println!("HotReload: {:?}", msg);
+            let Ok(mut receiver) = receiver else {
+                eprintln!("Failed to start hotreload server");
+                return;
+            };
 
-                        _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
-                    }
-                }
-                Err(err) => {
-                    panic!("HotReload failed to start {}", err);
-                }
+            while let Some(Ok(msg)) = receiver.next().await {
+                _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
             }
         });
     }
@@ -474,12 +472,9 @@ impl App {
                 monitor: monitor.name().unwrap().to_string(),
             };
 
+            // Yes... I know... we're loading a file that might not be ours... but it's a debug feature
             if let Ok(state) = serde_json::to_string(&state) {
-                // Write this to the target dir so we can pick back up in resume_from_state
-                // if let Ok(cfg) = dioxus_cli_config::CURRENT_CONFIG.as_ref() {
-                //     let path = cfg.target_dir.join("window_state.json");
-                //     _ = std::fs::write(path, state);
-                // }
+                _ = std::fs::write(restore_file(), state);
             }
         }
     }
@@ -487,19 +482,14 @@ impl App {
     // Write this to the target dir so we can pick back up
     #[cfg(debug_assertions)]
     fn resume_from_state(&mut self, webview: &WebviewInstance) {
-        if let Ok(cfg) = dioxus_cli_config::CURRENT_CONFIG.as_ref() {
-            // let path = cfg.target_dir.join("window_state.json");
-            // if let Ok(state) = std::fs::read_to_string(path) {
-            //     if let Ok(state) = serde_json::from_str::<PreservedWindowState>(&state) {
-            //         let window = &webview.desktop_context.window;
-            //         let position = (state.x, state.y);
-            //         let size = (state.width, state.height);
-            //         window.set_outer_position(tao::dpi::PhysicalPosition::new(
-            //             position.0, position.1,
-            //         ));
-            //         window.set_inner_size(tao::dpi::PhysicalSize::new(size.0, size.1));
-            //     }
-            // }
+        if let Ok(state) = std::fs::read_to_string(restore_file()) {
+            if let Ok(state) = serde_json::from_str::<PreservedWindowState>(&state) {
+                let window = &webview.desktop_context.window;
+                let position = (state.x, state.y);
+                let size = (state.width, state.height);
+                window.set_outer_position(tao::dpi::PhysicalPosition::new(position.0, position.1));
+                window.set_inner_size(tao::dpi::PhysicalSize::new(size.0, size.1));
+            }
         }
     }
 
@@ -567,4 +557,24 @@ pub fn hide_app_window(window: &wry::WebView) {
             let _: () = msg_send![app, hide: nil];
         });
     }
+}
+
+/// Return the location of a tempfile with our window state in it such that we can restore it later
+fn restore_file() -> PathBuf {
+    /// Get the name of the program or default to "dioxus" so we can hash it
+    fn get_prog_name_or_default() -> Option<String> {
+        Some(
+            std::env::current_exe()
+                .ok()?
+                .file_name()?
+                .to_str()?
+                .to_string(),
+        )
+    }
+
+    let name = get_prog_name_or_default().unwrap_or_else(|| "dioxus".to_string());
+    let hashed_id = name.chars().map(|c| c as usize).sum::<usize>();
+    let mut path = std::env::temp_dir();
+    path.push(format!("{}-window-state.json", hashed_id));
+    path
 }
