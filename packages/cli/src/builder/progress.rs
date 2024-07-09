@@ -69,7 +69,9 @@ impl UpdateBuildProgress {
             UpdateStage::AddMessage(message) => {
                 println!("{}", message.message);
             }
-            UpdateStage::SetProgress(progress) => {}
+            UpdateStage::SetProgress(progress) => {
+                println!("Build progress {:0.0}%", progress * 100.0);
+            }
         }
     }
 }
@@ -103,6 +105,7 @@ impl From<Diagnostic> for BuildMessage {
 }
 
 pub(crate) async fn build_cargo(
+    crate_count: usize,
     mut cmd: tokio::process::Command,
     progress: &Sender<UpdateBuildProgress>,
 ) -> anyhow::Result<CargoBuildResult> {
@@ -116,6 +119,7 @@ pub(crate) async fn build_cargo(
     let mut output_location = None;
 
     let mut lines = reader.lines();
+    let mut crates_compiled = 0;
     while let Ok(Some(line)) = lines.next_line().await {
         let mut deserializer = serde_json::Deserializer::from_str(&line);
         deserializer.disable_recursion_limit();
@@ -141,8 +145,15 @@ pub(crate) async fn build_cargo(
                 }
             }
             Message::CompilerArtifact(artifact) => {
+                crates_compiled += 1;
                 if let Some(executable) = artifact.executable {
                     output_location = Some(executable.into());
+                } else {
+                    let build_progress = crates_compiled as f64 / crate_count as f64;
+                    _ = progress.try_send(UpdateBuildProgress {
+                        stage: Stage::Compiling,
+                        update: UpdateStage::SetProgress((build_progress).clamp(0.0, 0.97)),
+                    });
                 }
             }
             Message::BuildFinished(finished) => {

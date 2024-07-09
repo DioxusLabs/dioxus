@@ -12,6 +12,7 @@ use crate::builder::progress::UpdateStage;
 use crate::link::LinkCommand;
 use crate::ExecutableType;
 use crate::Result;
+use dioxus_html::b;
 use manganis_cli_support::ManganisSupportGuard;
 use std::env;
 use std::fs::create_dir_all;
@@ -103,7 +104,16 @@ impl BuildRequest {
         let (cmd, cargo_args) = self.prepare_build_command()?;
 
         // Run the build command with a pretty loader
-        let cargo_result = build_cargo(cmd, &progress).await?;
+        // TODO: use https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#unit-graph once it is stable
+        let crate_count: usize = self
+            .config
+            .krates
+            .krates_filtered(krates::DepKind::Dev)
+            .iter()
+            .map(|k| k.targets.len())
+            .sum::<usize>()
+            / 4;
+        let cargo_result = build_cargo(crate_count, cmd, &progress).await?;
 
         // Post process the build result
         let build_result = self
