@@ -41,11 +41,13 @@ indicatif = "0.17.5"
 subprocess = "0.2.9"
 rayon = "1.8.0"
 futures-channel = { workspace = true }
-
+krates = { version = "0.16.6" }
 axum = { workspace = true, features = ["ws"] }
 axum-server = { workspace = true, features = ["tls-rustls"] }
 axum-extra = { workspace = true, features = ["typed-header"] }
 tower-http = { workspace = true, features = ["full"] }
+proc-macro2 = { workspace = true, features = ["span-locations"] }
+syn = { workspace = true, features = ["full", "extra-traits", "visit", "visit-mut"] }
 
 headers = "0.3.7"
 walkdir = "2"
@@ -74,7 +76,7 @@ toml_edit = "0.21.0"
 tauri-bundler = { version = "=1.4.*", features = ["native-tls-vendored"] }
 
 # formatting
-syn = { workspace = true }
+# syn = { workspace = true }
 prettyplease = { workspace = true }
 
 # Assets

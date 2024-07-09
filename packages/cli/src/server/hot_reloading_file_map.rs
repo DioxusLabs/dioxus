@@ -1,8 +1,10 @@
-use super::{hot_reload_diff::diff_rsx, ChangedRsx};
-use crate::{innerlude::CallBody, HotReloadedTemplate, HotReloadingContext};
 use dioxus_core::{
     prelude::{HotReloadLiteral, HotreloadedLiteral, TemplateAttribute, TemplateNode},
     Template,
+};
+use dioxus_rsx::{
+    hot_reload::{diff_rsx, ChangedRsx},
+    CallBody, HotReloadedTemplate, HotReloadingContext,
 };
 use krates::cm::MetadataCommand;
 use krates::Cmd;
@@ -159,7 +161,7 @@ impl FileMap {
             let leaked_location = Box::leak(template_location(old_start, file).into_boxed_str());
 
             // Returns a list of templates that are hotreloadable
-            let hotreload_result = crate::hotreload::HotReloadedTemplate::new::<Ctx>(
+            let hotreload_result = dioxus_rsx::hotreload::HotReloadedTemplate::new::<Ctx>(
                 &old_call_body,
                 &new_call_body,
                 leaked_location,
@@ -251,9 +253,9 @@ pub fn template_location(old_start: proc_macro2::LineColumn, file: &Path) -> Str
 
     path
         + ":"
-        + &line.to_string()
+        + line.to_string().as_str()
         + ":"
-        + &column.to_string()
+        + column.to_string().as_str()
         // the byte index doesn't matter, but dioxus needs it
         + ":0"
 }

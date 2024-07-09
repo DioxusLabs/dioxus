@@ -4,6 +4,7 @@ use crate::Result;
 use tokio::task::yield_now;
 
 mod builder;
+mod hot_reloading_file_map;
 mod output;
 mod proxy;
 mod server;

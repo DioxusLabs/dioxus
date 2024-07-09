@@ -19,22 +19,19 @@ dioxus-core = { workspace = true, optional = true }
 syn = { workspace = true, features = ["full", "extra-traits", "visit", "visit-mut"] }
 serde = { workspace = true, features = ["derive"], optional = true }
 internment = { version = "0.7.0", optional = true }
-krates = { version = "0.16.6", optional = true }
 tracing = { workspace = true }
 proc-macro2-diagnostics = { version = "0.10", default-features = false }
 
 # todo: remove this or something
 prettier-please = { version = "*" }
 
-
 [features]
 default = ["hot_reload"]
 hot_reload_traits = []
-hot_reload = ["dep:krates", "dep:internment", "dep:dioxus-core", "hot_reload_traits", "serde"]
+hot_reload = ["dep:internment", "dep:dioxus-core", "hot_reload_traits", "serde"]
 serde = ["dep:serde", "dioxus-core/serialize"]
 
 [dev-dependencies]
-insta = "1.36.1"
 prettyplease = { workspace = true }
 
 

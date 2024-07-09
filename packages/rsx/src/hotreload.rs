@@ -352,7 +352,6 @@ impl HotReloadedTemplate {
         // If the score is 0, the name didn't match or the values didn't match
         // A score of usize::MAX means the attributes are the same
         if score == 0 {
-            panic!("Mismatched attributes: {:?} != {:?}", old_attr, new_attr);
             return None;
         }
 

@@ -2289,12 +2289,14 @@ dependencies = [
  "hyper-util",
  "ignore",
  "indicatif",
+ "krates",
  "log",
  "manganis-cli-support",
  "notify",
  "once_cell",
  "open",
  "prettyplease",
+ "proc-macro2",
  "rayon",
  "reqwest 0.11.27",
  "rsx-rosetta",
@@ -2764,9 +2766,7 @@ name = "dioxus-rsx"
 version = "0.5.2"
 dependencies = [
  "dioxus-core 0.5.2",
- "insta",
  "internment",
- "krates",
  "prettier-please",
  "prettyplease",
  "proc-macro2",
@@ -5192,18 +5192,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a0c10553d664a4d0bcff9f4215d0aac67a639cc68ef660840afe309b807bc9f5"
 dependencies = [
  "generic-array 0.14.7",
-]
-
-[[package]]
-name = "insta"
-version = "1.39.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "810ae6042d48e2c9e9215043563a58a80b877bc863228a74cf10c49d4620a6f5"
-dependencies = [
- "console",
- "lazy_static",
- "linked-hash-map",
- "similar",
 ]
 
 [[package]]
@@ -8568,12 +8556,6 @@ name = "simdutf8"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f27f6278552951f1f2b8cf9da965d10969b2efdea95a6ec47987ab46edfe263a"
-
-[[package]]
-name = "similar"
-version = "2.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa42c91313f1d05da9b26f267f931cf178d4aba455b4c4622dd7355eb80c6640"
 
 [[package]]
 name = "simple-static-generation"

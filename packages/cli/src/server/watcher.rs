@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 
 use crate::dioxus_crate::DioxusCrate;
+use crate::server::hot_reloading_file_map::FileMap;
 use dioxus_hot_reload::HotReloadMsg;
 use dioxus_html::HtmlCtx;
-use dioxus_rsx::hot_reload::FileMap;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
 use notify::{
