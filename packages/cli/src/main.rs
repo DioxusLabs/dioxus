@@ -63,7 +63,7 @@ async fn main() -> anyhow::Result<()> {
                     .context(error_wrapper("Building project failed")),
 
                 Clean(opts) => opts
-                    .clean(Some(bin.clone()))
+                    .clean(dioxus_crate)
                     .context(error_wrapper("Cleaning project failed")),
 
                 Serve(opts) => opts

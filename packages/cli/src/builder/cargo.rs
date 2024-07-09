@@ -125,7 +125,7 @@ impl BuildRequest {
         progress: &Sender<UpdateBuildProgress>,
     ) -> Result<BuildResult> {
         _ = progress.try_send(UpdateBuildProgress {
-            stage: Stage::OptimizingWasm,
+            stage: Stage::OptimizingAssets,
             update: UpdateStage::Start,
         });
 
@@ -177,7 +177,7 @@ impl BuildRequest {
 
         // If this is a web build, run web post processing steps
         if self.web {
-            self.post_process_web_build(&build_result).await?;
+            self.post_process_web_build(&build_result, progress).await?;
         }
 
         Ok(build_result)

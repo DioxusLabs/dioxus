@@ -108,7 +108,16 @@ impl BuildRequest {
     }
 
     /// Post process the WASM build artifacts
-    pub(crate) async fn post_process_web_build(&self, build_result: &BuildResult) -> Result<()> {
+    pub(crate) async fn post_process_web_build(
+        &self,
+        build_result: &BuildResult,
+        progress: &Sender<UpdateBuildProgress>,
+    ) -> Result<()> {
+        _ = progress.try_send(UpdateBuildProgress {
+            stage: Stage::OptimizingAssets,
+            update: UpdateStage::Start,
+        });
+
         // Find the wasm file
         let output_location = build_result.executable.clone();
         let input_path = output_location.with_extension("wasm");

@@ -80,9 +80,9 @@ pub enum UpdateStage {
     SetProgress(f64),
 }
 
-struct BuildMessage {
-    level: Level,
-    message: String,
+pub struct BuildMessage {
+    pub level: Level,
+    pub message: String,
 }
 
 impl From<Diagnostic> for BuildMessage {
@@ -138,6 +138,11 @@ pub(crate) async fn build_cargo(
                         });
                     }
                     _ => {}
+                }
+            }
+            Message::CompilerArtifact(artifact) => {
+                if let Some(executable) = artifact.executable {
+                    output_location = Some(executable.into());
                 }
             }
             Message::BuildFinished(finished) => {
