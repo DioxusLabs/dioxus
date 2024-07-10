@@ -2408,6 +2408,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "toml 0.8.14",
  "toml_edit 0.22.15",
  "tower",

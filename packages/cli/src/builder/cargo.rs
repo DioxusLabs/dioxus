@@ -12,6 +12,7 @@ use crate::builder::progress::UpdateStage;
 use crate::link::LinkCommand;
 use crate::ExecutableType;
 use crate::Result;
+use anyhow::Context;
 use futures_channel::mpsc::{Receiver, Sender};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::SinkExt;
@@ -117,12 +118,15 @@ impl BuildRequest {
             .map(|k| k.targets.len())
             .sum::<usize>()
             / 4;
-        let cargo_result = build_cargo(crate_count, cmd, &mut progress).await?;
+        let cargo_result = build_cargo(crate_count, cmd, &mut progress)
+            .await
+            .context("Failed to build project")?;
 
         // Post process the build result
         let build_result = self
             .post_process_build(cargo_args, &cargo_result, start_time, &mut progress)
-            .await?;
+            .await
+            .context("Failed to post process build")?;
 
         tracing::info!(
             "🚩 Build completed: [./{}]",

@@ -1,8 +1,10 @@
 //! Report progress about the build to the user. We use channels to report progress back to the CLI.
 
+use anyhow::Context;
 use cargo_metadata::CompilerMessage;
 use cargo_metadata::{diagnostic::Diagnostic, Message};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use futures_util::stream::select_all;
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use std::io::{self, IsTerminal};
@@ -101,19 +103,32 @@ pub(crate) async fn build_cargo(
         update: UpdateStage::Start,
     });
 
-    let stdout = cmd
+    let mut child = cmd
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .spawn()?
-        .stderr
-        .take()
-        .unwrap();
-    let reader = tokio::io::BufReader::new(stdout);
+        .spawn()
+        .context("Failed to spawn cargo build")?;
+    let stdout = child.stdout.take().unwrap();
+    let stderr = child.stderr.take().unwrap();
+    let stdout = tokio::io::BufReader::new(stdout);
+    let stderr = tokio::io::BufReader::new(stderr);
     let mut output_location = None;
 
-    let mut lines = reader.lines();
+    let mut stdout = stdout.lines();
+    let mut stderr = stderr.lines();
     let mut crates_compiled = 0;
-    while let Ok(Some(line)) = lines.next_line().await {
+    loop {
+        let line = tokio::select! {
+            line = stdout.next_line() => {
+                line
+            }
+            line = stderr.next_line() => {
+                line
+            }
+        };
+        let Some(line) = line? else {
+            break;
+        };
         let mut deserializer = serde_json::Deserializer::from_str(&line);
         deserializer.disable_recursion_limit();
         let message = Message::deserialize(&mut deserializer).unwrap_or(Message::TextLine(line));
@@ -124,7 +139,12 @@ pub(crate) async fn build_cargo(
                     stage: Stage::Compiling,
                     update: UpdateStage::AddMessage(message.clone().into()),
                 });
-                if message.level == cargo_metadata::diagnostic::DiagnosticLevel::FailureNote {
+                const FATAL_LEVELS: &[cargo_metadata::diagnostic::DiagnosticLevel] = &[
+                    cargo_metadata::diagnostic::DiagnosticLevel::Error,
+                    cargo_metadata::diagnostic::DiagnosticLevel::FailureNote,
+                    cargo_metadata::diagnostic::DiagnosticLevel::Ice,
+                ];
+                if FATAL_LEVELS.contains(&message.level) {
                     return {
                         Err(anyhow::anyhow!(message
                             .rendered
