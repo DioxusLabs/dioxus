@@ -221,7 +221,7 @@ impl Output {
                         Span::from("[").magenta(),
                         Span::from(span.level.to_string()).white(),
                         Span::from("] ").magenta(),
-                        Span::from(span.message.clone()).gray(),
+                        Span::from(format!("{:#?}", span.message)).gray(),
                         Span::from("\n").magenta(),
                     ]);
                 }

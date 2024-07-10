@@ -23,19 +23,9 @@ use std::time::Instant;
 use tokio::process::Command;
 
 impl BuildRequest {
-    /// Create a build command for cargo
-    fn prepare_build_command(&self) -> Result<(tokio::process::Command, Vec<String>)> {
+    /// Create a list of arguments for cargo builds
+    pub(crate) fn build_arguments(&self) -> Vec<String> {
         let mut cargo_args = Vec::new();
-
-        let mut cmd = tokio::process::Command::new("cargo");
-        if let Some(target_dir) = &self.target_dir {
-            cmd.env("CARGO_TARGET_DIR", target_dir);
-        }
-        cmd.current_dir(&self.config.crate_dir())
-            .arg("build")
-            .arg("--message-format=json-render-diagnostics");
-
-        set_rust_flags(&mut cmd, self.rust_flags.clone());
 
         if self.build_arguments.release {
             cargo_args.push("--release".to_string());
@@ -69,7 +59,7 @@ impl BuildRequest {
 
         cargo_args.append(&mut self.build_arguments.cargo_args.clone());
 
-        match self.config.executable_type() {
+        match self.dioxus_crate.executable_type() {
             krates::cm::TargetKind::Bin => {
                 cargo_args.push("--bin".to_string());
             }
@@ -81,8 +71,24 @@ impl BuildRequest {
             }
             _ => {}
         };
-        cargo_args.push(self.config.executable_name().to_string());
+        cargo_args.push(self.dioxus_crate.executable_name().to_string());
 
+        cargo_args
+    }
+
+    /// Create a build command for cargo
+    fn prepare_build_command(&self) -> Result<(tokio::process::Command, Vec<String>)> {
+        let mut cmd = tokio::process::Command::new("cargo");
+        if let Some(target_dir) = &self.target_dir {
+            cmd.env("CARGO_TARGET_DIR", target_dir);
+        }
+        cmd.current_dir(&self.dioxus_crate.crate_dir())
+            .arg("build")
+            .arg("--message-format=json-render-diagnostics");
+
+        set_rust_flags(&mut cmd, self.rust_flags.clone());
+
+        let cargo_args = self.build_arguments();
         cmd.args(&cargo_args);
 
         Ok((cmd, cargo_args))
@@ -96,7 +102,7 @@ impl BuildRequest {
 
         // Set up runtime guards
         let start_time = std::time::Instant::now();
-        let _guard = dioxus_cli_config::__private::save_config(&self.config.dioxus_config);
+        let _guard = dioxus_cli_config::__private::save_config(&self.dioxus_crate.dioxus_config);
         let _manganis_support = ManganisSupportGuard::default();
         let _asset_guard = AssetConfigDropGuard::new();
 
@@ -109,15 +115,7 @@ impl BuildRequest {
         let (cmd, cargo_args) = self.prepare_build_command()?;
 
         // Run the build command with a pretty loader
-        // TODO: use https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#unit-graph once it is stable
-        let crate_count: usize = self
-            .config
-            .krates
-            .krates_filtered(krates::DepKind::Dev)
-            .iter()
-            .map(|k| k.targets.len())
-            .sum::<usize>()
-            / 4;
+        let crate_count = self.get_unit_count_estimate().await;
         let cargo_result = build_cargo(crate_count, cmd, &mut progress)
             .await
             .context("Failed to build project")?;
@@ -130,7 +128,7 @@ impl BuildRequest {
 
         tracing::info!(
             "🚩 Build completed: [./{}]",
-            self.config
+            self.dioxus_crate
                 .dioxus_config
                 .application
                 .out_dir
@@ -159,7 +157,7 @@ impl BuildRequest {
         });
 
         // Start Manganis linker intercept.
-        let linker_args = vec![format!("{}", self.config.out_dir().display())];
+        let linker_args = vec![format!("{}", self.dioxus_crate.out_dir().display())];
 
         manganis_cli_support::start_linker_intercept(
             &LinkCommand::command_name(),
@@ -167,9 +165,9 @@ impl BuildRequest {
             Some(linker_args),
         )?;
 
-        let file_name = self.config.executable_name();
+        let file_name = self.dioxus_crate.executable_name();
 
-        let out_dir = self.config.out_dir();
+        let out_dir = self.dioxus_crate.out_dir();
         if !out_dir.is_dir() {
             create_dir_all(&out_dir)?;
         }
@@ -186,11 +184,11 @@ impl BuildRequest {
         self.copy_assets_dir()?;
 
         let assets = if !self.build_arguments.skip_assets {
-            let assets = asset_manifest(&self.config);
+            let assets = asset_manifest(&self.dioxus_crate);
             // Collect assets
-            process_assets(&self.config, &assets)?;
+            process_assets(&self.dioxus_crate, &assets)?;
             // Create the __assets_head.html file for bundling
-            create_assets_head(&self.config, &assets)?;
+            create_assets_head(&self.dioxus_crate, &assets)?;
             Some(assets)
         } else {
             None
@@ -214,14 +212,14 @@ impl BuildRequest {
 
     pub fn copy_assets_dir(&self) -> anyhow::Result<()> {
         tracing::info!("Copying public assets to the output directory...");
-        let out_dir = self.config.out_dir();
-        let asset_dir = self.config.asset_dir();
+        let out_dir = self.dioxus_crate.out_dir();
+        let asset_dir = self.dioxus_crate.asset_dir();
 
         if asset_dir.is_dir() {
             // Only pre-compress the assets from the web build. Desktop assets are not served, so they don't need to be pre_compressed
             let pre_compress = self.web
                 && self
-                    .config
+                    .dioxus_crate
                     .should_pre_compress_web_assets(self.build_arguments.release);
 
             copy_dir_to(asset_dir, out_dir, pre_compress)?;

@@ -77,7 +77,7 @@ impl BuildRequest {
             web,
             serve,
             build_arguments: build.clone(),
-            config,
+            dioxus_crate: config,
             rust_flags: Some(rust_flags),
             target_dir,
         }

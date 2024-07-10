@@ -14,7 +14,10 @@ use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, Stdout};
 use tracing::Level;
 
-use crate::build::Build;
+use crate::build::{Build, TargetArgs};
+use crate::DioxusCrate;
+
+use super::BuildRequest;
 
 #[derive(Default, Debug)]
 pub enum Stage {
@@ -173,9 +176,12 @@ pub(crate) async fn build_cargo(
                     let build_progress = crates_compiled as f64 / crate_count as f64;
                     _ = progress.start_send(UpdateBuildProgress {
                         stage: Stage::Compiling,
-                        update: UpdateStage::SetProgress((build_progress).clamp(0.0, 0.97)),
+                        update: UpdateStage::SetProgress((build_progress).clamp(0.0, 1.00)),
                     });
                 }
+            }
+            Message::BuildScriptExecuted(_) => {
+                crates_compiled += 1;
             }
             Message::BuildFinished(finished) => {
                 if !finished.success {
@@ -202,4 +208,53 @@ pub(crate) async fn build_cargo(
 
 pub(crate) struct CargoBuildResult {
     pub(crate) output_location: Option<PathBuf>,
+}
+
+impl BuildRequest {
+    /// Try to get the unit graph for the crate. This is a nightly only feature which may not be available with the current version of rustc the user has installed.
+    async fn get_unit_count(&self) -> Option<usize> {
+        #[derive(Debug, Deserialize)]
+        struct UnitGraph {
+            units: Vec<serde_json::Value>,
+        }
+
+        let mut cmd = tokio::process::Command::new("cargo");
+        cmd.arg("+nightly");
+        cmd.arg("build");
+        cmd.arg("--unit-graph");
+        cmd.arg("-Z").arg("unstable-options");
+
+        cmd.args(self.build_arguments());
+
+        let output = cmd
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .await
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+
+        let output_text = String::from_utf8(output.stdout).ok()?;
+        let graph: UnitGraph = serde_json::from_str(&output_text).ok()?;
+
+        Some(graph.units.len())
+    }
+
+    /// Get an estimate of the number of units in the crate. If nightly rustc is not available, this will return an estimate of the number of units in the crate based on cargo metadata.
+    /// TODO: always use https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#unit-graph once it is stable
+    pub(crate) async fn get_unit_count_estimate(&self) -> usize {
+        // Try to get it from nightly
+        self.get_unit_count().await.unwrap_or_else(|| {
+            // Otherwise, use cargo metadata
+            self.dioxus_crate
+                .krates
+                .krates_filtered(krates::DepKind::Dev)
+                .iter()
+                .map(|k| k.targets.len())
+                .sum::<usize>()
+                / 4
+        })
+    }
 }

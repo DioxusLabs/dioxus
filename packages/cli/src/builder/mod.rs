@@ -22,7 +22,7 @@ pub struct BuildRequest {
     /// Whether this is a web build
     pub web: bool,
     /// The configuration for the crate we are building
-    pub config: DioxusCrate,
+    pub dioxus_crate: DioxusCrate,
     /// The arguments for the build
     pub build_arguments: Build,
     /// The rustc flags to pass to the build
@@ -34,11 +34,11 @@ pub struct BuildRequest {
 impl BuildRequest {
     pub fn create(
         serve: bool,
-        config: &DioxusCrate,
+        dioxus_crate: &DioxusCrate,
         build_arguments: impl Into<Build>,
     ) -> Vec<Self> {
         let build_arguments = build_arguments.into();
-        let config = config.clone();
+        let dioxus_crate = dioxus_crate.clone();
         let platform = build_arguments.platform.unwrap_or(Platform::Web);
         match platform {
             Platform::Web | Platform::Desktop => {
@@ -46,14 +46,14 @@ impl BuildRequest {
                 vec![Self {
                     serve,
                     web,
-                    config,
+                    dioxus_crate,
                     build_arguments,
                     rust_flags: Default::default(),
                     target_dir: Default::default(),
                 }]
             }
             Platform::StaticGeneration | Platform::Fullstack => {
-                Self::new_fullstack(config, build_arguments, serve)
+                Self::new_fullstack(dioxus_crate, build_arguments, serve)
             }
             _ => unimplemented!("Unknown platform: {platform:?}"),
         }

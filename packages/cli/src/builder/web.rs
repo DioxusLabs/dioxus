@@ -76,8 +76,8 @@ impl BuildRequest {
         let input_path = input_path.to_path_buf();
         let bindgen_outdir = bindgen_outdir.to_path_buf();
         let keep_debug =
-            self.config.dioxus_config.web.wasm_opt.debug || (!self.build_arguments.release);
-        let name = self.config.dioxus_config.application.name.clone();
+            self.dioxus_crate.dioxus_config.web.wasm_opt.debug || (!self.build_arguments.release);
+        let name = self.dioxus_crate.dioxus_config.application.name.clone();
         let run_wasm_bindgen = move || {
             // [3] Bindgen the final binary for use easy linking
             let mut bindgen_builder = Bindgen::new();
@@ -123,7 +123,7 @@ impl BuildRequest {
 
         // Create the index.html file
         let html = self.prepare_html(assets)?;
-        let html_path = self.config.out_dir().join("index.html");
+        let html_path = self.dioxus_crate.out_dir().join("index.html");
         std::fs::write(&html_path, html)?;
 
         // Find the wasm file
@@ -131,7 +131,7 @@ impl BuildRequest {
         let input_path = output_location.with_extension("wasm");
 
         // Create the directory where the bindgen output will be placed
-        let bindgen_outdir = self.config.out_dir().join("assets").join("dioxus");
+        let bindgen_outdir = self.dioxus_crate.out_dir().join("assets").join("dioxus");
 
         // Run wasm-bindgen
         self.run_wasm_bindgen(&input_path, &bindgen_outdir).await?;
@@ -139,7 +139,7 @@ impl BuildRequest {
         // Run wasm-opt if this is a release build
         if self.build_arguments.release {
             tracing::info!("Running optimization with wasm-opt...");
-            let mut options = match self.config.dioxus_config.web.wasm_opt.level {
+            let mut options = match self.dioxus_crate.dioxus_config.web.wasm_opt.level {
                 WasmOptLevel::Z => {
                     wasm_opt::OptimizationOptions::new_optimize_for_size_aggressively()
                 }
@@ -152,13 +152,13 @@ impl BuildRequest {
             };
             let wasm_file = bindgen_outdir.join(format!(
                 "{}_bg.wasm",
-                self.config.dioxus_config.application.name
+                self.dioxus_crate.dioxus_config.application.name
             ));
             let old_size = wasm_file.metadata()?.len();
             options
                 // WASM bindgen relies on reference types
                 .enable_feature(wasm_opt::Feature::ReferenceTypes)
-                .debug_info(self.config.dioxus_config.web.wasm_opt.debug)
+                .debug_info(self.dioxus_crate.dioxus_config.web.wasm_opt.debug)
                 .run(&wasm_file, &wasm_file)
                 .map_err(|err| Error::Other(anyhow::anyhow!(err)))?;
             let new_size = wasm_file.metadata()?.len();
@@ -172,7 +172,7 @@ impl BuildRequest {
 
         // If pre-compressing is enabled, we can pre_compress the wasm-bindgen output
         let pre_compress = self
-            .config
+            .dioxus_crate
             .should_pre_compress_web_assets(self.build_arguments.release);
         tokio::task::spawn_blocking(move || pre_compress_folder(&bindgen_outdir, pre_compress))
             .await

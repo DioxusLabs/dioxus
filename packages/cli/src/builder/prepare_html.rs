@@ -10,7 +10,7 @@ const DEFAULT_HTML: &str = include_str!("../../assets/index.html");
 
 impl BuildRequest {
     pub(crate) fn prepare_html(&self, assets: Option<&AssetManifest>) -> Result<String> {
-        let mut html = html_or_default(&self.config.crate_dir());
+        let mut html = html_or_default(&self.dioxus_crate.crate_dir());
 
         // Inject any resources from the config into the html
         self.inject_resources(&mut html, assets)?;
@@ -21,7 +21,7 @@ impl BuildRequest {
         // Replace any special placeholders in the HTML with resolved values
         self.replace_template_placeholders(&mut html);
 
-        let title = self.config.dioxus_config.web.app.title.clone();
+        let title = self.dioxus_crate.dioxus_config.web.app.title.clone();
 
         replace_or_insert_before("{app_title}", "</title", &title, &mut html);
 
@@ -31,7 +31,7 @@ impl BuildRequest {
     // Inject any resources from the config into the html
     fn inject_resources(&self, html: &mut String, assets: Option<&AssetManifest>) -> Result<()> {
         // Collect all resources into a list of styles and scripts
-        let resources = &self.config.dioxus_config.web.resource;
+        let resources = &self.dioxus_crate.dioxus_config.web.resource;
         let mut style_list = resources.style.clone().unwrap_or_default();
         let mut script_list = resources.script.clone().unwrap_or_default();
 
@@ -112,10 +112,10 @@ impl BuildRequest {
 
     /// Replace any special placeholders in the HTML with resolved values
     fn replace_template_placeholders(&self, html: &mut String) {
-        let base_path = self.config.dioxus_config.web.app.base_path();
+        let base_path = self.dioxus_crate.dioxus_config.web.app.base_path();
         *html = html.replace("{base_path}", base_path);
 
-        let app_name = &self.config.dioxus_config.application.name;
+        let app_name = &self.dioxus_crate.dioxus_config.application.name;
         *html = html.replace("{app_name}", app_name);
     }
 }
