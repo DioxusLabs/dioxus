@@ -73,17 +73,16 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                     continue;
                 }
 
-                // // if change is hotreloadable, hotreload it
-                // // and then send that update to all connected clients
-                // if let Some(hr) = watchr.attempt_hot_reload(&dioxus_crate) {
-                //     server.send_hotreload(hr).await;
-                //     continue;
-                // }
+                // if change is hotreloadable, hotreload it
+                // and then send that update to all connected clients
+                if let Some(hr) = watchr.attempt_hot_reload(&dioxus_crate) {
+                    server.send_hotreload(hr).await;
+                    continue;
+                }
 
                 // If the change is not binary patchable, rebuild the project
                 // We're going to kick off a new build, interrupting the current build if it's ongoing
                 buildr.build();
-                server.send_shutdown().await;
             }
 
             // reload the pag
