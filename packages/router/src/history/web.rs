@@ -96,8 +96,14 @@ impl<R: Routable> WebHistory<R> {
         }
 
         let prefix = prefix
+            // If there isn't a base path, try to grab one from the CLI
             .or_else(|| base_path().map(|s| s.to_string()))
-            .map(|prefix| format!("/{}", prefix.trim_matches('/')));
+            // Normalize the prefix to start and end with no slashes
+            .map(|prefix| prefix.trim_matches('/').to_string())
+            // If the prefix is empty, don't add it
+            .filter(|prefix| !prefix.is_empty())
+            // Otherwise, start with a slash
+            .map(|prefix| format!("/{prefix}"));
 
         Self {
             do_scroll_restoration,
@@ -214,10 +220,7 @@ where
     }
 
     fn replace(&mut self, state: R) {
-        let path = match &self.prefix {
-            None => format!("{state}"),
-            Some(prefix) => format!("{prefix}{state}"),
-        };
+        let path = self.full_path(&state);
 
         let state = self.create_state(state);
         self.handle_nav(replace_state_with_url(&self.history, &state, Some(&path)));
