@@ -2991,6 +2991,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
 
 [[package]]
+name = "dpi"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f25c0e292a7ca6d6498557ff1df68f32c99850012b6ea401cf8daf771f22ff53"
+
+[[package]]
 name = "dtoa"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10577,16 +10583,16 @@ dependencies = [
 
 [[package]]
 name = "webview2-com"
-version = "0.28.0"
+version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0ae9c7e420783826cf769d2c06ac9ba462f450eca5893bb8c6c6529a4e5dd33"
+checksum = "6516cfa64c6b3212686080eeec378e662c2af54bb2a5b2a22749673f5cb2226f"
 dependencies = [
  "webview2-com-macros",
  "webview2-com-sys",
- "windows 0.52.0",
- "windows-core 0.52.0",
- "windows-implement 0.52.0",
- "windows-interface 0.52.0",
+ "windows 0.57.0",
+ "windows-core 0.57.0",
+ "windows-implement 0.57.0",
+ "windows-interface 0.57.0",
 ]
 
 [[package]]
@@ -10602,13 +10608,13 @@ dependencies = [
 
 [[package]]
 name = "webview2-com-sys"
-version = "0.28.0"
+version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6ad85fceee6c42fa3d61239eba5a11401bf38407a849ed5ea1b407df08cca72"
+checksum = "c76d5b77320ff155660be1df3e6588bc85c75f1a9feef938cc4dc4dd60d1d7cf"
 dependencies = [
  "thiserror",
- "windows 0.52.0",
- "windows-core 0.52.0",
+ "windows 0.57.0",
+ "windows-core 0.57.0",
 ]
 
 [[package]]
@@ -10678,18 +10684,6 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 
 [[package]]
 name = "windows"
-version = "0.52.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e48a53791691ab099e5e2ad123536d0fff50652600abaf43bbf952894110d0be"
-dependencies = [
- "windows-core 0.52.0",
- "windows-implement 0.52.0",
- "windows-interface 0.52.0",
- "windows-targets 0.52.5",
-]
-
-[[package]]
-name = "windows"
 version = "0.54.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9252e5725dbed82865af151df558e754e4a3c2c30818359eb17465f1346a1b49"
@@ -10697,6 +10691,16 @@ dependencies = [
  "windows-core 0.54.0",
  "windows-implement 0.53.0",
  "windows-interface 0.53.0",
+ "windows-targets 0.52.5",
+]
+
+[[package]]
+name = "windows"
+version = "0.57.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12342cb4d8e3b046f3d80effd474a7a02447231330ef77d71daa6fbc40681143"
+dependencies = [
+ "windows-core 0.57.0",
  "windows-targets 0.52.5",
 ]
 
@@ -10720,14 +10724,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "windows-implement"
-version = "0.52.0"
+name = "windows-core"
+version = "0.57.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12168c33176773b86799be25e2a2ba07c7aab9968b37541f1094dbd7a60c8946"
+checksum = "d2ed2439a290666cd67ecce2b0ffaad89c2a56b976b736e6ece670297897832d"
 dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.68",
+ "windows-implement 0.57.0",
+ "windows-interface 0.57.0",
+ "windows-result",
+ "windows-targets 0.52.5",
 ]
 
 [[package]]
@@ -10742,10 +10747,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "windows-interface"
-version = "0.52.0"
+name = "windows-implement"
+version = "0.57.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d8dc32e0095a7eeccebd0e3f09e9509365ecb3fc6ac4d6f5f14a3f6392942d1"
+checksum = "9107ddc059d5b6fbfbffdfa7a7fe3e22a226def0b2608f72e9d552763d3e1ad7"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -10757,6 +10762,17 @@ name = "windows-interface"
 version = "0.53.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da33557140a288fae4e1d5f8873aaf9eb6613a9cf82c3e070223ff177f598b60"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.68",
+]
+
+[[package]]
+name = "windows-interface"
+version = "0.57.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29bee4b38ea3cde66011baa44dba677c432a78593e202392d1e9070cf2a7fca7"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -11026,26 +11042,25 @@ dependencies = [
 
 [[package]]
 name = "wry"
-version = "0.37.0"
+version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b717040ba9771fd88eb428c6ea6b555f8e734ff8534f02c13e8f10d97f5935e"
+checksum = "68b00c945786b02d7805d09a969fa36d0eee4e0bd4fb3ec2a79d2bf45a1b44cd"
 dependencies = [
- "base64 0.21.7",
+ "base64 0.22.1",
  "block",
- "cfg_aliases 0.1.1",
  "cocoa",
  "core-graphics",
  "crossbeam-channel",
+ "dpi",
  "dunce",
  "gdkx11",
  "gtk",
  "html5ever",
- "http 0.2.12",
+ "http 1.1.0",
  "javascriptcore-rs",
  "jni",
  "kuchikiki",
  "libc",
- "log",
  "ndk",
  "ndk-context",
  "ndk-sys",
@@ -11054,8 +11069,6 @@ dependencies = [
  "once_cell",
  "percent-encoding",
  "raw-window-handle 0.6.2",
- "serde",
- "serde_json",
  "sha2",
  "soup3",
  "tao-macros",
@@ -11063,8 +11076,8 @@ dependencies = [
  "webkit2gtk",
  "webkit2gtk-sys",
  "webview2-com",
- "windows 0.52.0",
- "windows-implement 0.52.0",
+ "windows 0.57.0",
+ "windows-core 0.57.0",
  "windows-version",
  "x11-dl",
 ]
