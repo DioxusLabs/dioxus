@@ -1260,39 +1260,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "cargo-lock"
-version = "9.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e11c675378efb449ed3ce8de78d75d0d80542fc98487c26aba28eb3b82feac72"
-dependencies = [
- "petgraph",
- "semver",
- "serde",
- "toml 0.7.8",
- "url",
-]
-
-[[package]]
 name = "cargo-platform"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "24b1f0365a6c6bb4020cd05806fd0d33c44d38046b8bd7f0e40814b9763cabfc"
 dependencies = [
  "serde",
-]
-
-[[package]]
-name = "cargo_metadata"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7daec1a2a2129eeba1644b220b4647ec537b0b5d4bfd6876fcc5a540056b592"
-dependencies = [
- "camino",
- "cargo-platform",
- "semver",
- "serde",
- "serde_json",
- "thiserror",
 ]
 
 [[package]]
@@ -1307,16 +1280,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
-]
-
-[[package]]
-name = "cargo_toml"
-version = "0.16.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3f9629bc6c4388ea699781dc988c2b99766d7679b151c81990b4fa1208fafd3"
-dependencies = [
- "serde",
- "toml 0.8.14",
 ]
 
 [[package]]
@@ -2228,6 +2191,7 @@ dependencies = [
  "dioxus-web",
  "env_logger 0.10.2",
  "futures-util",
+ "manganis",
  "rand 0.8.5",
  "serde",
  "thiserror",
@@ -2271,8 +2235,8 @@ dependencies = [
  "axum-server",
  "brotli 5.0.0",
  "cargo-generate",
- "cargo_metadata 0.18.1",
- "cargo_toml 0.18.0",
+ "cargo_metadata",
+ "cargo_toml",
  "chrono",
  "clap 4.5.8",
  "colored 2.1.0",
@@ -2335,7 +2299,7 @@ dependencies = [
 name = "dioxus-cli-config"
 version = "0.5.2"
 dependencies = [
- "cargo_toml 0.18.0",
+ "cargo_toml",
  "clap 4.5.8",
  "dirs",
  "once_cell",
@@ -5527,7 +5491,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7fcb3baf2360eb25ad31f0ada3add63927ada6db457791979b82ac199f835cb9"
 dependencies = [
  "cargo-platform",
- "cargo_metadata 0.18.1",
+ "cargo_metadata",
  "cfg-expr",
  "petgraph",
  "semver",
@@ -5923,8 +5887,7 @@ dependencies = [
 [[package]]
 name = "manganis"
 version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c211cfb4529c79b32307b606e83a1bb15d491b3b4a1ab97159b161d7af9d1b72"
+source = "git+https://github.com/DioxusLabs/collect-assets#ad09a549775957c5ce177274cfbb6dc76c976c10"
 dependencies = [
  "dioxus-core 0.5.1",
  "manganis-macro",
@@ -5933,28 +5896,23 @@ dependencies = [
 [[package]]
 name = "manganis-cli-support"
 version = "0.2.4"
-source = "git+https://github.com/DogeDark/dioxus-collect-assets/#6b6077150c854af6497d8b96d3a070635ab9b6c4"
+source = "git+https://github.com/DioxusLabs/collect-assets#ad09a549775957c5ce177274cfbb6dc76c976c10"
 dependencies = [
  "anyhow",
- "cargo-lock",
- "cargo_metadata 0.17.0",
- "cargo_toml 0.16.3",
  "image 0.25.1",
  "imagequant",
  "lightningcss",
- "manganis-common 0.2.4 (git+https://github.com/DogeDark/dioxus-collect-assets/)",
+ "manganis-common",
  "mozjpeg",
  "object",
- "petgraph",
  "png",
  "railwind",
  "ravif",
  "rayon",
- "reqwest 0.11.27",
+ "reqwest 0.12.5",
  "rustc-hash",
  "serde",
  "serde_json",
- "toml 0.7.8",
  "tracing",
  "url",
 ]
@@ -5962,30 +5920,13 @@ dependencies = [
 [[package]]
 name = "manganis-common"
 version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "542300f1e7d9313de5b7e5b92d273ba42ab547c068d773559d616aa14987de43"
+source = "git+https://github.com/DioxusLabs/collect-assets#ad09a549775957c5ce177274cfbb6dc76c976c10"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
  "home",
  "infer 0.11.0",
- "reqwest 0.11.27",
- "serde",
- "toml 0.7.8",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "manganis-common"
-version = "0.2.4"
-source = "git+https://github.com/DogeDark/dioxus-collect-assets/#6b6077150c854af6497d8b96d3a070635ab9b6c4"
-dependencies = [
- "anyhow",
- "base64 0.21.7",
- "home",
- "infer 0.11.0",
- "reqwest 0.11.27",
+ "reqwest 0.12.5",
  "serde",
  "toml 0.7.8",
  "tracing",
@@ -5995,12 +5936,12 @@ dependencies = [
 [[package]]
 name = "manganis-macro"
 version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "704a0123ac90fa630b21a04fde56c29dfd5a7665c5e8f3639567989daa2d29d1"
+source = "git+https://github.com/DioxusLabs/collect-assets#ad09a549775957c5ce177274cfbb6dc76c976c10"
 dependencies = [
- "manganis-common 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "manganis-common",
  "proc-macro2",
  "quote",
+ "serde_json",
  "syn 2.0.68",
  "tracing-subscriber",
 ]
@@ -7796,6 +7737,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "encoding_rs",
+ "futures-channel",
  "futures-core",
  "futures-util",
  "h2 0.4.5",

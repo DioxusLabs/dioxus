@@ -115,6 +115,10 @@ pub mod prelude {
     #[cfg(feature = "axum")]
     #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
     pub use axum;
+
+    #[cfg(feature = "asset")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "asset")))]
+    pub use manganis::{classes, mg as asset, ImageAsset, ImageType};
 }
 
 #[cfg(feature = "web")]
