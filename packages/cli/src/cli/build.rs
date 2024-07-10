@@ -122,8 +122,6 @@ impl Build {
     }
 
     fn auto_detect_platform(&self, resolved: &DioxusCrate) -> Platform {
-        
-
         for dioxus in resolved.krates.krates_by_name("dioxus") {
             println!("Found Dioxus crate: {:?}", dioxus.krate);
 

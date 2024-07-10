@@ -9,7 +9,6 @@ use std::process::Stdio;
 use tokio::io::AsyncBufReadExt;
 use tracing::Level;
 
-
 use super::BuildRequest;
 
 #[derive(Default, Debug)]

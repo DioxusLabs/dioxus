@@ -1,5 +1,5 @@
-use crate::DioxusCrate;
 use crate::build::Build;
+use crate::DioxusCrate;
 use anyhow::Context;
 use std::env::current_dir;
 use std::fs::create_dir_all;

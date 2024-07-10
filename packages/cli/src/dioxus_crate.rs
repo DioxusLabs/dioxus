@@ -86,13 +86,7 @@ fn find_main_package(package: Option<String>, krates: &Krates) -> Result<NodeId,
             let mut workspace_members = krates.workspace_members();
             workspace_members
                 .find_map(|node| {
-                    if let krates::Node::Krate {
-                        id,
-                        krate,
-                        
-                        ..
-                    } = node
-                    {
+                    if let krates::Node::Krate { id, krate, .. } = node {
                         if krate.name == package {
                             return Some(id);
                         }
@@ -108,13 +102,7 @@ fn find_main_package(package: Option<String>, krates: &Krates) -> Result<NodeId,
             // Go through each member and find the path that is a parent of the current directory
             let mut closest_parent = None;
             for member in krates.workspace_members() {
-                if let krates::Node::Krate {
-                    id,
-                    krate,
-                    
-                    ..
-                } = member
-                {
+                if let krates::Node::Krate { id, krate, .. } = member {
                     let member_path = krate.manifest_path.parent().unwrap();
                     if let Ok(path) = current_dir.strip_prefix(member_path.as_std_path()) {
                         let len = path.components().count();

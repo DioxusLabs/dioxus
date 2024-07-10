@@ -1,6 +1,8 @@
 use crate::dioxus_crate::DioxusCrate;
 use crate::serve::Serve;
 use crate::Result;
+use std::io::Write;
+use tokio::io::AsyncBufReadExt;
 use tokio::task::yield_now;
 
 mod builder;
@@ -100,6 +102,15 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                     match update {
                         BuildUpdate::BuildFinished(application) => {
                             // Display the process handle in the terminal
+                            for application in application {
+                                tokio::spawn(async move {
+                                    let mut log_file = std::fs::File::create("./log.txt").unwrap();
+                                    let mut lines = tokio::io::BufReader::new(application.stdout).lines();
+                                    while let Ok(Some(line)) = lines.next_line().await {
+                                        let _ = log_file.write_all(line.as_bytes());
+                                    }
+                                });
+                            }
                         }
                         BuildUpdate::BuildProgress { platform, update } => {
                             screen.new_build_logs(platform, update);

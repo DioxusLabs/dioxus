@@ -53,7 +53,6 @@ impl Server {
         let ip = serve
             .server_arguments
             .addr
-            .or_else(get_ip)
             .unwrap_or(IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)));
 
         let addr: SocketAddr = SocketAddr::from((ip, port));
@@ -351,11 +350,4 @@ pub(crate) fn open_browser(config: &DioxusCrate, ip: IpAddr, port: u16, https: b
         None => "".to_owned(),
     };
     _ = open::that(format!("{protocol}://{ip}:{port}{base_path}"));
-}
-
-/// Get the network ip
-fn get_ip() -> Option<IpAddr> {
-    let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
-    socket.connect("8.8.8.8:80").ok()?;
-    socket.local_addr().map(|addr| addr.ip()).ok()
 }

@@ -8,6 +8,7 @@ use dioxus_cli_config::Platform;
 use futures_channel::mpsc::UnboundedReceiver;
 use futures_util::stream::select_all;
 use futures_util::StreamExt;
+use std::process::Stdio;
 use tokio::process::ChildStderr;
 use tokio::process::ChildStdout;
 use tokio::{
@@ -130,6 +131,8 @@ impl Builder {
                 {
                     _ = Command::new("kill")
                         .args(["-s", "TERM", &pid.to_string()])
+                        .stderr(Stdio::null())
+                        .stdout(Stdio::null())
                         .spawn();
                 }
 
@@ -138,6 +141,8 @@ impl Builder {
                 {
                     _ = Command::new("taskkill")
                         .args(["/F", "/PID", &pid.to_string()])
+                        .stderr(Stdio::null())
+                        .stdout(Stdio::null())
                         .spawn();
                 }
             }
