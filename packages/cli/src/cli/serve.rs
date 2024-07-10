@@ -28,6 +28,7 @@ impl Serve {
     fn resolve(&mut self, crate_config: &mut DioxusCrate) -> Result<()> {
         // Set config settings
         let settings = settings::CliSettings::load();
+
         if self.server_arguments.hot_reload.is_none() {
             self.server_arguments.hot_reload = Some(settings.always_hot_reload.unwrap_or(true));
         }

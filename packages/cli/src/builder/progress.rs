@@ -16,7 +16,7 @@ use tracing::Level;
 
 use crate::build::Build;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub enum Stage {
     #[default]
     Initializing,
@@ -65,12 +65,14 @@ impl UpdateBuildProgress {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum UpdateStage {
     Start,
     AddMessage(BuildMessage),
     SetProgress(f64),
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct BuildMessage {
     pub level: Level,
     pub message: String,

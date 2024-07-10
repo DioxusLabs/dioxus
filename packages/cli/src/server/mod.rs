@@ -5,6 +5,7 @@ use tokio::task::yield_now;
 
 mod builder;
 mod hot_reloading_file_map;
+mod logs_tab;
 mod output;
 mod proxy;
 mod server;

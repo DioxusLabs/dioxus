@@ -125,6 +125,8 @@ impl Build {
         use cargo_toml::Dependency::{Detailed, Inherited, Simple};
 
         for dioxus in resolved.krates.krates_by_name("dioxus") {
+            println!("Found Dioxus crate: {:?}", dioxus.krate);
+
             let Some(features) = resolved.krates.get_enabled_features(dioxus.kid) else {
                 continue;
             };

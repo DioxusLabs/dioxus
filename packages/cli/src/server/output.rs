@@ -29,6 +29,9 @@ pub struct Output {
     dx_version: String,
     is_tty: bool,
     build_logs: HashMap<Platform, ActiveBuild>,
+    is_cli_release: bool,
+    platform: Platform,
+    fly_modal: FlyModal,
 }
 
 type TerminalBackend = Terminal<CrosstermBackend<io::Stdout>>;
@@ -60,14 +63,21 @@ impl Output {
 
         let mut dx_version = String::new();
 
-        if crate::dx_build_info::PROFILE != "release" {
+        dx_version.push_str(env!("CARGO_PKG_VERSION"));
+
+        let is_cli_release = crate::dx_build_info::PROFILE == "release";
+
+        if !is_cli_release {
             if let Some(hash) = crate::dx_build_info::GIT_COMMIT_HASH_SHORT {
                 let hash = &hash.trim_start_matches("g")[..4];
+                dx_version.push_str("-");
                 dx_version.push_str(hash);
-            } else {
-                dx_version.push_str(env!("CARGO_PKG_VERSION"));
             }
         }
+
+        let platform = cfg.build_arguments.platform.expect("To be resolved by now");
+
+        let fly_modal = FlyModal::new();
 
         Ok(Self {
             term,
@@ -77,6 +87,9 @@ impl Output {
             rustc_nightly,
             dx_version,
             is_tty,
+            is_cli_release,
+            platform,
+            fly_modal,
             build_logs: HashMap::new(),
         })
     }
@@ -96,8 +109,16 @@ impl Output {
             stdout().execute(LeaveAlternateScreen)?;
 
             // todo: print the build info here for the most recent build, and then the logs of the most recent build
-            println!("build output goes here");
-            println!("build logs go here");
+            for (platform, build) in self.build_logs.iter() {
+                if build.messages.is_empty() {
+                    println!("No build logs for {platform:?}");
+                    continue;
+                }
+                println!("Build logs for {platform:?}:");
+                for message in build.messages.iter() {
+                    println!("[{}] {}", message.level, message.message);
+                }
+            }
         }
 
         Ok(())
@@ -109,6 +130,15 @@ impl Output {
             if let KeyCode::Char('c') = key.code {
                 return Err(io::Error::new(io::ErrorKind::Interrupted, "Ctrl-C"));
             }
+        }
+
+        match input {
+            Event::Key(key) => {
+                if let KeyCode::Char('/') = key.code {
+                    self.fly_modal.hidden = !self.fly_modal.hidden;
+                }
+            }
+            _ => {}
         }
 
         Ok(())
@@ -136,227 +166,117 @@ impl Output {
             // a layout that has a title with stats about the program and then the actual console itself
             let body = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([Constraint::Length(1), Constraint::Min(0)].as_ref())
+                .constraints([Constraint::Length(2), Constraint::Min(0)].as_ref())
                 .split(frame.size());
 
             let header = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([Constraint::Min(20), Constraint::Fill(1)].as_ref())
+                .constraints([Constraint::Fill(1)].as_ref())
                 .split(body[0]);
 
             // Render a border for the header
-            frame.render_widget(Block::default().borders(Borders::TOP), body[1]);
+            frame.render_widget(Block::default().borders(Borders::BOTTOM), body[0]);
 
             // Render the metadata
-            frame.render_widget(
-                Paragraph::new(format!(
-                    "dx serve | rustc-{rust_version}{channel} | dx-v{dx_version}",
-                    rust_version = self.rustc_version,
-                    channel = if self.rustc_nightly { "-nightly" } else { "" },
-                    dx_version = self.dx_version
-                ))
-                .left_aligned(),
-                header[0],
-            );
+            let mut spans = vec![
+                Span::from(if self.is_cli_release { "dx" } else { "dx-dev" }).green(),
+                Span::from(" ").green(),
+                Span::from("serve").green(),
+                Span::from(" | ").white(),
+                Span::from("v").cyan(),
+                Span::from(self.dx_version.clone()).cyan(),
+                // Span::from(" | ").white(),
+                // Span::from("rustc-").cyan(),
+                // Span::from(self.rustc_version.clone()).cyan(),
+                // Span::from(if self.rustc_nightly { "-nightly" } else { "" }).cyan(),
+                Span::from(" | ").white(),
+                Span::from(self.platform.to_string()).cyan(),
+                Span::from(" | ").white(),
+            ];
 
-            // The primary header
-            frame.render_widget(
-                Paragraph::new(format!("[/:more]",)).right_aligned(),
-                header[1],
-            );
+            for (cmd, name) in [("/", "more"), ("?", "help")].iter() {
+                spans.extend_from_slice(&[
+                    Span::from("[").magenta(),
+                    Span::from(*cmd).white(),
+                    Span::from(" ").magenta(),
+                    Span::from(*name).gray(),
+                    Span::from("] ").magenta(),
+                ]);
+            }
 
-            // // Render a two-column layout
-            // let chunks = Layout::default()
-            //     .direction(Direction::Horizontal)
-            //     .constraints([Constraint::Max(20), Constraint::Min(0)].as_ref())
-            //     .split(chunks[1]);
+            frame.render_widget(Paragraph::new(Line::from(spans)).left_aligned(), header[0]);
 
-            // // The left column is a list of commands that we can interact with
-            // let commands = vec![
-            //     "Commands",
-            //     "  Console",
-            //     "  Configure",
-            //     "  Edit",
-            //     "  Add dep",
-            //     "  Simulator",
-            //     "  Bundle",
-            //     "  Deploy",
-            //     "  Lookbook",
-            //     "  HTML to RSX",
-            //     "  Builds",
-            //     "  Debug",
-            //     "  Visualize",
-            //     "  Lint/Check",
-            //     "  Share",
-            //     "  Shortcuts",
-            //     "  Learn",
-            //     "  Help",
-            // ];
+            // render the build logs
+            let platform_paragraph =
+                Paragraph::new(format!("Platforms: {:#?}", self.build_logs)).left_aligned();
 
-            // let commands = commands.iter().map(|c| Span::styled(*c, Style::default()));
+            frame.render_widget(platform_paragraph, body[1]);
 
-            // let commands = List::new(commands)
-            //     .block(Block::default().borders(Borders::ALL))
-            //     .style(Style::default().fg(Color::White))
-            //     .highlight_style(Style::default().add_modifier(Modifier::BOLD))
-            //     .highlight_symbol("> ");
-
-            // frame.render_stateful_widget(commands, chunks[0], &mut self.command_list);
-
-            // // The right is the output of that command
-            // let output = vec![
-            //     "Output",
-            //     "  Compiling dioxus v0.1.0 (/Users/kevin/Projects/dioxus)",
-            //     "    Finished dev [unoptimized + debuginfo] target(s) in 0.23s",
-            //     "  Running `target/debug/dioxus`",
-            //     "    dx run -i | rust 1.70 | stable | dx 0.5.2
-            //         ",
-            // ];
-
-            // let output = output.iter().map(|c| Span::styled(*c, Style::default()));
-
-            // let output = List::new(output)
-            //     .block(Block::default().borders(Borders::ALL))
-            //     .style(Style::default().fg(Color::White))
-            //     .highlight_style(Style::default().add_modifier(Modifier::BOLD))
-            //     .highlight_symbol("> ");
-
-            // frame.render_widget(output, chunks[1]);
+            // render the fly modal
+            self.fly_modal.render(frame, body[1]);
         });
+    }
+}
 
-        // // Don't clear the screen if the user has set the DIOXUS_LOG environment variable to "trace" so that we can see the logs
-        // if Some("trace") != std::env::var("DIOXUS_LOG").ok().as_deref() {
-        //     if let Ok(native_clearseq) = Command::new(if cfg!(target_os = "windows") {
-        //         "cls"
-        //     } else {
-        //         "clear"
-        //     })
-        //     .output()
-        //     {
-        //         print!("{}", String::from_utf8_lossy(&native_clearseq.stdout));
-        //     } else {
-        //         // Try ANSI-Escape characters
-        //         print!("\x1b[2J\x1b[H");
-        //     }
-        // }
+struct FlyModal {
+    hidden: bool,
+}
 
-        // let mut profile = if config.release { "Release" } else { "Debug" }.to_string();
-        // if config.custom_profile.is_some() {
-        //     profile = config.custom_profile.as_ref().unwrap().to_string();
-        // }
-        // let hot_reload = if config.hot_reload { "RSX" } else { "Normal" };
-        // let crate_root = crate_root().unwrap();
-        // let custom_html_file = if crate_root.join("index.html").is_file() {
-        //     "Custom [index.html]"
-        // } else {
-        //     "None"
-        // };
-        // let url_rewrite = if config.dioxus_config.web.watcher.index_on_404 {
-        //     "True"
-        // } else {
-        //     "False"
-        // };
+impl FlyModal {
+    fn new() -> Self {
+        Self { hidden: true }
+    }
 
-        // let proxies = &config.dioxus_config.web.proxy;
+    fn render(&mut self, frame: &mut Frame, area: Rect) {
+        if self.hidden {
+            return;
+        }
 
-        // if options.changed.is_empty() {
-        //     println!(
-        //         "{} @ v{} [{}]",
-        //         "Dioxus".bold().green(),
-        //         clap::crate_version!(),
-        //         chrono::Local::now().format("%H:%M:%S").to_string().dimmed()
-        //     );
-        // } else {
-        //     println!(
-        //         "Project Reloaded: {}\n",
-        //         format!(
-        //             "Changed {} files. [{}]",
-        //             options.changed.len(),
-        //             chrono::Local::now().format("%H:%M:%S").to_string().dimmed()
-        //         )
-        //         .purple()
-        //         .bold()
-        //     );
-        // }
+        // Create a frame slightly smaller than the area
+        let panel = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Fill(1)].as_ref())
+            .margin(2)
+            .split(area)[0];
 
-        // if let Some(WebServerInfo { ip, port }) = web_info {
-        //     let https = config.dioxus_config.web.https.enabled == Some(true);
-        //     let prefix = if https { "https://" } else { "http://" };
-        //     println!(
-        //         "    > Local address: {}",
-        //         format!("{prefix}localhost:{}/", port).blue()
-        //     );
-        //     println!(
-        //         "    > Network address: {}",
-        //         format!("{prefix}{}:{}/", ip, port).blue()
-        //     );
-        //     println!(
-        //         "    > HTTPS: {}",
-        //         if https {
-        //             "Enabled".to_string().green()
-        //         } else {
-        //             "Disabled".to_string().red()
-        //         }
-        //     );
-        // }
-        // println!();
+        // Wipe the panel
+        frame.render_widget(Clear, panel);
+        frame.render_widget(Block::default().borders(Borders::ALL), panel);
 
-        // println!("    > Hot Reload Mode: {}", hot_reload.cyan());
+        let modal = Paragraph::new(
+            "Hello world!\nHello world!\nHello world!\nHello world!\nHello world!\n",
+        )
+        .alignment(Alignment::Center);
+        frame.render_widget(modal, panel);
+    }
+}
 
-        // println!(
-        //     "    > Watching: [ {} ]",
-        //     config
-        //         .dioxus_config
-        //         .web
-        //         .watcher
-        //         .watch_path
-        //         .iter()
-        //         .cloned()
-        //         .chain(["Cargo.toml", "Dioxus.toml"].iter().map(PathBuf::from))
-        //         .map(|f| f.display().to_string())
-        //         .collect::<Vec<String>>()
-        //         .join(", ")
-        //         .cyan()
-        // );
+trait TuiTab {}
 
-        // if !proxies.is_empty() {
-        //     println!("    > Proxies :");
-        //     for proxy in proxies {
-        //         println!("    - {}", proxy.backend.blue());
-        //     }
-        // }
-        // println!("    > Custom index.html: {}", custom_html_file.green());
-        // println!("    > Serve index.html on 404: {}", url_rewrite.purple());
-        // println!();
-        // println!(
-        //     "    > Build Features: [ {} ]",
-        //     config
-        //         .features
-        //         .clone()
-        //         .unwrap_or_default()
-        //         .join(", ")
-        //         .green()
-        // );
-        // println!("    > Build Profile: {}", profile.green());
-        // println!(
-        //     "    > Build took: {} millis",
-        //     options.elapsed_time.to_string().green().bold()
-        // );
-        // println!();
+struct BuildOutputTab {}
+struct PlatformLogsTab {}
 
-        // if options.warnings.is_empty() {
-        //     tracing::info!("{}\n", "A perfect compilation!".green().bold());
-        // } else {
-        //     tracing::warn!(
-        //         "{}",
-        //         format!(
-        //         "There were {} warning messages during the build. Run `cargo check` to see them.",
-        //         options.warnings.len() - 1
-        //     )
-        //         .yellow()
-        //         .bold()
-        //     );
-        // }
+#[derive(Default, Debug)]
+pub struct ActiveBuild {
+    stage: Stage,
+    messages: Vec<BuildMessage>,
+    progress: f64,
+}
+
+impl ActiveBuild {
+    fn update(&mut self, update: UpdateBuildProgress) {
+        match update.update {
+            UpdateStage::Start => {
+                self.stage = update.stage;
+                self.progress = 0.0;
+            }
+            UpdateStage::AddMessage(message) => {
+                self.messages.push(message);
+            }
+            UpdateStage::SetProgress(progress) => {
+                self.progress = progress;
+            }
+        }
     }
 }
 
@@ -382,50 +302,4 @@ async fn rustc_version() -> String {
         })
         .flatten()
         .unwrap_or_else(|| "<unknown>".to_string())
-}
-
-// use crate::server::Diagnostic;
-
-// #[derive(Debug, Default)]
-// pub struct PrettierOptions {
-//     pub changed: Vec<PathBuf>,
-//     pub warnings: Vec<Diagnostic>,
-//     pub elapsed_time: u128,
-// }
-
-// #[derive(Debug, Clone)]
-// pub struct WebServerInfo {
-//     pub ip: IpAddr,
-//     pub port: u16,
-// }
-
-// pub fn print_console_info(
-//     config: &CrateConfig,
-//     options: PrettierOptions,
-//     web_info: Option<WebServerInfo>,
-// ) {
-// }
-
-#[derive(Default)]
-pub struct ActiveBuild {
-    stage: Stage,
-    messages: Vec<BuildMessage>,
-    progress: f64,
-}
-
-impl ActiveBuild {
-    fn update(&mut self, update: UpdateBuildProgress) {
-        match update.update {
-            UpdateStage::Start => {
-                self.stage = update.stage;
-                self.progress = 0.0;
-            }
-            UpdateStage::AddMessage(message) => {
-                self.messages.push(message);
-            }
-            UpdateStage::SetProgress(progress) => {
-                self.progress = progress;
-            }
-        }
-    }
 }
