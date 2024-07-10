@@ -84,27 +84,12 @@ impl Builder {
         tokio::select! {
             application = results => {
                 // If we have a build result, open it
-                // let application = .map_err(|e| crate::Error::Unique("Build failed".to_string()))?;
-                // let application = application.map_err(|e| crate::Error::Unique("Build failed".to_string()))?;
+                let application = application.map_err(|e| crate::Error::Unique("Build join failed".to_string()))??;
 
-                match application {
-                    Ok(Ok(application)) => {
-                        for build_result in application {
-                            _ = build_result.open(&self.serve.server_arguments);
-                        }
-                    }
-                    Ok(Err(err)) => {
-                        eprintln!("Build failed: {err:#?}");
-                    }
-                    Err(err) => {
-                        eprintln!("Build join failed: {err:#?}");
-                    }
+                for build_result in application {
+                    _ = build_result.open(&self.serve.server_arguments);
                 }
-                // if let Ok(application) = application {
-                //     for build_result in application {
-                //         _ = build_result.open();
-                //     }
-                // }
+
                 self.build_results = None;
                 std::future::pending::<()>().await;
             }
@@ -115,12 +100,6 @@ impl Builder {
                 }
             }
         }
-
-        // if results.is_finished() {
-        //     _ = self.build_results.take();
-        //     std::future::pending::<()>().await;
-        //     return Ok(None);
-        // }
 
         Ok(None)
     }
