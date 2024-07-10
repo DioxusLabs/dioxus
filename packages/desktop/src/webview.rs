@@ -106,9 +106,10 @@ impl WebviewInstance {
             }
         };
 
-        let ipc_handler = move |payload: String| {
+        let ipc_handler = move |payload: wry::http::Request<String>| {
             // defer the event to the main thread
-            if let Ok(msg) = serde_json::from_str(&payload) {
+            let body = payload.into_body();
+            if let Ok(msg) = serde_json::from_str(&body) {
                 _ = proxy_.send_event(UserWindowEvent::Ipc { id: window_id, msg });
             }
         };
@@ -159,7 +160,7 @@ impl WebviewInstance {
             }) // prevent all navigations
             .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler)
             .with_web_context(&mut web_context)
-            .with_file_drop_handler(file_drop_handler);
+            .with_drag_drop_handler(file_drop_handler);
 
         if let Some(color) = cfg.background_color {
             webview = webview.with_background_color(color);

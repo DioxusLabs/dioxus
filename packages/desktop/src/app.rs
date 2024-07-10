@@ -300,8 +300,8 @@ impl App {
                 if drag.files().is_some() {
                     let file_event = recent_file.current().unwrap();
                     let paths = match file_event {
-                        wry::FileDropEvent::Hovered { paths, .. } => paths,
-                        wry::FileDropEvent::Dropped { paths, .. } => paths,
+                        wry::DragDropEvent::Enter { paths, .. } => paths,
+                        wry::DragDropEvent::Drop { paths, .. } => paths,
                         _ => vec![],
                     };
                     Rc::new(PlatformEventData::new(Box::new(DesktopFileDragEvent {
