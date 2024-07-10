@@ -186,7 +186,7 @@ impl BuildRequest {
         let assets = if !self.build_arguments.skip_assets {
             let assets = asset_manifest(&self.dioxus_crate);
             // Collect assets
-            process_assets(&self.dioxus_crate, &assets)?;
+            process_assets(&self.dioxus_crate, &assets, progress)?;
             // Create the __assets_head.html file for bundling
             create_assets_head(&self.dioxus_crate, &assets)?;
             Some(assets)

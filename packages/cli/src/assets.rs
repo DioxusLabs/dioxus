@@ -1,14 +1,16 @@
+use crate::builder::{BuildMessage, MessageType, Stage, UpdateBuildProgress, UpdateStage};
+use crate::dioxus_crate::DioxusCrate;
+use crate::Result;
+use anyhow::Context;
 use brotli::enc::BrotliEncoderParams;
+use futures_channel::mpsc::UnboundedSender;
+use manganis_cli_support::{process_file, AssetManifest, AssetManifestExt, AssetType};
 use std::fs;
 use std::path::Path;
 use std::{ffi::OsString, path::PathBuf};
-use walkdir::WalkDir;
-
 use std::{fs::File, io::Write};
-
-use crate::dioxus_crate::DioxusCrate;
-use crate::Result;
-use manganis_cli_support::{AssetManifest, AssetManifestExt};
+use tracing::Level;
+use walkdir::WalkDir;
 
 /// The temp file name for passing manganis json from linker to current exec.
 pub const MG_JSON_OUT: &str = "mg-out";
@@ -30,7 +32,11 @@ pub fn create_assets_head(config: &DioxusCrate, manifest: &AssetManifest) -> Res
 }
 
 /// Process any assets collected from the binary
-pub(crate) fn process_assets(config: &DioxusCrate, manifest: &AssetManifest) -> anyhow::Result<()> {
+pub(crate) fn process_assets(
+    config: &DioxusCrate,
+    manifest: &AssetManifest,
+    progress: &mut UnboundedSender<UpdateBuildProgress>,
+) -> anyhow::Result<()> {
     let static_asset_output_dir = PathBuf::from(
         config
             .dioxus_config
@@ -42,7 +48,43 @@ pub(crate) fn process_assets(config: &DioxusCrate, manifest: &AssetManifest) -> 
     );
     let static_asset_output_dir = config.out_dir().join(static_asset_output_dir);
 
-    manifest.copy_static_assets_to(static_asset_output_dir)?;
+    std::fs::create_dir_all(&static_asset_output_dir)
+        .context("Failed to create static asset output directory")?;
+
+    let mut assets_finished: usize = 0;
+    let assets = manifest.assets();
+    let asset_count = assets.len();
+    assets.iter().try_for_each(move |asset| {
+        if let AssetType::File(file_asset) = asset {
+            match process_file(file_asset, &static_asset_output_dir) {
+                Ok(_) => {
+                    // Update the progress
+                    _ = progress.start_send(UpdateBuildProgress {
+                        stage: Stage::OptimizingAssets,
+                        update: UpdateStage::AddMessage(BuildMessage {
+                            level: Level::INFO,
+                            message: MessageType::Text(format!(
+                                "Optimized static asset {}",
+                                file_asset
+                            )),
+                        }),
+                    });
+                    assets_finished += 1;
+                    _ = progress.start_send(UpdateBuildProgress {
+                        stage: Stage::OptimizingAssets,
+                        update: UpdateStage::SetProgress(
+                            assets_finished as f64 / asset_count as f64,
+                        ),
+                    });
+                }
+                Err(err) => {
+                    tracing::error!("Failed to copy static asset: {}", err);
+                    return Err(err);
+                }
+            }
+        }
+        Ok::<(), anyhow::Error>(())
+    })?;
 
     Ok(())
 }
