@@ -73,12 +73,6 @@ impl Builder {
             return Ok(None);
         };
 
-        if results.is_finished() {
-            _ = self.build_results.take();
-            std::future::pending::<()>().await;
-            return Ok(None);
-        }
-
         // Wait for build progress
         let mut next = FuturesUnordered::new();
         for (platform, rx) in self.build_progress.iter_mut() {
@@ -92,11 +86,29 @@ impl Builder {
         tokio::select! {
             application = results => {
                 // If we have a build result, open it
-                let application = application.map_err(|_| crate::Error::Unique("Build failed".to_string()))?;
-                for build_result in application? {
-                    build_result.open()?;
+                // let application = .map_err(|e| crate::Error::Unique("Build failed".to_string()))?;
+                // let application = application.map_err(|e| crate::Error::Unique("Build failed".to_string()))?;
+
+                match application {
+                    Ok(Ok(application)) => {
+                        for build_result in application {
+                            _ = build_result.open();
+                        }
+                    }
+                    Ok(Err(err)) => {
+                        eprintln!("Build failed: {err:#?}");
+                    }
+                    Err(err) => {
+                        eprintln!("Build join failed: {err:#?}");
+                    }
                 }
+                // if let Ok(application) = application {
+                //     for build_result in application {
+                //         _ = build_result.open();
+                //     }
+                // }
                 self.build_results = None;
+                std::future::pending::<()>().await;
             }
             progress = next.next() => {
                 // If we have a build progress, send it to the screen
@@ -107,6 +119,12 @@ impl Builder {
                 }
             }
         }
+
+        // if results.is_finished() {
+        //     _ = self.build_results.take();
+        //     std::future::pending::<()>().await;
+        //     return Ok(None);
+        // }
 
         Ok(None)
     }
