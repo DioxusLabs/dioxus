@@ -6,6 +6,7 @@ use crate::{
     builder::{BuildResult, UpdateStage},
     serve::Serve,
 };
+use core::num;
 use crossterm::{
     event::{Event, EventStream, KeyCode, MouseEventKind},
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
@@ -24,7 +25,11 @@ use std::{
     io::{self, stdout},
     rc::Rc,
 };
-use tokio::io::AsyncReadExt;
+use tokio::{
+    io::{AsyncBufReadExt, AsyncReadExt, BufReader, Lines},
+    process::{ChildStderr, ChildStdout},
+};
+use tracing::Level;
 
 use super::{Builder, Server, Watcher};
 
@@ -41,6 +46,7 @@ pub struct Output {
     is_cli_release: bool,
     platform: Platform,
 
+    term_height: u16,
     scroll: u16,
     fly_modal_open: bool,
 }
@@ -102,6 +108,7 @@ impl Output {
             build_logs: HashMap::new(),
             running_apps: HashMap::new(),
             scroll: 0,
+            term_height: 0,
         })
     }
 
@@ -112,13 +119,14 @@ impl Output {
         let event = self.events.next();
 
         let next_stdout = self.running_apps.values_mut().map(|app| async move {
-            let mut stdout_line = String::new();
-            let mut stderr_line = String::new();
-            let stdout = app.stdout.read_to_string(&mut stdout_line);
-            let stderr = app.stderr.read_to_string(&mut stderr_line);
+            // let mut stdout_line = String::new();
+            // let mut stderr_line = String::new();
+            let stdout = app.stdout.next_line();
+            let stderr = app.stderr.next_line();
             tokio::select! {
-                _ = stdout => (app.result.platform, Some(stdout_line), None),
-                _ = stderr => (app.result.platform, None, Some(stderr_line)),
+                Ok(Some(line)) = stdout => (app.result.platform, Some(line), None),
+                Ok(Some(line)) = stderr => (app.result.platform, None, Some(line)),
+                _ = futures_util::future::pending() => (app.result.platform, None, None),
             }
         });
 
@@ -127,9 +135,17 @@ impl Output {
                 for (platform, stdout, stderr) in new_line {
                     if let Some(stdout) = stdout {
                         self.running_apps.get_mut(&platform).unwrap().stdout_line.push_str(&stdout);
+                        self.push_log(platform, BuildMessage {
+                            level: Level::INFO,
+                            message: MessageType::Text(stdout),
+                        })
                     }
                     if let Some(stderr) = stderr {
                         self.running_apps.get_mut(&platform).unwrap().stderr_line.push_str(&stderr);
+                        self.push_log(platform, BuildMessage {
+                            level: Level::ERROR,
+                            message: MessageType::Text(stderr),
+                        })
                     }
                 }
             },
@@ -179,29 +195,67 @@ impl Output {
 
         if let Event::Mouse(mouse) = input {
             if mouse.kind == MouseEventKind::ScrollUp {
-                self.scroll += 1;
+                self.scroll = self.scroll.saturating_sub(1);
             }
             if mouse.kind == MouseEventKind::ScrollDown {
-                self.scroll = self.scroll.saturating_sub(1);
+                self.scroll += 1;
             }
         }
 
         match input {
             Event::Key(key) if key.code == KeyCode::Up => {
-                self.scroll += 1;
-            }
-            Event::Key(key) if key.code == KeyCode::Down => {
                 self.scroll = self.scroll.saturating_sub(1);
             }
+            Event::Key(key) if key.code == KeyCode::Down => {
+                self.scroll += 1;
+            }
             _ => {}
+        }
+
+        for (plat, log) in self.build_logs.iter() {
+            // self.scroll = log.messages.len().saturating_sub(self.term_height as usize) as u16;
+            //     // if log.messages.len() > self.term_height as usize {
+            self.scroll =
+                self.scroll
+                    .clamp(0, log.messages.len() as u16 - self.term_height) as u16;
         }
 
         Ok(())
     }
 
+    pub fn push_log(&mut self, platform: Platform, message: BuildMessage) {
+        let snapped = self.is_snapped(platform);
+
+        self.build_logs
+            .get_mut(&platform)
+            .unwrap()
+            .messages
+            .push(message);
+
+        let log = self.build_logs.get(&platform).unwrap();
+        if snapped {
+            self.scroll = log.messages.len().saturating_sub(self.term_height as usize) as u16;
+        }
+    }
+
+    fn is_snapped(&self, platform: Platform) -> bool {
+        let Some(log) = self.build_logs.get(&platform) else {
+            return false;
+        };
+
+        let prev_scrol = log.messages.len().saturating_sub(self.term_height as usize) as u16;
+        prev_scrol == self.scroll
+    }
+
     pub fn new_build_logs(&mut self, platform: Platform, update: UpdateBuildProgress) {
-        let entry = self.build_logs.entry(platform).or_default();
-        entry.update(update);
+        let snapped = self.is_snapped(platform);
+
+        self.build_logs.entry(platform).or_default().update(update);
+
+        let log = self.build_logs.get(&platform).unwrap();
+        if snapped {
+            self.scroll = log.messages.len().saturating_sub(self.term_height as usize) as u16;
+        }
     }
 
     pub fn new_ready_app(&mut self, build_engine: &mut Builder, results: Vec<BuildResult>) {
@@ -222,8 +276,8 @@ impl Output {
 
             let app = RunningApp {
                 result,
-                stdout,
-                stderr,
+                stdout: BufReader::new(stdout).lines(),
+                stderr: BufReader::new(stderr).lines(),
                 stdout_line: String::new(),
                 stderr_line: String::new(),
             };
@@ -249,7 +303,14 @@ impl Output {
             // a layout that has a title with stats about the program and then the actual console itself
             let body = Layout::default()
                 .direction(Direction::Vertical)
-                .constraints([Constraint::Length(2), Constraint::Min(0)].as_ref())
+                .constraints(
+                    [
+                        Constraint::Length(2),
+                        Constraint::Min(0),
+                        Constraint::Length(1),
+                    ]
+                    .as_ref(),
+                )
                 .split(frame.size());
 
             let header = Layout::default()
@@ -259,6 +320,12 @@ impl Output {
 
             // Render a border for the header
             frame.render_widget(Block::default().borders(Borders::BOTTOM), body[0]);
+
+            let num_lines = self
+                .build_logs
+                .get(&self.platform)
+                .map(|log| log.messages.len())
+                .unwrap_or(0);
 
             // Render the metadata
             let mut spans = vec![
@@ -274,6 +341,11 @@ impl Output {
                 // Span::from(if self.rustc_nightly { "-nightly" } else { "" }).cyan(),
                 Span::from(" | ").white(),
                 Span::from(self.platform.to_string()).cyan(),
+                Span::from(" | ").white(),
+                Span::from(self.scroll.to_string()).cyan(),
+                Span::from("/").white(),
+                Span::from((num_lines.saturating_sub(self.term_height as usize)).to_string())
+                    .cyan(),
                 Span::from(" | ").white(),
             ];
 
@@ -293,7 +365,7 @@ impl Output {
                 let build = self.build_logs.get(platform).unwrap();
 
                 // Render the build logs with the last N lines where N is the height of the body
-                let spans_to_take = body[1].height as usize;
+                // let spans_to_take = body[1].height as usize;
 
                 let mut lines = vec![];
 
@@ -303,9 +375,9 @@ impl Output {
 
                 for span in logs_iter {
                     lines.push(Line::from(vec![
-                        Span::from("[").magenta(),
-                        Span::from(span.level.to_string()).white(),
-                        Span::from("] ").magenta(),
+                        // Span::from("[").magenta(),
+                        // Span::from(span.level.to_string()).white(),
+                        // Span::from("] ").magenta(),
                         match &span.message {
                             MessageType::Text(text) => Span::from(text),
                             MessageType::Cargo(diagnostic) => {
@@ -314,6 +386,23 @@ impl Output {
                         },
                     ]));
                 }
+                self.term_height = body[1].height;
+
+                // let height = body[1].height;
+                // self.term_height = height;
+
+                // let num_lines = lines.len();
+
+                // let max = num_lines.saturating_sub(height as usize);
+
+                // let scroll = self.scroll.clamp(0, max as u16);
+                // self.scroll = scroll;
+                // let scroll = () as u16;
+
+                // self.scroll.clamp(0, num_lines as u16)
+
+                // let scroll =
+                //     (num_lines + height -  as usize) as u16;
 
                 let paragraph = Paragraph::new(lines)
                     .left_aligned()
@@ -413,8 +502,8 @@ async fn rustc_version() -> String {
 
 pub struct RunningApp {
     result: BuildResult,
-    stdout: tokio::process::ChildStdout,
-    stderr: tokio::process::ChildStderr,
+    stdout: Lines<BufReader<ChildStdout>>,
+    stderr: Lines<BufReader<ChildStderr>>,
     stdout_line: String,
     stderr_line: String,
 }

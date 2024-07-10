@@ -149,7 +149,9 @@ impl App {
         not(target_os = "ios")
     ))]
     pub fn connect_hotreload(&self) {
-        let cli_args = dioxus_cli_config::ServeArguments::from_cli().unwrap();
+        let Some(cli_args) = dioxus_cli_config::ServeArguments::from_cli() else {
+            return;
+        };
         let port = cli_args.port;
         let addr = cli_args
             .addr
