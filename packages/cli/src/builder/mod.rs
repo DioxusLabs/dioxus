@@ -4,6 +4,7 @@ use crate::Result;
 use dioxus_cli_config::{Platform, ServeArguments};
 use futures_util::stream::select_all;
 use futures_util::StreamExt;
+use std::process::Stdio;
 use std::{path::PathBuf, time::Duration};
 use tokio::process::{Child, Command};
 
@@ -125,6 +126,8 @@ impl BuildResult {
                     dioxus_cli_config::__private::SERVE_ENV,
                     serde_json::to_string(&serve).unwrap(),
                 )
+                .stderr(Stdio::piped())
+                .stdout(Stdio::piped())
                 .kill_on_drop(true)
                 .spawn()?,
         ))

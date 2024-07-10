@@ -99,9 +99,7 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                 if let Ok(update) = application {
                     match update {
                         BuildUpdate::BuildFinished(application) => {
-                            for build_result in application {
-                                _ = build_result.open(&serve.server_arguments);
-                            }
+                            // Display the process handle in the terminal
                         }
                         BuildUpdate::BuildProgress { platform, update } => {
                             screen.new_build_logs(platform, update);

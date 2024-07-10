@@ -8,6 +8,8 @@ use dioxus_cli_config::Platform;
 use futures_channel::mpsc::UnboundedReceiver;
 use futures_util::stream::select_all;
 use futures_util::StreamExt;
+use tokio::process::ChildStderr;
+use tokio::process::ChildStdout;
 use tokio::{
     process::{Child, Command},
     task::JoinHandle,
@@ -89,13 +91,20 @@ impl Builder {
                 // If we have a build result, open it
                 let application = application.map_err(|e| crate::Error::Unique("Build join failed".to_string()))??;
 
-                for build_result in application {
-                    let child = build_result.open(&self.serve.server_arguments);
-                    self.children.push(child.unwrap().unwrap());
+                let mut handles = Vec::new();
+                for build_result in &application {
+                    if let Some(mut child) = build_result.open(&self.serve.server_arguments)? {
+                        let handle = ProcessHandle {
+                            stdout: child.stdout.take().unwrap(),
+                            stderr: child.stderr.take().unwrap(),
+                        };
+                        handles.push(handle);
+                        self.children.push(child);
+                    }
                 }
 
                 self.build_results = None;
-                Ok(BuildUpdate::BuildFinished(application))
+                Ok(BuildUpdate::BuildFinished(handles))
             }
             progress = next.next() => {
                 // If we have a build progress, send it to the screen
@@ -145,9 +154,14 @@ impl Builder {
 }
 
 pub(crate) enum BuildUpdate {
-    BuildFinished(Vec<BuildResult>),
+    BuildFinished(Vec<ProcessHandle>),
     BuildProgress {
         platform: Platform,
         update: UpdateBuildProgress,
     },
+}
+
+pub(crate) struct ProcessHandle {
+    pub(crate) stdout: ChildStdout,
+    pub(crate) stderr: ChildStderr,
 }
