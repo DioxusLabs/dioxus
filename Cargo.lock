@@ -1137,9 +1137,12 @@ dependencies = [
 
 [[package]]
 name = "built"
-version = "0.7.4"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "236e6289eda5a812bc6b53c3b024039382a2895fbbeef2d748b2931546d392c4"
+checksum = "c6a6c0b39c38fd754ac338b00a88066436389c0f029da5d37d1e01091d9b7c17"
+dependencies = [
+ "git2",
+]
 
 [[package]]
 name = "bumpalo"
@@ -2355,6 +2358,7 @@ dependencies = [
  "axum-extra",
  "axum-server",
  "brotli",
+ "built",
  "cargo-generate",
  "cargo_metadata",
  "cargo_toml",

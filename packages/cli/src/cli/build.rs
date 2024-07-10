@@ -8,6 +8,10 @@ use super::*;
 /// Information about the target to build
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 pub struct TargetArgs {
+    /// Build for nightly [default: false]
+    #[clap(long)]
+    pub nightly: bool,
+
     /// Build a example [default: ""]
     #[clap(long)]
     pub example: Option<String>,

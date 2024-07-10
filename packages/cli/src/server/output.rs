@@ -3,6 +3,7 @@ use crate::serve::Serve;
 use crossterm::{
     event::{self, Event, EventStream, KeyCode},
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    tty::IsTty,
     ExecutableCommand,
 };
 use futures_channel::mpsc::UnboundedReceiver;
@@ -17,14 +18,22 @@ pub struct Output {
     events: EventStream,
     command_list: ListState,
     rustc_version: String,
+    rustc_nightly: bool,
+    dx_version: String,
+    is_tty: bool,
 }
 
 type TerminalBackend = Terminal<CrosstermBackend<io::Stdout>>;
 
 impl Output {
     pub async fn start(cfg: &Serve, crate_config: &DioxusCrate) -> io::Result<Self> {
-        enable_raw_mode()?;
-        stdout().execute(EnterAlternateScreen)?;
+        let is_tty = std::io::stdout().is_tty();
+
+        if is_tty {
+            enable_raw_mode()?;
+            stdout().execute(EnterAlternateScreen)?;
+        }
+
         let events = EventStream::new();
         let term: TerminalBackend = Terminal::with_options(
             CrosstermBackend::new(stdout()),
@@ -35,14 +44,28 @@ impl Output {
 
         let command_list = ListState::default();
 
-        // get the rustc version
         let rustc_version = rustc_version().await;
+        let rustc_nightly = rustc_version.contains("nightly") || cfg.target_args.nightly;
+
+        let mut dx_version = String::new();
+
+        if crate::dx_build_info::PROFILE != "release" {
+            if let Some(hash) = crate::dx_build_info::GIT_COMMIT_HASH_SHORT {
+                let hash = hash.trim_start_matches("g");
+                dx_version.push_str(hash);
+            } else {
+                dx_version.push_str(env!("CARGO_PKG_VERSION"));
+            }
+        }
 
         Ok(Self {
             term,
             events,
             command_list,
             rustc_version,
+            rustc_nightly,
+            dx_version,
+            is_tty,
         })
     }
 
@@ -55,8 +78,16 @@ impl Output {
     }
 
     pub fn shutdown(&mut self) -> io::Result<()> {
-        disable_raw_mode()?;
-        stdout().execute(LeaveAlternateScreen)?;
+        // if we're a tty then we need to disable the raw mode
+        if self.is_tty {
+            disable_raw_mode()?;
+            stdout().execute(LeaveAlternateScreen)?;
+
+            // todo: print the build info here for the most recent build, and then the logs of the most recent build
+            println!("build output goes here");
+            println!("build logs go here");
+        }
+
         Ok(())
     }
 
@@ -79,80 +110,92 @@ impl Output {
         server: &Server,
         watcher: &Watcher,
     ) {
+        // just drain the build logs
+        if !self.is_tty {
+            return;
+        }
+
         _ = self.term.draw(|frame| {
             // a layout that has a title with stats about the program and then the actual console itself
-            let chunks = Layout::default()
+            let body = Layout::default()
                 .direction(Direction::Vertical)
-                // .margin(1)
-                .constraints([Constraint::Length(0), Constraint::Min(0)].as_ref())
+                .constraints([Constraint::Length(1), Constraint::Min(0)].as_ref())
                 .split(frame.size());
+
+            let header = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Min(20), Constraint::Fill(1)].as_ref())
+                .split(body[0]);
 
             // Render just a paragraph into the top chunks
             frame.render_widget(
                 Paragraph::new(format!(
-                    "dx serve | rust {version} | stable | dx 0.5.2",
-                    version = self.rustc_version
-                )),
-                chunks[0],
+                    "dx serve | rustc-{rust_version}{channel} | dx {dx_version}",
+                    rust_version = self.rustc_version,
+                    channel = if self.rustc_nightly { "-nightly" } else { "" },
+                    dx_version = self.dx_version
+                ))
+                .right_aligned(),
+                header[1],
             );
 
-            // Render a two-column layout
-            let chunks = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([Constraint::Max(20), Constraint::Min(0)].as_ref())
-                .split(chunks[1]);
+            // // Render a two-column layout
+            // let chunks = Layout::default()
+            //     .direction(Direction::Horizontal)
+            //     .constraints([Constraint::Max(20), Constraint::Min(0)].as_ref())
+            //     .split(chunks[1]);
 
-            // The left column is a list of commands that we can interact with
-            let commands = vec![
-                "Commands",
-                "  Console",
-                "  Configure",
-                "  Edit",
-                "  Add dep",
-                "  Simulator",
-                "  Bundle",
-                "  Deploy",
-                "  Lookbook",
-                "  HTML to RSX",
-                "  Builds",
-                "  Debug",
-                "  Visualize",
-                "  Lint/Check",
-                "  Share",
-                "  Shortcuts",
-                "  Learn",
-                "  Help",
-            ];
+            // // The left column is a list of commands that we can interact with
+            // let commands = vec![
+            //     "Commands",
+            //     "  Console",
+            //     "  Configure",
+            //     "  Edit",
+            //     "  Add dep",
+            //     "  Simulator",
+            //     "  Bundle",
+            //     "  Deploy",
+            //     "  Lookbook",
+            //     "  HTML to RSX",
+            //     "  Builds",
+            //     "  Debug",
+            //     "  Visualize",
+            //     "  Lint/Check",
+            //     "  Share",
+            //     "  Shortcuts",
+            //     "  Learn",
+            //     "  Help",
+            // ];
 
-            let commands = commands.iter().map(|c| Span::styled(*c, Style::default()));
+            // let commands = commands.iter().map(|c| Span::styled(*c, Style::default()));
 
-            let commands = List::new(commands)
-                .block(Block::default().borders(Borders::ALL))
-                .style(Style::default().fg(Color::White))
-                .highlight_style(Style::default().add_modifier(Modifier::BOLD))
-                .highlight_symbol("> ");
+            // let commands = List::new(commands)
+            //     .block(Block::default().borders(Borders::ALL))
+            //     .style(Style::default().fg(Color::White))
+            //     .highlight_style(Style::default().add_modifier(Modifier::BOLD))
+            //     .highlight_symbol("> ");
 
-            frame.render_stateful_widget(commands, chunks[0], &mut self.command_list);
+            // frame.render_stateful_widget(commands, chunks[0], &mut self.command_list);
 
-            // The right is the output of that command
-            let output = vec![
-                "Output",
-                "  Compiling dioxus v0.1.0 (/Users/kevin/Projects/dioxus)",
-                "    Finished dev [unoptimized + debuginfo] target(s) in 0.23s",
-                "  Running `target/debug/dioxus`",
-                "    dx run -i | rust 1.70 | stable | dx 0.5.2
-                    ",
-            ];
+            // // The right is the output of that command
+            // let output = vec![
+            //     "Output",
+            //     "  Compiling dioxus v0.1.0 (/Users/kevin/Projects/dioxus)",
+            //     "    Finished dev [unoptimized + debuginfo] target(s) in 0.23s",
+            //     "  Running `target/debug/dioxus`",
+            //     "    dx run -i | rust 1.70 | stable | dx 0.5.2
+            //         ",
+            // ];
 
-            let output = output.iter().map(|c| Span::styled(*c, Style::default()));
+            // let output = output.iter().map(|c| Span::styled(*c, Style::default()));
 
-            let output = List::new(output)
-                .block(Block::default().borders(Borders::ALL))
-                .style(Style::default().fg(Color::White))
-                .highlight_style(Style::default().add_modifier(Modifier::BOLD))
-                .highlight_symbol("> ");
+            // let output = List::new(output)
+            //     .block(Block::default().borders(Borders::ALL))
+            //     .style(Style::default().fg(Color::White))
+            //     .highlight_style(Style::default().add_modifier(Modifier::BOLD))
+            //     .highlight_symbol("> ");
 
-            frame.render_widget(output, chunks[1]);
+            // frame.render_widget(output, chunks[1]);
         });
 
         // // Don't clear the screen if the user has set the DIOXUS_LOG environment variable to "trace" so that we can see the logs
@@ -300,7 +343,7 @@ async fn rustc_version() -> String {
         .map(|o| o.stdout)
         .map(|o| {
             let out = String::from_utf8(o).unwrap();
-            out.split_ascii_whitespace().nth(2).map(|v| v.to_string())
+            out.split_ascii_whitespace().nth(1).map(|v| v.to_string())
         })
         .flatten()
         .unwrap_or_else(|| "<unknown>".to_string())
