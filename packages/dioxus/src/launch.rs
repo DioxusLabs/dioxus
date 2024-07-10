@@ -94,6 +94,20 @@ impl LaunchBuilder {
         }
     }
 
+    /// Launch your static site generation application.
+    #[cfg(feature = "static-generation")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "static-generation")))]
+    pub fn static_generation() -> LaunchBuilder<dioxus_static_site_generation::Config, SendContext>
+    {
+        LaunchBuilder {
+            launch_fn: |root, contexts, cfg| {
+                dioxus_static_site_generation::launch::launch(root, contexts, cfg)
+            },
+            contexts: Vec::new(),
+            platform_config: None,
+        }
+    }
+
     /// Launch your fullstack application.
     #[cfg(feature = "mobile")]
     #[cfg_attr(docsrs, doc(cfg(feature = "mobile")))]
