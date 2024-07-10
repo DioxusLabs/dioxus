@@ -206,11 +206,29 @@ impl Output {
 
             frame.render_widget(Paragraph::new(Line::from(spans)).left_aligned(), header[0]);
 
-            // render the build logs
-            let platform_paragraph =
-                Paragraph::new(format!("Platforms: {:#?}", self.build_logs)).left_aligned();
+            for platform in self.build_logs.keys() {
+                let build = self.build_logs.get(platform).unwrap();
 
-            frame.render_widget(platform_paragraph, body[1]);
+                // Render the build logs with the last N lines where N is the height of the body
+                let spans_to_take = body[1].height as usize;
+
+                let mut spans = vec![Span::from("Build logs:")];
+
+                let spans_iter = build.messages.iter().rev().take(spans_to_take).rev();
+
+                for span in spans_iter {
+                    spans.extend_from_slice(&[
+                        Span::from("[").magenta(),
+                        Span::from(span.level.to_string()).white(),
+                        Span::from("] ").magenta(),
+                        Span::from(span.message.clone()).gray(),
+                        Span::from("\n").magenta(),
+                    ]);
+                }
+
+                let paragraph = Paragraph::new(Line::from(spans)).left_aligned();
+                frame.render_widget(paragraph, body[1]);
+            }
 
             // render the fly modal
             self.fly_modal.render(frame, body[1]);
