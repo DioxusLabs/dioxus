@@ -116,7 +116,7 @@ impl Output {
                 }
                 println!("Build logs for {platform:?}:");
                 for message in build.messages.iter() {
-                    println!("[{}] {}", message.level, message.message);
+                    println!("[{}] {:?}", message.level, message.message);
                 }
             }
         }

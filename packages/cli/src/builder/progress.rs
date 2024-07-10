@@ -55,9 +55,14 @@ impl UpdateBuildProgress {
                     println!("--- Finished ---");
                 }
             },
-            UpdateStage::AddMessage(message) => {
-                println!("{}", message.message);
-            }
+            UpdateStage::AddMessage(message) => match &message.message {
+                MessageType::Cargo(message) => {
+                    println!("{}", message.rendered.clone().unwrap_or_default());
+                }
+                MessageType::Text(message) => {
+                    println!("{}", message);
+                }
+            },
             UpdateStage::SetProgress(progress) => {
                 println!("Build progress {:0.0}%", progress * 100.0);
             }
@@ -75,7 +80,13 @@ pub enum UpdateStage {
 #[derive(Debug, Clone, PartialEq)]
 pub struct BuildMessage {
     pub level: Level,
-    pub message: String,
+    pub message: MessageType,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum MessageType {
+    Cargo(Diagnostic),
+    Text(String),
 }
 
 impl From<Diagnostic> for BuildMessage {
@@ -90,7 +101,7 @@ impl From<Diagnostic> for BuildMessage {
                 cargo_metadata::diagnostic::DiagnosticLevel::Help => Level::DEBUG,
                 _ => Level::DEBUG,
             },
-            message: message.rendered.unwrap_or_default(),
+            message: MessageType::Cargo(message),
         }
     }
 }
@@ -176,7 +187,7 @@ pub(crate) async fn build_cargo(
                     stage: Stage::Compiling,
                     update: UpdateStage::AddMessage(BuildMessage {
                         level: Level::DEBUG,
-                        message: line,
+                        message: MessageType::Text(line),
                     }),
                 });
             }
