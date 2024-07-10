@@ -1,9 +1,10 @@
 //! Report progress about the build to the user. We use channels to report progress back to the CLI.
-
 use anyhow::Context;
 use cargo_metadata::{diagnostic::Diagnostic, Message};
+use chrono::format;
 use futures_channel::mpsc::UnboundedSender;
 use serde::Deserialize;
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::Stdio;
 use tokio::io::AsyncBufReadExt;
@@ -125,6 +126,7 @@ pub(crate) async fn build_cargo(
     let mut stdout = stdout.lines();
     let mut stderr = stderr.lines();
     let mut units_compiled = 0;
+    let mut logs = std::fs::File::create("logs.txt").unwrap();
     loop {
         let line = tokio::select! {
             line = stdout.next_line() => {
@@ -137,9 +139,23 @@ pub(crate) async fn build_cargo(
         let Some(line) = line? else {
             break;
         };
-        let mut deserializer = serde_json::Deserializer::from_str(&line);
+        let mut deserializer = serde_json::Deserializer::from_str(&line.trim());
         deserializer.disable_recursion_limit();
-        let message = Message::deserialize(&mut deserializer).unwrap_or(Message::TextLine(line));
+
+        logs.write_all(format!("{:?}\n", line).as_bytes()).unwrap();
+        let message = match Message::deserialize(&mut deserializer) {
+            Ok(message) => {
+                logs.write_all(format!("{:?}\n", message).as_bytes())
+                    .unwrap();
+                message
+            }
+            Err(err) => {
+                logs.write_all(err.to_string().as_bytes()).unwrap();
+                logs.write_all(b"\n").unwrap();
+                continue;
+            }
+        };
+        // }.unwrap_or(Message::TextLine(line));
         match message {
             Message::CompilerMessage(msg) => {
                 let message = msg.message;

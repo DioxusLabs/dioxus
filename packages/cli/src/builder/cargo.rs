@@ -76,17 +76,20 @@ impl BuildRequest {
     /// Create a build command for cargo
     fn prepare_build_command(&self) -> Result<(tokio::process::Command, Vec<String>)> {
         let mut cmd = tokio::process::Command::new("cargo");
+        cmd.arg("rustc");
         if let Some(target_dir) = &self.target_dir {
             cmd.env("CARGO_TARGET_DIR", target_dir);
         }
         cmd.current_dir(self.dioxus_crate.crate_dir())
-            .arg("build")
-            .arg("--message-format=json-render-diagnostics");
-
-        set_rust_flags(&mut cmd, self.rust_flags.clone());
+            .arg("--message-format")
+            .arg("json-diagnostic-rendered-ansi");
 
         let cargo_args = self.build_arguments();
         cmd.args(&cargo_args);
+
+        cmd.arg("--")
+            .arg("-C --error-format=json")
+            .args(self.rust_flags.clone());
 
         Ok((cmd, cargo_args))
     }
