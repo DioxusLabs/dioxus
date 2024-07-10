@@ -51,7 +51,7 @@ impl Output {
 
         if crate::dx_build_info::PROFILE != "release" {
             if let Some(hash) = crate::dx_build_info::GIT_COMMIT_HASH_SHORT {
-                let hash = hash.trim_start_matches("g");
+                let hash = &hash.trim_start_matches("g")[..4];
                 dx_version.push_str(hash);
             } else {
                 dx_version.push_str(env!("CARGO_PKG_VERSION"));
@@ -127,15 +127,24 @@ impl Output {
                 .constraints([Constraint::Min(20), Constraint::Fill(1)].as_ref())
                 .split(body[0]);
 
-            // Render just a paragraph into the top chunks
+            // Render a border for the header
+            frame.render_widget(Block::default().borders(Borders::TOP), body[1]);
+
+            // Render the metadata
             frame.render_widget(
                 Paragraph::new(format!(
-                    "dx serve | rustc-{rust_version}{channel} | dx {dx_version}",
+                    "dx serve | rustc-{rust_version}{channel} | dx-v{dx_version}",
                     rust_version = self.rustc_version,
                     channel = if self.rustc_nightly { "-nightly" } else { "" },
                     dx_version = self.dx_version
                 ))
-                .right_aligned(),
+                .left_aligned(),
+                header[0],
+            );
+
+            // The primary header
+            frame.render_widget(
+                Paragraph::new(format!("[/:more]",)).right_aligned(),
                 header[1],
             );
 
