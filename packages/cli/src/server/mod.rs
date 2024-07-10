@@ -61,7 +61,7 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
         yield_now().await;
 
         // Draw the state of the server to the screen
-        screen.draw(&serve, &dioxus_crate, &buildr, &server, &watchr);
+        screen.render(&serve, &dioxus_crate, &buildr, &server, &watchr);
 
         // Also update the webserver page if we need to
         // This will send updates about the current status of the build
@@ -98,30 +98,21 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                 // Wait for logs from the build engine
                 // These will cause us to update the screen
                 // We also can check the status of the builds here in case we have multiple ongoing builds
-                if let Ok(update) = application {
-                    match update {
-                        BuildUpdate::BuildFinished(application) => {
-                            // Display the process handle in the terminal
-                            for application in application {
-                                tokio::spawn(async move {
-                                    let mut log_file = std::fs::File::create("./log.txt").unwrap();
-                                    let mut lines = tokio::io::BufReader::new(application.stdout).lines();
-                                    while let Ok(Some(line)) = lines.next_line().await {
-                                        let _ = log_file.write_all(line.as_bytes());
-                                    }
-                                });
-                            }
-                        }
-                        BuildUpdate::BuildProgress { platform, update } => {
+                if let Ok(res) = application {
+                    match res {
+                        BuilderUpdate::Progress { platform, update } => {
                             screen.new_build_logs(platform, update);
                         }
-                    }
+                        BuilderUpdate::Ready { results } => {
+                            screen.new_ready_app(&mut buildr, results);
+                        }
+                    };
                 }
             }
 
             // Handle input from the user using our settings
-            input = screen.wait() => {
-                if screen.handle_input(input).is_err() {
+            res = screen.wait() => {
+                if res.is_err() {
                     break;
                 }
             }
@@ -132,7 +123,7 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
     // todo: more printing, logging, error handling in this phase
     _ = screen.shutdown();
     _ = server.shutdown().await;
-    buildr.shutdown();
+    _ = buildr.shutdown();
 
     Ok(())
 }

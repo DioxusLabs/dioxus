@@ -105,7 +105,7 @@ impl Server {
         for socket in self.sockets.iter_mut() {
             if socket.send(Message::Text(msg.clone())).await.is_err() {
                 // the socket is likely disconnected, we should remove it
-                println!("error sending message to socket - it's likely disconnected");
+                // println!("error sending message to socket - it's likely disconnected");
             }
         }
     }
@@ -117,7 +117,7 @@ impl Server {
             .next()
             .await
             .expect("receiver to receive a socket");
-        println!("new socket connected: {:?}", new_socket);
+        // println!("new socket connected: {:?}", new_socket);
 
         self.sockets.push(new_socket);
     }

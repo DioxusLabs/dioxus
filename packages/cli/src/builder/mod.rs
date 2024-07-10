@@ -4,8 +4,7 @@ use crate::Result;
 use dioxus_cli_config::{Platform, ServeArguments};
 use futures_util::stream::select_all;
 use futures_util::StreamExt;
-use std::process::Stdio;
-use std::{path::PathBuf, time::Duration};
+use std::{path::PathBuf, process::Stdio, time::Duration};
 use tokio::process::{Child, Command};
 
 mod cargo;
@@ -111,6 +110,7 @@ pub(crate) struct BuildResult {
     pub executable: PathBuf,
     pub elapsed_time: Duration,
     pub web: bool,
+    pub platform: Platform,
 }
 
 impl BuildResult {

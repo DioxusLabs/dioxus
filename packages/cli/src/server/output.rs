@@ -1,26 +1,35 @@
-use crate::{builder::UpdateStage, serve::Serve};
 use crate::{
-    builder::{BuildMessage, Stage, UpdateBuildProgress},
+    builder::{BuildMessage, MessageType, Stage, UpdateBuildProgress},
     dioxus_crate::DioxusCrate,
 };
+use crate::{
+    builder::{BuildResult, UpdateStage},
+    serve::Serve,
+};
 use crossterm::{
-    event::{Event, EventStream, KeyCode},
+    event::{Event, EventStream, KeyCode, MouseEventKind},
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     tty::IsTty,
     ExecutableCommand,
 };
 use dioxus_cli_config::Platform;
-use futures_util::{future::FutureExt, StreamExt};
+use futures_util::{
+    future::{join_all, FutureExt},
+    StreamExt,
+};
 use ratatui::{prelude::*, widgets::*, TerminalOptions, Viewport};
 use std::{
+    cell::RefCell,
     collections::HashMap,
     io::{self, stdout},
+    rc::Rc,
 };
+use tokio::io::AsyncReadExt;
 
 use super::{Builder, Server, Watcher};
 
 pub struct Output {
-    term: TerminalBackend,
+    term: Rc<RefCell<TerminalBackend>>,
     events: EventStream,
     command_list: ListState,
     rustc_version: String,
@@ -28,9 +37,12 @@ pub struct Output {
     dx_version: String,
     is_tty: bool,
     build_logs: HashMap<Platform, ActiveBuild>,
+    running_apps: HashMap<Platform, RunningApp>,
     is_cli_release: bool,
     platform: Platform,
-    fly_modal: FlyModal,
+
+    scroll: u16,
+    fly_modal_open: bool,
 }
 
 type TerminalBackend = Terminal<CrosstermBackend<io::Stdout>>;
@@ -76,10 +88,8 @@ impl Output {
 
         let platform = cfg.build_arguments.platform.expect("To be resolved by now");
 
-        let fly_modal = FlyModal::new();
-
         Ok(Self {
-            term,
+            term: Rc::new(RefCell::new(term)),
             events,
             command_list,
             rustc_version,
@@ -88,17 +98,47 @@ impl Output {
             is_tty,
             is_cli_release,
             platform,
-            fly_modal,
+            fly_modal_open: false,
             build_logs: HashMap::new(),
+            running_apps: HashMap::new(),
+            scroll: 0,
         })
     }
 
     /// Wait for either the ctrl_c handler or the next event
     ///
     /// Why is the ctrl_c handler here?
-    pub async fn wait(&mut self) -> Event {
-        let event = self.events.next().await;
-        event.unwrap().unwrap()
+    pub async fn wait(&mut self) -> io::Result<()> {
+        let event = self.events.next();
+
+        let next_stdout = self.running_apps.values_mut().map(|app| async move {
+            let mut stdout_line = String::new();
+            let mut stderr_line = String::new();
+            let stdout = app.stdout.read_to_string(&mut stdout_line);
+            let stderr = app.stderr.read_to_string(&mut stderr_line);
+            tokio::select! {
+                _ = stdout => (app.result.platform, Some(stdout_line), None),
+                _ = stderr => (app.result.platform, None, Some(stderr_line)),
+            }
+        });
+
+        tokio::select! {
+            new_line = join_all(next_stdout) => {
+                for (platform, stdout, stderr) in new_line {
+                    if let Some(stdout) = stdout {
+                        self.running_apps.get_mut(&platform).unwrap().stdout_line.push_str(&stdout);
+                    }
+                    if let Some(stderr) = stderr {
+                        self.running_apps.get_mut(&platform).unwrap().stderr_line.push_str(&stderr);
+                    }
+                }
+            },
+            event = event => {
+                self.handle_input(event.unwrap().unwrap())?;
+            }
+        }
+
+        return Ok(());
     }
 
     pub fn shutdown(&mut self) -> io::Result<()> {
@@ -133,8 +173,27 @@ impl Output {
 
         if let Event::Key(key) = input {
             if let KeyCode::Char('/') = key.code {
-                self.fly_modal.hidden = !self.fly_modal.hidden;
+                self.fly_modal_open = !self.fly_modal_open;
             }
+        }
+
+        if let Event::Mouse(mouse) = input {
+            if mouse.kind == MouseEventKind::ScrollUp {
+                self.scroll += 1;
+            }
+            if mouse.kind == MouseEventKind::ScrollDown {
+                self.scroll = self.scroll.saturating_sub(1);
+            }
+        }
+
+        match input {
+            Event::Key(key) if key.code == KeyCode::Up => {
+                self.scroll += 1;
+            }
+            Event::Key(key) if key.code == KeyCode::Down => {
+                self.scroll = self.scroll.saturating_sub(1);
+            }
+            _ => {}
         }
 
         Ok(())
@@ -145,7 +204,35 @@ impl Output {
         entry.update(update);
     }
 
-    pub fn draw(
+    pub fn new_ready_app(&mut self, build_engine: &mut Builder, results: Vec<BuildResult>) {
+        for result in results {
+            let (stdout, stderr) = build_engine
+                .children
+                .iter_mut()
+                .find_map(|(platform, child)| {
+                    if platform == &result.platform {
+                        Some((child.stdout.take().unwrap(), child.stderr.take().unwrap()))
+                    } else {
+                        None
+                    }
+                })
+                .unwrap();
+
+            let platform = result.platform.clone();
+
+            let app = RunningApp {
+                result,
+                stdout,
+                stderr,
+                stdout_line: String::new(),
+                stderr_line: String::new(),
+            };
+
+            self.running_apps.insert(platform, app);
+        }
+    }
+
+    pub fn render(
         &mut self,
         opts: &Serve,
         config: &DioxusCrate,
@@ -158,7 +245,7 @@ impl Output {
             return;
         }
 
-        _ = self.term.draw(|frame| {
+        _ = self.term.clone().borrow_mut().draw(|frame| {
             // a layout that has a title with stats about the program and then the actual console itself
             let body = Layout::default()
                 .direction(Direction::Vertical)
@@ -208,41 +295,48 @@ impl Output {
                 // Render the build logs with the last N lines where N is the height of the body
                 let spans_to_take = body[1].height as usize;
 
-                let mut spans = vec![Span::from("Build logs:")];
+                let mut lines = vec![];
 
-                let spans_iter = build.messages.iter().rev().take(spans_to_take).rev();
+                // let mut spans = vec![Span::from("Build logs:")];
 
-                for span in spans_iter {
-                    spans.extend_from_slice(&[
+                let logs_iter = build.messages.iter();
+
+                for span in logs_iter {
+                    lines.push(Line::from(vec![
                         Span::from("[").magenta(),
                         Span::from(span.level.to_string()).white(),
                         Span::from("] ").magenta(),
-                        Span::from(format!("{:#?}", span.message)).gray(),
-                        Span::from("\n").magenta(),
-                    ]);
+                        match &span.message {
+                            MessageType::Text(text) => Span::from(text),
+                            MessageType::Cargo(diagnostic) => {
+                                Span::from(format!("{diagnostic:#?}"))
+                            }
+                        },
+                    ]));
                 }
 
-                let paragraph = Paragraph::new(Line::from(spans)).left_aligned();
+                let paragraph = Paragraph::new(lines)
+                    .left_aligned()
+                    .scroll((self.scroll, 0));
                 frame.render_widget(paragraph, body[1]);
             }
 
             // render the fly modal
-            self.fly_modal.render(frame, body[1]);
+            self.render_fly_moydal(frame, body[1], opts, config, build_engine, server, watcher);
         });
     }
-}
 
-struct FlyModal {
-    hidden: bool,
-}
-
-impl FlyModal {
-    fn new() -> Self {
-        Self { hidden: true }
-    }
-
-    fn render(&mut self, frame: &mut Frame, area: Rect) {
-        if self.hidden {
+    fn render_fly_moydal(
+        &mut self,
+        frame: &mut Frame,
+        area: Rect,
+        opts: &Serve,
+        config: &DioxusCrate,
+        build_engine: &Builder,
+        server: &Server,
+        watcher: &Watcher,
+    ) {
+        if !self.fly_modal_open {
             return;
         }
 
@@ -315,4 +409,12 @@ async fn rustc_version() -> String {
             out.split_ascii_whitespace().nth(1).map(|v| v.to_string())
         })
         .unwrap_or_else(|| "<unknown>".to_string())
+}
+
+pub struct RunningApp {
+    result: BuildResult,
+    stdout: tokio::process::ChildStdout,
+    stderr: tokio::process::ChildStderr,
+    stdout_line: String,
+    stderr_line: String,
 }

@@ -13,22 +13,25 @@ use tokio::process::ChildStderr;
 use tokio::process::ChildStdout;
 use tokio::{
     process::{Child, Command},
-    task::JoinHandle,
+    task::{yield_now, JoinHandle},
 };
 
 /// A handle to ongoing builds and then the spawned tasks themselves
 pub struct Builder {
     /// The results of the build
     build_results: Option<JoinHandle<Result<Vec<BuildResult>>>>,
+
     /// The progress of the builds
     build_progress: Vec<(Platform, UnboundedReceiver<UpdateBuildProgress>)>,
+
     /// The application we are building
     config: DioxusCrate,
+
     /// The arguments for the build
     serve: Serve,
 
     /// The children of the build process
-    children: Vec<Child>,
+    pub children: Vec<(Platform, Child)>,
 }
 
 impl Builder {
@@ -73,12 +76,7 @@ impl Builder {
     }
 
     /// Wait for any new updates to the builder - either it completed or gave us a message etc
-    pub async fn wait(&mut self) -> Result<BuildUpdate> {
-        let Some(results) = self.build_results.as_mut() else {
-            std::future::pending::<()>().await;
-            unreachable!()
-        };
-
+    pub async fn wait(&mut self) -> Result<BuilderUpdate> {
         // Wait for build progress
         let mut next = select_all(
             self.build_progress
@@ -86,37 +84,38 @@ impl Builder {
                 .map(|(platform, rx)| rx.map(move |update| (*platform, update))),
         );
 
+        let Some(results) = self.build_results.as_mut() else {
+            std::future::pending::<()>().await;
+            unreachable!("Pending cannot resolve")
+        };
+
         // Wait for the next build result
         tokio::select! {
             application = results => {
                 // If we have a build result, open it
-                let application = application.map_err(|e| crate::Error::Unique("Build join failed".to_string()))??;
+                let applications = application.map_err(|e| crate::Error::Unique("Build join failed".to_string()))??;
 
-                let mut handles = Vec::new();
-                for build_result in &application {
-                    if let Some(mut child) = build_result.open(&self.serve.server_arguments)? {
-                        let handle = ProcessHandle {
-                            stdout: child.stdout.take().unwrap(),
-                            stderr: child.stderr.take().unwrap(),
-                        };
-                        handles.push(handle);
-                        self.children.push(child);
-                    }
+                for build_result in applications.iter() {
+                    let child = build_result.open(&self.serve.server_arguments);
+                    self.children.push((build_result.platform, child.unwrap().unwrap()));
+                    // if let Ok(Some(child_proc)) = child {
+                    //     self.children.push(child_proc);
+                    // }
                 }
 
                 self.build_results = None;
-                Ok(BuildUpdate::BuildFinished(handles))
+                return Ok(BuilderUpdate::Ready { results: applications });
             }
             Some((platform, update)) = next.next() => {
                 // If we have a build progress, send it to the screen
-                Ok(BuildUpdate::BuildProgress { platform, update })
+                Ok(BuilderUpdate::Progress { platform, update })
             }
         }
     }
 
     /// Shutdown the current build process
     pub(crate) fn shutdown(&mut self) {
-        for mut child in self.children.drain(..) {
+        for (_, mut child) in self.children.drain(..) {
             // Gracefully shtudown the desktop app
             // It might have a receiver to do some cleanup stuff
             if let Some(pid) = child.id() {
@@ -152,15 +151,12 @@ impl Builder {
     }
 }
 
-pub(crate) enum BuildUpdate {
-    BuildFinished(Vec<ProcessHandle>),
-    BuildProgress {
+pub enum BuilderUpdate {
+    Progress {
         platform: Platform,
         update: UpdateBuildProgress,
     },
-}
-
-pub(crate) struct ProcessHandle {
-    pub(crate) stdout: ChildStdout,
-    pub(crate) stderr: ChildStderr,
+    Ready {
+        results: Vec<BuildResult>,
+    },
 }

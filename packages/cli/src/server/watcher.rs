@@ -100,7 +100,7 @@ impl Watcher {
 
         let mut all_mods: Vec<(EventKind, PathBuf)> = vec![];
 
-        println!("dequeuing events: {:#?}", self.queued_events);
+        // println!("dequeuing events: {:#?}", self.queued_events);
 
         // Decompose the events into a list of all the files that have changed
         for evt in self.queued_events.drain(..) {
@@ -123,7 +123,7 @@ impl Watcher {
             // for various assets that might be linked in, we just try to hotreloading them forcefully
             // That is, unless they appear in an include! macro, in which case we need to a full rebuild....
             let ext = path.extension().and_then(|v| v.to_str())?;
-            println!("{:?}{:?}{:?}", ext, path, kind);
+            // println!("{:?}{:?}{:?}", ext, path, kind);
 
             // // Workaround for notify and vscode-like editor:
             // // when edit & save a file in vscode, there will be two notifications,
@@ -162,13 +162,13 @@ impl Watcher {
         let mut changed_templates = vec![];
 
         for rust_file in edited_rust_files {
-            println!("Updating file map for: {:?}", rust_file);
+            // println!("Updating file map for: {:?}", rust_file);
             let hotreloaded_templates = self
                 .file_map
                 .update_rsx::<HtmlCtx>(rust_file, &crate_dir)
                 .ok()?;
 
-            println!("Hotreloaded templates: {:#?}", hotreloaded_templates);
+            // println!("Hotreloaded templates: {:#?}", hotreloaded_templates);
 
             changed_templates.extend(hotreloaded_templates);
         }

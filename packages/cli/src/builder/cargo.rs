@@ -196,6 +196,10 @@ impl BuildRequest {
             executable: output_path,
             elapsed_time: t_start.elapsed(),
             web: self.web,
+            platform: self
+                .build_arguments
+                .platform
+                .expect("To be resolved by now"),
         };
 
         // If this is a web build, run web post processing steps
