@@ -116,9 +116,8 @@ impl Watcher {
             .dioxus_config
             .application
             .asset_dir
-            .clone()
             .canonicalize()
-            .expect("Asset dir to be valid");
+            .ok();
 
         for (kind, path) in all_mods.iter() {
             // for various assets that might be linked in, we just try to hotreloading them forcefully
@@ -149,7 +148,11 @@ impl Watcher {
                 edited_rust_files.push(path);
             }
 
-            if ext != "rs" && path.starts_with(&asset_dir) {
+            let asset_file = match &asset_dir {
+                Some(asset_dir) => path.starts_with(&asset_dir),
+                None => false,
+            };
+            if ext != "rs" && asset_file {
                 changed_assets.push(path);
             }
         }
