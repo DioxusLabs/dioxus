@@ -42,6 +42,9 @@ impl Output {
             stdout().execute(EnterAlternateScreen)?;
         }
 
+        // set the panic hook to fix the terminal
+        set_fix_term_hook();
+
         let events = EventStream::new();
         let term: TerminalBackend = Terminal::with_options(
             CrosstermBackend::new(stdout()),
@@ -355,6 +358,15 @@ impl Output {
         //     );
         // }
     }
+}
+
+fn set_fix_term_hook() {
+    let original_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        _ = disable_raw_mode();
+        _ = stdout().execute(LeaveAlternateScreen);
+        original_hook(info);
+    }));
 }
 
 async fn rustc_version() -> String {

@@ -9,6 +9,7 @@ use dioxus_cli_config::Platform;
 use futures_channel::mpsc::Receiver;
 use futures_channel::mpsc::UnboundedReceiver;
 use futures_util::stream::FuturesUnordered;
+use futures_util::stream::{FusedStream, FuturesUnordered};
 use futures_util::StreamExt;
 use tokio::task::JoinHandle;
 use tokio::task::JoinSet;
@@ -75,7 +76,10 @@ impl Builder {
         // Wait for build progress
         let mut next = FuturesUnordered::new();
         for (platform, rx) in self.build_progress.iter_mut() {
-            next.push(async { (*platform, rx.select_next_some().await) });
+            if rx.is_terminated() {
+                continue;
+            }
+            next.push(async { (*platform, { rx.next().await }) });
         }
 
         // Wait for the next build result
@@ -86,10 +90,15 @@ impl Builder {
                 for build_result in application? {
                     build_result.open()?;
                 }
+                self.build_results = None;
             }
             progress = next.next() => {
                 // If we have a build progress, send it to the screen
-                return Ok(progress)
+                if let Some(progress) = progress {
+                    if let Some(logs) = progress.1 {
+                        return Ok(Some((progress.0, logs)));
+                    }
+                }
             }
         }
 

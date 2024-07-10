@@ -72,12 +72,9 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                     continue;
                 }
 
-                println!("Changes detected! Reloading...");
-
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients
                 if let Some(hr) = watchr.attempt_hot_reload(&dioxus_crate) {
-                    println!("Hotreloading... {hr:?}");
                     server.send_hotreload(hr).await;
                     continue;
                 }
