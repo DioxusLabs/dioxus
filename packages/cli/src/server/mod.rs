@@ -95,7 +95,7 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                 // Wait for logs from the build engine
                 // These will cause us to update the screen
                 // We also can check the status of the builds here in case we have multiple ongoing builds
-                if let Some((platform, update)) = application? {
+                if let Ok(Some((platform, update))) = application {
                     screen.new_build_logs(platform, update);
                 }
             }

@@ -73,6 +73,12 @@ impl Builder {
             return Ok(None);
         };
 
+        if results.is_finished() {
+            _ = self.build_results.take();
+            std::future::pending::<()>().await;
+            return Ok(None);
+        }
+
         // Wait for build progress
         let mut next = FuturesUnordered::new();
         for (platform, rx) in self.build_progress.iter_mut() {
