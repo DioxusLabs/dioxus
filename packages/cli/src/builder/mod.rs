@@ -128,4 +128,8 @@ impl BuildResult {
                 .spawn()?,
         ))
     }
+
+    pub fn kill(&self) -> Result<(), std::io::Error> {
+        Ok(())
+    }
 }

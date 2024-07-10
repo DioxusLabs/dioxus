@@ -8,7 +8,10 @@ use dioxus_cli_config::Platform;
 use futures_channel::mpsc::UnboundedReceiver;
 use futures_util::stream::select_all;
 use futures_util::StreamExt;
-use tokio::task::JoinHandle;
+use tokio::{
+    process::{Child, Command},
+    task::JoinHandle,
+};
 
 /// A handle to ongoing builds and then the spawned tasks themselves
 pub struct Builder {
@@ -20,6 +23,9 @@ pub struct Builder {
     config: DioxusCrate,
     /// The arguments for the build
     serve: Serve,
+
+    /// The children of the build process
+    children: Vec<Child>,
 }
 
 impl Builder {
@@ -32,6 +38,7 @@ impl Builder {
             build_progress: Vec::new(),
             config: config.clone(),
             serve,
+            children: Vec::new(),
         }
     }
 
@@ -83,7 +90,11 @@ impl Builder {
                 let application = application.map_err(|e| crate::Error::Unique("Build join failed".to_string()))??;
 
                 for build_result in application {
-                    _ = build_result.open(&self.serve.server_arguments);
+                    let child = build_result.open(&self.serve.server_arguments);
+                    self.children.push(child.unwrap().unwrap());
+                    // if let Ok(Some(child_proc)) = child {
+                    //     self.children.push(child_proc);
+                    // }
                 }
 
                 self.build_results = None;
@@ -102,6 +113,31 @@ impl Builder {
 
     /// Shutdown the current build process
     pub(crate) fn shutdown(&mut self) {
+        for mut child in self.children.drain(..) {
+            // Gracefully shtudown the desktop app
+            // It might have a receiver to do some cleanup stuff
+            if let Some(pid) = child.id() {
+                // on unix, we can send a signal to the process to shut down
+                #[cfg(unix)]
+                {
+                    _ = Command::new("kill")
+                        .args(["-s", "TERM", &pid.to_string()])
+                        .spawn();
+                }
+
+                // on windows, use the `taskkill` command
+                #[cfg(windows)]
+                {
+                    _ = Command::new("taskkill")
+                        .args(["/F", "/PID", &pid.to_string()])
+                        .spawn();
+                }
+            }
+
+            // Todo: add a timeout here to kill the process if it doesn't shut down within a reasonable time
+            _ = child.start_kill();
+        }
+
         if let Some(tasks) = self.build_results.take() {
             tasks.abort();
         }

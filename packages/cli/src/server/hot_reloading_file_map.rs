@@ -1,7 +1,4 @@
-use dioxus_core::{
-    prelude::HotReloadLiteral,
-    Template,
-};
+use dioxus_core::{prelude::HotReloadLiteral, Template};
 use dioxus_rsx::{
     hot_reload::{diff_rsx, ChangedRsx},
     CallBody, HotReloadedTemplate, HotReloadingContext,
