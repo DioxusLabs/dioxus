@@ -222,7 +222,7 @@ jobs:
           - {
               target: x86_64-pc-windows-msvc,
               os: windows-latest,
-              toolchain: "1.76.0",
+              toolchain: "1.79.0",
               cross: false,
               command: "test",
               args: "--all --tests",
