@@ -129,6 +129,13 @@ impl BuildRequest {
                 .display()
         );
 
+        progress
+            .send(UpdateBuildProgress {
+                stage: Stage::Finished,
+                update: UpdateStage::Start,
+            })
+            .unwrap();
+
         Ok(build_result)
     }
 

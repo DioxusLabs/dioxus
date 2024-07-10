@@ -42,6 +42,7 @@ pub enum Stage {
     Compiling,
     OptimizingWasm,
     OptimizingAssets,
+    Finished,
 }
 
 pub struct UpdateBuildProgress {
@@ -64,6 +65,9 @@ impl UpdateBuildProgress {
                 }
                 Stage::OptimizingAssets => {
                     println!("--- Optimizing assets ---");
+                }
+                Stage::Finished => {
+                    println!("--- Finished ---");
                 }
             },
             UpdateStage::AddMessage(message) => {
