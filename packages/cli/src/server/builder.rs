@@ -91,20 +91,20 @@ impl Builder {
 
         // Wait for the next build result
         tokio::select! {
-            application = results => {
+            build_results = results => {
                 self.build_results = None;
                 
                 // If we have a build result, open it
-                let applications = application.map_err(|e| crate::Error::Unique("Build join failed".to_string()))??;
-
-                for build_result in applications.iter() {
+                let build_results = build_results.map_err(|e| crate::Error::Unique("Build join failed".to_string()))??;
+                
+                for build_result in build_results.iter() {
                     let child = build_result.open(&self.serve.server_arguments);
                     if let Some(child_proc) = child? {
                         self.children.push((build_result.platform,child_proc));
                     }
                 }
 
-                return Ok(BuilderUpdate::Ready { results: applications });
+                return Ok(BuilderUpdate::Ready { results: build_results });
             }
             Some((platform, update)) = next.next() => {
                 // If we have a build progress, send it to the screen

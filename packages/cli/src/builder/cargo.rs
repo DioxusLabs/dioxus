@@ -87,9 +87,7 @@ impl BuildRequest {
         let cargo_args = self.build_arguments();
         cmd.args(&cargo_args);
 
-        cmd.arg("--")
-            .arg("-C --error-format=json")
-            .args(self.rust_flags.clone());
+        cmd.arg("--").args(self.rust_flags.clone());
 
         Ok((cmd, cargo_args))
     }
