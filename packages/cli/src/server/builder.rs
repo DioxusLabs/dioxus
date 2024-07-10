@@ -23,19 +23,19 @@ pub struct Builder {
     /// The application we are building
     config: DioxusCrate,
     /// The arguments for the build
-    build_arguments: Build,
+    serve: Serve,
 }
 
 impl Builder {
     /// Create a new builder
     pub fn new(config: &DioxusCrate, serve: &Serve) -> Self {
-        let build_arguments = serve.build_arguments.clone();
+        let serve = serve.clone();
         let config = config.clone();
         Self {
             build_results: None,
             build_progress: Vec::new(),
             config: config.clone(),
-            build_arguments,
+            serve,
         }
     }
 
@@ -43,7 +43,7 @@ impl Builder {
     pub fn build(&mut self) {
         self.shutdown();
         let build_requests =
-            BuildRequest::create(false, &self.config, self.build_arguments.clone());
+            BuildRequest::create(false, &self.config, self.serve.build_arguments.clone());
 
         let mut set = tokio::task::JoinSet::new();
         for build_request in build_requests {
@@ -90,7 +90,7 @@ impl Builder {
                 match application {
                     Ok(Ok(application)) => {
                         for build_result in application {
-                            _ = build_result.open();
+                            _ = build_result.open(&self.serve.server_arguments);
                         }
                     }
                     Ok(Err(err)) => {

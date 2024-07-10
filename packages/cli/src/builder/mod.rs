@@ -2,7 +2,7 @@ use crate::build::Build;
 use crate::dioxus_crate::DioxusCrate;
 use crate::Result;
 use cargo_metadata::diagnostic::Diagnostic;
-use dioxus_cli_config::Platform;
+use dioxus_cli_config::{Platform, ServeArguments};
 use futures_util::stream::select_all;
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use std::{path::PathBuf, time::Duration};
@@ -115,10 +115,18 @@ pub(crate) struct BuildResult {
 
 impl BuildResult {
     /// Open the executable if this is a native build
-    pub fn open(&self) -> std::io::Result<Option<Child>> {
+    pub fn open(&self, serve: &ServeArguments) -> std::io::Result<Option<Child>> {
         if self.web {
             return Ok(None);
         }
-        Ok(Some(Command::new(&self.executable).spawn()?))
+        Ok(Some(
+            Command::new(&self.executable)
+                // When building the fullstack server, we need to forward the serve arguments (like port) to the fullstack server through env vars
+                .env(
+                    dioxus_cli_config::__private::SERVE_ENV.to_string(),
+                    serde_json::to_string(&serve).unwrap(),
+                )
+                .spawn()?,
+        ))
     }
 }

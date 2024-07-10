@@ -106,12 +106,4 @@ impl BuildRequest {
             true,
         )
     }
-
-    // When building the fullstack server, we need to forward the serve arguments (like port) to the fullstack server through env vars
-    fn add_serve_options_to_env(serve: &Serve, env: &mut Vec<(String, String)>) {
-        env.push((
-            dioxus_cli_config::__private::SERVE_ENV.to_string(),
-            serde_json::to_string(&serve.server_arguments).unwrap(),
-        ));
-    }
 }
