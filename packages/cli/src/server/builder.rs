@@ -107,15 +107,9 @@ impl Builder {
                 self.build_results = None;
                 Ok(BuildUpdate::BuildFinished(handles))
             }
-            progress = next.next() => {
+            Some((platform, update)) = next.next() => {
                 // If we have a build progress, send it to the screen
-                if let Some((platform, update)) = progress {
-                    Ok(BuildUpdate::BuildProgress { platform, update })
-                }
-                else {
-                    std::future::pending::<()>().await;
-                    unreachable!()
-                }
+                Ok(BuildUpdate::BuildProgress { platform, update })
             }
         }
     }
