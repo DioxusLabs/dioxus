@@ -8,7 +8,7 @@ use crate::{
 };
 use core::num;
 use crossterm::{
-    event::{Event, EventStream, KeyCode, MouseEventKind},
+    event::{Event, EventStream, KeyCode, KeyModifiers, MouseEventKind},
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     tty::IsTty,
     ExecutableCommand,
@@ -46,6 +46,7 @@ pub struct Output {
     is_cli_release: bool,
     platform: Platform,
 
+    num_lines_with_wrapping: u16,
     term_height: u16,
     scroll: u16,
     fly_modal_open: bool,
@@ -109,6 +110,7 @@ impl Output {
             running_apps: HashMap::new(),
             scroll: 0,
             term_height: 0,
+            num_lines_with_wrapping: 0,
         })
     }
 
@@ -119,8 +121,6 @@ impl Output {
         let event = self.events.next();
 
         let next_stdout = self.running_apps.values_mut().map(|app| async move {
-            // let mut stdout_line = String::new();
-            // let mut stderr_line = String::new();
             let stdout = app.stdout.next_line();
             let stderr = app.stderr.next_line();
             tokio::select! {
@@ -171,7 +171,10 @@ impl Output {
                 }
                 println!("Build logs for {platform:?}:");
                 for message in build.messages.iter() {
-                    println!("[{}] {:?}", message.level, message.message);
+                    match &message.message {
+                        MessageType::Cargo(t) => println!("{:?}", t),
+                        MessageType::Text(t) => println!("{}", t),
+                    }
                 }
             }
         }
@@ -183,7 +186,9 @@ impl Output {
         // handle ctrlc
         if let Event::Key(key) = input {
             if let KeyCode::Char('c') = key.code {
-                return Err(io::Error::new(io::ErrorKind::Interrupted, "Ctrl-C"));
+                if key.modifiers.contains(KeyModifiers::CONTROL) {
+                    return Err(io::Error::new(io::ErrorKind::Interrupted, "Ctrl-C"));
+                }
             }
         }
 
@@ -193,28 +198,26 @@ impl Output {
             }
         }
 
-        if let Event::Mouse(mouse) = input {
-            if mouse.kind == MouseEventKind::ScrollUp {
+        match input {
+            Event::Mouse(mouse) if mouse.kind == MouseEventKind::ScrollUp => {
                 self.scroll = self.scroll.saturating_sub(1);
             }
-            if mouse.kind == MouseEventKind::ScrollDown {
+            Event::Mouse(mouse) if mouse.kind == MouseEventKind::ScrollDown => {
                 self.scroll += 1;
             }
-        }
-
-        match input {
             Event::Key(key) if key.code == KeyCode::Up => {
                 self.scroll = self.scroll.saturating_sub(1);
             }
             Event::Key(key) if key.code == KeyCode::Down => {
                 self.scroll += 1;
             }
+            Event::Resize(widht, height) => {
+                self.term_height = height - 3;
+            }
             _ => {}
         }
 
         for (plat, log) in self.build_logs.iter() {
-            // self.scroll = log.messages.len().saturating_sub(self.term_height as usize) as u16;
-            //     // if log.messages.len() > self.term_height as usize {
             self.scroll =
                 self.scroll
                     .clamp(0, log.messages.len() as u16 - self.term_height) as u16;
@@ -327,40 +330,6 @@ impl Output {
                 .map(|log| log.messages.len())
                 .unwrap_or(0);
 
-            // Render the metadata
-            let mut spans = vec![
-                Span::from(if self.is_cli_release { "dx" } else { "dx-dev" }).green(),
-                Span::from(" ").green(),
-                Span::from("serve").green(),
-                Span::from(" | ").white(),
-                Span::from("v").cyan(),
-                Span::from(self.dx_version.clone()).cyan(),
-                // Span::from(" | ").white(),
-                // Span::from("rustc-").cyan(),
-                // Span::from(self.rustc_version.clone()).cyan(),
-                // Span::from(if self.rustc_nightly { "-nightly" } else { "" }).cyan(),
-                Span::from(" | ").white(),
-                Span::from(self.platform.to_string()).cyan(),
-                Span::from(" | ").white(),
-                Span::from(self.scroll.to_string()).cyan(),
-                Span::from("/").white(),
-                Span::from((num_lines.saturating_sub(self.term_height as usize)).to_string())
-                    .cyan(),
-                Span::from(" | ").white(),
-            ];
-
-            for (cmd, name) in [("/", "more"), ("?", "help")].iter() {
-                spans.extend_from_slice(&[
-                    Span::from("[").magenta(),
-                    Span::from(*cmd).white(),
-                    Span::from(" ").magenta(),
-                    Span::from(*name).gray(),
-                    Span::from("] ").magenta(),
-                ]);
-            }
-
-            frame.render_widget(Paragraph::new(Line::from(spans)).left_aligned(), header[0]);
-
             for platform in self.build_logs.keys() {
                 let build = self.build_logs.get(platform).unwrap();
 
@@ -406,9 +375,49 @@ impl Output {
 
                 let paragraph = Paragraph::new(lines)
                     .left_aligned()
+                    // .wrap(Wrap { trim: false })
                     .scroll((self.scroll, 0));
+
+                // paragraph.line_count(
+
+                // );
+
                 frame.render_widget(paragraph, body[1]);
             }
+
+            // Render the metadata
+            let mut spans = vec![
+                Span::from(if self.is_cli_release { "dx" } else { "dx-dev" }).green(),
+                Span::from(" ").green(),
+                Span::from("serve").green(),
+                Span::from(" | ").white(),
+                Span::from("v").cyan(),
+                Span::from(self.dx_version.clone()).cyan(),
+                // Span::from(" | ").white(),
+                // Span::from("rustc-").cyan(),
+                // Span::from(self.rustc_version.clone()).cyan(),
+                // Span::from(if self.rustc_nightly { "-nightly" } else { "" }).cyan(),
+                Span::from(" | ").white(),
+                Span::from(self.platform.to_string()).cyan(),
+                Span::from(" | ").white(),
+                Span::from(self.scroll.to_string()).cyan(),
+                Span::from("/").white(),
+                Span::from((num_lines.saturating_sub(self.term_height as usize)).to_string())
+                    .cyan(),
+                Span::from(" | ").white(),
+            ];
+
+            for (cmd, name) in [("/", "more"), ("?", "help")].iter() {
+                spans.extend_from_slice(&[
+                    Span::from("[").magenta(),
+                    Span::from(*cmd).white(),
+                    Span::from(" ").magenta(),
+                    Span::from(*name).gray(),
+                    Span::from("] ").magenta(),
+                ]);
+            }
+
+            frame.render_widget(Paragraph::new(Line::from(spans)).left_aligned(), header[0]);
 
             // render the fly modal
             self.render_fly_moydal(frame, body[1], opts, config, build_engine, server, watcher);
@@ -433,7 +442,7 @@ impl Output {
         let panel = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Fill(1)].as_ref())
-            .margin(2)
+            // .margin(2)
             .split(area)[0];
 
         // Wipe the panel
