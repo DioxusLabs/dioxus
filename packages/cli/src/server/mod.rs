@@ -50,6 +50,9 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
         .expect("Failed to open terminal logger");
     let mut buildr = Builder::new(&dioxus_crate, &serve);
 
+    // Start the first build
+    buildr.build();
+
     loop {
         // Make sure we don't hog the CPU: these loop { select! {} } blocks can starve the executor
         yield_now().await;
@@ -81,10 +84,10 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
 
                 // If the change is not binary patchable, rebuild the project
                 // We're going to kick off a new build, interrupting the current build if it's ongoing
-                buildr.build().await?;
+                buildr.build();
             }
 
-            // reload the page
+            // reload the pag
             _new_socket = server.wait() => {
                 // Run the server in the background
                 // Waiting for updates here lets us tap into when clients are added/removed
@@ -95,11 +98,10 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                 // Wait for logs from the build engine
                 // These will cause us to update the screen
                 // We also can check the status of the builds here in case we have multiple ongoing builds
-                for build_result in application? {
-                    build_result.open()?;
+                if let Some((platform, update)) = application? {
+                    println!("Update for {platform:?}...");
                 }
             }
-
 
             // Handle input from the user using our settings
             input = screen.wait() => {
@@ -114,7 +116,7 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
     // todo: more printing, logging, error handling in this phase
     _ = screen.shutdown();
     _ = server.shutdown().await;
-    _ = buildr.shutdown().await;
+    _ = buildr.shutdown();
 
     Ok(())
 }

@@ -244,11 +244,7 @@ fn no_cache(
     // If there's a 404 and we're supposed to index on 404, upgrade that failed request to the index.html
     // We migth want to isnert a header here saying we *did* that but oh well
     if response.status() == StatusCode::NOT_FOUND && index_on_404 {
-        let body = Body::from(
-            std::fs::read_to_string(out_dir.join("index.html"))
-                .ok()
-                .unwrap(),
-        );
+        let body = Body::from(std::fs::read_to_string(out_dir.join("index.html")).unwrap());
 
         response = Response::builder()
             .status(StatusCode::OK)

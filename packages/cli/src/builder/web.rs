@@ -6,9 +6,9 @@ use crate::builder::progress::UpdateBuildProgress;
 use crate::builder::progress::UpdateStage;
 use crate::error::{Error, Result};
 use dioxus_cli_config::WasmOptLevel;
+use futures_channel::mpsc::{Receiver, Sender};
 use std::path::Path;
 use tokio::process::Command;
-use tokio::sync::mpsc::Sender;
 use wasm_bindgen_cli_support::Bindgen;
 
 // Attempt to automatically recover from a bindgen failure by updating the wasm-bindgen version
@@ -45,7 +45,7 @@ async fn update_wasm_bindgen_version() -> Result<()> {
 
 /// Check if the wasm32-unknown-unknown target is installed and try to install it if not
 pub(crate) async fn install_web_build_tooling(
-    progress: &Sender<UpdateBuildProgress>,
+    progress: &mut Sender<UpdateBuildProgress>,
 ) -> Result<()> {
     // If the user has rustup, we can check if the wasm32-unknown-unknown target is installed
     // Otherwise we can just assume it is installed - which is not great...
@@ -111,7 +111,7 @@ impl BuildRequest {
     pub(crate) async fn post_process_web_build(
         &self,
         build_result: &BuildResult,
-        progress: &Sender<UpdateBuildProgress>,
+        progress: &mut Sender<UpdateBuildProgress>,
     ) -> Result<()> {
         _ = progress.try_send(UpdateBuildProgress {
             stage: Stage::OptimizingWasm,

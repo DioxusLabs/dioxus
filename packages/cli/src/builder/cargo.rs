@@ -12,13 +12,12 @@ use crate::builder::progress::UpdateStage;
 use crate::link::LinkCommand;
 use crate::ExecutableType;
 use crate::Result;
-use dioxus_html::b;
+use futures_channel::mpsc::{Receiver, Sender};
 use manganis_cli_support::ManganisSupportGuard;
 use std::env;
 use std::fs::create_dir_all;
 use std::time::Instant;
 use tokio::process::Command;
-use tokio::sync::mpsc::Sender;
 
 impl BuildRequest {
     /// Create a build command for cargo
@@ -86,7 +85,7 @@ impl BuildRequest {
         Ok((cmd, cargo_args))
     }
 
-    pub async fn build(&self, progress: Sender<UpdateBuildProgress>) -> Result<BuildResult> {
+    pub async fn build(&self, mut progress: Sender<UpdateBuildProgress>) -> Result<BuildResult> {
         tracing::info!("🚅 Running build [Desktop] command...");
 
         // Set up runtime guards
@@ -97,7 +96,7 @@ impl BuildRequest {
 
         // If this is a web, build make sure we have the web build tooling set up
         if self.web {
-            install_web_build_tooling(&progress).await?;
+            install_web_build_tooling(&mut progress).await?;
         }
 
         // Create the build command
@@ -113,11 +112,11 @@ impl BuildRequest {
             .map(|k| k.targets.len())
             .sum::<usize>()
             / 4;
-        let cargo_result = build_cargo(crate_count, cmd, &progress).await?;
+        let cargo_result = build_cargo(crate_count, cmd, &mut progress).await?;
 
         // Post process the build result
         let build_result = self
-            .post_process_build(cargo_args, &cargo_result, start_time, &progress)
+            .post_process_build(cargo_args, &cargo_result, start_time, &mut progress)
             .await?;
 
         tracing::info!(
@@ -138,7 +137,7 @@ impl BuildRequest {
         cargo_args: Vec<String>,
         cargo_build_result: &CargoBuildResult,
         t_start: Instant,
-        progress: &Sender<UpdateBuildProgress>,
+        progress: &mut Sender<UpdateBuildProgress>,
     ) -> Result<BuildResult> {
         _ = progress.try_send(UpdateBuildProgress {
             stage: Stage::OptimizingAssets,

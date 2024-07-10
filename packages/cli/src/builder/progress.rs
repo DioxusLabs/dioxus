@@ -2,6 +2,7 @@
 
 use cargo_metadata::CompilerMessage;
 use cargo_metadata::{diagnostic::Diagnostic, Message};
+use futures_channel::mpsc::{Receiver, Sender};
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use std::io::{self, IsTerminal};
@@ -9,7 +10,6 @@ use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, Stdout};
-use tokio::sync::mpsc::Sender;
 use tracing::Level;
 
 use crate::build::Build;
@@ -107,7 +107,7 @@ impl From<Diagnostic> for BuildMessage {
 pub(crate) async fn build_cargo(
     crate_count: usize,
     mut cmd: tokio::process::Command,
-    progress: &Sender<UpdateBuildProgress>,
+    progress: &mut Sender<UpdateBuildProgress>,
 ) -> anyhow::Result<CargoBuildResult> {
     _ = progress.try_send(UpdateBuildProgress {
         stage: Stage::Compiling,

@@ -12,6 +12,7 @@ mod fullstack;
 mod prepare_html;
 mod progress;
 mod web;
+pub use progress::{BuildMessage, Stage, UpdateBuildProgress, UpdateStage};
 
 /// A request for a project to be built
 pub struct BuildRequest {
@@ -62,7 +63,7 @@ impl BuildRequest {
         let mut build_progress = Vec::new();
         let mut set = tokio::task::JoinSet::new();
         for build_request in build_requests {
-            let (tx, rx) = tokio::sync::mpsc::channel(5000);
+            let (tx, rx) = futures_channel::mpsc::channel(5000);
             build_progress.push((
                 build_request.build_arguments.platform.unwrap_or_default(),
                 rx,
@@ -74,11 +75,9 @@ impl BuildRequest {
         loop {
             let mut next = FuturesUnordered::new();
             for (platform, rx) in build_progress.iter_mut() {
-                if !rx.is_closed() {
-                    next.push(async { rx.recv().await.map(|update| (*platform, update)) });
-                }
+                next.push(async { (*platform, rx.select_next_some().await) });
             }
-            match next.next().await.flatten() {
+            match next.next().await {
                 Some((platform, update)) => {
                     if multi_platform_build {
                         print!("{platform} build: ");
