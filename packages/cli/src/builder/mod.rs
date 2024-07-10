@@ -75,15 +75,19 @@ impl BuildRequest {
         loop {
             let mut next = FuturesUnordered::new();
             for (platform, rx) in build_progress.iter_mut() {
-                next.push(async { (*platform, rx.select_next_some().await) });
+                next.push(async { (*platform, rx.next().await) });
             }
             match next.next().await {
                 Some((platform, update)) => {
-                    if multi_platform_build {
-                        print!("{platform} build: ");
-                        update.to_std_out();
+                    if let Some(update) = update {
+                        if multi_platform_build {
+                            print!("{platform} build: ");
+                            update.to_std_out();
+                        } else {
+                            update.to_std_out();
+                        }
                     } else {
-                        update.to_std_out();
+                        break;
                     }
                 }
                 None => {
