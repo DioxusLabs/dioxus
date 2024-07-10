@@ -1,6 +1,5 @@
 use crate::DioxusCrate;
-use crate::ExecutableType;
-use crate::{build::Build, dioxus_crate};
+use crate::build::Build;
 use anyhow::Context;
 use std::env::current_dir;
 use std::fs::create_dir_all;
@@ -131,7 +130,7 @@ impl Bundle {
         let static_asset_output_dir = &dioxus_crate.dioxus_config.application.out_dir;
         // Make sure the dist directory is relative to the crate directory
         let static_asset_output_dir = static_asset_output_dir
-            .strip_prefix(&dioxus_crate.workspace_dir())
+            .strip_prefix(dioxus_crate.workspace_dir())
             .unwrap_or(static_asset_output_dir);
 
         let static_asset_output_dir = static_asset_output_dir.display().to_string();
@@ -178,7 +177,7 @@ impl Bundle {
         if let Some(packages) = &self.package {
             settings = settings.package_types(
                 packages
-                    .into_iter()
+                    .iter()
                     .map(|p| p.parse::<PackageType>().unwrap().into())
                     .collect(),
             );

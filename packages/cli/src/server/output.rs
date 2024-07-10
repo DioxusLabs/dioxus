@@ -4,17 +4,16 @@ use crate::{
     dioxus_crate::DioxusCrate,
 };
 use crossterm::{
-    event::{self, Event, EventStream, KeyCode},
+    event::{Event, EventStream, KeyCode},
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     tty::IsTty,
     ExecutableCommand,
 };
 use dioxus_cli_config::Platform;
-use futures_channel::mpsc::UnboundedReceiver;
-use futures_util::{future::FutureExt, select, StreamExt};
+use futures_util::{future::FutureExt, StreamExt};
 use ratatui::{prelude::*, widgets::*, TerminalOptions, Viewport};
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::HashMap,
     io::{self, stdout},
 };
 
@@ -70,7 +69,7 @@ impl Output {
         if !is_cli_release {
             if let Some(hash) = crate::dx_build_info::GIT_COMMIT_HASH_SHORT {
                 let hash = &hash.trim_start_matches("g")[..4];
-                dx_version.push_str("-");
+                dx_version.push('-');
                 dx_version.push_str(hash);
             }
         }
@@ -132,13 +131,10 @@ impl Output {
             }
         }
 
-        match input {
-            Event::Key(key) => {
-                if let KeyCode::Char('/') = key.code {
-                    self.fly_modal.hidden = !self.fly_modal.hidden;
-                }
+        if let Event::Key(key) = input {
+            if let KeyCode::Char('/') = key.code {
+                self.fly_modal.hidden = !self.fly_modal.hidden;
             }
-            _ => {}
         }
 
         Ok(())
@@ -314,10 +310,9 @@ async fn rustc_version() -> String {
         .await
         .ok()
         .map(|o| o.stdout)
-        .map(|o| {
+        .and_then(|o| {
             let out = String::from_utf8(o).unwrap();
             out.split_ascii_whitespace().nth(1).map(|v| v.to_string())
         })
-        .flatten()
         .unwrap_or_else(|| "<unknown>".to_string())
 }

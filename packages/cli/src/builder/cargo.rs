@@ -10,12 +10,9 @@ use crate::builder::progress::Stage;
 use crate::builder::progress::UpdateBuildProgress;
 use crate::builder::progress::UpdateStage;
 use crate::link::LinkCommand;
-use crate::ExecutableType;
 use crate::Result;
 use anyhow::Context;
-use futures_channel::mpsc::{Receiver, Sender};
-use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use futures_util::SinkExt;
+use futures_channel::mpsc::UnboundedSender;
 use manganis_cli_support::ManganisSupportGuard;
 use std::env;
 use std::fs::create_dir_all;
@@ -82,7 +79,7 @@ impl BuildRequest {
         if let Some(target_dir) = &self.target_dir {
             cmd.env("CARGO_TARGET_DIR", target_dir);
         }
-        cmd.current_dir(&self.dioxus_crate.crate_dir())
+        cmd.current_dir(self.dioxus_crate.crate_dir())
             .arg("build")
             .arg("--message-format=json-render-diagnostics");
 

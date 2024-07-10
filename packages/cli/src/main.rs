@@ -1,4 +1,4 @@
-use std::{env, path::PathBuf};
+use std::env;
 use tracing_subscriber::EnvFilter;
 
 use anyhow::Context;

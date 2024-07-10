@@ -1,21 +1,14 @@
 //! Report progress about the build to the user. We use channels to report progress back to the CLI.
 
 use anyhow::Context;
-use cargo_metadata::CompilerMessage;
 use cargo_metadata::{diagnostic::Diagnostic, Message};
-use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use futures_util::stream::select_all;
-use once_cell::sync::Lazy;
+use futures_channel::mpsc::UnboundedSender;
 use serde::Deserialize;
-use std::io::{self, IsTerminal};
 use std::path::PathBuf;
 use std::process::Stdio;
-use std::time::Duration;
-use tokio::io::{AsyncBufReadExt, Stdout};
+use tokio::io::AsyncBufReadExt;
 use tracing::Level;
 
-use crate::build::{Build, TargetArgs};
-use crate::DioxusCrate;
 
 use super::BuildRequest;
 

@@ -20,7 +20,7 @@ use dioxus_cli_config::WebHttpsConfig;
 use dioxus_hot_reload::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::{
     convert::Infallible,
     fs, io,

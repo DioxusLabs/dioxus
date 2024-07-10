@@ -1,8 +1,7 @@
 use crate::build::TargetArgs;
-use anyhow::Context;
 use dioxus_cli_config::{DioxusConfig, Platform};
 use krates::cm::Target;
-use krates::{cm::TargetKind, Cmd, Kid, Krates, NodeId};
+use krates::{cm::TargetKind, Cmd, Krates, NodeId};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::{
@@ -10,10 +9,7 @@ use std::{
     path::PathBuf,
 };
 
-use crate::{
-    build,
-    metadata::{crate_root, CargoError, Metadata},
-};
+use crate::metadata::CargoError;
 
 /// Load the dioxus config from a path
 fn load_dioxus_config(
@@ -93,7 +89,7 @@ fn find_main_package(package: Option<String>, krates: &Krates) -> Result<NodeId,
                     if let krates::Node::Krate {
                         id,
                         krate,
-                        features,
+                        
                         ..
                     } = node
                     {
@@ -108,14 +104,14 @@ fn find_main_package(package: Option<String>, krates: &Krates) -> Result<NodeId,
         None => {
             // Otherwise find the package that is the closest parent of the current directory
             let current_dir = std::env::current_dir()?;
-            let mut current_dir = current_dir.as_path();
+            let current_dir = current_dir.as_path();
             // Go through each member and find the path that is a parent of the current directory
             let mut closest_parent = None;
             for member in krates.workspace_members() {
                 if let krates::Node::Krate {
                     id,
                     krate,
-                    features,
+                    
                     ..
                 } = member
                 {

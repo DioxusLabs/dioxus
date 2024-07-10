@@ -107,8 +107,8 @@ impl Build {
         Ok(())
     }
 
-    pub async fn build(&mut self, mut dioxus_crate: &mut DioxusCrate) -> Result<()> {
-        self.resolve(&mut dioxus_crate)?;
+    pub async fn build(&mut self, dioxus_crate: &mut DioxusCrate) -> Result<()> {
+        self.resolve(dioxus_crate)?;
         let build_requests = BuildRequest::create(false, dioxus_crate, self.clone());
         BuildRequest::build_all_parallel(build_requests).await?;
         Ok(())
@@ -122,7 +122,7 @@ impl Build {
     }
 
     fn auto_detect_platform(&self, resolved: &DioxusCrate) -> Platform {
-        use cargo_toml::Dependency::{Detailed, Inherited, Simple};
+        
 
         for dioxus in resolved.krates.krates_by_name("dioxus") {
             println!("Found Dioxus crate: {:?}", dioxus.krate);

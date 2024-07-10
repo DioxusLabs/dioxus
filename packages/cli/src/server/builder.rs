@@ -1,4 +1,3 @@
-use crate::build::Build;
 use crate::builder::BuildRequest;
 use crate::builder::BuildResult;
 use crate::builder::UpdateBuildProgress;
@@ -6,13 +5,10 @@ use crate::dioxus_crate::DioxusCrate;
 use crate::serve::Serve;
 use crate::Result;
 use dioxus_cli_config::Platform;
-use futures_channel::mpsc::Receiver;
 use futures_channel::mpsc::UnboundedReceiver;
 use futures_util::stream::select_all;
-use futures_util::stream::{FusedStream, FuturesUnordered};
 use futures_util::StreamExt;
 use tokio::task::JoinHandle;
-use tokio::task::JoinSet;
 
 /// A handle to ongoing builds and then the spawned tasks themselves
 pub struct Builder {

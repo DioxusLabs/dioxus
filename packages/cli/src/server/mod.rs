@@ -114,7 +114,7 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
     // todo: more printing, logging, error handling in this phase
     _ = screen.shutdown();
     _ = server.shutdown().await;
-    _ = buildr.shutdown();
+    buildr.shutdown();;
 
     Ok(())
 }

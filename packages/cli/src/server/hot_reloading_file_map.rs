@@ -1,5 +1,5 @@
 use dioxus_core::{
-    prelude::{HotReloadLiteral, HotreloadedLiteral, TemplateAttribute, TemplateNode},
+    prelude::HotReloadLiteral,
     Template,
 };
 use dioxus_rsx::{
@@ -8,10 +8,7 @@ use dioxus_rsx::{
 };
 use krates::cm::MetadataCommand;
 use krates::Cmd;
-pub use proc_macro2::TokenStream;
 pub use std::collections::HashMap;
-pub use std::sync::Mutex;
-pub use std::time::SystemTime;
 use std::{ffi::OsStr, path::PathBuf};
 pub use std::{fs, io, path::Path};
 pub use std::{fs::File, io::Read};
@@ -190,7 +187,7 @@ impl FileMap {
 
                 // Update the most recent idea of the template
                 // This lets us know if the template has changed so we don't need to send it
-                old_cached.templates.insert(template.name, template.clone());
+                old_cached.templates.insert(template.name, *template);
 
                 true
             });

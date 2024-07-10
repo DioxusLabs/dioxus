@@ -149,7 +149,7 @@ impl Watcher {
             }
 
             let asset_file = match &asset_dir {
-                Some(asset_dir) => path.starts_with(&asset_dir),
+                Some(asset_dir) => path.starts_with(asset_dir),
                 None => false,
             };
             if ext != "rs" && asset_file {

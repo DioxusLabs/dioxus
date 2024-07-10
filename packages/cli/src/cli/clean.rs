@@ -11,7 +11,7 @@ pub struct Clean {}
 
 impl Clean {
     pub fn clean(self) -> anyhow::Result<()> {
-        let mut dioxus_crate =
+        let dioxus_crate =
             DioxusCrate::new(&TargetArgs::default()).context("Failed to load Dioxus workspace")?;
 
         let output = Command::new("cargo")

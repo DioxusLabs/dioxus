@@ -1,10 +1,9 @@
 use crate::build::Build;
 use crate::dioxus_crate::DioxusCrate;
 use crate::Result;
-use cargo_metadata::diagnostic::Diagnostic;
 use dioxus_cli_config::{Platform, ServeArguments};
 use futures_util::stream::select_all;
-use futures_util::{stream::FuturesUnordered, StreamExt};
+use futures_util::StreamExt;
 use std::{path::PathBuf, time::Duration};
 use tokio::process::{Child, Command};
 
@@ -123,7 +122,7 @@ impl BuildResult {
             Command::new(&self.executable)
                 // When building the fullstack server, we need to forward the serve arguments (like port) to the fullstack server through env vars
                 .env(
-                    dioxus_cli_config::__private::SERVE_ENV.to_string(),
+                    dioxus_cli_config::__private::SERVE_ENV,
                     serde_json::to_string(&serve).unwrap(),
                 )
                 .spawn()?,
