@@ -9,7 +9,7 @@ use std::path::Path;
 const DEFAULT_HTML: &str = include_str!("../../assets/index.html");
 
 impl BuildRequest {
-    pub fn prepare_html(&self, assets: Option<&AssetManifest>) -> Result<String> {
+    pub(crate) fn prepare_html(&self, assets: Option<&AssetManifest>) -> Result<String> {
         let mut html = html_or_default(&self.config.crate_dir());
 
         // Inject any resources from the config into the html
@@ -99,7 +99,7 @@ impl BuildRequest {
                 });
                 }
             );
-            </script>"#,
+            </script></body"#,
         );
 
         // And try to insert preload links for the wasm and js files

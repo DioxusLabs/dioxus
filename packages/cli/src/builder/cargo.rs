@@ -191,7 +191,8 @@ impl BuildRequest {
 
         // If this is a web build, run web post processing steps
         if self.web {
-            self.post_process_web_build(&build_result, progress).await?;
+            self.post_process_web_build(&build_result, assets.as_ref(), progress)
+                .await?;
         }
 
         Ok(build_result)

@@ -1,5 +1,6 @@
 use super::BuildRequest;
 use super::BuildResult;
+use crate::assets;
 use crate::assets::pre_compress_folder;
 use crate::builder::progress::Stage;
 use crate::builder::progress::UpdateBuildProgress;
@@ -7,6 +8,7 @@ use crate::builder::progress::UpdateStage;
 use crate::error::{Error, Result};
 use dioxus_cli_config::WasmOptLevel;
 use futures_channel::mpsc::{Receiver, Sender};
+use manganis_cli_support::AssetManifest;
 use std::path::Path;
 use tokio::process::Command;
 use wasm_bindgen_cli_support::Bindgen;
@@ -111,12 +113,18 @@ impl BuildRequest {
     pub(crate) async fn post_process_web_build(
         &self,
         build_result: &BuildResult,
+        assets: Option<&AssetManifest>,
         progress: &mut Sender<UpdateBuildProgress>,
     ) -> Result<()> {
         _ = progress.try_send(UpdateBuildProgress {
             stage: Stage::OptimizingWasm,
             update: UpdateStage::Start,
         });
+
+        // Create the index.html file
+        let html = self.prepare_html(assets)?;
+        let html_path = self.config.out_dir().join("index.html");
+        std::fs::write(&html_path, html)?;
 
         // Find the wasm file
         let output_location = build_result.executable.clone();
