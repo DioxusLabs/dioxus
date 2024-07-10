@@ -46,6 +46,7 @@ members = [
     # Playwright tests
     "packages/playwright-tests/liveview",
     "packages/playwright-tests/web",
+    "packages/playwright-tests/static-generation",
     "packages/playwright-tests/fullstack",
     "packages/playwright-tests/suspense-carousel",
     "packages/playwright-tests/nested-suspense",
