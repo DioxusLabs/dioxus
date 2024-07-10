@@ -129,12 +129,10 @@ impl BuildRequest {
                 .display()
         );
 
-        progress
-            .send(UpdateBuildProgress {
-                stage: Stage::Finished,
-                update: UpdateStage::Start,
-            })
-            .unwrap();
+        _ = progress.try_send(UpdateBuildProgress {
+            stage: Stage::Finished,
+            update: UpdateStage::Start,
+        });
 
         Ok(build_result)
     }

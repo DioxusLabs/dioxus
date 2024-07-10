@@ -118,7 +118,13 @@ pub(crate) async fn build_cargo(
         update: UpdateStage::Start,
     });
 
-    let stdout = cmd.stdout(Stdio::piped()).spawn()?.stdout.take().unwrap();
+    let stdout = cmd
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?
+        .stdout
+        .take()
+        .unwrap();
     let reader = tokio::io::BufReader::new(stdout);
     let mut output_location = None;
 
