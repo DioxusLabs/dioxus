@@ -7,7 +7,7 @@ use crate::builder::progress::UpdateBuildProgress;
 use crate::builder::progress::UpdateStage;
 use crate::error::{Error, Result};
 use dioxus_cli_config::WasmOptLevel;
-use futures_channel::mpsc::{Receiver, Sender};
+use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use manganis_cli_support::AssetManifest;
 use std::path::Path;
 use tokio::process::Command;
@@ -47,7 +47,7 @@ async fn update_wasm_bindgen_version() -> Result<()> {
 
 /// Check if the wasm32-unknown-unknown target is installed and try to install it if not
 pub(crate) async fn install_web_build_tooling(
-    progress: &mut Sender<UpdateBuildProgress>,
+    progress: &mut UnboundedSender<UpdateBuildProgress>,
 ) -> Result<()> {
     // If the user has rustup, we can check if the wasm32-unknown-unknown target is installed
     // Otherwise we can just assume it is installed - which is not great...
@@ -55,7 +55,7 @@ pub(crate) async fn install_web_build_tooling(
     if let Ok(wasm_check_command) = Command::new("rustup").args(["show"]).output().await {
         let wasm_check_output = String::from_utf8(wasm_check_command.stdout).unwrap();
         if !wasm_check_output.contains("wasm32-unknown-unknown") {
-            _ = progress.try_send(UpdateBuildProgress {
+            _ = progress.start_send(UpdateBuildProgress {
                 stage: Stage::InstallingWasmTooling,
                 update: UpdateStage::Start,
             });
@@ -114,9 +114,9 @@ impl BuildRequest {
         &self,
         build_result: &BuildResult,
         assets: Option<&AssetManifest>,
-        progress: &mut Sender<UpdateBuildProgress>,
+        progress: &mut UnboundedSender<UpdateBuildProgress>,
     ) -> Result<()> {
-        _ = progress.try_send(UpdateBuildProgress {
+        _ = progress.start_send(UpdateBuildProgress {
             stage: Stage::OptimizingWasm,
             update: UpdateStage::Start,
         });

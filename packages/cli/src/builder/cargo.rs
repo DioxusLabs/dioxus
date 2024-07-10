@@ -12,7 +12,7 @@ use crate::builder::progress::UpdateStage;
 use crate::link::LinkCommand;
 use crate::ExecutableType;
 use crate::Result;
-use futures_channel::mpsc::{Receiver, Sender};
+use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use manganis_cli_support::ManganisSupportGuard;
 use std::env;
 use std::fs::create_dir_all;
@@ -85,7 +85,10 @@ impl BuildRequest {
         Ok((cmd, cargo_args))
     }
 
-    pub async fn build(&self, mut progress: Sender<UpdateBuildProgress>) -> Result<BuildResult> {
+    pub async fn build(
+        &self,
+        mut progress: UnboundedSender<UpdateBuildProgress>,
+    ) -> Result<BuildResult> {
         tracing::info!("🚅 Running build [Desktop] command...");
 
         // Set up runtime guards
@@ -129,7 +132,7 @@ impl BuildRequest {
                 .display()
         );
 
-        _ = progress.try_send(UpdateBuildProgress {
+        _ = progress.start_send(UpdateBuildProgress {
             stage: Stage::Finished,
             update: UpdateStage::Start,
         });
@@ -142,9 +145,9 @@ impl BuildRequest {
         cargo_args: Vec<String>,
         cargo_build_result: &CargoBuildResult,
         t_start: Instant,
-        progress: &mut Sender<UpdateBuildProgress>,
+        progress: &mut UnboundedSender<UpdateBuildProgress>,
     ) -> Result<BuildResult> {
-        _ = progress.try_send(UpdateBuildProgress {
+        _ = progress.start_send(UpdateBuildProgress {
             stage: Stage::OptimizingAssets,
             update: UpdateStage::Start,
         });

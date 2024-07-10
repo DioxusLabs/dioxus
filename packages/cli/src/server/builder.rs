@@ -7,6 +7,7 @@ use crate::serve::Serve;
 use crate::Result;
 use dioxus_cli_config::Platform;
 use futures_channel::mpsc::Receiver;
+use futures_channel::mpsc::UnboundedReceiver;
 use futures_util::stream::FuturesUnordered;
 use futures_util::StreamExt;
 use tokio::task::JoinHandle;
@@ -17,7 +18,7 @@ pub struct Builder {
     /// The results of the build
     build_results: Option<JoinHandle<Result<Vec<BuildResult>>>>,
     /// The progress of the builds
-    build_progress: Vec<(Platform, Receiver<UpdateBuildProgress>)>,
+    build_progress: Vec<(Platform, UnboundedReceiver<UpdateBuildProgress>)>,
     /// The application we are building
     config: DioxusCrate,
     /// The arguments for the build
@@ -45,7 +46,7 @@ impl Builder {
 
         let mut set = tokio::task::JoinSet::new();
         for build_request in build_requests {
-            let (tx, rx) = futures_channel::mpsc::channel(5000);
+            let (tx, rx) = futures_channel::mpsc::unbounded();
             self.build_progress.push((
                 build_request.build_arguments.platform.unwrap_or_default(),
                 rx,

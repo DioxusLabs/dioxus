@@ -63,7 +63,7 @@ impl BuildRequest {
         let mut build_progress = Vec::new();
         let mut set = tokio::task::JoinSet::new();
         for build_request in build_requests {
-            let (tx, rx) = futures_channel::mpsc::channel(5000);
+            let (tx, rx) = futures_channel::mpsc::unbounded();
             build_progress.push((
                 build_request.build_arguments.platform.unwrap_or_default(),
                 rx,

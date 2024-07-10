@@ -2,7 +2,7 @@
 
 use cargo_metadata::CompilerMessage;
 use cargo_metadata::{diagnostic::Diagnostic, Message};
-use futures_channel::mpsc::{Receiver, Sender};
+use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use std::io::{self, IsTerminal};
@@ -111,9 +111,9 @@ impl From<Diagnostic> for BuildMessage {
 pub(crate) async fn build_cargo(
     crate_count: usize,
     mut cmd: tokio::process::Command,
-    progress: &mut Sender<UpdateBuildProgress>,
+    progress: &mut UnboundedSender<UpdateBuildProgress>,
 ) -> anyhow::Result<CargoBuildResult> {
-    _ = progress.try_send(UpdateBuildProgress {
+    _ = progress.start_send(UpdateBuildProgress {
         stage: Stage::Compiling,
         update: UpdateStage::Start,
     });
@@ -146,7 +146,7 @@ pub(crate) async fn build_cargo(
                         };
                     }
                     cargo_metadata::diagnostic::DiagnosticLevel::Warning => {
-                        _ = progress.try_send(UpdateBuildProgress {
+                        _ = progress.start_send(UpdateBuildProgress {
                             stage: Stage::Compiling,
                             update: UpdateStage::AddMessage(message.clone().into()),
                         });
@@ -160,7 +160,7 @@ pub(crate) async fn build_cargo(
                     output_location = Some(executable.into());
                 } else {
                     let build_progress = crates_compiled as f64 / crate_count as f64;
-                    _ = progress.try_send(UpdateBuildProgress {
+                    _ = progress.start_send(UpdateBuildProgress {
                         stage: Stage::Compiling,
                         update: UpdateStage::SetProgress((build_progress).clamp(0.0, 0.97)),
                     });
@@ -172,7 +172,7 @@ pub(crate) async fn build_cargo(
                 }
             }
             Message::TextLine(line) => {
-                _ = progress.try_send(UpdateBuildProgress {
+                _ = progress.start_send(UpdateBuildProgress {
                     stage: Stage::Compiling,
                     update: UpdateStage::AddMessage(BuildMessage {
                         level: Level::DEBUG,
