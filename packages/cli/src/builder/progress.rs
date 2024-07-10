@@ -132,7 +132,7 @@ pub(crate) async fn build_cargo(
 
     let mut stdout = stdout.lines();
     let mut stderr = stderr.lines();
-    let mut crates_compiled = 0;
+    let mut units_compiled = 0;
     loop {
         let line = tokio::select! {
             line = stdout.next_line() => {
@@ -169,11 +169,11 @@ pub(crate) async fn build_cargo(
                 }
             }
             Message::CompilerArtifact(artifact) => {
-                crates_compiled += 1;
+                units_compiled += 1;
                 if let Some(executable) = artifact.executable {
                     output_location = Some(executable.into());
                 } else {
-                    let build_progress = crates_compiled as f64 / crate_count as f64;
+                    let build_progress = units_compiled as f64 / crate_count as f64;
                     _ = progress.start_send(UpdateBuildProgress {
                         stage: Stage::Compiling,
                         update: UpdateStage::SetProgress((build_progress).clamp(0.0, 1.00)),
@@ -181,7 +181,7 @@ pub(crate) async fn build_cargo(
                 }
             }
             Message::BuildScriptExecuted(_) => {
-                crates_compiled += 1;
+                units_compiled += 1;
             }
             Message::BuildFinished(finished) => {
                 if !finished.success {
@@ -248,13 +248,14 @@ impl BuildRequest {
         // Try to get it from nightly
         self.get_unit_count().await.unwrap_or_else(|| {
             // Otherwise, use cargo metadata
-            self.dioxus_crate
+            (self
+                .dioxus_crate
                 .krates
                 .krates_filtered(krates::DepKind::Dev)
                 .iter()
                 .map(|k| k.targets.len())
-                .sum::<usize>()
-                / 4
+                .sum::<usize>() as f64
+                / 3.5) as usize
         })
     }
 }
