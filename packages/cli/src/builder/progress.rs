@@ -105,7 +105,7 @@ pub(crate) async fn build_cargo(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?
-        .stdout
+        .stderr
         .take()
         .unwrap();
     let reader = tokio::io::BufReader::new(stdout);
@@ -120,21 +120,16 @@ pub(crate) async fn build_cargo(
         match message {
             Message::CompilerMessage(msg) => {
                 let message = msg.message;
-                match message.level {
-                    cargo_metadata::diagnostic::DiagnosticLevel::Error => {
-                        return {
-                            Err(anyhow::anyhow!(message
-                                .rendered
-                                .unwrap_or("Unknown".into())))
-                        };
-                    }
-                    cargo_metadata::diagnostic::DiagnosticLevel::Warning => {
-                        _ = progress.start_send(UpdateBuildProgress {
-                            stage: Stage::Compiling,
-                            update: UpdateStage::AddMessage(message.clone().into()),
-                        });
-                    }
-                    _ => {}
+                _ = progress.start_send(UpdateBuildProgress {
+                    stage: Stage::Compiling,
+                    update: UpdateStage::AddMessage(message.clone().into()),
+                });
+                if message.level == cargo_metadata::diagnostic::DiagnosticLevel::FailureNote {
+                    return {
+                        Err(anyhow::anyhow!(message
+                            .rendered
+                            .unwrap_or("Unknown".into())))
+                    };
                 }
             }
             Message::CompilerArtifact(artifact) => {

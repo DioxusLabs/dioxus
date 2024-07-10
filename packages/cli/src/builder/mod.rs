@@ -3,6 +3,7 @@ use crate::dioxus_crate::DioxusCrate;
 use crate::Result;
 use cargo_metadata::diagnostic::Diagnostic;
 use dioxus_cli_config::Platform;
+use futures_util::stream::select_all;
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use std::{path::PathBuf, time::Duration};
 use tokio::process::{Child, Command};
@@ -73,21 +74,18 @@ impl BuildRequest {
 
         // Watch the build progress as it comes in
         loop {
-            let mut next = FuturesUnordered::new();
-            for (platform, rx) in build_progress.iter_mut() {
-                next.push(async { (*platform, rx.next().await) });
-            }
+            let mut next = select_all(
+                build_progress
+                    .iter_mut()
+                    .map(|(platform, rx)| rx.map(move |update| (*platform, update))),
+            );
             match next.next().await {
                 Some((platform, update)) => {
-                    if let Some(update) = update {
-                        if multi_platform_build {
-                            print!("{platform} build: ");
-                            update.to_std_out();
-                        } else {
-                            update.to_std_out();
-                        }
+                    if multi_platform_build {
+                        print!("{platform} build: ");
+                        update.to_std_out();
                     } else {
-                        break;
+                        update.to_std_out();
                     }
                 }
                 None => {
