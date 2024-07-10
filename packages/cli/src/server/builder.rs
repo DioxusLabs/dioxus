@@ -8,7 +8,6 @@ use crate::Result;
 use dioxus_cli_config::Platform;
 use futures_channel::mpsc::Receiver;
 use futures_channel::mpsc::UnboundedReceiver;
-use futures_util::stream::FuturesUnordered;
 use futures_util::stream::{FusedStream, FuturesUnordered};
 use futures_util::StreamExt;
 use tokio::task::JoinHandle;
