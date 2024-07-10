@@ -1,15 +1,22 @@
-use crate::dioxus_crate::DioxusCrate;
-use crate::serve::Serve;
+use crate::{builder::UpdateStage, serve::Serve};
+use crate::{
+    builder::{BuildMessage, Stage, UpdateBuildProgress},
+    dioxus_crate::DioxusCrate,
+};
 use crossterm::{
     event::{self, Event, EventStream, KeyCode},
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     tty::IsTty,
     ExecutableCommand,
 };
+use dioxus_cli_config::Platform;
 use futures_channel::mpsc::UnboundedReceiver;
 use futures_util::{future::FutureExt, select, StreamExt};
 use ratatui::{prelude::*, widgets::*, TerminalOptions, Viewport};
-use std::io::{self, stdout};
+use std::{
+    collections::{HashMap, VecDeque},
+    io::{self, stdout},
+};
 
 use super::{Builder, Server, Watcher};
 
@@ -21,6 +28,7 @@ pub struct Output {
     rustc_nightly: bool,
     dx_version: String,
     is_tty: bool,
+    build_logs: HashMap<Platform, ActiveBuild>,
 }
 
 type TerminalBackend = Terminal<CrosstermBackend<io::Stdout>>;
@@ -66,6 +74,7 @@ impl Output {
             rustc_nightly,
             dx_version,
             is_tty,
+            build_logs: HashMap::new(),
         })
     }
 
@@ -100,6 +109,11 @@ impl Output {
         }
 
         Ok(())
+    }
+
+    pub fn new_build_logs(&mut self, platform: Platform, update: UpdateBuildProgress) {
+        let entry = self.build_logs.entry(platform).or_default();
+        entry.update(update);
     }
 
     pub fn draw(
@@ -379,3 +393,27 @@ async fn rustc_version() -> String {
 //     web_info: Option<WebServerInfo>,
 // ) {
 // }
+
+#[derive(Default)]
+pub struct ActiveBuild {
+    stage: Stage,
+    messages: Vec<BuildMessage>,
+    progress: f64,
+}
+
+impl ActiveBuild {
+    fn update(&mut self, update: UpdateBuildProgress) {
+        match update.update {
+            UpdateStage::Start => {
+                self.stage = update.stage;
+                self.progress = 0.0;
+            }
+            UpdateStage::AddMessage(message) => {
+                self.messages.push(message);
+            }
+            UpdateStage::SetProgress(progress) => {
+                self.progress = progress;
+            }
+        }
+    }
+}

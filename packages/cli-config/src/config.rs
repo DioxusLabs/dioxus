@@ -4,7 +4,9 @@ use std::fmt::Display;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Debug, Default)]
+#[derive(
+    Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Debug, Default,
+)]
 #[cfg_attr(feature = "cli", derive(clap::ValueEnum))]
 #[non_exhaustive]
 pub enum Platform {

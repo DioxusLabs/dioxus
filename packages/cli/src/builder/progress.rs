@@ -14,30 +14,10 @@ use tracing::Level;
 
 use crate::build::Build;
 
-pub struct ActiveBuild {
-    stage: Stage,
-    messages: Vec<BuildMessage>,
-    progress: f64,
-}
-
-impl ActiveBuild {
-    fn update(&mut self, update: UpdateBuildProgress) {
-        match update.update {
-            UpdateStage::Start => {
-                self.stage = update.stage;
-                self.progress = 0.0;
-            }
-            UpdateStage::AddMessage(message) => {
-                self.messages.push(message);
-            }
-            UpdateStage::SetProgress(progress) => {
-                self.progress = progress;
-            }
-        }
-    }
-}
-
+#[derive(Default)]
 pub enum Stage {
+    #[default]
+    Initializing,
     InstallingWasmTooling,
     Compiling,
     OptimizingWasm,
@@ -54,6 +34,9 @@ impl UpdateBuildProgress {
     pub fn to_std_out(&self) {
         match &self.update {
             UpdateStage::Start => match self.stage {
+                Stage::Initializing => {
+                    println!("--- Initializing ---");
+                }
                 Stage::InstallingWasmTooling => {
                     println!("--- Installing wasm tooling ---");
                 }
