@@ -206,9 +206,10 @@ impl App {
 
     pub fn handle_start_cause_init(&mut self) {
         let virtual_dom = self.unmounted_dom.take().unwrap();
-        let cfg = self.cfg.take().unwrap();
+        let mut cfg = self.cfg.take().unwrap();
 
         self.is_visible_before_start = cfg.window.window.visible;
+        cfg.window = cfg.window.with_visible(false);
 
         let webview = WebviewInstance::new(cfg, virtual_dom, self.shared.clone());
 
