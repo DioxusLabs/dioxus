@@ -123,13 +123,20 @@ impl Server {
         self.sockets.push(new_socket);
     }
 
-    pub async fn shutdown(&mut self) {
-        for mut socket in self.sockets.drain(..) {
+    /// Send a shutdown message to all connected clients
+    pub async fn send_shutdown(&mut self) {
+        for mut socket in self.sockets.iter_mut() {
             _ = socket
                 .send(Message::Text(
                     serde_json::to_string(&DevserverMsg::Shutdown).unwrap(),
                 ))
                 .await;
+        }
+    }
+
+    pub async fn shutdown(&mut self) {
+        self.send_shutdown().await;
+        for mut socket in self.sockets.drain(..) {
             _ = socket.close().await;
         }
     }

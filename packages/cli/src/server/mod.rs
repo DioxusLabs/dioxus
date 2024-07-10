@@ -73,16 +73,17 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                     continue;
                 }
 
-                // if change is hotreloadable, hotreload it
-                // and then send that update to all connected clients
-                if let Some(hr) = watchr.attempt_hot_reload(&dioxus_crate) {
-                    server.send_hotreload(hr).await;
-                    continue;
-                }
+                // // if change is hotreloadable, hotreload it
+                // // and then send that update to all connected clients
+                // if let Some(hr) = watchr.attempt_hot_reload(&dioxus_crate) {
+                //     server.send_hotreload(hr).await;
+                //     continue;
+                // }
 
                 // If the change is not binary patchable, rebuild the project
                 // We're going to kick off a new build, interrupting the current build if it's ongoing
                 buildr.build();
+                server.send_shutdown().await;
             }
 
             // reload the pag
@@ -96,8 +97,17 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                 // Wait for logs from the build engine
                 // These will cause us to update the screen
                 // We also can check the status of the builds here in case we have multiple ongoing builds
-                if let Ok(Some((platform, update))) = application {
-                    screen.new_build_logs(platform, update);
+                if let Ok(update) = application {
+                    match update {
+                        BuildUpdate::BuildFinished(application) => {
+                            for build_result in application {
+                                _ = build_result.open(&serve.server_arguments);
+                            }
+                        }
+                        BuildUpdate::BuildProgress { platform, update } => {
+                            screen.new_build_logs(platform, update);
+                        }
+                    }
                 }
             }
 

@@ -125,6 +125,7 @@ impl BuildResult {
                     dioxus_cli_config::__private::SERVE_ENV,
                     serde_json::to_string(&serve).unwrap(),
                 )
+                .kill_on_drop(true)
                 .spawn()?,
         ))
     }

@@ -70,10 +70,10 @@ impl Builder {
     }
 
     /// Wait for any new updates to the builder - either it completed or gave us a message etc
-    pub async fn wait(&mut self) -> Result<Option<(Platform, UpdateBuildProgress)>> {
+    pub async fn wait(&mut self) -> Result<BuildUpdate> {
         let Some(results) = self.build_results.as_mut() else {
             std::future::pending::<()>().await;
-            return Ok(None);
+            unreachable!()
         };
 
         // Wait for build progress
@@ -92,23 +92,22 @@ impl Builder {
                 for build_result in application {
                     let child = build_result.open(&self.serve.server_arguments);
                     self.children.push(child.unwrap().unwrap());
-                    // if let Ok(Some(child_proc)) = child {
-                    //     self.children.push(child_proc);
-                    // }
                 }
 
                 self.build_results = None;
-                std::future::pending::<()>().await;
+                Ok(BuildUpdate::BuildFinished(application))
             }
             progress = next.next() => {
                 // If we have a build progress, send it to the screen
                 if let Some((platform, update)) = progress {
-                    return Ok(Some((platform, update)));
+                    Ok(BuildUpdate::BuildProgress { platform, update })
+                }
+                else {
+                    std::future::pending::<()>().await;
+                    unreachable!()
                 }
             }
         }
-
-        Ok(None)
     }
 
     /// Shutdown the current build process
@@ -143,4 +142,12 @@ impl Builder {
         }
         self.build_progress.clear();
     }
+}
+
+pub(crate) enum BuildUpdate {
+    BuildFinished(Vec<BuildResult>),
+    BuildProgress {
+        platform: Platform,
+        update: UpdateBuildProgress,
+    },
 }
