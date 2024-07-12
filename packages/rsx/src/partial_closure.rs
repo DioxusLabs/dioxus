@@ -3,9 +3,9 @@ use quote::ToTokens;
 use std::hash::{Hash, Hasher};
 use syn::{
     braced,
-    parse::{Parse, ParseStream},
+    parse::{Parse, ParseStream, Parser},
     punctuated::Punctuated,
-    token, Attribute, Block, Expr, ExprBlock, Pat, PatType, Result, ReturnType, Stmt, Token, Type,
+    token, Attribute, Block, Expr, ExprBlock, Pat, PatType, Result, ReturnType, Token, Type,
 };
 use syn::{BoundLifetimes, ExprClosure};
 
@@ -125,9 +125,6 @@ impl Parse for PartialClosure {
 
 impl ToTokens for PartialClosure {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        // todo: these attributes need to make their way down
-        // self.attrs.to_tokens(tokens);
-
         self.lifetimes.to_tokens(tokens);
         self.constness.to_tokens(tokens);
         self.movability.to_tokens(tokens);
@@ -159,26 +156,14 @@ impl PartialClosure {
         // If there's a brace token, we need to parse the body as a block
         // Otherwise we can parse it as an expression
         let body = match self.brace_token.as_ref() {
-            Some(brace) => {
-                // parse the tokenstream into a vec of statements
-                // I'm pretty sure there's a better way to do this
-                struct StmtVec(Vec<Stmt>);
-                impl Parse for StmtVec {
-                    fn parse(input: ParseStream) -> Result<Self> {
-                        Block::parse_within(input).map(Self)
-                    }
-                }
-                let StmtVec(stmts) = syn::parse2(self.body.clone())?;
-
-                Expr::Block(ExprBlock {
-                    attrs: Vec::new(),
-                    label: None,
-                    block: Block {
-                        brace_token: brace.clone(),
-                        stmts,
-                    },
-                })
-            }
+            Some(brace) => Expr::Block(ExprBlock {
+                attrs: Vec::new(),
+                label: None,
+                block: Block {
+                    brace_token: brace.clone(),
+                    stmts: Block::parse_within.parse2(self.body.clone())?,
+                },
+            }),
 
             None => syn::parse2(self.body.clone())?,
         };
@@ -339,5 +324,55 @@ mod tests {
 
         assert_eq!(a, b);
         assert_ne!(a, c);
+    }
+
+    /// Ensure our ToTokens impl is the same as the one in syn
+    #[test]
+    fn same_to_tokens() {
+        let a: PartialClosure = syn::parse2(quote! {
+            move |e| {
+                println!("clicked!");
+            }
+        })
+        .unwrap();
+
+        let b: PartialClosure = syn::parse2(quote! {
+            move |e| {
+                println!("clicked!");
+            }
+        })
+        .unwrap();
+
+        let c: ExprClosure = syn::parse2(quote! {
+            move |e| {
+                println!("clicked!");
+            }
+        })
+        .unwrap();
+
+        assert_eq!(
+            a.to_token_stream().to_string(),
+            b.to_token_stream().to_string()
+        );
+
+        assert_eq!(
+            a.to_token_stream().to_string(),
+            c.to_token_stream().to_string()
+        );
+
+        let a: PartialClosure = syn::parse2(quote! {
+            move |e| println!("clicked!")
+        })
+        .unwrap();
+
+        let b: ExprClosure = syn::parse2(quote! {
+            move |e| println!("clicked!")
+        })
+        .unwrap();
+
+        assert_eq!(
+            a.to_token_stream().to_string(),
+            b.to_token_stream().to_string()
+        );
     }
 }

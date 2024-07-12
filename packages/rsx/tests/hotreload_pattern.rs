@@ -2,7 +2,7 @@
 
 use dioxus_core::{prelude::Template, VNode};
 use dioxus_rsx::{
-    hot_reload::{diff_rsx, template_location, ChangedRsx},
+    hot_reload::{diff_rsx, ChangedRsx},
     hotreload::HotReloadedTemplate,
     CallBody, HotReloadingContext,
 };

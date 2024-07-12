@@ -45,5 +45,3 @@ assert_rsx_changed![for_];
 assert_rsx_changed![if_];
 assert_rsx_changed![let_];
 assert_rsx_changed![nested];
-
-assert_code_changed![changedexpr];

@@ -22,6 +22,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
 use std::fmt::Display;
 use syn::{
+    ext::IdentExt,
     parse::{Parse, ParseStream},
     spanned::Spanned,
     Expr, ExprClosure, ExprIf, Ident, Lit, LitBool, LitFloat, LitInt, LitStr, Token,
@@ -61,7 +62,7 @@ impl Parse for Attribute {
     fn parse(content: ParseStream) -> syn::Result<Self> {
         // if there's an ident not followed by a colon, it's a shorthand attribute
         if content.peek(Ident) && !content.peek2(Token![:]) {
-            let ident = content.parse::<Ident>()?;
+            let ident = Ident::parse(content)?;
             let comma = if !content.is_empty() {
                 Some(content.parse::<Token![,]>()?)
             } else {
@@ -81,7 +82,7 @@ impl Parse for Attribute {
         // Parse the name as either a known or custom attribute
         let name = match content.peek(LitStr) {
             true => AttributeName::Custom(content.parse::<LitStr>()?),
-            false => AttributeName::BuiltIn(content.parse::<Ident>()?),
+            false => AttributeName::BuiltIn(Ident::parse_any(content)?),
         };
 
         // Ensure there's a colon
@@ -646,5 +647,13 @@ mod tests {
         let c: Attribute = parse2(quote! { onclick: move |e| {} }).unwrap();
         assert_eq!(a, b);
         assert_ne!(a, c);
+    }
+
+    /// Make sure reserved keywords are parsed as attributes
+    /// HTML gets annoying sometimes so we just accept them
+    #[test]
+    fn reserved_keywords() {
+        let _a: Attribute = parse2(quote! { for: "class" }).unwrap();
+        let _b: Attribute = parse2(quote! { type: "class" }).unwrap();
     }
 }

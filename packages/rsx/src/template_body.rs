@@ -293,6 +293,18 @@ impl TemplateBody {
         self.node_paths.push(self.current_path.clone());
     }
 
+    /// Create a new template from this TemplateBody
+    ///
+    /// Note that this will leak memory! We explicitly call `leak` on the vecs to match the format of
+    /// the `Template` struct.
+    pub fn to_template<Ctx: HotReloadingContext>(&self) -> Template {
+        self.to_template_with_custom_paths::<Ctx>(
+            "placeholder",
+            self.node_paths.clone(),
+            self.attr_paths.clone().into_iter().map(|v| v.0).collect(),
+        )
+    }
+
     pub fn to_template_with_custom_paths<Ctx: HotReloadingContext>(
         &self,
         location: &'static str,
