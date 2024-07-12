@@ -1,7 +1,8 @@
 use crate::build::Build;
 use crate::dioxus_crate::DioxusCrate;
+use crate::serve::ServeArguments;
 use crate::Result;
-use dioxus_cli_config::{Platform, RuntimeCLIArguments, ServeArguments};
+use dioxus_cli_config::{Platform, RuntimeCLIArguments};
 use futures_util::stream::select_all;
 use futures_util::StreamExt;
 use std::net::SocketAddr;

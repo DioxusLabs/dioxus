@@ -31,31 +31,6 @@ impl AddressArguments {
     }
 }
 
-/// Arguments for the serve command
-#[derive(Clone, Debug, Parser, Default)]
-pub struct ServeArguments {
-    /// The arguments for the address the server will run on
-    #[clap(flatten)]
-    pub address: AddressArguments,
-
-    /// Open the app in the default browser [default: false - unless project or global settings are set]
-    #[clap(long)]
-    pub open: Option<bool>,
-
-    /// Enable full hot reloading for the app [default: true - unless project or global settings are set]
-    #[clap(long, group = "release-incompatible")]
-    pub hot_reload: Option<bool>,
-
-    /// Set cross-origin-policy to same-origin [default: false]
-    #[clap(name = "cross-origin-policy")]
-    #[clap(long)]
-    pub cross_origin_policy: bool,
-
-    /// Additional arguments to pass to the executable
-    #[clap(long)]
-    pub args: Vec<String>,
-}
-
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RuntimeCLIArguments {
     /// The address hot reloading is running on
