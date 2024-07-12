@@ -122,6 +122,10 @@ impl BuildResult {
             return Ok(None);
         }
 
+        let arguments = RuntimeCLIArguments {
+            cli_address: serve.address.address(),
+            server_socket: fullstack_address,
+        };
         Ok(Some(
             Command::new(&self.executable)
                 // When building the fullstack server, we need to forward the serve arguments (like port) to the fullstack server through env vars
