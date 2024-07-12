@@ -314,11 +314,9 @@ impl Output {
     pub fn push_log(&mut self, platform: Platform, message: BuildMessage) {
         let snapped = self.is_snapped(platform);
 
-        self.build_logs
-            .get_mut(&platform)
-            .unwrap()
-            .messages
-            .push(message);
+        if let Some(build) = self.build_logs.get_mut(&platform) {
+            build.messages.push(message);
+        }
 
         // // let log = self.build_logs.get(a).unwrap();
         // if snapped {
@@ -386,8 +384,10 @@ impl Output {
 
             self.running_apps.insert(platform, app);
 
-            // Clear the build progress for the platform that just finished building
-            self.build_logs.remove(&platform);
+            // Finish the build progress for the platform that just finished building
+            if let Some(build) = self.build_logs.get_mut(&platform) {
+                build.stage = Stage::Finished;
+            }
         }
     }
 
@@ -489,15 +489,21 @@ impl Output {
             spans.push(Span::from(self.platform.to_string()).cyan());
             // If there is build progress, display that next to the platform
             if !self.build_logs.is_empty() {
-                let mut layout_index = 0;
                 let build = self
                     .build_logs
                     .values()
                     .min_by(|a, b| a.partial_cmp(b).unwrap())
                     .unwrap();
-                spans.push(Span::from(format!(" ")));
-
-                spans.extend_from_slice(&build.spans(Rect::new(0, 0, build.max_layout_size(), 1)));
+                // If the build is finished, no need to show the progress
+                if build.stage != Stage::Finished {
+                    spans.push(Span::from(format!(" ")));
+                    spans.extend_from_slice(&build.spans(Rect::new(
+                        0,
+                        0,
+                        build.max_layout_size(),
+                        1,
+                    )));
+                }
             }
 
             spans.extend_from_slice(&[
