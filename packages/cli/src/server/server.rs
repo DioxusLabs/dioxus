@@ -144,11 +144,8 @@ impl Server {
                         panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
                     }
                 }
-                message = new_message.next() => {
-                    if let Some(Some(Ok(message))) = message {
-                        return Some(message);
-                        // self.handle_message(message).await;
-                    }
+                Some(Some(Ok(message))) = new_message.next() => {
+                    return Some(message);
                 }
             };
         }

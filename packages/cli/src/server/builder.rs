@@ -6,6 +6,7 @@ use crate::serve::Serve;
 use crate::Result;
 use dioxus_cli_config::Platform;
 use futures_channel::mpsc::UnboundedReceiver;
+use futures_util::future::OptionFuture;
 use futures_util::stream::select_all;
 use futures_util::StreamExt;
 use std::process::Stdio;
@@ -52,7 +53,7 @@ impl Builder {
     pub fn build(&mut self) {
         self.shutdown();
         let build_requests =
-            BuildRequest::create(false, &self.config, self.serve.build_arguments.clone());
+            BuildRequest::create(true, &self.config, self.serve.build_arguments.clone());
 
         let mut set = tokio::task::JoinSet::new();
         for build_request in build_requests {
@@ -82,14 +83,11 @@ impl Builder {
                 .map(|(platform, rx)| rx.map(move |update| (*platform, update))),
         );
 
-        let Some(results) = self.build_results.as_mut() else {
-            std::future::pending::<()>().await;
-            unreachable!("Pending cannot resolve")
-        };
+        let results: OptionFuture<_> = self.build_results.as_mut().into();
 
         // Wait for the next build result
         tokio::select! {
-            build_results = results => {
+            Some(build_results) = results => {
                 self.build_results = None;
 
                 // If we have a build result, bubble it up to the main loop
@@ -101,6 +99,10 @@ impl Builder {
                 // If we have a build progress, send it to the screen
                 Ok(BuilderUpdate::Progress { platform, update })
             }
+            else => {
+                std::future::pending::<()>().await;
+                unreachable!("Pending cannot resolve");
+            },
         }
     }
 

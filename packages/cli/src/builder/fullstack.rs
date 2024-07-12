@@ -1,5 +1,6 @@
 use crate::builder::Build;
 use crate::dioxus_crate::DioxusCrate;
+use dioxus_cli_config::Platform;
 
 use crate::builder::BuildRequest;
 use std::path::PathBuf;
@@ -63,6 +64,11 @@ impl BuildRequest {
     ) -> Self {
         let mut config = config.clone();
         let mut build = build.clone();
+        build.platform = Some(if web {
+            Platform::Web
+        } else {
+            Platform::Desktop
+        });
         // Set the target directory we are building the server in
         let target_dir = get_target_directory(&build, &mut config, target_directory);
         // Add the server feature to the features we pass to the build
