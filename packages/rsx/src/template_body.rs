@@ -54,14 +54,15 @@
 //! }
 //! ```
 
+use self::location::DynIdx;
 use crate::innerlude::Attribute;
 use crate::*;
-use dioxus_core::prelude::Template;
 use proc_macro2::TokenStream as TokenStream2;
 use proc_macro2_diagnostics::SpanDiagnosticExt;
 use syn::token::Brace;
 
-use self::location::DynIdx;
+#[cfg(feature = "hot_reload")]
+use dioxus_core::prelude::Template;
 
 type NodePath = Vec<u8>;
 type AttributePath = Vec<u8>;
@@ -297,6 +298,7 @@ impl TemplateBody {
     ///
     /// Note that this will leak memory! We explicitly call `leak` on the vecs to match the format of
     /// the `Template` struct.
+    #[cfg(feature = "hot_reload")]
     pub fn to_template<Ctx: HotReloadingContext>(&self) -> Template {
         self.to_template_with_custom_paths::<Ctx>(
             "placeholder",
@@ -305,6 +307,7 @@ impl TemplateBody {
         )
     }
 
+    #[cfg(feature = "hot_reload")]
     pub fn to_template_with_custom_paths<Ctx: HotReloadingContext>(
         &self,
         location: &'static str,

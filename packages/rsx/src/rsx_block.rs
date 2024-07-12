@@ -120,9 +120,9 @@ impl RsxBlock {
                 | content.peek(Token![match])
                 | content.peek(token::Brace)
                 // web components
-                | (content.peek(Ident) && content.peek2(Token![-]))
+                | (content.peek(Ident::peek_any) && content.peek2(Token![-]))
                 // elements
-                | (content.peek(Ident) && content.peek2(token::Brace))
+                | (content.peek(Ident::peek_any) && content.peek2(token::Brace))
             // todo: eager parse components?
             {
                 items.push(RsxItem::Child(content.parse::<BodyNode>()?));
@@ -145,17 +145,7 @@ impl RsxBlock {
                 && !content.peek2(Token![:])
                 && !content.peek2(Token![-])
             {
-                let name = content.parse::<Ident>()?;
-                let comma = content.parse().ok();
-
-                let attribute = Attribute {
-                    name: AttributeName::BuiltIn(name.clone()),
-                    colon: None,
-                    value: AttributeValue::Shorthand(name),
-                    comma,
-                    dyn_idx: DynIdx::default(),
-                    el_name: None,
-                };
+                let attribute = content.parse::<Attribute>()?;
 
                 if !content.is_empty() && attribute.comma.is_none() {
                     diagnostics.push(
@@ -327,9 +317,6 @@ mod tests {
         let _block: RsxBlock = syn::parse2(complex_component).unwrap();
     }
 
-    #[test]
-    fn ensure_props_before_elements() {}
-
     /// Some tests of partial expansion to give better autocomplete
     #[test]
     fn partial_cases() {
@@ -343,11 +330,6 @@ mod tests {
 
         let _block: RsxBlock = syn::parse2(with_hander).unwrap();
     }
-
-    /// Give helpful errors in the cases where the tree is malformed but we can still give a good error
-    /// Usually this just boils down to incorrect orders
-    #[test]
-    fn proper_diagnostics() {}
 
     /// Ensure the hotreload scoring algorithm works as expected
     #[test]

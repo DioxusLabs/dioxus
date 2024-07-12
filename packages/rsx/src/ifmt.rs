@@ -1,5 +1,6 @@
-use crate::intern;
+#[cfg(feature = "hot_reload")]
 use dioxus_core::prelude::{FmtSegment, FmtedSegments};
+
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
 use std::{collections::HashMap, str::FromStr};
@@ -111,7 +112,10 @@ impl IfmtInput {
         map
     }
 
+    #[cfg(feature = "hot_reload")]
     pub fn fmt_segments(old: &Self, new: &Self) -> Option<FmtedSegments> {
+        use crate::intern;
+
         // Make sure all the dynamic segments of b show up in a
         for segment in new.segments.iter() {
             if segment.is_formatted() && !old.segments.contains(segment) {

@@ -1,5 +1,7 @@
-use crate::{innerlude::*, HotReloadingContext};
+#[cfg(feature = "hot_reload")]
 use dioxus_core::TemplateNode;
+
+use crate::innerlude::*;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::ToTokens;
 use syn::{
@@ -128,7 +130,8 @@ impl BodyNode {
     /// Convert this BodyNode into a TemplateNode.
     ///
     /// dioxus-core uses this to understand templates at compiletime
-    pub fn to_template_node<Ctx: HotReloadingContext>(&self) -> TemplateNode {
+    #[cfg(feature = "hot_reload")]
+    pub fn to_template_node<Ctx: crate::HotReloadingContext>(&self) -> TemplateNode {
         match self {
             BodyNode::Element(el) => {
                 let rust_name = el.name.to_string();

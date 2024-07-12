@@ -1,3 +1,5 @@
+#![cfg(feature = "hot_reload")]
+
 use crate::{Attribute, AttributeValue, BodyNode, HotLiteralType, IfmtInput};
 
 /// Take two nodes and return their similarity score
@@ -5,11 +7,6 @@ use crate::{Attribute, AttributeValue, BodyNode, HotLiteralType, IfmtInput};
 /// This is not normalized or anything, so longer nodes will have higher scores
 pub fn score_dynamic_node(old_node: &BodyNode, new_node: &BodyNode) -> usize {
     use BodyNode::*;
-
-    // If they're different enums, they are not the same node
-    if std::mem::discriminant(old_node) != std::mem::discriminant(new_node) {
-        return 0;
-    }
 
     match (old_node, new_node) {
         (Element(_), Element(_)) => unreachable!("Elements are not dynamic nodes"),
@@ -141,19 +138,19 @@ fn score_attr_value(old_attr: &AttributeValue, new_attr: &AttributeValue) -> usi
     }
 }
 
-pub fn score_ifmt(left: &IfmtInput, right: &IfmtInput) -> usize {
+pub fn score_ifmt(old: &IfmtInput, new: &IfmtInput) -> usize {
     // If they're the same by source, return max
-    if left == right {
+    if old == new {
         return usize::MAX;
     }
 
     // Default score to 1 - an ifmt with no dynamic segments still technically has a score of 1
     // since it's not disqualified, but it's not a perfect match
     let mut score = 1;
-    let mut l_freq_map = left.dynamic_seg_frequency_map();
+    let mut l_freq_map = old.dynamic_seg_frequency_map();
 
     // Pluck out the dynamic segments from the other input
-    for seg in right.dynamic_segments() {
+    for seg in new.dynamic_segments() {
         let Some(ct) = l_freq_map.get_mut(seg) else {
             return 0;
         };

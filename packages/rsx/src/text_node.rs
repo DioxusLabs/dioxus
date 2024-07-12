@@ -1,10 +1,11 @@
+#[cfg(feature = "hot_reload")]
+use dioxus_core::TemplateNode;
+
 use crate::{
-    intern,
     literal::{HotLiteral, HotLiteralType},
     location::DynIdx,
     IfmtInput,
 };
-use dioxus_core::TemplateNode;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::ToTokens;
 use quote::{quote, TokenStreamExt};
@@ -72,7 +73,9 @@ impl TextNode {
         self.input.is_static()
     }
 
+    #[cfg(feature = "hot_reload")]
     pub fn to_template_node(&self) -> TemplateNode {
+        use crate::intern;
         match self.is_static() {
             true => {
                 let text = self.input.source.clone();

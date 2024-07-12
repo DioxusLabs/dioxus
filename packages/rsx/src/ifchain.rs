@@ -1,5 +1,7 @@
-use crate::location::DynIdx;
+#[cfg(feature = "hot_reload")]
 use dioxus_core::TemplateNode;
+
+use crate::location::DynIdx;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use quote::{ToTokens, TokenStreamExt};
@@ -34,6 +36,7 @@ impl IfChain {
         }
     }
 
+    #[cfg(feature = "hot_reload")]
     pub fn to_template_node(&self) -> TemplateNode {
         TemplateNode::Dynamic {
             id: self.dyn_idx.get(),

@@ -15,9 +15,8 @@
 //! ```
 
 use super::literal::HotLiteral;
-use crate::{innerlude::*, partial_closure::PartialClosure, HotReloadingContext};
+use crate::{innerlude::*, partial_closure::PartialClosure};
 
-use dioxus_core::prelude::TemplateAttribute;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
 use std::fmt::Display;
@@ -27,6 +26,9 @@ use syn::{
     spanned::Spanned,
     Expr, ExprClosure, ExprIf, Ident, Lit, LitBool, LitFloat, LitInt, LitStr, Token,
 };
+
+#[cfg(feature = "hot_reload")]
+use dioxus_core::prelude::TemplateAttribute;
 
 /// A property value in the from of a `name: value` pair with an optional comma.
 /// Note that the colon and value are optional in the case of shorthand attributes. We keep them around
@@ -166,7 +168,8 @@ impl Attribute {
         self.as_static_str_literal().is_some()
     }
 
-    pub fn to_template_attribute<Ctx: HotReloadingContext>(
+    #[cfg(feature = "hot_reload")]
+    pub fn to_template_attribute<Ctx: crate::HotReloadingContext>(
         &self,
         rust_name: &str,
     ) -> TemplateAttribute {

@@ -1,3 +1,5 @@
+#![cfg(feature = "hot_reload")]
+
 //! This module contains hotreloading logic for rsx.
 //!
 //! There's a few details that I wish we could've gotten right but we can revisit later:
@@ -17,13 +19,6 @@
 //!
 //! - Cross-templates hot reloading is not possible - multiple templates don't share the dynamic nodes.
 //!   This would require changes in core to work, I imagine.
-//!
-//! Some other details
-//!
-//! - Hotreloading is implemented by merging a new template with the old template. This modifies the
-//!   original in place. The idea here is that we need to keep updating the structure of the original
-//!   so that volatile things like hot literals can be updated. We keep the idea of the dynamic nodes
-//!   still baked into the original template but spit out new templates that are updated.
 //!
 //! Future work
 //!

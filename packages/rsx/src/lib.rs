@@ -110,9 +110,11 @@ pub(crate) mod innerlude {
     pub use crate::text_node::*;
 
     pub use crate::diagnostics::*;
-    pub use crate::hotreload::*;
     pub use crate::ifmt::*;
     pub use crate::literal::*;
     pub use crate::reload_stack::*;
     pub use crate::util::*;
+
+    #[cfg(feature = "hot_reload")]
+    pub use crate::hotreload::*;
 }
