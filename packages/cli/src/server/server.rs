@@ -129,25 +129,31 @@ impl Server {
         let mut new_message = self
             .sockets
             .iter_mut()
-            .map(|socket| socket.next())
+            .enumerate()
+            .map(|(idx, socket)| async move { (idx, socket.next().await) })
             .collect::<FuturesUnordered<_>>();
 
-        loop {
-            tokio::select! {
-                new_socket = &mut new_socket => {
-                    if let Some(new_socket) = new_socket {
-                        // println!("new socket connected: {:?}", new_socket);
+        tokio::select! {
+            new_socket = &mut new_socket => {
+                if let Some(new_socket) = new_socket {
+                    // println!("new socket connected: {:?}", new_socket);
+                    drop(new_message);
+                    self.sockets.push(new_socket);
+                    return None;
+                } else {
+                    panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
+                }
+            }
+            Some((idx, message)) = new_message.next() => {
+                match message {
+                    Some(Ok(message)) => return Some(message),
+                    _ => {
+                        let idx = idx;
                         drop(new_message);
-                        self.sockets.push(new_socket);
-                        return None;
-                    } else {
-                        panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
+                        _ = self.sockets.remove(idx);
                     }
                 }
-                Some(Some(Ok(message))) = new_message.next() => {
-                    return Some(message);
-                }
-            };
+            }
         }
 
         None
