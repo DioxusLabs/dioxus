@@ -26,7 +26,7 @@ pub struct BuildRequest {
     /// The arguments for the build
     pub build_arguments: Build,
     /// The rustc flags to pass to the build
-    pub rust_flags: Option<String>,
+    pub rust_flags: Vec<String>,
     /// The target directory for the build
     pub target_dir: Option<PathBuf>,
 }
