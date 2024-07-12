@@ -35,10 +35,8 @@ tokio = { workspace = true, features = ["full"] }
 
 [features]
 default = ["dioxus-html"]
-apply = ["dep:dioxus-signals"]
-custom_file_watcher = ["dep:ignore", "dep:chrono", "dep:notify", "dep:execute", "dep:once_cell", "dep:ignore"]
-file_watcher = ["custom_file_watcher", "dioxus-html/hot-reload-context", "dioxus-rsx/hot_reload"]
-serve = [ "dep:tokio-stream", "dep:futures-util", "dep:tokio", "file_watcher", "dep:tokio-tungstenite" ]
+client = ["dep:dioxus-signals"]
+serve = [ "dep:tokio-stream", "dep:futures-util", "dep:tokio", "dep:tokio-tungstenite" ]
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

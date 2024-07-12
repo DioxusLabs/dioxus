@@ -2,11 +2,11 @@ use dioxus_rsx::HotReloadedTemplate;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-#[cfg(feature = "apply")]
-mod apply;
+#[cfg(feature = "client")]
+mod client;
 
-#[cfg(feature = "apply")]
-pub use apply::*;
+#[cfg(feature = "client")]
+pub use client::*;
 
 #[cfg(feature = "serve")]
 mod ws_receiver;
