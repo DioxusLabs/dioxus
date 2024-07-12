@@ -1,10 +1,11 @@
 use crate::build::Build;
 use crate::dioxus_crate::DioxusCrate;
 use crate::Result;
-use dioxus_cli_config::{Platform, ServeArguments};
+use dioxus_cli_config::{Platform, RuntimeCLIArguments, ServeArguments};
 use futures_util::stream::select_all;
 use futures_util::StreamExt;
-use std::{path::PathBuf, process::Stdio, time::Duration};
+use std::net::SocketAddr;
+use std::{net::IpAddr, path::PathBuf, process::Stdio, time::Duration};
 use tokio::process::{Child, Command};
 
 mod cargo;
@@ -38,7 +39,7 @@ impl BuildRequest {
     ) -> Vec<Self> {
         let build_arguments = build_arguments.into();
         let dioxus_crate = dioxus_crate.clone();
-        let platform = build_arguments.platform.unwrap_or(Platform::Web);
+        let platform = build_arguments.platform();
         match platform {
             Platform::Web | Platform::Desktop => {
                 let web = platform == Platform::Web;
@@ -64,10 +65,7 @@ impl BuildRequest {
         let mut set = tokio::task::JoinSet::new();
         for build_request in build_requests {
             let (tx, rx) = futures_channel::mpsc::unbounded();
-            build_progress.push((
-                build_request.build_arguments.platform.unwrap_or_default(),
-                rx,
-            ));
+            build_progress.push((build_request.build_arguments.platform(), rx));
             set.spawn(async move { build_request.build(tx).await });
         }
 
@@ -115,7 +113,11 @@ pub(crate) struct BuildResult {
 
 impl BuildResult {
     /// Open the executable if this is a native build
-    pub fn open(&self, serve: &ServeArguments) -> std::io::Result<Option<Child>> {
+    pub fn open(
+        &self,
+        serve: &ServeArguments,
+        fullstack_address: Option<SocketAddr>,
+    ) -> std::io::Result<Option<Child>> {
         if self.web {
             return Ok(None);
         }
@@ -125,7 +127,7 @@ impl BuildResult {
                 // When building the fullstack server, we need to forward the serve arguments (like port) to the fullstack server through env vars
                 .env(
                     dioxus_cli_config::__private::SERVE_ENV,
-                    serde_json::to_string(&serve).unwrap(),
+                    serde_json::to_string(&arguments).unwrap(),
                 )
                 .stderr(Stdio::piped())
                 .stdout(Stdio::piped())

@@ -57,10 +57,8 @@ impl Builder {
         let mut set = tokio::task::JoinSet::new();
         for build_request in build_requests {
             let (tx, rx) = futures_channel::mpsc::unbounded();
-            self.build_progress.push((
-                build_request.build_arguments.platform.unwrap_or_default(),
-                rx,
-            ));
+            self.build_progress
+                .push((build_request.build_arguments.platform(), rx));
             set.spawn(async move { build_request.build(tx).await });
         }
 
@@ -93,16 +91,9 @@ impl Builder {
         tokio::select! {
             build_results = results => {
                 self.build_results = None;
-                
-                // If we have a build result, open it
+
+                // If we have a build result, bubble it up to the main loop
                 let build_results = build_results.map_err(|e| crate::Error::Unique("Build join failed".to_string()))??;
-                
-                for build_result in build_results.iter() {
-                    let child = build_result.open(&self.serve.server_arguments);
-                    if let Some(child_proc) = child? {
-                        self.children.push((build_result.platform,child_proc));
-                    }
-                }
 
                 return Ok(BuilderUpdate::Ready { results: build_results });
             }

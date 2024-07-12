@@ -6,9 +6,11 @@ use tokio_tungstenite::{
     MaybeTlsStream, WebSocketStream,
 };
 
-pub fn connect(url: String, mut callback: impl FnMut(DevserverMsg) + Send + 'static) {
+pub fn connect(mut callback: impl FnMut(DevserverMsg) + Send + 'static) {
     tokio::spawn(async move {
-        let mut recv = NativeReceiver::create(url).await.unwrap();
+        let Some(Ok(mut recv)) = NativeReceiver::create_from_cli().await else {
+            return;
+        };
         while let Some(msg) = recv.next().await {
             match msg {
                 Ok(msg) => callback(msg),
@@ -27,9 +29,18 @@ pub struct NativeReceiver {
 
 impl NativeReceiver {
     /// Connect to the devserver
-    pub async fn create(url: String) -> TtResult<Self> {
+    async fn create(url: String) -> TtResult<Self> {
         let (socket, _ws) = tokio_tungstenite::connect_async(&url).await?;
         Ok(Self { socket })
+    }
+
+    /// Connect to the devserver with an address from the CLI. Returns None if the current application was not run with the CLI
+    pub async fn create_from_cli() -> Option<TtResult<Self>> {
+        let Some(cli_args) = dioxus_cli_config::RuntimeCLIArguments::from_cli() else {
+            return None;
+        };
+        let addr = cli_args.cli_address;
+        Some(Self::create(format!("ws://{addr}/_dioxus")).await)
     }
 
     /// Wait for the next message from the devserver

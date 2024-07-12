@@ -149,24 +149,11 @@ impl App {
         not(target_os = "ios")
     ))]
     pub fn connect_hotreload(&self) {
-        let Some(cli_args) = dioxus_cli_config::ServeArguments::from_cli() else {
-            return;
-        };
-        let port = cli_args.port;
-        let addr = cli_args
-            .addr
-            .unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)));
-
         let proxy = self.shared.proxy.clone();
 
         tokio::task::spawn(async move {
-            let receiver = dioxus_hot_reload::NativeReceiver::create(format!(
-                "ws://{}:{}/_dioxus",
-                addr, port,
-            ))
-            .await;
-
-            let Ok(mut receiver) = receiver else {
+            let Some(Ok(receiver)) = dioxus_hot_reload::NativeReceiver::create_from_cli().await
+            else {
                 return;
             };
 

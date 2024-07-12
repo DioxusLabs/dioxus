@@ -52,7 +52,7 @@ pub fn launch(
                 let mut serve_dir =
                     ServeDir::new(path.clone()).call_fallback_on_method_not_allowed(true);
 
-                let mut router = axum::Router::new().forward_cli_hot_reloading();
+                let mut router = axum::Router::new();
 
                 // If we are acting like github pages, we need to serve the 404 page if the user requests a directory that doesn't exist
                 router = if github_pages {

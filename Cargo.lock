@@ -2413,6 +2413,7 @@ dependencies = [
  "rayon",
  "reqwest 0.12.5",
  "rsx-rosetta",
+ "rustls 0.23.11",
  "serde",
  "serde_json",
  "subprocess",
@@ -2673,6 +2674,7 @@ name = "dioxus-hot-reload"
 version = "0.5.2"
 dependencies = [
  "chrono",
+ "dioxus-cli-config",
  "dioxus-core 0.5.2",
  "dioxus-html",
  "dioxus-rsx",

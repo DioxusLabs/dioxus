@@ -10,7 +10,7 @@ use std::ops::Deref;
 use super::*;
 
 /// Run the WASM project on dev-server
-#[derive(Clone, Debug, Default, Deserialize, Parser)]
+#[derive(Clone, Debug, Default, Parser)]
 #[command(group = clap::ArgGroup::new("release-incompatible").multiple(true).conflicts_with("release"))]
 #[clap(name = "serve")]
 pub struct Serve {

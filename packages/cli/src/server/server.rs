@@ -16,10 +16,13 @@ use axum::{
     Router,
 };
 use axum_server::tls_rustls::RustlsConfig;
-use dioxus_cli_config::WebHttpsConfig;
+use chrono::format;
+use dioxus_cli_config::{Platform, WebHttpsConfig};
 use dioxus_hot_reload::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{stream::FuturesUnordered, StreamExt};
+use hyper::Uri;
+use std::net::TcpListener;
 use std::path::Path;
 use std::{
     convert::Infallible,
@@ -40,22 +43,31 @@ pub struct Server {
     pub ip: IpAddr,
     pub new_socket: UnboundedReceiver<WebSocket>,
     pub server_task: JoinHandle<Result<()>>,
+    /// We proxy (not hot reloading) fullstack requests to this port
+    pub fullstack_port: Option<u16>,
 }
 
 impl Server {
     pub async fn start(serve: &Serve, cfg: &DioxusCrate) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
 
-        let router = setup_router(serve, cfg, tx).await.unwrap();
-        let port = serve.server_arguments.port;
+        let addr = serve.server_arguments.address.address();
         let start_browser = serve.server_arguments.open.unwrap_or_default();
 
-        let ip = serve
-            .server_arguments
-            .addr
-            .unwrap_or(IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)));
+        // If we're serving a fullstack app, we need to find a port to proxy to
+        let fullstack_port = if matches!(
+            serve.build_arguments.platform(),
+            Platform::Fullstack | Platform::StaticGeneration
+        ) {
+            get_available_port(addr.ip())
+        } else {
+            None
+        };
+        let fullstack_address = fullstack_port.map(|port| SocketAddr::new(addr.ip(), port));
 
-        let addr: SocketAddr = SocketAddr::from((ip, port));
+        let router = setup_router(serve, cfg, tx, fullstack_address)
+            .await
+            .unwrap();
 
         // HTTPS
         // Before console info so it can stop if mkcert isn't installed or fails
@@ -64,7 +76,7 @@ impl Server {
 
         // Open the browser
         if start_browser {
-            open_browser(cfg, ip, port, rustls.is_some());
+            open_browser(cfg, addr, rustls.is_some());
         }
 
         // Actually just start the server
@@ -91,7 +103,8 @@ impl Server {
             sockets: vec![],
             new_socket: rx,
             server_task,
-            ip,
+            ip: addr.ip(),
+            fullstack_port,
         }
     }
 
@@ -160,26 +173,33 @@ impl Server {
             _ = socket.close().await;
         }
     }
+
+    /// Get the address the fullstack server should run on if we're serving a fullstack app
+    pub fn fullstack_address(&self) -> Option<SocketAddr> {
+        self.fullstack_port
+            .map(|port| SocketAddr::new(self.ip, port))
+    }
 }
 
 /// Sets up and returns a router
 ///
 /// Steps include:
 /// - Setting up cors
-/// - Setting up the proxy to the /api/ endpoint specifed in the config
+/// - Setting up the proxy to the endpoint specified in the config
 /// - Setting up the file serve service
 /// - Setting up the websocket endpoint for devtools
 pub async fn setup_router(
     serve: &Serve,
     config: &DioxusCrate,
     tx: UnboundedSender<WebSocket>,
+    fullstack_address: Option<SocketAddr>,
 ) -> Result<Router> {
     let mut router = Router::new();
+    let platform = serve.build_arguments.platform();
 
-    // Setup proxy for the /api/ endpoint
+    // Setup proxy for the endpoint specified in the config
     for proxy_config in config.dioxus_config.web.proxy.iter() {
-        todo!("Configure proxy");
-        // router = super::proxy::add_proxy(router, &proxy_config)?;
+        router = super::proxy::add_proxy(router, &proxy_config)?;
     }
 
     // Setup base path redirection
@@ -192,8 +212,20 @@ pub async fn setup_router(
             }));
     }
 
-    // Route file service to output the .wasm and assets
-    router = router.fallback(build_serve_dir(serve, config));
+    match platform {
+        Platform::Web => {
+            // Route file service to output the .wasm and assets if this is a web build
+            router = router.fallback(build_serve_dir(serve, config));
+        }
+        Platform::Fullstack | Platform::StaticGeneration => {
+            // For fullstack and static generation, forward all requests to the server
+            let address = fullstack_address.unwrap();
+            router = router.fallback(super::proxy::proxy_to(
+                format!("http://{address}").parse().unwrap(),
+            ));
+        }
+        _ => {}
+    }
 
     // Setup websocket endpoint - and pass in the extension layer immediately after
     router = router
@@ -364,11 +396,15 @@ pub fn get_rustls_without_mkcert(web_config: &WebHttpsConfig) -> Result<(String,
 }
 
 /// Open the browser to the address
-pub(crate) fn open_browser(config: &DioxusCrate, ip: IpAddr, port: u16, https: bool) {
+pub(crate) fn open_browser(config: &DioxusCrate, address: SocketAddr, https: bool) {
     let protocol = if https { "https" } else { "http" };
     let base_path = match config.dioxus_config.web.app.base_path.as_deref() {
         Some(base_path) => format!("/{}", base_path.trim_matches('/')),
         None => "".to_owned(),
     };
-    _ = open::that(format!("{protocol}://{ip}:{port}{base_path}"));
+    _ = open::that(format!("{protocol}://{address}{base_path}"));
+}
+
+fn get_available_port(address: IpAddr) -> Option<u16> {
+    (8000..9000).find(|port| TcpListener::bind((address, *port)).is_ok())
 }

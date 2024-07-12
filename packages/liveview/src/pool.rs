@@ -118,10 +118,8 @@ impl<S> LiveViewSocket for S where
 pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), LiveViewError> {
     #[cfg(all(feature = "hot-reload", debug_assertions))]
     let mut hot_reload_rx = {
-        let port = dioxus_cli_config::ServeArguments::from_cli().map_or(8080, |args| args.port);
-        let url = format!("ws://0.0.0.0:{}/_dioxus", port);
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        dioxus_hot_reload::connect(url, move |template| _ = tx.send(template));
+        dioxus_hot_reload::connect(move |template| _ = tx.send(template));
         rx
     };
 

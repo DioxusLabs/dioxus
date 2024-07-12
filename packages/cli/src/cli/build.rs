@@ -137,4 +137,9 @@ impl Build {
 
         resolved.dioxus_config.application.default_platform
     }
+
+    /// Get the platform from the build arguments
+    pub fn platform(&self) -> Platform {
+        self.platform.unwrap_or_default()
+    }
 }

@@ -108,6 +108,14 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                             screen.new_build_logs(platform, update);
                         }
                         BuilderUpdate::Ready { results } => {
+                            // If we have a build result, open it
+                            for build_result in results.iter() {
+                                let child = build_result.open(&serve.server_arguments, server.fullstack_address());
+                                if let Some(child_proc) = child? {
+                                    buildr.children.push((build_result.platform,child_proc));
+                                }
+                            }
+
                             screen.new_ready_app(&mut buildr, results);
                         }
                     };
