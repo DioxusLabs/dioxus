@@ -32,7 +32,7 @@ pub fn vdom_is_rendering() -> bool {
 /// ```
 pub fn throw_error(error: impl Into<CapturedError> + 'static) {
     current_scope_id()
-        .expect("to be in a dioxus runtime")
+        .expect("Must be called from inside the Dioxus runtime")
         .throw_error(error)
 }
 
@@ -64,13 +64,14 @@ pub fn has_context<T: 'static + Clone>() -> Option<T> {
 
 /// Provide context to the current scope
 pub fn provide_context<T: 'static + Clone>(value: T) -> T {
-    Runtime::with_current_scope(|cx| cx.provide_context(value)).expect("to be in a dioxus runtime")
+    Runtime::with_current_scope(|cx| cx.provide_context(value))
+        .expect("Must be called from inside the Dioxus runtime")
 }
 
 /// Provide a context to the root scope
 pub fn provide_root_context<T: 'static + Clone>(value: T) -> T {
     Runtime::with_current_scope(|cx| cx.provide_root_context(value))
-        .expect("to be in a dioxus runtime")
+        .expect("Must be called from inside the Dioxus runtime")
 }
 
 /// Suspended the current component on a specific task and then return None
@@ -108,7 +109,8 @@ pub fn suspend(task: Task) -> Element {
 ///
 #[doc = include_str!("../docs/common_spawn_errors.md")]
 pub fn spawn_isomorphic(fut: impl Future<Output = ()> + 'static) -> Task {
-    Runtime::with_current_scope(|cx| cx.spawn_isomorphic(fut)).expect("to be in a dioxus runtime")
+    Runtime::with_current_scope(|cx| cx.spawn_isomorphic(fut))
+        .expect("Must be called from inside the Dioxus runtime")
 }
 
 /// Spawns the future but does not return the [`Task`]. This task will automatically be canceled when the component is dropped.
@@ -134,12 +136,14 @@ pub fn spawn_isomorphic(fut: impl Future<Output = ()> + 'static) -> Task {
 ///
 #[doc = include_str!("../docs/common_spawn_errors.md")]
 pub fn spawn(fut: impl Future<Output = ()> + 'static) -> Task {
-    Runtime::with_current_scope(|cx| cx.spawn(fut)).expect("to be in a dioxus runtime")
+    Runtime::with_current_scope(|cx| cx.spawn(fut))
+        .expect("Must be called from inside the Dioxus runtime")
 }
 
 /// Queue an effect to run after the next render. You generally shouldn't need to interact with this function directly. [use_effect](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_effect.html) will call this function for you.
 pub fn queue_effect(f: impl FnOnce() + 'static) {
-    Runtime::with_current_scope(|cx| cx.queue_effect(f)).expect("to be in a dioxus runtime")
+    Runtime::with_current_scope(|cx| cx.queue_effect(f))
+        .expect("Must be called from inside the Dioxus runtime")
 }
 
 /// Spawn a future that Dioxus won't clean up when this component is unmounted
@@ -249,14 +253,16 @@ pub fn remove_future(id: Task) {
 /// }
 /// ```
 pub fn use_hook<State: Clone + 'static>(initializer: impl FnOnce() -> State) -> State {
-    Runtime::with_current_scope(|cx| cx.use_hook(initializer)).expect("to be in a dioxus runtime")
+    Runtime::with_current_scope(|cx| cx.use_hook(initializer))
+        .expect("Must be called from inside the Dioxus runtime")
 }
 
 /// Get the current render since the inception of this component
 ///
 /// This can be used as a helpful diagnostic when debugging hooks/renders, etc
 pub fn generation() -> usize {
-    Runtime::with_current_scope(|cx| cx.generation()).expect("to be in a dioxus runtime")
+    Runtime::with_current_scope(|cx| cx.generation())
+        .expect("Must be called from inside the Dioxus runtime")
 }
 
 /// Get the parent of the current scope if it exists
@@ -280,7 +286,8 @@ pub fn needs_update_any(id: ScopeId) {
 ///
 /// You should prefer [`schedule_update_any`] if you need to update multiple components.
 pub fn schedule_update() -> Arc<dyn Fn() + Send + Sync> {
-    Runtime::with_current_scope(|cx| cx.schedule_update()).expect("to be in a dioxus runtime")
+    Runtime::with_current_scope(|cx| cx.schedule_update())
+        .expect("Must be called from inside the Dioxus runtime")
 }
 
 /// Schedule an update for any component given its [`ScopeId`].
@@ -289,7 +296,8 @@ pub fn schedule_update() -> Arc<dyn Fn() + Send + Sync> {
 ///
 /// Note: Unlike [`needs_update`], the function returned by this method will work outside of the dioxus runtime.
 pub fn schedule_update_any() -> Arc<dyn Fn(ScopeId) + Send + Sync> {
-    Runtime::with_current_scope(|cx| cx.schedule_update_any()).expect("to be in a dioxus runtime")
+    Runtime::with_current_scope(|cx| cx.schedule_update_any())
+        .expect("Must be called from inside the Dioxus runtime")
 }
 
 /// Creates a callback that will be run before the component is removed.
