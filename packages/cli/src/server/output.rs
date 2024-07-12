@@ -385,6 +385,9 @@ impl Output {
             let app = RunningApp { result, stdout };
 
             self.running_apps.insert(platform, app);
+
+            // Clear the build progress for the platform that just finished building
+            self.build_logs.remove(&platform);
         }
     }
 
@@ -423,7 +426,7 @@ impl Output {
 
             let header = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([Constraint::Fill(2), Constraint::Fill(1)].as_ref())
+                .constraints([Constraint::Fill(1)].as_ref())
                 .split(body[0]);
 
             // Render a border for the header
