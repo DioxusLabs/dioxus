@@ -1,6 +1,7 @@
 use crate::{
     builder::{BuildMessage, MessageType, Stage, UpdateBuildProgress},
     dioxus_crate::DioxusCrate,
+    dx_build_info,
 };
 use crate::{
     builder::{BuildResult, UpdateStage},
@@ -13,6 +14,7 @@ use crossterm::{
     ExecutableCommand,
 };
 use dioxus_cli_config::Platform;
+use dioxus_hot_reload::ClientMsg;
 use futures_util::{
     future::{join_all, FutureExt},
     StreamExt,
@@ -131,8 +133,11 @@ impl Output {
         let user_input = self.events.next();
 
         let next_stdout = self.running_apps.values_mut().map(|app| async move {
-            let stdout = app.stdout.next_line();
-            let stderr = app.stderr.next_line();
+            let (stdout, stderr) = match &mut app.stdout {
+                Some(stdout) => (stdout.stdout.next_line(), stdout.stderr.next_line()),
+                None => return futures_util::future::pending().await,
+            };
+
             tokio::select! {
                 Ok(Some(line)) = stdout => (app.result.platform, Some(line), None),
                 Ok(Some(line)) = stderr => (app.result.platform, None, Some(line)),
@@ -146,14 +151,14 @@ impl Output {
             new_line = join_all(next_stdout) => {
                 for (platform, stdout, stderr) in new_line {
                     if let Some(stdout) = stdout {
-                        self.running_apps.get_mut(&platform).unwrap().stdout_line.push_str(&stdout);
+                        self.running_apps.get_mut(&platform).unwrap().stdout.as_mut().unwrap().stdout_line.push_str(&stdout);
                         self.push_log(platform, BuildMessage {
                             level: Level::INFO,
                             message: MessageType::Text(stdout),
                         })
                     }
                     if let Some(stderr) = stderr {
-                        self.running_apps.get_mut(&platform).unwrap().stderr_line.push_str(&stderr);
+                        self.running_apps.get_mut(&platform).unwrap().stdout.as_mut().unwrap().stderr_line.push_str(&stderr);
                         self.push_log(platform, BuildMessage {
                             level: Level::ERROR,
                             message: MessageType::Text(stderr),
@@ -237,6 +242,67 @@ impl Output {
         Ok(())
     }
 
+    pub fn new_ws_message(&mut self, platform: Platform, message: axum::extract::ws::Message) {
+        if let axum::extract::ws::Message::Text(text) = message {
+            let msg = serde_json::from_str::<ClientMsg>(text.as_str());
+            match msg {
+                Ok(ClientMsg::Log { level, messages }) => {
+                    self.push_log(
+                        platform,
+                        BuildMessage {
+                            level: match level.as_str() {
+                                "info" => Level::INFO,
+                                "warn" => Level::WARN,
+                                "error" => Level::ERROR,
+                                "debug" => Level::DEBUG,
+                                _ => Level::INFO,
+                            },
+                            message: MessageType::Text(
+                                // todo: the js console is giving us a list of params, not formatted text
+                                // we need to translate its styling into our own
+                                messages.get(0).unwrap_or(&String::new()).clone(),
+                            ),
+                        },
+                    );
+                }
+                Err(err) => {
+                    self.push_log(
+                        platform,
+                        BuildMessage {
+                            level: Level::ERROR,
+                            message: MessageType::Text(format!("Error parsing message: {err}")),
+                        },
+                    );
+                }
+            }
+
+            return;
+        }
+
+        // let message = BuildMessage {
+        //     level: Level::INFO,
+        //     message: MessageType::Text(fmted),
+        // };
+        // self.push_log(platform, message)
+
+        // dbg!(message);
+        // match message {
+        //     axum::extract::ws::Message::Text(text) => {
+        //         self.new_log(platform, text);
+        //     }
+        //     axum::extract::ws::Message::Binary(_) => {}
+        // }
+
+        // self.build_logs
+        //     .get_mut(&platform)
+        //     .unwrap()
+        //     .messages
+        //     .push(BuildMessage {
+        //         level: Level::INFO,
+        //         message: MessageType::Text(message.to_string()),
+        //     });
+    }
+
     pub fn push_log(&mut self, platform: Platform, message: BuildMessage) {
         let snapped = self.is_snapped(platform);
 
@@ -288,7 +354,7 @@ impl Output {
 
     pub fn new_ready_app(&mut self, build_engine: &mut Builder, results: Vec<BuildResult>) {
         for result in results {
-            let (stdout, stderr) = build_engine
+            let out = build_engine
                 .children
                 .iter_mut()
                 .find_map(|(platform, child)| {
@@ -297,18 +363,18 @@ impl Output {
                     } else {
                         None
                     }
-                })
-                .unwrap();
+                });
 
             let platform = result.platform.clone();
 
-            let app = RunningApp {
-                result,
+            let stdout = out.map(|(stdout, stderr)| RunningAppOutput {
                 stdout: BufReader::new(stdout).lines(),
                 stderr: BufReader::new(stderr).lines(),
                 stdout_line: String::new(),
                 stderr_line: String::new(),
-            };
+            });
+
+            let app = RunningApp { result, stdout };
 
             self.running_apps.insert(platform, app);
         }
@@ -525,6 +591,10 @@ async fn rustc_version() -> String {
 
 pub struct RunningApp {
     result: BuildResult,
+    stdout: Option<RunningAppOutput>,
+}
+
+struct RunningAppOutput {
     stdout: Lines<BufReader<ChildStdout>>,
     stderr: Lines<BufReader<ChildStderr>>,
     stdout_line: String,

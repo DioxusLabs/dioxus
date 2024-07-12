@@ -6,8 +6,8 @@
 use dioxus_hot_reload::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use js_sys::JsString;
-use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
+use wasm_bindgen::{closure::Closure, JsValue};
 use web_sys::{window, CloseEvent, MessageEvent, WebSocket};
 
 const POLL_INTERVAL_MIN: i32 = 250;
@@ -18,6 +18,7 @@ pub(crate) fn init() -> UnboundedReceiver<HotReloadMsg> {
     // Create the tx/rx pair that we'll use for the top-level future in the dioxus loop
     let (tx, rx) = unbounded();
 
+    // Wire up the websocket to the devserver
     make_ws(tx, POLL_INTERVAL_MIN, false);
 
     rx
@@ -119,6 +120,17 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
         .as_ref()
         .unchecked_ref(),
     ));
+
+    // monkey patch our console.log / console.error to send the logs to the websocket
+    // this will let us see the logs in the devserver!
+    // We only do this if we're not reloading the page, since that will cause duplicate monkey patches
+    if !reload {
+        // the method we need to patch:
+        // https://developer.mozilla.org/en-US/docs/Web/API/Console/log
+        // log, info, warn, error, debug
+        let ws: &JsValue = ws.as_ref();
+        dioxus_interpreter_js::minimal_bindings::monkeyPatchConsole(ws.clone());
+    }
 }
 
 /// Force a hotreload of the assets on this page by walking them and changing their URLs to include

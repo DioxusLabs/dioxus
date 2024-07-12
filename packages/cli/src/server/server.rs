@@ -19,7 +19,7 @@ use axum_server::tls_rustls::RustlsConfig;
 use dioxus_cli_config::WebHttpsConfig;
 use dioxus_hot_reload::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use futures_util::StreamExt;
+use futures_util::{stream::FuturesUnordered, StreamExt};
 use std::path::Path;
 use std::{
     convert::Infallible,
@@ -111,15 +111,36 @@ impl Server {
     }
 
     /// Wait for new clients to be connected and then save them
-    pub async fn wait(&mut self) {
-        let new_socket = self.new_socket.next().await;
+    pub async fn wait(&mut self) -> Option<Message> {
+        let mut new_socket = self.new_socket.next();
+        let mut new_message = self
+            .sockets
+            .iter_mut()
+            .map(|socket| socket.next())
+            .collect::<FuturesUnordered<_>>();
 
-        if let Some(new_socket) = new_socket {
-            // println!("new socket connected: {:?}", new_socket);
-            self.sockets.push(new_socket);
-        } else {
-            panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
+        loop {
+            tokio::select! {
+                new_socket = &mut new_socket => {
+                    if let Some(new_socket) = new_socket {
+                        // println!("new socket connected: {:?}", new_socket);
+                        drop(new_message);
+                        self.sockets.push(new_socket);
+                        return None;
+                    } else {
+                        panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
+                    }
+                }
+                message = new_message.next() => {
+                    if let Some(Some(Ok(message))) = message {
+                        return Some(message);
+                        // self.handle_message(message).await;
+                    }
+                }
+            };
         }
+
+        None
     }
 
     /// Send a shutdown message to all connected clients

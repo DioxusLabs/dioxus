@@ -1,6 +1,7 @@
 use crate::dioxus_crate::DioxusCrate;
 use crate::serve::Serve;
 use crate::Result;
+use dioxus_cli_config::Platform;
 use std::io::Write;
 use tokio::io::AsyncBufReadExt;
 use tokio::task::yield_now;
@@ -88,9 +89,12 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
             }
 
             // reload the pag
-            _new_socket = server.wait() => {
+            msg = server.wait() => {
                 // Run the server in the background
                 // Waiting for updates here lets us tap into when clients are added/removed
+                if let Some(msg) = msg {
+                    screen.new_ws_message(Platform::Web, msg);
+                }
             }
 
             // Handle updates from the build engine

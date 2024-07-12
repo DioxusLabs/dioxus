@@ -29,9 +29,34 @@ pub enum DevserverMsg {
     Shutdown,
 }
 
+/// A message the client sends from the frontend to the devserver
+///
+/// This is used to communicate with the devserver
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum ClientMsg {
+    Log {
+        level: String,
+        messages: Vec<String>,
+    },
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(bound(deserialize = "'de: 'static"))]
 pub struct HotReloadMsg {
     pub templates: Vec<HotReloadedTemplate>,
     pub assets: Vec<PathBuf>,
+}
+
+#[test]
+fn serialize_client_msg() {
+    let msg = ClientMsg::Log {
+        level: "info".to_string(),
+        messages: vec!["hello world".to_string()],
+    };
+
+    let json = serde_json::to_string(&msg).unwrap();
+    assert_eq!(
+        json,
+        r#"{"Log":{"level":"info","messages":["hello world"]}}"#
+    );
 }
