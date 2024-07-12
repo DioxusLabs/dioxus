@@ -1,5 +1,5 @@
 use std::env;
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::{prelude::*, EnvFilter, Layer};
 
 use anyhow::Context;
 use clap::Parser;
@@ -19,7 +19,10 @@ async fn main() -> anyhow::Result<()> {
     if env::var(LOG_ENV).is_ok() {
         filter = EnvFilter::from_env(LOG_ENV);
     }
-    tracing_subscriber::fmt().with_env_filter(filter).init();
+    tracing_subscriber::registry()
+        .with(console_subscriber::spawn())
+        .with(tracing_subscriber::fmt::layer().with_filter(filter))
+        .init();
 
     match args.action {
         Translate(opts) => opts
