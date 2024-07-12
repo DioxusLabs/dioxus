@@ -1,6 +1,5 @@
 use dioxus_core::prelude::{provide_root_context, try_consume_context};
 use std::{any::Any, cell::RefCell, collections::HashMap, panic::Location, rc::Rc};
-use uuid::Uuid;
 
 mod memo;
 pub use memo::*;
@@ -9,8 +8,6 @@ mod signal;
 pub use signal::*;
 
 use crate::Signal;
-
-pub(crate) static UUID_NAMESPACE: uuid::Uuid = uuid::Uuid::NAMESPACE_URL;
 
 /// The context for global signals
 #[derive(Clone)]
@@ -68,9 +65,10 @@ mod tests {
     /// We don't want signals to merge, but we also want them to use both string IDs and memory addresses.
     #[test]
     fn test_global_keys() {
-        static MYSIGNAL: GlobalSignal<i32> = GlobalSignal::new(|| 42);
-        static MYSIGNAL2: GlobalSignal<i32> = GlobalSignal::new(|| 42);
-        static MYSIGNAL3: GlobalSignal<i32> = GlobalSignal::with_key(|| 42, "custom-keyed");
+        // we're using consts since it's harder than statics due to merging - these won't be merged
+        const MYSIGNAL: GlobalSignal<i32> = GlobalSignal::new(|| 42);
+        const MYSIGNAL2: GlobalSignal<i32> = GlobalSignal::new(|| 42);
+        const MYSIGNAL3: GlobalSignal<i32> = GlobalSignal::with_key(|| 42, "custom-keyed");
 
         let a = MYSIGNAL.key();
         let b = MYSIGNAL.key();
@@ -83,8 +81,5 @@ mod tests {
 
         let e = MYSIGNAL3.key();
         assert_ne!(a, e);
-
-        let key = Uuid::new_v3(&UUID_NAMESPACE, "custom-keyed".as_bytes());
-        assert_eq!(e, key);
     }
 }

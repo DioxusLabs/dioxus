@@ -3,7 +3,7 @@ use quote::ToTokens;
 use quote::{quote, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
-    Lit, LitBool, LitFloat, LitInt,
+    Lit, LitBool, LitFloat, LitInt, LitStr,
 };
 
 use crate::{location::DynIdx, IfmtInput, Segment};
@@ -216,10 +216,20 @@ impl HotLiteral {
 
     pub fn to_string(&self) -> String {
         match &self.value {
-            HotLiteralType::Fmted(f) => f.to_quoted_string_from_parts(),
+            HotLiteralType::Fmted(f) => f.to_string_with_quotes(),
             HotLiteralType::Float(f) => f.to_string(),
             HotLiteralType::Int(f) => f.to_string(),
             HotLiteralType::Bool(f) => f.value().to_string(),
+        }
+    }
+
+    pub fn from_raw_text(text: &str) -> Self {
+        HotLiteral {
+            value: crate::HotLiteralType::Fmted(IfmtInput {
+                source: LitStr::new(text, Span::call_site()),
+                segments: vec![],
+            }),
+            hr_idx: Default::default(),
         }
     }
 }
@@ -270,7 +280,7 @@ mod tests {
             panic!("expected a formatted string");
         };
         assert!(segments.is_static());
-        assert_eq!(r##""hello""##, segments.to_quoted_string_from_parts());
+        assert_eq!(r##""hello""##, segments.to_string_with_quotes());
         println!("{}", lit.to_token_stream().pretty_unparse());
     }
 
@@ -281,10 +291,7 @@ mod tests {
             panic!("expected a formatted string");
         };
         assert!(!segments.is_static());
-        assert_eq!(
-            r##""hello {world}""##,
-            segments.to_quoted_string_from_parts()
-        );
+        assert_eq!(r##""hello {world}""##, segments.to_string_with_quotes());
         println!("{}", lit.to_token_stream().pretty_unparse());
     }
 }

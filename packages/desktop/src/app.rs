@@ -169,7 +169,6 @@ impl App {
             .await;
 
             let Ok(mut receiver) = receiver else {
-                eprintln!("Failed to start hotreload server");
                 return;
             };
 

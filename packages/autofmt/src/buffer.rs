@@ -51,7 +51,7 @@ impl Buffer {
     }
 
     pub fn write_text(&mut self, text: &IfmtInput) -> Result {
-        write!(self.buf, "{}", text.to_quoted_string_from_parts())
+        write!(self.buf, "{}", text.to_string_with_quotes())
     }
 }
 

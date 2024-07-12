@@ -1,7 +1,7 @@
-/// A vec that's optimized for finding and removing elements that match a predicate.
+/// An array that's optimized for finding and removing elements that match a predicate.
 ///
 /// Currently will do a linear search for the first element that matches the predicate.
-/// Uses a next_free pointer to optimize the search such that future searches start from left-most
+/// Uses a scan_start pointer to optimize the search such that future searches start from left-most
 /// non-None item, making it O(1) on average for sorted input.
 ///
 /// The motivating factor here is that hashes are expensive and actually quite hard to maintain for
@@ -10,8 +10,8 @@
 /// Deriving hash will start to slurp up private fields which is not what we want, so the comparison
 /// function is moved here to the reloadstack interface.
 pub struct PopVec<T> {
-    stack: Vec<Option<T>>,
-    next_free: usize,
+    stack: Box<[Option<T>]>,
+    scan_start: usize,
 }
 
 impl<T> PopVec<T> {
@@ -19,19 +19,19 @@ impl<T> PopVec<T> {
         let stack = f.map(Some).collect();
         Self {
             stack,
-            next_free: 0,
+            scan_start: 0,
         }
     }
 
     pub fn remove(&mut self, idx: usize) -> Option<T> {
-        let item = self.stack.get_mut(idx).unwrap().take();
+        let item = self.stack.get_mut(idx)?.take();
 
-        // move the next_free pointer to the right-most non-none element
-        for i in self.next_free..=idx {
+        // move the scan_start pointer to the right-most non-none element
+        for i in self.scan_start..=idx {
             if self.stack[i].is_some() {
                 break;
             }
-            self.next_free = i + 1;
+            self.scan_start = i + 1;
         }
 
         item
@@ -54,7 +54,7 @@ impl<T> PopVec<T> {
         let mut highest_score = 0;
         let mut best = None;
 
-        for (idx, x) in self.stack.iter().enumerate().skip(self.next_free) {
+        for (idx, x) in self.stack.iter().enumerate().skip(self.scan_start) {
             if let Some(x) = x {
                 let scored = score(x);
                 if scored > highest_score {
@@ -77,7 +77,7 @@ impl<T> PopVec<T> {
 
     pub fn is_empty(&self) -> bool {
         // next free is 0 when stack len = 1
-        self.next_free == self.stack.len() - 1
+        self.scan_start == self.stack.len() - 1
     }
 }
 
@@ -100,14 +100,14 @@ fn free_optimization_works() {
     let mut stack = PopVec::new(vec![0, 1, 2, 3, 4, 5].into_iter());
 
     _ = stack.remove(0);
-    assert_eq!(stack.next_free, 1);
+    assert_eq!(stack.scan_start, 1);
 
     _ = stack.remove(1);
-    assert_eq!(stack.next_free, 2);
+    assert_eq!(stack.scan_start, 2);
 
     _ = stack.remove(4);
-    assert_eq!(stack.next_free, 2);
+    assert_eq!(stack.scan_start, 2);
 
     _ = stack.remove(2);
-    assert_eq!(stack.next_free, 3);
+    assert_eq!(stack.scan_start, 3);
 }

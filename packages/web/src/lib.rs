@@ -189,23 +189,7 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
             dioxus_hot_reload::apply_changes(&mut dom, &hr_msg);
 
             if !hr_msg.assets.is_empty() {
-                // it might be triggering a reload of assets
-                // invalidate all the stylesheets on the page
-                let links = web_sys::window()
-                    .unwrap()
-                    .document()
-                    .unwrap()
-                    .query_selector_all("link[rel=stylesheet]")
-                    .unwrap();
-
-                let noise = js_sys::Math::random();
-
-                for x in 0..links.length() {
-                    use wasm_bindgen::JsCast;
-                    let link: web_sys::Element = links.get(x).unwrap().unchecked_into();
-                    let href = link.get_attribute("href").unwrap();
-                    _ = link.set_attribute("href", &format!("{}?{}", href, noise));
-                }
+                crate::hot_reload::invalidate_browser_asset_cache();
             }
         }
 

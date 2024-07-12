@@ -112,14 +112,14 @@ impl Server {
 
     /// Wait for new clients to be connected and then save them
     pub async fn wait(&mut self) {
-        let new_socket = self
-            .new_socket
-            .next()
-            .await
-            .expect("receiver to receive a socket");
-        // println!("new socket connected: {:?}", new_socket);
+        let new_socket = self.new_socket.next().await;
 
-        self.sockets.push(new_socket);
+        if let Some(new_socket) = new_socket {
+            // println!("new socket connected: {:?}", new_socket);
+            self.sockets.push(new_socket);
+        } else {
+            panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
+        }
     }
 
     /// Send a shutdown message to all connected clients

@@ -6,7 +6,7 @@ use convert_case::{Case, Casing};
 use dioxus_html::{map_html_attribute_to_rsx, map_html_element_to_rsx};
 use dioxus_rsx::{
     Attribute, AttributeName, AttributeValue, BodyNode, CallBody, Component, Element, ElementName,
-    HotLiteral, IfmtInput, TemplateBody, TextNode,
+    HotLiteral, TemplateBody, TextNode,
 };
 pub use html_parser::{Dom, Node};
 use proc_macro2::{Ident, Span};
@@ -30,12 +30,11 @@ pub fn rsx_from_html(dom: &Dom) -> CallBody {
 ///
 /// If the node is a comment, it will be ignored since RSX doesn't support comments
 pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
+    use AttributeName::*;
+    use AttributeValue::*;
+
     match node {
-        Node::Text(text) => Some(BodyNode::Text(TextNode {
-            input: ifmt_from_text(text),
-            dyn_idx: Default::default(),
-            hr_idx: Default::default(),
-        })),
+        Node::Text(text) => Some(BodyNode::Text(TextNode::from_text(text))),
 
         Node::Element(el) => {
             let el_name = if let Some(name) = map_html_element_to_rsx(&el.name) {
@@ -54,54 +53,34 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
                 .attributes
                 .iter()
                 .map(|(name, value)| {
-                    let value = literal_from_text(value.as_deref().unwrap_or("false"));
-                    let attr = if let Some(name) = map_html_attribute_to_rsx(name) {
-                        let ident = if let Some(name) = name.strip_prefix("r#") {
-                            Ident::new_raw(name, Span::call_site())
-                        } else {
-                            Ident::new(name, Span::call_site())
-                        };
-                        Attribute {
-                            value: AttributeValue::AttrLiteral(value),
-                            colon: Some(Default::default()),
-                            comma: Some(Default::default()),
-                            name: AttributeName::BuiltIn(ident),
-                            dyn_idx: Default::default(),
+                    let value = HotLiteral::from_raw_text(value.as_deref().unwrap_or("false"));
+                    let name = if let Some(name) = map_html_attribute_to_rsx(name) {
+                        match name.strip_prefix("r#") {
+                            Some(name) => Custom(LitStr::new(name, Span::call_site())),
+                            None => BuiltIn(Ident::new(name, Span::call_site())),
                         }
                     } else {
                         // If we don't recognize the attribute, we assume it's a custom attribute
-                        Attribute {
-                            value: AttributeValue::AttrLiteral(value),
-                            colon: Some(Default::default()),
-                            name: AttributeName::Custom(LitStr::new(name, Span::call_site())),
-                            comma: Some(Default::default()),
-                            dyn_idx: Default::default(),
-                        }
+                        Custom(LitStr::new(name, Span::call_site()))
                     };
 
-                    attr
+                    Attribute::from_raw(name, AttrLiteral(value))
                 })
                 .collect();
 
             let class = el.classes.join(" ");
             if !class.is_empty() {
-                attributes.push(Attribute {
-                    name: AttributeName::BuiltIn(Ident::new("class", Span::call_site())),
-                    colon: Some(Default::default()),
-                    value: AttributeValue::AttrLiteral(literal_from_text(&class)),
-                    comma: Some(Default::default()),
-                    dyn_idx: Default::default(),
-                });
+                attributes.push(Attribute::from_raw(
+                    BuiltIn(Ident::new("class", Span::call_site())),
+                    AttrLiteral(HotLiteral::from_raw_text(&class)),
+                ));
             }
 
             if let Some(id) = &el.id {
-                attributes.push(Attribute {
-                    name: AttributeName::BuiltIn(Ident::new("id", Span::call_site())),
-                    colon: Some(Default::default()),
-                    value: AttributeValue::AttrLiteral(literal_from_text(id)),
-                    comma: Some(Default::default()),
-                    dyn_idx: Default::default(),
-                });
+                attributes.push(Attribute::from_raw(
+                    BuiltIn(Ident::new("id", Span::call_site())),
+                    AttrLiteral(HotLiteral::from_raw_text(id)),
+                ));
             }
 
             let children = el.children.iter().filter_map(rsx_node_from_html).collect();
@@ -163,22 +142,5 @@ pub fn collect_svgs(children: &mut [BodyNode], out: &mut Vec<BodyNode>) {
 
             _ => {}
         }
-    }
-}
-
-fn ifmt_from_text(text: &str) -> IfmtInput {
-    IfmtInput {
-        source: LitStr::new(text, Span::call_site()),
-        segments: vec![],
-    }
-}
-
-fn literal_from_text(text: &str) -> HotLiteral {
-    HotLiteral {
-        value: dioxus_rsx::HotLiteralType::Fmted(IfmtInput {
-            source: LitStr::new(text, Span::call_site()),
-            segments: vec![],
-        }),
-        hr_idx: Default::default(),
     }
 }

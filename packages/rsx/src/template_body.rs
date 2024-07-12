@@ -58,6 +58,7 @@ use crate::innerlude::Attribute;
 use crate::*;
 use dioxus_core::prelude::Template;
 use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2_diagnostics::SpanDiagnosticExt;
 use syn::token::Brace;
 
 use self::location::DynIdx;
@@ -81,6 +82,7 @@ pub struct TemplateBody {
     pub template_idx: DynIdx,
     pub node_paths: Vec<NodePath>,
     pub attr_paths: Vec<(AttributePath, usize)>,
+    pub diagnostic: Diagnostics,
     current_path: Vec<u8>,
 }
 
@@ -88,8 +90,31 @@ impl Parse for TemplateBody {
     /// Parse the nodes of the callbody as `Body`.
     fn parse(input: ParseStream) -> Result<Self> {
         let brace = Brace::default();
-        let block = RsxBlock::parse_inner(input, brace)?;
-        Ok(Self::new(block.children))
+
+        let RsxBlock {
+            brace: _,
+            attributes,
+            spreads,
+            children,
+            diagnostics: _, // we don't care about the diagnostics here - ours might be different
+        } = RsxBlock::parse_inner(input, brace)?;
+
+        let mut template = Self::new(children);
+        for spread in spreads {
+            template.diagnostic.push(
+                spread
+                    .span()
+                    .error("Spreads are only allowed in elements and components"),
+            );
+        }
+        for attr in attributes {
+            template.diagnostic.push(
+                attr.span()
+                    .error("Attributes are only allowed in elements and components"),
+            );
+        }
+
+        Ok(template)
     }
 }
 
@@ -150,11 +175,10 @@ impl ToTokens for TemplateBody {
 
         // We could add a ToTokens for Attribute but since we use that for both components and elements
         // They actually need to be different, so we just localize that here
-        let dyn_attr_printer = self.attr_paths.iter().map(|(path, idx)| {
-            let node = self.get_dyn_node(&path);
-            let attr = self.get_dyn_attr(path, *idx);
-            attr.rendered_as_dynamic_attr(node.el_name())
-        });
+        let dyn_attr_printer = self
+            .attr_paths
+            .iter()
+            .map(|(path, idx)| self.get_dyn_attr(path, *idx).rendered_as_dynamic_attr());
 
         // Rust analyzer will not autocomplete properly if we change the name every time you type a character
         // If it looks like we are running in rust analyzer, we'll just use a placeholder location
@@ -205,6 +229,7 @@ impl TemplateBody {
             node_paths: Vec::new(),
             attr_paths: Vec::new(),
             current_path: Vec::new(),
+            diagnostic: Diagnostics::new(),
         };
 
         // Assign paths to all nodes in the template
@@ -262,31 +287,10 @@ impl TemplateBody {
     /// This simplifies the ToTokens implementation for the macro to be a little less centralized
     fn assign_path_to(&mut self, node: &BodyNode) {
         // Assign the TemplateNode::Dynamic index to the node
-        let idx = self.node_paths.len();
-        match node {
-            BodyNode::IfChain(chain) => chain.dyn_idx.set(idx),
-            BodyNode::ForLoop(floop) => floop.dyn_idx.set(idx),
-            BodyNode::Component(comp) => comp.dyn_idx.set(idx),
-            BodyNode::Text(text) => text.dyn_idx.set(idx),
-            BodyNode::RawExpr(expr) => expr.dyn_idx.set(idx),
-            BodyNode::Element(_) => unreachable!("Elements should not be assigned dynamic paths"),
-        }
+        node.set_dyn_idx(self.node_paths.len());
 
         // And then save the current path as the corresponding path
         self.node_paths.push(self.current_path.clone());
-    }
-
-    /// Create a new template from this TemplateBody
-    ///
-    /// Note that this will leak memory! We explicitly call `leak` on the vecs to match the format of
-    /// the `Template` struct.
-    pub fn to_template<Ctx: HotReloadingContext>(&self) -> Template {
-        todo!()
-        // self.to_template_with_custom_paths::<Ctx>(
-        //     "placeholder",
-        //     self.node_paths.clone(),
-        //     self.attr_paths.clone(),
-        // )
     }
 
     pub fn to_template_with_custom_paths<Ctx: HotReloadingContext>(
@@ -338,7 +342,7 @@ impl TemplateBody {
     pub fn get_dyn_node(&self, path: &[u8]) -> &BodyNode {
         let mut node = self.roots.get(path[0] as usize).unwrap();
         for idx in path.iter().skip(1) {
-            node = node.children().get(*idx as usize).unwrap();
+            node = node.element_children().get(*idx as usize).unwrap();
         }
         node
     }

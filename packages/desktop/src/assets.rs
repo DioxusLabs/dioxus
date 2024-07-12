@@ -1,4 +1,4 @@
-use dioxus_core::prelude::{Runtime, RuntimeGuard, ScopeId};
+use dioxus_core::prelude::{Runtime, ScopeId};
 use rustc_hash::FxHashMap;
 use std::{cell::RefCell, rc::Rc};
 use wry::{http::Request, RequestAsyncResponder};
@@ -36,9 +36,6 @@ impl AssetHandlerRegistry {
         responder: RequestAsyncResponder,
     ) {
         if let Some(handler) = self.handlers.borrow().get(name) {
-            // Push the runtime onto the stack
-            let _guard = RuntimeGuard::new(self.dom_rt.clone());
-
             // And run the handler in the scope of the component that created it
             self.dom_rt
                 .on_scope(handler.scope, || (handler.f)(request, responder));

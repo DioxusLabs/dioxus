@@ -211,7 +211,7 @@ impl IfmtInput {
     }
 
     /// print the original source string - this handles escapes and stuff for us
-    pub fn to_quoted_string_from_parts(&self) -> String {
+    pub fn to_string_with_quotes(&self) -> String {
         self.source.to_token_stream().to_string()
     }
 
@@ -441,6 +441,7 @@ mod tests {
         let input = syn::parse2::<IfmtInput>(quote! { r#"hello world"# }).unwrap();
         println!("{}", input.to_token_stream().pretty_unparse());
         assert_eq!(input.source.value(), "hello world");
+        assert_eq!(input.to_string_with_quotes(), "r#\"hello world\"#");
     }
 
     #[test]
@@ -466,21 +467,21 @@ mod tests {
     #[test]
     fn printing_raw() {
         let input = syn::parse2::<IfmtInput>(quote! { "hello {world}" }).unwrap();
-        println!("{}", input.to_quoted_string_from_parts());
+        println!("{}", input.to_string_with_quotes());
 
         let input = syn::parse2::<IfmtInput>(quote! { "hello {world} {world} {world}" }).unwrap();
-        println!("{}", input.to_quoted_string_from_parts());
+        println!("{}", input.to_string_with_quotes());
 
         let input = syn::parse2::<IfmtInput>(quote! { "hello {world} {world} {world()}" }).unwrap();
-        println!("{}", input.to_quoted_string_from_parts());
+        println!("{}", input.to_string_with_quotes());
 
         let input =
             syn::parse2::<IfmtInput>(quote! { r#"hello {world} {world} {world()}"# }).unwrap();
-        println!("{}", input.to_quoted_string_from_parts());
+        println!("{}", input.to_string_with_quotes());
         assert!(!input.is_static());
 
         let input = syn::parse2::<IfmtInput>(quote! { r#"hello"# }).unwrap();
-        println!("{}", input.to_quoted_string_from_parts());
+        println!("{}", input.to_string_with_quotes());
         assert!(input.is_static());
     }
 
@@ -500,6 +501,6 @@ mod tests {
     fn fmt_segments() {
         let left = syn::parse2::<IfmtInput>(quote! { "thing {abc}" }).unwrap();
         let right = syn::parse2::<IfmtInput>(quote! { "thing" }).unwrap();
-        let segments = IfmtInput::fmt_segments(&left, &right).unwrap();
+        let _segments = IfmtInput::fmt_segments(&left, &right).unwrap();
     }
 }

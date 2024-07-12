@@ -287,19 +287,7 @@ impl Component {
                     AttributeName::Spread(_) => return None,
                 };
 
-                let val = match value {
-                    AttributeValue::AttrLiteral(lit) => {
-                        // due to hotreloading being funky, we we need to map these to the concrete types
-                        match &lit.value {
-                            HotLiteralType::Int(_) => quote! { #lit },
-                            HotLiteralType::Float(_) => quote! { #lit },
-                            _ => quote! { #lit },
-                        }
-                    }
-                    _ => value.to_token_stream(),
-                };
-
-                Some((attr, val))
+                Some((attr, value.to_token_stream()))
             })
             .collect()
     }

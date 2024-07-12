@@ -6,12 +6,9 @@ use tokio_tungstenite::{
     MaybeTlsStream, WebSocketStream,
 };
 
-pub fn connect(mut callback: impl FnMut(DevserverMsg) + Send + 'static) {
+pub fn connect(url: String, mut callback: impl FnMut(DevserverMsg) + Send + 'static) {
     tokio::spawn(async move {
-        let mut recv = NativeReceiver::create("ws://0.0.0.0:6478".to_string())
-            .await
-            .unwrap();
-
+        let mut recv = NativeReceiver::create(url).await.unwrap();
         while let Some(msg) = recv.next().await {
             match msg {
                 Ok(msg) => callback(msg),
@@ -28,8 +25,6 @@ pub struct NativeReceiver {
     socket: WebSocketStream<MaybeTlsStream<TcpStream>>,
 }
 
-pub const SERVER_ADDR: &str = "ws://0.0.0.0:6478";
-
 impl NativeReceiver {
     /// Connect to the devserver
     pub async fn create(url: String) -> TtResult<Self> {
@@ -43,8 +38,6 @@ impl NativeReceiver {
     pub async fn next(&mut self) -> Option<TtResult<DevserverMsg>> {
         loop {
             let res = self.socket.next().await?;
-
-            println!("{:?}", res);
 
             match res {
                 Ok(res) => match res {

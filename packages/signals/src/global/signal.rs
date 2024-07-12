@@ -1,4 +1,3 @@
-use crate::UUID_NAMESPACE;
 use crate::{read::Readable, ReadableRef};
 use crate::{write::Writable, GlobalKey};
 use crate::{WritableRef, Write};

@@ -1,12 +1,22 @@
+//! Compare two files and find any rsx calls that have changed
+//!
+//! This is used to determine if a hotreload is needed.
+//! We use a special syn visitor to find all the rsx! calls in the file and then compare them to see
+//! if they are the same. This visitor will actually remove the rsx! calls and replace them with a
+//! dummy rsx! call. The final file type is thus mutated in place, leaving the original file idents
+//! in place. We then compare the two files to see if they are the same. We're able to differentiate
+//! between rust code changes and rsx code changes with much less code than the previous manual diff
+//! approach.
+
 use syn::visit_mut::VisitMut;
 use syn::{File, Macro};
 
 #[derive(Debug)]
 pub struct ChangedRsx {
-    /// The macro that was changed
+    /// The old macro - the original RSX from the original file
     pub old: Macro,
 
-    /// The new tokens for the macro
+    /// The new macro
     pub new: Macro,
 }
 
@@ -15,28 +25,35 @@ pub struct ChangedRsx {
 /// Takes in the two files, clones them, removes the rsx! contents and prunes any doc comments.
 /// Then it compares the two files to see if they are different - if they are, the code changed.
 /// Otherwise, the code is the same and we can move on to handling the changed rsx
+///
+/// Returns `None` if the files are the same and `Some` if they are different
+/// If there are no rsx! calls in the files, the vec will be empty.
 pub fn diff_rsx(new: &File, old: &File) -> Option<Vec<ChangedRsx>> {
+    // Make a clone of these files in place so we don't have to worry about mutating the original
     let mut old = old.clone();
     let mut new = new.clone();
 
+    // Collect all the rsx! macros from the old file - modifying the files in place
     let old_macros = collect_from_file(&mut old);
     let new_macros = collect_from_file(&mut new);
 
+    // If the number of rsx! macros is different, then it's not hotreloadable
     if old_macros.len() != new_macros.len() {
         return None;
     }
 
+    // If the files are not the same, then it's not hotreloadable
     if old != new {
         return None;
     }
 
-    let rsx_calls = old_macros
-        .into_iter()
-        .zip(new_macros.into_iter())
-        .map(|(old, new)| ChangedRsx { old, new })
-        .collect();
-
-    Some(rsx_calls)
+    Some(
+        old_macros
+            .into_iter()
+            .zip(new_macros.into_iter())
+            .map(|(old, new)| ChangedRsx { old, new })
+            .collect(),
+    )
 }
 
 pub fn collect_from_file(file: &mut File) -> Vec<Macro> {
@@ -67,9 +84,45 @@ pub fn collect_from_file(file: &mut File) -> Vec<Macro> {
 
 #[test]
 fn changing_files() {
-    let old = include_str!("../../tests/invalid/changedexpr.old.rsx");
-    let new = include_str!("../../tests/invalid/changedexpr.new.rsx");
-    let same = include_str!("../../tests/invalid/changedexpr.same.rsx");
+    let old = r#"
+use dioxus::prelude::*;
+
+/// some comment
+pub fn CoolChild() -> Element {
+    let a = 123;
+
+    rsx! {
+        div {
+            {some_expr()}
+        }
+    }
+}"#;
+
+    let new = r#"
+use dioxus::prelude::*;
+
+/// some comment
+pub fn CoolChild() -> Element {
+    rsx! {
+        div {
+            {some_expr()}
+        }
+    }
+}"#;
+
+    let same = r#"
+use dioxus::prelude::*;
+
+/// some comment!!!!!
+pub fn CoolChild() -> Element {
+    let a = 123;
+
+    rsx! {
+        div {
+            {some_expr()}
+        }
+    }
+}"#;
 
     let old = syn::parse_file(old).unwrap();
     let new = syn::parse_file(new).unwrap();

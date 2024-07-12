@@ -356,7 +356,7 @@ impl Writer<'_> {
         }
 
         match children {
-            [BodyNode::Text(ref text)] => Some(text.input.to_quoted_string_from_parts().len()),
+            [BodyNode::Text(ref text)] => Some(text.input.to_string_with_quotes().len()),
 
             // TODO: let rawexprs to be inlined
             [BodyNode::RawExpr(ref expr)] => Some(get_expr_length(expr.span())),

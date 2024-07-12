@@ -37,7 +37,7 @@ impl<'a> Writer<'a> {
         Some(self.out.buf)
     }
 
-    pub fn write_body(&mut self, body: &TemplateBody) -> Result {
+    pub fn write_rsx_call(&mut self, body: &TemplateBody) -> Result {
         match body.roots.len() {
             0 => {}
             1 if matches!(body.roots[0], BodyNode::Text(_)) => {
@@ -266,35 +266,27 @@ impl<'a> Writer<'a> {
             ElementAttrValue::AttrOptionalExpr { condition, value } => {
                 let condition_len = self.retrieve_formatted_expr(condition).len();
                 let value_len = self.attr_value_len(value);
-
                 condition_len + value_len + 6
             }
             ElementAttrValue::AttrLiteral(lit) => lit.to_string().len(),
             ElementAttrValue::Shorthand(expr) => expr.span().line_length(),
-            ElementAttrValue::AttrExpr(expr) => {
-                if let Ok(expr) = expr.as_expr() {
-                    let out = self.retrieve_formatted_expr(&expr);
-                    if out.contains('\n') {
-                        100000
-                    } else {
-                        out.len()
-                    }
-                } else {
-                    100000
-                }
-            }
-            ElementAttrValue::EventTokens(closure) => {
-                if let Ok(expr) = closure.as_expr() {
-                    let out = self.retrieve_formatted_expr(&expr);
-                    if out.contains('\n') {
-                        100000
-                    } else {
-                        out.len()
-                    }
-                } else {
-                    100000
-                }
-            }
+            ElementAttrValue::AttrExpr(expr) => expr
+                .as_expr()
+                .map(|expr| self.attr_expr_len(&expr))
+                .unwrap_or(100000),
+            ElementAttrValue::EventTokens(closure) => closure
+                .as_expr()
+                .map(|expr| self.attr_expr_len(&expr))
+                .unwrap_or(100000),
+        }
+    }
+
+    fn attr_expr_len(&mut self, expr: &Expr) -> usize {
+        let out = self.retrieve_formatted_expr(&expr);
+        if out.contains('\n') {
+            100000
+        } else {
+            out.len()
         }
     }
 
@@ -311,8 +303,8 @@ impl<'a> Writer<'a> {
         }
 
         for attr in attributes {
-            if self.current_span_is_primary(attr.start()) {
-                'line: for line in self.src[..attr.start().start().line - 1].iter().rev() {
+            if self.current_span_is_primary(attr.span()) {
+                'line: for line in self.src[..attr.span().start().line - 1].iter().rev() {
                     match (line.trim().starts_with("//"), line.is_empty()) {
                         (true, _) => return 100000,
                         (_, true) => continue 'line,

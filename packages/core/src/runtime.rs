@@ -82,7 +82,6 @@ impl Runtime {
         {
             let borrow = self.scope_states.borrow();
             if let Some(scope) = &borrow[id.0] {
-                let _runtime_guard = RuntimeGuard::new(self.clone());
                 // Manually drop tasks, hooks, and contexts inside of the runtime
                 self.on_scope(id, || {
                     // Drop all spawned tasks - order doesn't matter since tasks don't rely on eachother

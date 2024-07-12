@@ -183,7 +183,7 @@ impl BodyNode {
             BodyNode::Component(comp) => comp.dyn_idx.get(),
             BodyNode::ForLoop(floop) => floop.dyn_idx.get(),
             BodyNode::IfChain(chain) => chain.dyn_idx.get(),
-            _ => panic!("Cannot get dyn_idx for this node"),
+            BodyNode::Element(_) => panic!("Cannot get dyn_idx for this node"),
         }
     }
 
@@ -194,7 +194,7 @@ impl BodyNode {
             BodyNode::Component(comp) => comp.dyn_idx.set(idx),
             BodyNode::ForLoop(floop) => floop.dyn_idx.set(idx),
             BodyNode::IfChain(chain) => chain.dyn_idx.set(idx),
-            _ => panic!("Cannot set dyn_idx for this node"),
+            BodyNode::Element(_) => panic!("Cannot set dyn_idx for this node"),
         }
     }
 
@@ -213,10 +213,9 @@ impl BodyNode {
         }
     }
 
-    pub fn children(&self) -> &[BodyNode] {
+    pub fn element_children(&self) -> &[BodyNode] {
         match self {
             BodyNode::Element(el) => &el.children,
-            BodyNode::Component(comp) => &comp.children.roots,
             _ => panic!("Children not available for this node"),
         }
     }

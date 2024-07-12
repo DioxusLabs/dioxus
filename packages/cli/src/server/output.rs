@@ -6,7 +6,6 @@ use crate::{
     builder::{BuildResult, UpdateStage},
     serve::Serve,
 };
-use core::num;
 use crossterm::{
     event::{Event, EventStream, KeyCode, KeyModifiers, MouseEventKind},
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
@@ -24,6 +23,7 @@ use std::{
     collections::HashMap,
     io::{self, stdout},
     rc::Rc,
+    time::{Duration, Instant},
 };
 use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, BufReader, Lines},
@@ -50,6 +50,13 @@ pub struct Output {
     term_height: u16,
     scroll: u16,
     fly_modal_open: bool,
+    anim_start: Instant,
+}
+
+enum StatusLine {
+    Compiling,
+    Hotreloading,
+    Hotreloaded,
 }
 
 type TerminalBackend = Terminal<CrosstermBackend<io::Stdout>>;
@@ -111,14 +118,17 @@ impl Output {
             scroll: 0,
             term_height: 0,
             num_lines_with_wrapping: 0,
+            anim_start: Instant::now(),
         })
     }
 
     /// Wait for either the ctrl_c handler or the next event
     ///
     /// Why is the ctrl_c handler here?
+    ///
+    /// Also tick animations every few ms
     pub async fn wait(&mut self) -> io::Result<()> {
-        let event = self.events.next();
+        let user_input = self.events.next();
 
         let next_stdout = self.running_apps.values_mut().map(|app| async move {
             let stdout = app.stdout.next_line();
@@ -129,6 +139,8 @@ impl Output {
                 _ = futures_util::future::pending() => (app.result.platform, None, None),
             }
         });
+
+        let animation_timeout = tokio::time::sleep(Duration::from_millis(30));
 
         tokio::select! {
             new_line = join_all(next_stdout) => {
@@ -149,8 +161,12 @@ impl Output {
                     }
                 }
             },
-            event = event => {
+
+            event = user_input => {
                 self.handle_input(event.unwrap().unwrap())?;
+            }
+
+            _ = animation_timeout => {
             }
         }
 
@@ -166,13 +182,14 @@ impl Output {
             // todo: print the build info here for the most recent build, and then the logs of the most recent build
             for (platform, build) in self.build_logs.iter() {
                 if build.messages.is_empty() {
-                    println!("No build logs for {platform:?}");
                     continue;
                 }
-                println!("Build logs for {platform:?}:");
+
                 for message in build.messages.iter() {
                     match &message.message {
-                        MessageType::Cargo(t) => println!("{:?}", t),
+                        MessageType::Cargo(t) => {
+                            println!("{}", t.rendered.as_deref().unwrap_or_default())
+                        }
                         MessageType::Text(t) => println!("{}", t),
                     }
                 }
@@ -211,16 +228,10 @@ impl Output {
             Event::Key(key) if key.code == KeyCode::Down => {
                 self.scroll += 1;
             }
-            Event::Resize(widht, height) => {
-                self.term_height = height - 3;
+            Event::Resize(_width, _height) => {
+                // nothing, it should take care of itself
             }
             _ => {}
-        }
-
-        for (plat, log) in self.build_logs.iter() {
-            self.scroll =
-                self.scroll
-                    .clamp(0, log.messages.len() as u16 - self.term_height) as u16;
         }
 
         Ok(())
@@ -235,18 +246,24 @@ impl Output {
             .messages
             .push(message);
 
-        let log = self.build_logs.get(&platform).unwrap();
-        if snapped {
-            self.scroll = log.messages.len().saturating_sub(self.term_height as usize) as u16;
-        }
+        // // let log = self.build_logs.get(a).unwrap();
+        // if snapped {
+        //     self.scroll = (self.num_lines_with_wrapping).saturating_sub(self.term_height);
+        //     // self.scroll = self.scroll.clamp(
+        //     //     0,
+        //     //     (self.num_lines_with_wrapping).saturating_sub(self.term_height),
+        //     // ) as u16;
+        //     //     self.scroll = self
+        //     //         .num_lines_with_wrapping
+        //     //         .saturating_sub(self.term_height) as u16;
+        //     //     // self.scroll = log.messages.len().saturating_sub(self.term_height as usize) as u16;
+        // }
     }
 
     fn is_snapped(&self, platform: Platform) -> bool {
-        let Some(log) = self.build_logs.get(&platform) else {
-            return false;
-        };
-
-        let prev_scrol = log.messages.len().saturating_sub(self.term_height as usize) as u16;
+        let prev_scrol = self
+            .num_lines_with_wrapping
+            .saturating_sub(self.term_height) as u16;
         prev_scrol == self.scroll
     }
 
@@ -257,7 +274,15 @@ impl Output {
 
         let log = self.build_logs.get(&platform).unwrap();
         if snapped {
-            self.scroll = log.messages.len().saturating_sub(self.term_height as usize) as u16;
+            self.scroll = (self.num_lines_with_wrapping).saturating_sub(self.term_height);
+            // self.scroll = self.scroll.clamp(
+            //     0,
+            //     (self.num_lines_with_wrapping).saturating_sub(self.term_height),
+            // ) as u16;
+            // self.scroll = self
+            //     .num_lines_with_wrapping
+            //     .saturating_sub(self.term_height) as u16;
+            // self.scroll = log.messages.len().saturating_sub(self.term_height as usize) as u16;
         }
     }
 
@@ -302,6 +327,12 @@ impl Output {
             return;
         }
 
+        // Keep the animation track in terms of 100ms frames - the frame should be a number between 0 and 10
+        // todo: we want to use this somehow to animate things...
+        let elapsed = self.anim_start.elapsed().as_millis() as f32;
+        let num_frames = elapsed / 100.0;
+        let _frame_step = (num_frames % 10.0) as usize;
+
         _ = self.term.clone().borrow_mut().draw(|frame| {
             // a layout that has a title with stats about the program and then the actual console itself
             let body = Layout::default()
@@ -324,63 +355,40 @@ impl Output {
             // Render a border for the header
             frame.render_widget(Block::default().borders(Borders::BOTTOM), body[0]);
 
-            let num_lines = self
-                .build_logs
-                .get(&self.platform)
-                .map(|log| log.messages.len())
-                .unwrap_or(0);
-
             for platform in self.build_logs.keys() {
                 let build = self.build_logs.get(platform).unwrap();
 
-                // Render the build logs with the last N lines where N is the height of the body
-                // let spans_to_take = body[1].height as usize;
+                // We're going to assemble a text buffer directly and then let the paragraph widgets
+                // handle the wrapping and scrolling
+                let mut paragraph_text: Text<'_> = Text::default();
 
-                let mut lines = vec![];
-
-                // let mut spans = vec![Span::from("Build logs:")];
-
-                let logs_iter = build.messages.iter();
-
-                for span in logs_iter {
-                    lines.push(Line::from(vec![
-                        // Span::from("[").magenta(),
-                        // Span::from(span.level.to_string()).white(),
-                        // Span::from("] ").magenta(),
-                        match &span.message {
-                            MessageType::Text(text) => Span::from(text),
-                            MessageType::Cargo(diagnostic) => {
-                                Span::from(format!("{diagnostic:#?}"))
+                for span in build.messages.iter() {
+                    use ansi_to_tui::IntoText;
+                    match &span.message {
+                        MessageType::Text(line) => {
+                            paragraph_text.extend(line.as_str().into_text().unwrap_or_default());
+                        }
+                        MessageType::Cargo(diagnostic) => {
+                            let diagnostic = diagnostic.rendered.as_deref().unwrap_or_default();
+                            for line in diagnostic.lines() {
+                                paragraph_text.extend(line.into_text().unwrap_or_default());
                             }
-                        },
-                    ]));
+                        }
+                    };
                 }
-                self.term_height = body[1].height;
 
-                // let height = body[1].height;
-                // self.term_height = height;
-
-                // let num_lines = lines.len();
-
-                // let max = num_lines.saturating_sub(height as usize);
-
-                // let scroll = self.scroll.clamp(0, max as u16);
-                // self.scroll = scroll;
-                // let scroll = () as u16;
-
-                // self.scroll.clamp(0, num_lines as u16)
-
-                // let scroll =
-                //     (num_lines + height -  as usize) as u16;
-
-                let paragraph = Paragraph::new(lines)
+                let paragraph = Paragraph::new(paragraph_text)
                     .left_aligned()
-                    // .wrap(Wrap { trim: false })
-                    .scroll((self.scroll, 0));
+                    .wrap(Wrap { trim: false });
 
-                // paragraph.line_count(
+                self.term_height = body[1].height;
+                self.num_lines_with_wrapping = paragraph.line_count(body[1].width) as u16;
 
-                // );
+                // if self.is_snapped(platform.clone()) {
+                self.scroll = (self.num_lines_with_wrapping).saturating_sub(self.term_height);
+                // }
+
+                let paragraph = paragraph.scroll((self.scroll, 0));
 
                 frame.render_widget(paragraph, body[1]);
             }
@@ -391,6 +399,7 @@ impl Output {
                 Span::from(" ").green(),
                 Span::from("serve").green(),
                 Span::from(" | ").white(),
+                // Span::from(frame_step.to_string()).cyan(),
                 Span::from("v").cyan(),
                 Span::from(self.dx_version.clone()).cyan(),
                 // Span::from(" | ").white(),
@@ -402,8 +411,13 @@ impl Output {
                 Span::from(" | ").white(),
                 Span::from(self.scroll.to_string()).cyan(),
                 Span::from("/").white(),
-                Span::from((num_lines.saturating_sub(self.term_height as usize)).to_string())
-                    .cyan(),
+                Span::from(
+                    (self
+                        .num_lines_with_wrapping
+                        .saturating_sub(self.term_height))
+                    .to_string(),
+                )
+                .cyan(),
                 Span::from(" | ").white(),
             ];
 

@@ -134,10 +134,6 @@ tokio-tungstenite = { version = "0.21.0" }
 # cli, cli-config
 dirs = "5.0.1"
 
-# speed up some macros by optimizing them
-[profile.dev.package.insta]
-opt-level = 3
-
 [profile.dev.package.dioxus-core-macro]
 opt-level = 3
 

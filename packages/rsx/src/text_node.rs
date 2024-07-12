@@ -5,11 +5,14 @@ use crate::{
     IfmtInput,
 };
 use dioxus_core::TemplateNode;
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::ToTokens;
 use quote::{quote, TokenStreamExt};
-use syn::parse::{Parse, ParseStream};
 use syn::Result;
+use syn::{
+    parse::{Parse, ParseStream},
+    LitStr,
+};
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct TextNode {
@@ -53,6 +56,18 @@ impl ToTokens for TextNode {
 }
 
 impl TextNode {
+    pub fn from_text(text: &str) -> Self {
+        let ifmt = IfmtInput {
+            source: LitStr::new(text, Span::call_site()),
+            segments: vec![],
+        };
+        Self {
+            input: ifmt,
+            dyn_idx: Default::default(),
+            hr_idx: Default::default(),
+        }
+    }
+
     pub fn is_static(&self) -> bool {
         self.input.is_static()
     }

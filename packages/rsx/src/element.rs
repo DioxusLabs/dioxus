@@ -51,12 +51,17 @@ impl Parse for Element {
         let name = stream.parse::<ElementName>()?;
 
         let RsxBlock {
-            attributes: fields,
+            attributes: mut fields,
             children,
             brace,
             spreads,
             diagnostics,
         } = stream.parse::<RsxBlock>()?;
+
+        // Make sure these attributes have an el_name set for completions and Template generation
+        for attr in fields.iter_mut() {
+            attr.el_name = Some(name.clone());
+        }
 
         let mut element = Element {
             name,
@@ -77,6 +82,7 @@ impl Parse for Element {
                 value: AttributeValue::AttrExpr(PartialExpr::from_expr(&spread.expr)),
                 comma: spread.comma.clone(),
                 dyn_idx: spread.dyn_idx.clone(),
+                el_name: None,
             });
         }
 
@@ -270,6 +276,7 @@ impl Element {
                 colon: attr.colon.clone(),
                 dyn_idx: attr.dyn_idx.clone(),
                 comma: matching_attrs.last().unwrap().comma.clone(),
+                el_name: attr.el_name.clone(),
             });
         }
     }

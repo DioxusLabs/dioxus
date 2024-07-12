@@ -1,27 +1,60 @@
-use std::fmt::Display;
+//! Parser for the attribute shared both by elements and components
+//!
+//! ```rust, ignore
+//! rsx! {
+//!     div {
+//!         class: "my-class",
+//!         onclick: move |_| println!("clicked")
+//!     }
+//!
+//!     Component {
+//!         class: "my-class",
+//!         onclick: move |_| println!("clicked")
+//!     }
+//! }
+//! ```
 
+use super::literal::HotLiteral;
 use crate::{innerlude::*, partial_closure::PartialClosure, HotReloadingContext};
+
 use dioxus_core::prelude::TemplateAttribute;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
+use std::fmt::Display;
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
     Expr, ExprClosure, ExprIf, Ident, Lit, LitBool, LitFloat, LitInt, LitStr, Token,
 };
 
-use super::literal::HotLiteral;
-
 /// A property value in the from of a `name: value` pair with an optional comma.
 /// Note that the colon and value are optional in the case of shorthand attributes. We keep them around
 /// to support "lossless" parsing in case that ever might be useful.
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct Attribute {
+    /// The name of the attribute (ident or custom)
+    ///
+    /// IE `class` or `onclick`
     pub name: AttributeName,
+
+    /// The colon that separates the name and value - keep this for lossless parsing
     pub colon: Option<Token![:]>,
+
+    /// The value of the attribute
+    ///
+    /// IE `class="my-class"` or `onclick: move |_| println!("clicked")`
     pub value: AttributeValue,
+
+    /// The comma that separates this attribute from the next one
+    /// Used for more accurate completions
     pub comma: Option<Token![,]>,
+
+    /// The dynamic index of this attribute - used by the template system
     pub dyn_idx: DynIdx,
+
+    /// The element name of this attribute if it is bound to an element.
+    /// When parsed for components or freestanding, this will be None
+    pub el_name: Option<ElementName>,
 }
 
 impl Parse for Attribute {
@@ -41,6 +74,7 @@ impl Parse for Attribute {
                 value: AttributeValue::Shorthand(ident),
                 comma,
                 dyn_idx: DynIdx::default(),
+                el_name: None,
             });
         }
 
@@ -69,6 +103,7 @@ impl Parse for Attribute {
             colon,
             comma,
             dyn_idx: DynIdx::default(),
+            el_name: None,
         };
 
         Ok(attr)
@@ -76,6 +111,18 @@ impl Parse for Attribute {
 }
 
 impl Attribute {
+    /// Create a new attribute from a name and value
+    pub fn from_raw(name: AttributeName, value: AttributeValue) -> Self {
+        Self {
+            name,
+            colon: Default::default(),
+            value,
+            comma: Default::default(),
+            dyn_idx: Default::default(),
+            el_name: None,
+        }
+    }
+
     pub fn span(&self) -> proc_macro2::Span {
         self.name.span()
     }
@@ -148,7 +195,7 @@ impl Attribute {
         }
     }
 
-    pub fn rendered_as_dynamic_attr(&self, el_name: &ElementName) -> TokenStream2 {
+    pub fn rendered_as_dynamic_attr(&self) -> TokenStream2 {
         // Shortcut out with spreads
         if let AttributeName::Spread(_) = self.name {
             let AttributeValue::AttrExpr(expr) = &self.value else {
@@ -156,6 +203,11 @@ impl Attribute {
             };
             return quote! { {#expr}.into_boxed_slice() };
         }
+
+        let el_name = self
+            .el_name
+            .as_ref()
+            .expect("el_name rendered as a dynamic attribute should always have an el_name set");
 
         let ns = |name: &AttributeName| match (el_name, name) {
             (ElementName::Ident(i), AttributeName::BuiltIn(_)) => {
@@ -235,7 +287,7 @@ impl Attribute {
             }
         };
 
-        let completion_hints = self.completion_hints(el_name);
+        let completion_hints = self.completion_hints();
         quote! {
             Box::new([
                 {
@@ -247,17 +299,13 @@ impl Attribute {
         .to_token_stream()
     }
 
-    pub fn start(&self) -> proc_macro2::Span {
-        self.span()
-    }
-
     pub fn can_be_shorthand(&self) -> bool {
         // If it's a shorthand...
         if matches!(self.value, AttributeValue::Shorthand(_)) {
             return true;
         }
 
-        if self.value.to_token_stream().to_string() == self.value.to_token_stream().to_string() {
+        if self.name.to_token_stream().to_string() == self.value.to_token_stream().to_string() {
             return true;
         }
 
@@ -266,9 +314,13 @@ impl Attribute {
 
     /// If this is the last attribute of an element and it doesn't have a tailing comma,
     /// we add hints so that rust analyzer completes it either as an attribute or element
-    fn completion_hints(&self, el_name: &ElementName) -> TokenStream2 {
+    fn completion_hints(&self) -> TokenStream2 {
         let Attribute {
-            name, value, comma, ..
+            name,
+            value,
+            comma,
+            el_name,
+            ..
         } = self;
 
         // If there is a trailing comma, rust analyzer does a good job of completing the attribute by itself
@@ -280,8 +332,11 @@ impl Attribute {
         // - a built in attribute (not a literal)
         // - an build in element (not a custom element)
         // - a shorthand attribute
-        let (ElementName::Ident(el), AttributeName::BuiltIn(name), AttributeValue::Shorthand(_)) =
-            (&el_name, &name, &value)
+        let (
+            Some(ElementName::Ident(el)),
+            AttributeName::BuiltIn(name),
+            AttributeValue::Shorthand(_),
+        ) = (&el_name, &name, &value)
         else {
             return quote! {};
         };

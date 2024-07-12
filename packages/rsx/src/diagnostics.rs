@@ -1,6 +1,10 @@
 use proc_macro2_diagnostics::Diagnostic;
 use quote::ToTokens;
 
+/// A collection of diagnostics
+///
+/// This is a wrapper type since we want it to be transparent in terms of PartialEq and Eq.
+/// This also lets us choose the expansion strategy for the diagnostics.
 #[derive(Debug, Clone, Default)]
 pub struct Diagnostics {
     pub diagnostics: Vec<Diagnostic>,

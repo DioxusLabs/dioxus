@@ -150,6 +150,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4b46cbb362ab8752921c97e041f5e366ee6297bd428a31275b9fcf1e380f7299"
 
 [[package]]
+name = "ansi-to-tui"
+version = "4.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8438af3d7e7dccdb98eff55e5351587d9bec2294daff505fc9a061bd14d22db0"
+dependencies = [
+ "nom",
+ "ratatui",
+ "simdutf8",
+ "smallvec",
+ "thiserror",
+]
+
+[[package]]
 name = "anstream"
 version = "0.6.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2352,6 +2365,7 @@ dependencies = [
 name = "dioxus-cli"
 version = "0.5.2"
 dependencies = [
+ "ansi-to-tui",
  "anyhow",
  "atty",
  "axum",
@@ -2896,7 +2910,6 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "uuid",
 ]
 
 [[package]]
@@ -10113,7 +10126,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81dfa00651efa65069b0b6b651f4aaa31ba9e3c3ce0137aaad053604ee7e0314"
 dependencies = [
  "getrandom 0.2.15",
- "md-5",
  "serde",
  "sha1_smol",
 ]

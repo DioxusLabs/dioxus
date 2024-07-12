@@ -10,6 +10,7 @@ use crate::innerlude::*;
 use proc_macro2::Span;
 use proc_macro2_diagnostics::SpanDiagnosticExt;
 use syn::{
+    ext::IdentExt,
     parse::{Parse, ParseBuffer},
     spanned::Spanned,
     token::{self, Brace},
@@ -49,7 +50,6 @@ impl Parse for RsxBlock {
 
 impl RsxBlock {
     pub fn parse_inner(content: &ParseBuffer, brace: token::Brace) -> syn::Result<Self> {
-        // todo: toss a warning for
         let mut items = vec![];
         let mut diagnostics = Diagnostics::new();
 
@@ -94,7 +94,7 @@ impl RsxBlock {
             }
 
             // Parse unambiguous attributes - these can't be confused with anything
-            if (content.peek(LitStr) || content.peek(Ident))
+            if (content.peek(LitStr) || content.peek(Ident) || content.peek(Ident::peek_any))
                 && content.peek2(Token![:])
                 && !content.peek3(Token![:])
             {
@@ -154,6 +154,7 @@ impl RsxBlock {
                     value: AttributeValue::Shorthand(name),
                     comma,
                     dyn_idx: DynIdx::default(),
+                    el_name: None,
                 };
 
                 if !content.is_empty() && attribute.comma.is_none() {
@@ -172,17 +173,6 @@ impl RsxBlock {
 
             // Finally just attempt a bodynode parse
             items.push(RsxItem::Child(content.parse::<BodyNode>()?))
-
-            // if !content.is_empty() && content.peek(Token![,]) {
-            //     let comma = content.parse::<Token![,]>()?;
-            //     diagnostics.push(
-            //         comma
-            //             .span()
-            //             .warning("Elements and text nodes do not need to be separated by commas."),
-            //     );
-            // }
-
-            // node
         }
 
         // Validate the order of the items
@@ -522,6 +512,20 @@ mod tests {
                 aria_current,
                 ..attributes,
                 {children}
+            }
+        };
+
+        let parsed: RsxBlock = syn::parse2(input).unwrap();
+        dbg!(parsed.attributes);
+    }
+
+    #[test]
+    fn reserved_attributes() {
+        let input = quote! {
+            {
+                label {
+                    for: "blah",
+                }
             }
         };
 

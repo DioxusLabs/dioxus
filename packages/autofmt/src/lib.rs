@@ -80,7 +80,7 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
 
         // TESTME
         // If we fail to parse this macro then we have no choice to give up and return what we've got
-        if writer.write_body(&body.body).is_err() {
+        if writer.write_rsx_call(&body.body).is_err() {
             return formatted_blocks;
         }
 
@@ -126,14 +126,14 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
 /// that passed partial expansion but failed to parse.
 pub fn write_block_out(body: &CallBody) -> Option<String> {
     let mut buf = Writer::new("");
-    buf.write_body(&body.body).ok()?;
+    buf.write_rsx_call(&body.body).ok()?;
     buf.consume()
 }
 
 pub fn fmt_block_from_expr(raw: &str, expr: ExprMacro) -> Option<String> {
     let body = CallBody::parse_strict.parse2(expr.mac.tokens).unwrap();
     let mut buf = Writer::new(raw);
-    buf.write_body(&body.body).ok()?;
+    buf.write_rsx_call(&body.body).ok()?;
     buf.consume()
 }
 
@@ -143,7 +143,7 @@ pub fn fmt_block(block: &str, indent_level: usize, indent: IndentOptions) -> Opt
     let mut buf = Writer::new(block);
     buf.out.indent = indent;
     buf.out.indent_level = indent_level;
-    buf.write_body(&body.body).ok()?;
+    buf.write_rsx_call(&body.body).ok()?;
 
     // writing idents leaves the final line ended at the end of the last ident
     if buf.out.buf.contains('\n') {
