@@ -4,6 +4,7 @@ use cargo_metadata::{diagnostic::Diagnostic, Message};
 use chrono::format;
 use futures_channel::mpsc::UnboundedSender;
 use serde::Deserialize;
+use std::ops::Deref;
 use std::path::PathBuf;
 use std::process::Stdio;
 use tokio::io::AsyncBufReadExt;
@@ -11,15 +12,36 @@ use tracing::Level;
 
 use super::BuildRequest;
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, PartialOrd, Ord, PartialEq, Eq)]
 pub enum Stage {
     #[default]
-    Initializing,
-    InstallingWasmTooling,
-    Compiling,
-    OptimizingWasm,
-    OptimizingAssets,
-    Finished,
+    Initializing = 0,
+    InstallingWasmTooling = 1,
+    Compiling = 2,
+    OptimizingWasm = 3,
+    OptimizingAssets = 4,
+    Finished = 5,
+}
+
+impl Deref for Stage {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Stage::Initializing => "Initializing",
+            Stage::InstallingWasmTooling => "Installing Wasm Tooling",
+            Stage::Compiling => "Compiling",
+            Stage::OptimizingWasm => "Optimizing Wasm",
+            Stage::OptimizingAssets => "Optimizing Assets",
+            Stage::Finished => "Finished",
+        }
+    }
+}
+
+impl std::fmt::Display for Stage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.deref())
+    }
 }
 
 pub struct UpdateBuildProgress {
@@ -30,26 +52,7 @@ pub struct UpdateBuildProgress {
 impl UpdateBuildProgress {
     pub fn to_std_out(&self) {
         match &self.update {
-            UpdateStage::Start => match self.stage {
-                Stage::Initializing => {
-                    println!("--- Initializing ---");
-                }
-                Stage::InstallingWasmTooling => {
-                    println!("--- Installing wasm tooling ---");
-                }
-                Stage::Compiling => {
-                    println!("--- Compiling ---");
-                }
-                Stage::OptimizingWasm => {
-                    println!("--- Optimizing wasm ---");
-                }
-                Stage::OptimizingAssets => {
-                    println!("--- Optimizing assets ---");
-                }
-                Stage::Finished => {
-                    println!("--- Finished ---");
-                }
-            },
+            UpdateStage::Start => println!("--- {} ---", self.stage),
             UpdateStage::AddMessage(message) => match &message.message {
                 MessageType::Cargo(message) => {
                     println!("{}", message.rendered.clone().unwrap_or_default());

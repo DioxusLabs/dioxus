@@ -423,7 +423,7 @@ impl Output {
 
             let header = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([Constraint::Fill(1)].as_ref())
+                .constraints([Constraint::Fill(2), Constraint::Fill(1)].as_ref())
                 .split(body[0]);
 
             // Render a border for the header
@@ -481,7 +481,23 @@ impl Output {
                 // Span::from(self.rustc_version.clone()).cyan(),
                 // Span::from(if self.rustc_nightly { "-nightly" } else { "" }).cyan(),
                 Span::from(" | ").white(),
-                Span::from(self.platform.to_string()).cyan(),
+            ];
+
+            spans.push(Span::from(self.platform.to_string()).cyan());
+            // If there is build progress, display that next to the platform
+            if !self.build_logs.is_empty() {
+                let mut layout_index = 0;
+                let build = self
+                    .build_logs
+                    .values()
+                    .min_by(|a, b| a.partial_cmp(b).unwrap())
+                    .unwrap();
+                spans.push(Span::from(format!(" ")));
+
+                spans.extend_from_slice(&build.spans(Rect::new(0, 0, build.max_layout_size(), 1)));
+            }
+
+            spans.extend_from_slice(&[
                 Span::from(" | ").white(),
                 Span::from(self.scroll.to_string()).cyan(),
                 Span::from("/").white(),
@@ -493,7 +509,7 @@ impl Output {
                 )
                 .cyan(),
                 Span::from(" | ").white(),
-            ];
+            ]);
 
             for (cmd, name) in [("/", "more"), ("?", "help")].iter() {
                 spans.extend_from_slice(&[
@@ -550,7 +566,7 @@ trait TuiTab {}
 struct BuildOutputTab {}
 struct PlatformLogsTab {}
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, PartialEq)]
 pub struct ActiveBuild {
     stage: Stage,
     messages: Vec<BuildMessage>,
@@ -571,6 +587,42 @@ impl ActiveBuild {
                 self.progress = progress;
             }
         }
+    }
+
+    fn spans(&self, area: Rect) -> Vec<Span> {
+        let message = self.stage.to_string();
+        let progress = format!("{:>3}%", (self.progress * 100.0) as u8);
+
+        let mut spans = Vec::new();
+        spans.push(Span::from("[").magenta());
+        if area.width >= self.max_layout_size() {
+            spans.push(Span::from(message).light_green());
+            spans.push(Span::from(" ").white());
+            spans.push(Span::from(progress).cyan());
+        } else {
+            spans.push(Span::from(progress).cyan());
+        }
+        spans.push(Span::from("]").magenta());
+
+        spans
+    }
+
+    fn max_layout_size(&self) -> u16 {
+        let progress_size = 4;
+        let stage_size = self.stage.to_string().len() as u16;
+        let brace_size = 2;
+
+        progress_size + stage_size + brace_size
+    }
+}
+
+impl PartialOrd for ActiveBuild {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(
+            self.stage
+                .cmp(&other.stage)
+                .then(self.progress.partial_cmp(&other.progress).unwrap()),
+        )
     }
 }
 

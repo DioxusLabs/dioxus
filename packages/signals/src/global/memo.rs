@@ -2,7 +2,7 @@ use crate::{read::Readable, Memo, ReadableRef};
 use crate::{read_impls, GlobalKey};
 use dioxus_core::prelude::ScopeId;
 use generational_box::UnsyncStorage;
-use std::{ops::Deref};
+use std::ops::Deref;
 
 use crate::Signal;
 

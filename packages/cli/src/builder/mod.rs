@@ -127,8 +127,9 @@ impl BuildResult {
             cli_address: serve.address.address(),
             server_socket: fullstack_address,
         };
+        let executable = self.executable.canonicalize()?;
         Ok(Some(
-            Command::new(&self.executable)
+            Command::new(&executable)
                 // When building the fullstack server, we need to forward the serve arguments (like port) to the fullstack server through env vars
                 .env(
                     dioxus_cli_config::__private::SERVE_ENV,
