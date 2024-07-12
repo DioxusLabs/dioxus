@@ -16,7 +16,7 @@ use crossterm::{
 use dioxus_cli_config::Platform;
 use dioxus_hot_reload::ClientMsg;
 use futures_util::{
-    future::{join_all, FutureExt},
+    future::{join_all, select_all, FutureExt},
     StreamExt,
 };
 use ratatui::{prelude::*, widgets::*, TerminalOptions, Viewport};
@@ -132,38 +132,47 @@ impl Output {
     pub async fn wait(&mut self) -> io::Result<()> {
         let user_input = self.events.next();
 
-        let next_stdout = self.running_apps.values_mut().map(|app| async move {
-            let (stdout, stderr) = match &mut app.stdout {
-                Some(stdout) => (stdout.stdout.next_line(), stdout.stderr.next_line()),
-                None => return futures_util::future::pending().await,
+        let has_running_apps = !self.running_apps.is_empty();
+        let next_stdout = self.running_apps.values_mut().map(|app| {
+            let future = async move {
+                let (stdout, stderr) = match &mut app.stdout {
+                    Some(stdout) => (stdout.stdout.next_line(), stdout.stderr.next_line()),
+                    None => return futures_util::future::pending().await,
+                };
+
+                tokio::select! {
+                    Ok(Some(line)) = stdout => (app.result.platform, Some(line), None),
+                    Ok(Some(line)) = stderr => (app.result.platform, None, Some(line)),
+                    else => futures_util::future::pending().await,
+                }
             };
-
-            tokio::select! {
-                Ok(Some(line)) = stdout => (app.result.platform, Some(line), None),
-                Ok(Some(line)) = stderr => (app.result.platform, None, Some(line)),
-                _ = futures_util::future::pending() => (app.result.platform, None, None),
-            }
+            Box::pin(future)
         });
+        let next_stdout = async {
+            if has_running_apps {
+                select_all(next_stdout).await.0
+            } else {
+                futures_util::future::pending().await
+            }
+        };
 
-        let animation_timeout = tokio::time::sleep(Duration::from_millis(30));
+        let animation_timeout = tokio::time::sleep(Duration::from_millis(300));
 
         tokio::select! {
-            new_line = join_all(next_stdout) => {
-                for (platform, stdout, stderr) in new_line {
-                    if let Some(stdout) = stdout {
-                        self.running_apps.get_mut(&platform).unwrap().stdout.as_mut().unwrap().stdout_line.push_str(&stdout);
-                        self.push_log(platform, BuildMessage {
-                            level: Level::INFO,
-                            message: MessageType::Text(stdout),
-                        })
-                    }
-                    if let Some(stderr) = stderr {
-                        self.running_apps.get_mut(&platform).unwrap().stdout.as_mut().unwrap().stderr_line.push_str(&stderr);
-                        self.push_log(platform, BuildMessage {
-                            level: Level::ERROR,
-                            message: MessageType::Text(stderr),
-                        })
-                    }
+            (platform, stdout, stderr) = next_stdout => {
+                if let Some(stdout) = stdout {
+                    self.running_apps.get_mut(&platform).unwrap().stdout.as_mut().unwrap().stdout_line.push_str(&stdout);
+                    self.push_log(platform, BuildMessage {
+                        level: Level::INFO,
+                        message: MessageType::Text(stdout),
+                    })
+                }
+                if let Some(stderr) = stderr {
+                    self.running_apps.get_mut(&platform).unwrap().stdout.as_mut().unwrap().stderr_line.push_str(&stderr);
+                    self.push_log(platform, BuildMessage {
+                        level: Level::ERROR,
+                        message: MessageType::Text(stderr),
+                    })
                 }
             },
 
@@ -171,8 +180,7 @@ impl Output {
                 self.handle_input(event.unwrap().unwrap())?;
             }
 
-            _ = animation_timeout => {
-            }
+            _ = animation_timeout => {}
         }
 
         return Ok(());
