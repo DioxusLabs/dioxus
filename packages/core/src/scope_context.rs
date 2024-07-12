@@ -465,7 +465,7 @@ impl ScopeId {
     /// Provide context to the current scope
     pub fn provide_context<T: 'static + Clone>(self, value: T) -> T {
         Runtime::with_scope(self, |cx| cx.provide_context(value))
-            .expect("Must be called from inside the Dioxus runtime")
+            .expect("Must be called from inside a Dioxus runtime.")
     }
 
     /// Pushes the future onto the poll queue to be polled after the component renders.
@@ -483,7 +483,7 @@ impl ScopeId {
     /// This can be used as a helpful diagnostic when debugging hooks/renders, etc
     pub fn generation(self) -> Option<usize> {
         Runtime::with_scope(self, |cx| Some(cx.generation()))
-            .expect("Must be called from inside the Dioxus runtime")
+            .expect("Must be called from inside a Dioxus runtime.")
     }
 
     /// Get the parent of the current scope if it exists
@@ -501,19 +501,19 @@ impl ScopeId {
     /// ## Notice: you should prefer using [`crate::prelude::schedule_update_any`]
     pub fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
         Runtime::with_scope(*self, |cx| cx.schedule_update())
-            .expect("Must be called from inside the Dioxus runtime")
+            .expect("Must be called from inside a Dioxus runtime.")
     }
 
     /// Get the height of the current scope
     pub fn height(self) -> u32 {
         Runtime::with_scope(self, |cx| cx.height())
-            .expect("Must be called from inside the Dioxus runtime")
+            .expect("Must be called from inside a Dioxus runtime.")
     }
 
     /// Run a closure inside of scope's runtime
     pub fn in_runtime<T>(self, f: impl FnOnce() -> T) -> T {
         Runtime::current()
-            .expect("Must be called from inside the Dioxus runtime")
+            .expect("Must be called from inside a Dioxus runtime.")
             .on_scope(self, f)
     }
 

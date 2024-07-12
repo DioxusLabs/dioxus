@@ -92,6 +92,6 @@ impl ScopeId {
     /// Get the owner for the current scope.
     pub fn owner<S: AnyStorage>(self) -> Owner<S> {
         Runtime::with_scope(self, |cx| cx.owner::<S>())
-            .expect("Must be called from inside the Dioxus runtime")
+            .expect("Must be called from inside a Dioxus runtime.")
     }
 }

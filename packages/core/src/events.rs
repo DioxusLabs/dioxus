@@ -397,7 +397,7 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
         ));
         Self {
             callback,
-            origin: current_scope_id().expect("Must be called from inside the Dioxus runtime"),
+            origin: current_scope_id().expect("Must be called from inside a Dioxus runtime."),
         }
     }
 
@@ -409,7 +409,7 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
                 as Rc<RefCell<dyn FnMut(Args) -> Ret>>));
         Self {
             callback,
-            origin: current_scope_id().expect("Must be called from inside the Dioxus runtime"),
+            origin: current_scope_id().expect("Must be called from inside a Dioxus runtime."),
         }
     }
 
