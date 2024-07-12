@@ -1,18 +1,24 @@
+use crate::PartialExpr;
 use proc_macro2::TokenStream;
 use quote::ToTokens;
 use std::hash::{Hash, Hasher};
 use syn::{
-    braced,
-    parse::{Parse, ParseStream, Parser},
+    parse::{Parse, ParseStream},
     punctuated::Punctuated,
-    token, Attribute, Block, Expr, ExprBlock, Pat, PatType, Result, ReturnType, Token, Type,
+    Attribute, Expr, Pat, PatType, Result, ReturnType, Token, Type,
 };
 use syn::{BoundLifetimes, ExprClosure};
 
-/// A closure that has internals that might not be completely valid rust code but we want to interpret it regardless
+/// A closure whose body might not be valid rust code but we want to interpret it regardless.
+/// This lets us provide expansions in way more cases than normal closures at the expense of an
+/// increased mainteance burden and complexity.
+///
+/// We do our best to reuse the same logic from partial exprs for the body of the PartialClosure.
+/// The code here is simply stolen from `syn::ExprClosure` and lightly modified to work with
+/// PartialExprs. We only removed the attrs field and changed the body to be a PartialExpr.
+/// Otherwise, it's a direct copy of the original.
 #[derive(Debug, Clone)]
 pub struct PartialClosure {
-    pub attrs: Vec<Attribute>,
     pub lifetimes: Option<BoundLifetimes>,
     pub constness: Option<Token![const]>,
     pub movability: Option<Token![static]>,
@@ -22,43 +28,7 @@ pub struct PartialClosure {
     pub inputs: Punctuated<Pat, Token![,]>,
     pub or2_token: Token![|],
     pub output: ReturnType,
-    pub brace_token: Option<syn::token::Brace>,
-    pub body: TokenStream,
-}
-
-impl PartialEq for PartialClosure {
-    fn eq(&self, other: &Self) -> bool {
-        self.attrs == other.attrs
-            && self.lifetimes == other.lifetimes
-            && self.constness == other.constness
-            && self.movability == other.movability
-            && self.asyncness == other.asyncness
-            && self.capture == other.capture
-            && self.or1_token == other.or1_token
-            && self.inputs == other.inputs
-            && self.or2_token == other.or2_token
-            && self.output == other.output
-            && self.brace_token == other.brace_token
-            && self.body.to_string() == other.body.to_string()
-    }
-}
-
-impl Eq for PartialClosure {}
-impl Hash for PartialClosure {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.attrs.hash(state);
-        self.lifetimes.hash(state);
-        self.constness.hash(state);
-        self.movability.hash(state);
-        self.asyncness.hash(state);
-        self.capture.hash(state);
-        self.or1_token.hash(state);
-        self.inputs.hash(state);
-        self.or2_token.hash(state);
-        self.output.hash(state);
-        self.brace_token.hash(state);
-        self.body.to_string().hash(state);
-    }
+    pub body: PartialExpr,
 }
 
 impl Parse for PartialClosure {
@@ -94,20 +64,9 @@ impl Parse for PartialClosure {
             ReturnType::Default
         };
 
-        let mut brace_token = None;
-        let body = if input.peek(token::Brace) {
-            let body;
-            let brace = braced!(body in input);
-            brace_token = Some(brace);
-            body.parse()?
-        } else {
-            // todo: maybe parse incomplete until a delimiter (; or , or })
-            let body: Expr = input.parse()?;
-            body.to_token_stream()
-        };
+        let body = PartialExpr::parse(input)?;
 
         Ok(PartialClosure {
-            attrs: Vec::new(),
             lifetimes,
             constness,
             movability,
@@ -117,7 +76,6 @@ impl Parse for PartialClosure {
             inputs,
             or2_token,
             output,
-            brace_token,
             body,
         })
     }
@@ -134,56 +92,67 @@ impl ToTokens for PartialClosure {
         self.inputs.to_tokens(tokens);
         self.or2_token.to_tokens(tokens);
         self.output.to_tokens(tokens);
+        self.body.to_tokens(tokens);
+    }
+}
 
-        if let Some(brace_token) = &self.brace_token {
-            brace_token.surround(tokens, |tokens| {
-                self.body.to_tokens(tokens);
-            });
-        } else {
-            self.body.to_tokens(tokens);
-        }
+impl PartialEq for PartialClosure {
+    fn eq(&self, other: &Self) -> bool {
+        self.lifetimes == other.lifetimes
+            && self.constness == other.constness
+            && self.movability == other.movability
+            && self.asyncness == other.asyncness
+            && self.capture == other.capture
+            && self.or1_token == other.or1_token
+            && self.inputs == other.inputs
+            && self.or2_token == other.or2_token
+            && self.output == other.output
+            && self.body == other.body
+    }
+}
+
+impl Eq for PartialClosure {}
+impl Hash for PartialClosure {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.lifetimes.hash(state);
+        self.constness.hash(state);
+        self.movability.hash(state);
+        self.asyncness.hash(state);
+        self.capture.hash(state);
+        self.or1_token.hash(state);
+        self.inputs.hash(state);
+        self.or2_token.hash(state);
+        self.output.hash(state);
+        self.body.hash(state);
     }
 }
 
 impl PartialClosure {
-    pub fn as_expr(&self) -> Result<Expr> {
-        self.as_expr_closure().map(|closure| Expr::Closure(closure))
-    }
-
     /// Convert this partial closure into a full closure if it is valid
     /// Returns err if the internal tokens can't be parsed as a closure
-    pub fn as_expr_closure(&self) -> Result<ExprClosure> {
-        // If there's a brace token, we need to parse the body as a block
-        // Otherwise we can parse it as an expression
-        let body = match self.brace_token.as_ref() {
-            Some(brace) => Expr::Block(ExprBlock {
-                attrs: Vec::new(),
-                label: None,
-                block: Block {
-                    brace_token: brace.clone(),
-                    stmts: Block::parse_within.parse2(self.body.clone())?,
-                },
-            }),
-
-            None => syn::parse2(self.body.clone())?,
-        };
-
-        Ok(ExprClosure {
-            attrs: self.attrs.clone(),
+    pub fn as_expr(&self) -> Result<Expr> {
+        let expr_closure = ExprClosure {
+            attrs: Vec::new(),
             asyncness: self.asyncness.clone(),
             capture: self.capture.clone(),
             inputs: self.inputs.clone(),
             output: self.output.clone(),
-            body: Box::new(body),
             lifetimes: self.lifetimes.clone(),
             constness: self.constness.clone(),
             movability: self.movability.clone(),
             or1_token: self.or1_token.clone(),
             or2_token: self.or2_token.clone(),
-        })
+
+            // try to lower the body to an expression - if might fail if it can't
+            body: Box::new(self.body.as_expr()?),
+        };
+
+        Ok(Expr::Closure(expr_closure))
     }
 }
 
+/// This might look complex but it is just a ripoff of the `syn::ExprClosure` implementation. AFAIK
+/// This code is not particularly accessible from outside syn... so it lives here. sorry
 fn closure_arg(input: ParseStream) -> Result<Pat> {
     let attrs = input.call(Attribute::parse_outer)?;
     let mut pat = Pat::parse_single(input)?;
@@ -223,7 +192,7 @@ fn closure_arg(input: ParseStream) -> Result<Pat> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use quote::{quote, TokenStreamExt};
+    use quote::quote;
 
     #[test]
     fn parses() {
@@ -241,33 +210,6 @@ mod tests {
         // but ours can - we just can't format it out
         let parses = parses.unwrap();
         dbg!(parses.to_token_stream().to_string());
-    }
-
-    // hmmmm: todo: one day enable partial expansion on incomplete exprs
-    // kinda hard
-    #[test]
-    fn parse_delim() {
-        fn parse_non_delimited_group(input: ParseStream) -> Result<()> {
-            let (toks, cursor) = input.cursor().token_tree().unwrap();
-            println!("{:?}", toks);
-            let (toks, cursor) = cursor.token_tree().unwrap();
-            println!("{:?}", toks);
-            let (toks, cursor) = cursor.token_tree().unwrap();
-            println!("{:?}", toks);
-            Ok(())
-        }
-
-        let toks = quote! {
-            method.,
-        };
-
-        let o = syn::parse::Parser::parse2(parse_non_delimited_group, toks);
-
-        let parses: Result<PartialClosure> = syn::parse2(quote! {
-            |a, b| method.
-        });
-
-        // parse_non_delimited_group(syn::parse2(toks).unwrap()).unwrap();
     }
 
     #[test]

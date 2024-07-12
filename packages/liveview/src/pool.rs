@@ -221,6 +221,10 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
                     dioxus_hot_reload::DevserverMsg::Shutdown => {
                         std::process::exit(0);
                     },
+                    dioxus_hot_reload::DevserverMsg::FullReload => {
+                        // usually only web gets this message - what are we supposed to do?
+                        // Maybe we could just binary patch ourselves in place without losing window state?
+                    }
                 }
                 #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
                 let () = msg;

@@ -381,16 +381,6 @@ impl FullstackHTMLTemplate {
         &self,
         to: &mut R,
     ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
-        #[cfg(all(debug_assertions, feature = "hot-reload"))]
-        {
-            // In debug mode, we need to add a script to the page that will reload the page if the websocket disconnects to make full recompile hot reloads work
-            let disconnect_js = dioxus_hot_reload::RECONNECT_SCRIPT;
-
-            to.write_str(r#"<script>"#)?;
-            to.write_str(disconnect_js)?;
-            to.write_str(r#"</script>"#)?;
-        }
-
         let ServeConfig { index, .. } = &self.cfg;
 
         to.write_str(&index.post_main)?;

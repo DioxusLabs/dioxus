@@ -161,10 +161,8 @@ impl App {
 
         tokio::task::spawn(async move {
             let receiver = dioxus_hot_reload::NativeReceiver::create(format!(
-                "ws://{}:{}{}",
-                addr,
-                port,
-                dioxus_hot_reload::HOTRELOAD_ENDPOINT,
+                "ws://{}:{}/_dioxus",
+                addr, port,
             ))
             .await;
 
@@ -357,6 +355,10 @@ impl App {
                         webview.kick_stylsheets();
                     }
                 }
+            }
+            dioxus_hot_reload::DevserverMsg::FullReload => {
+                // usually only web gets this message - what are we supposed to do?
+                // Maybe we could just binary patch ourselves in place without losing window state?
             }
             dioxus_hot_reload::DevserverMsg::Shutdown => {
                 self.control_flow = ControlFlow::Exit;

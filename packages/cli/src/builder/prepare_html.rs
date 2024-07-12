@@ -64,15 +64,6 @@ impl BuildRequest {
             head_resources.push_str(&assets.head());
         }
 
-        // If we are serving the application, inject the reconnect script
-        if self.serve {
-            write!(
-                &mut head_resources,
-                "<script>{}</script>",
-                dioxus_hot_reload::RECONNECT_SCRIPT
-            )?;
-        }
-
         replace_or_insert_before("{style_include}", "</head", &head_resources, html);
 
         Ok(())

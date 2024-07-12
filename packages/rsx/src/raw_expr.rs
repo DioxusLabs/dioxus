@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{quote, ToTokens};
 use std::hash;
-use syn::{parse::Parse, spanned::Spanned, token::Brace, Expr};
+use syn::{parse::Parse, token::Brace, Expr};
 
 /// A raw expression potentially wrapped in curly braces that is parsed from the input stream.
 ///
@@ -9,7 +9,7 @@ use syn::{parse::Parse, spanned::Spanned, token::Brace, Expr};
 /// are braces, it parses the contents as a `TokenStream2` and stores it as such.
 #[derive(Clone, Debug)]
 pub struct PartialExpr {
-    pub brace: Brace,
+    pub brace: Option<Brace>,
     pub expr: TokenStream2,
 }
 
@@ -19,45 +19,36 @@ impl Parse for PartialExpr {
         if !input.peek(syn::token::Brace) {
             let expr = input.parse::<syn::Expr>()?;
             return Ok(Self {
-                brace: Brace::default(),
+                brace: None,
                 expr: quote! { #expr },
             });
         }
 
-        // Pull the brace and then parse the innards as TokenStream2 - not expr
-        //
-        // todo: rstml uses the syn `Block` type which is more flexible on the receiving end than our
-        // partially-complete TokenStream approach
         let content;
+        let brace = Some(syn::braced!(content in input));
+        let expr = content.parse()?;
 
-        Ok(Self {
-            brace: syn::braced!(content in input),
-            expr: content.parse()?,
-        })
+        Ok(Self { brace, expr })
     }
 }
 
 impl ToTokens for PartialExpr {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let exp = &self.expr;
-
-        // Make sure we bind the expression to a variable so the lifetimes are relaxed
-        tokens.append_all(quote! { { #exp } })
+        match &self.brace {
+            Some(brace) => brace.surround(tokens, |tokens| self.expr.to_tokens(tokens)),
+            _ => self.expr.to_tokens(tokens),
+        }
     }
 }
 
 impl PartialExpr {
-    pub fn span(&self) -> proc_macro2::Span {
-        self.brace.span.span()
-    }
-
     pub fn as_expr(&self) -> syn::Result<syn::Expr> {
         syn::parse2(self.expr.clone())
     }
 
     pub fn from_expr(expr: &Expr) -> Self {
         Self {
-            brace: Brace::default(),
+            brace: None,
             expr: quote! { #expr },
         }
     }
