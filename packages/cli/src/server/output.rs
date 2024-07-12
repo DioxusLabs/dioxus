@@ -42,7 +42,7 @@ pub struct Output {
     rustc_version: String,
     rustc_nightly: bool,
     dx_version: String,
-    is_tty: bool,
+    interactive: bool,
     build_logs: HashMap<Platform, ActiveBuild>,
     running_apps: HashMap<Platform, RunningApp>,
     is_cli_release: bool,
@@ -65,9 +65,9 @@ type TerminalBackend = Terminal<CrosstermBackend<io::Stdout>>;
 
 impl Output {
     pub async fn start(cfg: &Serve, crate_config: &DioxusCrate) -> io::Result<Self> {
-        let is_tty = std::io::stdout().is_tty();
+        let interactive = std::io::stdout().is_tty() && cfg.interactive.unwrap_or(true);
 
-        if is_tty {
+        if interactive {
             enable_raw_mode()?;
             stdout().execute(EnterAlternateScreen)?;
         }
@@ -111,7 +111,7 @@ impl Output {
             rustc_version,
             rustc_nightly,
             dx_version,
-            is_tty,
+            interactive,
             is_cli_release,
             platform,
             fly_modal_open: false,
@@ -188,28 +188,32 @@ impl Output {
 
     pub fn shutdown(&mut self) -> io::Result<()> {
         // if we're a tty then we need to disable the raw mode
-        if self.is_tty {
+        if self.interactive {
             disable_raw_mode()?;
             stdout().execute(LeaveAlternateScreen)?;
 
-            // todo: print the build info here for the most recent build, and then the logs of the most recent build
-            for (platform, build) in self.build_logs.iter() {
-                if build.messages.is_empty() {
-                    continue;
-                }
-
-                for message in build.messages.iter() {
-                    match &message.message {
-                        MessageType::Cargo(t) => {
-                            println!("{}", t.rendered.as_deref().unwrap_or_default())
-                        }
-                        MessageType::Text(t) => println!("{}", t),
-                    }
-                }
-            }
+            self.drain_print_logs();
         }
 
         Ok(())
+    }
+
+    fn drain_print_logs(&mut self) {
+        // todo: print the build info here for the most recent build, and then the logs of the most recent build
+        for (platform, build) in self.build_logs.iter() {
+            if build.messages.is_empty() {
+                continue;
+            }
+
+            for message in build.messages.iter() {
+                match &message.message {
+                    MessageType::Cargo(t) => {
+                        println!("{}", t.rendered.as_deref().unwrap_or_default())
+                    }
+                    MessageType::Text(t) => println!("{}", t),
+                }
+            }
+        }
     }
 
     pub fn handle_input(&mut self, input: Event) -> io::Result<()> {
@@ -400,7 +404,8 @@ impl Output {
         watcher: &Watcher,
     ) {
         // just drain the build logs
-        if !self.is_tty {
+        if !self.interactive {
+            self.drain_print_logs();
             return;
         }
 

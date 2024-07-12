@@ -46,6 +46,10 @@ pub struct Serve {
     /// Arguments for the dioxus build
     #[clap(flatten)]
     pub(crate) build_arguments: Build,
+
+    /// Run the server in interactive mode
+    #[arg(long, default_missing_value="true", num_args=0..=1, short = 'i')]
+    pub interactive: Option<bool>,
 }
 
 impl Serve {

@@ -63,6 +63,7 @@ impl Server {
         } else {
             None
         };
+
         let fullstack_address = fullstack_port.map(|port| SocketAddr::new(addr.ip(), port));
 
         let router = setup_router(serve, cfg, tx, fullstack_address)
@@ -157,6 +158,17 @@ impl Server {
         }
 
         None
+    }
+
+    pub async fn send_reload(&mut self) {
+        // if let Some(socket) = self.sockets.first_mut() {
+        for socket in self.sockets.iter_mut() {
+            _ = socket
+                .send(Message::Text(
+                    serde_json::to_string(&DevserverMsg::FullReload).unwrap(),
+                ))
+                .await;
+        }
     }
 
     /// Send a shutdown message to all connected clients

@@ -116,6 +116,8 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                                 }
                             }
 
+                            server.send_reload().await;
+
                             screen.new_ready_app(&mut buildr, results);
                         }
                     };

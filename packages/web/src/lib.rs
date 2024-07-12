@@ -77,8 +77,6 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
 
     let mut websys_dom = dom::WebsysDom::new(web_config, tx);
 
-    tracing::info!("rebuilding app");
-
     let mut hydration_receiver: Option<futures_channel::mpsc::UnboundedReceiver<SuspenseMessage>> =
         None;
 

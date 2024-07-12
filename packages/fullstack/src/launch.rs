@@ -122,6 +122,7 @@ async fn launch_server(
         .map(|args| args.into())
         .unwrap_or_else(dioxus_cli_config::AddressArguments::parse)
         .address();
+
     println!("Listening on http://{}", address);
 
     #[cfg(feature = "axum")]
@@ -129,6 +130,7 @@ async fn launch_server(
         use crate::axum_adapter::DioxusRouterExt;
 
         let router = axum::Router::new().register_server_functions_with_context(context_providers);
+
         #[cfg(not(any(feature = "desktop", feature = "mobile")))]
         let router = {
             use crate::prelude::SSRState;
@@ -144,8 +146,10 @@ async fn launch_server(
                 ),
             )
         };
+
         let router = router.into_make_service();
         let listener = tokio::net::TcpListener::bind(address).await.unwrap();
+
         axum::serve(listener, router).await.unwrap();
     }
     #[cfg(not(feature = "axum"))]

@@ -1,4 +1,4 @@
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
 
 use clap::Parser;
 
@@ -56,9 +56,13 @@ impl RuntimeCLIArguments {
 
 impl From<RuntimeCLIArguments> for AddressArguments {
     fn from(args: RuntimeCLIArguments) -> Self {
+        let socket = args.server_socket.unwrap_or_else(|| {
+            SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, default_port()))
+        });
+
         Self {
-            port: args.cli_address.port(),
-            addr: args.cli_address.ip(),
+            port: socket.port(),
+            addr: socket.ip(),
         }
     }
 }
@@ -68,5 +72,6 @@ fn default_port() -> u16 {
 }
 
 fn default_address() -> IpAddr {
-    IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0))
+    IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1))
+    // IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0))
 }

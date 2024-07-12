@@ -207,7 +207,6 @@ impl SsrRendererPool {
             }
 
             // poll the future, which may call server_context()
-            tracing::info!("Rebuilding vdom");
             with_server_context(server_context.clone(), || virtual_dom.rebuild_in_place());
 
             // Render the initial frame with loading placeholders

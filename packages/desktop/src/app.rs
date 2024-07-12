@@ -152,7 +152,7 @@ impl App {
         let proxy = self.shared.proxy.clone();
 
         tokio::task::spawn(async move {
-            let Some(Ok(receiver)) = dioxus_hot_reload::NativeReceiver::create_from_cli().await
+            let Some(Ok(mut receiver)) = dioxus_hot_reload::NativeReceiver::create_from_cli().await
             else {
                 return;
             };

@@ -176,6 +176,8 @@ impl BuildRequest {
             output_path.set_extension("exe");
         }
         if let Some(res_path) = &cargo_build_result.output_location {
+            // copy and destroy the old file
+            _ = std::fs::remove_file(&output_path);
             std::fs::copy(res_path, &output_path)?;
         }
 
