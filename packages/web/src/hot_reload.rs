@@ -1,11 +1,7 @@
 //! Handler code for hotreloading.
 //!
 //! This sets up a websocket connection to the devserver and handles messages from it.
-//! There's nto fantastic auto-reconnect logic here - that's coming from the cli devserver.
-//! We should look into merging those together.
-//!
-//! This simply handles the websocket connection and messages from the devserver and brings them
-//! back up into the main dioxus loop.
+//! We also set up a little recursive timer that will attempt to reconnect if the connection is lost.
 
 use dioxus_hot_reload::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};

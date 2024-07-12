@@ -65,11 +65,7 @@ impl Parse for Attribute {
         // if there's an ident not followed by a colon, it's a shorthand attribute
         if content.peek(Ident) && !content.peek2(Token![:]) {
             let ident = Ident::parse(content)?;
-            let comma = if !content.is_empty() {
-                Some(content.parse::<Token![,]>()?)
-            } else {
-                None
-            };
+            let comma = content.parse().ok();
 
             return Ok(Attribute {
                 name: AttributeName::BuiltIn(ident.clone()),

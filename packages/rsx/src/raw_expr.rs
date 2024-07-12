@@ -43,7 +43,8 @@ impl ToTokens for PartialExpr {
 
 impl PartialExpr {
     pub fn as_expr(&self) -> syn::Result<syn::Expr> {
-        syn::parse2(self.expr.clone())
+        let expr = self.expr.clone();
+        syn::parse2(quote! { {#expr} })
     }
 
     pub fn from_expr(expr: &Expr) -> Self {

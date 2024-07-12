@@ -53,6 +53,7 @@ features = [
     "DataTransfer",
     "console",
     "NodeList",
+    "CloseEvent"
 ]
 
 [features]
