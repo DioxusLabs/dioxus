@@ -150,7 +150,9 @@ impl Watcher {
         for (kind, path) in all_mods.iter() {
             // for various assets that might be linked in, we just try to hotreloading them forcefully
             // That is, unless they appear in an include! macro, in which case we need to a full rebuild....
-            let ext = path.extension().and_then(|v| v.to_str())?;
+            let Some(ext) = path.extension().and_then(|v| v.to_str()) else {
+                continue;
+            };
 
             // Workaround for notify and vscode-like editor:
             // when edit & save a file in vscode, there will be two notifications,
