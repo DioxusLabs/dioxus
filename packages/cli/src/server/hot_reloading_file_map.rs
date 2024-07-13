@@ -44,6 +44,9 @@ impl FileMap {
     }
 
     /// Create a new FileMap from a crate directory
+    ///
+    /// Takes a filter that when returns true, the file will be filtered out (ie not tracked)
+    /// Note that this is inverted from a typical .filter() method.
     pub fn create_with_filter<Ctx: HotReloadingContext>(
         crate_dir: PathBuf,
         mut filter: impl FnMut(&Path) -> bool,

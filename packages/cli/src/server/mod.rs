@@ -79,12 +79,11 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients
                 if let Some(hr) = watchr.attempt_hot_reload(&dioxus_crate) {
-                    if hr.templates.is_empty() && hr.assets.is_empty() {
-                        continue;
+                    // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
+                    if !hr.templates.is_empty() && !hr.assets.is_empty() {
+                        server.send_hotreload(hr).await;
+                        continue
                     }
-
-                    server.send_hotreload(hr).await;
-                    continue;
                 }
 
                 // If the change is not binary patchable, rebuild the project

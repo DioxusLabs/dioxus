@@ -6,6 +6,7 @@ use dioxus_hot_reload::HotReloadMsg;
 use dioxus_html::HtmlCtx;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
+use ignore::gitignore::Gitignore;
 use notify::{
     event::{DataChange, ModifyKind},
     EventKind, RecommendedWatcher,
@@ -22,6 +23,7 @@ pub struct Watcher {
     watcher: RecommendedWatcher,
     queued_events: Vec<notify::Event>,
     file_map: FileMap,
+    ignore: Gitignore,
 }
 
 impl Watcher {
@@ -38,6 +40,24 @@ impl Watcher {
         allow_watch_path.push("Dioxus.toml".to_string().into());
         allow_watch_path.dedup();
 
+        let crate_dir = config.crate_dir();
+        let gitignore_file_path = crate_dir.join(".gitignore");
+        let mut builder = ignore::gitignore::GitignoreBuilder::new(gitignore_file_path);
+        let excluded_paths = vec![
+            ".git",
+            ".github",
+            ".vscode",
+            "target",
+            "node_modules",
+            "dist",
+            "static",
+            ".dioxus",
+        ];
+        for path in excluded_paths {
+            builder.add(path);
+        }
+        let ignore = builder.build().unwrap();
+
         // Create the file watcher
         let mut watcher = notify::recommended_watcher({
             let tx = tx.clone();
@@ -53,6 +73,12 @@ impl Watcher {
         // todo: make sure we don't double-watch paths if they're nested
         for sub_path in allow_watch_path {
             let path = &config.crate_dir().join(sub_path);
+
+            // If the path is ignored, don't watch it
+            if ignore.matched(&path, path.is_dir()).is_ignore() {
+                continue;
+            }
+
             let mode = notify::RecursiveMode::Recursive;
 
             use notify::Watcher;
@@ -63,13 +89,17 @@ impl Watcher {
 
         // Probe the entire project looking for our rsx calls
         // Whenever we get an update from the file watcher, we'll try to hotreload against this file map
-        let file_map = FileMap::create::<HtmlCtx>(config.crate_dir()).unwrap();
+        let file_map = FileMap::create_with_filter::<HtmlCtx>(config.crate_dir(), |path| {
+            ignore.matched(path, path.is_dir()).is_ignore()
+        })
+        .unwrap();
 
         Self {
             tx,
             rx,
             watcher,
             file_map,
+            ignore,
             queued_events: Vec::new(),
             last_update_time: chrono::Local::now().timestamp(),
         }
@@ -106,6 +136,7 @@ impl Watcher {
     pub fn attempt_hot_reload(&mut self, config: &DioxusCrate) -> Option<HotReloadMsg> {
         let mut edited_rust_files = Vec::new();
         let mut changed_assets = Vec::new();
+        let mut unknown_files = Vec::new();
 
         let mut all_mods: Vec<(EventKind, PathBuf)> = vec![];
 
@@ -129,6 +160,11 @@ impl Watcher {
             .ok();
 
         for (kind, path) in all_mods.iter() {
+            // If the path is ignored, don't watch it
+            if self.ignore.matched(path, path.is_dir()).is_ignore() {
+                continue;
+            }
+
             // for various assets that might be linked in, we just try to hotreloading them forcefully
             // That is, unless they appear in an include! macro, in which case we need to a full rebuild....
             let ext = path.extension().and_then(|v| v.to_str())?;
@@ -164,6 +200,8 @@ impl Watcher {
 
             if ext != "rs" && asset_file {
                 changed_assets.push(path);
+            } else if !asset_file {
+                unknown_files.push(path.clone());
             }
         }
 
@@ -186,6 +224,7 @@ impl Watcher {
         Some(HotReloadMsg {
             templates: changed_templates,
             assets: changed_assets.into_iter().cloned().collect(),
+            unknown_files,
         })
     }
 

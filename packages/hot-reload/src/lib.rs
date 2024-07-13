@@ -45,6 +45,9 @@ pub enum ClientMsg {
 pub struct HotReloadMsg {
     pub templates: Vec<HotReloadedTemplate>,
     pub assets: Vec<PathBuf>,
+
+    /// A file changed that's not an asset or a rust file - best of luck!
+    pub unknown_files: Vec<PathBuf>,
 }
 
 #[test]
