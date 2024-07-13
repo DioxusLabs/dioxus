@@ -84,6 +84,15 @@ impl Watcher {
             self.queued_events.push(event);
         }
 
+        // self.queued_events.retain(|event| match event.kind {
+        //     EventKind::Any => todo!(),
+        //     EventKind::Access(_) => todo!(),
+        //     EventKind::Create(_) => todo!(),
+        //     EventKind::Modify(_) => todo!(),
+        //     EventKind::Remove(_) => todo!(),
+        //     EventKind::Other => todo!(),
+        // });
+
         if !self.queued_events.is_empty() {
             return;
         }
@@ -152,6 +161,7 @@ impl Watcher {
                 Some(asset_dir) => path.starts_with(asset_dir),
                 None => false,
             };
+
             if ext != "rs" && asset_file {
                 changed_assets.push(path);
             }

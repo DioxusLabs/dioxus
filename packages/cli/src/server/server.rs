@@ -21,7 +21,7 @@ use dioxus_cli_config::{Platform, WebHttpsConfig};
 use dioxus_hot_reload::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{stream::FuturesUnordered, StreamExt};
-use hyper::Uri;
+use hyper::{HeaderMap, Uri};
 use std::net::TcpListener;
 use std::path::Path;
 use std::{
@@ -227,6 +227,7 @@ pub async fn setup_router(
             }));
     }
 
+    // server the dir if it's web, otherwise let the fullstack server itself handle it
     match platform {
         Platform::Web => {
             // Route file service to output the .wasm and assets if this is a web build
@@ -235,8 +236,10 @@ pub async fn setup_router(
         Platform::Fullstack | Platform::StaticGeneration => {
             // For fullstack and static generation, forward all requests to the server
             let address = fullstack_address.unwrap();
+
             router = router.fallback(super::proxy::proxy_to(
                 format!("http://{address}").parse().unwrap(),
+                true,
             ));
         }
         _ => {}
@@ -326,11 +329,14 @@ fn no_cache(
             .unwrap();
     };
 
-    let headers = response.headers_mut();
+    insert_no_cache_headers(response.headers_mut());
+    response
+}
+
+pub fn insert_no_cache_headers(headers: &mut HeaderMap) {
     headers.insert(CACHE_CONTROL, HeaderValue::from_static("no-cache"));
     headers.insert(PRAGMA, HeaderValue::from_static("no-cache"));
     headers.insert(EXPIRES, HeaderValue::from_static("0"));
-    response
 }
 
 /// Returns an enum of rustls config

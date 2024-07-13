@@ -68,7 +68,7 @@ pub fn add_proxy(mut router: Router, proxy: &WebProxyConfig) -> Result<Router> {
         )));
     }
 
-    let method_router = proxy_to(url);
+    let method_router = proxy_to(url, false);
 
     // api/*path
     router = router.route(
@@ -91,7 +91,7 @@ pub fn add_proxy(mut router: Router, proxy: &WebProxyConfig) -> Result<Router> {
     Ok(router)
 }
 
-pub(crate) fn proxy_to(url: Uri) -> MethodRouter {
+pub(crate) fn proxy_to(url: Uri, nocache: bool) -> MethodRouter {
     let client = ProxyClient::new(url);
 
     any(move |mut req: Request<MyBody>| async move {
@@ -108,6 +108,10 @@ pub(crate) fn proxy_to(url: Uri) -> MethodRouter {
             "x-proxied-by-dioxus",
             "true".parse().expect("header value is valid"),
         );
+
+        if nocache {
+            crate::server::insert_no_cache_headers(req.headers_mut());
+        }
 
         client
             .send(req)

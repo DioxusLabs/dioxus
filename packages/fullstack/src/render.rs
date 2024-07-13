@@ -265,7 +265,6 @@ impl SsrRendererPool {
                     stream.render(resolved_chunk);
                 }
             }
-            tracing::info!("Suspense resolved");
 
             // After suspense is done, we render the html after the body
             let mut post_streaming = String::new();
