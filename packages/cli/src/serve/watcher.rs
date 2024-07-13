@@ -62,7 +62,18 @@ impl Watcher {
             let tx = tx.clone();
             move |info: notify::Result<notify::Event>| {
                 if let Ok(e) = info {
-                    _ = tx.unbounded_send(e);
+                     match e.kind {
+
+                        // An event emitted when the metadata of a file or folder is changed.
+                        EventKind::Modify(ModifyKind::Data(_)) |
+                        EventKind::Create(_) |
+                        EventKind::Remove(_) => {
+                            _ = tx.unbounded_send(e);
+                        },
+                        _ => {}
+                    }
+
+
                 }
             }
         })
@@ -190,6 +201,8 @@ impl Watcher {
                 changed_assets.push(path);
                 continue;
             }
+
+            panic!("Unknown file: {:?}, kind: {:?}", path, kind);
 
             unknown_files.push(path.clone());
         }
