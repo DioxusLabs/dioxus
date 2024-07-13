@@ -164,7 +164,7 @@ impl Runtime {
 
     /// Runs a function with the current runtime
     pub(crate) fn with<R>(f: impl FnOnce(&Runtime) -> R) -> Option<R> {
-        RUNTIMES.with(|stack| stack.borrow().last().map(|r| f(r)))
+        Self::current().map(|r| f(&r))
     }
 
     /// Runs a function with the current scope

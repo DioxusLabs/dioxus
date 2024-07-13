@@ -128,6 +128,10 @@ impl BuildResult {
             server_socket: fullstack_address,
         };
         let executable = self.executable.canonicalize()?;
+        // This is the /dist folder generally
+        let output_folder = executable.parent().unwrap();
+        // This is the workspace folder
+        let workspace_folder = output_folder.parent().unwrap();
         Ok(Some(
             Command::new(&executable)
                 // When building the fullstack server, we need to forward the serve arguments (like port) to the fullstack server through env vars
@@ -138,7 +142,7 @@ impl BuildResult {
                 .stderr(Stdio::piped())
                 .stdout(Stdio::piped())
                 .kill_on_drop(true)
-                .current_dir(executable.parent().unwrap())
+                .current_dir(workspace_folder)
                 .spawn()?,
         ))
     }

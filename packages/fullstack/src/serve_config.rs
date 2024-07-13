@@ -89,7 +89,6 @@ impl ServeConfigBuilder {
 }
 
 fn load_index_path(path: PathBuf) -> String {
-    println!("cwd: {:?}", current_dir());
     let mut file = File::open(path).expect("Failed to find index.html. Make sure the index_path is set correctly and the WASM application has been built.");
 
     let mut contents = String::new();
