@@ -138,6 +138,7 @@ impl BuildResult {
                 .stderr(Stdio::piped())
                 .stdout(Stdio::piped())
                 .kill_on_drop(true)
+                .current_dir(executable.parent().unwrap())
                 .spawn()?,
         ))
     }
