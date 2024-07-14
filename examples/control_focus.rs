@@ -3,8 +3,8 @@
 //! This example shows how to manage focus in a Dioxus application. We implement a "roulette" that focuses on each input
 //! in the grid every few milliseconds until the user interacts with the inputs.
 
-use std::rc::Rc;
 use dioxus::prelude::*;
+use std::rc::Rc;
 
 const STYLE: &str = asset!(file("./examples/assets/roulette.css"));
 

@@ -15,7 +15,7 @@ fn main() {
 
 fn app() -> Element {
     let mut state = use_signal(|| PlayerState { is_playing: false });
-    
+
     rsx!(
         link { rel: "stylesheet", href: STYLE }
         h1 {"Select an option"}

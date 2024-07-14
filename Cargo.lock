@@ -1913,7 +1913,7 @@ dependencies = [
  "cssparser-macros",
  "dtoa-short",
  "itoa 1.0.11",
- "phf 0.11.2",
+ "phf 0.8.0",
  "smallvec",
 ]
 
@@ -4820,7 +4820,7 @@ dependencies = [
  "httpdate",
  "itoa 1.0.11",
  "pin-project-lite",
- "socket2 0.5.7",
+ "socket2 0.4.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -5887,6 +5887,7 @@ dependencies = [
 [[package]]
 name = "manganis"
 version = "0.2.2"
+source = "git+https://github.com/DioxusLabs/collect-assets#ad09a549775957c5ce177274cfbb6dc76c976c10"
 dependencies = [
  "dioxus-core 0.5.1",
  "manganis-macro",
@@ -5901,7 +5902,7 @@ dependencies = [
  "image 0.25.1",
  "imagequant",
  "lightningcss",
- "manganis-common 0.2.4 (git+https://github.com/DioxusLabs/collect-assets)",
+ "manganis-common",
  "mozjpeg",
  "object",
  "png",
@@ -5912,21 +5913,6 @@ dependencies = [
  "rustc-hash",
  "serde",
  "serde_json",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "manganis-common"
-version = "0.2.4"
-dependencies = [
- "anyhow",
- "base64 0.21.7",
- "home",
- "infer 0.11.0",
- "reqwest 0.12.5",
- "serde",
- "toml 0.7.8",
  "tracing",
  "url",
 ]
@@ -5950,8 +5936,9 @@ dependencies = [
 [[package]]
 name = "manganis-macro"
 version = "0.2.2"
+source = "git+https://github.com/DioxusLabs/collect-assets#ad09a549775957c5ce177274cfbb6dc76c976c10"
 dependencies = [
- "manganis-common 0.2.4",
+ "manganis-common",
  "proc-macro2",
  "quote",
  "serde_json",
