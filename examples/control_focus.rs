@@ -4,8 +4,9 @@
 //! in the grid every few milliseconds until the user interacts with the inputs.
 
 use std::rc::Rc;
-
 use dioxus::prelude::*;
+
+const STYLE: &str = asset!(file("./examples/assets/roulette.css"));
 
 fn main() {
     launch_desktop(app);
@@ -37,7 +38,7 @@ fn app() -> Element {
     });
 
     rsx! {
-        style { {include_str!("./assets/roulette.css")} }
+        link { rel: "stylesheet", href: STYLE }
         h1 { "Input Roulette" }
         button { onclick: move |_| running.toggle(), "Toggle roulette" }
         div { id: "roulette-grid",

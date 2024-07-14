@@ -7,15 +7,17 @@
 
 use dioxus::prelude::*;
 
+const STYLE: &str = asset!(file("./examples/assets/radio.css"));
+
 fn main() {
     launch(app);
 }
 
 fn app() -> Element {
     let mut state = use_signal(|| PlayerState { is_playing: false });
-
+    
     rsx!(
-        style { {include_str!("./assets/radio.css")} }
+        link { rel: "stylesheet", href: STYLE }
         h1 {"Select an option"}
 
         // Add some cute animations if the radio is playing!
