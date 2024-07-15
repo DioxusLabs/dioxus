@@ -240,6 +240,15 @@ pub async fn setup_router(
             router = router.fallback(super::proxy::proxy_to(
                 format!("http://{address}").parse().unwrap(),
                 true,
+                |error| {
+                    Response::builder()
+                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                        .body(Body::from(format!(
+                            "Backend connection failed. The backend is likely still starting up. Please try again in a few seconds. Error: {:#?}",
+                            error
+                        )))
+                        .unwrap()
+                },
             ));
         }
         _ => {}
