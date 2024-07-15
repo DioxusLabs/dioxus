@@ -116,14 +116,19 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                         // If we have a build result, open it
                         for build_result in results.iter() {
                             let child = build_result.open(&serve.server_arguments, server.fullstack_address());
-                            if let Some(child_proc) = child? {
-                                builder.children.push((build_result.platform,child_proc));
+                            match child {
+                                Ok(Some(child_proc)) => builder.children.push((build_result.platform,child_proc)),
+                                Err(_e) => break,
+                                _ => {}
                             }
                         }
 
-                        server.send_reload().await;
-
+                        // Make sure we immediately capture the stdout/stderr of the executable -
+                        // otherwise it'll clobber our terminal output
                         screen.new_ready_app(&mut builder, results);
+
+                        // And then finally tell the server to reload
+                        server.send_reload().await;
                     },
                     Err(err) => {
                         server.send_build_error(err).await;

@@ -343,7 +343,7 @@ impl Output {
 
         // // let log = self.build_logs.get(a).unwrap();
         // if snapped {
-        //     self.scroll = (self.num_lines_with_wrapping).saturating_sub(self.term_height);
+        self.scroll = (self.num_lines_with_wrapping).saturating_sub(self.term_height);
         //     // self.scroll = self.scroll.clamp(
         //     //     0,
         //     //     (self.num_lines_with_wrapping).saturating_sub(self.term_height),
@@ -373,7 +373,7 @@ impl Output {
 
         let log = self.build_progress.build_logs.get(&platform).unwrap();
         if snapped {
-            self.scroll = (self.num_lines_with_wrapping).saturating_sub(self.term_height);
+            // self.scroll = (self.num_lines_with_wrapping).saturating_sub(self.term_height);
             // self.scroll = self.scroll.clamp(
             //     0,
             //     (self.num_lines_with_wrapping).saturating_sub(self.term_height),
@@ -392,7 +392,9 @@ impl Output {
                 .iter_mut()
                 .find_map(|(platform, child)| {
                     if platform == &result.platform {
-                        Some((child.stdout.take().unwrap(), child.stderr.take().unwrap()))
+                        let stdout = child.stdout.take().unwrap();
+                        let stderr = child.stderr.take().unwrap();
+                        Some((stdout, stderr))
                     } else {
                         None
                     }
@@ -471,10 +473,13 @@ impl Output {
                     use ansi_to_tui::IntoText;
                     match &span.message {
                         MessageType::Text(line) => {
-                            paragraph_text.extend(line.as_str().into_text().unwrap_or_default());
+                            for line in line.lines() {
+                                paragraph_text.extend(line.into_text().unwrap_or_default());
+                            }
                         }
                         MessageType::Cargo(diagnostic) => {
                             let diagnostic = diagnostic.rendered.as_deref().unwrap_or_default();
+
                             for line in diagnostic.lines() {
                                 paragraph_text.extend(line.into_text().unwrap_or_default());
                             }
@@ -490,7 +495,7 @@ impl Output {
                 self.num_lines_with_wrapping = paragraph.line_count(body[1].width) as u16;
 
                 // if self.is_snapped(platform.clone()) {
-                self.scroll = (self.num_lines_with_wrapping).saturating_sub(self.term_height);
+                // self.scroll = (self.num_lines_with_wrapping).saturating_sub(self.term_height);
                 // }
 
                 let paragraph = paragraph.scroll((self.scroll, 0));
