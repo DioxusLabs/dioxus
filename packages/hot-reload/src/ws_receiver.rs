@@ -36,9 +36,7 @@ impl NativeReceiver {
 
     /// Connect to the devserver with an address from the CLI. Returns None if the current application was not run with the CLI
     pub async fn create_from_cli() -> Option<TtResult<Self>> {
-        let Some(cli_args) = dioxus_cli_config::RuntimeCLIArguments::from_cli() else {
-            return None;
-        };
+        let cli_args = dioxus_cli_config::RuntimeCLIArguments::from_cli()?;
         let addr = cli_args.cli_address();
         Some(Self::create(format!("ws://{addr}/_dioxus")).await)
     }
@@ -54,7 +52,7 @@ impl NativeReceiver {
                 Ok(res) => match res {
                     Message::Text(text) => {
                         let leaked: &'static str = Box::leak(text.into_boxed_str());
-                        let msg = serde_json::from_str::<DevserverMsg>(&leaked);
+                        let msg = serde_json::from_str::<DevserverMsg>(leaked);
                         if let Ok(msg) = msg {
                             return Some(Ok(msg));
                         }

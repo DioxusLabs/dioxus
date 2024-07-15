@@ -1,7 +1,5 @@
 use dioxus_rsx::{hot_reload::Empty, CallBody};
-use proc_macro2::{Span, TokenStream};
 use quote::ToTokens;
-use syn::Item;
 
 use dioxus_rsx::PrettyUnparse;
 

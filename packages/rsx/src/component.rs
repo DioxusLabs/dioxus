@@ -278,7 +278,7 @@ impl Component {
 
                 let attr = match name {
                     AttributeName::BuiltIn(k) => {
-                        if k.to_string() == "key" {
+                        if k == "key" {
                             return None;
                         }
                         quote! { #k }

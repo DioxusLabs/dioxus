@@ -77,10 +77,10 @@ impl Parse for Element {
 
         for spread in spreads.iter() {
             element.merged_attributes.push(Attribute {
-                name: AttributeName::Spread(spread.dots.clone()),
+                name: AttributeName::Spread(spread.dots),
                 colon: None,
                 value: AttributeValue::AttrExpr(PartialExpr::from_expr(&spread.expr)),
-                comma: spread.comma.clone(),
+                comma: spread.comma,
                 dyn_idx: spread.dyn_idx.clone(),
                 el_name: None,
             });
@@ -273,9 +273,9 @@ impl Element {
             self.merged_attributes.push(Attribute {
                 name: attr.name.clone(),
                 value: AttributeValue::AttrLiteral(out_lit),
-                colon: attr.colon.clone(),
+                colon: attr.colon,
                 dyn_idx: attr.dyn_idx.clone(),
-                comma: matching_attrs.last().unwrap().comma.clone(),
+                comma: matching_attrs.last().unwrap().comma,
                 el_name: attr.el_name.clone(),
             });
         }

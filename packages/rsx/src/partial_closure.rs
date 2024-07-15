@@ -133,15 +133,15 @@ impl PartialClosure {
     pub fn as_expr(&self) -> Result<Expr> {
         let expr_closure = ExprClosure {
             attrs: Vec::new(),
-            asyncness: self.asyncness.clone(),
-            capture: self.capture.clone(),
+            asyncness: self.asyncness,
+            capture: self.capture,
             inputs: self.inputs.clone(),
             output: self.output.clone(),
             lifetimes: self.lifetimes.clone(),
-            constness: self.constness.clone(),
-            movability: self.movability.clone(),
-            or1_token: self.or1_token.clone(),
-            or2_token: self.or2_token.clone(),
+            constness: self.constness,
+            movability: self.movability,
+            or1_token: self.or1_token,
+            or2_token: self.or2_token,
 
             // try to lower the body to an expression - if might fail if it can't
             body: Box::new(self.body.as_expr()?),

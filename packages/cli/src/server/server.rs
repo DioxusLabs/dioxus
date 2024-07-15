@@ -18,13 +18,12 @@ use axum::{
     Router,
 };
 use axum_server::tls_rustls::RustlsConfig;
-use chrono::format;
 use dioxus_cli_config::{Platform, WebHttpsConfig};
 use dioxus_hot_reload::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use futures_util::{stream::FuturesUnordered, SinkExt, StreamExt};
+use futures_util::{stream::FuturesUnordered, StreamExt};
 use hyper::header::ACCEPT;
-use hyper::{HeaderMap, Uri};
+use hyper::HeaderMap;
 use serde::{Deserialize, Serialize};
 use std::net::TcpListener;
 use std::path::Path;
@@ -33,7 +32,7 @@ use std::sync::RwLock;
 use std::{
     convert::Infallible,
     fs, io,
-    net::{IpAddr, SocketAddr, UdpSocket},
+    net::{IpAddr, SocketAddr},
     process::Command,
 };
 use tokio::task::JoinHandle;
@@ -69,16 +68,16 @@ impl SharedStatus {
     }
 }
 
-pub struct Server {
+pub(crate) struct Server {
     pub hot_reload_sockets: Vec<WebSocket>,
     pub build_status_sockets: Vec<WebSocket>,
     pub ip: IpAddr,
     pub new_hot_reload_sockets: UnboundedReceiver<WebSocket>,
     pub new_build_status_sockets: UnboundedReceiver<WebSocket>,
-    pub server_task: JoinHandle<Result<()>>,
+    _server_task: JoinHandle<Result<()>>,
     /// We proxy (not hot reloading) fullstack requests to this port
     pub fullstack_port: Option<u16>,
-    pub build_status: SharedStatus,
+    build_status: SharedStatus,
 }
 
 impl Server {
@@ -125,7 +124,7 @@ impl Server {
 
         // Actually just start the server
         // todo: we might just be able to poll this future instead
-        let server_task = tokio::spawn(async move {
+        let _server_task = tokio::spawn(async move {
             // Start the server with or without rustls
             if let Some(rustls) = rustls {
                 axum_server::bind_rustls(addr, rustls)
@@ -148,7 +147,7 @@ impl Server {
             build_status_sockets: Default::default(),
             new_hot_reload_sockets: hot_reload_sockets_rx,
             new_build_status_sockets: build_status_sockets_rx,
-            server_task,
+            _server_task,
             ip: addr.ip(),
             fullstack_port,
             build_status,
@@ -238,7 +237,6 @@ impl Server {
                 match message {
                     Some(Ok(message)) => return Some(message),
                     _ => {
-                        let idx = idx;
                         drop(new_message);
                         _ = self.hot_reload_sockets.remove(idx);
                     }
@@ -301,7 +299,7 @@ impl Server {
 /// - Setting up the proxy to the endpoint specified in the config
 /// - Setting up the file serve service
 /// - Setting up the websocket endpoint for devtools
-pub async fn setup_router(
+pub(crate) async fn setup_router(
     serve: &Serve,
     config: &DioxusCrate,
     hot_reload_sockets: UnboundedSender<WebSocket>,
@@ -314,7 +312,7 @@ pub async fn setup_router(
 
     // Setup proxy for the endpoint specified in the config
     for proxy_config in config.dioxus_config.web.proxy.iter() {
-        router = super::proxy::add_proxy(router, &proxy_config)?;
+        router = super::proxy::add_proxy(router, proxy_config)?;
     }
 
     // Setup base path redirection
@@ -580,9 +578,7 @@ async fn build_status_middleware(
         }
     }
 
-    let response = next.run(request).await;
-
-    response
+    next.run(request).await
 }
 
 async fn send_build_status_to(

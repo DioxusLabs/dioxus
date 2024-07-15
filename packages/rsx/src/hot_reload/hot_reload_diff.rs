@@ -50,7 +50,7 @@ pub fn diff_rsx(new: &File, old: &File) -> Option<Vec<ChangedRsx>> {
     Some(
         old_macros
             .into_iter()
-            .zip(new_macros.into_iter())
+            .zip(new_macros)
             .map(|(old, new)| ChangedRsx { old, new })
             .collect(),
     )

@@ -10,11 +10,9 @@ use futures_util::future::OptionFuture;
 use futures_util::stream::select_all;
 use futures_util::StreamExt;
 use std::process::Stdio;
-use tokio::process::ChildStderr;
-use tokio::process::ChildStdout;
 use tokio::{
     process::{Child, Command},
-    task::{yield_now, JoinHandle},
+    task::JoinHandle,
 };
 
 /// A handle to ongoing builds and then the spawned tasks themselves
@@ -93,7 +91,7 @@ impl Builder {
                 // If we have a build result, bubble it up to the main loop
                 let build_results = build_results.map_err(|e| crate::Error::Unique("Build join failed".to_string()))??;
 
-                return Ok(BuilderUpdate::Ready { results: build_results });
+                Ok(BuilderUpdate::Ready { results: build_results })
             }
             Some((platform, update)) = next.next() => {
                 // If we have a build progress, send it to the screen
@@ -101,7 +99,7 @@ impl Builder {
             }
             else => {
                 std::future::pending::<()>().await;
-                unreachable!("Pending cannot resolve");
+                unreachable!("Pending cannot resolve")
             },
         }
     }

@@ -239,10 +239,10 @@ impl Writer<'_> {
                 write!(self.out, " }}")?;
             }
             AttributeValue::AttrLiteral(value) => {
-                write!(self.out, "{value}", value = value.to_string())?;
+                write!(self.out, "{value}")?;
             }
             AttributeValue::Shorthand(value) => {
-                write!(self.out, "{value}",)?;
+                write!(self.out, "{value}")?;
             }
             AttributeValue::EventTokens(closure) => {
                 self.write_partial_closure(closure)?;

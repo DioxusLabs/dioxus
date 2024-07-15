@@ -31,15 +31,13 @@ impl GlobalSignalContext {
         let id = GlobalKey::Dynamic(key);
 
         self.signal.borrow().get(&id).map(|f| {
-            f.downcast_ref::<Signal<T>>()
-                .unwrap_or_else(|| {
-                    panic!(
-                        "Global signal with key {:?} is not of the expected type. Keys are {:?}",
-                        key,
-                        self.signal.borrow().keys()
-                    )
-                })
-                .clone()
+            *f.downcast_ref::<Signal<T>>().unwrap_or_else(|| {
+                panic!(
+                    "Global signal with key {:?} is not of the expected type. Keys are {:?}",
+                    key,
+                    self.signal.borrow().keys()
+                )
+            })
         })
     }
 }
@@ -72,7 +70,7 @@ mod tests {
 
         let a = MYSIGNAL.key();
         let b = MYSIGNAL.key();
-        let c = (&&&&MYSIGNAL).key();
+        let c = MYSIGNAL.key();
         assert_eq!(a, b);
         assert_eq!(b, c);
 

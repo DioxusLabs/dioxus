@@ -141,7 +141,7 @@ pub(crate) async fn build_cargo(
         let Some(line) = line? else {
             break;
         };
-        let mut deserializer = serde_json::Deserializer::from_str(&line.trim());
+        let mut deserializer = serde_json::Deserializer::from_str(line.trim());
         deserializer.disable_recursion_limit();
 
         let message = Message::deserialize(&mut deserializer).unwrap_or(Message::TextLine(line));

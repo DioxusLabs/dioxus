@@ -21,9 +21,8 @@ pub fn rsx_from_html(dom: &Dom) -> CallBody {
         .collect::<Vec<_>>();
 
     let template = TemplateBody::new(nodes);
-    let body = CallBody::new(template);
 
-    body
+    CallBody::new(template)
 }
 
 /// Convert an HTML Node into an RSX BodyNode

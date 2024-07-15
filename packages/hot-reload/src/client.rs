@@ -17,23 +17,23 @@ pub fn apply_changes(dom: &mut VirtualDom, msg: &HotReloadMsg) {
             for (id, literal) in templates.changed_lits.iter() {
                 match &literal {
                     HotReloadLiteral::Fmted(f) => {
-                        if let Some(mut signal) = ctx.get_signal_with_key(&id) {
+                        if let Some(mut signal) = ctx.get_signal_with_key(id) {
                             signal.set(f.clone());
                         }
                     }
                     HotReloadLiteral::Float(f) => {
-                        if let Some(mut signal) = ctx.get_signal_with_key::<f64>(&id) {
-                            signal.set(f.clone());
+                        if let Some(mut signal) = ctx.get_signal_with_key::<f64>(id) {
+                            signal.set(*f);
                         }
                     }
                     HotReloadLiteral::Int(f) => {
-                        if let Some(mut signal) = ctx.get_signal_with_key::<i64>(&id) {
-                            signal.set(f.clone());
+                        if let Some(mut signal) = ctx.get_signal_with_key::<i64>(id) {
+                            signal.set(*f);
                         }
                     }
                     HotReloadLiteral::Bool(f) => {
-                        if let Some(mut signal) = ctx.get_signal_with_key::<bool>(&id) {
-                            signal.set(f.clone());
+                        if let Some(mut signal) = ctx.get_signal_with_key::<bool>(id) {
+                            signal.set(*f);
                         }
                     }
                 }

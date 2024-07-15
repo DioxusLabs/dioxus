@@ -2,8 +2,6 @@ use crate::dioxus_crate::DioxusCrate;
 use crate::serve::Serve;
 use crate::Result;
 use dioxus_cli_config::Platform;
-use std::io::Write;
-use tokio::io::AsyncBufReadExt;
 use tokio::task::yield_now;
 
 mod builder;
@@ -150,7 +148,7 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
     // todo: more printing, logging, error handling in this phase
     _ = screen.shutdown();
     _ = server.shutdown().await;
-    _ = builder.shutdown();
+    builder.shutdown();
 
     Ok(())
 }

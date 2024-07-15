@@ -1,7 +1,6 @@
 use dioxus_rsx::CallBody as RsxBody;
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::parse::ParseStream;
 
 fn parsed(item: TokenStream) -> RsxBody {
     let new_invalid: RsxBody = syn::parse2(item).unwrap();

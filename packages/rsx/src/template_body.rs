@@ -363,7 +363,7 @@ impl TemplateBody {
     }
 
     pub fn get_dyn_attr(&self, path: &AttributePath, idx: usize) -> &Attribute {
-        match self.get_dyn_node(&path) {
+        match self.get_dyn_node(path) {
             BodyNode::Element(el) => &el.merged_attributes[idx],
             _ => unreachable!(),
         }

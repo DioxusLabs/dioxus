@@ -36,7 +36,7 @@ pub fn score_dynamic_node(old_node: &BodyNode, new_node: &BodyNode) -> usize {
             // Walk the attributes and score each one - if there's a zero we return zero
             // circuit if we there's an attribute mismatch that can't be hotreloaded
             for (left, right) in left_fields.iter().zip(right_fields.iter()) {
-                let scored = match score_attribute(&left, &right) {
+                let scored = match score_attribute(left, right) {
                     usize::MAX => 3,
                     0 => return 0,
                     a if a == usize::MAX - 1 => 2,
@@ -124,7 +124,7 @@ fn score_attr_value(old_attr: &AttributeValue, new_attr: &AttributeValue) -> usi
             },
         ) if cond_a == cond_b => {
             // If the condition is the same, we can hotreload it
-            score_attr_value(&*value_a, &*value_b)
+            score_attr_value(value_a, value_b)
         }
 
         // todo: we should try and score recrusively if we can - templates need to propagate up their

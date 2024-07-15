@@ -34,7 +34,7 @@
 use crate::{innerlude::*, scoring::score_dynamic_node};
 use crate::{scoring::score_attribute, HotReloadingContext};
 use dioxus_core::prelude::{HotReloadLiteral, Template};
-use std::{collections::HashMap, usize};
+use std::collections::HashMap;
 
 /// The mapping of a node relative to the root of its containing template
 ///
@@ -145,7 +145,7 @@ impl HotReloadedTemplate {
     ) -> Option<()> {
         // Quickly run through dynamic attributes first attempting to invalidate them
         // Move over old IDs onto the new template
-        let new_attribute_paths = self.hotreload_attributes::<Ctx>(old, new)?;
+        let new_attribute_paths = self.hotreload_attributes(old, new)?;
 
         // Now we can run through the dynamic nodes and see if we can hot reload them
         // Move over old IDs onto the new template
@@ -181,7 +181,7 @@ impl HotReloadedTemplate {
     ///     div { class: "{class}", id: "{id}", "Hi" }
     /// }
     /// ```
-    fn hotreload_attributes<Ctx: HotReloadingContext>(
+    fn hotreload_attributes(
         &mut self,
         old: &TemplateBody,
         new: &TemplateBody,
@@ -209,7 +209,7 @@ impl HotReloadedTemplate {
             // As we find matches, the complexity of the search should reduce, making this quadratic
             // a little less painful
             let (old_idx, score) =
-                old_attrs.highest_score(move |old_attr| score_attribute(&old_attr, &new_attr))?;
+                old_attrs.highest_score(move |old_attr| score_attribute(old_attr, new_attr))?;
 
             // Remove it from the stack so we don't match it again
             let old_attr = old_attrs.remove(old_idx).unwrap();
@@ -272,7 +272,7 @@ impl HotReloadedTemplate {
 
                 // We want to attempt to  hotreload the component literals and the children
                 (Component(a), Component(b)) => {
-                    self.hotreload_component_fields::<Ctx>(a, b)?;
+                    self.hotreload_component_fields(a, b)?;
                     self.hotreload_body::<Ctx>(&a.children, &b.children)?;
                 }
 
@@ -310,11 +310,7 @@ impl HotReloadedTemplate {
         Some(())
     }
 
-    fn hotreload_component_fields<Ctx: HotReloadingContext>(
-        &mut self,
-        a: &Component,
-        b: &Component,
-    ) -> Option<()> {
+    fn hotreload_component_fields(&mut self, a: &Component, b: &Component) -> Option<()> {
         // make sure both are the same length
         if a.fields.len() != b.fields.len() {
             return None;
@@ -342,7 +338,7 @@ impl HotReloadedTemplate {
         new_attr: &Attribute,
         score: Option<usize>,
     ) -> Option<()> {
-        let score = score.unwrap_or_else(|| score_attribute(&old_attr, &new_attr));
+        let score = score.unwrap_or_else(|| score_attribute(old_attr, new_attr));
 
         // If the score is 0, the name didn't match or the values didn't match
         // A score of usize::MAX means the attributes are the same
@@ -371,7 +367,7 @@ impl HotReloadedTemplate {
             HotLiteralType::Int(f) => HotReloadLiteral::Int(f.base10_parse().unwrap()),
             HotLiteralType::Bool(f) => HotReloadLiteral::Bool(f.value),
             HotLiteralType::Fmted(new) => HotReloadLiteral::Fmted(
-                IfmtInput::fmt_segments(&old_attr.ifmt().unwrap(), &new)
+                IfmtInput::fmt_segments(old_attr.ifmt().unwrap(), new)
                     .expect("Fmt segments to generate"),
             ),
         };
@@ -425,7 +421,7 @@ impl HotReloadedTemplate {
 
                 // Write out the else branch and then we're done
                 let (left, right) = (a.else_branch.as_ref()?, b.else_branch.as_ref()?);
-                self.hotreload_body::<Ctx>(&left, &right)?;
+                self.hotreload_body::<Ctx>(left, right)?;
                 break;
             }
         }

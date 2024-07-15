@@ -109,7 +109,7 @@ mod tests {
     #[test]
     fn raw_str() {
         let input = syn::parse2::<TextNode>(quote! { r#"hello world"# }).unwrap();
-        println!("{}", input.input.source.to_token_stream().to_string());
+        println!("{}", input.input.source.to_token_stream());
         assert_eq!(input.input.source.value(), "hello world");
     }
 }

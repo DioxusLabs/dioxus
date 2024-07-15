@@ -82,7 +82,7 @@ impl<'a> Writer<'a> {
 
         write!(self.out, "{name} {{")?;
 
-        self.write_rsx_block(attributes, &spreads, &children, brace)?;
+        self.write_rsx_block(attributes, spreads, children, brace)?;
 
         write!(self.out, "}}")?;
 
@@ -115,7 +115,7 @@ impl<'a> Writer<'a> {
 
         write!(self.out, " {{")?;
 
-        self.write_rsx_block(&fields, spreads, &children.roots, brace)?;
+        self.write_rsx_block(fields, spreads, &children.roots, brace)?;
 
         write!(self.out, "}}")?;
 
@@ -282,7 +282,7 @@ impl<'a> Writer<'a> {
     }
 
     fn attr_expr_len(&mut self, expr: &Expr) -> usize {
-        let out = self.retrieve_formatted_expr(&expr);
+        let out = self.retrieve_formatted_expr(expr);
         if out.contains('\n') {
             100000
         } else {

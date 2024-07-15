@@ -55,7 +55,7 @@ impl LaunchBuilder {
     )]
     pub fn new() -> LaunchBuilder<current_platform::Config, ValidContext> {
         LaunchBuilder {
-            launch_fn: |root, contexts, cfg| current_platform::launch(root, contexts, cfg),
+            launch_fn: current_platform::launch,
             contexts: Vec::new(),
             platform_config: None,
         }
@@ -88,7 +88,7 @@ impl LaunchBuilder {
     #[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]
     pub fn fullstack() -> LaunchBuilder<dioxus_fullstack::Config, SendContext> {
         LaunchBuilder {
-            launch_fn: |root, contexts, cfg| dioxus_fullstack::launch::launch(root, contexts, cfg),
+            launch_fn: dioxus_fullstack::launch::launch,
             contexts: Vec::new(),
             platform_config: None,
         }

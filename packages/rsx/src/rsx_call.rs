@@ -94,7 +94,7 @@ impl CallBody {
     /// However, here, we only need to wire up ifmt and template IDs since TemplateBody will handle the rest.
     ///
     /// This is better though since we can save the relevant data on the structures themselves.
-    fn cascade_hotreload_info(&self, nodes: &Vec<BodyNode>) {
+    fn cascade_hotreload_info(&self, nodes: &[BodyNode]) {
         for node in nodes.iter() {
             match node {
                 BodyNode::RawExpr(_) => { /* one day maybe provide hr here?*/ }

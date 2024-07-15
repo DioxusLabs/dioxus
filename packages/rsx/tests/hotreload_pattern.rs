@@ -67,7 +67,7 @@ fn callbody_to_template<Ctx: HotReloadingContext>(
     location: &'static str,
 ) -> Option<Template> {
     let results = HotReloadedTemplate::new::<Ctx>(old, old, location, Default::default())?;
-    Some(results.templates.first().unwrap().clone())
+    Some(*results.templates.first().unwrap())
 }
 
 fn base_stream() -> TokenStream {

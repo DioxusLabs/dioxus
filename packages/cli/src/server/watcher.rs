@@ -74,7 +74,7 @@ impl Watcher {
             let path = &config.crate_dir().join(sub_path);
 
             // If the path is ignored, don't watch it
-            if ignore.matched(&path, path.is_dir()).is_ignore() {
+            if ignore.matched(path, path.is_dir()).is_ignore() {
                 continue;
             }
 

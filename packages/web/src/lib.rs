@@ -24,7 +24,7 @@ use std::{panic, rc::Rc};
 
 pub use crate::cfg::Config;
 use crate::hydration::SuspenseMessage;
-use dioxus_core::{prelude::HotReloadLiteral, ScopeId, VirtualDom};
+use dioxus_core::VirtualDom;
 use futures_util::{pin_mut, select, FutureExt, StreamExt};
 
 mod cfg;

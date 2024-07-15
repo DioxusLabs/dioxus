@@ -1,5 +1,4 @@
 use crate::{Error, Result};
-use chrono::format;
 use dioxus_cli_config::WebProxyConfig;
 
 use anyhow::{anyhow, Context};
@@ -15,7 +14,6 @@ use hyper_util::{
     client::legacy::{self, connect::HttpConnector},
     rt::TokioExecutor,
 };
-use rustls::crypto::CryptoProvider;
 
 #[derive(Debug, Clone)]
 struct ProxyClient {

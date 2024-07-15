@@ -1,7 +1,6 @@
 use crate::{
     builder::{BuildMessage, MessageType, Stage, UpdateBuildProgress},
     dioxus_crate::DioxusCrate,
-    dx_build_info,
 };
 use crate::{
     builder::{BuildResult, UpdateStage},
@@ -15,10 +14,7 @@ use crossterm::{
 };
 use dioxus_cli_config::Platform;
 use dioxus_hot_reload::ClientMsg;
-use futures_util::{
-    future::{join_all, select_all, FutureExt},
-    StreamExt,
-};
+use futures_util::{future::select_all, StreamExt};
 use ratatui::{prelude::*, widgets::*, TerminalOptions, Viewport};
 use std::{
     cell::RefCell,
@@ -28,7 +24,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::{
-    io::{AsyncBufReadExt, AsyncReadExt, BufReader, Lines},
+    io::{AsyncBufReadExt, BufReader, Lines},
     process::{ChildStderr, ChildStdout},
 };
 use tracing::Level;
@@ -44,7 +40,7 @@ impl BuildProgress {
     pub fn progress(&self) -> f64 {
         self.build_logs
             .values()
-            .min_by(|a, b| a.partial_cmp(&b).unwrap_or(std::cmp::Ordering::Equal))
+            .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
             .map(|build| match build.stage {
                 Stage::Initializing => 0.0,
                 Stage::InstallingWasmTooling => 0.0,
@@ -203,7 +199,7 @@ impl Output {
             _ = animation_timeout => {}
         }
 
-        return Ok(());
+        Ok(())
     }
 
     pub fn shutdown(&mut self) -> io::Result<()> {
@@ -292,7 +288,7 @@ impl Output {
                             message: MessageType::Text(
                                 // todo: the js console is giving us a list of params, not formatted text
                                 // we need to translate its styling into our own
-                                messages.get(0).unwrap_or(&String::new()).clone(),
+                                messages.first().unwrap_or(&String::new()).clone(),
                             ),
                         },
                     );
@@ -307,8 +303,6 @@ impl Output {
                     );
                 }
             }
-
-            return;
         }
 
         // let message = BuildMessage {
@@ -359,7 +353,7 @@ impl Output {
     fn is_snapped(&self, platform: Platform) -> bool {
         let prev_scrol = self
             .num_lines_with_wrapping
-            .saturating_sub(self.term_height) as u16;
+            .saturating_sub(self.term_height);
         prev_scrol == self.scroll
     }
 
@@ -399,7 +393,7 @@ impl Output {
                     }
                 });
 
-            let platform = result.platform.clone();
+            let platform = result.platform;
 
             let stdout = out.map(|(stdout, stderr)| RunningAppOutput {
                 stdout: BufReader::new(stdout).lines(),
@@ -526,7 +520,7 @@ impl Output {
                     .unwrap();
                 // If the build is finished, no need to show the progress
                 if build.stage != Stage::Finished {
-                    spans.push(Span::from(format!(" ")));
+                    spans.push(Span::from(" "));
                     spans.extend_from_slice(&build.spans(Rect::new(
                         0,
                         0,
@@ -563,20 +557,11 @@ impl Output {
             frame.render_widget(Paragraph::new(Line::from(spans)).left_aligned(), header[0]);
 
             // render the fly modal
-            self.render_fly_moydal(frame, body[1], opts, config, build_engine, server, watcher);
+            self.render_fly_modal(frame, body[1]);
         });
     }
 
-    fn render_fly_moydal(
-        &mut self,
-        frame: &mut Frame,
-        area: Rect,
-        opts: &Serve,
-        config: &DioxusCrate,
-        build_engine: &Builder,
-        server: &Server,
-        watcher: &Watcher,
-    ) {
+    fn render_fly_modal(&mut self, frame: &mut Frame, area: Rect) {
         if !self.fly_modal_open {
             return;
         }

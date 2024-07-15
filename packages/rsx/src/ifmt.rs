@@ -14,18 +14,10 @@ use syn::{
 /// This wraps LitStr with some extra goodies like inline expressions and hot-reloading.
 /// Originally this was intended to provide named inline string interpolation but eventually Rust
 /// actualy shipped this!
-#[derive(Debug, Eq, Clone, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct IfmtInput {
     pub source: LitStr,
     pub segments: Vec<Segment>,
-}
-
-// Specifically avoid colliding the location field in partialeq
-// This is just because we usually want to compare two ifmts with different locations just based on their contents
-impl PartialEq for IfmtInput {
-    fn eq(&self, other: &Self) -> bool {
-        self.source == other.source && self.segments == other.segments
-    }
 }
 
 impl IfmtInput {
@@ -135,7 +127,7 @@ impl IfmtInput {
                 crate::Segment::Formatted(f) => Some(f),
             })
             .cloned()
-            .map(|f| Some(f))
+            .map(Some)
             .collect::<Vec<_>>();
 
         for segment in new.segments.iter() {

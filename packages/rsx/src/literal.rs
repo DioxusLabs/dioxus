@@ -1,6 +1,7 @@
 use proc_macro2::Span;
 use quote::ToTokens;
 use quote::{quote, TokenStreamExt};
+use std::fmt::Display;
 use syn::{
     parse::{Parse, ParseStream},
     Lit, LitBool, LitFloat, LitInt, LitStr,
@@ -194,10 +195,10 @@ impl HotLiteral {
         if input.peek(Lit) {
             let lit = input.fork().parse::<Lit>().unwrap();
 
-            match lit {
-                Lit::Str(_) | Lit::Int(_) | Lit::Float(_) | Lit::Bool(_) => true,
-                _ => false,
-            }
+            matches!(
+                lit,
+                Lit::Str(_) | Lit::Int(_) | Lit::Float(_) | Lit::Bool(_)
+            )
         } else {
             false
         }
@@ -214,15 +215,6 @@ impl HotLiteral {
         self.value.span()
     }
 
-    pub fn to_string(&self) -> String {
-        match &self.value {
-            HotLiteralType::Fmted(f) => f.to_string_with_quotes(),
-            HotLiteralType::Float(f) => f.to_string(),
-            HotLiteralType::Int(f) => f.to_string(),
-            HotLiteralType::Bool(f) => f.value().to_string(),
-        }
-    }
-
     pub fn from_raw_text(text: &str) -> Self {
         HotLiteral {
             value: crate::HotLiteralType::Fmted(IfmtInput {
@@ -230,6 +222,17 @@ impl HotLiteral {
                 segments: vec![],
             }),
             hr_idx: Default::default(),
+        }
+    }
+}
+
+impl Display for HotLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.value {
+            HotLiteralType::Fmted(l) => l.to_string_with_quotes().fmt(f),
+            HotLiteralType::Float(l) => l.fmt(f),
+            HotLiteralType::Int(l) => l.fmt(f),
+            HotLiteralType::Bool(l) => l.value().fmt(f),
         }
     }
 }

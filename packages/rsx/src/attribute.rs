@@ -185,7 +185,7 @@ impl Attribute {
         let (_name, value) = self.as_static_str_literal().unwrap();
         let attribute_name_rust = self.name.to_string();
 
-        let (name, namespace) = Ctx::map_attribute(&rust_name, &attribute_name_rust)
+        let (name, namespace) = Ctx::map_attribute(rust_name, &attribute_name_rust)
             .unwrap_or((intern(attribute_name_rust.as_str()), None));
 
         TemplateAttribute::Static {
