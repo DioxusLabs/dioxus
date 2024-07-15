@@ -45,7 +45,7 @@ use watcher::*;
 /// - I want us to be able to detect a `server_fn` in the project and then upgrade from a static server
 ///   to a dynamic one on the fly.
 pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
-    let mut server = Server::start(&serve, &dioxus_crate).await;
+    let mut server = Server::start(&serve, &dioxus_crate);
     let mut watcher = Watcher::start(&dioxus_crate);
     let mut screen = Output::start(&serve)
         .await

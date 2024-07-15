@@ -20,12 +20,12 @@ use axum::{
 use axum_server::tls_rustls::RustlsConfig;
 use dioxus_cli_config::{Platform, WebHttpsConfig};
 use dioxus_hot_reload::{DevserverMsg, HotReloadMsg};
+use dioxus_html::base;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use hyper::header::ACCEPT;
 use hyper::HeaderMap;
 use serde::{Deserialize, Serialize};
-use std::net::TcpListener;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -35,6 +35,7 @@ use std::{
     net::{IpAddr, SocketAddr},
     process::Command,
 };
+use std::{net::TcpListener, path::PathBuf};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
 use tower_http::{
@@ -81,7 +82,7 @@ pub(crate) struct Server {
 }
 
 impl Server {
-    pub async fn start(serve: &Serve, cfg: &DioxusCrate) -> Self {
+    pub fn start(serve: &Serve, cfg: &DioxusCrate) -> Self {
         let (hot_reload_sockets_tx, hot_reload_sockets_rx) = futures_channel::mpsc::unbounded();
         let (build_status_sockets_tx, build_status_sockets_rx) = futures_channel::mpsc::unbounded();
         let build_status = SharedStatus::new(Status::Building { progress: 0.0 });
@@ -109,22 +110,23 @@ impl Server {
             fullstack_address,
             build_status.clone(),
         )
-        .await
         .unwrap();
 
-        // HTTPS
-        // Before console info so it can stop if mkcert isn't installed or fails
-        // todo: this is the only async thing here - might be nice to
-        let rustls: Option<RustlsConfig> = get_rustls(cfg).await.unwrap();
-
-        // Open the browser
-        if start_browser {
-            open_browser(cfg, addr, rustls.is_some());
-        }
-
-        // Actually just start the server
-        // todo: we might just be able to poll this future instead
+        // Actually just start the server, cloning in a few bits of config
+        let web_config = cfg.dioxus_config.web.https.clone();
+        let base_path = cfg.dioxus_config.web.app.base_path.clone();
         let _server_task = tokio::spawn(async move {
+            let web_config = web_config.clone();
+            // HTTPS
+            // Before console info so it can stop if mkcert isn't installed or fails
+            // todo: this is the only async thing here - might be nice to
+            let rustls: Option<RustlsConfig> = get_rustls(&web_config).await.unwrap();
+
+            // Open the browser
+            if start_browser {
+                open_browser(base_path, addr, rustls.is_some());
+            }
+
             // Start the server with or without rustls
             if let Some(rustls) = rustls {
                 axum_server::bind_rustls(addr, rustls)
@@ -297,7 +299,7 @@ impl Server {
 /// - Setting up the proxy to the endpoint specified in the config
 /// - Setting up the file serve service
 /// - Setting up the websocket endpoint for devtools
-async fn setup_router(
+fn setup_router(
     serve: &Serve,
     config: &DioxusCrate,
     hot_reload_sockets: UnboundedSender<WebSocket>,
@@ -463,9 +465,7 @@ pub fn insert_no_cache_headers(headers: &mut HeaderMap) {
 }
 
 /// Returns an enum of rustls config
-pub async fn get_rustls(config: &DioxusCrate) -> Result<Option<RustlsConfig>> {
-    let web_config = &config.dioxus_config.web.https;
-
+pub async fn get_rustls(web_config: &WebHttpsConfig) -> Result<Option<RustlsConfig>> {
     if web_config.enabled != Some(true) {
         return Ok(None);
     }
@@ -540,9 +540,9 @@ pub fn get_rustls_without_mkcert(web_config: &WebHttpsConfig) -> Result<(String,
 }
 
 /// Open the browser to the address
-pub(crate) fn open_browser(config: &DioxusCrate, address: SocketAddr, https: bool) {
+pub(crate) fn open_browser(base_path: Option<String>, address: SocketAddr, https: bool) {
     let protocol = if https { "https" } else { "http" };
-    let base_path = match config.dioxus_config.web.app.base_path.as_deref() {
+    let base_path = match base_path.as_deref() {
         Some(base_path) => format!("/{}", base_path.trim_matches('/')),
         None => "".to_owned(),
     };

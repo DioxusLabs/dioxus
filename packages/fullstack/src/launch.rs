@@ -132,7 +132,7 @@ async fn launch_server(
         .map(|args| args.cli_address())
         .unwrap_or_else(|| address.clone());
 
-    println!("Listening on http://{}", serve_address);
+    // println!("Listening on http://{}", serve_address);
 
     #[cfg(feature = "axum")]
     {

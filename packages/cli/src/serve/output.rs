@@ -101,8 +101,10 @@ impl Output {
 
         let command_list = ListState::default();
 
-        let rustc_version = rustc_version().await;
-        let rustc_nightly = rustc_version.contains("nightly") || cfg.target_args.nightly;
+        // let rustc_version = rustc_version().await;
+        // let rustc_nightly = rustc_version.contains("nightly") || cfg.target_args.nightly;
+        let rustc_version = String::from("1.0.0");
+        let rustc_nightly = false;
 
         let mut dx_version = String::new();
 
