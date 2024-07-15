@@ -1,6 +1,8 @@
 use crate::dioxus_crate::DioxusCrate;
 use crate::server::Serve;
 use crate::Result;
+use axum::extract::{Request, State};
+use axum::middleware::{self, Next};
 use axum::{
     body::Body,
     extract::{
@@ -20,10 +22,14 @@ use chrono::format;
 use dioxus_cli_config::{Platform, WebHttpsConfig};
 use dioxus_hot_reload::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use futures_util::{stream::FuturesUnordered, StreamExt};
+use futures_util::{stream::FuturesUnordered, SinkExt, StreamExt};
+use hyper::header::ACCEPT;
 use hyper::{HeaderMap, Uri};
+use serde::{Deserialize, Serialize};
 use std::net::TcpListener;
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::RwLock;
 use std::{
     convert::Infallible,
     fs, io,
@@ -38,18 +44,46 @@ use tower_http::{
     ServiceBuilderExt,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+enum Status {
+    Building,
+    Ready,
+}
+
+#[derive(Debug, Clone)]
+struct SharedStatus(Arc<RwLock<Status>>);
+
+impl SharedStatus {
+    fn new(status: Status) -> Self {
+        Self(Arc::new(RwLock::new(status)))
+    }
+
+    fn set(&self, status: Status) {
+        *self.0.write().unwrap() = status;
+    }
+
+    fn get(&self) -> Status {
+        *self.0.read().unwrap()
+    }
+}
+
 pub struct Server {
-    pub sockets: Vec<WebSocket>,
+    pub hot_reload_sockets: Vec<WebSocket>,
+    pub build_status_sockets: Vec<WebSocket>,
     pub ip: IpAddr,
-    pub new_socket: UnboundedReceiver<WebSocket>,
+    pub new_hot_reload_sockets: UnboundedReceiver<WebSocket>,
+    pub new_build_status_sockets: UnboundedReceiver<WebSocket>,
     pub server_task: JoinHandle<Result<()>>,
     /// We proxy (not hot reloading) fullstack requests to this port
     pub fullstack_port: Option<u16>,
+    pub build_status: SharedStatus,
 }
 
 impl Server {
     pub async fn start(serve: &Serve, cfg: &DioxusCrate) -> Self {
-        let (tx, rx) = futures_channel::mpsc::unbounded();
+        let (hot_reload_sockets_tx, hot_reload_sockets_rx) = futures_channel::mpsc::unbounded();
+        let (build_status_sockets_tx, build_status_sockets_rx) = futures_channel::mpsc::unbounded();
+        let build_status = SharedStatus::new(Status::Building);
 
         let addr = serve.server_arguments.address.address();
         let start_browser = serve.server_arguments.open.unwrap_or_default();
@@ -66,9 +100,16 @@ impl Server {
 
         let fullstack_address = fullstack_port.map(|port| SocketAddr::new(addr.ip(), port));
 
-        let router = setup_router(serve, cfg, tx, fullstack_address)
-            .await
-            .unwrap();
+        let router = setup_router(
+            serve,
+            cfg,
+            hot_reload_sockets_tx,
+            build_status_sockets_tx,
+            fullstack_address,
+            build_status.clone(),
+        )
+        .await
+        .unwrap();
 
         // HTTPS
         // Before console info so it can stop if mkcert isn't installed or fails
@@ -101,45 +142,64 @@ impl Server {
         });
 
         Self {
-            sockets: vec![],
-            new_socket: rx,
+            hot_reload_sockets: Default::default(),
+            build_status_sockets: Default::default(),
+            new_hot_reload_sockets: hot_reload_sockets_rx,
+            new_build_status_sockets: build_status_sockets_rx,
             server_task,
             ip: addr.ip(),
             fullstack_port,
+            build_status,
         }
+    }
+
+    fn send_build_status(&mut self) {
+        let msg = serde_json::to_string(&self.build_status.get()).unwrap();
+        self.build_status_sockets
+            .retain_mut(|socket| socket.start_send_unpin(Message::Text(msg.clone())).is_ok())
+    }
+
+    pub fn start_build(&mut self) {
+        self.build_status.set(Status::Building);
+        self.send_build_status();
     }
 
     pub fn update(&mut self, cfg: &Serve, crate_config: &DioxusCrate) {}
 
-    pub async fn send_hotreload(&mut self, reload: HotReloadMsg) {
+    pub fn send_hotreload(&mut self, reload: HotReloadMsg) {
         let msg = DevserverMsg::HotReload(reload);
         let msg = serde_json::to_string(&msg).unwrap();
 
-        // to our connected clients, send the changes to the sockets
-        for socket in self.sockets.iter_mut() {
-            if socket.send(Message::Text(msg.clone())).await.is_err() {
-                // the socket is likely disconnected, we should remove it
-                // println!("error sending message to socket - it's likely disconnected");
-            }
-        }
+        // Send the changes to any connected clients
+        self.hot_reload_sockets
+            .retain_mut(|socket| socket.start_send_unpin(Message::Text(msg.clone())).is_ok());
     }
 
     /// Wait for new clients to be connected and then save them
     pub async fn wait(&mut self) -> Option<Message> {
-        let mut new_socket = self.new_socket.next();
+        let mut new_hot_reload_socket = self.new_hot_reload_sockets.next();
+        let mut new_build_status_socket = self.new_build_status_sockets.next();
         let mut new_message = self
-            .sockets
+            .hot_reload_sockets
             .iter_mut()
             .enumerate()
             .map(|(idx, socket)| async move { (idx, socket.next().await) })
             .collect::<FuturesUnordered<_>>();
 
         tokio::select! {
-            new_socket = &mut new_socket => {
-                if let Some(new_socket) = new_socket {
-                    // println!("new socket connected: {:?}", new_socket);
+            new_hot_reload_socket = &mut new_hot_reload_socket => {
+                if let Some(new_socket) = new_hot_reload_socket {
                     drop(new_message);
-                    self.sockets.push(new_socket);
+                    self.hot_reload_sockets.push(new_socket);
+                    return None;
+                } else {
+                    panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
+                }
+            }
+            new_build_status_socket = &mut new_build_status_socket => {
+                if let Some(new_socket) = new_build_status_socket {
+                    drop(new_message);
+                    self.build_status_sockets.push(new_socket);
                     return None;
                 } else {
                     panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
@@ -151,7 +211,7 @@ impl Server {
                     _ => {
                         let idx = idx;
                         drop(new_message);
-                        _ = self.sockets.remove(idx);
+                        _ = self.hot_reload_sockets.remove(idx);
                     }
                 }
             }
@@ -161,8 +221,9 @@ impl Server {
     }
 
     pub async fn send_reload(&mut self) {
-        // if let Some(socket) = self.sockets.first_mut() {
-        for socket in self.sockets.iter_mut() {
+        self.build_status.set(Status::Ready);
+        self.send_build_status();
+        for socket in self.hot_reload_sockets.iter_mut() {
             _ = socket
                 .send(Message::Text(
                     serde_json::to_string(&DevserverMsg::FullReload).unwrap(),
@@ -173,7 +234,7 @@ impl Server {
 
     /// Send a shutdown message to all connected clients
     pub async fn send_shutdown(&mut self) {
-        for mut socket in self.sockets.iter_mut() {
+        for mut socket in self.hot_reload_sockets.iter_mut() {
             _ = socket
                 .send(Message::Text(
                     serde_json::to_string(&DevserverMsg::Shutdown).unwrap(),
@@ -184,7 +245,7 @@ impl Server {
 
     pub async fn shutdown(&mut self) {
         self.send_shutdown().await;
-        for mut socket in self.sockets.drain(..) {
+        for mut socket in self.hot_reload_sockets.drain(..) {
             _ = socket.close().await;
         }
     }
@@ -206,8 +267,10 @@ impl Server {
 pub async fn setup_router(
     serve: &Serve,
     config: &DioxusCrate,
-    tx: UnboundedSender<WebSocket>,
+    hot_reload_sockets: UnboundedSender<WebSocket>,
+    build_status_sockets: UnboundedSender<WebSocket>,
     fullstack_address: Option<SocketAddr>,
+    build_status: SharedStatus,
 ) -> Result<Router> {
     let mut router = Router::new();
     let platform = serve.build_arguments.platform();
@@ -254,6 +317,12 @@ pub async fn setup_router(
         _ => {}
     }
 
+    // Setup middleware to intercept html requests if the build status is "Building"
+    router = router.layer(middleware::from_fn_with_state(
+        build_status,
+        build_status_middleware,
+    ));
+
     // Setup websocket endpoint - and pass in the extension layer immediately after
     router = router
         .route(
@@ -264,7 +333,16 @@ pub async fn setup_router(
                 },
             ),
         )
-        .layer(Extension(tx));
+        .layer(Extension(hot_reload_sockets))
+        .route(
+            "/_dioxus/build_status",
+            get(
+                |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<WebSocket>>| async move {
+                    ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(socket) })
+                },
+            ),
+        )
+        .layer(Extension(build_status_sockets));
 
     // Setup cors
     router = router.layer(
@@ -437,4 +515,32 @@ pub(crate) fn open_browser(config: &DioxusCrate, address: SocketAddr, https: boo
 
 fn get_available_port(address: IpAddr) -> Option<u16> {
     (8000..9000).find(|port| TcpListener::bind((address, *port)).is_ok())
+}
+
+/// Middleware that intercepts html requests if the status is "Building" and returns a loading page instead
+async fn build_status_middleware(
+    state: State<SharedStatus>,
+    request: Request,
+    next: Next,
+) -> axum::response::Response {
+    // If the request is for html, and the status is "Building", return the loading page instead of the contents of the response
+    let accepts = request.headers().get(ACCEPT);
+    let accepts_html = accepts
+        .and_then(|v| v.to_str().ok())
+        .map(|v| v.contains("text/html"));
+
+    if let Some(true) = accepts_html {
+        let status = state.get();
+        if status == Status::Building {
+            let html = include_str!("../../assets/loading.html");
+            return axum::response::Response::builder()
+                .status(StatusCode::OK)
+                .body(Body::from(html))
+                .unwrap();
+        }
+    }
+
+    let response = next.run(request).await;
+
+    response
 }

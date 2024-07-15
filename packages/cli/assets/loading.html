@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Dioxus Build In Progress</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <div id="main">Application is loading...</div>
+    <script>
+      // Wait for a "Ready" message from the server on the websocket served at /_dioxus/build_status
+      let protocol;
+      if (window.location.protocol === "https:") {
+        protocol = "wss:";
+      } else {
+        protocol = "ws:";
+      }
+      let path =
+        protocol + "//" + window.location.host + "/_dioxus/build_status";
+      let ws = new WebSocket(path);
+      ws.onmessage = (event) => {
+        if (event.data === "Ready") {
+          // Once we get a "Ready" message, reload the page
+          window.location.reload();
+        }
+      };
+    </script>
+  </body>
+</html>

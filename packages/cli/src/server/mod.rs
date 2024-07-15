@@ -48,21 +48,21 @@ use watcher::*;
 ///   to a dynamic one on the fly.
 pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
     let mut server = Server::start(&serve, &dioxus_crate).await;
-    let mut watchr = Watcher::start(&dioxus_crate);
+    let mut watcher = Watcher::start(&dioxus_crate);
     let mut screen = Output::start(&serve, &dioxus_crate)
         .await
         .expect("Failed to open terminal logger");
-    let mut buildr = Builder::new(&dioxus_crate, &serve);
+    let mut builder = Builder::new(&dioxus_crate, &serve);
 
     // Start the first build
-    buildr.build();
+    builder.build();
 
     loop {
         // Make sure we don't hog the CPU: these loop { select! {} } blocks can starve the executor
         yield_now().await;
 
         // Draw the state of the server to the screen
-        screen.render(&serve, &dioxus_crate, &buildr, &server, &watchr);
+        screen.render(&serve, &dioxus_crate, &builder, &server, &watcher);
 
         // Also update the webserver page if we need to
         // This will send updates about the current status of the build
@@ -71,14 +71,14 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
         // And then wait for any updates before redrawing
         tokio::select! {
             // rebuild the project or hotreload it
-            _ = watchr.wait() => {
-                if !watchr.pending_changes() {
+            _ = watcher.wait() => {
+                if !watcher.pending_changes() {
                     continue;
                 }
 
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients
-                if let Some(hr) = watchr.attempt_hot_reload(&dioxus_crate) {
+                if let Some(hr) = watcher.attempt_hot_reload(&dioxus_crate) {
                     // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
                     if hr.templates.is_empty() && hr.assets.is_empty() {
                         continue
@@ -88,16 +88,18 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                         panic!("{:#?}", hr);
                     }
 
-                    server.send_hotreload(hr).await;
+                    server.send_hotreload(hr);
                 } else {
                     // If the change is not binary patchable, rebuild the project
                     // We're going to kick off a new build, interrupting the current build if it's ongoing
-                    buildr.build();
-                }
+                    builder.build();
 
+                    // Tell the server to show a loading page for any new requests
+                    server.start_build();
+                }
             }
 
-            // reload the pag
+            // reload the page
             msg = server.wait() => {
                 // Run the server in the background
                 // Waiting for updates here lets us tap into when clients are added/removed
@@ -107,7 +109,7 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
             }
 
             // Handle updates from the build engine
-            application = buildr.wait() => {
+            application = builder.wait() => {
                 // Wait for logs from the build engine
                 // These will cause us to update the screen
                 // We also can check the status of the builds here in case we have multiple ongoing builds
@@ -121,13 +123,13 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                             for build_result in results.iter() {
                                 let child = build_result.open(&serve.server_arguments, server.fullstack_address());
                                 if let Some(child_proc) = child? {
-                                    buildr.children.push((build_result.platform,child_proc));
+                                    builder.children.push((build_result.platform,child_proc));
                                 }
                             }
 
                             server.send_reload().await;
 
-                            screen.new_ready_app(&mut buildr, results);
+                            screen.new_ready_app(&mut builder, results);
                         }
                     };
                 }
@@ -146,7 +148,7 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
     // todo: more printing, logging, error handling in this phase
     _ = screen.shutdown();
     _ = server.shutdown().await;
-    _ = buildr.shutdown();
+    _ = builder.shutdown();
 
     Ok(())
 }

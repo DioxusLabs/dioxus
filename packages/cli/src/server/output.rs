@@ -35,6 +35,11 @@ use tracing::Level;
 
 use super::{Builder, Server, Watcher};
 
+#[derive(Default)]
+pub struct BuildProgress {
+    build_logs: HashMap<Platform, ActiveBuild>,
+}
+
 pub struct Output {
     term: Rc<RefCell<TerminalBackend>>,
     events: EventStream,
@@ -43,7 +48,7 @@ pub struct Output {
     rustc_nightly: bool,
     dx_version: String,
     interactive: bool,
-    build_logs: HashMap<Platform, ActiveBuild>,
+    build_progress: BuildProgress,
     running_apps: HashMap<Platform, RunningApp>,
     is_cli_release: bool,
     platform: Platform,
@@ -115,7 +120,7 @@ impl Output {
             is_cli_release,
             platform,
             fly_modal_open: false,
-            build_logs: HashMap::new(),
+            build_progress: Default::default(),
             running_apps: HashMap::new(),
             scroll: 0,
             term_height: 0,
@@ -200,7 +205,7 @@ impl Output {
 
     fn drain_print_logs(&mut self) {
         // todo: print the build info here for the most recent build, and then the logs of the most recent build
-        for (platform, build) in self.build_logs.iter() {
+        for (platform, build) in self.build_progress.build_logs.iter() {
             if build.messages.is_empty() {
                 continue;
             }
@@ -318,7 +323,7 @@ impl Output {
     pub fn push_log(&mut self, platform: Platform, message: BuildMessage) {
         let snapped = self.is_snapped(platform);
 
-        if let Some(build) = self.build_logs.get_mut(&platform) {
+        if let Some(build) = self.build_progress.build_logs.get_mut(&platform) {
             build.messages.push(message);
         }
 
@@ -346,9 +351,13 @@ impl Output {
     pub fn new_build_logs(&mut self, platform: Platform, update: UpdateBuildProgress) {
         let snapped = self.is_snapped(platform);
 
-        self.build_logs.entry(platform).or_default().update(update);
+        self.build_progress
+            .build_logs
+            .entry(platform)
+            .or_default()
+            .update(update);
 
-        let log = self.build_logs.get(&platform).unwrap();
+        let log = self.build_progress.build_logs.get(&platform).unwrap();
         if snapped {
             self.scroll = (self.num_lines_with_wrapping).saturating_sub(self.term_height);
             // self.scroll = self.scroll.clamp(
@@ -389,7 +398,7 @@ impl Output {
             self.running_apps.insert(platform, app);
 
             // Finish the build progress for the platform that just finished building
-            if let Some(build) = self.build_logs.get_mut(&platform) {
+            if let Some(build) = self.build_progress.build_logs.get_mut(&platform) {
                 build.stage = Stage::Finished;
             }
         }
@@ -437,8 +446,8 @@ impl Output {
             // Render a border for the header
             frame.render_widget(Block::default().borders(Borders::BOTTOM), body[0]);
 
-            for platform in self.build_logs.keys() {
-                let build = self.build_logs.get(platform).unwrap();
+            for platform in self.build_progress.build_logs.keys() {
+                let build = self.build_progress.build_logs.get(platform).unwrap();
 
                 // We're going to assemble a text buffer directly and then let the paragraph widgets
                 // handle the wrapping and scrolling
@@ -493,8 +502,9 @@ impl Output {
 
             spans.push(Span::from(self.platform.to_string()).cyan());
             // If there is build progress, display that next to the platform
-            if !self.build_logs.is_empty() {
+            if !self.build_progress.build_logs.is_empty() {
                 let build = self
+                    .build_progress
                     .build_logs
                     .values()
                     .min_by(|a, b| a.partial_cmp(b).unwrap())
