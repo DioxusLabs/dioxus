@@ -4,7 +4,7 @@
 
 pub mod assets;
 pub mod dx_build_info;
-pub mod server;
+pub mod serve;
 pub mod tools;
 
 pub mod cli;

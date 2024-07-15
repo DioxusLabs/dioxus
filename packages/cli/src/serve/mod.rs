@@ -1,5 +1,5 @@
+use crate::cli::serve::Serve;
 use crate::dioxus_crate::DioxusCrate;
-use crate::serve::Serve;
 use crate::Result;
 use dioxus_cli_config::Platform;
 use tokio::task::yield_now;
@@ -47,7 +47,7 @@ use watcher::*;
 pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
     let mut server = Server::start(&serve, &dioxus_crate).await;
     let mut watcher = Watcher::start(&dioxus_crate);
-    let mut screen = Output::start(&serve, &dioxus_crate)
+    let mut screen = Output::start(&serve)
         .await
         .expect("Failed to open terminal logger");
     let mut builder = Builder::new(&dioxus_crate, &serve);
@@ -61,10 +61,6 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
 
         // Draw the state of the server to the screen
         screen.render(&serve, &dioxus_crate, &builder, &server, &watcher);
-
-        // Also update the webserver page if we need to
-        // This will send updates about the current status of the build
-        server.update(&serve, &dioxus_crate);
 
         // And then wait for any updates before redrawing
         tokio::select! {

@@ -5,8 +5,6 @@ use std::{
     fmt::{Display, Formatter},
     fs,
     path::{Path, PathBuf},
-    process::Command,
-    str,
 };
 
 #[derive(Debug, Clone)]
@@ -30,12 +28,6 @@ impl Error for CargoError {}
 
 /// How many parent folders are searched for a `Cargo.toml`
 const MAX_ANCESTORS: u32 = 10;
-
-/// Some fields parsed from `cargo metadata` command
-pub struct Metadata {
-    pub workspace_root: PathBuf,
-    pub target_directory: PathBuf,
-}
 
 /// Returns the root of the crate that the command is run from
 ///
@@ -69,47 +61,4 @@ fn contains_manifest(path: &Path) -> bool {
                 .any(|ent| &ent.file_name() == "Cargo.toml")
         })
         .unwrap_or(false)
-}
-
-impl Metadata {
-    /// Returns the struct filled from `cargo metadata` output
-    /// TODO @Jon, find a different way that doesn't rely on the cargo metadata command (it's slow)
-    pub fn get() -> Result<Self, CargoError> {
-        let output = Command::new("cargo")
-            .args(["metadata"])
-            .output()
-            .map_err(|_| CargoError::new("Manifset".to_string()))?;
-
-        if !output.status.success() {
-            let mut msg = str::from_utf8(&output.stderr).unwrap().trim();
-            if msg.starts_with("error: ") {
-                msg = &msg[7..];
-            }
-
-            return Err(CargoError::new(msg.to_string()));
-        }
-
-        let stdout = str::from_utf8(&output.stdout).unwrap();
-        if let Some(line) = stdout.lines().next() {
-            let meta: serde_json::Value = serde_json::from_str(line)
-                .map_err(|_| CargoError::new("InvalidOutput".to_string()))?;
-
-            let workspace_root = meta["workspace_root"]
-                .as_str()
-                .ok_or_else(|| CargoError::new("InvalidOutput".to_string()))?
-                .into();
-
-            let target_directory = meta["target_directory"]
-                .as_str()
-                .ok_or_else(|| CargoError::new("InvalidOutput".to_string()))?
-                .into();
-
-            return Ok(Self {
-                workspace_root,
-                target_directory,
-            });
-        }
-
-        Err(CargoError::new("InvalidOutput".to_string()))
-    }
 }

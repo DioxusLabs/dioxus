@@ -15,8 +15,60 @@ pub struct GlobalSignalContext {
     signal: Rc<RefCell<HashMap<GlobalKey, Box<dyn Any>>>>,
 }
 
+/// A key used to identify a signal in the global signal context
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum GlobalKey {
+pub struct GlobalKey {
+    // We create an extra wrapper type here to make the storage of Location vs &'static str
+    // hidden so we could change it in a minor version
+    variant: GlobalKeyVariant,
+}
+
+impl GlobalKey {
+    /// Create a new key from a location
+    pub const fn new(key: &'static Location<'static>) -> Self {
+        GlobalKey {
+            variant: GlobalKeyVariant::Static(key),
+        }
+    }
+
+    /// Create a new key from a static string
+    #[allow(unused)]
+    pub const fn new_from_str(key: &'static str) -> Self {
+        GlobalKey {
+            variant: GlobalKeyVariant::Dynamic(key),
+        }
+    }
+}
+
+impl From<&'static str> for GlobalKey {
+    fn from(key: &'static str) -> Self {
+        GlobalKey {
+            variant: GlobalKeyVariant::Dynamic(key),
+        }
+    }
+}
+
+impl From<&'static Location<'static>> for GlobalKey {
+    fn from(key: &'static Location<'static>) -> Self {
+        GlobalKey {
+            variant: GlobalKeyVariant::Static(key),
+        }
+    }
+}
+
+impl std::fmt::Display for GlobalKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.variant {
+            GlobalKeyVariant::Static(key) => write!(f, "{}", key)?,
+            GlobalKeyVariant::Dynamic(key) => write!(f, "{}", key)?,
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum GlobalKeyVariant {
     Static(&'static Location<'static>),
     Dynamic(&'static str),
 }
@@ -25,10 +77,13 @@ impl GlobalSignalContext {
     /// Get a signal with the given string key
     /// The key will be converted to a UUID with the appropriate internal namespace
     pub fn get_signal_with_key<T>(&self, key: &str) -> Option<Signal<T>> {
-        // temporarily extend the lifetime
+        // Safety: We only extend the lifetime for hashing purposes. The key is never used after the function returns
+        // A raw hash API would let us avoid this unsafe block, but it's not available in stable rust
         let key = unsafe { std::mem::transmute::<&str, &'static str>(key) };
 
-        let id = GlobalKey::Dynamic(key);
+        let id = GlobalKey {
+            variant: GlobalKeyVariant::Dynamic(key),
+        };
 
         self.signal.borrow().get(&id).map(|f| {
             *f.downcast_ref::<Signal<T>>().unwrap_or_else(|| {

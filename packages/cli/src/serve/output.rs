@@ -80,7 +80,7 @@ enum StatusLine {
 type TerminalBackend = Terminal<CrosstermBackend<io::Stdout>>;
 
 impl Output {
-    pub async fn start(cfg: &Serve, crate_config: &DioxusCrate) -> io::Result<Self> {
+    pub async fn start(cfg: &Serve) -> io::Result<Self> {
         let interactive = std::io::stdout().is_tty() && cfg.interactive.unwrap_or(true);
 
         if interactive {
@@ -223,10 +223,13 @@ impl Output {
 
             for message in build.messages.iter() {
                 match &message.message {
-                    MessageType::Cargo(t) => {
-                        println!("{}", t.rendered.as_deref().unwrap_or_default())
+                    MessageType::Cargo(diagnostic) => {
+                        println!(
+                            "{platform}: {}",
+                            diagnostic.rendered.as_deref().unwrap_or_default()
+                        )
                     }
-                    MessageType::Text(t) => println!("{}", t),
+                    MessageType::Text(t) => println!("{platform}: {t}"),
                 }
             }
         }

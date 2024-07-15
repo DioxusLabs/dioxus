@@ -22,7 +22,7 @@ impl<T: 'static> GlobalSignal<T> {
         let key = std::panic::Location::caller();
         GlobalSignal {
             initializer,
-            key: GlobalKey::Static(key),
+            key: GlobalKey::new(key),
         }
     }
 
@@ -37,7 +37,7 @@ impl<T: 'static> GlobalSignal<T> {
     pub const fn with_key(initializer: fn() -> T, key: &'static str) -> GlobalSignal<T> {
         GlobalSignal {
             initializer,
-            key: GlobalKey::Dynamic(key),
+            key: GlobalKey::new_from_str(key),
         }
     }
 

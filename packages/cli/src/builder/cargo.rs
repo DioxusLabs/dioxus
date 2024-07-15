@@ -14,10 +14,7 @@ use crate::Result;
 use anyhow::Context;
 use futures_channel::mpsc::UnboundedSender;
 use manganis_cli_support::ManganisSupportGuard;
-use std::env;
 use std::fs::create_dir_all;
-use std::time::Instant;
-use tokio::process::Command;
 
 impl BuildRequest {
     /// Create a list of arguments for cargo builds
@@ -99,7 +96,6 @@ impl BuildRequest {
         tracing::info!("🚅 Running build [Desktop] command...");
 
         // Set up runtime guards
-        let start_time = std::time::Instant::now();
         let _guard = dioxus_cli_config::__private::save_config(&self.dioxus_crate.dioxus_config);
         let _manganis_support = ManganisSupportGuard::default();
         let _asset_guard = AssetConfigDropGuard::new();
@@ -118,7 +114,7 @@ impl BuildRequest {
 
         // Post process the build result
         let build_result = self
-            .post_process_build(cargo_args, &cargo_result, start_time, &mut progress)
+            .post_process_build(cargo_args, &cargo_result, &mut progress)
             .await
             .context("Failed to post process build")?;
 
@@ -144,7 +140,6 @@ impl BuildRequest {
         &self,
         cargo_args: Vec<String>,
         cargo_build_result: &CargoBuildResult,
-        t_start: Instant,
         progress: &mut UnboundedSender<UpdateBuildProgress>,
     ) -> Result<BuildResult> {
         _ = progress.start_send(UpdateBuildProgress {
@@ -194,7 +189,6 @@ impl BuildRequest {
         // Create the build result
         let build_result = BuildResult {
             executable: output_path,
-            elapsed_time: t_start.elapsed(),
             web: self.web,
             platform: self
                 .build_arguments
@@ -226,26 +220,5 @@ impl BuildRequest {
             copy_dir_to(asset_dir, out_dir, pre_compress)?;
         }
         Ok(())
-    }
-}
-
-/// Sets (appends to, if already set) `RUSTFLAGS` environment variable if
-/// `rust_flags` is not `None`.
-fn set_rust_flags(command: &mut Command, rust_flags: Option<String>) {
-    if let Some(rust_flags) = rust_flags {
-        // Some `RUSTFLAGS` might be already set in the environment or provided
-        // by the user. They should take higher priority than the default flags.
-        // If no default flags are provided, then there is no point in
-        // redefining the environment variable with the same value, if it is
-        // even set. If no custom flags are set, then there is no point in
-        // adding the unnecessary whitespace to the command.
-        command.env(
-            "RUSTFLAGS",
-            if let Ok(custom_rust_flags) = env::var("RUSTFLAGS") {
-                rust_flags + " " + custom_rust_flags.as_str()
-            } else {
-                rust_flags
-            },
-        );
     }
 }

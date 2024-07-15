@@ -77,7 +77,7 @@ impl Serve {
 
         self.resolve(&mut dioxus_crate)?;
 
-        crate::server::serve_all(self, dioxus_crate).await?;
+        crate::serve::serve_all(self, dioxus_crate).await?;
         Ok(())
     }
 }

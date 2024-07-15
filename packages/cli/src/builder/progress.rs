@@ -1,7 +1,6 @@
 //! Report progress about the build to the user. We use channels to report progress back to the CLI.
 use anyhow::Context;
 use cargo_metadata::{diagnostic::Diagnostic, Message};
-use chrono::format;
 use futures_channel::mpsc::UnboundedSender;
 use serde::Deserialize;
 use std::ops::Deref;
@@ -171,7 +170,7 @@ pub(crate) async fn build_cargo(
                     }
                 }
                 if FATAL_LEVELS.contains(&message.level) {
-                    return { Err(anyhow::anyhow!(errors.join("\n"))) };
+                    return Err(anyhow::anyhow!(errors.join("\n")));
                 }
             }
             Message::CompilerArtifact(artifact) => {

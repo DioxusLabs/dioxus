@@ -1,12 +1,12 @@
 use crate::build::Build;
+use crate::cli::serve::ServeArguments;
 use crate::dioxus_crate::DioxusCrate;
-use crate::serve::ServeArguments;
 use crate::Result;
 use dioxus_cli_config::{Platform, RuntimeCLIArguments};
 use futures_util::stream::select_all;
 use futures_util::StreamExt;
 use std::net::SocketAddr;
-use std::{net::IpAddr, path::PathBuf, process::Stdio, time::Duration};
+use std::{path::PathBuf, process::Stdio};
 use tokio::process::{Child, Command};
 
 mod cargo;
@@ -96,7 +96,7 @@ impl BuildRequest {
 
         while let Some(result) = set.join_next().await {
             let result = result
-                .map_err(|err| crate::Error::Unique("Failed to build project".to_owned()))??;
+                .map_err(|_| crate::Error::Unique("Failed to build project".to_owned()))??;
             all_results.push(result);
         }
 
@@ -107,7 +107,6 @@ impl BuildRequest {
 #[derive(Debug, Clone)]
 pub(crate) struct BuildResult {
     pub executable: PathBuf,
-    pub elapsed_time: Duration,
     pub web: bool,
     pub platform: Platform,
 }
@@ -142,9 +141,5 @@ impl BuildResult {
                 .current_dir(workspace_folder)
                 .spawn()?,
         ))
-    }
-
-    pub fn kill(&self) -> Result<(), std::io::Error> {
-        Ok(())
     }
 }

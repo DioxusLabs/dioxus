@@ -115,7 +115,7 @@ pub(crate) fn proxy_to(
         );
 
         if nocache {
-            crate::server::insert_no_cache_headers(req.headers_mut());
+            crate::serve::insert_no_cache_headers(req.headers_mut());
         }
 
         client.send(req).await.map_err(handle_error)

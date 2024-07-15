@@ -24,7 +24,7 @@ impl<T: PartialEq + 'static> GlobalMemo<T> {
         let key = std::panic::Location::caller();
         GlobalMemo {
             selector,
-            key: GlobalKey::Static(key),
+            key: GlobalKey::new(key),
         }
     }
 

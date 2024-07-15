@@ -27,7 +27,6 @@ pub struct FileMap {
 /// We store the templates found in this file
 pub struct CachedSynFile {
     pub raw: String,
-    pub path: PathBuf,
     pub templates: HashMap<&'static str, Template>,
 }
 
@@ -119,7 +118,6 @@ impl FileMap {
             None => {
                 let cached_file = CachedSynFile {
                     raw: src.clone(),
-                    path: file_path.to_path_buf(),
                     templates: HashMap::new(),
                 };
 
@@ -209,7 +207,6 @@ impl FileMap {
                 path.clone(),
                 CachedSynFile {
                     raw: String::new(),
-                    path,
                     templates: HashMap::from([(template.name, template)]),
                 },
             );
@@ -293,7 +290,6 @@ fn find_rs_files(root: PathBuf, filter: &mut impl FnMut(&Path) -> bool) -> FileM
                 Ok(_) => {
                     let cached_file = CachedSynFile {
                         raw: src.clone(),
-                        path: root.clone(),
                         templates: HashMap::new(),
                     };
 
@@ -314,7 +310,6 @@ fn find_rs_files(root: PathBuf, filter: &mut impl FnMut(&Path) -> bool) -> FileM
 pub enum HotreloadError {
     Failure(io::Error),
     Parse,
-    NoPreviousBuild,
     Notreloadable,
 }
 
@@ -323,7 +318,6 @@ impl std::fmt::Display for HotreloadError {
         match self {
             Self::Failure(err) => write!(f, "Failed to parse file: {}", err),
             Self::Parse => write!(f, "Failed to parse file"),
-            Self::NoPreviousBuild => write!(f, "No previous build found"),
             Self::Notreloadable => write!(f, "Template is not hotreloadable"),
         }
     }

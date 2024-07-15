@@ -89,7 +89,7 @@ impl Builder {
                 self.build_results = None;
 
                 // If we have a build result, bubble it up to the main loop
-                let build_results = build_results.map_err(|e| crate::Error::Unique("Build join failed".to_string()))??;
+                let build_results = build_results.map_err(|_| crate::Error::Unique("Build join failed".to_string()))??;
 
                 Ok(BuilderUpdate::Ready { results: build_results })
             }

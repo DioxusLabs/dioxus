@@ -1,5 +1,5 @@
 use crate::dioxus_crate::DioxusCrate;
-use crate::server::Serve;
+use crate::serve::Serve;
 use crate::{Error, Result};
 use axum::extract::{Request, State};
 use axum::middleware::{self, Next};
@@ -182,8 +182,6 @@ impl Server {
         self.send_build_status().await;
     }
 
-    pub fn update(&mut self, cfg: &Serve, crate_config: &DioxusCrate) {}
-
     pub async fn send_hotreload(&mut self, reload: HotReloadMsg) {
         let msg = DevserverMsg::HotReload(reload);
         let msg = serde_json::to_string(&msg).unwrap();
@@ -269,7 +267,7 @@ impl Server {
 
     /// Send a shutdown message to all connected clients
     pub async fn send_shutdown(&mut self) {
-        for mut socket in self.hot_reload_sockets.iter_mut() {
+        for socket in self.hot_reload_sockets.iter_mut() {
             _ = socket
                 .send(Message::Text(
                     serde_json::to_string(&DevserverMsg::Shutdown).unwrap(),
@@ -280,7 +278,7 @@ impl Server {
 
     pub async fn shutdown(&mut self) {
         self.send_shutdown().await;
-        for mut socket in self.hot_reload_sockets.drain(..) {
+        for socket in self.hot_reload_sockets.drain(..) {
             _ = socket.close().await;
         }
     }
@@ -299,7 +297,7 @@ impl Server {
 /// - Setting up the proxy to the endpoint specified in the config
 /// - Setting up the file serve service
 /// - Setting up the websocket endpoint for devtools
-pub(crate) async fn setup_router(
+async fn setup_router(
     serve: &Serve,
     config: &DioxusCrate,
     hot_reload_sockets: UnboundedSender<WebSocket>,
