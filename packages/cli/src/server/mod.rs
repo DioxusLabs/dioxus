@@ -88,14 +88,14 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                         panic!("{:#?}", hr);
                     }
 
-                    server.send_hotreload(hr);
+                    server.send_hotreload(hr).await;
                 } else {
                     // If the change is not binary patchable, rebuild the project
                     // We're going to kick off a new build, interrupting the current build if it's ongoing
                     builder.build();
 
                     // Tell the server to show a loading page for any new requests
-                    server.start_build();
+                    server.start_build().await;
                 }
             }
 

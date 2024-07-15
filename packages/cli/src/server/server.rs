@@ -153,26 +153,40 @@ impl Server {
         }
     }
 
-    fn send_build_status(&mut self) {
+    async fn send_build_status(&mut self) {
         let msg = serde_json::to_string(&self.build_status.get()).unwrap();
-        self.build_status_sockets
-            .retain_mut(|socket| socket.start_send_unpin(Message::Text(msg.clone())).is_ok())
+        let mut i = 0;
+        while i < self.build_status_sockets.len() {
+            let socket = &mut self.build_status_sockets[i];
+            if socket.send(Message::Text(msg.clone())).await.is_err() {
+                self.build_status_sockets.remove(i);
+            } else {
+                i += 1;
+            }
+        }
     }
 
-    pub fn start_build(&mut self) {
+    pub async fn start_build(&mut self) {
         self.build_status.set(Status::Building);
-        self.send_build_status();
+        self.send_build_status().await;
     }
 
     pub fn update(&mut self, cfg: &Serve, crate_config: &DioxusCrate) {}
 
-    pub fn send_hotreload(&mut self, reload: HotReloadMsg) {
+    pub async fn send_hotreload(&mut self, reload: HotReloadMsg) {
         let msg = DevserverMsg::HotReload(reload);
         let msg = serde_json::to_string(&msg).unwrap();
 
         // Send the changes to any connected clients
-        self.hot_reload_sockets
-            .retain_mut(|socket| socket.start_send_unpin(Message::Text(msg.clone())).is_ok());
+        let mut i = 0;
+        while i < self.hot_reload_sockets.len() {
+            let socket = &mut self.hot_reload_sockets[i];
+            if socket.send(Message::Text(msg.clone())).await.is_err() {
+                self.hot_reload_sockets.remove(i);
+            } else {
+                i += 1;
+            }
+        }
     }
 
     /// Wait for new clients to be connected and then save them
@@ -222,7 +236,7 @@ impl Server {
 
     pub async fn send_reload(&mut self) {
         self.build_status.set(Status::Ready);
-        self.send_build_status();
+        self.send_build_status().await;
         for socket in self.hot_reload_sockets.iter_mut() {
             _ = socket
                 .send(Message::Text(
@@ -324,25 +338,28 @@ pub async fn setup_router(
     ));
 
     // Setup websocket endpoint - and pass in the extension layer immediately after
-    router = router
-        .route(
-            "/_dioxus",
-            get(
-                |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<WebSocket>>| async move {
-                    ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(socket) })
-                },
-            ),
-        )
-        .layer(Extension(hot_reload_sockets))
-        .route(
-            "/_dioxus/build_status",
-            get(
-                |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<WebSocket>>| async move {
-                    ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(socket) })
-                },
-            ),
-        )
-        .layer(Extension(build_status_sockets));
+    router = router.nest(
+        "/_dioxus",
+        Router::new()
+            .route(
+                "/",
+                get(
+                    |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<WebSocket>>| async move {
+                        ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(socket) })
+                    },
+                ),
+            )
+            .layer(Extension(hot_reload_sockets))
+            .route(
+                "/build_status",
+                get(
+                    |ws: WebSocketUpgrade, ext: Extension<UnboundedSender<WebSocket>>| async move {
+                        ws.on_upgrade(move |socket| async move { _ = ext.0.unbounded_send(socket) })
+                    },
+                ),
+            )
+            .layer(Extension(build_status_sockets)),
+    );
 
     // Setup cors
     router = router.layer(
