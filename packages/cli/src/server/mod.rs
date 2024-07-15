@@ -116,6 +116,7 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                 match application {
                     Ok(BuilderUpdate::Progress { platform, update }) => {
                         screen.new_build_logs(platform, update);
+                        server.update_build_status(screen.build_progress.progress()).await;
                     }
                     Ok(BuilderUpdate::Ready { results }) => {
                         // If we have a build result, open it

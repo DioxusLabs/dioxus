@@ -44,10 +44,10 @@ use tower_http::{
     ServiceBuilderExt,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 enum Status {
-    Building,
+    Building { progress: f64 },
     BuildError { error: String },
     Ready,
 }
@@ -85,7 +85,7 @@ impl Server {
     pub async fn start(serve: &Serve, cfg: &DioxusCrate) -> Self {
         let (hot_reload_sockets_tx, hot_reload_sockets_rx) = futures_channel::mpsc::unbounded();
         let (build_status_sockets_tx, build_status_sockets_rx) = futures_channel::mpsc::unbounded();
-        let build_status = SharedStatus::new(Status::Building);
+        let build_status = SharedStatus::new(Status::Building { progress: 0.0 });
 
         let addr = serve.server_arguments.address.address();
         let start_browser = serve.server_arguments.open.unwrap_or_default();
@@ -156,11 +156,13 @@ impl Server {
     }
 
     async fn send_build_status(&mut self) {
-        let msg = serde_json::to_string(&self.build_status.get()).unwrap();
         let mut i = 0;
         while i < self.build_status_sockets.len() {
             let socket = &mut self.build_status_sockets[i];
-            if socket.send(Message::Text(msg.clone())).await.is_err() {
+            if send_build_status_to(&self.build_status, socket)
+                .await
+                .is_err()
+            {
                 self.build_status_sockets.remove(i);
             } else {
                 i += 1;
@@ -169,7 +171,15 @@ impl Server {
     }
 
     pub async fn start_build(&mut self) {
-        self.build_status.set(Status::Building);
+        self.build_status.set(Status::Building { progress: 0.0 });
+        self.send_build_status().await;
+    }
+
+    pub async fn update_build_status(&mut self, progress: f64) {
+        if !matches!(self.build_status.get(), Status::Building { .. }) {
+            return;
+        }
+        self.build_status.set(Status::Building { progress });
         self.send_build_status().await;
     }
 
@@ -207,16 +217,18 @@ impl Server {
                 if let Some(new_socket) = new_hot_reload_socket {
                     drop(new_message);
                     self.hot_reload_sockets.push(new_socket);
-                    self.send_build_status().await;
                     return None;
                 } else {
                     panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
                 }
             }
             new_build_status_socket = &mut new_build_status_socket => {
-                if let Some(new_socket) = new_build_status_socket {
+                if let Some(mut new_socket) = new_build_status_socket {
                     drop(new_message);
-                    self.build_status_sockets.push(new_socket);
+                    // Update the socket with the current status
+                    if  send_build_status_to(&self.build_status, &mut new_socket).await.is_ok() {
+                        self.build_status_sockets.push(new_socket);
+                    }
                     return None;
                 } else {
                     panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
@@ -571,4 +583,12 @@ async fn build_status_middleware(
     let response = next.run(request).await;
 
     response
+}
+
+async fn send_build_status_to(
+    build_status: &SharedStatus,
+    socket: &mut WebSocket,
+) -> Result<(), axum::Error> {
+    let msg = serde_json::to_string(&build_status.get()).unwrap();
+    socket.send(Message::Text(msg)).await
 }

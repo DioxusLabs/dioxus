@@ -1,46 +1,49 @@
 <!DOCTYPE html>
-<html>
+<html style="margin: 0; padding: 0; width: 100%; height: 100%">
   <head>
     <title>Dioxus Build In Progress</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta charset="UTF-8" />
     <style>
-      #loading-indicator {
+      #main {
         display: flex;
+        flex-direction: column;
         justify-content: center;
         align-items: center;
-        height: 100vh;
-        width: 100vw;
+        height: 100%;
+        width: 100%;
         background: #f6f7f8;
-        background-image: linear-gradient(
-          to right,
-          #f6f7f8 0%,
-          #edeef1 20%,
-          #f6f7f8 40%,
-          #f6f7f8 100%
-        );
-        animation: rainbowShimmer 1s infinite;
-        font-size: 2em;
       }
-      @keyframes rainbowShimmer {
+      #main :nth-child(n) {
+        animation: fade-in 0.5s;
+      }
+      #error-message {
+        color: rgb(182, 0, 0);
+        font-size: 0.75em;
+        white-space: pre-wrap;
+      }
+      @media (prefers-color-scheme: dark) {
+        #main {
+          background: #000;
+          color: #f6f7f8;
+        }
+        #error-message {
+          color: rgb(255, 89, 89);
+        }
+      }
+      @keyframes fade-in {
         0% {
-          background-position: 0 0;
+          opacity: 0;
         }
         100% {
-          background-position: 200% 0;
+          opacity: 1;
         }
-      }
-      #error {
-        font-size: 1.5em;
-        color: red;
       }
     </style>
   </head>
-  <body>
+  <body style="margin: 0; padding: 0; width: 100%; height: 100%">
     <div id="main">
-      <div id="loading-indicator">
-        <div>Loading...</div>
-      </div>
+      <h1 id="loading-indicator">Building project 0%</h1>
     </div>
     <script>
       // Wait for a "Ready" message from the server on the websocket served at /_dioxus/build_status
@@ -50,9 +53,9 @@
       } else {
         protocol = "ws:";
       }
-      let path =
+      let url =
         protocol + "//" + window.location.host + "/_dioxus/build_status";
-      let ws = new WebSocket(path);
+      let ws = new WebSocket(url);
       ws.onmessage = (event) => {
         // Parse the message as json
         let data = JSON.parse(event.data);
@@ -64,14 +67,52 @@
           }, 500);
         } else if (data.type === "BuildError") {
           // If the message is "BuildError", display an error message
-          document.getElementById("main").innerHTML = `
-            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; width: 100vw;">
-              <div>Failed to build project</div>
-              <pre id="error">${data.data.error}</pre>
-            </div>
-          `;
+          document.getElementById("main").innerHTML = `<div>
+              <h1>Failed to build project</h1>
+              <pre id="error-message">${data.data.error}</pre>
+            </div>`;
+        } else if (data.type === "Building") {
+          // Get the current progress
+          const progress = data.data.progress;
+          const roundedProgress = Math.round(progress * 100);
+          // Update the loading indicator
+          let loadingIndicator = document.getElementById("loading-indicator");
+          if (loadingIndicator) {
+            loadingIndicator.innerHTML = `Building project ${roundedProgress}%`;
+          } else {
+            document.getElementById(
+              "main"
+            ).innerHTML = `<h1 id="loading-indicator">Building project ${progress}%</h1>`;
+          }
         }
       };
+      const POLL_INTERVAL_MIN = 250;
+      const POLL_INTERVAL_MAX = 4000;
+      const POLL_INTERVAL_SCALE_FACTOR = 2;
+
+      const reload_upon_connect = (event, poll_interval) => {
+        // Firefox will send a 1001 code when the connection is closed because the page is reloaded
+        // Only firefox will trigger the onclose event when the page is reloaded manually: https://stackoverflow.com/questions/10965720/should-websocket-onclose-be-triggered-by-user-navigation-or-refresh
+        // We should not reload the page in this case
+        if (event.code === 1001) {
+          return;
+        }
+        window.setTimeout(() => {
+          var ws = new WebSocket(url);
+          ws.onopen = () => window.location.reload();
+          ws.onclose = (event) => {
+            reload_upon_connect(
+              event,
+              Math.min(
+                POLL_INTERVAL_MAX,
+                poll_interval * POLL_INTERVAL_SCALE_FACTOR
+              )
+            );
+          };
+        }, poll_interval);
+      };
+
+      ws.onclose = (event) => reload_upon_connect(event, POLL_INTERVAL_MIN);
     </script>
   </body>
 </html>

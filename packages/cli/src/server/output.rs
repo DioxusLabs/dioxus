@@ -40,6 +40,21 @@ pub struct BuildProgress {
     build_logs: HashMap<Platform, ActiveBuild>,
 }
 
+impl BuildProgress {
+    pub fn progress(&self) -> f64 {
+        self.build_logs
+            .values()
+            .min_by(|a, b| a.partial_cmp(&b).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|build| match build.stage {
+                Stage::Initializing => 0.0,
+                Stage::InstallingWasmTooling => 0.0,
+                Stage::Compiling => build.progress,
+                Stage::OptimizingWasm | Stage::OptimizingAssets | Stage::Finished => 1.0,
+            })
+            .unwrap_or_default()
+    }
+}
+
 pub struct Output {
     term: Rc<RefCell<TerminalBackend>>,
     events: EventStream,
@@ -48,7 +63,7 @@ pub struct Output {
     rustc_nightly: bool,
     dx_version: String,
     interactive: bool,
-    build_progress: BuildProgress,
+    pub(crate) build_progress: BuildProgress,
     running_apps: HashMap<Platform, RunningApp>,
     is_cli_release: bool,
     platform: Platform,
