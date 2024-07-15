@@ -113,25 +113,26 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                 // Wait for logs from the build engine
                 // These will cause us to update the screen
                 // We also can check the status of the builds here in case we have multiple ongoing builds
-                if let Ok(res) = application {
-                    match res {
-                        BuilderUpdate::Progress { platform, update } => {
-                            screen.new_build_logs(platform, update);
-                        }
-                        BuilderUpdate::Ready { results } => {
-                            // If we have a build result, open it
-                            for build_result in results.iter() {
-                                let child = build_result.open(&serve.server_arguments, server.fullstack_address());
-                                if let Some(child_proc) = child? {
-                                    builder.children.push((build_result.platform,child_proc));
-                                }
+                match application {
+                    Ok(BuilderUpdate::Progress { platform, update }) => {
+                        screen.new_build_logs(platform, update);
+                    }
+                    Ok(BuilderUpdate::Ready { results }) => {
+                        // If we have a build result, open it
+                        for build_result in results.iter() {
+                            let child = build_result.open(&serve.server_arguments, server.fullstack_address());
+                            if let Some(child_proc) = child? {
+                                builder.children.push((build_result.platform,child_proc));
                             }
-
-                            server.send_reload().await;
-
-                            screen.new_ready_app(&mut builder, results);
                         }
-                    };
+
+                        server.send_reload().await;
+
+                        screen.new_ready_app(&mut builder, results);
+                    },
+                    Err(err) => {
+                        server.send_build_error(err).await;
+                    }
                 }
             }
 

@@ -128,6 +128,7 @@ pub(crate) async fn build_cargo(
     let mut stdout = stdout.lines();
     let mut stderr = stderr.lines();
     let mut units_compiled = 0;
+    let mut errors = Vec::new();
     loop {
         let line = tokio::select! {
             line = stdout.next_line() => {
@@ -151,17 +152,26 @@ pub(crate) async fn build_cargo(
                     stage: Stage::Compiling,
                     update: UpdateStage::AddMessage(message.clone().into()),
                 });
+                const WARNING_LEVELS: &[cargo_metadata::diagnostic::DiagnosticLevel] = &[
+                    cargo_metadata::diagnostic::DiagnosticLevel::Help,
+                    cargo_metadata::diagnostic::DiagnosticLevel::Note,
+                    cargo_metadata::diagnostic::DiagnosticLevel::Warning,
+                    cargo_metadata::diagnostic::DiagnosticLevel::Error,
+                    cargo_metadata::diagnostic::DiagnosticLevel::FailureNote,
+                    cargo_metadata::diagnostic::DiagnosticLevel::Ice,
+                ];
                 const FATAL_LEVELS: &[cargo_metadata::diagnostic::DiagnosticLevel] = &[
                     cargo_metadata::diagnostic::DiagnosticLevel::Error,
                     cargo_metadata::diagnostic::DiagnosticLevel::FailureNote,
                     cargo_metadata::diagnostic::DiagnosticLevel::Ice,
                 ];
+                if WARNING_LEVELS.contains(&message.level) {
+                    if let Some(rendered) = message.rendered {
+                        errors.push(rendered);
+                    }
+                }
                 if FATAL_LEVELS.contains(&message.level) {
-                    return {
-                        Err(anyhow::anyhow!(message
-                            .rendered
-                            .unwrap_or("Unknown".into())))
-                    };
+                    return { Err(anyhow::anyhow!(errors.join("\n"))) };
                 }
             }
             Message::CompilerArtifact(artifact) => {

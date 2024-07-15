@@ -123,10 +123,7 @@ impl BuildResult {
             return Ok(None);
         }
 
-        let arguments = RuntimeCLIArguments {
-            cli_address: serve.address.address(),
-            server_socket: fullstack_address,
-        };
+        let arguments = RuntimeCLIArguments::new(serve.address.address(), fullstack_address);
         let executable = self.executable.canonicalize()?;
         // This is the /dist folder generally
         let output_folder = executable.parent().unwrap();

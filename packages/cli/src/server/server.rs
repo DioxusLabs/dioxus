@@ -1,6 +1,6 @@
 use crate::dioxus_crate::DioxusCrate;
 use crate::server::Serve;
-use crate::Result;
+use crate::{Error, Result};
 use axum::extract::{Request, State};
 use axum::middleware::{self, Next};
 use axum::{
@@ -44,9 +44,11 @@ use tower_http::{
     ServiceBuilderExt,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data")]
 enum Status {
     Building,
+    BuildError { error: String },
     Ready,
 }
 
@@ -63,7 +65,7 @@ impl SharedStatus {
     }
 
     fn get(&self) -> Status {
-        *self.0.read().unwrap()
+        self.0.read().unwrap().clone()
     }
 }
 
@@ -205,6 +207,7 @@ impl Server {
                 if let Some(new_socket) = new_hot_reload_socket {
                     drop(new_message);
                     self.hot_reload_sockets.push(new_socket);
+                    self.send_build_status().await;
                     return None;
                 } else {
                     panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
@@ -232,6 +235,14 @@ impl Server {
         }
 
         None
+    }
+
+    pub async fn send_build_error(&mut self, error: Error) {
+        let error = error.to_string();
+        self.build_status.set(Status::BuildError {
+            error: ansi_to_html::convert(&error).unwrap_or(error),
+        });
+        self.send_build_status().await;
     }
 
     pub async fn send_reload(&mut self) {
@@ -548,7 +559,7 @@ async fn build_status_middleware(
 
     if let Some(true) = accepts_html {
         let status = state.get();
-        if status == Status::Building {
+        if status != Status::Ready {
             let html = include_str!("../../assets/loading.html");
             return axum::response::Response::builder()
                 .status(StatusCode::OK)

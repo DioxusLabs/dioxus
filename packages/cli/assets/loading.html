@@ -4,9 +4,44 @@
     <title>Dioxus Build In Progress</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta charset="UTF-8" />
+    <style>
+      #loading-indicator {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        width: 100vw;
+        background: #f6f7f8;
+        background-image: linear-gradient(
+          to right,
+          #f6f7f8 0%,
+          #edeef1 20%,
+          #f6f7f8 40%,
+          #f6f7f8 100%
+        );
+        animation: rainbowShimmer 1s infinite;
+        font-size: 2em;
+      }
+      @keyframes rainbowShimmer {
+        0% {
+          background-position: 0 0;
+        }
+        100% {
+          background-position: 200% 0;
+        }
+      }
+      #error {
+        font-size: 1.5em;
+        color: red;
+      }
+    </style>
   </head>
   <body>
-    <div id="main">Application is loading...</div>
+    <div id="main">
+      <div id="loading-indicator">
+        <div>Loading...</div>
+      </div>
+    </div>
     <script>
       // Wait for a "Ready" message from the server on the websocket served at /_dioxus/build_status
       let protocol;
@@ -19,9 +54,22 @@
         protocol + "//" + window.location.host + "/_dioxus/build_status";
       let ws = new WebSocket(path);
       ws.onmessage = (event) => {
-        if (event.data === "Ready") {
-          // Once we get a "Ready" message, reload the page
-          window.location.reload();
+        // Parse the message as json
+        let data = JSON.parse(event.data);
+        // If the message is "Ready", reload the page
+        if (data.type === "Ready") {
+          setTimeout(() => {
+            // Once we get a "Ready" message, reload the page
+            window.location.reload();
+          }, 500);
+        } else if (data.type === "BuildError") {
+          // If the message is "BuildError", display an error message
+          document.getElementById("main").innerHTML = `
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; width: 100vw;">
+              <div>Failed to build project</div>
+              <pre id="error">${data.data.error}</pre>
+            </div>
+          `;
         }
       };
     </script>

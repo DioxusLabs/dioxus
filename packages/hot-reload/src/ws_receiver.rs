@@ -39,7 +39,7 @@ impl NativeReceiver {
         let Some(cli_args) = dioxus_cli_config::RuntimeCLIArguments::from_cli() else {
             return None;
         };
-        let addr = cli_args.cli_address;
+        let addr = cli_args.cli_address();
         Some(Self::create(format!("ws://{addr}/_dioxus")).await)
     }
 
