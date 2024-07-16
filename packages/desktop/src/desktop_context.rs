@@ -190,7 +190,9 @@ impl DesktopService {
 
     /// Set the zoom level of the webview
     pub fn set_zoom_level(&self, level: f64) {
-        self.webview.zoom(level);
+        if let Err(e) = self.webview.zoom(level) {
+            tracing::warn!("Set webview zoom failed: {e}");
+        }
     }
 
     /// opens DevTool window

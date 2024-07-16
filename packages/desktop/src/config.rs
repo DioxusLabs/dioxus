@@ -107,6 +107,13 @@ impl Config {
         // gots to do a swap because the window builder only takes itself as muy self
         // I wish more people knew about returning &mut Self
         self.window = window;
+        if self.window.window.decorations {
+            if self.menu.is_none() {
+                self.menu = Some(default_menu_bar());
+            }
+        } else {
+            self.menu = None;
+        }
         self
     }
 
@@ -203,12 +210,16 @@ impl Config {
 
     /// Sets the menu the window will use. This will override the default menu bar.
     ///
-    /// > Note: A default menu bar will be enabled unless the menu is overridden or set to `None`.
+    /// > Note: Menu will be hidden if
+    /// [`with_decorations`](tao::window::WindowBuilder::with_decorations)
+    /// is set to false and passed into [`with_window`](Config::with_window)
     #[allow(unused)]
     pub fn with_menu(mut self, menu: impl Into<Option<DioxusMenu>>) -> Self {
         #[cfg(not(any(target_os = "ios", target_os = "android")))]
         {
-            self.menu = menu.into();
+            if self.window.window.decorations {
+                self.menu = menu.into();
+            }
         }
         self
     }

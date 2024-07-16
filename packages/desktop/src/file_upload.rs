@@ -19,7 +19,7 @@ use std::{
     str::FromStr,
     sync::Arc,
 };
-use wry::FileDropEvent;
+use wry::DragDropEvent;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct FileDialogRequest {
@@ -162,14 +162,14 @@ impl HasFormData for DesktopFileUploadForm {
 
 #[derive(Default, Clone)]
 pub struct NativeFileHover {
-    event: Rc<RefCell<Option<FileDropEvent>>>,
+    event: Rc<RefCell<Option<DragDropEvent>>>,
 }
 impl NativeFileHover {
-    pub fn set(&self, event: FileDropEvent) {
+    pub fn set(&self, event: DragDropEvent) {
         self.event.borrow_mut().replace(event);
     }
 
-    pub fn current(&self) -> Option<FileDropEvent> {
+    pub fn current(&self) -> Option<DragDropEvent> {
         self.event.borrow_mut().clone()
     }
 }

@@ -104,6 +104,13 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]
     pub use dioxus_fullstack::prelude::*;
 
+    #[cfg(all(feature = "static-generation", not(feature = "fullstack")))]
+    #[cfg_attr(
+        docsrs,
+        doc(cfg(all(feature = "static-generation", not(feature = "fullstack"))))
+    )]
+    pub use dioxus_static_site_generation::prelude::*;
+
     #[cfg(feature = "router")]
     #[cfg_attr(docsrs, doc(cfg(feature = "router")))]
     pub use dioxus_router;

@@ -115,7 +115,6 @@ async fn launch_server(
     context_providers: ContextProviders,
 ) {
     use clap::Parser;
-
     use crate::prelude::RenderHandleState;
 
     // Get the address the server should run on. If the CLI is running, the CLI proxies fullstack into the main address
@@ -132,11 +131,10 @@ async fn launch_server(
         .map(|args| args.cli_address())
         .unwrap_or_else(|| address.clone());
 
-    // println!("Listening on http://{}", serve_address);
-
     #[cfg(feature = "axum")]
     {
         use crate::axum_adapter::DioxusRouterExt;
+        use crate::prelude::RenderHandleState;
 
         let router = axum::Router::new().register_server_functions_with_context(context_providers);
 
