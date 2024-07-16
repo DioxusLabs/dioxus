@@ -11,7 +11,7 @@ use super::get_global_context;
 /// A signal that can be accessed from anywhere in the application and created in a static
 pub struct GlobalMemo<T: 'static> {
     selector: fn() -> T,
-    key: GlobalKey,
+    key: GlobalKey<'static>,
 }
 
 impl<T: PartialEq + 'static> GlobalMemo<T> {
@@ -29,7 +29,7 @@ impl<T: PartialEq + 'static> GlobalMemo<T> {
     }
 
     /// Get the key for this global
-    pub fn key(&self) -> GlobalKey {
+    pub fn key(&self) -> GlobalKey<'static> {
         self.key.clone()
     }
 

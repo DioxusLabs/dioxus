@@ -12,7 +12,7 @@ use crate::Signal;
 /// A signal that can be accessed from anywhere in the application and created in a static
 pub struct GlobalSignal<T> {
     initializer: fn() -> T,
-    key: GlobalKey,
+    key: GlobalKey<'static>,
 }
 
 impl<T: 'static> GlobalSignal<T> {
@@ -27,7 +27,7 @@ impl<T: 'static> GlobalSignal<T> {
     }
 
     /// Get the key for this global
-    pub fn key(&self) -> GlobalKey {
+    pub fn key(&self) -> GlobalKey<'static> {
         self.key.clone()
     }
 

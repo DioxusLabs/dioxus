@@ -12,80 +12,58 @@ use crate::Signal;
 /// The context for global signals
 #[derive(Clone)]
 pub struct GlobalSignalContext {
-    signal: Rc<RefCell<HashMap<GlobalKey, Box<dyn Any>>>>,
+    signal: Rc<RefCell<HashMap<GlobalKey<'static>, Box<dyn Any>>>>,
 }
 
 /// A key used to identify a signal in the global signal context
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct GlobalKey {
-    // We create an extra wrapper type here to make the storage of Location vs &'static str
-    // hidden so we could change it in a minor version
-    variant: GlobalKeyVariant,
+pub struct GlobalKey<'a> {
+    // We create an extra wrapper around location so we can construct it manually for hot reloading
+    file: &'a str,
+    line: u32,
+    column: u32,
 }
 
-impl GlobalKey {
+impl<'a> GlobalKey<'a> {
     /// Create a new key from a location
-    pub const fn new(key: &'static Location<'static>) -> Self {
+    pub const fn new(key: &'a Location<'a>) -> Self {
         GlobalKey {
-            variant: GlobalKeyVariant::Static(key),
+            file: key.file(),
+            line: key.line(),
+            column: key.column(),
         }
     }
 
     /// Create a new key from a static string
     #[allow(unused)]
-    pub const fn new_from_str(key: &'static str) -> Self {
+    pub const fn new_from_str(key: &'a str) -> Self {
         GlobalKey {
-            variant: GlobalKeyVariant::Dynamic(key),
+            file: key,
+            line: 0,
+            column: 0,
         }
     }
 }
 
-impl From<&'static str> for GlobalKey {
+impl From<&'static str> for GlobalKey<'static> {
     fn from(key: &'static str) -> Self {
-        GlobalKey {
-            variant: GlobalKeyVariant::Dynamic(key),
-        }
+        Self::new_from_str(key)
     }
 }
 
-impl From<&'static Location<'static>> for GlobalKey {
+impl From<&'static Location<'static>> for GlobalKey<'static> {
     fn from(key: &'static Location<'static>) -> Self {
-        GlobalKey {
-            variant: GlobalKeyVariant::Static(key),
-        }
+        Self::new(key)
     }
-}
-
-impl std::fmt::Display for GlobalKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self.variant {
-            GlobalKeyVariant::Static(key) => write!(f, "{}", key)?,
-            GlobalKeyVariant::Dynamic(key) => write!(f, "{}", key)?,
-        }
-
-        Ok(())
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-enum GlobalKeyVariant {
-    Static(&'static Location<'static>),
-    Dynamic(&'static str),
 }
 
 impl GlobalSignalContext {
     /// Get a signal with the given string key
     /// The key will be converted to a UUID with the appropriate internal namespace
     pub fn get_signal_with_key<T>(&self, key: &str) -> Option<Signal<T>> {
-        // Safety: We only extend the lifetime for hashing purposes. The key is never used after the function returns
-        // A raw hash API would let us avoid this unsafe block, but it's not available in stable rust
-        let key = unsafe { std::mem::transmute::<&str, &'static str>(key) };
+        let key = GlobalKey::new_from_str(key);
 
-        let id = GlobalKey {
-            variant: GlobalKeyVariant::Dynamic(key),
-        };
-
-        self.signal.borrow().get(&id).map(|f| {
+        self.signal.borrow().get(&key).map(|f| {
             *f.downcast_ref::<Signal<T>>().unwrap_or_else(|| {
                 panic!(
                     "Global signal with key {:?} is not of the expected type. Keys are {:?}",
