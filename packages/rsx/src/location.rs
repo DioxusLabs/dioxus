@@ -3,7 +3,7 @@ use std::{cell::Cell, hash::Hash};
 /// A simple idx in the code that can be used to track back to the original source location
 ///
 /// Used in two places:
-/// - In the `CallBody` to track the location of ifmt strings
+/// - In the `CallBody` to track the location of hotreloadable literals
 /// - In the `Body` to track the ID of each template
 ///
 /// We need an ID system, unfortunately, to properly disambiguate between different templates since
