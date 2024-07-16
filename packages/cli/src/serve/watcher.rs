@@ -134,31 +134,40 @@ impl Watcher {
         }
     }
 
-    pub fn attempt_hot_reload(&mut self, config: &DioxusCrate) -> Option<HotReloadMsg> {
-        let mut edited_rust_files = Vec::new();
-        let mut changed_assets = Vec::new();
-        let mut unknown_files = Vec::new();
-
-        let mut all_mods: Vec<(EventKind, PathBuf)> = vec![];
+    pub fn dequeue_changed_files(&mut self) -> Vec<PathBuf> {
+        let mut all_mods: Vec<PathBuf> = vec![];
 
         // Decompose the events into a list of all the files that have changed
         for evt in self.queued_events.drain(..) {
             for modi in evt.paths {
-                all_mods.push((evt.kind, modi.clone()));
+                // && kind == &EventKind::Modify(ModifyKind::Data(DataChange::Content))
+                all_mods.push(modi.clone());
             }
         }
+
+        all_mods
+    }
+
+    pub fn attempt_hot_reload(
+        &mut self,
+        config: &DioxusCrate,
+        all_mods: Vec<PathBuf>,
+    ) -> Option<HotReloadMsg> {
+        let mut edited_rust_files = Vec::new();
+        let mut changed_assets = Vec::new();
+        let mut unknown_files = Vec::new();
 
         // For the non-rust files, we want to check if it's an asset file
         // This would mean the asset lives somewhere under the /assets directory or is referenced by magnanis in the linker
         // todo: mg integration here
-        let asset_dir = config
+        let _asset_dir = config
             .dioxus_config
             .application
             .asset_dir
             .canonicalize()
             .ok();
 
-        for (kind, path) in all_mods.iter() {
+        for path in all_mods.iter() {
             // for various assets that might be linked in, we just try to hotreloading them forcefully
             // That is, unless they appear in an include! macro, in which case we need to a full rebuild....
             let Some(ext) = path.extension().and_then(|v| v.to_str()) else {
@@ -186,25 +195,11 @@ impl Watcher {
                 continue;
             }
 
-            // Only handle .rs files that are changed since adds/removes don't necessarily change a rust project itself
-            if ext == "rs" && kind == &EventKind::Modify(ModifyKind::Data(DataChange::Content)) {
-                edited_rust_files.push(path);
-                continue;
+            match ext {
+                "rs" => edited_rust_files.push(path),
+                _ if path.starts_with("assets") => changed_assets.push(path),
+                _ => unknown_files.push(path),
             }
-
-            let asset_file = match &asset_dir {
-                Some(asset_dir) => path.starts_with(asset_dir),
-                None => false,
-            };
-
-            if ext != "rs" && asset_file {
-                changed_assets.push(path);
-                continue;
-            }
-
-            panic!("Unknown file: {:?}, kind: {:?}", path, kind);
-
-            unknown_files.push(path.clone());
         }
 
         // If we have any changes to the rust files, we need to update the file map
@@ -223,7 +218,7 @@ impl Watcher {
         Some(HotReloadMsg {
             templates: changed_templates,
             assets: changed_assets.into_iter().cloned().collect(),
-            unknown_files,
+            unknown_files: unknown_files.into_iter().cloned().collect(),
         })
     }
 
@@ -232,46 +227,16 @@ impl Watcher {
     pub fn pending_changes(&mut self) -> bool {
         !self.queued_events.is_empty()
     }
+
+    pub fn hotreload_all_files(&mut self, config: &DioxusCrate) {
+        let keys = self.file_map.map.keys().collect::<Vec<_>>();
+
+        // for key in keys {
+        //     self.file_map
+        //         .update_rsx::<HtmlCtx>(key, &config.crate_dir());
+        // }
+    }
 }
-
-// fn attempt_css_reload(
-//     path: &Path,
-//     asset_dir: PathBuf,
-//     rsx_file_map: &std::sync::MutexGuard<'_, FileMap<HtmlCtx>>,
-//     config: &CrateConfig,
-//     messages: &mut Vec<HotReloadMsg>,
-// ) -> Option<()> {
-//     // If the path is not in the asset directory, return
-//     if !path.starts_with(asset_dir) {
-//         return None;
-//     }
-
-//     // Get the local path of the asset (ie var.css or some_dir/var.css as long as the dir is under the asset dir)
-//     let local_path = local_path_of_asset(path)?;
-
-//     // Make sure we're actually tracking this asset...
-//     _ = rsx_file_map.is_tracking_asset(&local_path)?;
-
-//     // copy the asset over to the output directory
-//     // todo this whole css hotreloading should be less hacky and more robust
-//     _ = fs_extra::copy_items(
-//         &[path],
-//         config.out_dir(),
-//         &CopyOptions::new().overwrite(true),
-//     );
-
-//     messages.push(HotReloadMsg::Update {
-//         templates: Default::default(),
-//         changed_strings: Default::default(),
-//         assets: vec![local_path],
-//     });
-
-//     Some(())
-// }
-
-// fn local_path_of_asset(path: &Path) -> Option<PathBuf> {
-//     path.file_name()?.to_str()?.to_string().parse().ok()
-// }
 
 fn is_backup_file(path: PathBuf) -> bool {
     // If there's a tilde at the end of the file, it's a backup file

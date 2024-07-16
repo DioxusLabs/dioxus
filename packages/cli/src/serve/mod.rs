@@ -70,16 +70,14 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                     continue;
                 }
 
+                let changed_files = watcher.dequeue_changed_files();
+
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients
-                if let Some(hr) = watcher.attempt_hot_reload(&dioxus_crate) {
+                if let Some(hr) = watcher.attempt_hot_reload(&dioxus_crate, changed_files) {
                     // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
                     if hr.templates.is_empty() && hr.assets.is_empty() {
                         continue
-                    }
-
-                    if !hr.unknown_files.is_empty() {
-                        panic!("{:#?}", hr);
                     }
 
                     server.send_hotreload(hr).await;
@@ -97,8 +95,14 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
             msg = server.wait() => {
                 // Run the server in the background
                 // Waiting for updates here lets us tap into when clients are added/removed
-                if let Some(msg) = msg {
-                    screen.new_ws_message(Platform::Web, msg);
+                match msg {
+                    Some(SocketUpdate::NewSocket(socket)) => {
+                        server.hot_reload_sockets.push(socket);
+                    }
+                    Some(SocketUpdate::NewMessage(msg)) => {
+                        screen.new_ws_message(Platform::Web, msg);
+                    }
+                    None => {}
                 }
             }
 
@@ -113,6 +117,10 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                         server.update_build_status(screen.build_progress.progress()).await;
                     }
                     Ok(BuilderUpdate::Ready { results }) => {
+                        if !results.is_empty() {
+                            builder.children.clear();
+                        }
+
                         // If we have a build result, open it
                         for build_result in results.iter() {
                             let child = build_result.open(&serve.server_arguments, server.fullstack_address());

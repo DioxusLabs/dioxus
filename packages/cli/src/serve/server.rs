@@ -200,8 +200,18 @@ impl Server {
         }
     }
 
+    pub async fn send_initial_reload(&mut self, reload: HotReloadMsg) {
+        let msg = DevserverMsg::HotReload(reload);
+        let msg = serde_json::to_string(&msg).unwrap();
+
+        let socket = self.hot_reload_sockets.last_mut().unwrap();
+        if socket.send(Message::Text(msg)).await.is_err() {
+            self.hot_reload_sockets.pop();
+        }
+    }
+
     /// Wait for new clients to be connected and then save them
-    pub async fn wait(&mut self) -> Option<Message> {
+    pub async fn wait(&mut self) -> Option<SocketUpdate> {
         let mut new_hot_reload_socket = self.new_hot_reload_sockets.next();
         let mut new_build_status_socket = self.new_build_status_sockets.next();
         let mut new_message = self
@@ -225,7 +235,7 @@ impl Server {
                 if let Some(mut new_socket) = new_build_status_socket {
                     drop(new_message);
                     // Update the socket with the current status
-                    if  send_build_status_to(&self.build_status, &mut new_socket).await.is_ok() {
+                    if send_build_status_to(&self.build_status, &mut new_socket).await.is_ok() {
                         self.build_status_sockets.push(new_socket);
                     }
                     return None;
@@ -235,7 +245,7 @@ impl Server {
             }
             Some((idx, message)) = new_message.next() => {
                 match message {
-                    Some(Ok(message)) => return Some(message),
+                    Some(Ok(message)) => return Some(SocketUpdate::NewMessage(message)),
                     _ => {
                         drop(new_message);
                         _ = self.hot_reload_sockets.remove(idx);
@@ -290,6 +300,12 @@ impl Server {
         self.fullstack_port
             .map(|port| SocketAddr::new(self.ip, port))
     }
+}
+
+// Updates from the server wait channel
+pub enum SocketUpdate {
+    NewSocket(WebSocket),
+    NewMessage(Message),
 }
 
 /// Sets up and returns a router

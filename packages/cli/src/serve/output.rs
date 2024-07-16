@@ -462,12 +462,12 @@ impl Output {
             // Render a border for the header
             frame.render_widget(Block::default().borders(Borders::BOTTOM), body[0]);
 
+            // We're going to assemble a text buffer directly and then let the paragraph widgets
+            // handle the wrapping and scrolling
+            let mut paragraph_text: Text<'_> = Text::default();
+
             for platform in self.build_progress.build_logs.keys() {
                 let build = self.build_progress.build_logs.get(platform).unwrap();
-
-                // We're going to assemble a text buffer directly and then let the paragraph widgets
-                // handle the wrapping and scrolling
-                let mut paragraph_text: Text<'_> = Text::default();
 
                 for span in build.messages.iter() {
                     use ansi_to_tui::IntoText;
@@ -486,22 +486,22 @@ impl Output {
                         }
                     };
                 }
-
-                let paragraph = Paragraph::new(paragraph_text)
-                    .left_aligned()
-                    .wrap(Wrap { trim: false });
-
-                self.term_height = body[1].height;
-                self.num_lines_with_wrapping = paragraph.line_count(body[1].width) as u16;
-
-                // if self.is_snapped(platform.clone()) {
-                // self.scroll = (self.num_lines_with_wrapping).saturating_sub(self.term_height);
-                // }
-
-                let paragraph = paragraph.scroll((self.scroll, 0));
-
-                frame.render_widget(paragraph, body[1]);
+                // frame.render_widget(paragraph, body[1]);
             }
+
+            let paragraph = Paragraph::new(paragraph_text)
+                .left_aligned()
+                .wrap(Wrap { trim: false });
+
+            self.term_height = body[1].height;
+            self.num_lines_with_wrapping = paragraph.line_count(body[1].width) as u16;
+
+            // if self.is_snapped(platform.clone()) {
+            // self.scroll = (self.num_lines_with_wrapping).saturating_sub(self.term_height);
+            // }
+
+            let paragraph = paragraph.scroll((self.scroll, 0));
+            paragraph.render(body[1], frame.buffer_mut());
 
             // Render the metadata
             let mut spans = vec![
@@ -509,17 +509,17 @@ impl Output {
                 Span::from(" ").green(),
                 Span::from("serve").green(),
                 Span::from(" | ").white(),
+                Span::from(self.platform.to_string()).cyan(),
                 // Span::from(frame_step.to_string()).cyan(),
-                Span::from("v").cyan(),
-                Span::from(self.dx_version.clone()).cyan(),
-                // Span::from(" | ").white(),
+                // Span::from("v").cyan(),
+                // Span::from(self.dx_version.clone()).cyan(),
+                Span::from(" | ").white(),
                 // Span::from("rustc-").cyan(),
                 // Span::from(self.rustc_version.clone()).cyan(),
                 // Span::from(if self.rustc_nightly { "-nightly" } else { "" }).cyan(),
-                Span::from(" | ").white(),
+                // Span::from(" | ").white(),
             ];
 
-            spans.push(Span::from(self.platform.to_string()).cyan());
             // If there is build progress, display that next to the platform
             if !self.build_progress.build_logs.is_empty() {
                 let build = self
@@ -529,40 +529,36 @@ impl Output {
                     .min_by(|a, b| a.partial_cmp(b).unwrap())
                     .unwrap();
                 // If the build is finished, no need to show the progress
-                if build.stage != Stage::Finished {
-                    spans.push(Span::from(" "));
-                    spans.extend_from_slice(&build.spans(Rect::new(
-                        0,
-                        0,
-                        build.max_layout_size(),
-                        1,
-                    )));
-                }
+                // if build.stage != Stage::Finished {
+                spans.push(Span::from(" "));
+                spans.extend_from_slice(&build.spans(Rect::new(0, 0, build.max_layout_size(), 1)));
+                // }
             }
 
-            spans.extend_from_slice(&[
-                Span::from(" | ").white(),
-                Span::from(self.scroll.to_string()).cyan(),
-                Span::from("/").white(),
-                Span::from(
-                    (self
-                        .num_lines_with_wrapping
-                        .saturating_sub(self.term_height))
-                    .to_string(),
-                )
-                .cyan(),
-                Span::from(" | ").white(),
-            ]);
+            // spans.extend_from_slice(&[Span::from(" | ").white()]);
+            // spans.extend_from_slice(&[
+            //     Span::from(" | ").white(),
+            //     Span::from(self.scroll.to_string()).cyan(),
+            //     Span::from("/").white(),
+            //     Span::from(
+            //         (self
+            //             .num_lines_with_wrapping
+            //             .saturating_sub(self.term_height))
+            //         .to_string(),
+            //     )
+            //     .cyan(),
+            //     Span::from(" | ").white(),
+            // ]);
 
-            for (cmd, name) in [("/", "more"), ("?", "help")].iter() {
-                spans.extend_from_slice(&[
-                    Span::from("[").magenta(),
-                    Span::from(*cmd).white(),
-                    Span::from(" ").magenta(),
-                    Span::from(*name).gray(),
-                    Span::from("] ").magenta(),
-                ]);
-            }
+            // for (cmd, name) in [("/", "more")].iter() {
+            //     spans.extend_from_slice(&[
+            //         Span::from("[").magenta(),
+            //         Span::from(*cmd).white(),
+            //         Span::from(" ").magenta(),
+            //         Span::from(*name).gray(),
+            //         Span::from("] ").magenta(),
+            //     ]);
+            // }
 
             frame.render_widget(Paragraph::new(Line::from(spans)).left_aligned(), header[0]);
 
@@ -625,18 +621,21 @@ impl ActiveBuild {
 
     fn spans(&self, area: Rect) -> Vec<Span> {
         let message = self.stage.to_string();
-        let progress = format!("{:>3}%", (self.progress * 100.0) as u8);
+        let progress = format!("{}%", (self.progress * 100.0) as u8);
+        // let progress = format!("{:>3}%", (self.progress * 100.0) as u8);
 
         let mut spans = Vec::new();
-        spans.push(Span::from("[").magenta());
+        // spans.push(Span::from("[").magenta());
         if area.width >= self.max_layout_size() {
             spans.push(Span::from(message).light_green());
-            spans.push(Span::from(" ").white());
-            spans.push(Span::from(progress).cyan());
+            if self.stage != Stage::Finished {
+                spans.push(Span::from(": ").white());
+                spans.push(Span::from(progress).cyan());
+            }
         } else {
             spans.push(Span::from(progress).cyan());
         }
-        spans.push(Span::from("]").magenta());
+        // spans.push(Span::from("]").magenta());
 
         spans
     }
