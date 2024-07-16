@@ -20,12 +20,12 @@ use axum::{
 use axum_server::tls_rustls::RustlsConfig;
 use dioxus_cli_config::{Platform, WebHttpsConfig};
 use dioxus_hot_reload::{DevserverMsg, HotReloadMsg};
-use dioxus_html::base;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use hyper::header::ACCEPT;
 use hyper::HeaderMap;
 use serde::{Deserialize, Serialize};
+use std::net::TcpListener;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -35,7 +35,6 @@ use std::{
     net::{IpAddr, SocketAddr},
     process::Command,
 };
-use std::{net::TcpListener, path::PathBuf};
 use tokio::task::JoinHandle;
 use tower::ServiceBuilder;
 use tower_http::{

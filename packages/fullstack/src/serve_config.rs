@@ -1,7 +1,6 @@
 //! Configuration for how to serve a Dioxus application
 #![allow(non_snake_case)]
 
-use std::env::current_dir;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;

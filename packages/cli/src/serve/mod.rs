@@ -70,7 +70,7 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                     continue;
                 }
 
-                let changed_files = watcher.dequeue_changed_files();
+                let changed_files = watcher.dequeue_changed_files(&dioxus_crate);
 
                 // if change is hotreloadable, hotreload it
                 // and then send that update to all connected clients

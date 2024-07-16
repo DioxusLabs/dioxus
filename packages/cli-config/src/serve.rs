@@ -85,5 +85,4 @@ fn default_port() -> u16 {
 
 fn default_address() -> IpAddr {
     IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1))
-    // IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0))
 }

@@ -134,28 +134,27 @@ impl Watcher {
         }
     }
 
-    pub fn dequeue_changed_files(&mut self) -> Vec<PathBuf> {
+    /// Deques changed files from the event queue, doing the proper intelligent filtering
+    pub fn dequeue_changed_files(&mut self, config: &DioxusCrate) -> Vec<PathBuf> {
         let mut all_mods: Vec<PathBuf> = vec![];
 
         // Decompose the events into a list of all the files that have changed
-        for evt in self.queued_events.drain(..) {
-            for modi in evt.paths {
-                // && kind == &EventKind::Modify(ModifyKind::Data(DataChange::Content))
-                all_mods.push(modi.clone());
+        for event in self.queued_events.drain(..) {
+            // We only care about modify/crate/delete events
+            match event.kind {
+                EventKind::Modify(ModifyKind::Data(_)) => {}
+                EventKind::Modify(ModifyKind::Name(_)) => {}
+                EventKind::Create(_) => {}
+                EventKind::Remove(_) => {}
+                _ => continue,
+            }
+
+            for path in event.paths {
+                all_mods.push(path.clone());
             }
         }
 
-        all_mods
-    }
-
-    pub fn attempt_hot_reload(
-        &mut self,
-        config: &DioxusCrate,
-        all_mods: Vec<PathBuf>,
-    ) -> Option<HotReloadMsg> {
-        let mut edited_rust_files = Vec::new();
-        let mut changed_assets = Vec::new();
-        let mut unknown_files = Vec::new();
+        let mut modified_files = vec![];
 
         // For the non-rust files, we want to check if it's an asset file
         // This would mean the asset lives somewhere under the /assets directory or is referenced by magnanis in the linker
@@ -168,11 +167,9 @@ impl Watcher {
             .ok();
 
         for path in all_mods.iter() {
-            // for various assets that might be linked in, we just try to hotreloading them forcefully
-            // That is, unless they appear in an include! macro, in which case we need to a full rebuild....
-            let Some(ext) = path.extension().and_then(|v| v.to_str()) else {
+            if path.extension().is_none() {
                 continue;
-            };
+            }
 
             // Workaround for notify and vscode-like editor:
             // when edit & save a file in vscode, there will be two notifications,
@@ -195,30 +192,53 @@ impl Watcher {
                 continue;
             }
 
+            modified_files.push(path.clone());
+        }
+
+        modified_files
+    }
+
+    pub fn attempt_hot_reload(
+        &mut self,
+        config: &DioxusCrate,
+        modified_files: Vec<PathBuf>,
+    ) -> Option<HotReloadMsg> {
+        // If we have any changes to the rust files, we need to update the file map
+        let crate_dir = config.crate_dir();
+        let mut templates = vec![];
+
+        // Prepare the hotreload message we need to send
+        let mut edited_rust_files = Vec::new();
+        let mut assets = Vec::new();
+        let mut unknown_files = Vec::new();
+
+        for path in modified_files {
+            // for various assets that might be linked in, we just try to hotreloading them forcefully
+            // That is, unless they appear in an include! macro, in which case we need to a full rebuild....
+            let Some(ext) = path.extension().and_then(|v| v.to_str()) else {
+                continue;
+            };
+
             match ext {
                 "rs" => edited_rust_files.push(path),
-                _ if path.starts_with("assets") => changed_assets.push(path),
+                _ if path.starts_with("assets") => assets.push(path),
                 _ => unknown_files.push(path),
             }
         }
 
-        // If we have any changes to the rust files, we need to update the file map
-        let crate_dir = config.crate_dir();
-        let mut changed_templates = vec![];
-
         for rust_file in edited_rust_files {
             let hotreloaded_templates = self
                 .file_map
-                .update_rsx::<HtmlCtx>(rust_file, &crate_dir)
+                .update_rsx::<HtmlCtx>(&rust_file, &crate_dir)
                 .ok()?;
 
-            changed_templates.extend(hotreloaded_templates);
+            templates.extend(hotreloaded_templates);
         }
 
         Some(HotReloadMsg {
-            templates: changed_templates,
-            assets: changed_assets.into_iter().cloned().collect(),
-            unknown_files: unknown_files.into_iter().cloned().collect(),
+            templates,
+            assets,
+            unknown_files,
         })
     }
 

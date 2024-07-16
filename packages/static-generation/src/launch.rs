@@ -30,7 +30,6 @@ pub fn launch(
             use axum::routing::get;
             use axum::Router;
             use axum::ServiceExt;
-            use dioxus_hot_reload::HotReloadRouterExt;
             use http::StatusCode;
             use tower_http::services::ServeDir;
             use tower_http::services::ServeFile;
