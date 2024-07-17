@@ -20,6 +20,7 @@ axum = { workspace = true, features = ["ws", "macros"], optional = true }
 tower-http = { workspace = true, optional = true, features = ["fs"] }
 
 dioxus-lib = { workspace = true }
+generational-box = { workspace = true }
 
 # Dioxus + SSR
 dioxus-ssr = { workspace = true, optional = true }

@@ -2474,6 +2474,7 @@ dependencies = [
  "dioxus_server_macro",
  "futures-channel",
  "futures-util",
+ "generational-box 0.5.2",
  "http 1.1.0",
  "hyper 1.4.1",
  "once_cell",

@@ -655,6 +655,11 @@ builder_constructors! {
         title: String DEFAULT, // FIXME
         r#type: Mime "type",
         integrity: String DEFAULT,
+        disabled: Bool DEFAULT,
+        referrerpolicy: ReferrerPolicy DEFAULT,
+        fetchpriority: FetchPriority DEFAULT,
+        blocking: Blocking DEFAULT,
+        r#as: As "as",
     };
 
     /// Build a
@@ -1261,6 +1266,8 @@ builder_constructors! {
         nonce: Nonce DEFAULT,
         src: Uri DEFAULT,
         text: String DEFAULT,
+        fetchpriority: String DEFAULT,
+        referrerpolicy: String DEFAULT,
 
         r#async: Bool "async",
         r#type: String "type", // TODO could be an enum

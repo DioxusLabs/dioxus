@@ -19,6 +19,8 @@ pub mod launch;
 pub use config::*;
 
 #[cfg(feature = "server")]
+mod document;
+#[cfg(feature = "server")]
 mod render;
 #[cfg(feature = "server")]
 mod streaming;

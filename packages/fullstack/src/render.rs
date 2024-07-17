@@ -1,5 +1,5 @@
 //! A shared pool of renderers for efficient server side rendering.
-use crate::streaming::StreamingRenderer;
+use crate::{document::FullstackDocumentProvider, streaming::StreamingRenderer};
 use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
 use dioxus_ssr::{
     incremental::{CachedRender, RenderFreshness},
@@ -7,9 +7,9 @@ use dioxus_ssr::{
 };
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
-use std::sync::RwLock;
 use std::{collections::HashMap, future::Future};
 use std::{fmt::Write, sync::Arc};
+use std::{rc::Rc, sync::RwLock};
 use tokio::task::JoinHandle;
 
 use crate::prelude::*;
@@ -160,8 +160,29 @@ impl SsrRendererPool {
 
         let join_handle = spawn_platform(move || async move {
             let mut virtual_dom = virtual_dom_factory();
+            let document = Rc::new(FullstackDocumentProvider::default());
+            virtual_dom.provide_root_context(document.clone() as Rc<dyn Document>);
+
+            // poll the future, which may call server_context()
+            tracing::info!("Rebuilding vdom");
+            with_server_context(server_context.clone(), || virtual_dom.rebuild_in_place());
 
             let mut pre_body = String::new();
+
+            if let Err(err) = wrapper.render_head(&mut pre_body) {
+                _ = into.start_send(Err(err));
+                return;
+            }
+
+            // Collect any head content from the document provider and inject that into the head
+            if let Err(err) = document.render(&mut pre_body, &mut renderer) {
+                _ = into.start_send(Err(err.into()));
+                return;
+            }
+
+            // Enable a warning when inserting contents into the head during streaming
+            document.start_streaming();
+
             if let Err(err) = wrapper.render_before_body(&mut pre_body) {
                 _ = into.start_send(Err(err));
                 return;
@@ -205,10 +226,6 @@ impl SsrRendererPool {
                     return;
                 };
             }
-
-            // poll the future, which may call server_context()
-            tracing::info!("Rebuilding vdom");
-            with_server_context(server_context.clone(), || virtual_dom.rebuild_in_place());
 
             // Render the initial frame with loading placeholders
             let mut initial_frame = renderer.render(&virtual_dom);
@@ -364,6 +381,18 @@ impl FullstackHTMLTemplate {
 }
 
 impl FullstackHTMLTemplate {
+    /// Render any content before the head of the page.
+    pub fn render_head<R: std::fmt::Write>(
+        &self,
+        to: &mut R,
+    ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
+        let ServeConfig { index, .. } = &self.cfg;
+
+        to.write_str(&index.head)?;
+
+        Ok(())
+    }
+
     /// Render any content before the body of the page.
     pub fn render_before_body<R: std::fmt::Write>(
         &self,
@@ -371,7 +400,7 @@ impl FullstackHTMLTemplate {
     ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
         let ServeConfig { index, .. } = &self.cfg;
 
-        to.write_str(&index.pre_main)?;
+        to.write_str(&index.close_head)?;
 
         Ok(())
     }
