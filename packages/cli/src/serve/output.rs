@@ -94,6 +94,10 @@ impl Output {
         if interactive {
             enable_raw_mode()?;
             stdout().execute(EnterAlternateScreen)?;
+
+            // workaround for ci where the terminal is not fully initialized
+            // this stupid bug
+            // https://github.com/crossterm-rs/crossterm/issues/659
             events = Some(EventStream::new());
         };
 
