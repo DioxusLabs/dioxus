@@ -26,7 +26,7 @@ dioxus-html = { workspace = true, features = ["serialize", "eval", "mounted"] }
 rustc-hash = { workspace = true }
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
-dioxus-hot-reload = { workspace = true, optional = true }
+dioxus-hot-reload = { workspace = true, optional = true, features = ["serve", "client"] }
 dioxus-cli-config = { workspace = true, features = ["read-config"] }
 generational-box = { workspace = true }
 

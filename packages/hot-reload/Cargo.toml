@@ -14,7 +14,7 @@ dioxus-rsx = { workspace = true, features = ["serde"] }
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-html = { workspace = true, optional = true }
 dioxus-signals = { workspace = true, optional = true }
-dioxus-cli-config = { workspace = true, optional = true }
+dioxus-cli-config = { workspace = true, optional = true, features = ["cli"]}
 
 notify = { workspace = true, optional = true }
 chrono = { version = "0.4.24", default-features = false, features = ["clock"], optional = true }
@@ -27,7 +27,7 @@ ignore = { version = "0.4.19", optional = true }
 # hot reloading serve
 tokio-stream = { version = "0.1.12", features = ["sync"], optional = true }
 futures-util = { workspace = true, features = ["async-await-macro"], optional = true }
-tokio = { workspace = true, features = ["sync"], optional = true }
+tokio = { workspace = true, features = ["sync", "rt-multi-thread"], optional = true }
 tracing = { workspace = true }
 tokio-tungstenite = { workspace = true, optional = true }
 
