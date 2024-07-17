@@ -130,7 +130,7 @@ base64 = "0.22.1"
 once_cell = "1.17.1"
 uuid = "1.9.1"
 convert_case = "0.6.0"
-tokio-tungstenite = { version = "0.21.0" }
+tokio-tungstenite = { version = "0.23.1" }
 
 # cli, cli-config
 dirs = "5.0.1"
