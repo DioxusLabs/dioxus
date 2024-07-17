@@ -334,7 +334,7 @@ mod tests {
     /// Ensure the hotreload scoring algorithm works as expected
     #[test]
     fn hr_score() {
-        let block = quote! {
+        let _block = quote! {
             {
                 a: "value {cool}",
                 b: "{cool} value",
@@ -431,7 +431,7 @@ mod tests {
             }
         };
 
-        let parsed: RsxBlock = syn::parse2(input).unwrap();
+        let _parsed: RsxBlock = syn::parse2(input).unwrap();
     }
 
     #[test]
@@ -440,7 +440,7 @@ mod tests {
             { class: "inline-block mr-4", icons::icon_14 {} }
         };
 
-        let parsed: RsxBlock = syn::parse2(input).unwrap();
+        let _parsed: RsxBlock = syn::parse2(input).unwrap();
     }
 
     #[test]
@@ -468,7 +468,7 @@ mod tests {
             }
         };
 
-        let parsed: RsxBlock = syn::parse2(input).unwrap();
+        let _parsed: RsxBlock = syn::parse2(input).unwrap();
     }
 
     #[test]

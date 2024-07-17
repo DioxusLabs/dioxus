@@ -1,5 +1,5 @@
 use crate::HotReloadMsg;
-use dioxus_core::{prelude::HotReloadLiteral, ScopeId, VirtualDom};
+use dioxus_core::{internal::HotReloadLiteral, ScopeId, VirtualDom};
 use dioxus_signals::Writable;
 
 /// Applies template and literal changes to the VirtualDom

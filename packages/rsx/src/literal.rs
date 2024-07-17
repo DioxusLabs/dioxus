@@ -98,7 +98,7 @@ impl ToTokens for HotLiteral {
 
                 // The static segments with idxs for locations
                 quote! {
-                    FmtedSegments::new( vec![ #(#segments),* ], )
+                    dioxus_core::internal::FmtedSegments::new( vec![ #(#segments),* ], )
                 }
             }
             HotLiteralType::Float(a) => quote! { #a },
@@ -154,7 +154,7 @@ impl ToTokens for HotLiteral {
 
                     // The key is important here - we're creating a new GlobalSignal each call to this/
                     // But the key is what's keeping it stable
-                    dioxus::signals::GlobalSignal::with_key(
+                    GlobalSignal::with_key(
                         || #val, {
                         concat!(
                             file!(),

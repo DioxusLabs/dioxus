@@ -500,7 +500,7 @@ fn merges_attributes() {
 
     println!("{}", attr.to_token_stream().pretty_unparse());
 
-    let attr = match attr {
+    let _attr = match attr {
         AttributeValue::AttrLiteral(lit) => lit,
         _ => panic!("expected literal"),
     };

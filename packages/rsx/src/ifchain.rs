@@ -165,5 +165,5 @@ fn parses_if_chain() {
         }
     };
 
-    let chain: IfChain = syn::parse2(input).unwrap();
+    let _chain: IfChain = syn::parse2(input).unwrap();
 }

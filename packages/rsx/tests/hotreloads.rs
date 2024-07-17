@@ -17,22 +17,6 @@ macro_rules! assert_rsx_changed {
     };
 }
 
-macro_rules! assert_code_changed {
-    (
-        $( #[doc = $doc:expr] )*
-        $name:ident
-    ) => {
-        $( #[doc = $doc] )*
-        #[test]
-        fn $name() {
-            let old = include_str!(concat!("./invalid/", stringify!($name), ".old.rsx"));
-            let new = include_str!(concat!("./invalid/", stringify!($name), ".new.rsx"));
-            let (old, new) = load_files(old, new);
-            assert!(diff_rsx(&new, &old).is_none());
-        }
-    };
-}
-
 fn load_files(old: &str, new: &str) -> (File, File) {
     let old = syn::parse_file(old).unwrap();
     let new = syn::parse_file(new).unwrap();
