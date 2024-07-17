@@ -15,12 +15,13 @@ use crossterm::{
 };
 use dioxus_cli_config::Platform;
 use dioxus_hot_reload::ClientMsg;
-use futures_util::{future::select_all, StreamExt};
+use futures_util::{future::select_all, Future, StreamExt};
 use ratatui::{prelude::*, widgets::*, TerminalOptions, Viewport};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
     io::{self, stdout},
+    pin::Pin,
     rc::Rc,
     time::{Duration, Instant},
 };
@@ -54,7 +55,10 @@ impl BuildProgress {
 
 pub struct Output {
     term: Rc<RefCell<TerminalBackend>>,
-    events: EventStream,
+
+    // optional since when there's no tty there's no eventstream to read from - just stdin
+    events: Option<EventStream>,
+
     _rustc_version: String,
     _rustc_nightly: bool,
     _dx_version: String,
@@ -85,15 +89,17 @@ impl Output {
     pub async fn start(cfg: &Serve) -> io::Result<Self> {
         let interactive = std::io::stdout().is_tty() && cfg.interactive.unwrap_or(true);
 
+        let mut events = None;
+
         if interactive {
             enable_raw_mode()?;
             stdout().execute(EnterAlternateScreen)?;
-        }
+            events = Some(EventStream::new());
+        };
 
         // set the panic hook to fix the terminal
         set_fix_term_hook();
 
-        let events = EventStream::new();
         let term: TerminalBackend = Terminal::with_options(
             CrosstermBackend::new(stdout()),
             TerminalOptions {
@@ -149,7 +155,15 @@ impl Output {
     ///
     /// Also tick animations every few ms
     pub async fn wait(&mut self) -> io::Result<()> {
-        let user_input = self.events.next();
+        // sorry lord
+        let user_input = match self.events.as_mut() {
+            Some(events) => {
+                let pinned: Pin<Box<dyn Future<Output = Option<Result<Event, _>>>>> =
+                    Box::pin(events.next());
+                pinned
+            }
+            None => Box::pin(futures_util::future::pending()) as Pin<Box<dyn Future<Output = _>>>,
+        };
 
         let has_running_apps = !self.running_apps.is_empty();
         let next_stdout = self.running_apps.values_mut().map(|app| {
@@ -661,7 +675,7 @@ impl Output {
 
         // Collect all the events within the next 10ms in one stream
         loop {
-            let next = self.events.next();
+            let next = self.events.as_mut().unwrap().next();
             tokio::select! {
                 msg = next => events.push(msg.unwrap().unwrap()),
                 _ = tokio::time::sleep(Duration::from_millis(1)) => break
