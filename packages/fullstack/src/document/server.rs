@@ -1,4 +1,6 @@
-//! Head rendering for fullstack apps
+//! On the server, we collect any elements that should be rendered into the head in the first frame of SSR.
+//! After the first frame, we have already sent down the head, so we can't modify it in place. The web client
+//! will hydrate the head with the correct contents once it loads.
 
 use std::cell::RefCell;
 

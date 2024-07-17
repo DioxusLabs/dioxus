@@ -1,3 +1,6 @@
+#![allow(unused)]
+//! On the client, we use the [`WebDocument`] implementation to render the head for any elements that were not rendered on the server.
+
 use dioxus_lib::events::Document;
 use dioxus_web::WebDocument;
 
