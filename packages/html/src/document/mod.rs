@@ -2,6 +2,7 @@
 
 use std::{
     cell::RefCell,
+    collections::HashSet,
     rc::Rc,
     task::{Context, Poll},
 };
@@ -21,7 +22,9 @@ fn format_attributes(attributes: &[(&str, String)]) -> String {
     for (key, value) in attributes {
         formatted.push_str(&format!("[{key:?}, {value:?}],"));
     }
-    formatted.pop();
+    if formatted.ends_with(',') {
+        formatted.pop();
+    }
     formatted.push(']');
     formatted
 }
@@ -241,6 +244,7 @@ pub fn Meta(props: MetaProps) -> Element {
 #[derive(Clone, Props, PartialEq)]
 pub struct ScriptProps {
     pub children: Element,
+    /// Scripts are deduplicated by their src attribute
     pub src: Option<String>,
     pub defer: Option<bool>,
     pub crossorigin: Option<String>,
@@ -292,6 +296,12 @@ pub fn Script(props: ScriptProps) -> Element {
     use_update_warning(&props, "Script {}");
 
     use_hook(|| {
+        if let Some(src) = &props.src {
+            if !should_insert_script(src) {
+                return;
+            }
+        }
+
         let document = document();
         document.create_script(props);
     });
@@ -301,7 +311,7 @@ pub fn Script(props: ScriptProps) -> Element {
 
 #[derive(Clone, Props, PartialEq)]
 pub struct StyleProps {
-    // Allows React to de-duplicate styles that have the same href.
+    /// Styles are deduplicated by their href attribute
     pub href: Option<String>,
     pub media: Option<String>,
     pub nonce: Option<String>,
@@ -337,6 +347,11 @@ pub fn Style(props: StyleProps) -> Element {
     use_update_warning(&props, "Style {}");
 
     use_hook(|| {
+        if let Some(href) = &props.href {
+            if !should_insert_style(href) {
+                return;
+            }
+        }
         let document = document();
         document.create_style(props);
     });
@@ -352,6 +367,7 @@ pub struct LinkProps {
     pub disabled: Option<bool>,
     pub r#as: Option<String>,
     pub sizes: Option<String>,
+    /// Links are deduplicated by their href attribute
     pub href: Option<String>,
     pub crossorigin: Option<String>,
     pub referrerpolicy: Option<String>,
@@ -416,9 +432,68 @@ pub fn Link(props: LinkProps) -> Element {
     use_update_warning(&props, "Link {}");
 
     use_hook(|| {
+        if let Some(href) = &props.href {
+            if !should_insert_link(href) {
+                return;
+            }
+        }
         let document = document();
         document.create_link(props);
     });
 
     rsx! {}
+}
+
+fn get_or_insert_root_context<T: Default + Clone + 'static>() -> T {
+    match ScopeId::ROOT.has_context::<T>() {
+        Some(context) => context,
+        None => {
+            let context = T::default();
+            ScopeId::ROOT.provide_context(context.clone());
+            context
+        }
+    }
+}
+
+#[derive(Default, Clone)]
+struct LinkContext(DeduplicationContext);
+
+fn should_insert_link(href: &str) -> bool {
+    get_or_insert_root_context::<LinkContext>()
+        .0
+        .should_insert(href)
+}
+
+#[derive(Default, Clone)]
+struct ScriptContext(DeduplicationContext);
+
+fn should_insert_script(src: &str) -> bool {
+    get_or_insert_root_context::<ScriptContext>()
+        .0
+        .should_insert(src)
+}
+
+#[derive(Default, Clone)]
+struct StyleContext(DeduplicationContext);
+
+fn should_insert_style(href: &str) -> bool {
+    get_or_insert_root_context::<StyleContext>()
+        .0
+        .should_insert(href)
+}
+
+#[derive(Default, Clone)]
+struct DeduplicationContext(Rc<RefCell<HashSet<String>>>);
+
+impl DeduplicationContext {
+    fn should_insert(&self, href: &str) -> bool {
+        let mut set = self.0.borrow_mut();
+        let present = set.contains(href);
+        if !present {
+            set.insert(href.to_string());
+            true
+        } else {
+            false
+        }
+    }
 }
