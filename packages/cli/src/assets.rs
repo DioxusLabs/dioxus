@@ -67,6 +67,7 @@ pub(crate) fn process_assets(
                                 "Optimized static asset {}",
                                 file_asset
                             )),
+                            source: None,
                         }),
                     });
                     assets_finished += 1;

@@ -71,7 +71,7 @@ impl SharedStatus {
 pub(crate) struct Server {
     pub hot_reload_sockets: Vec<WebSocket>,
     pub build_status_sockets: Vec<WebSocket>,
-    pub ip: IpAddr,
+    pub ip: SocketAddr,
     pub new_hot_reload_sockets: UnboundedReceiver<WebSocket>,
     pub new_build_status_sockets: UnboundedReceiver<WebSocket>,
     _server_task: JoinHandle<Result<()>>,
@@ -149,7 +149,7 @@ impl Server {
             new_hot_reload_sockets: hot_reload_sockets_rx,
             new_build_status_sockets: build_status_sockets_rx,
             _server_task,
-            ip: addr.ip(),
+            ip: addr,
             fullstack_port,
             build_status,
         }
@@ -297,7 +297,7 @@ impl Server {
     /// Get the address the fullstack server should run on if we're serving a fullstack app
     pub fn fullstack_address(&self) -> Option<SocketAddr> {
         self.fullstack_port
-            .map(|port| SocketAddr::new(self.ip, port))
+            .map(|port| SocketAddr::new(self.ip.ip(), port))
     }
 }
 

@@ -6,19 +6,21 @@ use crate::{
     builder::{BuildResult, UpdateStage},
     serve::Serve,
 };
+use core::panic;
 use crossterm::{
-    event::{Event, EventStream, KeyCode, KeyModifiers, MouseEventKind},
+    event::{self, Event, EventStream, KeyCode, KeyModifiers, MouseEventKind},
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     tty::IsTty,
     ExecutableCommand,
 };
 use dioxus_cli_config::Platform;
 use dioxus_hot_reload::ClientMsg;
-use futures_util::{future::select_all, StreamExt};
+use dioxus_html::span;
+use futures_util::{future::select_all, StreamExt, TryStreamExt};
 use ratatui::{prelude::*, widgets::*, TerminalOptions, Viewport};
 use std::{
     cell::RefCell,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     io::{self, stdout},
     rc::Rc,
     time::{Duration, Instant},
@@ -69,12 +71,14 @@ pub struct Output {
     scroll: u16,
     fly_modal_open: bool,
     anim_start: Instant,
+
+    tab: Tab,
 }
 
-enum StatusLine {
-    Compiling,
-    Hotreloading,
-    Hotreloaded,
+#[derive(PartialEq, Eq, Clone, Copy)]
+enum Tab {
+    Console,
+    BuildLog,
 }
 
 type TerminalBackend = Terminal<CrosstermBackend<io::Stdout>>;
@@ -139,6 +143,7 @@ impl Output {
             term_height: 0,
             num_lines_with_wrapping: 0,
             anim_start: Instant::now(),
+            tab: Tab::BuildLog,
         })
     }
 
@@ -166,6 +171,7 @@ impl Output {
             };
             Box::pin(future)
         });
+
         let next_stdout = async {
             if has_running_apps {
                 select_all(next_stdout).await.0
@@ -183,6 +189,7 @@ impl Output {
                     self.push_log(platform, BuildMessage {
                         level: Level::INFO,
                         message: MessageType::Text(stdout),
+                        source: Some("app".to_string()),
                     })
                 }
                 if let Some(stderr) = stderr {
@@ -190,12 +197,14 @@ impl Output {
                     self.push_log(platform, BuildMessage {
                         level: Level::ERROR,
                         message: MessageType::Text(stderr),
+                        source: Some("app".to_string()),
                     })
                 }
             },
 
             event = user_input => {
-                self.handle_input(event.unwrap().unwrap())?;
+                self.handle_events(event.unwrap().unwrap()).await?;
+                // self.handle_input(event.unwrap().unwrap())?;
             }
 
             _ = animation_timeout => {}
@@ -209,13 +218,17 @@ impl Output {
         if self.interactive {
             disable_raw_mode()?;
             stdout().execute(LeaveAlternateScreen)?;
-
             self.drain_print_logs();
         }
 
         Ok(())
     }
 
+    /// Emit the build logs as println! statements such that the terminal has the same output as cargo
+    ///
+    /// This is used when the terminal is shutdown and we want the build logs in the terminal. Old
+    /// versions of the cli would just eat build logs making debugging issues harder than they needed
+    /// to be.
     fn drain_print_logs(&mut self) {
         // todo: print the build info here for the most recent build, and then the logs of the most recent build
         for (platform, build) in self.build_progress.build_logs.iter() {
@@ -266,10 +279,35 @@ impl Output {
             Event::Key(key) if key.code == KeyCode::Down => {
                 self.scroll += 1;
             }
+            Event::Key(key) if key.code == KeyCode::Char('r') => {}
+            Event::Key(key) if key.code == KeyCode::Char('o') => {
+                // todo: open the app
+            }
+            Event::Key(key) if key.code == KeyCode::Char('c') => {
+                // clear
+            }
+            Event::Key(key) if key.code == KeyCode::Char('0') => {
+                self.tab = Tab::Console;
+                self.scroll = 0;
+            }
+            Event::Key(key) if key.code == KeyCode::Char('1') => {
+                self.tab = Tab::BuildLog;
+                self.scroll = 0;
+            }
             Event::Resize(_width, _height) => {
                 // nothing, it should take care of itself
             }
             _ => {}
+        }
+
+        if self.scroll
+            > self
+                .num_lines_with_wrapping
+                .saturating_sub(self.term_height + 1)
+        {
+            self.scroll = self
+                .num_lines_with_wrapping
+                .saturating_sub(self.term_height + 1);
         }
 
         Ok(())
@@ -295,6 +333,7 @@ impl Output {
                                 // we need to translate its styling into our own
                                 messages.first().unwrap_or(&String::new()).clone(),
                             ),
+                            source: Some("app".to_string()),
                         },
                     );
                 }
@@ -303,67 +342,47 @@ impl Output {
                         platform,
                         BuildMessage {
                             level: Level::ERROR,
+                            source: Some("app".to_string()),
                             message: MessageType::Text(format!("Error parsing message: {err}")),
                         },
                     );
                 }
             }
         }
-
-        // let message = BuildMessage {
-        //     level: Level::INFO,
-        //     message: MessageType::Text(fmted),
-        // };
-        // self.push_log(platform, message)
-
-        // dbg!(message);
-        // match message {
-        //     axum::extract::ws::Message::Text(text) => {
-        //         self.new_log(platform, text);
-        //     }
-        //     axum::extract::ws::Message::Binary(_) => {}
-        // }
-
-        // self.build_logs
-        //     .get_mut(&platform)
-        //     .unwrap()
-        //     .messages
-        //     .push(BuildMessage {
-        //         level: Level::INFO,
-        //         message: MessageType::Text(message.to_string()),
-        //     });
-    }
-
-    pub fn push_log(&mut self, platform: Platform, message: BuildMessage) {
-        let snapped = self.is_snapped(platform);
-
-        if let Some(build) = self.build_progress.build_logs.get_mut(&platform) {
-            build.messages.push(message);
-        }
-
-        // // let log = self.build_logs.get(a).unwrap();
-        // if snapped {
-        self.scroll = (self.num_lines_with_wrapping).saturating_sub(self.term_height);
-        //     // self.scroll = self.scroll.clamp(
-        //     //     0,
-        //     //     (self.num_lines_with_wrapping).saturating_sub(self.term_height),
-        //     // ) as u16;
-        //     //     self.scroll = self
-        //     //         .num_lines_with_wrapping
-        //     //         .saturating_sub(self.term_height) as u16;
-        //     //     // self.scroll = log.messages.len().saturating_sub(self.term_height as usize) as u16;
-        // }
     }
 
     fn is_snapped(&self, platform: Platform) -> bool {
+        return true;
+
         let prev_scrol = self
             .num_lines_with_wrapping
             .saturating_sub(self.term_height);
         prev_scrol == self.scroll
     }
 
+    pub fn scroll_to_bottom(&mut self) {
+        self.scroll = (self.num_lines_with_wrapping).saturating_sub(self.term_height);
+    }
+
+    pub fn push_log(&mut self, platform: Platform, message: BuildMessage) {
+        let snapped = self.is_snapped(platform);
+
+        if let Some(build) = self.build_progress.build_logs.get_mut(&platform) {
+            build.stdout_logs.push(message);
+        }
+
+        if snapped {
+            self.scroll_to_bottom();
+        }
+    }
+
     pub fn new_build_logs(&mut self, platform: Platform, update: UpdateBuildProgress) {
         let snapped = self.is_snapped(platform);
+
+        // when the build is finished, switch to the console
+        if update.stage == Stage::Finished {
+            self.tab = Tab::Console;
+        }
 
         self.build_progress
             .build_logs
@@ -371,17 +390,8 @@ impl Output {
             .or_default()
             .update(update);
 
-        let log = self.build_progress.build_logs.get(&platform).unwrap();
         if snapped {
-            // self.scroll = (self.num_lines_with_wrapping).saturating_sub(self.term_height);
-            // self.scroll = self.scroll.clamp(
-            //     0,
-            //     (self.num_lines_with_wrapping).saturating_sub(self.term_height),
-            // ) as u16;
-            // self.scroll = self
-            //     .num_lines_with_wrapping
-            //     .saturating_sub(self.term_height) as u16;
-            // self.scroll = log.messages.len().saturating_sub(self.term_height as usize) as u16;
+            self.scroll_to_bottom();
         }
     }
 
@@ -446,21 +456,128 @@ impl Output {
                 .direction(Direction::Vertical)
                 .constraints(
                     [
-                        Constraint::Length(2),
-                        Constraint::Min(0),
+                        // Title
                         Constraint::Length(1),
+                        // Body
+                        Constraint::Min(0),
                     ]
                     .as_ref(),
                 )
                 .split(frame.size());
 
+            // Split the body into a left and a right
+            let console = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Fill(1), Constraint::Length(14)].as_ref())
+                .split(body[1]);
+
+            let listening_len = "listening at http://127.0.0.1:8080".len() + 3;
+            let listening_len = if listening_len > body[0].width as usize {
+                0
+            } else {
+                listening_len
+            };
+
             let header = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([Constraint::Fill(1)].as_ref())
+                .constraints(
+                    [
+                        Constraint::Fill(1),
+                        Constraint::Length(listening_len as u16),
+                    ]
+                    .as_ref(),
+                )
                 .split(body[0]);
 
-            // Render a border for the header
-            frame.render_widget(Block::default().borders(Borders::BOTTOM), body[0]);
+            // // Render a border for the header
+            // frame.render_widget(Block::default().borders(Borders::BOTTOM), body[0]);
+
+            // Render the metadata
+            let mut spans = vec![
+                Span::from(if self.is_cli_release { "dx" } else { "dx-dev" }).green(),
+                Span::from(" ").green(),
+                Span::from("serve").green(),
+                Span::from(" | ").white(),
+                Span::from(self.platform.to_string()).green(),
+                Span::from(" | ").white(),
+            ];
+
+            // If there is build progress, display that next to the platform
+            if !self.build_progress.build_logs.is_empty() {
+                if self
+                    .build_progress
+                    .build_logs
+                    .values()
+                    .any(|b| b.failed.is_some())
+                {
+                    spans.push(Span::from("build failed ❌").red());
+                } else {
+                    spans.push(Span::from("status: ").green());
+                    let build = self
+                        .build_progress
+                        .build_logs
+                        .values()
+                        .min_by(|a, b| a.partial_cmp(b).unwrap())
+                        .unwrap();
+                    spans.extend_from_slice(&build.spans(Rect::new(
+                        0,
+                        0,
+                        build.max_layout_size(),
+                        1,
+                    )));
+                }
+            }
+
+            frame.render_widget(Paragraph::new(Line::from(spans)).left_aligned(), header[0]);
+
+            // Split apart the body into a center and a right side
+            // We only want to show the sidebar if there's enough space
+            if listening_len > 0 {
+                frame.render_widget(
+                    Paragraph::new(Line::from(vec![
+                        Span::from("listening at ").dark_gray(),
+                        Span::from(format!("http://{}", server.ip).as_str()).gray(),
+                    ])),
+                    header[1],
+                );
+            }
+
+            // Draw the tabs in the right region of the console
+            // First draw the left border
+            frame.render_widget(
+                Paragraph::new(vec![
+                    {
+                        let mut line = Line::from(" [0] console").dark_gray();
+                        if self.tab == Tab::Console {
+                            line.style = Style::default().fg(Color::LightYellow);
+                        }
+                        line
+                    },
+                    {
+                        let mut line = Line::from(" [1] build").dark_gray();
+                        if self.tab == Tab::BuildLog {
+                            line.style = Style::default().fg(Color::LightYellow);
+                        }
+                        line
+                    },
+                    Line::from("  ").gray(),
+                    Line::from(" [/] more").gray(),
+                    Line::from(" [r] reload").gray(),
+                    Line::from(" [r] clear").gray(),
+                    Line::from(" [o] open").gray(),
+                    Line::from(" [h] hide").gray(),
+                ])
+                .left_aligned()
+                .block(
+                    Block::default()
+                        .borders(Borders::LEFT | Borders::TOP)
+                        .border_set(symbols::border::Set {
+                            top_left: symbols::line::NORMAL.horizontal_down,
+                            ..symbols::border::PLAIN
+                        }),
+                ),
+                console[1],
+            );
 
             // We're going to assemble a text buffer directly and then let the paragraph widgets
             // handle the wrapping and scrolling
@@ -469,12 +586,43 @@ impl Output {
             for platform in self.build_progress.build_logs.keys() {
                 let build = self.build_progress.build_logs.get(platform).unwrap();
 
-                for span in build.messages.iter() {
+                let msgs = match self.tab {
+                    Tab::Console => &build.stdout_logs,
+                    Tab::BuildLog => &build.messages,
+                };
+
+                for span in msgs.iter() {
                     use ansi_to_tui::IntoText;
                     match &span.message {
                         MessageType::Text(line) => {
+                            let mut idx = 0;
                             for line in line.lines() {
-                                paragraph_text.extend(line.into_text().unwrap_or_default());
+                                let text = line.into_text().unwrap_or_default();
+                                for line in text.lines {
+                                    let mut out_line = vec![Span::from("[app] ").dark_gray()];
+                                    for span in line.spans {
+                                        out_line.push(span);
+                                    }
+                                    let newline = Line::from(out_line);
+                                    paragraph_text.push_line(newline);
+                                }
+
+                                // for line in text.lines {
+                                //     let span = if idx == 0 {
+                                //         Span::from("[app] ").gray()
+                                //     } else {
+                                //         Span::from("    | ").gray()
+                                //     };
+
+                                //     let mut out_line = Line::from(span);
+
+                                //     for span in line.spans {
+                                //         out_line.push_span(span);
+                                //     }
+                                //     paragraph_text.push_line(out_line);
+                                //     idx += 1;
+                                // }
+                                idx += 1;
                             }
                         }
                         MessageType::Cargo(diagnostic) => {
@@ -486,85 +634,76 @@ impl Output {
                         }
                     };
                 }
-                // frame.render_widget(paragraph, body[1]);
             }
 
             let paragraph = Paragraph::new(paragraph_text)
                 .left_aligned()
                 .wrap(Wrap { trim: false });
 
-            self.term_height = body[1].height;
-            self.num_lines_with_wrapping = paragraph.line_count(body[1].width) as u16;
+            self.term_height = console[0].height;
+            self.num_lines_with_wrapping = paragraph.line_count(console[0].width) as u16;
 
-            // if self.is_snapped(platform.clone()) {
-            // self.scroll = (self.num_lines_with_wrapping).saturating_sub(self.term_height);
-            // }
+            let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(None)
+                .end_symbol(None)
+                .track_symbol(None)
+                .thumb_symbol("▐");
+
+            // .track_symbol(Some(symbols::border::QUADRANT_RIGHT_HALF))
+            // .begin_symbol(None)
+            // .end_symbol(None);
+            // .begin_symbol(Some("↑"))
+            // .end_symbol(Some("↓"));
+
+            let mut scrollbar_state = ScrollbarState::new(
+                self.num_lines_with_wrapping
+                    .saturating_sub(self.term_height) as usize,
+            )
+            .position(self.scroll as usize);
 
             let paragraph = paragraph.scroll((self.scroll, 0));
-            paragraph.render(body[1], frame.buffer_mut());
+            paragraph
+                .block(Block::new().borders(Borders::TOP))
+                .render(console[0], frame.buffer_mut());
 
-            // Render the metadata
-            let mut spans = vec![
-                Span::from(if self.is_cli_release { "dx" } else { "dx-dev" }).green(),
-                Span::from(" ").green(),
-                Span::from("serve").green(),
-                Span::from(" | ").white(),
-                Span::from(self.platform.to_string()).cyan(),
-                // Span::from(frame_step.to_string()).cyan(),
-                // Span::from("v").cyan(),
-                // Span::from(self.dx_version.clone()).cyan(),
-                Span::from(" | ").white(),
-                // Span::from("rustc-").cyan(),
-                // Span::from(self.rustc_version.clone()).cyan(),
-                // Span::from(if self.rustc_nightly { "-nightly" } else { "" }).cyan(),
-                // Span::from(" | ").white(),
-            ];
-
-            // If there is build progress, display that next to the platform
-            if !self.build_progress.build_logs.is_empty() {
-                let build = self
-                    .build_progress
-                    .build_logs
-                    .values()
-                    .min_by(|a, b| a.partial_cmp(b).unwrap())
-                    .unwrap();
-                // If the build is finished, no need to show the progress
-                // if build.stage != Stage::Finished {
-                spans.push(Span::from(" "));
-                spans.extend_from_slice(&build.spans(Rect::new(0, 0, build.max_layout_size(), 1)));
-                // }
-            }
-
-            // spans.extend_from_slice(&[Span::from(" | ").white()]);
-            // spans.extend_from_slice(&[
-            //     Span::from(" | ").white(),
-            //     Span::from(self.scroll.to_string()).cyan(),
-            //     Span::from("/").white(),
-            //     Span::from(
-            //         (self
-            //             .num_lines_with_wrapping
-            //             .saturating_sub(self.term_height))
-            //         .to_string(),
-            //     )
-            //     .cyan(),
-            //     Span::from(" | ").white(),
-            // ]);
-
-            // for (cmd, name) in [("/", "more")].iter() {
-            //     spans.extend_from_slice(&[
-            //         Span::from("[").magenta(),
-            //         Span::from(*cmd).white(),
-            //         Span::from(" ").magenta(),
-            //         Span::from(*name).gray(),
-            //         Span::from("] ").magenta(),
-            //     ]);
-            // }
-
-            frame.render_widget(Paragraph::new(Line::from(spans)).left_aligned(), header[0]);
+            // and the scrollbar, those are separate widgets
+            frame.render_stateful_widget(
+                scrollbar,
+                console[0].inner(Margin {
+                    // using an inner vertical margin of 1 unit makes the scrollbar inside the block
+                    vertical: 1,
+                    horizontal: 0,
+                }),
+                &mut scrollbar_state,
+            );
 
             // render the fly modal
-            self.render_fly_modal(frame, body[1]);
+            self.render_fly_modal(frame, console[0]);
         });
+    }
+
+    async fn handle_events(&mut self, event: Event) -> io::Result<()> {
+        let mut events = vec![event];
+
+        // Collect all the events within the next 10ms in one stream
+        loop {
+            let next = self.events.next();
+            tokio::select! {
+                msg = next => events.push(msg.unwrap().unwrap()),
+                _ = tokio::time::sleep(Duration::from_millis(1)) => break
+            }
+        }
+
+        // Debounce events within the same frame
+        let mut handled = HashSet::new();
+        for event in events {
+            if !handled.contains(&event) {
+                self.handle_input(event.clone())?;
+                handled.insert(event);
+            }
+        }
+
+        Ok(())
     }
 
     fn render_fly_modal(&mut self, frame: &mut Frame, area: Rect) {
@@ -576,7 +715,6 @@ impl Output {
         let panel = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Fill(1)].as_ref())
-            // .margin(2)
             .split(area)[0];
 
         // Wipe the panel
@@ -591,16 +729,13 @@ impl Output {
     }
 }
 
-trait TuiTab {}
-
-struct BuildOutputTab {}
-struct PlatformLogsTab {}
-
 #[derive(Default, Debug, PartialEq)]
 pub struct ActiveBuild {
     stage: Stage,
     messages: Vec<BuildMessage>,
+    stdout_logs: Vec<BuildMessage>,
     progress: f64,
+    failed: Option<String>,
 }
 
 impl ActiveBuild {
@@ -609,6 +744,7 @@ impl ActiveBuild {
             UpdateStage::Start => {
                 self.stage = update.stage;
                 self.progress = 0.0;
+                self.failed = None;
             }
             UpdateStage::AddMessage(message) => {
                 self.messages.push(message);
@@ -616,26 +752,35 @@ impl ActiveBuild {
             UpdateStage::SetProgress(progress) => {
                 self.progress = progress;
             }
+            UpdateStage::Failed(failed) => {
+                self.stage = Stage::Finished;
+                self.failed = Some(failed.clone());
+            }
         }
     }
 
     fn spans(&self, area: Rect) -> Vec<Span> {
-        let message = self.stage.to_string();
-        let progress = format!("{}%", (self.progress * 100.0) as u8);
-        // let progress = format!("{:>3}%", (self.progress * 100.0) as u8);
-
         let mut spans = Vec::new();
-        // spans.push(Span::from("[").magenta());
+
+        let message = match self.stage {
+            Stage::Initializing => "initializing... ",
+            Stage::InstallingWasmTooling => "installing wasm tools... ",
+            Stage::Compiling => "compiling... ",
+            Stage::OptimizingWasm => "optimizing wasm... ",
+            Stage::OptimizingAssets => "optimizing assets... ",
+            Stage::Finished => "finished! 🎉 ",
+        };
+        let progress = format!("{}%", (self.progress * 100.0) as u8);
+
         if area.width >= self.max_layout_size() {
-            spans.push(Span::from(message).light_green());
+            spans.push(Span::from(message).light_yellow());
+
             if self.stage != Stage::Finished {
-                spans.push(Span::from(": ").white());
-                spans.push(Span::from(progress).cyan());
+                spans.push(Span::from(progress).white());
             }
         } else {
-            spans.push(Span::from(progress).cyan());
+            spans.push(Span::from(progress).white());
         }
-        // spans.push(Span::from("]").magenta());
 
         spans
     }

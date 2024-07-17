@@ -1,6 +1,7 @@
 //! Report progress about the build to the user. We use channels to report progress back to the CLI.
 use anyhow::Context;
 use cargo_metadata::{diagnostic::Diagnostic, Message};
+use dioxus_html::p;
 use futures_channel::mpsc::UnboundedSender;
 use serde::Deserialize;
 use std::ops::Deref;
@@ -63,6 +64,9 @@ impl UpdateBuildProgress {
             UpdateStage::SetProgress(progress) => {
                 println!("Build progress {:0.0}%", progress * 100.0);
             }
+            UpdateStage::Failed(message) => {
+                println!("Build failed: {}", message);
+            }
         }
     }
 }
@@ -72,12 +76,14 @@ pub enum UpdateStage {
     Start,
     AddMessage(BuildMessage),
     SetProgress(f64),
+    Failed(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BuildMessage {
     pub level: Level,
     pub message: MessageType,
+    pub source: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -98,6 +104,7 @@ impl From<Diagnostic> for BuildMessage {
                 cargo_metadata::diagnostic::DiagnosticLevel::Help => Level::DEBUG,
                 _ => Level::DEBUG,
             },
+            source: Some("cargo".to_string()),
             message: MessageType::Cargo(message),
         }
     }
@@ -199,6 +206,7 @@ pub(crate) async fn build_cargo(
                     update: UpdateStage::AddMessage(BuildMessage {
                         level: Level::DEBUG,
                         message: MessageType::Text(line),
+                        source: None,
                     }),
                 });
             }

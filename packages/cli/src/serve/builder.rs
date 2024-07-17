@@ -54,19 +54,33 @@ impl Builder {
             BuildRequest::create(true, &self.config, self.serve.build_arguments.clone());
 
         let mut set = tokio::task::JoinSet::new();
+
         for build_request in build_requests {
-            let (tx, rx) = futures_channel::mpsc::unbounded();
+            let (mut tx, rx) = futures_channel::mpsc::unbounded();
             self.build_progress
                 .push((build_request.build_arguments.platform(), rx));
-            set.spawn(async move { build_request.build(tx).await });
+            set.spawn(async move {
+                let res = build_request.build(tx.clone()).await;
+
+                if let Err(err) = &res {
+                    let _ = tx.start_send(UpdateBuildProgress {
+                        stage: crate::builder::Stage::Finished,
+                        update: crate::builder::UpdateStage::Failed(err.to_string()),
+                    });
+                }
+
+                res
+            });
         }
 
         self.build_results = Some(tokio::spawn(async move {
             let mut all_results = Vec::new();
             while let Some(result) = set.join_next().await {
-                all_results.push(result.map_err(|err| {
+                let res = result.map_err(|err| {
                     crate::Error::Unique(format!("Panic while building project: {err:?}"))
-                })??);
+                })??;
+
+                all_results.push(res);
             }
             Ok(all_results)
         }));
