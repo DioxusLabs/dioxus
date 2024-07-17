@@ -215,7 +215,7 @@ pub(crate) struct GenerationalLocation {
     created_at: &'static std::panic::Location<'static>,
 }
 
-/// A dynamic memory location that can be used in a generational box.
+/// A pointer to a specific generational box and generation in that box.
 pub struct GenerationalPointer<S: 'static = UnsyncStorage> {
     /// The storage that is backing this location
     storage: &'static S,
