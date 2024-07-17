@@ -18,6 +18,10 @@ impl Document for DesktopDocument {
     fn new_evaluator(&self, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
         DesktopEvaluator::create(self.desktop_ctx.clone(), js)
     }
+
+    fn set_title(&self, title: String) {
+        self.desktop_ctx.window.set_title(&title);
+    }
 }
 
 /// Represents a desktop-target's JavaScript evaluator.

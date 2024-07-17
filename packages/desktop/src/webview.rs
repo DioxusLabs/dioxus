@@ -1,6 +1,6 @@
 use crate::menubar::DioxusMenu;
 use crate::{
-    app::SharedContext, assets::AssetHandlerRegistry, edits::EditQueue, eval::DesktopDocument,
+    app::SharedContext, assets::AssetHandlerRegistry, document::DesktopDocument, edits::EditQueue,
     file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, waker::tao_waker, Config,
     DesktopContext, DesktopService,
 };
