@@ -100,7 +100,7 @@ html_parser = "0.7.0"
 thiserror = "1.0.40"
 prettyplease = { version = "0.2.16", features = ["verbatim"] }
 manganis-cli-support = { git = "https://github.com/DioxusLabs/collect-assets", features = ["html"] }
-manganis = { path = "../dioxus-collect-assets" }#git = "https://github.com/DioxusLabs/collect-assets" }
+manganis = { git = "https://github.com/DioxusLabs/collect-assets" }
 interprocess = { version = "1.2.2", package = "interprocess-docfix" }
 const_format = "0.2.32"
 
