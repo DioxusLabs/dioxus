@@ -12,7 +12,6 @@ mod events;
 mod fragment;
 mod generational_box;
 mod global_context;
-mod hotreload_utils;
 mod mutations;
 mod nodes;
 mod properties;
@@ -28,10 +27,16 @@ mod suspense;
 mod tasks;
 mod virtual_dom;
 
+mod hotreload_utils;
+
 /// Items exported from this module are used in macros and should not be used directly.
 #[doc(hidden)]
 pub mod internal {
     pub use crate::properties::verify_component_called_as_component;
+
+    pub use crate::hotreload_utils::{
+        FmtSegment, FmtedSegments, HotReloadLiteral, HotreloadedLiteral,
+    };
 }
 
 pub(crate) mod innerlude {
@@ -43,7 +48,6 @@ pub(crate) mod innerlude {
     pub use crate::fragment::*;
     pub use crate::generational_box::*;
     pub use crate::global_context::*;
-    pub use crate::hotreload_utils::*;
     pub use crate::mutations::*;
     pub use crate::nodes::*;
     pub use crate::properties::*;
@@ -86,12 +90,11 @@ pub mod prelude {
         try_consume_context, use_after_render, use_before_render, use_drop, use_error_boundary,
         use_hook, use_hook_with_cleanup, with_owner, AnyValue, Attribute, Callback, Component,
         ComponentFunction, Context, Element, ErrorBoundary, ErrorContext, Event, EventHandler,
-        FmtSegment, FmtedSegments, Fragment, HasAttributes, HotReloadLiteral, HotreloadedLiteral,
-        IntoAttributeValue, IntoDynNode, OptionStringFromMarker, Properties, ReactiveContext,
-        RenderError, RenderReturn, Runtime, RuntimeGuard, ScopeId, ScopeState, SuperFrom,
-        SuperInto, SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps, SuspenseContext,
-        SuspenseExtension, Task, Template, TemplateAttribute, TemplateNode, VNode, VNodeInner,
-        VirtualDom,
+        Fragment, HasAttributes, IntoAttributeValue, IntoDynNode, OptionStringFromMarker,
+        Properties, ReactiveContext, RenderError, RenderReturn, Runtime, RuntimeGuard, ScopeId,
+        ScopeState, SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps,
+        SuspenseContext, SuspenseExtension, Task, Template, TemplateAttribute, TemplateNode, VNode,
+        VNodeInner, VirtualDom,
     };
 }
 

@@ -84,14 +84,14 @@ impl ToTokens for HotLiteral {
                 let mut idx = 0_usize;
                 let segments = fmt.segments.iter().map(|s| match s {
                     Segment::Literal(lit) => quote! {
-                        FmtSegment::Literal { value: #lit }
+                        dioxus_core::internal::FmtSegment::Literal { value: #lit }
                     },
                     Segment::Formatted(_fmt) => {
                         // increment idx for the dynamic segment so we maintain the mapping
                         let _idx = idx;
                         idx += 1;
                         quote! {
-                            FmtSegment::Dynamic { id: #_idx }
+                           dioxus_core::internal::FmtSegment::Dynamic { id: #_idx }
                         }
                     }
                 });
@@ -154,7 +154,7 @@ impl ToTokens for HotLiteral {
 
                     // The key is important here - we're creating a new GlobalSignal each call to this/
                     // But the key is what's keeping it stable
-                    GlobalSignal::with_key(
+                    dioxus::signals::GlobalSignal::with_key(
                         || #val, {
                         concat!(
                             file!(),

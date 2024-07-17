@@ -1,5 +1,5 @@
 #[cfg(feature = "hot_reload")]
-use dioxus_core::prelude::{FmtSegment, FmtedSegments};
+use dioxus_core::internal::{FmtSegment, FmtedSegments};
 
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};

@@ -33,7 +33,7 @@
 
 use crate::{innerlude::*, scoring::score_dynamic_node};
 use crate::{scoring::score_attribute, HotReloadingContext};
-use dioxus_core::prelude::{HotReloadLiteral, Template};
+use dioxus_core::{internal::HotReloadLiteral, Template};
 use std::collections::HashMap;
 
 /// The mapping of a node relative to the root of its containing template
@@ -229,7 +229,7 @@ impl HotReloadedTemplate {
 
             // While we're here, if it's a literal and not a perfect score, it's a mismatch and we need to
             // hotreload the literal
-            self.hotreload_attribute(old_attr, new_attr, Some(score))?;
+            self.hotreload_attribute(old_attr, new_attr, score)?;
         }
 
         Some(attr_paths)
@@ -326,7 +326,7 @@ impl HotReloadedTemplate {
         // Those will have plumbing in the hotreloading code
         // All others just get diffed via tokensa
         for (old_attr, new_attr) in left_fields.iter().zip(right_fields.iter()) {
-            self.hotreload_attribute(old_attr, new_attr, None)?;
+            self.hotreload_attribute(old_attr, new_attr, score_attribute(old_attr, new_attr))?;
         }
 
         Some(())
@@ -336,10 +336,8 @@ impl HotReloadedTemplate {
         &mut self,
         old_attr: &Attribute,
         new_attr: &Attribute,
-        score: Option<usize>,
+        score: usize,
     ) -> Option<()> {
-        let score = score.unwrap_or_else(|| score_attribute(old_attr, new_attr));
-
         // If the score is 0, the name didn't match or the values didn't match
         // A score of usize::MAX means the attributes are the same
         if score == 0 {

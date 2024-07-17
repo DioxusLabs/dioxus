@@ -238,7 +238,7 @@ impl Attribute {
         let attribute = {
             let value = &self.value;
             let name = &self.name;
-            let is_not_event = !self.name.ident_to_str().starts_with("on");
+            let is_not_event = !self.name.is_likely_event();
 
             match &self.value {
                 AttributeValue::AttrLiteral(_)
@@ -378,12 +378,8 @@ pub enum AttributeName {
 }
 
 impl AttributeName {
-    pub fn ident_to_str(&self) -> String {
-        match self {
-            Self::Custom(lit) => lit.value(),
-            Self::BuiltIn(ident) => ident.to_string(),
-            Self::Spread(_) => "..".to_string(),
-        }
+    pub fn is_likely_event(&self) -> bool {
+        matches!(self, Self::BuiltIn(ident) if ident.to_string().starts_with("on"))
     }
 
     pub fn span(&self) -> proc_macro2::Span {
