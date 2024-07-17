@@ -1,20 +1,20 @@
-use dioxus_html::prelude::{EvalError, EvalProvider, Evaluator};
+use dioxus_html::document::{Document, EvalError, Evaluator};
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 
 use crate::{query::Query, DesktopContext};
 
 /// Represents the desktop-target's provider of evaluators.
-pub struct DesktopEvalProvider {
+pub struct DesktopDocument {
     pub(crate) desktop_ctx: DesktopContext,
 }
 
-impl DesktopEvalProvider {
+impl DesktopDocument {
     pub fn new(desktop_ctx: DesktopContext) -> Self {
         Self { desktop_ctx }
     }
 }
 
-impl EvalProvider for DesktopEvalProvider {
+impl Document for DesktopDocument {
     fn new_evaluator(&self, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
         DesktopEvaluator::create(self.desktop_ctx.clone(), js)
     }

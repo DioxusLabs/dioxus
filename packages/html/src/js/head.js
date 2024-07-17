@@ -1,0 +1,1 @@
+function createElementInHead(tag,attributes){const element=document.createElement(tag);for(let[key,value]of attributes)element.setAttribute(key,value);document.head.appendChild(element)}export{createElementInHead};

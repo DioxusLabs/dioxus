@@ -15,9 +15,9 @@ dioxus-html = { workspace = true, features = [
     "serialize",
     "native-bind",
     "mounted",
-    "eval",
+    "document",
 ] }
-dioxus-interpreter-js = { workspace = true, features = ["binary-protocol", "eval"] }
+dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
 dioxus-cli-config = { workspace = true, features = ["read-config"] }
 generational-box = { workspace = true }
 

@@ -1,18 +1,14 @@
 #![allow(clippy::await_holding_refcell_ref)]
-#![doc = include_str!("../docs/eval.md")]
+#![doc = include_str!("../../docs/eval.md")]
 
 use dioxus_core::prelude::*;
-use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
+use generational_box::GenerationalBox;
 use std::future::{poll_fn, Future, IntoFuture};
 use std::pin::Pin;
 use std::rc::Rc;
 use std::task::{Context, Poll};
 
-/// A struct that implements EvalProvider is sent through [`ScopeState`]'s provide_context function
-/// so that [`eval`] can provide a platform agnostic interface for evaluating JavaScript code.
-pub trait EvalProvider {
-    fn new_evaluator(&self, js: String) -> GenerationalBox<Box<dyn Evaluator>>;
-}
+use super::document;
 
 /// The platform's evaluator.
 pub trait Evaluator {
@@ -42,55 +38,22 @@ type EvalCreator = Rc<dyn Fn(&str) -> UseEval>;
 /// has access to most, if not all of your application data.**
 #[must_use]
 pub fn eval_provider() -> EvalCreator {
-    let eval_provider = consume_context::<Rc<dyn EvalProvider>>();
+    let eval_provider = document();
 
     Rc::new(move |script: &str| UseEval::new(eval_provider.new_evaluator(script.to_string())))
         as Rc<dyn Fn(&str) -> UseEval>
 }
 
-#[doc = include_str!("../docs/eval.md")]
+#[doc = include_str!("../../docs/eval.md")]
 #[doc(alias = "javascript")]
 pub fn eval(script: &str) -> UseEval {
-    let eval_provider = dioxus_core::prelude::try_consume_context::<Rc<dyn EvalProvider>>()
-        // Create a dummy provider that always hiccups when trying to evaluate
-        // That way, we can still compile and run the code without a real provider
-        .unwrap_or_else(|| {
-            struct DummyProvider;
-            impl EvalProvider for DummyProvider {
-                fn new_evaluator(&self, _js: String) -> GenerationalBox<Box<dyn Evaluator>> {
-                    tracing::error!("Eval is not supported on this platform. If you are using dioxus fullstack, you can wrap your code with `client! {{}}` to only include the code that runs eval in the client bundle.");
-                    UnsyncStorage::owner().insert(Box::new(DummyEvaluator))
-                }
-            }
-
-            struct DummyEvaluator;
-            impl Evaluator for DummyEvaluator {
-                fn send(&self, _data: serde_json::Value) -> Result<(), EvalError> {
-                    Err(EvalError::Unsupported)
-                }
-                fn poll_recv(
-                    &mut self,
-                    _context: &mut Context<'_>,
-                ) -> Poll<Result<serde_json::Value, EvalError>> {
-                    Poll::Ready(Err(EvalError::Unsupported))
-                }
-                fn poll_join(
-                    &mut self,
-                    _context: &mut Context<'_>,
-                ) -> Poll<Result<serde_json::Value, EvalError>> {
-                    Poll::Ready(Err(EvalError::Unsupported))
-                }
-            }
-
-            Rc::new(DummyProvider) as Rc<dyn EvalProvider>
-        });
-
-    UseEval::new(eval_provider.new_evaluator(script.to_string()))
+    let document = use_hook(document);
+    UseEval::new(document.new_evaluator(script.to_string()))
 }
 
 /// A wrapper around the target platform's evaluator that lets you send and receive data from JavaScript spawned by [`eval`].
 ///
-#[doc = include_str!("../docs/eval.md")]
+#[doc = include_str!("../../docs/eval.md")]
 #[derive(Clone, Copy)]
 pub struct UseEval {
     evaluator: GenerationalBox<Box<dyn Evaluator>>,

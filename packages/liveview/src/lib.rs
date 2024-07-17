@@ -85,7 +85,7 @@ fn handle_edits_code() -> String {
     .replace("export", "");
     while let Some(import_start) = interpreter.find("import") {
         let import_end = interpreter[import_start..]
-            .find(|c| c == ';' || c == '\n')
+            .find([';', '\n'])
             .map(|i| i + import_start)
             .unwrap_or_else(|| interpreter.len());
         interpreter.replace_range(import_start..import_end, "");

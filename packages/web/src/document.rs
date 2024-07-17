@@ -1,5 +1,6 @@
-use dioxus_html::prelude::{EvalError, EvalProvider, Evaluator};
-use dioxus_interpreter_js::eval::{JSOwner, WeakDioxusChannel, WebDioxusChannel};
+use dioxus_html::document::{
+    Document, EvalError, Evaluator, JSOwner, WeakDioxusChannel, WebDioxusChannel,
+};
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 use js_sys::Function;
 use serde_json::Value;
@@ -9,14 +10,14 @@ use std::{rc::Rc, str::FromStr};
 use wasm_bindgen::prelude::*;
 
 /// Provides the WebEvalProvider through [`cx.provide_context`].
-pub fn init_eval() {
-    let provider: Rc<dyn EvalProvider> = Rc::new(WebEvalProvider);
+pub fn init_document() {
+    let provider: Rc<dyn Document> = Rc::new(WebDocument);
     dioxus_core::ScopeId::ROOT.provide_context(provider);
 }
 
 /// Represents the web-target's provider of evaluators.
-pub struct WebEvalProvider;
-impl EvalProvider for WebEvalProvider {
+pub struct WebDocument;
+impl Document for WebDocument {
     fn new_evaluator(&self, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
         WebEvaluator::create(js)
     }

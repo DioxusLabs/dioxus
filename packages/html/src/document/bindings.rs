@@ -1,13 +1,14 @@
 /// Code for the Dioxus channel used to communicate between the dioxus and javascript code
-pub const NATIVE_EVAL_JS: &str = include_str!("./js/native_eval.js");
+#[cfg(feature = "native-bind")]
+pub const NATIVE_EVAL_JS: &str = include_str!("../js/native_eval.js");
 
-#[cfg(feature = "webonly")]
+#[cfg(feature = "wasm-bind")]
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub struct JSOwner {
     _owner: Box<dyn std::any::Any>,
 }
 
-#[cfg(feature = "webonly")]
+#[cfg(feature = "wasm-bind")]
 impl JSOwner {
     pub fn new(owner: impl std::any::Any) -> Self {
         Self {
@@ -16,7 +17,7 @@ impl JSOwner {
     }
 }
 
-#[cfg(feature = "webonly")]
+#[cfg(feature = "wasm-bind")]
 #[wasm_bindgen::prelude::wasm_bindgen(module = "/src/js/eval.js")]
 extern "C" {
     pub type WebDioxusChannel;

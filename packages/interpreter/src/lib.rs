@@ -24,9 +24,6 @@ pub mod unified_bindings;
 #[cfg(feature = "sledgehammer")]
 pub use unified_bindings::*;
 
-#[cfg(feature = "eval")]
-pub mod eval;
-
 // Common bindings for minimal usage.
 #[cfg(all(feature = "minimal_bindings", feature = "webonly"))]
 pub mod minimal_bindings {

@@ -35,8 +35,8 @@ pub mod launch;
 mod mutations;
 pub use event::*;
 
-#[cfg(feature = "eval")]
-mod eval;
+#[cfg(feature = "document")]
+mod document;
 
 #[cfg(all(feature = "hot_reload", debug_assertions))]
 mod hot_reload;
@@ -60,8 +60,8 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
 
     let mut dom = virtual_dom;
 
-    #[cfg(feature = "eval")]
-    dom.in_runtime(eval::init_eval);
+    #[cfg(feature = "document")]
+    dom.in_runtime(document::init_document);
 
     #[cfg(feature = "panic_hook")]
     if web_config.default_panic_hook {
