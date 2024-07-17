@@ -106,11 +106,17 @@ impl AnyStorage for UnsyncStorage {
         })
     }
 
-    fn recycle(location: GenerationalPointer<Self>) -> Option<Box<dyn std::any::Any>> {
-        let mut borrow_mut = location.storage.data.borrow_mut();
+    fn recycle(pointer: GenerationalPointer<Self>) -> Option<Box<dyn std::any::Any>> {
+        let mut borrow_mut = pointer.storage.data.borrow_mut();
+
+        // First check if the generation is still valid
+        if !borrow_mut.valid(&pointer.location) {
+            return None;
+        }
+
         borrow_mut.increment_generation();
         let old_data = borrow_mut.data.take();
-        UNSYNC_RUNTIME.with(|runtime| runtime.borrow_mut().push(location.storage));
+        UNSYNC_RUNTIME.with(|runtime| runtime.borrow_mut().push(pointer.storage));
 
         old_data
     }
@@ -123,14 +129,15 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
     ) -> Result<Self::Ref<'static, T>, error::BorrowError> {
         let read = pointer.storage.try_borrow()?;
 
-        match Ref::filter_map(read, |any| {
+        let ref_ = Ref::filter_map(read, |any| {
             // Verify the generation is still correct
             if !any.valid(&pointer.location) {
                 return None;
             }
             // Then try to downcast
             any.data.as_ref()?.downcast_ref()
-        }) {
+        });
+        match ref_ {
             Ok(guard) => Ok(GenerationalRef::new(
                 guard,
                 pointer.storage.borrow_info.borrow_guard(),
@@ -147,14 +154,15 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
     ) -> Result<Self::Mut<'static, T>, error::BorrowMutError> {
         let write = pointer.storage.try_borrow_mut()?;
 
-        match RefMut::filter_map(write, |any| {
+        let ref_mut = RefMut::filter_map(write, |any| {
             // Verify the generation is still correct
             if !any.valid(&pointer.location) {
                 return None;
             }
             // Then try to downcast
             any.data.as_mut()?.downcast_mut()
-        }) {
+        });
+        match ref_mut {
             Ok(guard) => Ok(GenerationalRefMut::new(
                 guard,
                 pointer.storage.borrow_info.borrow_mut_guard(),

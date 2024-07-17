@@ -98,8 +98,11 @@ impl AnyStorage for SyncStorage {
     }
 
     fn recycle(pointer: GenerationalPointer<Self>) -> Option<Box<dyn std::any::Any>> {
-        let storage = pointer.storage;
-        let mut borrow_mut = storage.data.write();
+        let mut borrow_mut = pointer.storage.data.write();
+        // First check if the generation is still valid
+        if !borrow_mut.valid(&pointer.location) {
+            return None;
+        }
         borrow_mut.increment_generation();
         let old_data = borrow_mut.data.take();
         sync_runtime().lock().push(pointer.storage);
@@ -114,14 +117,15 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
     ) -> Result<Self::Ref<'static, T>, error::BorrowError> {
         let read = pointer.storage.data.read();
 
-        match RwLockReadGuard::try_map(read, |any| {
+        let read = RwLockReadGuard::try_map(read, |any| {
             // Verify the generation is still correct
             if !any.valid(&pointer.location) {
                 return None;
             }
             // Then try to downcast
             any.data.as_ref()?.downcast_ref()
-        }) {
+        });
+        match read {
             Ok(guard) => Ok(GenerationalRef::new(
                 guard,
                 pointer.storage.borrow_info.borrow_guard(),
@@ -138,14 +142,15 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
     ) -> Result<Self::Mut<'static, T>, error::BorrowMutError> {
         let write = pointer.storage.data.write();
 
-        match RwLockWriteGuard::try_map(write, |any| {
+        let write = RwLockWriteGuard::try_map(write, |any| {
             // Verify the generation is still correct
             if !any.valid(&pointer.location) {
                 return None;
             }
             // Then try to downcast
             any.data.as_mut()?.downcast_mut()
-        }) {
+        });
+        match write {
             Ok(guard) => Ok(GenerationalRefMut::new(
                 guard,
                 pointer.storage.borrow_info.borrow_mut_guard(),
