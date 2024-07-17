@@ -37,6 +37,8 @@ pub use event::*;
 
 #[cfg(feature = "document")]
 mod document;
+#[cfg(feature = "document")]
+pub use document::WebDocument;
 
 #[cfg(all(feature = "hot_reload", debug_assertions))]
 mod hot_reload;

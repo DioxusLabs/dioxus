@@ -1,6 +1,6 @@
 // Helper functions for working with the document head
 
-export function createElementInHead(
+function createElementInHead(
   tag: string,
   attributes: [string, string][],
   children: string | null
@@ -14,3 +14,6 @@ export function createElementInHead(
   }
   document.head.appendChild(element);
 }
+
+// @ts-ignore
+window.createElementInHead = createElementInHead;

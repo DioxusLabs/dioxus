@@ -1,5 +1,5 @@
 //! A shared pool of renderers for efficient server side rendering.
-use crate::{document::FullstackDocumentProvider, streaming::StreamingRenderer};
+use crate::streaming::StreamingRenderer;
 use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
 use dioxus_ssr::{
     incremental::{CachedRender, RenderFreshness},
@@ -7,9 +7,9 @@ use dioxus_ssr::{
 };
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
+use std::sync::RwLock;
 use std::{collections::HashMap, future::Future};
 use std::{fmt::Write, sync::Arc};
-use std::{rc::Rc, sync::RwLock};
 use tokio::task::JoinHandle;
 
 use crate::prelude::*;
@@ -160,8 +160,10 @@ impl SsrRendererPool {
 
         let join_handle = spawn_platform(move || async move {
             let mut virtual_dom = virtual_dom_factory();
-            let document = Rc::new(FullstackDocumentProvider::default());
-            virtual_dom.provide_root_context(document.clone() as Rc<dyn Document>);
+            #[cfg(feature = "document")]
+            let document = std::rc::Rc::new(crate::document::server::ServerDocument::default());
+            #[cfg(feature = "document")]
+            virtual_dom.provide_root_context(document.clone() as std::rc::Rc<dyn Document>);
 
             // poll the future, which may call server_context()
             tracing::info!("Rebuilding vdom");
@@ -174,14 +176,17 @@ impl SsrRendererPool {
                 return;
             }
 
-            // Collect any head content from the document provider and inject that into the head
-            if let Err(err) = document.render(&mut pre_body, &mut renderer) {
-                _ = into.start_send(Err(err.into()));
-                return;
-            }
+            #[cfg(feature = "document")]
+            {
+                // Collect any head content from the document provider and inject that into the head
+                if let Err(err) = document.render(&mut pre_body, &mut renderer) {
+                    _ = into.start_send(Err(err.into()));
+                    return;
+                }
 
-            // Enable a warning when inserting contents into the head during streaming
-            document.start_streaming();
+                // Enable a warning when inserting contents into the head during streaming
+                document.start_streaming();
+            }
 
             if let Err(err) = wrapper.render_before_body(&mut pre_body) {
                 _ = into.start_send(Err(err));

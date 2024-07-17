@@ -18,7 +18,7 @@ pub mod launch;
 
 pub use config::*;
 
-#[cfg(feature = "server")]
+#[cfg(feature = "document")]
 mod document;
 #[cfg(feature = "server")]
 mod render;

@@ -1,3 +1,4 @@
+use dioxus_core::ScopeId;
 use dioxus_html::document::{
     Document, EvalError, Evaluator, JSOwner, WeakDioxusChannel, WebDioxusChannel,
 };
@@ -9,13 +10,15 @@ use std::pin::Pin;
 use std::{rc::Rc, str::FromStr};
 use wasm_bindgen::prelude::*;
 
-/// Provides the WebEvalProvider through [`cx.provide_context`].
+/// Provides the WebEvalProvider through [`ScopeId::provide_context`].
 pub fn init_document() {
     let provider: Rc<dyn Document> = Rc::new(WebDocument);
-    dioxus_core::ScopeId::ROOT.provide_context(provider);
+    if ScopeId::ROOT.has_context::<Rc<dyn Document>>().is_none() {
+        ScopeId::ROOT.provide_context(provider);
+    }
 }
 
-/// Represents the web-target's provider of evaluators.
+/// The web-target's document provider.
 pub struct WebDocument;
 impl Document for WebDocument {
     fn new_evaluator(&self, js: String) -> GenerationalBox<Box<dyn Evaluator>> {

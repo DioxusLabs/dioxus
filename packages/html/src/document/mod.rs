@@ -36,7 +36,7 @@ fn create_element_in_head(
     let children = children
         .map(|c| format!("\"{c}\""))
         .unwrap_or("null".to_string());
-    format!(r#"{helpers};createElementInHead("{tag}", {attributes}, {children});"#)
+    format!(r#"{helpers};window.createElementInHead("{tag}", {attributes}, {children});"#)
 }
 
 /// A provider for document-related functionality. By default most methods are driven through [`eval`].

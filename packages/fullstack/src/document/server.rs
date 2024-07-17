@@ -7,7 +7,7 @@ use dioxus_ssr::Renderer;
 use generational_box::GenerationalBox;
 
 #[derive(Default)]
-struct FullstackDocumentProviderInner {
+struct ServerDocumentInner {
     streaming: bool,
     title: Option<String>,
     meta: Vec<Element>,
@@ -17,9 +17,9 @@ struct FullstackDocumentProviderInner {
 
 /// A Document provider that collects all contents injected into the head for SSR rendering.
 #[derive(Default)]
-pub(crate) struct FullstackDocumentProvider(RefCell<FullstackDocumentProviderInner>);
+pub(crate) struct ServerDocument(RefCell<ServerDocumentInner>);
 
-impl FullstackDocumentProvider {
+impl ServerDocument {
     pub(crate) fn render(
         &self,
         to: &mut impl std::fmt::Write,
@@ -41,7 +41,13 @@ impl FullstackDocumentProvider {
         let mut dom = VirtualDom::new_with_props(lazy_app, element);
         dom.rebuild_in_place();
 
-        renderer.render_to(to, &dom)
+        // We don't hydrate the head, so we can set the pre_render flag to false to save a few bytes
+        let was_pre_rendering = renderer.pre_render;
+        renderer.pre_render = false;
+        renderer.render_to(to, &dom)?;
+        renderer.pre_render = was_pre_rendering;
+
+        Ok(())
     }
 
     pub(crate) fn start_streaming(&self) {
@@ -53,20 +59,29 @@ impl FullstackDocumentProvider {
             tracing::warn!("You are inserting content into the head during streaming. Inserting content into the head only works during the initial render of SSR outside of suspense boundaries.");
         }
     }
+
+    /// Write the head element into the serialized context for hydration
+    /// We write true if the head element was written to the DOM during server side rendering
+    pub(crate) fn serialize_for_hydration(&self) {
+        let serialize = crate::html_storage::serialize_context();
+        serialize.push(&!self.0.borrow().streaming);
+    }
 }
 
-impl Document for FullstackDocumentProvider {
+impl Document for ServerDocument {
     fn new_evaluator(&self, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
         NoOpDocument.new_evaluator(js)
     }
 
     fn set_title(&self, title: String) {
         self.warn_if_streaming();
+        self.serialize_for_hydration();
         self.0.borrow_mut().title = Some(title);
     }
 
     fn create_meta(&self, props: MetaProps) {
         self.warn_if_streaming();
+        self.serialize_for_hydration();
         self.0.borrow_mut().meta.push(rsx! {
             meta {
                 name: props.name,
@@ -79,6 +94,7 @@ impl Document for FullstackDocumentProvider {
 
     fn create_script(&self, props: ScriptProps) {
         self.warn_if_streaming();
+        self.serialize_for_hydration();
         let children = props.script_contents();
         self.0.borrow_mut().script.push(rsx! {
             script {
@@ -98,6 +114,7 @@ impl Document for FullstackDocumentProvider {
 
     fn create_link(&self, props: LinkProps) {
         self.warn_if_streaming();
+        self.serialize_for_hydration();
         self.0.borrow_mut().link.push(rsx! {
             link {
                 rel: props.rel,
