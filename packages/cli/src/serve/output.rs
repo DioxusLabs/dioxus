@@ -649,12 +649,6 @@ impl Output {
                 .track_symbol(None)
                 .thumb_symbol("▐");
 
-            // .track_symbol(Some(symbols::border::QUADRANT_RIGHT_HALF))
-            // .begin_symbol(None)
-            // .end_symbol(None);
-            // .begin_symbol(Some("↑"))
-            // .end_symbol(Some("↓"));
-
             let mut scrollbar_state = ScrollbarState::new(
                 self.num_lines_with_wrapping
                     .saturating_sub(self.term_height) as usize,
@@ -670,6 +664,7 @@ impl Output {
             frame.render_stateful_widget(
                 scrollbar,
                 console[0].inner(Margin {
+                    // todo: dont use margin - just push down the body based on its top border
                     // using an inner vertical margin of 1 unit makes the scrollbar inside the block
                     vertical: 1,
                     horizontal: 0,
