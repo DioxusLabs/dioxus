@@ -56,7 +56,7 @@ impl ServerDocument {
 
     pub(crate) fn warn_if_streaming(&self) {
         if self.0.borrow().streaming {
-            tracing::warn!("You are inserting content into the head during streaming. Inserting content into the head only works during the initial render of SSR outside of suspense boundaries.");
+            tracing::warn!("Attempted to insert content into the head after the initial streaming frame. Inserting content into the head only works during the initial render of SSR outside before resolving any suspense boundaries.");
         }
     }
 
