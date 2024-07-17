@@ -9865,8 +9865,10 @@ checksum = "c6989540ced10490aaf14e6bad2e3d33728a2813310a0c71d1574304c49631cd"
 dependencies = [
  "futures-util",
  "log",
+ "native-tls",
  "rustls 0.23.11",
  "tokio",
+ "tokio-native-tls",
  "tungstenite 0.23.0",
 ]
 
@@ -10203,6 +10205,7 @@ dependencies = [
  "http 1.1.0",
  "httparse",
  "log",
+ "native-tls",
  "rand 0.8.5",
  "sha1",
  "thiserror",

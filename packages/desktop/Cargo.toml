@@ -52,7 +52,10 @@ futures-util = { workspace = true }
 urlencoding = "2.1.2"
 async-trait = "0.1.68"
 tao = { version = "0.26.1", features = ["rwh_05"] }
-tokio-tungstenite = { workspace = true , features = ["rustls"] }
+
+[target.'cfg(not(target_os = "ios"))'.dependencies]
+tokio-tungstenite = { workspace = true, optional = true, features = ["rustls"]}
+
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3.17"
@@ -66,6 +69,8 @@ muda = "0.11.3"
 [target.'cfg(target_os = "ios")'.dependencies]
 objc = "0.2.7"
 objc_id = "0.1.1"
+tokio-tungstenite = { workspace = true, optional = true, features = ["native-tls"]}
+
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cocoa = "0.25"

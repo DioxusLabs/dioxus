@@ -29,7 +29,12 @@ tokio-stream = { version = "0.1.12", features = ["sync"], optional = true }
 futures-util = { workspace = true, features = ["async-await-macro"], optional = true }
 tokio = { workspace = true, features = ["sync", "rt-multi-thread"], optional = true }
 tracing = { workspace = true }
-tokio-tungstenite = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+tokio-tungstenite = { workspace = true, optional = true, features = ["native-tls"]}
+
+[target.'cfg(not(target_os = "ios"))'.dependencies]
+tokio-tungstenite = { workspace = true, optional = true, features = ["rustls"]}
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
