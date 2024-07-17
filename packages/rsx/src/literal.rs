@@ -128,6 +128,10 @@ impl ToTokens for HotLiteral {
         };
 
         let as_lit = match &self.value {
+            HotLiteralType::Fmted(f) if f.is_static() => {
+                let r = f.to_static().unwrap();
+                quote! { #r }
+            }
             HotLiteralType::Fmted(f) => f.to_token_stream(),
             HotLiteralType::Float(f) => f.to_token_stream(),
             HotLiteralType::Int(f) => f.to_token_stream(),

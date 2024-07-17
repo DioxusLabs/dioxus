@@ -14,7 +14,6 @@ use dioxus_html::{native_bind::NativeFileEngine, HasFileData, HtmlEvent, Platfor
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
-    path::PathBuf,
     rc::Rc,
     sync::Arc,
 };
@@ -553,7 +552,8 @@ pub fn hide_app_window(window: &wry::WebView) {
 }
 
 /// Return the location of a tempfile with our window state in it such that we can restore it later
-fn restore_file() -> PathBuf {
+#[cfg(debug_assertions)]
+fn restore_file() -> std::path::PathBuf {
     /// Get the name of the program or default to "dioxus" so we can hash it
     fn get_prog_name_or_default() -> Option<String> {
         Some(
