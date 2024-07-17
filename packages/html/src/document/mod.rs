@@ -10,8 +10,8 @@ use dioxus_core::{prelude::*, DynamicNode};
 use dioxus_core_macro::*;
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 
-#[allow(unused)]
 mod bindings;
+#[allow(unused)]
 pub use bindings::*;
 mod eval;
 pub use eval::*;
@@ -201,20 +201,28 @@ pub fn Title(props: TitleProps) -> Element {
 
 #[derive(Clone, Props, PartialEq)]
 pub struct MetaProps {
-    pub name: String,
-    pub charset: String,
-    pub http_equiv: String,
-    pub content: String,
+    pub name: Option<String>,
+    pub charset: Option<String>,
+    pub http_equiv: Option<String>,
+    pub content: Option<String>,
 }
 
 impl MetaProps {
     fn attributes(&self) -> Vec<(&'static str, String)> {
-        vec![
-            ("name", self.name.clone()),
-            ("charset", self.charset.clone()),
-            ("http-equiv", self.http_equiv.clone()),
-            ("content", self.content.clone()),
-        ]
+        let mut attributes = Vec::new();
+        if let Some(name) = &self.name {
+            attributes.push(("name", name.clone()));
+        }
+        if let Some(charset) = &self.charset {
+            attributes.push(("charset", charset.clone()));
+        }
+        if let Some(http_equiv) = &self.http_equiv {
+            attributes.push(("http-equiv", http_equiv.clone()));
+        }
+        if let Some(content) = &self.content {
+            attributes.push(("content", content.clone()));
+        }
+        attributes
     }
 }
 
@@ -233,29 +241,45 @@ pub fn Meta(props: MetaProps) -> Element {
 #[derive(Clone, Props, PartialEq)]
 pub struct ScriptProps {
     pub children: Element,
-    pub src: String,
-    pub defer: bool,
-    pub crossorigin: String,
-    pub fetchpriority: String,
-    pub integrity: String,
-    pub nomodule: bool,
-    pub nonce: String,
-    pub referrerpolicy: String,
-    pub r#type: String,
+    pub src: Option<String>,
+    pub defer: Option<bool>,
+    pub crossorigin: Option<String>,
+    pub fetchpriority: Option<String>,
+    pub integrity: Option<String>,
+    pub nomodule: Option<bool>,
+    pub nonce: Option<String>,
+    pub referrerpolicy: Option<String>,
+    pub r#type: Option<String>,
 }
 
 impl ScriptProps {
     fn attributes(&self) -> Vec<(&'static str, String)> {
-        vec![
-            ("defer", self.defer.to_string()),
-            ("crossorigin", self.crossorigin.clone()),
-            ("fetchpriority", self.fetchpriority.clone()),
-            ("integrity", self.integrity.clone()),
-            ("nomodule", self.nomodule.to_string()),
-            ("nonce", self.nonce.clone()),
-            ("referrerpolicy", self.referrerpolicy.clone()),
-            ("type", self.r#type.clone()),
-        ]
+        let mut attributes = Vec::new();
+        if let Some(defer) = &self.defer {
+            attributes.push(("defer", defer.to_string()));
+        }
+        if let Some(crossorigin) = &self.crossorigin {
+            attributes.push(("crossorigin", crossorigin.clone()));
+        }
+        if let Some(fetchpriority) = &self.fetchpriority {
+            attributes.push(("fetchpriority", fetchpriority.clone()));
+        }
+        if let Some(integrity) = &self.integrity {
+            attributes.push(("integrity", integrity.clone()));
+        }
+        if let Some(nomodule) = &self.nomodule {
+            attributes.push(("nomodule", nomodule.to_string()));
+        }
+        if let Some(nonce) = &self.nonce {
+            attributes.push(("nonce", nonce.clone()));
+        }
+        if let Some(referrerpolicy) = &self.referrerpolicy {
+            attributes.push(("referrerpolicy", referrerpolicy.clone()));
+        }
+        if let Some(r#type) = &self.r#type {
+            attributes.push(("type", r#type.clone()));
+        }
+        attributes
     }
 
     pub fn script_contents(&self) -> Option<String> {
@@ -278,21 +302,29 @@ pub fn Script(props: ScriptProps) -> Element {
 #[derive(Clone, Props, PartialEq)]
 pub struct StyleProps {
     // Allows React to de-duplicate styles that have the same href.
-    pub href: String,
-    pub media: String,
-    pub nonce: String,
-    pub title: String,
+    pub href: Option<String>,
+    pub media: Option<String>,
+    pub nonce: Option<String>,
+    pub title: Option<String>,
     pub children: Element,
 }
 
 impl StyleProps {
     fn attributes(&self) -> Vec<(&'static str, String)> {
-        vec![
-            ("href", self.href.clone()),
-            ("media", self.media.clone()),
-            ("nonce", self.nonce.clone()),
-            ("title", self.title.clone()),
-        ]
+        let mut attributes = Vec::new();
+        if let Some(href) = &self.href {
+            attributes.push(("href", href.clone()));
+        }
+        if let Some(media) = &self.media {
+            attributes.push(("media", media.clone()));
+        }
+        if let Some(nonce) = &self.nonce {
+            attributes.push(("nonce", nonce.clone()));
+        }
+        if let Some(title) = &self.title {
+            attributes.push(("title", title.clone()));
+        }
+        attributes
     }
 
     pub fn style_contents(&self) -> Option<String> {
@@ -314,40 +346,68 @@ pub fn Style(props: StyleProps) -> Element {
 
 #[derive(Clone, Props, PartialEq)]
 pub struct LinkProps {
-    pub rel: String,
-    pub media: String,
-    pub title: String,
-    pub disabled: bool,
-    pub r#as: String,
-    pub sizes: String,
-    pub href: String,
-    pub crossorigin: String,
-    pub referrerpolicy: String,
-    pub fetchpriority: String,
-    pub hreflang: String,
-    pub integrity: String,
-    pub r#type: String,
-    pub blocking: String,
+    pub rel: Option<String>,
+    pub media: Option<String>,
+    pub title: Option<String>,
+    pub disabled: Option<bool>,
+    pub r#as: Option<String>,
+    pub sizes: Option<String>,
+    pub href: Option<String>,
+    pub crossorigin: Option<String>,
+    pub referrerpolicy: Option<String>,
+    pub fetchpriority: Option<String>,
+    pub hreflang: Option<String>,
+    pub integrity: Option<String>,
+    pub r#type: Option<String>,
+    pub blocking: Option<String>,
 }
 
 impl LinkProps {
     fn attributes(&self) -> Vec<(&'static str, String)> {
-        vec![
-            ("rel", self.rel.clone()),
-            ("media", self.media.clone()),
-            ("title", self.title.clone()),
-            ("disabled", self.disabled.to_string()),
-            ("as", self.r#as.clone()),
-            ("sizes", self.sizes.clone()),
-            ("href", self.href.clone()),
-            ("crossOrigin", self.crossorigin.clone()),
-            ("referrerPolicy", self.referrerpolicy.clone()),
-            ("fetchPriority", self.fetchpriority.clone()),
-            ("hrefLang", self.hreflang.clone()),
-            ("integrity", self.integrity.clone()),
-            ("type", self.r#type.clone()),
-            ("blocking", self.blocking.clone()),
-        ]
+        let mut attributes = Vec::new();
+        if let Some(rel) = &self.rel {
+            attributes.push(("rel", rel.clone()));
+        }
+        if let Some(media) = &self.media {
+            attributes.push(("media", media.clone()));
+        }
+        if let Some(title) = &self.title {
+            attributes.push(("title", title.clone()));
+        }
+        if let Some(disabled) = &self.disabled {
+            attributes.push(("disabled", disabled.to_string()));
+        }
+        if let Some(r#as) = &self.r#as {
+            attributes.push(("as", r#as.clone()));
+        }
+        if let Some(sizes) = &self.sizes {
+            attributes.push(("sizes", sizes.clone()));
+        }
+        if let Some(href) = &self.href {
+            attributes.push(("href", href.clone()));
+        }
+        if let Some(crossorigin) = &self.crossorigin {
+            attributes.push(("crossOrigin", crossorigin.clone()));
+        }
+        if let Some(referrerpolicy) = &self.referrerpolicy {
+            attributes.push(("referrerPolicy", referrerpolicy.clone()));
+        }
+        if let Some(fetchpriority) = &self.fetchpriority {
+            attributes.push(("fetchPriority", fetchpriority.clone()));
+        }
+        if let Some(hreflang) = &self.hreflang {
+            attributes.push(("hrefLang", hreflang.clone()));
+        }
+        if let Some(integrity) = &self.integrity {
+            attributes.push(("integrity", integrity.clone()));
+        }
+        if let Some(r#type) = &self.r#type {
+            attributes.push(("type", r#type.clone()));
+        }
+        if let Some(blocking) = &self.blocking {
+            attributes.push(("blocking", blocking.clone()));
+        }
+        attributes
     }
 }
 
