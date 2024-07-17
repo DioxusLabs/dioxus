@@ -142,8 +142,11 @@ impl RsxBlock {
             // where we can imagine expansion and what better diagnostics we can providea
             if content.peek(Ident)
                 && !content.peek2(Brace)
-                && !content.peek2(Token![:])
-                && !content.peek2(Token![-])
+                && !content.peek2(Token![:]) // regular attributes / components with generics
+                && !content.peek2(Token![-]) // web components
+                && !content.peek2(Token![<]) // generics on components
+                // generics on components
+                && !content.peek2(Token![::])
             {
                 let attribute = content.parse::<Attribute>()?;
 

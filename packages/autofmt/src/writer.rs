@@ -234,28 +234,13 @@ impl<'a> Writer<'a> {
     }
 
     pub fn write_body_no_indent(&mut self, children: &[BodyNode]) -> Result {
-        let last_child = children.len();
-        let iter = children.iter().peekable().enumerate();
-
-        for (idx, child) in iter {
+        for child in children {
             if self.current_span_is_primary(child.span()) {
                 self.write_comments(child.span())?;
-            }
+            };
 
-            match child {
-                // check if the expr is a short
-                BodyNode::RawExpr { .. } => {
-                    self.out.tabbed_line()?;
-                    self.write_ident(child)?;
-                    if idx != last_child - 1 {
-                        write!(self.out, ",")?;
-                    }
-                }
-                _ => {
-                    self.out.tabbed_line()?;
-                    self.write_ident(child)?;
-                }
-            }
+            self.out.tabbed_line()?;
+            self.write_ident(child)?;
         }
 
         Ok(())

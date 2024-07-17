@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens};
+use quote::ToTokens;
 use std::hash;
-use syn::{parse::Parse, token::Brace, Expr};
+use syn::{parse::Parse, spanned::Spanned, token::Brace, Expr};
 
 /// A raw expression potentially wrapped in curly braces that is parsed from the input stream.
 ///
@@ -20,13 +20,13 @@ impl Parse for PartialExpr {
             let expr = input.parse::<syn::Expr>()?;
             return Ok(Self {
                 brace: None,
-                expr: quote! { #expr },
+                expr: expr.to_token_stream(),
             });
         }
 
         let content;
         let brace = Some(syn::braced!(content in input));
-        let expr = content.parse()?;
+        let expr: TokenStream2 = content.parse()?;
 
         Ok(Self { brace, expr })
     }
@@ -43,14 +43,30 @@ impl ToTokens for PartialExpr {
 
 impl PartialExpr {
     pub fn as_expr(&self) -> syn::Result<syn::Expr> {
+        // very important: make sure to include the brace in the span of the expr
+        // otherwise autofmt will freak out since it will use the inner span
+        if let Some(brace) = &self.brace {
+            let mut tokens = TokenStream2::new();
+            let f = |tokens: &mut TokenStream2| self.expr.to_tokens(tokens);
+            brace.surround(&mut tokens, f);
+            return syn::parse2(tokens);
+        }
+
         let expr = self.expr.clone();
-        syn::parse2(quote! { {#expr} })
+        syn::parse2(expr.to_token_stream())
     }
 
     pub fn from_expr(expr: &Expr) -> Self {
         Self {
             brace: None,
-            expr: quote! { #expr },
+            expr: expr.to_token_stream(),
+        }
+    }
+    pub fn span(&self) -> proc_macro2::Span {
+        if let Some(brace) = &self.brace {
+            brace.span.span()
+        } else {
+            self.expr.span()
         }
     }
 }

@@ -102,11 +102,8 @@ impl Writer<'_> {
                     write!(self.out, " ")?;
                 }
 
-                for (id, child) in children.iter().enumerate() {
+                for child in children.iter() {
                     self.write_ident(child)?;
-                    if id != children.len() - 1 && children.len() > 1 {
-                        write!(self.out, ", ")?;
-                    }
                 }
 
                 write!(self.out, " ")?;

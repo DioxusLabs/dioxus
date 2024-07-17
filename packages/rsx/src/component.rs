@@ -292,15 +292,26 @@ impl Component {
     }
 }
 
+/// Normalize the generics of a path
+///
+/// Ensure there's a `::` after the last segment if there are generics
 fn normalize_path(name: &mut syn::Path) -> Option<AngleBracketedGenericArguments> {
     let seg = name.segments.last_mut()?;
-    match seg.arguments.clone() {
+
+    let mut generics = match seg.arguments.clone() {
         PathArguments::AngleBracketed(args) => {
             seg.arguments = PathArguments::None;
             Some(args)
         }
         _ => None,
+    };
+
+    if let Some(generics) = generics.as_mut() {
+        use syn::Token;
+        generics.colon2_token = Some(Token![::](proc_macro2::Span::call_site()));
     }
+
+    generics
 }
 
 /// Ensure we can parse a component
@@ -395,6 +406,22 @@ fn generics_params() {
          Outlet::<R> {}
     };
     let component: CallBody = syn::parse2(input_without_children).unwrap();
+    println!("{}", component.to_token_stream().pretty_unparse());
+}
+
+#[test]
+fn generics_no_fish() {
+    let name = quote! { Outlet<R> };
+    let mut p = syn::parse2::<syn::Path>(name).unwrap();
+    let generics = normalize_path(&mut p);
+    assert!(generics.is_some());
+
+    let input_without_children = quote! {
+        div {
+            Component<Generic> {}
+        }
+    };
+    let component: BodyNode = syn::parse2(input_without_children).unwrap();
     println!("{}", component.to_token_stream().pretty_unparse());
 }
 
