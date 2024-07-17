@@ -84,7 +84,7 @@ impl AnyStorage for SyncStorage {
                 GenerationalPointer { storage, location }
             }
             None => {
-                let storage: &'static Self = &*Box::leak(Box::new(Self::default()));
+                let storage: &'static Self = &*Box::leak(Box::default());
 
                 let location = GenerationalLocation {
                     generation: 0,

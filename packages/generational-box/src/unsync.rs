@@ -92,7 +92,7 @@ impl AnyStorage for UnsyncStorage {
                 };
                 GenerationalPointer { storage, location }
             } else {
-                let data: &'static Self = &*Box::leak(Box::new(Self::default()));
+                let data: &'static Self = &*Box::leak(Box::default());
                 let location = GenerationalLocation {
                     generation: 0,
                     #[cfg(any(debug_assertions, feature = "debug_borrows"))]
