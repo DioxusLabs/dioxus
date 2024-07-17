@@ -75,16 +75,12 @@ impl<T: 'static, S: Storage<T>> CopyValue<T, S> {
 
     pub(crate) fn new_with_caller(
         value: T,
-        #[cfg(debug_assertions)] caller: &'static std::panic::Location<'static>,
+        caller: &'static std::panic::Location<'static>,
     ) -> Self {
         let owner = current_owner();
 
         Self {
-            value: owner.insert_with_caller(
-                value,
-                #[cfg(debug_assertions)]
-                caller,
-            ),
+            value: owner.insert_with_caller(value, caller),
             origin_scope: current_scope_id().expect("in a virtual dom"),
         }
     }
