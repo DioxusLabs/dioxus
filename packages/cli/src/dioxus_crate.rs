@@ -252,7 +252,7 @@ impl DioxusCrate {
             for feature in features {
                 if let Some((_, after_dioxus)) = feature.split_once("dioxus") {
                     if let Some(dioxus_feature_enabled) =
-                        after_dioxus.trim_start_matches("?").strip_prefix("/")
+                        after_dioxus.trim_start_matches('?').strip_prefix('/')
                     {
                         // If that enables the feature we are looking for, return that feature
                         if dioxus_feature_enabled == dioxus_feature {

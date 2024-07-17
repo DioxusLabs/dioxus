@@ -95,14 +95,8 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
             msg = server.wait() => {
                 // Run the server in the background
                 // Waiting for updates here lets us tap into when clients are added/removed
-                match msg {
-                    Some(SocketUpdate::NewSocket(socket)) => {
-                        server.hot_reload_sockets.push(socket);
-                    }
-                    Some(SocketUpdate::NewMessage(msg)) => {
-                        screen.new_ws_message(Platform::Web, msg);
-                    }
-                    None => {}
+                if let Some(msg) = msg {
+                    screen.new_ws_message(Platform::Web, msg);
                 }
             }
 

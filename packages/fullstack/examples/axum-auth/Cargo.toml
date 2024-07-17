@@ -33,10 +33,12 @@ anyhow = "1.0.71"
 
 [dependencies.axum_session]
 workspace = true
+features = ["sqlite-rustls"]
 optional = true
 
 [dependencies.axum_session_auth]
 workspace = true
+features = ["sqlite-rustls"]
 optional = true
 
 [features]

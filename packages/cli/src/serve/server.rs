@@ -199,18 +199,8 @@ impl Server {
         }
     }
 
-    pub async fn send_initial_reload(&mut self, reload: HotReloadMsg) {
-        let msg = DevserverMsg::HotReload(reload);
-        let msg = serde_json::to_string(&msg).unwrap();
-
-        let socket = self.hot_reload_sockets.last_mut().unwrap();
-        if socket.send(Message::Text(msg)).await.is_err() {
-            self.hot_reload_sockets.pop();
-        }
-    }
-
     /// Wait for new clients to be connected and then save them
-    pub async fn wait(&mut self) -> Option<SocketUpdate> {
+    pub async fn wait(&mut self) -> Option<Message> {
         let mut new_hot_reload_socket = self.new_hot_reload_sockets.next();
         let mut new_build_status_socket = self.new_build_status_sockets.next();
         let mut new_message = self
@@ -244,7 +234,7 @@ impl Server {
             }
             Some((idx, message)) = new_message.next() => {
                 match message {
-                    Some(Ok(message)) => return Some(SocketUpdate::NewMessage(message)),
+                    Some(Ok(message)) => return Some(message),
                     _ => {
                         drop(new_message);
                         _ = self.hot_reload_sockets.remove(idx);
@@ -299,12 +289,6 @@ impl Server {
         self.fullstack_port
             .map(|port| SocketAddr::new(self.ip.ip(), port))
     }
-}
-
-// Updates from the server wait channel
-pub enum SocketUpdate {
-    NewSocket(WebSocket),
-    NewMessage(Message),
 }
 
 /// Sets up and returns a router
@@ -411,19 +395,19 @@ fn setup_router(
 }
 
 fn build_serve_dir(serve: &Serve, cfg: &DioxusCrate) -> axum::routing::MethodRouter {
-    const CORS_UNSAFE: (HeaderValue, HeaderValue) = (
+    static CORS_UNSAFE: (HeaderValue, HeaderValue) = (
         HeaderValue::from_static("unsafe-none"),
         HeaderValue::from_static("unsafe-none"),
     );
 
-    const CORS_REQUIRE: (HeaderValue, HeaderValue) = (
+    static CORS_REQUIRE: (HeaderValue, HeaderValue) = (
         HeaderValue::from_static("require-corp"),
         HeaderValue::from_static("same-origin"),
     );
 
     let (coep, coop) = match serve.server_arguments.cross_origin_policy {
-        true => CORS_REQUIRE,
-        false => CORS_UNSAFE,
+        true => CORS_REQUIRE.clone(),
+        false => CORS_UNSAFE.clone(),
     };
 
     let out_dir = cfg.out_dir();

@@ -958,9 +958,9 @@ dependencies = [
 
 [[package]]
 name = "axum_session"
-version = "0.14.0"
+version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f7f838b45b25647f9df4bd99ef0bbb009020de8093773dd27b41b12a87f2167"
+checksum = "d0f0035d1d5a70ac279e80a75e60592023ba8b327c929c3827f6c5ed749b9f8b"
 dependencies = [
  "aes-gcm",
  "async-trait",
@@ -979,6 +979,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "sqlx",
  "thiserror",
  "tokio",
  "tower-layer",
@@ -989,9 +990,9 @@ dependencies = [
 
 [[package]]
 name = "axum_session_auth"
-version = "0.14.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7201d64f4330340bcd53d60be7c15c9e9dc8e37dcb0b3214e8b1e8c75e9170a0"
+checksum = "cd4c620e865c92d9fca3ad57efeb4baef271f3ccdba163928002f13489952660"
 dependencies = [
  "anyhow",
  "async-recursion",

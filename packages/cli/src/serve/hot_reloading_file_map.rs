@@ -196,23 +196,6 @@ impl FileMap {
         Ok(out_templates)
     }
 
-    /// add the template to an existing file in the filemap if it exists
-    /// create a new file if it doesn't exist
-    pub fn insert(&mut self, path: PathBuf, template: Template) {
-        if self.map.contains_key(&path) {
-            let entry = self.map.get_mut(&path).unwrap();
-            entry.templates.insert(template.name, template);
-        } else {
-            self.map.insert(
-                path.clone(),
-                CachedSynFile {
-                    raw: String::new(),
-                    templates: HashMap::from([(template.name, template)]),
-                },
-            );
-        }
-    }
-
     fn child_in_workspace(&mut self, crate_dir: &Path) -> io::Result<Option<PathBuf>> {
         if let Some(in_workspace) = self.in_workspace.get(crate_dir) {
             return Ok(in_workspace.clone());

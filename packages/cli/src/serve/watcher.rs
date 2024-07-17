@@ -7,20 +7,17 @@ use dioxus_html::HtmlCtx;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
 use ignore::gitignore::Gitignore;
-use notify::{
-    event::{DataChange, ModifyKind},
-    EventKind, RecommendedWatcher,
-};
+use notify::{event::ModifyKind, EventKind, RecommendedWatcher};
 
 /// This struct stores the file watcher and the filemap for the project.
 ///
 /// This is where we do workspace discovery and recursively listen for changes in Rust files and asset
 /// directories.
 pub struct Watcher {
-    tx: UnboundedSender<notify::Event>,
+    _tx: UnboundedSender<notify::Event>,
     rx: UnboundedReceiver<notify::Event>,
-    last_update_time: i64,
-    watcher: RecommendedWatcher,
+    _last_update_time: i64,
+    _watcher: RecommendedWatcher,
     queued_events: Vec<notify::Event>,
     file_map: FileMap,
     ignore: Gitignore,
@@ -105,13 +102,13 @@ impl Watcher {
         .unwrap();
 
         Self {
-            tx,
+            _tx: tx,
             rx,
-            watcher,
+            _watcher: watcher,
             file_map,
             ignore,
             queued_events: Vec::new(),
-            last_update_time: chrono::Local::now().timestamp(),
+            _last_update_time: chrono::Local::now().timestamp(),
         }
     }
 
@@ -246,15 +243,6 @@ impl Watcher {
     /// rust code. We don't care about changes otherwise, unless we get a signle elsewhere to do a full rebuild
     pub fn pending_changes(&mut self) -> bool {
         !self.queued_events.is_empty()
-    }
-
-    pub fn hotreload_all_files(&mut self, config: &DioxusCrate) {
-        let keys = self.file_map.map.keys().collect::<Vec<_>>();
-
-        // for key in keys {
-        //     self.file_map
-        //         .update_rsx::<HtmlCtx>(key, &config.crate_dir());
-        // }
     }
 }
 

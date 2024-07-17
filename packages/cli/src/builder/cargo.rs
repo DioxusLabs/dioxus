@@ -13,7 +13,6 @@ use crate::link::LinkCommand;
 use crate::Result;
 use anyhow::Context;
 use futures_channel::mpsc::UnboundedSender;
-use futures_util::SinkExt;
 use manganis_cli_support::ManganisSupportGuard;
 use std::fs::create_dir_all;
 

@@ -1,7 +1,6 @@
 //! Report progress about the build to the user. We use channels to report progress back to the CLI.
 use anyhow::Context;
 use cargo_metadata::{diagnostic::Diagnostic, Message};
-use dioxus_html::p;
 use futures_channel::mpsc::UnboundedSender;
 use serde::Deserialize;
 use std::ops::Deref;

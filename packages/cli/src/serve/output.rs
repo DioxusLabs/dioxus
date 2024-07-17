@@ -8,15 +8,14 @@ use crate::{
 };
 use core::panic;
 use crossterm::{
-    event::{self, Event, EventStream, KeyCode, KeyModifiers, MouseEventKind},
+    event::{Event, EventStream, KeyCode, KeyModifiers, MouseEventKind},
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     tty::IsTty,
     ExecutableCommand,
 };
 use dioxus_cli_config::Platform;
 use dioxus_hot_reload::ClientMsg;
-use dioxus_html::span;
-use futures_util::{future::select_all, StreamExt, TryStreamExt};
+use futures_util::{future::select_all, StreamExt};
 use ratatui::{prelude::*, widgets::*, TerminalOptions, Viewport};
 use std::{
     cell::RefCell,
@@ -56,10 +55,9 @@ impl BuildProgress {
 pub struct Output {
     term: Rc<RefCell<TerminalBackend>>,
     events: EventStream,
-    command_list: ListState,
-    rustc_version: String,
-    rustc_nightly: bool,
-    dx_version: String,
+    _rustc_version: String,
+    _rustc_nightly: bool,
+    _dx_version: String,
     interactive: bool,
     pub(crate) build_progress: BuildProgress,
     running_apps: HashMap<Platform, RunningApp>,
@@ -103,12 +101,11 @@ impl Output {
             },
         )?;
 
-        let command_list = ListState::default();
-
+        // todo: re-enable rustc version
         // let rustc_version = rustc_version().await;
         // let rustc_nightly = rustc_version.contains("nightly") || cfg.target_args.nightly;
-        let rustc_version = String::from("1.0.0");
-        let rustc_nightly = false;
+        let _rustc_version = String::from("1.0.0");
+        let _rustc_nightly = false;
 
         let mut dx_version = String::new();
 
@@ -118,7 +115,7 @@ impl Output {
 
         if !is_cli_release {
             if let Some(hash) = crate::dx_build_info::GIT_COMMIT_HASH_SHORT {
-                let hash = &hash.trim_start_matches("g")[..4];
+                let hash = &hash.trim_start_matches('g')[..4];
                 dx_version.push('-');
                 dx_version.push_str(hash);
             }
@@ -129,10 +126,9 @@ impl Output {
         Ok(Self {
             term: Rc::new(RefCell::new(term)),
             events,
-            command_list,
-            rustc_version,
-            rustc_nightly,
-            dx_version,
+            _rustc_version,
+            _rustc_nightly,
+            _dx_version: dx_version,
             interactive,
             is_cli_release,
             platform,
@@ -351,13 +347,14 @@ impl Output {
         }
     }
 
-    fn is_snapped(&self, platform: Platform) -> bool {
-        return true;
-
-        let prev_scrol = self
-            .num_lines_with_wrapping
-            .saturating_sub(self.term_height);
-        prev_scrol == self.scroll
+    // todo: re-enable
+    #[allow(unused)]
+    fn is_snapped(&self, _platform: Platform) -> bool {
+        true
+        // let prev_scrol = self
+        //     .num_lines_with_wrapping
+        //     .saturating_sub(self.term_height);
+        // prev_scrol == self.scroll
     }
 
     pub fn scroll_to_bottom(&mut self) {
@@ -432,11 +429,11 @@ impl Output {
 
     pub fn render(
         &mut self,
-        opts: &Serve,
-        config: &DioxusCrate,
-        build_engine: &Builder,
+        _opts: &Serve,
+        _config: &DioxusCrate,
+        _build_engine: &Builder,
         server: &Server,
-        watcher: &Watcher,
+        _watcher: &Watcher,
     ) {
         // just drain the build logs
         if !self.interactive {
@@ -595,7 +592,6 @@ impl Output {
                     use ansi_to_tui::IntoText;
                     match &span.message {
                         MessageType::Text(line) => {
-                            let mut idx = 0;
                             for line in line.lines() {
                                 let text = line.into_text().unwrap_or_default();
                                 for line in text.lines {
@@ -606,23 +602,6 @@ impl Output {
                                     let newline = Line::from(out_line);
                                     paragraph_text.push_line(newline);
                                 }
-
-                                // for line in text.lines {
-                                //     let span = if idx == 0 {
-                                //         Span::from("[app] ").gray()
-                                //     } else {
-                                //         Span::from("    | ").gray()
-                                //     };
-
-                                //     let mut out_line = Line::from(span);
-
-                                //     for span in line.spans {
-                                //         out_line.push_span(span);
-                                //     }
-                                //     paragraph_text.push_line(out_line);
-                                //     idx += 1;
-                                // }
-                                idx += 1;
                             }
                         }
                         MessageType::Cargo(diagnostic) => {
@@ -808,6 +787,8 @@ fn set_fix_term_hook() {
     }));
 }
 
+// todo: re-enable
+#[allow(unused)]
 async fn rustc_version() -> String {
     tokio::process::Command::new("rustc")
         .arg("--version")

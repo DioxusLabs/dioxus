@@ -258,7 +258,7 @@ impl HotReloadedTemplate {
             let old_node = old_nodes.remove(old_idx)?;
 
             // This old node will now need to take on the new path in the new template
-            node_paths[old_node.get_dyn_idx()] = new.node_paths[new_node.get_dyn_idx()].clone();
+            node_paths[old_node.get_dyn_idx()].clone_from(&new.node_paths[new_node.get_dyn_idx()]);
 
             // But we also need to make sure the new node is taking on the old node's ID
             new_node.set_dyn_idx(old_node.get_dyn_idx());
