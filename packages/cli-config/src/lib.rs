@@ -8,9 +8,7 @@ pub use config::*;
 mod bundle;
 pub use bundle::*;
 
-#[cfg(feature = "cli")]
 mod serve;
-#[cfg(feature = "cli")]
 pub use serve::*;
 
 #[doc(hidden)]
@@ -39,7 +37,7 @@ pub mod __private {
         }
     }
 
-    #[cfg(feature = "cli")]
+    #[cfg(feature = "read-config")]
     /// The environment variable that stores the CLIs serve configuration.
     /// We use this to communicate between the CLI and the server for fullstack applications.
     pub const SERVE_ENV: &str = "DIOXUS_SERVE_CONFIG";

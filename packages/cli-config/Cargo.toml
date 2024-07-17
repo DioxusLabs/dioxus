@@ -25,8 +25,9 @@ dirs = { workspace = true, optional = true }
 
 [features]
 default = ["read-config"]
-cli = ["dep:tauri-bundler", "dep:tauri-utils", "dep:clap", "dep:toml", "dep:cargo_toml", "dep:dirs"]
+cli = ["dep:tauri-bundler", "dep:tauri-utils", "read-from-args", "dep:toml", "dep:cargo_toml", "dep:dirs"]
 read-config = []
+read-from-args = ["dep:clap"]
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

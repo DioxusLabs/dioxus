@@ -1,8 +1,11 @@
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
 
+#[cfg(feature = "read-from-args")]
 use clap::Parser;
 
 /// The arguments for the address the server will run on
+
+#[cfg(feature = "read-from-args")]
 #[derive(Clone, Debug, Parser)]
 pub struct AddressArguments {
     /// The port the server will run on
@@ -12,6 +15,16 @@ pub struct AddressArguments {
 
     /// The address the server will run on
     #[clap(long, default_value_t = default_address())]
+    pub addr: std::net::IpAddr,
+}
+
+#[cfg(not(feature = "cli"))]
+#[derive(Clone, Debug)]
+pub struct AddressArguments {
+    /// The port the server will run on
+    pub port: u16,
+
+    /// The address the server will run on
     pub addr: std::net::IpAddr,
 }
 

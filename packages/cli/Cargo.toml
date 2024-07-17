@@ -100,7 +100,7 @@ tracing = { workspace = true }
 wasm-opt = "0.116.1"
 ratatui = { version = "0.27.0", features = ["crossterm", "unstable"] }
 crossterm = { version = "0.27.0", features = ["event-stream"] }
-ansi-to-tui = "4.0.1"
+ansi-to-tui = "=5.0.0-rc.1"
 ansi-to-html = "0.2.1"
 
 # on maco, we need to specify the vendored feature on ssl when cross compiling

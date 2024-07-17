@@ -161,12 +161,12 @@ dependencies = [
 
 [[package]]
 name = "ansi-to-tui"
-version = "4.1.0"
+version = "5.0.0-rc.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba3bf628a79452df9614d933012dc500f8cb6ddad8c897ff8122ea1c0b187ff7"
+checksum = "428c2992b874104caf39204b05bf89eab4ceefdd4fcb26caa6759906f547f8e8"
 dependencies = [
  "nom",
- "ratatui 0.26.3",
+ "ratatui",
  "simdutf8",
  "smallvec",
  "thiserror",
@@ -2526,7 +2526,7 @@ dependencies = [
  "open",
  "prettyplease",
  "proc-macro2",
- "ratatui 0.27.0",
+ "ratatui",
  "rayon",
  "reqwest 0.12.5",
  "rsx-rosetta",
@@ -7710,25 +7710,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "16abd0c1b639e9eb4d7c50c0b8100b0d0f849be2349829c740fe8e6eb4816429"
 dependencies = [
  "rand_core 0.5.1",
-]
-
-[[package]]
-name = "ratatui"
-version = "0.26.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f44c9e68fd46eda15c646fbb85e1040b657a58cdc8c98db1d97a55930d991eef"
-dependencies = [
- "bitflags 2.6.0",
- "cassowary",
- "compact_str",
- "itertools 0.12.1",
- "lru",
- "paste",
- "stability",
- "strum 0.26.3",
- "unicode-segmentation",
- "unicode-truncate",
- "unicode-width",
 ]
 
 [[package]]
