@@ -30,11 +30,13 @@ futures-util = { workspace = true, features = ["async-await-macro"], optional = 
 tokio = { workspace = true, features = ["sync", "rt-multi-thread"], optional = true }
 tracing = { workspace = true }
 
-[target.'cfg(target_os = "ios")'.dependencies]
-tokio-tungstenite = { workspace = true, optional = true, features = ["native-tls"]}
+# use rustls on android
+[target.'cfg(target_os = "android")'.dependencies]
+tokio-tungstenite = { workspace = true, optional = true, features = ["rustls"] }
 
-[target.'cfg(not(target_os = "ios"))'.dependencies]
-tokio-tungstenite = { workspace = true, optional = true, features = ["rustls"]}
+# use native tls on other platforms
+[target.'cfg(not(target_os = "android"))'.dependencies]
+tokio-tungstenite = { workspace = true, optional = true, features = ["native-tls"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
