@@ -116,8 +116,6 @@ async fn launch_server(
 ) {
     use clap::Parser;
 
-    use crate::prelude::RenderHandleState;
-
     let args = dioxus_cli_config::ServeArguments::from_cli()
         .unwrap_or_else(dioxus_cli_config::ServeArguments::parse);
     let addr = args
@@ -129,6 +127,7 @@ async fn launch_server(
     #[cfg(feature = "axum")]
     {
         use crate::axum_adapter::DioxusRouterExt;
+        use crate::prelude::RenderHandleState;
 
         let router = axum::Router::new().register_server_functions_with_context(context_providers);
         #[cfg(not(any(feature = "desktop", feature = "mobile")))]
