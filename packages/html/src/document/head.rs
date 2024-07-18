@@ -324,7 +324,7 @@ impl StyleProps {
 ///                 body {{
 ///                     background-color: red;
 ///                 }}
-///             "#,
+///             "#
 ///         }
 ///     }
 /// }
