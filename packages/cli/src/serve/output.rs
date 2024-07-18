@@ -54,7 +54,7 @@ impl BuildProgress {
 }
 
 pub struct Output {
-    term: Rc<RefCell<TerminalBackend>>,
+    term: Rc<RefCell<Option<TerminalBackend>>>,
 
     // optional since when there's no tty there's no eventstream to read from - just stdin
     events: Option<EventStream>,
@@ -104,12 +104,13 @@ impl Output {
         // set the panic hook to fix the terminal
         set_fix_term_hook();
 
-        let term: TerminalBackend = Terminal::with_options(
+        let term: Option<TerminalBackend> = Terminal::with_options(
             CrosstermBackend::new(stdout()),
             TerminalOptions {
                 viewport: Viewport::Fullscreen,
             },
-        )?;
+        )
+        .ok();
 
         // todo: re-enable rustc version
         // let rustc_version = rustc_version().await;
@@ -465,213 +466,219 @@ impl Output {
         let num_frames = elapsed / 100.0;
         let _frame_step = (num_frames % 10.0) as usize;
 
-        _ = self.term.clone().borrow_mut().draw(|frame| {
-            // a layout that has a title with stats about the program and then the actual console itself
-            let body = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints(
-                    [
-                        // Title
-                        Constraint::Length(1),
-                        // Body
-                        Constraint::Min(0),
-                    ]
-                    .as_ref(),
-                )
-                .split(frame.size());
+        _ = self
+            .term
+            .clone()
+            .borrow_mut()
+            .as_mut()
+            .unwrap()
+            .draw(|frame| {
+                // a layout that has a title with stats about the program and then the actual console itself
+                let body = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints(
+                        [
+                            // Title
+                            Constraint::Length(1),
+                            // Body
+                            Constraint::Min(0),
+                        ]
+                        .as_ref(),
+                    )
+                    .split(frame.size());
 
-            // Split the body into a left and a right
-            let console = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([Constraint::Fill(1), Constraint::Length(14)].as_ref())
-                .split(body[1]);
+                // Split the body into a left and a right
+                let console = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints([Constraint::Fill(1), Constraint::Length(14)].as_ref())
+                    .split(body[1]);
 
-            let listening_len = "listening at http://127.0.0.1:8080".len() + 3;
-            let listening_len = if listening_len > body[0].width as usize {
-                0
-            } else {
-                listening_len
-            };
-
-            let header = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints(
-                    [
-                        Constraint::Fill(1),
-                        Constraint::Length(listening_len as u16),
-                    ]
-                    .as_ref(),
-                )
-                .split(body[0]);
-
-            // // Render a border for the header
-            // frame.render_widget(Block::default().borders(Borders::BOTTOM), body[0]);
-
-            // Render the metadata
-            let mut spans = vec![
-                Span::from(if self.is_cli_release { "dx" } else { "dx-dev" }).green(),
-                Span::from(" ").green(),
-                Span::from("serve").green(),
-                Span::from(" | ").white(),
-                Span::from(self.platform.to_string()).green(),
-                Span::from(" | ").white(),
-            ];
-
-            // If there is build progress, display that next to the platform
-            if !self.build_progress.build_logs.is_empty() {
-                if self
-                    .build_progress
-                    .build_logs
-                    .values()
-                    .any(|b| b.failed.is_some())
-                {
-                    spans.push(Span::from("build failed ❌").red());
+                let listening_len = "listening at http://127.0.0.1:8080".len() + 3;
+                let listening_len = if listening_len > body[0].width as usize {
+                    0
                 } else {
-                    spans.push(Span::from("status: ").green());
-                    let build = self
+                    listening_len
+                };
+
+                let header = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints(
+                        [
+                            Constraint::Fill(1),
+                            Constraint::Length(listening_len as u16),
+                        ]
+                        .as_ref(),
+                    )
+                    .split(body[0]);
+
+                // // Render a border for the header
+                // frame.render_widget(Block::default().borders(Borders::BOTTOM), body[0]);
+
+                // Render the metadata
+                let mut spans = vec![
+                    Span::from(if self.is_cli_release { "dx" } else { "dx-dev" }).green(),
+                    Span::from(" ").green(),
+                    Span::from("serve").green(),
+                    Span::from(" | ").white(),
+                    Span::from(self.platform.to_string()).green(),
+                    Span::from(" | ").white(),
+                ];
+
+                // If there is build progress, display that next to the platform
+                if !self.build_progress.build_logs.is_empty() {
+                    if self
                         .build_progress
                         .build_logs
                         .values()
-                        .min_by(|a, b| a.partial_cmp(b).unwrap())
-                        .unwrap();
-                    spans.extend_from_slice(&build.spans(Rect::new(
-                        0,
-                        0,
-                        build.max_layout_size(),
-                        1,
-                    )));
+                        .any(|b| b.failed.is_some())
+                    {
+                        spans.push(Span::from("build failed ❌").red());
+                    } else {
+                        spans.push(Span::from("status: ").green());
+                        let build = self
+                            .build_progress
+                            .build_logs
+                            .values()
+                            .min_by(|a, b| a.partial_cmp(b).unwrap())
+                            .unwrap();
+                        spans.extend_from_slice(&build.spans(Rect::new(
+                            0,
+                            0,
+                            build.max_layout_size(),
+                            1,
+                        )));
+                    }
                 }
-            }
 
-            frame.render_widget(Paragraph::new(Line::from(spans)).left_aligned(), header[0]);
+                frame.render_widget(Paragraph::new(Line::from(spans)).left_aligned(), header[0]);
 
-            // Split apart the body into a center and a right side
-            // We only want to show the sidebar if there's enough space
-            if listening_len > 0 {
+                // Split apart the body into a center and a right side
+                // We only want to show the sidebar if there's enough space
+                if listening_len > 0 {
+                    frame.render_widget(
+                        Paragraph::new(Line::from(vec![
+                            Span::from("listening at ").dark_gray(),
+                            Span::from(format!("http://{}", server.ip).as_str()).gray(),
+                        ])),
+                        header[1],
+                    );
+                }
+
+                // Draw the tabs in the right region of the console
+                // First draw the left border
                 frame.render_widget(
-                    Paragraph::new(Line::from(vec![
-                        Span::from("listening at ").dark_gray(),
-                        Span::from(format!("http://{}", server.ip).as_str()).gray(),
-                    ])),
-                    header[1],
+                    Paragraph::new(vec![
+                        {
+                            let mut line = Line::from(" [0] console").dark_gray();
+                            if self.tab == Tab::Console {
+                                line.style = Style::default().fg(Color::LightYellow);
+                            }
+                            line
+                        },
+                        {
+                            let mut line = Line::from(" [1] build").dark_gray();
+                            if self.tab == Tab::BuildLog {
+                                line.style = Style::default().fg(Color::LightYellow);
+                            }
+                            line
+                        },
+                        Line::from("  ").gray(),
+                        Line::from(" [/] more").gray(),
+                        Line::from(" [r] reload").gray(),
+                        Line::from(" [r] clear").gray(),
+                        Line::from(" [o] open").gray(),
+                        Line::from(" [h] hide").gray(),
+                    ])
+                    .left_aligned()
+                    .block(
+                        Block::default()
+                            .borders(Borders::LEFT | Borders::TOP)
+                            .border_set(symbols::border::Set {
+                                top_left: symbols::line::NORMAL.horizontal_down,
+                                ..symbols::border::PLAIN
+                            }),
+                    ),
+                    console[1],
                 );
-            }
 
-            // Draw the tabs in the right region of the console
-            // First draw the left border
-            frame.render_widget(
-                Paragraph::new(vec![
-                    {
-                        let mut line = Line::from(" [0] console").dark_gray();
-                        if self.tab == Tab::Console {
-                            line.style = Style::default().fg(Color::LightYellow);
-                        }
-                        line
-                    },
-                    {
-                        let mut line = Line::from(" [1] build").dark_gray();
-                        if self.tab == Tab::BuildLog {
-                            line.style = Style::default().fg(Color::LightYellow);
-                        }
-                        line
-                    },
-                    Line::from("  ").gray(),
-                    Line::from(" [/] more").gray(),
-                    Line::from(" [r] reload").gray(),
-                    Line::from(" [r] clear").gray(),
-                    Line::from(" [o] open").gray(),
-                    Line::from(" [h] hide").gray(),
-                ])
-                .left_aligned()
-                .block(
-                    Block::default()
-                        .borders(Borders::LEFT | Borders::TOP)
-                        .border_set(symbols::border::Set {
-                            top_left: symbols::line::NORMAL.horizontal_down,
-                            ..symbols::border::PLAIN
-                        }),
-                ),
-                console[1],
-            );
+                // We're going to assemble a text buffer directly and then let the paragraph widgets
+                // handle the wrapping and scrolling
+                let mut paragraph_text: Text<'_> = Text::default();
 
-            // We're going to assemble a text buffer directly and then let the paragraph widgets
-            // handle the wrapping and scrolling
-            let mut paragraph_text: Text<'_> = Text::default();
+                for platform in self.build_progress.build_logs.keys() {
+                    let build = self.build_progress.build_logs.get(platform).unwrap();
 
-            for platform in self.build_progress.build_logs.keys() {
-                let build = self.build_progress.build_logs.get(platform).unwrap();
+                    let msgs = match self.tab {
+                        Tab::Console => &build.stdout_logs,
+                        Tab::BuildLog => &build.messages,
+                    };
 
-                let msgs = match self.tab {
-                    Tab::Console => &build.stdout_logs,
-                    Tab::BuildLog => &build.messages,
-                };
-
-                for span in msgs.iter() {
-                    use ansi_to_tui::IntoText;
-                    match &span.message {
-                        MessageType::Text(line) => {
-                            for line in line.lines() {
-                                let text = line.into_text().unwrap_or_default();
-                                for line in text.lines {
-                                    let mut out_line = vec![Span::from("[app] ").dark_gray()];
-                                    for span in line.spans {
-                                        out_line.push(span);
+                    for span in msgs.iter() {
+                        use ansi_to_tui::IntoText;
+                        match &span.message {
+                            MessageType::Text(line) => {
+                                for line in line.lines() {
+                                    let text = line.into_text().unwrap_or_default();
+                                    for line in text.lines {
+                                        let mut out_line = vec![Span::from("[app] ").dark_gray()];
+                                        for span in line.spans {
+                                            out_line.push(span);
+                                        }
+                                        let newline = Line::from(out_line);
+                                        paragraph_text.push_line(newline);
                                     }
-                                    let newline = Line::from(out_line);
-                                    paragraph_text.push_line(newline);
                                 }
                             }
-                        }
-                        MessageType::Cargo(diagnostic) => {
-                            let diagnostic = diagnostic.rendered.as_deref().unwrap_or_default();
+                            MessageType::Cargo(diagnostic) => {
+                                let diagnostic = diagnostic.rendered.as_deref().unwrap_or_default();
 
-                            for line in diagnostic.lines() {
-                                paragraph_text.extend(line.into_text().unwrap_or_default());
+                                for line in diagnostic.lines() {
+                                    paragraph_text.extend(line.into_text().unwrap_or_default());
+                                }
                             }
-                        }
-                    };
+                        };
+                    }
                 }
-            }
 
-            let paragraph = Paragraph::new(paragraph_text)
-                .left_aligned()
-                .wrap(Wrap { trim: false });
+                let paragraph = Paragraph::new(paragraph_text)
+                    .left_aligned()
+                    .wrap(Wrap { trim: false });
 
-            self.term_height = console[0].height;
-            self.num_lines_with_wrapping = paragraph.line_count(console[0].width) as u16;
+                self.term_height = console[0].height;
+                self.num_lines_with_wrapping = paragraph.line_count(console[0].width) as u16;
 
-            let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                .begin_symbol(None)
-                .end_symbol(None)
-                .track_symbol(None)
-                .thumb_symbol("▐");
+                let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .begin_symbol(None)
+                    .end_symbol(None)
+                    .track_symbol(None)
+                    .thumb_symbol("▐");
 
-            let mut scrollbar_state = ScrollbarState::new(
-                self.num_lines_with_wrapping
-                    .saturating_sub(self.term_height) as usize,
-            )
-            .position(self.scroll as usize);
+                let mut scrollbar_state = ScrollbarState::new(
+                    self.num_lines_with_wrapping
+                        .saturating_sub(self.term_height) as usize,
+                )
+                .position(self.scroll as usize);
 
-            let paragraph = paragraph.scroll((self.scroll, 0));
-            paragraph
-                .block(Block::new().borders(Borders::TOP))
-                .render(console[0], frame.buffer_mut());
+                let paragraph = paragraph.scroll((self.scroll, 0));
+                paragraph
+                    .block(Block::new().borders(Borders::TOP))
+                    .render(console[0], frame.buffer_mut());
 
-            // and the scrollbar, those are separate widgets
-            frame.render_stateful_widget(
-                scrollbar,
-                console[0].inner(Margin {
-                    // todo: dont use margin - just push down the body based on its top border
-                    // using an inner vertical margin of 1 unit makes the scrollbar inside the block
-                    vertical: 1,
-                    horizontal: 0,
-                }),
-                &mut scrollbar_state,
-            );
+                // and the scrollbar, those are separate widgets
+                frame.render_stateful_widget(
+                    scrollbar,
+                    console[0].inner(Margin {
+                        // todo: dont use margin - just push down the body based on its top border
+                        // using an inner vertical margin of 1 unit makes the scrollbar inside the block
+                        vertical: 1,
+                        horizontal: 0,
+                    }),
+                    &mut scrollbar_state,
+                );
 
-            // render the fly modal
-            self.render_fly_modal(frame, console[0]);
-        });
+                // render the fly modal
+                self.render_fly_modal(frame, console[0]);
+            });
     }
 
     async fn handle_events(&mut self, event: Event) -> io::Result<()> {
