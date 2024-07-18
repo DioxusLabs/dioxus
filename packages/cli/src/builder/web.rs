@@ -121,7 +121,7 @@ impl BuildRequest {
         });
 
         // Create the index.html file
-        let html = self.prepare_html(assets)?;
+        let html = self.prepare_html(assets, progress)?;
         let html_path = self.dioxus_crate.out_dir().join("index.html");
         std::fs::write(&html_path, html)?;
 

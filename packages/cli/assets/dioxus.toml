@@ -32,21 +32,6 @@ index_on_404 = true
 
 watch_path = ["src", "examples"]
 
-# include `assets` in web platform
-[web.resource]
-
-# CSS style file
-style = []
-
-# Javascript code file
-script = []
-
-[web.resource.dev]
-
-# Javascript code file
-# serve: [dev-server] only
-script = []
-
 [bundler]
 # Bundle identifier
 identifier = "io.github.{{project-name}}"
