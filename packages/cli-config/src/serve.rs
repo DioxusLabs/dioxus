@@ -18,16 +18,6 @@ pub struct AddressArguments {
     pub addr: std::net::IpAddr,
 }
 
-#[cfg(not(feature = "cli"))]
-#[derive(Clone, Debug)]
-pub struct AddressArguments {
-    /// The port the server will run on
-    pub port: u16,
-
-    /// The address the server will run on
-    pub addr: std::net::IpAddr,
-}
-
 impl Default for AddressArguments {
     fn default() -> Self {
         Self {
