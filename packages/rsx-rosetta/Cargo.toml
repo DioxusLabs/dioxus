@@ -10,8 +10,6 @@ homepage = "https://dioxuslabs.com"
 documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 dioxus-autofmt = { workspace = true }
 dioxus-rsx = { workspace = true }
@@ -21,11 +19,6 @@ proc-macro2 = { workspace = true }
 quote = { workspace = true }
 syn = { workspace = true, features = ["full"] }
 convert_case = "0.5.0"
-
-# [features]
-# default = ["html"]
-
-# eventually more output options
 
 [dev-dependencies]
 pretty_assertions = "1.2.1"

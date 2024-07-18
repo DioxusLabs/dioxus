@@ -53,12 +53,3 @@ required-features = ["ssr"]
 name = "incremental"
 required-features = ["ssr"]
 harness = false
-
-# you need to comment this out when publishing since cargo workspaces is not smart enough to wipe this when dropping
-# dev-dependncey crates
-[target.'cfg(target_family = "wasm")'.dev-dependencies]
-console_error_panic_hook = "0.1.7"
-dioxus-router = { workspace = true, features = ["web"] }
-# dioxus-web = { workspace = true }
-gloo = "0.8.0"
-wasm-bindgen-test = "0.3.33"
