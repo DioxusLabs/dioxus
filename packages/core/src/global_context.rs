@@ -38,12 +38,15 @@ pub fn throw_error(error: impl Into<CapturedError> + 'static) {
 
 /// Consume context from the current scope
 pub fn try_consume_context<T: 'static + Clone>() -> Option<T> {
-    Runtime::with_current_scope(|cx| cx.consume_context::<T>()).flatten()
+    Runtime::with_current_scope(|cx| cx.consume_context::<T>())
+        .ok()
+        .flatten()
 }
 
 /// Consume context from the current scope
 pub fn consume_context<T: 'static + Clone>() -> T {
     Runtime::with_current_scope(|cx| cx.consume_context::<T>())
+        .ok()
         .flatten()
         .unwrap_or_else(|| panic!("Could not find context {}", std::any::type_name::<T>()))
 }
@@ -59,19 +62,19 @@ pub fn consume_context_from_scope<T: 'static + Clone>(scope_id: ScopeId) -> Opti
 
 /// Check if the current scope has a context
 pub fn has_context<T: 'static + Clone>() -> Option<T> {
-    Runtime::with_current_scope(|cx| cx.has_context::<T>()).flatten()
+    Runtime::with_current_scope(|cx| cx.has_context::<T>())
+        .ok()
+        .flatten()
 }
 
 /// Provide context to the current scope
 pub fn provide_context<T: 'static + Clone>(value: T) -> T {
-    Runtime::with_current_scope(|cx| cx.provide_context(value))
-        .expect("Must be called from inside a Dioxus runtime.")
+    Runtime::with_current_scope(|cx| cx.provide_context(value)).unwrap()
 }
 
 /// Provide a context to the root scope
 pub fn provide_root_context<T: 'static + Clone>(value: T) -> T {
-    Runtime::with_current_scope(|cx| cx.provide_root_context(value))
-        .expect("Must be called from inside a Dioxus runtime.")
+    Runtime::with_current_scope(|cx| cx.provide_root_context(value)).unwrap()
 }
 
 /// Suspended the current component on a specific task and then return None
@@ -267,17 +270,19 @@ pub fn generation() -> usize {
 
 /// Get the parent of the current scope if it exists
 pub fn parent_scope() -> Option<ScopeId> {
-    Runtime::with_current_scope(|cx| cx.parent_id()).flatten()
+    Runtime::with_current_scope(|cx| cx.parent_id())
+        .ok()
+        .flatten()
 }
 
 /// Mark the current scope as dirty, causing it to re-render
 pub fn needs_update() {
-    Runtime::with_current_scope(|cx| cx.needs_update());
+    Runtime::with_current_scope(|cx| cx.needs_update()).unwrap();
 }
 
 /// Mark the current scope as dirty, causing it to re-render
 pub fn needs_update_any(id: ScopeId) {
-    Runtime::with_current_scope(|cx| cx.needs_update_any(id));
+    Runtime::with_current_scope(|cx| cx.needs_update_any(id)).unwrap();
 }
 
 /// Schedule an update for the current component
@@ -401,12 +406,12 @@ pub fn use_after_render(f: impl FnMut() + 'static) {
 /// This is a hook and will always run, so you can't unschedule it
 /// Will run for every progression of suspense, though this might change in the future
 pub fn before_render(f: impl FnMut() + 'static) {
-    Runtime::with_current_scope(|cx| cx.push_before_render(f));
+    Runtime::with_current_scope(|cx| cx.push_before_render(f)).unwrap();
 }
 
 /// Push a function to be run after the render is complete, even if it didn't complete successfully
 pub fn after_render(f: impl FnMut() + 'static) {
-    Runtime::with_current_scope(|cx| cx.push_after_render(f));
+    Runtime::with_current_scope(|cx| cx.push_after_render(f)).unwrap();
 }
 
 /// Use a hook with a cleanup function

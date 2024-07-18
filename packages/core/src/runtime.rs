@@ -8,6 +8,7 @@ use crate::{
 };
 use slotmap::DefaultKey;
 use std::collections::BTreeSet;
+use std::fmt;
 use std::{
     cell::{Cell, Ref, RefCell},
     rc::Rc,
@@ -168,12 +169,13 @@ impl Runtime {
     }
 
     /// Runs a function with the current scope
-    pub(crate) fn with_current_scope<R>(f: impl FnOnce(&Scope) -> R) -> Option<R> {
+    pub(crate) fn with_current_scope<R>(f: impl FnOnce(&Scope) -> R) -> Result<R, RuntimeError> {
         Self::with(|rt| {
             rt.current_scope_id()
                 .and_then(|scope| rt.get_state(scope).map(|sc| f(&sc)))
         })
         .flatten()
+        .ok_or(RuntimeError { _priv: () })
     }
 
     /// Runs a function with the current scope
@@ -252,3 +254,22 @@ impl Drop for RuntimeGuard {
         Runtime::pop();
     }
 }
+
+/// Missing Dioxus runtime error.
+pub struct RuntimeError {
+    _priv: (),
+}
+
+impl fmt::Debug for RuntimeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RuntimeError").finish()
+    }
+}
+
+impl fmt::Display for RuntimeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Must be called from inside a Dioxus runtime.")
+    }
+}
+
+impl std::error::Error for RuntimeError {}
