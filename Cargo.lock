@@ -2703,6 +2703,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -2737,6 +2738,7 @@ dependencies = [
  "dioxus_server_macro",
  "futures-channel",
  "futures-util",
+ "generational-box 0.5.2",
  "http 1.1.0",
  "hyper 1.4.1",
  "once_cell",
@@ -2817,6 +2819,8 @@ dependencies = [
  "async-trait",
  "dioxus",
  "dioxus-core 0.5.2",
+ "dioxus-core-macro",
+ "dioxus-hooks",
  "dioxus-html-internal-macro",
  "dioxus-rsx",
  "dioxus-web",
@@ -2826,6 +2830,8 @@ dependencies = [
  "generational-box 0.5.2",
  "js-sys",
  "keyboard-types",
+ "lazy-js-bundle",
+ "manganis",
  "rfd",
  "rustversion",
  "serde",
@@ -2835,6 +2841,7 @@ dependencies = [
  "tokio",
  "tracing",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
 ]
 
@@ -2856,7 +2863,7 @@ dependencies = [
  "dioxus-core 0.5.2",
  "dioxus-html",
  "js-sys",
- "md5",
+ "lazy-js-bundle",
  "serde",
  "sledgehammer_bindgen",
  "sledgehammer_utils",
@@ -5685,6 +5692,10 @@ checksum = "0de8b303297635ad57c9f5059fd9cee7a47f8e8daa09df0fcd07dd39fb22977f"
 dependencies = [
  "log",
 ]
+
+[[package]]
+name = "lazy-js-bundle"
+version = "0.5.2"
 
 [[package]]
 name = "lazy_static"
@@ -9656,18 +9667,18 @@ checksum = "a38c90d48152c236a3ab59271da4f4ae63d678c5d7ad6b7714d7cb9760be5e4b"
 
 [[package]]
 name = "thiserror"
-version = "1.0.62"
+version = "1.0.63"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2675633b1499176c2dff06b0856a27976a8f9d436737b4cf4f312d4d91d8bbb"
+checksum = "c0342370b38b6a11b6cc11d6a805569958d54cfa061a29969c3b5ce2ea405724"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.62"
+version = "1.0.63"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d20468752b09f49e909e55a5d338caa8bedf615594e9d80bc4c565d30faf798c"
+checksum = "a4558b58466b9ad7ca0f102865eccc95938dca1a74a856f2b57b6629050da261"
 dependencies = [
  "proc-macro2",
  "quote",
