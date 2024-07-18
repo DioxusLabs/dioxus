@@ -70,7 +70,7 @@ pub trait Document {
         self.new_evaluator(js);
     }
 
-    fn create_link(&self, props: LinkProps) {
+    fn create_link(&self, props: head::LinkProps) {
         let attributes = props.attributes();
         let js = create_element_in_head("link", &attributes, None);
         self.new_evaluator(js);
@@ -359,89 +359,96 @@ pub fn Style(props: StyleProps) -> Element {
     rsx! {}
 }
 
-#[derive(Clone, Props, PartialEq)]
-pub struct LinkProps {
-    pub rel: Option<String>,
-    pub media: Option<String>,
-    pub title: Option<String>,
-    pub disabled: Option<bool>,
-    pub r#as: Option<String>,
-    pub sizes: Option<String>,
-    /// Links are deduplicated by their href attribute
-    pub href: Option<String>,
-    pub crossorigin: Option<String>,
-    pub referrerpolicy: Option<String>,
-    pub fetchpriority: Option<String>,
-    pub hreflang: Option<String>,
-    pub integrity: Option<String>,
-    pub r#type: Option<String>,
-    pub blocking: Option<String>,
-}
+pub mod head {
+    //! This module just contains the [`Link`] component which renders a `<link>` element in the head of the page. Note: This is different than the [Link](https://docs.rs/dioxus-router/latest/dioxus_router/components/fn.Link.html) component in dioxus router.
 
-impl LinkProps {
-    fn attributes(&self) -> Vec<(&'static str, String)> {
-        let mut attributes = Vec::new();
-        if let Some(rel) = &self.rel {
-            attributes.push(("rel", rel.clone()));
-        }
-        if let Some(media) = &self.media {
-            attributes.push(("media", media.clone()));
-        }
-        if let Some(title) = &self.title {
-            attributes.push(("title", title.clone()));
-        }
-        if let Some(disabled) = &self.disabled {
-            attributes.push(("disabled", disabled.to_string()));
-        }
-        if let Some(r#as) = &self.r#as {
-            attributes.push(("as", r#as.clone()));
-        }
-        if let Some(sizes) = &self.sizes {
-            attributes.push(("sizes", sizes.clone()));
-        }
-        if let Some(href) = &self.href {
-            attributes.push(("href", href.clone()));
-        }
-        if let Some(crossorigin) = &self.crossorigin {
-            attributes.push(("crossOrigin", crossorigin.clone()));
-        }
-        if let Some(referrerpolicy) = &self.referrerpolicy {
-            attributes.push(("referrerPolicy", referrerpolicy.clone()));
-        }
-        if let Some(fetchpriority) = &self.fetchpriority {
-            attributes.push(("fetchPriority", fetchpriority.clone()));
-        }
-        if let Some(hreflang) = &self.hreflang {
-            attributes.push(("hrefLang", hreflang.clone()));
-        }
-        if let Some(integrity) = &self.integrity {
-            attributes.push(("integrity", integrity.clone()));
-        }
-        if let Some(r#type) = &self.r#type {
-            attributes.push(("type", r#type.clone()));
-        }
-        if let Some(blocking) = &self.blocking {
-            attributes.push(("blocking", blocking.clone()));
-        }
-        attributes
+    use super::*;
+
+    #[derive(Clone, Props, PartialEq)]
+    pub struct LinkProps {
+        pub rel: Option<String>,
+        pub media: Option<String>,
+        pub title: Option<String>,
+        pub disabled: Option<bool>,
+        pub r#as: Option<String>,
+        pub sizes: Option<String>,
+        /// Links are deduplicated by their href attribute
+        pub href: Option<String>,
+        pub crossorigin: Option<String>,
+        pub referrerpolicy: Option<String>,
+        pub fetchpriority: Option<String>,
+        pub hreflang: Option<String>,
+        pub integrity: Option<String>,
+        pub r#type: Option<String>,
+        pub blocking: Option<String>,
     }
-}
 
-#[component]
-pub fn Link(props: LinkProps) -> Element {
-    use_update_warning(&props, "Link {}");
-
-    use_hook(|| {
-        if let Some(href) = &props.href {
-            if !should_insert_link(href) {
-                return;
+    impl LinkProps {
+        pub(crate)fn attributes(&self) -> Vec<(&'static str, String)> {
+            let mut attributes = Vec::new();
+            if let Some(rel) = &self.rel {
+                attributes.push(("rel", rel.clone()));
             }
+            if let Some(media) = &self.media {
+                attributes.push(("media", media.clone()));
+            }
+            if let Some(title) = &self.title {
+                attributes.push(("title", title.clone()));
+            }
+            if let Some(disabled) = &self.disabled {
+                attributes.push(("disabled", disabled.to_string()));
+            }
+            if let Some(r#as) = &self.r#as {
+                attributes.push(("as", r#as.clone()));
+            }
+            if let Some(sizes) = &self.sizes {
+                attributes.push(("sizes", sizes.clone()));
+            }
+            if let Some(href) = &self.href {
+                attributes.push(("href", href.clone()));
+            }
+            if let Some(crossorigin) = &self.crossorigin {
+                attributes.push(("crossOrigin", crossorigin.clone()));
+            }
+            if let Some(referrerpolicy) = &self.referrerpolicy {
+                attributes.push(("referrerPolicy", referrerpolicy.clone()));
+            }
+            if let Some(fetchpriority) = &self.fetchpriority {
+                attributes.push(("fetchPriority", fetchpriority.clone()));
+            }
+            if let Some(hreflang) = &self.hreflang {
+                attributes.push(("hrefLang", hreflang.clone()));
+            }
+            if let Some(integrity) = &self.integrity {
+                attributes.push(("integrity", integrity.clone()));
+            }
+            if let Some(r#type) = &self.r#type {
+                attributes.push(("type", r#type.clone()));
+            }
+            if let Some(blocking) = &self.blocking {
+                attributes.push(("blocking", blocking.clone()));
+            }
+            attributes
         }
-        let document = document();
-        document.create_link(props);
-    });
+    }
 
-    rsx! {}
+    #[doc(alias = "<link>")]
+    #[component]
+    pub fn Link(props: LinkProps) -> Element {
+        use_update_warning(&props, "Link {}");
+
+        use_hook(|| {
+            if let Some(href) = &props.href {
+                if !should_insert_link(href) {
+                    return;
+                }
+            }
+            let document = document();
+            document.create_link(props);
+        });
+
+        rsx! {}
+    }
 }
 
 fn get_or_insert_root_context<T: Default + Clone + 'static>() -> T {

@@ -114,7 +114,7 @@ impl Document for ServerDocument {
         });
     }
 
-    fn create_link(&self, props: LinkProps) {
+    fn create_link(&self, props: head::LinkProps) {
         self.warn_if_streaming();
         self.serialize_for_hydration();
         self.0.borrow_mut().link.push(rsx! {

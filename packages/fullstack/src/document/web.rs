@@ -49,7 +49,7 @@ impl Document for FullstackWebDocument {
         WebDocument.create_style(props);
     }
 
-    fn create_link(&self, props: dioxus_lib::prelude::LinkProps) {
+    fn create_link(&self, props: dioxus_lib::prelude::head::LinkProps) {
         if head_element_written_on_server() {
             return;
         }

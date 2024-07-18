@@ -59,7 +59,7 @@ pub mod prelude {
     pub use crate::attribute_groups::{GlobalAttributesExtension, SvgAttributesExtension};
     #[cfg(feature = "document")]
     pub use crate::document::{
-        self, document, eval, Document, Link, LinkProps, Meta, MetaProps, Script, ScriptProps,
+        self, document, eval, Document, head, Meta, MetaProps, Script, ScriptProps,
         Style, StyleProps, Title, TitleProps, UseEval,
     };
     pub use crate::elements::extensions::*;
