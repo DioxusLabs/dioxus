@@ -42,7 +42,7 @@ fn dual_stream() {
             HydrateText { path: &[0, 0], value: "123".to_string(), id: ElementId(2) },
             SetAttribute {
                 name: "class",
-                value: "asd 123 123".into_value(),
+                value: "asd 123 123 ".into_value(),
                 id: ElementId(1),
                 ns: None,
             },

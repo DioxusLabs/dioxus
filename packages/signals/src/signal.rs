@@ -85,6 +85,7 @@ impl<T: 'static> Signal<T> {
     /// Global signals are generally not recommended for use in libraries because it makes it more difficult to allow multiple instances of components you define in your library.
     ///
     /// </div>
+    #[track_caller]
     pub const fn global(constructor: fn() -> T) -> GlobalSignal<T> {
         GlobalSignal::new(constructor)
     }
@@ -116,6 +117,7 @@ impl<T: PartialEq + 'static> Signal<T> {
     /// Global memos are generally not recommended for use in libraries because it makes it more difficult to allow multiple instances of components you define in your library.
     ///
     /// </div>
+    #[track_caller]
     pub const fn global_memo(constructor: fn() -> T) -> GlobalMemo<T> {
         GlobalMemo::new(constructor)
     }

@@ -1,3 +1,5 @@
+#![allow(unused)] // lots of configs...
+
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
 
 #[cfg(feature = "read-from-args")]
@@ -18,6 +20,7 @@ pub struct AddressArguments {
     pub addr: std::net::IpAddr,
 }
 
+#[cfg(feature = "read-from-args")]
 impl Default for AddressArguments {
     fn default() -> Self {
         Self {
@@ -27,6 +30,7 @@ impl Default for AddressArguments {
     }
 }
 
+#[cfg(feature = "read-from-args")]
 impl AddressArguments {
     /// Get the address the server should run on
     pub fn address(&self) -> SocketAddr {
@@ -70,6 +74,7 @@ impl RuntimeCLIArguments {
     }
 
     /// Get the address the proxied fullstack server should run on
+    #[cfg(feature = "read-from-args")]
     pub fn fullstack_address(&self) -> AddressArguments {
         let socket = self.server_socket.unwrap_or_else(|| {
             SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, default_port()))
@@ -82,10 +87,12 @@ impl RuntimeCLIArguments {
     }
 }
 
+#[cfg(feature = "read-from-args")]
 fn default_port() -> u16 {
     8080
 }
 
+#[cfg(feature = "read-from-args")]
 fn default_address() -> IpAddr {
     IpAddr::V4(std::net::Ipv4Addr::new(127, 0, 0, 1))
 }

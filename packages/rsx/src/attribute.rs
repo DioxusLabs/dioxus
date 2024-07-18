@@ -91,10 +91,7 @@ impl Parse for Attribute {
         // we shouldn't be handling it any differently.
         let value = AttributeValue::parse(content)?;
 
-        let comma = match !content.is_empty() {
-            true => Some(content.parse::<Token![,]>()?),
-            false => None,
-        };
+        let comma = content.parse::<Token![,]>().ok();
 
         let attr = Attribute {
             name,

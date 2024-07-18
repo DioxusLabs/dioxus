@@ -53,17 +53,19 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
                 .iter()
                 .map(|(name, value)| {
                     let value = HotLiteral::from_raw_text(value.as_deref().unwrap_or("false"));
-                    let name = if let Some(name) = map_html_attribute_to_rsx(name) {
-                        match name.strip_prefix("r#") {
-                            Some(name) => Custom(LitStr::new(name, Span::call_site())),
-                            None => BuiltIn(Ident::new(name, Span::call_site())),
-                        }
+                    let attr = if let Some(name) = map_html_attribute_to_rsx(name) {
+                        let name = if let Some(name) = name.strip_prefix("r#") {
+                            Ident::new_raw(name, Span::call_site())
+                        } else {
+                            Ident::new(name, Span::call_site())
+                        };
+                        BuiltIn(name)
                     } else {
                         // If we don't recognize the attribute, we assume it's a custom attribute
                         Custom(LitStr::new(name, Span::call_site()))
                     };
 
-                    Attribute::from_raw(name, AttrLiteral(value))
+                    Attribute::from_raw(attr, AttrLiteral(value))
                 })
                 .collect();
 

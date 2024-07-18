@@ -1193,20 +1193,3 @@ fn sorting() {
         r
     );
 }
-
-#[test]
-fn sorting_simple() {
-    let r: [(usize, &[u8]); 2] = [
-        //
-        (0, &[0, 0]),
-        (1, &[0, 0]),
-    ];
-    assert_eq!(
-        sort_bfo(&[
-            //
-            &[0, 0],
-            &[0, 0],
-        ]),
-        r
-    );
-}

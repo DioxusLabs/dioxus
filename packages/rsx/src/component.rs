@@ -44,6 +44,10 @@ impl Parse for Component {
         let mut name = input.parse::<syn::Path>()?;
         let generics = normalize_path(&mut name);
 
+        if !input.peek(token::Brace) {
+            return Ok(Self::empty(name, generics));
+        };
+
         let RsxBlock {
             attributes: fields,
             children,
@@ -94,13 +98,14 @@ impl ToTokens for Component {
                 // we want to avoid importing traits
                 // use dioxus_core::prelude::Properties;
                 use dioxus_core::prelude::Properties;
-                ({
+                let __comp = ({
                     #props
                 }).into_vcomponent(
                     #name #generics,
                     #fn_name
-                )
+                );
                 #diagnostics
+                __comp
             })
         })
     }
@@ -290,6 +295,25 @@ impl Component {
     fn fn_name(&self) -> Ident {
         self.name.segments.last().unwrap().ident.clone()
     }
+
+    fn empty(name: syn::Path, generics: Option<AngleBracketedGenericArguments>) -> Self {
+        let mut diagnostics = Diagnostics::new();
+        diagnostics.push(
+            name.span()
+                .error("Components must have a body")
+                .help("Components must have a body, for example `Component {}`"),
+        );
+        Component {
+            name,
+            generics,
+            brace: token::Brace::default(),
+            fields: vec![],
+            spreads: vec![],
+            children: TemplateBody::new(vec![]),
+            dyn_idx: DynIdx::default(),
+            diagnostics,
+        }
+    }
 }
 
 /// Normalize the generics of a path
@@ -382,7 +406,7 @@ fn to_tokens_properly() {
     };
 
     let component: Component = syn::parse2(input).unwrap();
-    println!("{}", component.to_token_stream().pretty_unparse());
+    println!("{}", component.to_token_stream());
 }
 
 #[test]
@@ -434,4 +458,19 @@ fn fmt_passes_properly() {
     let component: Component = syn::parse2(input).unwrap();
 
     println!("{}", component.to_token_stream().pretty_unparse());
+}
+
+#[test]
+fn incomplete_components() {
+    let input = quote::quote! {
+        some::cool::Component
+    };
+
+    let _parsed: Component = syn::parse2(input).unwrap();
+
+    let input = quote::quote! {
+        some::cool::C
+    };
+
+    let _parsed: syn::Path = syn::parse2(input).unwrap();
 }

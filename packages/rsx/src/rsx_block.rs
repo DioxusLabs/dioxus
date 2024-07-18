@@ -517,4 +517,27 @@ mod tests {
         let parsed: RsxBlock = syn::parse2(input).unwrap();
         dbg!(parsed.attributes);
     }
+
+    #[test]
+    fn diagnostics_check() {
+        let input = quote::quote! {
+            {
+                class: "foo bar"
+                "Hello world"
+            }
+        };
+
+        let _parsed: RsxBlock = syn::parse2(input).unwrap();
+    }
+
+    #[test]
+    fn incomplete_components() {
+        let input = quote::quote! {
+            {
+                some::cool::Component
+            }
+        };
+
+        let _parsed: RsxBlock = syn::parse2(input).unwrap();
+    }
 }

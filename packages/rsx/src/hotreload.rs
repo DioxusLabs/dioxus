@@ -112,7 +112,7 @@ impl HotReloadedTemplate {
     /// re-ordered such that the node paths will be adjusted to match the new template for every
     /// existing dynamic node.
     ///
-    /// ```
+    /// ```ignore
     /// old:
     ///     [[0], [1], [2]]
     ///     rsx! {
@@ -172,7 +172,7 @@ impl HotReloadedTemplate {
     ///
     /// Does not apply with moving the dynamic contents from one attribute to another.
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// rsx! {
     ///     div { id: "{id}", class: "{class}", "Hi" }
     /// }

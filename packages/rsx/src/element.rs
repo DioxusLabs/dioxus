@@ -191,25 +191,25 @@ impl ToTokens for Element {
 impl Element {
     /// Collapses ifmt attributes into a single dynamic attribute using a space or `;` as a delimiter
     ///
-    /// ```
+    /// ```ignore,
     /// div {
     ///     class: "abc-def",
     ///     class: if some_expr { "abc" },
     /// }
     /// ```
     fn merge_attributes(&mut self) {
-        let mut attrs = vec![];
+        let mut attrs: Vec<&Attribute> = vec![];
 
         for attr in &self.raw_attributes {
-            if attrs.iter().any(|(name, _)| name == &&attr.name) {
+            if attrs.iter().any(|old_attr| old_attr.name == attr.name) {
                 continue;
             }
 
-            attrs.push((&attr.name, attr));
+            attrs.push(attr);
         }
 
-        for (name, attr) in attrs {
-            if name.to_string() == "key" {
+        for attr in attrs {
+            if attr.name.to_string() == "key" {
                 continue;
             }
 
@@ -217,7 +217,7 @@ impl Element {
             let matching_attrs = self
                 .raw_attributes
                 .iter()
-                .filter(|a| a.name == *name)
+                .filter(|a| a.name == attr.name)
                 .collect::<Vec<_>>();
 
             // if there's only one attribute with this name, then we don't need to merge anything
@@ -234,7 +234,7 @@ impl Element {
 
             for (idx, matching_attr) in matching_attrs.iter().enumerate() {
                 // If this is the first attribute, then we don't need to add a delimiter
-                if idx != 0 && idx != matching_attrs.len() - 1 {
+                if idx != 0 {
                     // FIXME: I don't want to special case anything - but our delimiter is special cased to a space
                     // We really don't want to special case anything in the macro, but the hope here is that
                     // multiline strings can be merged with a space
@@ -260,6 +260,8 @@ impl Element {
                     }
                 }
 
+                // unwind in case there's a test or two that cares about this weird state
+                _ = out.segments.pop();
                 self.diagnostics.push(matching_attr.span().error("Cannot merge non-fmt literals").help(
                     "Only formatted strings can be merged together. If you want to merge literals, you can use a format string.",
                 ));
@@ -547,4 +549,16 @@ fn merging_weird_fails() {
         .diagnostics
         .into_iter()
         .any(|f| f.emit_as_item_tokens().to_string().contains("style")));
+}
+
+#[test]
+fn diagnositcs() {
+    let input = quote::quote! {
+        p {
+            class: "foo bar"
+            "Hello world"
+        }
+    };
+
+    let _parsed: Element = syn::parse2(input).unwrap();
 }

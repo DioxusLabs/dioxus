@@ -284,5 +284,13 @@ mod tests {
             syn::parse2::<BodyNode>(match_expr).unwrap(),
             BodyNode::RawExpr(_)
         ),);
+
+        let incomplete_component = quote! {
+            some::cool::Component
+        };
+        assert!(matches!(
+            syn::parse2::<BodyNode>(incomplete_component).unwrap(),
+            BodyNode::Component(_)
+        ),);
     }
 }
