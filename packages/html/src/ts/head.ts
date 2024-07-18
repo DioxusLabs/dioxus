@@ -5,7 +5,6 @@ function createElementInHead(
   attributes: [string, string][],
   children: string | null
 ): void {
-  console.log("creating element in head", tag, attributes, children);
   const element = document.createElement(tag);
   for (const [key, value] of attributes) {
     element.setAttribute(key, value);
