@@ -97,6 +97,12 @@ pub struct ElementAttrNamed {
     pub attr: ElementAttr,
 }
 
+impl ElementAttrNamed {
+    pub fn new(el_name: ElementName, attr: ElementAttr) -> Self {
+        Self { el_name, attr }
+    }
+}
+
 impl Hash for ElementAttrNamed {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.attr.name.hash(state);
