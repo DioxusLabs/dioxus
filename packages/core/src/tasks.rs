@@ -81,7 +81,8 @@ impl Task {
             _ = rt
                 .sender
                 .unbounded_send(SchedulerMsg::TaskNotified(self.id))
-        });
+        })
+        .unwrap();
     }
 
     /// Poll the task immediately.
@@ -100,7 +101,8 @@ impl Task {
                         .unbounded_send(SchedulerMsg::TaskNotified(self.id));
                 }
             }
-        });
+        })
+        .unwrap();
     }
 }
 

@@ -16,7 +16,7 @@ impl VirtualDom {
         props: BoxedAnyProps,
         name: &'static str,
     ) -> &mut ScopeState {
-        let parent_id = self.runtime.current_scope_id();
+        let parent_id = self.runtime.current_scope_id().ok();
         let height = match parent_id.and_then(|id| self.runtime.get_state(id)) {
             Some(parent) => parent.height() + 1,
             None => 0,

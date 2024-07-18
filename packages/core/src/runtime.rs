@@ -106,8 +106,12 @@ impl Runtime {
     }
 
     /// Get the current scope id
-    pub(crate) fn current_scope_id(&self) -> Option<ScopeId> {
-        self.scope_stack.borrow().last().copied()
+    pub(crate) fn current_scope_id(&self) -> Result<ScopeId, RuntimeError> {
+        self.scope_stack
+            .borrow()
+            .last()
+            .copied()
+            .ok_or(RuntimeError { _priv: () })
     }
 
     /// Call this function with the current scope set to the given scope
@@ -164,23 +168,33 @@ impl Runtime {
     }
 
     /// Runs a function with the current runtime
-    pub(crate) fn with<R>(f: impl FnOnce(&Runtime) -> R) -> Option<R> {
-        RUNTIMES.with(|stack| stack.borrow().last().map(|r| f(r)))
+    pub(crate) fn with<R>(f: impl FnOnce(&Runtime) -> R) -> Result<R, RuntimeError> {
+        RUNTIMES
+            .with(|stack| stack.borrow().last().map(|r| f(r)))
+            .ok_or(RuntimeError::new())
     }
 
     /// Runs a function with the current scope
     pub(crate) fn with_current_scope<R>(f: impl FnOnce(&Scope) -> R) -> Result<R, RuntimeError> {
         Self::with(|rt| {
             rt.current_scope_id()
+                .ok()
                 .and_then(|scope| rt.get_state(scope).map(|sc| f(&sc)))
         })
+        .ok()
         .flatten()
-        .ok_or(RuntimeError { _priv: () })
+        .ok_or(RuntimeError::new())
     }
 
     /// Runs a function with the current scope
-    pub(crate) fn with_scope<R>(scope: ScopeId, f: impl FnOnce(&Scope) -> R) -> Option<R> {
-        Self::with(|rt| rt.get_state(scope).map(|sc| f(&sc))).flatten()
+    pub(crate) fn with_scope<R>(
+        scope: ScopeId,
+        f: impl FnOnce(&Scope) -> R,
+    ) -> Result<R, RuntimeError> {
+        Self::with(|rt| rt.get_state(scope).map(|sc| f(&sc)))
+            .ok()
+            .flatten()
+            .ok_or(RuntimeError::new())
     }
 
     /// Finish a render. This will mark all effects as ready to run and send the render signal.
@@ -258,6 +272,13 @@ impl Drop for RuntimeGuard {
 /// Missing Dioxus runtime error.
 pub struct RuntimeError {
     _priv: (),
+}
+
+impl RuntimeError {
+    #[inline(always)]
+    pub(crate) fn new() -> Self {
+        Self { _priv: () }
+    }
 }
 
 impl fmt::Debug for RuntimeError {

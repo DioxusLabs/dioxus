@@ -46,7 +46,7 @@ impl SuspendedFuture {
     pub fn new(task: Task) -> Self {
         Self {
             task,
-            origin: current_scope_id().expect("Must be called from inside a Dioxus runtime."),
+            origin: current_scope_id().unwrap(),
             placeholder: VNode::placeholder(),
         }
     }

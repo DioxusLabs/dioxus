@@ -397,7 +397,7 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
         ));
         Self {
             callback,
-            origin: current_scope_id().expect("Must be called from inside a Dioxus runtime."),
+            origin: current_scope_id().unwrap(),
         }
     }
 
@@ -409,7 +409,7 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
                 as Rc<RefCell<dyn FnMut(Args) -> Ret>>));
         Self {
             callback,
-            origin: current_scope_id().expect("Must be called from inside a Dioxus runtime."),
+            origin: current_scope_id().unwrap(),
         }
     }
 
@@ -418,12 +418,12 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
     /// This borrows the callback using a RefCell. Recursively calling a callback will cause a panic.
     pub fn call(&self, arguments: Args) -> Ret {
         if let Some(callback) = self.callback.read().as_ref() {
-            Runtime::with(|rt| rt.push_scope(self.origin));
+            Runtime::with(|rt| rt.push_scope(self.origin)).unwrap();
             let value = {
                 let mut callback = callback.borrow_mut();
                 callback(arguments)
             };
-            Runtime::with(|rt| rt.pop_scope());
+            Runtime::with(|rt| rt.pop_scope()).unwrap();
             value
         } else {
             panic!("Callback was manually dropped")
