@@ -41,7 +41,8 @@ If you have any important metadata that you want to render into the head, make s
 
 ```rust, no_run
 # use dioxus::prelude::*;
-# fn LoadData() -> Element { unimplemented!() }
+# #[component]
+# fn LoadData(children: Element) -> Element { unimplemented!() }
 fn App() -> Element {
     rsx! {
         // This will render in SSR
