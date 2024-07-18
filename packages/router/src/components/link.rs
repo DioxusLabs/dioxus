@@ -198,6 +198,7 @@ impl Debug for LinkProps {
 /// #     r#"<a href="/" dioxus-prevent-default="" class="link_class active" rel="link_rel" target="_blank" aria-current="page" id="link_id">A fully configured link</a>"#
 /// # );
 /// ```
+#[doc(alias = "<a>")]
 #[allow(non_snake_case)]
 pub fn Link(props: LinkProps) -> Element {
     let LinkProps {

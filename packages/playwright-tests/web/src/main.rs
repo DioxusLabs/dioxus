@@ -9,6 +9,7 @@ fn app() -> Element {
     rsx! {
         div {
             "hello axum! {num}"
+            Title { "hello axum! {num}" }
             button { class: "increment-button", onclick: move |_| num += 1, "Increment" }
         }
         svg { circle { cx: 50, cy: 50, r: 40, stroke: "green", fill: "yellow" } }

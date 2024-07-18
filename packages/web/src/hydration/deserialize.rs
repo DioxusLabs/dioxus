@@ -80,9 +80,21 @@ impl HTMLDataCursor {
 }
 
 /// An error that can occur when trying to take data from the server
+#[derive(Debug)]
 pub enum TakeDataError {
     /// Deserializing the data failed
     DeserializationError(ciborium::de::Error<std::io::Error>),
     /// No data was available
     DataNotAvailable,
 }
+
+impl std::fmt::Display for TakeDataError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DeserializationError(e) => write!(f, "DeserializationError: {}", e),
+            Self::DataNotAvailable => write!(f, "DataNotAvailable"),
+        }
+    }
+}
+
+impl std::error::Error for TakeDataError {}

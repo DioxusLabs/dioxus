@@ -1,48 +1,48 @@
 use dioxus_core::ScopeId;
-use dioxus_html::prelude::{EvalError, EvalProvider, Evaluator};
+use dioxus_html::document::{Document, EvalError, Evaluator};
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 use std::rc::Rc;
 
 use crate::query::{Query, QueryEngine};
 
-/// Provides the DesktopEvalProvider through [`cx.provide_context`].
+/// Provides the LiveviewDocument through [`ScopeId::provide_context`].
 pub fn init_eval() {
     let query = ScopeId::ROOT.consume_context::<QueryEngine>().unwrap();
-    let provider: Rc<dyn EvalProvider> = Rc::new(DesktopEvalProvider { query });
+    let provider: Rc<dyn Document> = Rc::new(LiveviewDocument { query });
     ScopeId::ROOT.provide_context(provider);
 }
 
-/// Reprints the desktop-target's provider of evaluators.
-pub struct DesktopEvalProvider {
+/// Reprints the liveview-target's provider of evaluators.
+pub struct LiveviewDocument {
     query: QueryEngine,
 }
 
-impl EvalProvider for DesktopEvalProvider {
+impl Document for LiveviewDocument {
     fn new_evaluator(&self, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
-        DesktopEvaluator::create(self.query.clone(), js)
+        LiveviewEvaluator::create(self.query.clone(), js)
     }
 }
 
-/// Reprents a desktop-target's JavaScript evaluator.
-pub(crate) struct DesktopEvaluator {
+/// Reprents a liveview-target's JavaScript evaluator.
+pub(crate) struct LiveviewEvaluator {
     query: Query<serde_json::Value>,
 }
 
-impl DesktopEvaluator {
-    /// Creates a new evaluator for desktop-based targets.
+impl LiveviewEvaluator {
+    /// Creates a new evaluator for liveview-based targets.
     pub fn create(query_engine: QueryEngine, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
         let query = query_engine.new_query(&js);
         // We create a generational box that is owned by the query slot so that when we drop the query slot, the generational box is also dropped.
         let owner = UnsyncStorage::owner();
         let query_id = query.id;
-        let query = owner.insert(Box::new(DesktopEvaluator { query }) as Box<dyn Evaluator>);
+        let query = owner.insert(Box::new(LiveviewEvaluator { query }) as Box<dyn Evaluator>);
         query_engine.active_requests.slab.borrow_mut()[query_id].owner = Some(owner);
 
         query
     }
 }
 
-impl Evaluator for DesktopEvaluator {
+impl Evaluator for LiveviewEvaluator {
     /// # Panics
     /// This will panic if the query is currently being awaited.
     fn poll_join(

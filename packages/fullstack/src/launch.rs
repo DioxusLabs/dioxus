@@ -50,12 +50,23 @@ pub fn launch(
 #[allow(unused)]
 pub fn launch(
     root: fn() -> Element,
-    contexts: Vec<Box<dyn Fn() -> Box<dyn Any + Send + Sync> + Send + Sync>>,
+    #[allow(unused_mut)] mut contexts: Vec<
+        Box<dyn Fn() -> Box<dyn Any + Send + Sync> + Send + Sync>,
+    >,
     platform_config: Config,
 ) {
     let contexts = Arc::new(contexts);
-    let factory = virtual_dom_factory(root, contexts);
+    let mut factory = virtual_dom_factory(root, contexts);
     let cfg = platform_config.web_cfg.hydrate(true);
+
+    #[cfg(feature = "document")]
+    let factory = move || {
+        let mut vdom = factory();
+        vdom.provide_root_context(std::rc::Rc::new(crate::document::web::FullstackWebDocument)
+            as std::rc::Rc<dyn dioxus_lib::prelude::document::Document>);
+        vdom
+    };
+
     dioxus_web::launch::launch_virtual_dom(factory(), cfg)
 }
 
