@@ -6051,13 +6051,13 @@ dependencies = [
 [[package]]
 name = "manganis-cli-support"
 version = "0.2.4"
-source = "git+https://github.com/dioxuslabs/collect-assets/#ad09a549775957c5ce177274cfbb6dc76c976c10"
+source = "git+https://github.com/DioxusLabs/manganis/#ad09a549775957c5ce177274cfbb6dc76c976c10"
 dependencies = [
  "anyhow",
  "image 0.25.1",
  "imagequant",
  "lightningcss",
- "manganis-common 0.2.4 (git+https://github.com/dioxuslabs/collect-assets/)",
+ "manganis-common 0.2.4 (git+https://github.com/DioxusLabs/manganis/)",
  "mozjpeg",
  "object",
  "png",
@@ -6092,7 +6092,7 @@ dependencies = [
 [[package]]
 name = "manganis-common"
 version = "0.2.4"
-source = "git+https://github.com/dioxuslabs/collect-assets/#ad09a549775957c5ce177274cfbb6dc76c976c10"
+source = "git+https://github.com/DioxusLabs/manganis/#ad09a549775957c5ce177274cfbb6dc76c976c10"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
