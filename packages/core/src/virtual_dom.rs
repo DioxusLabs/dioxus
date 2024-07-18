@@ -18,6 +18,7 @@ use crate::{
 };
 use crate::{Task, VComponent};
 use futures_util::StreamExt;
+use rustc_hash::FxHashMap;
 use slab::Slab;
 use std::collections::BTreeSet;
 use std::{any::Any, rc::Rc};
@@ -207,13 +208,8 @@ pub struct VirtualDom {
 
     pub(crate) dirty_scopes: BTreeSet<ScopeOrder>,
 
-    // Maps a template path to a map of byte indexes to templates
-    // if hot reload is enabled, we need to keep track of template overrides
-    #[cfg(debug_assertions)]
-    pub(crate) templates: rustc_hash::FxHashMap<TemplateId, rustc_hash::FxHashMap<usize, Template>>,
-    // Otherwise, we just need to keep track of what templates we have registered
-    #[cfg(not(debug_assertions))]
-    pub(crate) templates: rustc_hash::FxHashSet<TemplateId>,
+    // A map of overridden templates?
+    pub(crate) templates: FxHashMap<TemplateId, Template>,
 
     // Templates changes that are queued for the next render
     pub(crate) queued_templates: Vec<Template>,
@@ -576,17 +572,20 @@ impl VirtualDom {
         // we only replace templates if hot reloading is enabled
         #[cfg(debug_assertions)]
         {
-            self.register_template_first_byte_index(template);
+            // Save the template ID
+            self.templates.insert(template.name, template);
+
+            // Only queue the template to be written if its not completely dynamic
+            if !template.is_completely_dynamic() {
+                self.queued_templates.push(template);
+            }
 
             // iterating a slab is very inefficient, but this is a rare operation that will only happen during development so it's fine
             let mut dirty = Vec::new();
             for (id, scope) in self.scopes.iter() {
                 // Recurse into the dynamic nodes of the existing mounted node to see if the template is alive in the tree
                 fn check_node_for_templates(node: &crate::VNode, template: Template) -> bool {
-                    let this_template_name = node.template.get().name.rsplit_once(':').unwrap().0;
-                    let other_template_name = template.name.rsplit_once(':').unwrap().0;
-
-                    if this_template_name == other_template_name {
+                    if node.template.get().name == template.name {
                         return true;
                     }
 

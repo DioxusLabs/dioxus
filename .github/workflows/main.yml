@@ -228,8 +228,16 @@ jobs:
               args: "--all --tests",
             }
           - {
-              target: x86_64-apple-darwin,
+              target: aarch64-apple-darwin,
               os: macos-latest,
+              toolchain: "1.79.0",
+              cross: false,
+              command: "test",
+              args: "--all --tests",
+            }
+          - {
+              target: x86_64-apple-darwin,
+              os: macos-13,
               toolchain: "1.79.0",
               cross: false,
               command: "test",

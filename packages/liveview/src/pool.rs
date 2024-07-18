@@ -119,9 +119,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
     #[cfg(all(feature = "hot-reload", debug_assertions))]
     let mut hot_reload_rx = {
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        dioxus_hot_reload::connect(move |template| {
-            let _ = tx.send(template);
-        });
+        dioxus_hot_reload::connect(move |template| _ = tx.send(template));
         rx
     };
 
@@ -215,14 +213,16 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
             Some(msg) = hot_reload_wait => {
                 #[cfg(all(feature = "hot-reload", debug_assertions))]
                 match msg{
-                    dioxus_hot_reload::HotReloadMsg::UpdateTemplate(new_template) => {
-                        vdom.replace_template(new_template);
+                    dioxus_hot_reload::DevserverMsg::HotReload(msg)=> {
+                        dioxus_hot_reload::apply_changes(&mut vdom, &msg);
                     }
-                    // todo: enable hotreloading in liveview
-                    dioxus_hot_reload::HotReloadMsg::UpdateAsset(_) => {}
-                    dioxus_hot_reload::HotReloadMsg::Shutdown => {
+                    dioxus_hot_reload::DevserverMsg::Shutdown => {
                         std::process::exit(0);
                     },
+                    dioxus_hot_reload::DevserverMsg::FullReload => {
+                        // usually only web gets this message - what are we supposed to do?
+                        // Maybe we could just binary patch ourselves in place without losing window state?
+                    }
                 }
                 #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
                 let () = msg;

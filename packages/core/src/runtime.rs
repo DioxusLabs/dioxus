@@ -82,7 +82,6 @@ impl Runtime {
         {
             let borrow = self.scope_states.borrow();
             if let Some(scope) = &borrow[id.0] {
-                let _runtime_guard = RuntimeGuard::new(self.clone());
                 // Manually drop tasks, hooks, and contexts inside of the runtime
                 self.on_scope(id, || {
                     // Drop all spawned tasks - order doesn't matter since tasks don't rely on eachother
@@ -112,7 +111,8 @@ impl Runtime {
     /// Call this function with the current scope set to the given scope
     ///
     /// Useful in a limited number of scenarios
-    pub fn on_scope<O>(&self, id: ScopeId, f: impl FnOnce() -> O) -> O {
+    pub fn on_scope<O>(self: &Rc<Self>, id: ScopeId, f: impl FnOnce() -> O) -> O {
+        let _runtime_guard = RuntimeGuard::new(self.clone());
         {
             self.push_scope(id);
         }
@@ -164,7 +164,7 @@ impl Runtime {
 
     /// Runs a function with the current runtime
     pub(crate) fn with<R>(f: impl FnOnce(&Runtime) -> R) -> Option<R> {
-        RUNTIMES.with(|stack| stack.borrow().last().map(|r| f(r)))
+        Self::current().map(|r| f(&r))
     }
 
     /// Runs a function with the current scope

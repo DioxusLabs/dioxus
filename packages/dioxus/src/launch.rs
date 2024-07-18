@@ -35,6 +35,7 @@ type SendContext = dyn Fn() -> Box<dyn Any + Send + Sync> + Send + Sync + 'stati
 
 type UnsendContext = dyn Fn() -> Box<dyn Any> + 'static;
 
+#[allow(clippy::redundant_closure)] // clippy doesnt doesn't understand our coercion to fn
 impl LaunchBuilder {
     /// Create a new builder for your application. This will create a launch configuration for the current platform based on the features enabled on the `dioxus` crate.
     // If you aren't using a third party renderer and this is not a docs.rs build, generate a warning about no renderer being enabled

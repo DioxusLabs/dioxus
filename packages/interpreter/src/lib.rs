@@ -48,4 +48,9 @@ pub mod minimal_bindings {
             closure: &wasm_bindgen::closure::Closure<dyn FnMut(Vec<u32>, js_sys::Uint8Array)>,
         );
     }
+
+    #[wasm_bindgen(module = "/src/js/patch_console.js")]
+    extern "C" {
+        pub fn monkeyPatchConsole(ws: JsValue);
+    }
 }

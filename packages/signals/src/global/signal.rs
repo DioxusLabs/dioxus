@@ -1,7 +1,7 @@
-use crate::write::Writable;
 use crate::{read::Readable, ReadableRef};
+use crate::{write::Writable, GlobalKey};
 use crate::{WritableRef, Write};
-use dioxus_core::prelude::ScopeId;
+use dioxus_core::{prelude::ScopeId, Runtime};
 use generational_box::UnsyncStorage;
 use std::ops::Deref;
 
@@ -12,18 +12,40 @@ use crate::Signal;
 /// A signal that can be accessed from anywhere in the application and created in a static
 pub struct GlobalSignal<T> {
     initializer: fn() -> T,
+    key: GlobalKey<'static>,
 }
 
 impl<T: 'static> GlobalSignal<T> {
     /// Create a new global signal with the given initializer.
+    #[track_caller]
     pub const fn new(initializer: fn() -> T) -> GlobalSignal<T> {
-        GlobalSignal { initializer }
+        let key = std::panic::Location::caller();
+        GlobalSignal {
+            initializer,
+            key: GlobalKey::new(key),
+        }
     }
 
-    /// Get the signal that backs this global.
+    /// Get the key for this global
+    pub fn key(&self) -> GlobalKey<'static> {
+        self.key.clone()
+    }
+
+    /// Create this global signal with a specific key.
+    /// This is useful for ensuring that the signal is unique across the application and accessible from
+    /// outside the application too.
+    pub const fn with_key(initializer: fn() -> T, key: &'static str) -> GlobalSignal<T> {
+        GlobalSignal {
+            initializer,
+            key: GlobalKey::new_from_str(key),
+        }
+    }
+
+    /// Get the signal that backs this .
     pub fn signal(&self) -> Signal<T> {
-        let key = self as *const _ as *const ();
+        let key = self.key();
         let context = get_global_context();
+
         let read = context.signal.borrow();
 
         match read.get(&key) {
@@ -41,6 +63,15 @@ impl<T: 'static> GlobalSignal<T> {
 
                 signal
             }
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn maybe_with_rt<O>(&self, f: impl FnOnce(&T) -> O) -> O {
+        if Runtime::current().is_none() {
+            f(&(self.initializer)())
+        } else {
+            self.with(f)
         }
     }
 

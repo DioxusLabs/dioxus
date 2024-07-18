@@ -79,8 +79,6 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
 
     let mut websys_dom = dom::WebsysDom::new(web_config, tx);
 
-    tracing::info!("rebuilding app");
-
     let mut hydration_receiver: Option<futures_channel::mpsc::UnboundedReceiver<SuspenseMessage>> =
         None;
 
@@ -186,8 +184,13 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
         }
 
         #[cfg(all(feature = "hot_reload", debug_assertions))]
-        if let Some(template) = template {
-            dom.replace_template(template);
+        if let Some(hr_msg) = template {
+            // Replace all templates
+            dioxus_hot_reload::apply_changes(&mut dom, &hr_msg);
+
+            if !hr_msg.assets.is_empty() {
+                crate::hot_reload::invalidate_browser_asset_cache();
+            }
         }
 
         #[cfg(feature = "hydrate")]

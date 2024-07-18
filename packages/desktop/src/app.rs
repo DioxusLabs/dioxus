@@ -148,14 +148,16 @@ impl App {
         not(target_os = "ios")
     ))]
     pub fn connect_hotreload(&self) {
-        let Ok(cfg) = dioxus_cli_config::CURRENT_CONFIG.as_ref() else {
-            return;
-        };
+        let proxy = self.shared.proxy.clone();
 
-        dioxus_hot_reload::connect_at(cfg.target_dir.join("dioxusin"), {
-            let proxy = self.shared.proxy.clone();
-            move |template| {
-                let _ = proxy.send_event(UserWindowEvent::HotReloadEvent(template));
+        tokio::task::spawn(async move {
+            let Some(Ok(mut receiver)) = dioxus_hot_reload::NativeReceiver::create_from_cli().await
+            else {
+                return;
+            };
+
+            while let Some(Ok(msg)) = receiver.next().await {
+                _ = proxy.send_event(UserWindowEvent::HotReloadEvent(msg));
             }
         });
     }
@@ -327,22 +329,26 @@ impl App {
         not(target_os = "android"),
         not(target_os = "ios")
     ))]
-    pub fn handle_hot_reload_msg(&mut self, msg: dioxus_hot_reload::HotReloadMsg) {
+    pub fn handle_hot_reload_msg(&mut self, msg: dioxus_hot_reload::DevserverMsg) {
         match msg {
-            dioxus_hot_reload::HotReloadMsg::UpdateTemplate(template) => {
+            dioxus_hot_reload::DevserverMsg::HotReload(hr_msg) => {
                 for webview in self.webviews.values_mut() {
-                    webview.dom.replace_template(template);
+                    dioxus_hot_reload::apply_changes(&mut webview.dom, &hr_msg);
                     webview.poll_vdom();
                 }
-            }
-            dioxus_hot_reload::HotReloadMsg::Shutdown => {
-                self.control_flow = ControlFlow::Exit;
-            }
 
-            dioxus_hot_reload::HotReloadMsg::UpdateAsset(_) => {
-                for webview in self.webviews.values_mut() {
-                    webview.kick_stylsheets();
+                if !hr_msg.assets.is_empty() {
+                    for webview in self.webviews.values_mut() {
+                        webview.kick_stylsheets();
+                    }
                 }
+            }
+            dioxus_hot_reload::DevserverMsg::FullReload => {
+                // usually only web gets this message - what are we supposed to do?
+                // Maybe we could just binary patch ourselves in place without losing window state?
+            }
+            dioxus_hot_reload::DevserverMsg::Shutdown => {
+                self.control_flow = ControlFlow::Exit;
             }
         }
     }
@@ -458,12 +464,9 @@ impl App {
                 monitor: monitor.name().unwrap().to_string(),
             };
 
+            // Yes... I know... we're loading a file that might not be ours... but it's a debug feature
             if let Ok(state) = serde_json::to_string(&state) {
-                // Write this to the target dir so we can pick back up in resume_from_state
-                if let Ok(cfg) = dioxus_cli_config::CURRENT_CONFIG.as_ref() {
-                    let path = cfg.target_dir.join("window_state.json");
-                    _ = std::fs::write(path, state);
-                }
+                _ = std::fs::write(restore_file(), state);
             }
         }
     }
@@ -471,18 +474,13 @@ impl App {
     // Write this to the target dir so we can pick back up
     #[cfg(debug_assertions)]
     fn resume_from_state(&mut self, webview: &WebviewInstance) {
-        if let Ok(cfg) = dioxus_cli_config::CURRENT_CONFIG.as_ref() {
-            let path = cfg.target_dir.join("window_state.json");
-            if let Ok(state) = std::fs::read_to_string(path) {
-                if let Ok(state) = serde_json::from_str::<PreservedWindowState>(&state) {
-                    let window = &webview.desktop_context.window;
-                    let position = (state.x, state.y);
-                    let size = (state.width, state.height);
-                    window.set_outer_position(tao::dpi::PhysicalPosition::new(
-                        position.0, position.1,
-                    ));
-                    window.set_inner_size(tao::dpi::PhysicalSize::new(size.0, size.1));
-                }
+        if let Ok(state) = std::fs::read_to_string(restore_file()) {
+            if let Ok(state) = serde_json::from_str::<PreservedWindowState>(&state) {
+                let window = &webview.desktop_context.window;
+                let position = (state.x, state.y);
+                let size = (state.width, state.height);
+                window.set_outer_position(tao::dpi::PhysicalPosition::new(position.0, position.1));
+                window.set_inner_size(tao::dpi::PhysicalSize::new(size.0, size.1));
             }
         }
     }
@@ -551,4 +549,25 @@ pub fn hide_app_window(window: &wry::WebView) {
             let _: () = msg_send![app, hide: nil];
         });
     }
+}
+
+/// Return the location of a tempfile with our window state in it such that we can restore it later
+#[cfg(debug_assertions)]
+fn restore_file() -> std::path::PathBuf {
+    /// Get the name of the program or default to "dioxus" so we can hash it
+    fn get_prog_name_or_default() -> Option<String> {
+        Some(
+            std::env::current_exe()
+                .ok()?
+                .file_name()?
+                .to_str()?
+                .to_string(),
+        )
+    }
+
+    let name = get_prog_name_or_default().unwrap_or_else(|| "dioxus".to_string());
+    let hashed_id = name.chars().map(|c| c as usize).sum::<usize>();
+    let mut path = std::env::temp_dir();
+    path.push(format!("{}-window-state.json", hashed_id));
+    path
 }

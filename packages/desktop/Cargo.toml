@@ -17,9 +17,12 @@ dioxus-html = { workspace = true, features = [
     "mounted",
     "document",
 ] }
+dioxus-signals = { workspace = true, optional = true }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
 dioxus-cli-config = { workspace = true, features = ["read-config"] }
 generational-box = { workspace = true }
+# hotreload only works on desktop platforms.... mobile is still wip
+dioxus-hot-reload = { workspace = true, optional = true, features = ["serve", "client"]}
 
 serde = "1.0.136"
 serde_json = "1.0.79"
@@ -50,6 +53,7 @@ urlencoding = "2.1.2"
 async-trait = "0.1.68"
 tao = { version = "0.26.1", features = ["rwh_05"] }
 
+
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3.17"
 
@@ -57,12 +61,19 @@ signal-hook = "0.3.17"
 global-hotkey = "0.5.0"
 rfd = "0.14"
 muda = "0.11.3"
-# hotreload only works on desktop platforms.... mobile is still wip
-dioxus-hot-reload = { workspace = true, optional = true }
+
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc = "0.2.7"
 objc_id = "0.1.1"
+
+# use rustls on android
+[target.'cfg(target_os = "android")'.dependencies]
+tokio-tungstenite = { workspace = true, optional = true, features = ["rustls"]}
+
+# use native tls on other platforms
+[target.'cfg(not(target_os = "android"))'.dependencies]
+tokio-tungstenite = { workspace = true, optional = true, features = ["native-tls"]}
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cocoa = "0.25"
@@ -75,7 +86,7 @@ tokio_runtime = ["dep:tokio"]
 fullscreen = ["wry/fullscreen"]
 transparent = ["wry/transparent"]
 devtools = ["wry/devtools"]
-hot-reload = ["dep:dioxus-hot-reload"]
+hot-reload = ["dep:dioxus-hot-reload", "dioxus-signals"]
 gnu = []
 
 [package.metadata.docs.rs]
@@ -86,7 +97,7 @@ cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 [dev-dependencies]
 dioxus = { workspace = true, features = ["desktop"] }
 exitcode = "1.1.2"
-reqwest = { version = "0.11.9", features = ["json"] }
+reqwest = { workspace = true, features = ["json"] }
 http-range = { version = "0.1.5" }
 dioxus-ssr = { workspace = true, version = "0.5.0", default-features = false }
 separator = "0.4.1"

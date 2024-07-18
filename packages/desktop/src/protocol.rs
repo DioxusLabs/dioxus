@@ -255,7 +255,7 @@ fn get_asset_root() -> Option<PathBuf> {
     if running_in_dev_mode() {
         return dioxus_cli_config::CURRENT_CONFIG
             .as_ref()
-            .map(|c| c.out_dir())
+            .map(|c| c.application.out_dir.clone())
             .ok();
     }
 

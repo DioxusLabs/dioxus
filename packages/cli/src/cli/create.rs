@@ -63,7 +63,7 @@ pub fn post_create(path: &PathBuf) -> Result<()> {
     let toml_paths = [path.join("Cargo.toml"), path.join("Dioxus.toml")];
     for toml_path in &toml_paths {
         let toml = std::fs::read_to_string(toml_path)?;
-        let mut toml = toml.parse::<toml_edit::Document>().map_err(|e| {
+        let mut toml = toml.parse::<toml_edit::DocumentMut>().map_err(|e| {
             anyhow::anyhow!(
                 "failed to parse toml at {}: {}",
                 toml_path.display(),

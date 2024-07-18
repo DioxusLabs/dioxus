@@ -2,22 +2,16 @@
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
-use std::fmt::{Display, Write};
-
 use crate::writer::*;
-use collect_macros::byte_offset;
-use dioxus_rsx::{BodyNode, CallBody, IfmtInput};
+use dioxus_rsx::{BodyNode, CallBody};
 use proc_macro2::LineColumn;
-use quote::ToTokens;
-use syn::{parse::Parser, ExprMacro, MacroDelimiter};
+use syn::{parse::Parser, ExprMacro};
 
 mod buffer;
 mod collect_macros;
-mod component;
-mod element;
-mod expr;
 mod indent;
 mod prettier_please;
+mod rsx_block;
 mod writer;
 
 pub use indent::{IndentOptions, IndentType};
@@ -55,9 +49,7 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
     let mut formatted_blocks = Vec::new();
 
     let parsed = syn::parse_file(contents).unwrap();
-
-    let mut macros = vec![];
-    collect_macros::collect_from_file(&parsed, &mut macros);
+    let macros = collect_macros::collect_from_file(&parsed);
 
     // No macros, no work to do
     if macros.is_empty() {
@@ -86,7 +78,11 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
             .indent
             .count_indents(writer.src[rsx_start.line - 1]);
 
-        write_body(&mut writer, &body);
+        // TESTME
+        // If we fail to parse this macro then we have no choice to give up and return what we've got
+        if writer.write_rsx_call(&body.body).is_err() {
+            return formatted_blocks;
+        }
 
         // writing idents leaves the final line ended at the end of the last ident
         if writer.out.buf.contains('\n') {
@@ -94,23 +90,15 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
             writer.out.tab().unwrap();
         }
 
-        let span = match item.delimiter {
-            MacroDelimiter::Paren(b) => b.span,
-            MacroDelimiter::Brace(b) => b.span,
-            MacroDelimiter::Bracket(b) => b.span,
-        }
-        .join();
+        let span = item.delimiter.span().join();
+        let mut formatted = writer.out.buf.split_off(0);
 
-        let mut formatted = String::new();
-
-        std::mem::swap(&mut formatted, &mut writer.out.buf);
-
-        let start = byte_offset(contents, span.start()) + 1;
-        let end = byte_offset(contents, span.end()) - 1;
+        let start = collect_macros::byte_offset(contents, span.start()) + 1;
+        let end = collect_macros::byte_offset(contents, span.end()) - 1;
 
         // Rustfmt will remove the space between the macro and the opening paren if the macro is a single expression
-        let body_is_solo_expr = body.roots.len() == 1
-            && matches!(body.roots[0], BodyNode::RawExpr(_) | BodyNode::Text(_));
+        let body_is_solo_expr = body.body.roots.len() == 1
+            && matches!(body.body.roots[0], BodyNode::RawExpr(_) | BodyNode::Text(_));
 
         if formatted.len() <= 80 && !formatted.contains('\n') && !body_is_solo_expr {
             formatted = format!(" {formatted} ");
@@ -132,33 +120,20 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
     formatted_blocks
 }
 
+/// Write a Callbody (the rsx block) to a string
+///
+/// If the tokens can't be formatted, this returns None. This is usually due to an incomplete expression
+/// that passed partial expansion but failed to parse.
 pub fn write_block_out(body: &CallBody) -> Option<String> {
     let mut buf = Writer::new("");
-
-    write_body(&mut buf, body);
-
+    buf.write_rsx_call(&body.body).ok()?;
     buf.consume()
-}
-
-fn write_body(buf: &mut Writer, body: &CallBody) {
-    match body.roots.len() {
-        0 => {}
-        1 if matches!(body.roots[0], BodyNode::Text(_)) => {
-            write!(buf.out, " ").unwrap();
-            buf.write_ident(&body.roots[0]).unwrap();
-            write!(buf.out, " ").unwrap();
-        }
-        _ => buf.write_body_indented(&body.roots).unwrap(),
-    }
 }
 
 pub fn fmt_block_from_expr(raw: &str, expr: ExprMacro) -> Option<String> {
     let body = CallBody::parse_strict.parse2(expr.mac.tokens).unwrap();
-
     let mut buf = Writer::new(raw);
-
-    write_body(&mut buf, &body);
-
+    buf.write_rsx_call(&body.body).ok()?;
     buf.consume()
 }
 
@@ -166,11 +141,9 @@ pub fn fmt_block(block: &str, indent_level: usize, indent: IndentOptions) -> Opt
     let body = CallBody::parse_strict.parse_str(block).unwrap();
 
     let mut buf = Writer::new(block);
-
     buf.out.indent = indent;
     buf.out.indent_level = indent_level;
-
-    write_body(&mut buf, &body);
+    buf.write_rsx_call(&body.body).ok()?;
 
     // writing idents leaves the final line ended at the end of the last ident
     if buf.out.buf.contains('\n') {
@@ -178,16 +151,6 @@ pub fn fmt_block(block: &str, indent_level: usize, indent: IndentOptions) -> Opt
     }
 
     buf.consume()
-}
-
-pub fn apply_format(input: &str, block: FormattedBlock) -> String {
-    let start = block.start;
-    let end = block.end;
-
-    let (left, _) = input.split_at(start);
-    let (_, right) = input.split_at(end);
-
-    format!("{}{}{}", left, block.formatted, right)
 }
 
 // Apply all the blocks
@@ -212,25 +175,4 @@ pub fn apply_formats(input: &str, blocks: Vec<FormattedBlock>) -> String {
     out.push_str(suffix);
 
     out
-}
-
-struct DisplayIfmt<'a>(&'a IfmtInput);
-
-impl Display for DisplayIfmt<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let inner_tokens = self.0.source.as_ref().unwrap().to_token_stream();
-        inner_tokens.fmt(f)
-    }
-}
-
-pub(crate) fn ifmt_to_string(input: &IfmtInput) -> String {
-    let mut buf = String::new();
-    let display = DisplayIfmt(input);
-    write!(&mut buf, "{}", display).unwrap();
-    buf
-}
-
-pub(crate) fn write_ifmt(input: &IfmtInput, writable: &mut impl Write) -> std::fmt::Result {
-    let display = DisplayIfmt(input);
-    write!(writable, "{}", display)
 }

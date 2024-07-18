@@ -53,7 +53,7 @@ impl Config {
             .with_title(
                 dioxus_cli_config::CURRENT_CONFIG
                     .as_ref()
-                    .map(|c| c.dioxus_config.application.name.clone())
+                    .map(|c| c.application.name.clone())
                     .unwrap_or("Dioxus App".to_string()),
             )
             // During development we want the window to be on top so we can see it while we work
