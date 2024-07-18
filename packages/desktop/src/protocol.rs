@@ -1,5 +1,5 @@
 use crate::{assets::*, edits::EditQueue};
-use dioxus_interpreter_js::eval::NATIVE_EVAL_JS;
+use dioxus_html::document::NATIVE_EVAL_JS;
 use dioxus_interpreter_js::unified_bindings::SLEDGEHAMMER_JS;
 use dioxus_interpreter_js::NATIVE_JS;
 use std::path::{Component, Path, PathBuf};

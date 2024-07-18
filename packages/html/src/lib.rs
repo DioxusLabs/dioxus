@@ -47,8 +47,8 @@ pub use elements::*;
 pub use events::*;
 pub use render_template::*;
 
-#[cfg(feature = "eval")]
-pub mod eval;
+#[cfg(feature = "document")]
+pub mod document;
 
 pub mod extensions {
     pub use crate::attribute_groups::{GlobalAttributesExtension, SvgAttributesExtension};
@@ -57,9 +57,12 @@ pub mod extensions {
 
 pub mod prelude {
     pub use crate::attribute_groups::{GlobalAttributesExtension, SvgAttributesExtension};
+    #[cfg(feature = "document")]
+    pub use crate::document::{
+        self, document, eval, head, Document, Meta, MetaProps, Script, ScriptProps, Style,
+        StyleProps, Title, TitleProps, UseEval,
+    };
     pub use crate::elements::extensions::*;
-    #[cfg(feature = "eval")]
-    pub use crate::eval::*;
     pub use crate::events::*;
     pub use crate::point_interaction::*;
     pub use keyboard_types::{self, Code, Key, Location, Modifiers};

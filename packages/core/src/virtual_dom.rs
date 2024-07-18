@@ -918,7 +918,6 @@ impl VirtualDom {
                 "Calling {} listeners",
                 listeners.len()
             );
-            tracing::info!("Listeners: {:?}", listeners);
             for listener in listeners.into_iter().rev() {
                 if let AttributeValue::Listener(listener) = listener {
                     self.runtime.rendering.set(false);
