@@ -670,6 +670,7 @@ builder_constructors! {
         content: String DEFAULT,
         http_equiv: String "http-equiv",
         name: Metadata DEFAULT,
+        property: Metadata DEFAULT,
     };
 
     /// Build a

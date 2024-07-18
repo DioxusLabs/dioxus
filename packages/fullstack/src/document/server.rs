@@ -90,6 +90,7 @@ impl Document for ServerDocument {
                 charset: props.charset,
                 http_equiv: props.http_equiv,
                 content: props.content,
+                property: props.property,
             }
         });
     }

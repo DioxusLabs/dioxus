@@ -2567,6 +2567,7 @@ dependencies = [
  "js-sys",
  "keyboard-types",
  "lazy-js-bundle",
+ "manganis",
  "rfd",
  "rustversion",
  "serde",

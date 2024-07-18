@@ -65,6 +65,7 @@ fn extract_single_text_node(children: &Element, component: &str) -> Option<Strin
 
 #[derive(Clone, Props, PartialEq)]
 pub struct TitleProps {
+    /// The contents of the title tag. The children must be a single text node.
     children: Element,
 }
 
@@ -73,7 +74,7 @@ pub struct TitleProps {
 /// Unlike most head components, the Title can be modified after the first render. Only the latest update to the title will be reflected if multiple title components are rendered.
 ///
 ///
-/// The children of the title component must be a single text static or formatted string. If there are more children or the children contain components, conditionals, loops, or fragments, the title will not be updated.
+/// The children of the title component must be a single static or formatted string. If there are more children or the children contain components, conditionals, loops, or fragments, the title will not be updated.
 ///
 /// # Example
 ///
@@ -81,6 +82,7 @@ pub struct TitleProps {
 /// # use dioxus::prelude::*;
 /// fn App() -> Element {
 ///     rsx! {
+///         // You can use the Title component to render a title tag into the head of the page or window
 ///         Title { "My Page" }
 ///     }
 /// }
@@ -113,6 +115,7 @@ pub fn Title(props: TitleProps) -> Element {
 /// Props for the [`Meta`] component
 #[derive(Clone, Props, PartialEq)]
 pub struct MetaProps {
+    pub property: Option<String>,
     pub name: Option<String>,
     pub charset: Option<String>,
     pub http_equiv: Option<String>,
@@ -122,6 +125,9 @@ pub struct MetaProps {
 impl MetaProps {
     pub(crate) fn attributes(&self) -> Vec<(&'static str, String)> {
         let mut attributes = Vec::new();
+        if let Some(property) = &self.property {
+            attributes.push(("property", property.clone()));
+        }
         if let Some(name) = &self.name {
             attributes.push(("name", name.clone()));
         }
@@ -175,6 +181,7 @@ pub fn Meta(props: MetaProps) -> Element {
 
 #[derive(Clone, Props, PartialEq)]
 pub struct ScriptProps {
+    /// The contents of the script tag. If present, the children must be a single text node.
     pub children: Element,
     /// Scripts are deduplicated by their src attribute
     pub src: Option<String>,
@@ -226,21 +233,23 @@ impl ScriptProps {
 /// Render a [`script`](crate::elements::script) tag into the head of the page.
 ///
 ///
+/// If present, the children of the script component must be a single static or formatted string. If there are more children or the children contain components, conditionals, loops, or fragments, the script will not be added.
+///
+///
 /// Any scripts you add will be deduplicated by their `src` attribute (if present).
 ///
 /// # Example
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
-/// fn RedirectToDioxusHomepageWithoutJS() -> Element {
+/// fn LoadScript() -> Element {
 ///     rsx! {
-///         // You can use the meta component to render a meta tag into the head of the page
+///         // You can use the Script component to render a script tag into the head of the page
 ///         Script {
 ///             src: manganis::mg!(file("./assets/script.js")),
 ///         }
 ///     }
 /// }
 /// ```
-///
 ///
 /// <div class="warning">
 ///
@@ -272,6 +281,7 @@ pub struct StyleProps {
     pub media: Option<String>,
     pub nonce: Option<String>,
     pub title: Option<String>,
+    /// The contents of the style tag. If present, the children must be a single text node.
     pub children: Element,
 }
 
@@ -298,6 +308,33 @@ impl StyleProps {
     }
 }
 
+/// Render a [`style`](crate::elements::style) tag into the head of the page.
+///
+/// If present, the children of the style component must be a single static or formatted string. If there are more children or the children contain components, conditionals, loops, or fragments, the style will not be added.
+///
+/// # Example
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
+/// fn RedBackground() -> Element {
+///     rsx! {
+///         // You can use the style component to render a style tag into the head of the page
+///         // This style tag will set the background color of the page to red
+///         Style {
+///             r#"
+///                 body {
+///                     background-color: red;
+///                 }
+///             "#,
+///         }
+///     }
+/// }
+/// ```
+///
+/// <div class="warning">
+///
+/// Any updates to the props after the first render will not be reflected in the head.
+///
+/// </div>
 #[component]
 pub fn Style(props: StyleProps) -> Element {
     use_update_warning(&props, "Style {}");
@@ -393,7 +430,7 @@ impl LinkProps {
 /// # Example
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
-/// fn RedirectToDioxusHomepageWithoutJS() -> Element {
+/// fn RedBackground() -> Element {
 ///     rsx! {
 ///         // You can use the meta component to render a meta tag into the head of the page
 ///         // This meta tag will redirect the user to the dioxuslabs homepage in 10 seconds
