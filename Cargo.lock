@@ -2080,11 +2080,11 @@ dependencies = [
 
 [[package]]
 name = "dioxus"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "criterion 0.3.6",
  "dioxus-config-macro",
- "dioxus-core 0.5.2",
+ "dioxus-core 0.5.5",
  "dioxus-core-macro",
  "dioxus-desktop",
  "dioxus-fullstack",
@@ -2108,7 +2108,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-autofmt"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "dioxus-rsx",
  "pretty_assertions",
@@ -2121,7 +2121,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-check"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "indoc",
  "owo-colors",
@@ -2133,7 +2133,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-cli"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "anyhow",
  "atty",
@@ -2151,7 +2151,7 @@ dependencies = [
  "dioxus-autofmt",
  "dioxus-check",
  "dioxus-cli-config",
- "dioxus-core 0.5.2",
+ "dioxus-core 0.5.5",
  "dioxus-hot-reload",
  "dioxus-html",
  "dioxus-rsx",
@@ -2203,7 +2203,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-cli-config"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "cargo_toml 0.18.0",
  "clap 4.5.4",
@@ -2218,7 +2218,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-config-macro"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2242,13 +2242,13 @@ dependencies = [
 
 [[package]]
 name = "dioxus-core"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "dioxus",
  "dioxus-ssr",
  "futures-channel",
  "futures-util",
- "generational-box 0.5.2",
+ "generational-box 0.5.5",
  "longest-increasing-subsequence",
  "pretty_assertions",
  "rand 0.8.5",
@@ -2265,7 +2265,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-core-macro"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "constcat",
  "convert_case 0.6.0",
@@ -2287,14 +2287,14 @@ checksum = "2ea539174bb236e0e7dc9c12b19b88eae3cb574dedbd0252a2d43ea7e6de13e2"
 
 [[package]]
 name = "dioxus-desktop"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "async-trait",
  "cocoa",
  "core-foundation",
  "dioxus",
  "dioxus-cli-config",
- "dioxus-core 0.5.2",
+ "dioxus-core 0.5.5",
  "dioxus-hooks",
  "dioxus-hot-reload",
  "dioxus-html",
@@ -2303,7 +2303,7 @@ dependencies = [
  "exitcode",
  "futures-channel",
  "futures-util",
- "generational-box 0.5.2",
+ "generational-box 0.5.5",
  "global-hotkey",
  "infer 0.11.0",
  "muda",
@@ -2326,7 +2326,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-examples"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "base64 0.21.7",
  "ciborium",
@@ -2347,7 +2347,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-ext"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "dioxus-autofmt",
  "html_parser",
@@ -2357,7 +2357,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-fullstack"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "anymap",
  "async-trait",
@@ -2396,15 +2396,15 @@ dependencies = [
 
 [[package]]
 name = "dioxus-hooks"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "dioxus",
- "dioxus-core 0.5.2",
+ "dioxus-core 0.5.5",
  "dioxus-debug-cell",
  "dioxus-signals",
  "futures-channel",
  "futures-util",
- "generational-box 0.5.2",
+ "generational-box 0.5.5",
  "slab",
  "thiserror",
  "tokio",
@@ -2414,10 +2414,10 @@ dependencies = [
 
 [[package]]
 name = "dioxus-hot-reload"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "chrono",
- "dioxus-core 0.5.2",
+ "dioxus-core 0.5.5",
  "dioxus-html",
  "dioxus-rsx",
  "execute",
@@ -2431,16 +2431,16 @@ dependencies = [
 
 [[package]]
 name = "dioxus-html"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "async-trait",
- "dioxus-core 0.5.2",
+ "dioxus-core 0.5.5",
  "dioxus-html-internal-macro",
  "dioxus-rsx",
  "enumset",
  "euclid",
  "futures-channel",
- "generational-box 0.5.2",
+ "generational-box 0.5.5",
  "keyboard-types",
  "rfd",
  "serde",
@@ -2455,7 +2455,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-html-internal-macro"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2",
@@ -2466,9 +2466,9 @@ dependencies = [
 
 [[package]]
 name = "dioxus-interpreter-js"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
- "dioxus-core 0.5.2",
+ "dioxus-core 0.5.5",
  "dioxus-html",
  "js-sys",
  "md5",
@@ -2482,11 +2482,11 @@ dependencies = [
 
 [[package]]
 name = "dioxus-lib"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "dioxus",
  "dioxus-config-macro",
- "dioxus-core 0.5.2",
+ "dioxus-core 0.5.5",
  "dioxus-core-macro",
  "dioxus-hooks",
  "dioxus-html",
@@ -2496,18 +2496,18 @@ dependencies = [
 
 [[package]]
 name = "dioxus-liveview"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "axum",
  "dioxus",
  "dioxus-cli-config",
- "dioxus-core 0.5.2",
+ "dioxus-core 0.5.5",
  "dioxus-hot-reload",
  "dioxus-html",
  "dioxus-interpreter-js",
  "futures-channel",
  "futures-util",
- "generational-box 0.5.2",
+ "generational-box 0.5.5",
  "pretty_env_logger",
  "rustc-hash",
  "serde",
@@ -2523,7 +2523,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-mobile"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "dioxus-desktop",
 ]
@@ -2569,17 +2569,15 @@ dependencies = [
 
 [[package]]
 name = "dioxus-router"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "axum",
- "console_error_panic_hook",
  "criterion 0.5.1",
  "dioxus",
  "dioxus-cli-config",
  "dioxus-fullstack",
  "dioxus-lib",
  "dioxus-liveview",
- "dioxus-router",
  "dioxus-router-macro",
  "dioxus-ssr",
  "gloo",
@@ -2592,13 +2590,12 @@ dependencies = [
  "url",
  "urlencoding",
  "wasm-bindgen",
- "wasm-bindgen-test",
  "web-sys",
 ]
 
 [[package]]
 name = "dioxus-router-macro"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "dioxus",
  "proc-macro2",
@@ -2609,9 +2606,9 @@ dependencies = [
 
 [[package]]
 name = "dioxus-rsx"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
- "dioxus-core 0.5.2",
+ "dioxus-core 0.5.5",
  "insta",
  "internment",
  "krates",
@@ -2624,13 +2621,13 @@ dependencies = [
 
 [[package]]
 name = "dioxus-signals"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "dioxus",
- "dioxus-core 0.5.2",
+ "dioxus-core 0.5.5",
  "futures-channel",
  "futures-util",
- "generational-box 0.5.2",
+ "generational-box 0.5.5",
  "once_cell",
  "parking_lot",
  "rustc-hash",
@@ -2643,7 +2640,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-ssr"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "anyhow",
  "argh",
@@ -2651,12 +2648,12 @@ dependencies = [
  "async-trait",
  "chrono",
  "dioxus",
- "dioxus-core 0.5.2",
+ "dioxus-core 0.5.5",
  "dioxus-html",
  "dioxus-signals",
  "fern",
  "fs_extra",
- "generational-box 0.5.2",
+ "generational-box 0.5.5",
  "http 1.1.0",
  "lru",
  "rustc-hash",
@@ -2677,19 +2674,19 @@ dependencies = [
 
 [[package]]
 name = "dioxus-web"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "async-trait",
  "console_error_panic_hook",
  "dioxus",
- "dioxus-core 0.5.2",
+ "dioxus-core 0.5.5",
  "dioxus-html",
  "dioxus-interpreter-js",
  "dioxus-ssr",
  "dioxus-web",
  "futures-channel",
  "futures-util",
- "generational-box 0.5.2",
+ "generational-box 0.5.5",
  "gloo-dialogs",
  "gloo-timers",
  "js-sys",
@@ -2707,7 +2704,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus_server_macro"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2",
@@ -3535,7 +3532,7 @@ dependencies = [
 
 [[package]]
 name = "generational-box"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "criterion 0.3.6",
  "parking_lot",
@@ -7608,7 +7605,7 @@ dependencies = [
 
 [[package]]
 name = "rsx-rosetta"
-version = "0.5.2"
+version = "0.5.5"
 dependencies = [
  "convert_case 0.5.0",
  "dioxus-autofmt",

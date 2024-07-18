@@ -47,13 +47,13 @@ members = [
 exclude = ["examples/mobile_demo", "examples/openid_connect_demo"]
 
 [workspace.package]
-version = "0.5.2"
+version = "0.5.5"
 
 # dependencies that are shared across packages
 [workspace.dependencies]
 dioxus = { path = "packages/dioxus", version = "0.5.0" }
 dioxus-lib = { path = "packages/dioxus-lib", version = "0.5.0" }
-dioxus-core = { path = "packages/core", version = "0.5.0" }
+dioxus-core = { path = "packages/core", version = "0.5.5" }
 dioxus-core-macro = { path = "packages/core-macro", version = "0.5.0" }
 dioxus-config-macro = { path = "packages/config-macro", version = "0.5.0" }
 dioxus-router = { path = "packages/router", version = "0.5.0" }
@@ -143,7 +143,7 @@ opt-level = 3
 # It is not meant to be published, but is used so "cargo run --example XYZ" works properly
 [package]
 name = "dioxus-examples"
-version = "0.5.2"
+version = "0.5.5"
 authors = ["Jonathan Kelley"]
 edition = "2021"
 description = "Top level crate for the Dioxus repository"
