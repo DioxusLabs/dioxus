@@ -85,7 +85,7 @@ fn text_nodes() {
     fn app2() -> Element {
         let dynamic = 123;
         rsx! {
-            div { "{dynamic}", "{1234}" }
+            div { "{dynamic}" "{1234}" }
         }
     }
 

@@ -226,8 +226,10 @@ impl WebsysDom {
         to_mount: &mut Vec<ElementId>,
     ) -> Result<(), RehydrationError> {
         // If this scope is a suspense boundary that is pending, add it to the list of pending suspense boundaries
-        if let Some(suspense) = SuspenseBoundaryProps::downcast_from_scope(scope) {
-            if suspense.suspended() {
+        if let Some(suspense) =
+            SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime(), scope.id())
+        {
+            if suspense.has_suspended_tasks() {
                 self.suspense_hydration_ids
                     .add_suspense_boundary(scope.id());
             }

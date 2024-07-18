@@ -23,10 +23,7 @@ impl VirtualDom {
         };
         let suspense_boundary = self
             .runtime
-            .suspense_stack
-            .borrow()
-            .last()
-            .cloned()
+            .current_suspense_location()
             .unwrap_or(SuspenseLocation::NotSuspended);
         let entry = self.scopes.vacant_entry();
         let id = ScopeId(entry.key());
@@ -52,48 +49,49 @@ impl VirtualDom {
     #[tracing::instrument(skip(self), level = "trace", name = "VirtualDom::run_scope")]
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> RenderReturn {
         debug_assert!(
-            crate::Runtime::current().is_some(),
+            crate::Runtime::current().is_ok(),
             "Must be in a dioxus runtime"
         );
-        self.runtime.push_scope(scope_id);
+        self.runtime.clone().with_scope_on_stack(scope_id, || {
+            let scope = &self.scopes[scope_id.0];
+            let output = {
+                let scope_state = scope.state();
 
-        let scope = &self.scopes[scope_id.0];
-        let output = {
+                scope_state.hook_index.set(0);
+
+                // Run all pre-render hooks
+                for pre_run in scope_state.before_render.borrow_mut().iter_mut() {
+                    pre_run();
+                }
+
+                let props: &dyn AnyProps = &*scope.props;
+
+                let span = tracing::trace_span!("render", scope = %scope.state().name);
+                span.in_scope(|| {
+                    scope.reactive_context.reset_and_run_in(|| {
+                        let mut render_return = props.render();
+                        self.handle_element_return(
+                            &mut render_return.node,
+                            scope_id,
+                            &scope.state(),
+                        );
+                        render_return
+                    })
+                })
+            };
+
             let scope_state = scope.state();
 
-            scope_state.hook_index.set(0);
-
-            // Run all pre-render hooks
-            for pre_run in scope_state.before_render.borrow_mut().iter_mut() {
-                pre_run();
+            // Run all post-render hooks
+            for post_run in scope_state.after_render.borrow_mut().iter_mut() {
+                post_run();
             }
 
-            let props: &dyn AnyProps = &*scope.props;
-
-            let span = tracing::trace_span!("render", scope = %scope.state().name);
-            span.in_scope(|| {
-                scope.reactive_context.reset_and_run_in(|| {
-                    let mut render_return = props.render();
-                    self.handle_element_return(&mut render_return.node, scope_id, &scope.state());
-                    render_return
-                })
-            })
-        };
-
-        let scope_state = scope.state();
-
-        // Run all post-render hooks
-        for post_run in scope_state.after_render.borrow_mut().iter_mut() {
-            post_run();
-        }
-
-        // remove this scope from dirty scopes
-        self.dirty_scopes
-            .remove(&ScopeOrder::new(scope_state.height, scope_id));
-
-        self.runtime.pop_scope();
-
-        output
+            // remove this scope from dirty scopes
+            self.dirty_scopes
+                .remove(&ScopeOrder::new(scope_state.height, scope_id));
+            output
+        })
     }
 
     /// Insert any errors, or suspended tasks from an element return into the runtime
@@ -101,7 +99,7 @@ impl VirtualDom {
         match node {
             Err(RenderError::Aborted(e)) => {
                 tracing::error!(
-                    "Error while rendering component `{}`: {e:?}",
+                    "Error while rendering component `{}`:\n{e}",
                     scope_state.name
                 );
                 throw_error(e.clone_mounted());
@@ -114,7 +112,7 @@ impl VirtualDom {
                     .runtime
                     .get_state(scope_id)
                     .unwrap()
-                    .suspense_boundary();
+                    .suspense_location();
                 let already_suspended = self
                     .runtime
                     .tasks

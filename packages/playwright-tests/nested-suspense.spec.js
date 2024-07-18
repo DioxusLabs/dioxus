@@ -17,6 +17,9 @@ test("nested suspense resolves", async ({ page }) => {
     "The robot becomes sentient and says hello world"
   );
 
+  // And expect the title to have resolved on the client
+  await expect(page).toHaveTitle("The robot says hello world");
+
   // And more loading text for the nested suspense
   await expect(mainMessageDiv).toContainText("Loading 1...");
   await expect(mainMessageDiv).toContainText("Loading 2...");

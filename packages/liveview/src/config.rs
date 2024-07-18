@@ -6,7 +6,7 @@ use crate::LiveviewRouter;
 pub(crate) fn app_title() -> String {
     CURRENT_CONFIG
         .as_ref()
-        .map(|c| c.dioxus_config.web.app.title.clone())
+        .map(|c| c.web.app.title.clone())
         .unwrap_or_else(|_| "Dioxus Liveview App".to_string())
 }
 

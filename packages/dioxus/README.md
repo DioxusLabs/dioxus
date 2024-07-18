@@ -68,7 +68,7 @@ rsx! {
     div {
         class: "my-class {value}",                  // <--- attribute
         onclick: move |_| println!("clicked!"),   // <--- listener
-        h1 { "hello world" },                       // <--- child
+        h1 { "hello world" }                       // <--- child
     }
 };
 ```

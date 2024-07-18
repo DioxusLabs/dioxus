@@ -1,20 +1,21 @@
+use crate::builder::{BuildMessage, MessageType, Stage, UpdateBuildProgress, UpdateStage};
+use crate::dioxus_crate::DioxusCrate;
+use crate::Result;
+use anyhow::Context;
 use brotli::enc::BrotliEncoderParams;
+use futures_channel::mpsc::UnboundedSender;
+use manganis_cli_support::{process_file, AssetManifest, AssetManifestExt, AssetType};
 use std::fs;
 use std::path::Path;
 use std::{ffi::OsString, path::PathBuf};
-use walkdir::WalkDir;
-
 use std::{fs::File, io::Write};
-
-use crate::Result;
-use dioxus_cli_config::CrateConfig;
-use dioxus_cli_config::Platform;
-use manganis_cli_support::{AssetManifest, AssetManifestExt};
+use tracing::Level;
+use walkdir::WalkDir;
 
 /// The temp file name for passing manganis json from linker to current exec.
 pub const MG_JSON_OUT: &str = "mg-out";
 
-pub fn asset_manifest(config: &CrateConfig) -> AssetManifest {
+pub fn asset_manifest(config: &DioxusCrate) -> AssetManifest {
     let file_path = config.out_dir().join(MG_JSON_OUT);
     let read = fs::read_to_string(&file_path).unwrap();
     _ = fs::remove_file(file_path);
@@ -24,14 +25,18 @@ pub fn asset_manifest(config: &CrateConfig) -> AssetManifest {
 }
 
 /// Create a head file that contains all of the imports for assets that the user project uses
-pub fn create_assets_head(config: &CrateConfig, manifest: &AssetManifest) -> Result<()> {
+pub fn create_assets_head(config: &DioxusCrate, manifest: &AssetManifest) -> Result<()> {
     let mut file = File::create(config.out_dir().join("__assets_head.html"))?;
     file.write_all(manifest.head().as_bytes())?;
     Ok(())
 }
 
 /// Process any assets collected from the binary
-pub(crate) fn process_assets(config: &CrateConfig, manifest: &AssetManifest) -> anyhow::Result<()> {
+pub(crate) fn process_assets(
+    config: &DioxusCrate,
+    manifest: &AssetManifest,
+    progress: &mut UnboundedSender<UpdateBuildProgress>,
+) -> anyhow::Result<()> {
     let static_asset_output_dir = PathBuf::from(
         config
             .dioxus_config
@@ -43,7 +48,44 @@ pub(crate) fn process_assets(config: &CrateConfig, manifest: &AssetManifest) -> 
     );
     let static_asset_output_dir = config.out_dir().join(static_asset_output_dir);
 
-    manifest.copy_static_assets_to(static_asset_output_dir)?;
+    std::fs::create_dir_all(&static_asset_output_dir)
+        .context("Failed to create static asset output directory")?;
+
+    let mut assets_finished: usize = 0;
+    let assets = manifest.assets();
+    let asset_count = assets.len();
+    assets.iter().try_for_each(move |asset| {
+        if let AssetType::File(file_asset) = asset {
+            match process_file(file_asset, &static_asset_output_dir) {
+                Ok(_) => {
+                    // Update the progress
+                    _ = progress.start_send(UpdateBuildProgress {
+                        stage: Stage::OptimizingAssets,
+                        update: UpdateStage::AddMessage(BuildMessage {
+                            level: Level::INFO,
+                            message: MessageType::Text(format!(
+                                "Optimized static asset {}",
+                                file_asset
+                            )),
+                            source: None,
+                        }),
+                    });
+                    assets_finished += 1;
+                    _ = progress.start_send(UpdateBuildProgress {
+                        stage: Stage::OptimizingAssets,
+                        update: UpdateStage::SetProgress(
+                            assets_finished as f64 / asset_count as f64,
+                        ),
+                    });
+                }
+                Err(err) => {
+                    tracing::error!("Failed to copy static asset: {}", err);
+                    return Err(err);
+                }
+            }
+        }
+        Ok::<(), anyhow::Error>(())
+    })?;
 
     Ok(())
 }
@@ -68,21 +110,11 @@ impl Drop for AssetConfigDropGuard {
     }
 }
 
-pub fn copy_assets_dir(config: &CrateConfig, platform: Platform) -> anyhow::Result<()> {
-    tracing::info!("Copying public assets to the output directory...");
-    let out_dir = config.out_dir();
-    let asset_dir = config.asset_dir();
-
-    if asset_dir.is_dir() {
-        // Only pre-compress the assets from the web build. Desktop assets are not served, so they don't need to be pre_compressed
-        let pre_compress = platform == Platform::Web && config.should_pre_compress_web_assets();
-
-        copy_dir_to(asset_dir, out_dir, pre_compress)?;
-    }
-    Ok(())
-}
-
-fn copy_dir_to(src_dir: PathBuf, dest_dir: PathBuf, pre_compress: bool) -> std::io::Result<()> {
+pub(crate) fn copy_dir_to(
+    src_dir: PathBuf,
+    dest_dir: PathBuf,
+    pre_compress: bool,
+) -> std::io::Result<()> {
     let entries = std::fs::read_dir(&src_dir)?;
     let mut children: Vec<std::thread::JoinHandle<std::io::Result<()>>> = Vec::new();
 

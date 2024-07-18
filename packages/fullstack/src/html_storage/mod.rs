@@ -32,7 +32,11 @@ impl SerializeContext {
 }
 
 pub(crate) fn use_serialize_context() -> SerializeContext {
-    use_hook(|| has_context().unwrap_or_else(|| provide_context(SerializeContext::default())))
+    use_hook(serialize_context)
+}
+
+pub(crate) fn serialize_context() -> SerializeContext {
+    has_context().unwrap_or_else(|| provide_context(SerializeContext::default()))
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Default)]

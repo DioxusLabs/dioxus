@@ -100,6 +100,8 @@ impl SuspenseContext {
             inner: Rc::new(SuspenseBoundaryInner {
                 suspended_tasks: RefCell::new(vec![]),
                 id: Cell::new(ScopeId::ROOT),
+                suspended_nodes: Default::default(),
+                frozen: Default::default(),
             }),
         }
     }
@@ -109,8 +111,40 @@ impl SuspenseContext {
         self.inner.id.set(scope);
     }
 
+    /// Get the suspense boundary's suspended nodes
+    pub fn suspended_nodes(&self) -> Option<VNode> {
+        self.inner
+            .suspended_nodes
+            .borrow()
+            .as_ref()
+            .map(|node| node.clone_mounted())
+    }
+
+    /// Set the suspense boundary's suspended nodes
+    pub(crate) fn set_suspended_nodes(&self, suspended_nodes: VNode) {
+        self.inner
+            .suspended_nodes
+            .borrow_mut()
+            .replace(suspended_nodes);
+    }
+
+    /// Take the suspense boundary's suspended nodes
+    pub(crate) fn take_suspended_nodes(&self) -> Option<VNode> {
+        self.inner.suspended_nodes.borrow_mut().take()
+    }
+
+    /// Check if the suspense boundary is resolved and frozen
+    pub fn frozen(&self) -> bool {
+        self.inner.frozen.get()
+    }
+
+    /// Resolve the suspense boundary on the server and freeze it to prevent future reruns of any child nodes of the suspense boundary
+    pub fn freeze(&self) {
+        self.inner.frozen.set(true);
+    }
+
     /// Check if there are any suspended tasks
-    pub fn suspended(&self) -> bool {
+    pub fn has_suspended_tasks(&self) -> bool {
         !self.inner.suspended_tasks.borrow().is_empty()
     }
 
@@ -152,6 +186,10 @@ impl SuspenseContext {
 pub struct SuspenseBoundaryInner {
     suspended_tasks: RefCell<Vec<SuspendedFuture>>,
     id: Cell<ScopeId>,
+    /// The nodes that are suspended under this boundary
+    suspended_nodes: RefCell<Option<VNode>>,
+    /// On the server, you can only resolve a suspense boundary once. This is used to track if the suspense boundary has been resolved and if it should be frozen
+    frozen: Cell<bool>,
 }
 
 /// Provides context methods to [`Result<T, RenderError>`] to show loading indicators for suspended results

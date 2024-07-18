@@ -31,7 +31,6 @@ serde = "1.0.159"
 execute = "0.2.12"
 anyhow = "1.0.71"
 
-
 [dependencies.axum_session]
 workspace = true
 features = ["sqlite-rustls"]

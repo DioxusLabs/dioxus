@@ -85,6 +85,9 @@ impl VirtualDom {
         };
 
         self.dirty_scopes.remove(&ScopeOrder::new(height, id));
+
+        // If this scope was a suspense boundary, remove it from the resolved scopes
+        self.resolved_scopes.retain(|s| s != &id);
     }
 }
 

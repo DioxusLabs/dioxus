@@ -25,8 +25,9 @@ pub(crate) enum ScopeStatus {
 pub(crate) enum SuspenseLocation {
     #[default]
     NotSuspended,
-    InSuspensePlaceholder(SuspenseContext),
+    SuspenseBoundary(SuspenseContext),
     UnderSuspense(SuspenseContext),
+    InSuspensePlaceholder(SuspenseContext),
 }
 
 impl SuspenseLocation {
@@ -34,6 +35,7 @@ impl SuspenseLocation {
         match self {
             SuspenseLocation::InSuspensePlaceholder(context) => Some(context),
             SuspenseLocation::UnderSuspense(context) => Some(context),
+            SuspenseLocation::SuspenseBoundary(context) => Some(context),
             _ => None,
         }
     }
@@ -109,17 +111,26 @@ impl Scope {
         }
     }
 
-    /// Get the suspense boundary this scope is currently in (if any)
-    pub(crate) fn suspense_boundary(&self) -> SuspenseLocation {
+    /// Get the suspense location of this scope
+    pub(crate) fn suspense_location(&self) -> SuspenseLocation {
         self.suspense_boundary.clone()
+    }
+
+    /// If this scope is a suspense boundary, return the suspense context
+    pub(crate) fn suspense_boundary(&self) -> Option<SuspenseContext> {
+        match self.suspense_location() {
+            SuspenseLocation::SuspenseBoundary(context) => Some(context),
+            _ => None,
+        }
     }
 
     /// Check if a node should run during suspense
     pub(crate) fn should_run_during_suspense(&self) -> bool {
-        matches!(
-            self.suspense_boundary,
-            SuspenseLocation::UnderSuspense(_) | SuspenseLocation::InSuspensePlaceholder(_)
-        )
+        let Some(context) = self.suspense_boundary.suspense_context() else {
+            return false;
+        };
+
+        !context.frozen()
     }
 
     /// Mark this scope as dirty, and schedule a render for it.

@@ -1,66 +1,158 @@
-#![allow(dead_code)]
+//! Handler code for hotreloading.
+//!
+//! This sets up a websocket connection to the devserver and handles messages from it.
+//! We also set up a little recursive timer that will attempt to reconnect if the connection is lost.
 
-use futures_channel::mpsc::UnboundedReceiver;
+use dioxus_hot_reload::{DevserverMsg, HotReloadMsg};
+use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
+use js_sys::JsString;
+use wasm_bindgen::JsCast;
+use wasm_bindgen::{closure::Closure, JsValue};
+use web_sys::{window, CloseEvent, MessageEvent, WebSocket};
 
-use dioxus_core::Template;
-use web_sys::Element;
+const POLL_INTERVAL_MIN: i32 = 250;
+const POLL_INTERVAL_MAX: i32 = 4000;
+const POLL_INTERVAL_SCALE_FACTOR: i32 = 2;
 
-pub(crate) fn init() -> UnboundedReceiver<Template> {
-    use wasm_bindgen::closure::Closure;
-    use wasm_bindgen::JsCast;
-    use web_sys::{MessageEvent, WebSocket};
+pub(crate) fn init() -> UnboundedReceiver<HotReloadMsg> {
+    // Create the tx/rx pair that we'll use for the top-level future in the dioxus loop
+    let (tx, rx) = unbounded();
 
-    use serde::Deserialize;
+    // Wire up the websocket to the devserver
+    make_ws(tx, POLL_INTERVAL_MIN, false);
 
-    let window = web_sys::window().unwrap();
+    rx
+}
 
-    let protocol = match window.location().protocol().unwrap() {
-        prot if prot == "https:" => "wss:",
-        _ => "ws:",
-    };
-
+fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) {
+    // Get the location of the devserver, using the current location plus the /_dioxus path
+    // The idea here being that the devserver is always located on the /_dioxus behind a proxy
+    let location = web_sys::window().unwrap().location();
     let url = format!(
-        "{protocol}//{}/_dioxus/hot_reload",
-        window.location().host().unwrap()
+        "{protocol}//{host}/_dioxus",
+        protocol = match location.protocol().unwrap() {
+            prot if prot == "https:" => "wss:",
+            _ => "ws:",
+        },
+        host = location.host().unwrap(),
     );
 
     let ws = WebSocket::new(&url).unwrap();
 
-    let (tx, rx) = futures_channel::mpsc::unbounded();
+    // Set the onmessage handler to bounce messages off to the main dioxus loop
+    let tx_ = tx.clone();
+    ws.set_onmessage(Some(
+        Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
+            let Ok(text) = e.data().dyn_into::<JsString>() else {
+                return;
+            };
 
-    // change the rsx when new data is received
-    let cl = Closure::wrap(Box::new(move |e: MessageEvent| {
-        if let Ok(text) = e.data().dyn_into::<js_sys::JsString>() {
+            // The devserver messages have some &'static strs in them, so we need to leak the source string
             let string: String = text.into();
+            let leaked: &'static str = Box::leak(Box::new(string));
 
-            if let Ok(val) = serde_json::from_str::<serde_json::Value>(&string) {
-                // leak the value
-                let val: &'static serde_json::Value = Box::leak(Box::new(val));
-                let template: Template = Template::deserialize(val).unwrap();
-                tx.unbounded_send(template).unwrap();
-            } else {
-                // it might be triggering a reload of assets
-                // invalidate all the stylesheets on the page
-                let links = web_sys::window()
-                    .unwrap()
-                    .document()
-                    .unwrap()
-                    .query_selector_all("link[rel=stylesheet]")
-                    .unwrap();
+            match serde_json::from_str::<DevserverMsg>(leaked) {
+                Ok(DevserverMsg::HotReload(hr)) => _ = tx_.unbounded_send(hr),
 
-                let noise = js_sys::Math::random();
-
-                for x in 0..links.length() {
-                    let link: Element = links.get(x).unwrap().unchecked_into();
-                    let href = link.get_attribute("href").unwrap();
-                    _ = link.set_attribute("href", &format!("{}?{}", href, noise));
+                // todo: we want to throw a screen here that shows the user that the devserver has disconnected
+                // Would be nice to do that with dioxus itself or some html/css
+                // But if the dev server shutsdown we don't want to be super aggressive about it... let's
+                // play with other devservers to see how they handle this
+                Ok(DevserverMsg::Shutdown) => {
+                    web_sys::console::error_1(&"Connection to the devserver was closed".into())
                 }
+
+                // The devserver is telling us to reload the whole page
+                Ok(DevserverMsg::FullReload) => window().unwrap().location().reload().unwrap(),
+
+                Err(e) => web_sys::console::error_1(
+                    &format!("Error parsing devserver message: {}", e).into(),
+                ),
             }
-        }
-    }) as Box<dyn FnMut(MessageEvent)>);
+        })
+        .into_js_value()
+        .as_ref()
+        .unchecked_ref(),
+    ));
 
-    ws.set_onmessage(Some(cl.as_ref().unchecked_ref()));
-    cl.forget();
+    // Set the onclose handler to reload the page if the connection is closed
+    ws.set_onclose(Some(
+        Closure::<dyn FnMut(CloseEvent)>::new(move |e: CloseEvent| {
+            // Firefox will send a 1001 code when the connection is closed because the page is reloaded
+            // Only firefox will trigger the onclose event when the page is reloaded manually: https://stackoverflow.com/questions/10965720/should-websocket-onclose-be-triggered-by-user-navigation-or-refresh
+            // We should not reload the page in this case
+            if e.code() == 1001 {
+                return;
+            }
 
-    rx
+            // set timeout to reload the page in timeout_ms
+            let tx = tx.clone();
+            web_sys::window()
+                .unwrap()
+                .set_timeout_with_callback_and_timeout_and_arguments_0(
+                    Closure::<dyn FnMut()>::new(move || {
+                        make_ws(
+                            tx.clone(),
+                            POLL_INTERVAL_MAX.min(poll_interval * POLL_INTERVAL_SCALE_FACTOR),
+                            true,
+                        );
+                    })
+                    .into_js_value()
+                    .as_ref()
+                    .unchecked_ref(),
+                    poll_interval,
+                )
+                .unwrap();
+        })
+        .into_js_value()
+        .as_ref()
+        .unchecked_ref(),
+    ));
+
+    // Set the onopen handler to reload the page if the connection is closed
+    ws.set_onopen(Some(
+        Closure::<dyn FnMut(MessageEvent)>::new(move |_evt| {
+            if reload {
+                window().unwrap().location().reload().unwrap()
+            }
+        })
+        .into_js_value()
+        .as_ref()
+        .unchecked_ref(),
+    ));
+
+    // monkey patch our console.log / console.error to send the logs to the websocket
+    // this will let us see the logs in the devserver!
+    // We only do this if we're not reloading the page, since that will cause duplicate monkey patches
+    if !reload {
+        // the method we need to patch:
+        // https://developer.mozilla.org/en-US/docs/Web/API/Console/log
+        // log, info, warn, error, debug
+        let ws: &JsValue = ws.as_ref();
+        dioxus_interpreter_js::minimal_bindings::monkeyPatchConsole(ws.clone());
+    }
+}
+
+/// Force a hotreload of the assets on this page by walking them and changing their URLs to include
+/// some extra entropy.
+///
+/// This should... mostly work.
+pub(crate) fn invalidate_browser_asset_cache() {
+    // it might be triggering a reload of assets
+    // invalidate all the stylesheets on the page
+    let links = web_sys::window()
+        .unwrap()
+        .document()
+        .unwrap()
+        .query_selector_all("link[rel=stylesheet]")
+        .unwrap();
+
+    let noise = js_sys::Math::random();
+
+    for x in 0..links.length() {
+        use wasm_bindgen::JsCast;
+        let link: web_sys::Element = links.get(x).unwrap().unchecked_into();
+        let href = link.get_attribute("href").unwrap();
+        _ = link.set_attribute("href", &format!("{}?{}", href, noise));
+    }
 }

@@ -1,4 +1,4 @@
-use crate::innerlude::*;
+use crate::{innerlude::*, scope_context::SuspenseLocation};
 
 /// Properties for the [`SuspenseBoundary()`] component.
 #[allow(non_camel_case_types)]
@@ -6,8 +6,6 @@ pub struct SuspenseBoundaryProps {
     fallback: Callback<SuspenseContext, Element>,
     /// The children of the suspense boundary
     children: Element,
-    /// THe nodes that are suspended under this boundary
-    pub suspended_nodes: Option<VNode>,
 }
 
 impl Clone for SuspenseBoundaryProps {
@@ -15,10 +13,6 @@ impl Clone for SuspenseBoundaryProps {
         Self {
             fallback: self.fallback,
             children: self.children.clone(),
-            suspended_nodes: self
-                .suspended_nodes
-                .as_ref()
-                .map(|node| node.clone_mounted()),
         }
     }
 }
@@ -211,11 +205,7 @@ impl<__children: SuspenseBoundaryPropsBuilder_Optional<Element>>
         let fallback = fallback.0;
         let children = SuspenseBoundaryPropsBuilder_Optional::into_value(children, VNode::empty);
         SuspenseBoundaryPropsWithOwner {
-            inner: SuspenseBoundaryProps {
-                fallback,
-                children,
-                suspended_nodes: None,
-            },
+            inner: SuspenseBoundaryProps { fallback, children },
             owner: self.owner,
         }
     }
@@ -272,27 +262,9 @@ pub use SuspenseBoundary_completions::Component::SuspenseBoundary;
 /// Suspense has a custom diffing algorithm that diffs the suspended nodes in the background without rendering them
 impl SuspenseBoundaryProps {
     /// Try to downcast [`AnyProps`] to [`SuspenseBoundaryProps`]
-    pub(crate) fn downcast_mut_from_props(props: &mut dyn AnyProps) -> Option<&mut Self> {
+    pub(crate) fn downcast_from_props(props: &mut dyn AnyProps) -> Option<&mut Self> {
         let inner: Option<&mut SuspenseBoundaryPropsWithOwner> = props.props_mut().downcast_mut();
         inner.map(|inner| &mut inner.inner)
-    }
-
-    /// Try to downcast [`AnyProps`] to [`SuspenseBoundaryProps`]
-    pub(crate) fn downcast_ref_from_props(props: &dyn AnyProps) -> Option<&Self> {
-        let inner: Option<&SuspenseBoundaryPropsWithOwner> = props.props().downcast_ref();
-        inner.map(|inner| &inner.inner)
-    }
-
-    /// Try to extract [`SuspenseBoundaryProps`] from  [`ScopeState`]
-    pub fn downcast_from_scope(scope_state: &ScopeState) -> Option<&Self> {
-        let inner: Option<&SuspenseBoundaryPropsWithOwner> =
-            scope_state.props.props().downcast_ref();
-        inner.map(|inner| &inner.inner)
-    }
-
-    /// Check if the suspense boundary is currently holding its children in suspense
-    pub fn suspended(&self) -> bool {
-        self.suspended_nodes.is_some()
     }
 
     pub(crate) fn create<M: WriteMutations>(
@@ -310,17 +282,19 @@ impl SuspenseBoundaryProps {
             {
                 let suspense_context = SuspenseContext::new();
 
-                dom.runtime.suspense_stack.borrow_mut().push(
-                    crate::scope_context::SuspenseLocation::UnderSuspense(suspense_context.clone()),
-                );
-                {
-                    let scope_state = dom
-                        .new_scope(component.props.duplicate(), component.name)
-                        .state();
-                    suspense_context.mount(scope_state.id);
-                    scope_id = scope_state.id;
-                }
-                dom.runtime.suspense_stack.borrow_mut().pop();
+                let suspense_boundary_location =
+                    crate::scope_context::SuspenseLocation::SuspenseBoundary(
+                        suspense_context.clone(),
+                    );
+                dom.runtime
+                    .clone()
+                    .with_suspense_location(suspense_boundary_location, || {
+                        let scope_state = dom
+                            .new_scope(component.props.duplicate(), component.name)
+                            .state();
+                        suspense_context.mount(scope_state.id);
+                        scope_id = scope_state.id;
+                    });
             }
 
             // Store the scope id for the next render
@@ -328,7 +302,9 @@ impl SuspenseBoundaryProps {
         }
 
         let scope_state = &mut dom.scopes[scope_id.0];
-        let props = Self::downcast_mut_from_props(&mut *scope_state.props).unwrap();
+        let props = Self::downcast_from_props(&mut *scope_state.props).unwrap();
+        let suspense_context =
+            SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime, scope_id).unwrap();
 
         let children = RenderReturn {
             node: props
@@ -339,38 +315,41 @@ impl SuspenseBoundaryProps {
         };
 
         // First always render the children in the background. Rendering the children may cause this boundary to suspend
-        dom.runtime.push_scope(scope_id);
-        children.create(dom, parent, None::<&mut M>);
-        dom.runtime.pop_scope();
+        suspense_context.under_suspense_boundary(&dom.runtime(), || {
+            children.create(dom, parent, None::<&mut M>);
+        });
 
         // Store the (now mounted) children back into the scope state
         let scope_state = &mut dom.scopes[scope_id.0];
-        let props = Self::downcast_mut_from_props(&mut *scope_state.props).unwrap();
+        let props = Self::downcast_from_props(&mut *scope_state.props).unwrap();
         props.children = children.clone().node;
 
         let scope_state = &mut dom.scopes[scope_id.0];
         let suspense_context = scope_state
             .state()
-            .suspense_boundary()
+            .suspense_location()
             .suspense_context()
             .unwrap()
             .clone();
         // If there are suspended futures, render the fallback
         let nodes_created = if !suspense_context.suspended_futures().is_empty() {
-            let props = Self::downcast_mut_from_props(&mut *scope_state.props).unwrap();
-            props.suspended_nodes = Some(children.into());
-
-            dom.runtime.suspense_stack.borrow_mut().push(
-                crate::scope_context::SuspenseLocation::InSuspensePlaceholder(
-                    suspense_context.clone(),
-                ),
-            );
-            let suspense_placeholder = props.fallback.call(suspense_context);
-            let node = RenderReturn {
-                node: suspense_placeholder,
-            };
-            let nodes_created = node.create(dom, parent, to);
-            dom.runtime.suspense_stack.borrow_mut().pop();
+            let (node, nodes_created) =
+                suspense_context.in_suspense_placeholder(&dom.runtime(), || {
+                    let scope_state = &mut dom.scopes[scope_id.0];
+                    let props = Self::downcast_from_props(&mut *scope_state.props).unwrap();
+                    let suspense_context = SuspenseContext::downcast_suspense_boundary_from_scope(
+                        &dom.runtime,
+                        scope_id,
+                    )
+                    .unwrap();
+                    suspense_context.set_suspended_nodes(children.into());
+                    let suspense_placeholder = props.fallback.call(suspense_context);
+                    let node = RenderReturn {
+                        node: suspense_placeholder,
+                    };
+                    let nodes_created = node.create(dom, parent, to);
+                    (node, nodes_created)
+                });
 
             let scope_state = &mut dom.scopes[scope_id.0];
             scope_state.last_rendered_node = Some(node);
@@ -378,14 +357,17 @@ impl SuspenseBoundaryProps {
             nodes_created
         } else {
             // Otherwise just render the children in the real dom
-            dom.runtime.push_scope(scope_id);
             debug_assert!(children.mount.get().mounted());
-            let nodes_created = children.create(dom, parent, to);
-            dom.runtime.pop_scope();
+            let nodes_created = suspense_context
+                .under_suspense_boundary(&dom.runtime(), || children.create(dom, parent, to));
             let scope_state = &mut dom.scopes[scope_id.0];
             scope_state.last_rendered_node = Some(children);
-            let props = Self::downcast_mut_from_props(&mut *dom.scopes[scope_id.0].props).unwrap();
-            props.suspended_nodes = None;
+            let suspense_context =
+                SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime, scope_id)
+                    .unwrap();
+            suspense_context.take_suspended_nodes();
+            mark_suspense_resolved(dom, scope_id);
+
             nodes_created
         };
 
@@ -403,7 +385,7 @@ impl SuspenseBoundaryProps {
         only_write_templates: impl FnOnce(&mut M),
         replace_with: usize,
     ) {
-        let _runtime = RuntimeGuard::new(dom.runtime.clone());
+        let _runtime = RuntimeGuard::new(dom.runtime());
         let Some(scope_state) = dom.scopes.get_mut(scope_id.0) else {
             return;
         };
@@ -411,7 +393,7 @@ impl SuspenseBoundaryProps {
         // Reset the suspense context
         let suspense_context = scope_state
             .state()
-            .suspense_boundary()
+            .suspense_location()
             .suspense_context()
             .unwrap()
             .clone();
@@ -426,7 +408,7 @@ impl SuspenseBoundaryProps {
             .expect("suspense placeholder is not mounted")
             .parent;
 
-        let props = Self::downcast_mut_from_props(&mut *scope_state.props).unwrap();
+        let props = Self::downcast_from_props(&mut *scope_state.props).unwrap();
 
         // Unmount any children to reset any scopes under this suspense boundary
         let children = props
@@ -434,10 +416,9 @@ impl SuspenseBoundaryProps {
             .as_ref()
             .map(|node| node.clone_mounted())
             .map_err(Clone::clone);
-        let suspended = props
-            .suspended_nodes
-            .as_ref()
-            .map(|node| node.clone_mounted());
+        let suspense_context =
+            SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime, scope_id).unwrap();
+        let suspended = suspense_context.suspended_nodes();
         if let Some(node) = suspended {
             node.remove_node(&mut *dom, None::<&mut M>, None);
         }
@@ -451,16 +432,18 @@ impl SuspenseBoundaryProps {
         children.mount.take();
 
         // First always render the children in the background. Rendering the children may cause this boundary to suspend
-        dom.runtime.push_scope(scope_id);
-        children.create(dom, parent, Some(to));
-        dom.runtime.pop_scope();
+        suspense_context.under_suspense_boundary(&dom.runtime(), || {
+            children.create(dom, parent, Some(to));
+        });
 
         // Store the (now mounted) children back into the scope state
         let scope_state = &mut dom.scopes[scope_id.0];
-        let props = Self::downcast_mut_from_props(&mut *scope_state.props).unwrap();
+        let props = Self::downcast_from_props(&mut *scope_state.props).unwrap();
         props.children = children.clone().node;
         scope_state.last_rendered_node = Some(children);
-        props.suspended_nodes = None;
+        let suspense_context =
+            SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime, scope_id).unwrap();
+        suspense_context.take_suspended_nodes();
     }
 
     pub(crate) fn diff<M: WriteMutations>(
@@ -469,25 +452,18 @@ impl SuspenseBoundaryProps {
         to: Option<&mut M>,
     ) {
         let scope = &mut dom.scopes[scope_id.0];
-        let myself = Self::downcast_mut_from_props(&mut *scope.props)
+        let myself = Self::downcast_from_props(&mut *scope.props)
             .unwrap()
             .clone();
 
         let last_rendered_node = scope.last_rendered_node.as_ref().unwrap().clone_mounted();
 
         let Self {
-            fallback,
-            children,
-            suspended_nodes,
-            ..
+            fallback, children, ..
         } = myself;
 
-        let suspense_context = scope
-            .state()
-            .suspense_boundary()
-            .suspense_context()
-            .unwrap()
-            .clone();
+        let suspense_context = scope.state().suspense_boundary().unwrap().clone();
+        let suspended_nodes = suspense_context.suspended_nodes();
         let suspended = !suspense_context.suspended_futures().is_empty();
         match (suspended_nodes, suspended) {
             // We already have suspended nodes that still need to be suspended
@@ -496,39 +472,38 @@ impl SuspenseBoundaryProps {
                 let new_suspended_nodes: VNode = RenderReturn { node: children }.into();
 
                 // Diff the placeholder nodes in the dom
-                dom.runtime.suspense_stack.borrow_mut().push(
-                    crate::scope_context::SuspenseLocation::InSuspensePlaceholder(
-                        suspense_context.clone(),
-                    ),
-                );
-                let old_placeholder = last_rendered_node;
-                let new_placeholder = RenderReturn {
-                    node: fallback.call(suspense_context),
-                };
+                let new_placeholder =
+                    suspense_context.in_suspense_placeholder(&dom.runtime(), || {
+                        let old_placeholder = last_rendered_node;
+                        let new_placeholder = RenderReturn {
+                            node: fallback.call(suspense_context.clone()),
+                        };
 
-                old_placeholder.diff_node(&new_placeholder, dom, to);
-                dom.runtime.suspense_stack.borrow_mut().pop();
+                        old_placeholder.diff_node(&new_placeholder, dom, to);
+                        new_placeholder
+                    });
 
                 // Set the last rendered node to the placeholder
                 dom.scopes[scope_id.0].last_rendered_node = Some(new_placeholder);
 
                 // Diff the suspended nodes in the background
-                dom.runtime.push_scope(scope_id);
-                suspended_nodes.diff_node(&new_suspended_nodes, dom, None::<&mut M>);
-                dom.runtime.pop_scope();
+                suspense_context.under_suspense_boundary(&dom.runtime(), || {
+                    suspended_nodes.diff_node(&new_suspended_nodes, dom, None::<&mut M>);
+                });
 
-                let props =
-                    Self::downcast_mut_from_props(&mut *dom.scopes[scope_id.0].props).unwrap();
-                props.suspended_nodes = Some(new_suspended_nodes);
+                let suspense_context =
+                    SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime, scope_id)
+                        .unwrap();
+                suspense_context.set_suspended_nodes(new_suspended_nodes);
             }
             // We have no suspended nodes, and we are not suspended. Just diff the children like normal
             (None, false) => {
                 let old_children = last_rendered_node;
                 let new_children = RenderReturn { node: children };
 
-                dom.runtime.push_scope(scope_id);
-                old_children.diff_node(&new_children, dom, to);
-                dom.runtime.pop_scope();
+                suspense_context.under_suspense_boundary(&dom.runtime(), || {
+                    old_children.diff_node(&new_children, dom, to);
+                });
 
                 // Set the last rendered node to the new children
                 dom.scopes[scope_id.0].last_rendered_node = Some(new_children);
@@ -546,61 +521,102 @@ impl SuspenseBoundaryProps {
                 let mount = old_children.mount.get();
                 let mount = dom.mounts.get(mount.0).expect("mount should exist");
                 let parent = mount.parent;
-                dom.runtime.push_scope(scope_id);
-                dom.runtime.suspense_stack.borrow_mut().push(
-                    crate::scope_context::SuspenseLocation::InSuspensePlaceholder(suspense_context),
-                );
-                old_children.move_node_to_background(
-                    std::slice::from_ref(&*new_placeholder),
-                    parent,
-                    dom,
-                    to,
-                );
-                dom.runtime.suspense_stack.borrow_mut().pop();
+
+                suspense_context.in_suspense_placeholder(&dom.runtime(), || {
+                    old_children.move_node_to_background(
+                        std::slice::from_ref(&*new_placeholder),
+                        parent,
+                        dom,
+                        to,
+                    );
+                });
 
                 // Then diff the new children in the background
-                old_children.diff_node(&new_children, dom, None::<&mut M>);
-                dom.runtime.pop_scope();
+                suspense_context.under_suspense_boundary(&dom.runtime(), || {
+                    old_children.diff_node(&new_children, dom, None::<&mut M>);
+                });
 
                 // Set the last rendered node to the new suspense placeholder
                 dom.scopes[scope_id.0].last_rendered_node = Some(new_placeholder);
 
-                let props =
-                    Self::downcast_mut_from_props(&mut *dom.scopes[scope_id.0].props).unwrap();
-                props.suspended_nodes = Some(new_children);
+                let suspense_context =
+                    SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime, scope_id)
+                        .unwrap();
+                suspense_context.set_suspended_nodes(new_children);
+
+                un_resolve_suspense(dom, scope_id);
             } // We have suspended nodes, but we just got out of suspense. Move the suspended nodes to the foreground
             (Some(old_suspended_nodes), false) => {
                 let old_placeholder = last_rendered_node;
                 let new_children = RenderReturn { node: children };
 
                 // First diff the two children nodes in the background
-                dom.runtime.push_scope(scope_id);
-                old_suspended_nodes.diff_node(&new_children, dom, None::<&mut M>);
+                suspense_context.under_suspense_boundary(&dom.runtime(), || {
+                    old_suspended_nodes.diff_node(&new_children, dom, None::<&mut M>);
 
-                // Then replace the placeholder with the new children
-                let mount = old_placeholder.mount.get();
-                let mount = dom.mounts.get(mount.0).expect("mount should exist");
-                let parent = mount.parent;
-                old_placeholder.replace(std::slice::from_ref(&*new_children), parent, dom, to);
-                dom.runtime.pop_scope();
+                    // Then replace the placeholder with the new children
+                    let mount = old_placeholder.mount.get();
+                    let mount = dom.mounts.get(mount.0).expect("mount should exist");
+                    let parent = mount.parent;
+                    old_placeholder.replace(std::slice::from_ref(&*new_children), parent, dom, to);
+                });
 
                 // Set the last rendered node to the new children
                 dom.scopes[scope_id.0].last_rendered_node = Some(new_children);
 
-                let props =
-                    Self::downcast_mut_from_props(&mut *dom.scopes[scope_id.0].props).unwrap();
-                props.suspended_nodes = None;
+                let suspense_context =
+                    SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime, scope_id)
+                        .unwrap();
+                suspense_context.take_suspended_nodes();
+
+                mark_suspense_resolved(dom, scope_id);
             }
         }
     }
+}
+
+/// Move to a resolved suspense state
+fn mark_suspense_resolved(dom: &mut VirtualDom, scope_id: ScopeId) {
+    dom.resolved_scopes.push(scope_id);
+}
+
+/// Move from a resolved suspense state to an suspended state
+fn un_resolve_suspense(dom: &mut VirtualDom, scope_id: ScopeId) {
+    dom.resolved_scopes.retain(|&id| id != scope_id);
+}
+
+impl SuspenseContext {
+    /// Run a closure under a suspense boundary
+    pub fn under_suspense_boundary<O>(&self, runtime: &Runtime, f: impl FnOnce() -> O) -> O {
+        runtime.with_suspense_location(SuspenseLocation::UnderSuspense(self.clone()), f)
+    }
+
+    /// Run a closure under a suspense placeholder
+    pub fn in_suspense_placeholder<O>(&self, runtime: &Runtime, f: impl FnOnce() -> O) -> O {
+        runtime.with_suspense_location(SuspenseLocation::InSuspensePlaceholder(self.clone()), f)
+    }
+
+    /// Try to get a suspense boundary from a scope id
+    pub fn downcast_suspense_boundary_from_scope(
+        runtime: &Runtime,
+        scope_id: ScopeId,
+    ) -> Option<Self> {
+        runtime
+            .get_state(scope_id)
+            .and_then(|scope| scope.suspense_boundary())
+    }
 
     pub(crate) fn remove_suspended_nodes<M: WriteMutations>(
-        &mut self,
         dom: &mut VirtualDom,
+        scope_id: ScopeId,
         destroy_component_state: bool,
     ) {
+        let Some(scope) = Self::downcast_suspense_boundary_from_scope(&dom.runtime, scope_id)
+        else {
+            return;
+        };
         // Remove the suspended nodes
-        if let Some(node) = self.suspended_nodes.take() {
+        if let Some(node) = scope.take_suspended_nodes() {
             node.remove_node_inner(dom, None::<&mut M>, destroy_component_state, None)
         }
     }

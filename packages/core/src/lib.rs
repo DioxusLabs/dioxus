@@ -27,10 +27,16 @@ mod suspense;
 mod tasks;
 mod virtual_dom;
 
+mod hotreload_utils;
+
 /// Items exported from this module are used in macros and should not be used directly.
 #[doc(hidden)]
 pub mod internal {
     pub use crate::properties::verify_component_called_as_component;
+
+    pub use crate::hotreload_utils::{
+        FmtSegment, FmtedSegments, HotReloadLiteral, HotreloadedLiteral,
+    };
 }
 
 pub(crate) mod innerlude {
@@ -82,13 +88,13 @@ pub mod prelude {
         provide_context, provide_root_context, queue_effect, remove_future, schedule_update,
         schedule_update_any, spawn, spawn_forever, spawn_isomorphic, suspend, throw_error,
         try_consume_context, use_after_render, use_before_render, use_drop, use_error_boundary,
-        use_hook, use_hook_with_cleanup, with_owner, AnyValue, Attribute, Callback, CapturedError,
-        Component, ComponentFunction, Context, Element, ErrorBoundary, ErrorContext, Event,
-        EventHandler, Fragment, HasAttributes, IntoAttributeValue, IntoDynNode,
-        OptionStringFromMarker, Properties, ReactiveContext, RenderError, Runtime, RuntimeGuard,
-        ScopeId, ScopeState, SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary,
-        SuspenseBoundaryProps, SuspenseContext, SuspenseExtension, Task, Template,
-        TemplateAttribute, TemplateNode, VNode, VNodeInner, VirtualDom,
+        use_hook, use_hook_with_cleanup, with_owner, AnyValue, Attribute, Callback, Component,
+        ComponentFunction, Context, Element, ErrorBoundary, ErrorContext, Event, EventHandler,
+        Fragment, HasAttributes, IntoAttributeValue, IntoDynNode, OptionStringFromMarker,
+        Properties, ReactiveContext, RenderError, RenderReturn, Runtime, RuntimeGuard, ScopeId,
+        ScopeState, SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps,
+        SuspenseContext, SuspenseExtension, Task, Template, TemplateAttribute, TemplateNode, VNode,
+        VNodeInner, VirtualDom,
     };
 }
 

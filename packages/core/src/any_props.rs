@@ -83,7 +83,7 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> AnyProp
             Ok(node) => RenderReturn { node },
             Err(err) => {
                 let component_name = self.name;
-                tracing::error!("Error while rendering component `{component_name}`: {err:?}");
+                tracing::error!("Panic while rendering component `{component_name}`: {err:?}");
                 let panic = CapturedPanic { error: err };
                 RenderReturn {
                     node: Err(panic.into()),

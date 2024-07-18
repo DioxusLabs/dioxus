@@ -248,7 +248,7 @@ impl Runtime {
     }
 
     pub(crate) fn handle_task_wakeup(&self, id: Task) -> Poll<()> {
-        debug_assert!(Runtime::current().is_some(), "Must be in a dioxus runtime");
+        debug_assert!(Runtime::current().is_ok(), "Must be in a dioxus runtime");
 
         let task = self.tasks.borrow().get(id.id).cloned();
 
@@ -264,26 +264,26 @@ impl Runtime {
 
         let mut cx = std::task::Context::from_waker(&task.waker);
 
-        // update the scope stack
-        self.push_scope(task.scope);
-        self.rendering.set(false);
-        self.current_task.set(Some(id));
+        // poll the future with the scope on the stack
+        let poll_result = self.with_scope_on_stack(task.scope, || {
+            self.rendering.set(false);
+            self.current_task.set(Some(id));
 
-        let poll_result = task.task.borrow_mut().as_mut().poll(&mut cx);
+            let poll_result = task.task.borrow_mut().as_mut().poll(&mut cx);
 
-        if poll_result.is_ready() {
-            // Remove it from the scope so we dont try to double drop it when the scope dropes
-            self.get_state(task.scope)
-                .unwrap()
-                .spawned_tasks
-                .borrow_mut()
-                .remove(&id);
+            if poll_result.is_ready() {
+                // Remove it from the scope so we dont try to double drop it when the scope dropes
+                self.get_state(task.scope)
+                    .unwrap()
+                    .spawned_tasks
+                    .borrow_mut()
+                    .remove(&id);
 
-            self.remove_task(id);
-        }
+                self.remove_task(id);
+            }
 
-        // Remove the scope from the stack
-        self.pop_scope();
+            poll_result
+        });
         self.rendering.set(true);
         self.current_task.set(None);
 

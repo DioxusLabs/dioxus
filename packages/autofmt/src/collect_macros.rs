@@ -7,8 +7,15 @@ use syn::{visit::Visit, File, Macro};
 
 type CollectedMacro<'a> = &'a Macro;
 
-pub fn collect_from_file<'a>(file: &'a File, macros: &mut Vec<CollectedMacro<'a>>) {
-    MacroCollector::visit_file(&mut MacroCollector { macros }, file);
+pub fn collect_from_file(file: &File) -> Vec<CollectedMacro<'_>> {
+    let mut macros = vec![];
+    MacroCollector::visit_file(
+        &mut MacroCollector {
+            macros: &mut macros,
+        },
+        file,
+    );
+    macros
 }
 
 struct MacroCollector<'a, 'b> {
@@ -46,7 +53,6 @@ pub fn byte_offset(input: &str, location: LineColumn) -> usize {
 fn parses_file_and_collects_rsx_macros() {
     let contents = include_str!("../tests/samples/long.rsx");
     let parsed = syn::parse_file(contents).unwrap();
-    let mut macros = vec![];
-    collect_from_file(&parsed, &mut macros);
+    let macros = collect_from_file(&parsed);
     assert_eq!(macros.len(), 3);
 }

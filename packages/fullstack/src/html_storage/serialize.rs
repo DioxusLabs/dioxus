@@ -1,6 +1,7 @@
 use dioxus_lib::prelude::dioxus_core::DynamicNode;
 use dioxus_lib::prelude::{
-    has_context, try_consume_context, ScopeId, SuspenseBoundaryProps, VNode, VirtualDom,
+    has_context, try_consume_context, ScopeId, SuspenseBoundaryProps, SuspenseContext, VNode,
+    VirtualDom,
 };
 use serde::Serialize;
 
@@ -49,9 +50,11 @@ impl super::HTMLData {
         // then continue to any children
         if let Some(scope) = vdom.get_scope(scope) {
             // If this is a suspense boundary, move into the children first (even if they are suspended) because that will be run first on the client
-            if let Some(suspense_boundary) = SuspenseBoundaryProps::downcast_from_scope(scope) {
-                if let Some(node) = suspense_boundary.suspended_nodes.as_ref() {
-                    self.take_from_vnode(vdom, node);
+            if let Some(suspense_boundary) =
+                SuspenseContext::downcast_suspense_boundary_from_scope(&vdom.runtime(), scope.id())
+            {
+                if let Some(node) = suspense_boundary.suspended_nodes() {
+                    self.take_from_vnode(vdom, &node);
                 }
             }
             if let Some(node) = scope.try_root_node() {

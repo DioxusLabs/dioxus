@@ -85,6 +85,7 @@ impl<T: 'static> Signal<T> {
     /// Global signals are generally not recommended for use in libraries because it makes it more difficult to allow multiple instances of components you define in your library.
     ///
     /// </div>
+    #[track_caller]
     pub const fn global(constructor: fn() -> T) -> GlobalSignal<T> {
         GlobalSignal::new(constructor)
     }
@@ -116,6 +117,7 @@ impl<T: PartialEq + 'static> Signal<T> {
     /// Global memos are generally not recommended for use in libraries because it makes it more difficult to allow multiple instances of components you define in your library.
     ///
     /// </div>
+    #[track_caller]
     pub const fn global_memo(constructor: fn() -> T) -> GlobalMemo<T> {
         GlobalMemo::new(constructor)
     }
@@ -209,6 +211,7 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
             let inner = self.inner.read();
 
             // We cannot hold the subscribers lock while calling mark_dirty, because mark_dirty can run user code which may cause a new subscriber to be added. If we hold the lock, we will deadlock.
+            #[allow(clippy::mutable_key_type)]
             let mut subscribers = std::mem::take(&mut *inner.subscribers.lock().unwrap());
             subscribers.retain(|reactive_context| reactive_context.mark_dirty());
             // Extend the subscribers list instead of overwriting it in case a subscriber is added while reactive contexts are marked dirty

@@ -1,11 +1,11 @@
 use crate::menubar::DioxusMenu;
 use crate::{
-    app::SharedContext, assets::AssetHandlerRegistry, edits::EditQueue, eval::DesktopEvalProvider,
+    app::SharedContext, assets::AssetHandlerRegistry, document::DesktopDocument, edits::EditQueue,
     file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, waker::tao_waker, Config,
     DesktopContext, DesktopService,
 };
 use dioxus_core::{ScopeId, VirtualDom};
-use dioxus_html::prelude::EvalProvider;
+use dioxus_html::document::Document;
 use futures_util::{pin_mut, FutureExt};
 use std::{rc::Rc, task::Waker};
 use wry::{RequestAsyncResponder, WebContext, WebViewBuilder};
@@ -214,8 +214,7 @@ impl WebviewInstance {
             file_hover,
         ));
 
-        let provider: Rc<dyn EvalProvider> =
-            Rc::new(DesktopEvalProvider::new(desktop_context.clone()));
+        let provider: Rc<dyn Document> = Rc::new(DesktopDocument::new(desktop_context.clone()));
 
         dom.in_runtime(|| {
             ScopeId::ROOT.provide_context(desktop_context.clone());
