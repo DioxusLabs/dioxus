@@ -6,11 +6,13 @@ fn basic_syntax_is_a_template() -> Element {
     let var = 123;
 
     rsx! {
-        div { key: "{asd}", class: "asd", class: "{asd}", class: if true {
-                "{asd}"
-            }, class: if false {
-                "{asd}"
-            }, onclick: move |_| {},
+        div {
+            key: "{asd}",
+            class: "asd",
+            class: "{asd}",
+            class: if true { "{asd}" },
+            class: if false { "{asd}" },
+            onclick: move |_| {},
             div { "{var}" }
             div {
                 h1 { "var" }

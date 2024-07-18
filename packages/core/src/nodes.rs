@@ -1146,7 +1146,7 @@ pub trait HasAttributes {
 #[cfg(debug_assertions)]
 pub(crate) fn sort_bfo(paths: &[&'static [u8]]) -> Vec<(usize, &'static [u8])> {
     let mut with_indecies = paths.iter().copied().enumerate().collect::<Vec<_>>();
-    with_indecies.sort_unstable_by(|(_, a), (_, b)| {
+    with_indecies.sort_by(|(_, a), (_, b)| {
         let mut a = a.iter();
         let mut b = b.iter();
         loop {
@@ -1190,6 +1190,23 @@ fn sorting() {
     ];
     assert_eq!(
         sort_bfo(&[&[0], &[0, 1], &[0, 1, 2], &[1], &[1, 2], &[2],]),
+        r
+    );
+}
+
+#[test]
+fn sorting_simple() {
+    let r: [(usize, &[u8]); 2] = [
+        //
+        (0, &[0, 0]),
+        (1, &[0, 0]),
+    ];
+    assert_eq!(
+        sort_bfo(&[
+            //
+            &[0, 0],
+            &[0, 0],
+        ]),
         r
     );
 }

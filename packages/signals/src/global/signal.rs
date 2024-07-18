@@ -1,7 +1,7 @@
 use crate::{read::Readable, ReadableRef};
 use crate::{write::Writable, GlobalKey};
 use crate::{WritableRef, Write};
-use dioxus_core::prelude::ScopeId;
+use dioxus_core::{prelude::ScopeId, Runtime};
 use generational_box::UnsyncStorage;
 use std::ops::Deref;
 
@@ -63,6 +63,15 @@ impl<T: 'static> GlobalSignal<T> {
 
                 signal
             }
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn maybe_with_rt<O>(&self, f: impl FnOnce(&T) -> O) -> O {
+        if Runtime::current().is_none() {
+            f(&(self.initializer)())
+        } else {
+            self.with(f)
         }
     }
 

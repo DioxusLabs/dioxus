@@ -617,6 +617,7 @@ impl VNode {
 
         // Walk the roots, creating nodes and assigning IDs
         // nodes in an iterator of (dynamic_node_index, path)
+
         let nodes_sorted = template.breadth_first_node_paths();
         let attrs_sorted = template.breadth_first_attribute_paths();
 
@@ -803,6 +804,7 @@ impl VNode {
             dynamic_attrbiutes_iter.next_if(from_root_node)
         {
             let attribute = &self.dynamic_attrs[attribute_idx];
+
             let id = match last_path {
                 // If the last path was exactly the same, we can reuse the id
                 Some((path, id)) if path == attribute_path => id,

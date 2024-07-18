@@ -2,10 +2,7 @@ use crate::innerlude::*;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro2_diagnostics::SpanDiagnosticExt;
 use quote::{quote, ToTokens, TokenStreamExt};
-use std::{
-    collections::HashMap,
-    fmt::{Display, Formatter},
-};
+use std::fmt::{Display, Formatter};
 use syn::{
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
@@ -201,11 +198,15 @@ impl Element {
     /// }
     /// ```
     fn merge_attributes(&mut self) {
-        let attrs = self
-            .raw_attributes
-            .iter()
-            .map(|a| (&a.name, a))
-            .collect::<HashMap<_, _>>();
+        let mut attrs = vec![];
+
+        for attr in &self.raw_attributes {
+            if attrs.iter().any(|(name, _)| name == &&attr.name) {
+                continue;
+            }
+
+            attrs.push((&attr.name, attr));
+        }
 
         for (name, attr) in attrs {
             if name.to_string() == "key" {
@@ -229,12 +230,11 @@ impl Element {
             // This will be done by creating an ifmt attribute that combines all the segments
             // We might want to throw a diagnostic of trying to merge things together that might not
             // make a whole lot of sense - like merging two exprs together
-
             let mut out = IfmtInput::new(attr.span());
 
             for (idx, matching_attr) in matching_attrs.iter().enumerate() {
                 // If this is the first attribute, then we don't need to add a delimiter
-                if idx != 0 {
+                if idx != 0 && idx != matching_attrs.len() - 1 {
                     // FIXME: I don't want to special case anything - but our delimiter is special cased to a space
                     // We really don't want to special case anything in the macro, but the hope here is that
                     // multiline strings can be merged with a space

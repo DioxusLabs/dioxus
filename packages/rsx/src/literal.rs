@@ -170,7 +170,7 @@ impl ToTokens for HotLiteral {
                             #hr_idx
                         )
                     })
-                    .with(|s| s #mapped)
+                    .maybe_with_rt(|s| s #mapped)
                 }
 
                 // just render the literal directly
