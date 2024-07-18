@@ -69,7 +69,7 @@ pub struct TitleProps {
     children: Element,
 }
 
-/// Render the title of the page. On web renderers, this will set the title in the head. On desktop, it will set the window title.
+/// Render the title of the page. On web renderers, this will set the [title](crate::elements::title) in the head. On desktop, it will set the window title.
 ///
 /// Unlike most head components, the Title can be modified after the first render. Only the latest update to the title will be reflected if multiple title components are rendered.
 ///
@@ -321,9 +321,9 @@ impl StyleProps {
 ///         // This style tag will set the background color of the page to red
 ///         Style {
 ///             r#"
-///                 body {
+///                 body {{
 ///                     background-color: red;
-///                 }
+///                 }}
 ///             "#,
 ///         }
 ///     }

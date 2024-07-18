@@ -41,12 +41,13 @@ If you have any important metadata that you want to render into the head, make s
 
 ```rust, no_run
 # use dioxus::prelude::*;
+# fn LoadData() -> Element { unimplemented!() }
 fn App() -> Element {
     rsx! {
         // This will render in SSR
         Title { "My Page" }
         SuspenseBoundary {
-            fallback: rsx! { "Loading..." },
+            fallback: |_| rsx! { "Loading..." },
             LoadData {
                 // This will only be rendered on the client after hydration so it may not be visible to search engines
                 Meta { name: "description", content: "My Page" }
