@@ -207,10 +207,12 @@ impl SsrRendererPool {
                 let scope_to_mount_mapping = scope_to_mount_mapping.clone();
                 let stream = stream.clone();
                 renderer.set_render_components(move |renderer, to, vdom, scope| {
-                    let is_suspense_boundary = vdom
-                        .get_scope(scope)
-                        .and_then(|s| SuspenseBoundaryProps::downcast_from_scope(s))
-                        .filter(|s| s.suspended())
+                    let is_suspense_boundary =
+                        SuspenseContext::downcast_suspense_boundary_from_scope(
+                            &vdom.runtime(),
+                            scope,
+                        )
+                        .filter(|s| s.has_suspended_tasks())
                         .is_some();
                     if is_suspense_boundary {
                         let mount = stream.render_placeholder(
@@ -265,27 +267,37 @@ impl SsrRendererPool {
                 for scope in resolved_suspense_nodes {
                     let mount = {
                         let mut lock = scope_to_mount_mapping.write().unwrap();
-                        lock.remove(&scope).unwrap()
+                        lock.remove(&scope)
                     };
-                    let mut resolved_chunk = String::new();
-                    // After we replace the placeholder in the dom with javascript, we need to send down the resolved data so that the client can hydrate the node
-                    let render_suspense = |into: &mut String| {
-                        renderer.reset_hydration();
-                        renderer.render_scope(into, &virtual_dom, scope)
-                    };
-                    let resolved_data = serialize_server_data(&virtual_dom, scope);
-                    if let Err(err) = stream.replace_placeholder(
-                        mount,
-                        render_suspense,
-                        resolved_data,
-                        &mut resolved_chunk,
-                    ) {
-                        throw_error!(
-                            dioxus_ssr::incremental::IncrementalRendererError::RenderError(err)
-                        );
-                    }
+                    // If the suspense boundary was immediately removed, it may not have a mount. We can just skip resolving it
+                    if let Some(mount) = mount {
+                        let mut resolved_chunk = String::new();
+                        // After we replace the placeholder in the dom with javascript, we need to send down the resolved data so that the client can hydrate the node
+                        let render_suspense = |into: &mut String| {
+                            renderer.reset_hydration();
+                            renderer.render_scope(into, &virtual_dom, scope)
+                        };
+                        let resolved_data = serialize_server_data(&virtual_dom, scope);
+                        if let Err(err) = stream.replace_placeholder(
+                            mount,
+                            render_suspense,
+                            resolved_data,
+                            &mut resolved_chunk,
+                        ) {
+                            throw_error!(
+                                dioxus_ssr::incremental::IncrementalRendererError::RenderError(err)
+                            );
+                        }
 
-                    stream.render(resolved_chunk);
+                        stream.render(resolved_chunk);
+                    }
+                    // Freeze the suspense boundary to prevent future reruns of any child nodes of the suspense boundary
+                    if let Some(suspense) = SuspenseContext::downcast_suspense_boundary_from_scope(
+                        &virtual_dom.runtime(),
+                        scope,
+                    ) {
+                        suspense.freeze();
+                    }
                 }
             }
 
