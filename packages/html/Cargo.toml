@@ -62,6 +62,7 @@ serde_json = "1"
 dioxus = { workspace = true }
 dioxus-web = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
+manganis = { workspace = true }
 
 [features]
 default = ["serialize", "mounted", "document", "file-engine"]
