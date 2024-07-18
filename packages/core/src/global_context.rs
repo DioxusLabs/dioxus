@@ -275,12 +275,12 @@ pub fn parent_scope() -> Option<ScopeId> {
 
 /// Mark the current scope as dirty, causing it to re-render
 pub fn needs_update() {
-    Runtime::with_current_scope(|cx| cx.needs_update()).unwrap();
+    let _ = Runtime::with_current_scope(|cx| cx.needs_update());
 }
 
 /// Mark the current scope as dirty, causing it to re-render
 pub fn needs_update_any(id: ScopeId) {
-    Runtime::with_current_scope(|cx| cx.needs_update_any(id)).unwrap();
+    let _ = Runtime::with_current_scope(|cx| cx.needs_update_any(id));
 }
 
 /// Schedule an update for the current component
@@ -402,12 +402,12 @@ pub fn use_after_render(f: impl FnMut() + 'static) {
 /// This is a hook and will always run, so you can't unschedule it
 /// Will run for every progression of suspense, though this might change in the future
 pub fn before_render(f: impl FnMut() + 'static) {
-    Runtime::with_current_scope(|cx| cx.push_before_render(f)).unwrap();
+    let _ = Runtime::with_current_scope(|cx| cx.push_before_render(f));
 }
 
 /// Push a function to be run after the render is complete, even if it didn't complete successfully
 pub fn after_render(f: impl FnMut() + 'static) {
-    Runtime::with_current_scope(|cx| cx.push_after_render(f)).unwrap();
+    let _ = Runtime::with_current_scope(|cx| cx.push_after_render(f));
 }
 
 /// Use a hook with a cleanup function
