@@ -47,7 +47,7 @@ members = [
 exclude = ["examples/mobile_demo", "examples/openid_connect_demo"]
 
 [workspace.package]
-version = "0.5.6"
+version = "0.5.7"
 
 # dependencies that are shared across packages
 [workspace.dependencies]
@@ -71,7 +71,7 @@ dioxus-autofmt = { path = "packages/autofmt", version = "0.5.6" }
 dioxus-check = { path = "packages/check", version = "0.5.6" }
 dioxus-rsx = { path = "packages/rsx", version = "0.5.6" }
 rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.5.6" }
-dioxus-signals = { path = "packages/signals", version = "0.5.6" }
+dioxus-signals = { path = "packages/signals", version = "0.5.7" }
 dioxus-cli-config = { path = "packages/cli-config", version = "0.5.6", default-features = false}
 generational-box = { path = "packages/generational-box", version = "0.5.6" }
 dioxus-hot-reload = { path = "packages/hot-reload", version = "0.5.6" }
