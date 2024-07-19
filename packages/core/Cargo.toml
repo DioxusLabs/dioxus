@@ -24,6 +24,7 @@ serde = { version = "1", features = ["derive"], optional = true }
 generational-box = { workspace = true }
 rustversion = "1.0.17"
 const_format = { workspace = true }
+warnings = { git = "https://github.com/ealmloff/warnings" }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }

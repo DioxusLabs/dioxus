@@ -22,6 +22,7 @@ slab = { workspace = true }
 futures-util = { workspace = true}
 generational-box.workspace = true
 rustversion = "1.0.17"
+warnings = { git = "https://github.com/ealmloff/warnings" }
 
 [dev-dependencies]
 futures-util = { workspace = true, default-features = false }
