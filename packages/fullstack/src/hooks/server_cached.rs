@@ -23,26 +23,28 @@ use serde::{de::DeserializeOwned, Serialize};
 pub fn use_server_cached<O: 'static + Clone + Serialize + DeserializeOwned>(
     server_fn: impl Fn() -> O,
 ) -> O {
+    use_hook(|| server_cached(server_fn))
+}
+
+pub(crate) fn server_cached<O: 'static + Clone + Serialize + DeserializeOwned>(
+    value: impl FnOnce() -> O,
+) -> O {
     #[cfg(feature = "server")]
     {
-        let serialize = crate::html_storage::use_serialize_context();
-        use_hook(|| {
-            let data = server_fn();
-            serialize.push(&data);
-            data
-        })
+        let serialize = crate::html_storage::serialize_context();
+        let data = value();
+        serialize.push(&data);
+        data
     }
     #[cfg(all(not(feature = "server"), feature = "web"))]
     {
-        use_hook(|| {
-            dioxus_web::take_server_data()
-                .ok()
-                .flatten()
-                .unwrap_or_else(server_fn)
-        })
+        dioxus_web::take_server_data()
+            .ok()
+            .flatten()
+            .unwrap_or_else(value)
     }
     #[cfg(not(any(feature = "server", feature = "web")))]
     {
-        use_hook(server_fn)
+        value()
     }
 }

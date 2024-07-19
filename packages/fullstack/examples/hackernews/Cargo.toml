@@ -9,8 +9,8 @@ edition = "2021"
 [dependencies]
 dioxus = { workspace = true, features = ["fullstack", "router"] }
 chrono = { version = "0.4.38", features = ["serde"] }
-reqwest = { version = "0.12.4", features = ["json"] }
-serde = { version = "1.0.203", features = ["derive"] }
+reqwest = { workspace= true, features = ["json"] }
+serde = { workspace = true, features = ["derive"] }
 tracing-wasm = "0.2.1"
 tracing = { workspace = true }
 tracing-subscriber = "0.3.17"

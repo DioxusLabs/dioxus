@@ -1,49 +1,64 @@
-use std::str::FromStr;
+#[cfg(feature = "hot_reload")]
+use dioxus_core::internal::{FmtSegment, FmtedSegments};
 
 use proc_macro2::{Span, TokenStream};
-
 use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
+use std::{collections::HashMap, str::FromStr};
 use syn::{
     parse::{Parse, ParseStream},
     *,
 };
 
-pub fn format_args_f_impl(input: IfmtInput) -> Result<TokenStream> {
-    Ok(input.into_token_stream())
-}
-
-#[allow(dead_code)] // dumb compiler does not see the struct being used...
-#[derive(Debug, PartialEq, Eq, Clone, Hash, Default)]
+/// A hot-reloadable formatted string, boolean, number or other literal
+///
+/// This wraps LitStr with some extra goodies like inline expressions and hot-reloading.
+/// Originally this was intended to provide named inline string interpolation but eventually Rust
+/// actualy shipped this!
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct IfmtInput {
-    pub source: Option<LitStr>,
+    pub source: LitStr,
     pub segments: Vec<Segment>,
 }
 
 impl IfmtInput {
-    pub fn new_static(input: &str) -> Self {
+    pub fn new(span: Span) -> Self {
         Self {
-            source: None,
-            segments: vec![Segment::Literal(input.to_string())],
+            source: LitStr::new("", span),
+            segments: Vec::new(),
         }
     }
 
-    pub fn join(mut self, other: Self, separator: &str) -> Self {
-        if !self.segments.is_empty() {
-            self.segments.push(Segment::Literal(separator.to_string()));
-        }
+    pub fn new_litstr(source: LitStr) -> Self {
+        let segments = Self::from_raw(&source.value()).unwrap();
+        Self { segments, source }
+    }
+
+    pub fn span(&self) -> Span {
+        self.source.span()
+    }
+
+    pub fn push_raw_str(&mut self, other: String) {
+        self.segments.push(Segment::Literal(other.to_string()))
+    }
+
+    pub fn push_ifmt(&mut self, other: IfmtInput) {
         self.segments.extend(other.segments);
-        if let Some(source) = &other.source {
-            self.source = Some(LitStr::new(
-                &format!(
-                    "{}{}{}",
-                    self.source.as_ref().unwrap().value(),
-                    separator,
-                    source.value()
-                ),
-                source.span(),
-            ));
-        }
-        self
+    }
+
+    pub fn push_condition(&mut self, condition: Expr, contents: IfmtInput) {
+        let desugared = quote! {
+            {
+                let _cond = if #condition { #contents.to_string() } else { String::new() };
+                _cond
+            }
+        };
+
+        let parsed = syn::parse2::<Expr>(desugared).unwrap();
+
+        self.segments.push(Segment::Formatted(FormattedSegment {
+            format_args: String::new(),
+            segment: FormattedSegmentType::Expr(Box::new(parsed)),
+        }));
     }
 
     pub fn push_expr(&mut self, expr: Expr) {
@@ -53,24 +68,12 @@ impl IfmtInput {
         }));
     }
 
-    pub fn push_str(&mut self, s: &str) {
-        self.segments.push(Segment::Literal(s.to_string()));
-        if let Some(source) = &self.source {
-            self.source = Some(LitStr::new(
-                &format!("{}{}", source.value(), s),
-                source.span(),
-            ));
-        }
-    }
-
     pub fn is_static(&self) -> bool {
         self.segments
             .iter()
             .all(|seg| matches!(seg, Segment::Literal(_)))
     }
-}
 
-impl IfmtInput {
     pub fn to_static(&self) -> Option<String> {
         self.segments
             .iter()
@@ -81,6 +84,82 @@ impl IfmtInput {
                     None
                 }
             })
+    }
+
+    pub fn dynamic_segments(&self) -> Vec<&FormattedSegment> {
+        self.segments
+            .iter()
+            .filter_map(|seg| match seg {
+                Segment::Formatted(seg) => Some(seg),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    }
+
+    pub fn dynamic_seg_frequency_map(&self) -> HashMap<&FormattedSegment, usize> {
+        let mut map = HashMap::new();
+        for seg in self.dynamic_segments() {
+            *map.entry(seg).or_insert(0) += 1;
+        }
+        map
+    }
+
+    #[cfg(feature = "hot_reload")]
+    pub fn fmt_segments(old: &Self, new: &Self) -> Option<FmtedSegments> {
+        use crate::intern;
+
+        // Make sure all the dynamic segments of b show up in a
+        for segment in new.segments.iter() {
+            if segment.is_formatted() && !old.segments.contains(segment) {
+                return None;
+            }
+        }
+
+        // Collect all the formatted segments from the original
+        let mut out = vec![];
+
+        // the original list of formatted segments
+        let mut fmted = old
+            .segments
+            .iter()
+            .flat_map(|f| match f {
+                crate::Segment::Literal(_) => None,
+                crate::Segment::Formatted(f) => Some(f),
+            })
+            .cloned()
+            .map(Some)
+            .collect::<Vec<_>>();
+
+        for segment in new.segments.iter() {
+            match segment {
+                crate::Segment::Literal(lit) => {
+                    // create a &'static str by leaking the string
+                    let lit = intern(lit.clone().into_boxed_str());
+                    out.push(FmtSegment::Literal { value: lit });
+                }
+                crate::Segment::Formatted(fmt) => {
+                    // Find the formatted segment in the original
+                    // Set it to None when we find it so we don't re-render it on accident
+                    let idx = fmted
+                        .iter_mut()
+                        .position(|_s| {
+                            if let Some(s) = _s {
+                                if s == fmt {
+                                    *_s = None;
+                                    return true;
+                                }
+                            }
+
+                            false
+                        })
+                        .unwrap();
+
+                    out.push(FmtSegment::Dynamic { id: idx });
+                }
+            }
+        }
+
+        Some(FmtedSegments::new(out))
     }
 
     fn is_simple_expr(&self) -> bool {
@@ -126,12 +205,14 @@ impl IfmtInput {
         }
         single_dynamic
     }
-}
 
-impl FromStr for IfmtInput {
-    type Err = syn::Error;
+    /// print the original source string - this handles escapes and stuff for us
+    pub fn to_string_with_quotes(&self) -> String {
+        self.source.to_token_stream().to_string()
+    }
 
-    fn from_str(input: &str) -> Result<Self> {
+    /// Parse the source into segments
+    fn from_raw(input: &str) -> Result<Vec<Segment>> {
         let mut chars = input.chars().peekable();
         let mut segments = Vec::new();
         let mut current_literal = String::new();
@@ -190,13 +271,12 @@ impl FromStr for IfmtInput {
                 current_literal.push(c);
             }
         }
+
         if !current_literal.is_empty() {
             segments.push(Segment::Literal(current_literal));
         }
-        Ok(Self {
-            segments,
-            source: None,
-        })
+
+        Ok(segments)
     }
 }
 
@@ -236,10 +316,7 @@ impl ToTokens for IfmtInput {
             }
         }
 
-        let span = match self.source.as_ref() {
-            Some(source) => source.span(),
-            None => Span::call_site(),
-        };
+        let span = self.span();
 
         let positional_args = self.segments.iter().filter_map(|seg| {
             if let Segment::Formatted(FormattedSegment { segment, .. }) = seg {
@@ -271,10 +348,20 @@ pub enum Segment {
     Formatted(FormattedSegment),
 }
 
+impl Segment {
+    pub fn is_literal(&self) -> bool {
+        matches!(self, Segment::Literal(_))
+    }
+
+    pub fn is_formatted(&self) -> bool {
+        matches!(self, Segment::Formatted(_))
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct FormattedSegment {
-    format_args: String,
-    segment: FormattedSegmentType,
+    pub format_args: String,
+    pub segment: FormattedSegmentType,
 }
 
 impl ToTokens for FormattedSegment {
@@ -320,12 +407,96 @@ impl ToTokens for FormattedSegmentType {
     }
 }
 
+impl FromStr for IfmtInput {
+    type Err = syn::Error;
+
+    fn from_str(input: &str) -> Result<Self> {
+        let segments = IfmtInput::from_raw(input)?;
+        Ok(Self {
+            source: LitStr::new(input, Span::call_site()),
+            segments,
+        })
+    }
+}
+
 impl Parse for IfmtInput {
     fn parse(input: ParseStream) -> Result<Self> {
-        let input: LitStr = input.parse()?;
-        let input_str = input.value();
-        let mut ifmt = IfmtInput::from_str(&input_str)?;
-        ifmt.source = Some(input);
-        Ok(ifmt)
+        let source: LitStr = input.parse()?;
+        let segments = IfmtInput::from_raw(&source.value())?;
+        Ok(Self { source, segments })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::PrettyUnparse;
+
+    #[test]
+    fn raw_tokens() {
+        let input = syn::parse2::<IfmtInput>(quote! { r#"hello world"# }).unwrap();
+        println!("{}", input.to_token_stream().pretty_unparse());
+        assert_eq!(input.source.value(), "hello world");
+        assert_eq!(input.to_string_with_quotes(), "r#\"hello world\"#");
+    }
+
+    #[test]
+    fn segments_parse() {
+        let input = "blah {abc} {def}".parse::<IfmtInput>().unwrap();
+        assert_eq!(
+            input.segments,
+            vec![
+                Segment::Literal("blah ".to_string()),
+                Segment::Formatted(FormattedSegment {
+                    format_args: String::new(),
+                    segment: FormattedSegmentType::Ident(Ident::new("abc", Span::call_site()))
+                }),
+                Segment::Literal(" ".to_string()),
+                Segment::Formatted(FormattedSegment {
+                    format_args: String::new(),
+                    segment: FormattedSegmentType::Ident(Ident::new("def", Span::call_site()))
+                }),
+            ]
+        );
+    }
+
+    #[test]
+    fn printing_raw() {
+        let input = syn::parse2::<IfmtInput>(quote! { "hello {world}" }).unwrap();
+        println!("{}", input.to_string_with_quotes());
+
+        let input = syn::parse2::<IfmtInput>(quote! { "hello {world} {world} {world}" }).unwrap();
+        println!("{}", input.to_string_with_quotes());
+
+        let input = syn::parse2::<IfmtInput>(quote! { "hello {world} {world} {world()}" }).unwrap();
+        println!("{}", input.to_string_with_quotes());
+
+        let input =
+            syn::parse2::<IfmtInput>(quote! { r#"hello {world} {world} {world()}"# }).unwrap();
+        println!("{}", input.to_string_with_quotes());
+        assert!(!input.is_static());
+
+        let input = syn::parse2::<IfmtInput>(quote! { r#"hello"# }).unwrap();
+        println!("{}", input.to_string_with_quotes());
+        assert!(input.is_static());
+    }
+
+    #[test]
+    fn pushing_conditional() {
+        let mut input = syn::parse2::<IfmtInput>(quote! { "hello " }).unwrap();
+
+        input.push_condition(
+            parse_quote! { true },
+            syn::parse2::<IfmtInput>(quote! { "world" }).unwrap(),
+        );
+        println!("{}", input.to_token_stream().pretty_unparse());
+        dbg!(input.segments);
+    }
+
+    #[test]
+    fn fmt_segments() {
+        let left = syn::parse2::<IfmtInput>(quote! { "thing {abc}" }).unwrap();
+        let right = syn::parse2::<IfmtInput>(quote! { "thing" }).unwrap();
+        let _segments = IfmtInput::fmt_segments(&left, &right).unwrap();
     }
 }

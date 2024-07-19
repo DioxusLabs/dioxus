@@ -35,6 +35,7 @@ type SendContext = dyn Fn() -> Box<dyn Any + Send + Sync> + Send + Sync + 'stati
 
 type UnsendContext = dyn Fn() -> Box<dyn Any> + 'static;
 
+#[allow(clippy::redundant_closure)] // clippy doesnt doesn't understand our coercion to fn
 impl LaunchBuilder {
     /// Create a new builder for your application. This will create a launch configuration for the current platform based on the features enabled on the `dioxus` crate.
     // If you aren't using a third party renderer and this is not a docs.rs build, generate a warning about no renderer being enabled
@@ -89,6 +90,20 @@ impl LaunchBuilder {
     pub fn fullstack() -> LaunchBuilder<dioxus_fullstack::Config, SendContext> {
         LaunchBuilder {
             launch_fn: |root, contexts, cfg| dioxus_fullstack::launch::launch(root, contexts, cfg),
+            contexts: Vec::new(),
+            platform_config: None,
+        }
+    }
+
+    /// Launch your static site generation application.
+    #[cfg(feature = "static-generation")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "static-generation")))]
+    pub fn static_generation() -> LaunchBuilder<dioxus_static_site_generation::Config, SendContext>
+    {
+        LaunchBuilder {
+            launch_fn: |root, contexts, cfg| {
+                dioxus_static_site_generation::launch::launch(root, contexts, cfg)
+            },
             contexts: Vec::new(),
             platform_config: None,
         }

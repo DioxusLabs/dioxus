@@ -1,25 +1,17 @@
 pub mod autoformat;
 pub mod build;
 pub mod bundle;
-pub mod cfg;
 pub mod check;
 pub mod clean;
 pub mod config;
 pub mod create;
 pub mod init;
 pub mod link;
-pub mod plugin;
 pub mod serve;
 pub mod translate;
 
-use crate::{
-    cfg::{ConfigOptsBuild, ConfigOptsServe},
-    custom_error,
-    error::Result,
-    gen_page, server, Error,
-};
+use crate::{custom_error, error::Result, Error};
 use clap::{Parser, Subcommand};
-use dioxus_cli_config::CrateConfig;
 use html_parser::Dom;
 use serde::Deserialize;
 use std::{
@@ -82,11 +74,6 @@ pub enum Commands {
     #[clap(subcommand)]
     Config(config::Config),
 
-    /// Manage plugins for dioxus cli
-    #[cfg(feature = "plugin")]
-    #[clap(subcommand)]
-    Plugin(plugin::Plugin),
-
     /// Handles parsing of linker arguments for linker-based systems
     /// such as Manganis and binary patching.
     Link(link::LinkCommand),
@@ -106,9 +93,6 @@ impl Display for Commands {
             Commands::Check(_) => write!(f, "check"),
             Commands::Bundle(_) => write!(f, "bundle"),
             Commands::Link(_) => write!(f, "link"),
-
-            #[cfg(feature = "plugin")]
-            Commands::Plugin(_) => write!(f, "plugin"),
         }
     }
 }

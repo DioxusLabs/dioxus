@@ -53,7 +53,7 @@ impl Config {
             .with_title(
                 dioxus_cli_config::CURRENT_CONFIG
                     .as_ref()
-                    .map(|c| c.dioxus_config.application.name.clone())
+                    .map(|c| c.application.name.clone())
                     .unwrap_or("Dioxus App".to_string()),
             )
             // During development we want the window to be on top so we can see it while we work
@@ -211,8 +211,8 @@ impl Config {
     /// Sets the menu the window will use. This will override the default menu bar.
     ///
     /// > Note: Menu will be hidden if
-    /// [`with_decorations`](tao::window::WindowBuilder::with_decorations)
-    /// is set to false and passed into [`with_window`](Config::with_window)
+    /// > [`with_decorations`](tao::window::WindowBuilder::with_decorations)
+    /// > is set to false and passed into [`with_window`](Config::with_window)
     #[allow(unused)]
     pub fn with_menu(mut self, menu: impl Into<Option<DioxusMenu>>) -> Self {
         #[cfg(not(any(target_os = "ios", target_os = "android")))]

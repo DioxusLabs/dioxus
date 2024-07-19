@@ -138,6 +138,8 @@ impl ReactiveContext {
 
     /// Clear all subscribers to this context
     pub fn clear_subscribers(&self) {
+        // The key type is mutable, but the hash is stable through mutations because we hash by pointer
+        #[allow(clippy::mutable_key_type)]
         let old_subscribers = std::mem::take(&mut self.inner.write().subscribers);
         for subscriber in old_subscribers {
             subscriber.0.lock().unwrap().remove(self);
@@ -146,6 +148,7 @@ impl ReactiveContext {
 
     /// Update the subscribers
     pub(crate) fn update_subscribers(&self) {
+        #[allow(clippy::mutable_key_type)]
         let subscribers = &self.inner.read().subscribers;
         for subscriber in subscribers.iter() {
             subscriber.0.lock().unwrap().insert(*self);

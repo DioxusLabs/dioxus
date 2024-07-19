@@ -7,6 +7,8 @@ test("button click", async ({ page }) => {
   // Expect the page to contain the counter text.
   const main = page.locator("#main");
   await expect(main).toContainText("hello axum! 0");
+  // Expect the title to contain the counter text.
+  await expect(page).toHaveTitle("hello axum! 0");
 
   // Click the increment button.
   let button = page.locator("button.increment-button");
@@ -14,6 +16,8 @@ test("button click", async ({ page }) => {
 
   // Expect the page to contain the updated counter text.
   await expect(main).toContainText("hello axum! 1");
+  // Expect the title to contain the updated counter text.
+  await expect(page).toHaveTitle("hello axum! 1");
 });
 
 test("svg", async ({ page }) => {

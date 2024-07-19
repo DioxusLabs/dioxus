@@ -160,8 +160,34 @@ impl SsrRendererPool {
 
         let join_handle = spawn_platform(move || async move {
             let mut virtual_dom = virtual_dom_factory();
+            #[cfg(feature = "document")]
+            let document = std::rc::Rc::new(crate::document::server::ServerDocument::default());
+            #[cfg(feature = "document")]
+            virtual_dom.provide_root_context(document.clone() as std::rc::Rc<dyn Document>);
+
+            // poll the future, which may call server_context()
+            tracing::info!("Rebuilding vdom");
+            with_server_context(server_context.clone(), || virtual_dom.rebuild_in_place());
 
             let mut pre_body = String::new();
+
+            if let Err(err) = wrapper.render_head(&mut pre_body) {
+                _ = into.start_send(Err(err));
+                return;
+            }
+
+            #[cfg(feature = "document")]
+            {
+                // Collect any head content from the document provider and inject that into the head
+                if let Err(err) = document.render(&mut pre_body, &mut renderer) {
+                    _ = into.start_send(Err(err.into()));
+                    return;
+                }
+
+                // Enable a warning when inserting contents into the head during streaming
+                document.start_streaming();
+            }
+
             if let Err(err) = wrapper.render_before_body(&mut pre_body) {
                 _ = into.start_send(Err(err));
                 return;
@@ -181,10 +207,12 @@ impl SsrRendererPool {
                 let scope_to_mount_mapping = scope_to_mount_mapping.clone();
                 let stream = stream.clone();
                 renderer.set_render_components(move |renderer, to, vdom, scope| {
-                    let is_suspense_boundary = vdom
-                        .get_scope(scope)
-                        .and_then(|s| SuspenseBoundaryProps::downcast_from_scope(s))
-                        .filter(|s| s.suspended())
+                    let is_suspense_boundary =
+                        SuspenseContext::downcast_suspense_boundary_from_scope(
+                            &vdom.runtime(),
+                            scope,
+                        )
+                        .filter(|s| s.has_suspended_tasks())
                         .is_some();
                     if is_suspense_boundary {
                         let mount = stream.render_placeholder(
@@ -205,10 +233,6 @@ impl SsrRendererPool {
                     return;
                 };
             }
-
-            // poll the future, which may call server_context()
-            tracing::info!("Rebuilding vdom");
-            with_server_context(server_context.clone(), || virtual_dom.rebuild_in_place());
 
             // Render the initial frame with loading placeholders
             let mut initial_frame = renderer.render(&virtual_dom);
@@ -243,30 +267,39 @@ impl SsrRendererPool {
                 for scope in resolved_suspense_nodes {
                     let mount = {
                         let mut lock = scope_to_mount_mapping.write().unwrap();
-                        lock.remove(&scope).unwrap()
+                        lock.remove(&scope)
                     };
-                    let mut resolved_chunk = String::new();
-                    // After we replace the placeholder in the dom with javascript, we need to send down the resolved data so that the client can hydrate the node
-                    let render_suspense = |into: &mut String| {
-                        renderer.reset_hydration();
-                        renderer.render_scope(into, &virtual_dom, scope)
-                    };
-                    let resolved_data = serialize_server_data(&virtual_dom, scope);
-                    if let Err(err) = stream.replace_placeholder(
-                        mount,
-                        render_suspense,
-                        resolved_data,
-                        &mut resolved_chunk,
-                    ) {
-                        throw_error!(
-                            dioxus_ssr::incremental::IncrementalRendererError::RenderError(err)
-                        );
-                    }
+                    // If the suspense boundary was immediately removed, it may not have a mount. We can just skip resolving it
+                    if let Some(mount) = mount {
+                        let mut resolved_chunk = String::new();
+                        // After we replace the placeholder in the dom with javascript, we need to send down the resolved data so that the client can hydrate the node
+                        let render_suspense = |into: &mut String| {
+                            renderer.reset_hydration();
+                            renderer.render_scope(into, &virtual_dom, scope)
+                        };
+                        let resolved_data = serialize_server_data(&virtual_dom, scope);
+                        if let Err(err) = stream.replace_placeholder(
+                            mount,
+                            render_suspense,
+                            resolved_data,
+                            &mut resolved_chunk,
+                        ) {
+                            throw_error!(
+                                dioxus_ssr::incremental::IncrementalRendererError::RenderError(err)
+                            );
+                        }
 
-                    stream.render(resolved_chunk);
+                        stream.render(resolved_chunk);
+                    }
+                    // Freeze the suspense boundary to prevent future reruns of any child nodes of the suspense boundary
+                    if let Some(suspense) = SuspenseContext::downcast_suspense_boundary_from_scope(
+                        &virtual_dom.runtime(),
+                        scope,
+                    ) {
+                        suspense.freeze();
+                    }
                 }
             }
-            tracing::info!("Suspense resolved");
 
             // After suspense is done, we render the html after the body
             let mut post_streaming = String::new();
@@ -364,6 +397,18 @@ impl FullstackHTMLTemplate {
 }
 
 impl FullstackHTMLTemplate {
+    /// Render any content before the head of the page.
+    pub fn render_head<R: std::fmt::Write>(
+        &self,
+        to: &mut R,
+    ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
+        let ServeConfig { index, .. } = &self.cfg;
+
+        to.write_str(&index.head)?;
+
+        Ok(())
+    }
+
     /// Render any content before the body of the page.
     pub fn render_before_body<R: std::fmt::Write>(
         &self,
@@ -371,7 +416,7 @@ impl FullstackHTMLTemplate {
     ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
         let ServeConfig { index, .. } = &self.cfg;
 
-        to.write_str(&index.pre_main)?;
+        to.write_str(&index.close_head)?;
 
         Ok(())
     }
@@ -381,16 +426,6 @@ impl FullstackHTMLTemplate {
         &self,
         to: &mut R,
     ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
-        #[cfg(all(debug_assertions, feature = "hot-reload"))]
-        {
-            // In debug mode, we need to add a script to the page that will reload the page if the websocket disconnects to make full recompile hot reloads work
-            let disconnect_js = dioxus_hot_reload::RECONNECT_SCRIPT;
-
-            to.write_str(r#"<script>"#)?;
-            to.write_str(disconnect_js)?;
-            to.write_str(r#"</script>"#)?;
-        }
-
         let ServeConfig { index, .. } = &self.cfg;
 
         to.write_str(&index.post_main)?;

@@ -11,12 +11,15 @@ keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
 dioxus-core = { workspace = true }
+dioxus-core-macro = { workspace = true }
 dioxus-rsx = { workspace = true, optional = true }
 dioxus-html-internal-macro = { workspace = true }
+dioxus-hooks = { workspace = true }
 generational-box = { workspace = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_repr = { version = "0.1", optional = true }
 wasm-bindgen = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
 js-sys = { version = "0.3.56", optional = true }
 euclid = "0.22.7"
 enumset = "1.1.2"
@@ -51,14 +54,18 @@ features = [
     "CompositionEvent",
 ]
 
+[build-dependencies]
+lazy-js-bundle = { workspace = true }
+
 [dev-dependencies]
 serde_json = "1"
 dioxus = { workspace = true }
 dioxus-web = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
+manganis = { workspace = true }
 
 [features]
-default = ["serialize", "mounted", "eval", "file-engine"]
+default = ["serialize", "mounted", "document", "file-engine"]
 serialize = [
     "dep:serde",
     "dep:serde_json",
@@ -76,7 +83,7 @@ mounted = [
     "web-sys?/ScrollBehavior",
     "web-sys?/HtmlElement",
 ]
-eval = [
+document = [
     "dep:serde",
     "dep:serde_json"
 ]
@@ -87,7 +94,7 @@ file-engine = [
     "web-sys?/FileList",
     "web-sys?/FileReader"
 ]
-wasm-bind = ["dep:web-sys", "dep:wasm-bindgen"]
+wasm-bind = ["dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures"]
 native-bind = ["dep:tokio", "file-engine"]
 hot-reload-context = ["dep:dioxus-rsx", "dioxus-rsx/hot_reload_traits"]
 html-to-rsx = []
