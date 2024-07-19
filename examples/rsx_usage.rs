@@ -92,6 +92,10 @@ fn app() -> Element {
                     }
                 }
             }
+            use {}
+            link {
+                as: "asd"
+            }
 
             // Expressions can be used in element position too:
             {rsx!(p { "More templating!" })}

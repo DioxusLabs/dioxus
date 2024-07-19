@@ -313,7 +313,8 @@ impl ToTokens for ElementName {
 
 impl Parse for ElementName {
     fn parse(stream: ParseStream) -> Result<Self> {
-        let raw = Punctuated::<Ident, Token![-]>::parse_separated_nonempty(stream)?;
+        let raw =
+            Punctuated::<Ident, Token![-]>::parse_separated_nonempty_with(stream, parse_raw_ident)?;
         if raw.len() == 1 {
             Ok(ElementName::Ident(raw.into_iter().next().unwrap()))
         } else {
@@ -557,6 +558,17 @@ fn diagnositcs() {
         p {
             class: "foo bar"
             "Hello world"
+        }
+    };
+
+    let _parsed: Element = syn::parse2(input).unwrap();
+}
+
+#[test]
+fn parses_raw_elements() {
+    let input = quote::quote! {
+        use {
+            "hello"
         }
     };
 

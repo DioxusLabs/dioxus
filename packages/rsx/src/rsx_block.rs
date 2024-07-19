@@ -94,7 +94,7 @@ impl RsxBlock {
             }
 
             // Parse unambiguous attributes - these can't be confused with anything
-            if (content.peek(LitStr) || content.peek(Ident) || content.peek(Ident::peek_any))
+            if (content.peek(LitStr) || content.peek(Ident::peek_any))
                 && content.peek2(Token![:])
                 && !content.peek3(Token![:])
             {
@@ -140,7 +140,7 @@ impl RsxBlock {
             // Parse shorthand attributes
             // todo: this might cause complications with partial expansion... think more about the cases
             // where we can imagine expansion and what better diagnostics we can providea
-            if content.peek(Ident)
+            if content.peek(Ident::peek_any)
                 && !content.peek2(Brace)
                 && !content.peek2(Token![:]) // regular attributes / components with generics
                 && !content.peek2(Token![-]) // web components
