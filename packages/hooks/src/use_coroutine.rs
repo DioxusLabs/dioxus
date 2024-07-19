@@ -1,3 +1,4 @@
+use ::warnings::Warning;
 use dioxus_core::prelude::{consume_context, provide_context, spawn, use_hook};
 use dioxus_core::Task;
 use dioxus_signals::*;
@@ -84,13 +85,17 @@ where
 
     // We do this here so we can capture data with FnOnce
     // this might not be the best API
-    if *coroutine.needs_regen.peek() {
-        let (tx, rx) = futures_channel::mpsc::unbounded();
-        let task = spawn(init(rx));
-        coroutine.tx.set(Some(tx));
-        coroutine.task.set(Some(task));
-        coroutine.needs_regen.set(false);
-    }
+    dioxus_signals::warnings::signal_read_and_write_in_reactive_scope::allow(|| {
+        dioxus_signals::warnings::signal_write_in_component_body::allow(|| {
+            if *coroutine.needs_regen.peek() {
+                let (tx, rx) = futures_channel::mpsc::unbounded();
+                let task = spawn(init(rx));
+                coroutine.tx.set(Some(tx));
+                coroutine.task.set(Some(task));
+                coroutine.needs_regen.set(false);
+            }
+        })
+    });
 
     coroutine
 }
