@@ -10512,7 +10512,7 @@ dependencies = [
 [[package]]
 name = "warnings"
 version = "0.1.0"
-source = "git+https://github.com/ealmloff/warnings#2d17d2d158231982d8245a34f40bb4a51bebf9f9"
+source = "git+https://github.com/ealmloff/warnings#9889b96cccb6ac91a8af924cfee51a8895146d08"
 dependencies = [
  "pin-project",
  "warnings-macro",
@@ -10521,7 +10521,7 @@ dependencies = [
 [[package]]
 name = "warnings-macro"
 version = "0.1.0"
-source = "git+https://github.com/ealmloff/warnings#2d17d2d158231982d8245a34f40bb4a51bebf9f9"
+source = "git+https://github.com/ealmloff/warnings#9889b96cccb6ac91a8af924cfee51a8895146d08"
 dependencies = [
  "proc-macro2",
  "quote",

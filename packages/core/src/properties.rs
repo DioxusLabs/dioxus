@@ -119,7 +119,7 @@ where
 
 /// A warning that will trigger if a component is called as a function
 #[warnings::warning]
-pub fn component_called_as_function<C: ComponentFunction<P, M>, P, M>(_: C) {
+pub(crate) fn component_called_as_function<C: ComponentFunction<P, M>, P, M>(_: C) {
     // We trim WithOwner from the end of the type name for component with a builder that include a special owner which may not match the function name directly
     let mut type_name = std::any::type_name::<C>();
     if let Some((_, after_colons)) = type_name.rsplit_once("::") {

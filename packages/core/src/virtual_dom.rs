@@ -255,7 +255,14 @@ impl VirtualDom {
     ///
     /// Note: the VirtualDom is not progressed, you must either "run_with_deadline" or use "rebuild" to progress it.
     pub fn new(app: fn() -> Element) -> Self {
-        Self::new_with_props(app, ())
+        Self::new_with_props(
+            move || {
+                use warnings::Warning;
+                // The root props don't come from a vcomponent so we need to manually rerun them sometimes
+                crate::properties::component_called_as_function::allow(app)
+            },
+            (),
+        )
     }
 
     /// Create a new VirtualDom with the given properties for the root component.
