@@ -30,7 +30,7 @@ fn manual_diffing() {
     *value.lock().unwrap() = "goodbye";
 
     assert_eq!(
-        dom.rebuild_to_vec().santize().edits,
+        dom.rebuild_to_vec().sanitize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(3) },
             HydrateText { path: &[0], value: "goodbye".to_string(), id: ElementId(4) },

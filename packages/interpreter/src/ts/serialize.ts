@@ -1,6 +1,6 @@
 // Handle serialization of the event data across the IPC boundarytype SerialziedEvent = {};
 
-import { retriveSelectValue, retriveValues } from "./form";
+import { retrieveSelectValue, retrieveValues } from "./form";
 
 export type AppTouchEvent = TouchEvent;
 
@@ -10,29 +10,66 @@ export type SerializedEvent = {
   [key: string]: any;
 };
 
-export function serializeEvent(event: Event, target: EventTarget): SerializedEvent {
+export function serializeEvent(
+  event: Event,
+  target: EventTarget
+): SerializedEvent {
   let contents = {};
 
   // merge the object into the contents
   let extend = (obj: any) => (contents = { ...contents, ...obj });
 
-  if (event instanceof WheelEvent) { extend(serializeWheelEvent(event)) };
-  if (event instanceof MouseEvent) { extend(serializeMouseEvent(event)) }
-  if (event instanceof KeyboardEvent) { extend(serializeKeyboardEvent(event)) }
+  if (event instanceof WheelEvent) {
+    extend(serializeWheelEvent(event));
+  }
+  if (event instanceof MouseEvent) {
+    extend(serializeMouseEvent(event));
+  }
+  if (event instanceof KeyboardEvent) {
+    extend(serializeKeyboardEvent(event));
+  }
 
-  if (event instanceof InputEvent) { extend(serializeInputEvent(event, target)) }
-  if (event instanceof PointerEvent) { extend(serializePointerEvent(event)) }
-  if (event instanceof AnimationEvent) { extend(serializeAnimationEvent(event)) }
-  if (event instanceof TransitionEvent) { extend({ property_name: event.propertyName, elapsed_time: event.elapsedTime, pseudo_element: event.pseudoElement, }) }
-  if (event instanceof CompositionEvent) { extend({ data: event.data, }) }
-  if (event instanceof DragEvent) { extend(serializeDragEvent(event)) }
-  if (event instanceof FocusEvent) { extend({}) }
-  if (event instanceof ClipboardEvent) { extend({}) }
+  if (event instanceof InputEvent) {
+    extend(serializeInputEvent(event, target));
+  }
+  if (event instanceof PointerEvent) {
+    extend(serializePointerEvent(event));
+  }
+  if (event instanceof AnimationEvent) {
+    extend(serializeAnimationEvent(event));
+  }
+  if (event instanceof TransitionEvent) {
+    extend({
+      property_name: event.propertyName,
+      elapsed_time: event.elapsedTime,
+      pseudo_element: event.pseudoElement,
+    });
+  }
+  if (event instanceof CompositionEvent) {
+    extend({ data: event.data });
+  }
+  if (event instanceof DragEvent) {
+    extend(serializeDragEvent(event));
+  }
+  if (event instanceof FocusEvent) {
+    extend({});
+  }
+  if (event instanceof ClipboardEvent) {
+    extend({});
+  }
 
   // safari is quirky and doesn't have TouchEvent
-  if (typeof TouchEvent !== 'undefined' && event instanceof TouchEvent) { extend(serializeTouchEvent(event)); }
+  if (typeof TouchEvent !== "undefined" && event instanceof TouchEvent) {
+    extend(serializeTouchEvent(event));
+  }
 
-  if (event.type === "submit" || event.type === "reset" || event.type === "click" || event.type === "change" || event.type === "input") {
+  if (
+    event.type === "submit" ||
+    event.type === "reset" ||
+    event.type === "click" ||
+    event.type === "change" ||
+    event.type === "input"
+  ) {
     extend(serializeInputEvent(event as InputEvent, target));
   }
 
@@ -59,12 +96,15 @@ export function serializeEvent(event: Event, target: EventTarget): SerializedEve
   return contents;
 }
 
-function serializeInputEvent(event: InputEvent, target: EventTarget): SerializedEvent {
+function serializeInputEvent(
+  event: InputEvent,
+  target: EventTarget
+): SerializedEvent {
   let contents: SerializedEvent = {};
 
   // Attempt to retrieve the values from the form
   if (target instanceof HTMLElement) {
-    let values = retriveValues(event, target);
+    let values = retrieveValues(event, target);
     contents.values = values.values;
     contents.valid = values.valid;
   }
@@ -87,7 +127,7 @@ function serializeInputEvent(event: InputEvent, target: EventTarget): Serialized
   }
 
   if (event.target instanceof HTMLSelectElement) {
-    contents.value = retriveSelectValue(event.target).join(",");
+    contents.value = retrieveSelectValue(event.target).join(",");
   }
 
   // Ensure the serializer isn't quirky
@@ -95,11 +135,8 @@ function serializeInputEvent(event: InputEvent, target: EventTarget): Serialized
     contents.value = "";
   }
 
-
   return contents;
 }
-
-
 
 function serializeWheelEvent(event: WheelEvent): SerializedEvent {
   return {

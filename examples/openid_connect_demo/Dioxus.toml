@@ -3,7 +3,7 @@
 # dioxus project name
 name = "OpenID Connect authentication demo"
 
-# default platfrom
+# default platform
 # you can also use `dioxus serve/build --platform XXX` to use other platform
 # value: web | desktop
 default_platform = "web"

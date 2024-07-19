@@ -26,7 +26,7 @@ fn app() -> Element {
     });
 
     if expected != 0 && received == expected {
-        println!("all events recieved");
+        println!("all events received");
         desktop_context.close();
     }
 

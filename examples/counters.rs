@@ -10,7 +10,7 @@ fn app() -> Element {
     // Store the counters in a signal
     let mut counters = use_signal(|| vec![0, 0, 0]);
 
-    // Whenver the counters change, sum them up
+    // Whenever the counters change, sum them up
     let sum = use_memo(move || counters.read().iter().copied().sum::<i32>());
 
     rsx! {

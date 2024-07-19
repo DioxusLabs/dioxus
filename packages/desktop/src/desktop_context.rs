@@ -205,7 +205,7 @@ impl DesktopService {
     }
 
     /// Create a wry event handler that listens for wry events.
-    /// This event handler is scoped to the currently active window and will only recieve events that are either global or related to the current window.
+    /// This event handler is scoped to the currently active window and will only receive events that are either global or related to the current window.
     ///
     /// The id this function returns can be used to remove the event handler with [`DesktopContext::remove_wry_event_handler`]
     pub fn create_wry_event_handler(

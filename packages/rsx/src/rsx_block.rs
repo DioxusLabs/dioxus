@@ -25,7 +25,7 @@ use syn::{
 ///  children
 /// }
 ///
-/// Does not make any guarnatees about the contents of the block - this is meant to be verified by the
+/// Does not make any guarantees about the contents of the block - this is meant to be verified by the
 /// element/component impls themselves.
 ///
 /// The name of the block is expected to be parsed by the parent parser. It will accept items out of
@@ -323,7 +323,7 @@ mod tests {
     /// Some tests of partial expansion to give better autocomplete
     #[test]
     fn partial_cases() {
-        let with_hander = quote! {
+        let with_handler = quote! {
             {
                 onclick: move |_| {
                     some.
@@ -331,7 +331,7 @@ mod tests {
             }
         };
 
-        let _block: RsxBlock = syn::parse2(with_hander).unwrap();
+        let _block: RsxBlock = syn::parse2(with_handler).unwrap();
     }
 
     /// Ensure the hotreload scoring algorithm works as expected
