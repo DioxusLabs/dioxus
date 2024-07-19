@@ -22,7 +22,7 @@ once_cell = "1.18.0"
 rustc-hash = { workspace = true }
 futures-channel = { workspace = true }
 futures-util = { workspace = true }
-warnings = { git = "https://github.com/ealmloff/warnings" }
+warnings = { git = "https://github.com/DioxusLabs/warnings" }
 
 [dev-dependencies]
 dioxus = { workspace = true }
