@@ -245,7 +245,7 @@
     <h2 id="dioxus">Dioxus</h2>
 
     <!-- Project platform and name -->
-    <h2 id="project-info">web | my-cool-project</h2>
+    <h2 id="project-info">N/A | N/A</h2>
   </div>
 
   <!-- Building progress screen -->
@@ -257,7 +257,7 @@
     </div>
     <div id="text">
       <!-- Funny loading messages or something -->
-      <h4 id="build-message">A funny loading message.</h4>
+      <h4 id="build-message">Starting the build...</h4>
 
       <!-- Progress % -->
       <h4 id="build-progress-percent">0%</h4>
@@ -267,7 +267,7 @@
   <!-- Building Error -->
   <div class="content-container hidden" id="error">
     <h1 class="content-header-text">Oops! The build failed.</h1>
-    <p id="error-sub-text"><span class="warn">compiling my-cool-project</span> encountered an error:</p>
+    <p id="error-sub-text"><span id="error-inner-sub-text" class="warn">compiling my-cool-project</span> encountered an error:</p>
     <div id="error-block">
       <span class="err">error</span><span>: expected `;`, found `rsx`</span> <br/>
       <span class="info">  --></span><span> src/main.rs:21:6</span><br/>
@@ -295,6 +295,8 @@
 
   <!-- Logic -->
   <script>
+    let APPLICATION_NAME = "N/A";
+
     // Wait for a "Ready" message from the server on the websocket served at /_dioxus/build_status
     let protocol;
     if (window.location.protocol === "https:") {
@@ -310,12 +312,22 @@
     ws.onmessage = (event) => {
       // Parse the message as json
       let data = JSON.parse(event.data);
+      console.log(data);
+
       // If the message is "Ready", reload the page
       if (data.type === "Ready") {
         setTimeout(() => {
           // Once we get a "Ready" message, reload the page
           window.location.reload();
         }, 500);
+      } else if (data.type === "ClientInit") {
+        APPLICATION_NAME = data.data.application_name;
+        const platform = data.data.platform;
+
+        // Set project info
+        let projectInfo = document.getElementById("project-info");
+        projectInfo.innerText = `${platform} | ${APPLICATION_NAME}`;
+        
       } else if (data.type === "BuildError") {
         // Show correct content for message.
         let errorContainer = document.getElementById("error");
@@ -324,9 +336,11 @@
         let buildingContainer = document.getElementById("building");
         buildingContainer.className = "content-container hidden";
 
+        let errorInnerSubText = document.getElementById("error-inner-sub-text");
+        errorInnerSubText.innerText = `compiling ${APPLICATION_NAME}`;
+
         // If the message is "BuildError", display an error message
         // data.data.error
-        console.log(data.data);
       } else if (data.type === "Building") {
         // Show correct content for message.
         let errorContainer = document.getElementById("error");
@@ -345,6 +359,11 @@
         const formattedProgress = `${roundedProgress}%`;
         loadingPercent.innerHTML = formattedProgress;
         loadingBar.style.width = formattedProgress;
+
+        // Show progress message
+        const message = data.data.build_message;
+        let buildMessage = document.getElementById("build-message");
+        buildMessage.innerText = message;
       }
     };
 
