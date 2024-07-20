@@ -31,7 +31,7 @@ use syn::{
 /// The name of the block is expected to be parsed by the parent parser. It will accept items out of
 /// order if possible and then bubble up diagnostics to the parent. This lets us give better errors
 /// and autocomplete
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Default)]
 pub struct RsxBlock {
     pub brace: token::Brace,
     pub attributes: Vec<Attribute>,
@@ -44,76 +44,87 @@ impl Parse for RsxBlock {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let content: ParseBuffer;
         let brace = syn::braced!(content in input);
-        RsxBlock::parse_inner(&content, brace)
+        RsxBlock::parse_inner(&content, brace, false)
     }
 }
 
 impl RsxBlock {
-    pub fn parse_inner(content: &ParseBuffer, brace: token::Brace) -> syn::Result<Self> {
+    pub fn parse_inner(
+        content: &ParseBuffer,
+        brace: token::Brace,
+        root: bool,
+    ) -> syn::Result<Self> {
         let mut items = vec![];
         let mut diagnostics = Diagnostics::new();
+        // If we are after attributes, we can try to provide better completions and diagnostics
+        // by parsing the following nodes as body nodes if they are ambiguous, we can parse them as body nodes
+        let mut after_attributes = false;
 
         // Lots of manual parsing but it's important to do it all here to give the best diagnostics possible
         // We can do things like lookaheads, peeking, etc. to give better errors and autocomplete
         // We allow parsing in any order but complain if its done out of order.
         // Autofmt will fortunately fix this for us in most cases
         //
-        // Weo do this by parsing the unambiguous cases first and then do some clever lookahead to parse the rest
+        // We do this by parsing the unambiguous cases first and then do some clever lookahead to parse the rest
         while !content.is_empty() {
-            // Parse spread attributes
-            if content.peek(Token![..]) {
-                let dots = content.parse::<Token![..]>()?;
+            // If this isn't the root of rsx, try to parse spreads and attributes
+            if !root {
+                // Parse spread attributes
+                if content.peek(Token![..]) {
+                    let dots = content.parse::<Token![..]>()?;
 
-                // in case someone tries to do ...spread which is not valid
-                if let Ok(extra) = content.parse::<Token![.]>() {
-                    diagnostics.push(
-                        extra
-                            .span()
-                            .error("Spread expressions only take two dots - not 3! (..spread)"),
-                    );
+                    // in case someone tries to do ...spread which is not valid
+                    if let Ok(extra) = content.parse::<Token![.]>() {
+                        diagnostics.push(
+                            extra
+                                .span()
+                                .error("Spread expressions only take two dots - not 3! (..spread)"),
+                        );
+                    }
+
+                    let expr = content.parse::<Expr>()?;
+                    let attr = Spread {
+                        expr,
+                        dots,
+                        dyn_idx: DynIdx::default(),
+                        comma: content.parse().ok(),
+                    };
+
+                    if !content.is_empty() && attr.comma.is_none() {
+                        diagnostics.push(
+                            attr.span()
+                                .error("Attributes must be separated by commas")
+                                .help("Did you forget a comma?"),
+                        );
+                    }
+                    items.push(RsxItem::Spread(attr));
+                    after_attributes = true;
+
+                    continue;
                 }
 
-                let expr = content.parse::<Expr>()?;
-                let attr = Spread {
-                    expr,
-                    dots,
-                    dyn_idx: DynIdx::default(),
-                    comma: content.parse().ok(),
-                };
+                // Parse unambiguous attributes - these can't be confused with anything
+                if (content.peek(LitStr) || content.peek(Ident) || content.peek(Ident::peek_any))
+                    && content.peek2(Token![:])
+                    && !content.peek3(Token![:])
+                {
+                    let attr = content.parse::<Attribute>()?;
 
-                if !content.is_empty() && attr.comma.is_none() {
-                    diagnostics.push(
-                        attr.span()
-                            .error("Attributes must be separated by commas")
-                            .help("Did you forget a comma?"),
-                    );
+                    if !content.is_empty() && attr.comma.is_none() {
+                        diagnostics.push(
+                            attr.span()
+                                .error("Attributes must be separated by commas")
+                                .help("Did you forget a comma?"),
+                        );
+                    }
+
+                    items.push(RsxItem::Attribute(attr));
+
+                    continue;
                 }
-                items.push(RsxItem::Spread(attr));
-
-                continue;
             }
 
-            // Parse unambiguous attributes - these can't be confused with anything
-            if (content.peek(LitStr) || content.peek(Ident) || content.peek(Ident::peek_any))
-                && content.peek2(Token![:])
-                && !content.peek3(Token![:])
-            {
-                let attr = content.parse::<Attribute>()?;
-
-                if !content.is_empty() && attr.comma.is_none() {
-                    diagnostics.push(
-                        attr.span()
-                            .error("Attributes must be separated by commas")
-                            .help("Did you forget a comma?"),
-                    );
-                }
-
-                items.push(RsxItem::Attribute(attr));
-
-                continue;
-            }
-
-            // Eagerly match on children, generally
+            // Eagerly match on completed children, generally
             if content.peek(LitStr)
                 | content.peek(Token![for])
                 | content.peek(Token![if])
@@ -122,8 +133,9 @@ impl RsxBlock {
                 // web components
                 | (content.peek(Ident::peek_any) && content.peek2(Token![-]))
                 // elements
-                | (content.peek(Ident::peek_any) && content.peek2(token::Brace))
-            // todo: eager parse components?
+                | (content.peek(Ident::peek_any) && (after_attributes || content.peek2(token::Brace)))
+                // components
+                | (content.peek(Ident::peek_any) && (after_attributes || content.peek2(token::Brace) || content.peek2(Token![::])))
             {
                 items.push(RsxItem::Child(content.parse::<BodyNode>()?));
                 if !content.is_empty() && content.peek(Token![,]) {
@@ -134,34 +146,37 @@ impl RsxBlock {
                         ),
                     );
                 }
+                after_attributes = true;
                 continue;
             }
 
-            // Parse shorthand attributes
-            // todo: this might cause complications with partial expansion... think more about the cases
-            // where we can imagine expansion and what better diagnostics we can providea
-            if content.peek(Ident)
+            // If this isn't the root of rsx, try to parse shorthand attributes
+            if !root {
+                // todo: this might cause complications with partial expansion... think more about the cases
+                // where we can imagine expansion and what better diagnostics we can providea
+                if content.peek(Ident)
                 && !content.peek2(Brace)
                 && !content.peek2(Token![:]) // regular attributes / components with generics
                 && !content.peek2(Token![-]) // web components
                 && !content.peek2(Token![<]) // generics on components
                 // generics on components
                 && !content.peek2(Token![::])
-            {
-                let attribute = content.parse::<Attribute>()?;
+                {
+                    let attribute = content.parse::<Attribute>()?;
 
-                if !content.is_empty() && attribute.comma.is_none() {
-                    diagnostics.push(
-                        attribute
-                            .span()
-                            .error("Attributes must be separated by commas")
-                            .help("Did you forget a comma?"),
-                    );
+                    if !content.is_empty() && attribute.comma.is_none() {
+                        diagnostics.push(
+                            attribute
+                                .span()
+                                .error("Attributes must be separated by commas")
+                                .help("Did you forget a comma?"),
+                        );
+                    }
+
+                    items.push(RsxItem::Attribute(attribute));
+
+                    continue;
                 }
-
-                items.push(RsxItem::Attribute(attribute));
-
-                continue;
             }
 
             // Finally just attempt a bodynode parse
@@ -539,5 +554,29 @@ mod tests {
         };
 
         let _parsed: RsxBlock = syn::parse2(input).unwrap();
+    }
+
+    #[test]
+    fn incomplete_root_elements() {
+        use syn::parse::Parser;
+
+        let input = quote::quote! {
+            di
+        };
+
+        fn parse(input: &ParseBuffer) -> syn::Result<RsxBlock> {
+            RsxBlock::parse_inner(input, token::Brace::default(), true)
+        }
+        let parsed = parse.parse2(input).unwrap();
+
+        assert_eq!(parsed.children.len(), 1);
+        if let BodyNode::Element(parsed) = &parsed.children[0] {
+            assert_eq!(
+                parsed.name,
+                ElementName::Ident(Ident::new("di", Span::call_site()))
+            );
+        } else {
+            panic!("expected element, got {:?}", parsed);
+        }
     }
 }

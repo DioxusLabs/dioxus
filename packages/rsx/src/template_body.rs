@@ -83,7 +83,7 @@ pub struct TemplateBody {
     pub template_idx: DynIdx,
     pub node_paths: Vec<NodePath>,
     pub attr_paths: Vec<(AttributePath, usize)>,
-    pub diagnostic: Diagnostics,
+    pub diagnostics: Diagnostics,
     current_path: Vec<u8>,
 }
 
@@ -98,18 +98,18 @@ impl Parse for TemplateBody {
             spreads,
             children,
             diagnostics: _, // we don't care about the diagnostics here - ours might be different
-        } = RsxBlock::parse_inner(input, brace)?;
+        } = RsxBlock::parse_inner(input, brace, true)?;
 
         let mut template = Self::new(children);
         for spread in spreads {
-            template.diagnostic.push(
+            template.diagnostics.push(
                 spread
                     .span()
                     .error("Spreads are only allowed in elements and components"),
             );
         }
         for attr in attributes {
-            template.diagnostic.push(
+            template.diagnostics.push(
                 attr.span()
                     .error("Attributes are only allowed in elements and components"),
             );
@@ -192,6 +192,8 @@ impl ToTokens for TemplateBody {
         // todo: this just might be fixed?
         let index = self.template_idx.get();
 
+        let diagnostics = &self.diagnostics;
+
         tokens.append_all(quote! {
             dioxus_core::Element::Ok({
                 #[doc(hidden)] // vscode please stop showing these in symbol search
@@ -201,6 +203,8 @@ impl ToTokens for TemplateBody {
                     node_paths: &[ #( #node_paths ),* ],
                     attr_paths: &[ #( #attr_paths ),* ],
                 };
+
+                #diagnostics
 
                 {
                     // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
@@ -213,6 +217,7 @@ impl ToTokens for TemplateBody {
                     );
                     __vnodes
                 }
+
             })
         });
     }
@@ -230,7 +235,7 @@ impl TemplateBody {
             node_paths: Vec::new(),
             attr_paths: Vec::new(),
             current_path: Vec::new(),
-            diagnostic: Diagnostics::new(),
+            diagnostics: Diagnostics::new(),
         };
 
         // Assign paths to all nodes in the template

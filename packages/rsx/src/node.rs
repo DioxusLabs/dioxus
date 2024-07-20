@@ -7,7 +7,7 @@ use quote::ToTokens;
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    token::{self, Brace},
+    token::{self},
     Ident, LitStr, Result, Token,
 };
 
@@ -79,13 +79,12 @@ impl Parse for BodyNode {
         // this is an Element if path match of:
         //
         // - one ident
-        // - followed by `{`
         // - 1st char is lowercase
         // - no underscores (reserved for components)
         //
         // example:
         // div {}
-        if stream.peek(Ident) && stream.peek2(Brace) {
+        if stream.peek(Ident) {
             let ident = stream.fork().parse::<Ident>().unwrap();
             let el_name = ident.to_string();
             let first_char = el_name.chars().next().unwrap();

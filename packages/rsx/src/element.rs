@@ -35,7 +35,7 @@ pub struct Element {
     pub children: Vec<BodyNode>,
 
     /// the brace of the `div { }`
-    pub brace: Brace,
+    pub brace: Option<Brace>,
 
     /// A list of diagnostics that were generated during parsing. This element might be a valid rsx_block
     /// but not technically a valid element - these diagnostics tell us what's wrong and then are used
@@ -47,13 +47,27 @@ impl Parse for Element {
     fn parse(stream: ParseStream) -> Result<Self> {
         let name = stream.parse::<ElementName>()?;
 
-        let RsxBlock {
-            attributes: mut fields,
-            children,
-            brace,
-            spreads,
-            diagnostics,
-        } = stream.parse::<RsxBlock>()?;
+        // If the element is followed by a brace, it is complete. Parse the body
+        let (mut fields, children, brace, spreads, diagnostics) = if stream.peek(Brace) {
+            let RsxBlock {
+                attributes,
+                children,
+                brace,
+                spreads,
+                diagnostics,
+            } = stream.parse::<RsxBlock>()?;
+            (attributes, children, Some(brace), spreads, diagnostics)
+        }
+        // Otherwise, it is incomplete. Add a diagnostic and parse the body later
+        else {
+            let mut diagnostics = Diagnostics::new();
+            diagnostics.push(
+                name.span()
+                    .error("Elements must be followed by braces")
+                    .help("Did you forget a brace?"),
+            );
+            (Vec::new(), Vec::new(), None, Vec::new(), diagnostics)
+        };
 
         // Make sure these attributes have an el_name set for completions and Template generation
         for attr in fields.iter_mut() {
@@ -171,10 +185,13 @@ impl ToTokens for Element {
         let ns = ns(quote!(NAME_SPACE));
         let el_name = el_name.tag_name();
         let diagnostics = &el.diagnostics;
+        let completion_hints = &el.completion_hints();
 
         // todo: generate less code if there's no diagnostics by not including the curlies
         tokens.append_all(quote! {
             {
+                #completion_hints
+
                 #diagnostics
 
                 dioxus_core::TemplateNode::Element {
@@ -293,6 +310,29 @@ impl Element {
         }
 
         None
+    }
+
+    fn completion_hints(&self) -> TokenStream2 {
+        // If there is already a brace, we don't need any completion hints
+        if self.brace.is_some() {
+            return quote! {};
+        }
+
+        let ElementName::Ident(name) = &self.name else {
+            return quote! {};
+        };
+
+        quote! {
+            {
+                #[allow(dead_code)]
+                #[doc(hidden)]
+                mod __completions {
+                    fn ignore() {
+                        super::dioxus_elements::elements::completions::CompleteWithBraces::#name
+                    }
+                }
+            }
+        }
     }
 }
 
