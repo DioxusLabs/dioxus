@@ -36,17 +36,24 @@ impl<'de> Deserialize<'de> for HtmlEvent {
 
         // in debug mode let's try and be helpful as to why the deserialization failed
         #[cfg(debug_assertions)]
-        {
-            _ = deserialize_raw(&name, data.clone()).unwrap_or_else(|e| {
-                panic!(
-                    "Failed to deserialize event data for event {}:  {:#?}\n'{:#?}'",
-                    name, e, data,
-                )
-            });
-        }
+        let data = deserialize_raw(&name, data.clone()).map_err(|e| {
+            serde::de::Error::custom(format!(
+                "Failed to deserialize event data for event {}:  {:#?}\n'{:#?}'",
+                name, e, data,
+            ))
+        })?;
+
+        // in release mode don't clone data
+        #[cfg(not(debug_assertions))]
+        let data = deserialize_raw(&name, data).map_err(|e| {
+            serde::de::Error::custom(format!(
+                "Failed to deserialize event data for event {}:  {:#?}",
+                name, e
+            ))
+        })?;
 
         Ok(HtmlEvent {
-            data: deserialize_raw(&name, data).unwrap(),
+            data,
             element,
             bubbles,
             name,
