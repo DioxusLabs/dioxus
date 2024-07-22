@@ -269,6 +269,10 @@ jobs:
           targets: ${{ matrix.platform.target }}
           components: rustfmt
 
+      - name: Install nasm for windows (tls)
+        if: ${{ matrix.platform.target == 'x86_64-pc-windows-msvc' }}
+        uses: ilammy/setup-nasm@v1
+
       - name: Install cross
         if: ${{ matrix.platform.cross == true }}
 
