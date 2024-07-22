@@ -125,7 +125,6 @@ async fn launch_server(
     build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
     context_providers: ContextProviders,
 ) {
-    use crate::prelude::RenderHandleState;
     use clap::Parser;
 
     // Get the address the server should run on. If the CLI is running, the CLI proxies fullstack into the main address
@@ -145,12 +144,12 @@ async fn launch_server(
     #[cfg(feature = "axum")]
     {
         use crate::axum_adapter::DioxusRouterExt;
-        use crate::prelude::RenderHandleState;
 
         let router = axum::Router::new().register_server_functions_with_context(context_providers);
 
         #[cfg(not(any(feature = "desktop", feature = "mobile")))]
         let router = {
+            use crate::prelude::RenderHandleState;
             use crate::prelude::SSRState;
 
             let cfg = platform_config.server_cfg.build();
