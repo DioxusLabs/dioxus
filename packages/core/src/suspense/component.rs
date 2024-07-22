@@ -40,7 +40,7 @@ pub struct SuspenseBoundaryPropsBuilder<TypedBuilderFields> {
     fields: TypedBuilderFields,
     _phantom: (),
 }
-impl SimpleProperties for SuspenseBoundaryProps
+impl Properties for SuspenseBoundaryProps
 where
     Self: Clone,
 {
@@ -48,14 +48,25 @@ where
     fn builder() -> Self::Builder {
         SuspenseBoundaryProps::builder()
     }
-    fn memoize(&mut self, new: &Self) -> bool {
-        let equal = self == new;
-        self.fallback.__set(new.fallback.__take());
+    type CompleteBuilder = SuspenseBoundaryProps;
+    fn new(builder: Self::CompleteBuilder) -> Self::Mounted {
+        SuspenseBoundaryPropsWithOwner {
+            inner: builder,
+            owner: Owner::default(),
+        }
+    }
+    type Mounted = SuspenseBoundaryPropsWithOwner;
+    fn memoize(mounted: &mut Self::Mounted, new: &Self::CompleteBuilder) -> bool {
+        let equal = mounted.inner == *new;
+        mounted.inner.fallback.__set(new.fallback.__take());
         if !equal {
             let new_clone = new.clone();
-            self.children = new_clone.children;
+            mounted.inner.children = new_clone.children;
         }
         equal
+    }
+    fn props(mounted: &Self::Mounted) -> Self {
+        mounted.inner.clone()
     }
 }
 #[doc(hidden)]
@@ -173,41 +184,15 @@ impl PartialEq for SuspenseBoundaryPropsWithOwner {
         self.inner.eq(&other.inner)
     }
 }
-impl SuspenseBoundaryPropsWithOwner {
-    /// Create a component from the props.
-    pub fn into_vcomponent<M: 'static>(
-        self,
-        render_fn: impl ComponentFunction<SuspenseBoundaryProps, M>,
-        component_name: &'static str,
-    ) -> VComponent {
-        VComponent::new(
-            move |wrapper: Self| render_fn.rebuild(wrapper.inner),
-            self,
-            component_name,
-        )
-    }
-}
-impl SimpleProperties for SuspenseBoundaryPropsWithOwner {
-    type Builder = ();
-    fn builder() -> Self::Builder {
-        unreachable!()
-    }
-    fn memoize(&mut self, new: &Self) -> bool {
-        self.inner.memoize(&new.inner)
-    }
-}
 #[allow(dead_code, non_camel_case_types, missing_docs)]
 impl<__children: SuspenseBoundaryPropsBuilder_Optional<Element>>
     SuspenseBoundaryPropsBuilder<((Callback<SuspenseContext, Element>,), __children)>
 {
-    pub fn build(self) -> SuspenseBoundaryPropsWithOwner {
+    pub fn build(self) -> SuspenseBoundaryProps {
         let (fallback, children) = self.fields;
         let fallback = fallback.0;
         let children = SuspenseBoundaryPropsBuilder_Optional::into_value(children, VNode::empty);
-        SuspenseBoundaryPropsWithOwner {
-            inner: SuspenseBoundaryProps { fallback, children },
-            owner: self.owner,
-        }
+        SuspenseBoundaryProps { fallback, children }
     }
 }
 #[automatically_derived]

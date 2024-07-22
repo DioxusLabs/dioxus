@@ -81,7 +81,7 @@ pub(crate) trait AnyProps: 'static {
     /// Render the component with the internal props.
     fn render(&self) -> RenderReturn;
     /// Make the old props equal to the new type erased props. Return if the props were equal and should be memoized.
-    fn memoize(&mut self, other: &dyn Any) -> bool;
+    fn memoize(&mut self, new: &dyn Any) -> bool;
     /// Get the props as a type erased `dyn Any`.
     fn props_mut(&mut self) -> &mut dyn Any;
 }

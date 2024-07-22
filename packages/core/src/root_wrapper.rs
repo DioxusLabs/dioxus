@@ -20,7 +20,7 @@ pub(crate) fn RootScopeWrapper(props: RootProps<VComponent>) -> Element {
                     TEMPLATE,
                     Box::new([DynamicNode::Component({
                         #[allow(unused_imports)]
-                        fc_to_builder(SuspenseBoundary)
+                        let __props = fc_to_builder(SuspenseBoundary)
                             .fallback(|_| Element::Ok(VNode::placeholder()))
                             .children(Ok(VNode::new(
                                 None,
@@ -28,8 +28,8 @@ pub(crate) fn RootScopeWrapper(props: RootProps<VComponent>) -> Element {
                                 Box::new([DynamicNode::Component(props.0)]),
                                 Box::new([]),
                             )))
-                            .build()
-                            .into_vcomponent(SuspenseBoundary, "SuspenseBoundary")
+                            .build();
+                        crate::VComponent::new(SuspenseBoundary, __props, "SuspenseBoundary")
                     })]),
                     Box::new([]),
                 )))

@@ -84,7 +84,7 @@ pub trait SimpleProperties: Clone {
     fn builder() -> Self::Builder;
 
     /// Make the old props equal to the new props. Return if the props were equal and should be memoized.
-    fn memoize(&mut self, other: &Self) -> bool;
+    fn memoize(&mut self, new: &Self) -> bool;
 }
 
 impl<F: SimpleProperties + 'static> Properties for F {
@@ -158,6 +158,16 @@ where
 pub struct EmptyBuilder;
 impl EmptyBuilder {
     pub fn build(self) {}
+}
+
+impl SimpleProperties for () {
+    type Builder = EmptyBuilder;
+    fn builder() -> Self::Builder {
+        EmptyBuilder
+    }
+    fn memoize(&mut self, _: &Self) -> bool {
+        false
+    }
 }
 
 /// This utility function launches the builder method so rsx! and html! macros can use the typed-builder pattern

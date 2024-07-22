@@ -6,8 +6,7 @@ use std::{
 use crate::{
     any_props::{AnyProps, AnyPropsBuilder},
     innerlude::{
-        ElementRef, MountId, ScopeOrder, SuspenseBoundaryProps, SuspenseBoundaryPropsWithOwner,
-        VComponent, WriteMutations,
+        ElementRef, MountId, ScopeOrder, SuspenseBoundaryProps, VComponent, WriteMutations,
     },
     nodes::VNode,
     prelude::SuspenseContext,
@@ -184,7 +183,7 @@ impl VNode {
         to: Option<&mut impl WriteMutations>,
     ) -> usize {
         // If this is a suspense boundary, run our suspense creation logic instead of running the component
-        if component.props.props().type_id() == TypeId::of::<SuspenseBoundaryPropsWithOwner>() {
+        if component.props.props().type_id() == TypeId::of::<SuspenseBoundaryProps>() {
             return SuspenseBoundaryProps::create(mount, idx, component, parent, dom, to);
         }
 

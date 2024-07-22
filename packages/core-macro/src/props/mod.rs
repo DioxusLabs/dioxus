@@ -586,6 +586,17 @@ mod struct_info {
         }
 
         fn memoize_impl(&self) -> Result<TokenStream, Error> {
+            // First check if there are any child owned fields, if there are not, we can just use the partialEq impl
+            if !self.has_child_owned_fields() {
+                return Ok(quote! {
+                    let equal = mounted == new;
+                    if !equal {
+                        *mounted = new.clone();
+                    }
+                    equal
+                });
+            }
+
             // First check if there are any ReadOnlySignal fields, if there are not, we can just use the partialEq impl
             let signal_fields: Vec<_> = self
                 .included_fields()
@@ -629,7 +640,7 @@ mod struct_info {
                         (#signal_fields).__set(new.#signal_fields.__take());
                     }
                     // Move the old value back
-                    self.#signal_fields = #signal_fields;
+                    mounted.inner.#signal_fields = #signal_fields;
                 )*
             };
 
@@ -654,14 +665,14 @@ mod struct_info {
                 if optional {
                     quote! {
                         // If the event handler is None, we don't need to update it
-                        if let (Some(old_handler), Some(new_handler)) = (self.#name.as_mut(), new.#name.as_ref()) {
+                        if let (Some(old_handler), Some(new_handler)) = (mounted.inner.#name.as_mut(), new.#name.as_ref()) {
                             old_handler.__set(new_handler.__take());
                         }
                     }
                 } else {
                     quote! {
                         // Update the event handlers
-                        self.#name.__set(new.#name.__take());
+                        mounted.inner.#name.__set(new.#name.__take());
                     }
                 }
             }).collect();
@@ -670,7 +681,7 @@ mod struct_info {
             if !signal_fields.is_empty() {
                 Ok(quote! {
                     // First check if the fields are equal. This will compare the signal fields by pointer
-                    let exactly_equal = self == new;
+                    let exactly_equal = mounted.inner == *new;
                     if exactly_equal {
                         // If they are return early, they can be memoized without any changes
                         return true;
@@ -678,19 +689,19 @@ mod struct_info {
 
                     // If they are not, move the signal fields into self and check if they are equal now that the signal fields are equal
                     #(
-                        let mut #signal_fields = self.#signal_fields;
-                        self.#signal_fields = new.#signal_fields;
+                        let mut #signal_fields = mounted.inner.#signal_fields;
+                        mounted.inner.#signal_fields = new.#signal_fields;
                     )*
 
                     // Then check if the fields are equal now that we know the signal fields are equal
                     // NOTE: we don't compare other fields individually because we want to let users opt-out of memoization for certain fields by implementing PartialEq themselves
-                    let non_signal_fields_equal = self == new;
+                    let non_signal_fields_equal = mounted.inner == *new;
 
                     // If they are not equal, we need to move over all the fields that are not event handlers or signals to self
                     if !non_signal_fields_equal {
                         let new_clone = new.clone();
                         #(
-                            self.#regular_fields = new_clone.#regular_fields;
+                            mounted.inner.#regular_fields = new_clone.#regular_fields;
                         )*
                     }
                     // Move any signal and event fields into their old container.
@@ -702,14 +713,14 @@ mod struct_info {
                 })
             } else {
                 Ok(quote! {
-                    let equal = self == new;
+                    let equal = mounted.inner == *new;
                     // Move any signal and event fields into their old container.
                     #move_event_handlers
                     // If they are not equal, we need to move over all the fields that are not event handlers to self
                     if !equal {
                         let new_clone = new.clone();
                         #(
-                            self.#regular_fields = new_clone.#regular_fields;
+                            mounted.inner.#regular_fields = new_clone.#regular_fields;
                         )*
                     }
                     equal
@@ -825,6 +836,26 @@ Finally, call `.build()` to create the instance of `{name}`.
                         .then(|| quote!(owner: Owner::default())),
                 );
 
+            let props = if self.has_child_owned_fields() {
+                quote! { mounted.inner.clone() }
+            } else {
+                quote! { mounted.clone() }
+            };
+
+            let new = if self.has_child_owned_fields() {
+                let name = Ident::new(&format!("{}WithOwner", name), name.span());
+                quote! { #name { inner: builder, owner: Owner::default() } }
+            } else {
+                quote! { builder }
+            };
+
+            let mounted = if self.has_child_owned_fields() {
+                let name = Ident::new(&format!("{}WithOwner", name), name.span());
+                quote! { #name #ty_generics }
+            } else {
+                quote! { Self }
+            };
+
             Ok(quote! {
                 impl #impl_generics #name #ty_generics #where_clause {
                     #[doc = #builder_method_doc]
@@ -854,8 +885,16 @@ Finally, call `.build()` to create the instance of `{name}`.
                     fn builder() -> Self::Builder {
                         #name::builder()
                     }
-                    fn memoize(&mut self, new: &Self) -> bool {
+                    type CompleteBuilder = Self;
+                    fn new(builder: Self::CompleteBuilder) -> Self::Mounted {
+                        #new
+                    }
+                    type Mounted = #mounted;
+                    fn memoize(mounted: &mut Self::Mounted, new: &Self::CompleteBuilder) -> bool {
                         #memoize
+                    }
+                    fn props(mounted: &Self::Mounted) -> Self {
+                        #props
                     }
                 }
             })
@@ -1392,7 +1431,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 quote!()
             };
 
-            if self.has_child_owned_fields() {
+            let with_owner = self.has_child_owned_fields().then(|| {
                 let name = Ident::new(&format!("{}WithOwner", name), name.span());
                 let original_name = &self.name;
                 let vis = &self.vis;
@@ -1412,59 +1451,24 @@ Finally, call `.build()` to create the instance of `{name}`.
                             self.inner.eq(&other.inner)
                         }
                     }
+                }
+            });
 
-                    impl #original_impl_generics #name #ty_generics #where_clause {
-                        /// Create a component from the props.
-                        pub fn into_vcomponent<M: 'static>(
-                            self,
-                            render_fn: impl dioxus_core::prelude::ComponentFunction<#original_name #ty_generics, M>,
-                            component_name: &'static str,
-                        ) -> dioxus_core::VComponent {
-                            use dioxus_core::prelude::ComponentFunction;
-                            dioxus_core::VComponent::new(move |wrapper: Self| render_fn.rebuild(wrapper.inner), self, component_name)
-                        }
-                    }
+            quote!(
+                #with_owner
 
-                    impl #original_impl_generics dioxus_core::prelude::Properties for #name #ty_generics #where_clause {
-                        type Builder = ();
-                        fn builder() -> Self::Builder {
-                            unreachable!()
-                        }
-                        fn memoize(&mut self, new: &Self) -> bool {
-                            self.inner.memoize(&new.inner)
-                        }
-                    }
-
-                    #[allow(dead_code, non_camel_case_types, missing_docs)]
-                    impl #impl_generics #builder_name #modified_ty_generics #where_clause {
-                        #doc
-                        pub fn build(self) -> #name #ty_generics {
-                            let ( #(#descructuring,)* ) = self.fields;
-                            #( #assignments )*
-                            #name {
-                                inner: #original_name {
-                                    #( #field_names ),*
-                                },
-                                owner: self.owner,
-                            }
+                #[allow(dead_code, non_camel_case_types, missing_docs)]
+                impl #impl_generics #builder_name #modified_ty_generics #where_clause {
+                    #doc
+                    pub fn build(self) -> #name #ty_generics {
+                        let ( #(#descructuring,)* ) = self.fields;
+                        #( #assignments )*
+                        #name {
+                            #( #field_names ),*
                         }
                     }
                 }
-            } else {
-                quote!(
-                    #[allow(dead_code, non_camel_case_types, missing_docs)]
-                    impl #impl_generics #builder_name #modified_ty_generics #where_clause {
-                        #doc
-                        pub fn build(self) -> #name #ty_generics {
-                            let ( #(#descructuring,)* ) = self.fields;
-                            #( #assignments )*
-                            #name {
-                                #( #field_names ),*
-                            }
-                        }
-                    }
-                )
-            }
+            )
         }
     }
 

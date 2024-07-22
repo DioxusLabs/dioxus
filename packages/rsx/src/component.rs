@@ -93,17 +93,10 @@ impl ToTokens for Component {
 
         tokens.append_all(quote! {
             dioxus_core::DynamicNode::Component({
-
-                // todo: ensure going through the trait actually works
-                // we want to avoid importing traits
-                // use dioxus_core::prelude::Properties;
-                use dioxus_core::prelude::Properties;
-                let __comp = ({
+                let __props = {
                     #props
-                }).into_vcomponent(
-                    #name #generics,
-                    #fn_name
-                );
+                };
+                let __comp = dioxus_core::VComponent::new(#name #generics, __props, #fn_name);
                 #diagnostics
                 __comp
             })
