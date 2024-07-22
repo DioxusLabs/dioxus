@@ -24,7 +24,7 @@ impl<'de> Deserialize<'de> for HtmlEvent {
             element: ElementId,
             name: String,
             bubbles: bool,
-            data: serde_value::Value,
+            data: serde_json::Value,
         }
 
         let Inner {
@@ -35,18 +35,15 @@ impl<'de> Deserialize<'de> for HtmlEvent {
         } = Inner::deserialize(deserializer)?;
 
         // in debug mode let's try and be helpful as to why the deserialization failed
-        #[cfg(debug_assertions)]
-        {
-            _ = deserialize_raw(&name, data.clone()).unwrap_or_else(|e| {
-                panic!(
-                    "Failed to deserialize event data for event {}:  {:#?}\n'{:#?}'",
-                    name, e, data,
-                )
-            });
-        }
+        let data = deserialize_raw(&name, &data).map_err(|e| {
+            serde::de::Error::custom(format!(
+                "Failed to deserialize event data for event {}:  {:#?}\n'{:#?}'",
+                name, e, data,
+            ))
+        })?;
 
         Ok(HtmlEvent {
-            data: deserialize_raw(&name, data).unwrap(),
+            data,
             element,
             bubbles,
             name,
@@ -55,15 +52,12 @@ impl<'de> Deserialize<'de> for HtmlEvent {
 }
 
 #[cfg(feature = "serialize")]
-fn deserialize_raw(
-    name: &str,
-    data: serde_value::Value,
-) -> Result<EventData, serde_value::DeserializerError> {
+fn deserialize_raw(name: &str, data: &serde_json::Value) -> Result<EventData, serde_json::Error> {
     use EventData::*;
 
     // a little macro-esque thing to make the code below more readable
     #[inline]
-    fn de<'de, F>(f: serde_value::Value) -> Result<F, serde_value::DeserializerError>
+    fn de<'de, F>(f: &'de serde_json::Value) -> Result<F, serde_json::Error>
     where
         F: Deserialize<'de>,
     {
@@ -134,10 +128,9 @@ fn deserialize_raw(
 
         // OtherData => "abort" | "afterprint" | "beforeprint" | "beforeunload" | "hashchange" | "languagechange" | "message" | "offline" | "online" | "pagehide" | "pageshow" | "popstate" | "rejectionhandled" | "storage" | "unhandledrejection" | "unload" | "userproximity" | "vrdisplayactivate" | "vrdisplayblur" | "vrdisplayconnect" | "vrdisplaydeactivate" | "vrdisplaydisconnect" | "vrdisplayfocus" | "vrdisplaypointerrestricted" | "vrdisplaypointerunrestricted" | "vrdisplaypresentchange";
         other => {
-            return Err(serde_value::DeserializerError::UnknownVariant(
-                other.to_string(),
-                &[],
-            ))
+            return Err(serde::de::Error::custom(format!(
+                "Unknown event type: {other}"
+            )))
         }
     };
 
