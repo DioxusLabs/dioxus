@@ -178,7 +178,7 @@ impl BuildRequest {
         // to test failures and broken pages.
         let html = self.prepare_html(assets)?;
         let html_path = self.dioxus_crate.out_dir().join("index.html");
-        std::fs::write(&html_path, html)?;
+        std::fs::write(html_path, html)?;
 
         Ok(())
     }
