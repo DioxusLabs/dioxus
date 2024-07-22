@@ -255,6 +255,7 @@ pub fn remove_future(id: Task) {
 ///     })
 /// }
 /// ```
+#[track_caller]
 pub fn use_hook<State: Clone + 'static>(initializer: impl FnOnce() -> State) -> State {
     Runtime::with_current_scope(|cx| cx.use_hook(initializer)).unwrap()
 }

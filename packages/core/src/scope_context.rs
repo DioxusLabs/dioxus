@@ -529,6 +529,7 @@ impl ScopeId {
     }
 
     /// Run a closure inside of scope's runtime
+    #[track_caller]
     pub fn in_runtime<T>(self, f: impl FnOnce() -> T) -> T {
         Runtime::current().unwrap().on_scope(self, f)
     }
