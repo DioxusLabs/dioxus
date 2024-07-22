@@ -328,13 +328,13 @@ fn setup_router(
     match platform {
         Platform::Web => {
             // Route file service to output the .wasm and assets if this is a web build
-            router = router.fallback(build_serve_dir(serve, config));
+            router = router.nest_service("/", build_serve_dir(serve, config));
         }
         Platform::Fullstack | Platform::StaticGeneration => {
             // For fullstack and static generation, forward all requests to the server
             let address = fullstack_address.unwrap();
 
-            router = router.fallback(super::proxy::proxy_to(
+            router = router.nest_service("/",super::proxy::proxy_to(
                 format!("http://{address}").parse().unwrap(),
                 true,
                 |error| {
