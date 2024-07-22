@@ -17,10 +17,13 @@ pub const MG_JSON_OUT: &str = "mg-out";
 
 pub fn asset_manifest(config: &DioxusCrate) -> AssetManifest {
     let file_path = config.out_dir().join(MG_JSON_OUT);
-    let read = fs::read_to_string(&file_path).unwrap();
-    _ = fs::remove_file(file_path);
-    let json: Vec<String> = serde_json::from_str(&read).unwrap();
-
+    let json: Vec<String> = std::fs::read_to_string(&file_path)
+        .map(|text| {
+            _ = std::fs::remove_file(file_path);
+            serde_json::from_str(&text)
+                .unwrap_or_else(|_| Vec::new())
+        })
+        .unwrap_or_else(|_| Vec::new());
     AssetManifest::load(json)
 }
 
