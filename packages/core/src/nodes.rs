@@ -1,5 +1,6 @@
+use crate::any_props::BoxedAnyPropsBuilder;
+use crate::innerlude::ScopeState;
 use crate::innerlude::{RenderError, VProps};
-use crate::{any_props::BoxedAnyProps, innerlude::ScopeState};
 use crate::{arena::ElementId, Element, Event};
 use crate::{
     innerlude::{ElementRef, EventHandler, MountId},
@@ -599,7 +600,7 @@ pub struct VComponent {
     pub(crate) render_fn: TypeId,
 
     /// The props for this component
-    pub(crate) props: BoxedAnyProps,
+    pub(crate) props: BoxedAnyPropsBuilder,
 }
 
 impl Clone for VComponent {
@@ -614,21 +615,14 @@ impl Clone for VComponent {
 
 impl VComponent {
     /// Create a new [`VComponent`] variant
-    pub fn new<P, M: 'static>(
-        component: impl ComponentFunction<P, M>,
-        props: P,
-        fn_name: &'static str,
-    ) -> Self
+    pub fn new<R, P, M>(component: R, props: P::CompleteBuilder, fn_name: &'static str) -> Self
     where
+        R: ComponentFunction<P, M>,
         P: Properties + 'static,
+        M: 'static,
     {
         let render_fn = component.id();
-        let props = Box::new(VProps::new(
-            component,
-            <P as Properties>::memoize,
-            props,
-            fn_name,
-        ));
+        let props = Box::new(VProps::<R, P, M>::new(component, props, fn_name));
 
         VComponent {
             name: fn_name,

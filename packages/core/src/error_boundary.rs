@@ -1,6 +1,7 @@
 use crate::{
-    global_context::current_scope_id, innerlude::provide_context, use_hook, Element, IntoDynNode,
-    Properties, ScopeId, Template, TemplateAttribute, TemplateNode, VNode,
+    global_context::current_scope_id,
+    innerlude::{provide_context, SimpleProperties},
+    use_hook, Element, IntoDynNode, ScopeId, Template, TemplateAttribute, TemplateNode, VNode,
 };
 use std::{
     any::{Any, TypeId},
@@ -600,7 +601,7 @@ where
         }
     }
 }
-impl Properties for ErrorBoundaryProps {
+impl SimpleProperties for ErrorBoundaryProps {
     type Builder = ErrorBoundaryPropsBuilder<((), ())>;
     fn builder() -> Self::Builder {
         ErrorBoundaryProps::builder()

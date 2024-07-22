@@ -84,7 +84,7 @@ impl<const A: bool> FragmentBuilder<A> {
 ///     }
 /// }
 /// ```
-impl Properties for FragmentProps {
+impl SimpleProperties for FragmentProps {
     type Builder = FragmentBuilder<false>;
     fn builder() -> Self::Builder {
         FragmentBuilder(VNode::empty())

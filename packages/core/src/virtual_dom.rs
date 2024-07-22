@@ -2,14 +2,14 @@
 //!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
+use crate::any_props::{AnyPropsBuilder, VProps};
 use crate::innerlude::Work;
 use crate::properties::RootProps;
 use crate::root_wrapper::RootScopeWrapper;
 use crate::{
     arena::ElementId,
     innerlude::{
-        ElementRef, NoOpMutations, SchedulerMsg, ScopeOrder, ScopeState, VNodeMount, VProps,
-        WriteMutations,
+        ElementRef, NoOpMutations, SchedulerMsg, ScopeOrder, ScopeState, VNodeMount, WriteMutations,
     },
     nodes::{Template, TemplateId},
     runtime::{Runtime, RuntimeGuard},
@@ -20,6 +20,7 @@ use crate::{Task, VComponent};
 use futures_util::StreamExt;
 use rustc_hash::FxHashMap;
 use slab::Slab;
+use std::any::TypeId;
 use std::collections::BTreeSet;
 use std::{any::Any, rc::Rc};
 use tracing::instrument;
@@ -303,25 +304,6 @@ impl VirtualDom {
         root: impl ComponentFunction<P, M>,
         root_props: P,
     ) -> Self {
-        let render_fn = root.id();
-        let props = VProps::new(root, |_, _| true, root_props, "Root");
-        Self::new_with_component(VComponent {
-            name: "root",
-            render_fn,
-            props: Box::new(props),
-        })
-    }
-
-    /// Create a new virtualdom and build it immediately
-    pub fn prebuilt(app: fn() -> Element) -> Self {
-        let mut dom = Self::new(app);
-        dom.rebuild_in_place();
-        dom
-    }
-
-    /// Create a new VirtualDom from something that implements [`AnyProps`]
-    #[instrument(skip(root), level = "trace", name = "VirtualDom::new")]
-    pub(crate) fn new_with_component(root: VComponent) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
 
         let mut dom = Self {
@@ -336,17 +318,59 @@ impl VirtualDom {
             resolved_scopes: Default::default(),
         };
 
-        let root = VProps::new(
-            RootScopeWrapper,
-            |_, _| true,
-            RootProps(root),
-            "RootWrapper",
+        struct MapComponentFunction<F, P, M> {
+            function: F,
+            phantom: std::marker::PhantomData<(P, M)>,
+        }
+        impl<F, P, M> Clone for MapComponentFunction<F, P, M>
+        where
+            F: Clone,
+        {
+            fn clone(&self) -> Self {
+                Self {
+                    function: self.function.clone(),
+                    phantom: std::marker::PhantomData,
+                }
+            }
+        }
+
+        impl<F, P, M> ComponentFunction<RootProps<P>, M> for MapComponentFunction<F, P, M>
+        where
+            F: ComponentFunction<P, M>,
+            P: 'static,
+            M: 'static,
+        {
+            fn id(&self) -> TypeId {
+                TypeId::of::<P>()
+            }
+
+            fn rebuild(&self, props: RootProps<P>) -> Element {
+                self.function.rebuild(props.0)
+            }
+        }
+
+        let root = VComponent::new(
+            MapComponentFunction {
+                function: root,
+                phantom: std::marker::PhantomData,
+            },
+            root_props,
+            "Root",
         );
-        dom.new_scope(Box::new(root), "app");
+        let root =
+            VProps::<_, RootProps<VComponent>, _>::new(RootScopeWrapper, root, "RootWrapper");
+        dom.new_scope(root.create(), "app");
 
         // the root element is always given element ID 0 since it's the container for the entire tree
         dom.elements.insert(None);
 
+        dom
+    }
+
+    /// Create a new virtualdom and build it immediately
+    pub fn prebuilt(app: fn() -> Element) -> Self {
+        let mut dom = Self::new(app);
+        dom.rebuild_in_place();
         dom
     }
 

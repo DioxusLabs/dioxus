@@ -1,5 +1,78 @@
-use crate::{innerlude::CapturedPanic, nodes::RenderReturn, ComponentFunction};
+use crate::{innerlude::CapturedPanic, nodes::RenderReturn, ComponentFunction, Properties};
 use std::{any::Any, panic::AssertUnwindSafe};
+
+pub(crate) type BoxedAnyPropsBuilder = Box<dyn AnyPropsBuilder>;
+
+/// A trait for a builder that can be mounted to a scope
+pub(crate) trait AnyPropsBuilder: 'static {
+    /// Create a new [`AnyProps`] object.
+    fn create(&self) -> BoxedAnyProps;
+    /// Duplicate this component into a new boxed component.
+    fn duplicate(&self) -> BoxedAnyPropsBuilder;
+    /// Return the props builder
+    fn props(&self) -> &dyn Any;
+}
+
+/// A component along with the props the component uses to render.
+pub(crate) struct VProps<RenderFn, Props: Properties, Marker> {
+    render_fn: RenderFn,
+    props: Props::CompleteBuilder,
+    name: &'static str,
+    phantom: std::marker::PhantomData<Marker>,
+}
+
+impl<RenderFn, Props: Properties, Marker> Clone for VProps<RenderFn, Props, Marker>
+where
+    RenderFn: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            render_fn: self.render_fn.clone(),
+            props: self.props.clone(),
+            name: self.name,
+            phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<RenderFn, Props: Properties, Marker> VProps<RenderFn, Props, Marker> {
+    /// Create a [`VProps`] object.
+    pub fn new(
+        render_fn: RenderFn,
+        props: Props::CompleteBuilder,
+        name: &'static str,
+    ) -> VProps<RenderFn, Props, Marker> {
+        VProps {
+            render_fn,
+            props,
+            name,
+            phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<RenderFn, Props, Marker> AnyPropsBuilder for VProps<RenderFn, Props, Marker>
+where
+    Props: Properties,
+    RenderFn: ComponentFunction<Props, Marker> + Clone,
+    Marker: 'static,
+{
+    fn create(&self) -> BoxedAnyProps {
+        Box::new(MountedVProps::<RenderFn, Props, Marker>::new(
+            self.render_fn.clone(),
+            Props::new(self.props.clone()),
+            self.name,
+        ))
+    }
+
+    fn duplicate(&self) -> BoxedAnyPropsBuilder {
+        Box::new(self.clone())
+    }
+
+    fn props(&self) -> &dyn Any {
+        &self.props
+    }
+}
 
 pub(crate) type BoxedAnyProps = Box<dyn AnyProps>;
 
@@ -10,45 +83,26 @@ pub(crate) trait AnyProps: 'static {
     /// Make the old props equal to the new type erased props. Return if the props were equal and should be memoized.
     fn memoize(&mut self, other: &dyn Any) -> bool;
     /// Get the props as a type erased `dyn Any`.
-    fn props(&self) -> &dyn Any;
-    /// Get the props as a type erased `dyn Any`.
     fn props_mut(&mut self) -> &mut dyn Any;
-    /// Duplicate this component into a new boxed component.
-    fn duplicate(&self) -> BoxedAnyProps;
 }
 
 /// A component along with the props the component uses to render.
-pub(crate) struct VProps<F: ComponentFunction<P, M>, P, M> {
-    render_fn: F,
-    memo: fn(&mut P, &P) -> bool,
-    props: P,
+pub(crate) struct MountedVProps<RenderFn, Props: Properties, Marker> {
+    render_fn: RenderFn,
+    props: Props::Mounted,
     name: &'static str,
-    phantom: std::marker::PhantomData<M>,
+    phantom: std::marker::PhantomData<Marker>,
 }
 
-impl<F: ComponentFunction<P, M>, P: Clone, M> Clone for VProps<F, P, M> {
-    fn clone(&self) -> Self {
-        Self {
-            render_fn: self.render_fn.clone(),
-            memo: self.memo,
-            props: self.props.clone(),
-            name: self.name,
-            phantom: std::marker::PhantomData,
-        }
-    }
-}
-
-impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> VProps<F, P, M> {
-    /// Create a [`VProps`] object.
-    pub fn new(
-        render_fn: F,
-        memo: fn(&mut P, &P) -> bool,
-        props: P,
+impl<RenderFn, Props: Properties, Marker> MountedVProps<RenderFn, Props, Marker> {
+    /// Create a [`MountedVProps`] object.
+    fn new(
+        render_fn: RenderFn,
+        props: Props::Mounted,
         name: &'static str,
-    ) -> VProps<F, P, M> {
-        VProps {
+    ) -> MountedVProps<RenderFn, Props, Marker> {
+        MountedVProps {
             render_fn,
-            memo,
             props,
             name,
             phantom: std::marker::PhantomData,
@@ -56,18 +110,17 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> VProps<
     }
 }
 
-impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> AnyProps
-    for VProps<F, P, M>
+impl<RenderFn, Props: Properties, Marker> AnyProps for MountedVProps<RenderFn, Props, Marker>
+where
+    RenderFn: ComponentFunction<Props, Marker> + Clone,
+    Props: Properties,
+    Marker: 'static,
 {
     fn memoize(&mut self, other: &dyn Any) -> bool {
-        match other.downcast_ref::<P>() {
-            Some(other) => (self.memo)(&mut self.props, other),
+        match other.downcast_ref::<Props::CompleteBuilder>() {
+            Some(other) => Props::memoize(&mut self.props, other),
             None => false,
         }
-    }
-
-    fn props(&self) -> &dyn Any {
-        &self.props
     }
 
     fn props_mut(&mut self) -> &mut dyn Any {
@@ -76,7 +129,7 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> AnyProp
 
     fn render(&self) -> RenderReturn {
         let res = std::panic::catch_unwind(AssertUnwindSafe(move || {
-            self.render_fn.rebuild(self.props.clone())
+            self.render_fn.rebuild(Props::props(&self.props))
         }));
 
         match res {
@@ -90,15 +143,5 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> AnyProp
                 }
             }
         }
-    }
-
-    fn duplicate(&self) -> BoxedAnyProps {
-        Box::new(Self {
-            render_fn: self.render_fn.clone(),
-            memo: self.memo,
-            props: self.props.clone(),
-            name: self.name,
-            phantom: std::marker::PhantomData,
-        })
     }
 }

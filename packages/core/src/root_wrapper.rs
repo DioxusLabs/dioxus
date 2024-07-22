@@ -13,8 +13,8 @@ pub(crate) fn RootScopeWrapper(props: RootProps<VComponent>) -> Element {
     Element::Ok(VNode::new(
         None,
         TEMPLATE,
-        Box::new([DynamicNode::Component(
-            fc_to_builder(ErrorBoundary)
+        Box::new([DynamicNode::Component({
+            let __props = fc_to_builder(ErrorBoundary)
                 .children(Element::Ok(VNode::new(
                     None,
                     TEMPLATE,
@@ -33,9 +33,10 @@ pub(crate) fn RootScopeWrapper(props: RootProps<VComponent>) -> Element {
                     })]),
                     Box::new([]),
                 )))
-                .build()
-                .into_vcomponent(ErrorBoundary, "ErrorBoundary"),
-        )]),
+                .build();
+
+            VComponent::new(ErrorBoundary, __props, "ErrorBoundary")
+        })]),
         Box::new([]),
     ))
 }

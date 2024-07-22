@@ -45,7 +45,37 @@ use crate::innerlude::*;
         note = "If you manually created a new properties struct, you may have forgotten to add `#[derive(Props, PartialEq, Clone)]` to your struct",
     )
 )]
-pub trait Properties: Clone + Sized + 'static {
+// Properties lifecycle:
+// 1. Create a builder
+// 2. Mount that builder to a specific scope. The mounted version of the props lives as long as the scope lives and owns any signals the builder creates
+// 3. When the component is run, the props are created from the mounted version
+// - If the component is diffed, the new builder is compared against the mounted version of the props
+pub trait Properties: Sized + 'static {
+    /// The type of the builder for this component.
+    /// Used to create "in-progress" versions of the props.
+    type Builder;
+
+    /// Create a builder for this component.
+    fn builder() -> Self::Builder;
+
+    /// The type of the builder once it is complete which can create a mounted version of the props.
+    type CompleteBuilder: Clone;
+
+    /// The type of the mounted factory for this component.
+    type Mounted;
+
+    /// Create a new mounted props from a builder
+    fn new(builder: Self::CompleteBuilder) -> Self::Mounted;
+
+    /// Make the old props equal to the new props. Return if the props were equal and should be memoized.
+    fn memoize(mounted: &mut Self::Mounted, other: &Self::CompleteBuilder) -> bool;
+
+    /// Create the props from the mounted version.
+    fn props(mounted: &Self::Mounted) -> Self;
+}
+
+/// A trait for Properties with the same a finished builder, props, and mounted props type
+pub trait SimpleProperties: Clone {
     /// The type of the builder for this component.
     /// Used to create "in-progress" versions of the props.
     type Builder;
@@ -55,29 +85,38 @@ pub trait Properties: Clone + Sized + 'static {
 
     /// Make the old props equal to the new props. Return if the props were equal and should be memoized.
     fn memoize(&mut self, other: &Self) -> bool;
-
-    /// Create a component from the props.
-    fn into_vcomponent<M: 'static>(
-        self,
-        render_fn: impl ComponentFunction<Self, M>,
-        component_name: &'static str,
-    ) -> VComponent {
-        VComponent::new(render_fn, self, component_name)
-    }
 }
 
-impl Properties for () {
-    type Builder = EmptyBuilder;
+impl<F: SimpleProperties + 'static> Properties for F {
+    type Builder = F::Builder;
+    type CompleteBuilder = F;
+    type Mounted = F;
+
     fn builder() -> Self::Builder {
-        EmptyBuilder {}
+        <Self as SimpleProperties>::builder()
     }
-    fn memoize(&mut self, _other: &Self) -> bool {
-        true
+
+    fn new(builder: Self::CompleteBuilder) -> Self::Mounted {
+        builder
+    }
+
+    fn memoize(mounted: &mut Self::Mounted, other: &Self::CompleteBuilder) -> bool {
+        mounted.memoize(other)
+    }
+
+    fn props(mounted: &Self::Mounted) -> Self {
+        mounted.clone()
     }
 }
 
 /// Root properties never need to be memoized, so we can use a dummy implementation.
 pub(crate) struct RootProps<P>(pub P);
+
+impl<P> From<P> for RootProps<P> {
+    fn from(props: P) -> Self {
+        Self(props)
+    }
+}
 
 impl<P> Clone for RootProps<P>
 where
@@ -93,16 +132,29 @@ where
     P: Clone + 'static,
 {
     type Builder = P;
+    type CompleteBuilder = P;
+    type Mounted = P;
     fn builder() -> Self::Builder {
         unreachable!("Root props technically are never built")
     }
-    fn memoize(&mut self, _other: &Self) -> bool {
-        true
+
+    fn new(builder: Self::CompleteBuilder) -> Self::Mounted {
+        builder
+    }
+
+    fn memoize(mounted: &mut Self::Mounted, other: &Self::CompleteBuilder) -> bool {
+        *mounted = other.clone();
+        false
+    }
+
+    fn props(mounted: &Self::Mounted) -> Self {
+        RootProps(mounted.clone())
     }
 }
 
 // We allow components to use the () generic parameter if they have no props. This impl enables the "build" method
 // that the macros use to anonymously complete prop construction.
+#[derive(Clone, PartialEq)]
 pub struct EmptyBuilder;
 impl EmptyBuilder {
     pub fn build(self) {}
@@ -174,7 +226,7 @@ pub trait ComponentFunction<Props, Marker = ()>: Clone + 'static {
         TypeId::of::<Self>()
     }
 
-    /// Convert the component to a function that takes props and returns an element.
+    /// Rebuild the component with the new props.
     fn rebuild(&self, props: Props) -> Element;
 }
 

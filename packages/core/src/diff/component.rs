@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    any_props::AnyProps,
+    any_props::{AnyProps, AnyPropsBuilder},
     innerlude::{
         ElementRef, MountId, ScopeOrder, SuspenseBoundaryProps, SuspenseBoundaryPropsWithOwner,
         VComponent, WriteMutations,
@@ -135,7 +135,7 @@ impl VNode {
         // copy out the box for both
         let old_scope = &mut dom.scopes[scope_id.0];
         let old_props: &mut dyn AnyProps = old_scope.props.deref_mut();
-        let new_props: &dyn AnyProps = new.props.deref();
+        let new_props: &dyn AnyPropsBuilder = new.props.deref();
 
         // If the props are static, then we try to memoize by setting the new with the old
         // The target ScopeState still has the reference to the old props, so there's no need to update anything
@@ -193,7 +193,7 @@ impl VNode {
         // If the scopeid is a placeholder, we need to load up a new scope for this vcomponent. If it's already mounted, then we can just use that
         if scope_id.is_placeholder() {
             scope_id = dom
-                .new_scope(component.props.duplicate(), component.name)
+                .new_scope(component.props.create(), component.name)
                 .state()
                 .id;
 

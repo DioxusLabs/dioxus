@@ -40,7 +40,7 @@ pub struct SuspenseBoundaryPropsBuilder<TypedBuilderFields> {
     fields: TypedBuilderFields,
     _phantom: (),
 }
-impl Properties for SuspenseBoundaryProps
+impl SimpleProperties for SuspenseBoundaryProps
 where
     Self: Clone,
 {
@@ -187,7 +187,7 @@ impl SuspenseBoundaryPropsWithOwner {
         )
     }
 }
-impl Properties for SuspenseBoundaryPropsWithOwner {
+impl SimpleProperties for SuspenseBoundaryPropsWithOwner {
     type Builder = ();
     fn builder() -> Self::Builder {
         unreachable!()
@@ -290,7 +290,7 @@ impl SuspenseBoundaryProps {
                     .clone()
                     .with_suspense_location(suspense_boundary_location, || {
                         let scope_state = dom
-                            .new_scope(component.props.duplicate(), component.name)
+                            .new_scope(component.props.create(), component.name)
                             .state();
                         suspense_context.mount(scope_state.id);
                         scope_id = scope_state.id;
