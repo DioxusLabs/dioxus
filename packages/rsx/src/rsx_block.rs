@@ -116,7 +116,7 @@ impl RsxBlock {
             }
 
             // Parse unambiguous attributes - these can't be confused with anything
-            if (content.peek(LitStr) || content.peek(Ident) || content.peek(Ident::peek_any))
+            if (content.peek(LitStr) || content.peek(Ident::peek_any))
                 && content.peek2(Token![:])
                 && !content.peek3(Token![:])
             {
@@ -239,7 +239,7 @@ impl RsxBlock {
     }
 
     fn peek_lowercase_ident(stream: &ParseStream) -> bool {
-        let Ok(ident) = stream.fork().parse::<Ident>() else {
+        let Ok(ident) = stream.fork().call(Ident::parse_any) else {
             return false;
         };
 
