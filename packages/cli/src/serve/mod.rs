@@ -107,7 +107,7 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                 // We also can check the status of the builds here in case we have multiple ongoing builds
                 match application {
                     Ok(BuilderUpdate::Progress { platform, update }) => {
-                        let update_stage = update.stage.clone();
+                        let update_stage = update.stage;
                         screen.new_build_logs(platform, update);
                         server.update_build_status(screen.build_progress.progress(), update_stage.to_string()).await;
                     }

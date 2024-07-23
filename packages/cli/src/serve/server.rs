@@ -190,15 +190,21 @@ impl Server {
     }
 
     pub async fn start_build(&mut self) {
-        self.build_status.set(Status::Building { progress: 0.0, build_message: "Starting the build...".to_string() });
+        self.build_status.set(Status::Building {
+            progress: 0.0,
+            build_message: "Starting the build...".to_string(),
+        });
         self.send_build_status().await;
     }
 
-    pub async fn update_build_status(&mut self, progress: f64, build_message: String,) {
+    pub async fn update_build_status(&mut self, progress: f64, build_message: String) {
         if !matches!(self.build_status.get(), Status::Building { .. }) {
             return;
         }
-        self.build_status.set(Status::Building { progress, build_message });
+        self.build_status.set(Status::Building {
+            progress,
+            build_message,
+        });
         self.send_build_status().await;
     }
 

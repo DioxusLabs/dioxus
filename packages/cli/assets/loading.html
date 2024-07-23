@@ -122,26 +122,28 @@
       border-radius: 5px;
       padding: 20px;
       font-weight: 500;
-      letter-spacing: -1px;
       overflow-x: auto;
-    }
-
-    #error>#error-block>span {
-      white-space: pre;
+      white-space: pre-wrap;
+      min-width: 640px;
     }
 
     /* Text coloring */
     .err {
-      color: #DE1313;
+      color: #d94545;
     }
 
     .info {
-      color: #006FEE;
+      color: #3980d1;
     }
 
     .warn {
       color: #CC7E00;
     }
+
+    .text-theme {
+      color: #313131;
+    }
+
 
     /* Footer */
     #footer {
@@ -191,6 +193,10 @@
       #error>h1 {
         width: 100%;
       }
+
+      #error>#error-block {
+        min-width: auto;
+      }
     }
 
     /* Dark Theme */
@@ -215,14 +221,19 @@
         color: #FFCB51;
       }
 
-      #building>#progress-bar, #error>#error-block {
+      .text-theme {
+        color: #E2E5E9;
+      }
+
+      #building>#progress-bar,
+      #error>#error-block {
         background-color: #111318;
       }
 
       #footer>h4>a {
         color: #E2E5E9;
       }
-    } 
+    }
   </style>
 </head>
 
@@ -267,17 +278,19 @@
   <!-- Building Error -->
   <div class="content-container hidden" id="error">
     <h1 class="content-header-text">Oops! The build failed.</h1>
-    <p id="error-sub-text"><span id="error-inner-sub-text" class="warn">compiling my-cool-project</span> encountered an error:</p>
+    <p id="error-sub-text"><span id="error-inner-sub-text" class="warn">compiling my-cool-project</span> encountered an
+      error:</p>
     <div id="error-block">
-      <span class="err">error</span><span>: expected `;`, found `rsx`</span> <br/>
-      <span class="info">  --></span><span> src/main.rs:21:6</span><br/>
-      <span class="info">   |</span><br/>
-      <span class="info">21 |</span><span>    a</span><br/>
-      <span class="info">   |</span><span class="err">     ^ help: add `;` here</span><br/>
-      <span class="info">22 |</span><span>    rsx! {</span><br/>
-      <span class="info">   |</span><span class="info">    --- unexpected token</span><br/>
+      <span class="err">error</span><span>: expected `;`, found `rsx`</span> <br />
+      <span class="info"> --></span><span> src/main.rs:21:6</span><br />
+      <span class="info"> |</span><br />
+      <span class="info">21 |</span><span> a</span><br />
+      <span class="info"> |</span><span class="err"> ^ help: add `;` here</span><br />
+      <span class="info">22 |</span><span> rsx! {</span><br />
+      <span class="info"> |</span><span class="info"> --- unexpected token</span><br />
 
-      <span class="err">error</span><span>: could not compile `my-cool-app` (bin "my-cool-app") due to 1 previous error</span>
+      <span class="err">error</span><span>: could not compile `my-cool-app` (bin "my-cool-app") due to 1 previous
+        error</span>
     </div>
 
   </div>
@@ -321,15 +334,17 @@
           window.location.reload();
         }, 500);
       } else if (data.type === "ClientInit") {
+        // Get project info
         APPLICATION_NAME = data.data.application_name;
         const platform = data.data.platform;
 
         // Set project info
         let projectInfo = document.getElementById("project-info");
         projectInfo.innerText = `${platform} | ${APPLICATION_NAME}`;
-        
+
       } else if (data.type === "BuildError") {
-        // Show correct content for message.
+        // If the message is "BuildError", display an error message
+        // Show correct view for message.
         let errorContainer = document.getElementById("error");
         errorContainer.className = "content-container";
 
@@ -339,10 +354,19 @@
         let errorInnerSubText = document.getElementById("error-inner-sub-text");
         errorInnerSubText.innerText = `compiling ${APPLICATION_NAME}`;
 
-        // If the message is "BuildError", display an error message
-        // data.data.error
+        // Replace with our styling.
+        let color1 = data.data.error.replaceAll("style='color:#f55'", "class='err'");
+        let color2 = color1.replaceAll("style='color:#5ff'", "class='info'");
+        let color3 = color2.replaceAll("style='color:#fff'", "class='text-theme'");
+        let formatting1 = color3.replaceAll("<b>", "");
+        let formatting2 = formatting1.replaceAll("</b>", "");
+
+        let errorBlock = document.getElementById("error-block");
+        errorBlock.innerHTML = formatting2;
+
+        console.log(data.data.error);
       } else if (data.type === "Building") {
-        // Show correct content for message.
+        // Show correct view for message.
         let errorContainer = document.getElementById("error");
         errorContainer.className = "content-container hidden";
 
