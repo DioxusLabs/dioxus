@@ -301,8 +301,17 @@ impl Output {
                 // todo: open the app
             }
             Event::Key(key) if key.code == KeyCode::Char('c') => {
-                // Clear the screen.
-                self.build_progress.build_logs.clear();
+                // Clear the currently selected build logs.
+                let build = self
+                    .build_progress
+                    .build_logs
+                    .get_mut(&self.platform)
+                    .unwrap();
+                let msgs = match self.tab {
+                    Tab::Console => &mut build.stdout_logs,
+                    Tab::BuildLog => &mut build.messages,
+                };
+                msgs.clear();
             }
             Event::Key(key) if key.code == KeyCode::Char('0') => {
                 self.tab = Tab::Console;
