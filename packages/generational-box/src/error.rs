@@ -2,6 +2,8 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::fmt::Display;
 
+use crate::GenerationalLocation;
+
 #[derive(Debug, Clone, PartialEq)]
 /// An error that can occur when trying to borrow a value.
 pub enum BorrowError {
@@ -59,6 +61,15 @@ impl ValueDroppedError {
         Self {
             #[cfg(any(debug_assertions, feature = "debug_ownership"))]
             created_at,
+        }
+    }
+
+    /// Create a new `ValueDroppedError` for a [`GenerationalLocation`].
+    #[allow(unused)]
+    pub(crate) fn new_for_location(location: GenerationalLocation) -> Self {
+        Self {
+            #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+            created_at: location.created_at,
         }
     }
 }

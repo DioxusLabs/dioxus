@@ -139,6 +139,7 @@ pub(crate) struct IndexHtml {
 #[derive(Clone)]
 pub struct ServeConfig {
     pub(crate) index: IndexHtml,
+    #[allow(unused)]
     pub(crate) assets_path: PathBuf,
     pub(crate) incremental: Option<dioxus_ssr::incremental::IncrementalRendererConfig>,
 }

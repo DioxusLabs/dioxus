@@ -46,8 +46,17 @@ use tower_http::{
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 enum Status {
-    Building { progress: f64 },
-    BuildError { error: String },
+    ClientInit {
+        application_name: String,
+        platform: String,
+    },
+    Building {
+        progress: f64,
+        build_message: String,
+    },
+    BuildError {
+        error: String,
+    },
     Ready,
 }
 
@@ -77,14 +86,21 @@ pub(crate) struct Server {
     _server_task: JoinHandle<Result<()>>,
     /// We proxy (not hot reloading) fullstack requests to this port
     pub fullstack_port: Option<u16>,
+
     build_status: SharedStatus,
+    application_name: String,
+    platform: String,
 }
 
 impl Server {
     pub fn start(serve: &Serve, cfg: &DioxusCrate) -> Self {
         let (hot_reload_sockets_tx, hot_reload_sockets_rx) = futures_channel::mpsc::unbounded();
         let (build_status_sockets_tx, build_status_sockets_rx) = futures_channel::mpsc::unbounded();
-        let build_status = SharedStatus::new(Status::Building { progress: 0.0 });
+
+        let build_status = SharedStatus::new(Status::Building {
+            progress: 0.0,
+            build_message: "Starting the build...".to_string(),
+        });
 
         let addr = serve.server_arguments.address.address();
         let start_browser = serve.server_arguments.open.unwrap_or_default();
@@ -151,7 +167,10 @@ impl Server {
             _server_task,
             ip: addr,
             fullstack_port,
+
             build_status,
+            application_name: cfg.dioxus_config.application.name.clone(),
+            platform: serve.build_arguments.platform().to_string(),
         }
     }
 
@@ -171,15 +190,21 @@ impl Server {
     }
 
     pub async fn start_build(&mut self) {
-        self.build_status.set(Status::Building { progress: 0.0 });
+        self.build_status.set(Status::Building {
+            progress: 0.0,
+            build_message: "Starting the build...".to_string(),
+        });
         self.send_build_status().await;
     }
 
-    pub async fn update_build_status(&mut self, progress: f64) {
+    pub async fn update_build_status(&mut self, progress: f64, build_message: String) {
         if !matches!(self.build_status.get(), Status::Building { .. }) {
             return;
         }
-        self.build_status.set(Status::Building { progress });
+        self.build_status.set(Status::Building {
+            progress,
+            build_message,
+        });
         self.send_build_status().await;
     }
 
@@ -223,8 +248,11 @@ impl Server {
             new_build_status_socket = &mut new_build_status_socket => {
                 if let Some(mut new_socket) = new_build_status_socket {
                     drop(new_message);
-                    // Update the socket with the current status
-                    if send_build_status_to(&self.build_status, &mut new_socket).await.is_ok() {
+
+                    // Update the socket with project info and current build status
+                    let project_info = SharedStatus::new(Status::ClientInit { application_name: self.application_name.clone(), platform: self.platform.clone() });
+                    if send_build_status_to(&project_info, &mut new_socket).await.is_ok() {
+                        _ = send_build_status_to(&self.build_status, &mut new_socket).await;
                         self.build_status_sockets.push(new_socket);
                     }
                     return None;
@@ -328,13 +356,13 @@ fn setup_router(
     match platform {
         Platform::Web => {
             // Route file service to output the .wasm and assets if this is a web build
-            router = router.fallback(build_serve_dir(serve, config));
+            router = router.nest_service("/", build_serve_dir(serve, config));
         }
         Platform::Fullstack | Platform::StaticGeneration => {
             // For fullstack and static generation, forward all requests to the server
             let address = fullstack_address.unwrap();
 
-            router = router.fallback(super::proxy::proxy_to(
+            router = router.nest_service("/",super::proxy::proxy_to(
                 format!("http://{address}").parse().unwrap(),
                 true,
                 |error| {

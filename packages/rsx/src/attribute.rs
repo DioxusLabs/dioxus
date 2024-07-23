@@ -352,7 +352,7 @@ impl Attribute {
                     // Autocomplete as an element
                     pub use super::dioxus_elements::elements::completions::CompleteWithBraces::*;
                     fn ignore() {
-                        #name
+                        #name;
                     }
                 }
             }

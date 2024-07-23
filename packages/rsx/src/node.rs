@@ -8,7 +8,7 @@ use syn::{
     ext::IdentExt,
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    token::{self, Brace},
+    token::{self},
     Ident, LitStr, Result, Token,
 };
 
@@ -77,17 +77,18 @@ impl Parse for BodyNode {
             return Ok(BodyNode::Element(stream.parse::<Element>()?));
         }
 
-        // this is an Element if path match of:
+        // this is an Element if the path is:
         //
         // - one ident
-        // - followed by `{`
         // - 1st char is lowercase
         // - no underscores (reserved for components)
+        // And it is not:
+        // - the start of a path with components
         //
         // example:
         // div {}
-        if stream.peek(Ident::peek_any) && stream.peek2(Brace) {
-            let ident = parse_raw_ident(&stream.fork()).unwrap();
+        if stream.peek(Ident) && !stream.peek2(Token![::]) {
+            let ident = stream.fork().parse::<Ident>().unwrap();
             let el_name = ident.to_string();
             let first_char = el_name.chars().next().unwrap();
 

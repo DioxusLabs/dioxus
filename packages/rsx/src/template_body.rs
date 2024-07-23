@@ -58,8 +58,6 @@ use self::location::DynIdx;
 use crate::innerlude::Attribute;
 use crate::*;
 use proc_macro2::TokenStream as TokenStream2;
-use proc_macro2_diagnostics::SpanDiagnosticExt;
-use syn::token::Brace;
 
 #[cfg(feature = "hot_reload")]
 use dioxus_core::prelude::Template;
@@ -83,39 +81,19 @@ pub struct TemplateBody {
     pub template_idx: DynIdx,
     pub node_paths: Vec<NodePath>,
     pub attr_paths: Vec<(AttributePath, usize)>,
-    pub diagnostic: Diagnostics,
+    pub diagnostics: Diagnostics,
     current_path: Vec<u8>,
 }
 
 impl Parse for TemplateBody {
     /// Parse the nodes of the callbody as `Body`.
     fn parse(input: ParseStream) -> Result<Self> {
-        let brace = Brace::default();
-
-        let RsxBlock {
-            brace: _,
-            attributes,
-            spreads,
-            children,
-            diagnostics: _, // we don't care about the diagnostics here - ours might be different
-        } = RsxBlock::parse_inner(input, brace)?;
-
-        let mut template = Self::new(children);
-        for spread in spreads {
-            template.diagnostic.push(
-                spread
-                    .span()
-                    .error("Spreads are only allowed in elements and components"),
-            );
-        }
-        for attr in attributes {
-            template.diagnostic.push(
-                attr.span()
-                    .error("Attributes are only allowed in elements and components"),
-            );
-        }
-
-        Ok(template)
+        let children = RsxBlock::parse_children(input)?;
+        let mut myself = Self::new(children.children);
+        myself
+            .diagnostics
+            .extend(children.diagnostics.into_diagnostics());
+        Ok(myself)
     }
 }
 
@@ -181,26 +159,25 @@ impl ToTokens for TemplateBody {
             .iter()
             .map(|(path, idx)| self.get_dyn_attr(path, *idx).rendered_as_dynamic_attr());
 
-        // Rust analyzer will not autocomplete properly if we change the name every time you type a character
-        // If it looks like we are running in rust analyzer, we'll just use a placeholder location
-        // let looks_like_rust_analyzer = first_root_span.contains("SpanData");
-        // let index = if looks_like_rust_analyzer {
-        //     "0".to_string()
-        // } else {
-        //     self.template_idx.get().to_string()
-        // };
-        // todo: this just might be fixed?
         let index = self.template_idx.get();
+
+        let diagnostics = &self.diagnostics;
 
         tokens.append_all(quote! {
             dioxus_core::Element::Ok({
                 #[doc(hidden)] // vscode please stop showing these in symbol search
                 static ___TEMPLATE: dioxus_core::Template = dioxus_core::Template {
-                    name: concat!( file!(), ":", line!(), ":", column!(), ":", #index ) ,
+                    name: {
+                        const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
+                        const NORMAL: &str = dioxus_core::const_format::str_replace!(PATH, '\\', "/");
+                        dioxus_core::const_format::concatcp!(NORMAL, ':', line!(), ':', column!(), ':', #index)
+                    },
                     roots: &[ #( #roots ),* ],
                     node_paths: &[ #( #node_paths ),* ],
                     attr_paths: &[ #( #attr_paths ),* ],
                 };
+
+                #diagnostics
 
                 {
                     // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
@@ -213,6 +190,7 @@ impl ToTokens for TemplateBody {
                     );
                     __vnodes
                 }
+
             })
         });
     }
@@ -230,7 +208,7 @@ impl TemplateBody {
             node_paths: Vec::new(),
             attr_paths: Vec::new(),
             current_path: Vec::new(),
-            diagnostic: Diagnostics::new(),
+            diagnostics: Diagnostics::new(),
         };
 
         // Assign paths to all nodes in the template

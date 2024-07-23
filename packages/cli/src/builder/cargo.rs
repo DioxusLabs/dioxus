@@ -150,11 +150,17 @@ impl BuildRequest {
         // Start Manganis linker intercept.
         let linker_args = vec![format!("{}", self.dioxus_crate.out_dir().display())];
 
-        manganis_cli_support::start_linker_intercept(
-            &LinkCommand::command_name(),
-            cargo_args,
-            Some(linker_args),
-        )?;
+        // Don't block the main thread - magnanis should not be running its own std process but it's
+        // fine to wrap it here at the top
+        tokio::task::spawn_blocking(move || {
+            manganis_cli_support::start_linker_intercept(
+                &LinkCommand::command_name(),
+                cargo_args,
+                Some(linker_args),
+            )
+        })
+        .await
+        .unwrap()?;
 
         let file_name = self.dioxus_crate.executable_name();
 
