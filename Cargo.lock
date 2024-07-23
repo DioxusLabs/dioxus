@@ -2417,6 +2417,7 @@ dependencies = [
  "chrono",
  "clap 4.5.9",
  "colored 2.1.0",
+ "console",
  "console-subscriber",
  "crossterm",
  "ctrlc",
