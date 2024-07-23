@@ -76,15 +76,17 @@ impl Parse for BodyNode {
             return Ok(BodyNode::Element(stream.parse::<Element>()?));
         }
 
-        // this is an Element if path match of:
+        // this is an Element if the path is:
         //
         // - one ident
         // - 1st char is lowercase
         // - no underscores (reserved for components)
+        // And it is not:
+        // - the start of a path with components
         //
         // example:
         // div {}
-        if stream.peek(Ident) {
+        if stream.peek(Ident) && !stream.peek2(Token![::]) {
             let ident = stream.fork().parse::<Ident>().unwrap();
             let el_name = ident.to_string();
             let first_char = el_name.chars().next().unwrap();
