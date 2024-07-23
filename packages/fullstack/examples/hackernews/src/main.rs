@@ -33,30 +33,10 @@ pub fn App() -> Element {
     }
 }
 
-const STYLE: &str = r#"@keyframes spin {
-    0% {
-        transform: rotate(0deg);
-    }
-
-    100% {
-        transform: rotate(360deg);
-    }
-}
-.spinner {
-    width: 10px;
-    height: 10px;
-    border: 4px solid #f3f3f3;
-    border-top: 4px solid #3498db;
-    border-radius: 50%;
-    animation: spin 2s linear infinite;
-}"#;
-
 #[component]
 fn Homepage(story: ReadOnlySignal<PreviewState>) -> Element {
     rsx! {
-        style {
-            {STYLE}
-        }
+        head::Link { rel: "stylesheet", href: asset!("./assets/hackernews.css") }
         div { display: "flex", flex_direction: "row", width: "100%",
             div {
                 width: "50%",

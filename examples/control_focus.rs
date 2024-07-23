@@ -6,7 +6,7 @@
 use dioxus::prelude::*;
 use std::rc::Rc;
 
-const STYLE: &str = asset!(file("./examples/assets/roulette.css"));
+const STYLE: &str = asset!("./examples/assets/roulette.css");
 
 fn main() {
     launch_desktop(app);
@@ -38,7 +38,7 @@ fn app() -> Element {
     });
 
     rsx! {
-        link { rel: "stylesheet", href: STYLE }
+        head::Link { rel: "stylesheet", href: STYLE }
         h1 { "Input Roulette" }
         button { onclick: move |_| running.toggle(), "Toggle roulette" }
         div { id: "roulette-grid",
