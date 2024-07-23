@@ -13,7 +13,7 @@ use crossterm::{
     tty::IsTty,
     ExecutableCommand,
 };
-use dioxus_cli_config::Platform;
+use dioxus_cli_config::{AddressArguments, Platform};
 use dioxus_hot_reload::ClientMsg;
 use futures_util::{future::select_all, Future, StreamExt};
 use ratatui::{prelude::*, widgets::*, TerminalOptions, Viewport};
@@ -75,6 +75,8 @@ pub struct Output {
     anim_start: Instant,
 
     tab: Tab,
+
+    addr: AddressArguments,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -151,6 +153,7 @@ impl Output {
             num_lines_with_wrapping: 0,
             anim_start: Instant::now(),
             tab: Tab::BuildLog,
+            addr: cfg.server_arguments.address.clone(),
         })
     }
 
@@ -300,7 +303,8 @@ impl Output {
                 // todo: reload the app
             }
             Event::Key(key) if key.code == KeyCode::Char('o') => {
-                // todo: open the app
+                // Open the running app.
+                open::that(format!("http://{}:{}", self.addr.addr, self.addr.port))?;
             }
             Event::Key(key) if key.code == KeyCode::Char('c') => {
                 // Clear the currently selected build logs.
@@ -501,7 +505,8 @@ impl Output {
                     .constraints([Constraint::Fill(1), Constraint::Length(14)].as_ref())
                     .split(body[1]);
 
-                let listening_len = "listening at http://127.0.0.1:8080".len() + 3;
+                let addr = format!("http://{}:{}", self.addr.addr, self.addr.port);
+                let listening_len = format!("listening at {addr}").len() + 3;
                 let listening_len = if listening_len > body[0].width as usize {
                     0
                 } else {
