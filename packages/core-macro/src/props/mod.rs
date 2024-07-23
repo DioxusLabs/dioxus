@@ -1397,12 +1397,13 @@ Finally, call `.build()` to create the instance of `{name}`.
                 let original_name = &self.name;
                 let vis = &self.vis;
                 let generics_with_bounds = &self.generics;
+                let where_clause = &self.generics.where_clause;
 
                 quote! {
                     #[doc(hidden)]
                     #[allow(dead_code, non_camel_case_types, missing_docs)]
                     #[derive(Clone)]
-                    #vis struct #name #generics_with_bounds {
+                    #vis struct #name #generics_with_bounds #where_clause {
                         inner: #original_name #ty_generics,
                         owner: Owner,
                     }
