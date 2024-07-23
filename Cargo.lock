@@ -6042,7 +6042,7 @@ dependencies = [
 [[package]]
 name = "manganis"
 version = "0.2.2"
-source = "git+https://github.com/DioxusLabs/collect-assets#c6352db25361619b514a6a2d496c73a137ffbe27"
+source = "git+https://github.com/DioxusLabs/manganis#8a6d74dc19072e7a650854bd722c452da51955d6"
 dependencies = [
  "dioxus-core 0.5.6",
  "manganis-macro",
@@ -6051,7 +6051,7 @@ dependencies = [
 [[package]]
 name = "manganis-cli-support"
 version = "0.2.4"
-source = "git+https://github.com/DioxusLabs/collect-assets#c6352db25361619b514a6a2d496c73a137ffbe27"
+source = "git+https://github.com/DioxusLabs/manganis#8a6d74dc19072e7a650854bd722c452da51955d6"
 dependencies = [
  "anyhow",
  "image 0.25.1",
@@ -6075,7 +6075,7 @@ dependencies = [
 [[package]]
 name = "manganis-common"
 version = "0.2.4"
-source = "git+https://github.com/DioxusLabs/collect-assets#c6352db25361619b514a6a2d496c73a137ffbe27"
+source = "git+https://github.com/DioxusLabs/manganis#8a6d74dc19072e7a650854bd722c452da51955d6"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
@@ -6091,7 +6091,7 @@ dependencies = [
 [[package]]
 name = "manganis-macro"
 version = "0.2.2"
-source = "git+https://github.com/DioxusLabs/collect-assets#c6352db25361619b514a6a2d496c73a137ffbe27"
+source = "git+https://github.com/DioxusLabs/manganis#8a6d74dc19072e7a650854bd722c452da51955d6"
 dependencies = [
  "manganis-common",
  "proc-macro2",
