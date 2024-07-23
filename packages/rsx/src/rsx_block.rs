@@ -154,11 +154,10 @@ impl RsxBlock {
                 continue;
             }
 
-            // If this isn't the root of rsx, try to parse shorthand attributes
             // Parse shorthand attributes
             // todo: this might cause complications with partial expansion... think more about the cases
             // where we can imagine expansion and what better diagnostics we can provide
-            if Self::peek_uppercase_ident(&content)
+            if Self::peek_lowercase_ident(&content)
                     && !content.peek2(Brace)
                     && !content.peek2(Token![:]) // regular attributes / components with generics
                     && !content.peek2(Token![-]) // web components
@@ -211,7 +210,7 @@ impl RsxBlock {
         })
     }
 
-    fn peek_uppercase_ident(stream: &ParseStream) -> bool {
+    fn peek_lowercase_ident(stream: &ParseStream) -> bool {
         let Ok(ident) = stream.fork().parse::<Ident>() else {
             return false;
         };
