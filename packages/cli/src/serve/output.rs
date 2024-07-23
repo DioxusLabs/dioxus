@@ -313,14 +313,8 @@ impl Output {
                 };
                 msgs.clear();
             }
-            Event::Key(key) if key.code == KeyCode::Char('0') => {
-                self.tab = Tab::Console;
-                self.scroll = 0;
-            }
-            Event::Key(key) if key.code == KeyCode::Char('1') => {
-                self.tab = Tab::BuildLog;
-                self.scroll = 0;
-            }
+            Event::Key(key) if key.code == KeyCode::Char('1') => self.set_tab(Tab::Console),
+            Event::Key(key) if key.code == KeyCode::Char('2') => self.set_tab(Tab::BuildLog),
             Event::Resize(_width, _height) => {
                 // nothing, it should take care of itself
             }
@@ -339,6 +333,7 @@ impl Output {
 
         Ok(())
     }
+
 
     pub fn new_ws_message(&mut self, platform: Platform, message: axum::extract::ws::Message) {
         if let axum::extract::ws::Message::Text(text) = message {
@@ -581,14 +576,14 @@ impl Output {
                 frame.render_widget(
                     Paragraph::new(vec![
                         {
-                            let mut line = Line::from(" [0] console").dark_gray();
+                            let mut line = Line::from(" [1] console").dark_gray();
                             if self.tab == Tab::Console {
                                 line.style = Style::default().fg(Color::LightYellow);
                             }
                             line
                         },
                         {
-                            let mut line = Line::from(" [1] build").dark_gray();
+                            let mut line = Line::from(" [2] build").dark_gray();
                             if self.tab == Tab::BuildLog {
                                 line.style = Style::default().fg(Color::LightYellow);
                             }
@@ -732,11 +727,15 @@ impl Output {
         frame.render_widget(Clear, panel);
         frame.render_widget(Block::default().borders(Borders::ALL), panel);
 
-        let modal = Paragraph::new(
-            "Under construction, please check back at a later date!\n",
-        )
-        .alignment(Alignment::Center);
+        let modal = Paragraph::new("Under construction, please check back at a later date!\n")
+            .alignment(Alignment::Center);
         frame.render_widget(modal, panel);
+    }
+
+
+     fn set_tab(&mut self, tab: Tab) {
+        self.tab = tab;
+        self.scroll = 0;
     }
 }
 
