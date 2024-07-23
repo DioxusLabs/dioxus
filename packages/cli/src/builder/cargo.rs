@@ -96,7 +96,15 @@ impl BuildRequest {
         tracing::info!("🚅 Running build [Desktop] command...");
 
         // Set up runtime guards
-        let _guard = dioxus_cli_config::__private::save_config(&self.dioxus_crate.dioxus_config);
+        let mut dioxus_version = crate::dx_build_info::PKG_VERSION.to_string();
+        if let Some(hash) = crate::dx_build_info::GIT_COMMIT_HASH_SHORT {
+            let hash = &hash.trim_start_matches('g')[..4];
+            dioxus_version.push_str(&format!("-{hash}"));
+        }
+        let _guard = dioxus_cli_config::__private::save_config(
+            &self.dioxus_crate.dioxus_config,
+            &dioxus_version,
+        );
         let _manganis_support = ManganisSupportGuard::default();
         let _asset_guard = AssetConfigDropGuard::new();
 

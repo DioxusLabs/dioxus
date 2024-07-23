@@ -2558,6 +2558,7 @@ dependencies = [
 name = "dioxus-cli-config"
 version = "0.5.2"
 dependencies = [
+ "built",
  "cargo_toml",
  "clap 4.5.9",
  "dirs",
