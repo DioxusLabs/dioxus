@@ -87,8 +87,8 @@ impl Parse for BodyNode {
         //
         // example:
         // div {}
-        if stream.peek(Ident) && !stream.peek2(Token![::]) {
-            let ident = stream.fork().parse::<Ident>().unwrap();
+        if stream.peek(Ident::peek_any) && !stream.peek2(Token![::]) {
+            let ident = parse_raw_ident(&stream.fork()).unwrap();
             let el_name = ident.to_string();
             let first_char = el_name.chars().next().unwrap();
 
