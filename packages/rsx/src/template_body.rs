@@ -58,8 +58,6 @@ use self::location::DynIdx;
 use crate::innerlude::Attribute;
 use crate::*;
 use proc_macro2::TokenStream as TokenStream2;
-use proc_macro2_diagnostics::SpanDiagnosticExt;
-use syn::token::Brace;
 
 #[cfg(feature = "hot_reload")]
 use dioxus_core::prelude::Template;
@@ -90,32 +88,9 @@ pub struct TemplateBody {
 impl Parse for TemplateBody {
     /// Parse the nodes of the callbody as `Body`.
     fn parse(input: ParseStream) -> Result<Self> {
-        let brace = Brace::default();
+        let children = RsxBlock::parse_children(input)?;
 
-        let RsxBlock {
-            brace: _,
-            attributes,
-            spreads,
-            children,
-            diagnostics: _, // we don't care about the diagnostics here - ours might be different
-        } = RsxBlock::parse_inner(input, brace, true)?;
-
-        let mut template = Self::new(children);
-        for spread in spreads {
-            template.diagnostics.push(
-                spread
-                    .span()
-                    .error("Spreads are only allowed in elements and components"),
-            );
-        }
-        for attr in attributes {
-            template.diagnostics.push(
-                attr.span()
-                    .error("Attributes are only allowed in elements and components"),
-            );
-        }
-
-        Ok(template)
+        Ok(Self::new(children))
     }
 }
 

@@ -47,46 +47,51 @@ impl Parse for Element {
     fn parse(stream: ParseStream) -> Result<Self> {
         let name = stream.parse::<ElementName>()?;
 
-        // If the element is followed by a brace, it is complete. Parse the body
-        let (mut fields, children, brace, spreads, diagnostics) = if stream.peek(Brace) {
-            let RsxBlock {
-                attributes,
-                children,
-                brace,
-                spreads,
-                diagnostics,
-            } = stream.parse::<RsxBlock>()?;
-            (attributes, children, Some(brace), spreads, diagnostics)
-        }
-        // Otherwise, it is incomplete. Add a diagnostic and parse the body later
-        else {
-            let mut diagnostics = Diagnostics::new();
-            diagnostics.push(
+        // We very liberally parse elements - they might not even have a brace!
+        // This is designed such that we can throw a compile error but still give autocomplete
+        // ... partial completions mean we do some weird parsing to get the right completions
+        let mut brace = None;
+        let mut block = RsxBlock::default();
+
+        match stream.peek(Brace) {
+            // If the element is followed by a brace, it is complete. Parse the body
+            true => {
+                block = stream.parse::<RsxBlock>()?;
+                brace = Some(block.brace);
+            }
+
+            // Otherwise, it is incomplete. Add a diagnostic
+            false => block.diagnostics.push(
                 name.span()
                     .error("Elements must be followed by braces")
                     .help("Did you forget a brace?"),
-            );
-            (Vec::new(), Vec::new(), None, Vec::new(), diagnostics)
-        };
+            ),
+        }
 
         // Make sure these attributes have an el_name set for completions and Template generation
-        for attr in fields.iter_mut() {
+        for attr in block.attributes.iter_mut() {
             attr.el_name = Some(name.clone());
         }
 
+        // Assemble the new element from the contents of the block
         let mut element = Element {
-            name,
-            raw_attributes: fields,
-            children,
             brace,
-            diagnostics,
-            spreads: spreads.clone(),
+            name,
+            raw_attributes: block.attributes,
+            children: block.children,
+            diagnostics: block.diagnostics,
+            spreads: block.spreads.clone(),
             merged_attributes: Vec::new(),
         };
 
+        // And then merge the various attributes together
+        // The original raw_attributes are kept for lossless parsing used by hotreload/autofmt
         element.merge_attributes();
 
-        for spread in spreads.iter() {
+        // And then merge the spreads *after* the attributes are merged. This ensures walking the
+        // merged attributes in path order stops before we hit the spreads, but spreads are still
+        // counted as dynamic attributes
+        for spread in block.spreads.iter() {
             element.merged_attributes.push(Attribute {
                 name: AttributeName::Spread(spread.dots),
                 colon: None,
