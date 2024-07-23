@@ -222,15 +222,23 @@ jobs:
           - {
               target: x86_64-pc-windows-msvc,
               os: windows-latest,
-              toolchain: "1.76.0",
+              toolchain: "1.79.0",
+              cross: false,
+              command: "test",
+              args: "--all --tests",
+            }
+          - {
+              target: aarch64-apple-darwin,
+              os: macos-latest,
+              toolchain: "1.79.0",
               cross: false,
               command: "test",
               args: "--all --tests",
             }
           - {
               target: x86_64-apple-darwin,
-              os: macos-latest,
-              toolchain: "1.76.0",
+              os: macos-13,
+              toolchain: "1.79.0",
               cross: false,
               command: "test",
               args: "--all --tests",
@@ -238,7 +246,7 @@ jobs:
           - {
               target: aarch64-apple-ios,
               os: macos-latest,
-              toolchain: "1.76.0",
+              toolchain: "1.79.0",
               cross: false,
               command: "build",
               args: "--package dioxus-mobile",
@@ -246,7 +254,7 @@ jobs:
           - {
               target: aarch64-linux-android,
               os: ubuntu-latest,
-              toolchain: "1.76.0",
+              toolchain: "1.79.0",
               cross: true,
               command: "build",
               args: "--package dioxus-mobile",
@@ -260,6 +268,10 @@ jobs:
           toolchain: ${{ matrix.platform.toolchain }}
           targets: ${{ matrix.platform.target }}
           components: rustfmt
+
+      - name: Install nasm for windows (tls)
+        if: ${{ matrix.platform.target == 'x86_64-pc-windows-msvc' }}
+        uses: ilammy/setup-nasm@v1
 
       - name: Install cross
         if: ${{ matrix.platform.cross == true }}

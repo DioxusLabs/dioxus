@@ -7,8 +7,3 @@ pub use hot_reload_diff::*;
 mod hot_reloading_context;
 #[cfg(feature = "hot_reload_traits")]
 pub use hot_reloading_context::*;
-
-#[cfg(feature = "hot_reload")]
-mod hot_reloading_file_map;
-#[cfg(feature = "hot_reload")]
-pub use hot_reloading_file_map::*;

@@ -203,7 +203,7 @@ impl Drop for VNode {
             for attrs in self.vnode.dynamic_attrs.iter() {
                 for attr in attrs.iter() {
                     if let AttributeValue::Listener(listener) = &attr.value {
-                        listener.callback.recycle();
+                        listener.callback.manually_drop();
                     }
                 }
             }
@@ -385,7 +385,7 @@ pub struct Template {
 }
 
 #[cfg(feature = "serialize")]
-fn deserialize_string_leaky<'a, 'de, D>(deserializer: D) -> Result<&'a str, D::Error>
+pub(crate) fn deserialize_string_leaky<'a, 'de, D>(deserializer: D) -> Result<&'a str, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -1076,15 +1076,31 @@ impl IntoAttributeValue for String {
     }
 }
 
+impl IntoAttributeValue for f32 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Float(self as _)
+    }
+}
 impl IntoAttributeValue for f64 {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Float(self)
     }
 }
 
+impl IntoAttributeValue for i32 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
 impl IntoAttributeValue for i64 {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Int(self)
+    }
+}
+
+impl IntoAttributeValue for i128 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
     }
 }
 
@@ -1130,7 +1146,7 @@ pub trait HasAttributes {
 #[cfg(debug_assertions)]
 pub(crate) fn sort_bfo(paths: &[&'static [u8]]) -> Vec<(usize, &'static [u8])> {
     let mut with_indecies = paths.iter().copied().enumerate().collect::<Vec<_>>();
-    with_indecies.sort_unstable_by(|(_, a), (_, b)| {
+    with_indecies.sort_by(|(_, a), (_, b)| {
         let mut a = a.iter();
         let mut b = b.iter();
         loop {

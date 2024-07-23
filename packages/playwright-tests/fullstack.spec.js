@@ -1,34 +1,38 @@
 // @ts-check
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require("@playwright/test");
 
-test('button click', async ({ page }) => {
-  await page.goto('http://localhost:3333');
+test("button click", async ({ page }) => {
+  await page.goto("http://localhost:3333");
   await page.waitForTimeout(1000);
 
   // Expect the page to contain the counter text.
-  const main = page.locator('#main');
-  await expect(main).toContainText('hello axum! 12345');
+  const main = page.locator("#main");
+  await expect(main).toContainText("hello axum! 12345");
+  // Expect the title to contain the counter text.
+  await expect(page).toHaveTitle("hello axum! 12345");
 
   // Click the increment button.
-  let button = page.locator('button.increment-button');
+  let button = page.locator("button.increment-button");
   await button.click();
 
   // Expect the page to contain the updated counter text.
-  await expect(main).toContainText('hello axum! 12346');
+  await expect(main).toContainText("hello axum! 12346");
+  // Expect the title to contain the updated counter text.
+  await expect(page).toHaveTitle("hello axum! 12346");
 });
 
-test('fullstack communication', async ({ page }) => {
-  await page.goto('http://localhost:3333');
+test("fullstack communication", async ({ page }) => {
+  await page.goto("http://localhost:3333");
   await page.waitForTimeout(1000);
 
   // Expect the page to contain the counter text.
-  const main = page.locator('#main');
-  await expect(main).toContainText('Server said: ...');
+  const main = page.locator("#main");
+  await expect(main).toContainText("Server said: ...");
 
   // Click the increment button.
-  let button = page.locator('button.server-button');
+  let button = page.locator("button.server-button");
   await button.click();
 
   // Expect the page to contain the updated counter text.
-  await expect(main).toContainText('Server said: Hello from the server!');
+  await expect(main).toContainText("Server said: Hello from the server!");
 });

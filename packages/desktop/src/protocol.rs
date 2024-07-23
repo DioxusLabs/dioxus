@@ -1,8 +1,13 @@
 use crate::{assets::*, edits::EditQueue};
-use dioxus_interpreter_js::eval::NATIVE_EVAL_JS;
+use dioxus_html::document::NATIVE_EVAL_JS;
 use dioxus_interpreter_js::unified_bindings::SLEDGEHAMMER_JS;
 use dioxus_interpreter_js::NATIVE_JS;
-use std::path::{Component, Path, PathBuf};
+use serde::Deserialize;
+use std::{
+    path::{Component, Path, PathBuf},
+    process::Command,
+    sync::OnceLock,
+};
 use wry::{
     http::{status::StatusCode, Request, Response},
     RequestAsyncResponder, Result,
@@ -108,8 +113,18 @@ fn assets_head() -> Option<String> {
 
 fn resolve_resource(path: &Path) -> PathBuf {
     let mut base_path = get_asset_root_or_default();
+
     if running_in_dev_mode() {
         base_path.push(path);
+
+        // Special handler for Manganis filesystem fallback.
+        // We need this since Manganis provides assets from workspace root.
+        if !base_path.exists() {
+            let workspace_root = get_workspace_root_from_cargo();
+            let asset_path = workspace_root.join(path);
+            println!("ASSET PATH: {:?}", asset_path);
+            return asset_path;
+        }
     } else {
         let mut resource_path = PathBuf::new();
         for component in path.components() {
@@ -255,7 +270,7 @@ fn get_asset_root() -> Option<PathBuf> {
     if running_in_dev_mode() {
         return dioxus_cli_config::CURRENT_CONFIG
             .as_ref()
-            .map(|c| c.out_dir())
+            .map(|c| c.application.out_dir.clone())
             .ok();
     }
 
@@ -304,4 +319,32 @@ fn get_mime_by_ext(trimmed: &Path) -> &'static str {
         // using octet stream according to this:
         None => "application/octet-stream",
     }
+}
+
+/// A global that stores the workspace root. Used in [`get_workspace_root_from_cargo`].
+static WORKSPACE_ROOT: OnceLock<PathBuf> = OnceLock::new();
+
+/// Describes the metadata we need from `cargo metadata`.
+#[derive(Deserialize)]
+struct CargoMetadata {
+    workspace_root: PathBuf,
+}
+
+/// Get the workspace root using `cargo metadata`. Should not be used in release mode.
+pub(crate) fn get_workspace_root_from_cargo() -> PathBuf {
+    WORKSPACE_ROOT
+        .get_or_init(|| {
+            let out = Command::new("cargo")
+                .args(["metadata", "--format-version", "1", "--no-deps"])
+                .output()
+                .expect("`cargo metadata` failed to run");
+
+            let out =
+                String::from_utf8(out.stdout).expect("failed to parse output of `cargo metadata`");
+            let metadata = serde_json::from_str::<CargoMetadata>(&out)
+                .expect("failed to deserialize data from `cargo metadata`");
+
+            metadata.workspace_root
+        })
+        .to_owned()
 }

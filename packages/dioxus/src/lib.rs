@@ -96,13 +96,20 @@ pub mod prelude {
         feature = "hot-reload"
     ))]
     #[cfg_attr(docsrs, doc(cfg(feature = "hot-reload")))]
-    pub use dioxus_hot_reload::{self, hot_reload_init};
+    pub use dioxus_hot_reload;
 
     pub use dioxus_core;
 
     #[cfg(feature = "fullstack")]
     #[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]
     pub use dioxus_fullstack::prelude::*;
+
+    #[cfg(all(feature = "static-generation", not(feature = "fullstack")))]
+    #[cfg_attr(
+        docsrs,
+        doc(cfg(all(feature = "static-generation", not(feature = "fullstack"))))
+    )]
+    pub use dioxus_static_site_generation::prelude::*;
 
     #[cfg(feature = "router")]
     #[cfg_attr(docsrs, doc(cfg(feature = "router")))]
@@ -115,6 +122,10 @@ pub mod prelude {
     #[cfg(feature = "axum")]
     #[cfg_attr(docsrs, doc(cfg(feature = "axum")))]
     pub use axum;
+
+    #[cfg(feature = "asset")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "asset")))]
+    pub use manganis::{self, classes, mg as asset, ImageAsset, ImageType};
 }
 
 #[cfg(feature = "web")]

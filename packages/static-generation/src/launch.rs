@@ -10,7 +10,7 @@ pub use crate::Config;
 #[allow(unused)]
 pub fn launch(
     root: fn() -> Element,
-    contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
+    contexts: Vec<Box<dyn Fn() -> Box<dyn Any + Send + Sync> + Send + Sync>>,
     platform_config: Config,
 ) {
     let virtual_dom_factory = move || {
@@ -30,7 +30,6 @@ pub fn launch(
             use axum::routing::get;
             use axum::Router;
             use axum::ServiceExt;
-            use dioxus_hot_reload::HotReloadRouterExt;
             use http::StatusCode;
             use tower_http::services::ServeDir;
             use tower_http::services::ServeFile;
@@ -52,7 +51,7 @@ pub fn launch(
                 let mut serve_dir =
                     ServeDir::new(path.clone()).call_fallback_on_method_not_allowed(true);
 
-                let mut router = axum::Router::new().forward_cli_hot_reloading();
+                let mut router = axum::Router::new();
 
                 // If we are acting like github pages, we need to serve the 404 page if the user requests a directory that doesn't exist
                 router = if github_pages {

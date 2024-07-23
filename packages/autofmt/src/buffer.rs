@@ -8,7 +8,7 @@ use std::fmt::{Result, Write};
 
 use dioxus_rsx::IfmtInput;
 
-use crate::{indent::IndentOptions, write_ifmt};
+use crate::indent::IndentOptions;
 
 /// The output buffer that tracks indent and string
 #[derive(Debug, Default)]
@@ -51,7 +51,7 @@ impl Buffer {
     }
 
     pub fn write_text(&mut self, text: &IfmtInput) -> Result {
-        write_ifmt(text, &mut self.buf)
+        write!(self.buf, "{}", text.to_string_with_quotes())
     }
 }
 

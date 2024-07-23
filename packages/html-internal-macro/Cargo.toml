@@ -15,7 +15,7 @@ description = "HTML function macros for Dioxus"
 proc-macro2 = "1.0.66"
 syn = { workspace = true, features = ["full"] }
 quote = "^1.0.26"
-convert_case = "^0.6.0"
+convert_case = { workspace = true }
 
 [lib]
 proc-macro = true

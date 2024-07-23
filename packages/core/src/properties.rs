@@ -164,7 +164,7 @@ pub fn verify_component_called_as_component<C: ComponentFunction<P, M>, P, M>(co
     diagnostic::on_unimplemented(
         message = "`Component<{Props}>` is not implemented for `{Self}`",
         label = "Component",
-        note = "Components are functions in the form `fn() -> Element`, `fn(props: Properties) -> Element`, or `#[component] fn(partial_eq1: u32, partial_eq2: u32) -> Element`.", 
+        note = "Components are functions in the form `fn() -> Element`, `fn(props: Properties) -> Element`, or `#[component] fn(partial_eq1: u32, partial_eq2: u32) -> Element`.",
         note = "You may have forgotten to add `#[component]` to your function to automatically implement the `ComponentFunction` trait."
     )
 )]

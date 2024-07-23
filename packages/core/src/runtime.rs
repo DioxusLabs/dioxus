@@ -22,10 +22,12 @@ pub struct Runtime {
     pub(crate) scope_states: RefCell<Vec<Option<Scope>>>,
 
     // We use this to track the current scope
-    pub(crate) scope_stack: RefCell<Vec<ScopeId>>,
+    // This stack should only be modified through [`Runtime::with_scope_on_stack`] to ensure that the stack is correctly restored
+    scope_stack: RefCell<Vec<ScopeId>>,
 
     // We use this to track the current suspense location. Generally this lines up with the scope stack, but it may be different for children of a suspense boundary
-    pub(crate) suspense_stack: RefCell<Vec<SuspenseLocation>>,
+    // This stack should only be modified through [`Runtime::with_suspense_location`] to ensure that the stack is correctly restored
+    suspense_stack: RefCell<Vec<SuspenseLocation>>,
 
     // We use this to track the current task
     pub(crate) current_task: Cell<Option<Task>>,
@@ -82,7 +84,6 @@ impl Runtime {
         {
             let borrow = self.scope_states.borrow();
             if let Some(scope) = &borrow[id.0] {
-                let _runtime_guard = RuntimeGuard::new(self.clone());
                 // Manually drop tasks, hooks, and contexts inside of the runtime
                 self.on_scope(id, || {
                     // Drop all spawned tasks - order doesn't matter since tasks don't rely on eachother
@@ -112,7 +113,8 @@ impl Runtime {
     /// Call this function with the current scope set to the given scope
     ///
     /// Useful in a limited number of scenarios
-    pub fn on_scope<O>(&self, id: ScopeId, f: impl FnOnce() -> O) -> O {
+    pub fn on_scope<O>(self: &Rc<Self>, id: ScopeId, f: impl FnOnce() -> O) -> O {
+        let _runtime_guard = RuntimeGuard::new(self.clone());
         {
             self.push_scope(id);
         }
@@ -123,21 +125,46 @@ impl Runtime {
         o
     }
 
+    /// Get the current suspense location
+    pub(crate) fn current_suspense_location(&self) -> Option<SuspenseLocation> {
+        self.suspense_stack.borrow().last().cloned()
+    }
+
+    /// Run a callback a [`SuspenseLocation`] at the top of the stack
+    pub(crate) fn with_suspense_location<O>(
+        &self,
+        suspense_location: SuspenseLocation,
+        f: impl FnOnce() -> O,
+    ) -> O {
+        self.suspense_stack.borrow_mut().push(suspense_location);
+        let o = f();
+        self.suspense_stack.borrow_mut().pop();
+        o
+    }
+
+    /// Run a callback with the current scope at the top of the stack
+    pub(crate) fn with_scope_on_stack<O>(&self, scope: ScopeId, f: impl FnOnce() -> O) -> O {
+        self.push_scope(scope);
+        let o = f();
+        self.pop_scope();
+        o
+    }
+
     /// Push a scope onto the stack
-    pub(crate) fn push_scope(&self, scope: ScopeId) {
+    fn push_scope(&self, scope: ScopeId) {
         let suspense_location = self
             .scope_states
             .borrow()
             .get(scope.0)
             .and_then(|s| s.as_ref())
-            .map(|s| s.suspense_boundary())
+            .map(|s| s.suspense_location())
             .unwrap_or_default();
         self.suspense_stack.borrow_mut().push(suspense_location);
         self.scope_stack.borrow_mut().push(scope);
     }
 
     /// Pop a scope off the stack
-    pub(crate) fn pop_scope(&self) {
+    fn pop_scope(&self) {
         self.scope_stack.borrow_mut().pop();
         self.suspense_stack.borrow_mut().pop();
     }
@@ -164,7 +191,7 @@ impl Runtime {
 
     /// Runs a function with the current runtime
     pub(crate) fn with<R>(f: impl FnOnce(&Runtime) -> R) -> Option<R> {
-        RUNTIMES.with(|stack| stack.borrow().last().map(|r| f(r)))
+        Self::current().map(|r| f(&r))
     }
 
     /// Runs a function with the current scope
@@ -200,7 +227,7 @@ impl Runtime {
         // If this is not a suspended scope, and we are under a frozen context, then we should
         let scopes = self.scope_states.borrow();
         let scope = &scopes[scope_id.0].as_ref().unwrap();
-        !matches!(scope.suspense_boundary(), SuspenseLocation::UnderSuspense(suspense) if suspense.suspended())
+        !matches!(scope.suspense_location(), SuspenseLocation::UnderSuspense(suspense) if suspense.has_suspended_tasks())
     }
 }
 

@@ -1,5 +1,5 @@
-#![allow(non_snake_case)]
 //! Configuration for how to serve a Dioxus application
+#![allow(non_snake_case)]
 
 use std::fs::File;
 use std::io::Read;
@@ -62,7 +62,7 @@ impl ServeConfigBuilder {
         let assets_path = self.assets_path.unwrap_or(
             dioxus_cli_config::CURRENT_CONFIG
                 .as_ref()
-                .map(|c| c.dioxus_config.application.out_dir.clone())
+                .map(|c| c.application.out_dir.clone())
                 .unwrap_or("dist".into()),
         );
 
@@ -78,6 +78,7 @@ impl ServeConfigBuilder {
             .unwrap_or_else(|| load_index_path(index_path));
 
         let index = load_index_html(index_html, root_id);
+
         ServeConfig {
             index,
             assets_path,
@@ -107,13 +108,19 @@ fn load_index_html(contents: String, root_id: &'static str) -> IndexHtml {
         post_main.1.to_string(),
     );
 
+    let (head, close_head) = pre_main.split_once("</head>").unwrap_or_else(|| {
+        panic!("Failed to find closing </head> tag after id=\"{root_id}\" in index.html.")
+    });
+    let (head, close_head) = (head.to_string(), "</head>".to_string() + close_head);
+
     let (post_main, after_closing_body_tag) =
         post_main.split_once("</body>").unwrap_or_else(|| {
             panic!("Failed to find closing </body> tag after id=\"{root_id}\" in index.html.")
         });
 
     IndexHtml {
-        pre_main,
+        head,
+        close_head,
         post_main: post_main.to_string(),
         after_closing_body_tag: "</body>".to_string() + after_closing_body_tag,
     }
@@ -121,7 +128,8 @@ fn load_index_html(contents: String, root_id: &'static str) -> IndexHtml {
 
 #[derive(Clone)]
 pub(crate) struct IndexHtml {
-    pub(crate) pre_main: String,
+    pub(crate) head: String,
+    pub(crate) close_head: String,
     pub(crate) post_main: String,
     pub(crate) after_closing_body_tag: String,
 }
@@ -131,7 +139,7 @@ pub(crate) struct IndexHtml {
 #[derive(Clone)]
 pub struct ServeConfig {
     pub(crate) index: IndexHtml,
-    #[allow(dead_code)]
+    #[allow(unused)]
     pub(crate) assets_path: PathBuf,
     pub(crate) incremental: Option<dioxus_ssr::incremental::IncrementalRendererConfig>,
 }
