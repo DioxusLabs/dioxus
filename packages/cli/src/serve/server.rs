@@ -21,6 +21,7 @@ use axum_server::tls_rustls::RustlsConfig;
 use dioxus_cli_config::{Platform, WebHttpsConfig};
 use dioxus_hot_reload::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use futures_util::stream;
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use hyper::header::ACCEPT;
 use hyper::HeaderMap;
@@ -598,7 +599,12 @@ async fn build_status_middleware(
             let html = include_str!("../../assets/loading.html");
             return axum::response::Response::builder()
                 .status(StatusCode::OK)
-                .body(Body::from(html))
+                // Load the html loader then keep loading forever
+                // We never close the stream so any headless testing framework (like playwright) will wait until the real build is done
+                .body(Body::from_stream(
+                    stream::once(async move { Ok::<_, std::convert::Infallible>(html) })
+                        .chain(stream::pending()),
+                ))
                 .unwrap();
         }
     }
