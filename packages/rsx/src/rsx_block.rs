@@ -152,15 +152,28 @@ impl RsxBlock {
 
             // If this isn't the root of rsx, try to parse shorthand attributes
             if !root {
+                // Parse shorthand attributes
                 // todo: this might cause complications with partial expansion... think more about the cases
-                // where we can imagine expansion and what better diagnostics we can providea
-                if content.peek(Ident)
-                && !content.peek2(Brace)
-                && !content.peek2(Token![:]) // regular attributes / components with generics
-                && !content.peek2(Token![-]) // web components
-                && !content.peek2(Token![<]) // generics on components
-                // generics on components
-                && !content.peek2(Token![::])
+                // where we can imagine expansion and what better diagnostics we can provide
+                let looks_like_attribute = match content.fork().parse::<Ident>() {
+                    // If it is an ident, it is only a shorthand attribute if it starts with a lowercase letter
+                    // Otherwise this is the start of a component
+                    Ok(ident) => ident
+                        .to_string()
+                        .chars()
+                        .next()
+                        .unwrap()
+                        .is_ascii_lowercase(),
+                    Err(_) => false,
+                };
+
+                if looks_like_attribute
+                    && !content.peek2(Brace)
+                    && !content.peek2(Token![:]) // regular attributes / components with generics
+                    && !content.peek2(Token![-]) // web components
+                    && !content.peek2(Token![<]) // generics on components
+                    // generics on components
+                    && !content.peek2(Token![::])
                 {
                     let attribute = content.parse::<Attribute>()?;
 
