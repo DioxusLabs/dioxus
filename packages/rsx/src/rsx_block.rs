@@ -50,13 +50,20 @@ impl Parse for RsxBlock {
 
 impl RsxBlock {
     /// Only parse the children of the block - all others will be rejected
-    pub fn parse_children(content: &ParseBuffer) -> syn::Result<Vec<BodyNode>> {
+    pub fn parse_children(content: &ParseBuffer) -> syn::Result<Self> {
         let mut nodes = vec![];
+        let mut diagnostics = Diagnostics::new();
         while !content.is_empty() {
-            let node = content.parse::<BodyNode>()?;
-            nodes.push(node);
+            nodes.push(Self::parse_body_node_with_comma_diagnostics(
+                content,
+                &mut diagnostics,
+            )?);
         }
-        Ok(nodes)
+        Ok(Self {
+            children: nodes,
+            diagnostics,
+            ..Default::default()
+        })
     }
 
     pub fn parse_inner(content: &ParseBuffer, brace: token::Brace) -> syn::Result<Self> {
@@ -141,7 +148,9 @@ impl RsxBlock {
                 // components
                 | (content.peek(Ident::peek_any) && (after_attributes || content.peek2(token::Brace) || content.peek2(Token![::])))
             {
-                items.push(RsxItem::Child(content.parse::<BodyNode>()?));
+                items.push(RsxItem::Child(
+                    Self::parse_body_node_with_comma_diagnostics(content, &mut diagnostics)?,
+                ));
                 if !content.is_empty() && content.peek(Token![,]) {
                     let comma = content.parse::<Token![,]>()?;
                     diagnostics.push(
@@ -182,7 +191,9 @@ impl RsxBlock {
             }
 
             // Finally just attempt a bodynode parse
-            items.push(RsxItem::Child(content.parse::<BodyNode>()?))
+            items.push(RsxItem::Child(
+                Self::parse_body_node_with_comma_diagnostics(content, &mut diagnostics)?,
+            ))
         }
 
         // Validate the order of the items
@@ -208,6 +219,23 @@ impl RsxBlock {
             brace,
             diagnostics,
         })
+    }
+
+    // Parse a body node with diagnostics for unnecessary trailing commas
+    fn parse_body_node_with_comma_diagnostics(
+        content: &ParseBuffer,
+        diagnostics: &mut Diagnostics,
+    ) -> syn::Result<BodyNode> {
+        let body_node = content.parse::<BodyNode>()?;
+        if !content.is_empty() && content.peek(Token![,]) {
+            let comma = content.parse::<Token![,]>()?;
+            diagnostics.push(
+                comma
+                    .span()
+                    .warning("Elements and text nodes do not need to be separated by commas."),
+            );
+        }
+        Ok(body_node)
     }
 
     fn peek_lowercase_ident(stream: &ParseStream) -> bool {
@@ -579,10 +607,7 @@ mod tests {
             di
         };
 
-        fn parse(input: &ParseBuffer) -> syn::Result<Vec<BodyNode>> {
-            RsxBlock::parse_children(input)
-        }
-        let parsed = parse.parse2(input).unwrap();
+        let parsed = parse.parse2(RsxBlock::parse_children).unwrap();
 
         assert_eq!(parsed.len(), 1);
         if let BodyNode::Element(parsed) = &parsed[0] {

@@ -89,8 +89,11 @@ impl Parse for TemplateBody {
     /// Parse the nodes of the callbody as `Body`.
     fn parse(input: ParseStream) -> Result<Self> {
         let children = RsxBlock::parse_children(input)?;
-
-        Ok(Self::new(children))
+        let mut myself = Self::new(children.children);
+        myself
+            .diagnostics
+            .extend(children.diagnostics.into_diagnostics());
+        Ok(myself)
     }
 }
 
