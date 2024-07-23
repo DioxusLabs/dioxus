@@ -1,5 +1,5 @@
 use crate::{assets::*, edits::EditQueue};
-use dioxus_interpreter_js::eval::NATIVE_EVAL_JS;
+use dioxus_html::document::NATIVE_EVAL_JS;
 use dioxus_interpreter_js::unified_bindings::SLEDGEHAMMER_JS;
 use dioxus_interpreter_js::NATIVE_JS;
 use std::path::{Component, Path, PathBuf};
@@ -255,7 +255,7 @@ fn get_asset_root() -> Option<PathBuf> {
     if running_in_dev_mode() {
         return dioxus_cli_config::CURRENT_CONFIG
             .as_ref()
-            .map(|c| c.out_dir())
+            .map(|c| c.application.out_dir.clone())
             .ok();
     }
 

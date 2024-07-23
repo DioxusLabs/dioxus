@@ -24,9 +24,6 @@ pub mod unified_bindings;
 #[cfg(feature = "sledgehammer")]
 pub use unified_bindings::*;
 
-#[cfg(feature = "eval")]
-pub mod eval;
-
 // Common bindings for minimal usage.
 #[cfg(all(feature = "minimal_bindings", feature = "webonly"))]
 pub mod minimal_bindings {
@@ -50,5 +47,10 @@ pub mod minimal_bindings {
         pub fn register_rehydrate_chunk_for_streaming(
             closure: &wasm_bindgen::closure::Closure<dyn FnMut(Vec<u32>, js_sys::Uint8Array)>,
         );
+    }
+
+    #[wasm_bindgen(module = "/src/js/patch_console.js")]
+    extern "C" {
+        pub fn monkeyPatchConsole(ws: JsValue);
     }
 }

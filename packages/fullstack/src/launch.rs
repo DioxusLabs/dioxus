@@ -50,12 +50,23 @@ pub fn launch(
 #[allow(unused)]
 pub fn launch(
     root: fn() -> Element,
-    contexts: Vec<Box<dyn Fn() -> Box<dyn Any + Send + Sync> + Send + Sync>>,
+    #[allow(unused_mut)] mut contexts: Vec<
+        Box<dyn Fn() -> Box<dyn Any + Send + Sync> + Send + Sync>,
+    >,
     platform_config: Config,
 ) {
     let contexts = Arc::new(contexts);
-    let factory = virtual_dom_factory(root, contexts);
+    let mut factory = virtual_dom_factory(root, contexts);
     let cfg = platform_config.web_cfg.hydrate(true);
+
+    #[cfg(feature = "document")]
+    let factory = move || {
+        let mut vdom = factory();
+        vdom.provide_root_context(std::rc::Rc::new(crate::document::web::FullstackWebDocument)
+            as std::rc::Rc<dyn dioxus_lib::prelude::document::Document>);
+        vdom
+    };
+
     dioxus_web::launch::launch_virtual_dom(factory(), cfg)
 }
 
@@ -116,33 +127,34 @@ async fn launch_server(
 ) {
     use clap::Parser;
 
-    let args = dioxus_cli_config::ServeArguments::from_cli()
-        .unwrap_or_else(dioxus_cli_config::ServeArguments::parse);
-    let addr = args
-        .addr
-        .unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)));
-    let addr = std::net::SocketAddr::new(addr, args.port);
-    println!("Listening on http://{}", addr);
+    // Get the address the server should run on. If the CLI is running, the CLI proxies fullstack into the main address
+    // and we use the generated address the CLI gives us
+    let cli_args = dioxus_cli_config::RuntimeCLIArguments::from_cli();
+    let address = cli_args
+        .as_ref()
+        .map(|args| args.fullstack_address())
+        .unwrap_or_else(dioxus_cli_config::AddressArguments::parse)
+        .address();
+
+    // Point the user to the CLI address if the CLI is running or the fullstack address if not
+    let serve_address = cli_args
+        .map(|args| args.cli_address())
+        .unwrap_or_else(|| address);
 
     #[cfg(feature = "axum")]
     {
         use crate::axum_adapter::DioxusRouterExt;
-        use crate::prelude::RenderHandleState;
 
         let router = axum::Router::new().register_server_functions_with_context(context_providers);
+
         #[cfg(not(any(feature = "desktop", feature = "mobile")))]
         let router = {
+            use crate::prelude::RenderHandleState;
             use crate::prelude::SSRState;
 
             let cfg = platform_config.server_cfg.build();
 
             let mut router = router.serve_static_assets(cfg.assets_path.clone());
-
-            #[cfg(all(feature = "hot-reload", debug_assertions))]
-            {
-                use dioxus_hot_reload::HotReloadRouterExt;
-                router = router.forward_cli_hot_reloading();
-            }
 
             router.fallback(
                 axum::routing::get(crate::axum_adapter::render_handler).with_state(
@@ -151,8 +163,10 @@ async fn launch_server(
                 ),
             )
         };
+
         let router = router.into_make_service();
-        let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+        let listener = tokio::net::TcpListener::bind(address).await.unwrap();
+
         axum::serve(listener, router).await.unwrap();
     }
     #[cfg(not(feature = "axum"))]

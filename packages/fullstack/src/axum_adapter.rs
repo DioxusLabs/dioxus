@@ -256,12 +256,6 @@ where
             .serve_static_assets(cfg.assets_path.clone())
             .register_server_functions();
 
-        #[cfg(all(feature = "hot-reload", debug_assertions))]
-        {
-            use dioxus_hot_reload::HotReloadRouterExt;
-            server = server.forward_cli_hot_reloading();
-        }
-
         server.fallback(
             get(render_handler).with_state(
                 RenderHandleState::new(app)

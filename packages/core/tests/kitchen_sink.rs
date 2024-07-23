@@ -6,11 +6,13 @@ fn basic_syntax_is_a_template() -> Element {
     let var = 123;
 
     rsx! {
-        div { key: "{asd}", class: "asd", class: "{asd}", class: if true {
-                "{asd}"
-            }, class: if false {
-                "{asd}"
-            }, onclick: move |_| {},
+        div {
+            key: "{asd}",
+            class: "asd",
+            class: "{asd}",
+            class: if true { "{asd}" },
+            class: if false { "{asd}" },
+            onclick: move |_| {},
             div { "{var}" }
             div {
                 h1 { "var" }
@@ -40,7 +42,7 @@ fn dual_stream() {
             HydrateText { path: &[0, 0], value: "123".to_string(), id: ElementId(2) },
             SetAttribute {
                 name: "class",
-                value: "asd 123 123".into_value(),
+                value: "asd 123 123 ".into_value(),
                 id: ElementId(1),
                 ns: None,
             },

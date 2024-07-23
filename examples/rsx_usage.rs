@@ -94,7 +94,7 @@ fn app() -> Element {
             }
 
             // Expressions can be used in element position too:
-            {rsx!(p { "More templating!" })},
+            {rsx!(p { "More templating!" })}
 
             // Iterators
             {(0..10).map(|i| rsx!(li { "{i}" }))}

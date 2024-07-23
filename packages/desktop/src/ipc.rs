@@ -24,7 +24,7 @@ pub enum UserWindowEvent {
         not(target_os = "android"),
         not(target_os = "ios")
     ))]
-    HotReloadEvent(dioxus_hot_reload::HotReloadMsg),
+    HotReloadEvent(dioxus_hot_reload::DevserverMsg),
 
     /// Create a new window
     NewWindow,

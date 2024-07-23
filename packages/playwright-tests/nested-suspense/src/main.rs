@@ -17,6 +17,10 @@ fn main() {
 
 fn app() -> Element {
     rsx! {
+        SuspenseBoundary {
+            fallback: move |_| rsx! {},
+            LoadTitle {}
+        }
         MessageWithLoader { id: 0 }
     }
 }
@@ -30,6 +34,17 @@ fn MessageWithLoader(id: usize) -> Element {
             },
             Message { id }
         }
+    }
+}
+
+#[component]
+fn LoadTitle() -> Element {
+    let title = use_server_future(move || server_content(0))?()
+        .unwrap()
+        .unwrap();
+
+    rsx! {
+        Title { "{title.title}" }
     }
 }
 

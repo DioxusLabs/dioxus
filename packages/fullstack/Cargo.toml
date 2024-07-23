@@ -20,6 +20,7 @@ axum = { workspace = true, features = ["ws", "macros"], optional = true }
 tower-http = { workspace = true, optional = true, features = ["fs"] }
 
 dioxus-lib = { workspace = true }
+generational-box = { workspace = true }
 
 # Dioxus + SSR
 dioxus-ssr = { workspace = true, optional = true }
@@ -71,19 +72,18 @@ tokio = { workspace = true, features = ["rt", "sync", "rt-multi-thread"], option
 dioxus = { workspace = true, features = ["fullstack"] }
 
 [features]
-default = ["hot-reload", "panic_hook"]
+default = ["hot-reload", "panic_hook", "document", "file_engine", "mounted"]
 panic_hook = ["dioxus-web?/panic_hook"]
 hot-reload = ["dioxus-web?/hot_reload", "dioxus-hot-reload/serve"]
 mounted = ["dioxus-web?/mounted"]
 file_engine = ["dioxus-web?/file_engine"]
-eval = ["dioxus-web?/eval"]
+document = ["dioxus-web?/document"]
 web = ["dep:dioxus-web", "dep:web-sys"]
 desktop = ["dep:dioxus-desktop", "server_fn/reqwest", "dioxus_server_macro/reqwest"]
 mobile = ["dep:dioxus-mobile"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls"]
 axum = ["dep:axum", "dep:tower-http", "server", "server_fn/axum", "dioxus_server_macro/axum", "default-tls"]
-static-site-generation = []
 server = [
     "server_fn/ssr",
     "dioxus_server_macro/server",
@@ -104,7 +104,7 @@ server = [
     "dep:parking_lot",
     "dioxus-interpreter-js",
     "dep:clap",
-    "dioxus-cli-config/cli"
+    "dioxus-cli-config/read-from-args"
 ]
 
 [package.metadata.docs.rs]

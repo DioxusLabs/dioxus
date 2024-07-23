@@ -1,0 +1,3 @@
+# please dont accidentally run tsc and commit your js in this dir.
+*.js
+

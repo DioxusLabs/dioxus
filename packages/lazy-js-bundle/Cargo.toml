@@ -1,0 +1,11 @@
+[package]
+name = "lazy-js-bundle"
+version = { workspace = true }
+edition = "2021"
+authors = ["Jonathan Kelley"]
+description = "A codegen library to bundle TypeScript into JavaScript without requiring a bundler to be installed"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+documentation = "https://docs.rs/dioxus"
+keywords = ["ts", "codegen", "typescript", "javascript", "wasm"]
