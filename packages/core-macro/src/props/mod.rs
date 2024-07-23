@@ -640,6 +640,7 @@ mod struct_info {
 
             let regular_fields: Vec<_> = self
                 .included_fields()
+                .chain(self.extend_fields())
                 .filter(|f| !looks_like_signal_type(f.ty) && !looks_like_callback_type(f.ty))
                 .map(|f| {
                     let name = f.name;
