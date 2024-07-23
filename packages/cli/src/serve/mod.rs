@@ -45,15 +45,14 @@ use watcher::*;
 /// - I want us to be able to detect a `server_fn` in the project and then upgrade from a static server
 ///   to a dynamic one on the fly.
 pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
-    let mut server = Server::start(&serve, &dioxus_crate);
-    let mut watcher = Watcher::start(&dioxus_crate);
-    let mut screen = Output::start(&serve)
-        .await
-        .expect("Failed to open terminal logger");
     let mut builder = Builder::new(&dioxus_crate, &serve);
 
     // Start the first build
     builder.build();
+
+    let mut server = Server::start(&serve, &dioxus_crate);
+    let mut watcher = Watcher::start(&dioxus_crate);
+    let mut screen = Output::start(&serve).expect("Failed to open terminal logger");
 
     loop {
         // Make sure we don't hog the CPU: these loop { select! {} } blocks can starve the executor
