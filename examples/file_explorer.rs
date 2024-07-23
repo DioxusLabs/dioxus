@@ -18,7 +18,7 @@ fn app() -> Element {
     let mut files = use_signal(Files::new);
 
     rsx! {
-        Link {
+        head::Link {
             rel: "stylesheet",
             href: asset!("./examples/assets/fileexplorer.css")
         }
