@@ -697,9 +697,9 @@ dependencies = [
 
 [[package]]
 name = "aws-lc-rs"
-version = "1.8.0"
+version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8a47f2fb521b70c11ce7369a6c5fa4bd6af7e5d62ec06303875bafe7c6ba245"
+checksum = "4ae74d9bd0a7530e8afd1770739ad34b36838829d6ad61818f9230f683f5ad77"
 dependencies = [
  "aws-lc-sys",
  "mirai-annotations",
@@ -709,9 +709,9 @@ dependencies = [
 
 [[package]]
 name = "aws-lc-sys"
-version = "0.19.0"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2927c7af777b460b7ccd95f8b67acd7b4c04ec8896bf0c8e80ba30523cffc057"
+checksum = "2e89b6941c2d1a7045538884d6e760ccfffdf8e1ffc2613d8efa74305e1f3752"
 dependencies = [
  "bindgen",
  "cc",
@@ -1408,9 +1408,9 @@ dependencies = [
 
 [[package]]
 name = "cargo_toml"
-version = "0.20.3"
+version = "0.20.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4895c018bb228aa6b3ba1a0285543fcb4b704734c3fb1f72afaa75aa769500c1"
+checksum = "ad639525b1c67b6a298f378417b060fbc04618bea559482a8484381cce27d965"
 dependencies = [
  "serde",
  "toml 0.8.15",
@@ -1439,9 +1439,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.1.5"
+version = "1.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "324c74f2155653c90b04f25b2a47a8a631360cb908f92a772695f430c7e31052"
+checksum = "2aba8f4e9906c7ce3c73463f62a7f0c65183ada1a2d47e397cc8810827f9694f"
 dependencies = [
  "jobserver",
  "libc",
@@ -2444,6 +2444,7 @@ dependencies = [
  "dioxus-web",
  "env_logger 0.10.2",
  "futures-util",
+ "manganis",
  "rand 0.8.5",
  "serde",
  "thiserror",
@@ -2580,22 +2581,6 @@ dependencies = [
 
 [[package]]
 name = "dioxus-core"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "088daa3f45aaa729e9eef32dc0a9393dd709ee906b092089e5839cad1cad7c85"
-dependencies = [
- "futures-channel",
- "futures-util",
- "generational-box 0.5.1",
- "longest-increasing-subsequence",
- "rustc-hash",
- "slab",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "dioxus-core"
 version = "0.5.2"
 dependencies = [
  "const_format",
@@ -2619,6 +2604,23 @@ dependencies = [
  "tracing-fluent-assertions",
  "tracing-subscriber",
  "web-sys",
+]
+
+[[package]]
+name = "dioxus-core"
+version = "0.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3730d2459ab66951cedf10b09eb84141a6eda7f403c28057cbe010495be156b7"
+dependencies = [
+ "futures-channel",
+ "futures-util",
+ "generational-box 0.5.6",
+ "longest-increasing-subsequence",
+ "rustc-hash",
+ "slab",
+ "slotmap",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -3947,20 +3949,20 @@ dependencies = [
 
 [[package]]
 name = "generational-box"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f132919c96b85c02a067ceae965fd50ace57111e2f55c7384b95ac191f4d966b"
-dependencies = [
- "parking_lot",
-]
-
-[[package]]
-name = "generational-box"
 version = "0.5.2"
 dependencies = [
  "criterion 0.3.6",
  "parking_lot",
  "rand 0.8.5",
+]
+
+[[package]]
+name = "generational-box"
+version = "0.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "557cf2cbacd0504c6bf8c29f52f8071e0de1d9783346713dc6121d7fa1e5d0e0"
+dependencies = [
+ "parking_lot",
 ]
 
 [[package]]
@@ -4110,7 +4112,7 @@ dependencies = [
  "gix-utils",
  "itoa 1.0.11",
  "thiserror",
- "winnow 0.6.13",
+ "winnow 0.6.14",
 ]
 
 [[package]]
@@ -4131,7 +4133,7 @@ dependencies = [
  "smallvec",
  "thiserror",
  "unicode-bom",
- "winnow 0.6.13",
+ "winnow 0.6.14",
 ]
 
 [[package]]
@@ -4233,7 +4235,7 @@ dependencies = [
  "itoa 1.0.11",
  "smallvec",
  "thiserror",
- "winnow 0.6.13",
+ "winnow 0.6.14",
 ]
 
 [[package]]
@@ -4268,7 +4270,7 @@ dependencies = [
  "gix-validate",
  "memmap2",
  "thiserror",
- "winnow 0.6.13",
+ "winnow 0.6.14",
 ]
 
 [[package]]
@@ -5785,7 +5787,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e310b3a6b5907f99202fcdb4960ff45b93735d7c7d96b760fcff8db2dc0e103d"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -6040,23 +6042,22 @@ dependencies = [
 [[package]]
 name = "manganis"
 version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c211cfb4529c79b32307b606e83a1bb15d491b3b4a1ab97159b161d7af9d1b72"
+source = "git+https://github.com/DioxusLabs/manganis#8a6d74dc19072e7a650854bd722c452da51955d6"
 dependencies = [
- "dioxus-core 0.5.1",
+ "dioxus-core 0.5.6",
  "manganis-macro",
 ]
 
 [[package]]
 name = "manganis-cli-support"
 version = "0.2.4"
-source = "git+https://github.com/DioxusLabs/manganis/#ad09a549775957c5ce177274cfbb6dc76c976c10"
+source = "git+https://github.com/DioxusLabs/manganis#8a6d74dc19072e7a650854bd722c452da51955d6"
 dependencies = [
  "anyhow",
  "image 0.25.1",
  "imagequant",
  "lightningcss",
- "manganis-common 0.2.4 (git+https://github.com/DioxusLabs/manganis/)",
+ "manganis-common",
  "mozjpeg",
  "object",
  "png",
@@ -6074,24 +6075,7 @@ dependencies = [
 [[package]]
 name = "manganis-common"
 version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "542300f1e7d9313de5b7e5b92d273ba42ab547c068d773559d616aa14987de43"
-dependencies = [
- "anyhow",
- "base64 0.21.7",
- "home",
- "infer 0.11.0",
- "reqwest 0.11.27",
- "serde",
- "toml 0.7.8",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "manganis-common"
-version = "0.2.4"
-source = "git+https://github.com/DioxusLabs/manganis/#ad09a549775957c5ce177274cfbb6dc76c976c10"
+source = "git+https://github.com/DioxusLabs/manganis#8a6d74dc19072e7a650854bd722c452da51955d6"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
@@ -6107,12 +6091,12 @@ dependencies = [
 [[package]]
 name = "manganis-macro"
 version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "704a0123ac90fa630b21a04fde56c29dfd5a7665c5e8f3639567989daa2d29d1"
+source = "git+https://github.com/DioxusLabs/manganis#8a6d74dc19072e7a650854bd722c452da51955d6"
 dependencies = [
- "manganis-common 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "manganis-common",
  "proc-macro2",
  "quote",
+ "serde_json",
  "syn 2.0.71",
  "tracing-subscriber",
 ]
@@ -7313,9 +7297,9 @@ dependencies = [
 
 [[package]]
 name = "portable-atomic"
-version = "1.6.0"
+version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7170ef9988bc169ba16dd36a7fa041e5c4cbeb6a35b76d4c03daded371eae7c0"
+checksum = "da544ee218f0d287a911e9c99a39a8c9bc8fcad3cb8db5959940044ecfc67265"
 
 [[package]]
 name = "powerfmt"
@@ -9958,7 +9942,7 @@ dependencies = [
  "serde",
  "serde_spanned",
  "toml_datetime",
- "winnow 0.6.13",
+ "winnow 0.6.14",
 ]
 
 [[package]]
@@ -11270,9 +11254,9 @@ dependencies = [
 
 [[package]]
 name = "winnow"
-version = "0.6.13"
+version = "0.6.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59b5e5f6c299a3c7890b876a2a587f3115162487e704907d9b6cd29473052ba1"
+checksum = "374ec40a2d767a3c1b4972d9475ecd557356637be906f2cb3f7fe17a6eb5e22f"
 dependencies = [
  "memchr",
 ]

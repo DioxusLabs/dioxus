@@ -105,8 +105,8 @@ wasm-bindgen-futures = "0.4.42"
 html_parser = "0.7.0"
 thiserror = "1.0.40"
 prettyplease = { version = "0.2.16", features = ["verbatim"] }
-manganis-cli-support = { git = "https://github.com/DioxusLabs/manganis/", features = ["html"] }
-manganis = { version = "0.2.1" }
+manganis-cli-support = { git = "hhttps://github.com/DioxusLabs/manganis", features = ["html"] }
+manganis = { git = "https://github.com/DioxusLabs/manganis" }
 const_format = "0.2.32"
 cargo_toml = { version = "0.20.3" }
 tauri-utils = { version = "=1.5.*" }
