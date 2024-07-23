@@ -733,7 +733,7 @@ impl Output {
         frame.render_widget(Block::default().borders(Borders::ALL), panel);
 
         let modal = Paragraph::new(
-            "Hello world!\nHello world!\nHello world!\nHello world!\nHello world!\n",
+            "Under construction, please check back at a later date!\n",
         )
         .alignment(Alignment::Center);
         frame.render_widget(modal, panel);
