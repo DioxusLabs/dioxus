@@ -607,16 +607,18 @@ mod tests {
             di
         };
 
-        let parsed = parse.parse2(RsxBlock::parse_children).unwrap();
+        let parsed = RsxBlock::parse_children.parse2(input).unwrap();
+        let children = parsed.children;
 
-        assert_eq!(parsed.len(), 1);
-        if let BodyNode::Element(parsed) = &parsed[0] {
+        assert_eq!(children.len(), 1);
+        if let BodyNode::Element(parsed) = &children[0] {
             assert_eq!(
                 parsed.name,
                 ElementName::Ident(Ident::new("di", Span::call_site()))
             );
         } else {
-            panic!("expected element, got {:?}", parsed);
+            panic!("expected element, got {:?}", children);
         }
+        assert!(parsed.diagnostics.is_empty());
     }
 }
