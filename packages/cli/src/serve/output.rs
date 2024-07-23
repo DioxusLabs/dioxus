@@ -294,12 +294,15 @@ impl Output {
             Event::Key(key) if key.code == KeyCode::Down => {
                 self.scroll += 1;
             }
-            Event::Key(key) if key.code == KeyCode::Char('r') => {}
+            Event::Key(key) if key.code == KeyCode::Char('r') => {
+                // todo: reload the app
+            }
             Event::Key(key) if key.code == KeyCode::Char('o') => {
                 // todo: open the app
             }
             Event::Key(key) if key.code == KeyCode::Char('c') => {
-                // clear
+                // Clear the screen.
+                self.build_progress.build_logs.clear();
             }
             Event::Key(key) if key.code == KeyCode::Char('0') => {
                 self.tab = Tab::Console;
@@ -585,7 +588,7 @@ impl Output {
                         Line::from("  ").gray(),
                         Line::from(" [/] more").gray(),
                         Line::from(" [r] reload").gray(),
-                        Line::from(" [r] clear").gray(),
+                        Line::from(" [c] clear").gray(),
                         Line::from(" [o] open").gray(),
                         Line::from(" [h] hide").gray(),
                     ])
