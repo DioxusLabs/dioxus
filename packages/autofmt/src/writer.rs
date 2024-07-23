@@ -82,7 +82,8 @@ impl<'a> Writer<'a> {
 
         write!(self.out, "{name} {{")?;
 
-        self.write_rsx_block(attributes, spreads, children, brace)?;
+        let brace = brace.unwrap_or_default();
+        self.write_rsx_block(attributes, spreads, children, &brace)?;
 
         write!(self.out, "}}")?;
 
