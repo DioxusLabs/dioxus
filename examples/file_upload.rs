@@ -8,6 +8,8 @@ use std::sync::Arc;
 use dioxus::prelude::*;
 use dioxus::{html::HasFileData, prelude::dioxus_elements::FileEngine};
 
+const STYLE: &str = asset!(file("./examples/assets/file_upload.css"));
+
 fn main() {
     launch(app);
 }
@@ -41,7 +43,7 @@ fn app() -> Element {
     };
 
     rsx! {
-        style { {include_str!("./assets/file_upload.css")} }
+        link { rel: "stylesheet", href: STYLE }
 
         h1 { "File Upload Example" }
         p { "Drop a .txt, .rs, or .js file here to read it" }

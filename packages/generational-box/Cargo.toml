@@ -17,8 +17,6 @@ rand = "0.8.5"
 criterion = "0.3"
 
 [features]
-default = ["check_generation"]
-check_generation = []
 debug_borrows = []
 debug_ownership = []
 

@@ -86,7 +86,7 @@ enum Tab {
 type TerminalBackend = Terminal<CrosstermBackend<io::Stdout>>;
 
 impl Output {
-    pub async fn start(cfg: &Serve) -> io::Result<Self> {
+    pub fn start(cfg: &Serve) -> io::Result<Self> {
         let interactive = std::io::stdout().is_tty() && cfg.interactive.unwrap_or(true);
 
         let mut events = None;

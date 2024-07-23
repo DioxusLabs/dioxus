@@ -181,15 +181,6 @@ impl ToTokens for TemplateBody {
             .iter()
             .map(|(path, idx)| self.get_dyn_attr(path, *idx).rendered_as_dynamic_attr());
 
-        // Rust analyzer will not autocomplete properly if we change the name every time you type a character
-        // If it looks like we are running in rust analyzer, we'll just use a placeholder location
-        // let looks_like_rust_analyzer = first_root_span.contains("SpanData");
-        // let index = if looks_like_rust_analyzer {
-        //     "0".to_string()
-        // } else {
-        //     self.template_idx.get().to_string()
-        // };
-        // todo: this just might be fixed?
         let index = self.template_idx.get();
 
         let diagnostics = &self.diagnostics;
@@ -198,7 +189,11 @@ impl ToTokens for TemplateBody {
             dioxus_core::Element::Ok({
                 #[doc(hidden)] // vscode please stop showing these in symbol search
                 static ___TEMPLATE: dioxus_core::Template = dioxus_core::Template {
-                    name: concat!( file!(), ":", line!(), ":", column!(), ":", #index ) ,
+                    name: {
+                        const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
+                        const NORMAL: &str = dioxus_core::const_format::str_replace!(PATH, '\\', "/");
+                        dioxus_core::const_format::concatcp!(NORMAL, ':', line!(), ':', column!(), ':', #index)
+                    },
                     roots: &[ #( #roots ),* ],
                     node_paths: &[ #( #node_paths ),* ],
                     attr_paths: &[ #( #attr_paths ),* ],
