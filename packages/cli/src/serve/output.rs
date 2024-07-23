@@ -208,12 +208,14 @@ impl Output {
                     })
                 }
                 if let Some(stderr) = stderr {
+                    self.set_tab(Tab::BuildLog);
+
                     self.running_apps.get_mut(&platform).unwrap().stdout.as_mut().unwrap().stderr_line.push_str(&stderr);
-                    self.push_log(platform, BuildMessage {
+                    self.build_progress.build_logs.get_mut(&platform).unwrap().messages.push(BuildMessage {
                         level: Level::ERROR,
                         message: MessageType::Text(stderr),
                         source: Some("app".to_string()),
-                    })
+                    });
                 }
             },
 
@@ -333,7 +335,6 @@ impl Output {
 
         Ok(())
     }
-
 
     pub fn new_ws_message(&mut self, platform: Platform, message: axum::extract::ws::Message) {
         if let axum::extract::ws::Message::Text(text) = message {
@@ -732,8 +733,7 @@ impl Output {
         frame.render_widget(modal, panel);
     }
 
-
-     fn set_tab(&mut self, tab: Tab) {
+    fn set_tab(&mut self, tab: Tab) {
         self.tab = tab;
         self.scroll = 0;
     }
