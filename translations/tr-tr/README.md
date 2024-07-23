@@ -61,7 +61,6 @@
 
 > Çevirmen Notu (Translator Note): Teknik terimleri orijinal haliyle kullanıp, olabildiğince açıklamaya çalıştım ki hem tecrübeli hem de yeni başlayan arkadaşlar için daha kolay olsun diye. Sektör dilimiz İngilizce olduğundan parantez içindeki bilgiler çoğunlukla yeni dostlar için, tecrübeli arkadaşlar zaten terimlere de ne anlama geldiklerine de aşina. Teknik terimleri günlük hayatta da orijinal halinde kullandığımızdan, kavramları Türkçe'ye çevirme kısmı garip oldu. Gerekli de değildi ama yine de bilmeyen insanların da kafalarında bir şeyler canlandırmaya çalıştım. Yoksa kimse frontend için önyüz demiyor yahut framework yerine Türkçe bir şeyler kullanmıyoruz, ben de farkındayım. Çok da rahatsız etmemek adına sadece kavramlarla ilk karşılaştığınız yerlerde açıkladım devamında orijinal haliyle kullandım. Hatalar varsa affola.
 
-
 Web, masaüstü ve mobil; tek bir kod altyapısıyla üret. Eforsuz kurulum, entegre hotreloading(sürekli kendin derlemek yerine, güncelleme tespit edildikçe otomatik aktifleşmesi) ve sinyal temelli durum yönetimi. Sunucu fonksiyonları ile backend (arkayüz) özellikleri ekle ve CLI (Command-line Interface(Komut-satırı Arayüzü, terminal uygulaması))ile paketle (`dx bundle` sayesinde).
 
 ```rust
@@ -235,7 +234,7 @@ Dioxus'u diğer frameworklerden ayıran birkaç vurguladığı nokta var:
 - **React-benzeri**: Components, props(fonksiyon argümanlarına benzer olan yapılar) ve hooks(fonksiyon componentlerinin diğer framework özelliklerine erişmesini sağlayan yapılar) gibi konseptler üzerine bina ettik. Bu durum bizi SolidJS'ten ziyade Svelte'ye yaklaştırdı.
 - **HTML ve CSS**: Quirks(geriye uyumluluk) ve diğer özellikler için, HTML ve CSS'i temel alıyoruz.
 - **Renderer-agnostic(İşleyen Bağımsız)**: [Ürettiğimiz Hızlı VirtualDOM](https://dioxuslabs.com/blog/templates-diffing) sayesinde istediğiniz platform için renderer değiştebilirsiniz.
-- **Collaborative(Birlikte çalışmayı destekleyen)**: Mümkün olduğu sürece bu örneklerdeki gibi crates(basitçe Rust üzerindeki kütüphaneler gibi düşünün) üretiyoruz: [Taffy](https://github.com/DioxusLabs/taffy), [manganis](https://github.com/DioxusLabs/collect-assets), [include_mdbook](https://github.com/DioxusLabs/include_mdbook), ve [blitz](http://github.com/dioxusLabs/blitz). Böylece ekosistemi birlikte büyütebiliriz.
+- **Collaborative(Birlikte çalışmayı destekleyen)**: Mümkün olduğu sürece bu örneklerdeki gibi crates(basitçe Rust üzerindeki kütüphaneler gibi düşünün) üretiyoruz: [Taffy](https://github.com/DioxusLabs/taffy), [manganis](https://github.com/DioxusLabs/manganis), [include_mdbook](https://github.com/DioxusLabs/include_mdbook), ve [blitz](http://github.com/dioxusLabs/blitz). Böylece ekosistemi birlikte büyütebiliriz.
 
 ### Dioxus ile Tauri'yi Kıyaslayalım
 
@@ -250,6 +249,7 @@ Tauri masaüstü -ve yakında mobil de dahil edilecek- üzerine frontend(önyüz
 ### Dioxus ve Leptos'u Kıyaslayalım
 
 Leptos SolidJS ve SoldStart benzeri fullstack web uygulamları geliştirebildiğiniz bir kütüphane. Dioxus ve Leptos web üzerinde benzer amaçlarla var olan 2 kütüphane ancak birkaç önemli nüans mevcut.
+
 - **Reactivity model(Yeniden-aktifleştirme modeli)**: Leptops reactivity için signals (sinyaller) kullanırken, Dioxus Virtual(Sanal) DOM ve re-render(yeniden işleme) kullanır. Teoride signals çok daha verimli olurken pratikte [block-dom'dan ilham alınan taslaklar](https://dioxuslabs.com/blog/templates-diffing) sayesinde Virtual DOM neredeyse hiç fark oluşturmuyor. Kıyaslamada da görebileceğiniz gibi [aslında Leptos'tan hızlıyız](https://krausest.github.io/js-framework-benchmark/2024/table_chrome_123.0.6312.59.html).
 
 - **Control flow(Karar verme mekanizmaları)**: Leptops reactivity için signals kullandığından, Leptos'un primitives (ilkelleri(her kodlama dilinde var olan, en temel şeyler için kullanılır genelde, farklı kullanımları da var tabiki. Örnek olarak veri tiplerine integer(tamsayı), bool(sadece 1 ve 0 değerini alan veri tipi) verebiliriz. Kontrol mekanizmaları için de for, if yapıları verilebilir.)) içerisinde sıkışırsınız. Örnek vermek gerekirse `for` döngüleri ve `if` ifadeleri. Eğer bu yapılarda bir hata meydana gelirse uygulamanız bütün reactivity(tepkiselliğini) özelliklerini kaybeder, bu durum UI(User Interface (Kullanıcı Arayüzü)) hatalarını debug(hata ayıklama) yapmanızı zorlaştırır. Dioxus ile birlikte iteratörler, sıradan Rust `for` döngüleri ve `if` durumlarını kullanabilir ve uygulamanız reactive kalmaya devam edebilir. Pratikte bir listeye counters(sayaçlar) eklemek istediğimiz bir örnek şu şekilde görünebilir:

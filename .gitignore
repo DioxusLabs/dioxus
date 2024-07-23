@@ -5,6 +5,7 @@
 /dist
 .DS_Store
 /examples/assets/test_video.mp4
+static
 
 # new recommendation to keep the lockfile in for CI and reproducible builds
 # Cargo.lock
@@ -22,3 +23,4 @@ node_modules/
 /test-results/
 /packages/playwright-report/
 /packages/playwright/.cache/
+
