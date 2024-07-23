@@ -50,28 +50,27 @@ use crate::innerlude::*;
 // 2. Mount that builder to a specific scope. The mounted version of the props lives as long as the scope lives and owns any signals the builder creates
 // 3. When the component is run, the props are created from the mounted version
 // - If the component is diffed, the new builder is compared against the mounted version of the props
-pub trait Properties: Sized + 'static {
+pub trait Properties<CompleteBuilder: Clone>: PropertiesBuilder {
+    /// The type of the mounted factory for this component.
+    type Mounted;
+
+    /// Create a new mounted props from a builder
+    fn new(builder: CompleteBuilder) -> Self::Mounted;
+
+    /// Make the old props equal to the new props. Return if the props were equal and should be memoized.
+    fn memoize(mounted: &mut Self::Mounted, other: &CompleteBuilder) -> bool;
+
+    /// Create the props from the mounted version.
+    fn props(mounted: &Self::Mounted) -> Self;
+}
+
+pub trait PropertiesBuilder: Sized + 'static {
     /// The type of the builder for this component.
     /// Used to create "in-progress" versions of the props.
     type Builder;
 
     /// Create a builder for this component.
     fn builder() -> Self::Builder;
-
-    /// The type of the builder once it is complete which can create a mounted version of the props.
-    type CompleteBuilder: Clone;
-
-    /// The type of the mounted factory for this component.
-    type Mounted;
-
-    /// Create a new mounted props from a builder
-    fn new(builder: Self::CompleteBuilder) -> Self::Mounted;
-
-    /// Make the old props equal to the new props. Return if the props were equal and should be memoized.
-    fn memoize(mounted: &mut Self::Mounted, other: &Self::CompleteBuilder) -> bool;
-
-    /// Create the props from the mounted version.
-    fn props(mounted: &Self::Mounted) -> Self;
 }
 
 /// A trait for Properties with the same a finished builder, props, and mounted props type
@@ -87,20 +86,21 @@ pub trait SimpleProperties: Clone {
     fn memoize(&mut self, new: &Self) -> bool;
 }
 
-impl<F: SimpleProperties + 'static> Properties for F {
+impl<F: SimpleProperties + 'static> PropertiesBuilder for F {
     type Builder = F::Builder;
-    type CompleteBuilder = F;
-    type Mounted = F;
-
     fn builder() -> Self::Builder {
         <Self as SimpleProperties>::builder()
     }
+}
 
-    fn new(builder: Self::CompleteBuilder) -> Self::Mounted {
+impl<F: SimpleProperties + 'static> Properties<F> for F {
+    type Mounted = F;
+
+    fn new(builder: F) -> Self::Mounted {
         builder
     }
 
-    fn memoize(mounted: &mut Self::Mounted, other: &Self::CompleteBuilder) -> bool {
+    fn memoize(mounted: &mut Self::Mounted, other: &F) -> bool {
         mounted.memoize(other)
     }
 
@@ -127,22 +127,24 @@ where
     }
 }
 
-impl<P> Properties for RootProps<P>
-where
-    P: Clone + 'static,
-{
+impl<P: 'static> PropertiesBuilder for RootProps<P> {
     type Builder = P;
-    type CompleteBuilder = P;
-    type Mounted = P;
     fn builder() -> Self::Builder {
         unreachable!("Root props technically are never built")
     }
+}
 
-    fn new(builder: Self::CompleteBuilder) -> Self::Mounted {
+impl<P> Properties<P> for RootProps<P>
+where
+    P: Clone + 'static,
+{
+    type Mounted = P;
+
+    fn new(builder: P) -> Self::Mounted {
         builder
     }
 
-    fn memoize(mounted: &mut Self::Mounted, other: &Self::CompleteBuilder) -> bool {
+    fn memoize(mounted: &mut Self::Mounted, other: &P) -> bool {
         *mounted = other.clone();
         false
     }
@@ -172,9 +174,9 @@ impl SimpleProperties for () {
 
 /// This utility function launches the builder method so rsx! and html! macros can use the typed-builder pattern
 /// to initialize a component's props.
-pub fn fc_to_builder<P, M>(_: impl ComponentFunction<P, M>) -> <P as Properties>::Builder
+pub fn fc_to_builder<P, M>(_: impl ComponentFunction<P, M>) -> <P as PropertiesBuilder>::Builder
 where
-    P: Properties,
+    P: PropertiesBuilder,
 {
     P::builder()
 }

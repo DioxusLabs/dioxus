@@ -14,15 +14,17 @@ pub(crate) trait AnyPropsBuilder: 'static {
 }
 
 /// A component along with the props the component uses to render.
-pub(crate) struct VProps<RenderFn, Props: Properties, Marker> {
+pub(crate) struct VProps<RenderFn, CompleteBuilder, Props, Marker> {
     render_fn: RenderFn,
-    props: Props::CompleteBuilder,
+    props: CompleteBuilder,
     name: &'static str,
-    phantom: std::marker::PhantomData<Marker>,
+    phantom: std::marker::PhantomData<(Marker, Props)>,
 }
 
-impl<RenderFn, Props: Properties, Marker> Clone for VProps<RenderFn, Props, Marker>
+impl<RenderFn, CompleteBuilder, Props, Marker> Clone
+    for VProps<RenderFn, CompleteBuilder, Props, Marker>
 where
+    CompleteBuilder: Clone,
     RenderFn: Clone,
 {
     fn clone(&self) -> Self {
@@ -35,13 +37,17 @@ where
     }
 }
 
-impl<RenderFn, Props: Properties, Marker> VProps<RenderFn, Props, Marker> {
+impl<RenderFn, CompleteBuilder, Props, Marker> VProps<RenderFn, CompleteBuilder, Props, Marker>
+where
+    CompleteBuilder: Clone,
+    Props: Properties<CompleteBuilder>,
+{
     /// Create a [`VProps`] object.
     pub fn new(
         render_fn: RenderFn,
-        props: Props::CompleteBuilder,
+        props: CompleteBuilder,
         name: &'static str,
-    ) -> VProps<RenderFn, Props, Marker> {
+    ) -> VProps<RenderFn, CompleteBuilder, Props, Marker> {
         VProps {
             render_fn,
             props,
@@ -51,18 +57,22 @@ impl<RenderFn, Props: Properties, Marker> VProps<RenderFn, Props, Marker> {
     }
 }
 
-impl<RenderFn, Props, Marker> AnyPropsBuilder for VProps<RenderFn, Props, Marker>
+impl<RenderFn, CompleteBuilder, Props, Marker> AnyPropsBuilder
+    for VProps<RenderFn, CompleteBuilder, Props, Marker>
 where
-    Props: Properties,
+    CompleteBuilder: Clone + 'static,
+    Props: Properties<CompleteBuilder>,
     RenderFn: ComponentFunction<Props, Marker> + Clone,
     Marker: 'static,
 {
     fn create(&self) -> BoxedAnyProps {
-        Box::new(MountedVProps::<RenderFn, Props, Marker>::new(
-            self.render_fn.clone(),
-            Props::new(self.props.clone()),
-            self.name,
-        ))
+        Box::new(
+            MountedVProps::<RenderFn, CompleteBuilder, Props, Marker>::new(
+                self.render_fn.clone(),
+                Props::new(self.props.clone()),
+                self.name,
+            ),
+        )
     }
 
     fn duplicate(&self) -> BoxedAnyPropsBuilder {
@@ -87,20 +97,30 @@ pub(crate) trait AnyProps: 'static {
 }
 
 /// A component along with the props the component uses to render.
-pub(crate) struct MountedVProps<RenderFn, Props: Properties, Marker> {
+pub(crate) struct MountedVProps<
+    RenderFn,
+    CompleteBuilder: Clone,
+    Props: Properties<CompleteBuilder>,
+    Marker,
+> {
     render_fn: RenderFn,
     props: Props::Mounted,
     name: &'static str,
     phantom: std::marker::PhantomData<Marker>,
 }
 
-impl<RenderFn, Props: Properties, Marker> MountedVProps<RenderFn, Props, Marker> {
+impl<RenderFn, CompleteBuilder, Props, Marker>
+    MountedVProps<RenderFn, CompleteBuilder, Props, Marker>
+where
+    CompleteBuilder: Clone,
+    Props: Properties<CompleteBuilder>,
+{
     /// Create a [`MountedVProps`] object.
     fn new(
         render_fn: RenderFn,
         props: Props::Mounted,
         name: &'static str,
-    ) -> MountedVProps<RenderFn, Props, Marker> {
+    ) -> MountedVProps<RenderFn, CompleteBuilder, Props, Marker> {
         MountedVProps {
             render_fn,
             props,
@@ -110,14 +130,16 @@ impl<RenderFn, Props: Properties, Marker> MountedVProps<RenderFn, Props, Marker>
     }
 }
 
-impl<RenderFn, Props: Properties, Marker> AnyProps for MountedVProps<RenderFn, Props, Marker>
+impl<RenderFn, CompleteBuilder, Props, Marker> AnyProps
+    for MountedVProps<RenderFn, CompleteBuilder, Props, Marker>
 where
+    CompleteBuilder: Clone + 'static,
+    Props: Properties<CompleteBuilder>,
     RenderFn: ComponentFunction<Props, Marker> + Clone,
-    Props: Properties,
     Marker: 'static,
 {
     fn memoize(&mut self, other: &dyn Any) -> bool {
-        match other.downcast_ref::<Props::CompleteBuilder>() {
+        match other.downcast_ref::<CompleteBuilder>() {
             Some(other) => Props::memoize(&mut self.props, other),
             None => false,
         }

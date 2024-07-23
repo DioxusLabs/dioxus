@@ -615,14 +615,21 @@ impl Clone for VComponent {
 
 impl VComponent {
     /// Create a new [`VComponent`] variant
-    pub fn new<R, P, M>(component: R, props: P::CompleteBuilder, fn_name: &'static str) -> Self
+    pub fn new<RenderFn, CompleteBuilder, Props, Marker>(
+        component: RenderFn,
+        props: CompleteBuilder,
+        fn_name: &'static str,
+    ) -> Self
     where
-        R: ComponentFunction<P, M>,
-        P: Properties + 'static,
-        M: 'static,
+        CompleteBuilder: Clone + 'static,
+        RenderFn: ComponentFunction<Props, Marker>,
+        Props: Properties<CompleteBuilder> + 'static,
+        Marker: 'static,
     {
         let render_fn = component.id();
-        let props = Box::new(VProps::<R, P, M>::new(component, props, fn_name));
+        let props = Box::new(VProps::<RenderFn, CompleteBuilder, Props, Marker>::new(
+            component, props, fn_name,
+        ));
 
         VComponent {
             name: fn_name,

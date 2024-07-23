@@ -40,23 +40,25 @@ pub struct SuspenseBoundaryPropsBuilder<TypedBuilderFields> {
     fields: TypedBuilderFields,
     _phantom: (),
 }
-impl Properties for SuspenseBoundaryProps
-where
-    Self: Clone,
-{
+impl PropertiesBuilder for SuspenseBoundaryProps {
     type Builder = SuspenseBoundaryPropsBuilder<((), ())>;
     fn builder() -> Self::Builder {
         SuspenseBoundaryProps::builder()
     }
-    type CompleteBuilder = SuspenseBoundaryProps;
-    fn new(builder: Self::CompleteBuilder) -> Self::Mounted {
+}
+
+impl Properties<SuspenseBoundaryProps> for SuspenseBoundaryProps
+where
+    Self: Clone,
+{
+    fn new(builder: SuspenseBoundaryProps) -> Self::Mounted {
         SuspenseBoundaryPropsWithOwner {
             inner: builder,
             owner: Owner::default(),
         }
     }
     type Mounted = SuspenseBoundaryPropsWithOwner;
-    fn memoize(mounted: &mut Self::Mounted, new: &Self::CompleteBuilder) -> bool {
+    fn memoize(mounted: &mut Self::Mounted, new: &SuspenseBoundaryProps) -> bool {
         let equal = mounted.inner == *new;
         mounted.inner.fallback.__set(new.fallback.__take());
         if !equal {

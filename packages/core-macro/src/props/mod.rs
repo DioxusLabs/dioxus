@@ -878,19 +878,23 @@ Finally, call `.build()` to create the instance of `{name}`.
                     _phantom: (#( #phantom_generics ),*),
                 }
 
-                impl #impl_generics dioxus_core::prelude::Properties for #name #ty_generics
+                impl #impl_generics dioxus_core::PropertiesBuilder for #name #ty_generics
                 #b_generics_where
                 {
                     type Builder = #builder_name #generics_with_empty;
                     fn builder() -> Self::Builder {
                         #name::builder()
                     }
-                    type CompleteBuilder = Self;
-                    fn new(builder: Self::CompleteBuilder) -> Self::Mounted {
+                }
+
+                impl #impl_generics dioxus_core::Properties<Self> for #name #ty_generics
+                #b_generics_where
+                {
+                    fn new(builder: Self) -> Self::Mounted {
                         #new
                     }
                     type Mounted = #mounted;
-                    fn memoize(mounted: &mut Self::Mounted, new: &Self::CompleteBuilder) -> bool {
+                    fn memoize(mounted: &mut Self::Mounted, new: &Self) -> bool {
                         #memoize
                     }
                     fn props(mounted: &Self::Mounted) -> Self {

@@ -357,8 +357,7 @@ impl VirtualDom {
             root_props,
             "Root",
         );
-        let root =
-            VProps::<_, RootProps<VComponent>, _>::new(RootScopeWrapper, root, "RootWrapper");
+        let root = VProps::new(RootScopeWrapper, root, "RootWrapper");
         dom.new_scope(root.create(), "app");
 
         // the root element is always given element ID 0 since it's the container for the entire tree
