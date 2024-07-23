@@ -62,7 +62,7 @@ impl Watcher {
                      match e.kind {
 
                         // An event emitted when the metadata of a file or folder is changed.
-                        EventKind::Modify(ModifyKind::Data(_)) |
+                        EventKind::Modify(ModifyKind::Data(_) | ModifyKind::Any) |
                         EventKind::Create(_) |
                         EventKind::Remove(_) => {
                             _ = tx.unbounded_send(e);
@@ -139,6 +139,7 @@ impl Watcher {
         for event in self.queued_events.drain(..) {
             // We only care about modify/crate/delete events
             match event.kind {
+                EventKind::Modify(ModifyKind::Any) => {}
                 EventKind::Modify(ModifyKind::Data(_)) => {}
                 EventKind::Modify(ModifyKind::Name(_)) => {}
                 EventKind::Create(_) => {}
