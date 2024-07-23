@@ -61,15 +61,6 @@ serde = { version = "1", features = ["derive"] }
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 # Most of the examples live in the workspace. We include some here so that docs.rs can scrape our examples for better inline docs
-[[example]]
-name = "crm"
-path = "../../examples/crm.rs"
-doc-scrape-examples = true
-
-[[example]]
-name = "flat_router"
-path = "../../examples/flat_router.rs"
-doc-scrape-examples = true
 
 [[example]]
 name = "hash_fragment_state"
@@ -77,18 +68,8 @@ path = "../../examples/hash_fragment_state.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "link"
-path = "../../examples/link.rs"
-doc-scrape-examples = true
-
-[[example]]
 name = "query_segment_search"
 path = "../../examples/query_segment_search.rs"
-doc-scrape-examples = true
-
-[[example]]
-name = "router"
-path = "../../examples/router.rs"
 doc-scrape-examples = true
 
 [[example]]
