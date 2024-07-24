@@ -1,6 +1,7 @@
 error: Attributes must be separated by commas
-       = help: Did you forget a comma?
  --> tests/rsx/trailing-comma-0.rs:9:13
   |
 9 |             class: "foo bar"
   |             ^^^^^
+  |
+  = help: Did you forget a comma?

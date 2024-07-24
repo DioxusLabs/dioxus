@@ -619,6 +619,47 @@ impl IfAttributeValue {
             _ => Err(syn::Error::new(stmt.span(), "Expected an expression")),
         }
     }
+
+    fn to_tokens_with_terminated(&self, tokens: &mut TokenStream2, terminated: bool) {
+        let IfAttributeValue {
+            condition,
+            then_value,
+            else_value,
+        } = self;
+        let then_value = if terminated {
+            quote! { #then_value }
+        }
+        // Otherwise we need to return an Option and a None if the else value is None
+        else {
+            quote! { Some(#then_value) }
+        };
+
+        let else_value = match else_value.as_deref() {
+            Some(AttributeValue::IfExpr(else_value)) => {
+                let mut tokens = TokenStream2::new();
+                else_value.to_tokens_with_terminated(&mut tokens, terminated);
+                tokens
+            }
+            Some(other) => {
+                if terminated {
+                    quote! { #other }
+                } else {
+                    quote! { Some(#other) }
+                }
+            }
+            None => quote! { None },
+        };
+
+        tokens.append_all(quote! {
+            {
+                if #condition {
+                    #then_value
+                } else {
+                    #else_value
+                }
+            }
+        });
+    }
 }
 
 impl Parse for IfAttributeValue {
@@ -662,35 +703,9 @@ impl Parse for IfAttributeValue {
 
 impl ToTokens for IfAttributeValue {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let IfAttributeValue {
-            condition,
-            then_value,
-            else_value,
-        } = self;
         // If the if expression is terminated, we can just return the then value
         let terminated = self.is_terminated();
-        let then_value = if terminated {
-            quote! { #then_value }
-        }
-        // Otherwise we need to return an Option and a None if the else value is None
-        else {
-            quote! { Some(#then_value) }
-        };
-
-        let else_value = match else_value {
-            Some(else_value) => quote! { Some(#else_value) },
-            None => quote! { None },
-        };
-
-        tokens.append_all(quote! {
-            {
-                if #condition {
-                    #then_value
-                } else {
-                    #else_value
-                }
-            }
-        });
+        self.to_tokens_with_terminated(tokens, terminated)
     }
 }
 

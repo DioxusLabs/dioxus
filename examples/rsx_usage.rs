@@ -87,6 +87,7 @@ fn app() -> Element {
                 class: if formatting.contains("form") { "{asd}" },
                 // longer if chains also work
                 class: if formatting.contains("form") { "{asd}" } else if formatting.contains("my other form") { "{asd}" },
+                class: if formatting.contains("form") { "{asd}" } else if formatting.contains("my other form") { "{asd}" } else { "{asd}" },
                 div {
                     class: {
                         const WORD: &str = "expressions";
