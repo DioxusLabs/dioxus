@@ -9,7 +9,7 @@ use dioxus_rsx::HotReloadingContext;
 #[cfg(feature = "hot-reload-context")]
 use crate::{map_global_attributes, map_svg_attributes};
 
-pub type AttributeDiscription = (&'static str, Option<&'static str>, bool);
+pub type AttributeDescription = (&'static str, Option<&'static str>, bool);
 
 macro_rules! impl_attribute {
     (
@@ -38,7 +38,7 @@ macro_rules! impl_attribute {
         ///     }
         /// };
         /// ```
-        pub const $fil: AttributeDiscription = (stringify!($fil), None, false);
+        pub const $fil: AttributeDescription = (stringify!($fil), None, false);
     };
 
     (
@@ -67,7 +67,7 @@ macro_rules! impl_attribute {
         ///     }
         /// };
         /// ```
-        pub const $fil: AttributeDiscription = ($name, None, false);
+        pub const $fil: AttributeDescription = ($name, None, false);
     };
 
     (
@@ -96,7 +96,7 @@ macro_rules! impl_attribute {
         ///     }
         /// };
         /// ```
-        pub const $fil: AttributeDiscription = (stringify!($fil), None, true);
+        pub const $fil: AttributeDescription = (stringify!($fil), None, true);
     };
 
     (
@@ -125,7 +125,7 @@ macro_rules! impl_attribute {
         ///     }
         /// };
         /// ```
-        pub const $fil: AttributeDiscription = (stringify!($fil), Some($ns), false)
+        pub const $fil: AttributeDescription = (stringify!($fil), Some($ns), false)
     };
 
     (
@@ -154,7 +154,7 @@ macro_rules! impl_attribute {
         ///     }
         /// };
         /// ```
-        pub const $fil: AttributeDiscription = (stringify!($fil), Some($ns), true)
+        pub const $fil: AttributeDescription = (stringify!($fil), Some($ns), true)
     };
 }
 
@@ -621,7 +621,7 @@ macro_rules! builder_constructors {
 //
 // Does not include obsolete elements.
 //
-// This namespace represents a collection of modern HTML-5 compatiable elements.
+// This namespace represents a collection of modern HTML-5 compatible elements.
 //
 // This list does not include obsolete, deprecated, experimental, or poorly supported elements.
 builder_constructors! {

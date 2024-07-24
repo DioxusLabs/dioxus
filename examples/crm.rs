@@ -7,7 +7,7 @@
 //! in a way that works across pages.
 //!
 //! We implement a number of important details here too, like focusing inputs, handling form submits, navigating the router,
-//! platform-specific configuration, and importing 3rd party CSS libaries.
+//! platform-specific configuration, and importing 3rd party CSS libraries.
 
 use dioxus::prelude::*;
 

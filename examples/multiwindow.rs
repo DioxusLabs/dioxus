@@ -1,6 +1,6 @@
 //! Multiwindow example
 //!
-//! This exmaple shows how to implement a simple multiwindow application using dioxus.
+//! This example shows how to implement a simple multiwindow application using dioxus.
 //! This works by spawning a new window when the user clicks a button. We have to build a new virtualdom which has its
 //! own context, root elements, etc.
 

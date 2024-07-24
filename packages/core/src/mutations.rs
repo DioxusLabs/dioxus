@@ -344,7 +344,7 @@ impl Mutations {
     /// Rewrites IDs to just be "template", so you can compare the mutations
     ///
     /// Used really only for testing
-    pub fn santize(mut self) -> Self {
+    pub fn sanitize(mut self) -> Self {
         for edit in self.edits.iter_mut() {
             if let Mutation::LoadTemplate { name, .. } = edit {
                 *name = "template"

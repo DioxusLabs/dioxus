@@ -12,10 +12,10 @@ fn multiroot() {
     });
 
     // note: we dont test template edits anymore
-    let _templates = dom.rebuild_to_vec().santize().templates;
+    let _templates = dom.rebuild_to_vec().sanitize().templates;
 
     // assert_eq!(
-    //     dom.rebuild_to_vec().santize().templates,
+    //     dom.rebuild_to_vec().sanitize().templates,
     //     [
     //         CreateElement { name: "div" },
     //         CreateStaticText { value: "Hello a" },

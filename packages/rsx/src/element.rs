@@ -35,7 +35,7 @@ pub struct Element {
     pub children: Vec<BodyNode>,
 
     /// the brace of the `div { }`
-    pub brace: Brace,
+    pub brace: Option<Brace>,
 
     /// A list of diagnostics that were generated during parsing. This element might be a valid rsx_block
     /// but not technically a valid element - these diagnostics tell us what's wrong and then are used
@@ -47,32 +47,51 @@ impl Parse for Element {
     fn parse(stream: ParseStream) -> Result<Self> {
         let name = stream.parse::<ElementName>()?;
 
-        let RsxBlock {
-            attributes: mut fields,
-            children,
-            brace,
-            spreads,
-            diagnostics,
-        } = stream.parse::<RsxBlock>()?;
+        // We very liberally parse elements - they might not even have a brace!
+        // This is designed such that we can throw a compile error but still give autocomplete
+        // ... partial completions mean we do some weird parsing to get the right completions
+        let mut brace = None;
+        let mut block = RsxBlock::default();
+
+        match stream.peek(Brace) {
+            // If the element is followed by a brace, it is complete. Parse the body
+            true => {
+                block = stream.parse::<RsxBlock>()?;
+                brace = Some(block.brace);
+            }
+
+            // Otherwise, it is incomplete. Add a diagnostic
+            false => block.diagnostics.push(
+                name.span()
+                    .error("Elements must be followed by braces")
+                    .help("Did you forget a brace?"),
+            ),
+        }
 
         // Make sure these attributes have an el_name set for completions and Template generation
-        for attr in fields.iter_mut() {
+        for attr in block.attributes.iter_mut() {
             attr.el_name = Some(name.clone());
         }
 
+        // Assemble the new element from the contents of the block
         let mut element = Element {
-            name,
-            raw_attributes: fields,
-            children,
             brace,
-            diagnostics,
-            spreads: spreads.clone(),
+            name,
+            raw_attributes: block.attributes,
+            children: block.children,
+            diagnostics: block.diagnostics,
+            spreads: block.spreads.clone(),
             merged_attributes: Vec::new(),
         };
 
+        // And then merge the various attributes together
+        // The original raw_attributes are kept for lossless parsing used by hotreload/autofmt
         element.merge_attributes();
 
-        for spread in spreads.iter() {
+        // And then merge the spreads *after* the attributes are merged. This ensures walking the
+        // merged attributes in path order stops before we hit the spreads, but spreads are still
+        // counted as dynamic attributes
+        for spread in block.spreads.iter() {
             element.merged_attributes.push(Attribute {
                 name: AttributeName::Spread(spread.dots),
                 colon: None,
@@ -171,10 +190,13 @@ impl ToTokens for Element {
         let ns = ns(quote!(NAME_SPACE));
         let el_name = el_name.tag_name();
         let diagnostics = &el.diagnostics;
+        let completion_hints = &el.completion_hints();
 
         // todo: generate less code if there's no diagnostics by not including the curlies
         tokens.append_all(quote! {
             {
+                #completion_hints
+
                 #diagnostics
 
                 dioxus_core::TemplateNode::Element {
@@ -294,6 +316,29 @@ impl Element {
 
         None
     }
+
+    fn completion_hints(&self) -> TokenStream2 {
+        // If there is already a brace, we don't need any completion hints
+        if self.brace.is_some() {
+            return quote! {};
+        }
+
+        let ElementName::Ident(name) = &self.name else {
+            return quote! {};
+        };
+
+        quote! {
+            {
+                #[allow(dead_code)]
+                #[doc(hidden)]
+                mod __completions {
+                    fn ignore() {
+                        super::dioxus_elements::elements::completions::CompleteWithBraces::#name
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
@@ -313,7 +358,8 @@ impl ToTokens for ElementName {
 
 impl Parse for ElementName {
     fn parse(stream: ParseStream) -> Result<Self> {
-        let raw = Punctuated::<Ident, Token![-]>::parse_separated_nonempty(stream)?;
+        let raw =
+            Punctuated::<Ident, Token![-]>::parse_separated_nonempty_with(stream, parse_raw_ident)?;
         if raw.len() == 1 {
             Ok(ElementName::Ident(raw.into_iter().next().unwrap()))
         } else {
@@ -512,6 +558,7 @@ fn merges_attributes() {
 /// - merging two expressions together
 /// - merging two literals together
 /// - merging a literal and an expression together
+///
 /// etc
 ///
 /// We really only want to merge formatted things together
@@ -552,11 +599,22 @@ fn merging_weird_fails() {
 }
 
 #[test]
-fn diagnositcs() {
+fn diagnostics() {
     let input = quote::quote! {
         p {
             class: "foo bar"
             "Hello world"
+        }
+    };
+
+    let _parsed: Element = syn::parse2(input).unwrap();
+}
+
+#[test]
+fn parses_raw_elements() {
+    let input = quote::quote! {
+        use {
+            "hello"
         }
     };
 

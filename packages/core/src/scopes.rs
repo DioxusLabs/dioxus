@@ -6,7 +6,7 @@ use std::{cell::Ref, rc::Rc};
 
 /// A component's unique identifier.
 ///
-/// `ScopeId` is a `usize` that acts a key for the internal slab of Scopes. This means that the key is not unqiue across
+/// `ScopeId` is a `usize` that acts a key for the internal slab of Scopes. This means that the key is not unique across
 /// time. We do try and guarantee that between calls to `wait_for_work`, no ScopeIds will be recycled in order to give
 /// time for any logic that relies on these IDs to properly update.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
@@ -21,6 +21,7 @@ impl std::fmt::Debug for ScopeId {
         #[cfg(debug_assertions)]
         {
             if let Some(name) = Runtime::current()
+                .ok()
                 .as_ref()
                 .and_then(|rt| rt.get_state(*self))
             {

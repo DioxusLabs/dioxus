@@ -77,7 +77,7 @@ fn fragments_across_components() {
 
     fn demo_child() -> Element {
         let world = "world";
-        rsx! { "hellO!", {world} }
+        rsx! { "hellO!" {world} }
     }
 
     assert_eq!(

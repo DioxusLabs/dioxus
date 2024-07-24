@@ -92,7 +92,7 @@ fn score_attr_value(old_attr: &AttributeValue, new_attr: &AttributeValue) -> usi
         //       right now going from float to int or vice versa will cause a full rebuild
         //       which can get confusing. if we can figure out a way to hotreload this, that'd be great
         (AttrLiteral(left), AttrLiteral(right)) => {
-            // We assign perfect matches for token resuse, to minimize churn on the renderer
+            // We assign perfect matches for token reuse, to minimize churn on the renderer
             match (&left.value, &right.value) {
                 // Quick shortcut if there's no change
                 (Fmted(old), Fmted(new)) if old == new => usize::MAX,
@@ -127,7 +127,7 @@ fn score_attr_value(old_attr: &AttributeValue, new_attr: &AttributeValue) -> usi
             score_attr_value(value_a, value_b)
         }
 
-        // todo: we should try and score recrusively if we can - templates need to propagate up their
+        // todo: we should try and score recursively if we can - templates need to propagate up their
         // scores. That would lead to a time complexity explosion but can be helpful in some cases.
         //
         // If it's expression-type things, we give a perfect score if they match completely

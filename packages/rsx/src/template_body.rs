@@ -3,7 +3,7 @@
 //! The `Callbody` is the contents of the rsx! macro - this contains all the information about every
 //! node that rsx! directly knows about. For loops, if statements, etc.
 //!
-//! However, thre are multiple *templates* inside a callbody - due to how core clones templates and
+//! However, there are multiple *templates* inside a callbody - due to how core clones templates and
 //! just generally rationalize the concept of a template, nested bodies like for loops and if statements
 //! and component children are all templates, contained within the same Callbody.
 //!
@@ -58,8 +58,6 @@ use self::location::DynIdx;
 use crate::innerlude::Attribute;
 use crate::*;
 use proc_macro2::TokenStream as TokenStream2;
-use proc_macro2_diagnostics::SpanDiagnosticExt;
-use syn::token::Brace;
 
 #[cfg(feature = "hot_reload")]
 use dioxus_core::prelude::Template;
@@ -83,39 +81,19 @@ pub struct TemplateBody {
     pub template_idx: DynIdx,
     pub node_paths: Vec<NodePath>,
     pub attr_paths: Vec<(AttributePath, usize)>,
-    pub diagnostic: Diagnostics,
+    pub diagnostics: Diagnostics,
     current_path: Vec<u8>,
 }
 
 impl Parse for TemplateBody {
     /// Parse the nodes of the callbody as `Body`.
     fn parse(input: ParseStream) -> Result<Self> {
-        let brace = Brace::default();
-
-        let RsxBlock {
-            brace: _,
-            attributes,
-            spreads,
-            children,
-            diagnostics: _, // we don't care about the diagnostics here - ours might be different
-        } = RsxBlock::parse_inner(input, brace)?;
-
-        let mut template = Self::new(children);
-        for spread in spreads {
-            template.diagnostic.push(
-                spread
-                    .span()
-                    .error("Spreads are only allowed in elements and components"),
-            );
-        }
-        for attr in attributes {
-            template.diagnostic.push(
-                attr.span()
-                    .error("Attributes are only allowed in elements and components"),
-            );
-        }
-
-        Ok(template)
+        let children = RsxBlock::parse_children(input)?;
+        let mut myself = Self::new(children.children);
+        myself
+            .diagnostics
+            .extend(children.diagnostics.into_diagnostics());
+        Ok(myself)
     }
 }
 
@@ -183,6 +161,8 @@ impl ToTokens for TemplateBody {
 
         let index = self.template_idx.get();
 
+        let diagnostics = &self.diagnostics;
+
         tokens.append_all(quote! {
             dioxus_core::Element::Ok({
                 #[doc(hidden)] // vscode please stop showing these in symbol search
@@ -197,6 +177,8 @@ impl ToTokens for TemplateBody {
                     attr_paths: &[ #( #attr_paths ),* ],
                 };
 
+                #diagnostics
+
                 {
                     // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
                     #[allow(clippy::let_and_return)]
@@ -208,6 +190,7 @@ impl ToTokens for TemplateBody {
                     );
                     __vnodes
                 }
+
             })
         });
     }
@@ -225,7 +208,7 @@ impl TemplateBody {
             node_paths: Vec::new(),
             attr_paths: Vec::new(),
             current_path: Vec::new(),
-            diagnostic: Diagnostics::new(),
+            diagnostics: Diagnostics::new(),
         };
 
         // Assign paths to all nodes in the template

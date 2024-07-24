@@ -92,6 +92,10 @@ fn app() -> Element {
                     }
                 }
             }
+            use {}
+            link {
+                as: "asd"
+            }
 
             // Expressions can be used in element position too:
             {rsx!(p { "More templating!" })}
@@ -257,7 +261,7 @@ mod baller {
     }
 }
 
-/// Documention for this component is visible within the rsx macro
+/// Documentation for this component is visible within the rsx macro
 #[component]
 pub fn Taller(
     /// Fields are documented and accessible in rsx!

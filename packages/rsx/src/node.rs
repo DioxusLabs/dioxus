@@ -5,9 +5,10 @@ use crate::innerlude::*;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::ToTokens;
 use syn::{
+    ext::IdentExt,
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    token::{self, Brace},
+    token::{self},
     Ident, LitStr, Result, Token,
 };
 
@@ -72,21 +73,22 @@ impl Parse for BodyNode {
 
         // If there's an ident immediately followed by a dash, it's a web component
         // Web components support no namespacing, so just parse it as an element directly
-        if stream.peek(Ident) && stream.peek2(Token![-]) {
+        if stream.peek(Ident::peek_any) && stream.peek2(Token![-]) {
             return Ok(BodyNode::Element(stream.parse::<Element>()?));
         }
 
-        // this is an Element if path match of:
+        // this is an Element if the path is:
         //
         // - one ident
-        // - followed by `{`
         // - 1st char is lowercase
         // - no underscores (reserved for components)
+        // And it is not:
+        // - the start of a path with components
         //
         // example:
         // div {}
-        if stream.peek(Ident) && stream.peek2(Brace) {
-            let ident = stream.fork().parse::<Ident>().unwrap();
+        if stream.peek(Ident::peek_any) && !stream.peek2(Token![::]) {
+            let ident = parse_raw_ident(&stream.fork()).unwrap();
             let el_name = ident.to_string();
             let first_char = el_name.chars().next().unwrap();
 

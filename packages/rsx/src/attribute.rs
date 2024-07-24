@@ -63,8 +63,8 @@ pub struct Attribute {
 impl Parse for Attribute {
     fn parse(content: ParseStream) -> syn::Result<Self> {
         // if there's an ident not followed by a colon, it's a shorthand attribute
-        if content.peek(Ident) && !content.peek2(Token![:]) {
-            let ident = Ident::parse(content)?;
+        if content.peek(Ident::peek_any) && !content.peek2(Token![:]) {
+            let ident = parse_raw_ident(content)?;
             let comma = content.parse().ok();
 
             return Ok(Attribute {
@@ -80,7 +80,7 @@ impl Parse for Attribute {
         // Parse the name as either a known or custom attribute
         let name = match content.peek(LitStr) {
             true => AttributeName::Custom(content.parse::<LitStr>()?),
-            false => AttributeName::BuiltIn(Ident::parse_any(content)?),
+            false => AttributeName::BuiltIn(parse_raw_ident(content)?),
         };
 
         // Ensure there's a colon

@@ -194,13 +194,13 @@ fn invalid_cases() {
                 span { "asasddasdasd" }
 
                 // this is a new dynamic node, and thus can't be hot reloaded
-                // Eventualy we might be able to do a format like this, but not right now
+                // Eventually we might be able to do a format like this, but not right now
                 span { "123 {item}" }
             }
         }
     };
 
-    let new_invlaid_added = quote! {
+    let new_invalid_added = quote! {
         div {
             for item in vec![1, 2, 3] {
                 div { "asasddasdasd" }
@@ -225,7 +225,7 @@ fn invalid_cases() {
     let new_valid_removed: CallBody = syn::parse2(new_valid_removed).unwrap();
     let new_invalid_new_dynamic_internal: CallBody =
         syn::parse2(new_invalid_new_dynamic_internal).unwrap();
-    let new_invlaid_added: CallBody = syn::parse2(new_invlaid_added).unwrap();
+    let new_invalid_added: CallBody = syn::parse2(new_invalid_added).unwrap();
 
     assert!(hotreload_callbody::<Mock>(&old, &new_invalid, location).is_none());
     assert!(
@@ -244,7 +244,7 @@ fn invalid_cases() {
     assert_eq!(template.node_paths, &[&[], &[0u8, 0] as &[u8]]);
 
     // Adding a new dynamic node should not be hot reloadable
-    let added = hotreload_callbody::<Mock>(&old, &new_invlaid_added, location);
+    let added = hotreload_callbody::<Mock>(&old, &new_invalid_added, location);
     assert!(added.is_none());
 }
 

@@ -17,7 +17,7 @@ fn test_original_diff() {
         }
     });
 
-    let edits = dom.rebuild_to_vec().santize();
+    let edits = dom.rebuild_to_vec().sanitize();
 
     assert_eq!(
         edits.edits,
@@ -46,7 +46,7 @@ fn create() {
         }
     });
 
-    let _edits = dom.rebuild_to_vec().santize();
+    let _edits = dom.rebuild_to_vec().sanitize();
 
     // todo: we don't test template mutations anymore since the templates are passed along
 
@@ -77,7 +77,7 @@ fn create() {
 fn create_list() {
     let mut dom = VirtualDom::new(|| rsx! {{(0..3).map(|f| rsx!( div { "hello" } ))}});
 
-    let _edits = dom.rebuild_to_vec().santize();
+    let _edits = dom.rebuild_to_vec().sanitize();
 
     // note: we dont test template edits anymore
     // assert_eq!(
@@ -103,7 +103,7 @@ fn create_simple() {
         }
     });
 
-    let edits = dom.rebuild_to_vec().santize();
+    let edits = dom.rebuild_to_vec().sanitize();
 
     // note: we dont test template edits anymore
     // assert_eq!(
@@ -142,7 +142,7 @@ fn create_components() {
         }
     }
 
-    let _edits = dom.rebuild_to_vec().santize();
+    let _edits = dom.rebuild_to_vec().sanitize();
 
     // todo: test this
 }
@@ -161,7 +161,7 @@ fn anchors() {
     });
 
     // note that the template under "false" doesn't show up since it's not loaded
-    let edits = dom.rebuild_to_vec().santize();
+    let edits = dom.rebuild_to_vec().sanitize();
 
     // note: we dont test template edits anymore
     // assert_eq!(

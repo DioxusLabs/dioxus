@@ -4,7 +4,7 @@
 //! diagnostics. This was refactored from a straightforward parser to this validation approach so
 //! that we can emit errors as diagnostics instead of returning results.
 //!
-//! Using this approach we can provide *much* better errors as well as partial expansion whereever
+//! Using this approach we can provide *much* better errors as well as partial expansion wherever
 //! possible.
 //!
 //! It does lead to the code actually being larger than it was before, but it should be much easier

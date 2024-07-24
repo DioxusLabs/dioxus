@@ -176,7 +176,7 @@ mod test {
                 .unwrap();
         });
 
-        // Expose *just* the fileystem web server's address
+        // Expose *just* the filesystem web server's address
         server_handle_handle.listening().await.unwrap().to_string()
     }
 
