@@ -259,7 +259,7 @@ impl VirtualDom {
             move || {
                 use warnings::Warning;
                 // The root props don't come from a vcomponent so we need to manually rerun them sometimes
-                crate::properties::component_called_as_function::allow(|| app())
+                crate::properties::component_called_as_function::allow(app)
             },
             (),
         )
