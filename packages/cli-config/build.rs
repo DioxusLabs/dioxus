@@ -2,6 +2,8 @@
 // This means that some library is trying to access the crate's configuration, but the dioxus CLI was not used to build the application.
 
 fn main() {
+    built::write_built_file().expect("Failed to acquire build-time information");
+
     println!("cargo:rerun-if-env-changed=DIOXUS_CONFIG");
     let dioxus_config = std::env::var("DIOXUS_CONFIG");
     let built_with_dioxus = dioxus_config.is_ok();
