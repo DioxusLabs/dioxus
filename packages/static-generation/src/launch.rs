@@ -42,11 +42,22 @@ pub fn launch(
 
             // Serve the program if we are running with cargo
             if std::env::var_os("CARGO").is_some() || std::env::var_os("DIOXUS_ACTIVE").is_some() {
+                // Get the address the server should run on. If the CLI is running, the CLI proxies static generation into the main address
+                // and we use the generated address the CLI gives us
+                let cli_args = dioxus_cli_config::RuntimeCLIArguments::from_cli();
+                let address = cli_args
+                    .as_ref()
+                    .map(|args| args.fullstack_address().address())
+                    .unwrap_or_else(|| std::net::SocketAddr::from(([127, 0, 0, 1], 8080)));
+
+                // Point the user to the CLI address if the CLI is running or the fullstack address if not
+                let serve_address = cli_args
+                    .map(|args| args.cli_address())
+                    .unwrap_or_else(|| address);
                 println!(
-                    "Serving static files from {} at http://127.0.0.1:8080",
+                    "Serving static files from {} at http://{serve_address}",
                     path.display()
                 );
-                let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
 
                 let mut serve_dir =
                     ServeDir::new(path.clone()).call_fallback_on_method_not_allowed(true);
@@ -66,7 +77,7 @@ pub fn launch(
                     })))
                 };
 
-                let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+                let listener = tokio::net::TcpListener::bind(address).await.unwrap();
                 axum::serve(listener, router.into_make_service())
                     .await
                     .unwrap();

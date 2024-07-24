@@ -3,7 +3,7 @@
 # dioxus project name
 name = "{{project-name}}"
 
-# default platfrom
+# default platform
 # you can also use `dx serve/build --platform XXX` to use other platform
 # value: web | desktop
 default_platform = "{{default-platform}}"

@@ -6,7 +6,7 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[derive(ThisError, Debug)]
 pub enum Error {
-    /// Used when errors need to propogate but are too unique to be typed
+    /// Used when errors need to propagate but are too unique to be typed
     #[error("{0}")]
     Unique(String),
 

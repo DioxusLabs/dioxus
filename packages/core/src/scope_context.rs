@@ -1,3 +1,4 @@
+use crate::runtime::RuntimeError;
 use crate::{innerlude::SchedulerMsg, Runtime, ScopeId, Task};
 use crate::{
     innerlude::{throw_into, CapturedError},
@@ -219,7 +220,7 @@ impl Scope {
             None
         });
 
-        match cur_runtime.flatten() {
+        match cur_runtime.ok().flatten() {
             Some(ctx) => Some(ctx),
             None => {
                 tracing::trace!(
@@ -450,13 +451,18 @@ impl Scope {
 
 impl ScopeId {
     /// Get the current scope id
-    pub fn current_scope_id(self) -> Option<ScopeId> {
-        Runtime::with(|rt| rt.current_scope_id()).flatten()
+    pub fn current_scope_id(self) -> Result<ScopeId, RuntimeError> {
+        Runtime::with(|rt| rt.current_scope_id().ok())
+            .ok()
+            .flatten()
+            .ok_or(RuntimeError::new())
     }
 
     /// Consume context from the current scope
     pub fn consume_context<T: 'static + Clone>(self) -> Option<T> {
-        Runtime::with_scope(self, |cx| cx.consume_context::<T>()).flatten()
+        Runtime::with_scope(self, |cx| cx.consume_context::<T>())
+            .ok()
+            .flatten()
     }
 
     /// Consume context from the current scope
@@ -465,64 +471,67 @@ impl ScopeId {
             rt.get_state(scope_id)
                 .and_then(|cx| cx.consume_context::<T>())
         })
+        .ok()
         .flatten()
     }
 
     /// Check if the current scope has a context
     pub fn has_context<T: 'static + Clone>(self) -> Option<T> {
-        Runtime::with_scope(self, |cx| cx.has_context::<T>()).flatten()
+        Runtime::with_scope(self, |cx| cx.has_context::<T>())
+            .ok()
+            .flatten()
     }
 
     /// Provide context to the current scope
     pub fn provide_context<T: 'static + Clone>(self, value: T) -> T {
-        Runtime::with_scope(self, |cx| cx.provide_context(value))
-            .expect("to be in a dioxus runtime")
+        Runtime::with_scope(self, |cx| cx.provide_context(value)).unwrap()
     }
 
     /// Pushes the future onto the poll queue to be polled after the component renders.
     pub fn push_future(self, fut: impl Future<Output = ()> + 'static) -> Option<Task> {
-        Runtime::with_scope(self, |cx| cx.spawn(fut))
+        Runtime::with_scope(self, |cx| cx.spawn(fut)).ok()
     }
 
     /// Spawns the future but does not return the [`Task`]
     pub fn spawn(self, fut: impl Future<Output = ()> + 'static) {
-        Runtime::with_scope(self, |cx| cx.spawn(fut));
+        Runtime::with_scope(self, |cx| cx.spawn(fut)).unwrap();
     }
 
     /// Get the current render since the inception of this component
     ///
     /// This can be used as a helpful diagnostic when debugging hooks/renders, etc
     pub fn generation(self) -> Option<usize> {
-        Runtime::with_scope(self, |cx| Some(cx.generation())).expect("to be in a dioxus runtime")
+        Runtime::with_scope(self, |cx| Some(cx.generation())).unwrap()
     }
 
     /// Get the parent of the current scope if it exists
     pub fn parent_scope(self) -> Option<ScopeId> {
-        Runtime::with_scope(self, |cx| cx.parent_id()).flatten()
+        Runtime::with_scope(self, |cx| cx.parent_id())
+            .ok()
+            .flatten()
     }
 
     /// Mark the current scope as dirty, causing it to re-render
     pub fn needs_update(self) {
-        Runtime::with_scope(self, |cx| cx.needs_update());
+        Runtime::with_scope(self, |cx| cx.needs_update()).unwrap();
     }
 
     /// Create a subscription that schedules a future render for the reference component. Unlike [`Self::needs_update`], this function will work outside of the dioxus runtime.
     ///
     /// ## Notice: you should prefer using [`crate::prelude::schedule_update_any`]
     pub fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
-        Runtime::with_scope(*self, |cx| cx.schedule_update()).expect("to be in a dioxus runtime")
+        Runtime::with_scope(*self, |cx| cx.schedule_update()).unwrap()
     }
 
     /// Get the height of the current scope
     pub fn height(self) -> u32 {
-        Runtime::with_scope(self, |cx| cx.height()).expect("to be in a dioxus runtime")
+        Runtime::with_scope(self, |cx| cx.height()).unwrap()
     }
 
     /// Run a closure inside of scope's runtime
+    #[track_caller]
     pub fn in_runtime<T>(self, f: impl FnOnce() -> T) -> T {
-        Runtime::current()
-            .expect("to be in a dioxus runtime")
-            .on_scope(self, f)
+        Runtime::current().unwrap().on_scope(self, f)
     }
 
     /// Throw a [`CapturedError`] into a scope. The error will bubble up to the nearest [`ErrorBoundary`] or the root of the app.

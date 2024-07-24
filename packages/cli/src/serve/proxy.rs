@@ -23,7 +23,7 @@ struct ProxyClient {
 
 impl ProxyClient {
     fn new(url: Uri) -> Self {
-        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+        let _ = rustls::crypto::ring::default_provider().install_default();
         let https = hyper_rustls::HttpsConnectorBuilder::new()
             .with_native_roots()
             .unwrap()
@@ -176,7 +176,7 @@ mod test {
                 .unwrap();
         });
 
-        // Expose *just* the fileystem web server's address
+        // Expose *just* the filesystem web server's address
         server_handle_handle.listening().await.unwrap().to_string()
     }
 

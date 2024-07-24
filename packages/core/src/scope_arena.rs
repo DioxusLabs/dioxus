@@ -16,7 +16,7 @@ impl VirtualDom {
         props: BoxedAnyProps,
         name: &'static str,
     ) -> &mut ScopeState {
-        let parent_id = self.runtime.current_scope_id();
+        let parent_id = self.runtime.current_scope_id().ok();
         let height = match parent_id.and_then(|id| self.runtime.get_state(id)) {
             Some(parent) => parent.height() + 1,
             None => 0,
@@ -47,11 +47,11 @@ impl VirtualDom {
 
     /// Run a scope and return the rendered nodes. This will not modify the DOM or update the last rendered node of the scope.
     #[tracing::instrument(skip(self), level = "trace", name = "VirtualDom::run_scope")]
+    #[track_caller]
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> RenderReturn {
-        debug_assert!(
-            crate::Runtime::current().is_some(),
-            "Must be in a dioxus runtime"
-        );
+        // Ensure we are currently inside a `Runtime`.
+        crate::Runtime::current().unwrap();
+
         self.runtime.clone().with_scope_on_stack(scope_id, || {
             let scope = &self.scopes[scope_id.0];
             let output = {

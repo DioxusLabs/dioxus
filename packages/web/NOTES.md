@@ -2,7 +2,7 @@
 // ## RequestAnimationFrame and RequestIdleCallback
 // ------------------------------------------------
 // React implements "jank free rendering" by deliberately not blocking the browser's main thread. For large diffs, long
-// running work, and integration with things like React-Three-Fiber, it's extremeley important to avoid blocking the
+// running work, and integration with things like React-Three-Fiber, it's extremely important to avoid blocking the
 // main thread.
 //
 // React solves this problem by breaking up the rendering process into a "diff" phase and a "render" phase. In Dioxus,

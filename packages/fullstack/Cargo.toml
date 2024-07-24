@@ -104,7 +104,7 @@ server = [
     "dep:parking_lot",
     "dioxus-interpreter-js",
     "dep:clap",
-    "dioxus-cli-config/read-from-args"
+    "dioxus-cli-config/read-from-args",
 ]
 
 [package.metadata.docs.rs]

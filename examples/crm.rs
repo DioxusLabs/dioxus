@@ -7,9 +7,11 @@
 //! in a way that works across pages.
 //!
 //! We implement a number of important details here too, like focusing inputs, handling form submits, navigating the router,
-//! platform-specific configuration, and importing 3rd party CSS libaries.
+//! platform-specific configuration, and importing 3rd party CSS libraries.
 
 use dioxus::prelude::*;
+
+const STYLE: &str = asset!(file("./examples/assets/crm.css"));
 
 fn main() {
     LaunchBuilder::new()
@@ -26,7 +28,7 @@ fn main() {
                     integrity: "sha384-Uu6IeWbM+gzNVXJcM9XV3SohHtmWE+3VGi496jvgX1jyvDTXfdK+rfZc8C1Aehk5",
                     crossorigin: "anonymous"
                 }
-                style { {include_str!("./assets/crm.css")} }
+                link { rel: "stylesheet", href: STYLE }
                 h1 { "Dioxus CRM Example" }
                 Router::<Route> {}
             }

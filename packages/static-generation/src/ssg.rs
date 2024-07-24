@@ -111,6 +111,8 @@ async fn prerender_route(
     let context = server_context_for_route(&route);
     let wrapper = config.fullstack_template();
     let mut virtual_dom = VirtualDom::new(app);
+    let document = std::rc::Rc::new(dioxus_fullstack::document::ServerDocument::default());
+    virtual_dom.provide_root_context(document.clone() as std::rc::Rc<dyn Document>);
     with_server_context(context.clone(), || {
         tokio::task::block_in_place(|| virtual_dom.rebuild_in_place());
     });
@@ -119,10 +121,11 @@ async fn prerender_route(
     let mut wrapped = String::new();
 
     // Render everything before the body
-    wrapper.render_before_body(&mut wrapped)?;
+    wrapper.render_head(&mut wrapped, &virtual_dom)?;
 
     renderer.render_to(&mut wrapped, &virtual_dom)?;
 
+    wrapper.render_after_main(&mut wrapped, &virtual_dom)?;
     wrapper.render_after_body(&mut wrapped)?;
 
     cache.cache(route, wrapped)

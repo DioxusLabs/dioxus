@@ -156,7 +156,7 @@ pub struct ApplicationConfig {
 }
 
 fn default_name() -> String {
-    "name".into()
+    "my-cool-project".into()
 }
 
 fn default_platform() -> Platform {

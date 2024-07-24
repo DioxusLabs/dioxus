@@ -30,7 +30,7 @@ and install it in Cargo's global binary directory (`~/.cargo/bin/` by default).
 ### Install from local folder
 Note: The CLI will fail to build projects in debug profile. This is currently under investigation.
 ```shell
-cargo install --path . --release
+cargo install --path .
 ```
 
 ### Developing The CLI

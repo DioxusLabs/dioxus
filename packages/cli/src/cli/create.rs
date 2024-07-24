@@ -42,6 +42,12 @@ impl Create {
         if self.yes && args.name.is_none() {
             return Err("You have to provide the project's name when using `--yes` option.".into());
         }
+        // https://github.com/console-rs/dialoguer/issues/294
+        ctrlc::set_handler(move || {
+            let _ = console::Term::stdout().show_cursor();
+            std::process::exit(0);
+        })
+        .expect("ctrlc::set_handler");
         let path = cargo_generate::generate(args)?;
         post_create(&path)
     }
