@@ -1,4 +1,4 @@
-// Handle serialization of the event data across the IPC boundarytype SerialziedEvent = {};
+// Handle serialization of the event data across the IPC boundarytype SerializedEvent = {};
 
 import { retrieveSelectValue, retrieveValues } from "./form";
 
