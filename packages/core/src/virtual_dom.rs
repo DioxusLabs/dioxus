@@ -259,7 +259,7 @@ impl VirtualDom {
             move || {
                 use warnings::Warning;
                 // The root props don't come from a vcomponent so we need to manually rerun them sometimes
-                crate::properties::component_called_as_function::allow(app)
+                crate::properties::component_called_as_function::allow(|| app())
             },
             (),
         )
@@ -894,7 +894,7 @@ impl VirtualDom {
 
                 for attr in attrs.iter() {
                     // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                    if attr.name.get(2..) == Some(name) && target_path.is_decendant(this_path) {
+                    if attr.name.get(2..) == Some(name) && target_path.is_descendant(this_path) {
                         listeners.push(&attr.value);
 
                         // Break if this is the exact target element.

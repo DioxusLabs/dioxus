@@ -167,7 +167,7 @@ where
                 error.context.push(Rc::new(AdditionalErrorContext {
                     backtrace: Backtrace::capture(),
                     context: Box::new(context()),
-                    scope: current_scope_id(),
+                    scope: current_scope_id().ok(),
                 }));
                 Err(error)
             }

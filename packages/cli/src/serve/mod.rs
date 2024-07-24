@@ -45,15 +45,14 @@ use watcher::*;
 /// - I want us to be able to detect a `server_fn` in the project and then upgrade from a static server
 ///   to a dynamic one on the fly.
 pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
-    let mut server = Server::start(&serve, &dioxus_crate);
-    let mut watcher = Watcher::start(&dioxus_crate);
-    let mut screen = Output::start(&serve)
-        .await
-        .expect("Failed to open terminal logger");
     let mut builder = Builder::new(&dioxus_crate, &serve);
 
     // Start the first build
     builder.build();
+
+    let mut server = Server::start(&serve, &dioxus_crate);
+    let mut watcher = Watcher::start(&dioxus_crate);
+    let mut screen = Output::start(&serve).expect("Failed to open terminal logger");
 
     loop {
         // Make sure we don't hog the CPU: these loop { select! {} } blocks can starve the executor
@@ -107,8 +106,9 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                 // We also can check the status of the builds here in case we have multiple ongoing builds
                 match application {
                     Ok(BuilderUpdate::Progress { platform, update }) => {
+                        let update_stage = update.stage;
                         screen.new_build_logs(platform, update);
-                        server.update_build_status(screen.build_progress.progress()).await;
+                        server.update_build_status(screen.build_progress.progress(), update_stage.to_string()).await;
                     }
                     Ok(BuilderUpdate::Ready { results }) => {
                         if !results.is_empty() {
@@ -117,7 +117,7 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
 
                         // If we have a build result, open it
                         for build_result in results.iter() {
-                            let child = build_result.open(&serve.server_arguments, server.fullstack_address());
+                            let child = build_result.open(&serve.server_arguments, server.fullstack_address(), &dioxus_crate.workspace_dir());
                             match child {
                                 Ok(Some(child_proc)) => builder.children.push((build_result.platform,child_proc)),
                                 Err(_e) => break,

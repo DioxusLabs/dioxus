@@ -29,7 +29,7 @@ impl Config {
     #[cfg(feature = "hydrate")]
     /// Enable SSR hydration
     ///
-    /// This enables Dioxus to pick up work from a pre-renderd HTML file. Hydration will completely skip over any async
+    /// This enables Dioxus to pick up work from a pre-rendered HTML file. Hydration will completely skip over any async
     /// work and suspended nodes.
     ///
     /// Dioxus will load up all the elements with the `dio_el` data attribute into memory when the page is loaded.

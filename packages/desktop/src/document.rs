@@ -22,6 +22,10 @@ impl Document for DesktopDocument {
     fn set_title(&self, title: String) {
         self.desktop_ctx.window.set_title(&title);
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 /// Represents a desktop-target's JavaScript evaluator.

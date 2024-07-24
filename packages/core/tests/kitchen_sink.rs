@@ -33,7 +33,7 @@ fn basic_syntax_is_a_template() -> Element {
 #[test]
 fn dual_stream() {
     let mut dom = VirtualDom::new(basic_syntax_is_a_template);
-    let edits = dom.rebuild_to_vec().santize();
+    let edits = dom.rebuild_to_vec().sanitize();
 
     use Mutation::*;
     assert_eq!(edits.edits, {

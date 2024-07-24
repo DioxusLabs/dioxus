@@ -117,6 +117,7 @@ impl BuildResult {
         &self,
         serve: &ServeArguments,
         fullstack_address: Option<SocketAddr>,
+        workspace: &std::path::Path,
     ) -> std::io::Result<Option<Child>> {
         if self.web {
             return Ok(None);
@@ -124,12 +125,8 @@ impl BuildResult {
 
         let arguments = RuntimeCLIArguments::new(serve.address.address(), fullstack_address);
         let executable = self.executable.canonicalize()?;
-        // This is the /dist folder generally
-        let output_folder = executable.parent().unwrap();
-        // This is the workspace folder
-        let workspace_folder = output_folder.parent().unwrap();
         Ok(Some(
-            Command::new(&executable)
+            Command::new(executable)
                 // When building the fullstack server, we need to forward the serve arguments (like port) to the fullstack server through env vars
                 .env(
                     dioxus_cli_config::__private::SERVE_ENV,
@@ -138,7 +135,7 @@ impl BuildResult {
                 .stderr(Stdio::piped())
                 .stdout(Stdio::piped())
                 .kill_on_drop(true)
-                .current_dir(workspace_folder)
+                .current_dir(workspace)
                 .spawn()?,
         ))
     }

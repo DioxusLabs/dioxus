@@ -2,6 +2,9 @@
 const { test, expect } = require("@playwright/test");
 
 test("suspense resolves on server", async ({ page }) => {
+  // Wait for the dev server to reload
+  await page.goto("http://localhost:4040");
+  // Then wait for the page to start loading
   await page.goto("http://localhost:4040", { waitUntil: "commit" });
 
   // On the client, we should see some loading text

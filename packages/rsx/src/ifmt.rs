@@ -13,7 +13,7 @@ use syn::{
 ///
 /// This wraps LitStr with some extra goodies like inline expressions and hot-reloading.
 /// Originally this was intended to provide named inline string interpolation but eventually Rust
-/// actualy shipped this!
+/// actually shipped this!
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct IfmtInput {
     pub source: LitStr,

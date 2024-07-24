@@ -25,7 +25,7 @@ fn app() -> Element {
 fn list_renders() {
     let mut dom = VirtualDom::new(app);
 
-    let edits = dom.rebuild_to_vec().santize();
+    let edits = dom.rebuild_to_vec().sanitize();
 
     // note: we dont test template edits anymore
     // assert_eq!(

@@ -167,7 +167,6 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
     ///     use_hook(move || Signal::new_with_caller(function(), caller))
     /// }
     /// ```
-    #[allow(unused)]
     pub fn new_with_caller(value: T, caller: &'static std::panic::Location<'static>) -> Self {
         Self {
             inner: CopyValue::new_with_caller(
@@ -175,7 +174,6 @@ impl<T: 'static, S: Storage<SignalData<T>>> Signal<T, S> {
                     subscribers: Default::default(),
                     value,
                 },
-                #[cfg(debug_assertions)]
                 caller,
             ),
         }

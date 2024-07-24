@@ -127,9 +127,10 @@ pub(crate) fn component_called_as_function<C: ComponentFunction<P, M>, P, M>(_: 
     }
     let component_name = Runtime::with(|rt| {
         current_scope_id()
-            .and_then(|id| rt.get_state(id))
-            .map(|scope| scope.name)
+            .ok()
+            .and_then(|id| rt.get_state(id).map(|scope| scope.name))
     })
+    .ok()
     .flatten();
 
     // If we are in a component, and the type name is the same as the active component name, then we can just return

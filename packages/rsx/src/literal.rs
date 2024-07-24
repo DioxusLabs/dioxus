@@ -160,15 +160,11 @@ impl ToTokens for HotLiteral {
                     // But the key is what's keeping it stable
                     GlobalSignal::with_key(
                         || #val, {
-                        concat!(
-                            file!(),
-                            ":",
-                            line!(),
-                            ":",
-                            column!(),
-                            ":",
-                            #hr_idx
-                        )
+                        {
+                            const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
+                            const NORMAL: &str = dioxus_core::const_format::str_replace!(PATH, '\\', "/");
+                            dioxus_core::const_format::concatcp!(NORMAL, ':', line!(), ':', column!(), ':', #hr_idx)
+                        }
                     })
                     .maybe_with_rt(|s| s #mapped)
                 }
