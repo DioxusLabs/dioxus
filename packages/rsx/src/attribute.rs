@@ -516,9 +516,9 @@ impl AttributeValue {
 /// A if else chain attribute value
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct IfAttributeValue {
-    pub(crate) condition: Expr,
-    pub(crate) then_value: Box<AttributeValue>,
-    pub(crate) else_value: Option<Box<AttributeValue>>,
+    pub condition: Expr,
+    pub then_value: Box<AttributeValue>,
+    pub else_value: Option<Box<AttributeValue>>,
 }
 
 impl IfAttributeValue {
