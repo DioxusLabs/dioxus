@@ -11,7 +11,7 @@ use proc_macro2::Span;
 use proc_macro2_diagnostics::SpanDiagnosticExt;
 use syn::{
     ext::IdentExt,
-    parse::{Parse, ParseBuffer},
+    parse::{Parse, ParseBuffer, ParseStream},
     spanned::Spanned,
     token::{self, Brace},
     Expr, Ident, LitStr, Token,
@@ -31,7 +31,7 @@ use syn::{
 /// The name of the block is expected to be parsed by the parent parser. It will accept items out of
 /// order if possible and then bubble up diagnostics to the parent. This lets us give better errors
 /// and autocomplete
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Default)]
 pub struct RsxBlock {
     pub brace: token::Brace,
     pub attributes: Vec<Attribute>,
@@ -49,16 +49,37 @@ impl Parse for RsxBlock {
 }
 
 impl RsxBlock {
+    /// Only parse the children of the block - all others will be rejected
+    pub fn parse_children(content: &ParseBuffer) -> syn::Result<Self> {
+        let mut nodes = vec![];
+        let mut diagnostics = Diagnostics::new();
+        while !content.is_empty() {
+            nodes.push(Self::parse_body_node_with_comma_diagnostics(
+                content,
+                &mut diagnostics,
+            )?);
+        }
+        Ok(Self {
+            children: nodes,
+            diagnostics,
+            ..Default::default()
+        })
+    }
+
     pub fn parse_inner(content: &ParseBuffer, brace: token::Brace) -> syn::Result<Self> {
         let mut items = vec![];
         let mut diagnostics = Diagnostics::new();
+
+        // If we are after attributes, we can try to provide better completions and diagnostics
+        // by parsing the following nodes as body nodes if they are ambiguous, we can parse them as body nodes
+        let mut after_attributes = false;
 
         // Lots of manual parsing but it's important to do it all here to give the best diagnostics possible
         // We can do things like lookaheads, peeking, etc. to give better errors and autocomplete
         // We allow parsing in any order but complain if its done out of order.
         // Autofmt will fortunately fix this for us in most cases
         //
-        // Weo do this by parsing the unambiguous cases first and then do some clever lookahead to parse the rest
+        // We do this by parsing the unambiguous cases first and then do some clever lookahead to parse the rest
         while !content.is_empty() {
             // Parse spread attributes
             if content.peek(Token![..]) {
@@ -89,12 +110,13 @@ impl RsxBlock {
                     );
                 }
                 items.push(RsxItem::Spread(attr));
+                after_attributes = true;
 
                 continue;
             }
 
             // Parse unambiguous attributes - these can't be confused with anything
-            if (content.peek(LitStr) || content.peek(Ident) || content.peek(Ident::peek_any))
+            if (content.peek(LitStr) || content.peek(Ident::peek_any))
                 && content.peek2(Token![:])
                 && !content.peek3(Token![:])
             {
@@ -113,7 +135,7 @@ impl RsxBlock {
                 continue;
             }
 
-            // Eagerly match on children, generally
+            // Eagerly match on completed children, generally
             if content.peek(LitStr)
                 | content.peek(Token![for])
                 | content.peek(Token![if])
@@ -122,10 +144,13 @@ impl RsxBlock {
                 // web components
                 | (content.peek(Ident::peek_any) && content.peek2(Token![-]))
                 // elements
-                | (content.peek(Ident::peek_any) && content.peek2(token::Brace))
-            // todo: eager parse components?
+                | (content.peek(Ident::peek_any) && (after_attributes || content.peek2(token::Brace)))
+                // components
+                | (content.peek(Ident::peek_any) && (after_attributes || content.peek2(token::Brace) || content.peek2(Token![::])))
             {
-                items.push(RsxItem::Child(content.parse::<BodyNode>()?));
+                items.push(RsxItem::Child(
+                    Self::parse_body_node_with_comma_diagnostics(content, &mut diagnostics)?,
+                ));
                 if !content.is_empty() && content.peek(Token![,]) {
                     let comma = content.parse::<Token![,]>()?;
                     diagnostics.push(
@@ -134,19 +159,20 @@ impl RsxBlock {
                         ),
                     );
                 }
+                after_attributes = true;
                 continue;
             }
 
             // Parse shorthand attributes
             // todo: this might cause complications with partial expansion... think more about the cases
-            // where we can imagine expansion and what better diagnostics we can providea
-            if content.peek(Ident)
-                && !content.peek2(Brace)
-                && !content.peek2(Token![:]) // regular attributes / components with generics
-                && !content.peek2(Token![-]) // web components
-                && !content.peek2(Token![<]) // generics on components
-                // generics on components
-                && !content.peek2(Token![::])
+            // where we can imagine expansion and what better diagnostics we can provide
+            if Self::peek_lowercase_ident(&content)
+                    && !content.peek2(Brace)
+                    && !content.peek2(Token![:]) // regular attributes / components with generics
+                    && !content.peek2(Token![-]) // web components
+                    && !content.peek2(Token![<]) // generics on components
+                    // generics on components
+                    && !content.peek2(Token![::])
             {
                 let attribute = content.parse::<Attribute>()?;
 
@@ -165,7 +191,9 @@ impl RsxBlock {
             }
 
             // Finally just attempt a bodynode parse
-            items.push(RsxItem::Child(content.parse::<BodyNode>()?))
+            items.push(RsxItem::Child(
+                Self::parse_body_node_with_comma_diagnostics(content, &mut diagnostics)?,
+            ))
         }
 
         // Validate the order of the items
@@ -191,6 +219,36 @@ impl RsxBlock {
             brace,
             diagnostics,
         })
+    }
+
+    // Parse a body node with diagnostics for unnecessary trailing commas
+    fn parse_body_node_with_comma_diagnostics(
+        content: &ParseBuffer,
+        diagnostics: &mut Diagnostics,
+    ) -> syn::Result<BodyNode> {
+        let body_node = content.parse::<BodyNode>()?;
+        if !content.is_empty() && content.peek(Token![,]) {
+            let comma = content.parse::<Token![,]>()?;
+            diagnostics.push(
+                comma
+                    .span()
+                    .warning("Elements and text nodes do not need to be separated by commas."),
+            );
+        }
+        Ok(body_node)
+    }
+
+    fn peek_lowercase_ident(stream: &ParseStream) -> bool {
+        let Ok(ident) = stream.fork().call(Ident::parse_any) else {
+            return false;
+        };
+
+        ident
+            .to_string()
+            .chars()
+            .next()
+            .unwrap()
+            .is_ascii_lowercase()
     }
 
     /// Ensure the ordering of the items is correct
@@ -539,5 +597,28 @@ mod tests {
         };
 
         let _parsed: RsxBlock = syn::parse2(input).unwrap();
+    }
+
+    #[test]
+    fn incomplete_root_elements() {
+        use syn::parse::Parser;
+
+        let input = quote::quote! {
+            di
+        };
+
+        let parsed = RsxBlock::parse_children.parse2(input).unwrap();
+        let children = parsed.children;
+
+        assert_eq!(children.len(), 1);
+        if let BodyNode::Element(parsed) = &children[0] {
+            assert_eq!(
+                parsed.name,
+                ElementName::Ident(Ident::new("di", Span::call_site()))
+            );
+        } else {
+            panic!("expected element, got {:?}", children);
+        }
+        assert!(parsed.diagnostics.is_empty());
     }
 }

@@ -134,3 +134,32 @@ fn TakesSignal(sig: ReadOnlySignal<usize>, number: usize) -> Element {
         button { "{number}" }
     }
 }
+
+// Regression test for https://github.com/DioxusLabs/dioxus/issues/2582
+#[test]
+fn spreads_memorize_in_place() {
+    #[derive(Props, Clone, PartialEq)]
+    struct CompProps {
+        #[props(extends = GlobalAttributes)]
+        attributes: Vec<Attribute>,
+    }
+
+    let mut props = CompProps::builder().build();
+    assert!(!props.memoize(&CompProps::builder().all("123").build()));
+    assert_eq!(
+        props.attributes,
+        vec![Attribute::new("all", "123", Some("style"), false)]
+    );
+
+    assert!(!props.memoize(&CompProps::builder().width("123").build()));
+    assert_eq!(
+        props.attributes,
+        vec![Attribute::new("width", "123", Some("style"), false)]
+    );
+
+    assert!(!props.memoize(&CompProps::builder().build()));
+    assert_eq!(props.attributes, vec![]);
+
+    assert!(props.memoize(&CompProps::builder().build()));
+    assert_eq!(props.attributes, vec![]);
+}

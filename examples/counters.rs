@@ -2,6 +2,8 @@
 
 use dioxus::prelude::*;
 
+const STYLE: &str = asset!(file("./examples/assets/counter.css"));
+
 fn main() {
     launch(app);
 }
@@ -14,7 +16,7 @@ fn app() -> Element {
     let sum = use_memo(move || counters.read().iter().copied().sum::<i32>());
 
     rsx! {
-        style { {include_str!("./assets/counter.css")} }
+        link { rel: "stylesheet", href: STYLE }
 
         div { id: "controls",
             button { onclick: move |_| counters.write().push(0), "Add counter" }

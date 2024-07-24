@@ -86,7 +86,7 @@ enum Tab {
 type TerminalBackend = Terminal<CrosstermBackend<io::Stdout>>;
 
 impl Output {
-    pub async fn start(cfg: &Serve) -> io::Result<Self> {
+    pub fn start(cfg: &Serve) -> io::Result<Self> {
         let interactive = std::io::stdout().is_tty() && cfg.interactive.unwrap_or(true);
 
         let mut events = None;
@@ -246,12 +246,14 @@ impl Output {
     /// to be.
     fn drain_print_logs(&mut self) {
         // todo: print the build info here for the most recent build, and then the logs of the most recent build
-        for (platform, build) in self.build_progress.build_logs.iter() {
+        for (platform, build) in self.build_progress.build_logs.iter_mut() {
             if build.messages.is_empty() {
                 continue;
             }
 
-            for message in build.messages.iter() {
+            let messages = build.messages.drain(0..);
+
+            for message in messages {
                 match &message.message {
                     MessageType::Cargo(diagnostic) => {
                         println!(

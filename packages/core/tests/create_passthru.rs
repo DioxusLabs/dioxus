@@ -81,7 +81,7 @@ fn dynamic_node_as_root() {
     fn app() -> Element {
         let a = 123;
         let b = 456;
-        rsx! { "{a}", "{b}" }
+        rsx! { "{a}" "{b}" }
     }
 
     let mut dom = VirtualDom::new(app);

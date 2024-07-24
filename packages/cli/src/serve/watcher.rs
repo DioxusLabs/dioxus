@@ -38,8 +38,12 @@ impl Watcher {
         allow_watch_path.dedup();
 
         let crate_dir = config.crate_dir();
-        let gitignore_file_path = crate_dir.join(".gitignore");
-        let mut builder = ignore::gitignore::GitignoreBuilder::new(gitignore_file_path);
+        let mut builder = ignore::gitignore::GitignoreBuilder::new(&crate_dir);
+        builder.add(crate_dir.join(".gitignore"));
+
+        let out_dir = config.out_dir();
+        let out_dir_str = out_dir.display().to_string();
+
         let excluded_paths = vec![
             ".git",
             ".github",
@@ -48,9 +52,12 @@ impl Watcher {
             "node_modules",
             "dist",
             ".dioxus",
+            &out_dir_str,
         ];
         for path in excluded_paths {
-            builder.add(path);
+            builder
+                .add_line(None, path)
+                .expect("failed to add path to file excluder");
         }
         let ignore = builder.build().unwrap();
 
@@ -62,7 +69,7 @@ impl Watcher {
                      match e.kind {
 
                         // An event emitted when the metadata of a file or folder is changed.
-                        EventKind::Modify(ModifyKind::Data(_)) |
+                        EventKind::Modify(ModifyKind::Data(_) | ModifyKind::Any) |
                         EventKind::Create(_) |
                         EventKind::Remove(_) => {
                             _ = tx.unbounded_send(e);
@@ -139,6 +146,7 @@ impl Watcher {
         for event in self.queued_events.drain(..) {
             // We only care about modify/crate/delete events
             match event.kind {
+                EventKind::Modify(ModifyKind::Any) => {}
                 EventKind::Modify(ModifyKind::Data(_)) => {}
                 EventKind::Modify(ModifyKind::Name(_)) => {}
                 EventKind::Create(_) => {}

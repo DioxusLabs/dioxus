@@ -11,7 +11,7 @@ use tracing::Level;
 
 use super::BuildRequest;
 
-#[derive(Default, Debug, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Default, Debug, PartialOrd, Ord, PartialEq, Eq, Clone, Copy)]
 pub enum Stage {
     #[default]
     Initializing = 0,
