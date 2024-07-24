@@ -1,9 +1,10 @@
 use dioxus::prelude::*;
+use std::str::FromStr;
 
 // Tests for regressions of <https://github.com/DioxusLabs/dioxus/issues/2549>
 #[test]
 fn redirects_apply_in_order() {
-    let path = Route::parse("/").unwrap();
+    let path = Route::from_str("/").unwrap();
     assert_eq!(
         path,
         Route::Home {
@@ -34,7 +35,7 @@ fn App(path: Route) -> Element {
     rsx! {
         Router::<Route> {
             config: {
-                move || RouterConfig::default().history(MemoryHistory::with_initial_path(path))
+                move |_| RouterConfig::default().history(MemoryHistory::with_initial_path(path.clone()))
             }
         }
     }
