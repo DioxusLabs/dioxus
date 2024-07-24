@@ -23,7 +23,7 @@ impl Document for LiveviewDocument {
     }
 }
 
-/// Reprents a liveview-target's JavaScript evaluator.
+/// Represents a liveview-target's JavaScript evaluator.
 pub(crate) struct LiveviewEvaluator {
     query: Query<serde_json::Value>,
 }

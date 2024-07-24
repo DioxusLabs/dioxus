@@ -1,0 +1,10 @@
+[default.extend-words]
+# https://ratatui.rs/
+ratatui = "ratatui"
+# lits is short for literals
+lits = "lits"
+# https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/seeked_event
+seeked = "seeked"
+
+[files]
+extend-exclude = ["translations/*", "CHANGELOG.md", "*.js"]

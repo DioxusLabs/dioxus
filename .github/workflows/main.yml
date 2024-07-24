@@ -117,7 +117,15 @@ jobs:
           cache-all-crates: "true"
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo fmt --all -- --check
-
+  
+  typos:
+    if: github.event.pull_request.draft == false
+    name: Check for typos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for typos
+        uses: crate-ci/typos@master
   clippy:
     if: github.event.pull_request.draft == false
     name: Clippy

@@ -598,7 +598,7 @@ fn merging_weird_fails() {
 }
 
 #[test]
-fn diagnositcs() {
+fn diagnostics() {
     let input = quote::quote! {
         p {
             class: "foo bar"

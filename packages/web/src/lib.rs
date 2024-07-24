@@ -215,7 +215,7 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
         //
         // 1. wait for the browser to give us "idle" time
         // 2. During idle time, diff the dom
-        // 3. Stop diffing if the deadline is exceded
+        // 3. Stop diffing if the deadline is exceeded
         // 4. Wait for the animation frame to patch the dom
 
         // wait for the mainthread to schedule us in

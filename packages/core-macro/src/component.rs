@@ -40,7 +40,7 @@ impl ToTokens for ComponentBody {
             // No props declared, so we don't need to generate a props struct
             true => quote! {},
 
-            // Props declared, so we generate a props struct and thatn also attach the doc attributes to it
+            // Props declared, so we generate a props struct and then also attach the doc attributes to it
             false => {
                 let doc = format!("Properties for the [`{}`] component.", &comp_fn.sig.ident);
                 let props_struct = self.props_struct();

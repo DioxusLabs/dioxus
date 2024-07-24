@@ -5,7 +5,7 @@
   </p>
 </div>
 
-> This crate implements dioxus-lib which is a renderer-free version of Dioxus. This crate is intended to be used by library authors who need a stable core verison of dioxus withuot pulling in renderer-related dependencies on accident.
+> This crate implements dioxus-lib which is a renderer-free version of Dioxus. This crate is intended to be used by library authors who need a stable core version of dioxus withuot pulling in renderer-related dependencies on accident.
 
 # Resources
 

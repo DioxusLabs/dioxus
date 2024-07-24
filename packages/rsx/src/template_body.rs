@@ -3,7 +3,7 @@
 //! The `Callbody` is the contents of the rsx! macro - this contains all the information about every
 //! node that rsx! directly knows about. For loops, if statements, etc.
 //!
-//! However, thre are multiple *templates* inside a callbody - due to how core clones templates and
+//! However, there are multiple *templates* inside a callbody - due to how core clones templates and
 //! just generally rationalize the concept of a template, nested bodies like for loops and if statements
 //! and component children are all templates, contained within the same Callbody.
 //!

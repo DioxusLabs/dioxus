@@ -21,7 +21,7 @@ fn attrs_cycle() {
     });
 
     assert_eq!(
-        dom.rebuild_to_vec().santize().edits,
+        dom.rebuild_to_vec().sanitize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
             AppendChildren { m: 1, id: ElementId(0) },
@@ -30,7 +30,7 @@ fn attrs_cycle() {
 
     dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
             AssignId { path: &[0,], id: ElementId(3,) },
@@ -42,7 +42,7 @@ fn attrs_cycle() {
 
     dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1) },
             ReplaceWith { id: ElementId(2), m: 1 }
@@ -51,7 +51,7 @@ fn attrs_cycle() {
 
     dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(2) },
             AssignId { path: &[0], id: ElementId(3) },
@@ -74,7 +74,7 @@ fn attrs_cycle() {
     // we take the node taken by attributes since we reused it
     dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1) },
             ReplaceWith { id: ElementId(2), m: 1 }

@@ -7,7 +7,7 @@ import { BaseInterpreter, NodeId } from "./core";
 import { SerializedEvent, serializeEvent } from "./serialize";
 
 // okay so, we've got this JSChannel thing from sledgehammer, implicitly imported into our scope
-// we want to extend it, and it technically extends base intepreter. To make typescript happy,
+// we want to extend it, and it technically extends base interpreter. To make typescript happy,
 // we're going to bind the JSChannel_ object to the JSChannel object, and then extend it
 var JSChannel_: typeof BaseInterpreter;
 
@@ -209,7 +209,7 @@ export class NativeInterpreter extends JSChannel_ {
     // Liveview will still need to use this
     this.preventDefaults(event, target);
 
-    // liveview does not have syncronous event handling, so we need to send the event to the host
+    // liveview does not have synchronous event handling, so we need to send the event to the host
     if (this.liveview) {
       // Okay, so the user might've requested some files to be read
       if (
