@@ -25,6 +25,10 @@ impl Document for WebDocument {
     fn new_evaluator(&self, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
         WebEvaluator::create(js)
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 /// Required to avoid blocking the Rust WASM thread.

@@ -17,14 +17,7 @@ pub use crate::renderer::Renderer;
 ///
 /// For advanced rendering, create a new `SsrRender`.
 pub fn render_element(element: Element) -> String {
-    fn lazy_app(props: Element) -> Element {
-        props
-    }
-
-    let mut dom = VirtualDom::new_with_props(lazy_app, element);
-    dom.rebuild_in_place();
-
-    Renderer::new().render(&dom)
+    Renderer::new().render_element(element)
 }
 
 /// A convenience function to render an existing VirtualDom to a string

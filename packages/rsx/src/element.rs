@@ -558,6 +558,7 @@ fn merges_attributes() {
 /// - merging two expressions together
 /// - merging two literals together
 /// - merging a literal and an expression together
+///
 /// etc
 ///
 /// We really only want to merge formatted things together

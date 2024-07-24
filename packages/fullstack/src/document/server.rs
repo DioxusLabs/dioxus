@@ -7,6 +7,10 @@ use std::cell::RefCell;
 use dioxus_lib::{html::document::*, prelude::*};
 use dioxus_ssr::Renderer;
 use generational_box::GenerationalBox;
+use once_cell::sync::Lazy;
+use parking_lot::RwLock;
+
+static RENDERER: Lazy<RwLock<Renderer>> = Lazy::new(|| RwLock::new(Renderer::new()));
 
 #[derive(Default)]
 struct ServerDocumentInner {
@@ -19,35 +23,27 @@ struct ServerDocumentInner {
 
 /// A Document provider that collects all contents injected into the head for SSR rendering.
 #[derive(Default)]
-pub(crate) struct ServerDocument(RefCell<ServerDocumentInner>);
+pub struct ServerDocument(RefCell<ServerDocumentInner>);
 
 impl ServerDocument {
-    pub(crate) fn render(
-        &self,
-        to: &mut impl std::fmt::Write,
-        renderer: &mut Renderer,
-    ) -> std::fmt::Result {
-        fn lazy_app(props: Element) -> Element {
-            props
-        }
+    pub(crate) fn title(&self) -> Option<String> {
+        let myself = self.0.borrow();
+        myself.title.as_ref().map(|title| {
+            RENDERER
+                .write()
+                .render_element(rsx! { title { "{title}" } })
+        })
+    }
+
+    pub(crate) fn render(&self, to: &mut impl std::fmt::Write) -> std::fmt::Result {
         let myself = self.0.borrow();
         let element = rsx! {
-            if let Some(title) = myself.title.as_ref() {
-                title { title: "{title}" }
-            }
             {myself.meta.iter().map(|m| rsx! { {m} })}
             {myself.link.iter().map(|l| rsx! { {l} })}
             {myself.script.iter().map(|s| rsx! { {s} })}
         };
 
-        let mut dom = VirtualDom::new_with_props(lazy_app, element);
-        dom.rebuild_in_place();
-
-        // We don't hydrate the head, so we can set the pre_render flag to false to save a few bytes
-        let was_pre_rendering = renderer.pre_render;
-        renderer.pre_render = false;
-        renderer.render_to(to, &dom)?;
-        renderer.pre_render = was_pre_rendering;
+        RENDERER.write().render_element_to(to, element)?;
 
         Ok(())
     }
@@ -65,8 +61,12 @@ impl ServerDocument {
     /// Write the head element into the serialized context for hydration
     /// We write true if the head element was written to the DOM during server side rendering
     pub(crate) fn serialize_for_hydration(&self) {
-        let serialize = crate::html_storage::serialize_context();
-        serialize.push(&!self.0.borrow().streaming);
+        // We only serialize the head elements if the web document feature is enabled
+        #[cfg(feature = "document")]
+        {
+            let serialize = crate::html_storage::serialize_context();
+            serialize.push(&!self.0.borrow().streaming);
+        }
     }
 }
 
@@ -136,5 +136,9 @@ impl Document for ServerDocument {
                 blocking: props.blocking,
             }
         })
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }

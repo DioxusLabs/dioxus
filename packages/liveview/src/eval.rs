@@ -21,6 +21,10 @@ impl Document for LiveviewDocument {
     fn new_evaluator(&self, js: String) -> GenerationalBox<Box<dyn Evaluator>> {
         LiveviewEvaluator::create(self.query.clone(), js)
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 /// Represents a liveview-target's JavaScript evaluator.
