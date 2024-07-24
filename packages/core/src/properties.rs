@@ -130,9 +130,11 @@ pub fn verify_component_called_as_component<C: ComponentFunction<P, M>, P, M>(co
         }
         let component_name = Runtime::with(|rt| {
             current_scope_id()
+                .ok()
                 .and_then(|id| rt.get_state(id))
                 .map(|scope| scope.name)
         })
+        .ok()
         .flatten();
 
         // If we are in a component, and the type name is the same as the active component name, then we can just return

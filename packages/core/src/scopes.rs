@@ -21,6 +21,7 @@ impl std::fmt::Debug for ScopeId {
         #[cfg(debug_assertions)]
         {
             if let Some(name) = Runtime::current()
+                .ok()
                 .as_ref()
                 .and_then(|rt| rt.get_state(*self))
             {
