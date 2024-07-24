@@ -1,7 +1,11 @@
 // @ts-check
 const { test, expect } = require("@playwright/test");
+const { timeout } = require("./playwright.config");
 
 test("nested suspense resolves", async ({ page }) => {
+  // Wait for the dev server to reload
+  await page.goto("http://localhost:5050");
+  // Then wait for the page to start loading
   await page.goto("http://localhost:5050", { waitUntil: "commit" });
 
   // On the client, we should see some loading text

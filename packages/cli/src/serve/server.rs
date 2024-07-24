@@ -578,7 +578,9 @@ pub(crate) fn open_browser(base_path: Option<String>, address: SocketAddr, https
 }
 
 fn get_available_port(address: IpAddr) -> Option<u16> {
-    (8000..9000).find(|port| TcpListener::bind((address, *port)).is_ok())
+    TcpListener::bind((address, 0))
+        .map(|listener| listener.local_addr().unwrap().port())
+        .ok()
 }
 
 /// Middleware that intercepts html requests if the status is "Building" and returns a loading page instead
