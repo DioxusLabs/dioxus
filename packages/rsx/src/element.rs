@@ -226,9 +226,15 @@ impl Element {
     /// }
     /// ```
     fn merge_attributes(&mut self) {
-        let mut attrs = self.raw_attributes.clone();
-        attrs.sort_by_key(|attr| attr.name.to_string());
-        attrs.dedup_by_key(|attr| attr.name.to_string());
+        let mut attrs: Vec<&Attribute> = vec![];
+
+        for attr in &self.raw_attributes {
+            if attrs.iter().any(|old_attr| old_attr.name == attr.name) {
+                continue;
+            }
+
+            attrs.push(attr);
+        }
 
         for attr in attrs {
             if attr.name.to_string() == "key" {
