@@ -334,19 +334,19 @@ use dioxus::prelude::*;
 static COUNT: GlobalSignal<i32> = Signal::global(|| 0);
 
 #[component]
-fn MyComponent() -> Element {
-    use_effect(|| {
+fn MyComponent() -> Element {{
+    use_effect(|| {{
         // Grab the runtime from the MyComponent scope
         let runtime = Runtime::current().expect(\"Components run in the Dioxus runtime\");
         // Move the runtime into the web-sys closure scope
-        let web_sys_closure = Closure::new(|| {
+        let web_sys_closure = Closure::new(|| {{
             // Then create a guard to provide the runtime to the closure
             let _guard = RuntimeGuard::new(runtime);
             // and run whatever code needs the runtime
-            tracing::info!(\"The count is: {COUNT}\");
-        });
-    })
-}
+            tracing::info!(\"The count is: {{COUNT}}\");
+        }});
+    }})
+}}
 ```"
         )
     }
