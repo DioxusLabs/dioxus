@@ -23,8 +23,9 @@ use std::fmt::Display;
 use syn::{
     ext::IdentExt,
     parse::{Parse, ParseStream},
+    parse_quote,
     spanned::Spanned,
-    Expr, ExprClosure, ExprIf, Ident, Lit, LitBool, LitFloat, LitInt, LitStr, Token,
+    Block, Expr, ExprClosure, ExprIf, Ident, Lit, LitBool, LitFloat, LitInt, LitStr, Token,
 };
 
 #[cfg(feature = "hot_reload")]
@@ -241,7 +242,7 @@ impl Attribute {
                 AttributeValue::AttrLiteral(_)
                 | AttributeValue::AttrExpr(_)
                 | AttributeValue::Shorthand(_)
-                | AttributeValue::AttrOptionalExpr { .. }
+                | AttributeValue::IfExpr { .. }
                     if is_not_event =>
                 {
                     let name = &self.name;
@@ -439,20 +440,17 @@ pub enum AttributeValue {
     /// A series of tokens that represent an event handler
     ///
     /// We use a special type here so we can get autocomplete in the closure using partial expansion.
-    /// We also do some extra wrapping for improved type hinting since rust sometimes as trouble with
+    /// We also do some extra wrapping for improved type hinting since rust sometimes has trouble with
     /// generics and closures.
     EventTokens(PartialClosure),
 
-    /// Unterminated expression - full expressions are handled by AttrExpr
+    /// Conditional expression
     ///
-    /// attribute: if bool { "value" }
+    /// attribute: if bool { "value" } else if bool { "other value" } else { "default value" }
     ///
     /// Currently these don't get hotreloading super powers, but they could, depending on how far
     /// we want to go with it
-    AttrOptionalExpr {
-        condition: Expr,
-        value: Box<AttributeValue>,
-    },
+    IfExpr(IfAttributeValue),
 
     /// attribute: some_expr
     /// attribute: {some_expr} ?
@@ -463,45 +461,7 @@ impl Parse for AttributeValue {
     fn parse(content: ParseStream) -> syn::Result<Self> {
         // Attempt to parse the unterminated if statement
         if content.peek(Token![if]) {
-            let if_expr = content.parse::<ExprIf>()?;
-
-            if is_if_chain_terminated(&if_expr) {
-                return Ok(AttributeValue::AttrExpr(
-                    syn::parse2(if_expr.to_token_stream()).unwrap(),
-                ));
-            }
-
-            let stmts = &if_expr.then_branch.stmts;
-
-            if stmts.len() != 1 {
-                return Err(syn::Error::new(
-                    if_expr.then_branch.span(),
-                    "Expected a single statement in the if block",
-                ));
-            }
-
-            // either an ifmt or an expr in the block
-            let stmt = &stmts[0];
-
-            // Either it's a valid ifmt or an expression
-            let value = match stmt {
-                syn::Stmt::Expr(exp, None) => {
-                    // Try parsing the statement as an IfmtInput by passing it through tokens
-                    let value: Result<HotLiteral, syn::Error> = syn::parse2(quote! { #exp });
-                    match value {
-                        Ok(res) => Box::new(AttributeValue::AttrLiteral(res)),
-                        Err(_) => Box::new(AttributeValue::AttrExpr(
-                            syn::parse2(if_expr.to_token_stream()).unwrap(),
-                        )),
-                    }
-                }
-                _ => return Err(syn::Error::new(stmt.span(), "Expected an expression")),
-            };
-
-            return Ok(AttributeValue::AttrOptionalExpr {
-                condition: *if_expr.cond,
-                value,
-            });
+            return Ok(Self::IfExpr(content.parse::<IfAttributeValue>()?));
         }
 
         // Use the move and/or bars as an indicator that we have an event handler
@@ -534,15 +494,7 @@ impl ToTokens for AttributeValue {
         match self {
             Self::Shorthand(ident) => ident.to_tokens(tokens),
             Self::AttrLiteral(ifmt) => ifmt.to_tokens(tokens),
-            Self::AttrOptionalExpr { condition, value } => tokens.append_all(quote! {
-                {
-                    if #condition {
-                        Some(#value)
-                    } else {
-                        None
-                    }
-                }
-            }),
+            Self::IfExpr(if_expr) => if_expr.to_tokens(tokens),
             Self::AttrExpr(expr) => expr.to_tokens(tokens),
             Self::EventTokens(closure) => closure.to_tokens(tokens),
         }
@@ -554,10 +506,191 @@ impl AttributeValue {
         match self {
             Self::Shorthand(ident) => ident.span(),
             Self::AttrLiteral(ifmt) => ifmt.span(),
-            Self::AttrOptionalExpr { value, .. } => value.span(),
+            Self::IfExpr(if_expr) => if_expr.span(),
             Self::AttrExpr(expr) => expr.span(),
             Self::EventTokens(closure) => closure.span(),
         }
+    }
+}
+
+/// A if else chain attribute value
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+pub struct IfAttributeValue {
+    pub(crate) condition: Expr,
+    pub(crate) then_value: Box<AttributeValue>,
+    pub(crate) else_value: Option<Box<AttributeValue>>,
+}
+
+impl IfAttributeValue {
+    /// Convert the if expression to an expression that returns a string. If the unterminated case is hit, it returns an empty string
+    pub(crate) fn quote_as_string(&self, diagnostics: &mut Diagnostics) -> Expr {
+        let mut expression = quote! {};
+        let mut current_if_value = self;
+
+        let mut non_string_diagnostic = |span: proc_macro2::Span| -> Expr {
+            Element::add_merging_non_string_diagnostic(diagnostics, span);
+            parse_quote! { ::std::string::String::new() }
+        };
+
+        loop {
+            let AttributeValue::AttrLiteral(lit) = current_if_value.then_value.as_ref() else {
+                return non_string_diagnostic(current_if_value.span());
+            };
+
+            let HotLiteralType::Fmted(new) = &lit.value else {
+                return non_string_diagnostic(current_if_value.span());
+            };
+
+            let condition = &current_if_value.condition;
+            expression.extend(quote! {
+                if #condition {
+                    #new.to_string()
+                } else
+            });
+            match current_if_value.else_value.as_deref() {
+                // If the else value is another if expression, then we need to continue the loop
+                Some(AttributeValue::IfExpr(else_value)) => {
+                    current_if_value = else_value;
+                }
+                // If the else value is a literal, then we need to append it to the expression and break
+                Some(AttributeValue::AttrLiteral(lit)) => {
+                    if let HotLiteralType::Fmted(new) = &lit.value {
+                        expression.extend(quote! { { #new.to_string() } });
+                        break;
+                    } else {
+                        return non_string_diagnostic(current_if_value.span());
+                    }
+                }
+                // If it is the end of the if expression without an else, then we need to append the default value and break
+                None => {
+                    expression.extend(quote! { { ::std::string::String::new() } });
+                    break;
+                }
+                _ => {
+                    return non_string_diagnostic(current_if_value.else_value.span());
+                }
+            }
+        }
+
+        parse_quote! {
+            {
+                #expression
+            }
+        }
+    }
+
+    fn span(&self) -> proc_macro2::Span {
+        self.then_value.span()
+    }
+
+    fn is_terminated(&self) -> bool {
+        match &self.else_value {
+            Some(attribute) => match attribute.as_ref() {
+                AttributeValue::IfExpr(if_expr) => if_expr.is_terminated(),
+                _ => true,
+            },
+            None => false,
+        }
+    }
+
+    fn parse_attribute_value_from_block(block: &Block) -> syn::Result<Box<AttributeValue>> {
+        let stmts = &block.stmts;
+
+        if stmts.len() != 1 {
+            return Err(syn::Error::new(
+                block.span(),
+                "Expected a single statement in the if block",
+            ));
+        }
+
+        // either an ifmt or an expr in the block
+        let stmt = &stmts[0];
+
+        // Either it's a valid ifmt or an expression
+        match stmt {
+            syn::Stmt::Expr(exp, None) => {
+                // Try parsing the statement as an IfmtInput by passing it through tokens
+                let value: Result<HotLiteral, syn::Error> = syn::parse2(quote! { #exp });
+                Ok(match value {
+                    Ok(res) => Box::new(AttributeValue::AttrLiteral(res)),
+                    Err(_) => Box::new(AttributeValue::AttrExpr(PartialExpr::from_expr(exp))),
+                })
+            }
+            _ => Err(syn::Error::new(stmt.span(), "Expected an expression")),
+        }
+    }
+}
+
+impl Parse for IfAttributeValue {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let if_expr = input.parse::<ExprIf>()?;
+
+        let stmts = &if_expr.then_branch.stmts;
+
+        if stmts.len() != 1 {
+            return Err(syn::Error::new(
+                if_expr.then_branch.span(),
+                "Expected a single statement in the if block",
+            ));
+        }
+
+        // Parse the then branch into a single attribute value
+        let then_value = Self::parse_attribute_value_from_block(&if_expr.then_branch)?;
+
+        // If there's an else branch, parse it as a single attribute value or an if expression
+        let else_value = match if_expr.else_branch.as_ref() {
+            Some((_, else_branch)) => {
+                // The else branch if either a block or another if expression
+                let attribute_value = match else_branch.as_ref() {
+                    // If it is a block, then the else is terminated
+                    Expr::Block(block) => Self::parse_attribute_value_from_block(&block.block)?,
+                    // Otherwise try to parse it as an if expression
+                    _ => Box::new(syn::parse2(quote! { #else_branch })?),
+                };
+                Some(attribute_value)
+            }
+            None => None,
+        };
+
+        Ok(Self {
+            condition: *if_expr.cond,
+            then_value,
+            else_value,
+        })
+    }
+}
+
+impl ToTokens for IfAttributeValue {
+    fn to_tokens(&self, tokens: &mut TokenStream2) {
+        let IfAttributeValue {
+            condition,
+            then_value,
+            else_value,
+        } = self;
+        // If the if expression is terminated, we can just return the then value
+        let terminated = self.is_terminated();
+        let then_value = if terminated {
+            quote! { #then_value }
+        }
+        // Otherwise we need to return an Option and a None if the else value is None
+        else {
+            quote! { Some(#then_value) }
+        };
+
+        let else_value = match else_value {
+            Some(else_value) => quote! { Some(#else_value) },
+            None => quote! { None },
+        };
+
+        tokens.append_all(quote! {
+            {
+                if #condition {
+                    #then_value
+                } else {
+                    #else_value
+                }
+            }
+        });
     }
 }
 
@@ -581,22 +714,33 @@ mod tests {
         let _parsed: Attribute = parse2(quote! { "custom": false, }).unwrap();
         let _parsed: Attribute = parse2(quote! { name: false, }).unwrap();
 
-        // with expressions
-        let _parsed: Attribute = parse2(quote! { name: if true { "value" } }).unwrap();
-        let _parsed: Attribute =
+        // with if chains
+        let parsed: Attribute = parse2(quote! { name: if true { "value" } }).unwrap();
+        assert!(matches!(parsed.value, AttributeValue::IfExpr(_)));
+        let parsed: Attribute =
             parse2(quote! { name: if true { "value" } else { "other" } }).unwrap();
+        assert!(matches!(parsed.value, AttributeValue::IfExpr(_)));
+        let parsed: Attribute =
+            parse2(quote! { name: if true { "value" } else if false { "other" } }).unwrap();
+        assert!(matches!(parsed.value, AttributeValue::IfExpr(_)));
 
         // with shorthand
         let _parsed: Attribute = parse2(quote! { name }).unwrap();
         let _parsed: Attribute = parse2(quote! { name, }).unwrap();
 
         // Events - make sure they get partial expansion
-        let _parsed: Attribute = parse2(quote! { onclick: |e| {} }).unwrap();
-        let _parsed: Attribute = parse2(quote! { onclick: |e| { "value" } }).unwrap();
-        let _parsed: Attribute = parse2(quote! { onclick: |e| { value. } }).unwrap();
-        let _parsed: Attribute = parse2(quote! { onclick: move |e| { value. } }).unwrap();
-        let _parsed: Attribute = parse2(quote! { onclick: move |e| value }).unwrap();
-        let _parsed: Attribute = parse2(quote! { onclick: |e| value, }).unwrap();
+        let parsed: Attribute = parse2(quote! { onclick: |e| {} }).unwrap();
+        assert!(matches!(parsed.value, AttributeValue::EventTokens(_)));
+        let parsed: Attribute = parse2(quote! { onclick: |e| { "value" } }).unwrap();
+        assert!(matches!(parsed.value, AttributeValue::EventTokens(_)));
+        let parsed: Attribute = parse2(quote! { onclick: |e| { value. } }).unwrap();
+        assert!(matches!(parsed.value, AttributeValue::EventTokens(_)));
+        let parsed: Attribute = parse2(quote! { onclick: move |e| { value. } }).unwrap();
+        assert!(matches!(parsed.value, AttributeValue::EventTokens(_)));
+        let parsed: Attribute = parse2(quote! { onclick: move |e| value }).unwrap();
+        assert!(matches!(parsed.value, AttributeValue::EventTokens(_)));
+        let parsed: Attribute = parse2(quote! { onclick: |e| value, }).unwrap();
+        assert!(matches!(parsed.value, AttributeValue::EventTokens(_)));
     }
 
     #[test]
