@@ -462,7 +462,7 @@ impl FullstackHTMLTemplate {
         virtual_dom: &VirtualDom,
         body: impl std::fmt::Display,
     ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
-        self.render_head(to, &virtual_dom)?;
+        self.render_head(to, virtual_dom)?;
         write!(to, "{body}")?;
         self.render_after_main(to, virtual_dom)?;
         self.render_after_body(to)?;

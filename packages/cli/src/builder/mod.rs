@@ -126,7 +126,7 @@ impl BuildResult {
         let arguments = RuntimeCLIArguments::new(serve.address.address(), fullstack_address);
         let executable = self.executable.canonicalize()?;
         Ok(Some(
-            Command::new(&executable)
+            Command::new(executable)
                 // When building the fullstack server, we need to forward the serve arguments (like port) to the fullstack server through env vars
                 .env(
                     dioxus_cli_config::__private::SERVE_ENV,
