@@ -316,7 +316,39 @@ impl fmt::Debug for RuntimeError {
 
 impl fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Must be called from inside a Dioxus runtime.")
+        write!(
+            f,
+            "Must be called from inside a Dioxus runtime.
+
+Help: Some APIs in dioxus require a global runtime to be present.
+If you are calling one of these APIs from outside of a dioxus runtime
+(typically in a web-sys closure or dynamic library), you will need to
+grab the runtime from a scope that has it and then move it into your
+new scope with a runtime guard.
+
+For example, if you are trying to use dioxus apis from a web-sys
+closure, you can grab the runtime from the scope it is created in:
+
+```rust
+use dioxus::prelude::*;
+static COUNT: GlobalSignal<i32> = Signal::global(|| 0);
+
+#[component]
+fn MyComponent() -> Element {
+    use_effect(|| {
+        // Grab the runtime from the MyComponent scope
+        let runtime = Runtime::current().expect(\"Components run in the Dioxus runtime\");
+        // Move the runtime into the web-sys closure scope
+        let web_sys_closure = Closure::new(|| {
+            // Then create a guard to provide the runtime to the closure
+            let _guard = RuntimeGuard::new(runtime);
+            // and run whatever code needs the runtime
+            tracing::info!(\"The count is: {COUNT}\");
+        });
+    })
+}
+```"
+        )
     }
 }
 
