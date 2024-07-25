@@ -1,6 +1,6 @@
 #![cfg(feature = "hot_reload")]
 
-use crate::{Attribute, AttributeValue, BodyNode, HotLiteralType, IfmtInput};
+use crate::{Attribute, AttributeValue, BodyNode, HotLiteralType, IfAttributeValue, IfmtInput};
 
 /// Take two nodes and return their similarity score
 ///
@@ -114,17 +114,24 @@ fn score_attr_value(old_attr: &AttributeValue, new_attr: &AttributeValue) -> usi
         }
 
         (
-            AttrOptionalExpr {
+            IfExpr(IfAttributeValue {
                 condition: cond_a,
-                value: value_a,
-            },
-            AttrOptionalExpr {
+                then_value: value_a,
+                else_value: else_value_a,
+            }),
+            IfExpr(IfAttributeValue {
                 condition: cond_b,
-                value: value_b,
-            },
+                then_value: value_b,
+                else_value: else_value_b,
+            }),
         ) if cond_a == cond_b => {
             // If the condition is the same, we can hotreload it
             score_attr_value(value_a, value_b)
+                + match (else_value_a, else_value_b) {
+                    (Some(a), Some(b)) => score_attr_value(a, b),
+                    (None, None) => 0,
+                    _ => usize::MAX,
+                }
         }
 
         // todo: we should try and score recursively if we can - templates need to propagate up their
