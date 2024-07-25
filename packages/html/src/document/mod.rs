@@ -51,29 +51,36 @@ pub trait Document {
         self.new_evaluator(format!("document.title = {title:?};"));
     }
 
+    /// Create a new meta tag
     fn create_meta(&self, props: MetaProps) {
         let attributes = props.attributes();
         let js = create_element_in_head("meta", &attributes, None);
         self.new_evaluator(js);
     }
 
+    /// Create a new script tag
     fn create_script(&self, props: ScriptProps) {
         let attributes = props.attributes();
         let js = create_element_in_head("script", &attributes, props.script_contents());
         self.new_evaluator(js);
     }
 
+    /// Create a new style tag
     fn create_style(&self, props: StyleProps) {
         let attributes = props.attributes();
         let js = create_element_in_head("style", &attributes, props.style_contents());
         self.new_evaluator(js);
     }
 
+    /// Create a new link tag
     fn create_link(&self, props: head::LinkProps) {
         let attributes = props.attributes();
         let js = create_element_in_head("link", &attributes, None);
         self.new_evaluator(js);
     }
+
+    /// Get a reference to the document as `dyn Any`
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 /// The default No-Op document
@@ -83,6 +90,10 @@ impl Document for NoOpDocument {
     fn new_evaluator(&self, _js: String) -> GenerationalBox<Box<dyn Evaluator>> {
         tracing::error!("Eval is not supported on this platform. If you are using dioxus fullstack, you can wrap your code with `client! {{}}` to only include the code that runs eval in the client bundle.");
         UnsyncStorage::owner().insert(Box::new(NoOpEvaluator))
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

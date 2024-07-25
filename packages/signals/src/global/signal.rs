@@ -68,7 +68,7 @@ impl<T: 'static> GlobalSignal<T> {
 
     #[doc(hidden)]
     pub fn maybe_with_rt<O>(&self, f: impl FnOnce(&T) -> O) -> O {
-        if Runtime::current().is_none() {
+        if Runtime::current().is_err() {
             f(&(self.initializer)())
         } else {
             self.with(f)

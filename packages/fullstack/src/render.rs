@@ -7,9 +7,9 @@ use dioxus_ssr::{
 };
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
+use std::sync::Arc;
 use std::sync::RwLock;
 use std::{collections::HashMap, future::Future};
-use std::{fmt::Write, sync::Arc};
 use tokio::task::JoinHandle;
 
 use crate::prelude::*;
@@ -160,9 +160,7 @@ impl SsrRendererPool {
 
         let join_handle = spawn_platform(move || async move {
             let mut virtual_dom = virtual_dom_factory();
-            #[cfg(feature = "document")]
             let document = std::rc::Rc::new(crate::document::server::ServerDocument::default());
-            #[cfg(feature = "document")]
             virtual_dom.provide_root_context(document.clone() as std::rc::Rc<dyn Document>);
 
             // poll the future, which may call server_context()
@@ -171,31 +169,8 @@ impl SsrRendererPool {
 
             let mut pre_body = String::new();
 
-            if let Err(err) = wrapper.render_head(&mut pre_body) {
+            if let Err(err) = wrapper.render_head(&mut pre_body, &virtual_dom) {
                 _ = into.start_send(Err(err));
-                return;
-            }
-
-            #[cfg(feature = "document")]
-            {
-                // Collect any head content from the document provider and inject that into the head
-                if let Err(err) = document.render(&mut pre_body, &mut renderer) {
-                    _ = into.start_send(Err(err.into()));
-                    return;
-                }
-
-                // Enable a warning when inserting contents into the head during streaming
-                document.start_streaming();
-            }
-
-            if let Err(err) = wrapper.render_before_body(&mut pre_body) {
-                _ = into.start_send(Err(err));
-                return;
-            }
-            if let Err(err) = write!(&mut pre_body, "<script>{INITIALIZE_STREAMING_JS}</script>") {
-                _ = into.start_send(Err(
-                    dioxus_ssr::incremental::IncrementalRendererError::RenderError(err),
-                ));
                 return;
             }
 
@@ -237,15 +212,8 @@ impl SsrRendererPool {
             // Render the initial frame with loading placeholders
             let mut initial_frame = renderer.render(&virtual_dom);
 
-            // Collect the initial server data from the root node. For most apps, no use_server_futures will be resolved initially, so this will be full on `None`s.
-            // Sending down those Nones are still important to tell the client not to run the use_server_futures that are already running on the backend
-            let resolved_data = serialize_server_data(&virtual_dom, ScopeId::ROOT);
-            initial_frame.push_str(&format!(
-                r#"<script>window.initial_dioxus_hydration_data="{resolved_data}";</script>"#,
-            ));
-
             // Along with the initial frame, we render the html after the main element, but before the body tag closes. This should include the script that starts loading the wasm bundle.
-            if let Err(err) = wrapper.render_after_main(&mut initial_frame) {
+            if let Err(err) = wrapper.render_after_main(&mut initial_frame, &virtual_dom) {
                 throw_error!(err);
             }
             stream.render(initial_frame);
@@ -311,7 +279,7 @@ impl SsrRendererPool {
             // If incremental rendering is enabled, add the new render to the cache without the streaming bits
             if let Some(incremental) = &self.incremental_cache {
                 let mut cached_render = String::new();
-                if let Err(err) = wrapper.render_before_body(&mut cached_render) {
+                if let Err(err) = wrapper.render_head(&mut cached_render, &virtual_dom) {
                     throw_error!(err);
                 }
                 cached_render.push_str(&post_streaming);
@@ -401,22 +369,56 @@ impl FullstackHTMLTemplate {
     pub fn render_head<R: std::fmt::Write>(
         &self,
         to: &mut R,
+        virtual_dom: &VirtualDom,
     ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
         let ServeConfig { index, .. } = &self.cfg;
 
-        to.write_str(&index.head)?;
+        let title = {
+            let document: Option<std::rc::Rc<dyn dioxus_lib::prelude::document::Document>> =
+                virtual_dom.in_runtime(|| ScopeId::ROOT.consume_context());
+            let document: Option<&crate::document::server::ServerDocument> = document
+                .as_ref()
+                .and_then(|document| document.as_any().downcast_ref());
+            // Collect any head content from the document provider and inject that into the head
+            document.and_then(|document| document.title())
+        };
+
+        to.write_str(&index.head_before_title)?;
+        if let Some(title) = title {
+            to.write_str(&title)?;
+        } else {
+            to.write_str(&index.title)?;
+        }
+        to.write_str(&index.head_after_title)?;
+
+        let document: Option<std::rc::Rc<dyn dioxus_lib::prelude::document::Document>> =
+            virtual_dom.in_runtime(|| ScopeId::ROOT.consume_context());
+        let document: Option<&crate::document::server::ServerDocument> = document
+            .as_ref()
+            .and_then(|document| document.as_any().downcast_ref());
+        if let Some(document) = document {
+            // Collect any head content from the document provider and inject that into the head
+            document.render(to)?;
+
+            // Enable a warning when inserting contents into the head during streaming
+            document.start_streaming();
+        }
+
+        self.render_before_body(to)?;
 
         Ok(())
     }
 
     /// Render any content before the body of the page.
-    pub fn render_before_body<R: std::fmt::Write>(
+    fn render_before_body<R: std::fmt::Write>(
         &self,
         to: &mut R,
     ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
         let ServeConfig { index, .. } = &self.cfg;
 
         to.write_str(&index.close_head)?;
+
+        write!(to, "<script>{INITIALIZE_STREAMING_JS}</script>")?;
 
         Ok(())
     }
@@ -425,9 +427,17 @@ impl FullstackHTMLTemplate {
     pub fn render_after_main<R: std::fmt::Write>(
         &self,
         to: &mut R,
+        virtual_dom: &VirtualDom,
     ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
         let ServeConfig { index, .. } = &self.cfg;
 
+        // Collect the initial server data from the root node. For most apps, no use_server_futures will be resolved initially, so this will be full on `None`s.
+        // Sending down those Nones are still important to tell the client not to run the use_server_futures that are already running on the backend
+        let resolved_data = serialize_server_data(virtual_dom, ScopeId::ROOT);
+        write!(
+            to,
+            r#"<script>window.initial_dioxus_hydration_data="{resolved_data}";</script>"#,
+        )?;
         to.write_str(&index.post_main)?;
 
         Ok(())
@@ -441,6 +451,21 @@ impl FullstackHTMLTemplate {
         let ServeConfig { index, .. } = &self.cfg;
 
         to.write_str(&index.after_closing_body_tag)?;
+
+        Ok(())
+    }
+
+    /// Wrap a body in the template
+    pub fn wrap_body<R: std::fmt::Write>(
+        &self,
+        to: &mut R,
+        virtual_dom: &VirtualDom,
+        body: impl std::fmt::Display,
+    ) -> Result<(), dioxus_ssr::incremental::IncrementalRendererError> {
+        self.render_head(to, virtual_dom)?;
+        write!(to, "{body}")?;
+        self.render_after_main(to, virtual_dom)?;
+        self.render_after_body(to)?;
 
         Ok(())
     }

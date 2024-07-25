@@ -3,9 +3,9 @@ rsx! {
 
     div { "hi" }
 
-    div { class: "helo", "hi" }
+    div { class: "hello", "hi" }
 
-    div { class: "helo", glass: "123", "hi" }
+    div { class: "hello", glass: "123", "hi" }
 
     div { {some_expr} }
     div {

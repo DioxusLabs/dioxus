@@ -162,7 +162,7 @@ impl ReactiveContext {
     /// # use futures_util::StreamExt;
     /// fn use_simplified_memo(mut closure: impl FnMut() -> i32 + 'static) -> Signal<i32> {
     ///     use_hook(|| {
-    ///         // Create a new reactive context and channel that will recieve a value every time a value the reactive context subscribes to changes
+    ///         // Create a new reactive context and channel that will receive a value every time a value the reactive context subscribes to changes
     ///         let (reactive_context, mut changed) = ReactiveContext::new();
     ///         // Compute the value of the memo inside the reactive context. This will subscribe the reactive context to any values you read inside the closure
     ///         let value = reactive_context.reset_and_run_in(&mut closure);

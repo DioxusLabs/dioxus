@@ -254,8 +254,15 @@ impl VirtualDom {
     /// ```
     ///
     /// Note: the VirtualDom is not progressed, you must either "run_with_deadline" or use "rebuild" to progress it.
-    pub fn new<F: Fn() -> Element + Clone + 'static>(app: F) -> Self {
-        Self::new_with_props(app, ())
+    pub fn new(app: fn() -> Element) -> Self {
+        Self::new_with_props(
+            move || {
+                use warnings::Warning;
+                // The root props don't come from a vcomponent so we need to manually rerun them sometimes
+                crate::properties::component_called_as_function::allow(app)
+            },
+            (),
+        )
     }
 
     /// Create a new VirtualDom with the given properties for the root component.
@@ -313,7 +320,7 @@ impl VirtualDom {
     }
 
     /// Create a new virtualdom and build it immediately
-    pub fn prebuilt<F: Fn() -> Element + Clone + 'static>(app: F) -> Self {
+    pub fn prebuilt(app: fn() -> Element) -> Self {
         let mut dom = Self::new(app);
         dom.rebuild_in_place();
         dom
@@ -887,7 +894,7 @@ impl VirtualDom {
 
                 for attr in attrs.iter() {
                     // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                    if attr.name.get(2..) == Some(name) && target_path.is_decendant(this_path) {
+                    if attr.name.get(2..) == Some(name) && target_path.is_descendant(this_path) {
                         listeners.push(&attr.value);
 
                         // Break if this is the exact target element.

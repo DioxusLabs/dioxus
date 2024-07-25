@@ -27,9 +27,9 @@ However, it's NOT HTML. This is done since HTML is verbose and you'd need a dedi
 
 RSX is simple... It's similar enough to regular Rust code to trick most IDEs into automatically providing support for things like block selections, folding, highlighting, etc.
 
-To accomodate the transition from HTML to RSX, you might need to translate some existing code.
+To accommodate the transition from HTML to RSX, you might need to translate some existing code.
 
-This library provids a central AST that can accept a number of inputs:
+This library provides a central AST that can accept a number of inputs:
 
 - HTML
 - Syn (todo)

@@ -110,7 +110,14 @@ pub fn use_reactive<O, D: Dependency>(
         non_reactive_data.out()
     });
     if !first_run && non_reactive_data.changed(&*last_state.peek()) {
-        last_state.set(non_reactive_data.out());
+        use warnings::Warning;
+        // In use_reactive we do read and write to a signal during rendering to bridge the reactive and non-reactive worlds.
+        // We ignore
+        dioxus_signals::warnings::signal_read_and_write_in_reactive_scope::allow(|| {
+            dioxus_signals::warnings::signal_write_in_component_body::allow(|| {
+                last_state.set(non_reactive_data.out())
+            })
+        });
     }
     move || closure(last_state())
 }

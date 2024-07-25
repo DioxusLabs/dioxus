@@ -85,12 +85,19 @@ fn app() -> Element {
                 class: "{asd}",
                 // if statements can be used to conditionally render attributes
                 class: if formatting.contains("form") { "{asd}" },
+                // longer if chains also work
+                class: if formatting.contains("form") { "{asd}" } else if formatting.contains("my other form") { "{asd}" },
+                class: if formatting.contains("form") { "{asd}" } else if formatting.contains("my other form") { "{asd}" } else { "{asd}" },
                 div {
                     class: {
                         const WORD: &str = "expressions";
                         format_args!("Arguments can be passed in through curly braces for complex {WORD}")
                     }
                 }
+            }
+            use {}
+            link {
+                as: "asd"
             }
 
             // Expressions can be used in element position too:
@@ -257,7 +264,7 @@ mod baller {
     }
 }
 
-/// Documention for this component is visible within the rsx macro
+/// Documentation for this component is visible within the rsx macro
 #[component]
 pub fn Taller(
     /// Fields are documented and accessible in rsx!

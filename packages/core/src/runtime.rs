@@ -8,6 +8,7 @@ use crate::{
 };
 use slotmap::DefaultKey;
 use std::collections::BTreeSet;
+use std::fmt;
 use std::{
     cell::{Cell, Ref, RefCell},
     rc::Rc,
@@ -66,8 +67,10 @@ impl Runtime {
     }
 
     /// Get the current runtime
-    pub fn current() -> Option<Rc<Self>> {
-        RUNTIMES.with(|stack| stack.borrow().last().cloned())
+    pub fn current() -> Result<Rc<Self>, RuntimeError> {
+        RUNTIMES
+            .with(|stack| stack.borrow().last().cloned())
+            .ok_or(RuntimeError::new())
     }
 
     /// Create a scope context. This slab is synchronized with the scope slab.
@@ -106,8 +109,12 @@ impl Runtime {
     }
 
     /// Get the current scope id
-    pub(crate) fn current_scope_id(&self) -> Option<ScopeId> {
-        self.scope_stack.borrow().last().copied()
+    pub(crate) fn current_scope_id(&self) -> Result<ScopeId, RuntimeError> {
+        self.scope_stack
+            .borrow()
+            .last()
+            .copied()
+            .ok_or(RuntimeError { _priv: () })
     }
 
     /// Call this function with the current scope set to the given scope
@@ -190,22 +197,31 @@ impl Runtime {
     }
 
     /// Runs a function with the current runtime
-    pub(crate) fn with<R>(f: impl FnOnce(&Runtime) -> R) -> Option<R> {
+    pub(crate) fn with<R>(f: impl FnOnce(&Runtime) -> R) -> Result<R, RuntimeError> {
         Self::current().map(|r| f(&r))
     }
 
     /// Runs a function with the current scope
-    pub(crate) fn with_current_scope<R>(f: impl FnOnce(&Scope) -> R) -> Option<R> {
+    pub(crate) fn with_current_scope<R>(f: impl FnOnce(&Scope) -> R) -> Result<R, RuntimeError> {
         Self::with(|rt| {
             rt.current_scope_id()
+                .ok()
                 .and_then(|scope| rt.get_state(scope).map(|sc| f(&sc)))
         })
+        .ok()
         .flatten()
+        .ok_or(RuntimeError::new())
     }
 
     /// Runs a function with the current scope
-    pub(crate) fn with_scope<R>(scope: ScopeId, f: impl FnOnce(&Scope) -> R) -> Option<R> {
-        Self::with(|rt| rt.get_state(scope).map(|sc| f(&sc))).flatten()
+    pub(crate) fn with_scope<R>(
+        scope: ScopeId,
+        f: impl FnOnce(&Scope) -> R,
+    ) -> Result<R, RuntimeError> {
+        Self::with(|rt| rt.get_state(scope).map(|sc| f(&sc)))
+            .ok()
+            .flatten()
+            .ok_or(RuntimeError::new())
     }
 
     /// Finish a render. This will mark all effects as ready to run and send the render signal.
@@ -279,3 +295,61 @@ impl Drop for RuntimeGuard {
         Runtime::pop();
     }
 }
+
+/// Missing Dioxus runtime error.
+pub struct RuntimeError {
+    _priv: (),
+}
+
+impl RuntimeError {
+    #[inline(always)]
+    pub(crate) fn new() -> Self {
+        Self { _priv: () }
+    }
+}
+
+impl fmt::Debug for RuntimeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RuntimeError").finish()
+    }
+}
+
+impl fmt::Display for RuntimeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Must be called from inside a Dioxus runtime.
+
+Help: Some APIs in dioxus require a global runtime to be present.
+If you are calling one of these APIs from outside of a dioxus runtime
+(typically in a web-sys closure or dynamic library), you will need to
+grab the runtime from a scope that has it and then move it into your
+new scope with a runtime guard.
+
+For example, if you are trying to use dioxus apis from a web-sys
+closure, you can grab the runtime from the scope it is created in:
+
+```rust
+use dioxus::prelude::*;
+static COUNT: GlobalSignal<i32> = Signal::global(|| 0);
+
+#[component]
+fn MyComponent() -> Element {{
+    use_effect(|| {{
+        // Grab the runtime from the MyComponent scope
+        let runtime = Runtime::current().expect(\"Components run in the Dioxus runtime\");
+        // Move the runtime into the web-sys closure scope
+        let web_sys_closure = Closure::new(|| {{
+            // Then create a guard to provide the runtime to the closure
+            let _guard = RuntimeGuard::new(runtime);
+            // and run whatever code needs the runtime
+            tracing::info!(\"The count is: {{COUNT}}\");
+        }});
+    }})
+}}
+```"
+        )
+    }
+}
+
+impl std::error::Error for RuntimeError {}

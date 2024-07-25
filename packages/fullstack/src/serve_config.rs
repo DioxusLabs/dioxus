@@ -118,8 +118,23 @@ fn load_index_html(contents: String, root_id: &'static str) -> IndexHtml {
             panic!("Failed to find closing </body> tag after id=\"{root_id}\" in index.html.")
         });
 
+    // Strip out the head if it exists
+    let mut head_before_title = String::new();
+    let mut head_after_title = head;
+    let mut title = String::new();
+    if let Some((new_head_before_title, new_title)) = head_after_title.split_once("<title>") {
+        let (new_title, new_head_after_title) = new_title
+            .split_once("</title>")
+            .expect("Failed to find closing </title> tag after <title> in index.html.");
+        title = format!("<title>{new_title}</title>");
+        head_before_title = new_head_before_title.to_string();
+        head_after_title = new_head_after_title.to_string();
+    }
+
     IndexHtml {
-        head,
+        head_before_title,
+        head_after_title,
+        title,
         close_head,
         post_main: post_main.to_string(),
         after_closing_body_tag: "</body>".to_string() + after_closing_body_tag,
@@ -128,7 +143,9 @@ fn load_index_html(contents: String, root_id: &'static str) -> IndexHtml {
 
 #[derive(Clone)]
 pub(crate) struct IndexHtml {
-    pub(crate) head: String,
+    pub(crate) head_before_title: String,
+    pub(crate) head_after_title: String,
+    pub(crate) title: String,
     pub(crate) close_head: String,
     pub(crate) post_main: String,
     pub(crate) after_closing_body_tag: String,

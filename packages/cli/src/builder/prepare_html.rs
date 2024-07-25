@@ -1,19 +1,26 @@
 //! Build the HTML file to load a web application. The index.html file may be created from scratch or modified from the `index.html` file in the crate root.
 
-use super::BuildRequest;
+use super::{BuildRequest, UpdateBuildProgress};
+use crate::builder::Stage;
 use crate::Result;
+use futures_channel::mpsc::UnboundedSender;
 use manganis_cli_support::AssetManifest;
 use std::fmt::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use tracing::Level;
 
 const DEFAULT_HTML: &str = include_str!("../../assets/index.html");
 
 impl BuildRequest {
-    pub(crate) fn prepare_html(&self, assets: Option<&AssetManifest>) -> Result<String> {
+    pub(crate) fn prepare_html(
+        &self,
+        assets: Option<&AssetManifest>,
+        progress: &mut UnboundedSender<UpdateBuildProgress>,
+    ) -> Result<String> {
         let mut html = html_or_default(&self.dioxus_crate.crate_dir());
 
         // Inject any resources from the config into the html
-        self.inject_resources(&mut html, assets)?;
+        self.inject_resources(&mut html, assets, progress)?;
 
         // Inject loading scripts if they are not already present
         self.inject_loading_scripts(&mut html);
@@ -29,7 +36,12 @@ impl BuildRequest {
     }
 
     // Inject any resources from the config into the html
-    fn inject_resources(&self, html: &mut String, assets: Option<&AssetManifest>) -> Result<()> {
+    fn inject_resources(
+        &self,
+        html: &mut String,
+        assets: Option<&AssetManifest>,
+        progress: &mut UnboundedSender<UpdateBuildProgress>,
+    ) -> Result<()> {
         // Collect all resources into a list of styles and scripts
         let resources = &self.dioxus_crate.dioxus_config.web.resource;
         let mut style_list = resources.style.clone().unwrap_or_default();
@@ -42,7 +54,7 @@ impl BuildRequest {
 
         let mut head_resources = String::new();
         // Add all styles to the head
-        for style in style_list {
+        for style in &style_list {
             writeln!(
                 &mut head_resources,
                 "<link rel=\"stylesheet\" href=\"{}\">",
@@ -50,13 +62,21 @@ impl BuildRequest {
             )?;
         }
 
+        if !style_list.is_empty() {
+            self.send_resource_deprecation_warning(progress, style_list, ResourceType::Style);
+        }
+
         // Add all scripts to the head
-        for script in script_list {
+        for script in &script_list {
             writeln!(
                 &mut head_resources,
                 "<script src=\"{}\"></script>",
                 &script.to_str().unwrap(),
             )?;
+        }
+
+        if !script_list.is_empty() {
+            self.send_resource_deprecation_warning(progress, script_list, ResourceType::Script);
         }
 
         // Inject any resources from manganis into the head
@@ -109,6 +129,69 @@ impl BuildRequest {
         let app_name = &self.dioxus_crate.dioxus_config.application.name;
         *html = html.replace("{app_name}", app_name);
     }
+
+    fn send_resource_deprecation_warning(
+        &self,
+        progress: &mut UnboundedSender<UpdateBuildProgress>,
+        paths: Vec<PathBuf>,
+        variant: ResourceType,
+    ) {
+        const RESOURCE_DEPRECATION_MESSAGE: &str = r#"The `web.resource` config has been deprecated in favor of head components and will be removed in a future release. Instead of including assets in the config, you can include assets with the `asset!` macro and add them to the head with `head::Link` and `Script` components."#;
+
+        let replacement_components = paths
+            .iter()
+            .map(|path| {
+                let path = if path.exists() {
+                    path.to_path_buf()
+                } else {
+                    // If the path is absolute, make it relative to the current directory before we join it
+                    // The path is actually a web path which is relative to the root of the website
+                    let path = path.strip_prefix("/").unwrap_or(path);
+                    let asset_dir_path = self.dioxus_crate.asset_dir().join(path);
+                    if let Ok(absolute_path) = asset_dir_path.canonicalize() {
+                        let absolute_crate_root =
+                            self.dioxus_crate.crate_dir().canonicalize().unwrap();
+                        PathBuf::from("./")
+                            .join(absolute_path.strip_prefix(absolute_crate_root).unwrap())
+                    } else {
+                        path.to_path_buf()
+                    }
+                };
+                match variant {
+                    ResourceType::Style => format!(
+                        "    head::Link {{ rel: \"stylesheet\", href: asset!(css(\"{}\")) }}",
+                        path.display()
+                    ),
+                    ResourceType::Script => {
+                        format!("    Script {{ src: asset!(file(\"{}\")) }}", path.display())
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
+        let replacement_components = format!("rsx! {{\n{}\n}}", replacement_components.join("\n"));
+        let section_name = match variant {
+            ResourceType::Style => "web.resource.style",
+            ResourceType::Script => "web.resource.script",
+        };
+
+        let message = format!(
+        "{RESOURCE_DEPRECATION_MESSAGE}\nTo migrate to head components, remove `{section_name}` and include the following rsx in your root component:\n```rust\n{replacement_components}\n```"
+    );
+
+        _ = progress.unbounded_send(UpdateBuildProgress {
+            stage: Stage::OptimizingWasm,
+            update: super::UpdateStage::AddMessage(super::BuildMessage {
+                level: Level::WARN,
+                message: super::MessageType::Text(message),
+                source: None,
+            }),
+        });
+    }
+}
+
+enum ResourceType {
+    Style,
+    Script,
 }
 
 /// Read the html file from the crate root or use the default html file

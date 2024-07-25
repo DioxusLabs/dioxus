@@ -82,7 +82,8 @@ impl<'a> Writer<'a> {
 
         write!(self.out, "{name} {{")?;
 
-        self.write_rsx_block(attributes, spreads, children, brace)?;
+        let brace = brace.unwrap_or_default();
+        self.write_rsx_block(attributes, spreads, children, &brace)?;
 
         write!(self.out, "}}")?;
 
@@ -248,10 +249,18 @@ impl<'a> Writer<'a> {
 
     pub(crate) fn attr_value_len(&mut self, value: &ElementAttrValue) -> usize {
         match value {
-            ElementAttrValue::AttrOptionalExpr { condition, value } => {
-                let condition_len = self.retrieve_formatted_expr(condition).len();
-                let value_len = self.attr_value_len(value);
-                condition_len + value_len + 6
+            ElementAttrValue::IfExpr(if_chain) => {
+                let condition_len = self.retrieve_formatted_expr(&if_chain.condition).len();
+                let value_len = self.attr_value_len(&if_chain.then_value);
+                let if_len = 2;
+                let brace_len = 2;
+                let space_len = 2;
+                let else_len = if_chain
+                    .else_value
+                    .as_ref()
+                    .map(|else_value| self.attr_value_len(else_value) + 1)
+                    .unwrap_or_default();
+                condition_len + value_len + if_len + brace_len + space_len + else_len
             }
             ElementAttrValue::AttrLiteral(lit) => lit.to_string().len(),
             ElementAttrValue::Shorthand(expr) => expr.span().line_length(),

@@ -226,14 +226,8 @@ impl Writer<'_> {
 
     fn write_attribute_value(&mut self, value: &AttributeValue) -> Result {
         match value {
-            AttributeValue::AttrOptionalExpr { condition, value } => {
-                write!(
-                    self.out,
-                    "if {condition} {{ ",
-                    condition = unparse_expr(condition),
-                )?;
-                self.write_attribute_value(value)?;
-                write!(self.out, " }}")?;
+            AttributeValue::IfExpr(if_chain) => {
+                self.write_attribute_if_chain(if_chain)?;
             }
             AttributeValue::AttrLiteral(value) => {
                 write!(self.out, "{value}")?;
@@ -253,6 +247,26 @@ impl Writer<'_> {
                 let pretty_expr = self.retrieve_formatted_expr(&expr).to_string();
                 self.write_mulitiline_tokens(pretty_expr)?;
             }
+        }
+
+        Ok(())
+    }
+
+    fn write_attribute_if_chain(&mut self, if_chain: &IfAttributeValue) -> Result {
+        write!(self.out, "if {} {{ ", unparse_expr(&if_chain.condition))?;
+        self.write_attribute_value(&if_chain.then_value)?;
+        write!(self.out, " }}")?;
+        match if_chain.else_value.as_deref() {
+            Some(AttributeValue::IfExpr(else_if_chain)) => {
+                write!(self.out, "else ")?;
+                self.write_attribute_if_chain(else_if_chain)?;
+            }
+            Some(other) => {
+                write!(self.out, "else {{")?;
+                self.write_attribute_value(other)?;
+                write!(self.out, " }}")?;
+            }
+            None => {}
         }
 
         Ok(())

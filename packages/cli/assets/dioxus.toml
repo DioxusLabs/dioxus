@@ -3,7 +3,7 @@
 # dioxus project name
 name = "{{project-name}}"
 
-# default platfrom
+# default platform
 # you can also use `dx serve/build --platform XXX` to use other platform
 # value: web | desktop
 default_platform = "{{default-platform}}"
@@ -31,21 +31,6 @@ title = "Dioxus | An elegant GUI library for Rust"
 index_on_404 = true
 
 watch_path = ["src", "examples"]
-
-# include `assets` in web platform
-[web.resource]
-
-# CSS style file
-style = []
-
-# Javascript code file
-script = []
-
-[web.resource.dev]
-
-# Javascript code file
-# serve: [dev-server] only
-script = []
 
 [bundler]
 # Bundle identifier
