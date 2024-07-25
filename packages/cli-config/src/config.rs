@@ -86,6 +86,7 @@ impl Platform {
 pub struct DioxusConfig {
     pub application: ApplicationConfig,
 
+    #[serde(default)]
     pub web: WebConfig,
 
     #[serde(default)]
@@ -189,6 +190,20 @@ pub struct WebConfig {
     /// The wasm-opt configuration
     #[serde(default)]
     pub wasm_opt: WasmOptConfig,
+}
+
+impl Default for WebConfig {
+    fn default() -> Self {
+        Self {
+            pre_compress: true_bool(),
+            app: Default::default(),
+            https: Default::default(),
+            wasm_opt: Default::default(),
+            proxy: Default::default(),
+            watcher: Default::default(),
+            resource: Default::default(),
+        }
+    }
 }
 
 /// The wasm-opt configuration
