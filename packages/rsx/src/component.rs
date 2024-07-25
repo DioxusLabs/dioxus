@@ -71,7 +71,6 @@ impl Parse for Component {
         // validating it will dump diagnostics into the output
         component.validate_component_path();
         component.validate_fields();
-        component.validate_key();
         component.validate_component_spread();
 
         Ok(component)
@@ -167,32 +166,11 @@ impl Component {
         }
     }
 
-    /// Ensure only one key and that the key is not a static str
-    ///
-    /// todo: we want to allow arbitrary exprs for keys provided they impl hash / eq
-    fn validate_key(&mut self) {
-        let key = self.get_key();
-
-        if let Some(attr) = key {
-            let diagnostic = match &attr.value {
-                AttributeValue::AttrLiteral(ifmt) if ifmt.is_static() => {
-                    ifmt.span().error("Key must not be a static string. Make sure to use a formatted string like `key: \"{value}\"")
-                }
-                AttributeValue::AttrLiteral(_) => return,
-                _ => attr
-                    .value
-                    .span()
-                    .error("Key must be in the form of a formatted string like `key: \"{value}\""),
-            };
-
-            self.diagnostics.push(diagnostic);
-        }
-    }
-
-    pub fn get_key(&self) -> Option<&Attribute> {
-        self.fields
-            .iter()
-            .find(|attr| matches!(&attr.name, AttributeName::BuiltIn(key) if key == "key"))
+    pub fn get_key(&self) -> Option<&AttributeValue> {
+        self.fields.iter().find_map(|attr| match &attr.name {
+            AttributeName::BuiltIn(key) if key == "key" => Some(&attr.value),
+            _ => None,
+        })
     }
 
     /// Ensure there's no duplicate props - this will be a compile error but we can move it to a

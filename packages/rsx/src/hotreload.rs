@@ -360,11 +360,11 @@ impl HotReloadedTemplate {
             return Some(());
         }
 
-        let out = match &new_attr.as_lit().unwrap().value {
-            HotLiteralType::Float(f) => HotReloadLiteral::Float(f.base10_parse().unwrap()),
-            HotLiteralType::Int(f) => HotReloadLiteral::Int(f.base10_parse().unwrap()),
-            HotLiteralType::Bool(f) => HotReloadLiteral::Bool(f.value),
-            HotLiteralType::Fmted(new) => HotReloadLiteral::Fmted(
+        let out = match &new_attr.as_lit().unwrap() {
+            HotLiteral::Float(f) => HotReloadLiteral::Float(f.base10_parse().unwrap()),
+            HotLiteral::Int(f) => HotReloadLiteral::Int(f.base10_parse().unwrap()),
+            HotLiteral::Bool(f) => HotReloadLiteral::Bool(f.value),
+            HotLiteral::Fmted(new) => HotReloadLiteral::Fmted(
                 IfmtInput::fmt_segments(old_attr.ifmt().unwrap(), new)
                     .expect("Fmt segments to generate"),
             ),

@@ -49,6 +49,7 @@
 //! dioxus_elements::elements::di
 //! ```
 
+mod assign_dyn_ids;
 mod attribute;
 mod component;
 mod element;

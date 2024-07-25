@@ -120,6 +120,11 @@ impl Attribute {
         }
     }
 
+    /// Set the dynamic index of this attribute
+    pub fn set_dyn_idx(&self, idx: usize) {
+        self.dyn_idx.set(idx);
+    }
+
     pub fn span(&self) -> proc_macro2::Span {
         self.name.span()
     }
@@ -140,8 +145,8 @@ impl Attribute {
 
     pub fn ifmt(&self) -> Option<&IfmtInput> {
         match &self.value {
-            AttributeValue::AttrLiteral(lit) => match &lit.value {
-                HotLiteralType::Fmted(input) => Some(input),
+            AttributeValue::AttrLiteral(lit) => match &lit {
+                HotLiteral::Fmted(input) => Some(input),
                 _ => None,
             },
             _ => None,
@@ -150,8 +155,8 @@ impl Attribute {
 
     pub fn as_static_str_literal(&self) -> Option<(&AttributeName, &IfmtInput)> {
         match &self.value {
-            AttributeValue::AttrLiteral(lit) => match &lit.value {
-                HotLiteralType::Fmted(input) if input.is_static() => Some((&self.name, input)),
+            AttributeValue::AttrLiteral(lit) => match &lit {
+                HotLiteral::Fmted(input) if input.is_static() => Some((&self.name, input)),
                 _ => None,
             },
             _ => None,
@@ -537,7 +542,7 @@ impl IfAttributeValue {
                 return non_string_diagnostic(current_if_value.span());
             };
 
-            let HotLiteralType::Fmted(new) = &lit.value else {
+            let HotLiteral::Fmted(new) = &lit else {
                 return non_string_diagnostic(current_if_value.span());
             };
 
@@ -554,7 +559,7 @@ impl IfAttributeValue {
                 }
                 // If the else value is a literal, then we need to append it to the expression and break
                 Some(AttributeValue::AttrLiteral(lit)) => {
-                    if let HotLiteralType::Fmted(new) = &lit.value {
+                    if let HotLiteral::Fmted(new) = &lit {
                         expression.extend(quote! { { #new.to_string() } });
                         break;
                     } else {

@@ -1,6 +1,6 @@
 #![cfg(feature = "hot_reload")]
 
-use crate::{Attribute, AttributeValue, BodyNode, HotLiteralType, IfAttributeValue, IfmtInput};
+use crate::{Attribute, AttributeValue, BodyNode, HotLiteral, IfAttributeValue, IfmtInput};
 
 /// Take two nodes and return their similarity score
 ///
@@ -79,7 +79,7 @@ pub fn score_attribute(old_attr: &Attribute, new_attr: &Attribute) -> usize {
 
 fn score_attr_value(old_attr: &AttributeValue, new_attr: &AttributeValue) -> usize {
     use AttributeValue::*;
-    use HotLiteralType::*;
+    use HotLiteral::*;
 
     match (&old_attr, &new_attr) {
         // For literals, the value itself might change, but what's more important is the
@@ -93,7 +93,7 @@ fn score_attr_value(old_attr: &AttributeValue, new_attr: &AttributeValue) -> usi
         //       which can get confusing. if we can figure out a way to hotreload this, that'd be great
         (AttrLiteral(left), AttrLiteral(right)) => {
             // We assign perfect matches for token reuse, to minimize churn on the renderer
-            match (&left.value, &right.value) {
+            match (&left, &right) {
                 // Quick shortcut if there's no change
                 (Fmted(old), Fmted(new)) if old == new => usize::MAX,
 

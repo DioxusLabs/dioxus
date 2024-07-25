@@ -30,7 +30,7 @@ fn extract_single_text_node(children: &Element, component: &str) -> Option<Strin
     // The title's children must be in one of two forms:
     // 1. rsx! { "static text" }
     // 2. rsx! { "title: {dynamic_text}" }
-    match vnode.template.get() {
+    match vnode.template {
         // rsx! { "static text" }
         Template {
             roots: &[TemplateNode::Text { text }],

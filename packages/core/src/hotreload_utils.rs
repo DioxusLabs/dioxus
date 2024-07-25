@@ -26,7 +26,7 @@ pub enum HotReloadLiteral {
 #[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct FmtedSegments {
-    pub segments: Vec<FmtSegment>,
+    pub(crate) segments: Vec<FmtSegment>,
 }
 
 impl FmtedSegments {
@@ -35,7 +35,7 @@ impl FmtedSegments {
     }
 
     /// Render the formatted string by stitching together the segments
-    pub fn render_with(&self, dynamic_text: &[String]) -> String {
+    pub(crate) fn render_with(&self, dynamic_text: &[String]) -> String {
         let mut out = String::new();
 
         for segment in &self.segments {
@@ -46,13 +46,6 @@ impl FmtedSegments {
         }
 
         out
-    }
-
-    /// Update the segments with new segments
-    ///
-    /// this will change how we render the formatted string
-    pub fn update_segments(&mut self, new_segments: Vec<FmtSegment>) {
-        self.segments = new_segments;
     }
 }
 
@@ -71,14 +64,43 @@ pub enum FmtSegment {
     },
 }
 
-struct DynamicValuePool {
+// let __pool = DynamicValuePool::new(
+//     vec![...],
+//     vec![...],
+//     vec![...],
+// );
+// VNode::new(
+//     None,
+//     Template {
+//         name: "...",
+//         roots: &[...],
+//         node_paths: &[..],
+//         attr_paths: &[...],
+//     },
+//     Box::new([...]),
+//     Box::new([...]),
+// )
+
+pub struct DynamicValuePool {
     dynamic_attributes: Box<[Option<Box<[Attribute]>>]>,
     dynamic_nodes: Box<[Option<DynamicNode>]>,
     dynamic_text: Box<[String]>,
 }
 
 impl DynamicValuePool {
-    fn render_with(mut self, hot_reload: HotReloadedTemplate) -> VNode {
+    pub fn new(
+        dynamic_attributes: Vec<Box<[Attribute]>>,
+        dynamic_nodes: Vec<DynamicNode>,
+        dynamic_text: Box<[String]>,
+    ) -> Self {
+        Self {
+            dynamic_attributes: dynamic_attributes.into_iter().map(Some).collect(),
+            dynamic_nodes: dynamic_nodes.into_iter().map(Some).collect(),
+            dynamic_text,
+        }
+    }
+
+    fn render_with(&mut self, hot_reload: HotReloadedTemplate) -> VNode {
         // Get the node_paths from a depth first traversal of the template
         let node_paths = hot_reload.node_paths();
         let attr_paths = hot_reload.attr_paths();
@@ -104,7 +126,7 @@ impl DynamicValuePool {
         VNode::new(key, template, dynamic_nodes, dynamic_attrs)
     }
 
-    fn render_formatted(&self, segments: FmtedSegments) -> String {
+    pub fn render_formatted(&self, segments: FmtedSegments) -> String {
         segments.render_with(&self.dynamic_text)
     }
 
@@ -126,14 +148,21 @@ impl DynamicValuePool {
             HotReloadAttribute::Dynamic(id) => self.dynamic_attributes[id]
                 .take()
                 .expect("Hot reloaded attributes must only be taken once"),
-            HotReloadAttribute::Formatted {
+            HotReloadAttribute::Literal {
                 name,
                 namespace,
                 value,
             } => Box::new([Attribute {
                 name,
                 namespace,
-                value: AttributeValue::Text(self.render_formatted(value)),
+                value: match value {
+                    HotReloadLiteral::Fmted(segments) => {
+                        AttributeValue::Text(self.render_formatted(segments))
+                    }
+                    HotReloadLiteral::Float(f) => AttributeValue::Float(f),
+                    HotReloadLiteral::Int(i) => AttributeValue::Int(i),
+                    HotReloadLiteral::Bool(b) => AttributeValue::Bool(b),
+                },
                 volatile: false,
             }]),
         }
@@ -226,7 +255,7 @@ enum HotReloadDynamicNode {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 enum HotReloadAttribute {
     Dynamic(usize),
-    Formatted {
+    Literal {
         /// The name of this attribute.
         #[cfg_attr(
             feature = "serialize",
@@ -240,6 +269,6 @@ enum HotReloadAttribute {
         )]
         namespace: Option<&'static str>,
 
-        value: FmtedSegments,
+        value: HotReloadLiteral,
     },
 }
