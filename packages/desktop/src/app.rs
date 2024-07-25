@@ -344,7 +344,7 @@ impl App {
                         webview.kick_stylsheets();
                     }
                 }
-            },
+            }
             DevserverMsg::FullReloadCommand
             | DevserverMsg::FullReloadStart
             | DevserverMsg::FullReloadFailed => {

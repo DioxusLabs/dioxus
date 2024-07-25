@@ -26,7 +26,6 @@ impl BuildRequest {
         // Inject loading scripts if they are not already present
         self.inject_loading_scripts(&mut html);
 
-
         // Replace any special placeholders in the HTML with resolved values
         self.replace_template_placeholders(&mut html);
 

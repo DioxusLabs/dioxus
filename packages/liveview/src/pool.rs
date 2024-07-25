@@ -6,13 +6,13 @@ use crate::{
     LiveViewError,
 };
 use dioxus_core::prelude::*;
+use dioxus_hot_reload::DevserverMsg;
 use dioxus_html::{EventData, HtmlEvent, PlatformEventData};
 use dioxus_interpreter_js::MutationState;
 use futures_util::{pin_mut, SinkExt, StreamExt};
 use serde::Serialize;
 use std::{rc::Rc, time::Duration};
 use tokio_util::task::LocalPoolHandle;
-use dioxus_hot_reload::DevserverMsg;
 
 #[derive(Clone)]
 pub struct LiveViewPool {

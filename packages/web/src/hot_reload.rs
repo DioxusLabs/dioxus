@@ -73,7 +73,7 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
                 // The devserver is telling us that it started a full rebuild. This does not mean that it is ready.
                 Ok(DevserverMsg::FullReloadStart) => show_toast(
                     "Your app is being rebuilt.",
-                    "A non-hot-reloadable change occured and we must rebuild.",
+                    "A non-hot-reloadable change occurred and we must rebuild.",
                     ToastLevel::Info,
                     TOAST_TIMEOUT,
                     false,
@@ -186,7 +186,6 @@ impl Display for ToastLevel {
         }
     }
 }
-
 
 /// Displays a toast to the developer.
 fn show_toast(

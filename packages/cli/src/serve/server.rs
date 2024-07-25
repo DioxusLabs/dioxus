@@ -291,19 +291,22 @@ impl Server {
 
     /// Tells all clients that a full rebuild has started.
     pub async fn send_reload_start(&mut self) {
-        self.send_devserver_message(DevserverMsg::FullReloadStart).await;
+        self.send_devserver_message(DevserverMsg::FullReloadStart)
+            .await;
     }
 
     /// Tells all clients that a full rebuild has failed.
     pub async fn send_reload_failed(&mut self) {
-        self.send_devserver_message(DevserverMsg::FullReloadFailed).await;
+        self.send_devserver_message(DevserverMsg::FullReloadFailed)
+            .await;
     }
 
-    /// Tells all clients to reload if possibile for new changes.
+    /// Tells all clients to reload if possible for new changes.
     pub async fn send_reload_command(&mut self) {
         self.build_status.set(Status::Ready);
         self.send_build_status().await;
-        self.send_devserver_message(DevserverMsg::FullReloadCommand).await;
+        self.send_devserver_message(DevserverMsg::FullReloadCommand)
+            .await;
     }
 
     /// Send a shutdown message to all connected clients.
@@ -315,9 +318,7 @@ impl Server {
     async fn send_devserver_message(&mut self, msg: DevserverMsg) {
         for socket in self.hot_reload_sockets.iter_mut() {
             _ = socket
-                .send(Message::Text(
-                    serde_json::to_string(&msg).unwrap(),
-                ))
+                .send(Message::Text(serde_json::to_string(&msg).unwrap()))
                 .await;
         }
     }
