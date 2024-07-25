@@ -18,7 +18,7 @@ impl LinkCommand {
             return Ok(());
         };
 
-        // Parse object files, deserialize JSON, & create a file to propogate JSON.
+        // Parse object files, deserialize JSON, & create a file to propagate JSON.
         let json = manganis_cli_support::get_json_from_object_files(object_files);
         let parsed = serde_json::to_string(&json).unwrap();
 

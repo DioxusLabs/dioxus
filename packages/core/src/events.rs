@@ -397,7 +397,7 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
         ));
         Self {
             callback,
-            origin: current_scope_id().expect("to be in a dioxus runtime"),
+            origin: current_scope_id().unwrap(),
         }
     }
 
@@ -409,7 +409,7 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
                 as Rc<RefCell<dyn FnMut(Args) -> Ret>>));
         Self {
             callback,
-            origin: current_scope_id().expect("to be in a dioxus runtime"),
+            origin: current_scope_id().unwrap(),
         }
     }
 
@@ -427,7 +427,7 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
                     value
                 })
             })
-            .expect("Callback must be called from within the dioxus runtime")
+            .unwrap()
         } else {
             panic!("Callback was manually dropped")
         }

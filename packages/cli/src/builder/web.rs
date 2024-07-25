@@ -120,11 +120,6 @@ impl BuildRequest {
             update: UpdateStage::Start,
         });
 
-        // Create the index.html file
-        let html = self.prepare_html(assets, progress)?;
-        let html_path = self.dioxus_crate.out_dir().join("index.html");
-        std::fs::write(&html_path, html)?;
-
         // Find the wasm file
         let output_location = build_result.executable.clone();
         let input_path = output_location.with_extension("wasm");
@@ -176,6 +171,14 @@ impl BuildRequest {
         tokio::task::spawn_blocking(move || pre_compress_folder(&bindgen_outdir, pre_compress))
             .await
             .unwrap()?;
+
+        // Create the index.html file
+        // Note that we do this last since the webserver will attempt to serve the index.html file
+        // If we do this too early, the wasm won't be ready but the index.html will be served, leading
+        // to test failures and broken pages.
+        let html = self.prepare_html(assets, progress)?;
+        let html_path = self.dioxus_crate.out_dir().join("index.html");
+        std::fs::write(html_path, html)?;
 
         Ok(())
     }

@@ -81,7 +81,8 @@ impl Task {
             _ = rt
                 .sender
                 .unbounded_send(SchedulerMsg::TaskNotified(self.id))
-        });
+        })
+        .unwrap();
     }
 
     /// Poll the task immediately.
@@ -100,7 +101,8 @@ impl Task {
                         .unbounded_send(SchedulerMsg::TaskNotified(self.id));
                 }
             }
-        });
+        })
+        .unwrap();
     }
 }
 
@@ -246,7 +248,11 @@ impl Runtime {
     }
 
     pub(crate) fn handle_task_wakeup(&self, id: Task) -> Poll<()> {
-        debug_assert!(Runtime::current().is_some(), "Must be in a dioxus runtime");
+        #[cfg(feature = "debug_assertions")]
+        {
+            // Ensure we are currently inside a `Runtime`.
+            Runtime::current().unwrap();
+        }
 
         let task = self.tasks.borrow().get(id.id).cloned();
 

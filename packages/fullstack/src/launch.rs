@@ -62,8 +62,9 @@ pub fn launch(
     #[cfg(feature = "document")]
     let factory = move || {
         let mut vdom = factory();
-        vdom.provide_root_context(std::rc::Rc::new(crate::document::web::FullstackWebDocument)
-            as std::rc::Rc<dyn dioxus_lib::prelude::document::Document>);
+        let document = std::rc::Rc::new(crate::document::web::FullstackWebDocument)
+            as std::rc::Rc<dyn dioxus_lib::prelude::document::Document>;
+        vdom.provide_root_context(document);
         vdom
     };
 
@@ -125,7 +126,6 @@ async fn launch_server(
     build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
     context_providers: ContextProviders,
 ) {
-    use crate::prelude::RenderHandleState;
     use clap::Parser;
 
     // Get the address the server should run on. If the CLI is running, the CLI proxies fullstack into the main address
@@ -145,12 +145,12 @@ async fn launch_server(
     #[cfg(feature = "axum")]
     {
         use crate::axum_adapter::DioxusRouterExt;
-        use crate::prelude::RenderHandleState;
 
         let router = axum::Router::new().register_server_functions_with_context(context_providers);
 
         #[cfg(not(any(feature = "desktop", feature = "mobile")))]
         let router = {
+            use crate::prelude::RenderHandleState;
             use crate::prelude::SSRState;
 
             let cfg = platform_config.server_cfg.build();

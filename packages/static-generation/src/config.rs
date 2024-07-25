@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-/// Settings for a staticly generated site that may be hydrated in the browser
+/// Settings for a statically generated site that may be hydrated in the browser
 pub struct Config {
     #[cfg(feature = "server")]
     pub(crate) output_dir: PathBuf,

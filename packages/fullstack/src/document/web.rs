@@ -55,4 +55,8 @@ impl Document for FullstackWebDocument {
         }
         WebDocument.create_link(props);
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }

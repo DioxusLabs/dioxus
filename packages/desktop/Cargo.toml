@@ -136,21 +136,6 @@ path = "../../examples/calculator_mutable.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "calculator"
-path = "../../examples/calculator.rs"
-doc-scrape-examples = true
-
-[[example]]
-name = "clock"
-path = "../../examples/clock.rs"
-doc-scrape-examples = true
-
-[[example]]
-name = "crm"
-path = "../../examples/crm.rs"
-doc-scrape-examples = true
-
-[[example]]
 name = "custom_html"
 path = "../../examples/custom_html.rs"
 doc-scrape-examples = true
@@ -158,11 +143,6 @@ doc-scrape-examples = true
 [[example]]
 name = "custom_menu"
 path = "../../examples/custom_menu.rs"
-doc-scrape-examples = true
-
-[[example]]
-name = "dynamic_asset"
-path = "../../examples/dynamic_asset.rs"
 doc-scrape-examples = true
 
 [[example]]

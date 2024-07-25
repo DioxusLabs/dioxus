@@ -193,7 +193,7 @@ impl Drop for VNode {
         // FIXME:
         // TODO:
         //
-        // We have to add this drop *here* becase we can't add a drop impl to AttributeValue and
+        // We have to add this drop *here* because we can't add a drop impl to AttributeValue and
         // keep semver compatibility. Adding a drop impl means you can't destructure the value, which
         // we need to do for enums.
         //
@@ -203,7 +203,7 @@ impl Drop for VNode {
             for attrs in self.vnode.dynamic_attrs.iter() {
                 for attr in attrs.iter() {
                     if let AttributeValue::Listener(listener) = &attr.value {
-                        listener.callback.recycle();
+                        listener.callback.manually_drop();
                     }
                 }
             }
@@ -546,7 +546,7 @@ impl TemplateNode {
 
 /// A node created at runtime
 ///
-/// This node's index in the DynamicNode list on VNode should match its repsective `Dynamic` index
+/// This node's index in the DynamicNode list on VNode should match its respective `Dynamic` index
 #[derive(Debug)]
 pub enum DynamicNode {
     /// A component node
@@ -761,7 +761,7 @@ pub struct Attribute {
 impl Attribute {
     /// Create a new [`Attribute`] from a name, value, namespace, and volatile bool
     ///
-    /// "Volatile" referes to whether or not Dioxus should always override the value. This helps prevent the UI in
+    /// "Volatile" refers to whether or not Dioxus should always override the value. This helps prevent the UI in
     /// some renderers stay in sync with the VirtualDom's understanding of the world
     pub fn new(
         name: &'static str,
@@ -1145,8 +1145,8 @@ pub trait HasAttributes {
 
 #[cfg(debug_assertions)]
 pub(crate) fn sort_bfo(paths: &[&'static [u8]]) -> Vec<(usize, &'static [u8])> {
-    let mut with_indecies = paths.iter().copied().enumerate().collect::<Vec<_>>();
-    with_indecies.sort_by(|(_, a), (_, b)| {
+    let mut with_indices = paths.iter().copied().enumerate().collect::<Vec<_>>();
+    with_indices.sort_by(|(_, a), (_, b)| {
         let mut a = a.iter();
         let mut b = b.iter();
         loop {
@@ -1163,7 +1163,7 @@ pub(crate) fn sort_bfo(paths: &[&'static [u8]]) -> Vec<(usize, &'static [u8])> {
             }
         }
     });
-    with_indecies
+    with_indices
 }
 
 #[test]

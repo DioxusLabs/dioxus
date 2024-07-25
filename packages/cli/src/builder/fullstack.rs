@@ -44,8 +44,8 @@ impl BuildRequest {
         serve: bool,
     ) -> Vec<Self> {
         vec![
-            Self::new_server(serve, &config, &build_arguments),
             Self::new_client(serve, &config, &build_arguments),
+            Self::new_server(serve, &config, &build_arguments),
         ]
     }
 
