@@ -248,7 +248,7 @@ impl Runtime {
     }
 
     pub(crate) fn handle_task_wakeup(&self, id: Task) -> Poll<()> {
-        #[cfg(feature = "debug_assertions")]
+        #[cfg(debug_assertions)]
         {
             // Ensure we are currently inside a `Runtime`.
             Runtime::current().unwrap();
