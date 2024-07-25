@@ -122,13 +122,11 @@ impl Output {
 
         dx_version.push_str(env!("CARGO_PKG_VERSION"));
 
-        let is_cli_release = crate::dx_build_info::PROFILE == "release";
+        let is_cli_release = env!("VERGEN_CARGO_DEBUG") != "true";
 
         if !is_cli_release {
-            if let Some(hash) = crate::dx_build_info::GIT_COMMIT_HASH_SHORT {
-                let hash = &hash.trim_start_matches('g')[..4];
-                dx_version.push('-');
-                dx_version.push_str(hash);
+            if let Some(hash) = option_env!("VERGEN_GIT_SHA") {
+                dx_version.push_str(&format!("-{}", &hash[..4]));
             }
         }
 

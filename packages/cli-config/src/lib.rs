@@ -11,8 +11,6 @@ pub use bundle::*;
 mod serve;
 pub use serve::*;
 
-mod build_info;
-
 #[doc(hidden)]
 pub mod __private {
     use crate::DioxusConfig;
@@ -74,11 +72,10 @@ pub static CURRENT_CONFIG: once_cell::sync::Lazy<
     match serde_json::from_str(config) {
         Ok(config) => Ok(config),
         Err(err) => {
-            let mut cli_version = crate::build_info::PKG_VERSION.to_string();
+            let mut cli_version = env!("CARGO_PKG_VERSION").to_string();
 
-            if let Some(hash) = crate::build_info::GIT_COMMIT_HASH_SHORT {
-                let hash = &hash.trim_start_matches('g')[..4];
-                cli_version.push_str(&format!("-{hash}"));
+            if let Some(hash) = option_env!("VERGEN_GIT_SHA") {
+                cli_version.push_str(&format!("-{}", &hash[..4]));
             }
 
             let dioxus_version = std::option_env!("DIOXUS_CLI_VERSION").unwrap_or("unknown");
