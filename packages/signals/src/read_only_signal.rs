@@ -46,7 +46,13 @@ impl<T: 'static, S: Storage<SignalData<T>>> ReadOnlySignal<T, S> {
     /// This should only be used by the `rsx!` macro.
     pub fn __set(&mut self, value: T) {
         use crate::write::Writable;
-        self.inner.set(value);
+        use warnings::Warning;
+        // This is only called when converting T -> ReadOnlySignal<T> which will not cause loops
+        crate::warnings::signal_write_in_component_body::allow(|| {
+            crate::warnings::signal_read_and_write_in_reactive_scope::allow(|| {
+                self.inner.set(value);
+            });
+        });
     }
 
     #[doc(hidden)]

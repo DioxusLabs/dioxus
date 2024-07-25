@@ -9,26 +9,7 @@ use std::rc::Rc;
 use dioxus::{html::geometry::euclid::Rect, prelude::*};
 
 fn main() {
-    LaunchBuilder::desktop()
-        .with_cfg(
-            dioxus::desktop::Config::default().with_custom_head(
-                r#"
-<style type="text/css">
-    html, body {
-        height: 100%;
-        width: 100%;
-        margin: 0;
-    }
-    #main {
-        height: 100%;
-        width: 100%;
-    }
-</style>
-"#
-                .to_owned(),
-            ),
-        )
-        .launch(app);
+    launch(app);
 }
 
 fn app() -> Element {
@@ -47,6 +28,7 @@ fn app() -> Element {
     };
 
     rsx!(
+        head::Link { rel: "stylesheet", href: asset!("./examples/assets/read_size.css") }
         div {
             width: "50%",
             height: "50%",

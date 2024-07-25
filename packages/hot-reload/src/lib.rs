@@ -22,8 +22,14 @@ pub enum DevserverMsg {
     /// This includes all the templates/literals/assets/binary patches that have changed in one shot
     HotReload(HotReloadMsg),
 
+    /// The devserver is starting a full rebuild.
+    FullReloadStart,
+
+    /// The full reload failed.
+    FullReloadFailed,
+
     /// The app should reload completely if it can
-    FullReload,
+    FullReloadCommand,
 
     /// The program is shutting down completely - maybe toss up a splash screen or something?
     Shutdown,

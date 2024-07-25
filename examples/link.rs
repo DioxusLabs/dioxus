@@ -8,7 +8,7 @@
 
 use dioxus::prelude::*;
 
-const STYLE: &str = asset!(file("./examples/assets/links.css"));
+const STYLE: &str = asset!("./examples/assets/links.css");
 
 fn main() {
     launch(app);
@@ -16,7 +16,7 @@ fn main() {
 
 fn app() -> Element {
     rsx! (
-        link { rel: "stylesheet", href: STYLE }
+        head::Link { rel: "stylesheet", href: STYLE }
         Router::<Route> {}
     )
 }
