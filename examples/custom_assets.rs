@@ -11,8 +11,7 @@ use dioxus::prelude::*;
 static ASSET_PATH: &str = "examples/assets/logo.png";
 
 #[cfg(feature = "collect-assets")]
-static ASSET_PATH: &str =
-    manganis::mg!(image("examples/assets/logo.png").format(ImageType::Avif)).path();
+static ASSET_PATH: &str = asset!("examples/assets/logo.png".format(ImageType::Avif));
 
 fn main() {
     launch(app);
