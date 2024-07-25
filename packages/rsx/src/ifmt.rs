@@ -20,6 +20,12 @@ pub struct IfmtInput {
     pub segments: Vec<Segment>,
 }
 
+impl Default for IfmtInput {
+    fn default() -> Self {
+        Self::new(Span::call_site())
+    }
+}
+
 impl IfmtInput {
     pub fn new(span: Span) -> Self {
         Self {
@@ -43,22 +49,6 @@ impl IfmtInput {
 
     pub fn push_ifmt(&mut self, other: IfmtInput) {
         self.segments.extend(other.segments);
-    }
-
-    pub fn push_condition(&mut self, condition: Expr, contents: IfmtInput) {
-        let desugared = quote! {
-            {
-                let _cond = if #condition { #contents.to_string() } else { String::new() };
-                _cond
-            }
-        };
-
-        let parsed = syn::parse2::<Expr>(desugared).unwrap();
-
-        self.segments.push(Segment::Formatted(FormattedSegment {
-            format_args: String::new(),
-            segment: FormattedSegmentType::Expr(Box::new(parsed)),
-        }));
     }
 
     pub fn push_expr(&mut self, expr: Expr) {
@@ -479,18 +469,6 @@ mod tests {
         let input = syn::parse2::<IfmtInput>(quote! { r#"hello"# }).unwrap();
         println!("{}", input.to_string_with_quotes());
         assert!(input.is_static());
-    }
-
-    #[test]
-    fn pushing_conditional() {
-        let mut input = syn::parse2::<IfmtInput>(quote! { "hello " }).unwrap();
-
-        input.push_condition(
-            parse_quote! { true },
-            syn::parse2::<IfmtInput>(quote! { "world" }).unwrap(),
-        );
-        println!("{}", input.to_token_stream().pretty_unparse());
-        dbg!(input.segments);
     }
 
     #[test]

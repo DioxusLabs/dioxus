@@ -211,6 +211,12 @@ impl ToTokens for Element {
 }
 
 impl Element {
+    pub(crate) fn add_merging_non_string_diagnostic(diagnostics: &mut Diagnostics, span: Span) {
+        diagnostics.push(span.error("Cannot merge non-fmt literals").help(
+            "Only formatted strings can be merged together. If you want to merge literals, you can use a format string.",
+        ));
+    }
+
     /// Collapses ifmt attributes into a single dynamic attribute using a space or `;` as a delimiter
     ///
     /// ```ignore,
@@ -271,22 +277,16 @@ impl Element {
                     }
                 }
 
-                // Merge `if cond { "abc" }` into the output
-                if let AttributeValue::AttrOptionalExpr { condition, value } = &matching_attr.value
-                {
-                    if let AttributeValue::AttrLiteral(lit) = value.as_ref() {
-                        if let HotLiteralType::Fmted(new) = &lit.value {
-                            out.push_condition(condition.clone(), new.clone());
-                            continue;
-                        }
-                    }
+                // Merge `if cond { "abc" } else if ...` into the output
+                if let AttributeValue::IfExpr(value) = &matching_attr.value {
+                    out.push_expr(value.quote_as_string(&mut self.diagnostics));
+                    continue;
                 }
 
-                // unwind in case there's a test or two that cares about this weird state
-                _ = out.segments.pop();
-                self.diagnostics.push(matching_attr.span().error("Cannot merge non-fmt literals").help(
-                    "Only formatted strings can be merged together. If you want to merge literals, you can use a format string.",
-                ));
+                Self::add_merging_non_string_diagnostic(
+                    &mut self.diagnostics,
+                    matching_attr.span(),
+                );
             }
 
             let out_lit = HotLiteral {
@@ -533,11 +533,13 @@ fn merges_attributes() {
     let input = quote::quote! {
         div {
             class: "hello world",
-            class: if count > 3 { "abc {def}" }
+            class: if count > 3 { "abc {def}" },
+            class: if count < 50 { "small" } else { "big" }
         }
     };
 
     let parsed: Element = syn::parse2(input).unwrap();
+    assert_eq!(parsed.diagnostics.len(), 0);
     assert_eq!(parsed.merged_attributes.len(), 1);
     assert_eq!(
         parsed.merged_attributes[0].name.to_string(),
