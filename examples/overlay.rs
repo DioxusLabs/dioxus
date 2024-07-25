@@ -20,6 +20,10 @@ fn app() -> Element {
     _ = use_global_shortcut("cmd+g", move || show_overlay.toggle());
 
     rsx! {
+        head::Link {
+            rel: "stylesheet",
+            href: asset!("./examples/assets/overlay.css"),
+        }
         if show_overlay() {
             div {
                 width: "100%",
@@ -41,28 +45,7 @@ fn app() -> Element {
 }
 
 fn make_config() -> dioxus::desktop::Config {
-    dioxus::desktop::Config::default()
-        .with_window(make_window())
-        .with_custom_head(
-            r#"
-<style type="text/css">
-    html, body {
-        height: 100px;
-        margin: 0;
-        overscroll-behavior-y: none;
-        overscroll-behavior-x: none;
-        overflow: hidden;
-    }
-    #main, #bodywrap {
-        height: 100%;
-        margin: 0;
-        overscroll-behavior-x: none;
-        overscroll-behavior-y: none;
-    }
-</style>
-"#
-            .to_owned(),
-        )
+    dioxus::desktop::Config::default().with_window(make_window())
 }
 
 fn make_window() -> WindowBuilder {
