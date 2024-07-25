@@ -143,7 +143,10 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                 match res {
                     Ok(false) => {}
                     // Request a rebuild.
-                    Ok(true) => builder.build(),
+                    Ok(true) => {
+                        builder.build();
+                        server.start_build().await
+                    },
                     // Shutdown the server.
                     Err(_) => break,
                 }
