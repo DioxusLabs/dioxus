@@ -248,8 +248,11 @@ impl Runtime {
     }
 
     pub(crate) fn handle_task_wakeup(&self, id: Task) -> Poll<()> {
-        // Ensure we are currently inside a `Runtime`.
-        debug_assert!(Runtime::current().is_ok());
+        #[cfg(debug_assertions)]
+        {
+            // Ensure we are currently inside a `Runtime`.
+            Runtime::current().unwrap();
+        }
 
         let task = self.tasks.borrow().get(id.id).cloned();
 

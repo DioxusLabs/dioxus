@@ -2526,6 +2526,7 @@ dependencies = [
  "tracing",
  "tracing-fluent-assertions",
  "tracing-subscriber",
+ "warnings",
  "web-sys",
 ]
 
@@ -2711,6 +2712,7 @@ dependencies = [
  "slab",
  "tokio",
  "tracing",
+ "warnings",
  "web-sys",
 ]
 
@@ -2970,6 +2972,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "warnings",
 ]
 
 [[package]]
@@ -10361,6 +10364,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bfa7760aed19e106de2c7c0b581b509f2f25d3dacaf737cb82ac61bc6d760b0e"
 dependencies = [
  "try-lock",
+]
+
+[[package]]
+name = "warnings"
+version = "0.1.0"
+source = "git+https://github.com/DioxusLabs/warnings#9889b96cccb6ac91a8af924cfee51a8895146d08"
+dependencies = [
+ "pin-project",
+ "warnings-macro",
+]
+
+[[package]]
+name = "warnings-macro"
+version = "0.1.0"
+source = "git+https://github.com/DioxusLabs/warnings#9889b96cccb6ac91a8af924cfee51a8895146d08"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.71",
 ]
 
 [[package]]

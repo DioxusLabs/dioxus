@@ -176,7 +176,7 @@ impl BuildRequest {
         // Note that we do this last since the webserver will attempt to serve the index.html file
         // If we do this too early, the wasm won't be ready but the index.html will be served, leading
         // to test failures and broken pages.
-        let html = self.prepare_html(assets)?;
+        let html = self.prepare_html(assets, progress)?;
         let html_path = self.dioxus_crate.out_dir().join("index.html");
         std::fs::write(html_path, html)?;
 

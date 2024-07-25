@@ -6,6 +6,7 @@ use crate::{
     LiveViewError,
 };
 use dioxus_core::prelude::*;
+use dioxus_hot_reload::DevserverMsg;
 use dioxus_html::{EventData, HtmlEvent, PlatformEventData};
 use dioxus_interpreter_js::MutationState;
 use futures_util::{pin_mut, SinkExt, StreamExt};
@@ -213,16 +214,18 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
             Some(msg) = hot_reload_wait => {
                 #[cfg(all(feature = "hot-reload", debug_assertions))]
                 match msg{
-                    dioxus_hot_reload::DevserverMsg::HotReload(msg)=> {
+                    DevserverMsg::HotReload(msg)=> {
                         dioxus_hot_reload::apply_changes(&mut vdom, &msg);
                     }
-                    dioxus_hot_reload::DevserverMsg::Shutdown => {
+                    DevserverMsg::Shutdown => {
                         std::process::exit(0);
                     },
-                    dioxus_hot_reload::DevserverMsg::FullReload => {
+                    DevserverMsg::FullReloadCommand
+                    | DevserverMsg::FullReloadStart
+                    | DevserverMsg::FullReloadFailed => {
                         // usually only web gets this message - what are we supposed to do?
                         // Maybe we could just binary patch ourselves in place without losing window state?
-                    }
+                    },
                 }
                 #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
                 let () = msg;
