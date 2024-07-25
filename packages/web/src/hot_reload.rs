@@ -3,7 +3,9 @@
 //! This sets up a websocket connection to the devserver and handles messages from it.
 //! We also set up a little recursive timer that will attempt to reconnect if the connection is lost.
 
+use dioxus_core::ScopeId;
 use dioxus_hot_reload::{DevserverMsg, HotReloadMsg};
+use dioxus_html::prelude::eval;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use js_sys::JsString;
 use wasm_bindgen::JsCast;
@@ -25,6 +27,18 @@ pub(crate) fn init() -> UnboundedReceiver<HotReloadMsg> {
 }
 
 fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) {
+    if reload {
+        ScopeId::ROOT.in_runtime(|| {
+            eval(
+                r#"
+                if (typeof newDXToast !== "undefined") {
+                    newDXToast("Successfully rebuilt.", "Your app was rebuilt successfully and without error.", "success", 4000);
+                }
+                "#,
+            );
+        });
+    }
+
     // Get the location of the devserver, using the current location plus the /_dioxus path
     // The idea here being that the devserver is always located on the /_dioxus behind a proxy
     let location = web_sys::window().unwrap().location();
@@ -62,8 +76,34 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
                     web_sys::console::error_1(&"Connection to the devserver was closed".into())
                 }
 
+                // The devserver is telling us that it started a full rebuild. This does not mean that it is ready.
+                Ok(DevserverMsg::FullReloadStart) => {
+                    ScopeId::ROOT.in_runtime(|| {
+                        eval(
+                            r#"
+                            if (typeof newDXToast !== "undefined") {
+                                newDXToast("Your app is being rebuilt.", "A non-hot-reloadable change occursed and we must rebuild.", "success", 4000);
+                            }
+                            "#,
+                        );
+                    });
+                }
+
+                // The devserver is telling us that the full rebuild failed.
+                Ok(DevserverMsg::FullReloadFailed) => {
+                    ScopeId::ROOT.in_runtime(|| {
+                        eval(
+                            r#"
+                            if (typeof newDXToast !== "undefined") {
+                                newDXToast("Oops! The build failed.", "We tried to rebuild your app, but something went wrong.", "error", 4000);
+                            }
+                            "#,
+                        );
+                    });
+                }
+
                 // The devserver is telling us to reload the whole page
-                Ok(DevserverMsg::FullReload) => window().unwrap().location().reload().unwrap(),
+                Ok(DevserverMsg::FullReloadCommand) => window().unwrap().location().reload().unwrap(),
 
                 Err(e) => web_sys::console::error_1(
                     &format!("Error parsing devserver message: {}", e).into(),

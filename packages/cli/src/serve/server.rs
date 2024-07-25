@@ -283,13 +283,25 @@ impl Server {
         self.send_build_status().await;
     }
 
-    pub async fn send_reload(&mut self) {
+    pub async fn send_reload_start(&mut self) {
+        self.send_reload_message(DevserverMsg::FullReloadStart).await;
+    }
+
+    pub async fn send_reload_failed(&mut self) {
+        self.send_reload_message(DevserverMsg::FullReloadFailed).await;
+    }
+
+    pub async fn send_reload_command(&mut self) {
+        self.send_reload_message(DevserverMsg::FullReloadCommand).await;
+    }
+
+    async fn send_reload_message(&mut self, msg: DevserverMsg) {
         self.build_status.set(Status::Ready);
         self.send_build_status().await;
         for socket in self.hot_reload_sockets.iter_mut() {
             _ = socket
                 .send(Message::Text(
-                    serde_json::to_string(&DevserverMsg::FullReload).unwrap(),
+                    serde_json::to_string(&msg).unwrap(),
                 ))
                 .await;
         }

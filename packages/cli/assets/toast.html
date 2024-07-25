@@ -93,7 +93,7 @@
     background-color: #42FF65;
   }
 
-  .dx-toast-progress-bar.err {
+  .dx-toast-progress-bar.error {
     background-color: #FF4242;
   }
 </style>
@@ -102,7 +102,7 @@
   <div class="dx-toast-inner" style="right:-300px;">
     <!-- Progress/Color -->
     <div class="dx-toast-progress-container">
-      <div class="dx-toast-progress-bar err"></div>
+      <div class="dx-toast-progress-bar info"></div>
     </div>
 
     <!-- Content -->
@@ -134,7 +134,7 @@
   let currentToast = null;
   let currentTimeout = null;
 
-  function newToast(headerText, message, progressLevel, durationMs) {
+  function newDXToast(headerText, message, progressLevel, durationMs) {
     // Close current toast if exists.
     closeToast();
 
@@ -163,19 +163,19 @@
 
     // Add listener to close toasts when clicked.
     // Safety: Calling `closeToast` removes the element and all event listeners with it.
-    currentToast.addEventListener("onclick", closeToast);
+    currentToast.addEventListener("onclick", closeDXToast);
 
     // Wait a bit of time so animation plays correctly.
     setTimeout(() => {
       innerElem.style.right = "0";
 
       currentTimeout = setTimeout(() => {
-        closeToast();
+        closeDXToast();
       }, durationMs);
     }, 50);
   }
 
-  function closeToast() {
+  function closeDXToast() {
     if (currentToast) {
       currentToast.remove();
     }

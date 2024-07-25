@@ -330,8 +330,10 @@ impl App {
         not(target_os = "ios")
     ))]
     pub fn handle_hot_reload_msg(&mut self, msg: dioxus_hot_reload::DevserverMsg) {
+        use dioxus_hot_reload::DevserverMsg;
+
         match msg {
-            dioxus_hot_reload::DevserverMsg::HotReload(hr_msg) => {
+            DevserverMsg::HotReload(hr_msg) => {
                 for webview in self.webviews.values_mut() {
                     dioxus_hot_reload::apply_changes(&mut webview.dom, &hr_msg);
                     webview.poll_vdom();
@@ -342,12 +344,14 @@ impl App {
                         webview.kick_stylsheets();
                     }
                 }
-            }
-            dioxus_hot_reload::DevserverMsg::FullReload => {
+            },
+            DevserverMsg::FullReloadCommand
+            | DevserverMsg::FullReloadStart
+            | DevserverMsg::FullReloadFailed => {
                 // usually only web gets this message - what are we supposed to do?
                 // Maybe we could just binary patch ourselves in place without losing window state?
             }
-            dioxus_hot_reload::DevserverMsg::Shutdown => {
+            DevserverMsg::Shutdown => {
                 self.control_flow = ControlFlow::Exit;
             }
         }

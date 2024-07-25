@@ -43,6 +43,7 @@ impl std::fmt::Display for Stage {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct UpdateBuildProgress {
     pub stage: Stage,
     pub update: UpdateStage,
