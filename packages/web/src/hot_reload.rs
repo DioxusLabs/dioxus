@@ -3,6 +3,9 @@
 //! This sets up a websocket connection to the devserver and handles messages from it.
 //! We also set up a little recursive timer that will attempt to reconnect if the connection is lost.
 
+use std::fmt::Display;
+use std::time::Duration;
+
 use dioxus_core::ScopeId;
 use dioxus_hot_reload::{DevserverMsg, HotReloadMsg};
 use dioxus_html::prelude::eval;
@@ -16,6 +19,9 @@ const POLL_INTERVAL_MIN: i32 = 250;
 const POLL_INTERVAL_MAX: i32 = 4000;
 const POLL_INTERVAL_SCALE_FACTOR: i32 = 2;
 
+/// Amount of time that toats should be displayed.
+const TOAST_TIMEOUT: Duration = Duration::from_secs(5);
+
 pub(crate) fn init() -> UnboundedReceiver<HotReloadMsg> {
     // Create the tx/rx pair that we'll use for the top-level future in the dioxus loop
     let (tx, rx) = unbounded();
@@ -27,18 +33,6 @@ pub(crate) fn init() -> UnboundedReceiver<HotReloadMsg> {
 }
 
 fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) {
-    if reload {
-        ScopeId::ROOT.in_runtime(|| {
-            eval(
-                r#"
-                if (typeof newDXToast !== "undefined") {
-                    newDXToast("Successfully rebuilt.", "Your app was rebuilt successfully and without error.", "success", 4000);
-                }
-                "#,
-            );
-        });
-    }
-
     // Get the location of the devserver, using the current location plus the /_dioxus path
     // The idea here being that the devserver is always located on the /_dioxus behind a proxy
     let location = web_sys::window().unwrap().location();
@@ -77,33 +71,33 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
                 }
 
                 // The devserver is telling us that it started a full rebuild. This does not mean that it is ready.
-                Ok(DevserverMsg::FullReloadStart) => {
-                    ScopeId::ROOT.in_runtime(|| {
-                        eval(
-                            r#"
-                            if (typeof newDXToast !== "undefined") {
-                                newDXToast("Your app is being rebuilt.", "A non-hot-reloadable change occursed and we must rebuild.", "success", 4000);
-                            }
-                            "#,
-                        );
-                    });
-                }
-
+                Ok(DevserverMsg::FullReloadStart) => show_toast(
+                    "Your app is being rebuilt.",
+                    "A non-hot-reloadable change occured and we must rebuild.",
+                    ToastLevel::Info,
+                    TOAST_TIMEOUT,
+                    false,
+                ),
                 // The devserver is telling us that the full rebuild failed.
-                Ok(DevserverMsg::FullReloadFailed) => {
-                    ScopeId::ROOT.in_runtime(|| {
-                        eval(
-                            r#"
-                            if (typeof newDXToast !== "undefined") {
-                                newDXToast("Oops! The build failed.", "We tried to rebuild your app, but something went wrong.", "error", 4000);
-                            }
-                            "#,
-                        );
-                    });
-                }
+                Ok(DevserverMsg::FullReloadFailed) => show_toast(
+                    "Oops! The build failed.",
+                    "We tried to rebuild your app, but something went wrong.",
+                    ToastLevel::Error,
+                    TOAST_TIMEOUT,
+                    false,
+                ),
 
                 // The devserver is telling us to reload the whole page
-                Ok(DevserverMsg::FullReloadCommand) => window().unwrap().location().reload().unwrap(),
+                Ok(DevserverMsg::FullReloadCommand) => {
+                    show_toast(
+                        "Successfully rebuilt.",
+                        "Your app was rebuilt successfully and without error.",
+                        ToastLevel::Success,
+                        TOAST_TIMEOUT,
+                        true,
+                    );
+                    window().unwrap().location().reload().unwrap()
+                }
 
                 Err(e) => web_sys::console::error_1(
                     &format!("Error parsing devserver message: {}", e).into(),
@@ -171,6 +165,53 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
         let ws: &JsValue = ws.as_ref();
         dioxus_interpreter_js::minimal_bindings::monkeyPatchConsole(ws.clone());
     }
+}
+
+/// Represents what color the toast should have.
+enum ToastLevel {
+    /// Green
+    Success,
+    /// Blue
+    Info,
+    /// Red
+    Error,
+}
+
+impl Display for ToastLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ToastLevel::Success => write!(f, "success"),
+            ToastLevel::Info => write!(f, "info"),
+            ToastLevel::Error => write!(f, "error"),
+        }
+    }
+}
+
+
+/// Displays a toast to the developer.
+fn show_toast(
+    header_text: &str,
+    message: &str,
+    level: ToastLevel,
+    duration: Duration,
+    after_reload: bool,
+) {
+    let as_ms = duration.as_millis();
+
+    let js_fn_name = match after_reload {
+        true => "scheduleDXToast",
+        false => "showDXToast",
+    };
+
+    ScopeId::ROOT.in_runtime(|| {
+        eval(&format!(
+            r#"
+            if (typeof {js_fn_name} !== "undefined") {{
+                {js_fn_name}("{header_text}", "{message}", "{level}", {as_ms});
+            }}
+            "#,
+        ));
+    });
 }
 
 /// Force a hotreload of the assets on this page by walking them and changing their URLs to include

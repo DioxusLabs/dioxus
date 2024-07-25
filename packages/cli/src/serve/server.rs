@@ -131,6 +131,7 @@ impl Server {
         // Actually just start the server, cloning in a few bits of config
         let web_config = cfg.dioxus_config.web.https.clone();
         let base_path = cfg.dioxus_config.web.app.base_path.clone();
+        let platform = serve.platform();
         let _server_task = tokio::spawn(async move {
             let web_config = web_config.clone();
             // HTTPS
@@ -139,7 +140,7 @@ impl Server {
             let rustls: Option<RustlsConfig> = get_rustls(&web_config).await.unwrap();
 
             // Open the browser
-            if start_browser {
+            if start_browser && platform != Platform::Desktop {
                 open_browser(base_path, addr, rustls.is_some());
             }
 
@@ -175,6 +176,7 @@ impl Server {
         }
     }
 
+    /// Sends the current build status to all clients.
     async fn send_build_status(&mut self) {
         let mut i = 0;
         while i < self.build_status_sockets.len() {
@@ -190,6 +192,7 @@ impl Server {
         }
     }
 
+    /// Sends a start build message to all clients.
     pub async fn start_build(&mut self) {
         self.build_status.set(Status::Building {
             progress: 0.0,
@@ -198,6 +201,7 @@ impl Server {
         self.send_build_status().await;
     }
 
+    /// Sends an updated build status to all clients.
     pub async fn update_build_status(&mut self, progress: f64, build_message: String) {
         if !matches!(self.build_status.get(), Status::Building { .. }) {
             return;
@@ -209,6 +213,7 @@ impl Server {
         self.send_build_status().await;
     }
 
+    /// Sends hot reloadable changes to all clients.
     pub async fn send_hotreload(&mut self, reload: HotReloadMsg) {
         let msg = DevserverMsg::HotReload(reload);
         let msg = serde_json::to_string(&msg).unwrap();
@@ -275,6 +280,7 @@ impl Server {
         None
     }
 
+    /// Converts a `cargo` error to HTML and sends it to clients.
     pub async fn send_build_error(&mut self, error: Error) {
         let error = error.to_string();
         self.build_status.set(Status::BuildError {
@@ -283,36 +289,34 @@ impl Server {
         self.send_build_status().await;
     }
 
+    /// Tells all clients that a full rebuild has started.
     pub async fn send_reload_start(&mut self) {
-        self.send_reload_message(DevserverMsg::FullReloadStart).await;
+        self.send_devserver_message(DevserverMsg::FullReloadStart).await;
     }
 
+    /// Tells all clients that a full rebuild has failed.
     pub async fn send_reload_failed(&mut self) {
-        self.send_reload_message(DevserverMsg::FullReloadFailed).await;
+        self.send_devserver_message(DevserverMsg::FullReloadFailed).await;
     }
 
+    /// Tells all clients to reload if possibile for new changes.
     pub async fn send_reload_command(&mut self) {
-        self.send_reload_message(DevserverMsg::FullReloadCommand).await;
-    }
-
-    async fn send_reload_message(&mut self, msg: DevserverMsg) {
         self.build_status.set(Status::Ready);
         self.send_build_status().await;
+        self.send_devserver_message(DevserverMsg::FullReloadCommand).await;
+    }
+
+    /// Send a shutdown message to all connected clients.
+    pub async fn send_shutdown(&mut self) {
+        self.send_devserver_message(DevserverMsg::Shutdown).await;
+    }
+
+    /// Sends a devserver message to all connected clients.
+    async fn send_devserver_message(&mut self, msg: DevserverMsg) {
         for socket in self.hot_reload_sockets.iter_mut() {
             _ = socket
                 .send(Message::Text(
                     serde_json::to_string(&msg).unwrap(),
-                ))
-                .await;
-        }
-    }
-
-    /// Send a shutdown message to all connected clients
-    pub async fn send_shutdown(&mut self) {
-        for socket in self.hot_reload_sockets.iter_mut() {
-            _ = socket
-                .send(Message::Text(
-                    serde_json::to_string(&DevserverMsg::Shutdown).unwrap(),
                 ))
                 .await;
         }

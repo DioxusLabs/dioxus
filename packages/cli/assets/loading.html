@@ -325,7 +325,6 @@
     ws.onmessage = (event) => {
       // Parse the message as json
       let data = JSON.parse(event.data);
-      console.log(data);
 
       // If the message is "Ready", reload the page
       if (data.type === "Ready") {
@@ -364,7 +363,6 @@
         let errorBlock = document.getElementById("error-block");
         errorBlock.innerHTML = formatting2;
 
-        console.log(data.data.error);
       } else if (data.type === "Building") {
         // Show correct view for message.
         let errorContainer = document.getElementById("error");

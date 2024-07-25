@@ -1,6 +1,3 @@
-<!-- For Testing
-<body></body> -->
-
 <style>
   /* Inter Font */
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
@@ -39,16 +36,15 @@
 
   .dx-toast:hover {
     cursor: pointer;
-    transform: translateY(5px);
+    transform: translateX(-5px);
   }
 
-  .dx-toast .dx-toast-progress-container {
+  .dx-toast .dx-toast-level-bar-container {
     height: 100%;
     width: 6px;
-    /* margin-right: 13px; */
   }
 
-  .dx-toast .dx-toast-progress-container .dx-toast-progress-bar {
+  .dx-toast .dx-toast-level-bar-container .dx-toast-level-bar {
     width: 100%;
     height: 100%;
     border-radius: 5px 0px 0px 5px;
@@ -85,24 +81,24 @@
     margin: 0;
   }
 
-  .dx-toast-progress-bar.info {
+  .dx-toast-level-bar.info {
     background-color: #428EFF;
   }
 
-  .dx-toast-progress-bar.success {
+  .dx-toast-level-bar.success {
     background-color: #42FF65;
   }
 
-  .dx-toast-progress-bar.error {
+  .dx-toast-level-bar.error {
     background-color: #FF4242;
   }
 </style>
 
 <div id="dx-toast-template" class="dx-toast">
   <div class="dx-toast-inner" style="right:-300px;">
-    <!-- Progress/Color -->
-    <div class="dx-toast-progress-container">
-      <div class="dx-toast-progress-bar info"></div>
+    <!-- Level/Color decor -->
+    <div class="dx-toast-level-bar-container">
+      <div class="dx-toast-level-bar info"></div>
     </div>
 
     <!-- Content -->
@@ -121,6 +117,7 @@
             d="M5.142 1.783c0 4.016 1.275 7.099 3.102 9.637s4.125 4.422 6.252 6.195 4.083 3.656 5.447 5.551 2.215 3.974 2.215 7.051h4.701c0-4.016-1.275-7.038-3.102-9.576s-4.125-4.422-6.252-6.195-4.083-3.435-5.447-5.33S9.841 4.86 9.841 1.783z"
             fill="#00a8d6" />
         </svg>
+        <!-- Toast Title Text -->
         <h3 class="dx-toast-header-text">Your app is being rebuilt.</h3>
       </div>
 
@@ -131,12 +128,14 @@
 </div>
 
 <script>
+  const STORAGE_KEY = "SCHEDULED-DX-TOAST";
   let currentToast = null;
   let currentTimeout = null;
 
-  function newDXToast(headerText, message, progressLevel, durationMs) {
+  // Show a toast, removing the previous one.
+  function showDXToast(headerText, message, progressLevel, durationMs) {
     // Close current toast if exists.
-    closeToast();
+    closeDXToast();
 
     // Clone template and add unique id.
     let toastTemplate = document.getElementById("dx-toast-template");
@@ -145,11 +144,11 @@
     cloned.id = toastId;
     currentToast = cloned;
 
-    let innerElem = cloned.querySelector(`#${toastId} .dx-toast-inner`);
+    let innerElem = currentToast.querySelector(`#${toastId} .dx-toast-inner`);
 
     // Set the progress level
-    let progressBarElem = innerElem.querySelector(".dx-toast-inner .dx-toast-progress-container .dx-toast-progress-bar");
-    progressBarElem.className = `dx-toast-progress-bar ${progressLevel}`;
+    let progressBarElem = innerElem.querySelector(".dx-toast-inner .dx-toast-level-bar-container .dx-toast-level-bar");
+    progressBarElem.className = `dx-toast-level-bar ${progressLevel}`;
 
     // Set header text
     let headerTextElem = innerElem.querySelector(".dx-toast-inner .dx-toast-header .dx-toast-header-text");
@@ -159,11 +158,11 @@
     let messageElem = innerElem.querySelector(".dx-toast-inner .dx-toast-msg");
     messageElem.innerText = message;
 
-    document.body.appendChild(cloned);
+    document.body.appendChild(currentToast);
 
     // Add listener to close toasts when clicked.
     // Safety: Calling `closeToast` removes the element and all event listeners with it.
-    currentToast.addEventListener("onclick", closeDXToast);
+    currentToast.addEventListener("click", closeDXToast);
 
     // Wait a bit of time so animation plays correctly.
     setTimeout(() => {
@@ -172,9 +171,23 @@
       currentTimeout = setTimeout(() => {
         closeDXToast();
       }, durationMs);
-    }, 50);
+    }, 100);
   }
 
+  // Schedule a toast to be displayed after reload.
+  function scheduleDXToast(headerText, message, level, durationMs) {
+    let data = {
+      headerText,
+      message,
+      level,
+      durationMs,
+    };
+
+    let jsonData = JSON.stringify(data);
+    sessionStorage.setItem(STORAGE_KEY, jsonData);
+  }
+
+  // Close the current toast.
   function closeDXToast() {
     if (currentToast) {
       currentToast.remove();
@@ -182,13 +195,12 @@
     clearTimeout(currentTimeout);
   }
 
-  // let currentToastX = false;
-  // setInterval(() => {
-  //   if (currentToastX) {
-  //     newToast("Your app is being rebuilt.", "A non-hot-reloadable change occured and we must rebuild.", "success", 2000);
-  //   } else {
-  //     newToast("Oops! The build failed.", "We tried to rebuild your app, but something went wrong.", "err", 2000);
-  //   }
-  //   currentToastX = !currentToastX;
-  // }, 1000);
+  // Handle any scheduled toasts after reload.
+  let potentialData = sessionStorage.getItem(STORAGE_KEY);
+  if (potentialData) {
+    sessionStorage.removeItem(STORAGE_KEY);
+    let data = JSON.parse(potentialData);
+    showDXToast(data.headerText, data.message, data.level, data.durationMs);
+  }
+
 </script>
