@@ -7,6 +7,7 @@ use std::fmt::Write;
 use std::path::Path;
 
 const DEFAULT_HTML: &str = include_str!("../../assets/index.html");
+const TOAST_HTML: &str = include_str!("../../assets/toast.html");
 
 impl BuildRequest {
     pub(crate) fn prepare_html(&self, assets: Option<&AssetManifest>) -> Result<String> {
@@ -17,6 +18,7 @@ impl BuildRequest {
 
         // Inject loading scripts if they are not already present
         self.inject_loading_scripts(&mut html);
+
 
         // Replace any special placeholders in the HTML with resolved values
         self.replace_template_placeholders(&mut html);
@@ -90,8 +92,15 @@ impl BuildRequest {
                 });
                 }
             );
-            </script></body"#,
+            </script>
+            {DX_TOAST_UTILITIES}
+            </body"#,
         );
+
+        *html = match self.serve && !self.build_arguments.release {
+            true => html.replace("{DX_TOAST_UTILITIES}", TOAST_HTML),
+            false => html.replace("{DX_TOAST_UTILITIES}", ""),
+        };
 
         // And try to insert preload links for the wasm and js files
         *html = html.replace(
