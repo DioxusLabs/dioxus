@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use tracing::Level;
 
 const DEFAULT_HTML: &str = include_str!("../../assets/index.html");
+const TOAST_HTML: &str = include_str!("../../assets/toast.html");
 
 impl BuildRequest {
     pub(crate) fn prepare_html(
@@ -110,8 +111,15 @@ impl BuildRequest {
                 });
                 }
             );
-            </script></body"#,
+            </script>
+            {DX_TOAST_UTILITIES}
+            </body"#,
         );
+
+        *html = match self.serve && !self.build_arguments.release {
+            true => html.replace("{DX_TOAST_UTILITIES}", TOAST_HTML),
+            false => html.replace("{DX_TOAST_UTILITIES}", ""),
+        };
 
         // And try to insert preload links for the wasm and js files
         *html = html.replace(
