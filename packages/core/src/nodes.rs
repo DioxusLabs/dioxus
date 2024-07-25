@@ -122,7 +122,7 @@ pub struct VNodeInner {
     pub key: Option<String>,
 
     /// The static nodes and static descriptor of the template
-    pub template: Cell<Template>,
+    pub template: Template,
 
     /// The dynamic nodes in the template
     pub dynamic_nodes: Box<[DynamicNode]>,
@@ -252,12 +252,12 @@ impl VNode {
                     key: None,
                     dynamic_nodes: Box::new([DynamicNode::Placeholder(Default::default())]),
                     dynamic_attrs: Box::new([]),
-                    template: Cell::new(Template {
+                    template: Template {
                         name: "packages/core/nodes.rs:198:0:0",
                         roots: &[TemplateNode::Dynamic { id: 0 }],
                         node_paths: &[&[0]],
                         attr_paths: &[],
-                    }),
+                    },
                 })
             })
             .clone()
@@ -278,7 +278,7 @@ impl VNode {
         Self {
             vnode: Rc::new(VNodeInner {
                 key,
-                template: Cell::new(template),
+                template,
                 dynamic_nodes,
                 dynamic_attrs,
             }),
@@ -290,7 +290,7 @@ impl VNode {
     ///
     /// Returns [`None`] if the root is actually a static node (Element/Text)
     pub fn dynamic_root(&self, idx: usize) -> Option<&DynamicNode> {
-        self.template.get().roots[idx]
+        self.template.roots[idx]
             .dynamic_id()
             .map(|id| &self.dynamic_nodes[id])
     }
@@ -411,7 +411,7 @@ where
 }
 
 #[cfg(feature = "serialize")]
-fn deserialize_leaky<'a, 'de, T, D>(deserializer: D) -> Result<&'a [T], D::Error>
+pub(crate) fn deserialize_leaky<'a, 'de, T, D>(deserializer: D) -> Result<&'a [T], D::Error>
 where
     T: serde::Deserialize<'de>,
     D: serde::Deserializer<'de>,
@@ -423,7 +423,9 @@ where
 }
 
 #[cfg(feature = "serialize")]
-fn deserialize_option_leaky<'a, 'de, D>(deserializer: D) -> Result<Option<&'static str>, D::Error>
+pub(crate) fn deserialize_option_leaky<'a, 'de, D>(
+    deserializer: D,
+) -> Result<Option<&'static str>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {

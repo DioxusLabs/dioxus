@@ -34,6 +34,7 @@ mod hotreload_utils;
 pub mod internal {
     pub use crate::properties::verify_component_called_as_component;
 
+    #[doc(hidden)]
     pub use crate::hotreload_utils::{
         FmtSegment, FmtedSegments, HotReloadLiteral, HotreloadedLiteral,
     };
