@@ -159,11 +159,11 @@ impl BuildRequest {
                 };
                 match variant {
                     ResourceType::Style => format!(
-                        "\thead::Link {{ rel: \"stylesheet\", href: asset!(css(\"{}\")) }}",
+                        "    head::Link {{ rel: \"stylesheet\", href: asset!(css(\"{}\")) }}",
                         path.display()
                     ),
                     ResourceType::Script => {
-                        format!("\tScript {{ src: asset!(file(\"{}\")) }}", path.display())
+                        format!("    Script {{ src: asset!(file(\"{}\")) }}", path.display())
                     }
                 }
             })
