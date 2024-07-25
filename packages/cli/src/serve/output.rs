@@ -162,7 +162,7 @@ impl Output {
     /// Why is the ctrl_c handler here?
     ///
     /// Also tick animations every few ms
-    pub async fn wait(&mut self) -> io::Result<()> {
+    pub async fn wait(&mut self) -> io::Result<bool> {
         // sorry lord
         let user_input = match self.events.as_mut() {
             Some(events) => {
@@ -223,14 +223,16 @@ impl Output {
             },
 
             event = user_input => {
-                self.handle_events(event.unwrap().unwrap()).await?;
+                if self.handle_events(event.unwrap().unwrap()).await? {
+                    return Ok(true)
+                }
                 // self.handle_input(event.unwrap().unwrap())?;
             }
 
             _ = animation_timeout => {}
         }
 
-        Ok(())
+        Ok(false)
     }
 
     pub fn shutdown(&mut self) -> io::Result<()> {
@@ -270,7 +272,8 @@ impl Output {
         }
     }
 
-    pub fn handle_input(&mut self, input: Event) -> io::Result<()> {
+    /// Handle an input event, returning `true` if the event should cause the program to restart.
+    pub fn handle_input(&mut self, input: Event) -> io::Result<bool> {
         // handle ctrlc
         if let Event::Key(key) = input {
             if let KeyCode::Char('c') = key.code {
@@ -301,6 +304,7 @@ impl Output {
             }
             Event::Key(key) if key.code == KeyCode::Char('r') => {
                 // todo: reload the app
+                return Ok(true);
             }
             Event::Key(key) if key.code == KeyCode::Char('o') => {
                 // Open the running app.
@@ -337,7 +341,7 @@ impl Output {
                 .saturating_sub(self.term_height + 1);
         }
 
-        Ok(())
+        Ok(false)
     }
 
     pub fn new_ws_message(&mut self, platform: Platform, message: axum::extract::ws::Message) {
@@ -694,7 +698,7 @@ impl Output {
             });
     }
 
-    async fn handle_events(&mut self, event: Event) -> io::Result<()> {
+    async fn handle_events(&mut self, event: Event) -> io::Result<bool> {
         let mut events = vec![event];
 
         // Collect all the events within the next 10ms in one stream
@@ -710,12 +714,15 @@ impl Output {
         let mut handled = HashSet::new();
         for event in events {
             if !handled.contains(&event) {
-                self.handle_input(event.clone())?;
+                if self.handle_input(event.clone())? {
+                    // Restart the running app.
+                    return Ok(true);
+                }
                 handled.insert(event);
             }
         }
 
-        Ok(())
+        Ok(false)
     }
 
     fn render_fly_modal(&mut self, frame: &mut Frame, area: Rect) {
