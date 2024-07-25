@@ -647,12 +647,15 @@ pub mod warnings {
 #[allow(clippy::no_effect)]
 impl<T: 'static, S: Storage<SignalData<T>>> Drop for SignalSubscriberDrop<T, S> {
     fn drop(&mut self) {
-        tracing::trace!(
-            "Write on signal at {} finished, updating subscribers",
-            self.origin
-        );
-        warnings::signal_write_in_component_body(self.origin);
-        warnings::signal_read_and_write_in_reactive_scope::<T, S>(self.origin, self.signal);
+        #[cfg(debug_assertions)]
+        {
+            tracing::trace!(
+                "Write on signal at {} finished, updating subscribers",
+                self.origin
+            );
+            warnings::signal_write_in_component_body(self.origin);
+            warnings::signal_read_and_write_in_reactive_scope::<T, S>(self.origin, self.signal);
+        }
         self.signal.update_subscribers();
     }
 }
