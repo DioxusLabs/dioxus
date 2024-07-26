@@ -184,7 +184,7 @@ impl Component {
     /// Ensure there's no duplicate props - this will be a compile error but we can move it to a
     /// diagnostic, thankfully
     ///
-    /// Also ensure there's no stringly typed propsa
+    /// Also ensure there's no stringly typed props
     fn validate_fields(&mut self) {
         let mut seen = HashSet::new();
 
@@ -290,13 +290,15 @@ impl Component {
                 };
 
                 let value = quote! {
-                    #[cfg(debug_assertions)]
                     {
-                        #debug_value
-                    }
-                    #[cfg(not(debug_assertions))]
-                    {
-                        #release_value
+                        #[cfg(debug_assertions)]
+                        {
+                            #debug_value
+                        }
+                        #[cfg(not(debug_assertions))]
+                        {
+                            #release_value
+                        }
                     }
                 };
 

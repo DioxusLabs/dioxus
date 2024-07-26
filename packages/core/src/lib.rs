@@ -36,8 +36,8 @@ pub mod internal {
 
     #[doc(hidden)]
     pub use crate::hotreload_utils::{
-        DynamicLiteralPool, DynamicValuePool, FmtSegment, FmtedSegments, HotReloadLiteral,
-        HotreloadedLiteral,
+        DynamicLiteralPool, DynamicValuePool, FmtSegment, FmtedSegments, HotReloadAttribute,
+        HotReloadDynamicNode, HotReloadLiteral, HotReloadedTemplate, HotreloadedLiteral,
     };
 }
 

@@ -110,18 +110,7 @@ impl ToTokens for TemplateBody {
             None => quote! { None },
         };
 
-        let TemplateBody { roots, .. } = self;
-        let roots = roots.iter().map(|node| match node {
-            BodyNode::Element(el) => quote! { #el },
-            BodyNode::Text(text) if text.is_static() => {
-                let text = text.input.to_static().unwrap();
-                quote! { dioxus_core::TemplateNode::Text { text: #text } }
-            }
-            _ => {
-                let id = node.get_dyn_idx();
-                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
-            }
-        });
+        let roots = self.quote_roots();
 
         // Print paths is easy - just print the paths
         let node_paths = self.node_paths.iter().map(|it| quote!(&[#(#it),*]));
@@ -129,93 +118,75 @@ impl ToTokens for TemplateBody {
 
         // For printing dynamic nodes, we rely on the ToTokens impl
         // Elements have a weird ToTokens - they actually are the entrypoint for Template creation
-        let dynamic_nodes: Vec<&BodyNode> = self
-            .node_paths
-            .iter()
-            .map(|path| self.get_dyn_node(path))
-            .collect();
-
-        let non_text_dynamic_nodes = dynamic_nodes
-            .iter()
-            .filter(|node| !matches!(node, BodyNode::Text(_)));
-
-        let dyn_attributes: Vec<&Attribute> = self
-            .attr_paths
-            .iter()
-            .map(|(path, idx)| self.get_dyn_attr(path, *idx))
-            .collect();
+        let dynamic_nodes: Vec<_> = self.dynamic_nodes().collect();
 
         // We could add a ToTokens for Attribute but since we use that for both components and elements
         // They actually need to be different, so we just localize that here
-        let dyn_attr_printer = dyn_attributes
-            .iter()
-            .map(|attr| attr.rendered_as_dynamic_attr());
-
-        let non_literal_dynamic_attributes = dyn_attributes
-            .iter()
-            .filter(|attr| !matches!(attr.value, AttributeValue::AttrLiteral(_)))
-            .map(|attr| attr.rendered_as_dynamic_attr());
+        let dyn_attr_printer: Vec<_> = self
+            .dynamic_attributes()
+            .map(|attr| attr.rendered_as_dynamic_attr())
+            .collect();
 
         let dynamic_text = self.dynamic_text_segments.iter();
 
         let index = self.template_idx.get();
 
         let diagnostics = &self.diagnostics;
+        let hot_reload_mapping = self.hot_reload_mapping();
 
+        let vnode = quote! {
+            #[doc(hidden)] // vscode please stop showing these in symbol search
+            const ___TEMPLATE_NAME: &str = {
+                const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
+                const NORMAL: &str = dioxus_core::const_format::str_replace!(PATH, '\\', "/");
+                dioxus_core::const_format::concatcp!(NORMAL, ':', line!(), ':', column!(), ':', #index)
+            };
+            #[cfg(not(debug_assertions))]
+            {
+                #[doc(hidden)] // vscode please stop showing these in symbol search
+                static ___TEMPLATE: dioxus_core::Template = dioxus_core::Template {
+                    name: ___TEMPLATE_NAME,
+                    roots: &[ #( #roots ),* ],
+                    node_paths: &[ #( #node_paths ),* ],
+                    attr_paths: &[ #( #attr_paths ),* ],
+                };
+
+                // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
+                #[allow(clippy::let_and_return)]
+                let __vnodes = dioxus_core::VNode::new(
+                    #key_tokens,
+                    ___TEMPLATE,
+                    Box::new([ #( #dynamic_nodes ),* ]),
+                    Box::new([ #( #dyn_attr_printer ),* ]),
+                );
+                __vnodes
+            }
+            #[cfg(debug_assertions)]
+            {
+                let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
+                    vec![ #( #dynamic_text.to_string() ),* ],
+                );
+                let mut __dynamic_value_pool = dioxus_core::internal::DynamicValuePool::new(
+                    vec![ #( #dynamic_nodes ),* ],
+                    vec![ #( #dyn_attr_printer ),* ],
+                    __dynamic_literal_pool
+                );
+                // The key is important here - we're creating a new GlobalSignal each call to this
+                // But the key is what's keeping it stable
+                let __template = GlobalSignal::with_key(
+                    || #hot_reload_mapping,
+                    ___TEMPLATE_NAME
+                );
+
+                let __template_read = __template.read();
+                __dynamic_value_pool.render_with(&*__template_read)
+            }
+        };
         tokens.append_all(quote! {
             dioxus_core::Element::Ok({
-                #[doc(hidden)] // vscode please stop showing these in symbol search
-                const ___TEMPLATE_NAME: &str = {
-                    const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
-                    const NORMAL: &str = dioxus_core::const_format::str_replace!(PATH, '\\', "/");
-                    dioxus_core::const_format::concatcp!(NORMAL, ':', line!(), ':', column!(), ':', #index)
-                };
-                #[cfg(not(debug_assertions))]
-                {
-                    #[doc(hidden)] // vscode please stop showing these in symbol search
-                    static ___TEMPLATE: dioxus_core::Template = dioxus_core::Template {
-                        name: ___TEMPLATE_NAME,
-                        roots: &[ #( #roots ),* ],
-                        node_paths: &[ #( #node_paths ),* ],
-                        attr_paths: &[ #( #attr_paths ),* ],
-                    };
+                #diagnostics
 
-                    #diagnostics
-
-                    {
-                        // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
-                        #[allow(clippy::let_and_return)]
-                        let __vnodes = dioxus_core::VNode::new(
-                            #key_tokens,
-                            ___TEMPLATE,
-                            Box::new([ #( #dynamic_nodes ),* ]),
-                            Box::new([ #( #dyn_attr_printer ),* ]),
-                        );
-                        __vnodes
-                    }
-                }
-                #[cfg(debug_assertions)]
-                {
-                    #diagnostics
-
-                    let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
-                        vec![ #( #dynamic_text.to_string() ),* ],
-                    );
-                    let mut __dynamic_value_pool = dioxus_core::internal::DynamicValuePool::new(
-                        vec![ #( #non_text_dynamic_nodes ),* ],
-                        vec![ #( #non_literal_dynamic_attributes ),* ],
-                        __dynamic_literal_pool
-                    );
-                    // The key is important here - we're creating a new GlobalSignal each call to this
-                    // But the key is what's keeping it stable
-                    let __template = GlobalSignal::with_key(
-                        || todo!(),
-                        ___TEMPLATE_NAME
-                    );
-
-                    let __template_read = __template.read();
-                    __dynamic_value_pool.render_with(&*__template_read)
-                }
+                #vnode
             })
         });
     }
@@ -266,10 +237,13 @@ impl TemplateBody {
 
         if let Some(attr) = key {
             let diagnostic = match &attr {
-                AttributeValue::AttrLiteral(ifmt) if ifmt.is_static() => {
-                    ifmt.span().error("Key must not be a static string. Make sure to use a formatted string like `key: \"{value}\"")
+                AttributeValue::AttrLiteral(ifmt) => {
+                    if ifmt.is_static() {
+                        ifmt.span().error("Key must not be a static string. Make sure to use a formatted string like `key: \"{value}\"")
+                    } else {
+                        return;
+                    }
                 }
-                AttributeValue::AttrLiteral(_) => return,
                 _ => attr
                     .span()
                     .error("Key must be in the form of a formatted string like `key: \"{value}\""),
@@ -302,5 +276,63 @@ impl TemplateBody {
 
     pub fn dynamic_nodes(&self) -> impl DoubleEndedIterator<Item = &BodyNode> {
         self.node_paths.iter().map(|path| self.get_dyn_node(path))
+    }
+
+    fn quote_roots(&self) -> impl Iterator<Item = TokenStream2> + '_ {
+        self.roots.iter().map(|node| match node {
+            BodyNode::Element(el) => quote! { #el },
+            BodyNode::Text(text) if text.is_static() => {
+                let text = text.input.to_static().unwrap();
+                quote! { dioxus_core::TemplateNode::Text { text: #text } }
+            }
+            _ => {
+                let id = node.get_dyn_idx();
+                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
+            }
+        })
+    }
+
+    fn hot_reload_mapping(&self) -> TokenStream2 {
+        let key = if let Some(key) = self.implicit_key() {
+            quote! { Some(#key) }
+        } else {
+            quote! { None }
+        };
+        let roots = self.quote_roots();
+        let dynamic_nodes = self.dynamic_nodes().map(|node| {
+            let id = node.get_dyn_idx();
+            quote! { dioxus_core::internal::HotReloadDynamicNode::Dynamic(#id) }
+        });
+        let dyn_attr_printer = self.dynamic_attributes().map(|attr| {
+            let id = attr.get_dyn_idx();
+            quote! { dioxus_core::internal::HotReloadAttribute::Dynamic(#id) }
+        });
+        let component_values = self
+            .dynamic_nodes()
+            .filter_map(|node| {
+                if let BodyNode::Component(component) = node {
+                    Some(component)
+                } else {
+                    None
+                }
+            })
+            .flat_map(|component| {
+                component.fields.iter().filter_map(|field| {
+                    if let AttributeValue::AttrLiteral(literal) = &field.value {
+                        Some(literal)
+                    } else {
+                        None
+                    }
+                })
+            });
+        quote! {
+            dioxus_core::internal::HotReloadedTemplate::new(
+                #key,
+                vec![ #( #dynamic_nodes ),* ],
+                vec![ #( #dyn_attr_printer ),* ],
+                vec![ #( #component_values ),* ],
+                &[ #( #roots ),* ],
+            )
+        }
     }
 }

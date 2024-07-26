@@ -125,6 +125,11 @@ impl Attribute {
         self.dyn_idx.set(idx);
     }
 
+    /// Get the dynamic index of this attribute
+    pub fn get_dyn_idx(&self) -> usize {
+        self.dyn_idx.get()
+    }
+
     pub fn span(&self) -> proc_macro2::Span {
         self.name.span()
     }

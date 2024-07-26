@@ -79,7 +79,12 @@ impl Parse for HotLiteral {
 impl ToTokens for HotLiteral {
     fn to_tokens(&self, out: &mut proc_macro2::TokenStream) {
         match &self {
-            HotLiteral::Fmted(f) => f.formatted_input.to_tokens(out),
+            HotLiteral::Fmted(f) => {
+                let formatted_input = &f.formatted_input;
+                out.extend(quote! {
+                    #formatted_input.to_string()
+                });
+            }
             HotLiteral::Float(f) => f.to_tokens(out),
             HotLiteral::Int(f) => f.to_tokens(out),
             HotLiteral::Bool(f) => f.to_tokens(out),
@@ -220,10 +225,10 @@ mod tests {
         assert!(syn::parse2::<HotLiteral>(quote! { 'a' }).is_err());
 
         let lit = syn::parse2::<HotLiteral>(quote! { "hello" }).unwrap();
-        assert!(matches!(lit.value, HotLiteral::Fmted(_)));
+        assert!(matches!(lit, HotLiteral::Fmted(_)));
 
         let lit = syn::parse2::<HotLiteral>(quote! { "hello {world}" }).unwrap();
-        assert!(matches!(lit.value, HotLiteral::Fmted(_)));
+        assert!(matches!(lit, HotLiteral::Fmted(_)));
     }
 
     #[test]
@@ -243,7 +248,7 @@ mod tests {
     #[test]
     fn static_str_becomes_str() {
         let lit = syn::parse2::<HotLiteral>(quote! { "hello" }).unwrap();
-        let HotLiteral::Fmted(segments) = &lit.value else {
+        let HotLiteral::Fmted(segments) = &lit else {
             panic!("expected a formatted string");
         };
         assert!(segments.is_static());
@@ -254,7 +259,7 @@ mod tests {
     #[test]
     fn formatted_prints_as_formatted() {
         let lit = syn::parse2::<HotLiteral>(quote! { "hello {world}" }).unwrap();
-        let HotLiteral::Fmted(segments) = &lit.value else {
+        let HotLiteral::Fmted(segments) = &lit else {
             panic!("expected a formatted string");
         };
         assert!(!segments.is_static());

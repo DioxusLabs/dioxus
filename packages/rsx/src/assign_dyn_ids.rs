@@ -8,6 +8,7 @@ struct DynIdVisitor<'a> {
     body: &'a mut TemplateBody,
     current_path: Vec<u8>,
     dynamic_text_index: usize,
+    component_literal_index: usize,
 }
 
 impl<'a> DynIdVisitor<'a> {
@@ -16,6 +17,7 @@ impl<'a> DynIdVisitor<'a> {
             body,
             current_path: Vec::new(),
             dynamic_text_index: 0,
+            component_literal_index: 0,
         }
     }
 
@@ -52,10 +54,21 @@ impl<'a> DynIdVisitor<'a> {
             }
 
             // Raw exprs are always dynamic
-            BodyNode::RawExpr(_)
-            | BodyNode::ForLoop(_)
-            | BodyNode::Component(_)
-            | BodyNode::IfChain(_) => self.assign_path_to_node(node),
+            BodyNode::RawExpr(_) | BodyNode::ForLoop(_) | BodyNode::IfChain(_) => {
+                self.assign_path_to_node(node)
+            }
+            BodyNode::Component(component) => {
+                self.assign_path_to_node(node);
+                let mut index = 0;
+                for property in &component.fields {
+                    if let AttributeValue::AttrLiteral(_) = &property.value {
+                        component.component_literal_dyn_idx[index]
+                            .set(self.component_literal_index);
+                        self.component_literal_index += 1;
+                        index += 1;
+                    }
+                }
+            }
         };
     }
 

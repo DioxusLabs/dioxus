@@ -371,14 +371,14 @@ impl HotReloadedTemplate {
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
-enum HotReloadDynamicNode {
+pub enum HotReloadDynamicNode {
     Dynamic(usize),
     Formatted(FmtedSegments),
 }
 
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-enum HotReloadAttribute {
+pub enum HotReloadAttribute {
     Dynamic(usize),
     Literal {
         /// The name of this attribute.

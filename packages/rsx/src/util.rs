@@ -11,7 +11,7 @@ use syn::{
     Ident,
 };
 
-/// interns a object into a static object, resusing the value if it already exists
+/// interns a object into a static object, reusing the value if it already exists
 #[cfg(feature = "hot_reload")]
 pub(crate) fn intern<T: Eq + Hash + Send + Sync + ?Sized + 'static>(
     s: impl Into<Intern<T>>,
