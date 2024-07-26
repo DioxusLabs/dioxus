@@ -162,9 +162,14 @@ pub trait WebEventExt<E> {
 
     /// Downcast this event as a `web-sys` event.
     #[inline(always)]
-    fn as_web_event(&self) -> &E {
-        self.try_as_web_event()
-            .expect("Error downcasting to `web-sys`, event should be a {}.")
+    fn as_web_event(&self) -> &E
+    where
+        E: 'static,
+    {
+        self.try_as_web_event().expect(&format!(
+            "Error downcasting to `web-sys`, event should be a {}.",
+            std::any::type_name::<E>()
+        ))
     }
 }
 
