@@ -270,8 +270,7 @@ pub fn routable(input: TokenStream) -> TokenStream {
 
 struct RouteEnum {
     name: Ident,
-    redirects: Vec<Redirect>,
-    routes: Vec<Route>,
+    endpoints: Vec<RouteEndpoint>,
     nests: Vec<Nest>,
     layouts: Vec<Layout>,
     site_map: Vec<SiteMapSegment>,
@@ -284,9 +283,7 @@ impl RouteEnum {
         let mut site_map = Vec::new();
         let mut site_map_stack: Vec<Vec<SiteMapSegment>> = Vec::new();
 
-        let mut routes = Vec::new();
-
-        let mut redirects = Vec::new();
+        let mut endpoints = Vec::new();
 
         let mut layouts: Vec<Layout> = Vec::new();
         let mut layout_stack = Vec::new();
@@ -398,10 +395,10 @@ impl RouteEnum {
                     layout_stack.pop();
                 } else if attr.path().is_ident("redirect") {
                     let parser = |input: ParseStream| {
-                        Redirect::parse(input, nest_stack.clone(), redirects.len())
+                        Redirect::parse(input, nest_stack.clone(), endpoints.len())
                     };
                     let redirect = attr.parse_args_with(parser)?;
-                    redirects.push(redirect);
+                    endpoints.push(RouteEndpoint::Redirect(redirect));
                 }
             }
 
@@ -447,7 +444,7 @@ impl RouteEnum {
                 children.push(segment);
             }
 
-            routes.push(route);
+            endpoints.push(RouteEndpoint::Route(route));
         }
 
         // pop any remaining site map segments
@@ -470,8 +467,7 @@ impl RouteEnum {
 
         let myself = Self {
             name: name.clone(),
-            routes,
-            redirects,
+            endpoints,
             nests,
             layouts,
             site_map,
@@ -502,27 +498,46 @@ impl RouteEnum {
                 from_route = true
             }
         }
-        for route in &self.routes {
-            match &route.ty {
-                RouteType::Child(child) => {
-                    if let Some(child) = child.ident.as_ref() {
-                        if child == "child" {
-                            from_route = true
+        for route in &self.endpoints {
+            match route {
+                RouteEndpoint::Route(route) => match &route.ty {
+                    RouteType::Child(child) => {
+                        if let Some(child) = child.ident.as_ref() {
+                            if child == "child" {
+                                from_route = true
+                            }
                         }
                     }
-                }
-                RouteType::Leaf { .. } => {
-                    for segment in &route.segments {
+                    RouteType::Leaf { .. } => {
+                        for segment in &route.segments {
+                            if segment.name().as_ref() == Some(field) {
+                                from_route = true
+                            }
+                        }
+                        if let Some(query) = &route.query {
+                            if query.contains_ident(field) {
+                                from_route = true
+                            }
+                        }
+                        if let Some(hash) = &route.hash {
+                            if hash.contains_ident(field) {
+                                from_route = true
+                            }
+                        }
+                    }
+                },
+                RouteEndpoint::Redirect(redirect) => {
+                    for segment in &redirect.segments {
                         if segment.name().as_ref() == Some(field) {
                             from_route = true
                         }
                     }
-                    if let Some(query) = &route.query {
+                    if let Some(query) = &redirect.query {
                         if query.contains_ident(field) {
                             from_route = true
                         }
                     }
-                    if let Some(hash) = &route.hash {
+                    if let Some(hash) = &redirect.hash {
                         if hash.contains_ident(field) {
                             from_route = true
                         }
@@ -537,8 +552,10 @@ impl RouteEnum {
     fn impl_display(&self) -> TokenStream2 {
         let mut display_match = Vec::new();
 
-        for route in &self.routes {
-            display_match.push(route.display_match(&self.nests));
+        for route in &self.endpoints {
+            if let RouteEndpoint::Route(route) = route {
+                display_match.push(route.display_match(&self.nests));
+            }
         }
 
         let name = &self.name;
@@ -557,7 +574,7 @@ impl RouteEnum {
     }
 
     fn parse_impl(&self) -> TokenStream2 {
-        let tree = RouteTree::new(&self.routes, &self.nests, &self.redirects);
+        let tree = RouteTree::new(&self.endpoints, &self.nests);
         let name = &self.name;
 
         let error_name = format_ident!("{}MatchError", self.name);
@@ -618,15 +635,28 @@ impl RouteEnum {
         let mut error_variants = Vec::new();
         let mut display_match = Vec::new();
 
-        for route in &self.routes {
-            let route_name = &route.route_name;
+        for endpoint in &self.endpoints {
+            match endpoint {
+                RouteEndpoint::Route(route) => {
+                    let route_name = &route.route_name;
 
-            let error_name = route.error_ident();
-            let route_str = &route.route;
+                    let error_name = route.error_ident();
+                    let route_str = &route.route;
 
-            error_variants.push(quote! { #route_name(#error_name) });
-            display_match.push(quote! { Self::#route_name(err) => write!(f, "Route '{}' ('{}') did not match:\n{}", stringify!(#route_name), #route_str, err)? });
-            type_defs.push(route.error_type());
+                    error_variants.push(quote! { #route_name(#error_name) });
+                    display_match.push(quote! { Self::#route_name(err) => write!(f, "Route '{}' ('{}') did not match:\n{}", stringify!(#route_name), #route_str, err)? });
+                    type_defs.push(route.error_type());
+                }
+                RouteEndpoint::Redirect(redirect) => {
+                    let error_variant = redirect.error_variant();
+                    let error_name = redirect.error_ident();
+                    let route_str = &redirect.route;
+
+                    error_variants.push(quote! { #error_variant(#error_name) });
+                    display_match.push(quote! { Self::#error_variant(err) => write!(f, "Redirect '{}' ('{}') did not match:\n{}", stringify!(#error_name), #route_str, err)? });
+                    type_defs.push(redirect.error_type());
+                }
+            }
         }
 
         for nest in &self.nests {
@@ -637,16 +667,6 @@ impl RouteEnum {
             error_variants.push(quote! { #error_variant(#error_name) });
             display_match.push(quote! { Self::#error_variant(err) => write!(f, "Nest '{}' ('{}') did not match:\n{}", stringify!(#error_name), #route_str, err)? });
             type_defs.push(nest.error_type());
-        }
-
-        for redirect in &self.redirects {
-            let error_variant = redirect.error_variant();
-            let error_name = redirect.error_ident();
-            let route_str = &redirect.route;
-
-            error_variants.push(quote! { #error_variant(#error_name) });
-            display_match.push(quote! { Self::#error_variant(err) => write!(f, "Redirect '{}' ('{}') did not match:\n{}", stringify!(#error_name), #route_str, err)? });
-            type_defs.push(redirect.error_type());
         }
 
         quote! {
@@ -682,8 +702,10 @@ impl RouteEnum {
         let mut matches = Vec::new();
 
         // Collect all routes matches
-        for route in &self.routes {
-            matches.push(route.routable_match(&self.layouts, &self.nests));
+        for route in &self.endpoints {
+            if let RouteEndpoint::Route(route) = route {
+                matches.push(route.routable_match(&self.layouts, &self.nests));
+            }
         }
 
         quote! {
@@ -702,6 +724,11 @@ impl RouteEnum {
             }
         }
     }
+}
+
+enum RouteEndpoint {
+    Route(Route),
+    Redirect(Redirect),
 }
 
 struct SiteMapSegment {
