@@ -59,7 +59,7 @@ signal-hook = "0.3.17"
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
 global-hotkey = "0.5.0"
-rfd = "0.14"
+rfd = { version = "0.14", default-features = false, features = ["xdg-portal"] }
 muda = "0.11.3"
 
 
