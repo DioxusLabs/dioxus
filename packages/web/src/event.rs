@@ -161,8 +161,10 @@ pub trait WebEventExt<E> {
     fn try_as_web_event(&self) -> Option<&E>;
 
     /// Downcast this event as a `web-sys` event.
+    #[inline(always)]
     fn as_web_event(&self) -> &E {
-        self.try_as_web_event().expect("Event should be a {}")
+        self.try_as_web_event()
+            .expect("Error downcasting to `web-sys`, event should be a {}.")
     }
 }
 
