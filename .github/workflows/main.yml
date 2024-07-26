@@ -53,16 +53,7 @@ jobs:
         with:
           cache-all-crates: "true"
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      # https://github.com/foresterre/cargo-msrv/blob/4345edfe3f4fc91cc8ae6c7d6804c0748fae92ae/.github/workflows/msrv.yml
-      - name: install_cargo_msrv
-        run: cargo install cargo-msrv --all-features
-      - name: version_of_cargo_msrv
-        run: cargo msrv --version
-      - name: run_cargo_msrv
-        run: cargo msrv --output-format json verify -- cargo check
-      - name: run_cargo_msrv_on_verify_failure
-        if: ${{ failure() }}
-        run: cargo msrv --output-format json -- cargo check
+      - run: cargo check --all --examples --tests --all-features --all-targets
 
   check-msrv:
     if: github.event.pull_request.draft == false
@@ -75,7 +66,16 @@ jobs:
         with:
           cache-all-crates: "true"
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo check --all --examples --tests --all-features --all-targets --bins --tests --workspace --exclude dioxus-desktop --exclude dioxus-mobile
+      # https://github.com/foresterre/cargo-msrv/blob/4345edfe3f4fc91cc8ae6c7d6804c0748fae92ae/.github/workflows/msrv.yml
+      - name: install_cargo_msrv
+        run: cargo install cargo-msrv --all-features
+      - name: version_of_cargo_msrv
+        run: cargo msrv --version
+      - name: run_cargo_msrv
+        run: cargo msrv --output-format json verify -- cargo check
+      - name: run_cargo_msrv_on_verify_failure
+        if: ${{ failure() }}
+        run: cargo msrv --output-format json -- cargo check
 
   test:
     if: github.event.pull_request.draft == false
