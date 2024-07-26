@@ -83,6 +83,7 @@ impl KeyboardData {
     }
 
     /// Downcast this KeyboardData to a concrete type.
+    #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         self.inner.as_any().downcast_ref::<T>()
     }

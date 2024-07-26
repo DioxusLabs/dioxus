@@ -169,108 +169,126 @@ pub trait WebEventExt<E> {
 }
 
 impl WebEventExt<web_sys::AnimationEvent> for dioxus_html::AnimationData {
+    #[inline(always)]
     fn try_as_web_event(&self) -> Option<&web_sys::AnimationEvent> {
         self.downcast::<web_sys::AnimationEvent>()
     }
 }
 
 impl WebEventExt<web_sys::Event> for dioxus_html::ClipboardData {
+    #[inline(always)]
     fn try_as_web_event(&self) -> Option<&web_sys::Event> {
         self.downcast::<web_sys::Event>()
     }
 }
 
 impl WebEventExt<web_sys::CompositionEvent> for dioxus_html::CompositionData {
+    #[inline(always)]
     fn try_as_web_event(&self) -> Option<&web_sys::CompositionEvent> {
         self.downcast::<web_sys::CompositionEvent>()
     }
 }
 
 impl WebEventExt<web_sys::MouseEvent> for dioxus_html::DragData {
+    #[inline(always)]
     fn try_as_web_event(&self) -> Option<&web_sys::MouseEvent> {
         self.downcast::<WebDragData>().map(|data| &data.raw)
     }
 }
 
 impl WebEventExt<web_sys::FocusEvent> for dioxus_html::FocusData {
+    #[inline(always)]
     fn try_as_web_event(&self) -> Option<&web_sys::FocusEvent> {
         self.downcast::<web_sys::FocusEvent>()
     }
 }
 
 impl WebEventExt<web_sys::Event> for dioxus_html::FormData {
+    #[inline(always)]
     fn try_as_web_event(&self) -> Option<&web_sys::Event> {
         self.downcast::<web_sys::Event>()
     }
 }
 
 impl WebEventExt<WebImageEvent> for dioxus_html::ImageData {
+    #[inline(always)]
     fn try_as_web_event(&self) -> Option<&WebImageEvent> {
         self.downcast::<WebImageEvent>()
     }
 }
 
 impl WebEventExt<web_sys::KeyboardEvent> for dioxus_html::KeyboardData {
+    #[inline(always)]
     fn try_as_web_event(&self) -> Option<&web_sys::KeyboardEvent> {
         self.downcast::<web_sys::KeyboardEvent>()
     }
 }
 
 impl WebEventExt<web_sys::Event> for dioxus_html::MediaData {
+    #[inline(always)]
     fn try_as_web_event(&self) -> Option<&web_sys::Event> {
         self.downcast::<web_sys::Event>()
     }
 }
 
 impl WebEventExt<web_sys::Element> for MountedData {
+    #[inline(always)]
     fn try_as_web_event(&self) -> Option<&web_sys::Element> {
         self.downcast::<web_sys::Element>()
     }
 }
 
 impl WebEventExt<web_sys::MouseEvent> for dioxus_html::MouseData {
+    #[inline(always)]
     fn try_as_web_event(&self) -> Option<&web_sys::MouseEvent> {
         self.downcast::<web_sys::MouseEvent>()
     }
 }
 
 impl WebEventExt<web_sys::PointerEvent> for dioxus_html::PointerData {
+    #[inline(always)]
     fn try_as_web_event(&self) -> Option<&web_sys::PointerEvent> {
         self.downcast::<web_sys::PointerEvent>()
     }
 }
 
 impl WebEventExt<web_sys::Event> for ScrollData {
+    #[inline(always)]
     fn try_as_web_event(&self) -> Option<&web_sys::Event> {
         self.downcast::<web_sys::Event>()
     }
 }
 
 impl WebEventExt<web_sys::Event> for dioxus_html::SelectionData {
+    #[inline(always)]
     fn try_as_web_event(&self) -> Option<&web_sys::Event> {
         self.downcast::<web_sys::Event>()
     }
 }
 
 impl WebEventExt<web_sys::Event> for dioxus_html::ToggleData {
+    #[inline(always)]
     fn try_as_web_event(&self) -> Option<&web_sys::Event> {
         self.downcast::<web_sys::Event>()
     }
 }
 
 impl WebEventExt<web_sys::TouchEvent> for dioxus_html::TouchData {
+    #[inline(always)]
     fn try_as_web_event(&self) -> Option<&web_sys::TouchEvent> {
         self.downcast::<web_sys::TouchEvent>()
     }
 }
 
 impl WebEventExt<web_sys::TransitionEvent> for dioxus_html::TransitionData {
+    #[inline(always)]
     fn try_as_web_event(&self) -> Option<&web_sys::TransitionEvent> {
         self.downcast::<web_sys::TransitionEvent>()
     }
 }
 
 impl WebEventExt<web_sys::WheelEvent> for dioxus_html::WheelData {
+    #[inline(always)]
     fn try_as_web_event(&self) -> Option<&web_sys::WheelEvent> {
         self.downcast::<web_sys::WheelEvent>()
     }
