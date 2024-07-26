@@ -10382,7 +10382,7 @@ source = "git+https://github.com/DioxusLabs/warnings#9889b96cccb6ac91a8af924cfee
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.71",
+ "syn 2.0.72",
 ]
 
 [[package]]

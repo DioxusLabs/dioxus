@@ -4,6 +4,9 @@ use std::fmt::Display;
 
 use crate::GenerationalLocation;
 
+/// A result that can be returned from a borrow operation.
+pub type BorrowResult<T> = std::result::Result<T, BorrowError>;
+
 #[derive(Debug, Clone, PartialEq)]
 /// An error that can occur when trying to borrow a value.
 pub enum BorrowError {

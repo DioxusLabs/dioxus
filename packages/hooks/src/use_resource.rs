@@ -441,8 +441,10 @@ impl<T> Readable for Resource<T> {
     }
 
     #[track_caller]
-    fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
-        self.value.peek_unchecked()
+    fn try_peek_unchecked(
+        &self,
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+        self.value.try_peek_unchecked()
     }
 }
 
