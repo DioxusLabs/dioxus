@@ -36,6 +36,8 @@ pub enum Setting {
     AlwaysHotReload,
     /// Set the value of the always-open-browser setting.
     AlwaysOpenBrowser,
+    /// Set the value of the always-on-top desktop setting.
+    AlwaysOnTop,
 }
 
 // NOTE: Unsure of an alternative to get the desired behavior with clap, if it exists.
@@ -94,6 +96,7 @@ impl Config {
                 CliSettings::modify_settings(|settings| match setting {
                     Setting::AlwaysHotReload => settings.always_hot_reload = Some(value.into()),
                     Setting::AlwaysOpenBrowser => settings.always_open_browser = Some(value.into()),
+                    Setting::AlwaysOnTop => settings.always_on_top = Some(value.into()),
                 })?;
             }
         }
