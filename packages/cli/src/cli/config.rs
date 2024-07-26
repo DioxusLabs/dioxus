@@ -30,7 +30,7 @@ pub enum Config {
     SetGlobal { setting: Setting, value: Value },
 }
 
-#[derive(Debug, Clone, Deserialize, clap::ValueEnum)]
+#[derive(Debug, Clone, Copy, Deserialize, clap::ValueEnum)]
 pub enum Setting {
     /// Set the value of the always-hot-reload setting.
     AlwaysHotReload,
@@ -40,11 +40,30 @@ pub enum Setting {
     AlwaysOnTop,
 }
 
+impl Display for Setting {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::AlwaysHotReload => write!(f, "always_hot_reload"),
+            Self::AlwaysOpenBrowser => write!(f, "always_open_browser"),
+            Self::AlwaysOnTop => write!(f, "always_on_top"),
+        }
+    }
+}
+
 // NOTE: Unsure of an alternative to get the desired behavior with clap, if it exists.
-#[derive(Debug, Clone, Deserialize, clap::ValueEnum)]
+#[derive(Debug, Clone, Copy, Deserialize, clap::ValueEnum)]
 pub enum Value {
     True,
     False,
+}
+
+impl Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::True => write!(f, "true"),
+            Self::False => write!(f, "false"),
+        }
+    }
 }
 
 impl From<Value> for bool {
@@ -92,12 +111,14 @@ impl Config {
                 file.write_all(content.as_bytes())?;
                 tracing::info!("🚩 Create custom html file done.");
             }
+            // Handle configuration of global CLI settings.
             Config::SetGlobal { setting, value } => {
                 CliSettings::modify_settings(|settings| match setting {
                     Setting::AlwaysHotReload => settings.always_hot_reload = Some(value.into()),
                     Setting::AlwaysOpenBrowser => settings.always_open_browser = Some(value.into()),
                     Setting::AlwaysOnTop => settings.always_on_top = Some(value.into()),
                 })?;
+                tracing::info!("🚩 CLI setting `{setting}` has been set to `{value}`")
             }
         }
         Ok(())
