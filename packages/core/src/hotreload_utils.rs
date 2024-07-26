@@ -103,6 +103,7 @@ impl DynamicLiteralPool {
         &mut self,
         id: usize,
         hot_reload: &HotReloadedTemplate,
+        _coherse_type: T,
     ) -> T {
         fn assert_type<T: 'static, T2: 'static>(t: T) -> T2 {
             *(Box::new(t) as Box<dyn Any>).downcast::<T2>().unwrap()
@@ -111,6 +112,14 @@ impl DynamicLiteralPool {
         if type_id == TypeId::of::<String>() {
             if let Some(HotReloadLiteral::Fmted(segments)) = hot_reload.component_values.get(id) {
                 assert_type(self.render_formatted(segments).to_string())
+            } else {
+                panic!("Expected a string component property");
+            }
+        } else if type_id == TypeId::of::<&'static str>() {
+            if let Some(HotReloadLiteral::Fmted(segments)) = hot_reload.component_values.get(id) {
+                assert_type(Box::leak(
+                    self.render_formatted(segments).to_string().into_boxed_str(),
+                ))
             } else {
                 panic!("Expected a string component property");
             }

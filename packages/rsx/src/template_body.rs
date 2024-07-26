@@ -169,16 +169,17 @@ impl ToTokens for TemplateBody {
                     ___TEMPLATE_NAME
                 );
 
-                let __template_read = __template.read();
-                let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
-                    vec![ #( #dynamic_text.to_string() ),* ],
-                );
-                let mut __dynamic_value_pool = dioxus_core::internal::DynamicValuePool::new(
-                    vec![ #( #dynamic_nodes ),* ],
-                    vec![ #( #dyn_attr_printer ),* ],
-                    __dynamic_literal_pool
-                );
-                __dynamic_value_pool.render_with(&*__template_read)
+                __template.maybe_with_rt(|__template_read| {
+                    let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
+                        vec![ #( #dynamic_text.to_string() ),* ],
+                    );
+                    let mut __dynamic_value_pool = dioxus_core::internal::DynamicValuePool::new(
+                        vec![ #( #dynamic_nodes ),* ],
+                        vec![ #( #dyn_attr_printer ),* ],
+                        __dynamic_literal_pool
+                    );
+                    __dynamic_value_pool.render_with(__template_read)
+                })
             }
         };
         tokens.append_all(quote! {

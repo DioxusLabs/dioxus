@@ -80,10 +80,7 @@ impl ToTokens for HotLiteral {
     fn to_tokens(&self, out: &mut proc_macro2::TokenStream) {
         match &self {
             HotLiteral::Fmted(f) => {
-                let formatted_input = &f.formatted_input;
-                out.extend(quote! {
-                    #formatted_input.to_string()
-                });
+                f.formatted_input.to_tokens(out);
             }
             HotLiteral::Float(f) => f.to_tokens(out),
             HotLiteral::Int(f) => f.to_tokens(out),

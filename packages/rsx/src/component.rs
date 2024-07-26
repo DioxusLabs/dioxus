@@ -277,10 +277,21 @@ impl Component {
                 let release_value = value.to_token_stream();
 
                 // In debug mode, we try to grab the value from the dynamic literal pool if possible
-                let value = if let AttributeValue::AttrLiteral(_) = &value {
+                let value = if let AttributeValue::AttrLiteral(literal) = &value {
                     let idx = self.component_literal_dyn_idx[dynamic_literal_index].get();
                     dynamic_literal_index += 1;
-                    let debug_value = quote! { __dynamic_literal_pool.component_property(#idx, &*__template_read) };
+                    // We need to convert the literal to a static type. If it is &'static str, we can just use the segment
+                    // Otherwise, we need to convert it to a string
+                    let literal = match literal {
+                        HotLiteral::Fmted(segment) => if let Some(segment) = segment.to_static() {
+                            quote! { #segment }
+                        } else {
+                            let fmted = &segment.formatted_input;
+                            quote! { #fmted.to_string() }
+                        },
+                        _ => quote! { #literal },
+                    };
+                    let debug_value = quote! { __dynamic_literal_pool.component_property(#idx, &*__template_read, #literal) };
                     quote! {
                         {
                             #[cfg(debug_assertions)]

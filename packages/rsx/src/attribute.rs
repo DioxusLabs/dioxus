@@ -544,7 +544,11 @@ impl IfAttributeValue {
                 return non_string_diagnostic(current_if_value.span());
             };
 
-            let HotLiteral::Fmted(new) = &lit else {
+            let HotLiteral::Fmted(HotReloadFormattedSegment {
+                formatted_input: new,
+                ..
+            }) = &lit
+            else {
                 return non_string_diagnostic(current_if_value.span());
             };
 
@@ -562,7 +566,8 @@ impl IfAttributeValue {
                 // If the else value is a literal, then we need to append it to the expression and break
                 Some(AttributeValue::AttrLiteral(lit)) => {
                     if let HotLiteral::Fmted(new) = &lit {
-                        expression.extend(quote! { { #new.to_string() } });
+                        let fmted = &new.formatted_input;
+                        expression.extend(quote! { { #fmted.to_string() } });
                         break;
                     } else {
                         return non_string_diagnostic(current_if_value.span());

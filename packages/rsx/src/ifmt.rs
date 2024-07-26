@@ -272,6 +272,11 @@ impl IfmtInput {
 
 impl ToTokens for IfmtInput {
     fn to_tokens(&self, tokens: &mut TokenStream) {
+        // If the input is a string literal, we can just return it
+        if let Some(lit) = self.try_to_string() {
+            return lit.to_tokens(tokens);
+        }
+
         // Try to turn it into a single _.to_string() call
         if !cfg!(debug_assertions) {
             if let Some(single_dynamic) = self.try_to_string() {

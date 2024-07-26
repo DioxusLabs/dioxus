@@ -693,8 +693,10 @@ pub struct VText {
 
 impl VText {
     /// Create a new VText
-    pub fn new(value: String) -> Self {
-        Self { value }
+    pub fn new(value: impl ToString) -> Self {
+        Self {
+            value: value.to_string(),
+        }
     }
 }
 
