@@ -1,6 +1,6 @@
 use proc_macro2::Span;
+use quote::quote;
 use quote::ToTokens;
-use quote::{quote, TokenStreamExt};
 use std::fmt::Display;
 use std::ops::Deref;
 use syn::{
@@ -44,6 +44,17 @@ pub enum HotLiteral {
     Bool(LitBool),
 }
 
+impl HotLiteral {
+    pub fn quote_as_hot_reload_literal(&self) -> TokenStream2 {
+        match &self {
+            HotLiteral::Fmted(f) => quote! { dioxus_core::internal::HotReloadLiteral::Fmted(#f) },
+            HotLiteral::Float(f) => quote! { dioxus_core::internal::HotReloadLiteral::Float(#f) },
+            HotLiteral::Int(f) => quote! { dioxus_core::internal::HotReloadLiteral::Int(#f) },
+            HotLiteral::Bool(f) => quote! { dioxus_core::internal::HotReloadLiteral::Bool(#f) },
+        }
+    }
+}
+
 impl Parse for HotLiteral {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let raw = input.parse::<Lit>()?;
@@ -67,106 +78,12 @@ impl Parse for HotLiteral {
 
 impl ToTokens for HotLiteral {
     fn to_tokens(&self, out: &mut proc_macro2::TokenStream) {
-        let val = match &self {
-            HotLiteral::Fmted(fmt) if fmt.is_static() => {
-                let o = fmt.to_static().unwrap().to_token_stream();
-                quote! { #o }
-            }
-
-            HotLiteral::Fmted(fmt) => {
-                let mut idx = 0_usize;
-                let segments = fmt.segments.iter().map(|s| match s {
-                    Segment::Literal(lit) => quote! {
-                        dioxus_core::internal::FmtSegment::Literal { value: #lit }
-                    },
-                    Segment::Formatted(_fmt) => {
-                        // increment idx for the dynamic segment so we maintain the mapping
-                        let _idx = idx;
-                        idx += 1;
-                        quote! {
-                           dioxus_core::internal::FmtSegment::Dynamic { id: #_idx }
-                        }
-                    }
-                });
-
-                // The static segments with idxs for locations
-                quote! {
-                    dioxus_core::internal::FmtedSegments::new( vec![ #(#segments),* ], )
-                }
-            }
-            HotLiteral::Float(a) => quote! { #a },
-            HotLiteral::Int(a) => quote! { #a },
-            HotLiteral::Bool(a) => quote! { #a },
-        };
-
-        let mapped = match &self {
-            HotLiteral::Fmted(f) if f.is_static() => quote! { .clone() as &'static str},
-
-            HotLiteral::Fmted(segments) => {
-                let rendered_segments = segments.segments.iter().filter_map(|s| match s {
-                    Segment::Literal(_lit) => None,
-                    Segment::Formatted(fmt) => {
-                        // just render as a format_args! call
-                        Some(quote! { #fmt.to_string() })
-                    }
-                });
-
-                quote! {
-                    .render_with(vec![ #(#rendered_segments),* ])
-                }
-            }
-            HotLiteral::Float(_) => quote! { .clone() },
-            HotLiteral::Int(_) => quote! { .clone() },
-            HotLiteral::Bool(_) => quote! { .clone() },
-        };
-
-        let as_lit = match &self {
-            HotLiteral::Fmted(f) if f.is_static() => {
-                let r = f.to_static().unwrap();
-                quote! { #r }
-            }
-            HotLiteral::Fmted(f) => f.to_token_stream(),
-            HotLiteral::Float(f) => f.to_token_stream(),
-            HotLiteral::Int(f) => f.to_token_stream(),
-            HotLiteral::Bool(f) => f.to_token_stream(),
-        };
-
-        let map_lit = match &self {
-            HotLiteral::Fmted(f) if f.is_static() => quote! { .clone() },
-            HotLiteral::Fmted(_) => quote! { .to_string() },
-            HotLiteral::Float(_) => quote! { .clone() },
-            HotLiteral::Int(_) => quote! { .clone() },
-            HotLiteral::Bool(_) => quote! { .clone() },
-        };
-
-        let hr_idx = self.hr_idx.get().to_string();
-
-        out.append_all(quote! {
-            {
-                #[cfg(debug_assertions)]
-                {
-                    // in debug we still want these tokens to turn into fmt args such that RA can line
-                    // them up, giving us rename powers
-                    _ = #as_lit;
-
-                    // The key is important here - we're creating a new GlobalSignal each call to this/
-                    // But the key is what's keeping it stable
-                    GlobalSignal::with_key(
-                        || #val, {
-                        {
-                            const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
-                            const NORMAL: &str = dioxus_core::const_format::str_replace!(PATH, '\\', "/");
-                            dioxus_core::const_format::concatcp!(NORMAL, ':', line!(), ':', column!(), ':', #hr_idx)
-                        }
-                    })
-                    .maybe_with_rt(|s| s #mapped)
-                }
-
-                // just render the literal directly
-                #[cfg(not(debug_assertions))]
-                { #as_lit #map_lit }
-            }
-        })
+        match &self {
+            HotLiteral::Fmted(f) => f.formatted_input.to_tokens(out),
+            HotLiteral::Float(f) => f.to_tokens(out),
+            HotLiteral::Int(f) => f.to_tokens(out),
+            HotLiteral::Bool(f) => f.to_tokens(out),
+        }
     }
 }
 

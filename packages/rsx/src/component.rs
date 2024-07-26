@@ -20,7 +20,7 @@ use crate::innerlude::*;
 use proc_macro2::TokenStream as TokenStream2;
 use proc_macro2_diagnostics::SpanDiagnosticExt;
 use quote::{quote, ToTokens, TokenStreamExt};
-use std::collections::HashSet;
+use std::{collections::HashSet, vec};
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
@@ -32,6 +32,7 @@ pub struct Component {
     pub name: syn::Path,
     pub generics: Option<AngleBracketedGenericArguments>,
     pub fields: Vec<Attribute>,
+    pub component_literal_dyn_idx: Vec<DynIdx>,
     pub spreads: Vec<Spread>,
     pub brace: token::Brace,
     pub children: TemplateBody,
@@ -56,12 +57,19 @@ impl Parse for Component {
             diagnostics,
         } = input.parse::<RsxBlock>()?;
 
+        let literal_properties_count = fields
+            .iter()
+            .filter(|attr| matches!(attr.value, AttributeValue::AttrLiteral(_)))
+            .count();
+        let component_literal_dyn_idx = vec![DynIdx::default(); literal_properties_count];
+
         let mut component = Self {
             dyn_idx: DynIdx::default(),
             children: TemplateBody::new(children),
             name,
             generics,
             fields,
+            component_literal_dyn_idx,
             brace,
             spreads,
             diagnostics,
@@ -249,9 +257,10 @@ impl Component {
     }
 
     fn make_field_idents(&self) -> Vec<(TokenStream2, TokenStream2)> {
+        let mut dynamic_literal_index = 0;
         self.fields
             .iter()
-            .filter_map(|attr| {
+            .filter_map(move |attr| {
                 let Attribute { name, value, .. } = attr;
 
                 let attr = match name {
@@ -265,7 +274,33 @@ impl Component {
                     AttributeName::Spread(_) => return None,
                 };
 
-                Some((attr, value.to_token_stream()))
+                let release_value = value.to_token_stream();
+                // In debug mode, we try to grab the value from the dynamic literal pool if possible
+                let debug_value = {
+                    let mut tokens = TokenStream2::new();
+                    if let AttributeValue::AttrLiteral(_) = &value {
+                        let idx = self.component_literal_dyn_idx[dynamic_literal_index].get();
+                        dynamic_literal_index += 1;
+                        tokens
+                            .append_all(quote! { __dynamic_literal_pool.component_property(#idx) });
+                    } else {
+                        tokens.append_all(release_value.clone());
+                    }
+                    tokens
+                };
+
+                let value = quote! {
+                    #[cfg(debug_assertions)]
+                    {
+                        #debug_value
+                    }
+                    #[cfg(not(debug_assertions))]
+                    {
+                        #release_value
+                    }
+                };
+
+                Some((attr, value))
             })
             .collect()
     }
@@ -288,6 +323,7 @@ impl Component {
             fields: vec![],
             spreads: vec![],
             children: TemplateBody::new(vec![]),
+            component_literal_dyn_idx: vec![],
             dyn_idx: DynIdx::default(),
             diagnostics,
         }

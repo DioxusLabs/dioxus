@@ -7,9 +7,9 @@ use dioxus_signals::Writable;
 /// Assets need to be handled by the renderer.
 pub fn apply_changes(dom: &mut VirtualDom, msg: &HotReloadMsg) {
     for templates in &msg.templates {
-        for template in &templates.templates {
-            dom.replace_template(*template);
-        }
+        // for template in &templates.templates {
+        //     dom.replace_template(*template);
+        // }
 
         dom.runtime().on_scope(ScopeId::ROOT, || {
             let ctx = dioxus_signals::get_global_context();

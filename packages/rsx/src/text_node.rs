@@ -38,7 +38,7 @@ impl ToTokens for TextNode {
             // todo:
             // Use the RsxLiteral implementation to spit out a hotreloadable variant of this string
             // This is not super efficient since we're doing a bit of cloning
-            let as_lit = HotLiteral::Fmted(txt.clone().into());
+            let as_lit = HotLiteral::Fmted(txt.clone());
 
             tokens.append_all(quote! {
                 dioxus_core::DynamicNode::Text(dioxus_core::VText::new( #as_lit ))

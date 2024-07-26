@@ -35,7 +35,7 @@ impl<'a> DynIdVisitor<'a> {
                     if !attr.is_static_str_literal() {
                         self.assign_path_to_attribute(attr, idx);
                         if let AttributeValue::AttrLiteral(HotLiteral::Fmted(lit)) = &attr.value {
-                            self.assign_formatted_segment(&lit);
+                            self.assign_formatted_segment(lit);
                         }
                     }
                 }
@@ -63,12 +63,13 @@ impl<'a> DynIdVisitor<'a> {
     fn assign_formatted_segment(&mut self, segments: &HotReloadFormattedSegment) {
         let mut dynamic_node_indexes = segments.dynamic_node_indexes.iter();
         for segment in &segments.segments {
-            if let Segment::Formatted { .. } = segment {
+            if let Segment::Formatted(segment) = segment {
                 dynamic_node_indexes
                     .next()
                     .unwrap()
                     .set(self.dynamic_text_index);
                 self.dynamic_text_index += 1;
+                self.body.dynamic_text_segments.push(segment.clone());
             }
         }
     }

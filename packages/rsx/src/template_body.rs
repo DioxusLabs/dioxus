@@ -79,6 +79,7 @@ pub struct TemplateBody {
     pub template_idx: DynIdx,
     pub node_paths: Vec<NodePath>,
     pub attr_paths: Vec<(AttributePath, usize)>,
+    pub dynamic_text_segments: Vec<FormattedSegment>,
     pub diagnostics: Diagnostics,
 }
 
@@ -134,7 +135,11 @@ impl ToTokens for TemplateBody {
             .map(|path| self.get_dyn_node(path))
             .collect();
 
-        let dyn_attr_printer: Vec<&Attribute> = self
+        let non_text_dynamic_nodes = dynamic_nodes
+            .iter()
+            .filter(|node| !matches!(node, BodyNode::Text(_)));
+
+        let dyn_attributes: Vec<&Attribute> = self
             .attr_paths
             .iter()
             .map(|(path, idx)| self.get_dyn_attr(path, *idx))
@@ -142,9 +147,16 @@ impl ToTokens for TemplateBody {
 
         // We could add a ToTokens for Attribute but since we use that for both components and elements
         // They actually need to be different, so we just localize that here
-        let dyn_attr_printer = dyn_attr_printer
+        let dyn_attr_printer = dyn_attributes
             .iter()
             .map(|attr| attr.rendered_as_dynamic_attr());
+
+        let non_literal_dynamic_attributes = dyn_attributes
+            .iter()
+            .filter(|attr| !matches!(attr.value, AttributeValue::AttrLiteral(_)))
+            .map(|attr| attr.rendered_as_dynamic_attr());
+
+        let dynamic_text = self.dynamic_text_segments.iter();
 
         let index = self.template_idx.get();
 
@@ -152,41 +164,57 @@ impl ToTokens for TemplateBody {
 
         tokens.append_all(quote! {
             dioxus_core::Element::Ok({
-                #[cfg(debug_assertions)]
+                #[doc(hidden)] // vscode please stop showing these in symbol search
+                const ___TEMPLATE_NAME: &str = {
+                    const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
+                    const NORMAL: &str = dioxus_core::const_format::str_replace!(PATH, '\\', "/");
+                    dioxus_core::const_format::concatcp!(NORMAL, ':', line!(), ':', column!(), ':', #index)
+                };
+                #[cfg(not(debug_assertions))]
                 {
                     #[doc(hidden)] // vscode please stop showing these in symbol search
                     static ___TEMPLATE: dioxus_core::Template = dioxus_core::Template {
-                        name: {
-                            const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
-                            const NORMAL: &str = dioxus_core::const_format::str_replace!(PATH, '\\', "/");
-                            dioxus_core::const_format::concatcp!(NORMAL, ':', line!(), ':', column!(), ':', #index)
-                        },
+                        name: ___TEMPLATE_NAME,
                         roots: &[ #( #roots ),* ],
                         node_paths: &[ #( #node_paths ),* ],
                         attr_paths: &[ #( #attr_paths ),* ],
                     };
-    
+
                     #diagnostics
-    
+
                     {
                         // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
                         #[allow(clippy::let_and_return)]
                         let __vnodes = dioxus_core::VNode::new(
                             #key_tokens,
                             ___TEMPLATE,
-                            Box::new([ #( #dynamic_nodes),* ]),
+                            Box::new([ #( #dynamic_nodes ),* ]),
                             Box::new([ #( #dyn_attr_printer ),* ]),
                         );
                         __vnodes
                     }
                 }
-                #[cfg(not(debug_assertions))]
+                #[cfg(debug_assertions)]
                 {
-                    let __dynamic_value_pool = dioxus_core::internal::DynamicValuePool::new(
-                        vec![ #( #dynamic_nodes),* ],
-                        vec![ #( #dyn_attr_printer ),* ],
-                        vec![ #( #dynamic_text),* ],
+                    #diagnostics
+
+                    let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
+                        vec![ #( #dynamic_text.to_string() ),* ],
                     );
+                    let mut __dynamic_value_pool = dioxus_core::internal::DynamicValuePool::new(
+                        vec![ #( #non_text_dynamic_nodes ),* ],
+                        vec![ #( #non_literal_dynamic_attributes ),* ],
+                        __dynamic_literal_pool
+                    );
+                    // The key is important here - we're creating a new GlobalSignal each call to this
+                    // But the key is what's keeping it stable
+                    let __template = GlobalSignal::with_key(
+                        || todo!(),
+                        ___TEMPLATE_NAME
+                    );
+
+                    let __template_read = __template.read();
+                    __dynamic_value_pool.render_with(&*__template_read)
                 }
             })
         });
@@ -204,6 +232,7 @@ impl TemplateBody {
             template_idx: DynIdx::default(),
             node_paths: Vec::new(),
             attr_paths: Vec::new(),
+            dynamic_text_segments: Vec::new(),
             diagnostics: Diagnostics::new(),
         };
 

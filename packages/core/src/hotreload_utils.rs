@@ -1,3 +1,5 @@
+use std::any::{Any, TypeId};
+
 #[cfg(feature = "serialize")]
 use crate::nodes::deserialize_string_leaky;
 use crate::{
@@ -81,26 +83,133 @@ pub enum FmtSegment {
 //     Box::new([...]),
 // )
 
+// Open questions:
+// - How do we handle type coercion for different sized component property integers?
+// - Should non-string hot literals go through the centralized pool?
+// - Should formatted strings be a runtime concept?
+
+pub struct DynamicLiteralPool {
+    dynamic_text: Box<[String]>,
+}
+
+impl DynamicLiteralPool {
+    pub fn new(dynamic_text: Vec<String>) -> Self {
+        Self {
+            dynamic_text: dynamic_text.into_boxed_slice(),
+        }
+    }
+
+    pub fn component_property<T: 'static>(
+        &mut self,
+        id: usize,
+        hot_reload: &HotReloadedTemplate,
+    ) -> T {
+        fn assert_type<T: 'static, T2: 'static>(t: T) -> T2 {
+            *(Box::new(t) as Box<dyn Any>).downcast::<T2>().unwrap()
+        }
+        let type_id = TypeId::of::<T>();
+        if type_id == TypeId::of::<String>() {
+            if let Some(HotReloadLiteral::Fmted(segments)) = hot_reload.component_values.get(id) {
+                assert_type(self.render_formatted(segments).to_string())
+            } else {
+                panic!("Expected a string component property");
+            }
+        } else if type_id == TypeId::of::<i64>() {
+            if let Some(HotReloadLiteral::Int(i)) = hot_reload.component_values.get(id) {
+                assert_type(*i)
+            } else {
+                panic!("Expected an i64 component property");
+            }
+        } else if type_id == TypeId::of::<i32>() {
+            if let Some(HotReloadLiteral::Int(i)) = hot_reload.component_values.get(id) {
+                assert_type(*i as i32)
+            } else {
+                panic!("Expected an i32 component property");
+            }
+        } else if type_id == TypeId::of::<i16>() {
+            if let Some(HotReloadLiteral::Int(i)) = hot_reload.component_values.get(id) {
+                assert_type(*i as i16)
+            } else {
+                panic!("Expected an i16 component property");
+            }
+        } else if type_id == TypeId::of::<i8>() {
+            if let Some(HotReloadLiteral::Int(i)) = hot_reload.component_values.get(id) {
+                assert_type(*i as i8)
+            } else {
+                panic!("Expected an i8 component property");
+            }
+        } else if type_id == TypeId::of::<u64>() {
+            if let Some(HotReloadLiteral::Int(i)) = hot_reload.component_values.get(id) {
+                assert_type(*i as u64)
+            } else {
+                panic!("Expected an u64 component property");
+            }
+        } else if type_id == TypeId::of::<u32>() {
+            if let Some(HotReloadLiteral::Int(i)) = hot_reload.component_values.get(id) {
+                assert_type(*i as u32)
+            } else {
+                panic!("Expected an u32 component property");
+            }
+        } else if type_id == TypeId::of::<u16>() {
+            if let Some(HotReloadLiteral::Int(i)) = hot_reload.component_values.get(id) {
+                assert_type(*i as u16)
+            } else {
+                panic!("Expected an u16 component property");
+            }
+        } else if type_id == TypeId::of::<u8>() {
+            if let Some(HotReloadLiteral::Int(i)) = hot_reload.component_values.get(id) {
+                assert_type(*i as u8)
+            } else {
+                panic!("Expected an u8 component property");
+            }
+        } else if type_id == TypeId::of::<f32>() {
+            if let Some(HotReloadLiteral::Float(f)) = hot_reload.component_values.get(id) {
+                assert_type(*f)
+            } else {
+                panic!("Expected an f32 component property");
+            }
+        } else if type_id == TypeId::of::<f64>() {
+            if let Some(HotReloadLiteral::Float(f)) = hot_reload.component_values.get(id) {
+                assert_type(*f)
+            } else {
+                panic!("Expected an f64 component property");
+            }
+        } else if type_id == TypeId::of::<bool>() {
+            if let Some(HotReloadLiteral::Bool(b)) = hot_reload.component_values.get(id) {
+                assert_type(*b)
+            } else {
+                panic!("Expected an bool component property");
+            }
+        } else {
+            panic!("Unsupported component property type");
+        }
+    }
+
+    pub fn render_formatted(&self, segments: &FmtedSegments) -> String {
+        segments.render_with(&self.dynamic_text)
+    }
+}
+
 pub struct DynamicValuePool {
     dynamic_attributes: Box<[Option<Box<[Attribute]>>]>,
     dynamic_nodes: Box<[Option<DynamicNode>]>,
-    dynamic_text: Box<[String]>,
+    literal_pool: DynamicLiteralPool,
 }
 
 impl DynamicValuePool {
     pub fn new(
-        dynamic_attributes: Vec<Box<[Attribute]>>,
         dynamic_nodes: Vec<DynamicNode>,
-        dynamic_text: Box<[String]>,
+        dynamic_attributes: Vec<Box<[Attribute]>>,
+        literal_pool: DynamicLiteralPool,
     ) -> Self {
         Self {
             dynamic_attributes: dynamic_attributes.into_iter().map(Some).collect(),
             dynamic_nodes: dynamic_nodes.into_iter().map(Some).collect(),
-            dynamic_text,
+            literal_pool,
         }
     }
 
-    fn render_with(&mut self, hot_reload: HotReloadedTemplate) -> VNode {
+    pub fn render_with(&mut self, hot_reload: &HotReloadedTemplate) -> VNode {
         // Get the node_paths from a depth first traversal of the template
         let node_paths = hot_reload.node_paths();
         let attr_paths = hot_reload.attr_paths();
@@ -111,41 +220,40 @@ impl DynamicValuePool {
             node_paths,
             attr_paths,
         };
-        let key = hot_reload.key.map(|key| self.render_formatted(key));
+        let key = hot_reload
+            .key
+            .as_ref()
+            .map(|key| self.literal_pool.render_formatted(key));
         let dynamic_nodes = hot_reload
             .dynamic_nodes
-            .into_iter()
+            .iter()
             .map(|node| self.render_dynamic_node(node))
             .collect();
         let dynamic_attrs = hot_reload
             .dynamic_attributes
-            .into_iter()
+            .iter()
             .map(|attr| self.render_attribute(attr))
             .collect();
 
         VNode::new(key, template, dynamic_nodes, dynamic_attrs)
     }
 
-    pub fn render_formatted(&self, segments: FmtedSegments) -> String {
-        segments.render_with(&self.dynamic_text)
-    }
-
-    fn render_dynamic_node(&mut self, node: HotReloadDynamicNode) -> DynamicNode {
+    fn render_dynamic_node(&mut self, node: &HotReloadDynamicNode) -> DynamicNode {
         match node {
             // If the node is dynamic, take it from the pool and return it
-            HotReloadDynamicNode::Dynamic(id) => self.dynamic_nodes[id]
+            HotReloadDynamicNode::Dynamic(id) => self.dynamic_nodes[*id]
                 .take()
                 .expect("Hot reloaded nodes must only be taken once"),
             // Otherwise, format the text node and return it
             HotReloadDynamicNode::Formatted(segments) => DynamicNode::Text(VText {
-                value: self.render_formatted(segments),
+                value: self.literal_pool.render_formatted(segments),
             }),
         }
     }
 
-    fn render_attribute(&mut self, attr: HotReloadAttribute) -> Box<[Attribute]> {
+    fn render_attribute(&mut self, attr: &HotReloadAttribute) -> Box<[Attribute]> {
         match attr {
-            HotReloadAttribute::Dynamic(id) => self.dynamic_attributes[id]
+            HotReloadAttribute::Dynamic(id) => self.dynamic_attributes[*id]
                 .take()
                 .expect("Hot reloaded attributes must only be taken once"),
             HotReloadAttribute::Literal {
@@ -154,14 +262,14 @@ impl DynamicValuePool {
                 value,
             } => Box::new([Attribute {
                 name,
-                namespace,
+                namespace: *namespace,
                 value: match value {
                     HotReloadLiteral::Fmted(segments) => {
-                        AttributeValue::Text(self.render_formatted(segments))
+                        AttributeValue::Text(self.literal_pool.render_formatted(segments))
                     }
-                    HotReloadLiteral::Float(f) => AttributeValue::Float(f),
-                    HotReloadLiteral::Int(i) => AttributeValue::Int(i),
-                    HotReloadLiteral::Bool(b) => AttributeValue::Bool(b),
+                    HotReloadLiteral::Float(f) => AttributeValue::Float(*f),
+                    HotReloadLiteral::Int(i) => AttributeValue::Int(*i),
+                    HotReloadLiteral::Bool(b) => AttributeValue::Bool(*b),
                 },
                 volatile: false,
             }]),
@@ -172,10 +280,11 @@ impl DynamicValuePool {
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
-struct HotReloadedTemplate {
+pub struct HotReloadedTemplate {
     key: Option<FmtedSegments>,
     dynamic_nodes: Vec<HotReloadDynamicNode>,
     dynamic_attributes: Vec<HotReloadAttribute>,
+    component_values: Vec<HotReloadLiteral>,
     #[cfg_attr(
         feature = "serialize",
         serde(deserialize_with = "crate::nodes::deserialize_leaky")
@@ -184,6 +293,22 @@ struct HotReloadedTemplate {
 }
 
 impl HotReloadedTemplate {
+    pub fn new(
+        key: Option<FmtedSegments>,
+        dynamic_nodes: Vec<HotReloadDynamicNode>,
+        dynamic_attributes: Vec<HotReloadAttribute>,
+        component_values: Vec<HotReloadLiteral>,
+        roots: &'static [TemplateNode],
+    ) -> Self {
+        Self {
+            key,
+            dynamic_nodes,
+            dynamic_attributes,
+            component_values,
+            roots,
+        }
+    }
+
     fn node_paths(&self) -> &'static [&'static [u8]] {
         fn add_node_paths(
             roots: &[TemplateNode],

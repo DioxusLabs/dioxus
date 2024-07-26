@@ -145,10 +145,7 @@ impl Attribute {
 
     pub fn ifmt(&self) -> Option<&IfmtInput> {
         match &self.value {
-            AttributeValue::AttrLiteral(lit) => match &lit {
-                HotLiteral::Fmted(input) => Some(input),
-                _ => None,
-            },
+            AttributeValue::AttrLiteral(HotLiteral::Fmted(input)) => Some(input),
             _ => None,
         }
     }

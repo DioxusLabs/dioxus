@@ -151,16 +151,17 @@ impl HotReloadedTemplate {
         // Move over old IDs onto the new template
         let new_node_paths = self.hotreload_dynamic_nodes::<Ctx>(old, new)?;
 
-        // Now render the new template out. We've proven that it's a close enough match to the old template
-        //
-        // The paths will be different but the dynamic indexes will be the same
-        let template = new.to_template_with_custom_paths::<Ctx>(
-            intern(self.make_location(old.template_idx.get()).leak()),
-            new_node_paths,
-            new_attribute_paths,
-        );
+        // // Now render the new template out. We've proven that it's a close enough match to the old template
+        // //
+        // // The paths will be different but the dynamic indexes will be the same
+        // let template = new.to_template_with_custom_paths::<Ctx>(
+        //     intern(self.make_location(old.template_idx.get()).leak()),
+        //     new_node_paths,
+        //     new_attribute_paths,
+        // );
 
-        self.templates.push(template);
+        // self.templates.push(template);
+        todo!();
 
         Some(())
     }
@@ -301,11 +302,11 @@ impl HotReloadedTemplate {
     }
 
     fn hotreload_text_node(&mut self, a: &TextNode, b: &TextNode) -> Option<()> {
-        let idx = a.hr_idx.get();
-        let location = self.make_location(idx);
-        let segments = IfmtInput::fmt_segments(&a.input, &b.input)?;
-        self.changed_lits
-            .insert(location.to_string(), HotReloadLiteral::Fmted(segments));
+        // let idx = a.hr_idx.get();
+        // let location = self.make_location(idx);
+        // let segments = IfmtInput::fmt_segments(&a.input, &b.input)?;
+        // self.changed_lits
+        //     .insert(location.to_string(), HotReloadLiteral::Fmted(segments));
 
         Some(())
     }
@@ -353,24 +354,24 @@ impl HotReloadedTemplate {
         }
 
         // Prep the new literal
-        let location = self.make_location(old_attr.as_lit().unwrap().hr_idx.get());
+        // let location = self.make_location(old_attr.as_lit().unwrap().hr_idx.get());
 
-        // If we have a perfect match and no old lit exists, then this didn't change
-        if score == usize::MAX && self.prev_lits.remove(&location).is_none() {
-            return Some(());
-        }
+        // // If we have a perfect match and no old lit exists, then this didn't change
+        // if score == usize::MAX && self.prev_lits.remove(&location).is_none() {
+        //     return Some(());
+        // }
 
-        let out = match &new_attr.as_lit().unwrap() {
-            HotLiteral::Float(f) => HotReloadLiteral::Float(f.base10_parse().unwrap()),
-            HotLiteral::Int(f) => HotReloadLiteral::Int(f.base10_parse().unwrap()),
-            HotLiteral::Bool(f) => HotReloadLiteral::Bool(f.value),
-            HotLiteral::Fmted(new) => HotReloadLiteral::Fmted(
-                IfmtInput::fmt_segments(old_attr.ifmt().unwrap(), new)
-                    .expect("Fmt segments to generate"),
-            ),
-        };
+        // let out = match &new_attr.as_lit().unwrap() {
+        //     HotLiteral::Float(f) => HotReloadLiteral::Float(f.base10_parse().unwrap()),
+        //     HotLiteral::Int(f) => HotReloadLiteral::Int(f.base10_parse().unwrap()),
+        //     HotLiteral::Bool(f) => HotReloadLiteral::Bool(f.value),
+        //     HotLiteral::Fmted(new) => HotReloadLiteral::Fmted(
+        //         IfmtInput::fmt_segments(old_attr.ifmt().unwrap(), new)
+        //             .expect("Fmt segments to generate"),
+        //     ),
+        // };
 
-        self.changed_lits.insert(location, out);
+        // self.changed_lits.insert(location, out);
 
         Some(())
     }
