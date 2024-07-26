@@ -41,6 +41,10 @@ impl<'a> DynIdVisitor<'a> {
                         }
                     }
                 }
+                // Assign formatted segments to the key which is not included in the merged_attributes
+                if let Some(AttributeValue::AttrLiteral(HotLiteral::Fmted(fmted))) = el.key() {
+                    self.assign_formatted_segment(fmted);
+                }
 
                 self.visit_children(&el.children);
             }
@@ -61,7 +65,10 @@ impl<'a> DynIdVisitor<'a> {
                 self.assign_path_to_node(node);
                 let mut index = 0;
                 for property in &component.fields {
-                    if let AttributeValue::AttrLiteral(_) = &property.value {
+                    if let AttributeValue::AttrLiteral(literal) = &property.value {
+                        if let HotLiteral::Fmted(segments) = literal {
+                            self.assign_formatted_segment(segments);
+                        }
                         component.component_literal_dyn_idx[index]
                             .set(self.component_literal_index);
                         self.component_literal_index += 1;
