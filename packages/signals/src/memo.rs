@@ -10,7 +10,7 @@ use std::{
 
 use dioxus_core::prelude::*;
 use futures_util::StreamExt;
-use generational_box::{AnyStorage, UnsyncStorage};
+use generational_box::{AnyStorage, BorrowResult, UnsyncStorage};
 
 struct UpdateInformation<T> {
     dirty: Arc<AtomicBool>,
@@ -164,8 +164,8 @@ where
     ///
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
-        self.inner.peek_unchecked()
+    fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>> {
+        self.inner.try_peek_unchecked()
     }
 }
 
