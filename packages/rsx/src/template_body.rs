@@ -19,9 +19,11 @@
 //! - The IDs of dynamic nodes relative to the template they live in. This is somewhat easy to track
 //!   but needs to happen on a per-template basis.
 //!
-//! - The unique ID of a hotreloadable literal (like ifmt or integers or strings, etc). This ID is
-//!   unique to the Callbody, not necessarily the template it lives in. This is similar to the
-//!   template ID
+//! - The IDs of formatted strings in debug mode only. Any formatted segments like "{x:?}" get pulled out
+//!   into a pool so we can move them around during hot reloading on a per-template basis.
+//!
+//! - The IDs of component property literals in debug mode only. Any component property literals like
+//!   1234 get pulled into the pool so we can hot reload them with the context of the literal pool.
 //!
 //! We solve this by parsing the structure completely and then doing a second pass that fills in IDs
 //! by walking the structure.
@@ -29,25 +31,22 @@
 //! This means you can't query the ID of any node "in a vacuum" - these are assigned once - but at
 //! least they're stable enough for the purposes of hotreloading
 //!
-//! The plumbing for hotreloadable literals could be template relative... ie "file:line:col:template:idx"
-//! That would be ideal if we could determine the the idx only relative to the template
-//!
 //! ```rust, ignore
 //! rsx! {
 //!     div {
 //!         class: "hello",
-//!         id: "node-{node_id}",    <--- hotreloadable with ID 0
+//!         id: "node-{node_id}",    <--- {node_id} has the formatted segment id 0 in the literal pool
 //!         ..props,                 <--- spreads are not reloadable
 //!
-//!         "Hello, world!           <--- not tracked but reloadable since it's just a string
+//!         "Hello, world!           <--- not tracked but reloadable in the template since it's just a string
 //!
-//!         for item in 0..10 {      <--- both 0 and 10 are technically reloadable...
-//!             div { "cool-{item}" }     <--- the ifmt here is also reloadable
+//!         for item in 0..10 {      <--- both 0 and 10 are technically reloadable, but we don't hot reload them today...
+//!             div { "cool-{item}" }     <--- {item} has the formatted segment id 1 in the literal pool
 //!         }
 //!
 //!         Link {
-//!             to: "/home", <-- hotreloadable since its a component prop
-//!             class: "link {is_ready}", <-- hotreloadable since its a formatted string as a prop
+//!             to: "/home", <-- hotreloadable since its a component prop literal (with component literal id 0)
+//!             class: "link {is_ready}", <-- {is_ready} has the formatted segment id 2 in the literal pool and the property has the component literal id 1
 //!             "Home" <-- hotreloadable since its a component child (via template)
 //!         }
 //!     }
