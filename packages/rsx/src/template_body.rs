@@ -163,14 +163,6 @@ impl ToTokens for TemplateBody {
             }
             #[cfg(debug_assertions)]
             {
-                let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
-                    vec![ #( #dynamic_text.to_string() ),* ],
-                );
-                let mut __dynamic_value_pool = dioxus_core::internal::DynamicValuePool::new(
-                    vec![ #( #dynamic_nodes ),* ],
-                    vec![ #( #dyn_attr_printer ),* ],
-                    __dynamic_literal_pool
-                );
                 // The key is important here - we're creating a new GlobalSignal each call to this
                 // But the key is what's keeping it stable
                 let __template = GlobalSignal::with_key(
@@ -179,6 +171,14 @@ impl ToTokens for TemplateBody {
                 );
 
                 let __template_read = __template.read();
+                let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
+                    vec![ #( #dynamic_text.to_string() ),* ],
+                );
+                let mut __dynamic_value_pool = dioxus_core::internal::DynamicValuePool::new(
+                    vec![ #( #dynamic_nodes ),* ],
+                    vec![ #( #dyn_attr_printer ),* ],
+                    __dynamic_literal_pool
+                );
                 __dynamic_value_pool.render_with(&*__template_read)
             }
         };
@@ -293,7 +293,9 @@ impl TemplateBody {
     }
 
     fn hot_reload_mapping(&self) -> TokenStream2 {
-        let key = if let Some(key) = self.implicit_key() {
+        let key = if let Some(AttributeValue::AttrLiteral(HotLiteral::Fmted(key))) =
+            self.implicit_key()
+        {
             quote! { Some(#key) }
         } else {
             quote! { None }
@@ -319,7 +321,7 @@ impl TemplateBody {
             .flat_map(|component| {
                 component.fields.iter().filter_map(|field| {
                     if let AttributeValue::AttrLiteral(literal) = &field.value {
-                        Some(literal)
+                        Some(literal.quote_as_hot_reload_literal())
                     } else {
                         None
                     }

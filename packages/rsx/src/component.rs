@@ -275,31 +275,26 @@ impl Component {
                 };
 
                 let release_value = value.to_token_stream();
-                // In debug mode, we try to grab the value from the dynamic literal pool if possible
-                let debug_value = {
-                    let mut tokens = TokenStream2::new();
-                    if let AttributeValue::AttrLiteral(_) = &value {
-                        let idx = self.component_literal_dyn_idx[dynamic_literal_index].get();
-                        dynamic_literal_index += 1;
-                        tokens
-                            .append_all(quote! { __dynamic_literal_pool.component_property(#idx) });
-                    } else {
-                        tokens.append_all(release_value.clone());
-                    }
-                    tokens
-                };
 
-                let value = quote! {
-                    {
-                        #[cfg(debug_assertions)]
+                // In debug mode, we try to grab the value from the dynamic literal pool if possible
+                let value = if let AttributeValue::AttrLiteral(_) = &value {
+                    let idx = self.component_literal_dyn_idx[dynamic_literal_index].get();
+                    dynamic_literal_index += 1;
+                    let debug_value = quote! { __dynamic_literal_pool.component_property(#idx, &*__template_read) };
+                    quote! {
                         {
-                            #debug_value
-                        }
-                        #[cfg(not(debug_assertions))]
-                        {
-                            #release_value
+                            #[cfg(debug_assertions)]
+                            {
+                                #debug_value
+                            }
+                            #[cfg(not(debug_assertions))]
+                            {
+                                #release_value
+                            }
                         }
                     }
+                } else {
+                    release_value
                 };
 
                 Some((attr, value))
