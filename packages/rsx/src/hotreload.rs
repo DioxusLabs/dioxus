@@ -155,7 +155,7 @@ impl HotReloadedTemplate {
         //
         // The paths will be different but the dynamic indexes will be the same
         let template = new.to_template_with_custom_paths::<Ctx>(
-            intern(self.make_location(old.template_idx.get()).leak()),
+            intern(self.make_location(old.template_idx.get())),
             new_node_paths,
             new_attribute_paths,
         );

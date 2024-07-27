@@ -67,7 +67,7 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
             // rebuild the project or hotreload it
             _ = watcher.wait() => {
                 if !watcher.pending_changes() {
-                    continue;
+                    continue
                 }
 
                 let changed_files = watcher.dequeue_changed_files(&dioxus_crate);
@@ -149,8 +149,15 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
 
             // Handle input from the user using our settings
             res = screen.wait() => {
-                if res.is_err() {
-                    break;
+                match res {
+                    Ok(false) => {}
+                    // Request a rebuild.
+                    Ok(true) => {
+                        builder.build();
+                        server.start_build().await
+                    },
+                    // Shutdown the server.
+                    Err(_) => break,
                 }
             }
         }

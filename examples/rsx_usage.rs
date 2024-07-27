@@ -95,6 +95,12 @@ fn app() -> Element {
                     }
                 }
             }
+
+            // dangerous_inner_html for both html and svg
+            div { dangerous_inner_html: "<p>hello dangerous inner html</p>" }
+            svg { dangerous_inner_html: "<circle r='50' cx='50' cy='50' />" }
+
+            // Built-in idents can be used
             use {}
             link {
                 as: "asd"

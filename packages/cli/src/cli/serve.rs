@@ -16,13 +16,17 @@ pub struct ServeArguments {
     #[clap(flatten)]
     pub address: AddressArguments,
 
-    /// Open the app in the default browser [default: false - unless project or global settings are set]
+    /// Open the app in the default browser [default: true - unless cli settings are set]
     #[arg(long, default_missing_value="true", num_args=0..=1)]
     pub open: Option<bool>,
 
-    /// Enable full hot reloading for the app [default: true - unless project or global settings are set]
+    /// Enable full hot reloading for the app [default: true - unless cli settings are set]
     #[clap(long, group = "release-incompatible")]
     pub hot_reload: Option<bool>,
+
+    /// Configure always-on-top for desktop apps [default: true - unless cli settings are set]
+    #[clap(long, default_missing_value = "true")]
+    pub always_on_top: Option<bool>,
 
     /// Set cross-origin-policy to same-origin [default: false]
     #[clap(name = "cross-origin-policy")]
@@ -64,6 +68,11 @@ impl Serve {
         if self.server_arguments.open.is_none() {
             self.server_arguments.open = Some(settings.always_open_browser.unwrap_or_default());
         }
+        if self.server_arguments.always_on_top.is_none() {
+            self.server_arguments.always_on_top = Some(settings.always_on_top.unwrap_or(true))
+        }
+        crate_config.dioxus_config.desktop.always_on_top =
+            self.server_arguments.always_on_top.unwrap_or(true);
 
         // Resolve the build arguments
         self.build_arguments.resolve(crate_config)?;

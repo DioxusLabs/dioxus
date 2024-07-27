@@ -8,6 +8,7 @@ description = "CLI tool for developing, testing, and publishing Dioxus apps"
 repository = "https://github.com/DioxusLabs/dioxus/"
 license = "MIT OR Apache-2.0"
 keywords = ["react", "gui", "cli", "dioxus", "wasm"]
+rust-version = "1.79.0"
 
 [dependencies]
 # cli core

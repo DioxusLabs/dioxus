@@ -8,7 +8,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com/learn/0.5/"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
-rust-version = "1.65.0"
+rust-version = "1.79.0"
 
 [dependencies]
 dioxus-core = { workspace = true }

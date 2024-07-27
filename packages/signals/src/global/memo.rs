@@ -1,7 +1,7 @@
 use crate::{read::Readable, Memo, ReadableRef};
 use crate::{read_impls, GlobalKey};
 use dioxus_core::prelude::ScopeId;
-use generational_box::UnsyncStorage;
+use generational_box::{BorrowResult, UnsyncStorage};
 use std::ops::Deref;
 
 use crate::Signal;
@@ -75,8 +75,8 @@ impl<T: PartialEq + 'static> Readable for GlobalMemo<T> {
     }
 
     #[track_caller]
-    fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
-        self.memo().peek_unchecked()
+    fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>> {
+        self.memo().try_peek_unchecked()
     }
 }
 
