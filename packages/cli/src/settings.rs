@@ -77,7 +77,19 @@ impl CliSettings {
             CrateConfigError::Io(Error::new(ErrorKind::Other, e.to_string()))
         })?;
 
-        let result = fs::write(path.clone(), data.clone());
+        // Create the directory structure if it doesn't exist.
+        let parent_path = path.parent().unwrap();
+        if let Err(e) = fs::create_dir_all(parent_path) {
+            error!(
+                ?data,
+                ?path,
+                "failed to create directories for settings file"
+            );
+            return Err(CrateConfigError::Io(e));
+        }
+
+        // Write the data.
+        let result = fs::write(&path, data.clone());
         if let Err(e) = result {
             error!(?data, ?path, "failed to save global cli settings");
             return Err(CrateConfigError::Io(e));
