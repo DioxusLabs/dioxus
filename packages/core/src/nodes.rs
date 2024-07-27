@@ -46,24 +46,20 @@ impl From<Element> for RenderReturn {
 impl Clone for RenderReturn {
     fn clone(&self) -> Self {
         match &self.node {
-            Ok(node) => RenderReturn {
-                node: Ok(node.clone_mounted()),
-            },
-            Err(RenderError::Aborted(err)) => RenderReturn {
-                node: Err(RenderError::Aborted(err.clone_mounted())),
-            },
-            Err(RenderError::Suspended(fut)) => RenderReturn {
-                node: Err(RenderError::Suspended(fut.clone_mounted())),
-            },
+            Ok(node) => RenderReturn { node: Ok(node.clone_mounted()) },
+            Err(RenderError::Aborted(err)) => {
+                RenderReturn { node: Err(RenderError::Aborted(err.clone_mounted())) }
+            }
+            Err(RenderError::Suspended(fut)) => {
+                RenderReturn { node: Err(RenderError::Suspended(fut.clone_mounted())) }
+            }
         }
     }
 }
 
 impl Default for RenderReturn {
     fn default() -> Self {
-        RenderReturn {
-            node: Ok(VNode::placeholder()),
-        }
+        RenderReturn { node: Ok(VNode::placeholder()) }
     }
 }
 
@@ -175,10 +171,7 @@ pub struct VNode {
 
 impl Clone for VNode {
     fn clone(&self) -> Self {
-        Self {
-            vnode: self.vnode.clone(),
-            mount: Default::default(),
-        }
+        Self { vnode: self.vnode.clone(), mount: Default::default() }
     }
 }
 
@@ -228,10 +221,7 @@ impl Deref for VNode {
 impl VNode {
     /// Clone the element while retaining the mount information of the node
     pub(crate) fn clone_mounted(&self) -> Self {
-        Self {
-            vnode: self.vnode.clone(),
-            mount: self.mount.clone(),
-        }
+        Self { vnode: self.vnode.clone(), mount: self.mount.clone() }
     }
 
     /// Create a template with no nodes that will be skipped over during diffing
@@ -262,10 +252,7 @@ impl VNode {
             })
             .clone()
         });
-        Self {
-            vnode,
-            mount: Default::default(),
-        }
+        Self { vnode, mount: Default::default() }
     }
 
     /// Create a new VNode
@@ -290,9 +277,7 @@ impl VNode {
     ///
     /// Returns [`None`] if the root is actually a static node (Element/Text)
     pub fn dynamic_root(&self, idx: usize) -> Option<&DynamicNode> {
-        self.template.get().roots[idx]
-            .dynamic_id()
-            .map(|id| &self.dynamic_nodes[id])
+        self.template.get().roots[idx].dynamic_id().map(|id| &self.dynamic_nodes[id])
     }
 
     /// Get the mounted id for a dynamic node index
@@ -329,11 +314,7 @@ impl VNode {
     ) -> Option<ElementId> {
         let mount = self.mount.get().as_usize()?;
 
-        dom.mounts
-            .get(mount)?
-            .mounted_attributes
-            .get(dynamic_attribute_idx)
-            .copied()
+        dom.mounts.get(mount)?.mounted_attributes.get(dynamic_attribute_idx).copied()
     }
 }
 
@@ -351,10 +332,7 @@ pub struct Template {
     /// The name of the template. This must be unique across your entire program for template diffing to work properly
     ///
     /// If two templates have the same name, it's likely that Dioxus will panic when diffing.
-    #[cfg_attr(
-        feature = "serialize",
-        serde(deserialize_with = "deserialize_string_leaky")
-    )]
+    #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_string_leaky"))]
     pub name: &'static str,
 
     /// The list of template nodes that make up the template
@@ -367,20 +345,14 @@ pub struct Template {
     ///
     /// These will be one segment shorter than the path sent to the renderer since those paths are relative to the
     /// topmost element, not the `roots` field.
-    #[cfg_attr(
-        feature = "serialize",
-        serde(deserialize_with = "deserialize_bytes_leaky")
-    )]
+    #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_bytes_leaky"))]
     pub node_paths: &'static [&'static [u8]],
 
     /// The paths of each dynamic attribute relative to the root of the template
     ///
     /// These will be one segment shorter than the path sent to the renderer since those paths are relative to the
     /// topmost element, not the `roots` field.
-    #[cfg_attr(
-        feature = "serialize",
-        serde(deserialize_with = "deserialize_bytes_leaky")
-    )]
+    #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_bytes_leaky"))]
     pub attr_paths: &'static [&'static [u8]],
 }
 
@@ -403,10 +375,8 @@ where
     use serde::Deserialize;
 
     let deserialized = Vec::<Vec<u8>>::deserialize(deserializer)?;
-    let deserialized = deserialized
-        .into_iter()
-        .map(|v| &*Box::leak(v.into_boxed_slice()))
-        .collect::<Vec<_>>();
+    let deserialized =
+        deserialized.into_iter().map(|v| &*Box::leak(v.into_boxed_slice())).collect::<Vec<_>>();
     Ok(&*Box::leak(deserialized.into_boxed_slice()))
 }
 
@@ -503,10 +473,7 @@ pub enum TemplateNode {
         ///
         /// In HTML, this would be a valid URI that defines a namespace for all elements below it
         /// SVG is an example of this namespace
-        #[cfg_attr(
-            feature = "serialize",
-            serde(deserialize_with = "deserialize_option_leaky")
-        )]
+        #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_option_leaky"))]
         namespace: Option<&'static str>,
 
         /// A list of possibly dynamic attributes for this element
@@ -604,11 +571,7 @@ pub struct VComponent {
 
 impl Clone for VComponent {
     fn clone(&self) -> Self {
-        Self {
-            name: self.name,
-            render_fn: self.render_fn,
-            props: self.props.duplicate(),
-        }
+        Self { name: self.name, render_fn: self.render_fn, props: self.props.duplicate() }
     }
 }
 
@@ -623,18 +586,9 @@ impl VComponent {
         P: Properties + 'static,
     {
         let render_fn = component.id();
-        let props = Box::new(VProps::new(
-            component,
-            <P as Properties>::memoize,
-            props,
-            fn_name,
-        ));
+        let props = Box::new(VProps::new(component, <P as Properties>::memoize, props, fn_name));
 
-        VComponent {
-            name: fn_name,
-            props,
-            render_fn,
-        }
+        VComponent { name: fn_name, props, render_fn }
     }
 
     /// Get the [`ScopeId`] this node is mounted to if it's mounted
@@ -676,9 +630,7 @@ impl VComponent {
 
 impl std::fmt::Debug for VComponent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("VComponent")
-            .field("name", &self.name)
-            .finish()
+        f.debug_struct("VComponent").field("name", &self.name).finish()
     }
 }
 
@@ -769,12 +721,7 @@ impl Attribute {
         namespace: Option<&'static str>,
         volatile: bool,
     ) -> Attribute {
-        Attribute {
-            name,
-            namespace,
-            volatile,
-            value: value.into_value(),
-        }
+        Attribute { name, namespace, volatile, value: value.into_value() }
     }
 }
 
@@ -814,10 +761,7 @@ impl AttributeValue {
         // Maybe, create an Owned variant so we are less likely to run into leaks
         AttributeValue::Listener(EventHandler::leak(move |event: Event<dyn Any>| {
             let data = event.data.downcast::<T>().unwrap();
-            callback(Event {
-                propagates: event.propagates,
-                data,
-            });
+            callback(Event { propagates: event.propagates, data });
         }))
     }
 
@@ -949,9 +893,7 @@ impl IntoDynNode for &Option<VNode> {
 }
 impl IntoDynNode for &str {
     fn into_dyn_node(self) -> DynamicNode {
-        DynamicNode::Text(VText {
-            value: self.to_string(),
-        })
+        DynamicNode::Text(VText { value: self.to_string() })
     }
 }
 impl IntoDynNode for String {
@@ -961,9 +903,7 @@ impl IntoDynNode for String {
 }
 impl IntoDynNode for Arguments<'_> {
     fn into_dyn_node(self) -> DynamicNode {
-        DynamicNode::Text(VText {
-            value: self.to_string(),
-        })
+        DynamicNode::Text(VText { value: self.to_string() })
     }
 }
 impl IntoDynNode for &VNode {
@@ -1143,6 +1083,114 @@ pub trait HasAttributes {
     ) -> Self;
 }
 
+#[derive(Clone)]
+pub struct NodeCursor {
+    // The position in the inner node, represented as a list of child offsets
+    position: Vec<u8>,
+    // The inner node we are moving in. This is a block of static nodes with references to any dynamic children
+    inner: VNode,
+}
+
+impl NodeCursor {
+    /// Creates a new NodeCursor on the root node
+    pub fn new(inner: VNode) -> Self {
+        NodeCursor { position: vec![0], inner }
+    }
+
+    /// The current node the cursor is on
+    pub fn current_node(&self) -> TemplateNode {
+        self.try_current_node().unwrap()
+    }
+
+    fn try_current_node(&self) -> Option<TemplateNode> {
+        let mut child_index_iter = self.position.iter().copied();
+        let mut current =
+            self.inner.template.get().roots.get(child_index_iter.next().unwrap() as usize)?;
+
+        for child_index in child_index_iter {
+            match current {
+                TemplateNode::Element { children, .. } => {
+                    current = children.get(child_index as usize)?
+                }
+                TemplateNode::Dynamic { id } => match self.inner.dynamic_nodes[*id] {
+                    //DynamicNode::Fragment(children) => current = children.get(child_index as usize)?,
+                    _ => return None,
+                },
+                _ => return None,
+            }
+        }
+
+        Some(*current)
+    }
+
+    /// Returns the current node as text if possible
+    pub fn as_text(&self) -> Option<&str> {
+        match self.current_node() {
+            TemplateNode::Element { .. } => None,
+            TemplateNode::Text { text } => Some(text),
+            TemplateNode::Dynamic { .. } => None, // No dynamic text?
+        }
+    }
+
+    /// Returns the first node under the current node if possible
+    pub fn first_child(&self) -> Option<NodeCursor> {
+        let mut position = self.position.clone();
+        position.push(0);
+
+        match self.current_node() {
+            TemplateNode::Element { children, .. } => children
+                .get(0)
+                .map(|_| NodeCursor { inner: self.inner.clone(), position }),
+            TemplateNode::Dynamic { id } => {
+                match &self.inner.dynamic_nodes[id] {
+                    DynamicNode::Fragment(children) => children
+                        .get(0)
+                        .map(|_| NodeCursor { inner: self.inner.clone(), position }),
+                    DynamicNode::Text(_) => None,
+                    DynamicNode::Placeholder(_) => None,
+                    // Not easy to traverse into
+                    DynamicNode::Component(_) => None,
+                }
+            }
+            TemplateNode::Text { .. } => None,
+        }
+    }
+
+    /// Returns an iterable version of the NodeCursor's children
+    pub fn children(&self) -> NodeCursor {
+        let mut new_position = self.position.clone();
+        new_position.push(0);
+
+        NodeCursor { inner: self.inner.clone(), position: new_position }
+    }
+
+    /// Returns the next sibling of the current node
+    pub fn next_sibling(&self) -> Option<NodeCursor> {
+        let mut position = self.position.clone();
+        *position.last_mut()? += 1;
+        let sibling = NodeCursor { inner: self.inner.clone(), position };
+        sibling.try_current_node()?;
+        Some(sibling)
+    }
+}
+
+impl Iterator for NodeCursor {
+    type Item = Self;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.try_current_node()?;
+        let item = self.clone();
+        *self.position.last_mut()? += 1;
+        Some(item)
+    }
+}
+
+impl IntoDynNode for NodeCursor {
+    fn into_dyn_node(self) -> DynamicNode {
+        self.inner.into_dyn_node()
+    }
+}
+
 #[cfg(debug_assertions)]
 pub(crate) fn sort_bfo(paths: &[&'static [u8]]) -> Vec<(usize, &'static [u8])> {
     let mut with_indices = paths.iter().copied().enumerate().collect::<Vec<_>>();
@@ -1169,27 +1217,10 @@ pub(crate) fn sort_bfo(paths: &[&'static [u8]]) -> Vec<(usize, &'static [u8])> {
 #[test]
 #[cfg(debug_assertions)]
 fn sorting() {
-    let r: [(usize, &[u8]); 5] = [
-        (0, &[0, 1]),
-        (1, &[0, 2]),
-        (2, &[1, 0]),
-        (3, &[1, 0, 1]),
-        (4, &[1, 2]),
-    ];
-    assert_eq!(
-        sort_bfo(&[&[0, 1,], &[0, 2,], &[1, 0,], &[1, 0, 1,], &[1, 2,],]),
-        r
-    );
-    let r: [(usize, &[u8]); 6] = [
-        (0, &[0]),
-        (1, &[0, 1]),
-        (2, &[0, 1, 2]),
-        (3, &[1]),
-        (4, &[1, 2]),
-        (5, &[2]),
-    ];
-    assert_eq!(
-        sort_bfo(&[&[0], &[0, 1], &[0, 1, 2], &[1], &[1, 2], &[2],]),
-        r
-    );
+    let r: [(usize, &[u8]); 5] =
+        [(0, &[0, 1]), (1, &[0, 2]), (2, &[1, 0]), (3, &[1, 0, 1]), (4, &[1, 2])];
+    assert_eq!(sort_bfo(&[&[0, 1,], &[0, 2,], &[1, 0,], &[1, 0, 1,], &[1, 2,],]), r);
+    let r: [(usize, &[u8]); 6] =
+        [(0, &[0]), (1, &[0, 1]), (2, &[0, 1, 2]), (3, &[1]), (4, &[1, 2]), (5, &[2])];
+    assert_eq!(sort_bfo(&[&[0], &[0, 1], &[0, 1, 2], &[1], &[1, 2], &[2],]), r);
 }
