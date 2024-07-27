@@ -636,7 +636,7 @@ impl HotReloadState {
                 .dynamic_attributes
                 .position(|a| a.name == attribute.name && a.value == attribute.value)?;
             self.dynamic_attributes
-                .push(HotReloadAttribute::Spread(hot_reload_attribute));
+                .push(HotReloadAttribute::Dynamic(hot_reload_attribute));
 
             return Some(());
         }

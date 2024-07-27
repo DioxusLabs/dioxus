@@ -223,8 +223,16 @@ impl DynamicValuePool {
         let node_paths = hot_reload.node_paths();
         let attr_paths = hot_reload.attr_paths();
 
+        static mut ID: u32 = 0;
+        let id = unsafe {
+            ID += 1;
+            ID
+        };
+        let name = format!("dbg:{id}");
+        let name = Box::leak(name.into_boxed_str());
+
         let template = Template {
-            name: "",
+            name,
             roots: hot_reload.roots,
             node_paths,
             attr_paths,
@@ -260,7 +268,7 @@ impl DynamicValuePool {
 
     fn render_attribute(&mut self, attr: &HotReloadAttribute) -> Box<[Attribute]> {
         match attr {
-            HotReloadAttribute::Spread(id) => self.dynamic_attributes[*id].clone(),
+            HotReloadAttribute::Dynamic(id) => self.dynamic_attributes[*id].clone(),
             HotReloadAttribute::Named(NamedAttribute {
                 name,
                 namespace,
@@ -402,7 +410,7 @@ pub enum HotReloadDynamicNode {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 pub enum HotReloadAttribute {
-    Spread(usize),
+    Dynamic(usize),
     Named(NamedAttribute),
 }
 

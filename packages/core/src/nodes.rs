@@ -869,7 +869,8 @@ impl Clone for AttributeValue {
             Self::Float(arg0) => Self::Float(*arg0),
             Self::Int(arg0) => Self::Int(*arg0),
             Self::Bool(arg0) => Self::Bool(*arg0),
-            Self::Listener(_) | Self::Any(_) => panic!("Cannot clone listener or any value"),
+            Self::Listener(arg0) => Self::Listener(*arg0),
+            Self::Any(_) => panic!("Cannot clone any value"),
             Self::None => Self::None,
         }
     }
