@@ -7,6 +7,7 @@ use crate::ScopeId;
 use futures_util::task::ArcWake;
 use slotmap::DefaultKey;
 use std::marker::PhantomData;
+use std::panic;
 use std::sync::Arc;
 use std::task::Waker;
 use std::{cell::Cell, future::Future};
@@ -250,11 +251,12 @@ impl Runtime {
         self.tasks.borrow().get(task.id).map(|t| t.scope)
     }
 
+    #[track_caller]
     pub(crate) fn handle_task_wakeup(&self, id: Task) -> Poll<()> {
         #[cfg(debug_assertions)]
         {
             // Ensure we are currently inside a `Runtime`.
-            Runtime::current().unwrap();
+            Runtime::current().unwrap_or_else(|e| panic!("{}", e));
         }
 
         let task = self.tasks.borrow().get(id.id).cloned();
