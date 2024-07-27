@@ -221,7 +221,7 @@ impl TemplateBody {
         self.roots.is_empty()
     }
 
-    fn implicit_key(&self) -> Option<&AttributeValue> {
+    pub(crate) fn implicit_key(&self) -> Option<&AttributeValue> {
         match self.roots.first() {
             Some(BodyNode::Element(el)) => el.key(),
             Some(BodyNode::Component(comp)) => comp.get_key(),
@@ -292,6 +292,27 @@ impl TemplateBody {
         })
     }
 
+    /// Iterate through the literal component properties of this rsx call in depth-first order
+    pub(crate) fn literal_component_properties(&self) -> impl Iterator<Item = &HotLiteral> + '_ {
+        self.dynamic_nodes()
+            .filter_map(|node| {
+                if let BodyNode::Component(component) = node {
+                    Some(component)
+                } else {
+                    None
+                }
+            })
+            .flat_map(|component| {
+                component.fields.iter().filter_map(|field| {
+                    if let AttributeValue::AttrLiteral(literal) = &field.value {
+                        Some(literal)
+                    } else {
+                        None
+                    }
+                })
+            })
+    }
+
     fn hot_reload_mapping(&self) -> TokenStream2 {
         let key = if let Some(AttributeValue::AttrLiteral(HotLiteral::Fmted(key))) =
             self.implicit_key()
@@ -310,23 +331,8 @@ impl TemplateBody {
             quote! { dioxus_core::internal::HotReloadAttribute::Dynamic(#id) }
         });
         let component_values = self
-            .dynamic_nodes()
-            .filter_map(|node| {
-                if let BodyNode::Component(component) = node {
-                    Some(component)
-                } else {
-                    None
-                }
-            })
-            .flat_map(|component| {
-                component.fields.iter().filter_map(|field| {
-                    if let AttributeValue::AttrLiteral(literal) = &field.value {
-                        Some(literal.quote_as_hot_reload_literal())
-                    } else {
-                        None
-                    }
-                })
-            });
+            .literal_component_properties()
+            .map(|literal| literal.quote_as_hot_reload_literal());
         quote! {
             dioxus_core::internal::HotReloadedTemplate::new(
                 #key,

@@ -549,7 +549,7 @@ impl TemplateNode {
 /// A node created at runtime
 ///
 /// This node's index in the DynamicNode list on VNode should match its respective `Dynamic` index
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum DynamicNode {
     /// A component node
     ///

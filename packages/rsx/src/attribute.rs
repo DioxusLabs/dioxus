@@ -28,9 +28,6 @@ use syn::{
     Block, Expr, ExprClosure, ExprIf, Ident, Lit, LitBool, LitFloat, LitInt, LitStr, Token,
 };
 
-#[cfg(feature = "hot_reload")]
-use dioxus_core::prelude::TemplateAttribute;
-
 /// A property value in the from of a `name: value` pair with an optional comma.
 /// Note that the colon and value are optional in the case of shorthand attributes. We keep them around
 /// to support "lossless" parsing in case that ever might be useful.
@@ -170,10 +167,26 @@ impl Attribute {
     }
 
     #[cfg(feature = "hot_reload")]
+    pub(crate) fn html_tag_and_namespace<Ctx: crate::HotReloadingContext>(
+        &self,
+    ) -> (&'static str, Option<&'static str>) {
+        let attribute_name_rust = self.name.to_string();
+        let element_name = self.el_name.as_ref().unwrap();
+        let rust_name = match element_name {
+            ElementName::Ident(i) => i.to_string(),
+            ElementName::Custom(s) => return (intern(s.value()), None),
+        };
+
+        Ctx::map_attribute(&rust_name, &attribute_name_rust)
+            .unwrap_or((intern(attribute_name_rust.as_str()), None))
+    }
+
+    #[cfg(feature = "hot_reload")]
     pub fn to_template_attribute<Ctx: crate::HotReloadingContext>(
         &self,
-        rust_name: &str,
-    ) -> TemplateAttribute {
+    ) -> dioxus_core::TemplateAttribute {
+        use dioxus_core::TemplateAttribute;
+
         // If it's a dynamic node, just return it
         // For dynamic attributes, we need to check the mapping to see if that mapping exists
         // todo: one day we could generate new dynamic attributes on the fly if they're a literal,
@@ -187,11 +200,8 @@ impl Attribute {
         }
 
         // Otherwise it's a static node and we can build it
-        let (_name, value) = self.as_static_str_literal().unwrap();
-        let attribute_name_rust = self.name.to_string();
-
-        let (name, namespace) = Ctx::map_attribute(rust_name, &attribute_name_rust)
-            .unwrap_or((intern(attribute_name_rust.as_str()), None));
+        let (_, value) = self.as_static_str_literal().unwrap();
+        let (name, namespace) = self.html_tag_and_namespace::<Ctx>();
 
         TemplateAttribute::Static {
             name,

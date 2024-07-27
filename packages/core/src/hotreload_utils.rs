@@ -200,8 +200,8 @@ impl DynamicLiteralPool {
 }
 
 pub struct DynamicValuePool {
-    dynamic_attributes: Box<[Option<Box<[Attribute]>>]>,
-    dynamic_nodes: Box<[Option<DynamicNode>]>,
+    dynamic_attributes: Box<[Box<[Attribute]>]>,
+    dynamic_nodes: Box<[DynamicNode]>,
     literal_pool: DynamicLiteralPool,
 }
 
@@ -212,8 +212,8 @@ impl DynamicValuePool {
         literal_pool: DynamicLiteralPool,
     ) -> Self {
         Self {
-            dynamic_attributes: dynamic_attributes.into_iter().map(Some).collect(),
-            dynamic_nodes: dynamic_nodes.into_iter().map(Some).collect(),
+            dynamic_attributes: dynamic_attributes.into_boxed_slice(),
+            dynamic_nodes: dynamic_nodes.into_boxed_slice(),
             literal_pool,
         }
     }
@@ -250,9 +250,7 @@ impl DynamicValuePool {
     fn render_dynamic_node(&mut self, node: &HotReloadDynamicNode) -> DynamicNode {
         match node {
             // If the node is dynamic, take it from the pool and return it
-            HotReloadDynamicNode::Dynamic(id) => self.dynamic_nodes[*id]
-                .take()
-                .expect("Hot reloaded nodes must only be taken once"),
+            HotReloadDynamicNode::Dynamic(id) => self.dynamic_nodes[*id].clone(),
             // Otherwise, format the text node and return it
             HotReloadDynamicNode::Formatted(segments) => DynamicNode::Text(VText {
                 value: self.literal_pool.render_formatted(segments),
@@ -262,23 +260,30 @@ impl DynamicValuePool {
 
     fn render_attribute(&mut self, attr: &HotReloadAttribute) -> Box<[Attribute]> {
         match attr {
-            HotReloadAttribute::Dynamic(id) => self.dynamic_attributes[*id]
-                .take()
-                .expect("Hot reloaded attributes must only be taken once"),
-            HotReloadAttribute::Literal {
+            HotReloadAttribute::Spread(id) => self.dynamic_attributes[*id].clone(),
+            HotReloadAttribute::Named(NamedAttribute {
                 name,
                 namespace,
                 value,
-            } => Box::new([Attribute {
+            }) => Box::new([Attribute {
                 name,
                 namespace: *namespace,
                 value: match value {
-                    HotReloadLiteral::Fmted(segments) => {
+                    HotReloadAttributeValue::Literal(HotReloadLiteral::Fmted(segments)) => {
                         AttributeValue::Text(self.literal_pool.render_formatted(segments))
                     }
-                    HotReloadLiteral::Float(f) => AttributeValue::Float(*f),
-                    HotReloadLiteral::Int(i) => AttributeValue::Int(*i),
-                    HotReloadLiteral::Bool(b) => AttributeValue::Bool(*b),
+                    HotReloadAttributeValue::Literal(HotReloadLiteral::Float(f)) => {
+                        AttributeValue::Float(*f)
+                    }
+                    HotReloadAttributeValue::Literal(HotReloadLiteral::Int(i)) => {
+                        AttributeValue::Int(*i)
+                    }
+                    HotReloadAttributeValue::Literal(HotReloadLiteral::Bool(b)) => {
+                        AttributeValue::Bool(*b)
+                    }
+                    HotReloadAttributeValue::Dynamic(id) => {
+                        self.dynamic_attributes[*id][0].value.clone()
+                    }
                 },
                 volatile: false,
             }]),
@@ -387,22 +392,49 @@ pub enum HotReloadDynamicNode {
 
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 pub enum HotReloadAttribute {
-    Dynamic(usize),
-    Literal {
-        /// The name of this attribute.
-        #[cfg_attr(
-            feature = "serialize",
-            serde(deserialize_with = "crate::nodes::deserialize_string_leaky")
-        )]
-        name: &'static str,
-        /// The namespace of this attribute. Does not exist in the HTML spec
-        #[cfg_attr(
-            feature = "serialize",
-            serde(deserialize_with = "crate::nodes::deserialize_option_leaky")
-        )]
-        namespace: Option<&'static str>,
+    Spread(usize),
+    Named(NamedAttribute),
+}
 
-        value: HotReloadLiteral,
-    },
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+pub struct NamedAttribute {
+    /// The name of this attribute.
+    #[cfg_attr(
+        feature = "serialize",
+        serde(deserialize_with = "crate::nodes::deserialize_string_leaky")
+    )]
+    name: &'static str,
+    /// The namespace of this attribute. Does not exist in the HTML spec
+    #[cfg_attr(
+        feature = "serialize",
+        serde(deserialize_with = "crate::nodes::deserialize_option_leaky")
+    )]
+    namespace: Option<&'static str>,
+
+    value: HotReloadAttributeValue,
+}
+
+impl NamedAttribute {
+    pub fn new(
+        name: &'static str,
+        namespace: Option<&'static str>,
+        value: HotReloadAttributeValue,
+    ) -> Self {
+        Self {
+            name,
+            namespace,
+            value,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
+pub enum HotReloadAttributeValue {
+    Literal(HotReloadLiteral),
+    Dynamic(usize),
 }
