@@ -32,14 +32,13 @@
 //!   the template, but if that changed we'd be okay.
 
 use crate::innerlude::*;
-use crate::literal;
 use crate::HotReloadingContext;
 use dioxus_core::internal::{
     FmtSegment, FmtedSegments, HotReloadAttribute, HotReloadAttributeValue, HotReloadDynamicNode,
     HotReloadLiteral, HotReloadedTemplate, NamedAttribute,
 };
 use std::cell::Cell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 #[derive(Debug, PartialEq, Clone)]
 struct BakedItem<T> {
@@ -114,6 +113,8 @@ pub struct LastBuildState {
     /// In the new build, we must assign each of these a value even if we no longer use the component.
     /// The type must be the same as the last time we compiled the property
     component_properties: Vec<HotLiteral>,
+    /// The root indexes of the last build
+    root_index: DynIdx,
 }
 
 impl LastBuildState {
@@ -128,6 +129,7 @@ impl LastBuildState {
             dynamic_nodes: BakedPool::new(dynamic_nodes),
             dynamic_attributes: BakedPool::new(dynamic_attributes),
             component_properties,
+            root_index: body.template_idx.clone(),
         }
     }
 
@@ -150,7 +152,7 @@ impl LastBuildState {
         match hot_literal {
             // If the literal is a formatted segment, map the segments to the new formatted segments
             HotLiteral::Fmted(segments) => {
-                let new_segments = self.hot_reload_formatted_segments(&segments)?;
+                let new_segments = self.hot_reload_formatted_segments(segments)?;
                 Some(HotReloadLiteral::Fmted(new_segments))
             }
             // Otherwise just pass the literal through unchanged
@@ -196,10 +198,6 @@ pub struct HotReloadState {
     /// The state of the last full rebuild.
     pub full_rebuild_state: LastBuildState,
 
-    /// List of inner templates for nodes in this template (nested blocks like for/if/component bodies)
-    /// You should diff the result of this against the old template to see if you actually need to send down the result
-    pub templates: HashMap<DynIdx, HotReloadedTemplate>,
-
     /// The child templates we have already used. As we walk through the template tree, we will run into child templates.
     /// Each of those child templates also need to be hot reloaded. We keep track of which ones we've already hotreloaded
     /// to avoid diffing the same template twice against different new templates.
@@ -217,7 +215,9 @@ pub struct HotReloadState {
     /// ```
     ///
     /// If we hotreload the component, we don't need to hotreload the for loop
-    pub hotreloaded_templates: HashSet<DynIdx>,
+    ///
+    /// You should diff the result of this against the old template to see if you actually need to send down the result
+    pub templates: HashMap<DynIdx, HotReloadedTemplate>,
 
     /// The dynamic nodes for the current node
     dynamic_nodes: Vec<HotReloadDynamicNode>,
@@ -238,21 +238,18 @@ impl HotReloadState {
         let mut s = Self {
             full_rebuild_state,
             templates: Default::default(),
-            hotreloaded_templates: Default::default(),
             dynamic_nodes: Default::default(),
             dynamic_attributes: Default::default(),
             literal_component_properties: Default::default(),
         };
 
-        s.hotreload_body::<Ctx>(&new)?;
+        s.hotreload_body::<Ctx>(new)?;
 
         Some(s)
     }
 
     fn extend(&mut self, other: Self) {
         self.templates.extend(other.templates);
-        self.hotreloaded_templates
-            .extend(other.hotreloaded_templates);
     }
 
     /// Walk the dynamic contexts and do our best to find hotreloadable changes between the two
@@ -293,10 +290,7 @@ impl HotReloadState {
     ///
     /// This encourages the hotreloader to hot onto DynamicContexts directly instead of the CallBody since
     /// you can preserve more information about the nodes as they've changed over time.
-    pub fn hotreload_body<Ctx: HotReloadingContext>(
-        &mut self,
-        new: &TemplateBody,
-    ) -> Option<HotReloadedTemplate> {
+    fn hotreload_body<Ctx: HotReloadingContext>(&mut self, new: &TemplateBody) -> Option<()> {
         // Quickly run through dynamic attributes first attempting to invalidate them
         // Move over old IDs onto the new template
         self.hotreload_attributes::<Ctx>(new)?;
@@ -317,20 +311,25 @@ impl HotReloadState {
             .collect();
         let roots = intern(&*roots);
 
-        Some(HotReloadedTemplate::new(
+        let template = HotReloadedTemplate::new(
             key,
             new_dynamic_nodes,
             new_dynamic_attributes,
             literal_component_properties,
             roots,
-        ))
+        );
+
+        self.templates
+            .insert(self.full_rebuild_state.root_index.clone(), template);
+
+        Some(())
     }
 
     fn hot_reload_key(&mut self, new: &TemplateBody) -> Option<Option<FmtedSegments>> {
         match new.implicit_key() {
             Some(AttributeValue::AttrLiteral(HotLiteral::Fmted(value))) => Some(Some(
                 self.full_rebuild_state
-                    .hot_reload_formatted_segments(&value)?,
+                    .hot_reload_formatted_segments(value)?,
             )),
             None => Some(None),
             _ => None,
@@ -401,9 +400,7 @@ impl HotReloadState {
         let (index, best_call_body) = self.diff_best_call_body::<Ctx>(
             candidate_for_loops
                 .iter()
-                .map(|(_, for_loop)| &for_loop.body)
-                .collect::<Vec<_>>()
-                .as_slice(),
+                .map(|(_, for_loop)| &for_loop.body),
             &forloop.body,
         )?;
 
@@ -433,9 +430,9 @@ impl HotReloadState {
     /// Find the call body that minimizes the number of wasted dynamic items
     ///
     /// Returns the index of the best call body and the state of the best call body
-    fn diff_best_call_body<Ctx>(
+    fn diff_best_call_body<'a, Ctx>(
         &self,
-        bodies: &[&TemplateBody],
+        bodies: impl Iterator<Item = &'a TemplateBody>,
         new_call_body: &TemplateBody,
     ) -> Option<(usize, Self)>
     where
@@ -443,12 +440,12 @@ impl HotReloadState {
     {
         let mut best_score = usize::MAX;
         let mut best_output = None;
-        for (index, body) in bodies.iter().enumerate() {
+        for (index, body) in bodies.enumerate() {
             // Skip templates we've already hotreloaded
-            if self.hotreloaded_templates.contains(&body.template_idx) {
+            if self.templates.contains_key(&body.template_idx) {
                 continue;
             }
-            if let Some(state) = Self::new::<Ctx>(LastBuildState::new(&body), new_call_body) {
+            if let Some(state) = Self::new::<Ctx>(LastBuildState::new(body), new_call_body) {
                 let score = state.full_rebuild_state.unused_dynamic_items();
                 if score < best_score {
                     best_score = score;
@@ -484,13 +481,12 @@ impl HotReloadState {
             })
             .collect();
 
-        let possible_bodies: Vec<_> = components_with_matching_attributes
+        let possible_bodies = components_with_matching_attributes
             .iter()
-            .map(|(_, comp, _)| &comp.children)
-            .collect();
+            .map(|(_, comp, _)| &comp.children);
 
         let (index, new_body) =
-            self.diff_best_call_body::<Ctx>(possible_bodies.as_slice(), &component.children)?;
+            self.diff_best_call_body::<Ctx>(possible_bodies, &component.children)?;
 
         let (index, _, literal_component_properties) = &components_with_matching_attributes[index];
 
@@ -530,19 +526,26 @@ impl HotReloadState {
 
         for (new_field, old_field) in new_fields.iter().zip(old_fields.iter()) {
             // Verify the names match
-            if &new_field.name != &old_field.name {
+            if new_field.name != old_field.name {
                 return None;
             }
 
             // Verify the values match
             match (&new_field.value, &old_field.value) {
                 // If the values are both literals, we can try to hotreload them
-                (AttributeValue::AttrLiteral(new_value), AttributeValue::AttrLiteral(_)) => {
+                (
+                    AttributeValue::AttrLiteral(new_value),
+                    AttributeValue::AttrLiteral(old_value),
+                ) => {
+                    // Make sure that the types are the same
+                    if std::mem::discriminant(new_value) != std::mem::discriminant(old_value) {
+                        return None;
+                    }
                     let literal = self.full_rebuild_state.hotreload_hot_literal(new_value)?;
                     literal_component_properties.push(literal);
                 }
                 _ => {
-                    if &new_field.value != &old_field.value {
+                    if new_field.value != old_field.value {
                         return None;
                     }
                 }

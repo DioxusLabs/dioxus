@@ -3,7 +3,7 @@
 use dioxus_core::{prelude::Template, VNode};
 use dioxus_rsx::{
     hot_reload::{diff_rsx, ChangedRsx},
-    hotreload::HotReloadedTemplate,
+    hotreload::HotReloadState,
     CallBody, HotReloadingContext,
 };
 use proc_macro2::TokenStream;
@@ -40,25 +40,22 @@ fn boilerplate(old: TokenStream, new: TokenStream) -> Option<Vec<Template>> {
     let old: CallBody = syn::parse2(old).unwrap();
     let new: CallBody = syn::parse2(new).unwrap();
 
-    let location = "file:line:col:0";
-    hotreload_callbody::<Mock>(&old, &new, location)
+    hotreload_callbody::<Mock>(&old, &new)
 }
 
-fn can_hotreload(old: TokenStream, new: TokenStream) -> Option<HotReloadedTemplate> {
+fn can_hotreload(old: TokenStream, new: TokenStream) -> Option<HotReloadState> {
     let old: CallBody = syn::parse2(old).unwrap();
     let new: CallBody = syn::parse2(new).unwrap();
 
-    let location = "file:line:col:0";
-    let results = HotReloadedTemplate::new::<Mock>(&old, &new, location, Default::default())?;
+    let results = HotReloadState::new::<Mock>(&old, &new)?;
     Some(results)
 }
 
 fn hotreload_callbody<Ctx: HotReloadingContext>(
     old: &CallBody,
     new: &CallBody,
-    location: &'static str,
 ) -> Option<Vec<Template>> {
-    let results = HotReloadedTemplate::new::<Ctx>(old, new, location, Default::default())?;
+    let results = HotReloadState::new::<Ctx>(old, new)?;
     Some(results.templates)
 }
 
@@ -66,7 +63,7 @@ fn callbody_to_template<Ctx: HotReloadingContext>(
     old: &CallBody,
     location: &'static str,
 ) -> Option<Template> {
-    let results = HotReloadedTemplate::new::<Ctx>(old, old, location, Default::default())?;
+    let results = HotReloadState::new::<Ctx>(old, old)?;
     Some(*results.templates.first().unwrap())
 }
 
@@ -120,8 +117,8 @@ fn simple_for_loop() {
     let new_valid: CallBody = syn::parse2(new_valid).unwrap();
     let new_invalid: CallBody = syn::parse2(new_invalid).unwrap();
 
-    assert!(hotreload_callbody::<Mock>(&old, &new_valid, location).is_some());
-    assert!(hotreload_callbody::<Mock>(&old, &new_invalid, location).is_none());
+    assert!(hotreload_callbody::<Mock>(&old, &new_valid).is_some());
+    assert!(hotreload_callbody::<Mock>(&old, &new_invalid).is_none());
 }
 
 #[test]
@@ -140,10 +137,9 @@ fn valid_reorder() {
         }
     };
 
-    let location = "file:line:col:0";
     let new: CallBody = syn::parse2(new_valid).unwrap();
 
-    let valid = hotreload_callbody::<Mock>(&old, &new, location);
+    let valid = hotreload_callbody::<Mock>(&old, &new);
     assert!(valid.is_some());
     let templates = valid.unwrap();
 
@@ -227,12 +223,10 @@ fn invalid_cases() {
         syn::parse2(new_invalid_new_dynamic_internal).unwrap();
     let new_invalid_added: CallBody = syn::parse2(new_invalid_added).unwrap();
 
-    assert!(hotreload_callbody::<Mock>(&old, &new_invalid, location).is_none());
-    assert!(
-        hotreload_callbody::<Mock>(&old, &new_invalid_new_dynamic_internal, location).is_none()
-    );
+    assert!(hotreload_callbody::<Mock>(&old, &new_invalid).is_none());
+    assert!(hotreload_callbody::<Mock>(&old, &new_invalid_new_dynamic_internal).is_none());
 
-    let removed = hotreload_callbody::<Mock>(&old, &new_valid_removed, location);
+    let removed = hotreload_callbody::<Mock>(&old, &new_valid_removed);
     assert!(removed.is_some());
     let templates = removed.unwrap();
 
@@ -244,7 +238,7 @@ fn invalid_cases() {
     assert_eq!(template.node_paths, &[&[], &[0u8, 0] as &[u8]]);
 
     // Adding a new dynamic node should not be hot reloadable
-    let added = hotreload_callbody::<Mock>(&old, &new_invalid_added, location);
+    let added = hotreload_callbody::<Mock>(&old, &new_invalid_added);
     assert!(added.is_none());
 }
 
@@ -377,8 +371,7 @@ fn diffs_complex() {
     let old: CallBody = syn::parse2(old).unwrap();
     let new: CallBody = syn::parse2(new).unwrap();
 
-    let location = "file:line:col:0";
-    let templates = hotreload_callbody::<Mock>(&old, &new, location).unwrap();
+    let templates = hotreload_callbody::<Mock>(&old, &new).unwrap();
 }
 
 #[test]

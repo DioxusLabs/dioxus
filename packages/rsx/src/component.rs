@@ -451,7 +451,7 @@ fn generics_params() {
     let input_without_children = quote! {
          Outlet::<R> {}
     };
-    let component: CallBody = syn::parse2(input_without_children).unwrap();
+    let component: crate::CallBody = syn::parse2(input_without_children).unwrap();
     println!("{}", component.to_token_stream().pretty_unparse());
 }
 
