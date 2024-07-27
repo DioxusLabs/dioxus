@@ -23,6 +23,8 @@ pub struct CliSettings {
     pub always_hot_reload: Option<bool>,
     /// Describes whether the CLI should always open the browser for Web targets.
     pub always_open_browser: Option<bool>,
+    /// Describes whether desktop apps in development will be pinned always-on-top.
+    pub always_on_top: Option<bool>,
 }
 
 impl CliSettings {

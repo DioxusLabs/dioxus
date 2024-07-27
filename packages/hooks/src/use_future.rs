@@ -175,8 +175,10 @@ impl Readable for UseFuture {
     }
 
     #[track_caller]
-    fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
-        self.state.peek_unchecked()
+    fn try_peek_unchecked(
+        &self,
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+        self.state.try_peek_unchecked()
     }
 }
 
