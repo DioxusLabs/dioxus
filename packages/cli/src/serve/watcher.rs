@@ -76,7 +76,7 @@ impl Watcher {
             }
         };
 
-        // If we are in WSL, we must use Notify's poll watcher due to an event propogation issue.
+        // If we are in WSL, we must use Notify's poll watcher due to an event propagation issue.
         let is_wsl = is_wsl();
         const NOTIFY_ERROR_MSG: &str = "Failed to create file watcher.\nEnsure you have the required permissions to watch the specified directories.";
 
@@ -310,7 +310,7 @@ const WSL_KEYWORDS: [&str; 2] = ["microsoft", "wsl"];
 /// Detects if `dx` is being ran in a WSL environment.
 ///
 /// We determine this based on whether the keyword `microsoft` or `wsl` is contained within the [`WSL_1`] or [`WSL_2`] files.
-/// This may fail in the future as it isn't gauranteed by Microsoft.
+/// This may fail in the future as it isn't guaranteed by Microsoft.
 /// See https://github.com/microsoft/WSL/issues/423#issuecomment-221627364
 fn is_wsl() -> bool {
     // Test 1st File
