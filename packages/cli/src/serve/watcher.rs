@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{fs, path::PathBuf, time::Duration};
 
 use crate::dioxus_crate::DioxusCrate;
 use crate::serve::hot_reloading_file_map::FileMap;
@@ -7,7 +7,13 @@ use dioxus_html::HtmlCtx;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
 use ignore::gitignore::Gitignore;
-use notify::{event::ModifyKind, EventKind, RecommendedWatcher};
+use notify::{
+    event::{MetadataKind, ModifyKind},
+    Config, EventKind,
+};
+
+/// This is the default interval that `notify` will poll for file changes on WSL hosts.
+const DEFAULT_NOTIFY_POLL_INTERVAL: Duration = Duration::from_secs(2);
 
 /// This struct stores the file watcher and the filemap for the project.
 ///
@@ -17,7 +23,7 @@ pub struct Watcher {
     _tx: UnboundedSender<notify::Event>,
     rx: UnboundedReceiver<notify::Event>,
     _last_update_time: i64,
-    _watcher: RecommendedWatcher,
+    _watcher: Box<dyn notify::Watcher>,
     queued_events: Vec<notify::Event>,
     file_map: FileMap,
     ignore: Gitignore,
@@ -61,27 +67,36 @@ impl Watcher {
         }
         let ignore = builder.build().unwrap();
 
-        // Create the file watcher
-        let mut watcher = notify::recommended_watcher({
+        // Build the event handler for notify.
+        let notify_event_handler = {
             let tx = tx.clone();
             move |info: notify::Result<notify::Event>| {
+                println!("NOTIFY EVENT: {:?}", info);
                 if let Ok(e) = info {
-                     match e.kind {
-
-                        // An event emitted when the metadata of a file or folder is changed.
-                        EventKind::Modify(ModifyKind::Data(_) | ModifyKind::Any) |
-                        EventKind::Create(_) |
-                        EventKind::Remove(_) => {
-                            _ = tx.unbounded_send(e);
-                        },
-                        _ => {}
+                    if is_allowed_notify_event(&e) {
+                        _ = tx.unbounded_send(e);
                     }
-
-
                 }
             }
-        })
-        .expect("Failed to create file watcher.\nEnsure you have the required permissions to watch the specified directories.");
+        };
+
+        // If we are in WSL, we must use Notify's poll watcher due to an event propogation issue.
+        let is_wsl = is_wsl();
+        const NOTIFY_ERROR_MSG: &str = "Failed to create file watcher.\nEnsure you have the required permissions to watch the specified directories.";
+
+        // Create the file watcher.
+        let mut watcher: Box<dyn notify::Watcher> = match is_wsl {
+            true => Box::new(
+                notify::PollWatcher::new(
+                    notify_event_handler,
+                    Config::default().with_poll_interval(DEFAULT_NOTIFY_POLL_INTERVAL),
+                )
+                .expect(NOTIFY_ERROR_MSG),
+            ),
+            false => {
+                Box::new(notify::recommended_watcher(notify_event_handler).expect(NOTIFY_ERROR_MSG))
+            }
+        };
 
         // Watch the specified paths
         // todo: make sure we don't double-watch paths if they're nested
@@ -95,7 +110,6 @@ impl Watcher {
 
             let mode = notify::RecursiveMode::Recursive;
 
-            use notify::Watcher;
             if let Err(err) = watcher.watch(path, mode) {
                 tracing::warn!("Failed to watch path: {}", err);
             }
@@ -144,14 +158,9 @@ impl Watcher {
 
         // Decompose the events into a list of all the files that have changed
         for event in self.queued_events.drain(..) {
-            // We only care about modify/crate/delete events
-            match event.kind {
-                EventKind::Modify(ModifyKind::Any) => {}
-                EventKind::Modify(ModifyKind::Data(_)) => {}
-                EventKind::Modify(ModifyKind::Name(_)) => {}
-                EventKind::Create(_) => {}
-                EventKind::Remove(_) => {}
-                _ => continue,
+            // We only care about certain events.
+            if !is_allowed_notify_event(&event) {
+                continue;
             }
 
             for path in event.paths {
@@ -268,6 +277,55 @@ fn is_backup_file(path: PathBuf) -> bool {
     if let Some(name) = path.file_name() {
         if let Some(name) = name.to_str() {
             if name.starts_with('.') {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+/// Tests if the provided [`notify::Event`] is something we listen to so we can avoid unescessary hot reloads.
+fn is_allowed_notify_event(event: &notify::Event) -> bool {
+    match event.kind {
+        EventKind::Modify(ModifyKind::Data(_)) => true,
+        EventKind::Modify(ModifyKind::Name(_)) => true,
+        EventKind::Create(_) => true,
+        EventKind::Remove(_) => true,
+        // The primary modification event on WSL's poll watcher.
+        EventKind::Modify(ModifyKind::Metadata(MetadataKind::WriteTime)) => true,
+        // Catch-all for unknown event types.
+        EventKind::Modify(ModifyKind::Any) => true,
+        // Don't care about anything else.
+        _ => false,
+    }
+}
+
+const WSL_1: &str = "/proc/sys/kernel/osrelease";
+const WSL_2: &str = "/proc/version";
+const WSL_KEYWORDS: [&str; 2] = ["microsoft", "wsl"];
+
+/// Detects if `dx` is being ran in a WSL environment.
+///
+/// We determine this based on whether the keyword `microsoft` or `wsl` is contained within the [`WSL_1`] or [`WSL_2`] files.
+/// This may fail in the future as it isn't gauranteed by Microsoft.
+/// See https://github.com/microsoft/WSL/issues/423#issuecomment-221627364
+fn is_wsl() -> bool {
+    // Test 1st File
+    if let Ok(content) = fs::read_to_string(WSL_1) {
+        let lowercase = content.to_lowercase();
+        for keyword in WSL_KEYWORDS {
+            if lowercase.contains(keyword) {
+                return true;
+            }
+        }
+    }
+
+    // Test 2nd File
+    if let Ok(content) = fs::read_to_string(WSL_2) {
+        let lowercase = content.to_lowercase();
+        for keyword in WSL_KEYWORDS {
+            if lowercase.contains(keyword) {
                 return true;
             }
         }
