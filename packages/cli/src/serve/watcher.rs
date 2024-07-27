@@ -1,7 +1,7 @@
 use std::{fs, path::PathBuf, time::Duration};
 
-use crate::dioxus_crate::DioxusCrate;
 use crate::serve::hot_reloading_file_map::FileMap;
+use crate::{cli::serve::Serve, dioxus_crate::DioxusCrate};
 use dioxus_hot_reload::HotReloadMsg;
 use dioxus_html::HtmlCtx;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -11,9 +11,6 @@ use notify::{
     event::{MetadataKind, ModifyKind},
     Config, EventKind,
 };
-
-/// This is the default interval that `notify` will poll for file changes on WSL hosts.
-const DEFAULT_NOTIFY_POLL_INTERVAL: Duration = Duration::from_secs(2);
 
 /// This struct stores the file watcher and the filemap for the project.
 ///
@@ -30,7 +27,7 @@ pub struct Watcher {
 }
 
 impl Watcher {
-    pub fn start(config: &DioxusCrate) -> Self {
+    pub fn start(serve: &Serve, config: &DioxusCrate) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
 
         // Extend the watch path to include:
@@ -71,7 +68,6 @@ impl Watcher {
         let notify_event_handler = {
             let tx = tx.clone();
             move |info: notify::Result<notify::Event>| {
-                println!("NOTIFY EVENT: {:?}", info);
                 if let Ok(e) = info {
                     if is_allowed_notify_event(&e) {
                         _ = tx.unbounded_send(e);
@@ -86,13 +82,19 @@ impl Watcher {
 
         // Create the file watcher.
         let mut watcher: Box<dyn notify::Watcher> = match is_wsl {
-            true => Box::new(
-                notify::PollWatcher::new(
-                    notify_event_handler,
-                    Config::default().with_poll_interval(DEFAULT_NOTIFY_POLL_INTERVAL),
+            true => {
+                let poll_interval = Duration::from_secs(
+                    serve.server_arguments.wsl_file_poll_interval.unwrap_or(2) as u64,
+                );
+
+                Box::new(
+                    notify::PollWatcher::new(
+                        notify_event_handler,
+                        Config::default().with_poll_interval(poll_interval),
+                    )
+                    .expect(NOTIFY_ERROR_MSG),
                 )
-                .expect(NOTIFY_ERROR_MSG),
-            ),
+            }
             false => {
                 Box::new(notify::recommended_watcher(notify_event_handler).expect(NOTIFY_ERROR_MSG))
             }

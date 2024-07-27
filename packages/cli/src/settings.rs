@@ -25,6 +25,9 @@ pub struct CliSettings {
     pub always_open_browser: Option<bool>,
     /// Describes whether desktop apps in development will be pinned always-on-top.
     pub always_on_top: Option<bool>,
+    /// Describes the interval in seconds that the CLI should poll for file changes on WSL.
+    #[serde(default = "default_wsl_file_poll_interval")]
+    pub wsl_file_poll_interval: Option<u16>,
 }
 
 impl CliSettings {
@@ -101,4 +104,8 @@ impl CliSettings {
 
         Ok(())
     }
+}
+
+fn default_wsl_file_poll_interval() -> Option<u16> {
+    Some(2)
 }

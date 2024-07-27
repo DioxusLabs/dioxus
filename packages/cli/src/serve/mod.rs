@@ -52,7 +52,7 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
     builder.build();
 
     let mut server = Server::start(&serve, &dioxus_crate);
-    let mut watcher = Watcher::start(&dioxus_crate);
+    let mut watcher = Watcher::start(&serve, &dioxus_crate);
     let mut screen = Output::start(&serve).expect("Failed to open terminal logger");
 
     loop {
