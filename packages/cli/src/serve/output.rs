@@ -176,8 +176,8 @@ impl Output {
         let has_running_apps = !self.running_apps.is_empty();
         let next_stdout = self.running_apps.values_mut().map(|app| {
             let future = async move {
-                let (stdout, stderr) = match &mut app.stdout {
-                    Some(stdout) => (stdout.stdout.next_line(), stdout.stderr.next_line()),
+                let (stdout, stderr) = match &mut app.output {
+                    Some(out) => (out.stdout.next_line(), out.stderr.next_line()),
                     None => return futures_util::future::pending().await,
                 };
 
@@ -203,7 +203,7 @@ impl Output {
         tokio::select! {
             (platform, stdout, stderr) = next_stdout => {
                 if let Some(stdout) = stdout {
-                    self.running_apps.get_mut(&platform).unwrap().stdout.as_mut().unwrap().stdout_line.push_str(&stdout);
+                    self.running_apps.get_mut(&platform).unwrap().output.as_mut().unwrap().stdout_line.push_str(&stdout);
                     self.push_log(platform, BuildMessage {
                         level: Level::INFO,
                         message: MessageType::Text(stdout),
@@ -213,7 +213,7 @@ impl Output {
                 if let Some(stderr) = stderr {
                     self.set_tab(Tab::BuildLog);
 
-                    self.running_apps.get_mut(&platform).unwrap().stdout.as_mut().unwrap().stderr_line.push_str(&stderr);
+                    self.running_apps.get_mut(&platform).unwrap().output.as_mut().unwrap().stderr_line.push_str(&stderr);
                     self.build_progress.build_logs.get_mut(&platform).unwrap().messages.push(BuildMessage {
                         level: Level::ERROR,
                         message: MessageType::Text(stderr),
@@ -453,7 +453,10 @@ impl Output {
                 stderr_line: String::new(),
             });
 
-            let app = RunningApp { result, stdout };
+            let app = RunningApp {
+                result,
+                output: stdout,
+            };
 
             self.running_apps.insert(platform, app);
 
@@ -855,7 +858,7 @@ async fn rustc_version() -> String {
 
 pub struct RunningApp {
     result: BuildResult,
-    stdout: Option<RunningAppOutput>,
+    output: Option<RunningAppOutput>,
 }
 
 struct RunningAppOutput {

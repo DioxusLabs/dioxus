@@ -6,6 +6,7 @@ pub mod assets;
 pub mod dx_build_info;
 pub mod serve;
 pub mod tools;
+pub mod tracer;
 
 pub mod cli;
 pub use cli::*;
@@ -23,9 +24,6 @@ pub(crate) use settings::*;
 
 pub(crate) mod metadata;
 
-use std::env;
-use tracing_subscriber::{prelude::*, EnvFilter, Layer};
-
 use anyhow::Context;
 use clap::Parser;
 
@@ -37,7 +35,7 @@ const LOG_ENV: &str = "DIOXUS_LOG";
 async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
 
-    build_tracing();
+    tracer::build_tracing(None);
 
     match args.action {
         Translate(opts) => opts
@@ -93,22 +91,4 @@ async fn main() -> anyhow::Result<()> {
 /// Simplifies error messages that use the same pattern.
 fn error_wrapper(message: &str) -> String {
     format!("🚫 {message}:")
-}
-
-fn build_tracing() {
-    // If {LOG_ENV} is set, default to env, otherwise filter to cli
-    // and manganis warnings and errors from other crates
-    let mut filter = EnvFilter::new("error,dx=info,dioxus-cli=info,manganis-cli-support=info");
-    if env::var(LOG_ENV).is_ok() {
-        filter = EnvFilter::from_env(LOG_ENV);
-    }
-
-    let sub =
-        tracing_subscriber::registry().with(tracing_subscriber::fmt::layer().with_filter(filter));
-
-    #[cfg(feature = "tokio-console")]
-    sub.with(console_subscriber::spawn()).init();
-
-    #[cfg(not(feature = "tokio-console"))]
-    sub.init();
 }

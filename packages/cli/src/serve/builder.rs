@@ -6,9 +6,9 @@ use crate::serve::Serve;
 use crate::Result;
 use dioxus_cli_config::Platform;
 use futures_channel::mpsc::UnboundedReceiver;
-use futures_util::future::OptionFuture;
 use futures_util::stream::select_all;
 use futures_util::StreamExt;
+use futures_util::{future::OptionFuture, stream::FuturesUnordered};
 use std::process::Stdio;
 use tokio::{
     process::{Child, Command},
@@ -95,7 +95,22 @@ impl Builder {
                 .map(|(platform, rx)| rx.map(move |update| (*platform, update))),
         );
 
+        // The ongoing builds directly
         let results: OptionFuture<_> = self.build_results.as_mut().into();
+
+        // The process exits
+        let mut process_exited = self
+            .children
+            .iter_mut()
+            .map(|(platform, child)| async move {
+                let status = child.wait().await.ok();
+
+                BuilderUpdate::ProcessExited {
+                    platform: *platform,
+                    status,
+                }
+            })
+            .collect::<FuturesUnordered<_>>();
 
         // Wait for the next build result
         tokio::select! {
@@ -110,6 +125,9 @@ impl Builder {
             Some((platform, update)) = next.next() => {
                 // If we have a build progress, send it to the screen
                 Ok(BuilderUpdate::Progress { platform, update })
+            }
+            Some(exit_status) = process_exited.next() => {
+                Ok(exit_status)
             }
             else => {
                 std::future::pending::<()>().await;
@@ -163,5 +181,9 @@ pub enum BuilderUpdate {
     },
     Ready {
         results: Vec<BuildResult>,
+    },
+    ProcessExited {
+        platform: Platform,
+        status: Option<std::process::ExitStatus>,
     },
 }
