@@ -291,6 +291,14 @@ impl DynamicValuePool {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[serde(bound(deserialize = "'de: 'static"))]
+pub struct HotReloadTemplateWithLocation {
+    pub location: String,
+    pub template: HotReloadedTemplate,
+}
+
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
@@ -303,7 +311,7 @@ pub struct HotReloadedTemplate {
         feature = "serialize",
         serde(deserialize_with = "crate::nodes::deserialize_leaky")
     )]
-    roots: &'static [TemplateNode],
+    pub roots: &'static [TemplateNode],
 }
 
 impl HotReloadedTemplate {

@@ -232,9 +232,10 @@ pub struct HotReloadState {
 impl HotReloadState {
     /// Calculate the hotreload diff between two callbodies
     pub fn new<Ctx: HotReloadingContext>(
-        full_rebuild_state: LastBuildState,
+        full_rebuild_state: &TemplateBody,
         new: &TemplateBody,
     ) -> Option<Self> {
+        let full_rebuild_state = LastBuildState::new(full_rebuild_state);
         let mut s = Self {
             full_rebuild_state,
             templates: Default::default(),
@@ -445,7 +446,7 @@ impl HotReloadState {
             if self.templates.contains_key(&body.template_idx) {
                 continue;
             }
-            if let Some(state) = Self::new::<Ctx>(LastBuildState::new(body), new_call_body) {
+            if let Some(state) = Self::new::<Ctx>(body, new_call_body) {
                 let score = state.full_rebuild_state.unused_dynamic_items();
                 if score < best_score {
                     best_score = score;

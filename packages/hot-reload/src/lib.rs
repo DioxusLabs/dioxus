@@ -1,4 +1,4 @@
-use dioxus_rsx::HotReloadedTemplate;
+use dioxus_core::internal::HotReloadTemplateWithLocation;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -43,7 +43,7 @@ pub enum ClientMsg {
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(bound(deserialize = "'de: 'static"))]
 pub struct HotReloadMsg {
-    pub templates: Vec<HotReloadedTemplate>,
+    pub templates: Vec<HotReloadTemplateWithLocation>,
     pub assets: Vec<PathBuf>,
 
     /// A file changed that's not an asset or a rust file - best of luck!
