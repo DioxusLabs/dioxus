@@ -99,7 +99,7 @@ env_logger = "0.11.3"
 tracing-subscriber = { version = "0.3.18", features = ["std", "env-filter"] }
 console-subscriber = { version = "0.3.0", optional = true }
 tracing = { workspace = true }
-wasm-opt = "0.116.1"
+wasm-opt = { version = "0.116.1", optional = true }
 ratatui = { version = "0.27.0", features = ["crossterm", "unstable"] }
 crossterm = { version = "0.27.0", features = ["event-stream"] }
 ansi-to-tui = "=5.0.0-rc.1"
@@ -116,6 +116,9 @@ built = { version = "=0.7.3", features = ["git2"] }
 default = []
 plugin = []
 tokio-console = ["dep:console-subscriber"]
+
+# when releasing dioxus, we want to enable wasm-opt
+wasm-opt = ["dep:wasm-opt"]
 
 [[bin]]
 path = "src/main.rs"
