@@ -322,6 +322,7 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "serde_repr",
+ "tokio",
  "url",
  "zbus",
 ]
@@ -11328,6 +11329,7 @@ dependencies = [
  "serde_repr",
  "sha1",
  "static_assertions",
+ "tokio",
  "tracing",
  "uds_windows",
  "windows-sys 0.52.0",
