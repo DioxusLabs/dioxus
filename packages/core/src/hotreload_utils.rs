@@ -71,3 +71,19 @@ pub enum FmtSegment {
         id: usize,
     },
 }
+
+/// A helper function for deserializing to a `&'static str`.
+/// Parses escaped characters (like `"\n"` or `"\t"`),
+/// which cannot be done in-place using the default serde json deserializer.
+///
+/// **Leaks the memory** in order to achieve a `'static` reference.
+///
+/// Solves [this issue](https://github.com/DioxusLabs/dioxus/issues/1586).
+#[doc(hidden)]
+pub fn static_str_deserializer<'de, D>(deserializer: D) -> Result<&'static str, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    <String as serde::Deserialize>::deserialize(deserializer)
+        .map(|s| Box::leak(Box::new(s)) as &'static str)
+}

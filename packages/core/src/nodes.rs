@@ -523,6 +523,7 @@ pub enum TemplateNode {
     /// This template node is just a piece of static text
     Text {
         /// The actual text
+        #[serde(deserialize_with = "crate::hotreload_utils::static_str_deserializer")]
         text: &'static str,
     },
 
