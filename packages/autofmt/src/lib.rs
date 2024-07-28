@@ -69,7 +69,14 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
             continue;
         }
 
-        let body = item.parse_body_with(CallBody::parse_strict).unwrap();
+        let body = match item.parse_body_with(CallBody::parse_strict) {
+            Ok(v) => v,
+            //there is aparsing error, we give up and don't format the rsx
+            Err(e) => {
+                eprintln!("Error while parsing rsx {:?} ", e);
+                return formatted_blocks;
+            }
+        };
 
         let rsx_start = macro_path.span().start();
 
