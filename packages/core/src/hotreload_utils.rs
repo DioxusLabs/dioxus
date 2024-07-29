@@ -117,9 +117,10 @@ impl DynamicLiteralPool {
             }
         } else if type_id == TypeId::of::<&'static str>() {
             if let Some(HotReloadLiteral::Fmted(segments)) = hot_reload.component_values.get(id) {
-                assert_type(Box::leak(
-                    self.render_formatted(segments).to_string().into_boxed_str(),
-                ))
+                assert_type(
+                    Box::leak(self.render_formatted(segments).to_string().into_boxed_str())
+                        as &'static str,
+                )
             } else {
                 panic!("Expected a string component property");
             }

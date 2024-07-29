@@ -490,8 +490,9 @@ impl HotReloadState {
             self.diff_best_call_body::<Ctx>(possible_bodies, &component.children)?;
 
         let (index, _, literal_component_properties) = &components_with_matching_attributes[index];
+        let index = *index;
 
-        self.full_rebuild_state.dynamic_nodes.inner[*index]
+        self.full_rebuild_state.dynamic_nodes.inner[index]
             .used
             .set(true);
 
@@ -499,6 +500,10 @@ impl HotReloadState {
             .extend(literal_component_properties.iter().cloned());
 
         self.extend(new_body);
+
+        // Push the new component as a dynamic node
+        self.dynamic_nodes
+            .push(HotReloadDynamicNode::Dynamic(index));
 
         Some(())
     }
