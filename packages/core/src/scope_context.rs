@@ -97,7 +97,7 @@ impl Scope {
     }
 
     fn sender(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {
-        Runtime::with(|rt| rt.sender.clone()).unwrap()
+        Runtime::with(|rt| rt.sender.clone()).unwrap_or_else(|e| panic!("{}", e))
     }
 
     /// Mount the scope and queue any pending effects if it is not already mounted
@@ -531,7 +531,9 @@ impl ScopeId {
     /// Run a closure inside of scope's runtime
     #[track_caller]
     pub fn in_runtime<T>(self, f: impl FnOnce() -> T) -> T {
-        Runtime::current().unwrap().on_scope(self, f)
+        Runtime::current()
+            .unwrap_or_else(|e| panic!("{}", e))
+            .on_scope(self, f)
     }
 
     /// Throw a [`CapturedError`] into a scope. The error will bubble up to the nearest [`ErrorBoundary`] or the root of the app.

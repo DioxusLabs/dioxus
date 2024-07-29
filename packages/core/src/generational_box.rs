@@ -90,7 +90,8 @@ pub fn current_owner<S: AnyStorage>() -> Owner<S> {
 
 impl ScopeId {
     /// Get the owner for the current scope.
+    #[track_caller]
     pub fn owner<S: AnyStorage>(self) -> Owner<S> {
-        Runtime::with_scope(self, |cx| cx.owner::<S>()).unwrap()
+        Runtime::with_scope(self, |cx| cx.owner::<S>()).unwrap_or_else(|e| panic!("{}", e))
     }
 }
