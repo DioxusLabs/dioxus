@@ -31,3 +31,4 @@ twoway!("simple-combo-expr" => simple_combo_expr (IndentOptions::new(IndentType:
 twoway!("oneline-expand" => online_expand (IndentOptions::new(IndentType::Spaces, 4, false)));
 twoway!("shortened" => shortened (IndentOptions::new(IndentType::Spaces, 4, false)));
 twoway!("syntax_error" => syntax_error (IndentOptions::new(IndentType::Spaces, 4, false)));
+twoway!("skipfail" => skipfail (IndentOptions::new(IndentType::Spaces, 4, false)));
