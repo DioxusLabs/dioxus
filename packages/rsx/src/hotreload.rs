@@ -599,16 +599,19 @@ impl HotReloadState {
         }
 
         // If we found a hot reloadable if chain, hotreload it
-        if let Some((index, chain_templates)) = best_if_chain {
-            // Mark the if chain as used
-            self.full_rebuild_state.dynamic_nodes.inner[index]
-                .used
-                .set(true);
-            // Merge the hot reload changes into the current state
-            for template in chain_templates {
-                self.extend(template);
-            }
+        let (index, chain_templates) = best_if_chain?;
+        // Mark the if chain as used
+        self.full_rebuild_state.dynamic_nodes.inner[index]
+            .used
+            .set(true);
+        // Merge the hot reload changes into the current state
+        for template in chain_templates {
+            self.extend(template);
         }
+
+        // Push the new if chain as a dynamic node
+        self.dynamic_nodes
+            .push(HotReloadDynamicNode::Dynamic(index));
 
         Some(())
     }

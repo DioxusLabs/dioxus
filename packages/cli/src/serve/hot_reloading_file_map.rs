@@ -71,6 +71,17 @@ impl FileMap {
         }
     }
 
+    /// Insert a file into the map and force a full rebuild
+    fn full_rebuild(&mut self, file_path: PathBuf, src: String) -> HotreloadError {
+        let cached_file = CachedSynFile {
+            raw: src.clone(),
+            templates: HashMap::new(),
+        };
+
+        self.map.insert(file_path, cached_file);
+        HotreloadError::Notreloadable
+    }
+
     /// Try to update the rsx in a file
     pub fn update_rsx<Ctx: HotReloadingContext>(
         &mut self,
@@ -113,13 +124,7 @@ impl FileMap {
             // If the changes were some code, we should insert the file into the map and rebuild
             // todo: not sure we even need to put the cached file into the map, but whatever
             None => {
-                let cached_file = CachedSynFile {
-                    raw: src.clone(),
-                    templates: HashMap::new(),
-                };
-
-                self.map.insert(file_path.to_path_buf(), cached_file);
-                return Err(HotreloadError::Notreloadable);
+                return Err(self.full_rebuild(file_path.to_path_buf(), src));
             }
         };
 
@@ -157,7 +162,7 @@ impl FileMap {
 
             // if the template is not hotreloadable, we need to do a full rebuild
             let Some(mut results) = hotreload_result else {
-                return Err(HotreloadError::Notreloadable);
+                return Err(self.full_rebuild(file_path.to_path_buf(), src));
             };
 
             // Be careful to not send the bad templates
