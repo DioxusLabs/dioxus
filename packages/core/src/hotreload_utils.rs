@@ -1,4 +1,7 @@
-use std::any::{Any, TypeId};
+use std::{
+    any::{Any, TypeId},
+    sync::RwLock,
+};
 
 #[cfg(feature = "serialize")]
 use crate::nodes::deserialize_string_leaky;
@@ -224,12 +227,13 @@ impl DynamicValuePool {
         let node_paths = hot_reload.node_paths();
         let attr_paths = hot_reload.attr_paths();
 
-        static mut ID: u32 = 0;
-        let id = unsafe {
-            ID += 1;
-            ID
+        static ID: RwLock<usize> = RwLock::new(0);
+        let id = {
+            let mut id = ID.write().unwrap();
+            *id += 1;
+            *id
         };
-        let name = format!("dbg:{id}");
+        let name = format!("hot_reloaded_template_{id}");
         let name = Box::leak(name.into_boxed_str());
 
         let template = Template {
