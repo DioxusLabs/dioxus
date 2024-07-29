@@ -344,7 +344,10 @@ impl<'a> Writer<'a> {
             self.cached_formats.insert(loc, formatted);
         }
 
-        self.cached_formats.get(&loc).unwrap().as_str()
+        self.cached_formats
+            .get(&loc)
+            .expect("Just inserted the parsed expr, so it should be in the cache")
+            .as_str()
     }
 
     fn write_for_loop(&mut self, forloop: &ForLoop) -> std::fmt::Result {
@@ -416,7 +419,9 @@ impl<'a> Writer<'a> {
     fn write_inline_expr(&mut self, expr: &Expr) -> std::fmt::Result {
         let unparsed = self.unparse_expr(expr);
         let mut lines = unparsed.lines();
-        let first_line = lines.next().unwrap();
+        let first_line = lines
+            .next()
+            .expect("All exprs should have at least one line");
         write!(self.out, "{first_line}")?;
 
         let mut was_multiline = false;

@@ -186,21 +186,21 @@ fn wrapped(expr: &Expr) -> File {
 
 #[test]
 fn unparses_raw() {
-    let expr = syn::parse_str("1 + 1").unwrap();
+    let expr = syn::parse_str("1 + 1").expect("Failed to parse");
     let unparsed = unparse(&wrapped(&expr));
     assert_eq!(unparsed, "fn main() {\n    1 + 1;\n}\n");
 }
 
 #[test]
 fn unparses_completely() {
-    let expr = syn::parse_str("1 + 1").unwrap();
+    let expr = syn::parse_str("1 + 1").expect("Failed to parse");
     let unparsed = unparse_expr(&expr);
     assert_eq!(unparsed, "1 + 1");
 }
 
 #[test]
 fn unparses_let_guard() {
-    let expr = syn::parse_str("let Some(url) = &link.location").unwrap();
+    let expr = syn::parse_str("let Some(url) = &link.location").expect("Failed to parse");
     let unparsed = unparse_expr(&expr);
     assert_eq!(unparsed, "let Some(url) = &link.location");
 }

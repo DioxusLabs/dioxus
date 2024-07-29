@@ -94,7 +94,7 @@ fn attr_is_rustfmt_skip(i: &syn::Attribute) -> bool {
 #[test]
 fn parses_file_and_collects_rsx_macros() {
     let contents = include_str!("../tests/samples/long.rsx");
-    let parsed = syn::parse_file(contents).unwrap();
+    let parsed = syn::parse_file(contents).expect("parse file okay");
     let macros = collect_from_file(&parsed);
     assert_eq!(macros.len(), 3);
 }
@@ -103,7 +103,7 @@ fn parses_file_and_collects_rsx_macros() {
 #[test]
 fn dont_collect_skipped_macros() {
     let contents = include_str!("../tests/samples/skip.rsx");
-    let parsed = syn::parse_file(contents).unwrap();
+    let parsed = syn::parse_file(contents).expect("parse file okay");
     let macros = collect_from_file(&parsed);
     assert_eq!(macros.len(), 2);
 }

@@ -93,8 +93,8 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
 
         // writing idents leaves the final line ended at the end of the last ident
         if writer.out.buf.contains('\n') {
-            writer.out.new_line().unwrap();
-            writer.out.tab().unwrap();
+            _ = writer.out.new_line();
+            _ = writer.out.tab();
         }
 
         let span = item.delimiter.span().join();

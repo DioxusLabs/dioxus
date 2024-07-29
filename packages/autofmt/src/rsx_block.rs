@@ -422,7 +422,7 @@ impl Writer<'_> {
                 for _ in 0..self.out.indent_level + 1 {
                     write!(self.out, "    ")?
                 }
-                writeln!(self.out, "{}", line.trim()).unwrap();
+                writeln!(self.out, "{}", line.trim())?;
             }
         }
 
