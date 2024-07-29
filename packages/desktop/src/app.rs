@@ -175,6 +175,7 @@ impl App {
 
         match self.window_behavior {
             LastWindowExitsApp => {
+                self.persist_window_state();
                 self.webviews.remove(&id);
                 if self.webviews.is_empty() {
                     self.control_flow = ControlFlow::Exit
