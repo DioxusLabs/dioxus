@@ -6,7 +6,6 @@ use crate::{
     properties::ComponentFunction,
 };
 use crate::{Properties, ScopeId, VirtualDom};
-use core::panic;
 use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use std::vec;
@@ -786,6 +785,7 @@ impl Attribute {
 ///
 /// These are built-in to be faster during the diffing process. To use a custom value, use the [`AttributeValue::Any`]
 /// variant.
+#[derive(Clone)]
 pub enum AttributeValue {
     /// Text attribute
     Text(String),
@@ -803,7 +803,7 @@ pub enum AttributeValue {
     Listener(ListenerCb),
 
     /// An arbitrary value that implements PartialEq and is static
-    Any(Box<dyn AnyValue>),
+    Any(Rc<dyn AnyValue>),
 
     /// A "none" value, resulting in the removal of an attribute from the dom
     None,
@@ -827,7 +827,7 @@ impl AttributeValue {
 
     /// Create a new [`AttributeValue`] with a value that implements [`AnyValue`]
     pub fn any_value<T: AnyValue>(value: T) -> AttributeValue {
-        AttributeValue::Any(Box::new(value))
+        AttributeValue::Any(Rc::new(value))
     }
 }
 
@@ -858,20 +858,6 @@ impl PartialEq for AttributeValue {
             (Self::Any(l0), Self::Any(r0)) => l0.as_ref().any_cmp(r0.as_ref()),
             (Self::None, Self::None) => true,
             _ => false,
-        }
-    }
-}
-
-impl Clone for AttributeValue {
-    fn clone(&self) -> Self {
-        match self {
-            Self::Text(arg0) => Self::Text(arg0.clone()),
-            Self::Float(arg0) => Self::Float(*arg0),
-            Self::Int(arg0) => Self::Int(*arg0),
-            Self::Bool(arg0) => Self::Bool(*arg0),
-            Self::Listener(arg0) => Self::Listener(*arg0),
-            Self::Any(_) => panic!("Cannot clone any value"),
-            Self::None => Self::None,
         }
     }
 }
@@ -1121,7 +1107,7 @@ impl IntoAttributeValue for Arguments<'_> {
     }
 }
 
-impl IntoAttributeValue for Box<dyn AnyValue> {
+impl IntoAttributeValue for Rc<dyn AnyValue> {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Any(self)
     }
