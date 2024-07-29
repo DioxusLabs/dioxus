@@ -562,44 +562,104 @@ impl HotReloadState {
     }
 
     /// Hot reload an if chain
-    fn hotreload_if_chain<Ctx: HotReloadingContext>(&mut self, new: &IfChain) -> Option<()> {
-        todo!()
-        // let (mut elif_a, mut elif_b) = (Some(a), Some(b));
+    fn hotreload_if_chain<Ctx: HotReloadingContext>(
+        &mut self,
+        new_if_chain: &IfChain,
+    ) -> Option<()> {
+        let mut best_if_chain = None;
+        let mut best_score = usize::MAX;
 
-        // loop {
-        //     // No point in continuing if we've hit the end of the chain
-        //     if elif_a.is_none() && elif_b.is_none() {
-        //         break;
-        //     }
+        let if_chains = self
+            .full_rebuild_state
+            .dynamic_nodes
+            .inner
+            .iter()
+            .enumerate()
+            .filter_map(|(index, node)| {
+                if let BodyNode::IfChain(if_chain) = &node.inner {
+                    return Some((index, if_chain));
+                }
+                None
+            });
 
-        //     // We assume both exist branches exist
-        //     let (a, b) = (elif_a.take()?, elif_b.take()?);
+        // Find the if chain that matches all of the conditions and wastes the least dynamic items
+        for (index, old_if_chain) in if_chains {
+            let Some(chain_templates) = Self::diff_if_chains::<Ctx>(old_if_chain, new_if_chain)
+            else {
+                continue;
+            };
+            let score = chain_templates
+                .iter()
+                .map(|t| t.full_rebuild_state.unused_dynamic_items())
+                .sum();
+            if score < best_score {
+                best_score = score;
+                best_if_chain = Some((index, chain_templates));
+            }
+        }
 
-        //     // Write the `then` branch
-        //     self.hotreload_body::<Ctx>(&b.then_branch)?;
+        // If we found a hot reloadable if chain, hotreload it
+        if let Some((index, chain_templates)) = best_if_chain {
+            // Mark the if chain as used
+            self.full_rebuild_state.dynamic_nodes.inner[index]
+                .used
+                .set(true);
+            // Merge the hot reload changes into the current state
+            for template in chain_templates {
+                self.extend(template);
+            }
+        }
 
-        //     // If there's an elseif branch, we set that as the next branch
-        //     // Otherwise we continue to the else branch - which we assume both branches have
-        //     if let (Some(left), Some(right)) =
-        //         (a.else_if_branch.as_ref(), b.else_if_branch.as_ref())
-        //     {
-        //         elif_a = Some(left.as_ref());
-        //         elif_b = Some(right.as_ref());
-        //         continue;
-        //     }
+        Some(())
+    }
 
-        //     // No else branches, that's fine
-        //     if a.else_branch.is_none() && b.else_branch.is_none() {
-        //         break;
-        //     }
+    /// Hot reload an if chain
+    fn diff_if_chains<Ctx: HotReloadingContext>(
+        old_if_chain: &IfChain,
+        new_if_chain: &IfChain,
+    ) -> Option<Vec<Self>> {
+        // Go through each part of the if chain and find the best match
+        let mut old_chain = old_if_chain;
+        let mut new_chain = new_if_chain;
 
-        //     // Write out the else branch and then we're done
-        //     let (left, right) = (a.else_branch.as_ref()?, b.else_branch.as_ref()?);
-        //     self.hotreload_body::<Ctx>(right)?;
-        //     break;
-        // }
+        let mut chain_templates = Vec::new();
 
-        // Some(matches)
+        loop {
+            // Make sure the conditions are the same
+            if old_chain.cond != new_chain.cond {
+                return None;
+            }
+
+            // If the branches are the same, we can hotreload them
+            let hot_reload = Self::new::<Ctx>(&old_chain.then_branch, &new_chain.then_branch)?;
+            chain_templates.push(hot_reload);
+
+            // Make sure the if else branches match
+            match (
+                old_chain.else_if_branch.as_ref(),
+                new_chain.else_if_branch.as_ref(),
+            ) {
+                (Some(old), Some(new)) => {
+                    old_chain = old;
+                    new_chain = new;
+                }
+                (None, None) => {
+                    break;
+                }
+                _ => return None,
+            }
+        }
+        // Make sure the else branches match
+        match (&old_chain.else_branch, &new_chain.else_branch) {
+            (Some(old), Some(new)) => {
+                let template = Self::new::<Ctx>(old, new)?;
+                chain_templates.push(template);
+            }
+            (None, None) => {}
+            _ => return None,
+        }
+
+        Some(chain_templates)
     }
 
     /// Take a new template body and return the attributes that can be hot reloaded from the last build
