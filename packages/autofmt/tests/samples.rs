@@ -52,5 +52,6 @@ twoway![
     fat_exprs,
     nested,
     staged,
-    misplaced
+    misplaced,
+    spaces
 ];
