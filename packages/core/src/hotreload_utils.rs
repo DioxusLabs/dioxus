@@ -11,6 +11,7 @@ use crate::{
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
+#[doc(hidden)]
 #[derive(Debug, PartialEq, Clone)]
 pub struct HotreloadedLiteral {
     pub name: String,
@@ -19,6 +20,7 @@ pub struct HotreloadedLiteral {
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
+#[doc(hidden)]
 #[derive(Debug, PartialEq, Clone)]
 pub enum HotReloadLiteral {
     Fmted(FmtedSegments),
@@ -29,6 +31,7 @@ pub enum HotReloadLiteral {
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
+#[doc(hidden)]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct FmtedSegments {
     pub(crate) segments: Vec<FmtSegment>,
@@ -55,6 +58,7 @@ impl FmtedSegments {
 }
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[doc(hidden)]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum FmtSegment {
     Literal {
@@ -91,6 +95,7 @@ pub enum FmtSegment {
 // - Should non-string hot literals go through the centralized pool?
 // - Should formatted strings be a runtime concept?
 
+#[doc(hidden)]
 pub struct DynamicLiteralPool {
     dynamic_text: Box<[String]>,
 }
@@ -203,6 +208,7 @@ impl DynamicLiteralPool {
     }
 }
 
+#[doc(hidden)]
 pub struct DynamicValuePool {
     dynamic_attributes: Box<[Box<[Attribute]>]>,
     dynamic_nodes: Box<[DynamicNode]>,
@@ -304,6 +310,7 @@ impl DynamicValuePool {
     }
 }
 
+#[doc(hidden)]
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[serde(bound(deserialize = "'de: 'static"))]
@@ -312,6 +319,7 @@ pub struct HotReloadTemplateWithLocation {
     pub template: HotReloadedTemplate,
 }
 
+#[doc(hidden)]
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
@@ -403,6 +411,7 @@ impl HotReloadedTemplate {
     }
 }
 
+#[doc(hidden)]
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
@@ -411,6 +420,7 @@ pub enum HotReloadDynamicNode {
     Formatted(FmtedSegments),
 }
 
+#[doc(hidden)]
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
@@ -419,6 +429,7 @@ pub enum HotReloadAttribute {
     Named(NamedAttribute),
 }
 
+#[doc(hidden)]
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct NamedAttribute {
@@ -452,6 +463,7 @@ impl NamedAttribute {
     }
 }
 
+#[doc(hidden)]
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]

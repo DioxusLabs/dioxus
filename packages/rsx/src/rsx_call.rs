@@ -4,7 +4,7 @@
 //! Currently the additional tooling doesn't do much.
 
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens};
+use quote::ToTokens;
 use std::{cell::Cell, fmt::Debug};
 use syn::{
     parse::{Parse, ParseStream},
@@ -37,10 +37,7 @@ impl Parse for CallBody {
 
 impl ToTokens for CallBody {
     fn to_tokens(&self, out: &mut TokenStream2) {
-        match self.body.is_empty() {
-            true => quote! { dioxus_core::VNode::empty() }.to_tokens(out),
-            false => self.body.to_tokens(out),
-        }
+        self.body.to_tokens(out)
     }
 }
 

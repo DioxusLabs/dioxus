@@ -58,6 +58,7 @@ use crate::innerlude::Attribute;
 use crate::*;
 use proc_macro2::TokenStream as TokenStream2;
 use proc_macro2_diagnostics::SpanDiagnosticExt;
+use syn::parse_quote;
 
 type NodePath = Vec<u8>;
 type AttributePath = Vec<u8>;
@@ -98,11 +99,6 @@ impl Parse for TemplateBody {
 /// This is because the parsing phase filled in all the additional metadata we need
 impl ToTokens for TemplateBody {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        // If there are no roots, this is an empty template, so just return None
-        if self.roots.is_empty() {
-            return tokens.append_all(quote! { dioxus_core::VNode::empty() });
-        }
-
         // If we have an implicit key, then we need to write its tokens
         let key_tokens = match self.implicit_key() {
             Some(tok) => quote! { Some( #tok.to_string() ) },
@@ -197,7 +193,13 @@ impl TemplateBody {
     ///
     /// This will fill in all the necessary path information for the nodes in the template and will
     /// overwrite data like dynamic indexes.
-    pub fn new(nodes: Vec<BodyNode>) -> Self {
+    pub fn new(mut nodes: Vec<BodyNode>) -> Self {
+        // If the nodes are completely empty, insert a placeholder node
+        // Core expects at least one node in the template to make it easier to replace
+        if nodes.is_empty() {
+            nodes.push(BodyNode::RawExpr(parse_quote! {()}));
+        }
+
         let mut body = Self {
             roots: vec![],
             template_idx: DynIdx::default(),
