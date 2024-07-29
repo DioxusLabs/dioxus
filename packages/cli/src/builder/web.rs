@@ -131,7 +131,7 @@ impl BuildRequest {
 
         // Only run wasm-opt if the feature is enabled
         // Wasm-opt has an expensive build script that makes it annoying to keep enabled for iterative dev
-        #[cfg(any(feature = "wasm-opt", not(debug_assertions)))]
+        #[cfg(feature = "wasm-opt")]
         {
             // Run wasm-opt if this is a release build
             if self.build_arguments.release {
