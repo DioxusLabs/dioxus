@@ -29,7 +29,7 @@ pub(crate) fn RootScopeWrapper(props: RootProps<VComponent>) -> Element {
                                 Box::new([]),
                             )))
                             .build()
-                            .into_vcomponent(SuspenseBoundary, "SuspenseBoundary")
+                            .into_vcomponent(SuspenseBoundary)
                     })]),
                     Box::new([]),
                 )))
