@@ -33,4 +33,29 @@ rsx! {
         class: "asd",
         "Jon"
     }
+
+    // comments inline
+    div { // inline
+        // Collapse
+        class: "asd", // super inline
+        "Jon" // all the inline
+        // Comments at the end too
+    }
+
+    // please dont eat me 1
+    div { // please dont eat me 2
+        // please dont eat me 3
+    }
+
+    // please dont eat me 1
+    div { // please dont eat me 2
+        // please dont eat me 3
+        abc: 123
+    }
+
+    // please dont eat me 1
+    div {
+        // please dont eat me 3
+        abc: 123
+    }
 }

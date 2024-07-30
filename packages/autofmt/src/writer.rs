@@ -202,6 +202,24 @@ impl<'a> Writer<'a> {
         Ok(())
     }
 
+    pub fn write_inline_comments(&mut self, final_span: LineColumn) -> Result {
+        let line = final_span.line;
+        let column = final_span.column;
+        let mut whitespace = self.src[line - 1][column..].trim();
+
+        if whitespace.is_empty() {
+            return Ok(());
+        }
+
+        whitespace = whitespace[1..].trim();
+
+        if whitespace.starts_with("//") {
+            write!(self.out, " {whitespace}")?;
+        }
+
+        Ok(())
+    }
+
     pub fn write_comments(&mut self, child: Span) -> Result {
         // collect all comments upwards
         // make sure we don't collect the comments of the node that we're currently under.
@@ -219,19 +237,34 @@ impl<'a> Writer<'a> {
             }
         }
 
+        // dbg!(&self
+        //     .comments
+        //     .iter()
+        //     .map(|i| self.src[*i])
+        //     .collect::<Vec<_>>());
+
         let mut last_was_empty = false;
+
         while let Some(comment_line) = self.comments.pop_front() {
-            let line = &self.src[comment_line];
+            let line = &self.src[comment_line].trim();
+
             if line.is_empty() {
-                if !last_was_empty {
-                    self.out.new_line()?;
-                }
-                last_was_empty = true;
+                self.out.new_line()?;
             } else {
-                last_was_empty = false;
                 self.out.tab()?;
-                writeln!(self.out, "{}", self.src[comment_line].trim())?;
+                writeln!(self.out, "{}", line.trim())?;
             }
+
+            // if line.is_empty() {
+            //     if !last_was_empty {
+            //         self.out.new_line()?;
+            //     }
+            //     last_was_empty = true;
+            // } else {
+            //     last_was_empty = false;
+            //     self.out.tab()?;
+            //     writeln!(self.out, "{}", line.trim())?;
+            // }
         }
 
         Ok(())
@@ -267,13 +300,6 @@ impl<'a> Writer<'a> {
 
     pub fn write_body_no_indent(&mut self, children: &[BodyNode]) -> Result {
         self.write_body_nodes(children)?;
-        // for child in children {
-        //     // if self.current_span_is_primary(child.span()) {
-        //     //     self.write_comments(child.span())?;
-        //     // };
-        //     self.write_ident(child)?;
-        //     // self.out.tabbed_line()?;
-        // }
 
         Ok(())
     }
@@ -348,7 +374,6 @@ impl<'a> Writer<'a> {
             };
             total += name_len;
 
-            //
             if attr.can_be_shorthand() {
                 total += 2;
             } else {

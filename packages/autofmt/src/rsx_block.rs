@@ -49,7 +49,7 @@ impl Writer<'_> {
         // check if we have a lot of attributes
         let attr_len = self.is_short_attrs(attributes, spreads);
         let is_short_attr_list = (attr_len + self.out.indent_level * 4) < 80;
-        let children_len = self.is_short_children(children);
+        let children_len = self.is_short_children(children).map_err(|e| fmt::Error)?;
         let is_small_children = children_len.is_some();
 
         // if we have one long attribute and a lot of children, place the attrs on top
@@ -81,6 +81,7 @@ impl Writer<'_> {
             opt_level = ShortOptimization::Empty;
 
             // Write comments if they exist
+            self.write_inline_comments(brace.span.span().start())?;
             self.write_todo_body(brace)?;
         }
 
@@ -110,6 +111,7 @@ impl Writer<'_> {
             }
 
             ShortOptimization::PropsOnTop => {
+                // panic!("Props on top is not supported");
                 if !attributes.is_empty() {
                     write!(self.out, " ")?;
                 }
@@ -125,6 +127,8 @@ impl Writer<'_> {
             }
 
             ShortOptimization::NoOpt => {
+                self.write_inline_comments(brace.span.span().start())?;
+                self.out.new_line()?;
                 self.write_attributes(attributes, spreads, false, brace, has_children)?;
 
                 if !children.is_empty() {
@@ -158,6 +162,8 @@ impl Writer<'_> {
             .chain(spreads.iter().map(AttrType::Spread))
             .peekable();
 
+        let has_attributes = !attributes.is_empty() || !spreads.is_empty();
+
         while let Some(attr) = attr_iter.next() {
             self.out.indent_level += 1;
 
@@ -174,7 +180,7 @@ impl Writer<'_> {
             self.out.indent_level -= 1;
 
             if !props_same_line {
-                self.out.indented_tabbed_line()?;
+                self.out.indented_tab()?;
             }
 
             match attr {
@@ -182,19 +188,33 @@ impl Writer<'_> {
                 AttrType::Spread(attr) => self.write_spread_attribute(&attr.expr)?,
             }
 
-            if attr_iter.peek().is_some() {
+            let span = match attr {
+                AttrType::Attr(attr) => attr.value.span(),
+                AttrType::Spread(attr) => attr.span(),
+            };
+
+            let has_more = attr_iter.peek().is_some();
+            let should_finish_comma = has_attributes && has_children;
+
+            if has_more || should_finish_comma {
                 write!(self.out, ",")?;
-
-                if props_same_line {
-                    write!(self.out, " ")?;
-                }
             }
-        }
 
-        let has_attributes = !attributes.is_empty() || !spreads.is_empty();
+            if !props_same_line {
+                self.write_inline_comments(span.end())?;
+            }
 
-        if has_attributes && has_children {
-            write!(self.out, ",")?;
+            if props_same_line && !has_more {
+                self.write_inline_comments(span.end())?;
+            }
+
+            if props_same_line && has_more {
+                write!(self.out, " ")?;
+            }
+
+            if !props_same_line && has_more {
+                self.out.new_line()?;
+            }
         }
 
         Ok(())
@@ -238,11 +258,15 @@ impl Writer<'_> {
                 write!(self.out, "{value}")?;
             }
             AttributeValue::EventTokens(closure) => {
+                self.out.indent_level += 1;
                 self.write_partial_closure(closure)?;
+                self.out.indent_level -= 1;
             }
 
             AttributeValue::AttrExpr(value) => {
+                self.out.indent_level += 1;
                 self.write_partial_expr(value.as_expr(), value.span())?;
+                self.out.indent_level -= 1;
             }
         }
 
@@ -302,9 +326,7 @@ impl Writer<'_> {
     fn write_partial_closure(&mut self, closure: &PartialClosure) -> Result {
         // push out the indent level of the body of the closure
         // This ensures it doesnt get written to the same level as the parent
-        self.out.indent_level += 1;
         self.write_partial_expr(closure.as_expr(), closure.span())?;
-        self.out.indent_level -= 1;
         Ok(())
     }
 
@@ -345,7 +367,7 @@ impl Writer<'_> {
     // returns the total line length if it's short
     // returns none if the length exceeds the limit
     // I think this eventually becomes quadratic :(
-    pub fn is_short_children(&mut self, children: &[BodyNode]) -> Option<usize> {
+    pub fn is_short_children(&mut self, children: &[BodyNode]) -> syn::Result<Option<usize>> {
         if children.is_empty() {
             // todo: allow elements with comments but no children
             // like div { /* comment */ }
@@ -353,19 +375,26 @@ impl Writer<'_> {
             // div {
             //  // some helpful
             // }
-            return Some(0);
+            return Ok(Some(0));
         }
 
         // Any comments push us over the limit automatically
         if self.children_have_comments(children) {
-            return None;
+            return Ok(None);
         }
 
-        match children {
+        let res = match children {
             [BodyNode::Text(ref text)] => Some(text.input.to_string_with_quotes().len()),
 
             // TODO: let rawexprs to be inlined
-            [BodyNode::RawExpr(ref expr)] => Some(get_expr_length(expr.span())),
+            [BodyNode::RawExpr(ref expr)] => {
+                let pretty = self.retrieve_formatted_expr(&expr.expr.as_expr()?);
+                if pretty.contains('\n') {
+                    None
+                } else {
+                    Some(pretty.len() + 2)
+                }
+            }
 
             // TODO: let rawexprs to be inlined
             [BodyNode::Component(ref comp)] if comp.fields.is_empty() => Some(
@@ -380,7 +409,9 @@ impl Writer<'_> {
             // We used to do a lot of math to figure out if we should expand out the line, but folks just
             // don't like it.
             _ => None,
-        }
+        };
+
+        Ok(res)
     }
 
     fn children_have_comments(&self, children: &[BodyNode]) -> bool {

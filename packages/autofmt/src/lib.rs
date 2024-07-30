@@ -157,7 +157,6 @@ pub fn fmt_block_from_expr(raw: &str, tokens: TokenStream) -> Option<String> {
     let body = CallBody::parse_strict.parse2(tokens).unwrap();
     let mut buf = Writer::new(raw);
     buf.write_body_no_indent(&body.body.roots).ok()?;
-    // buf.write_rsx_call(&body.body).ok()?;
     buf.consume()
 }
 

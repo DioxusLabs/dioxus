@@ -1,4 +1,5 @@
-use std::path::Path;
+use core::fmt;
+use std::{f32::consts::E, path::Path};
 
 use prettyplease::unparse;
 use proc_macro2::TokenStream;
@@ -12,8 +13,8 @@ impl Writer<'_> {
     }
 }
 
-const MARKER: &str = "dioxus_autofmt_block__________dioxus_autofmt_block__________";
-const MARKER_REPLACE: &str = "dioxus_autofmt_block__________dioxus_autofmt_block__________! {}";
+const MARKER: &str = "dioxus_autofmt_block__________";
+const MARKER_REPLACE: &str = "dioxus_autofmt_block__________! {}";
 
 pub fn unparse_expr(expr: &Expr, src: &str) -> String {
     struct ReplaceMacros<'a> {
@@ -35,21 +36,26 @@ pub fn unparse_expr(expr: &Expr, src: &str) -> String {
                 // we'll use information about the macro to replace it with another formatted block
                 // once we've written out the unparsed expr from prettyplease, we can replace
                 // this dummy block with the actual formatted block
-                let formatted = crate::fmt_block_from_expr(self.src, i.tokens.clone()).unwrap();
+                let mut formatted = crate::fmt_block_from_expr(self.src, i.tokens.clone()).unwrap();
 
                 // always push out the rsx to require a new line
                 i.path = syn::parse_str(MARKER).unwrap();
                 i.tokens = Default::default();
-                // i
 
-                // *_expr = syn::Stmt::Expr(
-                //     syn::parse_quote!(dioxus_autofmt_block__________),
-                //     i.semi_token,
-                // );
+                // Push out the indent level of the formatted block if it's multiline
+                if formatted.contains('{') {
+                    dbg!(&formatted);
+                    formatted = formatted
+                        .lines()
+                        .map(|line| format!("    {line}"))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                }
 
                 // Save this formatted block for later, when we apply it to the original expr
                 self.formatted_stack.push(formatted)
             }
+
             syn::visit_mut::visit_macro_mut(self, i);
         }
     }
@@ -62,15 +68,16 @@ pub fn unparse_expr(expr: &Expr, src: &str) -> String {
 
     // builds the expression stack
     let mut modified_expr = expr.clone();
-    syn::visit_mut::visit_expr_mut(&mut replacer, &mut modified_expr);
-    // replacer.visit_expr_mut(&mut modified_expr);
+    replacer.visit_expr_mut(&mut modified_expr);
 
     // now unparsed with the modified expression
     let mut unparsed = unparse_inner(&modified_expr);
+    // dbg!(&unparsed);
 
     // walk each line looking for the dioxus_autofmt_block__________ token
     // if we find it, replace it with the formatted block
     // if there's indentation we want to presreve it
+    // dbg!(&replacer.formatted_stack);
 
     // now we can replace the macros with the formatted blocks
     for formatted in replacer.formatted_stack.drain(..) {
@@ -80,37 +87,60 @@ pub fn unparse_expr(expr: &Expr, src: &str) -> String {
         // } else {
         //     format!("rsx! {{{formatted}}}")
         // };
-        let fmted = formatted.trim_start();
-        let mut out_fmt = String::from("rsx! ");
+        let fmted = formatted;
+        let is_multiline = fmted.contains('{');
+
+        // let fmted = formatted.trim_start();
+        let mut out_fmt = String::from("rsx! {");
+        if is_multiline {
+            out_fmt.push('\n');
+        } else {
+            out_fmt.push(' ');
+        }
+
         let mut whitespace = 0;
 
+        println!("{}", &unparsed);
         for line in unparsed.lines() {
             if line.contains(MARKER) {
                 whitespace = line.chars().take_while(|c| c.is_whitespace()).count();
                 break;
             }
         }
+        dbg!(&whitespace);
 
         let mut lines = fmted.lines().enumerate().peekable();
 
         while let Some((idx, fmt_line)) = lines.next() {
             // Push the indentation
-            if idx > 0 {
+            // if idx > 0 {
+            if is_multiline {
                 out_fmt.push_str(&" ".repeat(whitespace));
             }
+            // }
 
             // Calculate delta between indentations - the block indentation is too much
             out_fmt.push_str(fmt_line);
 
-            // Push a newline
-            out_fmt.push('\n');
+            // Push a newline if there's another line
+            if lines.peek().is_some() {
+                out_fmt.push('\n');
+            }
         }
 
-        // Remove the last newline
-        out_fmt.pop();
+        if is_multiline {
+            out_fmt.push('\n');
+            out_fmt.push_str(&" ".repeat(whitespace));
+        } else {
+            out_fmt.push(' ');
+        }
 
         // Replace the dioxus_autofmt_block__________ token with the formatted block
+        out_fmt.push('}');
+
+        dbg!(&out_fmt);
         unparsed = unparsed.replacen(MARKER_REPLACE, &out_fmt, 1);
+        // dbg!(&unparsed);
         continue;
     }
 
@@ -149,7 +179,9 @@ fn unwrapped(raw: String) -> String {
         .join("\n");
 
     // remove the semicolon
-    o.pop();
+    if o.ends_with(";") {
+        o.pop();
+    }
 
     o
 }
@@ -262,10 +294,92 @@ fn write_body_no_indent() {
                     .some_big_long()
                     .some_big_long()
             }
+            div { class: "px-4", {is_current.then(|| rsx! { {children} })} }
+            Thing {
+                field: rsx! {
+                    div { "hi" }
+                    Component {
+                        onrender: rsx! {
+                            div { "hi" }
+                            Component {
+                                onclick: move |_| {
+                                    another_macro! {
+                                        div { class: "max-w-lg lg:max-w-2xl mx-auto mb-16 text-center",
+                                            "gomg"
+                                            "hi!!"
+                                            "womh"
+                                        }
+                                    };
+                                    rsx! {
+                                        div { class: "max-w-lg lg:max-w-2xl mx-auto mb-16 text-center",
+                                            "gomg"
+                                            "hi!!"
+                                            "womh"
+                                        }
+                                    };
+                                    println!("hi")
+                                },
+                                onrender: move |_| {
+                                    let _ = 12;
+                                    let r = rsx! {
+                                        div { "hi" }
+                                    };
+                                    rsx! {
+                                        div { "hi" }
+                                    }
+                                }
+                            }
+                            {
+                                rsx! {
+                                    BarChart {
+                                        id: "bar-plot".to_string(),
+                                        x: value,
+                                        y: label
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     "##;
 
     let tokens: TokenStream = syn::parse_str(src).unwrap();
     let out = crate::fmt_block_from_expr(src, tokens).unwrap();
+    println!("{}", out);
+}
+
+#[test]
+fn write_component_body() {
+    let src = r##"
+div { class: "px-4", {is_current.then(|| rsx! { {children} })} }
+"##;
+
+    let tokens: TokenStream = syn::parse_str(src).unwrap();
+    let out = crate::fmt_block_from_expr(src, tokens).unwrap();
+    println!("{}", out);
+}
+
+#[test]
+fn weird_macro() {
+    let contents = r##"
+    fn main() {
+        move |_| {
+            drop_macro_semi! {
+                "something_very_long_something_very_long_something_very_long_something_very_long"
+            };
+            let _ = drop_macro_semi! {
+                "something_very_long_something_very_long_something_very_long_something_very_long"
+            };
+            drop_macro_semi! {
+                "something_very_long_something_very_long_something_very_long_something_very_long"
+            };
+        };
+    }
+"##;
+
+    let expr: File = syn::parse_file(contents).unwrap();
+    let out = unparse(&expr);
     println!("{}", out);
 }

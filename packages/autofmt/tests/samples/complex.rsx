@@ -22,14 +22,17 @@ rsx! {
                 span {
                     class: "inline-block ml-auto hover:bg-gray-500",
                     onclick: move |evt| {
-                        // open.set(!open.get());
                         evt.cancel_bubble();
                     },
                     icons::icon_8 {}
                 }
             })}
         }
-        div { class: "px-4", {is_current.then(|| rsx!{ children })} }
+        div { class: "px-4",
+            {is_current.then(|| rsx! {
+                {children}
+            })}
+        }
     }
 
     // No nesting

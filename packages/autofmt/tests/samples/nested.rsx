@@ -36,7 +36,7 @@ fn App() -> Element {
                             "hi!!"
                             "womh"
                         }
-                    };
+                    }
                     println!("hi")
                 },
                 "hi"
@@ -121,12 +121,14 @@ fn App() -> Element {
                                 }
                             }
                         },
-                        {rsx! {
-                            div2 {
-                                h12 { "hi" }
-                                "so22mething nested?"
+                        {
+                            rsx! {
+                                div2 {
+                                    h12 { "hi" }
+                                    "so22mething nested?"
+                                }
                             }
-                        }}
+                        }
                     }
                 }
             },
