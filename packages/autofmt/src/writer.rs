@@ -18,28 +18,6 @@ pub struct Writer<'a> {
     pub invalid_exprs: Vec<Span>,
 }
 
-#[derive(Debug)]
-enum ShortOptimization {
-    /// Special because we want to print the closing bracket immediately
-    ///
-    /// IE
-    /// `div {}` instead of `div { }`
-    Empty,
-
-    /// Special optimization to put everything on the same line and add some buffer spaces
-    ///
-    /// IE
-    ///
-    /// `div { "asdasd" }` instead of a multiline variant
-    Oneliner,
-
-    /// Optimization where children flow but props remain fixed on top
-    PropsOnTop,
-
-    /// The noisiest optimization where everything flows
-    NoOpt,
-}
-
 impl<'a> Writer<'a> {
     pub fn new(raw_src: &'a str) -> Self {
         let src = raw_src.lines().collect();
@@ -86,7 +64,7 @@ impl<'a> Writer<'a> {
         }
     }
 
-    pub fn write_element(&mut self, el: &Element) -> Result {
+    fn write_element(&mut self, el: &Element) -> Result {
         let Element {
             name,
             raw_attributes: attributes,
@@ -96,24 +74,15 @@ impl<'a> Writer<'a> {
             ..
         } = el;
 
-        /*
-            1. Write the tag
-            2. Write the key
-            3. Write the attributes
-            4. Write the children
-        */
-
         write!(self.out, "{name} {{")?;
-
         let brace = brace.unwrap_or_default();
         self.write_rsx_block(attributes, spreads, children, &brace)?;
-
         write!(self.out, "}}")?;
 
         Ok(())
     }
 
-    pub fn write_component(
+    fn write_component(
         &mut self,
         Component {
             name,
@@ -138,219 +107,18 @@ impl<'a> Writer<'a> {
         }
 
         write!(self.out, " {{")?;
-
         self.write_rsx_block(fields, spreads, &children.roots, brace)?;
-
         write!(self.out, "}}")?;
 
         Ok(())
     }
 
-    pub fn write_text_node(&mut self, text: &TextNode) -> Result {
+    fn write_text_node(&mut self, text: &TextNode) -> Result {
         self.out.write_text(&text.input)
     }
 
-    pub fn write_expr_node(&mut self, expr: &ExprNode) -> Result {
+    fn write_expr_node(&mut self, expr: &ExprNode) -> Result {
         self.write_partial_expr(expr.expr.as_expr(), expr.span())
-    }
-
-    pub fn write_attr_comments(&mut self, brace: &Brace, attr_span: Span) -> Result {
-        // There's a chance this line actually shares the same line as the previous
-        // Only write comments if the comments actually belong to this line
-        //
-        // to do this, we check if the attr span starts on the same line as the brace
-        // if it doesn't, we write the comments
-        let brace_line = brace.span.span().start().line;
-        let attr_line = attr_span.start().line;
-
-        if brace_line != attr_line {
-            self.write_comments(attr_span)?;
-        }
-
-        Ok(())
-    }
-
-    pub fn write_inline_comments(&mut self, final_span: LineColumn) -> Result {
-        let line = final_span.line;
-        let column = final_span.column;
-        let mut whitespace = self.src[line - 1][column..].trim();
-
-        if whitespace.is_empty() {
-            return Ok(());
-        }
-
-        whitespace = whitespace[1..].trim();
-
-        if whitespace.starts_with("//") {
-            write!(self.out, " {whitespace}")?;
-        }
-
-        Ok(())
-    }
-
-    pub fn write_comments(&mut self, child: Span) -> Result {
-        // collect all comments upwards
-        // make sure we don't collect the comments of the node that we're currently under.
-        let start = child.start();
-        let line_start = start.line - 1;
-
-        for (id, line) in self.src[..line_start].iter().enumerate().rev() {
-            if line.trim().starts_with("//") || line.is_empty() && id != 0 {
-                if id != 0 {
-                    self.comments.push_front(id);
-                }
-            } else {
-                break;
-            }
-        }
-
-        while let Some(comment_line) = self.comments.pop_front() {
-            let line = &self.src[comment_line].trim();
-
-            if line.is_empty() {
-                self.out.new_line()?;
-            } else {
-                self.out.tab()?;
-                writeln!(self.out, "{}", line.trim())?;
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn write_body_nodes(&mut self, children: &[BodyNode]) -> Result {
-        let mut iter = children.iter().peekable();
-        while let Some(child) = iter.next() {
-            if self.current_span_is_primary(child.span()) {
-                self.write_comments(child.span())?;
-            };
-
-            self.out.tab()?;
-            self.write_ident(child)?;
-
-            if iter.peek().is_some() {
-                self.out.new_line()?;
-            }
-        }
-
-        Ok(())
-    }
-
-    // Push out the indent level and write each component, line by line
-    pub fn write_body_indented(&mut self, children: &[BodyNode]) -> Result {
-        self.out.indent_level += 1;
-
-        self.write_body_nodes(children)?;
-
-        self.out.indent_level -= 1;
-        Ok(())
-    }
-
-    pub fn write_body_no_indent(&mut self, children: &[BodyNode]) -> Result {
-        self.write_body_nodes(children)?;
-
-        Ok(())
-    }
-
-    pub(crate) fn attr_value_len(&mut self, value: &AttributeValue) -> usize {
-        match value {
-            AttributeValue::IfExpr(if_chain) => {
-                let condition_len = self.retrieve_formatted_expr(&if_chain.condition).len();
-                let value_len = self.attr_value_len(&if_chain.then_value);
-                let if_len = 2;
-                let brace_len = 2;
-                let space_len = 2;
-                let else_len = if_chain
-                    .else_value
-                    .as_ref()
-                    .map(|else_value| self.attr_value_len(else_value) + 1)
-                    .unwrap_or_default();
-                condition_len + value_len + if_len + brace_len + space_len + else_len
-            }
-            AttributeValue::AttrLiteral(lit) => lit.to_string().len(),
-            AttributeValue::Shorthand(expr) => {
-                let span = &expr.span();
-                span.end().line - span.start().line
-            }
-            AttributeValue::AttrExpr(expr) => expr
-                .as_expr()
-                .map(|expr| self.attr_expr_len(&expr))
-                .unwrap_or(100000),
-            AttributeValue::EventTokens(closure) => closure
-                .as_expr()
-                .map(|expr| self.attr_expr_len(&expr))
-                .unwrap_or(100000),
-        }
-    }
-
-    fn attr_expr_len(&mut self, expr: &Expr) -> usize {
-        let out = self.retrieve_formatted_expr(expr);
-        if out.contains('\n') {
-            100000
-        } else {
-            out.len()
-        }
-    }
-
-    pub(crate) fn is_short_attrs(&mut self, attributes: &[Attribute], spreads: &[Spread]) -> usize {
-        let mut total = 0;
-
-        // No more than 3 attributes before breaking the line
-        if attributes.len() > 3 {
-            return 100000;
-        }
-
-        for attr in attributes {
-            if self.current_span_is_primary(attr.span()) {
-                'line: for line in self.src[..attr.span().start().line - 1].iter().rev() {
-                    match (line.trim().starts_with("//"), line.is_empty()) {
-                        (true, _) => return 100000,
-                        (_, true) => continue 'line,
-                        _ => break 'line,
-                    }
-                }
-            }
-
-            let name_len = match &attr.name {
-                AttributeName::BuiltIn(name) => {
-                    let name = name.to_string();
-                    name.len()
-                }
-                AttributeName::Custom(name) => name.value().len() + 2,
-                AttributeName::Spread(_) => unreachable!(),
-            };
-            total += name_len;
-
-            if attr.can_be_shorthand() {
-                total += 2;
-            } else {
-                total += self.attr_value_len(&attr.value);
-            }
-
-            total += 6;
-        }
-
-        for spread in spreads {
-            let expr_len = self.retrieve_formatted_expr(&spread.expr).len();
-            total += expr_len + 3;
-        }
-
-        total
-    }
-
-    #[allow(clippy::map_entry)]
-    pub fn retrieve_formatted_expr(&mut self, expr: &Expr) -> &str {
-        let loc = expr.span().start();
-
-        if !self.cached_formats.contains_key(&loc) {
-            let formatted = self.unparse_expr(expr);
-            self.cached_formats.insert(loc, formatted);
-        }
-
-        self.cached_formats
-            .get(&loc)
-            .expect("Just inserted the parsed expr, so it should be in the cache")
-            .as_str()
     }
 
     fn write_for_loop(&mut self, forloop: &ForLoop) -> std::fmt::Result {
@@ -425,9 +193,8 @@ impl<'a> Writer<'a> {
     fn write_inline_expr(&mut self, expr: &Expr) -> std::fmt::Result {
         let unparsed = self.unparse_expr(expr);
         let mut lines = unparsed.lines();
-        let first_line = lines
-            .next()
-            .expect("All exprs should have at least one line");
+        let first_line = lines.next().ok_or(std::fmt::Error)?;
+
         write!(self.out, "{first_line}")?;
 
         let mut was_multiline = false;
@@ -448,17 +215,64 @@ impl<'a> Writer<'a> {
         Ok(())
     }
 
+    pub fn write_body_nodes(&mut self, children: &[BodyNode]) -> Result {
+        let mut iter = children.iter().peekable();
+
+        while let Some(child) = iter.next() {
+            if self.current_span_is_primary(child.span()) {
+                self.write_comments(child.span())?;
+            };
+            self.out.tab()?;
+            self.write_ident(child)?;
+            if iter.peek().is_some() {
+                self.out.new_line()?;
+            }
+        }
+
+        Ok(())
+    }
+
+    // Push out the indent level and write each component, line by line
+    fn write_body_indented(&mut self, children: &[BodyNode]) -> Result {
+        self.out.indent_level += 1;
+        self.write_body_nodes(children)?;
+        self.out.indent_level -= 1;
+        Ok(())
+    }
+
     /// Basically elements and components are the same thing
     ///
     /// This writes the contents out for both in one function, centralizing the annoying logic like
     /// key handling, breaks, closures, etc
-    pub fn write_rsx_block(
+    fn write_rsx_block(
         &mut self,
         attributes: &[Attribute],
         spreads: &[Spread],
         children: &[BodyNode],
         brace: &Brace,
     ) -> Result {
+        #[derive(Debug)]
+        enum ShortOptimization {
+            /// Special because we want to print the closing bracket immediately
+            ///
+            /// IE
+            /// `div {}` instead of `div { }`
+            Empty,
+
+            /// Special optimization to put everything on the same line and add some buffer spaces
+            ///
+            /// IE
+            ///
+            /// `div { "asdasd" }` instead of a multiline variant
+            Oneliner,
+
+            /// Optimization where children flow but props remain fixed on top
+            PropsOnTop,
+
+            /// The noisiest optimization where everything flows
+            NoOpt,
+        }
+
         // decide if we have any special optimizations
         // Default with none, opt the cases in one-by-one
         let mut opt_level = ShortOptimization::NoOpt;
@@ -653,16 +467,10 @@ impl<'a> Writer<'a> {
 
     fn write_attribute_name(&mut self, attr: &AttributeName) -> Result {
         match attr {
-            AttributeName::BuiltIn(name) => {
-                write!(self.out, "{}", name)?;
-            }
-            AttributeName::Custom(name) => {
-                write!(self.out, "{}", name.to_token_stream())?;
-            }
+            AttributeName::BuiltIn(name) => write!(self.out, "{}", name),
+            AttributeName::Custom(name) => write!(self.out, "{}", name.to_token_stream()),
             AttributeName::Spread(_) => unreachable!(),
         }
-
-        Ok(())
     }
 
     fn write_attribute_value(&mut self, value: &AttributeValue) -> Result {
@@ -678,10 +486,9 @@ impl<'a> Writer<'a> {
             }
             AttributeValue::EventTokens(closure) => {
                 self.out.indent_level += 1;
-                self.write_partial_closure(closure)?;
+                self.write_partial_expr(closure.as_expr(), closure.span())?;
                 self.out.indent_level -= 1;
             }
-
             AttributeValue::AttrExpr(value) => {
                 self.out.indent_level += 1;
                 self.write_partial_expr(value.as_expr(), value.span())?;
@@ -695,7 +502,6 @@ impl<'a> Writer<'a> {
     fn write_attribute_if_chain(&mut self, if_chain: &IfAttributeValue) -> Result {
         let cond = self.unparse_expr(&if_chain.condition);
         write!(self.out, "if {cond} {{ ")?;
-
         self.write_attribute_value(&if_chain.then_value)?;
         write!(self.out, " }}")?;
         match if_chain.else_value.as_deref() {
@@ -710,6 +516,196 @@ impl<'a> Writer<'a> {
             }
             None => {}
         }
+
+        Ok(())
+    }
+
+    fn write_attr_comments(&mut self, brace: &Brace, attr_span: Span) -> Result {
+        // There's a chance this line actually shares the same line as the previous
+        // Only write comments if the comments actually belong to this line
+        //
+        // to do this, we check if the attr span starts on the same line as the brace
+        // if it doesn't, we write the comments
+        let brace_line = brace.span.span().start().line;
+        let attr_line = attr_span.start().line;
+
+        if brace_line != attr_line {
+            self.write_comments(attr_span)?;
+        }
+
+        Ok(())
+    }
+
+    fn write_inline_comments(&mut self, final_span: LineColumn) -> Result {
+        let line = final_span.line;
+        let column = final_span.column;
+        let mut whitespace = self.src[line - 1][column..].trim();
+
+        if whitespace.is_empty() {
+            return Ok(());
+        }
+
+        whitespace = whitespace[1..].trim();
+
+        if whitespace.starts_with("//") {
+            write!(self.out, " {whitespace}")?;
+        }
+
+        Ok(())
+    }
+
+    fn write_comments(&mut self, child: Span) -> Result {
+        // collect all comments upwards
+        // make sure we don't collect the comments of the node that we're currently under.
+        let start = child.start();
+        let line_start = start.line - 1;
+
+        for (id, line) in self.src[..line_start].iter().enumerate().rev() {
+            if line.trim().starts_with("//") || line.is_empty() && id != 0 {
+                if id != 0 {
+                    self.comments.push_front(id);
+                }
+            } else {
+                break;
+            }
+        }
+
+        while let Some(comment_line) = self.comments.pop_front() {
+            let line = &self.src[comment_line].trim();
+
+            if line.is_empty() {
+                self.out.new_line()?;
+            } else {
+                self.out.tab()?;
+                writeln!(self.out, "{}", line.trim())?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn attr_value_len(&mut self, value: &AttributeValue) -> usize {
+        match value {
+            AttributeValue::IfExpr(if_chain) => {
+                let condition_len = self.retrieve_formatted_expr(&if_chain.condition).len();
+                let value_len = self.attr_value_len(&if_chain.then_value);
+                let if_len = 2;
+                let brace_len = 2;
+                let space_len = 2;
+                let else_len = if_chain
+                    .else_value
+                    .as_ref()
+                    .map(|else_value| self.attr_value_len(else_value) + 1)
+                    .unwrap_or_default();
+                condition_len + value_len + if_len + brace_len + space_len + else_len
+            }
+            AttributeValue::AttrLiteral(lit) => lit.to_string().len(),
+            AttributeValue::Shorthand(expr) => {
+                let span = &expr.span();
+                span.end().line - span.start().line
+            }
+            AttributeValue::AttrExpr(expr) => expr
+                .as_expr()
+                .map(|expr| self.attr_expr_len(&expr))
+                .unwrap_or(100000),
+            AttributeValue::EventTokens(closure) => closure
+                .as_expr()
+                .map(|expr| self.attr_expr_len(&expr))
+                .unwrap_or(100000),
+        }
+    }
+
+    fn attr_expr_len(&mut self, expr: &Expr) -> usize {
+        let out = self.retrieve_formatted_expr(expr);
+        if out.contains('\n') {
+            100000
+        } else {
+            out.len()
+        }
+    }
+
+    fn is_short_attrs(&mut self, attributes: &[Attribute], spreads: &[Spread]) -> usize {
+        let mut total = 0;
+
+        // No more than 3 attributes before breaking the line
+        if attributes.len() > 3 {
+            return 100000;
+        }
+
+        for attr in attributes {
+            if self.current_span_is_primary(attr.span()) {
+                'line: for line in self.src[..attr.span().start().line - 1].iter().rev() {
+                    match (line.trim().starts_with("//"), line.is_empty()) {
+                        (true, _) => return 100000,
+                        (_, true) => continue 'line,
+                        _ => break 'line,
+                    }
+                }
+            }
+
+            let name_len = match &attr.name {
+                AttributeName::BuiltIn(name) => {
+                    let name = name.to_string();
+                    name.len()
+                }
+                AttributeName::Custom(name) => name.value().len() + 2,
+                AttributeName::Spread(_) => unreachable!(),
+            };
+            total += name_len;
+
+            if attr.can_be_shorthand() {
+                total += 2;
+            } else {
+                total += self.attr_value_len(&attr.value);
+            }
+
+            total += 6;
+        }
+
+        for spread in spreads {
+            let expr_len = self.retrieve_formatted_expr(&spread.expr).len();
+            total += expr_len + 3;
+        }
+
+        total
+    }
+
+    fn write_todo_body(&mut self, brace: &Brace) -> std::fmt::Result {
+        let span = brace.span.span();
+        let start = span.start();
+        let end = span.end();
+
+        if start.line == end.line {
+            return Ok(());
+        }
+
+        writeln!(self.out)?;
+
+        for idx in start.line..end.line {
+            let line = &self.src[idx];
+            if line.trim().starts_with("//") {
+                for _ in 0..self.out.indent_level + 1 {
+                    write!(self.out, "    ")?
+                }
+                writeln!(self.out, "{}", line.trim())?;
+            }
+        }
+
+        for _ in 0..self.out.indent_level {
+            write!(self.out, "    ")?
+        }
+
+        Ok(())
+    }
+
+    fn write_partial_expr(&mut self, expr: syn::Result<Expr>, src_span: Span) -> Result {
+        let Ok(expr) = expr else {
+            self.invalid_exprs.push(src_span);
+            return Err(std::fmt::Error);
+        };
+
+        let pretty_expr = self.retrieve_formatted_expr(&expr).to_string();
+        self.write_mulitiline_tokens(pretty_expr)?;
 
         Ok(())
     }
@@ -739,16 +735,6 @@ impl<'a> Writer<'a> {
         Ok(())
     }
 
-    /// Write out the special PartialClosure type from the rsx crate
-    /// Basically just write token by token until we hit the block and then try and format *that*
-    /// We can't just ToTokens
-    fn write_partial_closure(&mut self, closure: &PartialClosure) -> Result {
-        // push out the indent level of the body of the closure
-        // This ensures it doesnt get written to the same level as the parent
-        self.write_partial_expr(closure.as_expr(), closure.span())?;
-        Ok(())
-    }
-
     fn write_spread_attribute(&mut self, attr: &Expr) -> Result {
         let formatted = self.unparse_expr(attr);
 
@@ -765,28 +751,12 @@ impl<'a> Writer<'a> {
         Ok(())
     }
 
-    // make sure the comments are actually relevant to this element.
-    // test by making sure this element is the primary element on this line
-    pub fn current_span_is_primary(&self, location: Span) -> bool {
-        let start = location.start();
-        let line_start = start.line - 1;
-
-        let beginning = self
-            .src
-            .get(line_start)
-            .filter(|this_line| this_line.len() > start.column)
-            .map(|this_line| this_line[..start.column].trim())
-            .unwrap_or_default();
-
-        beginning.is_empty()
-    }
-
     // check if the children are short enough to be on the same line
     // We don't have the notion of current line depth - each line tries to be < 80 total
     // returns the total line length if it's short
     // returns none if the length exceeds the limit
     // I think this eventually becomes quadratic :(
-    pub fn is_short_children(&mut self, children: &[BodyNode]) -> syn::Result<Option<usize>> {
+    fn is_short_children(&mut self, children: &[BodyNode]) -> syn::Result<Option<usize>> {
         if children.is_empty() {
             // todo: allow elements with comments but no children
             // like div { /* comment */ }
@@ -849,44 +819,34 @@ impl<'a> Writer<'a> {
         false
     }
 
-    /// empty everything except for some comments
-    fn write_todo_body(&mut self, brace: &Brace) -> std::fmt::Result {
-        let span = brace.span.span();
-        let start = span.start();
-        let end = span.end();
+    // make sure the comments are actually relevant to this element.
+    // test by making sure this element is the primary element on this line
+    fn current_span_is_primary(&self, location: Span) -> bool {
+        let start = location.start();
+        let line_start = start.line - 1;
 
-        if start.line == end.line {
-            return Ok(());
-        }
+        let beginning = self
+            .src
+            .get(line_start)
+            .filter(|this_line| this_line.len() > start.column)
+            .map(|this_line| this_line[..start.column].trim())
+            .unwrap_or_default();
 
-        writeln!(self.out)?;
-
-        for idx in start.line..end.line {
-            let line = &self.src[idx];
-            if line.trim().starts_with("//") {
-                for _ in 0..self.out.indent_level + 1 {
-                    write!(self.out, "    ")?
-                }
-                writeln!(self.out, "{}", line.trim())?;
-            }
-        }
-
-        for _ in 0..self.out.indent_level {
-            write!(self.out, "    ")?
-        }
-
-        Ok(())
+        beginning.is_empty()
     }
 
-    pub(crate) fn write_partial_expr(&mut self, expr: syn::Result<Expr>, src_span: Span) -> Result {
-        let Ok(expr) = expr else {
-            self.invalid_exprs.push(src_span);
-            return Err(std::fmt::Error);
-        };
+    #[allow(clippy::map_entry)]
+    fn retrieve_formatted_expr(&mut self, expr: &Expr) -> &str {
+        let loc = expr.span().start();
 
-        let pretty_expr = self.retrieve_formatted_expr(&expr).to_string();
-        self.write_mulitiline_tokens(pretty_expr)?;
+        if !self.cached_formats.contains_key(&loc) {
+            let formatted = self.unparse_expr(expr);
+            self.cached_formats.insert(loc, formatted);
+        }
 
-        Ok(())
+        self.cached_formats
+            .get(&loc)
+            .expect("Just inserted the parsed expr, so it should be in the cache")
+            .as_str()
     }
 }

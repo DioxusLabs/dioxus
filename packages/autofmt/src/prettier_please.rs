@@ -139,7 +139,7 @@ fn fmt_block_from_expr(raw: &str, tokens: TokenStream, cfg: IndentOptions) -> Op
     let body = CallBody::parse_strict.parse2(tokens).unwrap();
     let mut writer = Writer::new(raw);
     writer.out.indent = cfg;
-    writer.write_body_no_indent(&body.body.roots).ok()?;
+    writer.write_body_nodes(&body.body.roots).ok()?;
     writer.consume()
 }
 
