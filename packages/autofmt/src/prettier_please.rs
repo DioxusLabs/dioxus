@@ -42,6 +42,11 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
                 i.tokens = Default::default();
 
                 // Push out the indent level of the formatted block if it's multiline
+                // Normally we'd use a `\n` as the delimiter, but we actually want to make sure
+                // any block-level things are indented properly
+                //
+                // we should really just be parsing the block here and using the same heuristic
+                // rsx_call uses (short strings are inlined, all others are multiline
                 if formatted.contains('{') {
                     formatted = formatted
                         .lines()
@@ -363,9 +368,12 @@ mod tests {
 
     #[test]
     fn comments_on_nodes() {
-        let src = r##"
+        let src = r##"// hiasdasds
     div {
+        attr: "value", // comment
         div {}
+        "hi" // hello!
+        "hi" // hello!
         "hi" // hello!
         // hi!
     }

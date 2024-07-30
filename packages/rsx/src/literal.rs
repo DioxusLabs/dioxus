@@ -151,6 +151,14 @@ pub struct HotReloadFormattedSegment {
     pub dynamic_node_indexes: Vec<DynIdx>,
 }
 
+impl HotReloadFormattedSegment {
+    /// This mnethod is very important!
+    /// Deref + Spanned + .span() methods leads to name coliisions
+    pub fn span(&self) -> Span {
+        self.formatted_input.span()
+    }
+}
+
 impl Deref for HotReloadFormattedSegment {
     type Target = IfmtInput;
 

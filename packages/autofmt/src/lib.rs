@@ -152,10 +152,7 @@ pub fn fmt_block(block: &str, indent_level: usize, indent: IndentOptions) -> Opt
     let body = CallBody::parse_strict.parse_str(block).unwrap();
 
     let mut buf = Writer::new(block, indent);
-
-    // push out the indent level of the body of the html
     buf.out.indent_level = indent_level;
-
     buf.write_rsx_call(&body.body).ok()?;
 
     // writing idents leaves the final line ended at the end of the last ident

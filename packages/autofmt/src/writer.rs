@@ -36,17 +36,17 @@ impl<'a> Writer<'a> {
     }
 
     pub fn write_rsx_call(&mut self, body: &TemplateBody) -> Result {
-        match body.roots.len() {
-            0 => {}
-            1 if matches!(body.roots[0], BodyNode::Text(_)) => {
-                write!(self.out, " ")?;
-                self.write_ident(&body.roots[0])?;
-                write!(self.out, " ")?;
-            }
-            _ => {
-                self.out.new_line()?;
-                self.write_body_indented(&body.roots)?
-            }
+        if body.roots.is_empty() {
+            return Ok(());
+        }
+
+        if Self::is_short_rsx_call(&body.roots) {
+            write!(self.out, " ")?;
+            self.write_ident(&body.roots[0])?;
+            write!(self.out, " ")?;
+        } else {
+            self.out.new_line()?;
+            self.write_body_indented(&body.roots)?
         }
 
         Ok(())
@@ -68,6 +68,15 @@ impl<'a> Writer<'a> {
         self.write_inline_comments(span.end(), 0)?;
 
         Ok(())
+    }
+
+    /// Check if the rsx call is short enough to be inlined
+    fn is_short_rsx_call(roots: &[BodyNode]) -> bool {
+        match roots.len() {
+            0 => true,
+            1 if matches!(roots[0], BodyNode::Text(_)) => true,
+            _ => false,
+        }
     }
 
     fn write_element(&mut self, el: &Element) -> Result {
