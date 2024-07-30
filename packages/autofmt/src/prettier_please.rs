@@ -45,7 +45,7 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
                 if formatted.contains('{') {
                     formatted = formatted
                         .lines()
-                        .map(|line| format!("    {line}"))
+                        .map(|line| format!("{}{line}", self.cfg.indent_str()))
                         .collect::<Vec<_>>()
                         .join("\n");
                 }
@@ -87,7 +87,7 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
 
         for line in unparsed.lines() {
             if line.contains(MARKER) {
-                whitespace = line.chars().take_while(|c| c.is_whitespace()).count();
+                whitespace = line.matches(cfg.indent_str()).count();
                 break;
             }
         }
@@ -97,7 +97,7 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
         while let Some((_idx, fmt_line)) = lines.next() {
             // Push the indentation
             if is_multiline {
-                out_fmt.push_str(&" ".repeat(whitespace));
+                out_fmt.push_str(&cfg.indent_str().repeat(whitespace));
             }
 
             // Calculate delta between indentations - the block indentation is too much
@@ -111,7 +111,7 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
 
         if is_multiline {
             out_fmt.push('\n');
-            out_fmt.push_str(&" ".repeat(whitespace));
+            out_fmt.push_str(&cfg.indent_str().repeat(whitespace));
         } else {
             out_fmt.push(' ');
         }
