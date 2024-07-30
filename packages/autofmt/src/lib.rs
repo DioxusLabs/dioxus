@@ -99,10 +99,7 @@ pub fn try_fmt_file(
         // TESTME
         // Writing *should* not fail but it's possible that it does
         if writer.write_rsx_call(&body.body).is_err() {
-            let span = writer
-                .invalid_exprs
-                .pop()
-                .unwrap_or_else(|| Span::call_site());
+            let span = writer.invalid_exprs.pop().unwrap_or_else(Span::call_site);
             return Err(syn::Error::new(span, "Failed emit valid rsx - likely due to partially complete expressions in the rsx! macro"));
         }
 

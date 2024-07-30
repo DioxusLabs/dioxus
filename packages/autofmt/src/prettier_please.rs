@@ -153,7 +153,7 @@ fn unwrapped(raw: String) -> String {
         .join("\n");
 
     // remove the semicolon
-    if o.ends_with(";") {
+    if o.ends_with(';') {
         o.pop();
     }
 
