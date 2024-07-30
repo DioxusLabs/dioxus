@@ -46,7 +46,7 @@ impl SuspendedFuture {
     pub fn new(task: Task) -> Self {
         Self {
             task,
-            origin: current_scope_id().unwrap(),
+            origin: current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
             placeholder: VNode::placeholder(),
         }
     }

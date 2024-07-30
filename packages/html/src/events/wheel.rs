@@ -1,10 +1,17 @@
 use dioxus_core::Event;
 use std::fmt::Formatter;
 
-use crate::geometry::WheelDelta;
+use crate::geometry::*;
+use crate::input_data::{MouseButton, MouseButtonSet};
+use crate::prelude::*;
 
+use super::HasMouseData;
+
+/// A synthetic event that wraps a web-style
+/// [`WheelEvent`](https://developer.mozilla.org/en-US/docs/Web/API/WheelEvent)
 pub type WheelEvent = Event<WheelData>;
 
+/// Data associated with a [WheelEvent]
 pub struct WheelData {
     inner: Box<dyn HasWheelData>,
 }
@@ -19,6 +26,10 @@ impl std::fmt::Debug for WheelData {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("WheelData")
             .field("delta", &self.delta())
+            .field("coordinates", &self.coordinates())
+            .field("modifiers", &self.modifiers())
+            .field("held_buttons", &self.held_buttons())
+            .field("trigger_button", &self.trigger_button())
             .finish()
     }
 }
@@ -30,7 +41,6 @@ impl PartialEq for WheelData {
 }
 
 impl WheelData {
-    /// Create a new WheelData
     pub fn new(inner: impl HasWheelData + 'static) -> Self {
         Self {
             inner: Box::new(inner),
@@ -45,7 +55,48 @@ impl WheelData {
 
     /// Downcast this event to a concrete event type
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
-        self.inner.as_any().downcast_ref::<T>()
+        HasWheelData::as_any(&*self.inner).downcast_ref::<T>()
+    }
+}
+
+impl InteractionLocation for WheelData {
+    fn client_coordinates(&self) -> ClientPoint {
+        self.inner.client_coordinates()
+    }
+
+    fn page_coordinates(&self) -> PagePoint {
+        self.inner.page_coordinates()
+    }
+
+    fn screen_coordinates(&self) -> ScreenPoint {
+        self.inner.screen_coordinates()
+    }
+}
+
+impl InteractionElementOffset for WheelData {
+    fn element_coordinates(&self) -> ElementPoint {
+        self.inner.element_coordinates()
+    }
+
+    fn coordinates(&self) -> Coordinates {
+        self.inner.coordinates()
+    }
+}
+
+impl ModifiersInteraction for WheelData {
+    fn modifiers(&self) -> Modifiers {
+        self.inner.modifiers()
+    }
+}
+
+impl PointerInteraction for WheelData {
+    fn held_buttons(&self) -> MouseButtonSet {
+        self.inner.held_buttons()
+    }
+
+    // todo the following is kind of bad; should we just return None when the trigger_button is unreliable (and frankly irrelevant)? i guess we would need the event_type here
+    fn trigger_button(&self) -> Option<MouseButton> {
+        self.inner.trigger_button()
     }
 }
 
@@ -53,6 +104,9 @@ impl WheelData {
 /// A serialized version of WheelData
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedWheelData {
+    #[serde(flatten)]
+    pub mouse: crate::point_interaction::SerializedPointInteraction,
+
     pub delta_mode: u32,
     pub delta_x: f64,
     pub delta_y: f64,
@@ -62,14 +116,15 @@ pub struct SerializedWheelData {
 #[cfg(feature = "serialize")]
 impl SerializedWheelData {
     /// Create a new SerializedWheelData
-    pub fn new(delta: WheelDelta) -> Self {
-        let delta_mode = match delta {
+    pub fn new(wheel: &WheelData) -> Self {
+        let delta_mode = match wheel.delta() {
             WheelDelta::Pixels(_) => 0,
             WheelDelta::Lines(_) => 1,
             WheelDelta::Pages(_) => 2,
         };
-        let delta_raw = delta.strip_units();
+        let delta_raw = wheel.delta().strip_units();
         Self {
+            mouse: crate::point_interaction::SerializedPointInteraction::from(wheel),
             delta_mode,
             delta_x: delta_raw.x,
             delta_y: delta_raw.y,
@@ -81,7 +136,7 @@ impl SerializedWheelData {
 #[cfg(feature = "serialize")]
 impl From<&WheelData> for SerializedWheelData {
     fn from(data: &WheelData) -> Self {
-        Self::new(data.delta())
+        Self::new(data)
     }
 }
 
@@ -93,6 +148,57 @@ impl HasWheelData for SerializedWheelData {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl HasMouseData for SerializedWheelData {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl InteractionLocation for SerializedWheelData {
+    fn client_coordinates(&self) -> ClientPoint {
+        self.mouse.client_coordinates()
+    }
+
+    fn page_coordinates(&self) -> PagePoint {
+        self.mouse.page_coordinates()
+    }
+
+    fn screen_coordinates(&self) -> ScreenPoint {
+        self.mouse.screen_coordinates()
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl InteractionElementOffset for SerializedWheelData {
+    fn element_coordinates(&self) -> ElementPoint {
+        self.mouse.element_coordinates()
+    }
+
+    fn coordinates(&self) -> Coordinates {
+        self.mouse.coordinates()
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl ModifiersInteraction for SerializedWheelData {
+    fn modifiers(&self) -> Modifiers {
+        self.mouse.modifiers()
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl PointerInteraction for SerializedWheelData {
+    fn held_buttons(&self) -> MouseButtonSet {
+        self.mouse.held_buttons()
+    }
+
+    fn trigger_button(&self) -> Option<MouseButton> {
+        self.mouse.trigger_button()
     }
 }
 
@@ -120,7 +226,7 @@ impl_event![
     onwheel
 ];
 
-pub trait HasWheelData: std::any::Any {
+pub trait HasWheelData: HasMouseData + std::any::Any {
     /// The amount of wheel movement
     fn delta(&self) -> WheelDelta;
 

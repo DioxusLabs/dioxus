@@ -171,7 +171,7 @@ repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
-rust-version = "1.60.0"
+rust-version = "1.79.0"
 publish = false
 
 [dependencies]

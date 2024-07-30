@@ -19,9 +19,11 @@
 //! - The IDs of dynamic nodes relative to the template they live in. This is somewhat easy to track
 //!   but needs to happen on a per-template basis.
 //!
-//! - The unique ID of a hotreloadable literal (like ifmt or integers or strings, etc). This ID is
-//!   unique to the Callbody, not necessarily the template it lives in. This is similar to the
-//!   template ID
+//! - The IDs of formatted strings in debug mode only. Any formatted segments like "{x:?}" get pulled out
+//!   into a pool so we can move them around during hot reloading on a per-template basis.
+//!
+//! - The IDs of component property literals in debug mode only. Any component property literals like
+//!   1234 get pulled into the pool so we can hot reload them with the context of the literal pool.
 //!
 //! We solve this by parsing the structure completely and then doing a second pass that fills in IDs
 //! by walking the structure.
@@ -29,25 +31,22 @@
 //! This means you can't query the ID of any node "in a vacuum" - these are assigned once - but at
 //! least they're stable enough for the purposes of hotreloading
 //!
-//! The plumbing for hotreloadable literals could be template relative... ie "file:line:col:template:idx"
-//! That would be ideal if we could determine the the idx only relative to the template
-//!
 //! ```rust, ignore
 //! rsx! {
 //!     div {
 //!         class: "hello",
-//!         id: "node-{node_id}",    <--- hotreloadable with ID 0
+//!         id: "node-{node_id}",    <--- {node_id} has the formatted segment id 0 in the literal pool
 //!         ..props,                 <--- spreads are not reloadable
 //!
-//!         "Hello, world!           <--- not tracked but reloadable since it's just a string
+//!         "Hello, world!           <--- not tracked but reloadable in the template since it's just a string
 //!
-//!         for item in 0..10 {      <--- both 0 and 10 are technically reloadable...
-//!             div { "cool-{item}" }     <--- the ifmt here is also reloadable
+//!         for item in 0..10 {      <--- both 0 and 10 are technically reloadable, but we don't hot reload them today...
+//!             div { "cool-{item}" }     <--- {item} has the formatted segment id 1 in the literal pool
 //!         }
 //!
 //!         Link {
-//!             to: "/home", <-- hotreloadable since its a component prop
-//!             class: "link {is_ready}", <-- hotreloadable since its a formatted string as a prop
+//!             to: "/home", <-- hotreloadable since its a component prop literal (with component literal id 0)
+//!             class: "link {is_ready}", <-- {is_ready} has the formatted segment id 2 in the literal pool and the property has the component literal id 1
 //!             "Home" <-- hotreloadable since its a component child (via template)
 //!         }
 //!     }
@@ -58,9 +57,8 @@ use self::location::DynIdx;
 use crate::innerlude::Attribute;
 use crate::*;
 use proc_macro2::TokenStream as TokenStream2;
-
-#[cfg(feature = "hot_reload")]
-use dioxus_core::prelude::Template;
+use proc_macro2_diagnostics::SpanDiagnosticExt;
+use syn::parse_quote;
 
 type NodePath = Vec<u8>;
 type AttributePath = Vec<u8>;
@@ -81,8 +79,8 @@ pub struct TemplateBody {
     pub template_idx: DynIdx,
     pub node_paths: Vec<NodePath>,
     pub attr_paths: Vec<(AttributePath, usize)>,
+    pub dynamic_text_segments: Vec<FormattedSegment>,
     pub diagnostics: Diagnostics,
-    current_path: Vec<u8>,
 }
 
 impl Parse for TemplateBody {
@@ -101,9 +99,19 @@ impl Parse for TemplateBody {
 /// This is because the parsing phase filled in all the additional metadata we need
 impl ToTokens for TemplateBody {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        // If there are no roots, this is an empty template, so just return None
-        if self.roots.is_empty() {
-            return tokens.append_all(quote! { dioxus_core::VNode::empty() });
+        // If the nodes are completely empty, insert a placeholder node
+        // Core expects at least one node in the template to make it easier to replace
+        if self.is_empty() {
+            // Create an empty template body with a placeholder and diagnostics + the template index from the original
+            let empty = Self::new(vec![BodyNode::RawExpr(parse_quote! {()})]);
+            let default = Self {
+                diagnostics: self.diagnostics.clone(),
+                template_idx: self.template_idx.clone(),
+                ..empty
+            };
+            // And then render the default template body
+            default.to_tokens(tokens);
+            return;
         }
 
         // If we have an implicit key, then we need to write its tokens
@@ -112,34 +120,7 @@ impl ToTokens for TemplateBody {
             None => quote! { None },
         };
 
-        let TemplateBody { roots, .. } = self;
-        let roots = roots.iter().map(|node| match node {
-            BodyNode::Element(el) => quote! { #el },
-            BodyNode::Text(text) if text.is_static() => {
-                let text = text.input.to_static().unwrap();
-                quote! { dioxus_core::TemplateNode::Text { text: #text } }
-            }
-            BodyNode::Text(text) => {
-                let id = text.dyn_idx.get();
-                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
-            }
-            BodyNode::ForLoop(floop) => {
-                let id = floop.dyn_idx.get();
-                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
-            }
-            BodyNode::RawExpr(exp) => {
-                let id = exp.dyn_idx.get();
-                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
-            }
-            BodyNode::Component(exp) => {
-                let id = exp.dyn_idx.get();
-                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
-            }
-            BodyNode::IfChain(exp) => {
-                let id = exp.dyn_idx.get();
-                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
-            }
-        });
+        let roots = self.quote_roots();
 
         // Print paths is easy - just print the paths
         let node_paths = self.node_paths.iter().map(|it| quote!(&[#(#it),*]));
@@ -147,50 +128,76 @@ impl ToTokens for TemplateBody {
 
         // For printing dynamic nodes, we rely on the ToTokens impl
         // Elements have a weird ToTokens - they actually are the entrypoint for Template creation
-        let dynamic_nodes = self.node_paths.iter().map(|path| {
-            let node = self.get_dyn_node(path);
-            quote::quote! { #node }
-        });
+        let dynamic_nodes: Vec<_> = self.dynamic_nodes().collect();
 
         // We could add a ToTokens for Attribute but since we use that for both components and elements
         // They actually need to be different, so we just localize that here
-        let dyn_attr_printer = self
-            .attr_paths
-            .iter()
-            .map(|(path, idx)| self.get_dyn_attr(path, *idx).rendered_as_dynamic_attr());
+        let dyn_attr_printer: Vec<_> = self
+            .dynamic_attributes()
+            .map(|attr| attr.rendered_as_dynamic_attr())
+            .collect();
+
+        let dynamic_text = self.dynamic_text_segments.iter();
 
         let index = self.template_idx.get();
 
         let diagnostics = &self.diagnostics;
+        let hot_reload_mapping = self.hot_reload_mapping(quote! { ___TEMPLATE_NAME });
 
-        tokens.append_all(quote! {
-            dioxus_core::Element::Ok({
+        let vnode = quote! {
+            #[doc(hidden)] // vscode please stop showing these in symbol search
+            const ___TEMPLATE_NAME: &str = {
+                const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
+                const NORMAL: &str = dioxus_core::const_format::str_replace!(PATH, '\\', "/");
+                dioxus_core::const_format::concatcp!(NORMAL, ':', line!(), ':', column!(), ':', #index)
+            };
+            #[cfg(not(debug_assertions))]
+            {
                 #[doc(hidden)] // vscode please stop showing these in symbol search
                 static ___TEMPLATE: dioxus_core::Template = dioxus_core::Template {
-                    name: {
-                        const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
-                        const NORMAL: &str = dioxus_core::const_format::str_replace!(PATH, '\\', "/");
-                        dioxus_core::const_format::concatcp!(NORMAL, ':', line!(), ':', column!(), ':', #index)
-                    },
+                    name: ___TEMPLATE_NAME,
                     roots: &[ #( #roots ),* ],
                     node_paths: &[ #( #node_paths ),* ],
                     attr_paths: &[ #( #attr_paths ),* ],
                 };
 
+                // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
+                #[allow(clippy::let_and_return)]
+                let __vnodes = dioxus_core::VNode::new(
+                    #key_tokens,
+                    ___TEMPLATE,
+                    Box::new([ #( #dynamic_nodes ),* ]),
+                    Box::new([ #( #dyn_attr_printer ),* ]),
+                );
+                __vnodes
+            }
+            #[cfg(debug_assertions)]
+            {
+                // The key is important here - we're creating a new GlobalSignal each call to this
+                // But the key is what's keeping it stable
+                let __template = GlobalSignal::with_key(
+                    || #hot_reload_mapping,
+                    ___TEMPLATE_NAME
+                );
+
+                __template.maybe_with_rt(|__template_read| {
+                    let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
+                        vec![ #( #dynamic_text.to_string() ),* ],
+                    );
+                    let mut __dynamic_value_pool = dioxus_core::internal::DynamicValuePool::new(
+                        vec![ #( #dynamic_nodes ),* ],
+                        vec![ #( #dyn_attr_printer ),* ],
+                        __dynamic_literal_pool
+                    );
+                    __dynamic_value_pool.render_with(__template_read)
+                })
+            }
+        };
+        tokens.append_all(quote! {
+            dioxus_core::Element::Ok({
                 #diagnostics
 
-                {
-                    // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
-                    #[allow(clippy::let_and_return)]
-                    let __vnodes = dioxus_core::VNode::new(
-                        #key_tokens,
-                        ___TEMPLATE,
-                        Box::new([ #( #dynamic_nodes),* ]),
-                        Box::new([ #( #dyn_attr_printer ),* ]),
-                    );
-                    __vnodes
-                }
-
+                #vnode
             })
         });
     }
@@ -207,12 +214,13 @@ impl TemplateBody {
             template_idx: DynIdx::default(),
             node_paths: Vec::new(),
             attr_paths: Vec::new(),
-            current_path: Vec::new(),
+            dynamic_text_segments: Vec::new(),
             diagnostics: Diagnostics::new(),
         };
 
         // Assign paths to all nodes in the template
         body.assign_paths_inner(&nodes);
+        body.validate_key();
 
         // And then save the roots
         body.roots = nodes;
@@ -220,115 +228,39 @@ impl TemplateBody {
         body
     }
 
-    /// Cascade down path information into the children of this template
-    ///
-    /// This provides the necessary path and index information for the children of this template
-    /// so that they can render out their dynamic nodes correctly. Also does plumbing for things like
-    /// hotreloaded literals which need to be tracked on a per-template basis.
-    ///
-    /// This can only operate with knowledge of this template, not the surrounding callbody. Things like
-    /// wiring of ifmt literals need to be done at the callbody level since those final IDs need to
-    /// be unique to the entire app.
-    fn assign_paths_inner(&mut self, nodes: &[BodyNode]) {
-        for (idx, node) in nodes.iter().enumerate() {
-            self.current_path.push(idx as u8);
-            match node {
-                // Just descend into elements - they're not dynamic
-                BodyNode::Element(el) => {
-                    for (idx, attr) in el.merged_attributes.iter().enumerate() {
-                        if !attr.is_static_str_literal() {
-                            attr.dyn_idx.set(self.attr_paths.len());
-                            self.attr_paths.push((self.current_path.clone(), idx));
-                        }
-                    }
-
-                    self.assign_paths_inner(&el.children)
-                }
-
-                // Text nodes are dynamic if they contain dynamic segments
-                BodyNode::Text(txt) => {
-                    if !txt.is_static() {
-                        self.assign_path_to(node);
-                    }
-                }
-
-                // Raw exprs are always dynamic
-                BodyNode::RawExpr(_)
-                | BodyNode::ForLoop(_)
-                | BodyNode::Component(_)
-                | BodyNode::IfChain(_) => self.assign_path_to(node),
-            };
-            self.current_path.pop();
-        }
-    }
-
-    /// Assign a path to a node and give it its dynamic index
-    /// This simplifies the ToTokens implementation for the macro to be a little less centralized
-    fn assign_path_to(&mut self, node: &BodyNode) {
-        // Assign the TemplateNode::Dynamic index to the node
-        node.set_dyn_idx(self.node_paths.len());
-
-        // And then save the current path as the corresponding path
-        self.node_paths.push(self.current_path.clone());
-    }
-
-    /// Create a new template from this TemplateBody
-    ///
-    /// Note that this will leak memory! We explicitly call `leak` on the vecs to match the format of
-    /// the `Template` struct.
-    #[cfg(feature = "hot_reload")]
-    pub fn to_template<Ctx: HotReloadingContext>(&self) -> Template {
-        self.to_template_with_custom_paths::<Ctx>(
-            "placeholder",
-            self.node_paths.clone(),
-            self.attr_paths.clone().into_iter().map(|v| v.0).collect(),
-        )
-    }
-
-    #[cfg(feature = "hot_reload")]
-    pub fn to_template_with_custom_paths<Ctx: HotReloadingContext>(
-        &self,
-        location: &'static str,
-        node_paths: Vec<NodePath>,
-        attr_paths: Vec<AttributePath>,
-    ) -> Template {
-        let roots = self
-            .roots
-            .iter()
-            .map(|node| node.to_template_node::<Ctx>())
-            .collect::<Vec<_>>();
-
-        Template {
-            name: location,
-            roots: intern(roots.as_slice()),
-            node_paths: intern(
-                node_paths
-                    .into_iter()
-                    .map(|path| intern(path.as_slice()))
-                    .collect::<Vec<_>>()
-                    .as_slice(),
-            ),
-            attr_paths: intern(
-                attr_paths
-                    .into_iter()
-                    .map(|path| intern(path.as_slice()))
-                    .collect::<Vec<_>>()
-                    .as_slice(),
-            ),
-        }
-    }
-
     pub fn is_empty(&self) -> bool {
         self.roots.is_empty()
     }
 
-    fn implicit_key(&self) -> Option<IfmtInput> {
+    pub(crate) fn implicit_key(&self) -> Option<&AttributeValue> {
         match self.roots.first() {
-            Some(BodyNode::Element(el)) if self.roots.len() == 1 => el.key().cloned(),
-            Some(BodyNode::Component(comp)) if self.roots.len() == 1 => {
-                comp.get_key().and_then(|f| f.ifmt().cloned())
-            }
+            Some(BodyNode::Element(el)) => el.key(),
+            Some(BodyNode::Component(comp)) => comp.get_key(),
             _ => None,
+        }
+    }
+
+    /// Ensure only one key and that the key is not a static str
+    ///
+    /// todo: we want to allow arbitrary exprs for keys provided they impl hash / eq
+    fn validate_key(&mut self) {
+        let key = self.implicit_key();
+
+        if let Some(attr) = key {
+            let diagnostic = match &attr {
+                AttributeValue::AttrLiteral(ifmt) => {
+                    if ifmt.is_static() {
+                        ifmt.span().error("Key must not be a static string. Make sure to use a formatted string like `key: \"{value}\"")
+                    } else {
+                        return;
+                    }
+                }
+                _ => attr
+                    .span()
+                    .error("Key must be in the form of a formatted string like `key: \"{value}\""),
+            };
+
+            self.diagnostics.push(diagnostic);
         }
     }
 
@@ -355,5 +287,72 @@ impl TemplateBody {
 
     pub fn dynamic_nodes(&self) -> impl DoubleEndedIterator<Item = &BodyNode> {
         self.node_paths.iter().map(|path| self.get_dyn_node(path))
+    }
+
+    fn quote_roots(&self) -> impl Iterator<Item = TokenStream2> + '_ {
+        self.roots.iter().map(|node| match node {
+            BodyNode::Element(el) => quote! { #el },
+            BodyNode::Text(text) if text.is_static() => {
+                let text = text.input.to_static().unwrap();
+                quote! { dioxus_core::TemplateNode::Text { text: #text } }
+            }
+            _ => {
+                let id = node.get_dyn_idx();
+                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
+            }
+        })
+    }
+
+    /// Iterate through the literal component properties of this rsx call in depth-first order
+    pub(crate) fn literal_component_properties(&self) -> impl Iterator<Item = &HotLiteral> + '_ {
+        self.dynamic_nodes()
+            .filter_map(|node| {
+                if let BodyNode::Component(component) = node {
+                    Some(component)
+                } else {
+                    None
+                }
+            })
+            .flat_map(|component| {
+                component.fields.iter().filter_map(|field| {
+                    if let AttributeValue::AttrLiteral(literal) = &field.value {
+                        Some(literal)
+                    } else {
+                        None
+                    }
+                })
+            })
+    }
+
+    fn hot_reload_mapping(&self, name: impl ToTokens) -> TokenStream2 {
+        let key = if let Some(AttributeValue::AttrLiteral(HotLiteral::Fmted(key))) =
+            self.implicit_key()
+        {
+            quote! { Some(#key) }
+        } else {
+            quote! { None }
+        };
+        let roots = self.quote_roots();
+        let dynamic_nodes = self.dynamic_nodes().map(|node| {
+            let id = node.get_dyn_idx();
+            quote! { dioxus_core::internal::HotReloadDynamicNode::Dynamic(#id) }
+        });
+        let dyn_attr_printer = self.dynamic_attributes().map(|attr| {
+            let id = attr.get_dyn_idx();
+            quote! { dioxus_core::internal::HotReloadDynamicAttribute::Dynamic(#id) }
+        });
+        let component_values = self
+            .literal_component_properties()
+            .map(|literal| literal.quote_as_hot_reload_literal());
+        quote! {
+            dioxus_core::internal::HotReloadedTemplate::new(
+                #name,
+                #key,
+                vec![ #( #dynamic_nodes ),* ],
+                vec![ #( #dyn_attr_printer ),* ],
+                vec![ #( #component_values ),* ],
+                &[ #( #roots ),* ],
+            )
+        }
     }
 }

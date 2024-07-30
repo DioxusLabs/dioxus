@@ -67,7 +67,11 @@ impl ReactiveContext {
             }
             let _ = tx.unbounded_send(());
         };
-        let _self = Self::new_with_callback(callback, current_scope_id().unwrap(), origin);
+        let _self = Self::new_with_callback(
+            callback,
+            current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
+            origin,
+        );
         (_self, rx)
     }
 

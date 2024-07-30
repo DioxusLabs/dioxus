@@ -378,6 +378,63 @@ impl HasWheelData for WheelEvent {
     }
 }
 
+impl HasMouseData for WheelEvent {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+impl InteractionLocation for WheelEvent {
+    fn client_coordinates(&self) -> ClientPoint {
+        ClientPoint::new(self.client_x().into(), self.client_y().into())
+    }
+
+    fn screen_coordinates(&self) -> ScreenPoint {
+        ScreenPoint::new(self.screen_x().into(), self.screen_y().into())
+    }
+
+    fn page_coordinates(&self) -> PagePoint {
+        PagePoint::new(self.page_x().into(), self.page_y().into())
+    }
+}
+
+impl InteractionElementOffset for WheelEvent {
+    fn element_coordinates(&self) -> ElementPoint {
+        ElementPoint::new(self.offset_x().into(), self.offset_y().into())
+    }
+}
+
+impl ModifiersInteraction for WheelEvent {
+    fn modifiers(&self) -> Modifiers {
+        let mut modifiers = Modifiers::empty();
+
+        if self.alt_key() {
+            modifiers.insert(Modifiers::ALT);
+        }
+        if self.ctrl_key() {
+            modifiers.insert(Modifiers::CONTROL);
+        }
+        if self.meta_key() {
+            modifiers.insert(Modifiers::META);
+        }
+        if self.shift_key() {
+            modifiers.insert(Modifiers::SHIFT);
+        }
+
+        modifiers
+    }
+}
+
+impl PointerInteraction for WheelEvent {
+    fn held_buttons(&self) -> crate::input_data::MouseButtonSet {
+        decode_mouse_button_set(self.buttons())
+    }
+
+    fn trigger_button(&self) -> Option<MouseButton> {
+        Some(MouseButton::from_web_code(self.button()))
+    }
+}
+
 impl HasAnimationData for AnimationEvent {
     fn animation_name(&self) -> String {
         self.animation_name()

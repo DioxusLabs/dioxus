@@ -131,6 +131,7 @@ pub fn collect_svgs(children: &mut [BodyNode], out: &mut Vec<BodyNode>) {
                     children: TemplateBody::new(vec![]),
                     brace: Default::default(),
                     dyn_idx: Default::default(),
+                    component_literal_dyn_idx: vec![],
                 });
 
                 std::mem::swap(child, &mut new_comp);

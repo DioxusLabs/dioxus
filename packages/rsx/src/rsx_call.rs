@@ -4,7 +4,7 @@
 //! Currently the additional tooling doesn't do much.
 
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens};
+use quote::ToTokens;
 use std::{cell::Cell, fmt::Debug};
 use syn::{
     parse::{Parse, ParseStream},
@@ -25,7 +25,6 @@ use crate::{BodyNode, TemplateBody};
 #[derive(Debug, Clone)]
 pub struct CallBody {
     pub body: TemplateBody,
-    pub ifmt_idx: Cell<usize>,
     pub template_idx: Cell<usize>,
 }
 
@@ -38,10 +37,7 @@ impl Parse for CallBody {
 
 impl ToTokens for CallBody {
     fn to_tokens(&self, out: &mut TokenStream2) {
-        match self.body.is_empty() {
-            true => quote! { dioxus_core::VNode::empty() }.to_tokens(out),
-            false => self.body.to_tokens(out),
-        }
+        self.body.to_tokens(out)
     }
 }
 
@@ -52,7 +48,6 @@ impl CallBody {
     pub fn new(body: TemplateBody) -> Self {
         let body = CallBody {
             body,
-            ifmt_idx: Cell::new(0),
             template_idx: Cell::new(0),
         };
 
@@ -91,36 +86,17 @@ impl CallBody {
     ///
     /// Lots of wiring!
     ///
-    /// However, here, we only need to wire up ifmt and template IDs since TemplateBody will handle the rest.
+    /// However, here, we only need to wire up template IDs since TemplateBody will handle the rest.
     ///
     /// This is better though since we can save the relevant data on the structures themselves.
     fn cascade_hotreload_info(&self, nodes: &[BodyNode]) {
         for node in nodes.iter() {
             match node {
-                BodyNode::RawExpr(_) => { /* one day maybe provide hr here?*/ }
-
-                BodyNode::Text(text) => {
-                    // one day we could also provide HR here to allow dynamic parts on the fly
-                    if !text.is_static() {
-                        text.hr_idx.set(self.next_ifmt_idx());
-                    }
-                }
-
                 BodyNode::Element(el) => {
-                    // Walk the attributes looking for hotreload opportunities
-                    for attr in &el.merged_attributes {
-                        attr.with_literal(|lit| lit.hr_idx.set(self.next_ifmt_idx()));
-                    }
-
                     self.cascade_hotreload_info(&el.children);
                 }
 
                 BodyNode::Component(comp) => {
-                    // walk the props looking for hotreload opportunities
-                    for prop in comp.fields.iter() {
-                        prop.with_literal(|lit| lit.hr_idx.set(self.next_ifmt_idx()));
-                    }
-
                     comp.children.template_idx.set(self.next_template_idx());
                     self.cascade_hotreload_info(&comp.children.roots);
                 }
@@ -134,14 +110,10 @@ impl CallBody {
                     body.template_idx.set(self.next_template_idx());
                     self.cascade_hotreload_info(&body.roots)
                 }),
+
+                _ => {}
             }
         }
-    }
-
-    fn next_ifmt_idx(&self) -> usize {
-        let idx = self.ifmt_idx.get();
-        self.ifmt_idx.set(idx + 1);
-        idx
     }
 
     fn next_template_idx(&self) -> usize {

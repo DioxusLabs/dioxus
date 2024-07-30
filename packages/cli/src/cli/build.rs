@@ -21,7 +21,7 @@ pub struct TargetArgs {
     pub bin: Option<String>,
 
     /// The package to build
-    #[clap(long)]
+    #[clap(short, long)]
     pub package: Option<String>,
 
     /// Space separated list of features to activate

@@ -28,9 +28,6 @@ use syn::{
     Block, Expr, ExprClosure, ExprIf, Ident, Lit, LitBool, LitFloat, LitInt, LitStr, Token,
 };
 
-#[cfg(feature = "hot_reload")]
-use dioxus_core::prelude::TemplateAttribute;
-
 /// A property value in the from of a `name: value` pair with an optional comma.
 /// Note that the colon and value are optional in the case of shorthand attributes. We keep them around
 /// to support "lossless" parsing in case that ever might be useful.
@@ -120,6 +117,16 @@ impl Attribute {
         }
     }
 
+    /// Set the dynamic index of this attribute
+    pub fn set_dyn_idx(&self, idx: usize) {
+        self.dyn_idx.set(idx);
+    }
+
+    /// Get the dynamic index of this attribute
+    pub fn get_dyn_idx(&self) -> usize {
+        self.dyn_idx.get()
+    }
+
     pub fn span(&self) -> proc_macro2::Span {
         self.name.span()
     }
@@ -140,18 +147,15 @@ impl Attribute {
 
     pub fn ifmt(&self) -> Option<&IfmtInput> {
         match &self.value {
-            AttributeValue::AttrLiteral(lit) => match &lit.value {
-                HotLiteralType::Fmted(input) => Some(input),
-                _ => None,
-            },
+            AttributeValue::AttrLiteral(HotLiteral::Fmted(input)) => Some(input),
             _ => None,
         }
     }
 
     pub fn as_static_str_literal(&self) -> Option<(&AttributeName, &IfmtInput)> {
         match &self.value {
-            AttributeValue::AttrLiteral(lit) => match &lit.value {
-                HotLiteralType::Fmted(input) if input.is_static() => Some((&self.name, input)),
+            AttributeValue::AttrLiteral(lit) => match &lit {
+                HotLiteral::Fmted(input) if input.is_static() => Some((&self.name, input)),
                 _ => None,
             },
             _ => None,
@@ -163,10 +167,26 @@ impl Attribute {
     }
 
     #[cfg(feature = "hot_reload")]
+    pub(crate) fn html_tag_and_namespace<Ctx: crate::HotReloadingContext>(
+        &self,
+    ) -> (&'static str, Option<&'static str>) {
+        let attribute_name_rust = self.name.to_string();
+        let element_name = self.el_name.as_ref().unwrap();
+        let rust_name = match element_name {
+            ElementName::Ident(i) => i.to_string(),
+            ElementName::Custom(s) => return (intern(s.value()), None),
+        };
+
+        Ctx::map_attribute(&rust_name, &attribute_name_rust)
+            .unwrap_or((intern(attribute_name_rust.as_str()), None))
+    }
+
+    #[cfg(feature = "hot_reload")]
     pub fn to_template_attribute<Ctx: crate::HotReloadingContext>(
         &self,
-        rust_name: &str,
-    ) -> TemplateAttribute {
+    ) -> dioxus_core::TemplateAttribute {
+        use dioxus_core::TemplateAttribute;
+
         // If it's a dynamic node, just return it
         // For dynamic attributes, we need to check the mapping to see if that mapping exists
         // todo: one day we could generate new dynamic attributes on the fly if they're a literal,
@@ -180,11 +200,8 @@ impl Attribute {
         }
 
         // Otherwise it's a static node and we can build it
-        let (_name, value) = self.as_static_str_literal().unwrap();
-        let attribute_name_rust = self.name.to_string();
-
-        let (name, namespace) = Ctx::map_attribute(rust_name, &attribute_name_rust)
-            .unwrap_or((intern(attribute_name_rust.as_str()), None));
+        let (_, value) = self.as_static_str_literal().unwrap();
+        let (name, namespace) = self.html_tag_and_namespace::<Ctx>();
 
         TemplateAttribute::Static {
             name,
@@ -303,8 +320,15 @@ impl Attribute {
             return true;
         }
 
-        if self.name.to_token_stream().to_string() == self.value.to_token_stream().to_string() {
-            return true;
+        // Or if it is a builtin attribute with a single ident value
+        if let (AttributeName::BuiltIn(name), AttributeValue::AttrExpr(expr)) =
+            (&self.name, &self.value)
+        {
+            if let Ok(Expr::Path(path)) = expr.as_expr() {
+                if path.path.get_ident() == Some(name) {
+                    return true;
+                }
+            }
         }
 
         false
@@ -537,7 +561,11 @@ impl IfAttributeValue {
                 return non_string_diagnostic(current_if_value.span());
             };
 
-            let HotLiteralType::Fmted(new) = &lit.value else {
+            let HotLiteral::Fmted(HotReloadFormattedSegment {
+                formatted_input: new,
+                ..
+            }) = &lit
+            else {
                 return non_string_diagnostic(current_if_value.span());
             };
 
@@ -554,8 +582,9 @@ impl IfAttributeValue {
                 }
                 // If the else value is a literal, then we need to append it to the expression and break
                 Some(AttributeValue::AttrLiteral(lit)) => {
-                    if let HotLiteralType::Fmted(new) = &lit.value {
-                        expression.extend(quote! { { #new.to_string() } });
+                    if let HotLiteral::Fmted(new) = &lit {
+                        let fmted = &new.formatted_input;
+                        expression.extend(quote! { { #fmted.to_string() } });
                         break;
                     } else {
                         return non_string_diagnostic(current_if_value.span());
