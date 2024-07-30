@@ -228,7 +228,7 @@ impl ToTokens for IfmtInput {
         if self.is_simple_expr() {
             let raw = &self.source;
             tokens.extend(quote! {
-                ::std::format_args!(#raw)
+                ::std::format!(#raw)
             });
             return;
         }
@@ -303,7 +303,7 @@ impl ToTokens for FormattedSegment {
         let (fmt, seg) = (&self.format_args, &self.segment);
         let fmt = format!("{{0:{fmt}}}");
         tokens.append_all(quote! {
-            format_args!(#fmt, #seg)
+            format!(#fmt, #seg)
         });
     }
 }
