@@ -1,4 +1,4 @@
-use dioxus_rsx::{hot_reload::Empty, CallBody};
+use dioxus_rsx::CallBody;
 use quote::ToTokens;
 
 use dioxus_rsx::PrettyUnparse;

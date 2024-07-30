@@ -83,6 +83,12 @@ pub struct TemplateBody {
     pub diagnostics: Diagnostics,
 }
 
+impl Default for TemplateBody {
+    fn default() -> Self {
+        Self::new(vec![BodyNode::RawExpr(parse_quote! {()})])
+    }
+}
+
 impl Parse for TemplateBody {
     /// Parse the nodes of the callbody as `Body`.
     fn parse(input: ParseStream) -> Result<Self> {
@@ -99,6 +105,20 @@ impl Parse for TemplateBody {
 /// This is because the parsing phase filled in all the additional metadata we need
 impl ToTokens for TemplateBody {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
+        // If the nodes are completely empty, insert a placeholder node
+        // Core expects at least one node in the template to make it easier to replace
+        if self.is_empty() {
+            // Create a default template body with diagnostics and the template index from the original
+            let default = Self {
+                diagnostics: self.diagnostics.clone(),
+                template_idx: self.template_idx.clone(),
+                ..Default::default()
+            };
+            // And then render the default template body
+            default.to_tokens(tokens);
+            return;
+        }
+
         // If we have an implicit key, then we need to write its tokens
         let key_tokens = match self.implicit_key() {
             Some(tok) => quote! { Some( #tok.to_string() ) },
@@ -193,13 +213,7 @@ impl TemplateBody {
     ///
     /// This will fill in all the necessary path information for the nodes in the template and will
     /// overwrite data like dynamic indexes.
-    pub fn new(mut nodes: Vec<BodyNode>) -> Self {
-        // If the nodes are completely empty, insert a placeholder node
-        // Core expects at least one node in the template to make it easier to replace
-        if nodes.is_empty() {
-            nodes.push(BodyNode::RawExpr(parse_quote! {()}));
-        }
-
+    pub fn new(nodes: Vec<BodyNode>) -> Self {
         let mut body = Self {
             roots: vec![],
             template_idx: DynIdx::default(),

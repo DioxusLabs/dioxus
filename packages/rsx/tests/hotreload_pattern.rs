@@ -11,8 +11,7 @@ use dioxus_core::{
     TemplateAttribute, VNode,
 };
 use dioxus_rsx::{
-    hot_reload::{self, diff_rsx, ChangedRsx},
-    hotreload::HotReloadState,
+    hot_reload::{self, diff_rsx, ChangedRsx, HotReloadState},
     CallBody, HotReloadingContext,
 };
 use proc_macro2::TokenStream;
