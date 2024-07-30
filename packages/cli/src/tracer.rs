@@ -1,13 +1,17 @@
+use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use std::{
     env, io,
-    sync::{Arc, Mutex, OnceLock},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
 };
-use tokio::sync::mpsc::UnboundedSender;
-use tracing_subscriber::{fmt::{writer::OrElse, MakeWriter}, prelude::*, EnvFilter, Layer};
+use tracing_subscriber::{prelude::*, EnvFilter};
 
 const LOG_ENV: &str = "DIOXUS_LOG";
 
-pub fn build_tracing() -> Mutex<CLIWriter> {
+/// Build tracing infrastructure.
+pub fn build_tracing() -> CLILogControl {
     // If {LOG_ENV} is set, default to env, otherwise filter to cli
     // and manganis warnings and errors from other crates
     let mut filter = EnvFilter::new("error,dx=info,dioxus-cli=info,manganis-cli-support=info");
@@ -15,11 +19,19 @@ pub fn build_tracing() -> Mutex<CLIWriter> {
         filter = EnvFilter::from_env(LOG_ENV);
     }
 
-    let cli_writer = CLIWriter::new();
-    let cli_writer_clone = cli_writer.clone();
+    // Create writer controller and custom writer.
+    let (tui_tx, tui_rx) = unbounded();
+    let tui_enabled = Arc::new(AtomicBool::new(false));
 
+    let writer_control = CLILogControl {
+        tui_rx,
+        tui_enabled: tui_enabled.clone(),
+    };
+    let cli_writer = Mutex::new(CLIWriter::new(tui_enabled, tui_tx));
+
+    // Build tracing
     let fmt_layer = tracing_subscriber::fmt::layer()
-        .with_writer(cli_writer_clone)
+        .with_writer(cli_writer)
         .with_filter(filter);
     let sub = tracing_subscriber::registry().with(fmt_layer);
 
@@ -28,71 +40,50 @@ pub fn build_tracing() -> Mutex<CLIWriter> {
 
     sub.init();
 
-    cli_writer
+    writer_control
 }
 
+/// Contains the sync primitives to control the CLIWriter.
+pub struct CLILogControl {
+    pub tui_rx: UnboundedReceiver<String>,
+    pub tui_enabled: Arc<AtomicBool>,
+}
+
+/// Represents the CLI's custom tracing writer for conditionally writing logs between outputs.
 pub struct CLIWriter {
     stdout: io::Stdout,
-    tui_writer: Option<TUIWriter>,
+    tui_tx: UnboundedSender<String>,
+    tui_enabled: Arc<AtomicBool>,
 }
 
 impl CLIWriter {
-    pub fn new() -> Self {
+    /// Create a new CLIWriter with required sync primitives for conditionally routing logs.
+    pub fn new(tui_enabled: Arc<AtomicBool>, tui_tx: UnboundedSender<String>) -> Self {
         Self {
             stdout: io::stdout(),
-            tui_writer: None,
+            tui_tx,
+            tui_enabled,
         }
-    }
-
-    pub fn enable_tui(&mut self, tx: UnboundedSender<String>) {
-        self.tui_writer = Some(Mutex::new(TUIWriter(tx)));
-    }
-
-    pub fn disable_tui(&mut self) {
-        self.tui_writer = None;
     }
 }
 
+// Implement a conditional writer so that logs are routed to the appropriate place.
 impl io::Write for CLIWriter {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        if let Some(tx) = &self.tx {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        if self.tui_enabled.load(Ordering::SeqCst) {
             let len = buf.len();
 
             let as_string = String::from_utf8(buf.to_vec())
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
-            tx.send(as_string)
+            self.tui_tx
+                .unbounded_send(as_string)
                 .map_err(|e| io::Error::new(io::ErrorKind::BrokenPipe, e))?;
+
             Ok(len)
         } else {
             self.stdout.write(buf)
         }
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
-
-impl<'a> MakeWriter<'a> for CLIWriter {
-    type Writer = OrElse<Mutex<TUIWriter>, io::Stdout>;
-
-    fn make_writer(&'a self) -> Self::Writer {}
-}
-
-pub struct TUIWriter(UnboundedSender<String>);
-
-impl io::Write for TUIWriter {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let len = buf.len();
-
-        let as_string = String::from_utf8(buf.to_vec())
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
-        self.0
-            .send(as_string)
-            .map_err(|e| io::Error::new(io::ErrorKind::BrokenPipe, e))?;
-        Ok(len)
     }
 
     fn flush(&mut self) -> io::Result<()> {

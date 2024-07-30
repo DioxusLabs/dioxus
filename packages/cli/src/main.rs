@@ -33,7 +33,7 @@ use Commands::*;
 async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
 
-    tracer::build_tracing();
+    let log_control = tracer::build_tracing();
 
     match args.action {
         Translate(opts) => opts
@@ -75,7 +75,7 @@ async fn main() -> anyhow::Result<()> {
             .context(error_wrapper("Cleaning project failed")),
 
         Serve(opts) => opts
-            .serve()
+            .serve(log_control)
             .await
             .context(error_wrapper("Serving project failed")),
 

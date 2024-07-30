@@ -1,6 +1,7 @@
 use crate::{
     builder::{BuildMessage, MessageType, Stage, UpdateBuildProgress},
     dioxus_crate::DioxusCrate,
+    tracer::CLILogControl,
 };
 use crate::{
     builder::{BuildResult, UpdateStage},
@@ -23,6 +24,7 @@ use std::{
     io::{self, stdout},
     pin::Pin,
     rc::Rc,
+    sync::atomic::Ordering,
     time::{Duration, Instant},
 };
 use tokio::{
@@ -55,6 +57,7 @@ impl BuildProgress {
 
 pub struct Output {
     term: Rc<RefCell<Option<TerminalBackend>>>,
+    log_control: CLILogControl,
 
     // optional since when there's no tty there's no eventstream to read from - just stdin
     events: Option<EventStream>,
@@ -88,12 +91,13 @@ enum Tab {
 type TerminalBackend = Terminal<CrosstermBackend<io::Stdout>>;
 
 impl Output {
-    pub fn start(cfg: &Serve) -> io::Result<Self> {
+    pub fn start(cfg: &Serve, log_control: CLILogControl) -> io::Result<Self> {
         let interactive = std::io::stdout().is_tty() && cfg.interactive.unwrap_or(true);
 
         let mut events = None;
 
         if interactive {
+            log_control.tui_enabled.store(true, Ordering::SeqCst);
             enable_raw_mode()?;
             stdout().execute(EnterAlternateScreen)?;
 
@@ -138,6 +142,7 @@ impl Output {
 
         Ok(Self {
             term: Rc::new(RefCell::new(term)),
+            log_control,
             events,
             _rustc_version,
             _rustc_nightly,
@@ -199,6 +204,7 @@ impl Output {
         };
 
         let animation_timeout = tokio::time::sleep(Duration::from_millis(300));
+        let tui_log_rx = &mut self.log_control.tui_rx;
 
         tokio::select! {
             (platform, stdout, stderr) = next_stdout => {
@@ -222,6 +228,14 @@ impl Output {
                 }
             },
 
+            Some(log) = tui_log_rx.next() => {
+                self.build_progress.build_logs.get_mut(&self.platform).unwrap().messages.push(BuildMessage {
+                    level: Level::INFO,
+                    message: MessageType::Text(log),
+                    source: Some("app".to_string()),
+                });
+            }
+
             event = user_input => {
                 if self.handle_events(event.unwrap().unwrap()).await? {
                     return Ok(true)
@@ -238,6 +252,7 @@ impl Output {
     pub fn shutdown(&mut self) -> io::Result<()> {
         // if we're a tty then we need to disable the raw mode
         if self.interactive {
+            self.log_control.tui_enabled.store(false, Ordering::SeqCst);
             disable_raw_mode()?;
             stdout().execute(LeaveAlternateScreen)?;
             self.drain_print_logs();

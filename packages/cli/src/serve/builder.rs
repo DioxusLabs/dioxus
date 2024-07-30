@@ -102,13 +102,10 @@ impl Builder {
         let mut process_exited = self
             .children
             .iter_mut()
-            .map(|(platform, child)| async move {
+            .map(|(_, child)| async move {
                 let status = child.wait().await.ok();
 
-                BuilderUpdate::ProcessExited {
-                    platform: *platform,
-                    status,
-                }
+                BuilderUpdate::ProcessExited { status }
             })
             .collect::<FuturesUnordered<_>>();
 
@@ -183,7 +180,6 @@ pub enum BuilderUpdate {
         results: Vec<BuildResult>,
     },
     ProcessExited {
-        platform: Platform,
         status: Option<std::process::ExitStatus>,
     },
 }

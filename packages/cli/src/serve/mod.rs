@@ -1,6 +1,7 @@
 use crate::builder::{Stage, UpdateBuildProgress, UpdateStage};
 use crate::cli::serve::Serve;
 use crate::dioxus_crate::DioxusCrate;
+use crate::tracer::CLILogControl;
 use crate::Result;
 use dioxus_cli_config::Platform;
 use tokio::task::yield_now;
@@ -45,7 +46,11 @@ use watcher::*;
 /// - Consume logs from the wasm for web/fullstack
 /// - I want us to be able to detect a `server_fn` in the project and then upgrade from a static server
 ///   to a dynamic one on the fly.
-pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
+pub async fn serve_all(
+    serve: Serve,
+    dioxus_crate: DioxusCrate,
+    log_control: CLILogControl,
+) -> Result<()> {
     let mut builder = Builder::new(&dioxus_crate, &serve);
 
     // Start the first build
@@ -53,7 +58,7 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
 
     let mut server = Server::start(&serve, &dioxus_crate);
     let mut watcher = Watcher::start(&dioxus_crate);
-    let mut screen = Output::start(&serve).expect("Failed to open terminal logger");
+    let mut screen = Output::start(&serve, log_control).expect("Failed to open terminal logger");
 
     loop {
         // Make sure we don't hog the CPU: these loop { select! {} } blocks can starve the executor
