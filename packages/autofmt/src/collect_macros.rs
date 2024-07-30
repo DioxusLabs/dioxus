@@ -42,7 +42,7 @@ impl<'a, 'b> Visit<'b> for MacroCollector<'a, 'b> {
     }
 
     // attributes can occur on stmts and items - we need to make sure the stack is reset when we exit
-    // this means we save the skipped length and set it back to its origianl length
+    // this means we save the skipped length and set it back to its original length
     fn visit_stmt(&mut self, i: &'b syn::Stmt) {
         let skipped_len = self.skip_stack.len();
         syn::visit::visit_stmt(self, i);

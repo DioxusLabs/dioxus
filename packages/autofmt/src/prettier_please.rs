@@ -66,8 +66,8 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
     // Visit the expr and replace the macros with formatted blocks
     let mut replacer = ReplaceMacros {
         src,
-        formatted_stack: vec![],
         cfg,
+        formatted_stack: vec![],
     };
 
     // builds the expression stack
@@ -218,7 +218,7 @@ mod tests {
     }
 
     #[test]
-    fn multiline_maddness() {
+    fn multiline_madness() {
         let contents = r##"
         {
         {children.is_some().then(|| rsx! {
