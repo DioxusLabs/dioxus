@@ -5,13 +5,12 @@
 use crate::writer::*;
 use dioxus_rsx::{BodyNode, CallBody};
 use proc_macro2::{LineColumn, Span, TokenStream};
-use syn::{parse::Parser, spanned::Spanned, ExprMacro, Macro};
+use syn::parse::Parser;
 
 mod buffer;
 mod collect_macros;
 mod indent;
 mod prettier_please;
-mod rsx_block;
 mod writer;
 
 pub use indent::{IndentOptions, IndentType};

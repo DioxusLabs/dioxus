@@ -1,8 +1,3 @@
-use core::fmt;
-use std::{f32::consts::E, path::Path};
-
-use prettyplease::unparse;
-use proc_macro2::TokenStream;
 use syn::{visit_mut::VisitMut, Expr, File, Item};
 
 use crate::Writer;
@@ -44,7 +39,6 @@ pub fn unparse_expr(expr: &Expr, src: &str) -> String {
 
                 // Push out the indent level of the formatted block if it's multiline
                 if formatted.contains('{') {
-                    dbg!(&formatted);
                     formatted = formatted
                         .lines()
                         .map(|line| format!("    {line}"))
@@ -62,7 +56,7 @@ pub fn unparse_expr(expr: &Expr, src: &str) -> String {
 
     // Visit the expr and replace the macros with formatted blocks
     let mut replacer = ReplaceMacros {
-        src: src,
+        src,
         formatted_stack: vec![],
     };
 
@@ -72,25 +66,11 @@ pub fn unparse_expr(expr: &Expr, src: &str) -> String {
 
     // now unparsed with the modified expression
     let mut unparsed = unparse_inner(&modified_expr);
-    // dbg!(&unparsed);
-
-    // walk each line looking for the dioxus_autofmt_block__________ token
-    // if we find it, replace it with the formatted block
-    // if there's indentation we want to presreve it
-    // dbg!(&replacer.formatted_stack);
 
     // now we can replace the macros with the formatted blocks
-    for formatted in replacer.formatted_stack.drain(..) {
-        // dbg!(&formatted);
-        // let fmted = if formatted.contains('\n') {
-        //     format!("rsx! {{{formatted}\n}}")
-        // } else {
-        //     format!("rsx! {{{formatted}}}")
-        // };
-        let fmted = formatted;
+    for fmted in replacer.formatted_stack.drain(..) {
         let is_multiline = fmted.contains('{');
 
-        // let fmted = formatted.trim_start();
         let mut out_fmt = String::from("rsx! {");
         if is_multiline {
             out_fmt.push('\n');
@@ -100,24 +80,20 @@ pub fn unparse_expr(expr: &Expr, src: &str) -> String {
 
         let mut whitespace = 0;
 
-        println!("{}", &unparsed);
         for line in unparsed.lines() {
             if line.contains(MARKER) {
                 whitespace = line.chars().take_while(|c| c.is_whitespace()).count();
                 break;
             }
         }
-        dbg!(&whitespace);
 
         let mut lines = fmted.lines().enumerate().peekable();
 
-        while let Some((idx, fmt_line)) = lines.next() {
+        while let Some((_idx, fmt_line)) = lines.next() {
             // Push the indentation
-            // if idx > 0 {
             if is_multiline {
                 out_fmt.push_str(&" ".repeat(whitespace));
             }
-            // }
 
             // Calculate delta between indentations - the block indentation is too much
             out_fmt.push_str(fmt_line);
@@ -138,9 +114,7 @@ pub fn unparse_expr(expr: &Expr, src: &str) -> String {
         // Replace the dioxus_autofmt_block__________ token with the formatted block
         out_fmt.push('}');
 
-        dbg!(&out_fmt);
         unparsed = unparsed.replacen(MARKER_REPLACE, &out_fmt, 1);
-        // dbg!(&unparsed);
         continue;
     }
 
@@ -162,7 +136,7 @@ pub fn unparse_expr(expr: &Expr, src: &str) -> String {
 /// This is a bit of a hack, but dtonlay doesn't want to support this very simple usecase, forcing us to clone the expr
 pub fn unparse_inner(expr: &Expr) -> String {
     let file = wrapped(expr);
-    let wrapped = unparse(&file);
+    let wrapped = prettyplease::unparse(&file);
     unwrapped(wrapped)
 }
 
@@ -201,140 +175,132 @@ fn wrapped(expr: &Expr) -> File {
     }
 }
 
-#[test]
-fn unparses_raw() {
-    let expr = syn::parse_str("1 + 1").expect("Failed to parse");
-    let unparsed = unparse(&wrapped(&expr));
-    assert_eq!(unparsed, "fn main() {\n    1 + 1;\n}\n");
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use proc_macro2::TokenStream;
 
-// #[test]
-// fn unparses_completely() {
-//     let expr = syn::parse_str("1 + 1").expect("Failed to parse");
-//     let unparsed = unparse_expr(&expr);
-//     assert_eq!(unparsed, "1 + 1");
-// }
-
-// #[test]
-// fn unparses_let_guard() {
-//     let expr = syn::parse_str("let Some(url) = &link.location").expect("Failed to parse");
-//     let unparsed = unparse_expr(&expr);
-//     assert_eq!(unparsed, "let Some(url) = &link.location");
-// }
-
-#[test]
-fn weird_ifcase() {
-    let contents = r##"
-    fn main() {
-        move |_| timer.with_mut(|t| if t.started_at.is_none() { Some(Instant::now()) } else { None })
-    }
-"##;
-
-    let expr: File = syn::parse_file(contents).unwrap();
-    let out = unparse(&expr);
-    println!("{}", out);
-}
-
-#[test]
-fn multiline_maddness() {
-    let contents = r##"
-    {
-    {children.is_some().then(|| rsx! {
-        span {
-            class: "inline-block ml-auto hover:bg-gray-500",
-            onclick: move |evt| {
-                evt.cancel_bubble();
-            },
-            icons::icon_5 {}
-            {rsx! {
-                icons::icon_6 {}
-            }}
-        }
-    })}
-    {children.is_some().then(|| rsx! {
-        span {
-            class: "inline-block ml-auto hover:bg-gray-500",
-            onclick: move |evt| {
-                evt.cancel_bubble();
-            },
-            icons::icon_10 {}
-        }
-    })}
-
+    #[test]
+    fn unparses_raw() {
+        let expr = syn::parse_str("1 + 1").expect("Failed to parse");
+        let unparsed = prettyplease::unparse(&wrapped(&expr));
+        assert_eq!(unparsed, "fn main() {\n    1 + 1;\n}\n");
     }
 
+    #[test]
+    fn weird_ifcase() {
+        let contents = r##"
+        fn main() {
+            move |_| timer.with_mut(|t| if t.started_at.is_none() { Some(Instant::now()) } else { None })
+        }
     "##;
 
-    let expr: Expr = syn::parse_str(contents).unwrap();
-    let out = unparse_expr(&expr, &contents);
-    println!("{}", out);
-}
+        let expr: File = syn::parse_file(contents).unwrap();
+        let out = prettyplease::unparse(&expr);
+        println!("{}", out);
+    }
 
-#[test]
-fn write_body_no_indent() {
-    let src = r##"
-        span {
-            class: "inline-block ml-auto hover:bg-gray-500",
-            onclick: move |evt| {
-                evt.cancel_bubble();
-            },
-            icons::icon_10 {}
-            icons::icon_10 {}
-            icons::icon_10 {}
-            icons::icon_10 {}
-            div { "hi" }
-            div { div {} }
-            div { div {} div {} div {} }
-            {children}
-            {
-                some_big_long()
-                    .some_big_long()
-                    .some_big_long()
-                    .some_big_long()
-                    .some_big_long()
-                    .some_big_long()
+    #[test]
+    fn multiline_maddness() {
+        let contents = r##"
+        {
+        {children.is_some().then(|| rsx! {
+            span {
+                class: "inline-block ml-auto hover:bg-gray-500",
+                onclick: move |evt| {
+                    evt.cancel_bubble();
+                },
+                icons::icon_5 {}
+                {rsx! {
+                    icons::icon_6 {}
+                }}
             }
-            div { class: "px-4", {is_current.then(|| rsx! { {children} })} }
-            Thing {
-                field: rsx! {
-                    div { "hi" }
-                    Component {
-                        onrender: rsx! {
-                            div { "hi" }
-                            Component {
-                                onclick: move |_| {
-                                    another_macro! {
-                                        div { class: "max-w-lg lg:max-w-2xl mx-auto mb-16 text-center",
-                                            "gomg"
-                                            "hi!!"
-                                            "womh"
+        })}
+        {children.is_some().then(|| rsx! {
+            span {
+                class: "inline-block ml-auto hover:bg-gray-500",
+                onclick: move |evt| {
+                    evt.cancel_bubble();
+                },
+                icons::icon_10 {}
+            }
+        })}
+
+        }
+
+        "##;
+
+        let expr: Expr = syn::parse_str(contents).unwrap();
+        let out = unparse_expr(&expr, &contents);
+        println!("{}", out);
+    }
+
+    #[test]
+    fn write_body_no_indent() {
+        let src = r##"
+            span {
+                class: "inline-block ml-auto hover:bg-gray-500",
+                onclick: move |evt| {
+                    evt.cancel_bubble();
+                },
+                icons::icon_10 {}
+                icons::icon_10 {}
+                icons::icon_10 {}
+                icons::icon_10 {}
+                div { "hi" }
+                div { div {} }
+                div { div {} div {} div {} }
+                {children}
+                {
+                    some_big_long()
+                        .some_big_long()
+                        .some_big_long()
+                        .some_big_long()
+                        .some_big_long()
+                        .some_big_long()
+                }
+                div { class: "px-4", {is_current.then(|| rsx! { {children} })} }
+                Thing {
+                    field: rsx! {
+                        div { "hi" }
+                        Component {
+                            onrender: rsx! {
+                                div { "hi" }
+                                Component {
+                                    onclick: move |_| {
+                                        another_macro! {
+                                            div { class: "max-w-lg lg:max-w-2xl mx-auto mb-16 text-center",
+                                                "gomg"
+                                                "hi!!"
+                                                "womh"
+                                            }
+                                        };
+                                        rsx! {
+                                            div { class: "max-w-lg lg:max-w-2xl mx-auto mb-16 text-center",
+                                                "gomg"
+                                                "hi!!"
+                                                "womh"
+                                            }
+                                        };
+                                        println!("hi")
+                                    },
+                                    onrender: move |_| {
+                                        let _ = 12;
+                                        let r = rsx! {
+                                            div { "hi" }
+                                        };
+                                        rsx! {
+                                            div { "hi" }
                                         }
-                                    };
-                                    rsx! {
-                                        div { class: "max-w-lg lg:max-w-2xl mx-auto mb-16 text-center",
-                                            "gomg"
-                                            "hi!!"
-                                            "womh"
-                                        }
-                                    };
-                                    println!("hi")
-                                },
-                                onrender: move |_| {
-                                    let _ = 12;
-                                    let r = rsx! {
-                                        div { "hi" }
-                                    };
-                                    rsx! {
-                                        div { "hi" }
                                     }
                                 }
-                            }
-                            {
-                                rsx! {
-                                    BarChart {
-                                        id: "bar-plot".to_string(),
-                                        x: value,
-                                        y: label
+                                {
+                                    rsx! {
+                                        BarChart {
+                                            id: "bar-plot".to_string(),
+                                            x: value,
+                                            y: label
+                                        }
                                     }
                                 }
                             }
@@ -342,44 +308,44 @@ fn write_body_no_indent() {
                     }
                 }
             }
+        "##;
+
+        let tokens: TokenStream = syn::parse_str(src).unwrap();
+        let out = crate::fmt_block_from_expr(src, tokens).unwrap();
+        println!("{}", out);
+    }
+
+    #[test]
+    fn write_component_body() {
+        let src = r##"
+    div { class: "px-4", {is_current.then(|| rsx! { {children} })} }
+    "##;
+
+        let tokens: TokenStream = syn::parse_str(src).unwrap();
+        let out = crate::fmt_block_from_expr(src, tokens).unwrap();
+        println!("{}", out);
+    }
+
+    #[test]
+    fn weird_macro() {
+        let contents = r##"
+        fn main() {
+            move |_| {
+                drop_macro_semi! {
+                    "something_very_long_something_very_long_something_very_long_something_very_long"
+                };
+                let _ = drop_macro_semi! {
+                    "something_very_long_something_very_long_something_very_long_something_very_long"
+                };
+                drop_macro_semi! {
+                    "something_very_long_something_very_long_something_very_long_something_very_long"
+                };
+            };
         }
     "##;
 
-    let tokens: TokenStream = syn::parse_str(src).unwrap();
-    let out = crate::fmt_block_from_expr(src, tokens).unwrap();
-    println!("{}", out);
-}
-
-#[test]
-fn write_component_body() {
-    let src = r##"
-div { class: "px-4", {is_current.then(|| rsx! { {children} })} }
-"##;
-
-    let tokens: TokenStream = syn::parse_str(src).unwrap();
-    let out = crate::fmt_block_from_expr(src, tokens).unwrap();
-    println!("{}", out);
-}
-
-#[test]
-fn weird_macro() {
-    let contents = r##"
-    fn main() {
-        move |_| {
-            drop_macro_semi! {
-                "something_very_long_something_very_long_something_very_long_something_very_long"
-            };
-            let _ = drop_macro_semi! {
-                "something_very_long_something_very_long_something_very_long_something_very_long"
-            };
-            drop_macro_semi! {
-                "something_very_long_something_very_long_something_very_long_something_very_long"
-            };
-        };
+        let expr: File = syn::parse_file(contents).unwrap();
+        let out = prettyplease::unparse(&expr);
+        println!("{}", out);
     }
-"##;
-
-    let expr: File = syn::parse_file(contents).unwrap();
-    let out = unparse(&expr);
-    println!("{}", out);
 }
