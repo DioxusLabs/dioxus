@@ -126,7 +126,7 @@ impl StringCache {
 
         let mut cur_path = vec![];
 
-        for (root_idx, root) in template.template.get().roots.iter().enumerate() {
+        for (root_idx, root) in template.template.roots.iter().enumerate() {
             from_template_recursive(root, &mut cur_path, root_idx, true, &mut chain)?;
         }
 

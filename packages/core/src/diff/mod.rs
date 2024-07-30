@@ -103,11 +103,11 @@ impl VirtualDom {
         to: &mut impl WriteMutations,
         mut template: Template,
     ) {
-        if self.templates.contains_key(template.name) {
+        if self.templates.contains(&template.name) {
             return;
         }
 
-        _ = self.templates.insert(template.name, template);
+        _ = self.templates.insert(template.name);
 
         // If it's all dynamic nodes, then we don't need to register it
         if !template.is_completely_dynamic() {
@@ -124,7 +124,7 @@ impl VirtualDom {
 ///  - for appending children we can use AppendChildren
 #[allow(dead_code)]
 fn is_dyn_node_only_child(node: &VNode, idx: usize) -> bool {
-    let template = node.template.get();
+    let template = node.template;
     let path = template.node_paths[idx];
 
     // use a loop to index every static node's children until the path has run out

@@ -49,6 +49,7 @@
 //! dioxus_elements::elements::di
 //! ```
 
+mod assign_dyn_ids;
 mod attribute;
 mod component;
 mod element;
@@ -63,13 +64,10 @@ mod text_node;
 
 mod diagnostics;
 mod expr_node;
-pub mod hotreload;
 mod ifmt;
 mod literal;
 mod location;
 mod partial_closure;
-mod reload_stack;
-mod scoring;
 mod util;
 
 // Re-export the namespaces into each other
@@ -105,16 +103,11 @@ pub(crate) mod innerlude {
     pub use crate::node::*;
     pub use crate::raw_expr::*;
     pub use crate::rsx_block::*;
-    pub use crate::rsx_call::*;
     pub use crate::template_body::*;
     pub use crate::text_node::*;
 
     pub use crate::diagnostics::*;
     pub use crate::ifmt::*;
     pub use crate::literal::*;
-    pub use crate::reload_stack::*;
     pub use crate::util::*;
-
-    #[cfg(feature = "hot_reload")]
-    pub use crate::hotreload::*;
 }

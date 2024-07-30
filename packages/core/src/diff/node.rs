@@ -1,5 +1,5 @@
 use crate::innerlude::MountId;
-use crate::{Attribute, AttributeValue, DynamicNode::*, Template};
+use crate::{Attribute, AttributeValue, DynamicNode::*};
 use crate::{VNode, VirtualDom, WriteMutations};
 use core::iter::Peekable;
 
@@ -20,21 +20,6 @@ impl VNode {
     ) {
         // The node we are diffing from should always be mounted
         debug_assert!(dom.mounts.get(self.mount.get().0).is_some() || to.is_none());
-
-        // If hot reloading is enabled, we need to make sure we're using the latest template
-        #[cfg(debug_assertions)]
-        {
-            let name = new.template.get().name;
-            if let Some(template) = dom.templates.get(name).cloned() {
-                new.template.set(template);
-                if template != self.template.get() {
-                    let mount_id = self.mount.get();
-                    let parent = dom.mounts[mount_id.0].parent;
-                    self.replace(std::slice::from_ref(new), parent, dom, to);
-                    return;
-                }
-            }
-        }
 
         // If the templates are different by name, we need to replace the entire template
         if self.templates_are_different(new) {
@@ -120,7 +105,7 @@ impl VNode {
         &self,
         root_idx: usize,
     ) -> Option<(usize, &DynamicNode)> {
-        self.template.get().roots[root_idx]
+        self.template.roots[root_idx]
             .dynamic_id()
             .map(|id| (id, &self.dynamic_nodes[id]))
     }
@@ -148,7 +133,7 @@ impl VNode {
 
     pub(crate) fn find_last_element(&self, dom: &VirtualDom) -> ElementId {
         let mount = &dom.mounts[self.mount.get().0];
-        let last_root_index = self.template.get().roots.len() - 1;
+        let last_root_index = self.template.roots.len() - 1;
         match self.get_dynamic_root_node_and_id(last_root_index) {
             // This node is static, just get the root id
             None | Some((_, Placeholder(_) | Text(_))) => mount.root_ids[last_root_index],
@@ -272,7 +257,7 @@ impl VNode {
         destroy_component_state: bool,
         replace_with: Option<usize>,
     ) {
-        let roots = self.template.get().roots;
+        let roots = self.template.roots;
         for (idx, node) in roots.iter().enumerate() {
             let last_node = idx == roots.len() - 1;
             if let Some(id) = node.dynamic_id() {
@@ -305,7 +290,7 @@ impl VNode {
         dom: &mut VirtualDom,
         destroy_component_state: bool,
     ) {
-        let template = self.template.get();
+        let template = self.template;
         for (idx, dyn_node) in self.dynamic_nodes.iter().enumerate() {
             let path_len = template.node_paths.get(idx).map(|path| path.len());
             // Roots are cleaned up automatically above and nodes with a empty path are placeholders
@@ -361,14 +346,14 @@ impl VNode {
     }
 
     fn templates_are_different(&self, other: &VNode) -> bool {
-        let self_node_name = self.template.get().id();
-        let other_node_name = other.template.get().id();
+        let self_node_name = self.template.id();
+        let other_node_name = other.template.id();
         self_node_name != other_node_name
     }
 
     pub(super) fn reclaim_attributes(&self, mount: MountId, dom: &mut VirtualDom) {
         let mut next_id = None;
-        for (idx, path) in self.template.get().attr_paths.iter().enumerate() {
+        for (idx, path) in self.template.attr_paths.iter().enumerate() {
             // We clean up the roots in the next step, so don't worry about them here
             if path.len() <= 1 {
                 continue;
@@ -399,7 +384,7 @@ impl VNode {
             let mut old_attributes_iter = old_attrs.iter().peekable();
             let mut new_attributes_iter = new_attrs.iter().peekable();
             let attribute_id = dom.mounts[mount_id.0].mounted_attributes[idx];
-            let path = self.template.get().attr_paths[idx];
+            let path = self.template.attr_paths[idx];
 
             loop {
                 match (old_attributes_iter.peek(), new_attributes_iter.peek()) {
@@ -566,21 +551,6 @@ impl VNode {
         }
     }
 
-    /// Get the most up to date template for this rsx block
-    #[allow(unused)]
-    pub(crate) fn template(&self, dom: &VirtualDom) -> Template {
-        // check for a overridden template
-        #[cfg(debug_assertions)]
-        {
-            let template = self.template.get();
-            if let Some(new_template) = dom.templates.get(template.name) {
-                self.template.set(*new_template);
-            }
-        };
-
-        self.template.get()
-    }
-
     /// Create this rsx block. This will create scopes from components that this rsx block contains, but it will not write anything to the DOM.
     pub(crate) fn create(
         &self,
@@ -589,7 +559,7 @@ impl VNode {
         mut to: Option<&mut impl WriteMutations>,
     ) -> usize {
         // Get the most up to date template
-        let template = self.template(dom);
+        let template = self.template;
 
         // Initialize the mount information for this vnode if it isn't already mounted
         if !self.mount.get().mounted() {
@@ -616,13 +586,9 @@ impl VNode {
         }
 
         // Walk the roots, creating nodes and assigning IDs
-        // nodes in an iterator of (dynamic_node_index, path)
-
-        let nodes_sorted = template.breadth_first_node_paths();
-        let attrs_sorted = template.breadth_first_attribute_paths();
-
-        let mut nodes = nodes_sorted.peekable();
-        let mut attrs = attrs_sorted.peekable();
+        // nodes in an iterator of (dynamic_node_index, path) and attrs in an iterator of (attr_index, path)
+        let mut nodes = template.node_paths.iter().copied().enumerate().peekable();
+        let mut attrs = template.attr_paths.iter().copied().enumerate().peekable();
 
         // Get the mounted id of this block
         // At this point, we should have already mounted the block
@@ -690,7 +656,7 @@ impl VNode {
     fn reference_to_dynamic_node(&self, mount: MountId, dynamic_node_id: usize) -> ElementRef {
         ElementRef {
             path: ElementPath {
-                path: self.template.get().node_paths[dynamic_node_id],
+                path: self.template.node_paths[dynamic_node_id],
             },
             mount,
         }
@@ -834,7 +800,7 @@ impl VNode {
         let this_id = dom.next_element();
         dom.mounts[mount.0].root_ids[root_idx] = this_id;
 
-        to.load_template(self.template.get().name, root_idx, this_id);
+        to.load_template(self.template.name, root_idx, this_id);
 
         this_id
     }
@@ -874,7 +840,7 @@ impl VNode {
         dom: &mut VirtualDom,
     ) -> (ElementId, &'static [u8]) {
         // Add the mutation to the list
-        let path = self.template.get().node_paths[idx];
+        let path = self.template.node_paths[idx];
 
         // Allocate a dynamic element reference for this text node
         let new_id = mount.mount_node(idx, dom);
@@ -940,8 +906,8 @@ fn matching_components<'a>(
     left: &'a VNode,
     right: &'a VNode,
 ) -> Option<Vec<(&'a VComponent, &'a VComponent)>> {
-    let left_node = left.template.get();
-    let right_node = right.template.get();
+    let left_node = left.template;
+    let right_node = right.template;
     if left_node.roots.len() != right_node.roots.len() {
         return None;
     }

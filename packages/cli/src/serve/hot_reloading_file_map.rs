@@ -1,7 +1,7 @@
-use dioxus_core::{internal::HotReloadLiteral, Template};
+use dioxus_core::internal::{HotReloadTemplateWithLocation, HotReloadedTemplate};
 use dioxus_rsx::{
     hot_reload::{diff_rsx, ChangedRsx},
-    CallBody, HotReloadedTemplate, HotReloadingContext,
+    CallBody, HotReloadingContext,
 };
 use krates::cm::MetadataCommand;
 use krates::Cmd;
@@ -18,8 +18,6 @@ pub struct FileMap {
     pub errors: Vec<io::Error>,
 
     pub in_workspace: HashMap<PathBuf, Option<PathBuf>>,
-
-    pub changed_lits: HashMap<String, HotReloadLiteral>,
 }
 
 /// A cached file that has been parsed
@@ -27,7 +25,7 @@ pub struct FileMap {
 /// We store the templates found in this file
 pub struct CachedSynFile {
     pub raw: String,
-    pub templates: HashMap<&'static str, Template>,
+    pub templates: HashMap<String, HotReloadedTemplate>,
 }
 
 impl FileMap {
@@ -56,7 +54,6 @@ impl FileMap {
             map,
             errors,
             in_workspace: HashMap::new(),
-            changed_lits: HashMap::new(),
         };
 
         map.load_assets::<Ctx>(crate_dir.as_path());
@@ -74,12 +71,23 @@ impl FileMap {
         }
     }
 
+    /// Insert a file into the map and force a full rebuild
+    fn full_rebuild(&mut self, file_path: PathBuf, src: String) -> HotreloadError {
+        let cached_file = CachedSynFile {
+            raw: src.clone(),
+            templates: HashMap::new(),
+        };
+
+        self.map.insert(file_path, cached_file);
+        HotreloadError::Notreloadable
+    }
+
     /// Try to update the rsx in a file
     pub fn update_rsx<Ctx: HotReloadingContext>(
         &mut self,
         file_path: &Path,
         crate_dir: &Path,
-    ) -> Result<Vec<HotReloadedTemplate>, HotreloadError> {
+    ) -> Result<Vec<HotReloadTemplateWithLocation>, HotreloadError> {
         let src = std::fs::read_to_string(file_path)?;
 
         // If we can't parse the contents we want to pass it off to the build system to tell the user that there's a syntax error
@@ -116,13 +124,7 @@ impl FileMap {
             // If the changes were some code, we should insert the file into the map and rebuild
             // todo: not sure we even need to put the cached file into the map, but whatever
             None => {
-                let cached_file = CachedSynFile {
-                    raw: src.clone(),
-                    templates: HashMap::new(),
-                };
-
-                self.map.insert(file_path.to_path_buf(), cached_file);
-                return Err(HotreloadError::Notreloadable);
+                return Err(self.full_rebuild(file_path.to_path_buf(), src));
             }
         };
 
@@ -150,47 +152,48 @@ impl FileMap {
                 continue;
             };
 
-            // We leak the template since templates are a compiletime value
-            // This is not ideal, but also not a huge deal for hot reloading
-            // TODO: we could consider arena allocating the templates and dropping them when the connection is closed
-            let leaked_location = Box::leak(template_location(old_start, file).into_boxed_str());
+            let template_location = template_location(old_start, file);
 
             // Returns a list of templates that are hotreloadable
-            let hotreload_result = dioxus_rsx::hotreload::HotReloadedTemplate::new::<Ctx>(
-                &old_call_body,
-                &new_call_body,
-                leaked_location,
-                self.changed_lits.clone(),
+            let hotreload_result = dioxus_rsx::hot_reload::HotReloadResult::new::<Ctx>(
+                &old_call_body.body,
+                &new_call_body.body,
+                template_location.clone(),
             );
 
             // if the template is not hotreloadable, we need to do a full rebuild
             let Some(mut results) = hotreload_result else {
-                return Err(HotreloadError::Notreloadable);
+                return Err(self.full_rebuild(file_path.to_path_buf(), src));
             };
 
-            // self.changed_lits
-            //     .extend(std::mem::take(&mut results.changed_lits));
-
             // Be careful to not send the bad templates
-            results.templates.retain(|template| {
+            results.templates.retain(|idx, template| {
                 // dioxus cannot handle empty templates...
                 if template.roots.is_empty() {
                     return false;
                 }
+                let template_location = format_template_name(&template_location, *idx);
 
-                // if the template is the same, don't send it
-                if old_cached.templates.get(template.name) == Some(template) {
+                // if the template is the same, don't send its
+                if old_cached.templates.get(&template_location) == Some(&*template) {
                     return false;
                 };
 
                 // Update the most recent idea of the template
                 // This lets us know if the template has changed so we don't need to send it
-                old_cached.templates.insert(template.name, *template);
+                old_cached
+                    .templates
+                    .insert(template_location, template.clone());
 
                 true
             });
 
-            out_templates.push(results);
+            out_templates.extend(results.templates.into_iter().map(|(idx, template)| {
+                HotReloadTemplateWithLocation {
+                    location: format_template_name(&template_location, idx),
+                    template,
+                }
+            }));
         }
 
         Ok(out_templates)
@@ -228,13 +231,11 @@ pub fn template_location(old_start: proc_macro2::LineColumn, file: &Path) -> Str
         .collect::<Vec<_>>()
         .join("/");
 
-    path
-        + ":"
-        + line.to_string().as_str()
-        + ":"
-        + column.to_string().as_str()
-        // the byte index doesn't matter, but dioxus needs it
-        + ":0"
+    path + ":" + line.to_string().as_str() + ":" + column.to_string().as_str()
+}
+
+pub fn format_template_name(name: &str, index: usize) -> String {
+    format!("{}:{}", name, index)
 }
 
 struct FileMapSearchResult {

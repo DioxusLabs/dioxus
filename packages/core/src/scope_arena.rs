@@ -50,7 +50,7 @@ impl VirtualDom {
     #[track_caller]
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> RenderReturn {
         // Ensure we are currently inside a `Runtime`.
-        crate::Runtime::current().unwrap();
+        crate::Runtime::current().unwrap_or_else(|e| panic!("{}", e));
 
         self.runtime.clone().with_scope_on_stack(scope_id, || {
             let scope = &self.scopes[scope_id.0];

@@ -18,7 +18,7 @@ use crate::{
 };
 use crate::{Task, VComponent};
 use futures_util::StreamExt;
-use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
 use slab::Slab;
 use std::collections::BTreeSet;
 use std::{any::Any, rc::Rc};
@@ -208,8 +208,8 @@ pub struct VirtualDom {
 
     pub(crate) dirty_scopes: BTreeSet<ScopeOrder>,
 
-    // A map of overridden templates?
-    pub(crate) templates: FxHashMap<TemplateId, Template>,
+    // A map of templates we have sent to the renderer
+    pub(crate) templates: FxHashSet<TemplateId>,
 
     // Templates changes that are queued for the next render
     pub(crate) queued_templates: Vec<Template>,
@@ -572,60 +572,6 @@ impl VirtualDom {
         }
     }
 
-    /// Replace a template at runtime. This will re-render all components that use this template.
-    /// This is the primitive that enables hot-reloading.
-    ///
-    /// The caller must ensure that the template references the same dynamic attributes and nodes as the original template.
-    ///
-    /// This will only replace the parent template, not any nested templates.
-    #[instrument(skip(self), level = "trace", name = "VirtualDom::replace_template")]
-    pub fn replace_template(&mut self, template: Template) {
-        // we only replace templates if hot reloading is enabled
-        #[cfg(debug_assertions)]
-        {
-            // Save the template ID
-            self.templates.insert(template.name, template);
-
-            // Only queue the template to be written if its not completely dynamic
-            if !template.is_completely_dynamic() {
-                self.queued_templates.push(template);
-            }
-
-            // iterating a slab is very inefficient, but this is a rare operation that will only happen during development so it's fine
-            let mut dirty = Vec::new();
-            for (id, scope) in self.scopes.iter() {
-                // Recurse into the dynamic nodes of the existing mounted node to see if the template is alive in the tree
-                fn check_node_for_templates(node: &crate::VNode, template: Template) -> bool {
-                    if node.template.get().name == template.name {
-                        return true;
-                    }
-
-                    for dynamic in node.dynamic_nodes.iter() {
-                        if let crate::DynamicNode::Fragment(nodes) = dynamic {
-                            for node in nodes {
-                                if check_node_for_templates(node, template) {
-                                    return true;
-                                }
-                            }
-                        }
-                    }
-
-                    false
-                }
-
-                if let Some(sync) = scope.try_root_node() {
-                    if check_node_for_templates(sync, template) {
-                        dirty.push(ScopeId(id));
-                    }
-                }
-            }
-
-            for dirty in dirty {
-                self.mark_dirty(dirty);
-            }
-        }
-    }
-
     /// Rebuild the virtualdom without handling any of the mutations
     ///
     /// This is useful for testing purposes and in cases where you render the output of the virtualdom without
@@ -885,11 +831,11 @@ impl VirtualDom {
                 return;
             };
             let el_ref = &mount.node;
-            let node_template = el_ref.template.get();
+            let node_template = el_ref.template;
             let target_path = path.path;
 
             // Accumulate listeners into the listener list bottom to top
-            for (idx, this_path) in node_template.breadth_first_attribute_paths() {
+            for (idx, this_path) in node_template.attr_paths.iter().enumerate() {
                 let attrs = &*el_ref.dynamic_attrs[idx];
 
                 for attr in attrs.iter() {
@@ -943,10 +889,10 @@ impl VirtualDom {
             return;
         };
         let el_ref = &mount.node;
-        let node_template = el_ref.template.get();
+        let node_template = el_ref.template;
         let target_path = node.path;
 
-        for (idx, this_path) in node_template.breadth_first_attribute_paths() {
+        for (idx, this_path) in node_template.attr_paths.iter().enumerate() {
             let attrs = &*el_ref.dynamic_attrs[idx];
 
             for attr in attrs.iter() {

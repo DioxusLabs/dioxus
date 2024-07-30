@@ -30,7 +30,7 @@ fn extract_single_text_node(children: &Element, component: &str) -> Option<Strin
     // The title's children must be in one of two forms:
     // 1. rsx! { "static text" }
     // 2. rsx! { "title: {dynamic_text}" }
-    match vnode.template.get() {
+    match vnode.template {
         // rsx! { "static text" }
         Template {
             roots: &[TemplateNode::Text { text }],
@@ -91,7 +91,7 @@ pub struct TitleProps {
 pub fn Title(props: TitleProps) -> Element {
     let children = props.children;
     let Some(text) = extract_single_text_node(&children, "Title") else {
-        return rsx! {};
+        return VNode::empty();
     };
 
     // Update the title as it changes. NOTE: We don't use use_effect here because we need this to run on the server
@@ -109,7 +109,7 @@ pub fn Title(props: TitleProps) -> Element {
         *last_text = text;
     }
 
-    rsx! {}
+    VNode::empty()
 }
 
 /// Props for the [`Meta`] component
@@ -176,7 +176,7 @@ pub fn Meta(props: MetaProps) -> Element {
         document.create_meta(props);
     });
 
-    rsx! {}
+    VNode::empty()
 }
 
 #[derive(Clone, Props, PartialEq)]
@@ -271,7 +271,7 @@ pub fn Script(props: ScriptProps) -> Element {
         document.create_script(props);
     });
 
-    rsx! {}
+    VNode::empty()
 }
 
 #[derive(Clone, Props, PartialEq)]
@@ -349,7 +349,7 @@ pub fn Style(props: StyleProps) -> Element {
         document.create_style(props);
     });
 
-    rsx! {}
+    VNode::empty()
 }
 
 use super::*;
@@ -462,7 +462,7 @@ pub fn Link(props: LinkProps) -> Element {
         document.create_link(props);
     });
 
-    rsx! {}
+    VNode::empty()
 }
 
 fn get_or_insert_root_context<T: Default + Clone + 'static>() -> T {

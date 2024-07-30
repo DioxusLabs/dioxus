@@ -41,7 +41,12 @@ impl Error for CapturedPanic {}
 
 /// Provide an error boundary to catch errors from child components
 pub fn use_error_boundary() -> ErrorContext {
-    use_hook(|| provide_context(ErrorContext::new(Vec::new(), current_scope_id().unwrap())))
+    use_hook(|| {
+        provide_context(ErrorContext::new(
+            Vec::new(),
+            current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
+        ))
+    })
 }
 
 /// A trait for any type that can be downcast to a concrete type and implements Debug. This is automatically implemented for all types that implement Any + Debug.

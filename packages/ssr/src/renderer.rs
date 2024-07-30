@@ -108,7 +108,7 @@ impl Renderer {
     ) -> std::fmt::Result {
         let entry = self
             .template_cache
-            .entry(template.template.get().id())
+            .entry(template.template.id())
             .or_insert_with(move || Arc::new(StringCache::from_template(template).unwrap()))
             .clone();
 

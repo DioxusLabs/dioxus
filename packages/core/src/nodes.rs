@@ -6,7 +6,6 @@ use crate::{
     properties::ComponentFunction,
 };
 use crate::{Properties, ScopeId, VirtualDom};
-use core::panic;
 use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use std::vec;
@@ -122,7 +121,7 @@ pub struct VNodeInner {
     pub key: Option<String>,
 
     /// The static nodes and static descriptor of the template
-    pub template: Cell<Template>,
+    pub template: Template,
 
     /// The dynamic nodes in the template
     pub dynamic_nodes: Box<[DynamicNode]>,
@@ -252,12 +251,12 @@ impl VNode {
                     key: None,
                     dynamic_nodes: Box::new([DynamicNode::Placeholder(Default::default())]),
                     dynamic_attrs: Box::new([]),
-                    template: Cell::new(Template {
+                    template: Template {
                         name: "packages/core/nodes.rs:198:0:0",
                         roots: &[TemplateNode::Dynamic { id: 0 }],
                         node_paths: &[&[0]],
                         attr_paths: &[],
-                    }),
+                    },
                 })
             })
             .clone()
@@ -278,7 +277,7 @@ impl VNode {
         Self {
             vnode: Rc::new(VNodeInner {
                 key,
-                template: Cell::new(template),
+                template,
                 dynamic_nodes,
                 dynamic_attrs,
             }),
@@ -290,7 +289,7 @@ impl VNode {
     ///
     /// Returns [`None`] if the root is actually a static node (Element/Text)
     pub fn dynamic_root(&self, idx: usize) -> Option<&DynamicNode> {
-        self.template.get().roots[idx]
+        self.template.roots[idx]
             .dynamic_id()
             .map(|id| &self.dynamic_nodes[id])
     }
@@ -411,7 +410,7 @@ where
 }
 
 #[cfg(feature = "serialize")]
-fn deserialize_leaky<'a, 'de, T, D>(deserializer: D) -> Result<&'a [T], D::Error>
+pub(crate) fn deserialize_leaky<'a, 'de, T, D>(deserializer: D) -> Result<&'a [T], D::Error>
 where
     T: serde::Deserialize<'de>,
     D: serde::Deserializer<'de>,
@@ -423,7 +422,9 @@ where
 }
 
 #[cfg(feature = "serialize")]
-fn deserialize_option_leaky<'a, 'de, D>(deserializer: D) -> Result<Option<&'static str>, D::Error>
+pub(crate) fn deserialize_option_leaky<'a, 'de, D>(
+    deserializer: D,
+) -> Result<Option<&'static str>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -447,36 +448,6 @@ impl Template {
         // We compare the template name by pointer so that the id is different after hot reloading even if the name is the same
         let ptr: *const str = self.name;
         ptr as *const () as usize
-    }
-
-    /// Iterate over the attribute paths in order along with the original indexes for each path
-    pub(crate) fn breadth_first_attribute_paths(
-        &self,
-    ) -> impl Iterator<Item = (usize, &'static [u8])> {
-        // In release mode, hot reloading is disabled and everything is in breadth first order already
-        #[cfg(not(debug_assertions))]
-        {
-            self.attr_paths.iter().copied().enumerate()
-        }
-        // If we are in debug mode, hot reloading may have messed up the order of the paths. We need to sort them
-        #[cfg(debug_assertions)]
-        {
-            sort_bfo(self.attr_paths).into_iter()
-        }
-    }
-
-    /// Iterate over the node paths in order along with the original indexes for each path
-    pub(crate) fn breadth_first_node_paths(&self) -> impl Iterator<Item = (usize, &'static [u8])> {
-        // In release mode, hot reloading is disabled and everything is in breadth first order already
-        #[cfg(not(debug_assertions))]
-        {
-            self.node_paths.iter().copied().enumerate()
-        }
-        // If we are in debug mode, hot reloading may have messed up the order of the paths. We need to sort them
-        #[cfg(debug_assertions)]
-        {
-            sort_bfo(self.node_paths).into_iter()
-        }
     }
 }
 
@@ -523,6 +494,10 @@ pub enum TemplateNode {
     /// This template node is just a piece of static text
     Text {
         /// The actual text
+        #[cfg_attr(
+            feature = "serialize",
+            serde(deserialize_with = "deserialize_string_leaky")
+        )]
         text: &'static str,
     },
 
@@ -547,7 +522,7 @@ impl TemplateNode {
 /// A node created at runtime
 ///
 /// This node's index in the DynamicNode list on VNode should match its respective `Dynamic` index
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum DynamicNode {
     /// A component node
     ///
@@ -691,8 +666,10 @@ pub struct VText {
 
 impl VText {
     /// Create a new VText
-    pub fn new(value: String) -> Self {
-        Self { value }
+    pub fn new(value: impl ToString) -> Self {
+        Self {
+            value: value.to_string(),
+        }
     }
 }
 
@@ -782,6 +759,7 @@ impl Attribute {
 ///
 /// These are built-in to be faster during the diffing process. To use a custom value, use the [`AttributeValue::Any`]
 /// variant.
+#[derive(Clone)]
 pub enum AttributeValue {
     /// Text attribute
     Text(String),
@@ -799,7 +777,7 @@ pub enum AttributeValue {
     Listener(ListenerCb),
 
     /// An arbitrary value that implements PartialEq and is static
-    Any(Box<dyn AnyValue>),
+    Any(Rc<dyn AnyValue>),
 
     /// A "none" value, resulting in the removal of an attribute from the dom
     None,
@@ -823,7 +801,7 @@ impl AttributeValue {
 
     /// Create a new [`AttributeValue`] with a value that implements [`AnyValue`]
     pub fn any_value<T: AnyValue>(value: T) -> AttributeValue {
-        AttributeValue::Any(Box::new(value))
+        AttributeValue::Any(Rc::new(value))
     }
 }
 
@@ -854,19 +832,6 @@ impl PartialEq for AttributeValue {
             (Self::Any(l0), Self::Any(r0)) => l0.as_ref().any_cmp(r0.as_ref()),
             (Self::None, Self::None) => true,
             _ => false,
-        }
-    }
-}
-
-impl Clone for AttributeValue {
-    fn clone(&self) -> Self {
-        match self {
-            Self::Text(arg0) => Self::Text(arg0.clone()),
-            Self::Float(arg0) => Self::Float(*arg0),
-            Self::Int(arg0) => Self::Int(*arg0),
-            Self::Bool(arg0) => Self::Bool(*arg0),
-            Self::Listener(_) | Self::Any(_) => panic!("Cannot clone listener or any value"),
-            Self::None => Self::None,
         }
     }
 }
@@ -1116,7 +1081,7 @@ impl IntoAttributeValue for Arguments<'_> {
     }
 }
 
-impl IntoAttributeValue for Box<dyn AnyValue> {
+impl IntoAttributeValue for Rc<dyn AnyValue> {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Any(self)
     }
@@ -1141,55 +1106,4 @@ pub trait HasAttributes {
         attr: impl IntoAttributeValue,
         volatile: bool,
     ) -> Self;
-}
-
-#[cfg(debug_assertions)]
-pub(crate) fn sort_bfo(paths: &[&'static [u8]]) -> Vec<(usize, &'static [u8])> {
-    let mut with_indices = paths.iter().copied().enumerate().collect::<Vec<_>>();
-    with_indices.sort_by(|(_, a), (_, b)| {
-        let mut a = a.iter();
-        let mut b = b.iter();
-        loop {
-            match (a.next(), b.next()) {
-                (Some(a), Some(b)) => {
-                    if a != b {
-                        return a.cmp(b);
-                    }
-                }
-                // The shorter path goes first
-                (None, Some(_)) => return std::cmp::Ordering::Less,
-                (Some(_), None) => return std::cmp::Ordering::Greater,
-                (None, None) => return std::cmp::Ordering::Equal,
-            }
-        }
-    });
-    with_indices
-}
-
-#[test]
-#[cfg(debug_assertions)]
-fn sorting() {
-    let r: [(usize, &[u8]); 5] = [
-        (0, &[0, 1]),
-        (1, &[0, 2]),
-        (2, &[1, 0]),
-        (3, &[1, 0, 1]),
-        (4, &[1, 2]),
-    ];
-    assert_eq!(
-        sort_bfo(&[&[0, 1,], &[0, 2,], &[1, 0,], &[1, 0, 1,], &[1, 2,],]),
-        r
-    );
-    let r: [(usize, &[u8]); 6] = [
-        (0, &[0]),
-        (1, &[0, 1]),
-        (2, &[0, 1, 2]),
-        (3, &[1]),
-        (4, &[1, 2]),
-        (5, &[2]),
-    ];
-    assert_eq!(
-        sort_bfo(&[&[0], &[0, 1], &[0, 1, 2], &[1], &[1, 2], &[2],]),
-        r
-    );
 }
