@@ -29,6 +29,36 @@ pub enum HotReloadLiteral {
     Bool(bool),
 }
 
+impl HotReloadLiteral {
+    pub fn as_fmted(&self) -> Option<&FmtedSegments> {
+        match self {
+            Self::Fmted(segments) => Some(segments),
+            _ => None,
+        }
+    }
+
+    pub fn as_float(&self) -> Option<f64> {
+        match self {
+            Self::Float(f) => Some(*f),
+            _ => None,
+        }
+    }
+
+    pub fn as_int(&self) -> Option<i64> {
+        match self {
+            Self::Int(i) => Some(*i),
+            _ => None,
+        }
+    }
+
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            Self::Bool(b) => Some(*b),
+            _ => None,
+        }
+    }
+}
+
 impl Hash for HotReloadLiteral {
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
@@ -118,99 +148,64 @@ impl DynamicLiteralPool {
         }
     }
 
+    pub fn get_component_property<'a, T>(
+        &self,
+        id: usize,
+        hot_reload: &'a HotReloadedTemplate,
+        f: impl FnOnce(&'a HotReloadLiteral) -> Option<T>,
+    ) -> Option<T> {
+        f(hot_reload.component_values.get(id)?)
+    }
+
+    /// Get a component property of a specific type at the component property index
     pub fn component_property<T: 'static>(
         &mut self,
         id: usize,
         hot_reload: &HotReloadedTemplate,
+        // We pass in the original value for better type inference
+        // For example, if the original literal is `0i128`, we know the output must be the type `i128`
         _coherse_type: T,
     ) -> T {
         fn assert_type<T: 'static, T2: 'static>(t: T) -> T2 {
             *(Box::new(t) as Box<dyn Any>).downcast::<T2>().unwrap()
         }
-        let type_id = TypeId::of::<T>();
-        if type_id == TypeId::of::<String>() {
-            if let Some(HotReloadLiteral::Fmted(segments)) = hot_reload.component_values.get(id) {
-                assert_type(self.render_formatted(segments).to_string())
-            } else {
-                panic!("Expected a string component property");
+        let grab_float = || {
+            self.get_component_property(id, hot_reload, HotReloadLiteral::as_float).expect("Expected a float component property. This is probably caused by a bug in dioxus hot reloading. Please report this issue.")
+        };
+        let grab_int = || {
+            self.get_component_property(id, hot_reload, HotReloadLiteral::as_int).expect("Expected an int component property. This is probably caused by a bug in dioxus hot reloading. Please report this issue.")
+        };
+        let grab_bool = || {
+            self.get_component_property(id, hot_reload, HotReloadLiteral::as_bool).expect("Expected a bool component property. This is probably caused by a bug in dioxus hot reloading. Please report this issue.")
+        };
+        let grab_fmted = || {
+            self.get_component_property(id, hot_reload, |fmted| HotReloadLiteral::as_fmted(fmted).map(|segments| self.render_formatted(segments))).expect("Expected a string component property. This is probably caused by a bug in dioxus hot reloading. Please report this issue.")
+        };
+        match TypeId::of::<T>() {
+            // Any string types that accept a literal
+            _ if TypeId::of::<String>() == TypeId::of::<T>() => assert_type(grab_fmted()),
+            _ if TypeId::of::<&'static str>() == TypeId::of::<T>() => {
+                assert_type(Box::leak(grab_fmted().into_boxed_str()) as &'static str)
             }
-        } else if type_id == TypeId::of::<&'static str>() {
-            if let Some(HotReloadLiteral::Fmted(segments)) = hot_reload.component_values.get(id) {
-                assert_type(
-                    Box::leak(self.render_formatted(segments).to_string().into_boxed_str())
-                        as &'static str,
-                )
-            } else {
-                panic!("Expected a string component property");
-            }
-        } else if type_id == TypeId::of::<i64>() {
-            if let Some(HotReloadLiteral::Int(i)) = hot_reload.component_values.get(id) {
-                assert_type(*i)
-            } else {
-                panic!("Expected an i64 component property");
-            }
-        } else if type_id == TypeId::of::<i32>() {
-            if let Some(HotReloadLiteral::Int(i)) = hot_reload.component_values.get(id) {
-                assert_type(*i as i32)
-            } else {
-                panic!("Expected an i32 component property");
-            }
-        } else if type_id == TypeId::of::<i16>() {
-            if let Some(HotReloadLiteral::Int(i)) = hot_reload.component_values.get(id) {
-                assert_type(*i as i16)
-            } else {
-                panic!("Expected an i16 component property");
-            }
-        } else if type_id == TypeId::of::<i8>() {
-            if let Some(HotReloadLiteral::Int(i)) = hot_reload.component_values.get(id) {
-                assert_type(*i as i8)
-            } else {
-                panic!("Expected an i8 component property");
-            }
-        } else if type_id == TypeId::of::<u64>() {
-            if let Some(HotReloadLiteral::Int(i)) = hot_reload.component_values.get(id) {
-                assert_type(*i as u64)
-            } else {
-                panic!("Expected an u64 component property");
-            }
-        } else if type_id == TypeId::of::<u32>() {
-            if let Some(HotReloadLiteral::Int(i)) = hot_reload.component_values.get(id) {
-                assert_type(*i as u32)
-            } else {
-                panic!("Expected an u32 component property");
-            }
-        } else if type_id == TypeId::of::<u16>() {
-            if let Some(HotReloadLiteral::Int(i)) = hot_reload.component_values.get(id) {
-                assert_type(*i as u16)
-            } else {
-                panic!("Expected an u16 component property");
-            }
-        } else if type_id == TypeId::of::<u8>() {
-            if let Some(HotReloadLiteral::Int(i)) = hot_reload.component_values.get(id) {
-                assert_type(*i as u8)
-            } else {
-                panic!("Expected an u8 component property");
-            }
-        } else if type_id == TypeId::of::<f32>() {
-            if let Some(HotReloadLiteral::Float(f)) = hot_reload.component_values.get(id) {
-                assert_type(*f)
-            } else {
-                panic!("Expected an f32 component property");
-            }
-        } else if type_id == TypeId::of::<f64>() {
-            if let Some(HotReloadLiteral::Float(f)) = hot_reload.component_values.get(id) {
-                assert_type(*f)
-            } else {
-                panic!("Expected an f64 component property");
-            }
-        } else if type_id == TypeId::of::<bool>() {
-            if let Some(HotReloadLiteral::Bool(b)) = hot_reload.component_values.get(id) {
-                assert_type(*b)
-            } else {
-                panic!("Expected an bool component property");
-            }
-        } else {
-            panic!("Unsupported component property type");
+            // Any integer types that accept a literal
+            _ if TypeId::of::<i128>() == TypeId::of::<T>() => assert_type(grab_int() as i128),
+            _ if TypeId::of::<i64>() == TypeId::of::<T>() => assert_type(grab_int()),
+            _ if TypeId::of::<i32>() == TypeId::of::<T>() => assert_type(grab_int() as i32),
+            _ if TypeId::of::<i16>() == TypeId::of::<T>() => assert_type(grab_int() as i16),
+            _ if TypeId::of::<i8>() == TypeId::of::<T>() => assert_type(grab_int() as i8),
+            _ if TypeId::of::<isize>() == TypeId::of::<T>() => assert_type(grab_int() as isize),
+            _ if TypeId::of::<u128>() == TypeId::of::<T>() => assert_type(grab_int() as u128),
+            _ if TypeId::of::<u64>() == TypeId::of::<T>() => assert_type(grab_int() as u64),
+            _ if TypeId::of::<u32>() == TypeId::of::<T>() => assert_type(grab_int() as u32),
+            _ if TypeId::of::<u16>() == TypeId::of::<T>() => assert_type(grab_int() as u16),
+            _ if TypeId::of::<u8>() == TypeId::of::<T>() => assert_type(grab_int() as u8),
+            _ if TypeId::of::<usize>() == TypeId::of::<T>() => assert_type(grab_int() as usize),
+            // Any float types that accept a literal
+            _ if TypeId::of::<f64>() == TypeId::of::<T>() => assert_type(grab_float()),
+            _ if TypeId::of::<f32>() == TypeId::of::<T>() => assert_type(grab_float() as f32),
+            // Any bool types that accept a literal
+            _ if TypeId::of::<bool>() == TypeId::of::<T>() => assert_type(grab_bool()),
+            _ => panic!("Unsupported component property type"),
         }
     }
 
@@ -218,7 +213,6 @@ impl DynamicLiteralPool {
         segments.render_with(&self.dynamic_text)
     }
 }
-
 #[doc(hidden)]
 pub struct DynamicValuePool {
     dynamic_attributes: Box<[Box<[Attribute]>]>,
