@@ -1,11 +1,9 @@
+use super::*;
+use crate::DioxusCrate;
 use build::TargetArgs;
 use dioxus_autofmt::{IndentOptions, IndentType};
 use rayon::prelude::*;
-use std::{fs, path::Path, process::exit};
-
-use crate::DioxusCrate;
-
-use super::*;
+use std::{borrow::Cow, fs, path::Path, process::exit};
 
 // For reference, the rustfmt main.rs file
 // https://github.com/rust-lang/rustfmt/blob/master/src/bin/main.rs
@@ -50,33 +48,11 @@ impl Autoformat {
             ..
         } = self;
 
-        // TODO (matt): Do we need to use the entire `DioxusCrate` here?
-        let target_args = TargetArgs {
-            package: self.package,
-            ..Default::default()
-        };
-        let dx_crate = match DioxusCrate::new(&target_args) {
-            Ok(x) => x,
-            Err(error) => {
-                eprintln!("failed to parse crate graph: {error}");
-                exit(1);
-            }
-        };
-
-        // Default to formatting the project
-        if raw.is_none() && file.is_none() {
-            if let Err(e) = autoformat_project(
-                check,
-                split_line_attributes,
-                format_rust_code,
-                dx_crate.crate_dir(),
-            ) {
-                eprintln!("error formatting project: {}", e);
-                exit(1);
-            }
-        }
-
-        if let Some(raw) = raw {
+        if let Some(file) = file {
+            // Format a single file
+            refactor_file(file, split_line_attributes, format_rust_code)?;
+        } else if let Some(raw) = raw {
+            // Format raw text.
             let indent = indentation_for(".", self.split_line_attributes)?;
             if let Some(inner) = dioxus_autofmt::fmt_block(&raw, 0, indent) {
                 println!("{}", inner);
@@ -85,11 +61,32 @@ impl Autoformat {
                 eprintln!("error formatting codeblock");
                 exit(1);
             }
-        }
+        } else {
+            // Default to formatting the project.
+            let crate_dir = if let Some(package) = self.package {
+                // TODO (matt): Do we need to use the entire `DioxusCrate` here?
+                let target_args = TargetArgs {
+                    package: Some(package),
+                    ..Default::default()
+                };
+                let dx_crate = match DioxusCrate::new(&target_args) {
+                    Ok(x) => x,
+                    Err(error) => {
+                        eprintln!("failed to parse crate graph: {error}");
+                        exit(1);
+                    }
+                };
+                Cow::Owned(dx_crate.crate_dir())
+            } else {
+                Cow::Borrowed(Path::new("."))
+            };
 
-        // Format single file
-        if let Some(file) = file {
-            refactor_file(file, split_line_attributes, format_rust_code)?;
+            if let Err(e) =
+                autoformat_project(check, split_line_attributes, format_rust_code, crate_dir)
+            {
+                eprintln!("error formatting project: {}", e);
+                exit(1);
+            }
         }
 
         Ok(())
