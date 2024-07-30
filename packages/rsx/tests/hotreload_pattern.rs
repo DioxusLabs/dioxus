@@ -1125,3 +1125,25 @@ fn valid_fill_empty() {
 
     assert!(valid);
 }
+
+// We should be able to hot reload spreads
+#[test]
+fn valid_spread() {
+    let valid = can_hotreload(
+        quote! {
+            div {
+                ..spread
+            }
+        },
+        quote! {
+            div {
+                "hello world"
+            }
+            h1 {
+                ..spread
+            }
+        },
+    );
+
+    assert!(valid);
+}

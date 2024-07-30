@@ -76,7 +76,7 @@ impl Parse for Element {
         // Assemble the new element from the contents of the block
         let mut element = Element {
             brace,
-            name,
+            name: name.clone(),
             raw_attributes: block.attributes,
             children: block.children,
             diagnostics: block.diagnostics,
@@ -98,7 +98,7 @@ impl Parse for Element {
                 value: AttributeValue::AttrExpr(PartialExpr::from_expr(&spread.expr)),
                 comma: spread.comma,
                 dyn_idx: spread.dyn_idx.clone(),
-                el_name: None,
+                el_name: Some(name.clone()),
             });
         }
 
