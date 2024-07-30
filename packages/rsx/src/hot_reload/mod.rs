@@ -1,9 +1,14 @@
 #[cfg(feature = "hot_reload")]
-mod hot_reload_diff;
+mod collect;
 #[cfg(feature = "hot_reload")]
-pub use hot_reload_diff::*;
+pub use collect::*;
 
 #[cfg(feature = "hot_reload_traits")]
-mod hot_reloading_context;
+mod context;
 #[cfg(feature = "hot_reload_traits")]
-pub use hot_reloading_context::*;
+pub use context::*;
+
+#[cfg(feature = "hot_reload")]
+mod diff;
+#[cfg(feature = "hot_reload")]
+pub use diff::*;

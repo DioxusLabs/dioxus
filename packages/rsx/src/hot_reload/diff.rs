@@ -1,35 +1,21 @@
-#![cfg(feature = "hot_reload")]
-
-//! This module contains hotreloading logic for rsx.
+//! This module contains the diffing logic for rsx hot reloading.
 //!
 //! There's a few details that I wish we could've gotten right but we can revisit later:
-//!
-//! - Empty rsx! blocks are written as `None` - it would be nice to be able to hot reload them
-//!
-//! - The byte index of the template is not the same as the byte index of the original template
-//!   this forces us to make up IDs on the fly. We should just find an ID naming scheme, but that
-//!   struggles when you have nested rsx! calls since file:line:col is the same for all expanded rsx!
 //!
 //! - There's lots of linear scans
 //!
 //! - Expanding an if chain is not possible - only its contents can be hot reloaded
 //!
-//! - Components that don't start with children can't be hotreloaded - IE going from `Comp {}` to `Comp { "foo" }`
+//! - Components that don't start with children can't be hot reloaded - IE going from `Comp {}` to `Comp { "foo" }`
 //!   is not possible. We could in theory allow this by seeding all Components with a `children` field.
 //!
-//! - Cross-templates hot reloading is not possible - multiple templates don't share the dynamic nodes.
-//!   This would require changes in core to work, I imagine.
-//!
-//! Future work
+//! - Cross-templates hot reloading is not possible - multiple templates don't share the dynamic pool. This would require handling aliases
+//!   in hot reload diffing.
 //!
 //! - We've proven that binary patching is feasible but has a longer path to stabilization for all platforms.
-//!   Binary patching is pretty quick, actually, and *might* remove the need to literal hotreloading.
-//!   However, you could imagine a scenario where literal hotreloading would be useful without the
+//!   Binary patching is pretty quick, actually, and *might* remove the need to literal hot reloading.
+//!   However, you could imagine a scenario where literal hot reloading would be useful without the
 //!   compiler in the loop. Ideally we can slash most of this code once patching is stable.
-//!
-//! - We could also allow adding arbitrary nodes/attributes at runtime. The template system doesn't
-//!   quite support that, unfortunately, since the number of dynamic nodes and attributes is baked into
-//!   the template, but if that changed we'd be okay.
 
 use crate::innerlude::*;
 use crate::HotReloadingContext;

@@ -64,7 +64,6 @@ mod text_node;
 
 mod diagnostics;
 mod expr_node;
-pub mod hotreload;
 mod ifmt;
 mod literal;
 mod location;
@@ -111,7 +110,4 @@ pub(crate) mod innerlude {
     pub use crate::ifmt::*;
     pub use crate::literal::*;
     pub use crate::util::*;
-
-    #[cfg(feature = "hot_reload")]
-    pub use crate::hotreload::*;
 }
