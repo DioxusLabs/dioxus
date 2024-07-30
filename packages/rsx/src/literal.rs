@@ -48,8 +48,10 @@ impl HotLiteral {
     pub fn quote_as_hot_reload_literal(&self) -> TokenStream2 {
         match &self {
             HotLiteral::Fmted(f) => quote! { dioxus_core::internal::HotReloadLiteral::Fmted(#f) },
-            HotLiteral::Float(f) => quote! { dioxus_core::internal::HotReloadLiteral::Float(#f) },
-            HotLiteral::Int(f) => quote! { dioxus_core::internal::HotReloadLiteral::Int(#f) },
+            HotLiteral::Float(f) => {
+                quote! { dioxus_core::internal::HotReloadLiteral::Float(#f as _) }
+            }
+            HotLiteral::Int(f) => quote! { dioxus_core::internal::HotReloadLiteral::Int(#f as _) },
             HotLiteral::Bool(f) => quote! { dioxus_core::internal::HotReloadLiteral::Bool(#f) },
         }
     }
