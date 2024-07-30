@@ -17,5 +17,5 @@ fn parses_and_is_okay() {
     let src = include_str!("./partials/okay.rsx");
     let file = syn::parse_file(src).unwrap();
     let formatted = dioxus_autofmt::try_fmt_file(src, &file, Default::default()).unwrap();
-    assert!(formatted.len() > 0);
+    assert_ne!(formatted.len(), 0);
 }

@@ -19,13 +19,13 @@ pub struct Writer<'a> {
 
 impl<'a> Writer<'a> {
     pub fn new(raw_src: &'a str, indent: IndentOptions) -> Self {
-        let src = raw_src.lines().collect();
-        let mut out = Buffer::default();
-        out.indent = indent;
         Self {
+            src: raw_src.lines().collect(),
             raw_src,
-            src,
-            out,
+            out: Buffer {
+                indent,
+                ..Default::default()
+            },
             cached_formats: HashMap::new(),
             invalid_exprs: Vec::new(),
         }

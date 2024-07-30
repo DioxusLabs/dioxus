@@ -248,7 +248,7 @@ mod tests {
         "##;
 
         let expr: Expr = syn::parse_str(contents).unwrap();
-        let out = unparse_expr(&expr, &contents, &IndentOptions::default());
+        let out = unparse_expr(&expr, contents, &IndentOptions::default());
         println!("{}", out);
     }
 
