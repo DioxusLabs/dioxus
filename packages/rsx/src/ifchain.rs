@@ -1,6 +1,3 @@
-#[cfg(feature = "hot_reload")]
-use dioxus_core::TemplateNode;
-
 use crate::location::DynIdx;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
@@ -36,13 +33,6 @@ impl IfChain {
 
         if let Some(else_branch) = &self.else_branch {
             f(else_branch);
-        }
-    }
-
-    #[cfg(feature = "hot_reload")]
-    pub fn to_template_node(&self) -> TemplateNode {
-        TemplateNode::Dynamic {
-            id: self.dyn_idx.get(),
         }
     }
 }

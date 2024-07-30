@@ -52,8 +52,10 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
     builder.build();
 
     let mut server = Server::start(&serve, &dioxus_crate);
-    let mut watcher = Watcher::start(&dioxus_crate);
+    let mut watcher = Watcher::start(&serve, &dioxus_crate);
     let mut screen = Output::start(&serve).expect("Failed to open terminal logger");
+
+    let is_hot_reload = serve.server_arguments.hot_reload.unwrap_or(true);
 
     loop {
         // Make sure we don't hog the CPU: these loop { select! {} } blocks can starve the executor
@@ -65,7 +67,7 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
         // And then wait for any updates before redrawing
         tokio::select! {
             // rebuild the project or hotreload it
-            _ = watcher.wait() => {
+            _ = watcher.wait(), if is_hot_reload => {
                 if !watcher.pending_changes() {
                     continue
                 }

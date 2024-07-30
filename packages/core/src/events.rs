@@ -397,7 +397,7 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
         ));
         Self {
             callback,
-            origin: current_scope_id().unwrap(),
+            origin: current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
         }
     }
 
@@ -409,13 +409,14 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
                 as Rc<RefCell<dyn FnMut(Args) -> Ret>>));
         Self {
             callback,
-            origin: current_scope_id().unwrap(),
+            origin: current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
         }
     }
 
     /// Call this callback with the appropriate argument type
     ///
     /// This borrows the callback using a RefCell. Recursively calling a callback will cause a panic.
+    #[track_caller]
     pub fn call(&self, arguments: Args) -> Ret {
         if let Some(callback) = self.callback.read().as_ref() {
             Runtime::with(|rt| {
@@ -427,7 +428,7 @@ impl<Args: 'static, Ret: 'static> Callback<Args, Ret> {
                     value
                 })
             })
-            .unwrap()
+            .unwrap_or_else(|e| panic!("{}", e))
         } else {
             panic!("Callback was manually dropped")
         }

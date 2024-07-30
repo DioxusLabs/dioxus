@@ -20,11 +20,11 @@ use crate::innerlude::*;
 use proc_macro2::TokenStream as TokenStream2;
 use proc_macro2_diagnostics::SpanDiagnosticExt;
 use quote::{quote, ToTokens, TokenStreamExt};
-use std::collections::HashSet;
+use std::{collections::HashSet, vec};
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    token, AngleBracketedGenericArguments, Expr, Ident, PathArguments, Result,
+    token, AngleBracketedGenericArguments, Expr, PathArguments, Result,
 };
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -32,6 +32,7 @@ pub struct Component {
     pub name: syn::Path,
     pub generics: Option<AngleBracketedGenericArguments>,
     pub fields: Vec<Attribute>,
+    pub component_literal_dyn_idx: Vec<DynIdx>,
     pub spreads: Vec<Spread>,
     pub brace: Option<token::Brace>,
     pub children: TemplateBody,
@@ -56,6 +57,12 @@ impl Parse for Component {
             diagnostics,
         } = input.parse::<RsxBlock>()?;
 
+        let literal_properties_count = fields
+            .iter()
+            .filter(|attr| matches!(attr.value, AttributeValue::AttrLiteral(_)))
+            .count();
+        let component_literal_dyn_idx = vec![DynIdx::default(); literal_properties_count];
+
         let mut component = Self {
             dyn_idx: DynIdx::default(),
             children: TemplateBody::new(children),
@@ -63,6 +70,7 @@ impl Parse for Component {
             generics,
             fields,
             brace: Some(brace),
+            component_literal_dyn_idx,
             spreads,
             diagnostics,
         };
@@ -71,7 +79,6 @@ impl Parse for Component {
         // validating it will dump diagnostics into the output
         component.validate_component_path();
         component.validate_fields();
-        component.validate_key();
         component.validate_component_spread();
 
         Ok(component)
@@ -84,9 +91,6 @@ impl ToTokens for Component {
 
         // Create props either from manual props or from the builder approach
         let props = self.create_props();
-
-        // Make sure we stringify the component name
-        let fn_name = self.fn_name().to_string();
 
         // Make sure we emit any errors
         let diagnostics = &self.diagnostics;
@@ -102,7 +106,6 @@ impl ToTokens for Component {
                     #props
                 }).into_vcomponent(
                     #name #generics,
-                    #fn_name
                 );
                 #diagnostics
                 __comp
@@ -167,38 +170,17 @@ impl Component {
         }
     }
 
-    /// Ensure only one key and that the key is not a static str
-    ///
-    /// todo: we want to allow arbitrary exprs for keys provided they impl hash / eq
-    fn validate_key(&mut self) {
-        let key = self.get_key();
-
-        if let Some(attr) = key {
-            let diagnostic = match &attr.value {
-                AttributeValue::AttrLiteral(ifmt) if ifmt.is_static() => {
-                    ifmt.span().error("Key must not be a static string. Make sure to use a formatted string like `key: \"{value}\"")
-                }
-                AttributeValue::AttrLiteral(_) => return,
-                _ => attr
-                    .value
-                    .span()
-                    .error("Key must be in the form of a formatted string like `key: \"{value}\""),
-            };
-
-            self.diagnostics.push(diagnostic);
-        }
-    }
-
-    pub fn get_key(&self) -> Option<&Attribute> {
-        self.fields
-            .iter()
-            .find(|attr| matches!(&attr.name, AttributeName::BuiltIn(key) if key == "key"))
+    pub fn get_key(&self) -> Option<&AttributeValue> {
+        self.fields.iter().find_map(|attr| match &attr.name {
+            AttributeName::BuiltIn(key) if key == "key" => Some(&attr.value),
+            _ => None,
+        })
     }
 
     /// Ensure there's no duplicate props - this will be a compile error but we can move it to a
     /// diagnostic, thankfully
     ///
-    /// Also ensure there's no stringly typed propsa
+    /// Also ensure there's no stringly typed props
     fn validate_fields(&mut self) {
         let mut seen = HashSet::new();
 
@@ -271,9 +253,10 @@ impl Component {
     }
 
     fn make_field_idents(&self) -> Vec<(TokenStream2, TokenStream2)> {
+        let mut dynamic_literal_index = 0;
         self.fields
             .iter()
-            .filter_map(|attr| {
+            .filter_map(move |attr| {
                 let Attribute { name, value, .. } = attr;
 
                 let attr = match name {
@@ -287,13 +270,32 @@ impl Component {
                     AttributeName::Spread(_) => return None,
                 };
 
-                Some((attr, value.to_token_stream()))
+                let release_value = value.to_token_stream();
+
+                // In debug mode, we try to grab the value from the dynamic literal pool if possible
+                let value = if let AttributeValue::AttrLiteral(literal) = &value {
+                    let idx = self.component_literal_dyn_idx[dynamic_literal_index].get();
+                    dynamic_literal_index += 1;
+                    let debug_value = quote! { __dynamic_literal_pool.component_property(#idx, &*__template_read, #literal) };
+                    quote! {
+                        {
+                            #[cfg(debug_assertions)]
+                            {
+                                #debug_value
+                            }
+                            #[cfg(not(debug_assertions))]
+                            {
+                                #release_value
+                            }
+                        }
+                    }
+                } else {
+                    release_value
+                };
+
+                Some((attr, value))
             })
             .collect()
-    }
-
-    fn fn_name(&self) -> Ident {
-        self.name.segments.last().unwrap().ident.clone()
     }
 
     fn empty(name: syn::Path, generics: Option<AngleBracketedGenericArguments>) -> Self {
@@ -310,6 +312,7 @@ impl Component {
             fields: vec![],
             spreads: vec![],
             children: TemplateBody::new(vec![]),
+            component_literal_dyn_idx: vec![],
             dyn_idx: DynIdx::default(),
             diagnostics,
         }
@@ -429,7 +432,7 @@ fn generics_params() {
     let input_without_children = quote! {
          Outlet::<R> {}
     };
-    let component: CallBody = syn::parse2(input_without_children).unwrap();
+    let component: crate::CallBody = syn::parse2(input_without_children).unwrap();
     println!("{}", component.to_token_stream().pretty_unparse());
 }
 

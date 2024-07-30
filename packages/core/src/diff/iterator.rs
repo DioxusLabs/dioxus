@@ -467,7 +467,7 @@ impl VNode {
         dom: &VirtualDom,
         to: &mut impl WriteMutations,
     ) -> usize {
-        let template = self.template.get();
+        let template = self.template;
 
         let mount = dom.mounts.get(self.mount.get().0).unwrap();
 
