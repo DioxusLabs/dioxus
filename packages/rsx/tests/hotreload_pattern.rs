@@ -11,7 +11,7 @@ use dioxus_core::{
     TemplateAttribute, VNode,
 };
 use dioxus_rsx::{
-    hot_reload::{self, diff_rsx, ChangedRsx, HotReloadState},
+    hot_reload::{self, diff_rsx, ChangedRsx, HotReloadResult},
     CallBody, HotReloadingContext,
 };
 use proc_macro2::TokenStream;
@@ -62,7 +62,7 @@ fn hotreload_callbody<Ctx: HotReloadingContext>(
     old: &CallBody,
     new: &CallBody,
 ) -> Option<HashMap<usize, HotReloadedTemplate>> {
-    let results = HotReloadState::new::<Ctx>(&old.body, &new.body)?;
+    let results = HotReloadResult::new::<Ctx>(&old.body, &new.body)?;
     Some(results.templates)
 }
 
@@ -70,7 +70,7 @@ fn callbody_to_template<Ctx: HotReloadingContext>(
     old: &CallBody,
     location: &'static str,
 ) -> Option<HotReloadedTemplate> {
-    let mut results = HotReloadState::new::<Ctx>(&old.body, &old.body)?;
+    let mut results = HotReloadResult::new::<Ctx>(&old.body, &old.body)?;
     Some(results.templates.remove(&0).unwrap())
 }
 

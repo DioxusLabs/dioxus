@@ -180,7 +180,7 @@ impl LastBuildState {
 /// This contains information about what has changed so the hotreloader can apply the right changes
 #[non_exhaustive]
 #[derive(Debug, PartialEq, Clone)]
-pub struct HotReloadState {
+pub struct HotReloadResult {
     /// The state of the last full rebuild.
     pub full_rebuild_state: LastBuildState,
 
@@ -215,8 +215,8 @@ pub struct HotReloadState {
     literal_component_properties: Vec<HotReloadLiteral>,
 }
 
-impl HotReloadState {
-    /// Calculate the hotreload diff between two callbodies
+impl HotReloadResult {
+    /// Calculate the hot reload diff between two template bodies
     pub fn new<Ctx: HotReloadingContext>(
         full_rebuild_state: &TemplateBody,
         new: &TemplateBody,
@@ -239,8 +239,8 @@ impl HotReloadState {
         self.templates.extend(other.templates);
     }
 
-    /// Walk the dynamic contexts and do our best to find hotreloadable changes between the two
-    /// sets of dynamic nodes/attributes. If there's a change we can't hotreload, we'll return None
+    /// Walk the dynamic contexts and do our best to find hot reload-able changes between the two
+    /// sets of dynamic nodes/attributes. If there's a change we can't hot reload, we'll return None
     ///
     /// Otherwise, we pump out the list of templates that need to be updated. The templates will be
     /// re-ordered such that the node paths will be adjusted to match the new template for every
@@ -264,7 +264,7 @@ impl HotReloadState {
     ///    }
     /// ```
     ///
-    /// Generally we can't hotreload a node if:
+    /// Generally we can't hot reload a node if:
     /// - We add or modify a new rust expression
     ///   - Adding a new formatted segment we haven't seen before
     ///   - Adding a new dynamic node (loop, fragment, if chain, etc)
@@ -272,10 +272,10 @@ impl HotReloadState {
     /// - We remove a component field
     /// - We change the type of a component field
     ///
-    /// If a dynamic node is removed, we don't necessarily need to kill hotreload - just unmounting it should be enough
+    /// If a dynamic node is removed, we don't necessarily need to kill hot reload - just unmounting it should be enough
     /// If the dynamic node is re-added, we want to be able to find it again.
     ///
-    /// This encourages the hotreloader to hot onto DynamicContexts directly instead of the CallBody since
+    /// This encourages the hot reloader to hot onto DynamicContexts directly instead of the CallBody since
     /// you can preserve more information about the nodes as they've changed over time.
     fn hotreload_body<Ctx: HotReloadingContext>(&mut self, new: &TemplateBody) -> Option<()> {
         // Quickly run through dynamic attributes first attempting to invalidate them

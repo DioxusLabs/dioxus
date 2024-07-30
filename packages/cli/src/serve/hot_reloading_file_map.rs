@@ -155,7 +155,7 @@ impl FileMap {
             let template_location = template_location(old_start, file);
 
             // Returns a list of templates that are hotreloadable
-            let hotreload_result = dioxus_rsx::hot_reload::HotReloadState::new::<Ctx>(
+            let hotreload_result = dioxus_rsx::hot_reload::HotReloadResult::new::<Ctx>(
                 &old_call_body.body,
                 &new_call_body.body,
             );
