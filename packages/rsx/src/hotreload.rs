@@ -34,8 +34,8 @@
 use crate::innerlude::*;
 use crate::HotReloadingContext;
 use dioxus_core::internal::{
-    FmtSegment, FmtedSegments, HotReloadAttribute, HotReloadAttributeValue, HotReloadDynamicNode,
-    HotReloadLiteral, HotReloadedTemplate, NamedAttribute,
+    FmtSegment, FmtedSegments, HotReloadAttributeValue, HotReloadDynamicAttribute,
+    HotReloadDynamicNode, HotReloadLiteral, HotReloadedTemplate, NamedAttribute,
 };
 use std::cell::Cell;
 use std::collections::HashMap;
@@ -217,13 +217,13 @@ pub struct HotReloadState {
     /// If we hotreload the component, we don't need to hotreload the for loop
     ///
     /// You should diff the result of this against the old template to see if you actually need to send down the result
-    pub templates: HashMap<DynIdx, HotReloadedTemplate>,
+    pub templates: HashMap<usize, HotReloadedTemplate>,
 
     /// The dynamic nodes for the current node
     dynamic_nodes: Vec<HotReloadDynamicNode>,
 
     /// The dynamic attributes for the current node
-    dynamic_attributes: Vec<HotReloadAttribute>,
+    dynamic_attributes: Vec<HotReloadDynamicAttribute>,
 
     /// The literal component properties for the current node
     literal_component_properties: Vec<HotReloadLiteral>,
@@ -321,7 +321,7 @@ impl HotReloadState {
         );
 
         self.templates
-            .insert(self.full_rebuild_state.root_index.clone(), template);
+            .insert(self.full_rebuild_state.root_index.get(), template);
 
         Some(())
     }
@@ -443,7 +443,7 @@ impl HotReloadState {
         let mut best_output = None;
         for (index, body) in bodies.enumerate() {
             // Skip templates we've already hotreloaded
-            if self.templates.contains_key(&body.template_idx) {
+            if self.templates.contains_key(&body.template_idx.get()) {
                 continue;
             }
             if let Some(state) = Self::new::<Ctx>(body, new_call_body) {
@@ -704,7 +704,7 @@ impl HotReloadState {
                 .dynamic_attributes
                 .position(|a| a.name == attribute.name && a.value == attribute.value)?;
             self.dynamic_attributes
-                .push(HotReloadAttribute::Dynamic(hot_reload_attribute));
+                .push(HotReloadDynamicAttribute::Dynamic(hot_reload_attribute));
 
             return Some(());
         }
@@ -731,7 +731,7 @@ impl HotReloadState {
         };
 
         self.dynamic_attributes
-            .push(HotReloadAttribute::Named(NamedAttribute::new(
+            .push(HotReloadDynamicAttribute::Named(NamedAttribute::new(
                 tag, namespace, value,
             )));
 

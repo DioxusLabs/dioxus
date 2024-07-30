@@ -277,10 +277,10 @@ impl DynamicValuePool {
         }
     }
 
-    fn render_attribute(&mut self, attr: &HotReloadAttribute) -> Box<[Attribute]> {
+    fn render_attribute(&mut self, attr: &HotReloadDynamicAttribute) -> Box<[Attribute]> {
         match attr {
-            HotReloadAttribute::Dynamic(id) => self.dynamic_attributes[*id].clone(),
-            HotReloadAttribute::Named(NamedAttribute {
+            HotReloadDynamicAttribute::Dynamic(id) => self.dynamic_attributes[*id].clone(),
+            HotReloadDynamicAttribute::Named(NamedAttribute {
                 name,
                 namespace,
                 value,
@@ -324,10 +324,10 @@ pub struct HotReloadTemplateWithLocation {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 pub struct HotReloadedTemplate {
-    key: Option<FmtedSegments>,
-    dynamic_nodes: Vec<HotReloadDynamicNode>,
-    dynamic_attributes: Vec<HotReloadAttribute>,
-    component_values: Vec<HotReloadLiteral>,
+    pub key: Option<FmtedSegments>,
+    pub dynamic_nodes: Vec<HotReloadDynamicNode>,
+    pub dynamic_attributes: Vec<HotReloadDynamicAttribute>,
+    pub component_values: Vec<HotReloadLiteral>,
     #[cfg_attr(
         feature = "serialize",
         serde(deserialize_with = "crate::nodes::deserialize_leaky")
@@ -339,7 +339,7 @@ impl HotReloadedTemplate {
     pub fn new(
         key: Option<FmtedSegments>,
         dynamic_nodes: Vec<HotReloadDynamicNode>,
-        dynamic_attributes: Vec<HotReloadAttribute>,
+        dynamic_attributes: Vec<HotReloadDynamicAttribute>,
         component_values: Vec<HotReloadLiteral>,
         roots: &'static [TemplateNode],
     ) -> Self {
@@ -424,7 +424,7 @@ pub enum HotReloadDynamicNode {
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
-pub enum HotReloadAttribute {
+pub enum HotReloadDynamicAttribute {
     Dynamic(usize),
     Named(NamedAttribute),
 }

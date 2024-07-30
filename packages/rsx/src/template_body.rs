@@ -330,7 +330,7 @@ impl TemplateBody {
         });
         let dyn_attr_printer = self.dynamic_attributes().map(|attr| {
             let id = attr.get_dyn_idx();
-            quote! { dioxus_core::internal::HotReloadAttribute::Dynamic(#id) }
+            quote! { dioxus_core::internal::HotReloadDynamicAttribute::Dynamic(#id) }
         });
         let component_values = self
             .literal_component_properties()

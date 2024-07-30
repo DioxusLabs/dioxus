@@ -171,7 +171,7 @@ impl FileMap {
                 if template.roots.is_empty() {
                     return false;
                 }
-                let template_location = format_template_name(&template_location, idx.get());
+                let template_location = format_template_name(&template_location, *idx);
 
                 // if the template is the same, don't send its
                 if old_cached.templates.get(&template_location) == Some(&*template) {
@@ -189,7 +189,7 @@ impl FileMap {
 
             out_templates.extend(results.templates.into_iter().map(|(idx, template)| {
                 HotReloadTemplateWithLocation {
-                    location: format_template_name(&template_location, idx.get()),
+                    location: format_template_name(&template_location, idx),
                     template,
                 }
             }));
