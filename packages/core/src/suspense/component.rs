@@ -178,8 +178,8 @@ impl SuspenseBoundaryPropsWithOwner {
     pub fn into_vcomponent<M: 'static>(
         self,
         render_fn: impl ComponentFunction<SuspenseBoundaryProps, M>,
-        component_name: &'static str,
     ) -> VComponent {
+        let component_name = std::any::type_name_of_val(&render_fn);
         VComponent::new(
             move |wrapper: Self| render_fn.rebuild(wrapper.inner),
             self,

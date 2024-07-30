@@ -1420,9 +1420,9 @@ Finally, call `.build()` to create the instance of `{name}`.
                         pub fn into_vcomponent<M: 'static>(
                             self,
                             render_fn: impl dioxus_core::prelude::ComponentFunction<#original_name #ty_generics, M>,
-                            component_name: &'static str,
                         ) -> dioxus_core::VComponent {
                             use dioxus_core::prelude::ComponentFunction;
+                            let component_name = ::std::any::type_name_of_val(&render_fn);
                             dioxus_core::VComponent::new(move |wrapper: Self| render_fn.rebuild(wrapper.inner), self, component_name)
                         }
                     }

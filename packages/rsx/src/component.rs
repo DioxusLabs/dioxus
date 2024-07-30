@@ -24,7 +24,7 @@ use std::{collections::HashSet, vec};
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    token, AngleBracketedGenericArguments, Expr, Ident, PathArguments, Result,
+    token, AngleBracketedGenericArguments, Expr, PathArguments, Result,
 };
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -92,9 +92,6 @@ impl ToTokens for Component {
         // Create props either from manual props or from the builder approach
         let props = self.create_props();
 
-        // Make sure we stringify the component name
-        let fn_name = self.fn_name().to_string();
-
         // Make sure we emit any errors
         let diagnostics = &self.diagnostics;
 
@@ -109,7 +106,6 @@ impl ToTokens for Component {
                     #props
                 }).into_vcomponent(
                     #name #generics,
-                    #fn_name
                 );
                 #diagnostics
                 __comp
@@ -300,10 +296,6 @@ impl Component {
                 Some((attr, value))
             })
             .collect()
-    }
-
-    fn fn_name(&self) -> Ident {
-        self.name.segments.last().unwrap().ident.clone()
     }
 
     fn empty(name: syn::Path, generics: Option<AngleBracketedGenericArguments>) -> Self {
