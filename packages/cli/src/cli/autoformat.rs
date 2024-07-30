@@ -1,6 +1,9 @@
+use build::TargetArgs;
 use dioxus_autofmt::{IndentOptions, IndentType};
 use rayon::prelude::*;
 use std::{fs, path::Path, process::exit};
+
+use crate::DioxusCrate;
 
 use super::*;
 
@@ -30,6 +33,10 @@ pub struct Autoformat {
     /// Split attributes in lines or not
     #[clap(short, long, default_value = "false")]
     pub split_line_attributes: bool,
+
+    /// The package to build
+    #[clap(short, long)]
+    pub package: Option<String>,
 }
 
 impl Autoformat {
@@ -43,9 +50,25 @@ impl Autoformat {
             ..
         } = self;
 
+        // TODO (matt): Do we need to use the entire `DioxusCrate` here?
+        let mut target_args = TargetArgs::default();
+        target_args.package = self.package;
+        let dx_crate = match DioxusCrate::new(&target_args) {
+            Ok(x) => x,
+            Err(error) => {
+                eprintln!("failed to parse crate graph: {error}");
+                exit(1);
+            }
+        };
+
         // Default to formatting the project
         if raw.is_none() && file.is_none() {
-            if let Err(e) = autoformat_project(check, split_line_attributes, format_rust_code) {
+            if let Err(e) = autoformat_project(
+                check,
+                split_line_attributes,
+                format_rust_code,
+                dx_crate.crate_dir(),
+            ) {
                 eprintln!("error formatting project: {}", e);
                 exit(1);
             }
@@ -108,9 +131,9 @@ fn refactor_file(
 }
 
 use std::ffi::OsStr;
-fn get_project_files() -> Vec<PathBuf> {
+fn get_project_files(dir: impl AsRef<Path>) -> Vec<PathBuf> {
     let mut files = Vec::new();
-    for result in ignore::Walk::new("./") {
+    for result in ignore::Walk::new(dir) {
         let path = result.unwrap().into_path();
         if let Some(ext) = path.extension() {
             if ext == OsStr::new("rs") {
@@ -161,8 +184,9 @@ fn autoformat_project(
     check: bool,
     split_line_attributes: bool,
     format_rust_code: bool,
+    dir: impl AsRef<Path>,
 ) -> Result<()> {
-    let files_to_format = get_project_files();
+    let files_to_format = get_project_files(dir);
 
     if files_to_format.is_empty() {
         return Ok(());
@@ -285,6 +309,7 @@ async fn test_auto_fmt() {
         raw: Some(test_rsx),
         file: None,
         split_line_attributes: false,
+        package: None,
     };
 
     fmt.autoformat().unwrap();
