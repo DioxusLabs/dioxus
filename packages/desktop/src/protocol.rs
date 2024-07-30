@@ -122,7 +122,6 @@ fn resolve_resource(path: &Path) -> PathBuf {
         if !base_path.exists() {
             let workspace_root = get_workspace_root_from_cargo();
             let asset_path = workspace_root.join(path);
-            println!("ASSET PATH: {:?}", asset_path);
             return asset_path;
         }
     } else {
