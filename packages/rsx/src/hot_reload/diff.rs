@@ -2,8 +2,6 @@
 //!
 //! There's a few details that I wish we could've gotten right but we can revisit later:
 //!
-//! - There's lots of linear scans
-//!
 //! - Expanding an if chain is not possible - only its contents can be hot reloaded
 //!
 //! - Components that don't start with children can't be hot reloaded - IE going from `Comp {}` to `Comp { "foo" }`
@@ -16,170 +14,67 @@
 //!   Binary patching is pretty quick, actually, and *might* remove the need to literal hot reloading.
 //!   However, you could imagine a scenario where literal hot reloading would be useful without the
 //!   compiler in the loop. Ideally we can slash most of this code once patching is stable.
+//!
+//! ## Assigning/Scoring Templates
+//!
+//! We can clone most dynamic items from the last full rebuild:
+//! - Dynamic text segments: `div { width: "{x}%" } -> div { width: "{x}%", height: "{x}%" }`
+//! - Dynamic attributes: `div { width: dynamic } -> div { width: dynamic, height: dynamic }`
+//! - Dynamic nodes: `div { {children} } -> div { {children} {children} }`
+//!
+//! But we cannot clone rsx bodies themselves because we cannot hot reload the new rsx body:
+//! - `div { Component { "{text}" } } -> div { Component { "{text}" } Component { "hello" } }` // We can't create a template for both "{text}" and "hello"
+//!
+//! In some cases, two nodes with children are ambiguous. For example:
+//! ```rust, ignore
+//! rsx! {
+//!     div {
+//!         Component { "{text}" }
+//!         Component { "hello" }
+//!     }
+//! }
+//! ```
+//!
+//! Outside of the template, both components are compatible for hot reloading.
+//!
+//! After we create a list of all components with compatible names and props, we need to find the best match for the
+//! template.
+//!
+//!
+//! Dioxus uses a greedy algorithm to find the best match. We first try to create the child template with the dynamic context from the last full rebuild.
+//! Then we use the child template that leaves the least unused dynamic items in the pool to create the new template.
+//!
+//! For the example above:
+//! - Hot reloading `Component { "hello" }`:
+//!   - Try to hot reload the component body `"hello"` with the dynamic pool from `"{text}"`: Success with 1 unused dynamic item
+//!   - Try to hot reload the component body `"hello"` with the dynamic pool from `"hello"`: Success with 0 unused dynamic items
+//!   - We use the the template that leaves the least unused dynamic items in the pool - `"hello"`
+//! - Hot reloading `Component { "{text}" }`:
+//!   - Try to hot reload the component body `"{text}"` with the dynamic pool from `"{text}"`: Success with 0 unused dynamic items
+//!   - The `"hello"` template has already been hot reloaded, so we don't try to hot reload it again
+//!   - We use the the template that leaves the least unused dynamic items in the pool - `"{text}"`
+//!
+//! Greedy algorithms are optimal when:
+//! - The step we take reduces the problem size
+//! - The subproblem is optimal
+//!
+//! In this case, hot reloading a template removes it from the pool of templates we can use to hot reload the next template which reduces the problem size.
+//!
+//! The subproblem is optimal because the alternative is leaving less dynamic items for the remaining templates to hot reload which just makes it
+//! more difficult to match future templates.
 
 use crate::innerlude::*;
 use crate::HotReloadingContext;
 use dioxus_core::internal::{
-    FmtSegment, FmtedSegments, HotReloadAttributeValue, HotReloadDynamicAttribute,
-    HotReloadDynamicNode, HotReloadLiteral, HotReloadedTemplate, NamedAttribute,
+    FmtedSegments, HotReloadAttributeValue, HotReloadDynamicAttribute, HotReloadDynamicNode,
+    HotReloadLiteral, HotReloadedTemplate, NamedAttribute,
 };
-use std::cell::Cell;
 use std::collections::HashMap;
 use std::hash::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
 
-#[derive(Debug, PartialEq, Clone)]
-struct BakedItem<T> {
-    inner: T,
-    used: Cell<bool>,
-}
-
-impl<T> BakedItem<T> {
-    fn new(inner: T) -> Self {
-        Self {
-            inner,
-            used: Cell::new(false),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Clone)]
-struct BakedPool<T> {
-    inner: Vec<BakedItem<T>>,
-}
-
-impl<T> BakedPool<T> {
-    fn new(inner: impl IntoIterator<Item = T>) -> Self {
-        Self {
-            inner: inner.into_iter().map(BakedItem::new).collect(),
-        }
-    }
-
-    fn position(&self, condition: impl Fn(&T) -> bool) -> Option<usize> {
-        for (idx, baked_item) in self.inner.iter().enumerate() {
-            if condition(&baked_item.inner) {
-                baked_item.used.set(true);
-                return Some(idx);
-            }
-        }
-        None
-    }
-
-    fn unused_dynamic_items(&self) -> usize {
-        self.inner
-            .iter()
-            .filter(|baked_item| !baked_item.used.get())
-            .count()
-    }
-
-    fn reset_usage(&mut self) {
-        for baked_item in self.inner.iter_mut() {
-            baked_item.used.set(false);
-        }
-    }
-}
-
-/// The state of the last full rebuild.
-/// This object contains the pool of compiled dynamic segments we can pull from for hot reloading
-#[derive(Debug, PartialEq, Clone)]
-pub struct LastBuildState {
-    /// The formatted segments that were used in the last build. Eg: "{class}", "{id}"
-    ///
-    /// We are free to use each of these segments many times in the same build.
-    /// We just clone the result (assuming display + debug have no side effects)
-    dynamic_text_segments: BakedPool<FormattedSegment>,
-    /// The dynamic nodes that were used in the last build. Eg: div { {children} }
-    ///
-    /// We are also free to clone these nodes many times in the same build.
-    dynamic_nodes: BakedPool<BodyNode>,
-    /// The attributes that were used in the last build. Eg: div { class: "{class}" }
-    ///
-    /// We are also free to clone these nodes many times in the same build.
-    dynamic_attributes: BakedPool<Attribute>,
-    /// The component literal properties we can hot reload from the last build. Eg: Component { class: "{class}" }
-    ///
-    /// In the new build, we must assign each of these a value even if we no longer use the component.
-    /// The type must be the same as the last time we compiled the property
-    component_properties: Vec<HotLiteral>,
-    /// The root indexes of the last build
-    root_index: DynIdx,
-    /// The name of the original template
-    name: String,
-}
-
-impl LastBuildState {
-    /// Create a new LastBuildState from the given [`TemplateBody`]
-    pub fn new(body: &TemplateBody, name: String) -> Self {
-        let dynamic_text_segments = body.dynamic_text_segments.iter().cloned();
-        let dynamic_nodes = body.dynamic_nodes().cloned();
-        let dynamic_attributes = body.dynamic_attributes().cloned();
-        let component_properties = body.literal_component_properties().cloned().collect();
-        Self {
-            dynamic_text_segments: BakedPool::new(dynamic_text_segments),
-            dynamic_nodes: BakedPool::new(dynamic_nodes),
-            dynamic_attributes: BakedPool::new(dynamic_attributes),
-            component_properties,
-            root_index: body.template_idx.clone(),
-            name,
-        }
-    }
-
-    /// Return the number of unused dynamic items in the pool
-    pub fn unused_dynamic_items(&self) -> usize {
-        self.dynamic_text_segments.unused_dynamic_items()
-            + self.dynamic_nodes.unused_dynamic_items()
-            + self.dynamic_attributes.unused_dynamic_items()
-    }
-
-    /// Reset the usage of the dynamic items in the pool
-    pub fn reset_dynamic_items(&mut self) {
-        self.dynamic_text_segments.reset_usage();
-        self.dynamic_nodes.reset_usage();
-        self.dynamic_attributes.reset_usage();
-    }
-
-    /// Hot reload a hot literal
-    fn hotreload_hot_literal(&self, hot_literal: &HotLiteral) -> Option<HotReloadLiteral> {
-        match hot_literal {
-            // If the literal is a formatted segment, map the segments to the new formatted segments
-            HotLiteral::Fmted(segments) => {
-                let new_segments = self.hot_reload_formatted_segments(segments)?;
-                Some(HotReloadLiteral::Fmted(new_segments))
-            }
-            // Otherwise just pass the literal through unchanged
-            HotLiteral::Bool(b) => Some(HotReloadLiteral::Bool(b.value())),
-            HotLiteral::Float(f) => Some(HotReloadLiteral::Float(f.base10_parse().ok()?)),
-            HotLiteral::Int(i) => Some(HotReloadLiteral::Int(i.base10_parse().ok()?)),
-        }
-    }
-
-    fn hot_reload_formatted_segments(
-        &self,
-        new: &HotReloadFormattedSegment,
-    ) -> Option<FmtedSegments> {
-        // Go through each dynamic segment and look for a match in the formatted segments pool.
-        // If we find a match, we can hot reload the segment otherwise we need to do a full rebuild
-        let mut segments = Vec::new();
-        for segment in &new.segments {
-            match segment {
-                // If it is a literal, we can always hot reload it. Just add it to the segments
-                Segment::Literal(value) => {
-                    segments.push(FmtSegment::Literal {
-                        value: Box::leak(value.clone().into_boxed_str()),
-                    });
-                } // If it is a dynamic segment, we need to check if it exists in the formatted segments pool
-                Segment::Formatted(formatted) => {
-                    let index = self.dynamic_text_segments.position(|s| s == formatted)?;
-
-                    segments.push(FmtSegment::Dynamic { id: index });
-                }
-            }
-        }
-
-        Some(FmtedSegments::new(segments))
-    }
-}
+use super::last_build_state::LastBuildState;
 
 /// A result of hot reloading
 ///
@@ -188,7 +83,7 @@ impl LastBuildState {
 #[derive(Debug, PartialEq, Clone)]
 pub struct HotReloadResult {
     /// The state of the last full rebuild.
-    pub full_rebuild_state: LastBuildState,
+    full_rebuild_state: LastBuildState,
 
     /// The child templates we have already used. As we walk through the template tree, we will run into child templates.
     /// Each of those child templates also need to be hot reloaded. We keep track of which ones we've already hotreloaded

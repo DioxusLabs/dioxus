@@ -12,3 +12,6 @@ pub use context::*;
 mod diff;
 #[cfg(feature = "hot_reload")]
 pub use diff::*;
+
+#[cfg(feature = "hot_reload")]
+mod last_build_state;
