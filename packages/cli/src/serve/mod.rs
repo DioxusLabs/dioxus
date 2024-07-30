@@ -60,7 +60,6 @@ pub async fn serve_all(
     let mut watcher = Watcher::start(&serve, &dioxus_crate);
     let mut screen = Output::start(&serve, log_control).expect("Failed to open terminal logger");
 
-
     let is_hot_reload = serve.server_arguments.hot_reload.unwrap_or(true);
 
     loop {
