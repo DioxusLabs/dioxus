@@ -83,12 +83,6 @@ pub struct TemplateBody {
     pub diagnostics: Diagnostics,
 }
 
-impl Default for TemplateBody {
-    fn default() -> Self {
-        Self::new(vec![BodyNode::RawExpr(parse_quote! {()})])
-    }
-}
-
 impl Parse for TemplateBody {
     /// Parse the nodes of the callbody as `Body`.
     fn parse(input: ParseStream) -> Result<Self> {
@@ -108,11 +102,12 @@ impl ToTokens for TemplateBody {
         // If the nodes are completely empty, insert a placeholder node
         // Core expects at least one node in the template to make it easier to replace
         if self.is_empty() {
-            // Create a default template body with diagnostics and the template index from the original
+            // Create an empty template body with a placeholder and diagnostics + the template index from the original
+            let empty = Self::new(vec![BodyNode::RawExpr(parse_quote! {()})]);
             let default = Self {
                 diagnostics: self.diagnostics.clone(),
                 template_idx: self.template_idx.clone(),
-                ..Default::default()
+                ..empty
             };
             // And then render the default template body
             default.to_tokens(tokens);
