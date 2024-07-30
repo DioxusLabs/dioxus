@@ -29,13 +29,11 @@ use clap::Parser;
 
 use Commands::*;
 
-const LOG_ENV: &str = "DIOXUS_LOG";
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
 
-    tracer::build_tracing(None);
+    tracer::build_tracing();
 
     match args.action {
         Translate(opts) => opts

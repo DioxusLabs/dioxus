@@ -11,13 +11,11 @@ mod logs_tab;
 mod output;
 mod proxy;
 mod server;
-mod subscriber;
 mod watcher;
 
 use builder::*;
 use output::*;
 use server::*;
-use subscriber::*;
 use watcher::*;
 
 /// For *all* builds the CLI spins up a dedicated webserver, file watcher, and build infrastructure to serve the project.
@@ -145,7 +143,7 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                     },
 
                     // If the process exited *cleanly*, we can exit
-                    Ok(BuilderUpdate::ProcessExited { platform, status }) => {
+                    Ok(BuilderUpdate::ProcessExited { status, ..}) => {
                         if let Some(status) = status {
                             if status.success() {
                                 break;
