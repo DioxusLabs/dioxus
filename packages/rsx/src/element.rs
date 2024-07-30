@@ -270,11 +270,9 @@ impl Element {
                 }
 
                 // Merge raw literals into the output
-                if let AttributeValue::AttrLiteral(lit) = &matching_attr.value {
-                    if let HotLiteralType::Fmted(new) = &lit.value {
-                        out.push_ifmt(new.clone());
-                        continue;
-                    }
+                if let AttributeValue::AttrLiteral(HotLiteral::Fmted(lit)) = &matching_attr.value {
+                    out.push_ifmt(lit.formatted_input.clone());
+                    continue;
                 }
 
                 // Merge `if cond { "abc" } else if ...` into the output
@@ -289,10 +287,7 @@ impl Element {
                 );
             }
 
-            let out_lit = HotLiteral {
-                value: HotLiteralType::Fmted(out),
-                hr_idx: Default::default(),
-            };
+            let out_lit = HotLiteral::Fmted(out.into());
 
             self.merged_attributes.push(Attribute {
                 name: attr.name.clone(),
@@ -305,11 +300,11 @@ impl Element {
         }
     }
 
-    pub(crate) fn key(&self) -> Option<&IfmtInput> {
+    pub(crate) fn key(&self) -> Option<&AttributeValue> {
         for attr in &self.raw_attributes {
             if let AttributeName::BuiltIn(name) = &attr.name {
                 if name == "key" {
-                    return attr.ifmt();
+                    return Some(&attr.value);
                 }
             }
         }

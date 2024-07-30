@@ -1,4 +1,4 @@
-use dioxus_rsx::{hot_reload::Empty, CallBody};
+use dioxus_rsx::CallBody;
 use quote::ToTokens;
 
 use dioxus_rsx::PrettyUnparse;
@@ -40,9 +40,6 @@ fn callbody_ctx() {
     let cb: CallBody = syn::parse2(item).unwrap();
 
     dbg!(cb.template_idx.get());
-    dbg!(cb.ifmt_idx.get());
-
-    let _template = cb.body.to_template::<Empty>();
 }
 
 #[test]
