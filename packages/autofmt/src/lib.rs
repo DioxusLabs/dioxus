@@ -4,8 +4,8 @@
 
 use crate::writer::*;
 use dioxus_rsx::{BodyNode, CallBody};
-use proc_macro2::LineColumn;
-use syn::{parse::Parser, ExprMacro};
+use proc_macro2::{LineColumn, Span, TokenStream};
+use syn::{parse::Parser, spanned::Spanned, ExprMacro, Macro};
 
 mod buffer;
 mod collect_macros;
@@ -39,21 +39,40 @@ pub struct FormattedBlock {
 
 /// Format a file into a list of `FormattedBlock`s to be applied by an IDE for autoformatting.
 ///
+/// It accepts
+#[deprecated(note = "Use try_fmt_file instead - this function panics on error.")]
+pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
+    let parsed =
+        syn::parse_file(contents).expect("fmt_file should only be called on valid syn::File files");
+    try_fmt_file(contents, parsed, indent).expect("Failed to format file")
+}
+
+/// Format a file into a list of `FormattedBlock`s to be applied by an IDE for autoformatting.
+///
 /// This function expects a complete file, not just a block of code. To format individual rsx! blocks, use fmt_block instead.
 ///
 /// The point here is to provide precise modifications of a source file so an accompanying IDE tool can map these changes
 /// back to the file precisely.
 ///
 /// Nested blocks of RSX will be handled automatically
-pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
+///
+/// This returns an error if the rsx itself is invalid.
+///
+/// Will early return if any of the expressions are not complete. Even though we *could* return the
+/// expressions, eventually we'll want to pass off expression formatting to rustfmt which will reject
+/// those.
+pub fn try_fmt_file(
+    contents: &str,
+    parsed: syn::File,
+    indent: IndentOptions,
+) -> syn::Result<Vec<FormattedBlock>> {
     let mut formatted_blocks = Vec::new();
 
-    let parsed = syn::parse_file(contents).unwrap();
     let macros = collect_macros::collect_from_file(&parsed);
 
     // No macros, no work to do
     if macros.is_empty() {
-        return formatted_blocks;
+        return Ok(formatted_blocks);
     }
 
     let mut writer = Writer::new(contents);
@@ -69,14 +88,7 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
             continue;
         }
 
-        let body = match item.parse_body_with(CallBody::parse_strict) {
-            Ok(v) => v,
-            //there is aparsing error, we give up and don't format the rsx
-            Err(e) => {
-                eprintln!("Error while parsing rsx {:?} ", e);
-                return formatted_blocks;
-            }
-        };
+        let body = item.parse_body_with(CallBody::parse_strict)?;
 
         let rsx_start = macro_path.span().start();
 
@@ -86,9 +98,13 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
             .count_indents(writer.src[rsx_start.line - 1]);
 
         // TESTME
-        // If we fail to parse this macro then we have no choice to give up and return what we've got
+        // Writing *should* not fail but it's possible that it does
         if writer.write_rsx_call(&body.body).is_err() {
-            return formatted_blocks;
+            let span = writer
+                .invalid_exprs
+                .pop()
+                .unwrap_or_else(|| Span::call_site());
+            return Err(syn::Error::new(span, "Failed emit valid rsx - likely due to partially complete expressions in the rsx! macro"));
         }
 
         // writing idents leaves the final line ended at the end of the last ident
@@ -124,7 +140,7 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
         });
     }
 
-    formatted_blocks
+    Ok(formatted_blocks)
 }
 
 /// Write a Callbody (the rsx block) to a string
@@ -137,10 +153,11 @@ pub fn write_block_out(body: &CallBody) -> Option<String> {
     buf.consume()
 }
 
-pub fn fmt_block_from_expr(raw: &str, expr: ExprMacro) -> Option<String> {
-    let body = CallBody::parse_strict.parse2(expr.mac.tokens).unwrap();
+pub fn fmt_block_from_expr(raw: &str, tokens: TokenStream) -> Option<String> {
+    let body = CallBody::parse_strict.parse2(tokens).unwrap();
     let mut buf = Writer::new(raw);
-    buf.write_rsx_call(&body.body).ok()?;
+    buf.write_body_no_indent(&body.body.roots).ok()?;
+    // buf.write_rsx_call(&body.body).ok()?;
     buf.consume()
 }
 

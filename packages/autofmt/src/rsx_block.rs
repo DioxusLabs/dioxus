@@ -117,6 +117,7 @@ impl Writer<'_> {
                 self.write_attributes(attributes, spreads, true, brace, has_children)?;
 
                 if !children.is_empty() {
+                    self.out.new_line()?;
                     self.write_body_indented(children)?;
                 }
 
@@ -127,6 +128,7 @@ impl Writer<'_> {
                 self.write_attributes(attributes, spreads, false, brace, has_children)?;
 
                 if !children.is_empty() {
+                    self.out.new_line()?;
                     self.write_body_indented(children)?;
                 }
 
@@ -240,12 +242,7 @@ impl Writer<'_> {
             }
 
             AttributeValue::AttrExpr(value) => {
-                let Ok(expr) = value.as_expr() else {
-                    return Err(fmt::Error);
-                };
-
-                let pretty_expr = self.retrieve_formatted_expr(&expr).to_string();
-                self.write_mulitiline_tokens(pretty_expr)?;
+                self.write_partial_expr(value.as_expr(), value.span())?;
             }
         }
 
@@ -253,7 +250,9 @@ impl Writer<'_> {
     }
 
     fn write_attribute_if_chain(&mut self, if_chain: &IfAttributeValue) -> Result {
-        write!(self.out, "if {} {{ ", unparse_expr(&if_chain.condition))?;
+        let cond = self.unparse_expr(&if_chain.condition);
+        write!(self.out, "if {cond} {{ ")?;
+
         self.write_attribute_value(&if_chain.then_value)?;
         write!(self.out, " }}")?;
         match if_chain.else_value.as_deref() {
@@ -284,7 +283,7 @@ impl Writer<'_> {
             writeln!(self.out, "{first}")?;
 
             while let Some(line) = lines.next() {
-                self.out.indented_tab()?;
+                self.out.tab()?;
                 write!(self.out, "{line}")?;
                 if lines.peek().is_none() {
                     write!(self.out, "")?;
@@ -301,20 +300,16 @@ impl Writer<'_> {
     /// Basically just write token by token until we hit the block and then try and format *that*
     /// We can't just ToTokens
     fn write_partial_closure(&mut self, closure: &PartialClosure) -> Result {
-        // Write the pretty version of the closure
-        if let Ok(expr) = closure.as_expr() {
-            let pretty_expr = self.retrieve_formatted_expr(&expr).to_string();
-            self.write_mulitiline_tokens(pretty_expr)?;
-            return Ok(());
-        }
-
-        // If we can't parse the closure, writing it is also a failure
-        // rustfmt won't be able to parse it either so no point in trying
-        Err(fmt::Error)
+        // push out the indent level of the body of the closure
+        // This ensures it doesnt get written to the same level as the parent
+        self.out.indent_level += 1;
+        self.write_partial_expr(closure.as_expr(), closure.span())?;
+        self.out.indent_level -= 1;
+        Ok(())
     }
 
     fn write_spread_attribute(&mut self, attr: &Expr) -> Result {
-        let formatted = unparse_expr(attr);
+        let formatted = self.unparse_expr(attr);
 
         let mut lines = formatted.lines();
 
@@ -429,6 +424,18 @@ impl Writer<'_> {
         for _ in 0..self.out.indent_level {
             write!(self.out, "    ")?
         }
+
+        Ok(())
+    }
+
+    pub(crate) fn write_partial_expr(&mut self, expr: syn::Result<Expr>, src_span: Span) -> Result {
+        let Ok(expr) = expr else {
+            self.invalid_exprs.push(src_span);
+            return Err(fmt::Error);
+        };
+
+        let pretty_expr = self.retrieve_formatted_expr(&expr).to_string();
+        self.write_mulitiline_tokens(pretty_expr)?;
 
         Ok(())
     }

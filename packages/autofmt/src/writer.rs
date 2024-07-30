@@ -2,7 +2,7 @@ use crate::buffer::Buffer;
 use crate::collect_macros::byte_offset;
 use dioxus_rsx::{
     Attribute as AttributeType, AttributeName, AttributeValue as ElementAttrValue, BodyNode,
-    Component, Element, ForLoop, IfChain, Spread, TemplateBody,
+    Component, Element, ExprNode, ForLoop, IfChain, Spread, TemplateBody, TextNode,
 };
 use proc_macro2::{LineColumn, Span};
 use quote::ToTokens;
@@ -19,6 +19,7 @@ pub struct Writer<'a> {
     pub cached_formats: HashMap<LineColumn, String>,
     pub comments: VecDeque<usize>,
     pub out: Buffer,
+    pub invalid_exprs: Vec<Span>,
 }
 
 impl<'a> Writer<'a> {
@@ -30,6 +31,7 @@ impl<'a> Writer<'a> {
             cached_formats: HashMap::new(),
             comments: VecDeque::new(),
             out: Buffer::default(),
+            invalid_exprs: Vec::new(),
         }
     }
 
@@ -45,7 +47,10 @@ impl<'a> Writer<'a> {
                 self.write_ident(&body.roots[0])?;
                 write!(self.out, " ")?;
             }
-            _ => self.write_body_indented(&body.roots)?,
+            _ => {
+                self.out.new_line()?;
+                self.write_body_indented(&body.roots)?
+            }
         }
 
         Ok(())
@@ -56,8 +61,8 @@ impl<'a> Writer<'a> {
         match node {
             BodyNode::Element(el) => self.write_element(el),
             BodyNode::Component(component) => self.write_component(component),
-            BodyNode::Text(text) => self.out.write_text(&text.input),
-            BodyNode::RawExpr(exp) => self.write_raw_expr(exp.span()),
+            BodyNode::Text(text) => self.write_text_node(text),
+            BodyNode::RawExpr(expr) => self.write_expr_node(expr),
             BodyNode::ForLoop(forloop) => self.write_for_loop(forloop),
             BodyNode::IfChain(ifchain) => self.write_if_chain(ifchain),
         }
@@ -123,7 +128,15 @@ impl<'a> Writer<'a> {
         Ok(())
     }
 
-    pub fn write_raw_expr(&mut self, placement: Span) -> Result {
+    pub fn write_text_node(&mut self, text: &TextNode) -> Result {
+        self.out.write_text(&text.input)
+    }
+
+    pub fn write_expr_node(&mut self, expr: &ExprNode) -> Result {
+        self.write_partial_expr(expr.expr.as_expr(), expr.span())
+    }
+
+    pub fn write_from_span(&mut self, placement: Span) -> Result {
         /*
         We want to normalize the expr to the appropriate indent level.
         */
@@ -216,8 +229,26 @@ impl<'a> Writer<'a> {
                 last_was_empty = true;
             } else {
                 last_was_empty = false;
-                self.out.tabbed_line()?;
-                write!(self.out, "{}", self.src[comment_line].trim())?;
+                self.out.tab()?;
+                writeln!(self.out, "{}", self.src[comment_line].trim())?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn write_body_nodes(&mut self, children: &[BodyNode]) -> Result {
+        let mut iter = children.iter().peekable();
+        while let Some(child) = iter.next() {
+            if self.current_span_is_primary(child.span()) {
+                self.write_comments(child.span())?;
+            };
+
+            self.out.tab()?;
+            self.write_ident(child)?;
+
+            if iter.peek().is_some() {
+                self.out.new_line()?;
             }
         }
 
@@ -228,21 +259,21 @@ impl<'a> Writer<'a> {
     pub fn write_body_indented(&mut self, children: &[BodyNode]) -> Result {
         self.out.indent_level += 1;
 
-        self.write_body_no_indent(children)?;
+        self.write_body_nodes(children)?;
 
         self.out.indent_level -= 1;
         Ok(())
     }
 
     pub fn write_body_no_indent(&mut self, children: &[BodyNode]) -> Result {
-        for child in children {
-            if self.current_span_is_primary(child.span()) {
-                self.write_comments(child.span())?;
-            };
-
-            self.out.tabbed_line()?;
-            self.write_ident(child)?;
-        }
+        self.write_body_nodes(children)?;
+        // for child in children {
+        //     // if self.current_span_is_primary(child.span()) {
+        //     //     self.write_comments(child.span())?;
+        //     // };
+        //     self.write_ident(child)?;
+        //     // self.out.tabbed_line()?;
+        // }
 
         Ok(())
     }
@@ -364,6 +395,7 @@ impl<'a> Writer<'a> {
             return Ok(());
         }
 
+        self.out.new_line()?;
         self.write_body_indented(&forloop.body.roots)?;
 
         self.out.tabbed_line()?;
@@ -390,6 +422,7 @@ impl<'a> Writer<'a> {
 
             self.write_inline_expr(cond)?;
 
+            self.out.new_line()?;
             self.write_body_indented(&then_branch.roots)?;
 
             if let Some(else_if_branch) = else_if_branch {
@@ -402,6 +435,7 @@ impl<'a> Writer<'a> {
                 self.out.tabbed_line()?;
                 write!(self.out, "}} else {{")?;
 
+                self.out.new_line()?;
                 self.write_body_indented(&else_branch.roots)?;
                 branch = None;
             } else {

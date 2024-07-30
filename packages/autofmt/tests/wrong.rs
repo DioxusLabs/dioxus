@@ -1,3 +1,5 @@
+#![allow(deprecated)]
+
 use dioxus_autofmt::{IndentOptions, IndentType};
 
 macro_rules! twoway {
