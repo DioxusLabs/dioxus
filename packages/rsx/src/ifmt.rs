@@ -212,8 +212,8 @@ impl IfmtInput {
 impl ToTokens for IfmtInput {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         // If the input is a string literal, we can just return it
-        if let Some(lit) = self.try_to_string() {
-            return lit.to_tokens(tokens);
+        if let Some(static_str) = self.to_static() {
+            return static_str.to_tokens(tokens);
         }
 
         // Try to turn it into a single _.to_string() call
@@ -267,7 +267,7 @@ impl ToTokens for IfmtInput {
 
         quote_spanned! {
             span =>
-            ::std::format_args!(
+            ::std::format!(
                 #format_literal
                 #(, #positional_args)*
             )
