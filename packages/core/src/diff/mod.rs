@@ -44,9 +44,18 @@ impl VirtualDom {
     ) {
         let m = self.create_children(to.as_deref_mut(), r, parent);
         if let Some(to) = to {
-            to.replace_node_with(placeholder_id, m);
-            self.reclaim(placeholder_id);
+            self.replace_placeholder_with_nodes_on_stack(to, placeholder_id, m)
         }
+    }
+
+    fn replace_placeholder_with_nodes_on_stack(
+        &mut self,
+        to: &mut impl WriteMutations,
+        placeholder_id: ElementId,
+        m: usize,
+    ) {
+        to.replace_node_with(placeholder_id, m);
+        self.reclaim(placeholder_id);
     }
 
     fn nodes_to_placeholder(

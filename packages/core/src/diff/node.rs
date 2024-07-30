@@ -84,6 +84,12 @@ impl VNode {
                     self.diff_vtext(to, mount, idx, old, new)
                 }
             },
+            (Text(_), Placeholder(_)) => {
+                self.replace_text_with_placeholder(to, mount, idx, dom)
+            },
+            (Placeholder(_), Text(new)) => {
+                self.replace_placeholder_with_text(to, mount, idx, new, dom)
+            },
             (Placeholder(_), Placeholder(_)) => {},
             (Fragment(old), Fragment(new)) => dom.diff_non_empty_fragment(to, old, new, Some(self.reference_to_dynamic_node(mount, idx))),
             (Component(old), Component(new)) => {
@@ -98,6 +104,42 @@ impl VNode {
             },
             _ => todo!("This is an usual custom case for dynamic nodes. We don't know how to handle it yet."),
         };
+    }
+
+    /// Replace a text node with a placeholder node
+    pub(crate) fn replace_text_with_placeholder(
+        &self,
+        to: Option<&mut impl WriteMutations>,
+        mount: MountId,
+        idx: usize,
+        dom: &mut VirtualDom,
+    ) {
+        if let Some(to) = to {
+            // Grab the text element id from the mount and replace it with a new placeholder
+            let text_id = ElementId(dom.mounts[mount.0].mounted_dynamic_nodes[idx]);
+            let (id, _) = self.create_dynamic_node_with_path(mount, idx, dom);
+            to.create_placeholder(id);
+            to.replace_node_with(text_id, 1);
+            dom.reclaim(text_id);
+        }
+    }
+
+    /// Replace a placeholder node with a text node
+    pub(crate) fn replace_placeholder_with_text(
+        &self,
+        to: Option<&mut impl WriteMutations>,
+        mount: MountId,
+        idx: usize,
+        new: &VText,
+        dom: &mut VirtualDom,
+    ) {
+        if let Some(to) = to {
+            // Grab the placeholder id from the mount and replace it with a new text node
+            let placeholder_id = ElementId(dom.mounts[mount.0].mounted_dynamic_nodes[idx]);
+            let (new_id, _) = self.create_dynamic_node_with_path(mount, idx, dom);
+            to.create_text_node(&new.value, new_id);
+            dom.replace_placeholder_with_nodes_on_stack(to, placeholder_id, 1);
+        }
     }
 
     /// Try to get the dynamic node and its index for a root node
@@ -880,7 +922,7 @@ impl VNode {
     ) -> usize {
         let (id, path) = self.create_dynamic_node_with_path(mount, idx, dom);
 
-        // If this is a root node, the path is empty and we need to create a new text node
+        // If this is a root node, the path is empty and we need to create a new placeholder node
         if path.is_empty() {
             to.create_placeholder(id);
             // We create one node on the stack
