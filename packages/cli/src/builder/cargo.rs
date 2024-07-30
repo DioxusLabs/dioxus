@@ -51,6 +51,11 @@ impl BuildRequest {
             cargo_args.push(target.to_string());
         }
 
+        if let Some(ref platform) = self.build_arguments.target_args.package {
+            cargo_args.push(String::from("-p"));
+            cargo_args.push(platform.clone());
+        }
+
         cargo_args.append(&mut self.build_arguments.cargo_args.clone());
 
         match self.dioxus_crate.executable_type() {
