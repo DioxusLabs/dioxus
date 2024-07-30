@@ -25,8 +25,10 @@
 ///         self.value.try_read_unchecked()
 ///     }
 ///
-///     fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
-///         self.value.read_unchecked()
+///     fn try_peek_unchecked(
+///         &self,
+///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+///         self.value.try_read_unchecked()
 ///     }
 /// }
 ///
@@ -85,8 +87,10 @@ macro_rules! default_impl {
 ///         self.value.try_read_unchecked()
 ///     }
 ///
-///     fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
-///         self.value.read_unchecked()
+///     fn try_peek_unchecked(
+///         &self,
+///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+///         self.value.try_read_unchecked()
 ///     }
 /// }
 ///
@@ -156,8 +160,10 @@ macro_rules! read_impls {
 ///         self.value.try_read_unchecked()
 ///     }
 ///
-///     fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
-///         self.value.read_unchecked()
+///     fn try_peek_unchecked(
+///         &self,
+///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+///         self.value.try_read_unchecked()
 ///     }
 /// }
 ///
@@ -230,8 +236,10 @@ macro_rules! fmt_impls {
 ///         self.value.try_read_unchecked()
 ///     }
 ///
-///     fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
-///         self.value.read_unchecked()
+///     fn try_peek_unchecked(
+///         &self,
+///     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+///         self.value.try_read_unchecked()
 ///     }
 /// }
 ///

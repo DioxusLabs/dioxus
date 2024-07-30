@@ -90,6 +90,9 @@ pub struct DioxusConfig {
     pub web: WebConfig,
 
     #[serde(default)]
+    pub desktop: DesktopConfig,
+
+    #[serde(default)]
     pub bundle: BundleConfig,
 }
 
@@ -129,6 +132,7 @@ impl Default for DioxusConfig {
                 pre_compress: true,
                 wasm_opt: Default::default(),
             },
+            desktop: DesktopConfig::default(),
             bundle: BundleConfig {
                 identifier: Some(format!("io.github.{name}")),
                 publisher: Some(name),
@@ -202,6 +206,22 @@ impl Default for WebConfig {
             proxy: Default::default(),
             watcher: Default::default(),
             resource: Default::default(),
+        }
+    }
+}
+
+/// Represents configuration items for the desktop platform.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DesktopConfig {
+    /// Describes whether a debug-mode desktop app should be always-on-top.
+    #[serde(default)]
+    pub always_on_top: bool,
+}
+
+impl Default for DesktopConfig {
+    fn default() -> Self {
+        Self {
+            always_on_top: true,
         }
     }
 }

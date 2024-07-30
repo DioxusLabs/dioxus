@@ -13,7 +13,7 @@ use crossterm::{
     tty::IsTty,
     ExecutableCommand,
 };
-use dioxus_cli_config::Platform;
+use dioxus_cli_config::{AddressArguments, Platform};
 use dioxus_hot_reload::ClientMsg;
 use futures_util::{future::select_all, Future, StreamExt};
 use ratatui::{prelude::*, widgets::*, TerminalOptions, Viewport};
@@ -75,6 +75,8 @@ pub struct Output {
     anim_start: Instant,
 
     tab: Tab,
+
+    addr: AddressArguments,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -151,6 +153,7 @@ impl Output {
             num_lines_with_wrapping: 0,
             anim_start: Instant::now(),
             tab: Tab::BuildLog,
+            addr: cfg.server_arguments.address.clone(),
         })
     }
 
@@ -159,7 +162,7 @@ impl Output {
     /// Why is the ctrl_c handler here?
     ///
     /// Also tick animations every few ms
-    pub async fn wait(&mut self) -> io::Result<()> {
+    pub async fn wait(&mut self) -> io::Result<bool> {
         // sorry lord
         let user_input = match self.events.as_mut() {
             Some(events) => {
@@ -208,24 +211,28 @@ impl Output {
                     })
                 }
                 if let Some(stderr) = stderr {
+                    self.set_tab(Tab::BuildLog);
+
                     self.running_apps.get_mut(&platform).unwrap().stdout.as_mut().unwrap().stderr_line.push_str(&stderr);
-                    self.push_log(platform, BuildMessage {
+                    self.build_progress.build_logs.get_mut(&platform).unwrap().messages.push(BuildMessage {
                         level: Level::ERROR,
                         message: MessageType::Text(stderr),
                         source: Some("app".to_string()),
-                    })
+                    });
                 }
             },
 
             event = user_input => {
-                self.handle_events(event.unwrap().unwrap()).await?;
+                if self.handle_events(event.unwrap().unwrap()).await? {
+                    return Ok(true)
+                }
                 // self.handle_input(event.unwrap().unwrap())?;
             }
 
             _ = animation_timeout => {}
         }
 
-        Ok(())
+        Ok(false)
     }
 
     pub fn shutdown(&mut self) -> io::Result<()> {
@@ -267,7 +274,8 @@ impl Output {
         }
     }
 
-    pub fn handle_input(&mut self, input: Event) -> io::Result<()> {
+    /// Handle an input event, returning `true` if the event should cause the program to restart.
+    pub fn handle_input(&mut self, input: Event) -> io::Result<bool> {
         // handle ctrlc
         if let Event::Key(key) = input {
             if let KeyCode::Char('c') = key.code {
@@ -296,21 +304,29 @@ impl Output {
             Event::Key(key) if key.code == KeyCode::Down => {
                 self.scroll += 1;
             }
-            Event::Key(key) if key.code == KeyCode::Char('r') => {}
+            Event::Key(key) if key.code == KeyCode::Char('r') => {
+                // todo: reload the app
+                return Ok(true);
+            }
             Event::Key(key) if key.code == KeyCode::Char('o') => {
-                // todo: open the app
+                // Open the running app.
+                open::that(format!("http://{}:{}", self.addr.addr, self.addr.port))?;
             }
             Event::Key(key) if key.code == KeyCode::Char('c') => {
-                // clear
+                // Clear the currently selected build logs.
+                let build = self
+                    .build_progress
+                    .build_logs
+                    .get_mut(&self.platform)
+                    .unwrap();
+                let msgs = match self.tab {
+                    Tab::Console => &mut build.stdout_logs,
+                    Tab::BuildLog => &mut build.messages,
+                };
+                msgs.clear();
             }
-            Event::Key(key) if key.code == KeyCode::Char('0') => {
-                self.tab = Tab::Console;
-                self.scroll = 0;
-            }
-            Event::Key(key) if key.code == KeyCode::Char('1') => {
-                self.tab = Tab::BuildLog;
-                self.scroll = 0;
-            }
+            Event::Key(key) if key.code == KeyCode::Char('1') => self.set_tab(Tab::Console),
+            Event::Key(key) if key.code == KeyCode::Char('2') => self.set_tab(Tab::BuildLog),
             Event::Resize(_width, _height) => {
                 // nothing, it should take care of itself
             }
@@ -327,7 +343,7 @@ impl Output {
                 .saturating_sub(self.term_height + 1);
         }
 
-        Ok(())
+        Ok(false)
     }
 
     pub fn new_ws_message(&mut self, platform: Platform, message: axum::extract::ws::Message) {
@@ -495,7 +511,8 @@ impl Output {
                     .constraints([Constraint::Fill(1), Constraint::Length(14)].as_ref())
                     .split(body[1]);
 
-                let listening_len = "listening at http://127.0.0.1:8080".len() + 3;
+                let addr = format!("http://{}:{}", self.addr.addr, self.addr.port);
+                let listening_len = format!("listening at {addr}").len() + 3;
                 let listening_len = if listening_len > body[0].width as usize {
                     0
                 } else {
@@ -571,14 +588,14 @@ impl Output {
                 frame.render_widget(
                     Paragraph::new(vec![
                         {
-                            let mut line = Line::from(" [0] console").dark_gray();
+                            let mut line = Line::from(" [1] console").dark_gray();
                             if self.tab == Tab::Console {
                                 line.style = Style::default().fg(Color::LightYellow);
                             }
                             line
                         },
                         {
-                            let mut line = Line::from(" [1] build").dark_gray();
+                            let mut line = Line::from(" [2] build").dark_gray();
                             if self.tab == Tab::BuildLog {
                                 line.style = Style::default().fg(Color::LightYellow);
                             }
@@ -587,7 +604,7 @@ impl Output {
                         Line::from("  ").gray(),
                         Line::from(" [/] more").gray(),
                         Line::from(" [r] reload").gray(),
-                        Line::from(" [r] clear").gray(),
+                        Line::from(" [c] clear").gray(),
                         Line::from(" [o] open").gray(),
                         Line::from(" [h] hide").gray(),
                     ])
@@ -683,7 +700,7 @@ impl Output {
             });
     }
 
-    async fn handle_events(&mut self, event: Event) -> io::Result<()> {
+    async fn handle_events(&mut self, event: Event) -> io::Result<bool> {
         let mut events = vec![event];
 
         // Collect all the events within the next 10ms in one stream
@@ -699,12 +716,15 @@ impl Output {
         let mut handled = HashSet::new();
         for event in events {
             if !handled.contains(&event) {
-                self.handle_input(event.clone())?;
+                if self.handle_input(event.clone())? {
+                    // Restart the running app.
+                    return Ok(true);
+                }
                 handled.insert(event);
             }
         }
 
-        Ok(())
+        Ok(false)
     }
 
     fn render_fly_modal(&mut self, frame: &mut Frame, area: Rect) {
@@ -722,11 +742,14 @@ impl Output {
         frame.render_widget(Clear, panel);
         frame.render_widget(Block::default().borders(Borders::ALL), panel);
 
-        let modal = Paragraph::new(
-            "Hello world!\nHello world!\nHello world!\nHello world!\nHello world!\n",
-        )
-        .alignment(Alignment::Center);
+        let modal = Paragraph::new("Under construction, please check back at a later date!\n")
+            .alignment(Alignment::Center);
         frame.render_widget(modal, panel);
+    }
+
+    fn set_tab(&mut self, tab: Tab) {
+        self.tab = tab;
+        self.scroll = 0;
     }
 }
 

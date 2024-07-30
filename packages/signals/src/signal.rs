@@ -2,7 +2,7 @@ use crate::{default_impl, fmt_impls, write_impls};
 use crate::{read::*, write::*, CopyValue, GlobalMemo, GlobalSignal, ReadableRef};
 use crate::{Memo, WritableRef};
 use dioxus_core::prelude::*;
-use generational_box::{AnyStorage, Storage, SyncStorage, UnsyncStorage};
+use generational_box::{AnyStorage, BorrowResult, Storage, SyncStorage, UnsyncStorage};
 use std::sync::Arc;
 use std::{
     any::Any,
@@ -349,9 +349,7 @@ impl<T, S: Storage<SignalData<T>>> Readable for Signal<T, S> {
     type Storage = S;
 
     #[track_caller]
-    fn try_read_unchecked(
-        &self,
-    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+    fn try_read_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>> {
         let inner = self.inner.try_read_unchecked()?;
 
         if let Some(reactive_context) = ReactiveContext::current() {
@@ -366,9 +364,10 @@ impl<T, S: Storage<SignalData<T>>> Readable for Signal<T, S> {
     ///
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
-        let inner = self.inner.try_read_unchecked().unwrap();
-        S::map(inner, |v| &v.value)
+    fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>> {
+        self.inner
+            .try_read_unchecked()
+            .map(|inner| S::map(inner, |v| &v.value))
     }
 }
 

@@ -1,0 +1,13 @@
+html, body {
+    height: 100px;
+    margin: 0;
+    overscroll-behavior-y: none;
+    overscroll-behavior-x: none;
+    overflow: hidden;
+}
+#main, #bodywrap {
+    height: 100%;
+    margin: 0;
+    overscroll-behavior-x: none;
+    overscroll-behavior-y: none;
+}

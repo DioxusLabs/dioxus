@@ -2,19 +2,19 @@ use std::{ops::Deref, rc::Rc};
 
 use crate::{read::Readable, read_impls, ReadableRef};
 use dioxus_core::prelude::*;
-use generational_box::{AnyStorage, UnsyncStorage};
+use generational_box::{AnyStorage, BorrowResult, UnsyncStorage};
 
 /// A read only signal that has been mapped to a new type.
 pub struct MappedSignal<O: ?Sized + 'static, S: AnyStorage = UnsyncStorage> {
     try_read: Rc<dyn Fn() -> Result<S::Ref<'static, O>, generational_box::BorrowError> + 'static>,
-    peek: Rc<dyn Fn() -> S::Ref<'static, O> + 'static>,
+    try_peek: Rc<dyn Fn() -> Result<S::Ref<'static, O>, generational_box::BorrowError> + 'static>,
 }
 
 impl<O: ?Sized, S: AnyStorage> Clone for MappedSignal<O, S> {
     fn clone(&self) -> Self {
         MappedSignal {
             try_read: self.try_read.clone(),
-            peek: self.peek.clone(),
+            try_peek: self.try_peek.clone(),
         }
     }
 }
@@ -29,9 +29,11 @@ where
         try_read: Rc<
             dyn Fn() -> Result<S::Ref<'static, O>, generational_box::BorrowError> + 'static,
         >,
-        peek: Rc<dyn Fn() -> S::Ref<'static, O> + 'static>,
+        try_peek: Rc<
+            dyn Fn() -> Result<S::Ref<'static, O>, generational_box::BorrowError> + 'static,
+        >,
     ) -> Self {
-        MappedSignal { try_read, peek }
+        MappedSignal { try_read, try_peek }
     }
 }
 
@@ -49,8 +51,8 @@ where
         (self.try_read)()
     }
 
-    fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
-        (self.peek)()
+    fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>> {
+        (self.try_peek)()
     }
 }
 
@@ -70,7 +72,8 @@ where
     S: AnyStorage,
 {
     fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(&self.peek, &other.peek) && std::ptr::eq(&self.try_read, &other.try_read)
+        std::ptr::eq(&self.try_peek, &other.try_peek)
+            && std::ptr::eq(&self.try_read, &other.try_read)
     }
 }
 

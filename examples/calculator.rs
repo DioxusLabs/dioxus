@@ -12,7 +12,7 @@ use dioxus::events::*;
 use dioxus::html::input_data::keyboard_types::Key;
 use dioxus::prelude::*;
 
-const STYLE: &str = asset!(file("./examples/assets/calculator.css"));
+const STYLE: &str = asset!("./examples/assets/calculator.css");
 
 fn main() {
     LaunchBuilder::desktop()
@@ -54,7 +54,7 @@ fn app() -> Element {
     };
 
     rsx! {
-        link { rel: "stylesheet", href: STYLE }
+        head::Link { rel: "stylesheet", href: STYLE }
         div { id: "wrapper",
             div { class: "app",
                 div { class: "calculator", tabindex: "0", onkeydown: handle_key_down_event,

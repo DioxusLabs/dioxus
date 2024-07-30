@@ -8,12 +8,12 @@
 
 use dioxus::prelude::*;
 
-const STYLE: &str = asset!(file("./examples/assets/router.css"));
+const STYLE: &str = asset!("./examples/assets/router.css");
 
 fn main() {
     launch(|| {
         rsx! {
-            link { rel: "stylesheet", href: STYLE }
+            head::Link { rel: "stylesheet", href: STYLE }
             Router::<Route> {}
         }
     });

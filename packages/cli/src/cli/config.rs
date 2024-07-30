@@ -26,30 +26,47 @@ pub enum Config {
     /// Create a custom html file.
     CustomHtml {},
 
-    /// Set global cli settings.
-    SetGlobal { setting: Setting, value: Value },
+    /// Set CLI settings.
+    #[command(subcommand)]
+    Set(Setting),
 }
 
-#[derive(Debug, Clone, Deserialize, clap::ValueEnum)]
+#[derive(Debug, Clone, Copy, Deserialize, Subcommand)]
 pub enum Setting {
     /// Set the value of the always-hot-reload setting.
-    AlwaysHotReload,
+    AlwaysHotReload { value: BoolValue },
     /// Set the value of the always-open-browser setting.
-    AlwaysOpenBrowser,
+    AlwaysOpenBrowser { value: BoolValue },
+    /// Set the value of the always-on-top desktop setting.
+    AlwaysOnTop { value: BoolValue },
+    /// Set the interval that file changes are polled on WSL for hot reloading.
+    WSLFilePollInterval { value: u16 },
 }
 
-// NOTE: Unsure of an alternative to get the desired behavior with clap, if it exists.
-#[derive(Debug, Clone, Deserialize, clap::ValueEnum)]
-pub enum Value {
+impl Display for Setting {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::AlwaysHotReload { value: _ } => write!(f, "always-hot-reload"),
+            Self::AlwaysOpenBrowser { value: _ } => write!(f, "always-open-browser"),
+            Self::AlwaysOnTop { value: _ } => write!(f, "always-on-top"),
+            Self::WSLFilePollInterval { value: _ } => write!(f, "wsl-file-poll-interval"),
+        }
+    }
+}
+
+// Clap complains if we use a bool directly and I can't find much info about it.
+// "Argument 'value` is positional and it must take a value but action is SetTrue"
+#[derive(Debug, Clone, Copy, Deserialize, clap::ValueEnum)]
+pub enum BoolValue {
     True,
     False,
 }
 
-impl From<Value> for bool {
-    fn from(value: Value) -> Self {
+impl From<BoolValue> for bool {
+    fn from(value: BoolValue) -> Self {
         match value {
-            Value::True => true,
-            Value::False => false,
+            BoolValue::True => true,
+            BoolValue::False => false,
         }
     }
 }
@@ -90,11 +107,21 @@ impl Config {
                 file.write_all(content.as_bytes())?;
                 tracing::info!("🚩 Create custom html file done.");
             }
-            Config::SetGlobal { setting, value } => {
+            // Handle CLI settings.
+            Config::Set(setting) => {
                 CliSettings::modify_settings(|settings| match setting {
-                    Setting::AlwaysHotReload => settings.always_hot_reload = Some(value.into()),
-                    Setting::AlwaysOpenBrowser => settings.always_open_browser = Some(value.into()),
+                    Setting::AlwaysOnTop { value } => settings.always_on_top = Some(value.into()),
+                    Setting::AlwaysHotReload { value } => {
+                        settings.always_hot_reload = Some(value.into())
+                    }
+                    Setting::AlwaysOpenBrowser { value } => {
+                        settings.always_open_browser = Some(value.into())
+                    }
+                    Setting::WSLFilePollInterval { value } => {
+                        settings.wsl_file_poll_interval = Some(value)
+                    }
                 })?;
+                tracing::info!("🚩 CLI setting `{setting}` has been set.");
             }
         }
         Ok(())

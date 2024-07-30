@@ -1,3 +1,4 @@
+use crate::builder::{Stage, UpdateBuildProgress, UpdateStage};
 use crate::cli::serve::Serve;
 use crate::dioxus_crate::DioxusCrate;
 use crate::Result;
@@ -51,8 +52,10 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
     builder.build();
 
     let mut server = Server::start(&serve, &dioxus_crate);
-    let mut watcher = Watcher::start(&dioxus_crate);
+    let mut watcher = Watcher::start(&serve, &dioxus_crate);
     let mut screen = Output::start(&serve).expect("Failed to open terminal logger");
+
+    let is_hot_reload = serve.server_arguments.hot_reload.unwrap_or(true);
 
     loop {
         // Make sure we don't hog the CPU: these loop { select! {} } blocks can starve the executor
@@ -64,9 +67,9 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
         // And then wait for any updates before redrawing
         tokio::select! {
             // rebuild the project or hotreload it
-            _ = watcher.wait() => {
+            _ = watcher.wait(), if is_hot_reload => {
                 if !watcher.pending_changes() {
-                    continue;
+                    continue
                 }
 
                 let changed_files = watcher.dequeue_changed_files(&dioxus_crate);
@@ -106,9 +109,17 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                 // We also can check the status of the builds here in case we have multiple ongoing builds
                 match application {
                     Ok(BuilderUpdate::Progress { platform, update }) => {
-                        let update_stage = update.stage;
-                        screen.new_build_logs(platform, update);
-                        server.update_build_status(screen.build_progress.progress(), update_stage.to_string()).await;
+                        let update_clone = update.clone();
+                        screen.new_build_logs(platform, update_clone);
+                        server.update_build_status(screen.build_progress.progress(), update.stage.to_string()).await;
+
+                        match update {
+                            // Send rebuild start message.
+                            UpdateBuildProgress { stage: Stage::Compiling, update: UpdateStage::Start } => server.send_reload_start().await,
+                            // Send rebuild failed message.
+                            UpdateBuildProgress { stage: Stage::Finished, update: UpdateStage::Failed(_) } => server.send_reload_failed().await,
+                            _ => {},
+                        }
                     }
                     Ok(BuilderUpdate::Ready { results }) => {
                         if !results.is_empty() {
@@ -130,7 +141,7 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
                         screen.new_ready_app(&mut builder, results);
 
                         // And then finally tell the server to reload
-                        server.send_reload().await;
+                        server.send_reload_command().await;
                     },
                     Err(err) => {
                         server.send_build_error(err).await;
@@ -140,8 +151,15 @@ pub async fn serve_all(serve: Serve, dioxus_crate: DioxusCrate) -> Result<()> {
 
             // Handle input from the user using our settings
             res = screen.wait() => {
-                if res.is_err() {
-                    break;
+                match res {
+                    Ok(false) => {}
+                    // Request a rebuild.
+                    Ok(true) => {
+                        builder.build();
+                        server.start_build().await
+                    },
+                    // Shutdown the server.
+                    Err(_) => break,
                 }
             }
         }

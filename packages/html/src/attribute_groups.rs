@@ -1752,6 +1752,12 @@ mod_methods! {
     /// <https://developer.mozilla.org/en-US/docs/Web/API/Event/preventDefault>
     prevent_default: "dioxus-prevent-default";
 
+    /// dangerous_inner_html is Dioxus's replacement for using innerHTML in the browser DOM. In general, setting
+    /// HTML from code is risky because it’s easy to inadvertently expose your users to a cross-site scripting (XSS)
+    /// attack. So, you can set HTML directly from Dioxus, but you have to type out dangerous_inner_html to remind
+    /// yourself that it’s dangerous
+    dangerous_inner_html;
+
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/accent-height>
     accent_height: "accent-height";
 
