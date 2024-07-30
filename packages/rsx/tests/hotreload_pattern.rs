@@ -62,7 +62,7 @@ fn hotreload_callbody<Ctx: HotReloadingContext>(
     old: &CallBody,
     new: &CallBody,
 ) -> Option<HashMap<usize, HotReloadedTemplate>> {
-    let results = HotReloadResult::new::<Ctx>(&old.body, &new.body)?;
+    let results = HotReloadResult::new::<Ctx>(&old.body, &new.body, Default::default())?;
     Some(results.templates)
 }
 
@@ -70,7 +70,7 @@ fn callbody_to_template<Ctx: HotReloadingContext>(
     old: &CallBody,
     location: &'static str,
 ) -> Option<HotReloadedTemplate> {
-    let mut results = HotReloadResult::new::<Ctx>(&old.body, &old.body)?;
+    let mut results = HotReloadResult::new::<Ctx>(&old.body, &old.body, Default::default())?;
     Some(results.templates.remove(&0).unwrap())
 }
 

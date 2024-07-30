@@ -147,7 +147,7 @@ impl ToTokens for TemplateBody {
         let index = self.template_idx.get();
 
         let diagnostics = &self.diagnostics;
-        let hot_reload_mapping = self.hot_reload_mapping();
+        let hot_reload_mapping = self.hot_reload_mapping(quote! { ___TEMPLATE_NAME });
 
         let vnode = quote! {
             #[doc(hidden)] // vscode please stop showing these in symbol search
@@ -329,7 +329,7 @@ impl TemplateBody {
             })
     }
 
-    fn hot_reload_mapping(&self) -> TokenStream2 {
+    fn hot_reload_mapping(&self, name: impl ToTokens) -> TokenStream2 {
         let key = if let Some(AttributeValue::AttrLiteral(HotLiteral::Fmted(key))) =
             self.implicit_key()
         {
@@ -351,6 +351,7 @@ impl TemplateBody {
             .map(|literal| literal.quote_as_hot_reload_literal());
         quote! {
             dioxus_core::internal::HotReloadedTemplate::new(
+                #name,
                 #key,
                 vec![ #( #dynamic_nodes ),* ],
                 vec![ #( #dyn_attr_printer ),* ],

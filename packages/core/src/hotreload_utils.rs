@@ -1,6 +1,6 @@
 use std::{
     any::{Any, TypeId},
-    sync::RwLock,
+    hash::{Hash, Hasher},
 };
 
 #[cfg(feature = "serialize")]
@@ -29,10 +29,21 @@ pub enum HotReloadLiteral {
     Bool(bool),
 }
 
+impl Hash for HotReloadLiteral {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Self::Fmted(segments) => segments.hash(state),
+            Self::Float(f) => f.to_bits().hash(state),
+            Self::Int(i) => i.hash(state),
+            Self::Bool(b) => b.hash(state),
+        }
+    }
+}
+
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 #[doc(hidden)]
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct FmtedSegments {
     pub(crate) segments: Vec<FmtSegment>,
 }
@@ -59,7 +70,7 @@ impl FmtedSegments {
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[doc(hidden)]
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum FmtSegment {
     Literal {
         #[cfg_attr(
@@ -233,17 +244,8 @@ impl DynamicValuePool {
         let node_paths = hot_reload.node_paths();
         let attr_paths = hot_reload.attr_paths();
 
-        static ID: RwLock<usize> = RwLock::new(0);
-        let id = {
-            let mut id = ID.write().unwrap();
-            *id += 1;
-            *id
-        };
-        let name = format!("hot_reloaded_template_{id}");
-        let name = Box::leak(name.into_boxed_str());
-
         let template = Template {
-            name,
+            name: hot_reload.name,
             roots: hot_reload.roots,
             node_paths,
             attr_paths,
@@ -322,8 +324,8 @@ pub struct HotReloadTemplateWithLocation {
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 pub struct HotReloadedTemplate {
+    pub name: &'static str,
     pub key: Option<FmtedSegments>,
     pub dynamic_nodes: Vec<HotReloadDynamicNode>,
     pub dynamic_attributes: Vec<HotReloadDynamicAttribute>,
@@ -337,6 +339,7 @@ pub struct HotReloadedTemplate {
 
 impl HotReloadedTemplate {
     pub fn new(
+        name: &'static str,
         key: Option<FmtedSegments>,
         dynamic_nodes: Vec<HotReloadDynamicNode>,
         dynamic_attributes: Vec<HotReloadDynamicAttribute>,
@@ -344,6 +347,7 @@ impl HotReloadedTemplate {
         roots: &'static [TemplateNode],
     ) -> Self {
         Self {
+            name,
             key,
             dynamic_nodes,
             dynamic_attributes,
@@ -412,7 +416,7 @@ impl HotReloadedTemplate {
 }
 
 #[doc(hidden)]
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 pub enum HotReloadDynamicNode {
@@ -421,7 +425,7 @@ pub enum HotReloadDynamicNode {
 }
 
 #[doc(hidden)]
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 pub enum HotReloadDynamicAttribute {
@@ -430,7 +434,7 @@ pub enum HotReloadDynamicAttribute {
 }
 
 #[doc(hidden)]
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct NamedAttribute {
     /// The name of this attribute.
@@ -464,7 +468,7 @@ impl NamedAttribute {
 }
 
 #[doc(hidden)]
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 pub enum HotReloadAttributeValue {

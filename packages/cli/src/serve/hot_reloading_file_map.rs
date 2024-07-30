@@ -158,6 +158,7 @@ impl FileMap {
             let hotreload_result = dioxus_rsx::hot_reload::HotReloadResult::new::<Ctx>(
                 &old_call_body.body,
                 &new_call_body.body,
+                template_location.clone(),
             );
 
             // if the template is not hotreloadable, we need to do a full rebuild

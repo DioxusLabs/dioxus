@@ -25,6 +25,9 @@ use dioxus_core::internal::{
 };
 use std::cell::Cell;
 use std::collections::HashMap;
+use std::hash::DefaultHasher;
+use std::hash::Hash;
+use std::hash::Hasher;
 
 #[derive(Debug, PartialEq, Clone)]
 struct BakedItem<T> {
@@ -101,11 +104,13 @@ pub struct LastBuildState {
     component_properties: Vec<HotLiteral>,
     /// The root indexes of the last build
     root_index: DynIdx,
+    /// The name of the original template
+    name: String,
 }
 
 impl LastBuildState {
     /// Create a new LastBuildState from the given [`TemplateBody`]
-    pub fn new(body: &TemplateBody) -> Self {
+    pub fn new(body: &TemplateBody, name: String) -> Self {
         let dynamic_text_segments = body.dynamic_text_segments.iter().cloned();
         let dynamic_nodes = body.dynamic_nodes().cloned();
         let dynamic_attributes = body.dynamic_attributes().cloned();
@@ -116,6 +121,7 @@ impl LastBuildState {
             dynamic_attributes: BakedPool::new(dynamic_attributes),
             component_properties,
             root_index: body.template_idx.clone(),
+            name,
         }
     }
 
@@ -220,8 +226,9 @@ impl HotReloadResult {
     pub fn new<Ctx: HotReloadingContext>(
         full_rebuild_state: &TemplateBody,
         new: &TemplateBody,
+        name: String,
     ) -> Option<Self> {
-        let full_rebuild_state = LastBuildState::new(full_rebuild_state);
+        let full_rebuild_state = LastBuildState::new(full_rebuild_state, name);
         let mut s = Self {
             full_rebuild_state,
             templates: Default::default(),
@@ -296,9 +303,25 @@ impl HotReloadResult {
             .iter()
             .map(|node| node.to_template_node::<Ctx>())
             .collect();
-        let roots = intern(&*roots);
+        let roots: &[dioxus_core::TemplateNode] = intern(&*roots);
+
+        // Add the template name, the dyn index and the hash of the template to get a unique name
+        let name = {
+            let mut hasher = DefaultHasher::new();
+            key.hash(&mut hasher);
+            new_dynamic_attributes.hash(&mut hasher);
+            new_dynamic_nodes.hash(&mut hasher);
+            literal_component_properties.hash(&mut hasher);
+            roots.hash(&mut hasher);
+            let hash = hasher.finish();
+            let name = &self.full_rebuild_state.name;
+
+            format!("{}:{}-{}", name, hash, new.template_idx.get())
+        };
+        let name = Box::leak(name.into_boxed_str());
 
         let template = HotReloadedTemplate::new(
+            name,
             key,
             new_dynamic_nodes,
             new_dynamic_attributes,
@@ -432,7 +455,9 @@ impl HotReloadResult {
             if self.templates.contains_key(&body.template_idx.get()) {
                 continue;
             }
-            if let Some(state) = Self::new::<Ctx>(body, new_call_body) {
+            if let Some(state) =
+                Self::new::<Ctx>(body, new_call_body, self.full_rebuild_state.name.clone())
+            {
                 let score = state.full_rebuild_state.unused_dynamic_items();
                 if score < best_score {
                     best_score = score;
@@ -570,8 +595,11 @@ impl HotReloadResult {
 
         // Find the if chain that matches all of the conditions and wastes the least dynamic items
         for (index, old_if_chain) in if_chains {
-            let Some(chain_templates) = Self::diff_if_chains::<Ctx>(old_if_chain, new_if_chain)
-            else {
+            let Some(chain_templates) = Self::diff_if_chains::<Ctx>(
+                old_if_chain,
+                new_if_chain,
+                self.full_rebuild_state.name.clone(),
+            ) else {
                 continue;
             };
             let score = chain_templates
@@ -606,6 +634,7 @@ impl HotReloadResult {
     fn diff_if_chains<Ctx: HotReloadingContext>(
         old_if_chain: &IfChain,
         new_if_chain: &IfChain,
+        name: String,
     ) -> Option<Vec<Self>> {
         // Go through each part of the if chain and find the best match
         let mut old_chain = old_if_chain;
@@ -620,7 +649,8 @@ impl HotReloadResult {
             }
 
             // If the branches are the same, we can hotreload them
-            let hot_reload = Self::new::<Ctx>(&old_chain.then_branch, &new_chain.then_branch)?;
+            let hot_reload =
+                Self::new::<Ctx>(&old_chain.then_branch, &new_chain.then_branch, name.clone())?;
             chain_templates.push(hot_reload);
 
             // Make sure the if else branches match
@@ -641,7 +671,7 @@ impl HotReloadResult {
         // Make sure the else branches match
         match (&old_chain.else_branch, &new_chain.else_branch) {
             (Some(old), Some(new)) => {
-                let template = Self::new::<Ctx>(old, new)?;
+                let template = Self::new::<Ctx>(old, new, name.clone())?;
                 chain_templates.push(template);
             }
             (None, None) => {}
