@@ -87,6 +87,10 @@ impl io::Write for CLIWriter {
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        Ok(())
+        if !self.tui_enabled.load(Ordering::SeqCst) {
+            self.stdout.flush()
+        } else {
+            Ok(())
+        }
     }
 }
