@@ -51,8 +51,10 @@ impl Autoformat {
         } = self;
 
         // TODO (matt): Do we need to use the entire `DioxusCrate` here?
-        let mut target_args = TargetArgs::default();
-        target_args.package = self.package;
+        let target_args = TargetArgs {
+            package: self.package,
+            ..Default::default()
+        };
         let dx_crate = match DioxusCrate::new(&target_args) {
             Ok(x) => x,
             Err(error) => {
