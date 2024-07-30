@@ -43,7 +43,7 @@ pub struct FormattedBlock {
 pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
     let parsed =
         syn::parse_file(contents).expect("fmt_file should only be called on valid syn::File files");
-    try_fmt_file(contents, parsed, indent).expect("Failed to format file")
+    try_fmt_file(contents, &parsed, indent).expect("Failed to format file")
 }
 
 /// Format a file into a list of `FormattedBlock`s to be applied by an IDE for autoformatting.
@@ -62,12 +62,12 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
 /// those.
 pub fn try_fmt_file(
     contents: &str,
-    parsed: syn::File,
+    parsed: &syn::File,
     indent: IndentOptions,
 ) -> syn::Result<Vec<FormattedBlock>> {
     let mut formatted_blocks = Vec::new();
 
-    let macros = collect_macros::collect_from_file(&parsed);
+    let macros = collect_macros::collect_from_file(parsed);
 
     // No macros, no work to do
     if macros.is_empty() {

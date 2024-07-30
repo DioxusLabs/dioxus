@@ -93,7 +93,13 @@ fn refactor_file(
         s = format_rust(&s)?;
     }
 
-    let edits = dioxus_autofmt::fmt_file(&s, indent);
+    let Ok(Ok(edits)) =
+        syn::parse_file(&s).map(|file| dioxus_autofmt::try_fmt_file(&s, &file, indent))
+    else {
+        eprintln!("failed to format file: {}", s);
+        exit(1);
+    };
+
     let out = dioxus_autofmt::apply_formats(&s, edits);
 
     if file == "-" {
@@ -137,7 +143,10 @@ fn format_file(
         }
     }
 
-    let edits = dioxus_autofmt::fmt_file(&contents, indent);
+    let parsed = syn::parse_file(&contents)
+        .map_err(|err| Error::ParseError(format!("Failed to parse file: {}", err)))?;
+    let edits = dioxus_autofmt::try_fmt_file(&contents, &parsed, indent)
+        .map_err(|err| Error::ParseError(format!("Failed to format file: {}", err)))?;
     let len = edits.len();
 
     if !edits.is_empty() {

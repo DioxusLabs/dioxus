@@ -8,7 +8,7 @@ fn no_parse() {
 fn parses_but_fmt_fails() {
     let src = include_str!("./partials/wrong.rsx");
     let file = syn::parse_file(src).unwrap();
-    let formatted = dioxus_autofmt::try_fmt_file(src, file, Default::default());
+    let formatted = dioxus_autofmt::try_fmt_file(src, &file, Default::default());
     assert!(&formatted.is_err());
 }
 
@@ -16,6 +16,6 @@ fn parses_but_fmt_fails() {
 fn parses_and_is_okay() {
     let src = include_str!("./partials/okay.rsx");
     let file = syn::parse_file(src).unwrap();
-    let formatted = dioxus_autofmt::try_fmt_file(src, file, Default::default()).unwrap();
+    let formatted = dioxus_autofmt::try_fmt_file(src, &file, Default::default()).unwrap();
     assert!(formatted.len() > 0);
 }

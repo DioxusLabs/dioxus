@@ -2616,6 +2616,7 @@ dependencies = [
  "dioxus-autofmt",
  "html_parser",
  "rsx-rosetta",
+ "syn 2.0.72",
  "wasm-bindgen",
 ]
 

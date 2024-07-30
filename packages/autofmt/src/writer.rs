@@ -572,7 +572,9 @@ impl<'a> Writer<'a> {
     fn write_inline_comments(&mut self, final_span: LineColumn, offset: usize) -> Result {
         let line = final_span.line;
         let column = final_span.column;
-        let src_line = self.src[line - 1];
+        let Some(src_line) = self.src.get(line - 1) else {
+            return Ok(());
+        };
 
         // the line might contain emoji or other unicode characters - this will cause issues
         let Some(mut whitespace) = src_line.get(column..).map(|s| s.trim()) else {

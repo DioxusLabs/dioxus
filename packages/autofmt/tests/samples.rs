@@ -56,5 +56,6 @@ twoway![
     t2,
     tiny,
     tinynoopt,
-    trailing_expr
+    trailing_expr,
+    oneline
 ];

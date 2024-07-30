@@ -65,18 +65,26 @@ impl FormatBlockInstance {
 
 #[wasm_bindgen]
 pub fn format_file(contents: String, use_tabs: bool, indent_size: usize) -> FormatBlockInstance {
-    let _edits = dioxus_autofmt::fmt_file(
-        &contents,
-        IndentOptions::new(
-            if use_tabs {
-                IndentType::Tabs
-            } else {
-                IndentType::Spaces
-            },
-            indent_size,
-            false,
-        ),
+    // todo: use rustfmt for this instead
+    let options = IndentOptions::new(
+        if use_tabs {
+            IndentType::Tabs
+        } else {
+            IndentType::Spaces
+        },
+        indent_size,
+        false,
     );
+
+    let Ok(Ok(_edits)) = syn::parse_file(&contents)
+        .map(|file| dioxus_autofmt::try_fmt_file(&contents, &file, options))
+    else {
+        return FormatBlockInstance {
+            new: contents,
+            _edits: Vec::new(),
+        };
+    };
+
     let out = dioxus_autofmt::apply_formats(&contents, _edits.clone());
     FormatBlockInstance { new: out, _edits }
 }
