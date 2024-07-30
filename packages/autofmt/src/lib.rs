@@ -4,7 +4,7 @@
 
 use crate::writer::*;
 use dioxus_rsx::{BodyNode, CallBody};
-use proc_macro2::{LineColumn, Span, TokenStream};
+use proc_macro2::{LineColumn, Span};
 use syn::parse::Parser;
 
 mod buffer;
@@ -146,13 +146,6 @@ pub fn try_fmt_file(
 pub fn write_block_out(body: &CallBody) -> Option<String> {
     let mut buf = Writer::new("");
     buf.write_rsx_call(&body.body).ok()?;
-    buf.consume()
-}
-
-pub fn fmt_block_from_expr(raw: &str, tokens: TokenStream) -> Option<String> {
-    let body = CallBody::parse_strict.parse2(tokens).unwrap();
-    let mut buf = Writer::new(raw);
-    buf.write_body_no_indent(&body.body.roots).ok()?;
     buf.consume()
 }
 

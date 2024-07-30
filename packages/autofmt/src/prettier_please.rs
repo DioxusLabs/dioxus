@@ -1,20 +1,23 @@
-use syn::{visit_mut::VisitMut, Expr, File, Item};
+use dioxus_rsx::CallBody;
+use proc_macro2::TokenStream;
+use syn::{parse::Parser, visit_mut::VisitMut, Expr, File, Item};
 
-use crate::Writer;
+use crate::{IndentOptions, Writer};
 
 impl Writer<'_> {
     pub fn unparse_expr(&mut self, expr: &Expr) -> String {
-        unparse_expr(expr, self.raw_src)
+        unparse_expr(expr, self.raw_src, &self.out.indent)
     }
 }
 
 const MARKER: &str = "dioxus_autofmt_block__________";
 const MARKER_REPLACE: &str = "dioxus_autofmt_block__________! {}";
 
-pub fn unparse_expr(expr: &Expr, src: &str) -> String {
+pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
     struct ReplaceMacros<'a> {
         src: &'a str,
         formatted_stack: Vec<String>,
+        cfg: &'a IndentOptions,
     }
 
     impl VisitMut for ReplaceMacros<'_> {
@@ -31,7 +34,8 @@ pub fn unparse_expr(expr: &Expr, src: &str) -> String {
                 // we'll use information about the macro to replace it with another formatted block
                 // once we've written out the unparsed expr from prettyplease, we can replace
                 // this dummy block with the actual formatted block
-                let mut formatted = crate::fmt_block_from_expr(self.src, i.tokens.clone()).unwrap();
+                let mut formatted =
+                    fmt_block_from_expr(self.src, i.tokens.clone(), self.cfg.clone()).unwrap();
 
                 // always push out the rsx to require a new line
                 i.path = syn::parse_str(MARKER).unwrap();
@@ -58,6 +62,7 @@ pub fn unparse_expr(expr: &Expr, src: &str) -> String {
     let mut replacer = ReplaceMacros {
         src,
         formatted_stack: vec![],
+        cfg,
     };
 
     // builds the expression stack
@@ -128,6 +133,14 @@ pub fn unparse_expr(expr: &Expr, src: &str) -> String {
     } else {
         unparsed
     }
+}
+
+fn fmt_block_from_expr(raw: &str, tokens: TokenStream, cfg: IndentOptions) -> Option<String> {
+    let body = CallBody::parse_strict.parse2(tokens).unwrap();
+    let mut writer = Writer::new(raw);
+    writer.out.indent = cfg;
+    writer.write_body_no_indent(&body.body.roots).ok()?;
+    writer.consume()
 }
 
 /// Unparse an expression back into a string
@@ -231,7 +244,7 @@ mod tests {
         "##;
 
         let expr: Expr = syn::parse_str(contents).unwrap();
-        let out = unparse_expr(&expr, &contents);
+        let out = unparse_expr(&expr, &contents, &IndentOptions::default());
         println!("{}", out);
     }
 
@@ -311,7 +324,7 @@ mod tests {
         "##;
 
         let tokens: TokenStream = syn::parse_str(src).unwrap();
-        let out = crate::fmt_block_from_expr(src, tokens).unwrap();
+        let out = fmt_block_from_expr(src, tokens, IndentOptions::default()).unwrap();
         println!("{}", out);
     }
 
@@ -322,7 +335,7 @@ mod tests {
     "##;
 
         let tokens: TokenStream = syn::parse_str(src).unwrap();
-        let out = crate::fmt_block_from_expr(src, tokens).unwrap();
+        let out = fmt_block_from_expr(src, tokens, IndentOptions::default()).unwrap();
         println!("{}", out);
     }
 
