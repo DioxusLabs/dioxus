@@ -449,36 +449,6 @@ impl Template {
         let ptr: *const str = self.name;
         ptr as *const () as usize
     }
-
-    /// Iterate over the attribute paths in order along with the original indexes for each path
-    pub(crate) fn breadth_first_attribute_paths(
-        &self,
-    ) -> impl Iterator<Item = (usize, &'static [u8])> {
-        // In release mode, hot reloading is disabled and everything is in breadth first order already
-        #[cfg(not(debug_assertions))]
-        {
-            self.attr_paths.iter().copied().enumerate()
-        }
-        // If we are in debug mode, hot reloading may have messed up the order of the paths. We need to sort them
-        #[cfg(debug_assertions)]
-        {
-            sort_bfo(self.attr_paths).into_iter()
-        }
-    }
-
-    /// Iterate over the node paths in order along with the original indexes for each path
-    pub(crate) fn breadth_first_node_paths(&self) -> impl Iterator<Item = (usize, &'static [u8])> {
-        // In release mode, hot reloading is disabled and everything is in breadth first order already
-        #[cfg(not(debug_assertions))]
-        {
-            self.node_paths.iter().copied().enumerate()
-        }
-        // If we are in debug mode, hot reloading may have messed up the order of the paths. We need to sort them
-        #[cfg(debug_assertions)]
-        {
-            sort_bfo(self.node_paths).into_iter()
-        }
-    }
 }
 
 /// A statically known node in a layout.
@@ -524,7 +494,10 @@ pub enum TemplateNode {
     /// This template node is just a piece of static text
     Text {
         /// The actual text
-        #[serde(deserialize_with = "deserialize_string_leaky")]
+        #[cfg_attr(
+            feature = "serialize",
+            serde(deserialize_with = "deserialize_string_leaky")
+        )]
         text: &'static str,
     },
 
@@ -1133,55 +1106,4 @@ pub trait HasAttributes {
         attr: impl IntoAttributeValue,
         volatile: bool,
     ) -> Self;
-}
-
-#[cfg(debug_assertions)]
-pub(crate) fn sort_bfo(paths: &[&'static [u8]]) -> Vec<(usize, &'static [u8])> {
-    let mut with_indices = paths.iter().copied().enumerate().collect::<Vec<_>>();
-    with_indices.sort_by(|(_, a), (_, b)| {
-        let mut a = a.iter();
-        let mut b = b.iter();
-        loop {
-            match (a.next(), b.next()) {
-                (Some(a), Some(b)) => {
-                    if a != b {
-                        return a.cmp(b);
-                    }
-                }
-                // The shorter path goes first
-                (None, Some(_)) => return std::cmp::Ordering::Less,
-                (Some(_), None) => return std::cmp::Ordering::Greater,
-                (None, None) => return std::cmp::Ordering::Equal,
-            }
-        }
-    });
-    with_indices
-}
-
-#[test]
-#[cfg(debug_assertions)]
-fn sorting() {
-    let r: [(usize, &[u8]); 5] = [
-        (0, &[0, 1]),
-        (1, &[0, 2]),
-        (2, &[1, 0]),
-        (3, &[1, 0, 1]),
-        (4, &[1, 2]),
-    ];
-    assert_eq!(
-        sort_bfo(&[&[0, 1,], &[0, 2,], &[1, 0,], &[1, 0, 1,], &[1, 2,],]),
-        r
-    );
-    let r: [(usize, &[u8]); 6] = [
-        (0, &[0]),
-        (1, &[0, 1]),
-        (2, &[0, 1, 2]),
-        (3, &[1]),
-        (4, &[1, 2]),
-        (5, &[2]),
-    ];
-    assert_eq!(
-        sort_bfo(&[&[0], &[0, 1], &[0, 1, 2], &[1], &[1, 2], &[2],]),
-        r
-    );
 }

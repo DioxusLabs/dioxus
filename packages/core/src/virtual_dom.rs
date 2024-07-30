@@ -835,7 +835,7 @@ impl VirtualDom {
             let target_path = path.path;
 
             // Accumulate listeners into the listener list bottom to top
-            for (idx, this_path) in node_template.breadth_first_attribute_paths() {
+            for (idx, this_path) in node_template.attr_paths.iter().enumerate() {
                 let attrs = &*el_ref.dynamic_attrs[idx];
 
                 for attr in attrs.iter() {
@@ -892,7 +892,7 @@ impl VirtualDom {
         let node_template = el_ref.template;
         let target_path = node.path;
 
-        for (idx, this_path) in node_template.breadth_first_attribute_paths() {
+        for (idx, this_path) in node_template.attr_paths.iter().enumerate() {
             let attrs = &*el_ref.dynamic_attrs[idx];
 
             for attr in attrs.iter() {

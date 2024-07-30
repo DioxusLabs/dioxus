@@ -586,13 +586,9 @@ impl VNode {
         }
 
         // Walk the roots, creating nodes and assigning IDs
-        // nodes in an iterator of (dynamic_node_index, path)
-
-        let nodes_sorted = template.breadth_first_node_paths();
-        let attrs_sorted = template.breadth_first_attribute_paths();
-
-        let mut nodes = nodes_sorted.peekable();
-        let mut attrs = attrs_sorted.peekable();
+        // nodes in an iterator of (dynamic_node_index, path) and attrs in an iterator of (attr_index, path)
+        let mut nodes = template.node_paths.iter().copied().enumerate().peekable();
+        let mut attrs = template.attr_paths.iter().copied().enumerate().peekable();
 
         // Get the mounted id of this block
         // At this point, we should have already mounted the block
