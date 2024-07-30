@@ -129,7 +129,7 @@ pub fn collect_svgs(children: &mut [BodyNode], out: &mut Vec<BodyNode>) {
                     diagnostics: Default::default(),
                     fields: vec![],
                     children: TemplateBody::new(vec![]),
-                    brace: Default::default(),
+                    brace: Some(Default::default()),
                     dyn_idx: Default::default(),
                 });
 

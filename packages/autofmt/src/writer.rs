@@ -1,4 +1,4 @@
-use crate::buffer::Buffer;
+use crate::{buffer::Buffer, IndentOptions};
 use dioxus_rsx::*;
 use proc_macro2::{LineColumn, Span};
 use quote::ToTokens;
@@ -13,20 +13,20 @@ pub struct Writer<'a> {
     pub raw_src: &'a str,
     pub src: Vec<&'a str>,
     pub cached_formats: HashMap<LineColumn, String>,
-    pub comments: VecDeque<usize>,
     pub out: Buffer,
     pub invalid_exprs: Vec<Span>,
 }
 
 impl<'a> Writer<'a> {
-    pub fn new(raw_src: &'a str) -> Self {
+    pub fn new(raw_src: &'a str, indent: IndentOptions) -> Self {
         let src = raw_src.lines().collect();
+        let mut out = Buffer::default();
+        out.indent = indent;
         Self {
             raw_src,
             src,
+            out,
             cached_formats: HashMap::new(),
-            comments: VecDeque::new(),
-            out: Buffer::default(),
             invalid_exprs: Vec::new(),
         }
     }
@@ -61,7 +61,13 @@ impl<'a> Writer<'a> {
             BodyNode::RawExpr(expr) => self.write_expr_node(expr),
             BodyNode::ForLoop(forloop) => self.write_for_loop(forloop),
             BodyNode::IfChain(ifchain) => self.write_if_chain(ifchain),
-        }
+        }?;
+
+        let span = Self::final_span_of_node(node);
+
+        self.write_inline_comments(span.end(), 0)?;
+
+        Ok(())
     }
 
     fn write_element(&mut self, el: &Element) -> Result {
@@ -74,10 +80,8 @@ impl<'a> Writer<'a> {
             ..
         } = el;
 
-        write!(self.out, "{name} {{")?;
-        let brace = brace.unwrap_or_default();
-        self.write_rsx_block(attributes, spreads, children, &brace)?;
-        write!(self.out, "}}")?;
+        write!(self.out, "{name} ")?;
+        self.write_rsx_block(attributes, spreads, children, &brace.unwrap_or_default())?;
 
         Ok(())
     }
@@ -106,9 +110,8 @@ impl<'a> Writer<'a> {
             write!(self.out, "{written}")?;
         }
 
-        write!(self.out, " {{")?;
-        self.write_rsx_block(fields, spreads, &children.roots, brace)?;
-        write!(self.out, "}}")?;
+        write!(self.out, " ")?;
+        self.write_rsx_block(fields, spreads, &children.roots, &brace.unwrap_or_default())?;
 
         Ok(())
     }
@@ -215,12 +218,20 @@ impl<'a> Writer<'a> {
         Ok(())
     }
 
+    // Push out the indent level and write each component, line by line
+    fn write_body_indented(&mut self, children: &[BodyNode]) -> Result {
+        self.out.indent_level += 1;
+        self.write_body_nodes(children)?;
+        self.out.indent_level -= 1;
+        Ok(())
+    }
+
     pub fn write_body_nodes(&mut self, children: &[BodyNode]) -> Result {
         let mut iter = children.iter().peekable();
 
         while let Some(child) = iter.next() {
-            if self.current_span_is_primary(child.span()) {
-                self.write_comments(child.span())?;
+            if self.current_span_is_primary(child.span().start()) {
+                self.write_comments(child.span().start())?;
             };
             self.out.tab()?;
             self.write_ident(child)?;
@@ -229,14 +240,6 @@ impl<'a> Writer<'a> {
             }
         }
 
-        Ok(())
-    }
-
-    // Push out the indent level and write each component, line by line
-    fn write_body_indented(&mut self, children: &[BodyNode]) -> Result {
-        self.out.indent_level += 1;
-        self.write_body_nodes(children)?;
-        self.out.indent_level -= 1;
         Ok(())
     }
 
@@ -272,6 +275,9 @@ impl<'a> Writer<'a> {
             /// The noisiest optimization where everything flows
             NoOpt,
         }
+
+        // Write the opening brace
+        write!(self.out, "{{")?;
 
         // decide if we have any special optimizations
         // Default with none, opt the cases in one-by-one
@@ -314,7 +320,7 @@ impl<'a> Writer<'a> {
             opt_level = ShortOptimization::Empty;
 
             // Write comments if they exist
-            self.write_inline_comments(brace.span.span().start())?;
+            self.write_inline_comments(brace.span.span().start(), 1)?;
             self.write_todo_body(brace)?;
         }
 
@@ -360,7 +366,7 @@ impl<'a> Writer<'a> {
             }
 
             ShortOptimization::NoOpt => {
-                self.write_inline_comments(brace.span.span().start())?;
+                self.write_inline_comments(brace.span.span().start(), 1)?;
                 self.out.new_line()?;
                 self.write_attributes(attributes, spreads, false, brace, has_children)?;
 
@@ -372,6 +378,24 @@ impl<'a> Writer<'a> {
                 self.out.tabbed_line()?;
             }
         }
+
+        // Write trailing comments
+        if matches!(
+            opt_level,
+            ShortOptimization::NoOpt | ShortOptimization::PropsOnTop
+        ) {
+            // if self.current_span_is_primary(brace.span.span().end()) {
+            if self.leading_row_is_empty(brace.span.span().end()) {
+                let comments = self.accumulate_comments(brace.span.span().end());
+                if !comments.is_empty() {
+                    self.apply_comments(comments)?;
+                    self.out.tab()?;
+                }
+            }
+            // }
+        }
+
+        write!(self.out, "}}")?;
 
         Ok(())
     }
@@ -434,11 +458,11 @@ impl<'a> Writer<'a> {
             }
 
             if !props_same_line {
-                self.write_inline_comments(span.end())?;
+                self.write_inline_comments(span.end(), 1)?;
             }
 
             if props_same_line && !has_more {
-                self.write_inline_comments(span.end())?;
+                self.write_inline_comments(span.end(), 1)?;
             }
 
             if props_same_line && has_more {
@@ -530,22 +554,27 @@ impl<'a> Writer<'a> {
         let attr_line = attr_span.start().line;
 
         if brace_line != attr_line {
-            self.write_comments(attr_span)?;
+            self.write_comments(attr_span.start())?;
         }
 
         Ok(())
     }
 
-    fn write_inline_comments(&mut self, final_span: LineColumn) -> Result {
+    fn write_inline_comments(&mut self, final_span: LineColumn, offset: usize) -> Result {
         let line = final_span.line;
         let column = final_span.column;
-        let mut whitespace = self.src[line - 1][column..].trim();
+        let src_line = self.src[line - 1];
+
+        // the line might contain emoji or other unicode characters - this will cause issues
+        let Some(mut whitespace) = src_line.get(column..).map(|s| s.trim()) else {
+            return Ok(());
+        };
 
         if whitespace.is_empty() {
             return Ok(());
         }
 
-        whitespace = whitespace[1..].trim();
+        whitespace = whitespace[offset..].trim();
 
         if whitespace.starts_with("//") {
             write!(self.out, " {whitespace}")?;
@@ -553,24 +582,28 @@ impl<'a> Writer<'a> {
 
         Ok(())
     }
-
-    fn write_comments(&mut self, child: Span) -> Result {
+    fn accumulate_comments(&mut self, loc: LineColumn) -> VecDeque<usize> {
         // collect all comments upwards
         // make sure we don't collect the comments of the node that we're currently under.
-        let start = child.start();
+        let start = loc;
         let line_start = start.line - 1;
+
+        let mut comments = VecDeque::new();
 
         for (id, line) in self.src[..line_start].iter().enumerate().rev() {
             if line.trim().starts_with("//") || line.is_empty() && id != 0 {
                 if id != 0 {
-                    self.comments.push_front(id);
+                    comments.push_front(id);
                 }
             } else {
                 break;
             }
         }
 
-        while let Some(comment_line) = self.comments.pop_front() {
+        comments
+    }
+    fn apply_comments(&mut self, mut comments: VecDeque<usize>) -> Result {
+        while let Some(comment_line) = comments.pop_front() {
             let line = &self.src[comment_line].trim();
 
             if line.is_empty() {
@@ -580,6 +613,12 @@ impl<'a> Writer<'a> {
                 writeln!(self.out, "{}", line.trim())?;
             }
         }
+        Ok(())
+    }
+
+    fn write_comments(&mut self, loc: LineColumn) -> Result {
+        let comments = self.accumulate_comments(loc);
+        self.apply_comments(comments)?;
 
         Ok(())
     }
@@ -633,7 +672,7 @@ impl<'a> Writer<'a> {
         }
 
         for attr in attributes {
-            if self.current_span_is_primary(attr.span()) {
+            if self.current_span_is_primary(attr.span().start()) {
                 'line: for line in self.src[..attr.span().start().line - 1].iter().rev() {
                     match (line.trim().starts_with("//"), line.is_empty()) {
                         (true, _) => return 100000,
@@ -805,7 +844,7 @@ impl<'a> Writer<'a> {
 
     fn children_have_comments(&self, children: &[BodyNode]) -> bool {
         for child in children {
-            if self.current_span_is_primary(child.span()) {
+            if self.current_span_is_primary(child.span().start()) {
                 'line: for line in self.src[..child.span().start().line - 1].iter().rev() {
                     match (line.trim().starts_with("//"), line.is_empty()) {
                         (true, _) => return true,
@@ -820,19 +859,25 @@ impl<'a> Writer<'a> {
     }
 
     // make sure the comments are actually relevant to this element.
-    // test by making sure this element is the primary element on this line
-    fn current_span_is_primary(&self, location: Span) -> bool {
-        let start = location.start();
-        let line_start = start.line - 1;
+    // test by making sure this element is the primary element on this line (nothing else before it)
+    fn current_span_is_primary(&self, location: LineColumn) -> bool {
+        let location = LineColumn {
+            line: location.line,
+            column: location.column + 1,
+        };
+        self.leading_row_is_empty(location)
+    }
 
-        let beginning = self
-            .src
-            .get(line_start)
-            .filter(|this_line| this_line.len() > start.column)
-            .map(|this_line| this_line[..start.column].trim())
-            .unwrap_or_default();
+    fn leading_row_is_empty(&self, location: LineColumn) -> bool {
+        let Some(line) = self.src.get(location.line - 1) else {
+            return false;
+        };
 
-        beginning.is_empty()
+        let Some(sub) = line.get(..location.column - 1) else {
+            return false;
+        };
+
+        sub.trim().is_empty()
     }
 
     #[allow(clippy::map_entry)]
@@ -848,5 +893,30 @@ impl<'a> Writer<'a> {
             .get(&loc)
             .expect("Just inserted the parsed expr, so it should be in the cache")
             .as_str()
+    }
+
+    fn final_span_of_node(node: &BodyNode) -> Span {
+        // Write the trailing comments if there are any
+        // Get the ending span of the node
+        let span = match node {
+            BodyNode::Element(el) => el
+                .brace
+                .as_ref()
+                .map(|b| b.span.span())
+                .unwrap_or_else(|| el.name.span()),
+            BodyNode::Component(el) => el
+                .brace
+                .as_ref()
+                .map(|b| b.span.span())
+                .unwrap_or_else(|| el.name.span()),
+            BodyNode::Text(txt) => txt.input.span(),
+            BodyNode::RawExpr(exp) => exp.span(),
+            BodyNode::ForLoop(f) => f.brace.span.span(),
+            BodyNode::IfChain(i) => match i.else_brace {
+                Some(b) => b.span.span(),
+                None => i.then_brace.span.span(),
+            },
+        };
+        span
     }
 }

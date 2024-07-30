@@ -8,7 +8,12 @@ macro_rules! twoway {
         fn $name() {
             let src_right = include_str!(concat!("./wrong/", $val, ".rsx"));
             let src_wrong = include_str!(concat!("./wrong/", $val, ".wrong.rsx"));
-            let formatted = dioxus_autofmt::fmt_file(src_wrong, $indent);
+
+            let parsed = syn::parse_file(src_wrong)
+                .expect("fmt_file should only be called on valid syn::File files");
+
+            let formatted =
+                dioxus_autofmt::try_fmt_file(src_wrong, parsed, $indent).unwrap_or_default();
             let out = dioxus_autofmt::apply_formats(src_wrong, formatted);
 
             // normalize line endings

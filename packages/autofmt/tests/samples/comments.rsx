@@ -38,6 +38,7 @@ rsx! {
     div { // inline
         // Collapse
         class: "asd", // super inline
+        class: "asd", // super inline
         "Jon" // all the inline
         // Comments at the end too
     }

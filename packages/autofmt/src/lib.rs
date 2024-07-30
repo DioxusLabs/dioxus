@@ -74,8 +74,7 @@ pub fn try_fmt_file(
         return Ok(formatted_blocks);
     }
 
-    let mut writer = Writer::new(contents);
-    writer.out.indent = indent;
+    let mut writer = Writer::new(contents, indent);
 
     // Don't parse nested macros
     let mut end_span = LineColumn { column: 0, line: 0 };
@@ -144,7 +143,7 @@ pub fn try_fmt_file(
 /// If the tokens can't be formatted, this returns None. This is usually due to an incomplete expression
 /// that passed partial expansion but failed to parse.
 pub fn write_block_out(body: &CallBody) -> Option<String> {
-    let mut buf = Writer::new("");
+    let mut buf = Writer::new("", IndentOptions::default());
     buf.write_rsx_call(&body.body).ok()?;
     buf.consume()
 }
@@ -152,9 +151,11 @@ pub fn write_block_out(body: &CallBody) -> Option<String> {
 pub fn fmt_block(block: &str, indent_level: usize, indent: IndentOptions) -> Option<String> {
     let body = CallBody::parse_strict.parse_str(block).unwrap();
 
-    let mut buf = Writer::new(block);
-    buf.out.indent = indent;
+    let mut buf = Writer::new(block, indent);
+
+    // push out the indent level of the body of the html
     buf.out.indent_level = indent_level;
+
     buf.write_rsx_call(&body.body).ok()?;
 
     // writing idents leaves the final line ended at the end of the last ident

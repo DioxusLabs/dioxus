@@ -137,8 +137,7 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
 
 fn fmt_block_from_expr(raw: &str, tokens: TokenStream, cfg: IndentOptions) -> Option<String> {
     let body = CallBody::parse_strict.parse2(tokens).unwrap();
-    let mut writer = Writer::new(raw);
-    writer.out.indent = cfg;
+    let mut writer = Writer::new(raw, cfg);
     writer.write_body_nodes(&body.body.roots).ok()?;
     writer.consume()
 }
@@ -359,6 +358,21 @@ mod tests {
 
         let expr: File = syn::parse_file(contents).unwrap();
         let out = prettyplease::unparse(&expr);
+        println!("{}", out);
+    }
+
+    #[test]
+    fn comments_on_nodes() {
+        let src = r##"
+    div {
+        div {}
+        "hi" // hello!
+        // hi!
+    }
+    "##;
+
+        let tokens: TokenStream = syn::parse_str(src).unwrap();
+        let out = fmt_block_from_expr(src, tokens, IndentOptions::default()).unwrap();
         println!("{}", out);
     }
 }

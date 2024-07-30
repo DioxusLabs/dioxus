@@ -33,7 +33,7 @@ pub struct Component {
     pub generics: Option<AngleBracketedGenericArguments>,
     pub fields: Vec<Attribute>,
     pub spreads: Vec<Spread>,
-    pub brace: token::Brace,
+    pub brace: Option<token::Brace>,
     pub children: TemplateBody,
     pub dyn_idx: DynIdx,
     pub diagnostics: Diagnostics,
@@ -62,7 +62,7 @@ impl Parse for Component {
             name,
             generics,
             fields,
-            brace,
+            brace: Some(brace),
             spreads,
             diagnostics,
         };
@@ -306,7 +306,7 @@ impl Component {
         Component {
             name,
             generics,
-            brace: token::Brace::default(),
+            brace: None,
             fields: vec![],
             spreads: vec![],
             children: TemplateBody::new(vec![]),
