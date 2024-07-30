@@ -24,7 +24,7 @@ use std::{collections::HashSet, vec};
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    token, AngleBracketedGenericArguments, Expr, Ident, PathArguments, Result,
+    token, AngleBracketedGenericArguments, Expr, PathArguments, Result,
 };
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -296,10 +296,6 @@ impl Component {
                 Some((attr, value))
             })
             .collect()
-    }
-
-    fn fn_name(&self) -> Ident {
-        self.name.segments.last().unwrap().ident.clone()
     }
 
     fn empty(name: syn::Path, generics: Option<AngleBracketedGenericArguments>) -> Self {
