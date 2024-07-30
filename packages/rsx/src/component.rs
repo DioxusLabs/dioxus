@@ -92,9 +92,6 @@ impl ToTokens for Component {
         // Create props either from manual props or from the builder approach
         let props = self.create_props();
 
-        // Make sure we stringify the component name
-        let fn_name = self.fn_name().to_string();
-
         // Make sure we emit any errors
         let diagnostics = &self.diagnostics;
 
@@ -109,7 +106,6 @@ impl ToTokens for Component {
                     #props
                 }).into_vcomponent(
                     #name #generics,
-                    #fn_name
                 );
                 #diagnostics
                 __comp

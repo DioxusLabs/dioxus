@@ -57,12 +57,9 @@ pub trait Properties: Clone + Sized + 'static {
     fn memoize(&mut self, other: &Self) -> bool;
 
     /// Create a component from the props.
-    fn into_vcomponent<M: 'static>(
-        self,
-        render_fn: impl ComponentFunction<Self, M>,
-        component_name: &'static str,
-    ) -> VComponent {
-        VComponent::new(render_fn, self, component_name)
+    fn into_vcomponent<M: 'static>(self, render_fn: impl ComponentFunction<Self, M>) -> VComponent {
+        let type_name = std::any::type_name_of_val(&render_fn);
+        VComponent::new(render_fn, self, type_name)
     }
 }
 
@@ -121,10 +118,7 @@ where
 #[warnings::warning]
 pub(crate) fn component_called_as_function<C: ComponentFunction<P, M>, P, M>(_: C) {
     // We trim WithOwner from the end of the type name for component with a builder that include a special owner which may not match the function name directly
-    let mut type_name = std::any::type_name::<C>();
-    if let Some((_, after_colons)) = type_name.rsplit_once("::") {
-        type_name = after_colons;
-    }
+    let type_name = std::any::type_name::<C>();
     let component_name = Runtime::with(|rt| {
         current_scope_id()
             .ok()
