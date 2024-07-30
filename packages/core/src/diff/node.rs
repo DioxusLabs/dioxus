@@ -154,9 +154,11 @@ impl VNode {
 
     pub(crate) fn find_first_element(&self, dom: &VirtualDom) -> ElementId {
         let mount = &dom.mounts[self.mount.get().0];
-        match self.get_dynamic_root_node_and_id(0) {
+        let first = match self.get_dynamic_root_node_and_id(0) {
             // This node is static, just get the root id
-            None | Some((_, Placeholder(_) | Text(_))) => mount.root_ids[0],
+            None => mount.root_ids[0],
+            // If it is dynamic and shallow, grab the id from the mounted dynamic nodes
+            Some((idx, Placeholder(_) | Text(_))) => ElementId(mount.mounted_dynamic_nodes[idx]),
             // The node is a fragment, so we need to find the first element in the fragment
             Some((_, Fragment(children))) => {
                 let child = children.first().unwrap();
@@ -170,15 +172,22 @@ impl VNode {
                     .root_node()
                     .find_first_element(dom)
             }
-        }
+        };
+
+        // The first element should never be the default element id (the root element)
+        debug_assert_ne!(first, ElementId::default());
+
+        first
     }
 
     pub(crate) fn find_last_element(&self, dom: &VirtualDom) -> ElementId {
         let mount = &dom.mounts[self.mount.get().0];
         let last_root_index = self.template.roots.len() - 1;
-        match self.get_dynamic_root_node_and_id(last_root_index) {
+        let last = match self.get_dynamic_root_node_and_id(last_root_index) {
             // This node is static, just get the root id
-            None | Some((_, Placeholder(_) | Text(_))) => mount.root_ids[last_root_index],
+            None => mount.root_ids[last_root_index],
+            // If it is dynamic and shallow, grab the id from the mounted dynamic nodes
+            Some((idx, Placeholder(_) | Text(_))) => ElementId(mount.mounted_dynamic_nodes[idx]),
             // The node is a fragment, so we need to find the first element in the fragment
             Some((_, Fragment(children))) => {
                 let child = children.first().unwrap();
@@ -192,7 +201,12 @@ impl VNode {
                     .root_node()
                     .find_last_element(dom)
             }
-        }
+        };
+
+        // The last element should never be the default element id (the root element)
+        debug_assert_ne!(last, ElementId::default());
+
+        last
     }
 
     /// Diff the two text nodes

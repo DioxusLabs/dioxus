@@ -390,3 +390,84 @@ fn remove_many() {
         )
     }
 }
+
+#[test]
+fn replace_and_add_items() {
+    let mut dom = VirtualDom::new(|| {
+        let items = (0..generation()).map(|_| {
+            if generation() % 2 == 0 {
+                VNode::empty()
+            } else {
+                rsx! {
+                    li {
+                        "Fizz"
+                    }
+                }
+            }
+        });
+
+        rsx! {
+            ul {
+                {items}
+            }
+        }
+    });
+
+    // The list starts empty with a placeholder
+    {
+        let edits = dom.rebuild_to_vec().sanitize();
+        assert_eq!(
+            edits.edits,
+            [
+                LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
+                AssignId { path: &[0], id: ElementId(2,) },
+                AppendChildren { id: ElementId(0), m: 1 },
+            ]
+        );
+    }
+
+    // Rerendering adds an a static template
+    {
+        dom.mark_dirty(ScopeId::APP);
+        let edits = dom.render_immediate_to_vec().sanitize();
+        assert_eq!(
+            edits.edits,
+            [
+                LoadTemplate { name: "template", index: 0, id: ElementId(3,) },
+                ReplaceWith { id: ElementId(2,), m: 1 },
+            ]
+        );
+    }
+
+    // Rerendering replaces the old node with a placeholder and adds a new placeholder
+    {
+        dom.mark_dirty(ScopeId::APP);
+        let edits = dom.render_immediate_to_vec().sanitize();
+        assert_eq!(
+            edits.edits,
+            [
+                CreatePlaceholder { id: ElementId(2,) },
+                InsertAfter { id: ElementId(3,), m: 1 },
+                CreatePlaceholder { id: ElementId(4,) },
+                ReplaceWith { id: ElementId(3,), m: 1 },
+            ]
+        );
+    }
+
+    // Rerendering replaces both placeholders with the static nodes and add a new static node
+    {
+        dom.mark_dirty(ScopeId::APP);
+        let edits = dom.render_immediate_to_vec().sanitize();
+        assert_eq!(
+            edits.edits,
+            [
+                LoadTemplate { name: "template", index: 0, id: ElementId(3,) },
+                InsertAfter { id: ElementId(2,), m: 1 },
+                LoadTemplate { name: "template", index: 0, id: ElementId(5,) },
+                ReplaceWith { id: ElementId(4,), m: 1 },
+                LoadTemplate { name: "template", index: 0, id: ElementId(4,) },
+                ReplaceWith { id: ElementId(2,), m: 1 },
+            ]
+        );
+    }
+}
