@@ -516,7 +516,7 @@ mod struct_info {
     use syn::parse::Error;
     use syn::punctuated::Punctuated;
     use syn::spanned::Spanned;
-    use syn::{Expr, Ident};
+    use syn::{parse_quote, Expr, Ident};
 
     use crate::props::strip_option;
 
@@ -1372,14 +1372,19 @@ Finally, call `.build()` to create the instance of `{name}`.
                 if !field.builder_attr.extends.is_empty() {
                     quote!(let #name = self.#name;)
                 } else if let Some(ref default) = field.builder_attr.default {
+
                     // If field has `into`, apply it to the default value.
-                    let into = if field.builder_attr.auto_into {
-                        quote!{ .into() }
-                    } else if field.builder_attr.auto_to_string {
-                        quote!{ .to_string() }
-                    } else {
-                        quote!{}
-                    };
+                    // Ignore any blank defaults as it causes type inference errors.
+                    let is_default = *default == parse_quote!(::core::default::Default::default());
+                    let mut into = quote!{};
+
+                    if !is_default {
+                        if field.builder_attr.auto_into {
+                            into = quote!{ .into() }
+                        } else if field.builder_attr.auto_to_string {
+                            into = quote!{ .to_string() }
+                        }
+                    }
 
                     if field.builder_attr.skip {
                         quote!(let #name = #default #into;)
