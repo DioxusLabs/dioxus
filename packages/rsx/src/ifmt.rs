@@ -17,12 +17,6 @@ pub struct IfmtInput {
     pub segments: Vec<Segment>,
 }
 
-impl Default for IfmtInput {
-    fn default() -> Self {
-        Self::new(Span::call_site())
-    }
-}
-
 impl IfmtInput {
     pub fn new(span: Span) -> Self {
         Self {
@@ -213,7 +207,7 @@ impl ToTokens for IfmtInput {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         // If the input is a string literal, we can just return it
         if let Some(static_str) = self.to_static() {
-            return static_str.to_tokens(tokens);
+            return quote_spanned! { self.span() => #static_str }.to_tokens(tokens);
         }
 
         // Try to turn it into a single _.to_string() call

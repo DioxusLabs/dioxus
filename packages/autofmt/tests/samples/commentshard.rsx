@@ -36,7 +36,7 @@ rsx! {
             class: "hello world",
 
             // todo some work in here
-            class: "hello world"
+            class: "hello world",
         }
 
         div {

@@ -65,9 +65,9 @@ function fmtSelection() {
 
 	// Select full lines of selection
 	let selection_range = new vscode.Range(
-		editor.selection.start.line, 
-		0, 
-		end_line, 
+		editor.selection.start.line,
+		0,
+		end_line,
 		editor.document.lineAt(end_line).range.end.character
 	);
 
@@ -83,9 +83,9 @@ function fmtSelection() {
 		end_line += 1;
 
 		selection_range = new vscode.Range(
-			editor.selection.start.line, 
-			0, 
-			end_line, 
+			editor.selection.start.line,
+			0,
+			end_line,
 			editor.document.lineAt(end_line).range.end.character
 		);
 
@@ -103,8 +103,8 @@ function fmtSelection() {
 
 	let lines_above = editor.document.getText(
 		new vscode.Range(
-			0, 
-			0, 
+			0,
+			0,
 			end_above,
 			editor.document.lineAt(end_above).range.end.character
 		)
@@ -115,7 +115,7 @@ function fmtSelection() {
 
 	try {
 		let formatted = dioxus.format_selection(unformatted, !editor.options.insertSpaces, tabSize, base_indentation);
-		for(let i = 0; i <= base_indentation; i++) {
+		for (let i = 0; i <= base_indentation; i++) {
 			formatted = (editor.options.insertSpaces ? " ".repeat(tabSize) : "\t") + formatted;
 		}
 		if (formatted.length > 0) {

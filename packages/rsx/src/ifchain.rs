@@ -4,6 +4,7 @@ use quote::quote;
 use quote::{ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
+    token::Brace,
     Expr, Result, Token,
 };
 
@@ -14,8 +15,10 @@ use crate::TemplateBody;
 pub struct IfChain {
     pub if_token: Token![if],
     pub cond: Box<Expr>,
+    pub then_brace: Brace,
     pub then_branch: TemplateBody,
     pub else_if_branch: Option<Box<IfChain>>,
+    pub else_brace: Option<Brace>,
     pub else_branch: Option<TemplateBody>,
     pub dyn_idx: DynIdx,
 }
@@ -42,10 +45,11 @@ impl Parse for IfChain {
         let cond = Box::new(input.call(Expr::parse_without_eager_brace)?);
 
         let content;
-        syn::braced!(content in input);
+        let then_brace = syn::braced!(content in input);
 
         let then_branch = content.parse()?;
 
+        let mut else_brace = None;
         let mut else_branch = None;
         let mut else_if_branch = None;
 
@@ -56,7 +60,7 @@ impl Parse for IfChain {
                 else_if_branch = Some(Box::new(input.parse::<IfChain>()?));
             } else {
                 let content;
-                syn::braced!(content in input);
+                else_brace = Some(syn::braced!(content in input));
                 else_branch = Some(content.parse()?);
             }
         }
@@ -67,6 +71,8 @@ impl Parse for IfChain {
             then_branch,
             else_if_branch,
             else_branch,
+            then_brace,
+            else_brace,
             dyn_idx: DynIdx::default(),
         })
     }

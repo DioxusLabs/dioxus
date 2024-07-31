@@ -15,7 +15,7 @@ pub(crate) fn Nav() -> Element {
                     MaterialIcon {
                         name: "menu",
                         size: 24,
-                        color: MaterialIconColor::Dark
+                        color: MaterialIconColor::Dark,
                     }
                 }
                 div { class: "flex z-50 md:flex-1 px-2", LinkList {} }

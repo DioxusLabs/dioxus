@@ -10,7 +10,7 @@ rsx! {
         Component {
             asdasd: "asdasd",
             asdasd: "asdasdasdasdasdasdasdasdasdasd",
-            ..Props { a: 10, b: 20 }
+            ..Props { a: 10, b: 20 },
         }
         Component {
             asdasd: "asdasd",
