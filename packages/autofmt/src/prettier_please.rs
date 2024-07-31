@@ -1,5 +1,4 @@
 use dioxus_rsx::CallBody;
-use proc_macro2::TokenStream;
 use syn::{parse::Parser, visit_mut::VisitMut, Expr, File, Item};
 
 use crate::{IndentOptions, Writer};
@@ -34,20 +33,21 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
                 // we'll use information about the macro to replace it with another formatted block
                 // once we've written out the unparsed expr from prettyplease, we can replace
                 // this dummy block with the actual formatted block
-                let mut formatted =
-                    fmt_block_from_expr(self.src, i.tokens.clone(), self.cfg.clone()).unwrap();
+                let body = CallBody::parse_strict.parse2(i.tokens.clone()).unwrap();
+                let multiline = !Writer::is_short_rsx_call(&body.body.roots);
+                let mut formatted = {
+                    let mut writer = Writer::new(self.src, self.cfg.clone());
+                    _ = writer.write_body_nodes(&body.body.roots).ok();
+                    writer.consume()
+                }
+                .unwrap();
 
                 // always push out the rsx to require a new line
                 i.path = syn::parse_str(MARKER).unwrap();
                 i.tokens = Default::default();
 
                 // Push out the indent level of the formatted block if it's multiline
-                // Normally we'd use a `\n` as the delimiter, but we actually want to make sure
-                // any block-level things are indented properly
-                //
-                // we should really just be parsing the block here and using the same heuristic
-                // rsx_call uses (short strings are inlined, all others are multiline
-                if formatted.contains('{') {
+                if multiline || formatted.contains('\n') {
                     formatted = formatted
                         .lines()
                         .map(|line| format!("{}{line}", self.cfg.indent_str()))
@@ -140,13 +140,6 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
     }
 }
 
-fn fmt_block_from_expr(raw: &str, tokens: TokenStream, cfg: IndentOptions) -> Option<String> {
-    let body = CallBody::parse_strict.parse2(tokens).unwrap();
-    let mut writer = Writer::new(raw, cfg);
-    writer.write_body_nodes(&body.body.roots).ok()?;
-    writer.consume()
-}
-
 /// Unparse an expression back into a string
 ///
 /// This creates a new temporary file, parses the expression into it, and then formats the file.
@@ -196,6 +189,13 @@ fn wrapped(expr: &Expr) -> File {
 mod tests {
     use super::*;
     use proc_macro2::TokenStream;
+
+    fn fmt_block_from_expr(raw: &str, tokens: TokenStream, cfg: IndentOptions) -> Option<String> {
+        let body = CallBody::parse_strict.parse2(tokens).unwrap();
+        let mut writer = Writer::new(raw, cfg);
+        writer.write_body_nodes(&body.body.roots).ok()?;
+        writer.consume()
+    }
 
     #[test]
     fn unparses_raw() {

@@ -71,7 +71,7 @@ impl<'a> Writer<'a> {
     }
 
     /// Check if the rsx call is short enough to be inlined
-    fn is_short_rsx_call(roots: &[BodyNode]) -> bool {
+    pub(crate) fn is_short_rsx_call(roots: &[BodyNode]) -> bool {
         match roots.len() {
             0 => true,
             1 if matches!(roots[0], BodyNode::Text(_)) => true,
@@ -351,15 +351,18 @@ impl<'a> Writer<'a> {
                     write!(self.out, " ")?;
                 }
 
-                for child in children.iter() {
+                let mut children_iter = children.iter().peekable();
+                while let Some(child) = children_iter.next() {
                     self.write_ident(child)?;
+                    if children_iter.peek().is_some() {
+                        write!(self.out, " ")?;
+                    }
                 }
 
                 write!(self.out, " ")?;
             }
 
             ShortOptimization::PropsOnTop => {
-                // panic!("Props on top is not supported");
                 if !attributes.is_empty() {
                     write!(self.out, " ")?;
                 }
@@ -393,7 +396,6 @@ impl<'a> Writer<'a> {
             opt_level,
             ShortOptimization::NoOpt | ShortOptimization::PropsOnTop
         ) {
-            // if self.current_span_is_primary(brace.span.span().end()) {
             if self.leading_row_is_empty(brace.span.span().end()) {
                 let comments = self.accumulate_comments(brace.span.span().end());
                 if !comments.is_empty() {
@@ -401,7 +403,6 @@ impl<'a> Writer<'a> {
                     self.out.tab()?;
                 }
             }
-            // }
         }
 
         write!(self.out, "}}")?;
@@ -808,12 +809,6 @@ impl<'a> Writer<'a> {
     // I think this eventually becomes quadratic :(
     fn is_short_children(&mut self, children: &[BodyNode]) -> syn::Result<Option<usize>> {
         if children.is_empty() {
-            // todo: allow elements with comments but no children
-            // like div { /* comment */ }
-            // or
-            // div {
-            //  // some helpful
-            // }
             return Ok(Some(0));
         }
 
@@ -872,11 +867,10 @@ impl<'a> Writer<'a> {
     // make sure the comments are actually relevant to this element.
     // test by making sure this element is the primary element on this line (nothing else before it)
     fn current_span_is_primary(&self, location: LineColumn) -> bool {
-        let location = LineColumn {
+        self.leading_row_is_empty(LineColumn {
             line: location.line,
             column: location.column + 1,
-        };
-        self.leading_row_is_empty(location)
+        })
     }
 
     fn leading_row_is_empty(&self, location: LineColumn) -> bool {

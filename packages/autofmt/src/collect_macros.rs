@@ -16,14 +16,14 @@ pub fn collect_from_file(file: &File) -> Vec<CollectedMacro<'_>> {
 
 struct MacroCollector<'a, 'b> {
     macros: &'a mut Vec<CollectedMacro<'b>>,
-    skip_stack: Vec<()>,
+    skip_count: usize,
 }
 
 impl<'a, 'b> MacroCollector<'a, 'b> {
     fn new(macros: &'a mut Vec<CollectedMacro<'b>>) -> Self {
         Self {
             macros,
-            skip_stack: vec![],
+            skip_count: 0,
         }
     }
 }
@@ -35,7 +35,7 @@ impl<'a, 'b> Visit<'b> for MacroCollector<'a, 'b> {
 
         let name = &i.path.segments.last().map(|i| i.ident.to_string());
         if let Some("rsx" | "render") = name.as_deref() {
-            if self.skip_stack.is_empty() {
+            if self.skip_count == 0 {
                 self.macros.push(i)
             }
         }
@@ -44,21 +44,21 @@ impl<'a, 'b> Visit<'b> for MacroCollector<'a, 'b> {
     // attributes can occur on stmts and items - we need to make sure the stack is reset when we exit
     // this means we save the skipped length and set it back to its original length
     fn visit_stmt(&mut self, i: &'b syn::Stmt) {
-        let skipped_len = self.skip_stack.len();
+        let skipped_len = self.skip_count;
         syn::visit::visit_stmt(self, i);
-        self.skip_stack.truncate(skipped_len);
+        self.skip_count = skipped_len;
     }
 
     fn visit_item(&mut self, i: &'b syn::Item) {
-        let skipped_len = self.skip_stack.len();
+        let skipped_len = self.skip_count;
         syn::visit::visit_item(self, i);
-        self.skip_stack.truncate(skipped_len);
+        self.skip_count = skipped_len;
     }
 
     fn visit_attribute(&mut self, i: &'b syn::Attribute) {
         // we need to communicate that this stmt is skipped up the tree
         if attr_is_rustfmt_skip(i) {
-            self.skip_stack.push(());
+            self.skip_count += 1;
         }
 
         syn::visit::visit_attribute(self, i);
