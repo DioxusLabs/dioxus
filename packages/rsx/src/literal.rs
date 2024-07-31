@@ -152,8 +152,8 @@ pub struct HotReloadFormattedSegment {
 }
 
 impl HotReloadFormattedSegment {
-    /// This mnethod is very important!
-    /// Deref + Spanned + .span() methods leads to name coliisions
+    /// This method is very important!
+    /// Deref + Spanned + .span() methods leads to name collisions
     pub fn span(&self) -> Span {
         self.formatted_input.span()
     }

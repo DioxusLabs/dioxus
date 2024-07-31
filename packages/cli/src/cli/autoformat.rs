@@ -322,29 +322,3 @@ async fn test_auto_fmt() {
 
     fmt.autoformat().unwrap();
 }
-
-/*#[test]
-fn spawn_properly() {
-    let out = Command::new("dioxus")
-        .args([
-            "fmt",
-            "-f",
-            r#"
-//
-
-rsx! {
-
-    div {}
-}
-
-//
-//
-//
-
-        "#,
-        ])
-        .output()
-        .expect("failed to execute process");
-
-    dbg!(out);
-}*/

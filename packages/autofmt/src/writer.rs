@@ -398,7 +398,6 @@ impl<'a> Writer<'a> {
         ) && self.leading_row_is_empty(brace.span.span().end())
         {
             let comments = self.accumulate_comments(brace.span.span().end());
-            dbg!(&comments);
             if !comments.is_empty() {
                 self.apply_comments(comments)?;
                 self.out.tab()?;
