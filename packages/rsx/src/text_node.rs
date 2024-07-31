@@ -66,13 +66,11 @@ impl TextNode {
     #[cfg(feature = "hot_reload")]
     pub fn to_template_node(&self) -> TemplateNode {
         use crate::intern;
-        match self.is_static() {
-            true => {
-                let text = self.input.source.clone();
-                let text = intern(text.value().as_str());
-                TemplateNode::Text { text }
-            }
-            false => TemplateNode::Dynamic {
+        match self.input.to_static() {
+            Some(text) => TemplateNode::Text {
+                text: intern(text.as_str()),
+            },
+            None => TemplateNode::Dynamic {
                 id: self.dyn_idx.get(),
             },
         }
