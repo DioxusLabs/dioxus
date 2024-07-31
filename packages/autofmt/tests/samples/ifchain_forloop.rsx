@@ -24,4 +24,15 @@ rsx! {
     } else {
         h3 {}
     }
+
+    div {
+        class: "asdasd",
+        class: if expr { "asdasd" } else { "asdasd" },
+        class: if expr { "asdasd" },
+        class: if expr { "asdasd" } else if expr { "asdasd" } else { "asdasd" },
+
+        // comments?
+        class: if expr { "asdasd" } else if expr { "asdasd" } else { "asdasd" }, // comments!!?
+        // comments?
+    }
 }

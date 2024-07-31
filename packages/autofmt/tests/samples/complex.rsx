@@ -40,7 +40,7 @@ rsx! {
         adsasd: "asd",
         onclick: move |_| {
             let blah = 120;
-        }
+        },
     }
 
     // Component path
@@ -48,7 +48,7 @@ rsx! {
         adsasd: "asd",
         onclick: move |_| {
             let blah = 120;
-        }
+        },
     }
 
     for i in 0..10 {

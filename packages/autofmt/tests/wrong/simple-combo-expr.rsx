@@ -28,7 +28,7 @@ fn main() {
                 value: format!("{:02}", timer.read().hours),
                 oninput: move |e| {
                     timer.write().hours = e.value().parse().unwrap_or(0);
-                }
+                },
             }
             // some comment
             input {
@@ -38,7 +38,7 @@ fn main() {
                 value: format!("{:02}", timer.read().hours),
                 oninput: move |e| {
                     timer.write().hours = e.value().parse().unwrap_or(0);
-                }
+                },
             }
         }
     }

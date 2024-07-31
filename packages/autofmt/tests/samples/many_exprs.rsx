@@ -128,7 +128,7 @@ fn app() -> Element {
                 value: format!("{:02}", timer.read().hours),
                 oninput: move |e| {
                     timer.write().hours = e.value().parse().unwrap_or(0);
-                }
+                },
             }
 
             input {
@@ -138,7 +138,7 @@ fn app() -> Element {
                 value: format!("{:02}", timer.read().minutes),
                 oninput: move |e| {
                     timer.write().minutes = e.value().parse().unwrap_or(0);
-                }
+                },
             }
 
             input {
@@ -148,7 +148,7 @@ fn app() -> Element {
                 value: format!("{:02}", timer.read().seconds),
                 oninput: move |e| {
                     timer.write().seconds = e.value().parse().unwrap_or(0);
-                }
+                },
             }
         }
 

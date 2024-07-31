@@ -395,13 +395,13 @@ impl<'a> Writer<'a> {
         if matches!(
             opt_level,
             ShortOptimization::NoOpt | ShortOptimization::PropsOnTop
-        ) {
-            if self.leading_row_is_empty(brace.span.span().end()) {
-                let comments = self.accumulate_comments(brace.span.span().end());
-                if !comments.is_empty() {
-                    self.apply_comments(comments)?;
-                    self.out.tab()?;
-                }
+        ) && self.leading_row_is_empty(brace.span.span().end())
+        {
+            let comments = self.accumulate_comments(brace.span.span().end());
+            dbg!(&comments);
+            if !comments.is_empty() {
+                self.apply_comments(comments)?;
+                self.out.tab()?;
             }
         }
 
@@ -456,23 +456,27 @@ impl<'a> Writer<'a> {
             }
 
             let span = match attr {
-                AttrType::Attr(attr) => attr.value.span(),
+                AttrType::Attr(attr) => attr
+                    .comma
+                    .as_ref()
+                    .map(|c| c.span())
+                    .unwrap_or_else(|| self.final_span_of_attr(attr)),
                 AttrType::Spread(attr) => attr.span(),
             };
 
             let has_more = attr_iter.peek().is_some();
-            let should_finish_comma = has_attributes && has_children;
+            let should_finish_comma = has_attributes && has_children || !props_same_line;
 
             if has_more || should_finish_comma {
                 write!(self.out, ",")?;
             }
 
             if !props_same_line {
-                self.write_inline_comments(span.end(), 1)?;
+                self.write_inline_comments(span.end(), 0)?;
             }
 
             if props_same_line && !has_more {
-                self.write_inline_comments(span.end(), 1)?;
+                self.write_inline_comments(span.end(), 0)?;
             }
 
             if props_same_line && has_more {
@@ -540,11 +544,11 @@ impl<'a> Writer<'a> {
         write!(self.out, " }}")?;
         match if_chain.else_value.as_deref() {
             Some(AttributeValue::IfExpr(else_if_chain)) => {
-                write!(self.out, "else ")?;
+                write!(self.out, " else ")?;
                 self.write_attribute_if_chain(else_if_chain)?;
             }
             Some(other) => {
-                write!(self.out, "else {{")?;
+                write!(self.out, " else {{ ")?;
                 self.write_attribute_value(other)?;
                 write!(self.out, " }}")?;
             }
@@ -923,5 +927,19 @@ impl<'a> Writer<'a> {
             },
         };
         span
+    }
+
+    fn final_span_of_attr(&self, attr: &Attribute) -> Span {
+        match &attr.value {
+            AttributeValue::Shorthand(s) => s.span(),
+            AttributeValue::AttrLiteral(l) => l.span(),
+            AttributeValue::EventTokens(closure) => closure.body.span(),
+            AttributeValue::AttrExpr(exp) => exp.span(),
+            AttributeValue::IfExpr(ex) => ex
+                .else_value
+                .as_ref()
+                .map(|v| v.span())
+                .unwrap_or_else(|| ex.then_value.span()),
+        }
     }
 }

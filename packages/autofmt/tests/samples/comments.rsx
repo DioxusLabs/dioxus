@@ -51,12 +51,12 @@ rsx! {
     // please dont eat me 1
     div { // please dont eat me 2
         // please dont eat me 3
-        abc: 123
+        abc: 123,
     }
 
     // please dont eat me 1
     div {
         // please dont eat me 3
-        abc: 123
+        abc: 123,
     }
 }

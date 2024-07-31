@@ -83,7 +83,7 @@ fn App() -> Element {
                                                                 "so22mething nested?"
                                                             }
                                                         }
-                                                    }
+                                                    },
                                                 }
                                             }
                                         };
@@ -93,11 +93,11 @@ fn App() -> Element {
                                                 "something nested?"
                                             }
                                         }
-                                    }
+                                    },
                                 }
-                            }
+                            },
                         }
-                    }
+                    },
                 }
             },
             onrender: move |_| {
@@ -140,7 +140,7 @@ fn App() -> Element {
                             "something nested?"
                         }
                     };
-                }
+                },
             }
         }
     }
