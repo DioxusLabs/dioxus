@@ -1,4 +1,6 @@
-use crate::builder::{BuildMessage, MessageType, Stage, UpdateBuildProgress, UpdateStage};
+use crate::builder::{
+    BuildMessage, MessageSource, MessageType, Stage, UpdateBuildProgress, UpdateStage,
+};
 use crate::dioxus_crate::DioxusCrate;
 use crate::Result;
 use anyhow::Context;
@@ -67,7 +69,7 @@ pub(crate) fn process_assets(
                                 "Optimized static asset {}",
                                 file_asset
                             )),
-                            source: None,
+                            source: MessageSource::Build,
                         }),
                     });
                     assets_finished += 1;

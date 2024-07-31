@@ -1,5 +1,5 @@
 use crate::{
-    builder::{BuildMessage, MessageType, Stage, UpdateBuildProgress},
+    builder::{BuildMessage, MessageSource, MessageType, Stage, UpdateBuildProgress},
     dioxus_crate::DioxusCrate,
     tracer::CLILogControl,
 };
@@ -213,7 +213,7 @@ impl Output {
                     self.push_log(platform, BuildMessage {
                         level: Level::INFO,
                         message: MessageType::Text(stdout),
-                        source: Some("app".to_string()),
+                        source: MessageSource::App,
                     })
                 }
                 if let Some(stderr) = stderr {
@@ -223,16 +223,17 @@ impl Output {
                     self.build_progress.build_logs.get_mut(&platform).unwrap().messages.push(BuildMessage {
                         level: Level::ERROR,
                         message: MessageType::Text(stderr),
-                        source: Some("app".to_string()),
+                        source: MessageSource::App,
                     });
                 }
             },
 
+            // Handle internal CLI tracing logs.
             Some(log) = tui_log_rx.next() => {
-                self.build_progress.build_logs.get_mut(&self.platform).unwrap().messages.push(BuildMessage {
+                self.push_log(self.platform, BuildMessage {
                     level: Level::INFO,
                     message: MessageType::Text(log),
-                    source: Some("app".to_string()),
+                    source: MessageSource::Dev,
                 });
             }
 
@@ -381,7 +382,7 @@ impl Output {
                                 // we need to translate its styling into our own
                                 messages.first().unwrap_or(&String::new()).clone(),
                             ),
-                            source: Some("app".to_string()),
+                            source: MessageSource::App,
                         },
                     );
                 }
@@ -390,8 +391,8 @@ impl Output {
                         platform,
                         BuildMessage {
                             level: Level::ERROR,
-                            source: Some("app".to_string()),
-                            message: MessageType::Text(format!("Error parsing message: {err}")),
+                            source: MessageSource::Dev,
+                            message: MessageType::Text(format!("Error parsing app message: {err}")),
                         },
                     );
                 }
@@ -657,7 +658,16 @@ impl Output {
                                 for line in line.lines() {
                                     let text = line.into_text().unwrap_or_default();
                                     for line in text.lines {
-                                        let mut out_line = vec![Span::from("[app] ").dark_gray()];
+                                        let source = format!("[{}] ", span.source);
+
+                                        let msg_span = Span::from(source);
+                                        let msg_span = match span.source {
+                                            MessageSource::App => msg_span.light_blue(),
+                                            MessageSource::Dev => msg_span.dark_gray(),
+                                            MessageSource::Build => msg_span.light_yellow(),
+                                        };
+
+                                        let mut out_line = vec![msg_span];
                                         for span in line.spans {
                                             out_line.push(span);
                                         }

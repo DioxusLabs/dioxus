@@ -14,7 +14,9 @@ mod fullstack;
 mod prepare_html;
 mod progress;
 mod web;
-pub use progress::{BuildMessage, MessageType, Stage, UpdateBuildProgress, UpdateStage};
+pub use progress::{
+    BuildMessage, MessageSource, MessageType, Stage, UpdateBuildProgress, UpdateStage,
+};
 
 /// A request for a project to be built
 pub struct BuildRequest {
