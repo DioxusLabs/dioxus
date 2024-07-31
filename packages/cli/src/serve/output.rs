@@ -1,6 +1,7 @@
 use crate::{
-    builder::{BuildMessage, MessageType, Stage, UpdateBuildProgress},
+    builder::{BuildMessage, MessageSource, MessageType, Stage, UpdateBuildProgress},
     dioxus_crate::DioxusCrate,
+    tracer::CLILogControl,
 };
 use crate::{
     builder::{BuildResult, UpdateStage},
@@ -23,6 +24,7 @@ use std::{
     io::{self, stdout},
     pin::Pin,
     rc::Rc,
+    sync::atomic::Ordering,
     time::{Duration, Instant},
 };
 use tokio::{
@@ -55,6 +57,7 @@ impl BuildProgress {
 
 pub struct Output {
     term: Rc<RefCell<Option<TerminalBackend>>>,
+    log_control: CLILogControl,
 
     // optional since when there's no tty there's no eventstream to read from - just stdin
     events: Option<EventStream>,
@@ -88,12 +91,13 @@ enum Tab {
 type TerminalBackend = Terminal<CrosstermBackend<io::Stdout>>;
 
 impl Output {
-    pub fn start(cfg: &Serve) -> io::Result<Self> {
+    pub fn start(cfg: &Serve, log_control: CLILogControl) -> io::Result<Self> {
         let interactive = std::io::stdout().is_tty() && cfg.interactive.unwrap_or(true);
 
         let mut events = None;
 
         if interactive {
+            log_control.tui_enabled.store(true, Ordering::SeqCst);
             enable_raw_mode()?;
             stdout().execute(EnterAlternateScreen)?;
 
@@ -138,6 +142,7 @@ impl Output {
 
         Ok(Self {
             term: Rc::new(RefCell::new(term)),
+            log_control,
             events,
             _rustc_version,
             _rustc_nightly,
@@ -176,8 +181,8 @@ impl Output {
         let has_running_apps = !self.running_apps.is_empty();
         let next_stdout = self.running_apps.values_mut().map(|app| {
             let future = async move {
-                let (stdout, stderr) = match &mut app.stdout {
-                    Some(stdout) => (stdout.stdout.next_line(), stdout.stderr.next_line()),
+                let (stdout, stderr) = match &mut app.output {
+                    Some(out) => (out.stdout.next_line(), out.stderr.next_line()),
                     None => return futures_util::future::pending().await,
                 };
 
@@ -199,28 +204,38 @@ impl Output {
         };
 
         let animation_timeout = tokio::time::sleep(Duration::from_millis(300));
+        let tui_log_rx = &mut self.log_control.tui_rx;
 
         tokio::select! {
             (platform, stdout, stderr) = next_stdout => {
                 if let Some(stdout) = stdout {
-                    self.running_apps.get_mut(&platform).unwrap().stdout.as_mut().unwrap().stdout_line.push_str(&stdout);
+                    self.running_apps.get_mut(&platform).unwrap().output.as_mut().unwrap().stdout_line.push_str(&stdout);
                     self.push_log(platform, BuildMessage {
                         level: Level::INFO,
                         message: MessageType::Text(stdout),
-                        source: Some("app".to_string()),
+                        source: MessageSource::App,
                     })
                 }
                 if let Some(stderr) = stderr {
                     self.set_tab(Tab::BuildLog);
 
-                    self.running_apps.get_mut(&platform).unwrap().stdout.as_mut().unwrap().stderr_line.push_str(&stderr);
+                    self.running_apps.get_mut(&platform).unwrap().output.as_mut().unwrap().stderr_line.push_str(&stderr);
                     self.build_progress.build_logs.get_mut(&platform).unwrap().messages.push(BuildMessage {
                         level: Level::ERROR,
                         message: MessageType::Text(stderr),
-                        source: Some("app".to_string()),
+                        source: MessageSource::App,
                     });
                 }
             },
+
+            // Handle internal CLI tracing logs.
+            Some(log) = tui_log_rx.next() => {
+                self.push_log(self.platform, BuildMessage {
+                    level: Level::INFO,
+                    message: MessageType::Text(log),
+                    source: MessageSource::Dev,
+                });
+            }
 
             event = user_input => {
                 if self.handle_events(event.unwrap().unwrap()).await? {
@@ -238,6 +253,7 @@ impl Output {
     pub fn shutdown(&mut self) -> io::Result<()> {
         // if we're a tty then we need to disable the raw mode
         if self.interactive {
+            self.log_control.tui_enabled.store(false, Ordering::SeqCst);
             disable_raw_mode()?;
             stdout().execute(LeaveAlternateScreen)?;
             self.drain_print_logs();
@@ -366,7 +382,7 @@ impl Output {
                                 // we need to translate its styling into our own
                                 messages.first().unwrap_or(&String::new()).clone(),
                             ),
-                            source: Some("app".to_string()),
+                            source: MessageSource::App,
                         },
                     );
                 }
@@ -375,8 +391,8 @@ impl Output {
                         platform,
                         BuildMessage {
                             level: Level::ERROR,
-                            source: Some("app".to_string()),
-                            message: MessageType::Text(format!("Error parsing message: {err}")),
+                            source: MessageSource::Dev,
+                            message: MessageType::Text(format!("Error parsing app message: {err}")),
                         },
                     );
                 }
@@ -401,9 +417,12 @@ impl Output {
     pub fn push_log(&mut self, platform: Platform, message: BuildMessage) {
         let snapped = self.is_snapped(platform);
 
-        if let Some(build) = self.build_progress.build_logs.get_mut(&platform) {
-            build.stdout_logs.push(message);
-        }
+        self.build_progress
+            .build_logs
+            .entry(platform)
+            .or_default()
+            .stdout_logs
+            .push(message);
 
         if snapped {
             self.scroll_to_bottom();
@@ -453,7 +472,10 @@ impl Output {
                 stderr_line: String::new(),
             });
 
-            let app = RunningApp { result, stdout };
+            let app = RunningApp {
+                result,
+                output: stdout,
+            };
 
             self.running_apps.insert(platform, app);
 
@@ -639,7 +661,16 @@ impl Output {
                                 for line in line.lines() {
                                     let text = line.into_text().unwrap_or_default();
                                     for line in text.lines {
-                                        let mut out_line = vec![Span::from("[app] ").dark_gray()];
+                                        let source = format!("[{}] ", span.source);
+
+                                        let msg_span = Span::from(source);
+                                        let msg_span = match span.source {
+                                            MessageSource::App => msg_span.light_blue(),
+                                            MessageSource::Dev => msg_span.dark_gray(),
+                                            MessageSource::Build => msg_span.light_yellow(),
+                                        };
+
+                                        let mut out_line = vec![msg_span];
                                         for span in line.spans {
                                             out_line.push(span);
                                         }
@@ -855,7 +886,7 @@ async fn rustc_version() -> String {
 
 pub struct RunningApp {
     result: BuildResult,
-    stdout: Option<RunningAppOutput>,
+    output: Option<RunningAppOutput>,
 }
 
 struct RunningAppOutput {

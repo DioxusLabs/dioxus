@@ -1,5 +1,6 @@
 use crate::{
     settings::{self},
+    tracer::CLILogControl,
     DioxusCrate,
 };
 use anyhow::Context;
@@ -105,13 +106,13 @@ impl Serve {
         Ok(())
     }
 
-    pub async fn serve(mut self) -> anyhow::Result<()> {
+    pub async fn serve(mut self, log_control: CLILogControl) -> anyhow::Result<()> {
         let mut dioxus_crate = DioxusCrate::new(&self.build_arguments.target_args)
             .context("Failed to load Dioxus workspace")?;
 
         self.resolve(&mut dioxus_crate)?;
 
-        crate::serve::serve_all(self, dioxus_crate).await?;
+        crate::serve::serve_all(self, dioxus_crate, log_control).await?;
         Ok(())
     }
 }
