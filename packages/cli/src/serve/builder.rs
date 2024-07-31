@@ -65,7 +65,7 @@ impl Builder {
                 if let Err(err) = &res {
                     let _ = tx.start_send(UpdateBuildProgress {
                         stage: crate::builder::Stage::Finished,
-                        update: crate::builder::UpdateStage::Failed(err.to_string()),
+                        update: crate::builder::UpdateStage::Failed(format!("{err}")),
                     });
                 }
 

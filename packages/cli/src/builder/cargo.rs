@@ -111,7 +111,8 @@ impl BuildRequest {
             &dioxus_version,
         );
         let _manganis_support = ManganisSupportGuard::default();
-        let _asset_guard = AssetConfigDropGuard::new();
+        let _asset_guard =
+            AssetConfigDropGuard::new(self.dioxus_crate.dioxus_config.web.app.base_path.as_deref());
 
         // If this is a web, build make sure we have the web build tooling set up
         if self.web {
@@ -163,7 +164,7 @@ impl BuildRequest {
         // Start Manganis linker intercept.
         let linker_args = vec![format!("{}", self.dioxus_crate.out_dir().display())];
 
-        // Don't block the main thread - magnanis should not be running its own std process but it's
+        // Don't block the main thread - manganis should not be running its own std process but it's
         // fine to wrap it here at the top
         tokio::task::spawn_blocking(move || {
             manganis_cli_support::start_linker_intercept(
@@ -196,11 +197,19 @@ impl BuildRequest {
 
         let assets = if !self.build_arguments.skip_assets {
             let assets = asset_manifest(&self.dioxus_crate);
-            // Collect assets
-            process_assets(&self.dioxus_crate, &assets, progress)?;
-            // Create the __assets_head.html file for bundling
-            create_assets_head(&self.dioxus_crate, &assets)?;
-            Some(assets)
+            let dioxus_crate = self.dioxus_crate.clone();
+            let mut progress = progress.clone();
+            tokio::task::spawn_blocking(
+                move || -> Result<Option<manganis_cli_support::AssetManifest>> {
+                    // Collect assets
+                    process_assets(&dioxus_crate, &assets, &mut progress)?;
+                    // Create the __assets_head.html file for bundling
+                    create_assets_head(&dioxus_crate, &assets)?;
+                    Ok(Some(assets))
+                },
+            )
+            .await
+            .unwrap()?
         } else {
             None
         };
