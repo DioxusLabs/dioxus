@@ -148,6 +148,25 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check for typos
         uses: crate-ci/typos@master
+
+  docs:
+    if: github.event.pull_request.draft == false
+    name: Docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust ${{ env.rust_nightly }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.rust_nightly }}
+      - uses: Swatinem/rust-cache@v2
+      - name: "doc --lib --all-features"
+        run: |
+          cargo doc --lib --no-deps --all-features --document-private-items
+        env:
+          RUSTFLAGS: --cfg docsrs --cfg tokio_unstable --cfg tokio_taskdump
+          RUSTDOCFLAGS: --cfg docsrs --cfg tokio_unstable --cfg tokio_taskdump -Dwarnings
+
   clippy:
     if: github.event.pull_request.draft == false
     name: Clippy
