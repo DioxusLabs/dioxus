@@ -30,6 +30,11 @@ pub enum Platform {
     #[cfg_attr(feature = "cli", clap(name = "static-generation"))]
     #[serde(rename = "static-generation")]
     StaticGeneration,
+
+    /// Targeting the static generation platform using SSR and Dioxus-Fullstack
+    #[cfg_attr(feature = "cli", clap(name = "liveview"))]
+    #[serde(rename = "liveview")]
+    Liveview,
 }
 
 /// An error that occurs when a platform is not recognized
@@ -50,6 +55,7 @@ impl FromStr for Platform {
             "desktop" => Ok(Self::Desktop),
             "fullstack" => Ok(Self::Fullstack),
             "static-generation" => Ok(Self::StaticGeneration),
+            "liveview" => Ok(Self::Liveview),
             _ => Err(UnknownPlatformError),
         }
     }
@@ -78,6 +84,7 @@ impl Platform {
             Platform::Desktop => "desktop",
             Platform::Fullstack => "fullstack",
             Platform::StaticGeneration => "static-generation",
+            Platform::Liveview => "liveview",
         }
     }
 }

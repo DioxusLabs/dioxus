@@ -18,14 +18,25 @@ pub use progress::{
     BuildMessage, MessageSource, MessageType, Stage, UpdateBuildProgress, UpdateStage,
 };
 
+/// The target platform for the build
+/// This is very similar to the Platform enum, but we need to be able to differentiate between the
+/// server and web targets for the fullstack platform
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TargetPlatform {
+    Web,
+    Desktop,
+    Server,
+    Liveview,
+}
+
 /// A request for a project to be built
 pub struct BuildRequest {
     /// Whether the build is for serving the application
     pub serve: bool,
-    /// Whether this is a web build
-    pub web: bool,
     /// The configuration for the crate we are building
     pub dioxus_crate: DioxusCrate,
+    /// The target platform for the build
+    pub target_platform: TargetPlatform,
     /// The arguments for the build
     pub build_arguments: Build,
     /// The rustc flags to pass to the build
@@ -41,22 +52,24 @@ impl BuildRequest {
         build_arguments: impl Into<Build>,
     ) -> Vec<Self> {
         let build_arguments = build_arguments.into();
-        let dioxus_crate = dioxus_crate.clone();
         let platform = build_arguments.platform();
+        let single_platform = |platform| {
+            let dioxus_crate = dioxus_crate.clone();
+            vec![Self {
+                serve,
+                dioxus_crate,
+                build_arguments: build_arguments.clone(),
+                target_platform: platform,
+                rust_flags: Default::default(),
+                target_dir: Default::default(),
+            }]
+        };
         match platform {
-            Platform::Web | Platform::Desktop => {
-                let web = platform == Platform::Web;
-                vec![Self {
-                    serve,
-                    web,
-                    dioxus_crate,
-                    build_arguments,
-                    rust_flags: Default::default(),
-                    target_dir: Default::default(),
-                }]
-            }
+            Platform::Web => single_platform(TargetPlatform::Web),
+            Platform::Liveview => single_platform(TargetPlatform::Liveview),
+            Platform::Desktop => single_platform(TargetPlatform::Desktop),
             Platform::StaticGeneration | Platform::Fullstack => {
-                Self::new_fullstack(dioxus_crate, build_arguments, serve)
+                Self::new_fullstack(dioxus_crate.clone(), build_arguments, serve)
             }
             _ => unimplemented!("Unknown platform: {platform:?}"),
         }
@@ -104,12 +117,17 @@ impl BuildRequest {
 
         Ok(all_results)
     }
+
+    /// Check if the build is targeting the web platform
+    pub fn targeting_web(&self) -> bool {
+        self.target_platform == TargetPlatform::Web
+    }
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct BuildResult {
     pub executable: PathBuf,
-    pub web: bool,
+    pub target_platform: TargetPlatform,
     pub platform: Platform,
 }
 
@@ -121,7 +139,7 @@ impl BuildResult {
         fullstack_address: Option<SocketAddr>,
         workspace: &std::path::Path,
     ) -> std::io::Result<Option<Child>> {
-        if self.web {
+        if self.target_platform == TargetPlatform::Web {
             return Ok(None);
         }
 

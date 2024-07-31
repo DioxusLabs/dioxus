@@ -41,11 +41,10 @@ impl BuildRequest {
             cargo_args.push(features_str);
         }
 
-        if let Some(target) = self.web.then_some("wasm32-unknown-unknown").or(self
-            .build_arguments
-            .target_args
-            .target
-            .as_deref())
+        if let Some(target) = self
+            .targeting_web()
+            .then_some("wasm32-unknown-unknown")
+            .or(self.build_arguments.target_args.target.as_deref())
         {
             cargo_args.push("--target".to_string());
             cargo_args.push(target.to_string());
@@ -114,7 +113,7 @@ impl BuildRequest {
         let _asset_guard = AssetConfigDropGuard::new();
 
         // If this is a web, build make sure we have the web build tooling set up
-        if self.web {
+        if self.targeting_web() {
             install_web_build_tooling(&mut progress).await?;
         }
 
@@ -183,7 +182,7 @@ impl BuildRequest {
             create_dir_all(&out_dir)?;
         }
         let mut output_path = out_dir.join(file_name);
-        if self.web {
+        if self.targeting_web() {
             output_path.set_extension("wasm");
         } else if cfg!(windows) {
             output_path.set_extension("exe");
@@ -208,7 +207,7 @@ impl BuildRequest {
         // Create the build result
         let build_result = BuildResult {
             executable: output_path,
-            web: self.web,
+            target_platform: self.target_platform,
             platform: self
                 .build_arguments
                 .platform
@@ -216,7 +215,7 @@ impl BuildRequest {
         };
 
         // If this is a web build, run web post processing steps
-        if self.web {
+        if self.targeting_web() {
             self.post_process_web_build(&build_result, assets.as_ref(), progress)
                 .await?;
         }
@@ -231,7 +230,7 @@ impl BuildRequest {
 
         if asset_dir.is_dir() {
             // Only pre-compress the assets from the web build. Desktop assets are not served, so they don't need to be pre_compressed
-            let pre_compress = self.web
+            let pre_compress = self.targeting_web()
                 && self
                     .dioxus_crate
                     .should_pre_compress_web_assets(self.build_arguments.release);

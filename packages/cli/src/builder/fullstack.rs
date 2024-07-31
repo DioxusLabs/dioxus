@@ -1,9 +1,10 @@
 use crate::builder::Build;
 use crate::dioxus_crate::DioxusCrate;
-use dioxus_cli_config::Platform;
 
 use crate::builder::BuildRequest;
 use std::path::PathBuf;
+
+use super::TargetPlatform;
 
 static CLIENT_RUST_FLAGS: &[&str] = &["-Cdebuginfo=none", "-Cstrip=debuginfo"];
 // The `opt-level=2` increases build times, but can noticeably decrease time
@@ -60,11 +61,6 @@ impl BuildRequest {
     ) -> Self {
         let config = config.clone();
         let mut build = build.clone();
-        build.platform = Some(if web {
-            Platform::Web
-        } else {
-            Platform::Desktop
-        });
         // Set the target directory we are building the server in
         let target_dir = get_target_directory(&build, target_directory);
         // Add the server feature to the features we pass to the build
@@ -74,12 +70,16 @@ impl BuildRequest {
         let rust_flags = fullstack_rust_flags(&build, rust_flags);
 
         Self {
-            web,
             serve,
             build_arguments: build.clone(),
             dioxus_crate: config,
             rust_flags,
             target_dir,
+            target_platform: if web {
+                TargetPlatform::Web
+            } else {
+                TargetPlatform::Server
+            },
         }
     }
 
