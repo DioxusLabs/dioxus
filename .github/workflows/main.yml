@@ -43,7 +43,7 @@ env:
   RUSTUP_WINDOWS_PATH_ADD_BIN: 1
   # Change to specific Rust release to pin
   rust_stable: stable
-  rust_nightly: nightly-2021-07-06
+  rust_nightly: nightly-2024-07-01
   rust_clippy: "1.79"
   # When updating this, also update relevant msrvs (readme, cargo.toml etc):
   rust_min: "1.79.0"
@@ -169,6 +169,9 @@ jobs:
         with:
           toolchain: ${{ env.rust_nightly }}
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: "doc --lib --all-features"
         run: |
           cargo doc --lib --no-deps --all-features --document-private-items
