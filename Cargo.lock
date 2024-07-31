@@ -2451,7 +2451,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-cli"
-version = "0.5.2"
+version = "0.6.0-alpha.0"
 dependencies = [
  "ansi-to-html",
  "ansi-to-tui",
@@ -2663,7 +2663,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-examples"
-version = "0.5.2"
+version = "0.0.0"
 dependencies = [
  "base64 0.21.7",
  "ciborium",
@@ -6072,8 +6072,8 @@ dependencies = [
 
 [[package]]
 name = "manganis"
-version = "0.2.2"
-source = "git+https://github.com/DioxusLabs/manganis#5bf3d1b3d06c435754502ae538c78d2d728a723f"
+version = "0.3.0-alpha.0"
+source = "git+https://github.com/DioxusLabs/manganis#7825665f06b477b7306a3c05647280903a5d0686"
 dependencies = [
  "dioxus-core 0.5.6",
  "manganis-macro",
@@ -6081,8 +6081,8 @@ dependencies = [
 
 [[package]]
 name = "manganis-cli-support"
-version = "0.2.4"
-source = "git+https://github.com/DioxusLabs/manganis#5bf3d1b3d06c435754502ae538c78d2d728a723f"
+version = "0.3.0-alpha.0"
+source = "git+https://github.com/DioxusLabs/manganis#7825665f06b477b7306a3c05647280903a5d0686"
 dependencies = [
  "anyhow",
  "image 0.25.2",
@@ -6107,8 +6107,8 @@ dependencies = [
 
 [[package]]
 name = "manganis-common"
-version = "0.2.4"
-source = "git+https://github.com/DioxusLabs/manganis#5bf3d1b3d06c435754502ae538c78d2d728a723f"
+version = "0.3.0-alpha.0"
+source = "git+https://github.com/DioxusLabs/manganis#7825665f06b477b7306a3c05647280903a5d0686"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
@@ -6124,8 +6124,8 @@ dependencies = [
 
 [[package]]
 name = "manganis-macro"
-version = "0.2.2"
-source = "git+https://github.com/DioxusLabs/manganis#5bf3d1b3d06c435754502ae538c78d2d728a723f"
+version = "0.3.0-alpha.0"
+source = "git+https://github.com/DioxusLabs/manganis#7825665f06b477b7306a3c05647280903a5d0686"
 dependencies = [
  "manganis-common",
  "proc-macro2",
@@ -11650,8 +11650,8 @@ dependencies = [
 
 [[package]]
 name = "warnings"
-version = "0.1.0"
-source = "git+https://github.com/DioxusLabs/warnings#9889b96cccb6ac91a8af924cfee51a8895146d08"
+version = "0.2.0"
+source = "git+https://github.com/DioxusLabs/warnings#bf20533dbcf3716b18fe7ad110e9a73cef58c10b"
 dependencies = [
  "pin-project",
  "warnings-macro",
@@ -11659,8 +11659,8 @@ dependencies = [
 
 [[package]]
 name = "warnings-macro"
-version = "0.1.0"
-source = "git+https://github.com/DioxusLabs/warnings#9889b96cccb6ac91a8af924cfee51a8895146d08"
+version = "0.2.0"
+source = "git+https://github.com/DioxusLabs/warnings#bf20533dbcf3716b18fe7ad110e9a73cef58c10b"
 dependencies = [
  "proc-macro2",
  "quote",

@@ -99,7 +99,7 @@ dioxus = { workspace = true, features = ["desktop"] }
 exitcode = "1.1.2"
 reqwest = { workspace = true, features = ["json"] }
 http-range = { version = "0.1.5" }
-dioxus-ssr = { workspace = true, version = "0.5.0", default-features = false }
+dioxus-ssr = { workspace = true, default-features = false }
 separator = "0.4.1"
 rand = { version = "0.8.4", features = ["small_rng"] }
 
