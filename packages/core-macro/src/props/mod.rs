@@ -1373,10 +1373,10 @@ Finally, call `.build()` to create the instance of `{name}`.
                     quote!(let #name = self.#name;)
                 } else if let Some(ref default) = field.builder_attr.default {
                     // If field has `into`, apply it to the default value.
-                    let into = if field.builder_attr.auto_into { 
+                    let into = if field.builder_attr.auto_into {
                         quote!{ .into() }
                     } else if field.builder_attr.auto_to_string {
-                        quote!{ .to_string() }  
+                        quote!{ .to_string() }
                     } else {
                         quote!{}
                     };
