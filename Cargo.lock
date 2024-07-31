@@ -6073,7 +6073,8 @@ dependencies = [
 [[package]]
 name = "manganis"
 version = "0.3.0-alpha.0"
-source = "git+https://github.com/DioxusLabs/manganis#7825665f06b477b7306a3c05647280903a5d0686"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "578cb1a3a1a7dfad59feaa34eb928855e7f7d09a031db913b84ac2cc10fdfb84"
 dependencies = [
  "dioxus-core 0.5.6",
  "manganis-macro",
@@ -6082,7 +6083,8 @@ dependencies = [
 [[package]]
 name = "manganis-cli-support"
 version = "0.3.0-alpha.0"
-source = "git+https://github.com/DioxusLabs/manganis#7825665f06b477b7306a3c05647280903a5d0686"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "378a47dc7523152750e923d3c0ea94a0d491ea2cd3616abce0d20ae0f1df36c0"
 dependencies = [
  "anyhow",
  "image 0.25.2",
@@ -6108,7 +6110,8 @@ dependencies = [
 [[package]]
 name = "manganis-common"
 version = "0.3.0-alpha.0"
-source = "git+https://github.com/DioxusLabs/manganis#7825665f06b477b7306a3c05647280903a5d0686"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86a1bfc5ff78ac6ade38584b033952f7cef921b90db6d5ac2016bc30caf47f8b"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
@@ -6125,7 +6128,8 @@ dependencies = [
 [[package]]
 name = "manganis-macro"
 version = "0.3.0-alpha.0"
-source = "git+https://github.com/DioxusLabs/manganis#7825665f06b477b7306a3c05647280903a5d0686"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "046c953865755a7b4e41f3680a2659833b41fdb171a0bffbaeba8b8237319924"
 dependencies = [
  "manganis-common",
  "proc-macro2",
@@ -11651,7 +11655,8 @@ dependencies = [
 [[package]]
 name = "warnings"
 version = "0.2.0"
-source = "git+https://github.com/DioxusLabs/warnings#bf20533dbcf3716b18fe7ad110e9a73cef58c10b"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0c672c7629eeed21c37d7a96ee9c0287b86a5e29b5730773117e4261d1a73ca"
 dependencies = [
  "pin-project",
  "warnings-macro",
@@ -11660,7 +11665,8 @@ dependencies = [
 [[package]]
 name = "warnings-macro"
 version = "0.2.0"
-source = "git+https://github.com/DioxusLabs/warnings#bf20533dbcf3716b18fe7ad110e9a73cef58c10b"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59195a1db0e95b920366d949ba5e0d3fc0e70b67c09be15ce5abb790106b0571"
 dependencies = [
  "proc-macro2",
  "quote",
