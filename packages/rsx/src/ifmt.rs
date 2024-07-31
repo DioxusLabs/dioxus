@@ -408,4 +408,13 @@ mod tests {
         println!("{}", input.to_string_with_quotes());
         assert!(input.is_static());
     }
+
+    #[test]
+    fn to_static() {
+        let input = syn::parse2::<IfmtInput>(quote! { "body {{ background: red; }}" }).unwrap();
+        assert_eq!(
+            input.to_static(),
+            Some("body { background: red; }".to_string())
+        );
+    }
 }

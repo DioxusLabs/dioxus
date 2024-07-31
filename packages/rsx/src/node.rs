@@ -156,14 +156,7 @@ impl BodyNode {
                     ),
                 }
             }
-            BodyNode::Text(text) if text.is_static() => {
-                let text = text.input.source.clone();
-                let text = intern(text.value().as_str());
-                TemplateNode::Text { text }
-            }
-            BodyNode::Text(text) => TemplateNode::Dynamic {
-                id: text.dyn_idx.get(),
-            },
+            BodyNode::Text(text) => text.to_template_node(),
             BodyNode::RawExpr(exp) => TemplateNode::Dynamic {
                 id: exp.dyn_idx.get(),
             },
@@ -209,7 +202,7 @@ impl BodyNode {
         match self {
             BodyNode::Element(el) => el.name.span(),
             BodyNode::Component(component) => component.name.span(),
-            BodyNode::Text(text) => text.input.source.span(),
+            BodyNode::Text(text) => text.input.span(),
             BodyNode::RawExpr(exp) => exp.span(),
             BodyNode::ForLoop(fl) => fl.for_token.span(),
             BodyNode::IfChain(f) => f.if_token.span(),
