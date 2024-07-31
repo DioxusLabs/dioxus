@@ -105,7 +105,7 @@ pub enum MessageSource {
     ///
     /// Usage of Tracing inside of the CLI will be routed to this type.
     Dev,
-    /// Represents a message from the build process. Renders `[dev]`
+    /// Represents a message from the build process. Renders `[bld]`
     ///
     /// This is anything emitted from a build process such as cargo and optimizations.
     Build,
@@ -116,7 +116,7 @@ impl Display for MessageSource {
         match self {
             Self::App => write!(f, "app"),
             Self::Dev => write!(f, "dev"),
-            Self::Build => write!(f, "dev"),
+            Self::Build => write!(f, "bld"),
         }
     }
 }
