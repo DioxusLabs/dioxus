@@ -417,9 +417,12 @@ impl Output {
     pub fn push_log(&mut self, platform: Platform, message: BuildMessage) {
         let snapped = self.is_snapped(platform);
 
-        if let Some(build) = self.build_progress.build_logs.get_mut(&platform) {
-            build.stdout_logs.push(message);
-        }
+        self.build_progress
+            .build_logs
+            .entry(platform)
+            .or_default()
+            .stdout_logs
+            .push(message);
 
         if snapped {
             self.scroll_to_bottom();
