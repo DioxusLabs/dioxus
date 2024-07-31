@@ -173,8 +173,8 @@ jobs:
         run: |
           cargo doc --lib --no-deps --all-features --document-private-items
         env:
-          RUSTFLAGS: --cfg docsrs --cfg tokio_unstable --cfg tokio_taskdump
-          RUSTDOCFLAGS: --cfg docsrs --cfg tokio_unstable --cfg tokio_taskdump -Dwarnings
+          RUSTFLAGS: --cfg docsrs
+          RUSTDOCFLAGS: --cfg docsrs -Dwarnings
 
   clippy:
     if: github.event.pull_request.draft == false
