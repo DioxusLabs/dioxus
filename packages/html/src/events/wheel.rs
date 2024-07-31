@@ -54,6 +54,7 @@ impl WheelData {
     }
 
     /// Downcast this event to a concrete event type
+    #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         HasWheelData::as_any(&*self.inner).downcast_ref::<T>()
     }

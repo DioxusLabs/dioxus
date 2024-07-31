@@ -121,6 +121,7 @@ impl MountedData {
     }
 
     /// Downcast this event to a concrete event type
+    #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         self.inner.as_any().downcast_ref::<T>()
     }
@@ -186,7 +187,7 @@ impl_event! [
     ///             id: "some-id",
     ///             onmounted: move |element| {
     ///                 // You can use the web_event trait to downcast the element to a web specific event. For the mounted event, this will be a web_sys::Element
-    ///                 let web_sys_element = element.web_event();
+    ///                 let web_sys_element = element.as_web_event();
     ///                 assert_eq!(web_sys_element.id(), "some-id");
     ///             }
     ///         }
