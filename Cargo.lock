@@ -2430,7 +2430,7 @@ dependencies = [
  "criterion",
  "dioxus",
  "dioxus-config-macro",
- "dioxus-core 0.6.0-alpha.0",
+ "dioxus-core",
  "dioxus-core-macro",
  "dioxus-desktop",
  "dioxus-fullstack",
@@ -2505,7 +2505,7 @@ dependencies = [
  "dioxus-autofmt",
  "dioxus-check",
  "dioxus-cli-config",
- "dioxus-core 0.6.0-alpha.0",
+ "dioxus-core",
  "dioxus-hot-reload",
  "dioxus-html",
  "dioxus-rsx",
@@ -2585,23 +2585,6 @@ dependencies = [
 
 [[package]]
 name = "dioxus-core"
-version = "0.5.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3730d2459ab66951cedf10b09eb84141a6eda7f403c28057cbe010495be156b7"
-dependencies = [
- "futures-channel",
- "futures-util",
- "generational-box 0.5.6",
- "longest-increasing-subsequence",
- "rustc-hash",
- "slab",
- "slotmap",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "dioxus-core"
 version = "0.6.0-alpha.0"
 dependencies = [
  "const_format",
@@ -2610,7 +2593,7 @@ dependencies = [
  "dioxus-ssr",
  "futures-channel",
  "futures-util",
- "generational-box 0.6.0-alpha.0",
+ "generational-box",
  "longest-increasing-subsequence",
  "pretty_assertions",
  "rand 0.8.5",
@@ -2654,7 +2637,7 @@ dependencies = [
  "core-foundation",
  "dioxus",
  "dioxus-cli-config",
- "dioxus-core 0.6.0-alpha.0",
+ "dioxus-core",
  "dioxus-hooks",
  "dioxus-hot-reload",
  "dioxus-html",
@@ -2665,7 +2648,7 @@ dependencies = [
  "exitcode",
  "futures-channel",
  "futures-util",
- "generational-box 0.6.0-alpha.0",
+ "generational-box",
  "global-hotkey",
  "http-range",
  "infer 0.11.0",
@@ -2747,7 +2730,7 @@ dependencies = [
  "dioxus_server_macro",
  "futures-channel",
  "futures-util",
- "generational-box 0.6.0-alpha.0",
+ "generational-box",
  "http 1.1.0",
  "hyper 1.4.1",
  "hyper-rustls 0.27.2",
@@ -2787,11 +2770,11 @@ name = "dioxus-hooks"
 version = "0.6.0-alpha.0"
 dependencies = [
  "dioxus",
- "dioxus-core 0.6.0-alpha.0",
+ "dioxus-core",
  "dioxus-signals",
  "futures-channel",
  "futures-util",
- "generational-box 0.6.0-alpha.0",
+ "generational-box",
  "reqwest 0.12.5",
  "rustversion",
  "slab",
@@ -2807,7 +2790,7 @@ version = "0.6.0-alpha.0"
 dependencies = [
  "chrono",
  "dioxus-cli-config",
- "dioxus-core 0.6.0-alpha.0",
+ "dioxus-core",
  "dioxus-html",
  "dioxus-rsx",
  "dioxus-signals",
@@ -2830,7 +2813,7 @@ version = "0.6.0-alpha.0"
 dependencies = [
  "async-trait",
  "dioxus",
- "dioxus-core 0.6.0-alpha.0",
+ "dioxus-core",
  "dioxus-core-macro",
  "dioxus-hooks",
  "dioxus-html-internal-macro",
@@ -2839,7 +2822,7 @@ dependencies = [
  "enumset",
  "euclid",
  "futures-channel",
- "generational-box 0.6.0-alpha.0",
+ "generational-box",
  "js-sys",
  "keyboard-types",
  "lazy-js-bundle",
@@ -2870,7 +2853,7 @@ dependencies = [
 name = "dioxus-interpreter-js"
 version = "0.6.0-alpha.0"
 dependencies = [
- "dioxus-core 0.6.0-alpha.0",
+ "dioxus-core",
  "dioxus-html",
  "js-sys",
  "lazy-js-bundle",
@@ -2888,7 +2871,7 @@ version = "0.6.0-alpha.0"
 dependencies = [
  "dioxus",
  "dioxus-config-macro",
- "dioxus-core 0.6.0-alpha.0",
+ "dioxus-core",
  "dioxus-core-macro",
  "dioxus-hooks",
  "dioxus-html",
@@ -2903,13 +2886,13 @@ dependencies = [
  "axum 0.7.5",
  "dioxus",
  "dioxus-cli-config",
- "dioxus-core 0.6.0-alpha.0",
+ "dioxus-core",
  "dioxus-hot-reload",
  "dioxus-html",
  "dioxus-interpreter-js",
  "futures-channel",
  "futures-util",
- "generational-box 0.6.0-alpha.0",
+ "generational-box",
  "pretty_env_logger",
  "rustc-hash",
  "serde",
@@ -3025,7 +3008,7 @@ dependencies = [
 name = "dioxus-rsx"
 version = "0.6.0-alpha.0"
 dependencies = [
- "dioxus-core 0.6.0-alpha.0",
+ "dioxus-core",
  "internment",
  "prettier-please",
  "prettyplease",
@@ -3042,10 +3025,10 @@ name = "dioxus-signals"
 version = "0.6.0-alpha.0"
 dependencies = [
  "dioxus",
- "dioxus-core 0.6.0-alpha.0",
+ "dioxus-core",
  "futures-channel",
  "futures-util",
- "generational-box 0.6.0-alpha.0",
+ "generational-box",
  "once_cell",
  "parking_lot",
  "rand 0.8.5",
@@ -3070,13 +3053,13 @@ dependencies = [
  "chrono",
  "dioxus",
  "dioxus-cli-config",
- "dioxus-core 0.6.0-alpha.0",
+ "dioxus-core",
  "dioxus-html",
  "dioxus-interpreter-js",
  "dioxus-signals",
  "fern",
  "fs_extra",
- "generational-box 0.6.0-alpha.0",
+ "generational-box",
  "http 1.1.0",
  "lru 0.12.4",
  "rustc-hash",
@@ -3123,7 +3106,7 @@ dependencies = [
  "ciborium",
  "console_error_panic_hook",
  "dioxus",
- "dioxus-core 0.6.0-alpha.0",
+ "dioxus-core",
  "dioxus-hot-reload",
  "dioxus-html",
  "dioxus-interpreter-js",
@@ -3132,7 +3115,7 @@ dependencies = [
  "dioxus-web",
  "futures-channel",
  "futures-util",
- "generational-box 0.6.0-alpha.0",
+ "generational-box",
  "gloo-dialogs",
  "gloo-timers",
  "js-sys",
@@ -3967,15 +3950,6 @@ dependencies = [
  "libc",
  "system-deps",
  "x11",
-]
-
-[[package]]
-name = "generational-box"
-version = "0.5.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "557cf2cbacd0504c6bf8c29f52f8071e0de1d9783346713dc6121d7fa1e5d0e0"
-dependencies = [
- "parking_lot",
 ]
 
 [[package]]
@@ -6120,7 +6094,6 @@ version = "0.3.0-alpha.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "578cb1a3a1a7dfad59feaa34eb928855e7f7d09a031db913b84ac2cc10fdfb84"
 dependencies = [
- "dioxus-core 0.5.6",
  "manganis-macro",
 ]
 
