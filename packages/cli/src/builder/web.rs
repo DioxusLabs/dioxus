@@ -124,7 +124,7 @@ impl BuildRequest {
         let input_path = output_location.with_extension("wasm");
 
         // Create the directory where the bindgen output will be placed
-        let bindgen_outdir = self.dioxus_crate.out_dir().join("assets").join("dioxus");
+        let bindgen_outdir = self.target_out_dir().join("assets").join("dioxus");
 
         // Run wasm-bindgen
         self.run_wasm_bindgen(&input_path, &bindgen_outdir).await?;
@@ -183,7 +183,7 @@ impl BuildRequest {
         // If we do this too early, the wasm won't be ready but the index.html will be served, leading
         // to test failures and broken pages.
         let html = self.prepare_html(assets, progress)?;
-        let html_path = self.dioxus_crate.out_dir().join("index.html");
+        let html_path = self.target_out_dir().join("index.html");
         std::fs::write(html_path, html)?;
 
         Ok(())

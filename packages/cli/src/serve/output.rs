@@ -1,6 +1,7 @@
 use crate::{
     builder::{BuildMessage, MessageSource, MessageType, Stage, UpdateBuildProgress},
     dioxus_crate::DioxusCrate,
+    serve::next_or_pending,
     tracer::CLILogControl,
 };
 use crate::{
@@ -16,13 +17,12 @@ use crossterm::{
 };
 use dioxus_cli_config::{AddressArguments, Platform};
 use dioxus_hot_reload::ClientMsg;
-use futures_util::{future::select_all, Future, StreamExt};
+use futures_util::{future::select_all, Future, FutureExt, StreamExt};
 use ratatui::{prelude::*, widgets::*, TerminalOptions, Viewport};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
     io::{self, stdout},
-    pin::Pin,
     rc::Rc,
     sync::atomic::Ordering,
     time::{Duration, Instant},
@@ -168,28 +168,32 @@ impl Output {
     ///
     /// Also tick animations every few ms
     pub async fn wait(&mut self) -> io::Result<bool> {
-        // sorry lord
-        let user_input = match self.events.as_mut() {
-            Some(events) => {
-                let pinned: Pin<Box<dyn Future<Output = Option<Result<Event, _>>>>> =
-                    Box::pin(events.next());
-                pinned
-            }
-            None => Box::pin(futures_util::future::pending()) as Pin<Box<dyn Future<Output = _>>>,
+        fn ok_and_some<F, T, E>(f: F) -> impl Future<Output = T>
+        where
+            F: Future<Output = Result<Option<T>, E>>,
+        {
+            next_or_pending(async move { f.await.ok().flatten() })
+        }
+        let user_input = async {
+            let events = self.events.as_mut()?;
+            events.next().await
         };
+        let user_input = ok_and_some(user_input.map(|e| e.transpose()));
 
         let has_running_apps = !self.running_apps.is_empty();
         let next_stdout = self.running_apps.values_mut().map(|app| {
             let future = async move {
                 let (stdout, stderr) = match &mut app.output {
-                    Some(out) => (out.stdout.next_line(), out.stderr.next_line()),
+                    Some(out) => (
+                        ok_and_some(out.stdout.next_line()),
+                        ok_and_some(out.stderr.next_line()),
+                    ),
                     None => return futures_util::future::pending().await,
                 };
 
                 tokio::select! {
-                    Ok(Some(line)) = stdout => (app.result.platform, Some(line), None),
-                    Ok(Some(line)) = stderr => (app.result.platform, None, Some(line)),
-                    else => futures_util::future::pending().await,
+                    line = stdout => (app.result.platform, Some(line), None),
+                    line = stderr => (app.result.platform, None, Some(line)),
                 }
             };
             Box::pin(future)
@@ -203,8 +207,8 @@ impl Output {
             }
         };
 
-        let animation_timeout = tokio::time::sleep(Duration::from_millis(300));
         let tui_log_rx = &mut self.log_control.tui_rx;
+        let next_tui_log = next_or_pending(tui_log_rx.next());
 
         tokio::select! {
             (platform, stdout, stderr) = next_stdout => {
@@ -229,7 +233,7 @@ impl Output {
             },
 
             // Handle internal CLI tracing logs.
-            Some(log) = tui_log_rx.next() => {
+            log = next_tui_log => {
                 self.push_log(self.platform, BuildMessage {
                     level: Level::INFO,
                     message: MessageType::Text(log),
@@ -238,13 +242,10 @@ impl Output {
             }
 
             event = user_input => {
-                if self.handle_events(event.unwrap().unwrap()).await? {
+                if self.handle_events(event).await? {
                     return Ok(true)
                 }
-                // self.handle_input(event.unwrap().unwrap())?;
             }
-
-            _ = animation_timeout => {}
         }
 
         Ok(false)
@@ -454,7 +455,7 @@ impl Output {
                 .children
                 .iter_mut()
                 .find_map(|(platform, child)| {
-                    if platform == &result.platform {
+                    if platform == &result.target_platform {
                         let stdout = child.stdout.take().unwrap();
                         let stderr = child.stderr.take().unwrap();
                         Some((stdout, stderr))
@@ -735,12 +736,17 @@ impl Output {
         let mut events = vec![event];
 
         // Collect all the events within the next 10ms in one stream
-        loop {
-            let next = self.events.as_mut().unwrap().next();
-            tokio::select! {
-                msg = next => events.push(msg.unwrap().unwrap()),
-                _ = tokio::time::sleep(Duration::from_millis(1)) => break
+        let collect_events = async {
+            loop {
+                let Some(Ok(next)) = self.events.as_mut().unwrap().next().await else {
+                    break;
+                };
+                events.push(next);
             }
+        };
+        tokio::select! {
+            _ = collect_events => {},
+            _ = tokio::time::sleep(Duration::from_millis(10)) => {}
         }
 
         // Debounce events within the same frame

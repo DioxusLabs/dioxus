@@ -57,7 +57,7 @@ impl BuildRequest {
         target_directory: PathBuf,
         rust_flags: &[&str],
         feature: String,
-        web: bool,
+        target_platform: TargetPlatform,
     ) -> Self {
         let config = config.clone();
         let mut build = build.clone();
@@ -75,11 +75,7 @@ impl BuildRequest {
             dioxus_crate: config,
             rust_flags,
             target_dir,
-            target_platform: if web {
-                TargetPlatform::Web
-            } else {
-                TargetPlatform::Server
-            },
+            target_platform,
         }
     }
 
@@ -91,7 +87,7 @@ impl BuildRequest {
             config.server_target_dir(),
             SERVER_RUST_FLAGS,
             build.target_args.server_feature.clone(),
-            false,
+            TargetPlatform::Server,
         )
     }
 
@@ -103,7 +99,7 @@ impl BuildRequest {
             config.client_target_dir(),
             CLIENT_RUST_FLAGS,
             build.target_args.client_feature.clone(),
-            true,
+            TargetPlatform::Web,
         )
     }
 }

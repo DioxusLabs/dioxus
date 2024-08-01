@@ -30,6 +30,7 @@ pub enum TargetPlatform {
 }
 
 /// A request for a project to be built
+#[derive(Clone)]
 pub struct BuildRequest {
     /// Whether the build is for serving the application
     pub serve: bool,
@@ -75,7 +76,9 @@ impl BuildRequest {
         }
     }
 
-    pub async fn build_all_parallel(build_requests: Vec<BuildRequest>) -> Result<Vec<BuildResult>> {
+    pub(crate) async fn build_all_parallel(
+        build_requests: Vec<BuildRequest>,
+    ) -> Result<Vec<BuildResult>> {
         let multi_platform_build = build_requests.len() > 1;
         let mut build_progress = Vec::new();
         let mut set = tokio::task::JoinSet::new();
@@ -141,6 +144,9 @@ impl BuildResult {
     ) -> std::io::Result<Option<Child>> {
         if self.target_platform == TargetPlatform::Web {
             return Ok(None);
+        }
+        if self.target_platform == TargetPlatform::Server {
+            tracing::trace!("Proxying fullstack server from port {fullstack_address:?}");
         }
 
         let arguments = RuntimeCLIArguments::new(serve.address.address(), fullstack_address);

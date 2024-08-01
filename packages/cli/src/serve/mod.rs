@@ -1,3 +1,6 @@
+use std::future::{poll_fn, Future, IntoFuture};
+use std::task::Poll;
+
 use crate::builder::{Stage, UpdateBuildProgress, UpdateStage};
 use crate::cli::serve::Serve;
 use crate::dioxus_crate::DioxusCrate;
@@ -135,7 +138,7 @@ pub async fn serve_all(
                         for build_result in results.iter() {
                             let child = build_result.open(&serve.server_arguments, server.fullstack_address(), &dioxus_crate.workspace_dir());
                             match child {
-                                Ok(Some(child_proc)) => builder.children.push((build_result.platform,child_proc)),
+                                Ok(Some(child_proc)) => builder.children.push((build_result.target_platform, child_proc)),
                                 Err(_e) => break,
                                 _ => {}
                             }
@@ -151,7 +154,7 @@ pub async fn serve_all(
 
                     // If the process exited *cleanly*, we can exit
                     Ok(BuilderUpdate::ProcessExited { status, ..}) => {
-                        if let Some(status) = status {
+                        if let Ok(status) = status {
                             if status.success() {
                                 break;
                             }
@@ -186,4 +189,21 @@ pub async fn serve_all(
     builder.shutdown();
 
     Ok(())
+}
+
+// Grab the output of a future that returns an option or wait forever
+pub(crate) fn next_or_pending<F, T>(f: F) -> impl Future<Output = T>
+where
+    F: IntoFuture<Output = Option<T>>,
+{
+    let pinned = f.into_future();
+    let mut pinned = Box::pin(pinned);
+    poll_fn(move |cx| {
+        let next = pinned.as_mut().poll(cx);
+        match next {
+            Poll::Ready(Some(next)) => Poll::Ready(next),
+            Poll::Ready(None) => Poll::Pending,
+            Poll::Pending => Poll::Pending,
+        }
+    })
 }
