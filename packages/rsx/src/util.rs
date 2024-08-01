@@ -19,20 +19,6 @@ pub(crate) fn intern<T: Eq + Hash + Send + Sync + ?Sized + 'static>(
     s.into().as_ref()
 }
 
-/// These are just helpful methods for tests to pretty print the token stream - they are not used in the actual code
-// #[cfg(test)]
-pub trait PrettyUnparse {
-    fn pretty_unparse(&self) -> String;
-}
-
-// #[cfg(test)]
-impl PrettyUnparse for TokenStream2 {
-    fn pretty_unparse(&self) -> String {
-        let parsed = syn::parse2::<syn::Expr>(self.clone()).unwrap();
-        prettier_please::unparse_expr(&parsed)
-    }
-}
-
 /// Parse a raw ident and return a new ident with the r# prefix added
 pub fn parse_raw_ident(parse_buffer: &ParseBuffer) -> syn::Result<Ident> {
     // First try to parse as a normal ident

@@ -358,7 +358,7 @@ impl Parse for IfmtInput {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::PrettyUnparse;
+    use prettier_please::PrettyUnparse;
 
     #[test]
     fn raw_tokens() {

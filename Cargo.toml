@@ -96,6 +96,10 @@ manganis-cli-support = { version = "0.3.0-alpha.0", features = ["html"] }
 manganis = { version = "0.3.0-alpha.0", default-features = false }
 warnings = { version = "0.2.0" }
 
+
+# a fork of pretty please for tests
+prettier-please = { version = "0.3.0", features = ["verbatim"]}
+
 tracing = "0.1.37"
 tracing-futures = "0.2.5"
 toml = "0.8"
