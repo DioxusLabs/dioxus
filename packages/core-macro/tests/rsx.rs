@@ -57,6 +57,7 @@ mod test_default_into {
 /// These are compile-time tests.
 /// See https://github.com/DioxusLabs/dioxus/issues/2648
 #[cfg(test)]
+#[allow(unused)]
 mod test_optional_signals {
     use dioxus::prelude::*;
 
@@ -65,28 +66,25 @@ mod test_optional_signals {
     fn UsesComponents() -> Element {
         rsx! {
             PropsStruct {}
-            PropsParams {}
+            PropParams {}
         }
     }
 
     // Test props as struct param.
     #[derive(Props, Clone, PartialEq)]
     struct MyTestProps {
-        pub optional_signal: Signal<Option<u16>>,
-        pub optional_read_signal: ReadOnlySignal<Option<16>>,
+        pub optional_read_signal: ReadOnlySignal<Option<u16>>,
+        //pub basic_opt: Option<u16>,
     }
 
     #[component]
-    fn PropsStruct(_props: MyTestProps) -> Element {
+    fn PropsStruct(props: MyTestProps) -> Element {
         rsx! { "hi" }
     }
 
     // Test props as params.
     #[component]
-    fn PropParams(
-        opt_sig: Signal<Option<u16>>,
-        opt_read_sig: ReadOnlySignal<Option<u16>>,
-    ) -> Element {
+    fn PropParams(opt_read_sig: ReadOnlySignal<Option<u16>>) -> Element {
         rsx! { "hi!" }
     }
 }

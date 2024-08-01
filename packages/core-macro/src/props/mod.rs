@@ -13,7 +13,7 @@ use syn::spanned::Spanned;
 use syn::{parse::Error, PathArguments};
 
 use quote::quote;
-use syn::{parse_quote, Type};
+use syn::{parse_quote, PathSegment, Type};
 
 pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
     let data = match &ast.data {
@@ -228,8 +228,7 @@ mod field_info {
 
                 // auto detect optional
                 let strip_option_auto = builder_attr.strip_option
-                    || !builder_attr.ignore_option
-                        && type_from_inside_option(&field.ty, true).is_some();
+                    || !builder_attr.ignore_option && type_from_inside_option(&field.ty).is_some();
                 if !builder_attr.strip_option && strip_option_auto {
                     builder_attr.strip_option = true;
                     builder_attr.default = Some(
@@ -482,41 +481,52 @@ mod field_info {
     }
 }
 
-fn type_from_inside_option(ty: &syn::Type, check_option_name: bool) -> Option<&syn::Type> {
-    let path = if let syn::Type::Path(type_path) = ty {
-        if type_path.qself.is_some() {
-            return None;
-        } else {
-            &type_path.path
-        }
-    } else {
+fn type_from_inside_option(ty: &syn::Type) -> Option<&syn::Type> {
+    let syn::Type::Path(type_path) = ty else {
         return None;
     };
 
-    let mut is_optional = false;
-    
-    // Check if last path segment is optional.
-    let segment = path.segments.last()?;
-    if segment.ident == "Option" {
-        is_optional = true;
-    }
-
-    // We didn't detect any supported optional props.
-    if check_option_name && !is_optional {
+    if type_path.qself.is_some() {
         return None;
     }
 
-    let generic_params =
-        if let syn::PathArguments::AngleBracketed(generic_params) = &segment.arguments {
-            generic_params
-        } else {
+    let path = &type_path.path;
+    let seg = path.segments.last()?;
+
+    // If the segment is a supported optional type, provide the inner type.
+    if seg.ident == "Option" || seg.ident == "ReadOnlySignal" || seg.ident == "ReadSignal" {
+        // Get the inner type. E.g. the `u16` in `Option<u16>` or `Option` in `ReadSignal<Option<bool>>`
+        let inner_type = extract_inner_type_from_segment(seg)?;
+        let Type::Path(inner_path) = inner_type else {
             return None;
         };
-    if let syn::GenericArgument::Type(ty) = generic_params.args.first()? {
-        Some(ty)
-    } else {
-        None
+
+        // If we're entering an `Option`, we must get the innermost type. Otherwise, return the current type.
+        let inner_seg = inner_path.path.segments.last()?;
+        if inner_seg.ident == "Option" {
+            // Get the innermost type.
+            let innermost_type = extract_inner_type_from_segment(inner_seg)?;
+            return Some(innermost_type);
+        } else {
+            return Some(inner_type);
+        }
     }
+
+
+    None
+}
+
+// Extract the inner type from a path segment.
+fn extract_inner_type_from_segment(segment: &PathSegment) -> Option<&syn::Type> {
+    let syn::PathArguments::AngleBracketed(generic_args) = &segment.arguments else {
+        return None;
+    };
+
+    let syn::GenericArgument::Type(final_type) = generic_args.args.first()? else {
+        return None;
+    };
+
+    Some(final_type)
 }
 
 mod struct_info {
