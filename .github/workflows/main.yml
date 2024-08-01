@@ -62,7 +62,7 @@ jobs:
         with:
           cache-all-crates: "true"
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo check --all --examples --tests --all-features --all-targets
+      - run: cargo check --workspace --all-features --all-targets
 
   check-msrv:
     if: github.event.pull_request.draft == false
@@ -354,4 +354,5 @@ jobs:
 
       - name: test
         run: |
+          ${{ env.RUST_CARGO_COMMAND }} check --workspace --all-features --all-targets --target ${{ matrix.platform.target }}
           ${{ env.RUST_CARGO_COMMAND }} ${{ matrix.platform.command }} ${{ matrix.platform.args }} --target ${{ matrix.platform.target }}

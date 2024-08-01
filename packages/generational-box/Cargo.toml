@@ -14,7 +14,7 @@ parking_lot = "0.12.1"
 
 [dev-dependencies]
 rand = "0.8.5"
-criterion = "0.3"
+criterion = { workspace = true }
 
 [features]
 debug_borrows = []

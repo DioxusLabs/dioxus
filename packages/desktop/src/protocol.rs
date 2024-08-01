@@ -282,6 +282,15 @@ fn get_asset_root() -> Option<PathBuf> {
         return dunce::canonicalize(absolute_resources_root).ok();
     }
 
+    #[cfg(target_os = "windows")]
+    {
+        let mut path = std::env::current_exe()?;
+        path.pop();
+        path.pop();
+        path.push("resources");
+        return dunce::canonicalize(path).ok();
+    }
+
     None
 }
 
