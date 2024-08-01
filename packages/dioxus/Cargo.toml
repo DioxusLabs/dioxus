@@ -43,7 +43,7 @@ hooks = ["dep:dioxus-hooks"]
 hot-reload = ["dep:dioxus-hot-reload", "dioxus-web?/hot_reload", "dioxus-fullstack?/hot-reload"]
 mounted = ["dioxus-web?/mounted", "dioxus-html?/mounted"]
 file_engine = ["dioxus-web?/file_engine"]
-asset = ["dep:manganis"]
+asset = ["dep:manganis", "dioxus-core/manganis"]
 document = ["dioxus-web?/document", "dioxus-html?/document"]
 
 launch = ["dep:dioxus-config-macro"]
