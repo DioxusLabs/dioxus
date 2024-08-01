@@ -70,6 +70,8 @@ pub async fn generate_static_site(
         .map(|c| c.application.out_dir.clone())
         .unwrap_or("./dist".into());
 
+    let assets_path = assets_path.join("public");
+
     copy_static_files(&assets_path, &config.output_dir)?;
 
     Ok(())

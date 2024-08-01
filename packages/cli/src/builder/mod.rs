@@ -172,7 +172,6 @@ impl BuildResult {
             .stdout(Stdio::piped())
             .kill_on_drop(true)
             .current_dir(workspace);
-        tracing::info!("cmd: {:?}", cmd);
         Ok(Some(cmd.spawn()?))
     }
 }
