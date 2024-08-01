@@ -51,7 +51,7 @@ mod test_default_into {
         pub some_other_data: bool,
     }
 }
-/// This test ensures that read-only signals that contain an option (`Signal<Option<u16>>`) 
+/// This test ensures that read-only signals that contain an option (`Signal<Option<u16>>`)
 /// are correctly created as default when not provided.
 ///
 /// These are compile-time tests.
