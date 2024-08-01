@@ -405,7 +405,7 @@ impl Display for ElementName {
 }
 
 #[cfg(test)]
-mod tests{
+mod tests {
     use super::*;
     use prettier_please::PrettyUnparse;
 
