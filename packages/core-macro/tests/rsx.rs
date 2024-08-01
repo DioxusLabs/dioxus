@@ -51,8 +51,8 @@ mod test_default_into {
         pub some_other_data: bool,
     }
 }
-/// This test ensures that signals that contain an option (`Signal<Option<u16>>`) and the
-/// read-only varients are correctly created as default when not provided.
+/// This test ensures that read-only signals that contain an option (`Signal<Option<u16>>`) 
+/// are correctly created as default when not provided.
 ///
 /// These are compile-time tests.
 /// See https://github.com/DioxusLabs/dioxus/issues/2648
@@ -74,7 +74,6 @@ mod test_optional_signals {
     #[derive(Props, Clone, PartialEq)]
     struct MyTestProps {
         pub optional_read_signal: ReadOnlySignal<Option<u16>>,
-        //pub basic_opt: Option<u16>,
     }
 
     #[component]

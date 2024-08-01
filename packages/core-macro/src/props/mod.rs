@@ -512,7 +512,6 @@ fn type_from_inside_option(ty: &syn::Type) -> Option<&syn::Type> {
         }
     }
 
-
     None
 }
 
