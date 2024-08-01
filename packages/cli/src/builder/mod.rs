@@ -29,6 +29,17 @@ pub enum TargetPlatform {
     Liveview,
 }
 
+impl std::fmt::Display for TargetPlatform {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TargetPlatform::Web => write!(f, "web"),
+            TargetPlatform::Desktop => write!(f, "desktop"),
+            TargetPlatform::Server => write!(f, "server"),
+            TargetPlatform::Liveview => write!(f, "liveview"),
+        }
+    }
+}
+
 /// A request for a project to be built
 #[derive(Clone)]
 pub struct BuildRequest {
@@ -131,7 +142,6 @@ impl BuildRequest {
 pub(crate) struct BuildResult {
     pub executable: PathBuf,
     pub target_platform: TargetPlatform,
-    pub platform: Platform,
 }
 
 impl BuildResult {
@@ -151,18 +161,18 @@ impl BuildResult {
 
         let arguments = RuntimeCLIArguments::new(serve.address.address(), fullstack_address);
         let executable = self.executable.canonicalize()?;
-        Ok(Some(
-            Command::new(executable)
-                // When building the fullstack server, we need to forward the serve arguments (like port) to the fullstack server through env vars
-                .env(
-                    dioxus_cli_config::__private::SERVE_ENV,
-                    serde_json::to_string(&arguments).unwrap(),
-                )
-                .stderr(Stdio::piped())
-                .stdout(Stdio::piped())
-                .kill_on_drop(true)
-                .current_dir(workspace)
-                .spawn()?,
-        ))
+        let mut cmd = Command::new(executable);
+        cmd
+            // When building the fullstack server, we need to forward the serve arguments (like port) to the fullstack server through env vars
+            .env(
+                dioxus_cli_config::__private::SERVE_ENV,
+                serde_json::to_string(&arguments).unwrap(),
+            )
+            .stderr(Stdio::piped())
+            .stdout(Stdio::piped())
+            .kill_on_drop(true)
+            .current_dir(workspace);
+        tracing::info!("cmd: {:?}", cmd);
+        Ok(Some(cmd.spawn()?))
     }
 }

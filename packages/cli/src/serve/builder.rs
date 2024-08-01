@@ -6,7 +6,6 @@ use crate::dioxus_crate::DioxusCrate;
 use crate::serve::next_or_pending;
 use crate::serve::Serve;
 use crate::Result;
-use dioxus_cli_config::Platform;
 use futures_channel::mpsc::UnboundedReceiver;
 use futures_util::future::OptionFuture;
 use futures_util::stream::select_all;
@@ -23,7 +22,7 @@ pub struct Builder {
     build_results: Option<JoinHandle<Result<Vec<BuildResult>>>>,
 
     /// The progress of the builds
-    build_progress: Vec<(Platform, UnboundedReceiver<UpdateBuildProgress>)>,
+    build_progress: Vec<(TargetPlatform, UnboundedReceiver<UpdateBuildProgress>)>,
 
     /// The application we are building
     config: DioxusCrate,
@@ -60,7 +59,7 @@ impl Builder {
         for build_request in build_requests {
             let (mut tx, rx) = futures_channel::mpsc::unbounded();
             self.build_progress
-                .push((build_request.build_arguments.platform(), rx));
+                .push((build_request.target_platform, rx));
             set.spawn(async move {
                 let res = build_request.build(tx.clone()).await;
 
@@ -107,7 +106,7 @@ impl Builder {
         let process_exited = self
             .children
             .iter_mut()
-            .map(|(_, child)| Box::pin(child.wait()));
+            .map(|(target, child)| Box::pin(async move { (*target, child.wait().await) }));
         let process_exited = async move {
             if children_empty {
                 return futures_util::future::pending().await;
@@ -116,8 +115,6 @@ impl Builder {
         };
 
         // Wait for the next build result
-        let exit_code;
-        let child_exited;
         tokio::select! {
             build_results = results => {
                 self.build_results = None;
@@ -125,20 +122,16 @@ impl Builder {
                 // If we have a build result, bubble it up to the main loop
                 let build_results = build_results.map_err(|_| crate::Error::Unique("Build join failed".to_string()))??;
 
-                return Ok(BuilderUpdate::Ready { results: build_results });
+                Ok(BuilderUpdate::Ready { results: build_results })
             }
             (platform, update) = next => {
                 // If we have a build progress, send it to the screen
-                return Ok(BuilderUpdate::Progress { platform, update });
+                 Ok(BuilderUpdate::Progress { platform, update })
             }
-            (exit_status, index, _) = process_exited => {
-                exit_code = exit_status;
-                child_exited = index;
+            ((target, exit_status), _, _) = process_exited => {
+                Ok(BuilderUpdate::ProcessExited { status: exit_status, target_platform: target })
             }
         }
-        // Remove the process from the list of running processes
-        self.children.remove(child_exited);
-        Ok(BuilderUpdate::ProcessExited { status: exit_code })
     }
 
     /// Shutdown the current build process
@@ -181,13 +174,14 @@ impl Builder {
 
 pub enum BuilderUpdate {
     Progress {
-        platform: Platform,
+        platform: TargetPlatform,
         update: UpdateBuildProgress,
     },
     Ready {
         results: Vec<BuildResult>,
     },
     ProcessExited {
+        target_platform: TargetPlatform,
         status: Result<std::process::ExitStatus, std::io::Error>,
     },
 }

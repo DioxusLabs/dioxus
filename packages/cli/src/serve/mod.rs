@@ -1,12 +1,12 @@
 use std::future::{poll_fn, Future, IntoFuture};
 use std::task::Poll;
 
-use crate::builder::{Stage, UpdateBuildProgress, UpdateStage};
+use crate::builder::{Stage, TargetPlatform, UpdateBuildProgress, UpdateStage};
 use crate::cli::serve::Serve;
 use crate::dioxus_crate::DioxusCrate;
 use crate::tracer::CLILogControl;
 use crate::Result;
-use dioxus_cli_config::Platform;
+use futures_util::FutureExt;
 use tokio::task::yield_now;
 
 mod builder;
@@ -106,7 +106,7 @@ pub async fn serve_all(
                 // Run the server in the background
                 // Waiting for updates here lets us tap into when clients are added/removed
                 if let Some(msg) = msg {
-                    screen.new_ws_message(Platform::Web, msg);
+                    screen.new_ws_message(TargetPlatform::Web, msg);
                 }
             }
 
@@ -139,7 +139,10 @@ pub async fn serve_all(
                             let child = build_result.open(&serve.server_arguments, server.fullstack_address(), &dioxus_crate.workspace_dir());
                             match child {
                                 Ok(Some(child_proc)) => builder.children.push((build_result.target_platform, child_proc)),
-                                Err(_e) => break,
+                                Err(e) => {
+                                    tracing::error!("Failed to open build result: {e}");
+                                    break;
+                                },
                                 _ => {}
                             }
                         }
@@ -153,10 +156,20 @@ pub async fn serve_all(
                     },
 
                     // If the process exited *cleanly*, we can exit
-                    Ok(BuilderUpdate::ProcessExited { status, ..}) => {
-                        if let Ok(status) = status {
-                            if status.success() {
-                                break;
+                    Ok(BuilderUpdate::ProcessExited { status, target_platform }) => {
+                        // Then remove the child process
+                        builder.children.retain(|(platform, _)| *platform != target_platform);
+                        match status {
+                            Ok(status) => {
+                                if status.success() {
+                                    break;
+                                }
+                                else {
+                                    tracing::error!("Application exited with status: {status}");
+                                }
+                            },
+                            Err(e) => {
+                                tracing::error!("Application exited with error: {e}");
                             }
                         }
                     }
@@ -196,14 +209,14 @@ pub(crate) fn next_or_pending<F, T>(f: F) -> impl Future<Output = T>
 where
     F: IntoFuture<Output = Option<T>>,
 {
-    let pinned = f.into_future();
+    let pinned = f.into_future().fuse();
     let mut pinned = Box::pin(pinned);
     poll_fn(move |cx| {
         let next = pinned.as_mut().poll(cx);
         match next {
             Poll::Ready(Some(next)) => Poll::Ready(next),
-            Poll::Ready(None) => Poll::Pending,
-            Poll::Pending => Poll::Pending,
+            _ => Poll::Pending,
         }
     })
+    .fuse()
 }

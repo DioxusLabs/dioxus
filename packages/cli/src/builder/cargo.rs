@@ -180,33 +180,10 @@ impl BuildRequest {
 
         self.copy_assets_dir()?;
 
-        let assets = if !self.build_arguments.skip_assets {
-            let assets = asset_manifest(&self.dioxus_crate);
-            let dioxus_crate = self.dioxus_crate.clone();
-            let mut progress = progress.clone();
-            tokio::task::spawn_blocking(
-                move || -> Result<Option<manganis_cli_support::AssetManifest>> {
-                    // Collect assets
-                    process_assets(&dioxus_crate, &assets, &mut progress)?;
-                    // Create the __assets_head.html file for bundling
-                    create_assets_head(&dioxus_crate, &assets)?;
-                    Ok(Some(assets))
-                },
-            )
-            .await
-            .unwrap()?
-        } else {
-            None
-        };
-
         // Create the build result
         let build_result = BuildResult {
             executable: output_path,
             target_platform: self.target_platform,
-            platform: self
-                .build_arguments
-                .platform
-                .expect("To be resolved by now"),
         };
 
         // If this is a web build, run web post processing steps
