@@ -68,7 +68,16 @@ mod test_optional_signals {
             PropsStruct {
                 regular_read_signal: ReadOnlySignal::new(Signal::new(1234)),
             }
+            PropsStruct {
+                optional_read_signal: 1234,
+                regular_read_signal: 123u16,
+            }
             PropParams {}
+            PropParams {
+                opt_read_sig: 1234
+            }
+            DoubleOption {}
+            DoubleOption { optional: Some(1234) }
         }
     }
 
@@ -87,6 +96,11 @@ mod test_optional_signals {
     // Test props as params.
     #[component]
     fn PropParams(opt_read_sig: ReadOnlySignal<Option<u16>>) -> Element {
+        rsx! { "hi!" }
+    }
+
+    #[component]
+    fn DoubleOption(optional: Option<Option<u16>>) -> Element {
         rsx! { "hi!" }
     }
 }
