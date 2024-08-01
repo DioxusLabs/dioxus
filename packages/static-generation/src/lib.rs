@@ -3,6 +3,7 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![deny(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+//! Static generation for Dioxus
 
 mod config;
 pub use config::*;
