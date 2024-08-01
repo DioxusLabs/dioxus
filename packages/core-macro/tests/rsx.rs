@@ -51,3 +51,56 @@ mod test_default_into {
         pub some_other_data: bool,
     }
 }
+/// This test ensures that read-only signals that contain an option (`Signal<Option<u16>>`)
+/// are correctly created as default when not provided.
+///
+/// These are compile-time tests.
+/// See https://github.com/DioxusLabs/dioxus/issues/2648
+#[cfg(test)]
+#[allow(unused)]
+mod test_optional_signals {
+    use dioxus::prelude::*;
+
+    // Test if test components fail to compile.
+    #[component]
+    fn UsesComponents() -> Element {
+        rsx! {
+            PropsStruct {
+                regular_read_signal: ReadOnlySignal::new(Signal::new(1234)),
+            }
+            PropsStruct {
+                optional_read_signal: 1234,
+                regular_read_signal: 123u16,
+            }
+            PropParams {}
+            PropParams {
+                opt_read_sig: 1234
+            }
+            DoubleOption {}
+            DoubleOption { optional: Some(1234) }
+        }
+    }
+
+    // Test props as struct param.
+    #[derive(Props, Clone, PartialEq)]
+    struct MyTestProps {
+        pub optional_read_signal: ReadOnlySignal<Option<u16>>,
+        pub regular_read_signal: ReadOnlySignal<u16>,
+    }
+
+    #[component]
+    fn PropsStruct(props: MyTestProps) -> Element {
+        rsx! { "hi" }
+    }
+
+    // Test props as params.
+    #[component]
+    fn PropParams(opt_read_sig: ReadOnlySignal<Option<u16>>) -> Element {
+        rsx! { "hi!" }
+    }
+
+    #[component]
+    fn DoubleOption(optional: Option<Option<u16>>) -> Element {
+        rsx! { "hi!" }
+    }
+}
