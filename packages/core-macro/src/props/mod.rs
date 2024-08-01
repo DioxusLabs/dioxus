@@ -492,10 +492,20 @@ fn type_from_inside_option(ty: &syn::Type, check_option_name: bool) -> Option<&s
     } else {
         return None;
     };
+
+    let mut is_optional = false;
+    
+    // Check if last path segment is optional.
     let segment = path.segments.last()?;
-    if check_option_name && segment.ident != "Option" {
+    if segment.ident == "Option" {
+        is_optional = true;
+    }
+
+    // We didn't detect any supported optional props.
+    if check_option_name && !is_optional {
         return None;
     }
+
     let generic_params =
         if let syn::PathArguments::AngleBracketed(generic_params) = &segment.arguments {
             generic_params
