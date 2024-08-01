@@ -174,7 +174,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: "doc --lib --all-features"
         run: |
-          cargo doc --workspace --lib --no-deps --all-features --document-private-items
+          cargo doc --workspace --no-deps --all-features --document-private-items
         env:
           RUSTFLAGS: --cfg docsrs
           RUSTDOCFLAGS: --cfg docsrs -Dwarnings
