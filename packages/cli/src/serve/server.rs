@@ -361,21 +361,23 @@ fn setup_router(
         router = super::proxy::add_proxy(router, proxy_config)?;
     }
 
-    // Setup base path redirection
-    if let Some(base_path) = config.dioxus_config.web.app.base_path.clone() {
-        let base_path = format!("/{}", base_path.trim_matches('/'));
-        router = Router::new()
-            .nest(&base_path, router)
-            .fallback(get(move || async move {
-                format!("Outside of the base path: {}", base_path)
-            }));
-    }
-
     // server the dir if it's web, otherwise let the fullstack server itself handle it
     match platform {
         Platform::Web => {
             // Route file service to output the .wasm and assets if this is a web build
-            router = router.nest_service("/", build_serve_dir(serve, config));
+            let base_path = format!(
+                "/{}",
+                config
+                    .dioxus_config
+                    .web
+                    .app
+                    .base_path
+                    .as_deref()
+                    .unwrap_or_default()
+                    .trim_matches('/')
+            );
+
+            router = router.nest_service(&base_path, build_serve_dir(serve, config));
         }
         Platform::Fullstack | Platform::StaticGeneration => {
             // For fullstack and static generation, forward all requests to the server

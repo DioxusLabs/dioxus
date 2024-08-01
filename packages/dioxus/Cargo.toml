@@ -66,7 +66,7 @@ third-party-renderer = []
 futures-util = { workspace = true }
 tracing = { workspace = true }
 rand = { version = "0.8.4", features = ["small_rng"] }
-criterion = "0.3.5"
+criterion = { workspace = true }
 thiserror = { workspace = true }
 env_logger = "0.10.0"
 tokio = { workspace = true, features = ["full"] }
@@ -78,3 +78,15 @@ harness = false
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+features = [
+    "router",
+    "ssr",
+    "web",
+    "fullstack",
+    "signals",
+    "hooks",
+    "html",
+    "liveview",
+    "static-generation",
+    "axum"
+]

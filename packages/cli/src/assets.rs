@@ -43,17 +43,7 @@ pub(crate) fn process_assets(
     manifest: &AssetManifest,
     progress: &mut UnboundedSender<UpdateBuildProgress>,
 ) -> anyhow::Result<()> {
-    let static_asset_output_dir = PathBuf::from(
-        build
-            .dioxus_crate
-            .dioxus_config
-            .web
-            .app
-            .base_path
-            .clone()
-            .unwrap_or_default(),
-    );
-    let static_asset_output_dir = build.target_out_dir().join(static_asset_output_dir);
+    let static_asset_output_dir = build.target_out_dir();
 
     std::fs::create_dir_all(&static_asset_output_dir)
         .context("Failed to create static asset output directory")?;
@@ -105,10 +95,14 @@ pub(crate) fn process_assets(
 pub(crate) struct AssetConfigDropGuard;
 
 impl AssetConfigDropGuard {
-    pub fn new() -> Self {
+    pub fn new(base_path: Option<&str>) -> Self {
         // Set up the collect asset config
+        let base = match base_path {
+            Some(base) => format!("/{}/", base.trim_matches('/')),
+            None => "/".to_string(),
+        };
         manganis_cli_support::Config::default()
-            .with_assets_serve_location("/")
+            .with_assets_serve_location(&base)
             .save();
         Self {}
     }

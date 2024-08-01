@@ -213,6 +213,9 @@ mod field_info {
                 {
                     builder_attr.from_displayable = true;
                     // ToString is both more general and provides a more useful error message than From<String>. If the user tries to use `#[into]`, use ToString instead.
+                    if builder_attr.auto_into {
+                        builder_attr.auto_to_string = true;
+                    }
                     builder_attr.auto_into = false;
                 }
 
@@ -275,6 +278,7 @@ mod field_info {
         pub docs: Vec<syn::Attribute>,
         pub skip: bool,
         pub auto_into: bool,
+        pub auto_to_string: bool,
         pub from_displayable: bool,
         pub strip_option: bool,
         pub ignore_option: bool,
@@ -512,7 +516,7 @@ mod struct_info {
     use syn::parse::Error;
     use syn::punctuated::Punctuated;
     use syn::spanned::Spanned;
-    use syn::{Expr, Ident};
+    use syn::{parse_quote, Expr, Ident};
 
     use crate::props::strip_option;
 
@@ -1368,10 +1372,24 @@ Finally, call `.build()` to create the instance of `{name}`.
                 if !field.builder_attr.extends.is_empty() {
                     quote!(let #name = self.#name;)
                 } else if let Some(ref default) = field.builder_attr.default {
+
+                    // If field has `into`, apply it to the default value.
+                    // Ignore any blank defaults as it causes type inference errors.
+                    let is_default = *default == parse_quote!(::core::default::Default::default());
+                    let mut into = quote!{};
+
+                    if !is_default {
+                        if field.builder_attr.auto_into {
+                            into = quote!{ .into() }
+                        } else if field.builder_attr.auto_to_string {
+                            into = quote!{ .to_string() }
+                        }
+                    }
+
                     if field.builder_attr.skip {
-                        quote!(let #name = #default;)
+                        quote!(let #name = #default #into;)
                     } else {
-                        quote!(let #name = #helper_trait_name::into_value(#name, || #default);)
+                        quote!(let #name = #helper_trait_name::into_value(#name, || #default #into);)
                     }
                 } else {
                     quote!(let #name = #name.0;)

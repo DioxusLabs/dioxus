@@ -114,7 +114,8 @@ impl BuildRequest {
             &dioxus_version,
         );
         let _manganis_support = ManganisSupportGuard::default();
-        let _asset_guard = AssetConfigDropGuard::new();
+        let _asset_guard =
+            AssetConfigDropGuard::new(self.dioxus_crate.dioxus_config.web.app.base_path.as_deref());
 
         // If this is a web, build make sure we have the web build tooling set up
         if self.targeting_web() {
@@ -178,6 +179,25 @@ impl BuildRequest {
         }
 
         self.copy_assets_dir()?;
+
+        let assets = if !self.build_arguments.skip_assets {
+            let assets = asset_manifest(&self.dioxus_crate);
+            let dioxus_crate = self.dioxus_crate.clone();
+            let mut progress = progress.clone();
+            tokio::task::spawn_blocking(
+                move || -> Result<Option<manganis_cli_support::AssetManifest>> {
+                    // Collect assets
+                    process_assets(&dioxus_crate, &assets, &mut progress)?;
+                    // Create the __assets_head.html file for bundling
+                    create_assets_head(&dioxus_crate, &assets)?;
+                    Ok(Some(assets))
+                },
+            )
+            .await
+            .unwrap()?
+        } else {
+            None
+        };
 
         // Create the build result
         let build_result = BuildResult {

@@ -90,16 +90,26 @@ hot-reload = ["dep:dioxus-hot-reload", "dioxus-signals"]
 gnu = []
 
 [package.metadata.docs.rs]
-default-features = false
 features = ["tokio_runtime", "hot-reload"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+default-features = false
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+    "aarch64-apple-darwin",
+    "aarch64-apple-ios",
+    "aarch64-linux-android",
+    "armv7-linux-androideabi",
+]
+rustc-args = [ "--cfg", "docsrs" ]
+rustdoc-args = [ "--cfg", "docsrs" ]
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["desktop"] }
 exitcode = "1.1.2"
 reqwest = { workspace = true, features = ["json"] }
 http-range = { version = "0.1.5" }
-dioxus-ssr = { workspace = true, version = "0.5.0", default-features = false }
+dioxus-ssr = { workspace = true, default-features = false }
 separator = "0.4.1"
 rand = { version = "0.8.4", features = ["small_rng"] }
 

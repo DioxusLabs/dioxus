@@ -53,7 +53,7 @@ fullstack = ["dep:dioxus-fullstack"]
 axum = { workspace = true, features = ["ws"] }
 dioxus = { workspace = true, features = ["router"] }
 dioxus-ssr = { workspace = true }
-criterion = { version = "0.5", features = ["async_tokio", "html_reports"] }
+criterion = { workspace = true, features = ["async_tokio", "html_reports"] }
 ciborium = { version = "0.2.1" }
 base64 = { version = "0.21.0" }
 serde = { version = "1", features = ["derive"] }
