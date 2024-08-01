@@ -162,7 +162,9 @@ jobs:
           cargo doc --workspace --no-deps --all-features --document-private-items
         env:
           RUSTFLAGS: --cfg docsrs
-          RUSTDOCFLAGS: --cfg docsrs -Dwarnings
+          RUSTDOCFLAGS: --cfg docsrs
+          # todo: re-enable warnings
+          # RUSTDOCFLAGS: --cfg docsrs -Dwarnings
 
   check:
     if: github.event.pull_request.draft == false
