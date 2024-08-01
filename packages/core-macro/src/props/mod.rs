@@ -13,7 +13,7 @@ use syn::spanned::Spanned;
 use syn::{parse::Error, PathArguments};
 
 use quote::quote;
-use syn::{parse_quote, PathSegment, Type};
+use syn::{parse_quote, GenericArgument, PathSegment, Type};
 
 pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
     let data = match &ast.data {
@@ -481,8 +481,8 @@ mod field_info {
     }
 }
 
-fn type_from_inside_option(ty: &syn::Type) -> Option<&syn::Type> {
-    let syn::Type::Path(type_path) = ty else {
+fn type_from_inside_option(ty: &Type) -> Option<&Type> {
+    let Type::Path(type_path) = ty else {
         return None;
     };
 
@@ -516,12 +516,12 @@ fn type_from_inside_option(ty: &syn::Type) -> Option<&syn::Type> {
 }
 
 // Extract the inner type from a path segment.
-fn extract_inner_type_from_segment(segment: &PathSegment) -> Option<&syn::Type> {
-    let syn::PathArguments::AngleBracketed(generic_args) = &segment.arguments else {
+fn extract_inner_type_from_segment(segment: &PathSegment) -> Option<&Type> {
+    let PathArguments::AngleBracketed(generic_args) = &segment.arguments else {
         return None;
     };
 
-    let syn::GenericArgument::Type(final_type) = generic_args.args.first()? else {
+    let GenericArgument::Type(final_type) = generic_args.args.first()? else {
         return None;
     };
 
