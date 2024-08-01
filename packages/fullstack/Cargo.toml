@@ -63,6 +63,8 @@ web-sys = { version = "0.3.61", optional = true, features = ["Window", "Document
 dioxus-cli-config = { workspace = true, features = ["read-config"], optional = true }
 clap = { version = "4.5.7", optional = true, features = ["derive"] }
 
+aws-lc-rs = { version = "1.8.1", optional = true }
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { workspace = true, features = ["rt", "sync"], optional = true }
 
@@ -85,7 +87,6 @@ desktop = ["dep:dioxus-desktop", "server_fn/reqwest", "dioxus_server_macro/reqwe
 mobile = ["dep:dioxus-mobile"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls", "dep:rustls", "dep:hyper-rustls"]
-rustls_fips = ["rustls?/fips"]
 axum = ["dep:axum", "dep:tower-http", "server", "server_fn/axum", "dioxus_server_macro/axum", "default-tls"]
 server = [
     "server_fn/ssr",
@@ -112,4 +113,4 @@ server = [
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
-features = ["axum", "web"]
+features = ["axum", "web", "dep:aws-lc-rs"]
