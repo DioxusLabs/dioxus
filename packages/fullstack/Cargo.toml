@@ -85,6 +85,7 @@ desktop = ["dep:dioxus-desktop", "server_fn/reqwest", "dioxus_server_macro/reqwe
 mobile = ["dep:dioxus-mobile"]
 default-tls = ["server_fn/default-tls"]
 rustls = ["server_fn/rustls", "dep:rustls", "dep:hyper-rustls"]
+rustls_fips = ["rustls?/fips"]
 axum = ["dep:axum", "dep:tower-http", "server", "server_fn/axum", "dioxus_server_macro/axum", "default-tls"]
 server = [
     "server_fn/ssr",
