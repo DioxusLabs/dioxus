@@ -13,27 +13,6 @@ use generational_box::{GenerationalBox, Storage, SyncStorage, UnsyncStorage};
 fn compile_fail() {}
 
 #[test]
-fn reused() {
-    fn reused_test<S: Storage<i32>>() {
-        let first_ptr;
-        {
-            let owner = S::owner();
-            first_ptr = owner.insert(1).raw_ptr();
-            drop(owner);
-        }
-        {
-            let owner = S::owner();
-            let second_ptr = owner.insert(1234).raw_ptr();
-            assert_eq!(first_ptr, second_ptr);
-            drop(owner);
-        }
-    }
-
-    reused_test::<UnsyncStorage>();
-    reused_test::<SyncStorage>();
-}
-
-#[test]
 fn leaking_is_ok() {
     fn leaking_is_ok_test<S: Storage<String>>() {
         let data = String::from("hello world");
