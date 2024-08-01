@@ -21,7 +21,7 @@ sqlx = { version = "0.7.0", features = [
     "postgres",
     "sqlite",
     "_unstable-all-types",
-    "tls-rustls",
+    "tls-native-tls",
     "runtime-tokio",
 ], optional = true }
 http = { workspace = true, optional = true }

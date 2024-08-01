@@ -49,6 +49,8 @@ futures-util = { workspace = true }
 futures-channel = { workspace = true }
 ciborium = { workspace = true }
 base64 = { workspace = true }
+rustls = { workspace = true, optional = true }
+hyper-rustls = { workspace = true, optional = true }
 
 pin-project = { version = "1.1.2", optional = true }
 thiserror = { workspace = true, optional = true }
@@ -60,6 +62,8 @@ web-sys = { version = "0.3.61", optional = true, features = ["Window", "Document
 
 dioxus-cli-config = { workspace = true, features = ["read-config"], optional = true }
 clap = { version = "4.5.7", optional = true, features = ["derive"] }
+
+aws-lc-rs = { version = "1.8.1", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { workspace = true, features = ["rt", "sync"], optional = true }
@@ -82,7 +86,7 @@ web = ["dep:dioxus-web", "dep:web-sys"]
 desktop = ["dep:dioxus-desktop", "server_fn/reqwest", "dioxus_server_macro/reqwest"]
 mobile = ["dep:dioxus-mobile"]
 default-tls = ["server_fn/default-tls"]
-rustls = ["server_fn/rustls"]
+rustls = ["server_fn/rustls", "dep:rustls", "dep:hyper-rustls"]
 axum = ["dep:axum", "dep:tower-http", "server", "server_fn/axum", "dioxus_server_macro/axum", "default-tls"]
 server = [
     "server_fn/ssr",
@@ -109,4 +113,4 @@ server = [
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
-features = ["axum", "web"]
+features = ["axum", "web", "dep:aws-lc-rs"]

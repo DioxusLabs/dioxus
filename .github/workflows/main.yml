@@ -38,23 +38,10 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
+  RUST_BACKTRACE: 1
+  rust_nightly: nightly-2024-07-01
 
 jobs:
-  check:
-    if: github.event.pull_request.draft == false
-    name: Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: sudo apt-get update
-      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo check --all --examples --tests --all-features --all-targets
-
   check-msrv:
     if: github.event.pull_request.draft == false
     name: Check MSRV
@@ -148,6 +135,45 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check for typos
         uses: crate-ci/typos@master
+
+  docs:
+    if: github.event.pull_request.draft == false
+    name: Docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust ${{ env.rust_nightly }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.rust_nightly }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: "doc --lib --all-features"
+        run: |
+          cargo doc --workspace --no-deps --all-features --document-private-items
+        env:
+          RUSTFLAGS: --cfg docsrs
+          RUSTDOCFLAGS: --cfg docsrs
+          # todo: re-enable warnings
+          # RUSTDOCFLAGS: --cfg docsrs -Dwarnings
+
+  check:
+    if: github.event.pull_request.draft == false
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update
+      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: cargo check --workspace --all-features --all-targets
+
   clippy:
     if: github.event.pull_request.draft == false
     name: Clippy
