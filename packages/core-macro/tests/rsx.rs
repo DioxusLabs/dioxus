@@ -65,7 +65,9 @@ mod test_optional_signals {
     #[component]
     fn UsesComponents() -> Element {
         rsx! {
-            PropsStruct {}
+            PropsStruct {
+                regular_read_signal: ReadOnlySignal::new(Signal::new(1234)),
+            }
             PropParams {}
         }
     }
@@ -74,6 +76,7 @@ mod test_optional_signals {
     #[derive(Props, Clone, PartialEq)]
     struct MyTestProps {
         pub optional_read_signal: ReadOnlySignal<Option<u16>>,
+        pub regular_read_signal: ReadOnlySignal<u16>,
     }
 
     #[component]

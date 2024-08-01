@@ -507,7 +507,8 @@ fn type_from_inside_option(ty: &Type) -> Option<&Type> {
             // Get the innermost type.
             let innermost_type = extract_inner_type_from_segment(inner_seg)?;
             return Some(innermost_type);
-        } else {
+        } else if seg.ident == "Option" {
+            // Return the inner type only if the parent is an `Option`.
             return Some(inner_type);
         }
     }
