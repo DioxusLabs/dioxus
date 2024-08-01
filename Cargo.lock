@@ -2578,6 +2578,7 @@ dependencies = [
  "futures-util",
  "generational-box",
  "longest-increasing-subsequence",
+ "manganis",
  "pretty_assertions",
  "rand 0.8.5",
  "reqwest 0.12.5",

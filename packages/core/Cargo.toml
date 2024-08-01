@@ -25,6 +25,7 @@ generational-box = { workspace = true }
 rustversion = "1.0.17"
 const_format = { workspace = true }
 warnings = { workspace = true }
+manganis = { workspace = true, default-features = false, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
@@ -47,6 +48,7 @@ features = [
 
 [features]
 serialize = ["dep:serde"]
+manganis = ["dep:manganis"]
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
