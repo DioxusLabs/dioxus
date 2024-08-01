@@ -124,6 +124,7 @@ notify = { version = "6.1.1" }
 tower-http = "0.5.2"
 hyper = "1.0.0"
 hyper-rustls = { version= "0.27.2", default-features = false , features=["native-tokio","http1","tls12","logging","ring"]}
+rustls = { version="0.23.11", default-features=false, features =["logging","std","tls12","ring"] }
 serde_json = "1.0.61"
 serde = "1.0.61"
 syn = "2.0"
