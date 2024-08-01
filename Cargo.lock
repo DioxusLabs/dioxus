@@ -2407,7 +2407,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "axum 0.7.5",
  "criterion",
@@ -2439,7 +2439,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-autofmt"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "dioxus-rsx",
  "pretty_assertions",
@@ -2452,7 +2452,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-check"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "indoc",
  "owo-colors",
@@ -2464,7 +2464,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-cli"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "ansi-to-html",
  "ansi-to-tui",
@@ -2543,7 +2543,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-cli-config"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "built",
  "cargo_toml",
@@ -2560,7 +2560,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-config-macro"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2568,7 +2568,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-core"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "const_format",
  "dioxus",
@@ -2596,7 +2596,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-core-macro"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "convert_case 0.6.0",
  "dioxus",
@@ -2613,7 +2613,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-desktop"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "async-trait",
  "cocoa",
@@ -2681,7 +2681,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-ext"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "dioxus-autofmt",
  "html_parser",
@@ -2692,7 +2692,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-fullstack"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "async-trait",
  "aws-lc-rs",
@@ -2750,7 +2750,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-hooks"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "dioxus",
  "dioxus-core",
@@ -2769,7 +2769,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-hot-reload"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "chrono",
  "dioxus-cli-config",
@@ -2792,7 +2792,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-html"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "async-trait",
  "dioxus",
@@ -2823,7 +2823,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-html-internal-macro"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2",
@@ -2834,7 +2834,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-interpreter-js"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "dioxus-core",
  "dioxus-html",
@@ -2850,7 +2850,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-lib"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "dioxus",
  "dioxus-config-macro",
@@ -2864,7 +2864,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-liveview"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "axum 0.7.5",
  "dioxus",
@@ -2891,7 +2891,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-mobile"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "dioxus-desktop",
 ]
@@ -2945,7 +2945,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-router"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "axum 0.7.5",
  "base64 0.21.7",
@@ -2978,7 +2978,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-router-macro"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "dioxus",
  "proc-macro2",
@@ -2989,7 +2989,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-rsx"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "dioxus-core",
  "internment",
@@ -3005,7 +3005,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-signals"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "dioxus",
  "dioxus-core",
@@ -3027,7 +3027,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-ssr"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "anyhow",
  "argh",
@@ -3055,7 +3055,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-static-site-generation"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "axum 0.7.5",
  "criterion",
@@ -3084,7 +3084,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-web"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "ciborium",
  "console_error_panic_hook",
@@ -3116,7 +3116,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus_server_macro"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "convert_case 0.6.0",
  "proc-macro2",
@@ -3937,7 +3937,7 @@ dependencies = [
 
 [[package]]
 name = "generational-box"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "criterion",
  "parking_lot",
@@ -5719,7 +5719,7 @@ dependencies = [
 
 [[package]]
 name = "lazy-js-bundle"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 
 [[package]]
 name = "lazy_static"
@@ -8267,7 +8267,7 @@ dependencies = [
 
 [[package]]
 name = "rsx-rosetta"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "convert_case 0.6.0",
  "dioxus-autofmt",
@@ -9539,7 +9539,7 @@ dependencies = [
 
 [[package]]
 name = "suspense-carousel"
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 dependencies = [
  "async-std",
  "dioxus",

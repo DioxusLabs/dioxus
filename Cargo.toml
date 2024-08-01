@@ -59,7 +59,7 @@ members = [
 exclude = ["examples/mobile_demo", "examples/openid_connect_demo"]
 
 [workspace.package]
-version = "0.6.0-alpha.0"
+version = "0.6.0-alpha.1"
 
 # dependencies that are shared across packages
 [workspace.dependencies]
@@ -87,7 +87,7 @@ dioxus-signals = { path = "packages/signals", version = "0.6.0-alpha.0" }
 dioxus-cli-config = { path = "packages/cli-config", version = "0.6.0-alpha.0", default-features = false}
 generational-box = { path = "packages/generational-box", version = "0.6.0-alpha.0" }
 dioxus-hot-reload = { path = "packages/hot-reload", version = "0.6.0-alpha.0" }
-dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-alpha.0" }
+dioxus-fullstack = { path = "packages/fullstack", version = "0.6.0-alpha.1" }
 dioxus-static-site-generation = { path = "packages/static-generation", version = "0.6.0-alpha.0" }
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.0", default-features = false }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.0" }

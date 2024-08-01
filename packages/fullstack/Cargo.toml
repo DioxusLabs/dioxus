@@ -110,7 +110,8 @@ server = [
     "dep:clap",
     "dioxus-cli-config/read-from-args",
 ]
+aws-lc-rs = ["dep:aws-lc-rs"]
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
-features = ["axum", "web", "dep:aws-lc-rs"]
+features = ["axum", "web", "aws-lc-rs"]
