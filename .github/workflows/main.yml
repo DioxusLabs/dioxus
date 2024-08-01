@@ -38,15 +38,8 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
-  # RUSTFLAGS: -Dwarnings
   RUST_BACKTRACE: 1
-  RUSTUP_WINDOWS_PATH_ADD_BIN: 1
-  # Change to specific Rust release to pin
-  rust_stable: stable
   rust_nightly: nightly-2024-07-01
-  rust_clippy: "1.79"
-  # When updating this, also update relevant msrvs (readme, cargo.toml etc):
-  rust_min: "1.79.0"
 
 jobs:
   check-msrv:
