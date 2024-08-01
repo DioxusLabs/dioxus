@@ -49,21 +49,6 @@ env:
   rust_min: "1.79.0"
 
 jobs:
-  check:
-    if: github.event.pull_request.draft == false
-    name: Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: sudo apt-get update
-      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo check --workspace --all-features --all-targets
-
   check-msrv:
     if: github.event.pull_request.draft == false
     name: Check MSRV
@@ -178,6 +163,21 @@ jobs:
         env:
           RUSTFLAGS: --cfg docsrs
           RUSTDOCFLAGS: --cfg docsrs -Dwarnings
+
+  check:
+    if: github.event.pull_request.draft == false
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update
+      - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: cargo check --workspace --all-features --all-targets
 
   clippy:
     if: github.event.pull_request.draft == false
@@ -354,5 +354,4 @@ jobs:
 
       - name: test
         run: |
-          ${{ env.RUST_CARGO_COMMAND }} check --workspace --all-features --all-targets --target ${{ matrix.platform.target }}
           ${{ env.RUST_CARGO_COMMAND }} ${{ matrix.platform.command }} ${{ matrix.platform.args }} --target ${{ matrix.platform.target }}
