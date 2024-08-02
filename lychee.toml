@@ -1,2 +1,3 @@
 # This is the configuration file for lychee, a link validator.
 exclude = [".*\\/*\\/CHANGELOG\\.md$", "file:///"]
+exclude_path = ["./**/CHANGELOG.md"]
