@@ -8,7 +8,7 @@
 [crates-badge]: https://img.shields.io/crates/v/dioxus-hot-reload.svg
 [crates-url]: https://crates.io/crates/dioxus-hot-reload
 [mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
-[mit-url]: https://github.com/dioxuslabs/dioxus/blob/master/LICENSE
+[mit-url]: https://github.com/dioxuslabs/dioxus/blob/main/LICENSE-MIT
 [actions-badge]: https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg
 [actions-url]: https://github.com/dioxuslabs/dioxus/actions?query=workflow%3ACI+branch%3Amaster
 [discord-badge]: https://img.shields.io/discord/899851952891002890.svg?logo=discord&style=flat-square
@@ -164,7 +164,7 @@ async fn launch(app: Component) {
 
 This project is licensed under the [MIT license].
 
-[mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
+[mit license]: https://github.com/dioxuslabs/dioxus/blob/main/LICENSE-MIT
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in Dioxus by you shall be licensed as MIT without any additional

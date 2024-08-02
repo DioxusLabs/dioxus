@@ -40,11 +40,11 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/example-projects"> Exemplos </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/guide/pt-br"> Guia </a>
+    <a href="https://dioxuslabs.com/learn"> Guia </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/master/notes/README/ZH_CN.md"> 中文 </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/zh-cn/README.md"> 中文 </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/master/translations/ja-jp/README.md"> 日本語 </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/ja-jp/README.md"> 日本語 </a>
   </h3>
 </div>
 
@@ -85,11 +85,11 @@ Se você conhece React, então você já conhece o Dioxus.
 
 <table style="width:100%" align="center">
     <tr>
-        <th><a href="https://dioxuslabs.com/guide/pt-br/">Tutorial</a></th>
-        <th><a href="https://dioxuslabs.com/reference/web">Web</a></th>
-        <th><a href="https://dioxuslabs.com/reference/desktop/">Desktop</a></th>
-        <th><a href="https://dioxuslabs.com/reference/ssr/">SSR</a></th>
-        <th><a href="https://dioxuslabs.com/reference/mobile/">Móvel</a></th>
+        <th><a href="https://dioxuslabs.com/learn">Tutorial</a></th>
+        <th><a href="https://dioxuslabs.com/learn/0.5/reference/web">Web</a></th>
+        <th><a href="https://dioxuslabs.com/learn/0.5/reference/desktop">Desktop</a></th>
+        <th><a href="https://dioxuslabs.com/learn/0.5/reference/ssr">SSR</a></th>
+        <th><a href="https://dioxuslabs.com/learn/0.5/reference/mobile">Móvel</a></th>
     <tr>
 </table>
 
@@ -97,7 +97,7 @@ Se você conhece React, então você já conhece o Dioxus.
 
 | Navegador de Arquivos (Desktop)                                                                                                                                                          | WiFi Scanner (Desktop)                                                                                                                                                                 | TodoMVC (Todas as Plataformas)                                                                                                                                          | E-commerce com Tailwind (SSR/LiveView)                                                                                                                                                   |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [![Explorador de Arquivos](https://github.com/DioxusLabs/example-projects/raw/master/file-explorer/image.png)](https://github.com/DioxusLabs/example-projects/blob/master/file-explorer) | [![Wifi Scanner Demo](https://github.com/DioxusLabs/example-projects/raw/master/wifi-scanner/demo_small.png)](https://github.com/DioxusLabs/example-projects/blob/master/wifi-scanner) | [![TodoMVC example](https://github.com/DioxusLabs/example-projects/raw/master/todomvc/example.png)](https://github.com/DioxusLabs/example-projects/blob/master/todomvc) | [![Exemplo de E-commerce](https://github.com/DioxusLabs/example-projects/raw/master/ecommerce-site/demo.png)](https://github.com/DioxusLabs/example-projects/blob/master/ecommerce-site) |
+| [![Explorador de Arquivos](https://github.com/DioxusLabs/example-projects/blob/master/file-explorer/assets/image.png)](https://github.com/DioxusLabs/example-projects/blob/master/file-explorer) | [![Wifi Scanner Demo](https://github.com/DioxusLabs/example-projects/raw/master/wifi-scanner/demo_small.png)](https://github.com/DioxusLabs/example-projects/blob/master/wifi-scanner) | [![TodoMVC example](https://github.com/DioxusLabs/example-projects/raw/master/todomvc/example.png)](https://github.com/DioxusLabs/example-projects/blob/master/todomvc) | [![Exemplo de E-commerce](https://github.com/DioxusLabs/example-projects/raw/master/ecommerce-site/demo.png)](https://github.com/DioxusLabs/example-projects/blob/master/ecommerce-site) |
 
 Veja a página [awesome-dioxus](https://github.com/DioxusLabs/awesome-dioxus) para uma lista curada do conteúdo dentro do ecossistema do Dioxus.
 
