@@ -175,7 +175,7 @@ jobs:
       - name: Run lychee
         uses: lycheeverse/lychee-action@v1
         with:
-          args: --base . --cache --max-cache-age 30d --no-progress './**/*.md'
+          args: --base . --config ./lychee.toml './**/*.md'
           fail: true
 
   check:

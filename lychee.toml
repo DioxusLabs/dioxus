@@ -1,3 +1,6 @@
 # This is the configuration file for lychee, a link validator.
-exclude = [".*\\/*\\/CHANGELOG\\.md$", "file:///"]
-exclude_path = ["./**/CHANGELOG.md"]
+exclude = ['file:///']
+exclude_path = ['.*CHANGELOG\.md']
+no_progress = true
+cache = true
+max_cache_age = "10d"
