@@ -511,6 +511,18 @@ impl ScopeId {
             .flatten()
     }
 
+    /// Check if the current scope is a descendant of the given scope
+    pub fn is_descendant_of(self, other: ScopeId) -> bool {
+        let mut current = self;
+        while let Some(parent) = current.parent_scope() {
+            if parent == other {
+                return true;
+            }
+            current = parent;
+        }
+        false
+    }
+
     /// Mark the current scope as dirty, causing it to re-render
     pub fn needs_update(self) {
         Runtime::with_scope(self, |cx| cx.needs_update()).unwrap();

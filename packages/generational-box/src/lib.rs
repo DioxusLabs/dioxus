@@ -115,6 +115,18 @@ impl<T, S: Storage<T>> GenerationalBox<T, S> {
     {
         self.raw.take()
     }
+
+    /// Try to get the location the generational box was created at. In release mode this will always return None.
+    pub fn created_at(&self) -> Option<&'static std::panic::Location<'static>> {
+        #[cfg(debug_assertions)]
+        {
+            Some(self.raw.location.created_at)
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            None
+        }
+    }
 }
 
 impl<T, S> Copy for GenerationalBox<T, S> {}
