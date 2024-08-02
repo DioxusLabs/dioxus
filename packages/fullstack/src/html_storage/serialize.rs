@@ -28,11 +28,10 @@ impl super::HTMLData {
         let mut data = Self::default();
         // If there is an error boundary on the suspense boundary, grab the error from the context API
         // and throw it on the client so that it bubbles up to the nearest error boundary
-        let mut error = None;
-        vdom.in_runtime(|| {
-            if let Some(error_context) = scope.consume_context::<ErrorContext>() {
-                error = error_context.errors().first().cloned();
-            }
+        let mut error = vdom.in_runtime(|| {
+            scope
+                .consume_context::<ErrorContext>()
+                .and_then(|error_context| error_context.errors().first().cloned())
         });
         data.push(&error);
         data.take_from_scope(vdom, scope);

@@ -1,5 +1,5 @@
 //! A shared pool of renderers for efficient server side rendering.
-use crate::streaming::StreamingRenderer;
+use crate::streaming::{Mount, StreamingRenderer};
 use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
 use dioxus_ssr::{
     incremental::{CachedRender, RenderFreshness},
@@ -15,6 +15,13 @@ use tokio::task::JoinHandle;
 use crate::prelude::*;
 use dioxus_lib::prelude::*;
 
+/// A suspense boundary that is pending with a placeholder in the client
+struct PendingSuspenseBoundary {
+    mount: Mount,
+    children: Vec<ScopeId>,
+}
+
+/// Spawn a task in the background. If wasm is enabled, this will use the single threaded tokio runtime
 fn spawn_platform<Fut>(f: impl FnOnce() -> Fut + Send + 'static) -> JoinHandle<Fut::Output>
 where
     Fut: Future + 'static,
@@ -56,6 +63,7 @@ impl SsrRendererPool {
         }
     }
 
+    /// Look for a cached route in the incremental cache and send it into the render channel if it exists
     fn check_cached_route(
         &self,
         route: &str,
@@ -91,6 +99,8 @@ impl SsrRendererPool {
         None
     }
 
+    /// Render a virtual dom into a stream. This method will return immediately and continue streaming the result in the background
+    /// The streaming is canceled when the stream the function returns is dropped
     async fn render_to(
         self: Arc<Self>,
         cfg: &ServeConfig,
@@ -181,6 +191,9 @@ impl SsrRendererPool {
             {
                 let scope_to_mount_mapping = scope_to_mount_mapping.clone();
                 let stream = stream.clone();
+                // We use a stack to keep track of what suspense boundaries we are nested in to add children to the correct boundary
+                // The stack starts with the root scope because the root is a suspense boundary
+                let pending_suspense_boundaries_stack = RwLock::new(vec![]);
                 renderer.set_render_components(move |renderer, to, vdom, scope| {
                     let is_suspense_boundary =
                         SuspenseContext::downcast_suspense_boundary_from_scope(
@@ -191,10 +204,47 @@ impl SsrRendererPool {
                         .is_some();
                     if is_suspense_boundary {
                         let mount = stream.render_placeholder(
-                            |to| renderer.render_scope(to, vdom, scope),
+                            |to| {
+                                {
+                                    pending_suspense_boundaries_stack
+                                        .write()
+                                        .unwrap()
+                                        .push(scope);
+                                }
+                                let out = renderer.render_scope(to, vdom, scope);
+                                {
+                                    pending_suspense_boundaries_stack.write().unwrap().pop();
+                                }
+                                out
+                            },
                             &mut *to,
                         )?;
-                        scope_to_mount_mapping.write().unwrap().insert(scope, mount);
+                        // Add the suspense boundary to the list of pending suspense boundaries
+                        // We will replace the mount with the resolved contents later once the suspense boundary is resolved
+                        let mut scope_to_mount_mapping_write =
+                            scope_to_mount_mapping.write().unwrap();
+                        scope_to_mount_mapping_write.insert(
+                            scope,
+                            PendingSuspenseBoundary {
+                                mount,
+                                children: vec![],
+                            },
+                        );
+                        // Add the scope to the list of children of the parent suspense boundary
+                        let pending_suspense_boundaries_stack =
+                            pending_suspense_boundaries_stack.read().unwrap();
+                        // If there is a parent suspense boundary, add the scope to the list of children
+                        // This suspense boundary will start capturing errors when the parent is resolved
+                        if let Some(parent) = pending_suspense_boundaries_stack.last() {
+                            let parent = scope_to_mount_mapping_write.get_mut(parent).unwrap();
+                            parent.children.push(scope);
+                        }
+                        // Otherwise this is a root suspense boundary, so we need to start capturing errors immediately
+                        else {
+                            vdom.in_runtime(|| {
+                                start_capturing_errors(scope);
+                            });
+                        }
                     } else {
                         renderer.render_scope(to, vdom, scope)?
                     }
@@ -233,12 +283,12 @@ impl SsrRendererPool {
 
                 // Just rerender the resolved nodes
                 for scope in resolved_suspense_nodes {
-                    let mount = {
+                    let pending_suspense_boundary = {
                         let mut lock = scope_to_mount_mapping.write().unwrap();
                         lock.remove(&scope)
                     };
                     // If the suspense boundary was immediately removed, it may not have a mount. We can just skip resolving it
-                    if let Some(mount) = mount {
+                    if let Some(pending_suspense_boundary) = pending_suspense_boundary {
                         let mut resolved_chunk = String::new();
                         // After we replace the placeholder in the dom with javascript, we need to send down the resolved data so that the client can hydrate the node
                         let render_suspense = |into: &mut String| {
@@ -247,7 +297,7 @@ impl SsrRendererPool {
                         };
                         let resolved_data = serialize_server_data(&virtual_dom, scope);
                         if let Err(err) = stream.replace_placeholder(
-                            mount,
+                            pending_suspense_boundary.mount,
                             render_suspense,
                             resolved_data,
                             &mut resolved_chunk,
@@ -258,43 +308,22 @@ impl SsrRendererPool {
                         }
 
                         stream.render(resolved_chunk);
-                    }
-                    // Freeze the suspense boundary to prevent future reruns of any child nodes of the suspense boundary
-                    if let Some(suspense) = SuspenseContext::downcast_suspense_boundary_from_scope(
-                        &virtual_dom.runtime(),
-                        scope,
-                    ) {
-                        suspense.freeze();
-                        // Go to every child suspense boundary and add an error boundary. Since we cannot rerun any nodes above the child suspense boundary,
-                        // we need to capture the errors and send them to the client as it resolves
-                        let lock = scope_to_mount_mapping.read().unwrap();
-                        virtual_dom.in_runtime(|| {
-                            'suspended: for &suspense_scope in lock.keys() {
-                                // Make sure the scope id is under the resolved scope
-                                if suspense_scope.height() < scope.height() {
-                                    continue;
+                        // Freeze the suspense boundary to prevent future reruns of any child nodes of the suspense boundary
+                        if let Some(suspense) =
+                            SuspenseContext::downcast_suspense_boundary_from_scope(
+                                &virtual_dom.runtime(),
+                                scope,
+                            )
+                        {
+                            suspense.freeze();
+                            // Go to every child suspense boundary and add an error boundary. Since we cannot rerun any nodes above the child suspense boundary,
+                            // we need to capture the errors and send them to the client as it resolves
+                            virtual_dom.in_runtime(|| {
+                                for &suspense_scope in pending_suspense_boundary.children.iter() {
+                                    start_capturing_errors(suspense_scope);
                                 }
-                                let mut current = suspense_scope;
-                                loop {
-                                    // We reached the resolved scope, so we're done
-                                    if current == scope {
-                                        break;
-                                    }
-                                    let next = current.parent_scope();
-                                    // We reached the root scope, without reaching the resolved scope. It isn't a child scope
-                                    match next {
-                                        Some(next) => {
-                                            current = next;
-                                        }
-                                        None => {
-                                            continue 'suspended;
-                                        }
-                                    }
-                                }
-                                // Add an error boundary to the scope
-                                suspense_scope.in_runtime(provide_error_boundary);
-                            }
-                        });
+                            });
+                        }
                     }
                 }
             }
@@ -333,6 +362,13 @@ impl SsrRendererPool {
             },
         ))
     }
+}
+
+/// Start capturing errors at a suspense boundary. If the parent suspense boundary is frozen, we need to capture the errors in the suspense boundary
+/// and send them to the client to continue bubbling up
+fn start_capturing_errors(suspense_scope: ScopeId) {
+    // Add an error boundary to the scope
+    suspense_scope.in_runtime(provide_error_boundary);
 }
 
 fn serialize_server_data(virtual_dom: &VirtualDom, scope: ScopeId) -> String {

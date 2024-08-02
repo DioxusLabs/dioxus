@@ -31,5 +31,5 @@ test("hydration", async ({ page }) => {
 
   // Make sure the error that was thrown on the server is shown in the error boundary on the client
   const errors = page.locator("#errors");
-  await expect(errors).toContainText("the server threw an error!");
+  await expect(errors).toContainText("Hmm, something went wrong.");
 });
