@@ -1,7 +1,7 @@
 use dioxus_rsx::CallBody;
 use quote::ToTokens;
 
-use dioxus_rsx::PrettyUnparse;
+use prettier_please::PrettyUnparse;
 
 #[test]
 fn callbody_ctx() {

@@ -341,139 +341,145 @@ fn normalize_path(name: &mut syn::Path) -> Option<AngleBracketedGenericArguments
     generics
 }
 
-/// Ensure we can parse a component
-#[test]
-fn parses() {
-    let input = quote! {
-        MyComponent {
-            key: "value {something}",
-            prop: "value",
-            ..props,
-            div {
-                "Hello, world!"
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use prettier_please::PrettyUnparse;
+
+    /// Ensure we can parse a component
+    #[test]
+    fn parses() {
+        let input = quote! {
+            MyComponent {
+                key: "value {something}",
+                prop: "value",
+                ..props,
+                div {
+                    "Hello, world!"
+                }
             }
-        }
-    };
+        };
 
-    let component: Component = syn::parse2(input).unwrap();
+        let component: Component = syn::parse2(input).unwrap();
 
-    dbg!(component);
+        dbg!(component);
 
-    let input_without_manual_props = quote! {
-        MyComponent {
-            key: "value {something}",
-            prop: "value",
-            div { "Hello, world!" }
-        }
-    };
-
-    let component: Component = syn::parse2(input_without_manual_props).unwrap();
-    dbg!(component);
-}
-
-/// Ensure we reject invalid forms
-///
-/// Maybe want to snapshot the errors?
-#[test]
-fn rejects() {
-    let input = quote! {
-        myComponent {
-            key: "value",
-            prop: "value",
-            prop: "other",
-            ..props,
-            ..other_props,
-            div {
-                "Hello, world!"
+        let input_without_manual_props = quote! {
+            MyComponent {
+                key: "value {something}",
+                prop: "value",
+                div { "Hello, world!" }
             }
-        }
-    };
+        };
 
-    let component: Component = syn::parse2(input).unwrap();
-    dbg!(component.diagnostics);
-}
+        let component: Component = syn::parse2(input_without_manual_props).unwrap();
+        dbg!(component);
+    }
 
-#[test]
-fn to_tokens_properly() {
-    let input = quote! {
-        MyComponent {
-            key: "value {something}",
-            prop: "value",
-            prop: "value",
-            prop: "value",
-            prop: "value",
-            prop: 123,
-            ..props,
-            div { "Hello, world!" }
-        }
-    };
+    /// Ensure we reject invalid forms
+    ///
+    /// Maybe want to snapshot the errors?
+    #[test]
+    fn rejects() {
+        let input = quote! {
+            myComponent {
+                key: "value",
+                prop: "value",
+                prop: "other",
+                ..props,
+                ..other_props,
+                div {
+                    "Hello, world!"
+                }
+            }
+        };
 
-    let component: Component = syn::parse2(input).unwrap();
-    println!("{}", component.to_token_stream());
-}
+        let component: Component = syn::parse2(input).unwrap();
+        dbg!(component.diagnostics);
+    }
 
-#[test]
-fn to_tokens_no_manual_props() {
-    let input_without_manual_props = quote! {
-        MyComponent {
-            key: "value {something}",
-            named: "value {something}",
-            prop: "value",
-            count: 1,
-            div { "Hello, world!" }
-        }
-    };
-    let component: Component = syn::parse2(input_without_manual_props).unwrap();
-    println!("{}", component.to_token_stream().pretty_unparse());
-}
+    #[test]
+    fn to_tokens_properly() {
+        let input = quote! {
+            MyComponent {
+                key: "value {something}",
+                prop: "value",
+                prop: "value",
+                prop: "value",
+                prop: "value",
+                prop: 123,
+                ..props,
+                div { "Hello, world!" }
+            }
+        };
 
-#[test]
-fn generics_params() {
-    let input_without_children = quote! {
-         Outlet::<R> {}
-    };
-    let component: crate::CallBody = syn::parse2(input_without_children).unwrap();
-    println!("{}", component.to_token_stream().pretty_unparse());
-}
+        let component: Component = syn::parse2(input).unwrap();
+        println!("{}", component.to_token_stream());
+    }
 
-#[test]
-fn generics_no_fish() {
-    let name = quote! { Outlet<R> };
-    let mut p = syn::parse2::<syn::Path>(name).unwrap();
-    let generics = normalize_path(&mut p);
-    assert!(generics.is_some());
+    #[test]
+    fn to_tokens_no_manual_props() {
+        let input_without_manual_props = quote! {
+            MyComponent {
+                key: "value {something}",
+                named: "value {something}",
+                prop: "value",
+                count: 1,
+                div { "Hello, world!" }
+            }
+        };
+        let component: Component = syn::parse2(input_without_manual_props).unwrap();
+        println!("{}", component.to_token_stream().pretty_unparse());
+    }
 
-    let input_without_children = quote! {
-        div {
-            Component<Generic> {}
-        }
-    };
-    let component: BodyNode = syn::parse2(input_without_children).unwrap();
-    println!("{}", component.to_token_stream().pretty_unparse());
-}
+    #[test]
+    fn generics_params() {
+        let input_without_children = quote! {
+             Outlet::<R> {}
+        };
+        let component: crate::CallBody = syn::parse2(input_without_children).unwrap();
+        println!("{}", component.to_token_stream().pretty_unparse());
+    }
 
-#[test]
-fn fmt_passes_properly() {
-    let input = quote! {
-        Link { to: Route::List, class: "pure-button", "Go back" }
-    };
+    #[test]
+    fn generics_no_fish() {
+        let name = quote! { Outlet<R> };
+        let mut p = syn::parse2::<syn::Path>(name).unwrap();
+        let generics = normalize_path(&mut p);
+        assert!(generics.is_some());
 
-    let component: Component = syn::parse2(input).unwrap();
+        let input_without_children = quote! {
+            div {
+                Component<Generic> {}
+            }
+        };
+        let component: BodyNode = syn::parse2(input_without_children).unwrap();
+        println!("{}", component.to_token_stream().pretty_unparse());
+    }
 
-    println!("{}", component.to_token_stream().pretty_unparse());
-}
+    #[test]
+    fn fmt_passes_properly() {
+        let input = quote! {
+            Link { to: Route::List, class: "pure-button", "Go back" }
+        };
 
-#[test]
-fn incomplete_components() {
-    let input = quote::quote! {
-        some::cool::Component
-    };
+        let component: Component = syn::parse2(input).unwrap();
 
-    let _parsed: Component = syn::parse2(input).unwrap();
+        println!("{}", component.to_token_stream().pretty_unparse());
+    }
 
-    let input = quote::quote! {
-        some::cool::C
-    };
+    #[test]
+    fn incomplete_components() {
+        let input = quote::quote! {
+            some::cool::Component
+        };
 
-    let _parsed: syn::Path = syn::parse2(input).unwrap();
+        let _parsed: Component = syn::parse2(input).unwrap();
+
+        let input = quote::quote! {
+            some::cool::C
+        };
+
+        let _parsed: syn::Path = syn::parse2(input).unwrap();
+    }
 }

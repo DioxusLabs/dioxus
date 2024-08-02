@@ -21,7 +21,6 @@ serde = { workspace = true, features = ["derive"], optional = true }
 internment = { version = "0.7.0", optional = true }
 tracing = { workspace = true }
 proc-macro2-diagnostics = { version = "0.10", default-features = false }
-prettier-please = { version = "*" }
 
 [features]
 default = ["hot_reload"]
@@ -31,6 +30,7 @@ serde = ["dep:serde", "dioxus-core/serialize"]
 
 [dev-dependencies]
 prettyplease = { workspace = true }
+prettier-please = { workspace = true }
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

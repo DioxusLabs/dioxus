@@ -34,7 +34,7 @@ impl ToTokens for ExprNode {
 
 #[test]
 fn no_commas() {
-    use crate::PrettyUnparse;
+    use prettier_please::PrettyUnparse;
     let input = quote! {
         div {
             {label("Hello, world!")},

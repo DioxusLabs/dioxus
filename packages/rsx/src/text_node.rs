@@ -80,7 +80,7 @@ impl TextNode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::PrettyUnparse;
+    use prettier_please::PrettyUnparse;
 
     #[test]
     fn parses() {
