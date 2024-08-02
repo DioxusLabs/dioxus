@@ -16,7 +16,7 @@
 
 [Website](https://dioxuslabs.com) |
 [Guides](https://dioxuslabs.com/learn/0.5/) |
-[API Docs](https://docs.rs/dioxus-fullstack/latest/dioxus_sever) |
+[API Docs](https://docs.rs/dioxus-fullstack/latest) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 
 Fullstack utilities for the [`Dioxus`](https://dioxuslabs.com) framework.

@@ -106,7 +106,7 @@ fn main(){
 }
 ```
 
-If you are using a namespace other than html, you can implement the [HotReloadingContext](https://docs.rs/dioxus-rsx/latest/dioxus_rsx/trait.HotReloadingContext.html) trait to provide a mapping between the rust names of your elements/attributes and the resulting strings.
+If you are using a namespace other than html, you can implement the [HotReloadingContext](https://docs.rs/dioxus-rsx/latest/dioxus_rsx/index.html#reexport.HotReloadingContext) trait to provide a mapping between the rust names of your elements/attributes and the resulting strings.
 
 You can then provide the Context to the builder to make hot reloading work with your custom namespace:
 

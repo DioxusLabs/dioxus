@@ -40,7 +40,7 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/example-projects"> Exemplos </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/learn"> Guia </a>
+    <a href="https://dioxuslabs.com/learn/0.5"> Guia </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/zh-cn/README.md"> 中文 </a>
     <span> | </span>
@@ -161,13 +161,12 @@ Dioxus é único no ecossistema do Rust por suportar:
 - SSR com `hydration` feito pelo Cliente
 - Suporte à aplicação Desktop
 
-Para mais informações sobre quais funções estão atualmente disponíveis e para o progresso futuro, veja [O Guia](https://dioxuslabs.com/guide/pt-br/).
+Para mais informações sobre quais funções estão atualmente disponíveis e para o progresso futuro, veja [O Guia](https://dioxuslabs.com/learn/0.5).
 
 ## Projeto dentro do ecossistema Dioxus
 
 Quer adentrar e ajudar a construir o futuro do frontend em Rust? Há um vasto número de lugares em que você pode contribuir e fazer uma grande diferença:
 
-- [TUI renderer](https://github.com/dioxusLabs/plasmo)
 - [Ferramentas CLI](https://github.com/dioxusLabs/cli)
 - [Documentação e Exemplos de Projeto](https://github.com/dioxusLabs/docsite)
 - LiveView e Servidor Web
