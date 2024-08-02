@@ -175,7 +175,7 @@ jobs:
       - name: Run lychee
         uses: lycheeverse/lychee-action@v1
         with:
-          args: "--base . --cache --max-cache-age 1d --no-progress './**/*.md' './**/*.html' './**/*.rst' ."
+          args: --base . --cache --max-cache-age 1d --no-progress './**/*.md' './**/*.html' './**/*.rst' .
           fail: true
 
   check:
