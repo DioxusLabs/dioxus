@@ -23,7 +23,7 @@ Fullstack utilities for the [`Dioxus`](https://dioxuslabs.com) framework.
 
 # Features
 
-- Integrates with the [Axum](./examples/axum-hello-world/) server framework with utilities for serving and rendering Dioxus applications.
+- Integrates with the [Axum](./examples/axum-hello-world/src/main.rs) server framework with utilities for serving and rendering Dioxus applications.
 - [Server functions](https://docs.rs/dioxus-fullstack/latest/dioxus_fullstack/prelude/attr.server.html) allow you to call code on the server from the client as if it were a normal function.
 - Instant RSX Hot reloading with [`dioxus-hot-reload`](https://crates.io/crates/dioxus-hot-reload).
 - Passing root props from the server to the client.

@@ -176,6 +176,7 @@ jobs:
         uses: lycheeverse/lychee-action@v1
         with:
           args: "--base . --cache --max-cache-age 1d --no-progress './**/*.md' './**/*.html' './**/*.rst' ."
+          fail: true
 
   check:
     if: github.event.pull_request.draft == false
