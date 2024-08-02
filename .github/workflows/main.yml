@@ -169,9 +169,9 @@ jobs:
       - name: Restore lychee cache
         uses: actions/cache@v3
         with:
-        path: .lycheecache
-        key: cache-lychee-${{ github.sha }}
-        restore-keys: cache-lychee-
+          path: .lycheecache
+          key: cache-lychee-${{ github.sha }}
+          restore-keys: cache-lychee-
       - name: Run lychee
         uses: lycheeverse/lychee-action@v1
         with:
