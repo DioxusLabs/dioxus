@@ -1,0 +1,2 @@
+# This is the configuration file for lychee, a link validator.
+exclude_path = ["./**/CHANGELOG.md", "file://"]
