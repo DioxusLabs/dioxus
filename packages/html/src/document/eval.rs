@@ -3,6 +3,8 @@
 
 use dioxus_core::prelude::*;
 use generational_box::GenerationalBox;
+use std::error::Error;
+use std::fmt::Display;
 use std::future::{poll_fn, Future, IntoFuture};
 use std::pin::Pin;
 use std::rc::Rc;
@@ -117,3 +119,16 @@ pub enum EvalError {
     /// Represents an error communicating between JavaScript and Rust.
     Communication(String),
 }
+
+impl Display for EvalError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EvalError::Unsupported => write!(f, "EvalError::Unsupported - eval is not supported on the current platform"),
+            EvalError::Finished => write!(f, "EvalError::Finished - eval has already ran"),
+            EvalError::InvalidJs(_) => write!(f, "EvalError::InvalidJs - the provided javascript is invalid"),
+            EvalError::Communication(_) => write!(f, "EvalError::Communication - there was an error trying to communicate with between javascript and rust"),
+        }
+    }
+}
+
+impl Error for EvalError {}
