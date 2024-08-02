@@ -1,6 +1,9 @@
 use crate::{
-    builder::{BuildMessage, MessageSource, MessageType, Stage, UpdateBuildProgress},
+    builder::{
+        BuildMessage, MessageSource, MessageType, Stage, TargetPlatform, UpdateBuildProgress,
+    },
     dioxus_crate::DioxusCrate,
+    serve::next_or_pending,
     tracer::CLILogControl,
 };
 use crate::{
@@ -16,13 +19,13 @@ use crossterm::{
 };
 use dioxus_cli_config::{AddressArguments, Platform};
 use dioxus_hot_reload::ClientMsg;
-use futures_util::{future::select_all, Future, StreamExt};
+use futures_util::{future::select_all, Future, FutureExt, StreamExt};
 use ratatui::{prelude::*, widgets::*, TerminalOptions, Viewport};
 use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
+    fmt::Display,
     io::{self, stdout},
-    pin::Pin,
     rc::Rc,
     sync::atomic::Ordering,
     time::{Duration, Instant},
@@ -35,9 +38,30 @@ use tracing::Level;
 
 use super::{Builder, Server, Watcher};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum LogSource {
+    Internal,
+    Target(TargetPlatform),
+}
+
+impl Display for LogSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LogSource::Internal => write!(f, "CLI"),
+            LogSource::Target(platform) => write!(f, "{platform}"),
+        }
+    }
+}
+
+impl From<TargetPlatform> for LogSource {
+    fn from(platform: TargetPlatform) -> Self {
+        LogSource::Target(platform)
+    }
+}
+
 #[derive(Default)]
 pub struct BuildProgress {
-    build_logs: HashMap<Platform, ActiveBuild>,
+    build_logs: HashMap<LogSource, ActiveBuild>,
 }
 
 impl BuildProgress {
@@ -67,7 +91,7 @@ pub struct Output {
     _dx_version: String,
     interactive: bool,
     pub(crate) build_progress: BuildProgress,
-    running_apps: HashMap<Platform, RunningApp>,
+    running_apps: HashMap<TargetPlatform, RunningApp>,
     is_cli_release: bool,
     platform: Platform,
 
@@ -162,34 +186,87 @@ impl Output {
         })
     }
 
+    /// Add a message from stderr to the logs
+    fn push_stderr(&mut self, platform: TargetPlatform, stderr: String) {
+        self.set_tab(Tab::BuildLog);
+        let source = platform.into();
+
+        self.running_apps
+            .get_mut(&platform)
+            .unwrap()
+            .output
+            .as_mut()
+            .unwrap()
+            .stderr_line
+            .push_str(&stderr);
+        self.build_progress
+            .build_logs
+            .get_mut(&source)
+            .unwrap()
+            .messages
+            .push(BuildMessage {
+                level: Level::ERROR,
+                message: MessageType::Text(stderr),
+                source: MessageSource::App,
+            });
+    }
+
+    /// Add a message from stdout to the logs
+    fn push_stdout(&mut self, platform: TargetPlatform, stdout: String) {
+        let source = platform.into();
+
+        self.running_apps
+            .get_mut(&platform)
+            .unwrap()
+            .output
+            .as_mut()
+            .unwrap()
+            .stdout_line
+            .push_str(&stdout);
+        self.build_progress
+            .build_logs
+            .get_mut(&source)
+            .unwrap()
+            .messages
+            .push(BuildMessage {
+                level: Level::INFO,
+                message: MessageType::Text(stdout),
+                source: MessageSource::App,
+            });
+    }
+
     /// Wait for either the ctrl_c handler or the next event
     ///
     /// Why is the ctrl_c handler here?
     ///
     /// Also tick animations every few ms
     pub async fn wait(&mut self) -> io::Result<bool> {
-        // sorry lord
-        let user_input = match self.events.as_mut() {
-            Some(events) => {
-                let pinned: Pin<Box<dyn Future<Output = Option<Result<Event, _>>>>> =
-                    Box::pin(events.next());
-                pinned
-            }
-            None => Box::pin(futures_util::future::pending()) as Pin<Box<dyn Future<Output = _>>>,
+        fn ok_and_some<F, T, E>(f: F) -> impl Future<Output = T>
+        where
+            F: Future<Output = Result<Option<T>, E>>,
+        {
+            next_or_pending(async move { f.await.ok().flatten() })
+        }
+        let user_input = async {
+            let events = self.events.as_mut()?;
+            events.next().await
         };
+        let user_input = ok_and_some(user_input.map(|e| e.transpose()));
 
         let has_running_apps = !self.running_apps.is_empty();
         let next_stdout = self.running_apps.values_mut().map(|app| {
             let future = async move {
                 let (stdout, stderr) = match &mut app.output {
-                    Some(out) => (out.stdout.next_line(), out.stderr.next_line()),
+                    Some(out) => (
+                        ok_and_some(out.stdout.next_line()),
+                        ok_and_some(out.stderr.next_line()),
+                    ),
                     None => return futures_util::future::pending().await,
                 };
 
                 tokio::select! {
-                    Ok(Some(line)) = stdout => (app.result.platform, Some(line), None),
-                    Ok(Some(line)) = stderr => (app.result.platform, None, Some(line)),
-                    else => futures_util::future::pending().await,
+                    line = stdout => (app.result.target_platform, Some(line), None),
+                    line = stderr => (app.result.target_platform, None, Some(line)),
                 }
             };
             Box::pin(future)
@@ -203,34 +280,22 @@ impl Output {
             }
         };
 
-        let animation_timeout = tokio::time::sleep(Duration::from_millis(300));
         let tui_log_rx = &mut self.log_control.tui_rx;
+        let next_tui_log = next_or_pending(tui_log_rx.next());
 
         tokio::select! {
             (platform, stdout, stderr) = next_stdout => {
                 if let Some(stdout) = stdout {
-                    self.running_apps.get_mut(&platform).unwrap().output.as_mut().unwrap().stdout_line.push_str(&stdout);
-                    self.push_log(platform, BuildMessage {
-                        level: Level::INFO,
-                        message: MessageType::Text(stdout),
-                        source: MessageSource::App,
-                    })
+                    self.push_stdout(platform, stdout);
                 }
                 if let Some(stderr) = stderr {
-                    self.set_tab(Tab::BuildLog);
-
-                    self.running_apps.get_mut(&platform).unwrap().output.as_mut().unwrap().stderr_line.push_str(&stderr);
-                    self.build_progress.build_logs.get_mut(&platform).unwrap().messages.push(BuildMessage {
-                        level: Level::ERROR,
-                        message: MessageType::Text(stderr),
-                        source: MessageSource::App,
-                    });
+                    self.push_stderr(platform, stderr);
                 }
             },
 
             // Handle internal CLI tracing logs.
-            Some(log) = tui_log_rx.next() => {
-                self.push_log(self.platform, BuildMessage {
+            log = next_tui_log => {
+                self.push_log(LogSource::Internal, BuildMessage {
                     level: Level::INFO,
                     message: MessageType::Text(log),
                     source: MessageSource::Dev,
@@ -238,13 +303,10 @@ impl Output {
             }
 
             event = user_input => {
-                if self.handle_events(event.unwrap().unwrap()).await? {
+                if self.handle_events(event).await? {
                     return Ok(true)
                 }
-                // self.handle_input(event.unwrap().unwrap())?;
             }
-
-            _ = animation_timeout => {}
         }
 
         Ok(false)
@@ -330,16 +392,13 @@ impl Output {
             }
             Event::Key(key) if key.code == KeyCode::Char('c') => {
                 // Clear the currently selected build logs.
-                let build = self
-                    .build_progress
-                    .build_logs
-                    .get_mut(&self.platform)
-                    .unwrap();
-                let msgs = match self.tab {
-                    Tab::Console => &mut build.stdout_logs,
-                    Tab::BuildLog => &mut build.messages,
-                };
-                msgs.clear();
+                for build in self.build_progress.build_logs.values_mut() {
+                    let msgs = match self.tab {
+                        Tab::Console => &mut build.stdout_logs,
+                        Tab::BuildLog => &mut build.messages,
+                    };
+                    msgs.clear();
+                }
             }
             Event::Key(key) if key.code == KeyCode::Char('1') => self.set_tab(Tab::Console),
             Event::Key(key) if key.code == KeyCode::Char('2') => self.set_tab(Tab::BuildLog),
@@ -362,7 +421,11 @@ impl Output {
         Ok(false)
     }
 
-    pub fn new_ws_message(&mut self, platform: Platform, message: axum::extract::ws::Message) {
+    pub fn new_ws_message(
+        &mut self,
+        platform: TargetPlatform,
+        message: axum::extract::ws::Message,
+    ) {
         if let axum::extract::ws::Message::Text(text) = message {
             let msg = serde_json::from_str::<ClientMsg>(text.as_str());
             match msg {
@@ -402,7 +465,7 @@ impl Output {
 
     // todo: re-enable
     #[allow(unused)]
-    fn is_snapped(&self, _platform: Platform) -> bool {
+    fn is_snapped(&self, _platform: LogSource) -> bool {
         true
         // let prev_scrol = self
         //     .num_lines_with_wrapping
@@ -414,12 +477,13 @@ impl Output {
         self.scroll = (self.num_lines_with_wrapping).saturating_sub(self.term_height);
     }
 
-    pub fn push_log(&mut self, platform: Platform, message: BuildMessage) {
-        let snapped = self.is_snapped(platform);
+    pub fn push_log(&mut self, platform: impl Into<LogSource>, message: BuildMessage) {
+        let source = platform.into();
+        let snapped = self.is_snapped(source);
 
         self.build_progress
             .build_logs
-            .entry(platform)
+            .entry(source)
             .or_default()
             .stdout_logs
             .push(message);
@@ -429,8 +493,9 @@ impl Output {
         }
     }
 
-    pub fn new_build_logs(&mut self, platform: Platform, update: UpdateBuildProgress) {
-        let snapped = self.is_snapped(platform);
+    pub fn new_build_logs(&mut self, platform: impl Into<LogSource>, update: UpdateBuildProgress) {
+        let source = platform.into();
+        let snapped = self.is_snapped(source);
 
         // when the build is finished, switch to the console
         if update.stage == Stage::Finished {
@@ -439,7 +504,7 @@ impl Output {
 
         self.build_progress
             .build_logs
-            .entry(platform)
+            .entry(source)
             .or_default()
             .update(update);
 
@@ -454,7 +519,7 @@ impl Output {
                 .children
                 .iter_mut()
                 .find_map(|(platform, child)| {
-                    if platform == &result.platform {
+                    if platform == &result.target_platform {
                         let stdout = child.stdout.take().unwrap();
                         let stderr = child.stderr.take().unwrap();
                         Some((stdout, stderr))
@@ -463,7 +528,7 @@ impl Output {
                     }
                 });
 
-            let platform = result.platform;
+            let platform = result.target_platform;
 
             let stdout = out.map(|(stdout, stderr)| RunningAppOutput {
                 stdout: BufReader::new(stdout).lines(),
@@ -480,7 +545,8 @@ impl Output {
             self.running_apps.insert(platform, app);
 
             // Finish the build progress for the platform that just finished building
-            if let Some(build) = self.build_progress.build_logs.get_mut(&platform) {
+            let source = platform.into();
+            if let Some(build) = self.build_progress.build_logs.get_mut(&source) {
                 build.stage = Stage::Finished;
             }
         }
@@ -735,12 +801,17 @@ impl Output {
         let mut events = vec![event];
 
         // Collect all the events within the next 10ms in one stream
-        loop {
-            let next = self.events.as_mut().unwrap().next();
-            tokio::select! {
-                msg = next => events.push(msg.unwrap().unwrap()),
-                _ = tokio::time::sleep(Duration::from_millis(1)) => break
+        let collect_events = async {
+            loop {
+                let Some(Ok(next)) = self.events.as_mut().unwrap().next().await else {
+                    break;
+                };
+                events.push(next);
             }
+        };
+        tokio::select! {
+            _ = collect_events => {},
+            _ = tokio::time::sleep(Duration::from_millis(10)) => {}
         }
 
         // Debounce events within the same frame

@@ -1,5 +1,5 @@
 use crate::dioxus_crate::DioxusCrate;
-use crate::serve::Serve;
+use crate::serve::{next_or_pending, Serve};
 use crate::{Error, Result};
 use axum::extract::{Request, State};
 use axum::middleware::{self, Next};
@@ -240,6 +240,7 @@ impl Server {
             .enumerate()
             .map(|(idx, socket)| async move { (idx, socket.next().await) })
             .collect::<FuturesUnordered<_>>();
+        let next_new_message = next_or_pending(new_message.next());
 
         tokio::select! {
             new_hot_reload_socket = &mut new_hot_reload_socket => {
@@ -266,7 +267,7 @@ impl Server {
                     panic!("Could not receive a socket - the devtools could not boot - the port is likely already in use");
                 }
             }
-            Some((idx, message)) = new_message.next() => {
+            (idx, message) = next_new_message => {
                 match message {
                     Some(Ok(message)) => return Some(message),
                     _ => {

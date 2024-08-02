@@ -155,7 +155,7 @@ async fn launch_server(
 
             let cfg = platform_config.server_cfg.build();
 
-            let mut router = router.serve_static_assets(cfg.assets_path.clone());
+            let mut router = router.serve_static_assets();
 
             router.fallback(
                 axum::routing::get(crate::axum_adapter::render_handler).with_state(

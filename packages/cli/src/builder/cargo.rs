@@ -1,6 +1,7 @@
 use super::web::install_web_build_tooling;
 use super::BuildRequest;
 use super::BuildResult;
+use super::TargetPlatform;
 use crate::assets::copy_dir_to;
 use crate::assets::create_assets_head;
 use crate::assets::{asset_manifest, process_assets, AssetConfigDropGuard};
@@ -12,9 +13,12 @@ use crate::builder::progress::UpdateStage;
 use crate::link::LinkCommand;
 use crate::Result;
 use anyhow::Context;
+use dioxus_cli_config::Platform;
 use futures_channel::mpsc::UnboundedSender;
+use manganis_cli_support::AssetManifest;
 use manganis_cli_support::ManganisSupportGuard;
 use std::fs::create_dir_all;
+use std::path::PathBuf;
 
 impl BuildRequest {
     /// Create a list of arguments for cargo builds
@@ -41,11 +45,10 @@ impl BuildRequest {
             cargo_args.push(features_str);
         }
 
-        if let Some(target) = self.web.then_some("wasm32-unknown-unknown").or(self
-            .build_arguments
-            .target_args
-            .target
-            .as_deref())
+        if let Some(target) = self
+            .targeting_web()
+            .then_some("wasm32-unknown-unknown")
+            .or(self.build_arguments.target_args.target.as_deref())
         {
             cargo_args.push("--target".to_string());
             cargo_args.push(target.to_string());
@@ -94,7 +97,7 @@ impl BuildRequest {
         Ok((cmd, cargo_args))
     }
 
-    pub async fn build(
+    pub(crate) async fn build(
         &self,
         mut progress: UnboundedSender<UpdateBuildProgress>,
     ) -> Result<BuildResult> {
@@ -115,7 +118,7 @@ impl BuildRequest {
             AssetConfigDropGuard::new(self.dioxus_crate.dioxus_config.web.app.base_path.as_deref());
 
         // If this is a web, build make sure we have the web build tooling set up
-        if self.web {
+        if self.targeting_web() {
             install_web_build_tooling(&mut progress).await?;
         }
 
@@ -133,13 +136,8 @@ impl BuildRequest {
             .context("Failed to post process build")?;
 
         tracing::info!(
-            "🚩 Build completed: [./{}]",
-            self.dioxus_crate
-                .dioxus_config
-                .application
-                .out_dir
-                .clone()
-                .display()
+            "🚩 Build completed: [{}]",
+            self.dioxus_crate.out_dir().display()
         );
 
         _ = progress.start_send(UpdateBuildProgress {
@@ -161,30 +159,17 @@ impl BuildRequest {
             update: UpdateStage::Start,
         });
 
-        // Start Manganis linker intercept.
-        let linker_args = vec![format!("{}", self.dioxus_crate.out_dir().display())];
-
-        // Don't block the main thread - manganis should not be running its own std process but it's
-        // fine to wrap it here at the top
-        tokio::task::spawn_blocking(move || {
-            manganis_cli_support::start_linker_intercept(
-                &LinkCommand::command_name(),
-                cargo_args,
-                Some(linker_args),
-            )
-        })
-        .await
-        .unwrap()?;
+        let assets = self.collect_assets(cargo_args, progress).await?;
 
         let file_name = self.dioxus_crate.executable_name();
 
         // Move the final output executable into the dist folder
-        let out_dir = self.dioxus_crate.out_dir();
+        let out_dir = self.target_out_dir();
         if !out_dir.is_dir() {
             create_dir_all(&out_dir)?;
         }
         let mut output_path = out_dir.join(file_name);
-        if self.web {
+        if self.targeting_web() {
             output_path.set_extension("wasm");
         } else if cfg!(windows) {
             output_path.set_extension("exe");
@@ -195,42 +180,58 @@ impl BuildRequest {
 
         self.copy_assets_dir()?;
 
-        let assets = if !self.build_arguments.skip_assets {
-            let assets = asset_manifest(&self.dioxus_crate);
-            let dioxus_crate = self.dioxus_crate.clone();
-            let mut progress = progress.clone();
-            tokio::task::spawn_blocking(
-                move || -> Result<Option<manganis_cli_support::AssetManifest>> {
-                    // Collect assets
-                    process_assets(&dioxus_crate, &assets, &mut progress)?;
-                    // Create the __assets_head.html file for bundling
-                    create_assets_head(&dioxus_crate, &assets)?;
-                    Ok(Some(assets))
-                },
-            )
-            .await
-            .unwrap()?
-        } else {
-            None
-        };
-
         // Create the build result
         let build_result = BuildResult {
             executable: output_path,
-            web: self.web,
-            platform: self
-                .build_arguments
-                .platform
-                .expect("To be resolved by now"),
+            target_platform: self.target_platform,
         };
 
         // If this is a web build, run web post processing steps
-        if self.web {
+        if self.targeting_web() {
             self.post_process_web_build(&build_result, assets.as_ref(), progress)
                 .await?;
         }
 
         Ok(build_result)
+    }
+
+    async fn collect_assets(
+        &self,
+        cargo_args: Vec<String>,
+        progress: &mut UnboundedSender<UpdateBuildProgress>,
+    ) -> anyhow::Result<Option<AssetManifest>> {
+        // If this is the server build, the client build already copied any assets we need
+        if self.target_platform == TargetPlatform::Server {
+            return Ok(None);
+        }
+        // If assets are skipped, we don't need to collect them
+        if self.build_arguments.skip_assets {
+            return Ok(None);
+        }
+
+        // Start Manganis linker intercept.
+        let linker_args = vec![format!("{}", self.target_out_dir().display())];
+
+        // Don't block the main thread - manganis should not be running its own std process but it's
+        // fine to wrap it here at the top
+        let build = self.clone();
+        let mut progress = progress.clone();
+        tokio::task::spawn_blocking(move || {
+            manganis_cli_support::start_linker_intercept(
+                &LinkCommand::command_name(),
+                cargo_args,
+                Some(linker_args),
+            )?;
+            let assets = asset_manifest(&build);
+            // Collect assets from the asset manifest the linker intercept created
+            process_assets(&build, &assets, &mut progress)?;
+            // Create the __assets_head.html file for bundling
+            create_assets_head(&build, &assets)?;
+
+            Ok(Some(assets))
+        })
+        .await
+        .unwrap()
     }
 
     pub fn copy_assets_dir(&self) -> anyhow::Result<()> {
@@ -240,7 +241,7 @@ impl BuildRequest {
 
         if asset_dir.is_dir() {
             // Only pre-compress the assets from the web build. Desktop assets are not served, so they don't need to be pre_compressed
-            let pre_compress = self.web
+            let pre_compress = self.targeting_web()
                 && self
                     .dioxus_crate
                     .should_pre_compress_web_assets(self.build_arguments.release);
@@ -248,5 +249,17 @@ impl BuildRequest {
             copy_dir_to(asset_dir, out_dir, pre_compress)?;
         }
         Ok(())
+    }
+
+    /// Get the output directory for a specific built target
+    pub fn target_out_dir(&self) -> PathBuf {
+        let out_dir = self.dioxus_crate.out_dir();
+        match self.build_arguments.platform {
+            Some(Platform::Fullstack | Platform::StaticGeneration) => match self.target_platform {
+                TargetPlatform::Web => out_dir.join("public"),
+                _ => out_dir,
+            },
+            _ => out_dir,
+        }
     }
 }

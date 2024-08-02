@@ -125,7 +125,7 @@ pub trait DioxusRouterExt<S> {
     ///     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8080));
     ///     let router = axum::Router::new()
     ///         // Server side render the application, serve static assets, and register server functions
-    ///         .serve_static_assets("dist")
+    ///         .serve_static_assets()
     ///         // Server render the application
     ///         // ...
     ///         .into_make_service();
@@ -133,7 +133,7 @@ pub trait DioxusRouterExt<S> {
     ///     axum::serve(listener, router).await.unwrap();
     /// }
     /// ```
-    fn serve_static_assets(self, assets_path: impl Into<std::path::PathBuf>) -> Self
+    fn serve_static_assets(self) -> Self
     where
         Self: Sized;
 
@@ -203,18 +203,16 @@ where
         self
     }
 
-    // TODO: This is a breaking change, but we should probably serve static assets from a different directory than dist where the server executable is located
-    // This would prevent issues like https://github.com/DioxusLabs/dioxus/issues/2327
-    fn serve_static_assets(mut self, assets_path: impl Into<std::path::PathBuf>) -> Self {
+    fn serve_static_assets(mut self) -> Self {
         use tower_http::services::{ServeDir, ServeFile};
 
-        let assets_path = assets_path.into();
+        let public_path = crate::public_path();
 
-        // Serve all files in dist folder except index.html
-        let dir = std::fs::read_dir(&assets_path).unwrap_or_else(|e| {
+        // Serve all files in public folder except index.html
+        let dir = std::fs::read_dir(&public_path).unwrap_or_else(|e| {
             panic!(
-                "Couldn't read assets directory at {:?}: {}",
-                &assets_path, e
+                "Couldn't read public directory at {:?}: {}",
+                &public_path, e
             )
         });
 
@@ -224,7 +222,7 @@ where
                 continue;
             }
             let route = path
-                .strip_prefix(&assets_path)
+                .strip_prefix(&public_path)
                 .unwrap()
                 .iter()
                 .map(|segment| {
@@ -251,10 +249,7 @@ where
         let ssr_state = SSRState::new(&cfg);
 
         // Add server functions and render index.html
-        #[allow(unused_mut)]
-        let mut server = self
-            .serve_static_assets(cfg.assets_path.clone())
-            .register_server_functions();
+        let server = self.serve_static_assets().register_server_functions();
 
         server.fallback(
             get(render_handler).with_state(
