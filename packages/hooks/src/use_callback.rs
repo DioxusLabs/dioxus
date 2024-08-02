@@ -10,7 +10,7 @@ use dioxus_signals::Writable;
 ///
 /// This API is in flux and might not remain.
 #[doc = include_str!("../docs/rules_of_hooks.md")]
-pub fn use_callback<O>(f: impl FnMut() -> O + 'static) -> UseCallback<O> {
+pub fn use_callback<T, O>(f: impl FnMut(T) -> O + 'static) -> UseCallback<T, O> {
     // Create a copyvalue with no contents
     // This copyvalue is generic over F so that it can be sized properly
     let mut inner = use_hook(|| CopyValue::new(None));
@@ -24,9 +24,10 @@ pub fn use_callback<O>(f: impl FnMut() -> O + 'static) -> UseCallback<O> {
         let rt = Runtime::current().unwrap();
 
         UseCallback {
-            inner: CopyValue::new(Box::new(move || {
+            inner: CopyValue::new(Box::new(move |value| {
                 // run this callback in the context of the scope it was created in.
-                let run_callback = || inner.with_mut(|f: &mut Option<_>| f.as_mut().unwrap()());
+                let run_callback =
+                    || inner.with_mut(|f: &mut Option<_>| f.as_mut().unwrap()(value));
                 rt.on_scope(cur_scope, run_callback)
             })),
         }
@@ -36,17 +37,17 @@ pub fn use_callback<O>(f: impl FnMut() -> O + 'static) -> UseCallback<O> {
 /// This callback is not generic over a return type so you can hold a bunch of callbacks at once
 ///
 /// If you need a callback that returns a value, you can simply wrap the closure you pass in that sets a value in its scope
-pub struct UseCallback<O: 'static + ?Sized> {
-    inner: CopyValue<Box<dyn FnMut() -> O>>,
+pub struct UseCallback<T: 'static, O: 'static + ?Sized> {
+    inner: CopyValue<Box<dyn FnMut(T) -> O>>,
 }
 
-impl<O: 'static + ?Sized> PartialEq for UseCallback<O> {
+impl<T: 'static, O: 'static + ?Sized> PartialEq for UseCallback<T, O> {
     fn eq(&self, other: &Self) -> bool {
         self.inner == other.inner
     }
 }
 
-impl<O: 'static + ?Sized> std::fmt::Debug for UseCallback<O> {
+impl<T: 'static, O: 'static + ?Sized> std::fmt::Debug for UseCallback<T, O> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("UseCallback")
             .field("inner", &self.inner.value())
@@ -54,23 +55,23 @@ impl<O: 'static + ?Sized> std::fmt::Debug for UseCallback<O> {
     }
 }
 
-impl<O: 'static + ?Sized> Clone for UseCallback<O> {
+impl<T: 'static, O: 'static + ?Sized> Clone for UseCallback<T, O> {
     fn clone(&self) -> Self {
         Self { inner: self.inner }
     }
 }
-impl<O: 'static> Copy for UseCallback<O> {}
+impl<T: 'static, O: 'static> Copy for UseCallback<T, O> {}
 
-impl<O> UseCallback<O> {
+impl<T, O> UseCallback<T, O> {
     /// Call the callback
-    pub fn call(&self) -> O {
-        (self.inner.write_unchecked())()
+    pub fn call(&self, value: T) -> O {
+        (self.inner.write_unchecked())(value)
     }
 }
 
 // This makes UseCallback callable like a normal function
-impl<O> std::ops::Deref for UseCallback<O> {
-    type Target = dyn Fn() -> O;
+impl<T, O> std::ops::Deref for UseCallback<T, O> {
+    type Target = dyn Fn(T) -> O;
 
     fn deref(&self) -> &Self::Target {
         use std::mem::MaybeUninit;
@@ -80,7 +81,7 @@ impl<O> std::ops::Deref for UseCallback<O> {
         // First we create a closure that captures something with the Same in memory layout as Self (MaybeUninit<Self>).
         let uninit_callable = MaybeUninit::<Self>::uninit();
         // Then move that value into the closure. We assume that the closure now has a in memory layout of Self.
-        let uninit_closure = move || Self::call(unsafe { &*uninit_callable.as_ptr() });
+        let uninit_closure = move |value| Self::call(unsafe { &*uninit_callable.as_ptr() }, value);
 
         // Check that the size of the closure is the same as the size of Self in case the compiler changed the layout of the closure.
         let size_of_closure = std::mem::size_of_val(&uninit_closure);
