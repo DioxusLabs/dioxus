@@ -19,7 +19,7 @@ use crate::{default_impl, write_impls};
 /// CopyValue is a wrapper around a value to make the value mutable and Copy.
 ///
 /// It is internally backed by [`generational_box::GenerationalBox`].
-pub struct CopyValue<T: 'static, S: Storage<T> = UnsyncStorage> {
+pub struct CopyValue<T: ?Sized + 'static, S: Storage<T> = UnsyncStorage> {
     pub(crate) value: GenerationalBox<T, S>,
     pub(crate) origin_scope: ScopeId,
 }

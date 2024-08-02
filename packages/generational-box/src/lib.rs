@@ -39,7 +39,7 @@ impl Debug for GenerationalBoxId {
 }
 
 /// The core Copy state type. The generational box will be dropped when the [Owner] is dropped.
-pub struct GenerationalBox<T, S: 'static = UnsyncStorage> {
+pub struct GenerationalBox<T: ?Sized, S: 'static = UnsyncStorage> {
     raw: GenerationalPointer<S>,
     _marker: PhantomData<T>,
 }
@@ -138,7 +138,7 @@ impl<T, S> Clone for GenerationalBox<T, S> {
 }
 
 /// A trait for a storage backing type. (RefCell, RwLock, etc.)
-pub trait Storage<Data = ()>: AnyStorage + 'static {
+pub trait Storage<Data: ?Sized = ()>: AnyStorage + 'static {
     /// Try to read the value. Returns None if the value is no longer valid.
     fn try_read(
         location: GenerationalPointer<Self>,
