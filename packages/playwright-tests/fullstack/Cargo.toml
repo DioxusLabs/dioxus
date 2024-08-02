@@ -9,8 +9,9 @@ publish = false
 [dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
 serde = "1.0.159"
+tokio = { workspace = true, features = ["full"], optional = true }
 
 [features]
 default = []
-server = ["dioxus/axum"]
+server = ["dioxus/axum", "dep:tokio"]
 web = ["dioxus/web"]

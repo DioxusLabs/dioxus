@@ -1,6 +1,7 @@
 use std::cell::{Cell, RefCell};
 use std::io::Cursor;
 
+use dioxus_core::CapturedError;
 use serde::de::DeserializeOwned;
 
 thread_local! {
@@ -37,6 +38,7 @@ fn remove_server_data() {
 
 /// Data that is deserialized from the server during hydration
 pub(crate) struct HTMLDataCursor {
+    error: Option<CapturedError>,
     data: Vec<Option<Vec<u8>>>,
     index: Cell<usize>,
 }
@@ -47,11 +49,28 @@ impl HTMLDataCursor {
         Self::new(deserialized)
     }
 
+    /// Get the error if there is one
+    pub(crate) fn error(&self) -> Option<CapturedError> {
+        self.error.clone()
+    }
+
     fn new(data: Vec<Option<Vec<u8>>>) -> Self {
-        Self {
+        let mut myself = Self {
+            error: None,
             data,
             index: Cell::new(0),
-        }
+        };
+
+        // The first item is always an error if it exists
+        let error = myself
+            .take::<Option<CapturedError>>()
+            .ok()
+            .flatten()
+            .flatten();
+
+        myself.error = error;
+
+        myself
     }
 
     pub fn take<T: DeserializeOwned>(&self) -> Result<Option<T>, TakeDataError> {

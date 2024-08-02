@@ -1,7 +1,7 @@
 use dioxus_lib::prelude::dioxus_core::DynamicNode;
 use dioxus_lib::prelude::{
-    has_context, try_consume_context, ScopeId, SuspenseBoundaryProps, SuspenseContext, VNode,
-    VirtualDom,
+    has_context, try_consume_context, ErrorContext, ScopeId, SuspenseBoundaryProps,
+    SuspenseContext, VNode, VirtualDom,
 };
 use serde::Serialize;
 
@@ -26,6 +26,15 @@ impl super::HTMLData {
     /// We use depth first order instead of relying on the order the hooks are called in because during suspense on the server, the order that futures are run in may be non deterministic.
     pub(crate) fn extract_from_suspense_boundary(vdom: &VirtualDom, scope: ScopeId) -> Self {
         let mut data = Self::default();
+        // If there is an error boundary on the suspense boundary, grab the error from the context API
+        // and throw it on the client so that it bubbles up to the nearest error boundary
+        let mut error = None;
+        vdom.in_runtime(|| {
+            if let Some(error_context) = scope.consume_context::<ErrorContext>() {
+                error = error_context.errors().first().cloned();
+            }
+        });
+        data.push(&error);
         data.take_from_scope(vdom, scope);
         data
     }

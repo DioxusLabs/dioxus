@@ -190,10 +190,10 @@ impl Scope {
     /// Clones the state if it exists.
     pub fn consume_context<T: 'static + Clone>(&self) -> Option<T> {
         tracing::trace!(
-            "looking for context {} ({:?}) in {}",
+            "looking for context {} ({:?}) in {:?}",
             std::any::type_name::<T>(),
             std::any::TypeId::of::<T>(),
-            self.name
+            self.id
         );
         if let Some(this_ctx) = self.has_context() {
             return Some(this_ctx);
@@ -207,10 +207,10 @@ impl Scope {
                     return None;
                 };
                 tracing::trace!(
-                    "looking for context {} ({:?}) in {}",
+                    "looking for context {} ({:?}) in {:?}",
                     std::any::type_name::<T>(),
                     std::any::TypeId::of::<T>(),
-                    parent.name
+                    parent.id
                 );
                 if let Some(shared) = parent.has_context() {
                     return Some(shared);
@@ -277,10 +277,10 @@ impl Scope {
     /// ```
     pub fn provide_context<T: 'static + Clone>(&self, value: T) -> T {
         tracing::trace!(
-            "providing context {} ({:?}) in {}",
+            "providing context {} ({:?}) in {:?}",
             std::any::type_name::<T>(),
             std::any::TypeId::of::<T>(),
-            self.name
+            self.id
         );
         let mut contexts = self.shared_contexts.borrow_mut();
 

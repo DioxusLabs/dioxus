@@ -265,6 +265,36 @@ impl SsrRendererPool {
                         scope,
                     ) {
                         suspense.freeze();
+                        // Go to every child suspense boundary and add an error boundary. Since we cannot rerun any nodes above the child suspense boundary,
+                        // we need to capture the errors and send them to the client as it resolves
+                        let lock = scope_to_mount_mapping.read().unwrap();
+                        virtual_dom.in_runtime(|| {
+                            'suspended: for &suspense_scope in lock.keys() {
+                                // Make sure the scope id is under the resolved scope
+                                if suspense_scope.height() < scope.height() {
+                                    continue;
+                                }
+                                let mut current = suspense_scope;
+                                loop {
+                                    // We reached the resolved scope, so we're done
+                                    if current == scope {
+                                        break;
+                                    }
+                                    let next = current.parent_scope();
+                                    // We reached the root scope, without reaching the resolved scope. It isn't a child scope
+                                    match next {
+                                        Some(next) => {
+                                            current = next;
+                                        }
+                                        None => {
+                                            continue 'suspended;
+                                        }
+                                    }
+                                }
+                                // Add an error boundary to the scope
+                                suspense_scope.in_runtime(provide_error_boundary);
+                            }
+                        });
                     }
                 }
             }
