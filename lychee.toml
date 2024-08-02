@@ -1,0 +1,6 @@
+# This is the configuration file for lychee, a link validator.
+exclude = ['file:///', 'https://github.com/DioxusLabs/dioxus/commit']
+exclude_path = ['target']
+no_progress = false
+cache = true
+max_cache_age = "10d"

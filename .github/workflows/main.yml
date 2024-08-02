@@ -159,6 +159,25 @@ jobs:
           # todo: re-enable warnings
           # RUSTDOCFLAGS: --cfg docsrs -Dwarnings
 
+  # Check for invalid links in the repository
+  link-check:
+    if: github.event.pull_request.draft == false
+    name: Check For Invalid Links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore lychee cache
+        uses: actions/cache@v3
+        with:
+          path: .lycheecache
+          key: cache-lychee-${{ github.sha }}
+          restore-keys: cache-lychee-
+      - name: Run lychee
+        uses: lycheeverse/lychee-action@v1
+        with:
+          args: --base . --config ./lychee.toml './**/*.md'
+          fail: true
+
   check:
     if: github.event.pull_request.draft == false
     name: Check
