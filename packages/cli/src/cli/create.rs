@@ -1,5 +1,7 @@
 use super::*;
+use crate::DioxusCrate;
 use cargo_generate::{GenerateArgs, TemplatePath};
+use std::path::Path;
 
 pub(crate) static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
 
@@ -54,7 +56,10 @@ impl Create {
 }
 
 // being also used by `init`
-pub fn post_create(path: &PathBuf) -> Result<()> {
+pub fn post_create(path: &Path) -> Result<()> {
+    // Add the new project to the workspace, if it exists.
+    add_workspace_member(path);
+
     // first run cargo fmt
     let mut cmd = Command::new("cargo");
     let cmd = cmd.arg("fmt").current_dir(path);
@@ -106,4 +111,28 @@ fn remove_triple_newlines(string: &str) -> String {
         new_string.push(char);
     }
     new_string
+}
+
+fn add_workspace_member(path: &Path) {
+    DioxusCrate::new(&Default::default())
+        .ok()
+        .and_then(|krate| {
+            let cargo_toml_path = &krate.package().manifest_path;
+            let cargo_toml_str = std::fs::read_to_string(cargo_toml_path).ok()?;
+
+            let mut root_path = cargo_toml_path.clone();
+            root_path.pop();
+            let relative_path = path.strip_prefix(root_path).ok()?;
+
+            let mut cargo_toml: toml_edit::DocumentMut = cargo_toml_str.parse().ok()?;
+            cargo_toml
+                .get_mut("workspace")?
+                .get_mut("members")?
+                .as_array_mut()?
+                .push(relative_path.display().to_string());
+
+            std::fs::write(cargo_toml_path, cargo_toml.to_string()).ok()?;
+
+            Some(())
+        });
 }
