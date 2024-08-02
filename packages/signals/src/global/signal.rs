@@ -13,6 +13,7 @@ use crate::Signal;
 pub struct GlobalSignal<T> {
     initializer: fn() -> T,
     key: GlobalKey<'static>,
+    created_at: &'static std::panic::Location<'static>,
 }
 
 impl<T: 'static> GlobalSignal<T> {
@@ -23,6 +24,7 @@ impl<T: 'static> GlobalSignal<T> {
         GlobalSignal {
             initializer,
             key: GlobalKey::new(key),
+            created_at: key,
         }
     }
 
@@ -34,10 +36,12 @@ impl<T: 'static> GlobalSignal<T> {
     /// Create this global signal with a specific key.
     /// This is useful for ensuring that the signal is unique across the application and accessible from
     /// outside the application too.
+    #[track_caller]
     pub const fn with_key(initializer: fn() -> T, key: &'static str) -> GlobalSignal<T> {
         GlobalSignal {
             initializer,
             key: GlobalKey::new_from_str(key),
+            created_at: std::panic::Location::caller(),
         }
     }
 
@@ -56,7 +60,11 @@ impl<T: 'static> GlobalSignal<T> {
                 // Constructors are always run in the root scope
                 // The signal also exists in the root scope
                 let value = ScopeId::ROOT.in_runtime(self.initializer);
-                let signal = Signal::new_in_scope(value, ScopeId::ROOT);
+                let signal = Signal::new_maybe_sync_in_scope_with_caller(
+                    value,
+                    ScopeId::ROOT,
+                    self.created_at,
+                );
 
                 let entry = context.signal.borrow_mut().insert(key, Box::new(signal));
                 debug_assert!(entry.is_none(), "Global signal already exists");
