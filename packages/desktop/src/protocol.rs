@@ -114,30 +114,30 @@ fn assets_head() -> Option<String> {
 fn resolve_resource(path: &Path) -> PathBuf {
     let mut base_path = get_asset_root_or_default();
 
-    if running_in_dev_mode() {
-        base_path.push(path);
+    // if running_in_dev_mode() {
+    //     base_path.push(path);
 
-        // Special handler for Manganis filesystem fallback.
-        // We need this since Manganis provides assets from workspace root.
-        if !base_path.exists() {
-            let workspace_root = get_workspace_root_from_cargo();
-            let asset_path = workspace_root.join(path);
-            return asset_path;
-        }
-    } else {
-        let mut resource_path = PathBuf::new();
-        for component in path.components() {
-            // Tauri-bundle inserts special path segments for abnormal component paths
-            match component {
-                Component::Prefix(_) => {}
-                Component::RootDir => resource_path.push("_root_"),
-                Component::CurDir => {}
-                Component::ParentDir => resource_path.push("_up_"),
-                Component::Normal(p) => resource_path.push(p),
-            }
-        }
-        base_path.push(resource_path);
-    }
+    //     // Special handler for Manganis filesystem fallback.
+    //     // We need this since Manganis provides assets from workspace root.
+    //     if !base_path.exists() {
+    //         let workspace_root = get_workspace_root_from_cargo();
+    //         let asset_path = workspace_root.join(path);
+    //         return asset_path;
+    //     }
+    // } else {
+    //     let mut resource_path = PathBuf::new();
+    //     for component in path.components() {
+    //         // Tauri-bundle inserts special path segments for abnormal component paths
+    //         match component {
+    //             Component::Prefix(_) => {}
+    //             Component::RootDir => resource_path.push("_root_"),
+    //             Component::CurDir => {}
+    //             Component::ParentDir => resource_path.push("_up_"),
+    //             Component::Normal(p) => resource_path.push(p),
+    //         }
+    //     }
+    //     base_path.push(resource_path);
+    // }
     base_path
 }
 
@@ -249,11 +249,11 @@ fn get_asset_root_or_default() -> PathBuf {
     get_asset_root().unwrap_or_else(|| std::env::current_dir().unwrap())
 }
 
-fn running_in_dev_mode() -> bool {
-    // If running under cargo, there's no bundle!
-    // There might be a smarter/more resilient way of doing this
-    std::env::var_os("CARGO").is_some()
-}
+// fn running_in_dev_mode() -> bool {
+//     // If running under cargo, there's no bundle!
+//     // There might be a smarter/more resilient way of doing this
+//     std::env::var_os("CARGO").is_some()
+// }
 
 /// Get the asset directory, following tauri/cargo-bundles directory discovery approach
 ///
