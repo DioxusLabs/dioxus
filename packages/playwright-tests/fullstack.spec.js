@@ -28,4 +28,8 @@ test("hydration", async ({ page }) => {
 
   // Expect the page to contain the updated counter text.
   await expect(main).toContainText("Server said: Hello from the server!");
+
+  // Make sure the error that was thrown on the server is shown in the error boundary on the client
+  const errors = page.locator("#errors");
+  await expect(errors).toContainText("Hmm, something went wrong.");
 });
