@@ -1,6 +1,6 @@
 use crate::TemplateAttribute::Static;
 use dioxus::prelude::*;
-use dioxus_core::{prelude::NodeCursor, TemplateNode, Template};
+use dioxus_core::{prelude::NodeCursor, Template, TemplateNode};
 
 #[test]
 fn create_walker() {
@@ -16,7 +16,8 @@ fn create_walker() {
     }
     .unwrap();
 
-    let cursor = NodeCursor::new(node).first_child().unwrap();
+    let cursor = NodeCursor::new(&node);
+    let cursor = cursor.first_child().unwrap();
     assert_eq!(
         cursor.current_node(),
         TemplateNode::Element {
@@ -34,14 +35,24 @@ fn create_walker() {
             tag: "div",
             namespace: None,
             attrs: &[],
-            children: &[TemplateNode::Element { tag: "p", namespace: None, attrs: &[], children: &[TemplateNode::Text { text: "Hello World" }] }]
+            children: &[TemplateNode::Element {
+                tag: "p",
+                namespace: None,
+                attrs: &[],
+                children: &[TemplateNode::Text { text: "Hello World" }]
+            }]
         }
     );
 
     let cursor = cursor.first_child().unwrap();
     assert_eq!(
         cursor.current_node(),
-        TemplateNode::Element { tag: "p", namespace: None, attrs: &[], children: &[TemplateNode::Text { text: "Hello World" }] } 
+        TemplateNode::Element {
+            tag: "p",
+            namespace: None,
+            attrs: &[],
+            children: &[TemplateNode::Text { text: "Hello World" }]
+        }
     );
 }
 
@@ -55,7 +66,7 @@ fn recursive_walker() {
     }
     .unwrap();
 
-    let mut cursor = NodeCursor::new(node);
+    let mut cursor = NodeCursor::new(&node);
 
     for child in cursor.children() {
         if let Some(text) = child.as_text() {
