@@ -266,12 +266,12 @@ fn get_asset_root_or_default() -> PathBuf {
 /// - [ ] Android
 #[allow(unreachable_code)]
 fn get_asset_root() -> Option<PathBuf> {
-    if running_in_dev_mode() {
-        return dioxus_cli_config::CURRENT_CONFIG
-            .as_ref()
-            .map(|c| c.application.out_dir.clone())
-            .ok();
-    }
+    // if running_in_dev_mode() {
+    //     return dioxus_cli_config::CURRENT_CONFIG
+    //         .as_ref()
+    //         .map(|c| c.application.out_dir.clone())
+    //         .ok();
+    // }
 
     #[cfg(target_os = "macos")]
     {

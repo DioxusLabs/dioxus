@@ -193,7 +193,7 @@ impl Bundle {
         #[cfg(target_os = "macos")]
         std::env::set_var("CI", "true");
 
-        tauri_bundler::bundle::bundle_project(settings.unwrap()).unwrap_or_else(|err|{
+        tauri_bundler::bundle::bundle_project(&settings.unwrap()).unwrap_or_else(|err|{
             #[cfg(target_os = "macos")]
             panic!("Failed to bundle project: {:#?}\nMake sure you have automation enabled in your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208) and full disk access enabled for your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208)", err);
             #[cfg(not(target_os = "macos"))]

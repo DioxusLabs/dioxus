@@ -72,6 +72,6 @@ Signals will automatically be added as dependencies, so you don't need to call t
 fn Comp(count: u32) -> Element {
 // Because the memo subscribes to `count` by adding it as a dependency, the memo will rerun every time `count` changes.
 let new_count = use_memo(use_reactive((&count,), |(count,)| count + 1));
-    todo!()
+    unimplemented!()
 }
 ```

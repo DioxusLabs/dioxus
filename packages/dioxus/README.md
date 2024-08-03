@@ -114,7 +114,7 @@ In Dioxus, all properties are memorized by default with Clone and PartialEq. For
 
 ```rust, no_run
 # use dioxus::prelude::*;
-# #[component] fn Header(title: String, color: String) -> Element { todo!() }
+# #[component] fn Header(title: String, color: String) -> Element { unimplemented!() }
 #[component]
 fn App() -> Element {
     rsx! {
