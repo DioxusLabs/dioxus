@@ -1452,6 +1452,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "cargo-config2"
+version = "0.1.26"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d83ce0be8bd1479e5de6202def660e6c7e27e4e0599bffa4fed05bd380ec2ede"
+dependencies = [
+ "home",
+ "serde",
+ "serde_derive",
+ "toml_edit 0.22.20",
+]
+
+[[package]]
 name = "cargo-generate"
 version = "0.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1488,7 +1500,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "time",
- "toml 0.8.19",
+ "toml",
  "walkdir",
 ]
 
@@ -1522,7 +1534,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ad639525b1c67b6a298f378417b060fbc04618bea559482a8484381cce27d965"
 dependencies = [
  "serde",
- "toml 0.8.19",
+ "toml",
 ]
 
 [[package]]
@@ -2679,6 +2691,7 @@ dependencies = [
  "axum-server",
  "brotli",
  "built",
+ "cargo-config2",
  "cargo-generate",
  "cargo_metadata",
  "cargo_toml",
@@ -2732,7 +2745,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
- "toml 0.8.19",
+ "toml",
  "toml_edit 0.22.20",
  "tower",
  "tower-http",
@@ -2750,6 +2763,7 @@ name = "dioxus-cli-config"
 version = "0.6.0-alpha.1"
 dependencies = [
  "built",
+ "cargo-config2",
  "cargo_toml",
  "clap",
  "dirs",
@@ -2758,7 +2772,7 @@ dependencies = [
  "serde_json",
  "tauri-bundler",
  "tauri-utils",
- "toml 0.8.19",
+ "toml",
  "tracing",
 ]
 
@@ -5704,6 +5718,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "infer"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc150e5ce2330295b8616ce0e3f53250e53af31759a9dbedad1621ba29151847"
+dependencies = [
+ "cfb",
+]
+
+[[package]]
 name = "inotify"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6473,13 +6496,14 @@ name = "manganis-common"
 version = "0.3.0-alpha.0"
 dependencies = [
  "anyhow",
- "base64 0.21.7",
+ "base64 0.22.1",
  "built",
+ "cargo-config2",
  "home",
- "infer 0.11.0",
+ "infer 0.16.0",
  "reqwest 0.12.5",
  "serde",
- "toml 0.7.8",
+ "toml",
  "tracing",
  "url",
 ]
@@ -11168,7 +11192,7 @@ dependencies = [
  "cfg-expr 0.15.8",
  "heck 0.5.0",
  "pkg-config",
- "toml 0.8.19",
+ "toml",
  "version-compare",
 ]
 
@@ -11339,7 +11363,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "thiserror",
- "toml 0.8.19",
+ "toml",
  "url",
  "urlpattern",
  "walkdir",
@@ -11645,18 +11669,6 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "0.7.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd79e69d3b627db300ff956027cc6c3798cef26d22526befdfcd12feeb6d2257"
-dependencies = [
- "serde",
- "serde_spanned",
- "toml_datetime",
- "toml_edit 0.19.15",
-]
-
-[[package]]
-name = "toml"
 version = "0.8.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1ed1f98e3fdc28d6d910e6737ae6ab1a93bf1985935a1193e68f93eeb68d24e"
@@ -11684,8 +11696,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b5bb770da30e5cbfde35a2d7b9b8a2c4b8ef89548a7a6aeab5c9a576e3e7421"
 dependencies = [
  "indexmap 2.3.0",
- "serde",
- "serde_spanned",
  "toml_datetime",
  "winnow 0.5.40",
 ]
@@ -11937,7 +11947,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "termcolor",
- "toml 0.8.19",
+ "toml",
 ]
 
 [[package]]

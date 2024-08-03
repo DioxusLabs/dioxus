@@ -215,6 +215,10 @@ impl Server {
 
     /// Sends hot reloadable changes to all clients.
     pub async fn send_hotreload(&mut self, reload: HotReloadMsg) {
+        if !reload.assets.is_empty() {
+            tracing::debug!("Hot reloading assets {:?}", reload.assets);
+        }
+
         let msg = DevserverMsg::HotReload(reload);
         let msg = serde_json::to_string(&msg).unwrap();
 

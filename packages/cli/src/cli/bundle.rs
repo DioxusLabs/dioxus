@@ -15,6 +15,7 @@ use super::*;
 pub struct Bundle {
     #[clap(long)]
     pub package: Option<Vec<String>>,
+
     /// The arguments for the dioxus build
     #[clap(flatten)]
     pub build_arguments: Build,

@@ -150,9 +150,9 @@ tokio-tungstenite = { version = "0.23.1" }
 
 # cli, cli-config
 dirs = "5.0.1"
+cargo-config2 = "0.1.26"
 
 criterion = { version = "0.5" }
-
 
 [profile.dev.package.dioxus-core-macro]
 opt-level = 3
