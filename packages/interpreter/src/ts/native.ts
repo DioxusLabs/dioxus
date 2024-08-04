@@ -4,7 +4,12 @@
 // provide since it doesn't have access to the dom.
 
 import { BaseInterpreter, NodeId } from "./core";
-import { SerializedEvent, serializeEvent, serializeResizeObserverEntry } from "./serialize";
+import { SerializedEvent, serializeEvent } from "./serialize";
+// TODO: We should import ResizeEventDetail from "./types/events" to fix the
+// handleResizeEvent warnings. However, uncommenting the following line
+// causes a SyntaxError (Cannot declare a class twice: 'ResizeEventDetail')
+// during the app loading.
+// import { ResizeEventDetail } from "./types/events";
 
 // okay so, we've got this JSChannel thing from sledgehammer, implicitly imported into our scope
 // we want to extend it, and it technically extends base intepreter. To make typescript happy,
@@ -97,10 +102,7 @@ export class NativeInterpreter extends JSChannel_ {
     const handler: EventListener = (event) =>
       this.handleEvent(event, event.type, true);
 
-    const resize_observer_handler = (entries: ResizeObserverEntry[], observer: ResizeObserver) =>
-      this.handleResizeEvent(entries, observer);
-
-    super.initialize(root, handler, resize_observer_handler);
+    super.initialize(root, handler);
   }
 
   serializeIpcMessage(method: string, params = {}) {
@@ -242,6 +244,38 @@ export class NativeInterpreter extends JSChannel_ {
     }
   }
 
+  handleResizeEvent(entries: ResizeObserverEntry[], _observer: ResizeObserver) {
+    for (const entry of entries) {
+      const target = entry.target;
+      const realId = getTargetId(target)!;
+
+      const details = new ResizeEventDetail(
+        entry.borderBoxSize?.[0],
+        entry.contentBoxSize?.[0],
+        entry.contentRect,
+        entry.target
+      );
+
+      const event = new CustomEvent<ResizeEventDetail>("resize", { detail: details });
+      const contents = serializeEvent(event, target);
+
+      const body = {
+        name: "resize",
+        data: contents,
+        element: realId,
+        bubbles: false,
+      };
+
+      if (this.liveview) {
+        // TODO:
+      } else {
+        const message = this.serializeIpcMessage("user_event", body);
+        this.ipc.postMessage(message);
+      }
+    }
+  }
+
+
   // This should:
   // - prevent form submissions from navigating
   // - prevent anchor tags from navigating
@@ -269,29 +303,6 @@ export class NativeInterpreter extends JSChannel_ {
     // Attempt to intercept if the event is a click
     if (target instanceof Element && event.type === "click") {
       this.handleClickNavigate(event, target, preventDefaultRequests);
-    }
-  }
-
-  handleResizeEvent(entries: ResizeObserverEntry[], observer: ResizeObserver) {
-    for (const entry of entries) {
-      const target = entry.target;
-      const realId = getTargetId(target)!;
-
-      const contents = serializeResizeObserverEntry(entry, target);
-
-      const body = {
-        name: "resize",
-        data: contents,
-        element: realId,
-        bubbles: false,
-      };
-
-      if (this.liveview) {
-        // TODO:
-      } else {
-        const message = this.serializeIpcMessage("user_event", body);
-        this.ipc.postMessage(message);
-      }
     }
   }
 

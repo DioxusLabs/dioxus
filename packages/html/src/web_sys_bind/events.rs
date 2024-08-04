@@ -13,8 +13,8 @@ use keyboard_types::{Code, Key, Modifiers};
 use std::str::FromStr;
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{
-    AnimationEvent, CompositionEvent, Event, KeyboardEvent, MouseEvent, PointerEvent, Touch,
-    TouchEvent, TransitionEvent, WheelEvent,
+    AnimationEvent, CompositionEvent, CustomEvent, Event, KeyboardEvent, MouseEvent, PointerEvent,
+    Touch, TouchEvent, TransitionEvent, WheelEvent,
 };
 
 macro_rules! uncheck_convert {
@@ -423,8 +423,8 @@ impl From<&web_sys::Element> for MountedData {
     }
 }
 
-impl From<&web_sys::ResizeObserverEntry> for ResizeData {
-    fn from(e: &web_sys::ResizeObserverEntry) -> Self {
+impl From<&web_sys::CustomEvent> for ResizeData {
+    fn from(e: &web_sys::CustomEvent) -> Self {
         ResizeData::new(e.clone())
     }
 }
@@ -498,38 +498,43 @@ impl crate::RenderedElementBacking for web_sys::Element {
     }
 }
 
-macro_rules! get_observer_entry_size {
-    ($meth_name:ident, $entry_meth_name:ident, $field_name:literal) => {
+use wasm_bindgen::prelude::*;
+use web_sys::js_sys;
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(extends = js_sys :: Object , js_name = ResizeCustomEvent , typescript_type = "ResizeCustomEvent")]
+    #[derive(Debug)]
+    pub type ResizeCustomEvent;
+    #[wasm_bindgen(structural , method , getter , js_class = "ResizeCustomEvent" , js_name = borderBoxSize)]
+    pub fn get_border_box_size(this: &ResizeCustomEvent) -> web_sys::ResizeObserverSize;
+    #[wasm_bindgen(structural, method, getter, js_class = "ResizeCustomEvent" , js_name = contentBoxSize)]
+    pub fn get_content_box_size(this: &ResizeCustomEvent) -> web_sys::ResizeObserverSize;
+}
+
+macro_rules! get_custom_resize_event_box_size {
+    ($meth_name:ident, $field_name:literal) => {
         #[doc = concat!("Get the ", $field_name, " size of the observed element")]
-        fn $meth_name(&self) -> ResizeResult<Vec<PixelsSize>> {
-            let sizes = web_sys::ResizeObserverEntry::$entry_meth_name(&self);
+        fn $meth_name(&self) -> ResizeResult<PixelsSize> {
+            let detail = ResizeCustomEvent::from(self.detail());
 
-            let sizes = sizes
-                .iter()
-                .map(|s| {
-                    let size: web_sys::ResizeObserverSize = s.into();
-                    // block_size matchs the height of the element if its writing-mode is horizontal, the width otherwise
-                    let block_size = size.block_size();
-                    // inline_size matchs the width of the element if its writing-mode is horizontal, the height otherwise
-                    let inline_size = size.inline_size();
-                    PixelsSize::new(inline_size, block_size)
-                })
-                .collect();
+            let size = detail.$meth_name();
+            // inline_size matchs the width of the element if its writing-mode is horizontal, the height otherwise
+            let inline_size = size.inline_size();
+            // block_size matchs the height of the element if its writing-mode is horizontal, the width otherwise
+            let block_size = size.block_size();
 
-            Ok(sizes)
+            Ok(PixelsSize::new(inline_size, block_size))
         }
     };
 }
 
-impl crate::ObserverEntryBacking for web_sys::ResizeObserverEntry {
-    /// Return self as Any
+impl HasResizeData for CustomEvent {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
-    get_observer_entry_size!(get_border_box_size, border_box_size, "border box");
-
-    get_observer_entry_size!(get_content_box_size, content_box_size, "content box");
+    get_custom_resize_event_box_size!(get_border_box_size, "border box");
+    get_custom_resize_event_box_size!(get_content_box_size, "content box");
 }
 
 #[derive(Debug)]

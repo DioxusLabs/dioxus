@@ -1,54 +1,30 @@
 use std::fmt::{Display, Formatter};
 
-pub trait ObserverEntryBacking: std::any::Any {
-    /// Return self as Any
-    fn as_any(&self) -> &dyn std::any::Any;
-
-    /// Get the border box size of the observed element
-    fn get_border_box_size(&self) -> ResizeResult<Vec<PixelsSize>> {
-        Err(ResizeError::NotSupported)
-    }
-
-    /// Get the content box size of the observed element
-    fn get_content_box_size(&self) -> ResizeResult<Vec<PixelsSize>> {
-        Err(ResizeError::NotSupported)
-    }
-}
-
 pub struct ResizeData {
-    inner: Box<dyn ObserverEntryBacking>,
+    inner: Box<dyn HasResizeData>,
 }
 
-impl<E: ObserverEntryBacking> From<E> for ResizeData {
+impl<E: HasResizeData> From<E> for ResizeData {
     fn from(e: E) -> Self {
         Self { inner: Box::new(e) }
     }
 }
 
-impl std::fmt::Debug for ResizeData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ResizeData")
-            .field("border_box_size", &self.inner.get_border_box_size())
-            .field("content_box_size", &self.inner.get_content_box_size())
-            .finish()
-    }
-}
-
 impl ResizeData {
     /// Create a new ResizeData
-    pub fn new(inner: impl ObserverEntryBacking + 'static) -> Self {
+    pub fn new(inner: impl HasResizeData + 'static) -> Self {
         Self {
             inner: Box::new(inner),
         }
     }
 
     /// Get the border box size of the observed element
-    pub fn get_border_box_size(&self) -> ResizeResult<Vec<PixelsSize>> {
+    pub fn get_border_box_size(&self) -> ResizeResult<PixelsSize> {
         self.inner.get_border_box_size()
     }
 
     /// Get the content box size of the observed element
-    pub fn get_content_box_size(&self) -> ResizeResult<Vec<PixelsSize>> {
+    pub fn get_content_box_size(&self) -> ResizeResult<PixelsSize> {
         self.inner.get_content_box_size()
     }
 
@@ -58,94 +34,65 @@ impl ResizeData {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
-#[serde(rename_all = "camelCase")]
-struct SerializedResizeObserverSize {
-    width: f64,
-    height: f64,
-}
-
-impl From<&PixelsSize> for SerializedResizeObserverSize {
-    fn from(value: &PixelsSize) -> Self {
-        Self {
-            width: value.width,
-            height: value.height,
-        }
+impl std::fmt::Debug for ResizeData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ResizeData")
+            .field("border_box_size", &self.inner.get_border_box_size())
+            .field("content_box_size", &self.inner.get_content_box_size())
+            .finish()
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
-struct DomRect {
-    bottom: f64,
-    height: f64,
-    left: f64,
-    right: f64,
-    top: f64,
-    width: f64,
-    x: f64,
-    y: f64,
+impl PartialEq for ResizeData {
+    fn eq(&self, other: &Self) -> bool {
+        true
+    }
 }
 
 #[cfg(feature = "serialize")]
 /// A serialized version of ResizeData
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedResizeData {
-    border_box_size: Vec<SerializedResizeObserverSize>,
-    content_box_size: Vec<SerializedResizeObserverSize>,
+    pub border_box_size: PixelsSize,
+    pub content_box_size: PixelsSize,
+}
+
+#[cfg(feature = "serialize")]
+impl SerializedResizeData {
+    /// Create a new SerializedResizeData
+    pub fn new(border_box_size: PixelsSize, content_box_size: PixelsSize) -> Self {
+        Self {
+            border_box_size,
+            content_box_size,
+        }
+    }
 }
 
 #[cfg(feature = "serialize")]
 impl From<&ResizeData> for SerializedResizeData {
     fn from(data: &ResizeData) -> Self {
-        let border_box_sizes = match data.inner.get_border_box_size() {
-            Ok(sizes) => sizes
-                .iter()
-                .map(SerializedResizeObserverSize::from)
-                .collect(),
-            Err(_) => Vec::new(),
-        };
-
-        let content_box_sizes = match data.inner.get_content_box_size() {
-            Ok(sizes) => sizes
-                .iter()
-                .map(SerializedResizeObserverSize::from)
-                .collect(),
-            Err(_) => Vec::new(),
-        };
-
-        Self {
-            border_box_size: border_box_sizes,
-            content_box_size: content_box_sizes,
-        }
+        Self::new(
+            data.get_border_box_size().unwrap(),
+            data.get_content_box_size().unwrap(),
+        )
     }
-}
-
-macro_rules! get_box_size {
-    ($meth_name:ident, $field_name:ident) => {
-        fn $meth_name(&self) -> ResizeResult<Vec<PixelsSize>> {
-            if self.$field_name.len() > 0 {
-                let sizes = self
-                    .$field_name
-                    .iter()
-                    .map(|s| PixelsSize::new(s.width, s.height))
-                    .collect();
-                Ok(sizes)
-            } else {
-                Err(ResizeError::NotSupported)
-            }
-        }
-    };
 }
 
 #[cfg(feature = "serialize")]
-impl ObserverEntryBacking for SerializedResizeData {
+impl HasResizeData for SerializedResizeData {
+    /// Get the border box size of the observed element
+    fn get_border_box_size(&self) -> ResizeResult<PixelsSize> {
+        Ok(self.border_box_size.clone())
+    }
+
+    /// Get the content box size of the observed element
+    fn get_content_box_size(&self) -> ResizeResult<PixelsSize> {
+        Ok(self.content_box_size.clone())
+    }
+
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
-
-    get_box_size!(get_border_box_size, border_box_size);
-
-    get_box_size!(get_content_box_size, content_box_size);
 }
 
 #[cfg(feature = "serialize")]
@@ -163,6 +110,20 @@ impl<'de> serde::Deserialize<'de> for ResizeData {
             inner: Box::new(data),
         })
     }
+}
+
+pub trait HasResizeData: std::any::Any {
+    /// Get the border box size of the observed element
+    fn get_border_box_size(&self) -> ResizeResult<PixelsSize> {
+        Err(ResizeError::NotSupported)
+    }
+    /// Get the content box size of the observed element
+    fn get_content_box_size(&self) -> ResizeResult<PixelsSize> {
+        Err(ResizeError::NotSupported)
+    }
+
+    /// return self as Any
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 use dioxus_core::Event;

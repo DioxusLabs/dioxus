@@ -1,6 +1,7 @@
 // Handle serialization of the event data across the IPC boundarytype SerialziedEvent = {};
 
 import { retriveSelectValue, retriveValues } from "./form";
+import { ResizeEventDetail } from "./types/events";
 
 export type AppTouchEvent = TouchEvent;
 
@@ -28,6 +29,8 @@ export function serializeEvent(event: Event, target: EventTarget): SerializedEve
   if (event instanceof DragEvent) { extend(serializeDragEvent(event)) }
   if (event instanceof FocusEvent) { extend({}) }
   if (event instanceof ClipboardEvent) { extend({}) }
+
+  if (event instanceof CustomEvent) { extend(serializeResizeEventDetail(event.detail)) }
 
   // safari is quirky and doesn't have TouchEvent
   if (typeof TouchEvent !== 'undefined' && event instanceof TouchEvent) { extend(serializeTouchEvent(event)); }
@@ -59,17 +62,17 @@ export function serializeEvent(event: Event, target: EventTarget): SerializedEve
   return contents;
 }
 
-function toSerializableResizeObserverEntry(size: ResizeObserverSize, is_inline_width: boolean): Object {
-  return {
-    width: is_inline_width ? size.inlineSize : size.blockSize,
-    height: is_inline_width ? size.blockSize : size.inlineSize,
-  };
+function toSerializableResizeObserverSize(size: ResizeObserverSize, is_inline_width: boolean): Object {
+  return [
+    is_inline_width ? size.inlineSize : size.blockSize,
+    is_inline_width ? size.blockSize : size.inlineSize,
+  ];
 }
 
-export function serializeResizeObserverEntry(entry: ResizeObserverEntry, target: EventTarget): SerializedEvent {
+export function serializeResizeEventDetail(detail: ResizeEventDetail): SerializedEvent {
   let is_inline_width = true;
-  if (target instanceof HTMLElement) {
-    let target_style = window.getComputedStyle(target);
+  if (detail.target instanceof HTMLElement) {
+    let target_style = window.getComputedStyle(detail.target);
     let target_writing_mode = target_style.getPropertyValue("writing-mode");
     if (target_writing_mode !== "horizontal-tb") {
       is_inline_width = false;
@@ -77,16 +80,16 @@ export function serializeResizeObserverEntry(entry: ResizeObserverEntry, target:
   }
 
   return {
-    border_box_size: entry.borderBoxSize.length > 0 ?
-      entry.borderBoxSize.map((e) => toSerializableResizeObserverEntry(e, is_inline_width)) :
-      [entry.contentRect],
-    content_box_size: entry.contentBoxSize.length > 0 ?
-      entry.contentBoxSize.map((e) => toSerializableResizeObserverEntry(e, is_inline_width)) :
-      [entry.contentRect],
-    content_rect: entry.contentRect,
-    device_pixel_content_box_size: entry.devicePixelContentBoxSize,
+    border_box_size: detail.borderBoxSize !== undefined ?
+      toSerializableResizeObserverSize(detail.borderBoxSize, is_inline_width) :
+      detail.contentRect,
+    content_box_size: detail.contentBoxSize !== undefined ?
+      toSerializableResizeObserverSize(detail.contentBoxSize, is_inline_width) :
+      detail.contentRect,
+    content_rect: detail.contentRect,
   };
 }
+
 
 function serializeInputEvent(event: InputEvent, target: EventTarget): SerializedEvent {
   let contents: SerializedEvent = {};

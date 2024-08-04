@@ -47,6 +47,8 @@ features = [
     "PointerEvent",
     "FocusEvent",
     "CompositionEvent",
+    "CustomEvent",
+    "ResizeObserverSize"
 ]
 
 [dev-dependencies]

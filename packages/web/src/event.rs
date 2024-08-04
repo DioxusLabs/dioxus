@@ -10,7 +10,7 @@ use dioxus_html::{
 };
 use js_sys::Array;
 use wasm_bindgen::{prelude::wasm_bindgen, JsCast, JsValue};
-use web_sys::{Document, DragEvent, Element, Event, MouseEvent};
+use web_sys::{CustomEvent, Document, DragEvent, Element, Event, MouseEvent};
 
 pub(crate) struct WebEventConverter;
 
@@ -19,6 +19,13 @@ fn downcast_event(event: &dioxus_html::PlatformEventData) -> &GenericWebSysEvent
     event
         .downcast::<GenericWebSysEvent>()
         .expect("event should be a GenericWebSysEvent")
+}
+
+#[inline(always)]
+fn downcast_custom_event(event: &dioxus_html::PlatformEventData) -> &GenericWebSysCustomEvent {
+    event
+        .downcast::<GenericWebSysCustomEvent>()
+        .expect("event should be a GenericWebSysCustomEvent")
 }
 
 impl HtmlEventConverter for WebEventConverter {
@@ -118,11 +125,7 @@ impl HtmlEventConverter for WebEventConverter {
         &self,
         event: &dioxus_html::PlatformEventData,
     ) -> dioxus_html::ResizeData {
-        ResizeData::from(
-            event
-                .downcast::<web_sys::ResizeObserverEntry>()
-                .expect("event should be a web_sys::ResizeObserverEntry"),
-        )
+        ResizeData::from(downcast_custom_event(event).raw.clone())
     }
 
     #[inline(always)]
@@ -316,6 +319,21 @@ pub(crate) fn virtual_event_from_websys_event(
     PlatformEventData::new(Box::new(GenericWebSysEvent {
         raw: event,
         element: target,
+    }))
+}
+
+struct GenericWebSysCustomEvent {
+    raw: CustomEvent,
+    _element: Element,
+}
+
+pub(crate) fn virtual_event_from_websys_custom_event(
+    event: web_sys::CustomEvent,
+    target: Element,
+) -> PlatformEventData {
+    PlatformEventData::new(Box::new(GenericWebSysCustomEvent {
+        raw: event,
+        _element: target,
     }))
 }
 

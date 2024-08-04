@@ -9,12 +9,7 @@ extern "C" {
     pub type BaseInterpreter;
 
     #[wasm_bindgen(method)]
-    pub fn initialize(
-        this: &BaseInterpreter,
-        root: Node,
-        handler: &js_sys::Function,
-        resize_observer_handler: &js_sys::Function,
-    );
+    pub fn initialize(this: &BaseInterpreter, root: Node, handler: &js_sys::Function);
 
     #[wasm_bindgen(method, js_name = "saveTemplate")]
     pub fn save_template(this: &BaseInterpreter, nodes: Vec<Node>, tmpl_id: u16);
@@ -89,12 +84,7 @@ mod js {
             if (node.listening) { node.listening += 1; } else { node.listening = 1; }
             node.setAttribute('data-dioxus-id', `\${id}`);
 
-            if (["resize"].indexOf(event_name) >= 0) {
-              this.createObserver(event_name, node);
-            }
-            else {
-              this.createListener(event_name, node, bubbles);
-            }
+            this.createListener(event_name, node, bubbles);
         }"#
     }
     fn remove_event_listener(event_name: &str<u8, evt>, id: u32, bubbles: u8) {
@@ -106,11 +96,7 @@ mod js {
             node.listening -= 1;
             node.removeAttribute('data-dioxus-id');
 
-            if (["resize"].indexOf(event_name) >= 0) {
-              this.removeObserver(event_name, node);
-            } else {
-              this.removeListener(node, event_name, bubbles);
-            }
+            this.removeListener(node, event_name, bubbles);
         }"#
     }
     fn set_text(id: u32, text: &str) {
@@ -230,8 +216,6 @@ mod js {
                 bubbles,
             })
         );
-    } else if (["resize"].indexOf(event_name) >= 0) {
-      this.createObserver(event_name, this_node);
     } else {
       this.createListener(event_name, this_node, bubbles, (event) => {
         this.handler(event, event_name, bubbles);

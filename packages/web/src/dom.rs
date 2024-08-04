@@ -12,9 +12,12 @@ use dioxus_interpreter_js::unified_bindings::Interpreter;
 use futures_channel::mpsc;
 use rustc_hash::FxHashMap;
 use wasm_bindgen::{closure::Closure, JsCast};
-use web_sys::{Document, Element, Event, ResizeObserver, ResizeObserverEntry};
+use web_sys::{Document, Element, Event};
 
-use crate::{load_document, virtual_event_from_websys_event, Config, WebEventConverter};
+use crate::{
+    load_document, virtual_event_from_websys_custom_event, virtual_event_from_websys_event, Config,
+    WebEventConverter,
+};
 
 pub struct WebsysDom {
     #[allow(dead_code)]
@@ -102,49 +105,34 @@ impl WebsysDom {
                     event.prevent_default();
                 }
 
-                let data = virtual_event_from_websys_event(event.clone(), target);
-                let _ = event_channel.unbounded_send(UiEvent {
-                    name,
-                    bubbles,
-                    element,
-                    data,
-                });
+                let mut data = None;
+                if name == "resize" {
+                    if let Ok(event) = event.clone().dyn_into::<web_sys::CustomEvent>() {
+                        data = Some(virtual_event_from_websys_custom_event(event, target));
+                    }
+                } else {
+                    data = Some(virtual_event_from_websys_event(event.clone(), target));
+                }
+
+                if let Some(data) = data {
+                    let _ = event_channel.unbounded_send(UiEvent {
+                        name,
+                        bubbles,
+                        element,
+                        data,
+                    });
+                }
             }
         }));
-
-        let resize_observer_handler: Closure<dyn FnMut(Vec<ResizeObserverEntry>, ResizeObserver)> =
-            Closure::wrap(Box::new({
-                let event_channel = event_channel.clone();
-                move |entries: Vec<web_sys::ResizeObserverEntry>,
-                      _observer: web_sys::ResizeObserver| {
-                    for entry in entries {
-                        let target = entry.target();
-                        let element = walk_node_for_id(target);
-
-                        let Some((element, _)) = element else {
-                            return;
-                        };
-
-                        let _ = event_channel.unbounded_send(UiEvent {
-                            name: "resize".to_string(),
-                            bubbles: false,
-                            element,
-                            data: PlatformEventData::new(Box::new(entry)),
-                        });
-                    }
-                }
-            }));
 
         let _interpreter = interpreter.base();
         _interpreter.initialize(
             root.clone().unchecked_into(),
             handler.as_ref().unchecked_ref(),
-            resize_observer_handler.as_ref().unchecked_ref(),
         );
 
         dioxus_html::set_event_converter(Box::new(WebEventConverter));
         handler.forget();
-        resize_observer_handler.forget();
 
         Self {
             document,

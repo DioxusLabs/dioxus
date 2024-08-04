@@ -2,6 +2,7 @@
 // This always lives in the JS side of things, and is extended by the native and web interpreters
 
 import { setAttributeInner } from "./set_attribute";
+import { ResizeEventDetail } from "./types/events";
 
 export type NodeId = number;
 
@@ -30,12 +31,9 @@ export class BaseInterpreter {
   // sledgehammer is generating this...
   m: any;
 
-  constructor() {}
+  constructor() { }
 
-  initialize(
-    root: HTMLElement,
-    handler: EventListener | null = null,
-    resize_observer_handler: ResizeObserverCallback | null = null) {
+  initialize(root: HTMLElement, handler: EventListener | null = null) {
     this.global = {};
     this.local = {};
     this.root = root;
@@ -46,10 +44,29 @@ export class BaseInterpreter {
 
     if (handler) {
       this.handler = handler;
-    }
 
-    if (resize_observer_handler) {
-      this.resize_observer = new ResizeObserver(resize_observer_handler);
+      this.resize_observer = new ResizeObserver(this.on_resize_event);
+    }
+  }
+
+  on_resize_event(entries: ResizeObserverEntry[], _observer: ResizeObserver) {
+    for (const entry of entries) {
+      const target = entry.target;
+
+      let event = new CustomEvent<ResizeEventDetail>(
+        "resize",
+        {
+          bubbles: false,
+          detail: new ResizeEventDetail(
+            entry.borderBoxSize?.[0],
+            entry.contentBoxSize?.[0],
+            entry.contentRect,
+            entry.target
+          ),
+        }
+      );
+
+      target.dispatchEvent(event);
     }
   }
 
@@ -58,6 +75,8 @@ export class BaseInterpreter {
       case "resize":
         if (this.resize_observer) {
           this.resize_observer.observe(element);
+        } else {
+          console.error("No resize observer initialized");
         }
         break;
       default:
@@ -91,6 +110,10 @@ export class BaseInterpreter {
         this.local[id] = {};
       }
       element.addEventListener(event_name, this.handler);
+    }
+
+    if (event_name == "resize") {
+      this.createObserver(event_name, element);
     }
   }
 
