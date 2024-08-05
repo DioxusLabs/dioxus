@@ -1,5 +1,4 @@
 use super::*;
-use crate::DioxusCrate;
 use cargo_generate::{GenerateArgs, TemplatePath};
 use std::path::Path;
 
@@ -55,12 +54,30 @@ impl Create {
     }
 }
 
-// being also used by `init`
+/// Post-creation actions for newly setup crates.
+// Also used by `init`.
 pub fn post_create(path: &Path) -> Result<()> {
-    // Add the new project to the workspace, if it exists.
-    add_workspace_member(path);
+    // 1. Add the new project to the workspace, if it exists.
+    //    This must be executed first in order to run `cargo fmt` on the new project.
+    cargo_metadata::MetadataCommand::new()
+        .exec()
+        .ok()
+        .and_then(|metadata| {
+            let cargo_toml_path = &metadata.workspace_root.join("Cargo.toml");
+            let cargo_toml_str = std::fs::read_to_string(cargo_toml_path).ok()?;
+            let relative_path = path.strip_prefix(metadata.workspace_root).ok()?;
 
-    // first run cargo fmt
+            let mut cargo_toml: toml_edit::DocumentMut = cargo_toml_str.parse().ok()?;
+            cargo_toml
+                .get_mut("workspace")?
+                .get_mut("members")?
+                .as_array_mut()?
+                .push(relative_path.display().to_string());
+
+            std::fs::write(cargo_toml_path, cargo_toml.to_string()).ok()
+        });
+
+    // 2. Run `cargo fmt` on the new project.
     let mut cmd = Command::new("cargo");
     let cmd = cmd.arg("fmt").current_dir(path);
     let output = cmd.output().expect("failed to execute process");
@@ -70,7 +87,7 @@ pub fn post_create(path: &Path) -> Result<()> {
         tracing::error!("stderr: {}", String::from_utf8_lossy(&output.stderr));
     }
 
-    // then format the toml
+    // 3. Format the `Cargo.toml` and `Dioxus.toml` files.
     let toml_paths = [path.join("Cargo.toml"), path.join("Dioxus.toml")];
     for toml_path in &toml_paths {
         let toml = std::fs::read_to_string(toml_path)?;
@@ -90,7 +107,7 @@ pub fn post_create(path: &Path) -> Result<()> {
         file.write_all(new_string.as_bytes())?;
     }
 
-    // remove any triple newlines from the readme
+    // 4. Remove any triple newlines from the readme.
     let readme_path = path.join("README.md");
     let readme = std::fs::read_to_string(&readme_path)?;
     let new_readme = remove_triple_newlines(&readme);
@@ -111,24 +128,4 @@ fn remove_triple_newlines(string: &str) -> String {
         new_string.push(char);
     }
     new_string
-}
-
-fn add_workspace_member(path: &Path) {
-    cargo_metadata::MetadataCommand::new()
-        .exec()
-        .ok()
-        .and_then(|metadata| {
-            let cargo_toml_path = &metadata.workspace_root.join("Cargo.toml");
-            let cargo_toml_str = std::fs::read_to_string(cargo_toml_path).ok()?;
-            let relative_path = path.strip_prefix(metadata.workspace_root).ok()?;
-
-            let mut cargo_toml: toml_edit::DocumentMut = cargo_toml_str.parse().ok()?;
-            cargo_toml
-                .get_mut("workspace")?
-                .get_mut("members")?
-                .as_array_mut()?
-                .push(relative_path.display().to_string());
-
-            std::fs::write(cargo_toml_path, cargo_toml.to_string()).ok()
-        });
 }
