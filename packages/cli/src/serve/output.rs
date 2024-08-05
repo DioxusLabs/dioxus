@@ -190,7 +190,6 @@ impl Output {
     /// Add a message from stderr to the logs
     fn push_stderr(&mut self, platform: TargetPlatform, stderr: String) {
         self.set_tab(Tab::BuildLog);
-        let source = platform.into();
 
         self.running_apps
             .get_mut(&platform)
@@ -202,7 +201,7 @@ impl Output {
             .push_str(&stderr);
         self.build_progress
             .build_logs
-            .get_mut(&source)
+            .get_mut(&platform)
             .unwrap()
             .messages
             .push(BuildMessage {
