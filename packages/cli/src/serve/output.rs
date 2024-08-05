@@ -340,7 +340,7 @@ impl Output {
                     println!("{platform}: {diagnostic}");
                 }
             }
-        };
+        }
 
         // todo: print the build info here for the most recent build, and then the logs of the most recent build
         for (platform, build) in self.build_progress.build_logs.iter_mut() {
