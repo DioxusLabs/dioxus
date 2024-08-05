@@ -114,15 +114,13 @@ fn remove_triple_newlines(string: &str) -> String {
 }
 
 fn add_workspace_member(path: &Path) {
-    DioxusCrate::new(&Default::default())
+    cargo_metadata::MetadataCommand::new()
+        .exec()
         .ok()
-        .and_then(|krate| {
-            let cargo_toml_path = &krate.package().manifest_path;
+        .and_then(|metadata| {
+            let cargo_toml_path = &metadata.workspace_root.join("Cargo.toml");
             let cargo_toml_str = std::fs::read_to_string(cargo_toml_path).ok()?;
-
-            let mut root_path = cargo_toml_path.clone();
-            root_path.pop();
-            let relative_path = path.strip_prefix(root_path).ok()?;
+            let relative_path = path.strip_prefix(metadata.workspace_root).ok()?;
 
             let mut cargo_toml: toml_edit::DocumentMut = cargo_toml_str.parse().ok()?;
             cargo_toml
@@ -131,8 +129,6 @@ fn add_workspace_member(path: &Path) {
                 .as_array_mut()?
                 .push(relative_path.display().to_string());
 
-            std::fs::write(cargo_toml_path, cargo_toml.to_string()).ok()?;
-
-            Some(())
+            std::fs::write(cargo_toml_path, cargo_toml.to_string()).ok()
         });
 }
