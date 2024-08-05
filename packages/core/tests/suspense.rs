@@ -1,4 +1,6 @@
 use dioxus::prelude::*;
+use dioxus_core::{ElementId, Mutation};
+use pretty_assertions::assert_eq;
 use std::future::poll_fn;
 use std::task::Poll;
 
@@ -371,4 +373,102 @@ fn suspense_tracks_resolved() {
             "child"
         }
     }
+}
+
+// Regression test for https://github.com/DioxusLabs/dioxus/issues/2783
+#[test]
+fn toggle_suspense() {
+    use dioxus::prelude::*;
+
+    fn app() -> Element {
+        rsx! {
+            SuspenseBoundary {
+                fallback: |_| rsx! { "fallback" },
+                if generation() % 2 == 0 {
+                    Page {}
+                } else {
+                    Home {}
+                }
+            }
+        }
+    }
+
+    #[component]
+    pub fn Home() -> Element {
+        let _calculation = use_resource(|| async move {
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            1 + 1
+        })
+        .suspend()?;
+        rsx! {
+            "hello world"
+        }
+    }
+
+    #[component]
+    pub fn Page() -> Element {
+        rsx! {
+            "goodbye world"
+        }
+    }
+
+    tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .unwrap()
+        .block_on(async {
+            let mut dom = VirtualDom::new(app);
+            let mutations = dom.rebuild_to_vec().sanitize();
+
+            // First create goodbye world
+            println!("{:#?}", mutations);
+            assert_eq!(
+                mutations.edits,
+                [
+                    Mutation::LoadTemplate { name: "template", index: 0, id: ElementId(1) },
+                    Mutation::AppendChildren { id: ElementId(0), m: 1 }
+                ]
+            );
+
+            dom.mark_dirty(ScopeId::APP);
+            let mutations = dom.render_immediate_to_vec().sanitize();
+
+            // Then replace that with nothing
+            println!("{:#?}", mutations);
+            assert_eq!(
+                mutations.edits,
+                [
+                    Mutation::CreatePlaceholder { id: ElementId(2) },
+                    Mutation::ReplaceWith { id: ElementId(1), m: 1 },
+                ]
+            );
+
+            dom.wait_for_work().await;
+            let mutations = dom.render_immediate_to_vec().sanitize();
+
+            // Then replace it with a placeholder
+            println!("{:#?}", mutations);
+            assert_eq!(
+                mutations.edits,
+                [
+                    Mutation::LoadTemplate { name: "template", index: 0, id: ElementId(1) },
+                    Mutation::ReplaceWith { id: ElementId(2), m: 1 },
+                ]
+            );
+
+            dom.wait_for_work().await;
+            let mutations = dom.render_immediate_to_vec().sanitize();
+
+            // Then replace it with the resolved node
+            println!("{:#?}", mutations);
+            assert_eq!(
+                mutations.edits,
+                [
+                    Mutation::CreatePlaceholder { id: ElementId(2,) },
+                    Mutation::ReplaceWith { id: ElementId(1,), m: 1 },
+                    Mutation::LoadTemplate { name: "template", index: 0, id: ElementId(1) },
+                    Mutation::ReplaceWith { id: ElementId(2), m: 1 },
+                ]
+            );
+        });
 }
