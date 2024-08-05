@@ -61,7 +61,8 @@ impl From<TargetPlatform> for LogSource {
 
 #[derive(Default)]
 pub struct BuildProgress {
-    build_logs: HashMap<LogSource, ActiveBuild>,
+    internal_logs: Vec<BuildMessage>,
+    build_logs: HashMap<TargetPlatform, ActiveBuild>,
 }
 
 impl BuildProgress {
@@ -481,20 +482,23 @@ impl Output {
         let source = platform.into();
         let snapped = self.is_snapped(source);
 
-        self.build_progress
-            .build_logs
-            .entry(source)
-            .or_default()
-            .stdout_logs
-            .push(message);
+        match source {
+            LogSource::Internal => self.build_progress.internal_logs.push(message),
+            LogSource::Target(platform) => self
+                .build_progress
+                .build_logs
+                .entry(platform)
+                .or_default()
+                .stdout_logs
+                .push(message),
+        }
 
         if snapped {
             self.scroll_to_bottom();
         }
     }
 
-    pub fn new_build_logs(&mut self, platform: impl Into<LogSource>, update: UpdateBuildProgress) {
-        let source = platform.into();
+    pub fn new_build_logs(&mut self, platform: TargetPlatform, update: UpdateBuildProgress) {
         let snapped = self.is_snapped(source);
 
         // when the build is finished, switch to the console
@@ -504,11 +508,11 @@ impl Output {
 
         self.build_progress
             .build_logs
-            .entry(source)
+            .entry(platform)
             .or_default()
             .update(update);
 
-        if snapped {
+        if self.is_snapped(LogSource::Target(platform)) {
             self.scroll_to_bottom();
         }
     }
@@ -646,7 +650,7 @@ impl Output {
                             .build_progress
                             .build_logs
                             .values()
-                            .min_by(|a, b| a.partial_cmp(b).unwrap())
+                            .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
                             .unwrap();
                         spans.extend_from_slice(&build.spans(Rect::new(
                             0,
@@ -868,6 +872,10 @@ impl ActiveBuild {
     fn update(&mut self, update: UpdateBuildProgress) {
         match update.update {
             UpdateStage::Start => {
+                // If we are already past the stage, don't roll back
+                if self.stage > update.stage {
+                    return;
+                }
                 self.stage = update.stage;
                 self.progress = 0.0;
                 self.failed = None;
