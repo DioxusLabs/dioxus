@@ -214,8 +214,6 @@ impl Output {
 
     /// Add a message from stdout to the logs
     fn push_stdout(&mut self, platform: TargetPlatform, stdout: String) {
-        let source = platform.into();
-
         self.running_apps
             .get_mut(&platform)
             .unwrap()
@@ -226,7 +224,7 @@ impl Output {
             .push_str(&stdout);
         self.build_progress
             .build_logs
-            .get_mut(&source)
+            .get_mut(&platform)
             .unwrap()
             .messages
             .push(BuildMessage {
@@ -331,6 +329,19 @@ impl Output {
     /// versions of the cli would just eat build logs making debugging issues harder than they needed
     /// to be.
     fn drain_print_logs(&mut self) {
+        fn log_build_message(platform: &LogSource, message: &BuildMessage) {
+            match &message.message {
+                MessageType::Text(text) => {
+                    for line in text.lines() {
+                        println!("{platform}: {line}");
+                    }
+                }
+                MessageType::Cargo(diagnostic) => {
+                    println!("{platform}: {diagnostic}");
+                }
+            }
+        };
+
         // todo: print the build info here for the most recent build, and then the logs of the most recent build
         for (platform, build) in self.build_progress.build_logs.iter_mut() {
             if build.messages.is_empty() {
@@ -340,16 +351,14 @@ impl Output {
             let messages = build.messages.drain(0..);
 
             for message in messages {
-                match &message.message {
-                    MessageType::Cargo(diagnostic) => {
-                        println!(
-                            "{platform}: {}",
-                            diagnostic.rendered.as_deref().unwrap_or_default()
-                        )
-                    }
-                    MessageType::Text(t) => println!("{platform}: {t}"),
-                }
+                log_build_message(&LogSource::Target(*platform), &message);
             }
+        }
+
+        // Log the internal logs
+        let messaegs = self.build_progress.internal_logs.drain(..);
+        for message in messaegs {
+            log_build_message(&LogSource::Internal, &message);
         }
     }
 
@@ -499,7 +508,7 @@ impl Output {
     }
 
     pub fn new_build_logs(&mut self, platform: TargetPlatform, update: UpdateBuildProgress) {
-        let snapped = self.is_snapped(source);
+        let snapped = self.is_snapped(LogSource::Target(platform));
 
         // when the build is finished, switch to the console
         if update.stage == Stage::Finished {
@@ -512,7 +521,7 @@ impl Output {
             .or_default()
             .update(update);
 
-        if self.is_snapped(LogSource::Target(platform)) {
+        if snapped {
             self.scroll_to_bottom();
         }
     }
@@ -549,8 +558,7 @@ impl Output {
             self.running_apps.insert(platform, app);
 
             // Finish the build progress for the platform that just finished building
-            let source = platform.into();
-            if let Some(build) = self.build_progress.build_logs.get_mut(&source) {
+            if let Some(build) = self.build_progress.build_logs.get_mut(&platform) {
                 build.stage = Stage::Finished;
             }
         }
@@ -716,6 +724,42 @@ impl Output {
                 // handle the wrapping and scrolling
                 let mut paragraph_text: Text<'_> = Text::default();
 
+                let mut add_build_message = |message: &BuildMessage| {
+                    use ansi_to_tui::IntoText;
+                    match &message.message {
+                        MessageType::Text(line) => {
+                            for line in line.lines() {
+                                let text = line.into_text().unwrap_or_default();
+                                for line in text.lines {
+                                    let source = format!("[{}] ", message.source);
+
+                                    let msg_span = Span::from(source);
+                                    let msg_span = match message.source {
+                                        MessageSource::App => msg_span.light_blue(),
+                                        MessageSource::Dev => msg_span.dark_gray(),
+                                        MessageSource::Build => msg_span.light_yellow(),
+                                    };
+
+                                    let mut out_line = vec![msg_span];
+                                    for span in line.spans {
+                                        out_line.push(span);
+                                    }
+                                    let newline = Line::from(out_line);
+                                    paragraph_text.push_line(newline);
+                                }
+                            }
+                        }
+                        MessageType::Cargo(diagnostic) => {
+                            let diagnostic = diagnostic.rendered.as_deref().unwrap_or_default();
+
+                            for line in diagnostic.lines() {
+                                paragraph_text.extend(line.into_text().unwrap_or_default());
+                            }
+                        }
+                    };
+                };
+
+                // First log each platform's build logs
                 for platform in self.build_progress.build_logs.keys() {
                     let build = self.build_progress.build_logs.get(platform).unwrap();
 
@@ -725,39 +769,12 @@ impl Output {
                     };
 
                     for span in msgs.iter() {
-                        use ansi_to_tui::IntoText;
-                        match &span.message {
-                            MessageType::Text(line) => {
-                                for line in line.lines() {
-                                    let text = line.into_text().unwrap_or_default();
-                                    for line in text.lines {
-                                        let source = format!("[{}] ", span.source);
-
-                                        let msg_span = Span::from(source);
-                                        let msg_span = match span.source {
-                                            MessageSource::App => msg_span.light_blue(),
-                                            MessageSource::Dev => msg_span.dark_gray(),
-                                            MessageSource::Build => msg_span.light_yellow(),
-                                        };
-
-                                        let mut out_line = vec![msg_span];
-                                        for span in line.spans {
-                                            out_line.push(span);
-                                        }
-                                        let newline = Line::from(out_line);
-                                        paragraph_text.push_line(newline);
-                                    }
-                                }
-                            }
-                            MessageType::Cargo(diagnostic) => {
-                                let diagnostic = diagnostic.rendered.as_deref().unwrap_or_default();
-
-                                for line in diagnostic.lines() {
-                                    paragraph_text.extend(line.into_text().unwrap_or_default());
-                                }
-                            }
-                        };
+                        add_build_message(span);
                     }
+                }
+                // Then log the internal logs
+                for message in self.build_progress.internal_logs.iter() {
+                    add_build_message(message);
                 }
 
                 let paragraph = Paragraph::new(paragraph_text)
