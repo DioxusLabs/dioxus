@@ -3,8 +3,8 @@
 // cargo run --bin server --features server
 // ```
 
-use axum_desktop::*;
 use dioxus::prelude::*;
+use fullstack_desktop_example::*;
 use server_fn::axum::register_explicit;
 
 #[tokio::main]
