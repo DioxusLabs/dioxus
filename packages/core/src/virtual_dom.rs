@@ -865,8 +865,9 @@ impl VirtualDom {
                     self.runtime.rendering.set(false);
                     listener.call(uievent.clone());
                     self.runtime.rendering.set(true);
+                    let metadata = uievent.metadata.get();
 
-                    if !uievent.propagates.get() {
+                    if !metadata.propagates {
                         return;
                     }
                 }

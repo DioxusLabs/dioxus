@@ -26,14 +26,23 @@ use std::{
 pub struct Event<T: 'static + ?Sized> {
     /// The data associated with this event
     pub data: Rc<T>,
-    pub(crate) propagates: Rc<Cell<bool>>,
+    pub(crate) metadata: Rc<Cell<EventMetadata>>,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct EventMetadata {
+    pub(crate) propagates: bool,
+    pub(crate) prevent_default: bool,
 }
 
 impl<T: ?Sized + 'static> Event<T> {
     pub(crate) fn new(data: Rc<T>, bubbles: bool) -> Self {
         Self {
             data,
-            propagates: Rc::new(Cell::new(bubbles)),
+            metadata: Rc::new(Cell::new(EventMetadata {
+                propagates: bubbles,
+                prevent_default: false,
+            })),
         }
     }
 }
@@ -57,7 +66,7 @@ impl<T> Event<T> {
     pub fn map<U: 'static, F: FnOnce(&T) -> U>(&self, f: F) -> Event<U> {
         Event {
             data: Rc::new(f(&self.data)),
-            propagates: self.propagates.clone(),
+            metadata: self.metadata.clone(),
         }
     }
 
@@ -78,7 +87,9 @@ impl<T> Event<T> {
     /// ```
     #[deprecated = "use stop_propagation instead"]
     pub fn cancel_bubble(&self) {
-        self.propagates.set(false);
+        let mut metadata = self.metadata.get();
+        metadata.propagates = false;
+        self.metadata.set(metadata);
     }
 
     /// Prevent this event from continuing to bubble up the tree to parent elements.
@@ -96,7 +107,9 @@ impl<T> Event<T> {
     /// };
     /// ```
     pub fn stop_propagation(&self) {
-        self.propagates.set(false);
+        let mut metadata = self.metadata.get();
+        metadata.propagates = false;
+        self.metadata.set(metadata);
     }
 
     /// Get a reference to the inner data from this event
@@ -117,12 +130,45 @@ impl<T> Event<T> {
     pub fn data(&self) -> Rc<T> {
         self.data.clone()
     }
+
+    /// Prevent the default action of the event.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// fn App() -> Element {
+    ///     rsx! {
+    ///         a {
+    ///             // You can prevent the default action of the event with `prevent_default`
+    ///             onclick: move |event| {
+    ///                 event.prevent_default();
+    ///             },
+    ///             href: "https://dioxuslabs.com",
+    ///             "don't go to the link"
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// Note: This must be called synchronously when handling the event. Calling it after the event has been handled will have no effect.
+    #[track_caller]
+    pub fn prevent_default(&self) {
+        let mut metadata = self.metadata.get();
+        metadata.prevent_default = true;
+        self.metadata.set(metadata);
+    }
+
+    /// Check if the default action of the event is enabled.
+    pub fn default_action_enabled(&self) -> bool {
+        !self.metadata.get().prevent_default
+    }
 }
 
 impl<T: ?Sized> Clone for Event<T> {
     fn clone(&self) -> Self {
         Self {
-            propagates: self.propagates.clone(),
+            metadata: self.metadata.clone(),
             data: self.data.clone(),
         }
     }
@@ -138,7 +184,8 @@ impl<T> std::ops::Deref for Event<T> {
 impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("UiEvent")
-            .field("bubble_state", &self.propagates)
+            .field("bubble_state", &self.metadata.get().propagates)
+            .field("prevent_default", &self.metadata.get().prevent_default)
             .field("data", &self.data)
             .finish()
     }

@@ -793,7 +793,7 @@ impl AttributeValue {
         AttributeValue::Listener(EventHandler::leak(move |event: Event<dyn Any>| {
             let data = event.data.downcast::<T>().unwrap();
             callback(Event {
-                propagates: event.propagates,
+                metadata: event.metadata.clone(),
                 data,
             });
         }))
