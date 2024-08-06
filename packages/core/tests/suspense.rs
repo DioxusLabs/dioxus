@@ -258,10 +258,6 @@ fn suspended_nodes_dont_trigger_effects() {
 /// Make sure we keep any state of components when we switch from a resolved future to a suspended future
 #[test]
 fn resolved_to_suspended() {
-    tracing_subscriber::fmt::SubscriberBuilder::default()
-        .with_max_level(tracing::Level::INFO)
-        .init();
-
     static SUSPENDED: GlobalSignal<bool> = Signal::global(|| false);
 
     tokio::runtime::Builder::new_current_thread()
@@ -588,7 +584,6 @@ fn nested_suspense_resolves_client() {
         .build()
         .unwrap()
         .block_on(async {
-            tracing_subscriber::fmt::init();
             let mut dom = VirtualDom::new(app);
             let mutations = dom.rebuild_to_vec();
             // Initial loading message and loading title
