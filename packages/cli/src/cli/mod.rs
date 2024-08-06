@@ -1,3 +1,4 @@
+pub mod apple;
 pub mod autoformat;
 pub mod build;
 pub mod bundle;
@@ -86,6 +87,9 @@ pub enum Commands {
     /// Handles parsing of linker arguments for linker-based systems
     /// such as Manganis and binary patching.
     Link(link::LinkCommand),
+
+    #[clap(subcommand)]
+    Apple(apple::Apple),
 }
 
 impl Display for Commands {
@@ -102,6 +106,7 @@ impl Display for Commands {
             Commands::Check(_) => write!(f, "check"),
             Commands::Bundle(_) => write!(f, "bundle"),
             Commands::Link(_) => write!(f, "link"),
+            Commands::Apple(_) => write!(f, "apple"),
         }
     }
 }

@@ -83,6 +83,11 @@ async fn main() -> anyhow::Result<()> {
             .bundle()
             .await
             .context(error_wrapper("Bundling project failed")),
+
+        Apple(opts) => {
+            apple::run(opts);
+            Ok(())
+        }
     }
 }
 

@@ -73,6 +73,7 @@ once_cell = "1.19.0"
 # plugin packages
 open = "5.0.1"
 cargo-generate = "=0.21.1"
+cargo-mobile2 = "0.13.0"
 toml_edit = "0.22.15"
 
 # bundling
