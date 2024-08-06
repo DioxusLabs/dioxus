@@ -10,27 +10,69 @@ pub(crate) static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
 pub struct Create {
     /// Project name (required when `--yes` is used)
     name: Option<String>,
+
+    /// Generate the template directly at the given path.
+    #[arg(long, value_parser)]
+    destination: Option<PathBuf>,
+
+    /// Generate the template directly into the current dir. No subfolder will be created and no vcs is initialized.
+    #[arg(long, action)]
+    init: bool,
+
     /// Template path
     #[clap(default_value = DEFAULT_TEMPLATE, short, long)]
     template: String,
+
     /// Pass <option>=<value> for the used template (e.g., `foo=bar`)
     #[clap(short, long)]
     option: Vec<String>,
+
     /// Specify a sub-template within the template repository to be used as the actual template
     #[clap(long)]
     subtemplate: Option<String>,
+
     /// Skip user interaction by using the default values for the used template.
     /// Default values can be overridden with `--option`
     #[clap(short, long)]
     yes: bool,
-    // TODO: turn on/off cargo-generate's output (now is invisible)
-    // #[clap(default_value = "false", short, long)]
-    // silent: bool,
 }
 
 impl Create {
-    pub fn create(self) -> Result<()> {
+    pub fn create(mut self) -> Result<()> {
         let metadata = cargo_metadata::MetadataCommand::new().exec().ok();
+
+        // If we're getting pass a `.` name, that's actually a path
+        // We're actually running an init - we should clear the name
+        if self.name.as_deref() == Some(".") {
+            self.name = None;
+            self.init = true;
+        }
+
+        // A default destination is set for nameless projects
+        if self.name.is_none() {
+            self.destination = Some(PathBuf::from("."));
+        }
+
+        // Split the name into path components
+        // such that dx new packages/app will create a directory called packages/app
+        let destination = self.destination.unwrap_or_else(|| {
+            let mut path = PathBuf::from(self.name.as_deref().unwrap());
+
+            if path.is_relative() {
+                path = std::env::current_dir().unwrap().join(path);
+            }
+
+            // split the path into the parent and the name
+            let parent = path.parent().unwrap();
+            let name = path.file_name().unwrap();
+            self.name = Some(name.to_str().unwrap().to_string());
+
+            // create the parent directory if it doesn't exist
+            std::fs::create_dir_all(parent).unwrap();
+
+            // And then the "destination" is the parent directory
+            parent.to_path_buf()
+        });
 
         let args = GenerateArgs {
             define: self.option,
@@ -41,6 +83,8 @@ impl Create {
                 subfolder: self.subtemplate,
                 ..Default::default()
             },
+            init: self.init,
+            destination: Some(destination),
             vcs: if metadata.is_some() {
                 Some(cargo_generate::Vcs::None)
             } else {
@@ -48,9 +92,11 @@ impl Create {
             },
             ..Default::default()
         };
+
         if self.yes && args.name.is_none() {
             return Err("You have to provide the project's name when using `--yes` option.".into());
         }
+
         // https://github.com/console-rs/dialoguer/issues/294
         ctrlc::set_handler(move || {
             let _ = console::Term::stdout().show_cursor();
