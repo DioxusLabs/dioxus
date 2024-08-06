@@ -48,7 +48,7 @@ where
 {
     let mut state = use_signal(|| UseFutureState::Pending);
 
-    let callback = use_callback(move || {
+    let callback = use_callback(move |_| {
         let fut = future();
         spawn(async move {
             state.set(UseFutureState::Pending);
@@ -58,7 +58,7 @@ where
     });
 
     // Create the task inside a CopyValue so we can reset it in-place later
-    let task = use_hook(|| CopyValue::new(callback.call()));
+    let task = use_hook(|| CopyValue::new(callback(())));
 
     // Early returns in dioxus have consequences for use_memo, use_resource, and use_future, etc
     // We *don't* want futures to be running if the component early returns. It's a rather weird behavior to have
@@ -82,7 +82,7 @@ where
 pub struct UseFuture {
     task: CopyValue<Task>,
     state: Signal<UseFutureState>,
-    callback: UseCallback<Task>,
+    callback: UseCallback<(), Task>,
 }
 
 /// A signal that represents the state of a future
@@ -109,7 +109,7 @@ impl UseFuture {
     /// generates.
     pub fn restart(&mut self) {
         self.task.write().cancel();
-        let new_task = self.callback.call();
+        let new_task = self.callback.call(());
         self.task.set(new_task);
     }
 

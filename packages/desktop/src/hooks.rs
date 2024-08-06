@@ -71,13 +71,13 @@ pub fn use_asset_handler(
 /// Get a closure that executes any JavaScript in the WebView context.
 pub fn use_global_shortcut(
     accelerator: impl IntoAccelerator,
-    handler: impl FnMut() + 'static,
+    mut handler: impl FnMut() + 'static,
 ) -> Result<ShortcutHandle, ShortcutRegistryError> {
     // wrap the user's handler in something that will carry the scope/runtime with it
-    let cb = use_callback(handler);
+    let cb = use_callback(move |_| handler());
 
     use_hook_with_cleanup(
-        move || window().create_shortcut(accelerator.accelerator(), move || cb.call()),
+        move || window().create_shortcut(accelerator.accelerator(), move || cb.call(())),
         |handle| {
             if let Ok(handle) = handle {
                 handle.remove();

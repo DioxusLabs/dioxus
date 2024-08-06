@@ -5,7 +5,7 @@
 // - Hydration
 
 #![allow(non_snake_case)]
-use dioxus::prelude::*;
+use dioxus::{prelude::*, CapturedError};
 
 fn main() {
     LaunchBuilder::fullstack().launch(app);
@@ -31,6 +31,10 @@ fn app() -> Element {
             "Run a server function!"
         }
         "Server said: {text}"
+        div {
+            id: "errors",
+            Errors {}
+        }
     }
 }
 
@@ -44,4 +48,43 @@ async fn post_server_data(data: String) -> Result<(), ServerFnError> {
 #[server(GetServerData)]
 async fn get_server_data() -> Result<String, ServerFnError> {
     Ok("Hello from the server!".to_string())
+}
+
+#[server]
+async fn server_error() -> Result<String, ServerFnError> {
+    tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+    Err(ServerFnError::new("the server threw an error!"))
+}
+
+#[component]
+fn Errors() -> Element {
+    rsx! {
+        // This is a tricky case for suspense https://github.com/DioxusLabs/dioxus/issues/2570
+        // Root suspense boundary is already resolved when the inner suspense boundary throws an error.
+        // We need to throw the error from the inner suspense boundary on the server to the hydrated
+        // suspense boundary on the client
+        ErrorBoundary {
+            handle_error: |_| rsx! {
+                "Hmm, something went wrong."
+            },
+            SuspenseBoundary {
+                fallback: |_: SuspenseContext| rsx! {
+                    div {
+                        "Loading..."
+                    }
+                },
+                ThrowsError {}
+            }
+        }
+    }
+}
+
+#[component]
+pub fn ThrowsError() -> Element {
+    use_server_future(server_error)?
+        .unwrap()
+        .map_err(|err| RenderError::Aborted(CapturedError::from_display(err)))?;
+    rsx! {
+        "success"
+    }
 }
