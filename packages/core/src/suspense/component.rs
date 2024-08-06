@@ -421,7 +421,8 @@ impl SuspenseBoundaryProps {
             let suspense_context =
                 SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime, scope_id)
                     .unwrap();
-            let suspended = suspense_context.suspended_nodes();
+            // Take the suspended nodes out of the suspense boundary so the children know that the boundary is not suspended while diffing
+            let suspended = suspense_context.take_suspended_nodes();
             if let Some(node) = suspended {
                 node.remove_node(&mut *dom, None::<&mut M>, None);
             }
@@ -444,10 +445,6 @@ impl SuspenseBoundaryProps {
             let props = Self::downcast_from_props(&mut *scope_state.props).unwrap();
             props.children = children.clone().node;
             scope_state.last_rendered_node = Some(children);
-            let suspense_context =
-                SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime, scope_id)
-                    .unwrap();
-            suspense_context.take_suspended_nodes();
         })
     }
 
