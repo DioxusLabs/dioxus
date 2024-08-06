@@ -465,6 +465,29 @@ pub fn Link(props: LinkProps) -> Element {
     VNode::empty()
 }
 
+/// Render a `<link>` element with a `rel="stylesheet"` attribute by default.
+///
+/// # Example
+///
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
+/// fn App() -> Element {
+///     rsx! {
+///         Stylesheet {
+///             href: "https://example.com/styles.css",
+///         }
+///     }
+/// }
+/// ```
+#[doc(alias = "<link>")]
+#[component]
+pub fn Stylesheet(props: LinkProps) -> Element {
+    Link(LinkProps {
+        rel: Some("stylesheet".to_string()),
+        ..props
+    })
+}
+
 fn get_or_insert_root_context<T: Default + Clone + 'static>() -> T {
     match ScopeId::ROOT.has_context::<T>() {
         Some(context) => context,

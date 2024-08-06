@@ -320,30 +320,30 @@ fn get_mime_by_ext(trimmed: &Path) -> &'static str {
     }
 }
 
-/// A global that stores the workspace root. Used in [`get_workspace_root_from_cargo`].
-static WORKSPACE_ROOT: OnceLock<PathBuf> = OnceLock::new();
+// /// A global that stores the workspace root. Used in [`get_workspace_root_from_cargo`].
+// static WORKSPACE_ROOT: OnceLock<PathBuf> = OnceLock::new();
 
-/// Describes the metadata we need from `cargo metadata`.
-#[derive(Deserialize)]
-struct CargoMetadata {
-    workspace_root: PathBuf,
-}
+// /// Describes the metadata we need from `cargo metadata`.
+// #[derive(Deserialize)]
+// struct CargoMetadata {
+//     workspace_root: PathBuf,
+// }
 
-/// Get the workspace root using `cargo metadata`. Should not be used in release mode.
-pub(crate) fn get_workspace_root_from_cargo() -> PathBuf {
-    WORKSPACE_ROOT
-        .get_or_init(|| {
-            let out = Command::new("cargo")
-                .args(["metadata", "--format-version", "1", "--no-deps"])
-                .output()
-                .expect("`cargo metadata` failed to run");
+// /// Get the workspace root using `cargo metadata`. Should not be used in release mode.
+// pub(crate) fn get_workspace_root_from_cargo() -> PathBuf {
+//     WORKSPACE_ROOT
+//         .get_or_init(|| {
+//             let out = Command::new("cargo")
+//                 .args(["metadata", "--format-version", "1", "--no-deps"])
+//                 .output()
+//                 .expect("`cargo metadata` failed to run");
 
-            let out =
-                String::from_utf8(out.stdout).expect("failed to parse output of `cargo metadata`");
-            let metadata = serde_json::from_str::<CargoMetadata>(&out)
-                .expect("failed to deserialize data from `cargo metadata`");
+//             let out =
+//                 String::from_utf8(out.stdout).expect("failed to parse output of `cargo metadata`");
+//             let metadata = serde_json::from_str::<CargoMetadata>(&out)
+//                 .expect("failed to deserialize data from `cargo metadata`");
 
-            metadata.workspace_root
-        })
-        .to_owned()
-}
+//             metadata.workspace_root
+//         })
+//         .to_owned()
+// }

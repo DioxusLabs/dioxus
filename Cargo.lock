@@ -6498,12 +6498,10 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "built",
- "cargo-config2",
- "home",
  "infer 0.16.0",
  "reqwest 0.12.5",
+ "scratch",
  "serde",
- "toml",
  "tracing",
  "url",
 ]
