@@ -148,6 +148,11 @@ impl SuspenseContext {
         !self.inner.suspended_tasks.borrow().is_empty()
     }
 
+    /// Check if the suspense boundary is currently rendered as suspended
+    pub fn is_suspended(&self) -> bool {
+        self.inner.suspended_nodes.borrow().is_some()
+    }
+
     /// Add a suspended task
     pub(crate) fn add_suspended_task(&self, task: SuspendedFuture) {
         self.inner.suspended_tasks.borrow_mut().push(task);

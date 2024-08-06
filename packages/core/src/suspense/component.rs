@@ -421,7 +421,8 @@ impl SuspenseBoundaryProps {
             let suspense_context =
                 SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime, scope_id)
                     .unwrap();
-            let suspended = suspense_context.suspended_nodes();
+            // Take the suspended nodes out of the suspense boundary so the children know that the boundary is not suspended while diffing
+            let suspended = suspense_context.take_suspended_nodes();
             if let Some(node) = suspended {
                 node.remove_node(&mut *dom, None::<&mut M>, None);
             }
@@ -444,10 +445,6 @@ impl SuspenseBoundaryProps {
             let props = Self::downcast_from_props(&mut *scope_state.props).unwrap();
             props.children = children.clone().node;
             scope_state.last_rendered_node = Some(children);
-            let suspense_context =
-                SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime, scope_id)
-                    .unwrap();
-            suspense_context.take_suspended_nodes();
         })
     }
 
@@ -555,8 +552,11 @@ impl SuspenseBoundaryProps {
                     suspense_context.set_suspended_nodes(new_children);
 
                     un_resolve_suspense(dom, scope_id);
-                } // We have suspended nodes, but we just got out of suspense. Move the suspended nodes to the foreground
-                (Some(old_suspended_nodes), false) => {
+                }
+                // We have suspended nodes, but we just got out of suspense. Move the suspended nodes to the foreground
+                (Some(_), false) => {
+                    // Take the suspended nodes out of the suspense boundary so the children know that the boundary is not suspended while diffing
+                    let old_suspended_nodes = suspense_context.take_suspended_nodes().unwrap();
                     let old_placeholder = last_rendered_node;
                     let new_children = RenderReturn { node: children };
 
@@ -578,13 +578,6 @@ impl SuspenseBoundaryProps {
 
                     // Set the last rendered node to the new children
                     dom.scopes[scope_id.0].last_rendered_node = Some(new_children);
-
-                    let suspense_context = SuspenseContext::downcast_suspense_boundary_from_scope(
-                        &dom.runtime,
-                        scope_id,
-                    )
-                    .unwrap();
-                    suspense_context.take_suspended_nodes();
 
                     mark_suspense_resolved(dom, scope_id);
                 }
