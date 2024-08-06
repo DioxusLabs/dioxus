@@ -55,6 +55,6 @@ impl Init {
             ..Default::default()
         };
         let path = cargo_generate::generate(args)?;
-        create::post_create(&path, None)
+        create::post_create(&path, metadata)
     }
 }
