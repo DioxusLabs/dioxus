@@ -1,5 +1,6 @@
 use super::*;
 use cargo_generate::{GenerateArgs, TemplatePath};
+use cargo_metadata::Metadata;
 use std::path::Path;
 
 pub(crate) static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
@@ -29,6 +30,8 @@ pub struct Create {
 
 impl Create {
     pub fn create(self) -> Result<()> {
+        let metadata = cargo_metadata::MetadataCommand::new().exec().ok();
+
         let args = GenerateArgs {
             define: self.option,
             name: self.name,
@@ -37,6 +40,11 @@ impl Create {
                 auto_path: Some(self.template),
                 subfolder: self.subtemplate,
                 ..Default::default()
+            },
+            vcs: if metadata.is_some() {
+                Some(cargo_generate::Vcs::None)
+            } else {
+                None
             },
             ..Default::default()
         };
@@ -50,32 +58,30 @@ impl Create {
         })
         .expect("ctrlc::set_handler");
         let path = cargo_generate::generate(args)?;
-        post_create(&path)
+
+        post_create(&path, metadata)
     }
 }
 
 /// Post-creation actions for newly setup crates.
 // Also used by `init`.
-pub fn post_create(path: &Path) -> Result<()> {
+pub fn post_create(path: &Path, metadata: Option<Metadata>) -> Result<()> {
     // 1. Add the new project to the workspace, if it exists.
     //    This must be executed first in order to run `cargo fmt` on the new project.
-    cargo_metadata::MetadataCommand::new()
-        .exec()
-        .ok()
-        .and_then(|metadata| {
-            let cargo_toml_path = &metadata.workspace_root.join("Cargo.toml");
-            let cargo_toml_str = std::fs::read_to_string(cargo_toml_path).ok()?;
-            let relative_path = path.strip_prefix(metadata.workspace_root).ok()?;
+    metadata.and_then(|metadata| {
+        let cargo_toml_path = &metadata.workspace_root.join("Cargo.toml");
+        let cargo_toml_str = std::fs::read_to_string(cargo_toml_path).ok()?;
+        let relative_path = path.strip_prefix(metadata.workspace_root).ok()?;
 
-            let mut cargo_toml: toml_edit::DocumentMut = cargo_toml_str.parse().ok()?;
-            cargo_toml
-                .get_mut("workspace")?
-                .get_mut("members")?
-                .as_array_mut()?
-                .push(relative_path.display().to_string());
+        let mut cargo_toml: toml_edit::DocumentMut = cargo_toml_str.parse().ok()?;
+        cargo_toml
+            .get_mut("workspace")?
+            .get_mut("members")?
+            .as_array_mut()?
+            .push(relative_path.display().to_string());
 
-            std::fs::write(cargo_toml_path, cargo_toml.to_string()).ok()
-        });
+        std::fs::write(cargo_toml_path, cargo_toml.to_string()).ok()
+    });
 
     // 2. Run `cargo fmt` on the new project.
     let mut cmd = Command::new("cargo");

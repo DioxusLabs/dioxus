@@ -25,6 +25,8 @@ pub struct Init {
 
 impl Init {
     pub fn init(self) -> Result<()> {
+        let metadata = cargo_metadata::MetadataCommand::new().exec().ok();
+
         // Get directory name.
         let name = std::env::current_dir()?
             .file_name()
@@ -45,9 +47,14 @@ impl Init {
                 subfolder: self.subtemplate,
                 ..Default::default()
             },
+            vcs: if metadata.is_some() {
+                Some(cargo_generate::Vcs::None)
+            } else {
+                None
+            },
             ..Default::default()
         };
         let path = cargo_generate::generate(args)?;
-        create::post_create(&path)
+        create::post_create(&path, None)
     }
 }
