@@ -402,9 +402,7 @@ impl VNode {
     }
 
     fn templates_are_different(&self, other: &VNode) -> bool {
-        let self_node_name = self.template.id();
-        let other_node_name = other.template.id();
-        self_node_name != other_node_name
+        self.template == other.template
     }
 
     pub(super) fn reclaim_attributes(&self, mount: MountId, dom: &mut VirtualDom) {
@@ -856,7 +854,7 @@ impl VNode {
         let this_id = dom.next_element();
         dom.mounts[mount.0].root_ids[root_idx] = this_id;
 
-        to.load_template(self.template.name, root_idx, this_id);
+        to.load_template(self.template, root_idx, this_id);
 
         this_id
     }

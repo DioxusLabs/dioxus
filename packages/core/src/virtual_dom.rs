@@ -11,7 +11,7 @@ use crate::{
         ElementRef, NoOpMutations, SchedulerMsg, ScopeOrder, ScopeState, VNodeMount, VProps,
         WriteMutations,
     },
-    nodes::{Template, TemplateId},
+    nodes::Template,
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
     AttributeValue, ComponentFunction, Element, Event, Mutations,
@@ -209,7 +209,7 @@ pub struct VirtualDom {
     pub(crate) dirty_scopes: BTreeSet<ScopeOrder>,
 
     // A map of templates we have sent to the renderer
-    pub(crate) templates: FxHashSet<TemplateId>,
+    pub(crate) templates: FxHashSet<Template>,
 
     // Templates changes that are queued for the next render
     pub(crate) queued_templates: Vec<Template>,

@@ -112,11 +112,11 @@ impl VirtualDom {
         to: &mut impl WriteMutations,
         mut template: Template,
     ) {
-        if self.templates.contains(&template.name) {
+        if self.templates.contains(&template) {
             return;
         }
 
-        _ = self.templates.insert(template.name);
+        _ = self.templates.insert(template);
 
         // If it's all dynamic nodes, then we don't need to register it
         if !template.is_completely_dynamic() {
