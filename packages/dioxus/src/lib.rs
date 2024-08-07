@@ -125,7 +125,7 @@ pub mod prelude {
 
     #[cfg(feature = "asset")]
     #[cfg_attr(docsrs, doc(cfg(feature = "asset")))]
-    pub use manganis::{self, classes, mg as asset, ImageAsset, ImageType};
+    pub use manganis::{self, self as assets, asset, classes, ImageAsset, ImageType};
 }
 
 #[cfg(feature = "web")]
@@ -159,3 +159,11 @@ pub use dioxus_liveview as liveview;
 #[cfg(feature = "ssr")]
 #[cfg_attr(docsrs, doc(cfg(feature = "ssr")))]
 pub use dioxus_ssr as ssr;
+
+#[cfg(feature = "asset")]
+#[cfg_attr(docsrs, doc(cfg(feature = "asset")))]
+pub use manganis as assets;
+
+#[cfg(feature = "asset")]
+#[cfg_attr(docsrs, doc(cfg(feature = "asset")))]
+pub use manganis;

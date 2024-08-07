@@ -92,8 +92,8 @@ dioxus-static-site-generation = { path = "packages/static-generation", version =
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.1", default-features = false }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.1" }
 
-manganis-cli-support = { version = "0.3.0-alpha.0", features = ["html"], path = "../ecosystem-dioxus/manganis/cli-support" }
-manganis = { version = "0.3.0-alpha.0", default-features = false, features = ["macro"], path = "../ecosystem-dioxus/manganis" }
+manganis-cli-support = { version = "0.3.0-alpha.0", features = ["html"], path = "../ecosystem-dioxus/manganis/packages/cli-support" }
+manganis = { version = "0.3.0-alpha.0", default-features = false, features = ["macro"], path = "../ecosystem-dioxus/manganis/packages/manganis" }
 # manganis-cli-support = { version = "0.3.0-alpha.0", features = ["html"] }
 # manganis = { version = "0.3.0-alpha.0", default-features = false }
 warnings = { version = "0.2.0" }
