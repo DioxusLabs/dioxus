@@ -59,7 +59,7 @@ members = [
 exclude = ["examples/mobile_demo", "examples/openid_connect_demo"]
 
 [workspace.package]
-version = "0.6.0-alpha.1"
+version = "0.6.0-alpha.2"
 
 # dependencies that are shared across packages
 [workspace.dependencies]
@@ -92,8 +92,8 @@ dioxus-static-site-generation = { path = "packages/static-generation", version =
 dioxus_server_macro = { path = "packages/server-macro", version = "0.6.0-alpha.0", default-features = false }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.6.0-alpha.0" }
 
-manganis-cli-support = { version = "0.3.0-alpha.0", features = ["html"] }
-manganis = { version = "0.3.0-alpha.0", default-features = false }
+manganis-cli-support = { version = "0.3.0-alpha.1", features = ["html"] }
+manganis = { version = "0.3.0-alpha.1", default-features = false, features = ["html", "macro"]}
 warnings = { version = "0.2.0" }
 
 
