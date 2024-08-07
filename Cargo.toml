@@ -59,7 +59,7 @@ members = [
 exclude = ["examples/mobile_demo", "examples/openid_connect_demo"]
 
 [workspace.package]
-version = "0.6.0-alpha.1"
+version = "0.6.0-alpha.2"
 
 # dependencies that are shared across packages
 [workspace.dependencies]
