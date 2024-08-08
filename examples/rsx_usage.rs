@@ -197,6 +197,12 @@ fn app() -> Element {
             Label { text: "hello geneirc world!" }
             Label { text: 99.9 }
 
+            // Lowercase components work too, as long as they are access using a path
+            baller::lowercase_component {}
+
+            // For in-scope lowercase components, use the `self` keyword
+            self::lowercase_helper {}
+
             // helper functions
             // Anything that implements IntoVnode can be dropped directly into Rsx
             {helper("hello world!")}
@@ -223,6 +229,16 @@ fn helper(text: &str) -> Element {
     }
 }
 
+// no_case_check disables PascalCase checking if you *really* want a snake_case component.
+// This will likely be deprecated/removed in a future update that will introduce a more polished linting system,
+// something like Clippy.
+#[component(no_case_check)]
+fn lowercase_helper() -> Element {
+    rsx! {
+        "asd"
+    }
+}
+
 mod baller {
     use super::*;
 
@@ -230,6 +246,14 @@ mod baller {
     /// This component totally balls
     pub fn Baller() -> Element {
         rsx! { "ballin'" }
+    }
+
+    // no_case_check disables PascalCase checking if you *really* want a snake_case component.
+    // This will likely be deprecated/removed in a future update that will introduce a more polished linting system,
+    // something like Clippy.
+    #[component(no_case_check)]
+    pub fn lowercase_component() -> Element {
+        rsx! { "look ma, no uppercase" }
     }
 }
 

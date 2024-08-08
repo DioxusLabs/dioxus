@@ -58,16 +58,16 @@ use tracing::instrument;
 /// static ROUTES: &str = "";
 ///
 /// #[component]
-/// fn App(props: AppProps) -> Element {
+/// fn app(cx: AppProps) -> Element {
 ///     rsx!(
 ///         NavBar { routes: ROUTES }
-///         Title { "{props.title}" }
+///         Title { "{cx.title}" }
 ///         Footer {}
 ///     )
 /// }
 ///
 /// #[component]
-/// fn NavBar(routes: &'static str) -> Element {
+/// fn NavBar( routes: &'static str) -> Element {
 ///     rsx! {
 ///         div { "Routes: {routes}" }
 ///     }
@@ -130,7 +130,7 @@ use tracing::instrument;
 /// Putting everything together, you can build an event loop around Dioxus by using the methods outlined above.
 /// ```rust, ignore
 /// #[component]
-/// fn App() -> Element {
+/// fn app() -> Element {
 ///     rsx! {
 ///         div { "Hello World" }
 ///     }
