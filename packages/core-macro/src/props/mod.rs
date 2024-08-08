@@ -494,23 +494,26 @@ fn type_from_inside_option(ty: &Type) -> Option<&Type> {
     let seg = path.segments.last()?;
 
     // If the segment is a supported optional type, provide the inner type.
-    if seg.ident == "Option" || seg.ident == "ReadOnlySignal" || seg.ident == "ReadSignal" {
-        // Get the inner type. E.g. the `u16` in `Option<u16>` or `Option` in `ReadSignal<Option<bool>>`
+    // Return the inner type if the pattern is `Option<T>` or `ReadOnlySignal<Option<T>>``
+    if seg.ident == "ReadOnlySignal" {
+        // Get the inner type. E.g. the `u16` in `ReadOnlySignal<u16>` or `Option` in `ReadOnlySignal<Option<bool>>`
         let inner_type = extract_inner_type_from_segment(seg)?;
         let Type::Path(inner_path) = inner_type else {
+            // If it isn't a path, the inner type isn't option
             return None;
         };
 
-        // If we're entering an `Option`, we must get the innermost type. Otherwise, return the current type.
+        // If we're entering an `Option`, we must get the innermost type
         let inner_seg = inner_path.path.segments.last()?;
         if inner_seg.ident == "Option" {
             // Get the innermost type.
             let innermost_type = extract_inner_type_from_segment(inner_seg)?;
             return Some(innermost_type);
-        } else if seg.ident == "Option" {
-            // Return the inner type only if the parent is an `Option`.
-            return Some(inner_type);
         }
+    } else if seg.ident == "Option" {
+        // Grab the inner time. E.g. Option<u16>
+        let inner_type = extract_inner_type_from_segment(seg)?;
+        return Some(inner_type);
     }
 
     None
