@@ -92,7 +92,7 @@ fn Route1(user_id: usize, dynamic: usize, query: String) -> Element {
 fn Route2(user_id: usize) -> Element {
     rsx! {
         pre { "Route2{{\n\tuser_id:{user_id}\n}}" }
-        {(0..user_id).map(|i| rsx!{ p { "{i}" } })},
+        {(0..user_id).map(|i| rsx!{ p { "{i}" } })}
         p { "Footer" }
         Link {
             to: Route::Route3 {
@@ -119,7 +119,7 @@ fn Route3(dynamic: String) -> Element {
 
     rsx! {
         input {
-            oninput: move |evt| {
+            oninput: move |evt: FormEvent| {
                 *current_route_str.write() = evt.value();
             },
             value: "{current_route_str}"
@@ -160,7 +160,7 @@ fn Route3(dynamic: String) -> Element {
                     }
                 }
                 else {
-                    None
+                    VNode::empty()
                 }
             }
             Err(err) => {

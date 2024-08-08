@@ -1,8 +1,9 @@
 //! The typical TodoMVC app, implemented in Dioxus.
 
 use dioxus::prelude::*;
-use dioxus_elements::input_data::keyboard_types::Key;
 use std::collections::HashMap;
+
+const STYLE: &str = asset!("./examples/assets/todomvc.css");
 
 fn main() {
     launch(app);
@@ -64,7 +65,7 @@ fn app() -> Element {
     };
 
     rsx! {
-        style { {include_str!("./assets/todomvc.css")} }
+        head::Link { rel: "stylesheet", href: STYLE }
         section { class: "todoapp",
             TodoHeader { todos }
             section { class: "main",
@@ -74,7 +75,7 @@ fn app() -> Element {
                         class: "toggle-all",
                         r#type: "checkbox",
                         onchange: toggle_all,
-                        checked: active_todo_count() == 0,
+                        checked: active_todo_count() == 0
                     }
                     label { r#for: "toggle-all" }
                 }
@@ -98,8 +99,14 @@ fn app() -> Element {
         // A simple info footer
         footer { class: "info",
             p { "Double-click to edit a todo" }
-            p { "Created by " a { href: "http://github.com/jkelleyrtp/", "jkelleyrtp" } }
-            p { "Part of " a { href: "http://todomvc.com", "TodoMVC" } }
+            p {
+                "Created by "
+                a { href: "http://github.com/jkelleyrtp/", "jkelleyrtp" }
+            }
+            p {
+                "Part of "
+                a { href: "http://todomvc.com", "TodoMVC" }
+            }
         }
     }
 }
@@ -132,7 +139,7 @@ fn TodoHeader(mut todos: Signal<HashMap<u32, TodoItem>>) -> Element {
                 value: "{draft}",
                 autofocus: "true",
                 oninput: move |evt| draft.set(evt.value()),
-                onkeydown,
+                onkeydown
             }
         }
     }
@@ -165,7 +172,7 @@ fn TodoEntry(mut todos: Signal<HashMap<u32, TodoItem>>, id: u32) -> Element {
                     r#type: "checkbox",
                     id: "cbg-{id}",
                     checked: "{checked}",
-                    oninput: move |evt| todos.write().get_mut(&id).unwrap().checked = evt.checked(),
+                    oninput: move |evt| todos.write().get_mut(&id).unwrap().checked = evt.checked()
                 }
                 label {
                     r#for: "cbg-{id}",
@@ -175,7 +182,9 @@ fn TodoEntry(mut todos: Signal<HashMap<u32, TodoItem>>, id: u32) -> Element {
                 }
                 button {
                     class: "destroy",
-                    onclick: move |_| { todos.write().remove(&id); },
+                    onclick: move |_| {
+                        todos.write().remove(&id);
+                    },
                     prevent_default: "onclick"
                 }
             }
@@ -211,41 +220,41 @@ fn ListFooter(
     let show_clear_completed = use_memo(move || todos.read().values().any(|todo| todo.checked));
 
     rsx! {
-        footer { class: "footer",
-            span { class: "todo-count",
-                strong { "{active_todo_count} " }
-                span {
-                    match active_todo_count() {
-                        1 => "item",
-                        _ => "items",
+            footer { class: "footer",
+                span { class: "todo-count",
+                    strong { "{active_todo_count} " }
+                    span {
+                        match active_todo_count() {
+                            1 => "item",
+                            _ => "items",
+                        }
+                        " left"
                     }
-                    " left"
                 }
-            }
-            ul { class: "filters",
-                for (state , state_text , url) in [
-                    (FilterState::All, "All", "#/"),
-                    (FilterState::Active, "Active", "#/active"),
-                    (FilterState::Completed, "Completed", "#/completed"),
-                ] {
-                    li {
-                        a {
-                            href: url,
-                            class: if filter() == state { "selected" },
-                            onclick: move |_| filter.set(state),
-                            prevent_default: "onclick",
-                            {state_text}
+                ul { class: "filters",
+                    for (state , state_text , url) in [
+        (FilterState::All, "All", "#/"),
+        (FilterState::Active, "Active", "#/active"),
+        (FilterState::Completed, "Completed", "#/completed"),
+    ] {
+                        li {
+                            a {
+                                href: url,
+                                class: if filter() == state { "selected" },
+                                onclick: move |_| filter.set(state),
+                                prevent_default: "onclick",
+                                {state_text}
+                            }
                         }
                     }
                 }
-            }
-            if show_clear_completed() {
-                button {
-                    class: "clear-completed",
-                    onclick: move |_| todos.write().retain(|_, todo| !todo.checked),
-                    "Clear completed"
+                if show_clear_completed() {
+                    button {
+                        class: "clear-completed",
+                        onclick: move |_| todos.write().retain(|_, todo| !todo.checked),
+                        "Clear completed"
+                    }
                 }
             }
         }
-    }
 }

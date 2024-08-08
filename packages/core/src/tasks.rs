@@ -1,6 +1,13 @@
+use crate::innerlude::Effect;
+use crate::innerlude::ScopeOrder;
 use crate::innerlude::{remove_future, spawn, Runtime};
+use crate::scope_context::ScopeStatus;
+use crate::scope_context::SuspenseLocation;
 use crate::ScopeId;
 use futures_util::task::ArcWake;
+use slotmap::DefaultKey;
+use std::marker::PhantomData;
+use std::panic;
 use std::sync::Arc;
 use std::task::Waker;
 use std::{cell::Cell, future::Future};
@@ -12,9 +19,21 @@ use std::{pin::Pin, task::Poll};
 /// `Task` is a unique identifier for a task that has been spawned onto the runtime. It can be used to cancel the task
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct Task(pub(crate) usize);
+pub struct Task {
+    pub(crate) id: slotmap::DefaultKey,
+    // We add a raw pointer to make this !Send + !Sync
+    unsend: PhantomData<*const ()>,
+}
 
 impl Task {
+    /// Create a task from a raw id
+    pub(crate) const fn from_id(id: slotmap::DefaultKey) -> Self {
+        Self {
+            id,
+            unsend: PhantomData,
+        }
+    }
+
     /// Start a new future on the same thread as the rest of the VirtualDom.
     ///
     /// This future will not contribute to suspense resolving, so you should primarily use this for reacting to changes
@@ -48,7 +67,7 @@ impl Task {
     /// Check if the task is paused.
     pub fn paused(&self) -> bool {
         Runtime::with(|rt| {
-            if let Some(task) = rt.tasks.borrow().get(self.0) {
+            if let Some(task) = rt.tasks.borrow().get(self.id) {
                 !task.active.get()
             } else {
                 false
@@ -58,25 +77,36 @@ impl Task {
     }
 
     /// Wake the task.
+    #[track_caller]
     pub fn wake(&self) {
-        Runtime::with(|rt| _ = rt.sender.unbounded_send(SchedulerMsg::TaskNotified(*self)));
+        Runtime::with(|rt| {
+            _ = rt
+                .sender
+                .unbounded_send(SchedulerMsg::TaskNotified(self.id))
+        })
+        .unwrap_or_else(|e| panic!("{}", e))
     }
 
     /// Poll the task immediately.
+    #[track_caller]
     pub fn poll_now(&self) -> Poll<()> {
-        Runtime::with(|rt| rt.handle_task_wakeup(*self)).unwrap()
+        Runtime::with(|rt| rt.handle_task_wakeup(*self)).unwrap_or_else(|e| panic!("{}", e))
     }
 
     /// Set the task as active or paused.
+    #[track_caller]
     pub fn set_active(&self, active: bool) {
         Runtime::with(|rt| {
-            if let Some(task) = rt.tasks.borrow().get(self.0) {
+            if let Some(task) = rt.tasks.borrow().get(self.id) {
                 let was_active = task.active.replace(active);
                 if !was_active && active {
-                    _ = rt.sender.unbounded_send(SchedulerMsg::TaskNotified(*self));
+                    _ = rt
+                        .sender
+                        .unbounded_send(SchedulerMsg::TaskNotified(self.id));
                 }
             }
-        });
+        })
+        .unwrap_or_else(|e| panic!("{}", e))
     }
 }
 
@@ -137,24 +167,29 @@ impl Runtime {
         let (task, task_id) = {
             let mut tasks = self.tasks.borrow_mut();
 
-            let entry = tasks.vacant_entry();
-            let task_id = Task(entry.key());
+            let mut task_id = Task::from_id(DefaultKey::default());
+            let mut local_task = None;
+            tasks.insert_with_key(|key| {
+                task_id = Task::from_id(key);
 
-            let task = Rc::new(LocalTask {
-                scope,
-                active: Cell::new(true),
-                parent: self.current_task(),
-                task: RefCell::new(Box::pin(task)),
-                waker: futures_util::task::waker(Arc::new(LocalTaskHandle {
-                    id: task_id,
-                    tx: self.sender.clone(),
-                })),
-                ty: Cell::new(ty),
+                let new_task = Rc::new(LocalTask {
+                    scope,
+                    active: Cell::new(true),
+                    parent: self.current_task(),
+                    task: RefCell::new(Box::pin(task)),
+                    waker: futures_util::task::waker(Arc::new(LocalTaskHandle {
+                        id: task_id.id,
+                        tx: self.sender.clone(),
+                    })),
+                    ty: RefCell::new(ty),
+                });
+
+                local_task = Some(new_task.clone());
+
+                new_task
             });
 
-            entry.insert(task.clone());
-
-            (task, task_id)
+            (local_task.unwrap(), task_id)
         };
 
         // Get a borrow on the task, holding no borrows on the tasks map
@@ -162,10 +197,44 @@ impl Runtime {
         debug_assert!(task.task.try_borrow_mut().is_ok());
 
         self.sender
-            .unbounded_send(SchedulerMsg::TaskNotified(task_id))
+            .unbounded_send(SchedulerMsg::TaskNotified(task_id.id))
             .expect("Scheduler should exist");
 
         task_id
+    }
+
+    /// Queue an effect to run after the next render
+    pub(crate) fn queue_effect(&self, id: ScopeId, f: impl FnOnce() + 'static) {
+        let effect = Box::new(f) as Box<dyn FnOnce() + 'static>;
+        let Some(scope) = self.get_state(id) else {
+            return;
+        };
+        let mut status = scope.status.borrow_mut();
+        match &mut *status {
+            ScopeStatus::Mounted => {
+                self.queue_effect_on_mounted_scope(id, effect);
+            }
+            ScopeStatus::Unmounted { effects_queued, .. } => {
+                effects_queued.push(effect);
+            }
+        }
+    }
+
+    /// Queue an effect to run after the next render without checking if the scope is mounted
+    pub(crate) fn queue_effect_on_mounted_scope(
+        &self,
+        id: ScopeId,
+        f: Box<dyn FnOnce() + 'static>,
+    ) {
+        // Add the effect to the queue of effects to run after the next render for the given scope
+        let mut effects = self.pending_effects.borrow_mut();
+        let scope_order = ScopeOrder::new(id.height(), id);
+        match effects.get(&scope_order) {
+            Some(effects) => effects.push_back(f),
+            None => {
+                effects.insert(Effect::new(scope_order, f));
+            }
+        }
     }
 
     /// Get the currently running task
@@ -175,17 +244,22 @@ impl Runtime {
 
     /// Get the parent task of the given task, if it exists
     pub fn parent_task(&self, task: Task) -> Option<Task> {
-        self.tasks.borrow().get(task.0)?.parent
+        self.tasks.borrow().get(task.id)?.parent
     }
 
     pub(crate) fn task_scope(&self, task: Task) -> Option<ScopeId> {
-        self.tasks.borrow().get(task.0).map(|t| t.scope)
+        self.tasks.borrow().get(task.id).map(|t| t.scope)
     }
 
+    #[track_caller]
     pub(crate) fn handle_task_wakeup(&self, id: Task) -> Poll<()> {
-        debug_assert!(Runtime::current().is_some(), "Must be in a dioxus runtime");
+        #[cfg(debug_assertions)]
+        {
+            // Ensure we are currently inside a `Runtime`.
+            Runtime::current().unwrap_or_else(|e| panic!("{}", e));
+        }
 
-        let task = self.tasks.borrow().get(id.0).cloned();
+        let task = self.tasks.borrow().get(id.id).cloned();
 
         // The task was removed from the scheduler, so we can just ignore it
         let Some(task) = task else {
@@ -199,50 +273,65 @@ impl Runtime {
 
         let mut cx = std::task::Context::from_waker(&task.waker);
 
-        // update the scope stack
-        self.scope_stack.borrow_mut().push(task.scope);
-        self.rendering.set(false);
-        self.current_task.set(Some(id));
+        // poll the future with the scope on the stack
+        let poll_result = self.with_scope_on_stack(task.scope, || {
+            self.rendering.set(false);
+            self.current_task.set(Some(id));
 
-        let poll_result = task.task.borrow_mut().as_mut().poll(&mut cx);
+            let poll_result = task.task.borrow_mut().as_mut().poll(&mut cx);
 
-        if poll_result.is_ready() {
-            // Remove it from the scope so we dont try to double drop it when the scope dropes
-            self.get_state(task.scope)
-                .unwrap()
-                .spawned_tasks
-                .borrow_mut()
-                .remove(&id);
+            if poll_result.is_ready() {
+                // Remove it from the scope so we dont try to double drop it when the scope dropes
+                self.get_state(task.scope)
+                    .unwrap()
+                    .spawned_tasks
+                    .borrow_mut()
+                    .remove(&id);
 
-            self.remove_task(id);
-        }
+                self.remove_task(id);
+            }
 
-        // Remove the scope from the stack
-        self.scope_stack.borrow_mut().pop();
+            poll_result
+        });
         self.rendering.set(true);
         self.current_task.set(None);
 
         poll_result
     }
 
-    /// Drop the future with the given TaskId
+    /// Drop the future with the given Task
     ///
     /// This does not abort the task, so you'll want to wrap it in an abort handle if that's important to you
     pub(crate) fn remove_task(&self, id: Task) -> Option<Rc<LocalTask>> {
-        let task = self.tasks.borrow_mut().try_remove(id.0);
+        // Remove the task from the task list
+        let task = self.tasks.borrow_mut().remove(id.id);
+
         if let Some(task) = &task {
-            if task.suspended() {
+            // Remove the task from suspense
+            if let TaskType::Suspended { boundary } = &*task.ty.borrow() {
                 self.suspended_tasks.set(self.suspended_tasks.get() - 1);
+                if let SuspenseLocation::UnderSuspense(boundary) = boundary {
+                    boundary.remove_suspended_task(id);
+                }
+            }
+
+            // Remove the task from pending work. We could reuse the slot before the task is polled and discarded so we need to remove it from pending work instead of filtering out dead tasks when we try to poll them
+            if let Some(scope) = self.get_state(task.scope) {
+                let order = ScopeOrder::new(scope.height(), scope.id);
+                if let Some(dirty_tasks) = self.dirty_tasks.borrow_mut().get(&order) {
+                    dirty_tasks.remove(id);
+                }
             }
         }
+
         task
     }
 
     /// Check if a task should be run during suspense
     pub(crate) fn task_runs_during_suspense(&self, task: Task) -> bool {
         let borrow = self.tasks.borrow();
-        let task: Option<&LocalTask> = borrow.get(task.0).map(|t| &**t);
-        matches!(task, Some(LocalTask { ty, .. }) if ty.get().runs_during_suspense())
+        let task: Option<&LocalTask> = borrow.get(task.id).map(|t| &**t);
+        matches!(task, Some(LocalTask { ty, .. }) if ty.borrow().runs_during_suspense())
     }
 }
 
@@ -252,30 +341,29 @@ pub(crate) struct LocalTask {
     parent: Option<Task>,
     task: RefCell<Pin<Box<dyn Future<Output = ()> + 'static>>>,
     waker: Waker,
-    ty: Cell<TaskType>,
+    ty: RefCell<TaskType>,
     active: Cell<bool>,
 }
 
 impl LocalTask {
-    pub(crate) fn suspend(&self) {
-        self.ty.set(TaskType::Suspended);
-    }
-
-    pub(crate) fn suspended(&self) -> bool {
-        matches!(self.ty.get(), TaskType::Suspended)
+    /// Suspend the task, returns true if the task was already suspended
+    pub(crate) fn suspend(&self, boundary: SuspenseLocation) -> bool {
+        // Make this a suspended task so it runs during suspense
+        let old_type = self.ty.replace(TaskType::Suspended { boundary });
+        matches!(old_type, TaskType::Suspended { .. })
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum TaskType {
     ClientOnly,
-    Suspended,
+    Suspended { boundary: SuspenseLocation },
     Isomorphic,
 }
 
 impl TaskType {
-    fn runs_during_suspense(self) -> bool {
-        matches!(self, TaskType::Isomorphic | TaskType::Suspended)
+    fn runs_during_suspense(&self) -> bool {
+        matches!(self, TaskType::Isomorphic | TaskType::Suspended { .. })
     }
 }
 
@@ -288,11 +376,14 @@ pub(crate) enum SchedulerMsg {
     Immediate(ScopeId),
 
     /// A task has woken and needs to be progressed
-    TaskNotified(Task),
+    TaskNotified(slotmap::DefaultKey),
+
+    /// An effect has been queued to run after the next render
+    EffectQueued,
 }
 
 struct LocalTaskHandle {
-    id: Task,
+    id: slotmap::DefaultKey,
     tx: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
 }
 

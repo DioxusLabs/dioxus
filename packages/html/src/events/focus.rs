@@ -33,6 +33,7 @@ impl FocusData {
     }
 
     /// Downcast this event data to a specific type
+    #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         self.inner.as_any().downcast_ref::<T>()
     }

@@ -10,7 +10,9 @@ keywords = ["dom", "ui", "gui", "react", "ssr"]
 
 [dependencies]
 dioxus-core = { workspace = true, features = ["serialize"] }
-dioxus-html = { workspace = true, features = ["eval"]}
+dioxus-html = { workspace = true, features = ["document"]}
+dioxus-cli-config = { workspace = true, features = ["read-config"], optional = true }
+dioxus-interpreter-js = { workspace = true }
 generational-box = { workspace = true }
 askama_escape = "0.10.3"
 thiserror = "1.0.23"
@@ -31,6 +33,7 @@ tokio = { version = "1.28", features = ["fs", "io-util"], optional = true }
 [dev-dependencies]
 dioxus = { workspace = true }
 dioxus-signals = { workspace = true }
+tokio = { version = "1", features = ["full"] }
 
 tracing = { workspace = true }
 fern = { version = "0.6.0", features = ["colored"] }
@@ -42,4 +45,7 @@ fs_extra = "1.2.0"
 
 [features]
 default = []
-incremental = ["dep:tokio", "chrono"]
+incremental = ["dep:tokio", "dep:chrono", "dep:dioxus-cli-config"]
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

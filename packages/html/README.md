@@ -8,7 +8,7 @@
 [crates-badge]: https://img.shields.io/crates/v/dioxus-html.svg
 [crates-url]: https://crates.io/crates/dioxus-html
 [mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
-[mit-url]: https://github.com/dioxuslabs/dioxus/blob/master/LICENSE
+[mit-url]: https://github.com/dioxuslabs/dioxus/blob/main/LICENSE-MIT
 [actions-badge]: https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg
 [actions-url]: https://github.com/dioxuslabs/dioxus/actions?query=workflow%3ACI+branch%3Amaster
 [discord-badge]: https://img.shields.io/discord/899851952891002890.svg?logo=discord&style=flat-square
@@ -25,7 +25,7 @@ The Dioxus `rsx!` and `html!` macros can accept any compile-time correct namespa
 
 However, this abstraction enables you to add any namespace of elements, provided they're in scope when rsx! is called. For an example, a UI that is designed for Augmented Reality might use different primitives than HTML:
 
-```rust
+```rust, ignore
 use ar_namespace::*;
 
 rsx! {
@@ -46,7 +46,7 @@ This is currently a not-very-explored part of Dioxus. However, the namespacing s
 
 Elements for dioxus must implement the (simple) DioxusElement trait to be used in the rsx! macro.
 
-```rust
+```rust, ignore
 struct div;
 impl DioxusElement for div {
     const TAG_NAME: &'static str = "div";
@@ -60,7 +60,7 @@ Attributes would then be implemented as constants on these unit structs.
 
 The HTML namespace is defined mostly with macros. However, the expanded form would look something like this:
 
-```rust
+```rust, ignore
 struct base;
 impl DioxusElement for base {
     const TAG_NAME: &'static str = "base";
@@ -78,7 +78,7 @@ Because attributes are defined as methods on the unit struct, they guard the att
 
 Whenever the rsx! macro is called, it relies on a module `dioxus_elements` to be in scope. When you enable the `html` feature in dioxus, this module gets imported in the prelude. However, you can extend this with your own set of custom elements by making your own `dioxus_elements` module and re-exporting the html namespace.
 
-```rust
+```rust, ignore
 mod dioxus_elements {
     use dioxus::prelude::dioxus_elements::*;
     struct my_element;
@@ -98,7 +98,7 @@ mod dioxus_elements {
 
 This project is licensed under the [MIT license].
 
-[mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
+[mit license]: https://github.com/dioxuslabs/dioxus/blob/main/LICENSE-MIT
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in Dioxus by you shall be licensed as MIT without any additional

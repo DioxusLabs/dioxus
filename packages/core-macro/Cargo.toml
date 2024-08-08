@@ -17,15 +17,19 @@ proc-macro2 = { version = "1.0" }
 quote = { workspace = true }
 syn = { workspace = true, features = ["full", "extra-traits", "visit"] }
 dioxus-rsx = { workspace = true }
-constcat = "0.3.0"
-convert_case = "^0.6.0"
+convert_case = { workspace = true }
 prettyplease = "0.2.15"
 
 # testing
 [dev-dependencies]
 dioxus = { workspace = true }
+dioxus-html = { workspace = true, features = ["serialize"]}
 rustversion = "1.0"
+tokio = { workspace = true, features = ["full", "time"] }
 trybuild = "1.0"
 
 [features]
 default = []
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

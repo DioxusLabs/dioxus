@@ -8,9 +8,6 @@
 pub mod navigation;
 pub mod routable;
 
-#[cfg(feature = "ssr")]
-pub mod incremental;
-
 /// Components interacting with the router.
 pub mod components {
     mod default_errors;
@@ -35,6 +32,7 @@ mod contexts {
     pub(crate) mod router;
     pub use navigator::*;
     pub(crate) use router::*;
+    pub use router::{root_router, RouterContext};
 }
 
 mod router_cfg;
@@ -65,11 +63,6 @@ pub mod prelude {
     pub use crate::routable::*;
     pub use crate::router_cfg::RouterConfig;
     pub use dioxus_router_macro::Routable;
-
-    #[cfg(feature = "ssr")]
-    pub use crate::incremental::*;
-    #[cfg(feature = "ssr")]
-    pub use dioxus_ssr::incremental::*;
 
     #[doc(hidden)]
     /// A component with props used in the macro

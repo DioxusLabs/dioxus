@@ -8,10 +8,10 @@ pub fn launch(
     root: fn() -> Element,
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
     platform_config: Config,
-) {
-    #[cfg(feature = "multi-threaded")]
+) -> ! {
+    #[cfg(feature = "multi-thread")]
     let mut builder = tokio::runtime::Builder::new_multi_thread();
-    #[cfg(not(feature = "multi-threaded"))]
+    #[cfg(not(feature = "multi-thread"))]
     let mut builder = tokio::runtime::Builder::new_current_thread();
 
     builder.enable_all().build().unwrap().block_on(async move {
@@ -28,4 +28,6 @@ pub fn launch(
             .launch()
             .await;
     });
+
+    panic!("Launching a liveview app should never return")
 }

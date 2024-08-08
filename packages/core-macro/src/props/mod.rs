@@ -3,8 +3,8 @@
 //! However, it has been adopted to fit the Dioxus Props builder pattern.
 //!
 //! For Dioxus, we make a few changes:
-//! - [x] Automatically implement Into<Option> on the setters (IE the strip setter option)
-//! - [x] Automatically implement a default of none for optional fields (those explicitly wrapped with Option<T>)
+//! - [x] Automatically implement [`Into<Option>`] on the setters (IE the strip setter option)
+//! - [x] Automatically implement a default of none for optional fields (those explicitly wrapped with [`Option<T>`])
 
 use proc_macro2::TokenStream;
 
@@ -13,7 +13,7 @@ use syn::spanned::Spanned;
 use syn::{parse::Error, PathArguments};
 
 use quote::quote;
-use syn::{parse_quote, Type};
+use syn::{parse_quote, GenericArgument, PathSegment, Type};
 
 pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
     let data = match &ast.data {
@@ -201,9 +201,8 @@ mod field_info {
 
                 // children field is automatically defaulted to None
                 if name == "children" {
-                    builder_attr.default = Some(
-                        syn::parse(quote!(::core::default::Default::default()).into()).unwrap(),
-                    );
+                    builder_attr.default =
+                        Some(syn::parse(quote!(dioxus_core::VNode::empty()).into()).unwrap());
                 }
 
                 // String fields automatically use impl Display
@@ -213,6 +212,11 @@ mod field_info {
                     || field.ty == parse_quote!(String)
                 {
                     builder_attr.from_displayable = true;
+                    // ToString is both more general and provides a more useful error message than From<String>. If the user tries to use `#[into]`, use ToString instead.
+                    if builder_attr.auto_into {
+                        builder_attr.auto_to_string = true;
+                    }
+                    builder_attr.auto_into = false;
                 }
 
                 // extended field is automatically empty
@@ -224,8 +228,7 @@ mod field_info {
 
                 // auto detect optional
                 let strip_option_auto = builder_attr.strip_option
-                    || !builder_attr.ignore_option
-                        && type_from_inside_option(&field.ty, true).is_some();
+                    || !builder_attr.ignore_option && type_from_inside_option(&field.ty).is_some();
                 if !builder_attr.strip_option && strip_option_auto {
                     builder_attr.strip_option = true;
                     builder_attr.default = Some(
@@ -271,9 +274,10 @@ mod field_info {
     #[derive(Debug, Default, Clone)]
     pub struct FieldBuilderAttr {
         pub default: Option<syn::Expr>,
-        pub doc: Option<syn::Expr>,
+        pub docs: Vec<syn::Attribute>,
         pub skip: bool,
         pub auto_into: bool,
+        pub auto_to_string: bool,
         pub from_displayable: bool,
         pub strip_option: bool,
         pub ignore_option: bool,
@@ -284,6 +288,11 @@ mod field_info {
         pub fn with(mut self, attrs: &[syn::Attribute]) -> Result<Self, Error> {
             let mut skip_tokens = None;
             for attr in attrs {
+                if attr.path().is_ident("doc") {
+                    self.docs.push(attr.clone());
+                    continue;
+                }
+
                 if path_to_single_string(attr.path()).as_deref() != Some("props") {
                     continue;
                 }
@@ -343,10 +352,6 @@ mod field_info {
                         }
                         "default" => {
                             self.default = Some(*assign.right);
-                            Ok(())
-                        }
-                        "doc" => {
-                            self.doc = Some(*assign.right);
                             Ok(())
                         }
                         "default_code" => {
@@ -444,10 +449,6 @@ mod field_info {
                                 self.default = None;
                                 Ok(())
                             }
-                            "doc" => {
-                                self.doc = None;
-                                Ok(())
-                            }
                             "skip" => {
                                 self.skip = false;
                                 Ok(())
@@ -480,31 +481,52 @@ mod field_info {
     }
 }
 
-fn type_from_inside_option(ty: &syn::Type, check_option_name: bool) -> Option<&syn::Type> {
-    let path = if let syn::Type::Path(type_path) = ty {
-        if type_path.qself.is_some() {
-            return None;
-        } else {
-            &type_path.path
-        }
-    } else {
+fn type_from_inside_option(ty: &Type) -> Option<&Type> {
+    let Type::Path(type_path) = ty else {
         return None;
     };
-    let segment = path.segments.last()?;
-    if check_option_name && segment.ident != "Option" {
+
+    if type_path.qself.is_some() {
         return None;
     }
-    let generic_params =
-        if let syn::PathArguments::AngleBracketed(generic_params) = &segment.arguments {
-            generic_params
-        } else {
+
+    let path = &type_path.path;
+    let seg = path.segments.last()?;
+
+    // If the segment is a supported optional type, provide the inner type.
+    if seg.ident == "Option" || seg.ident == "ReadOnlySignal" || seg.ident == "ReadSignal" {
+        // Get the inner type. E.g. the `u16` in `Option<u16>` or `Option` in `ReadSignal<Option<bool>>`
+        let inner_type = extract_inner_type_from_segment(seg)?;
+        let Type::Path(inner_path) = inner_type else {
             return None;
         };
-    if let syn::GenericArgument::Type(ty) = generic_params.args.first()? {
-        Some(ty)
-    } else {
-        None
+
+        // If we're entering an `Option`, we must get the innermost type. Otherwise, return the current type.
+        let inner_seg = inner_path.path.segments.last()?;
+        if inner_seg.ident == "Option" {
+            // Get the innermost type.
+            let innermost_type = extract_inner_type_from_segment(inner_seg)?;
+            return Some(innermost_type);
+        } else if seg.ident == "Option" {
+            // Return the inner type only if the parent is an `Option`.
+            return Some(inner_type);
+        }
     }
+
+    None
+}
+
+// Extract the inner type from a path segment.
+fn extract_inner_type_from_segment(segment: &PathSegment) -> Option<&Type> {
+    let PathArguments::AngleBracketed(generic_args) = &segment.arguments else {
+        return None;
+    };
+
+    let GenericArgument::Type(final_type) = generic_args.args.first()? else {
+        return None;
+    };
+
+    Some(final_type)
 }
 
 mod struct_info {
@@ -514,14 +536,16 @@ mod struct_info {
     use syn::parse::Error;
     use syn::punctuated::Punctuated;
     use syn::spanned::Spanned;
-    use syn::{Expr, Ident};
+    use syn::{parse_quote, Expr, Ident};
+
+    use crate::props::strip_option;
 
     use super::field_info::{FieldBuilderAttr, FieldInfo};
     use super::util::{
         empty_type, empty_type_tuple, expr_to_single_string, make_punctuated_single,
         modify_types_generics_hack, path_to_single_string, strip_raw_ident_prefix, type_tuple,
     };
-    use super::{child_owned_type, looks_like_event_handler_type, looks_like_signal_type};
+    use super::{child_owned_type, looks_like_callback_type, looks_like_signal_type};
 
     #[derive(Debug)]
     pub struct StructInfo<'a> {
@@ -533,6 +557,7 @@ mod struct_info {
         pub builder_attr: TypeBuilderAttr,
         pub builder_name: syn::Ident,
         pub conversion_helper_trait_name: syn::Ident,
+        #[allow(unused)]
         pub core: syn::Ident,
     }
 
@@ -634,28 +659,37 @@ mod struct_info {
 
             let event_handlers_fields: Vec<_> = self
                 .included_fields()
-                .filter(|f| looks_like_event_handler_type(f.ty))
-                .map(|f| {
-                    let name = f.name;
-                    quote!(#name)
-                })
+                .filter(|f| looks_like_callback_type(f.ty))
                 .collect();
 
             let regular_fields: Vec<_> = self
                 .included_fields()
-                .filter(|f| !looks_like_signal_type(f.ty) && !looks_like_event_handler_type(f.ty))
+                .chain(self.extend_fields())
+                .filter(|f| !looks_like_signal_type(f.ty) && !looks_like_callback_type(f.ty))
                 .map(|f| {
                     let name = f.name;
                     quote!(#name)
                 })
                 .collect();
 
-            let move_event_handlers = quote! {
-                #(
-                    // Update the event handlers
-                    self.#event_handlers_fields.__set(new.#event_handlers_fields.__take());
-                )*
-            };
+            let move_event_handlers: TokenStream = event_handlers_fields.iter().map(|field| {
+                // If this is an optional event handler, we need to check if it's None before we try to update it
+                let optional = strip_option(field.ty).is_some();
+                let name = field.name;
+                if optional {
+                    quote! {
+                        // If the event handler is None, we don't need to update it
+                        if let (Some(old_handler), Some(new_handler)) = (self.#name.as_mut(), new.#name.as_ref()) {
+                            old_handler.__set(new_handler.__take());
+                        }
+                    }
+                } else {
+                    quote! {
+                        // Update the event handlers
+                        self.#name.__set(new.#name.__take());
+                    }
+                }
+            }).collect();
 
             // If there are signals, we automatically try to memoize the signals
             if !signal_fields.is_empty() {
@@ -957,6 +991,11 @@ Finally, call `.build()` to create the instance of `{name}`.
                 quote!(#name: self.#name)
             });
 
+            let forward_owner = self
+                .has_child_owned_fields()
+                .then(|| quote!(owner: self.owner))
+                .into_iter();
+
             let extends_impl = field.builder_attr.extends.iter().map(|path| {
                 let name_str = path_to_single_string(path).unwrap();
                 let camel_name = name_str.to_case(Case::UpperCamel);
@@ -994,6 +1033,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                         );
                         #builder_name {
                             #(#forward_extended_fields,)*
+                            #(#forward_owner,)*
                             fields: ( #(#reconstructing,)* ),
                             _phantom: self._phantom,
                         }
@@ -1030,7 +1070,6 @@ Finally, call `.build()` to create the instance of `{name}`.
                 ty: field_type,
                 ..
             } = field;
-            // Add the bump lifetime to the generics
             let mut ty_generics: Vec<syn::GenericArgument> = self
                 .generics
                 .params
@@ -1089,10 +1128,7 @@ Finally, call `.build()` to create the instance of `{name}`.
             );
 
             let (impl_generics, _, where_clause) = generics.split_for_impl();
-            let doc = match field.builder_attr.doc {
-                Some(ref doc) => quote!(#[doc = #doc]),
-                None => quote!(),
-            };
+            let docs = &field.builder_attr.docs;
 
             let arg_type = field_type;
             // If the field is auto_into, we need to add a generic parameter to the builder for specialization
@@ -1145,7 +1181,7 @@ Finally, call `.build()` to create the instance of `{name}`.
             Ok(quote! {
                 #[allow(dead_code, non_camel_case_types, missing_docs)]
                 impl #impl_generics #builder_name < #( #ty_generics ),* > #where_clause {
-                    #doc
+                    #( #docs )*
                     #[allow(clippy::type_complexity)]
                     pub fn #field_name < #marker > (self, #field_name: #arg_type) -> #builder_name < #( #target_generics ),* > {
                         let #field_name = (#arg_expr,);
@@ -1185,7 +1221,6 @@ Finally, call `.build()` to create the instance of `{name}`.
                 name: ref field_name,
                 ..
             } = field;
-            // Add a bump lifetime to the generics
             let mut builder_generics: Vec<syn::GenericArgument> = self
                 .generics
                 .params
@@ -1357,10 +1392,24 @@ Finally, call `.build()` to create the instance of `{name}`.
                 if !field.builder_attr.extends.is_empty() {
                     quote!(let #name = self.#name;)
                 } else if let Some(ref default) = field.builder_attr.default {
+
+                    // If field has `into`, apply it to the default value.
+                    // Ignore any blank defaults as it causes type inference errors.
+                    let is_default = *default == parse_quote!(::core::default::Default::default());
+                    let mut into = quote!{};
+
+                    if !is_default {
+                        if field.builder_attr.auto_into {
+                            into = quote!{ .into() }
+                        } else if field.builder_attr.auto_to_string {
+                            into = quote!{ .to_string() }
+                        }
+                    }
+
                     if field.builder_attr.skip {
-                        quote!(let #name = #default;)
+                        quote!(let #name = #default #into;)
                     } else {
-                        quote!(let #name = #helper_trait_name::into_value(#name, || #default);)
+                        quote!(let #name = #helper_trait_name::into_value(#name, || #default #into);)
                     }
                 } else {
                     quote!(let #name = #name.0;)
@@ -1387,12 +1436,13 @@ Finally, call `.build()` to create the instance of `{name}`.
                 let original_name = &self.name;
                 let vis = &self.vis;
                 let generics_with_bounds = &self.generics;
+                let where_clause = &self.generics.where_clause;
 
                 quote! {
                     #[doc(hidden)]
                     #[allow(dead_code, non_camel_case_types, missing_docs)]
                     #[derive(Clone)]
-                    #vis struct #name #generics_with_bounds {
+                    #vis struct #name #generics_with_bounds #where_clause {
                         inner: #original_name #ty_generics,
                         owner: Owner,
                     }
@@ -1408,9 +1458,9 @@ Finally, call `.build()` to create the instance of `{name}`.
                         pub fn into_vcomponent<M: 'static>(
                             self,
                             render_fn: impl dioxus_core::prelude::ComponentFunction<#original_name #ty_generics, M>,
-                            component_name: &'static str,
                         ) -> dioxus_core::VComponent {
                             use dioxus_core::prelude::ComponentFunction;
+                            let component_name = ::std::any::type_name_of_val(&render_fn);
                             dioxus_core::VComponent::new(move |wrapper: Self| render_fn.rebuild(wrapper.inner), self, component_name)
                         }
                     }
@@ -1582,7 +1632,7 @@ Finally, call `.build()` to create the instance of `{name}`.
 }
 
 /// A helper function for paring types with a single generic argument.
-fn extract_base_type_without_single_generic(ty: &Type) -> Option<syn::Path> {
+fn extract_base_type_without_generics(ty: &Type) -> Option<syn::Path> {
     let Type::Path(ty) = ty else {
         return None;
     };
@@ -1622,13 +1672,48 @@ fn extract_base_type_without_single_generic(ty: &Type) -> Option<syn::Path> {
     Some(path_without_generics)
 }
 
+/// Returns the type inside the Option wrapper if it exists
+fn strip_option(type_: &Type) -> Option<Type> {
+    if let Type::Path(ty) = &type_ {
+        let mut segments_iter = ty.path.segments.iter().peekable();
+        // Strip any leading std||core::option:: prefix
+        let allowed_segments: &[&[&str]] = &[&["std", "core"], &["option"]];
+        let mut allowed_segments_iter = allowed_segments.iter();
+        while let Some(segment) = segments_iter.peek() {
+            let Some(allowed_segments) = allowed_segments_iter.next() else {
+                break;
+            };
+            if !allowed_segments.contains(&segment.ident.to_string().as_str()) {
+                break;
+            }
+            segments_iter.next();
+        }
+        // The last segment should be Option
+        let option_segment = segments_iter.next()?;
+        if option_segment.ident == "Option" && segments_iter.next().is_none() {
+            // It should have a single generic argument
+            if let PathArguments::AngleBracketed(generic_arg) = &option_segment.arguments {
+                if let Some(syn::GenericArgument::Type(ty)) = generic_arg.args.first() {
+                    return Some(ty.clone());
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Remove the Option wrapper from a type
+fn remove_option_wrapper(type_: Type) -> Type {
+    strip_option(&type_).unwrap_or(type_)
+}
+
 /// Check if a type should be owned by the child component after conversion
 fn child_owned_type(ty: &Type) -> bool {
-    looks_like_signal_type(ty) || looks_like_event_handler_type(ty)
+    looks_like_signal_type(ty) || looks_like_callback_type(ty)
 }
 
 fn looks_like_signal_type(ty: &Type) -> bool {
-    match extract_base_type_without_single_generic(ty) {
+    match extract_base_type_without_generics(ty) {
         Some(path_without_generics) => {
             path_without_generics == parse_quote!(dioxus_core::prelude::ReadOnlySignal)
                 || path_without_generics == parse_quote!(prelude::ReadOnlySignal)
@@ -1638,13 +1723,59 @@ fn looks_like_signal_type(ty: &Type) -> bool {
     }
 }
 
-fn looks_like_event_handler_type(ty: &Type) -> bool {
-    match extract_base_type_without_single_generic(ty) {
+fn looks_like_callback_type(ty: &Type) -> bool {
+    let type_without_option = remove_option_wrapper(ty.clone());
+    match extract_base_type_without_generics(&type_without_option) {
         Some(path_without_generics) => {
             path_without_generics == parse_quote!(dioxus_core::prelude::EventHandler)
                 || path_without_generics == parse_quote!(prelude::EventHandler)
                 || path_without_generics == parse_quote!(EventHandler)
+                || path_without_generics == parse_quote!(dioxus_core::prelude::Callback)
+                || path_without_generics == parse_quote!(prelude::Callback)
+                || path_without_generics == parse_quote!(Callback)
         }
         None => false,
     }
+}
+
+#[test]
+fn test_looks_like_type() {
+    assert!(!looks_like_signal_type(&parse_quote!(
+        Option<ReadOnlySignal<i32>>
+    )));
+    assert!(looks_like_signal_type(&parse_quote!(ReadOnlySignal<i32>)));
+    assert!(looks_like_signal_type(
+        &parse_quote!(ReadOnlySignal<i32, SyncStorage>)
+    ));
+    assert!(looks_like_signal_type(&parse_quote!(
+        ReadOnlySignal<Option<i32>, UnsyncStorage>
+    )));
+
+    assert!(looks_like_callback_type(&parse_quote!(
+        Option<EventHandler>
+    )));
+    assert!(looks_like_callback_type(&parse_quote!(
+        std::option::Option<EventHandler<i32>>
+    )));
+    assert!(looks_like_callback_type(&parse_quote!(
+        Option<EventHandler<MouseEvent>>
+    )));
+
+    assert!(looks_like_callback_type(&parse_quote!(EventHandler<i32>)));
+    assert!(looks_like_callback_type(&parse_quote!(EventHandler)));
+
+    assert!(looks_like_callback_type(&parse_quote!(Callback<i32>)));
+    assert!(looks_like_callback_type(&parse_quote!(Callback<i32, u32>)));
+}
+
+#[test]
+fn test_remove_option_wrapper() {
+    let type_without_option = remove_option_wrapper(parse_quote!(Option<i32>));
+    assert_eq!(type_without_option, parse_quote!(i32));
+
+    let type_without_option = remove_option_wrapper(parse_quote!(Option<Option<i32>>));
+    assert_eq!(type_without_option, parse_quote!(Option<i32>));
+
+    let type_without_option = remove_option_wrapper(parse_quote!(Option<Option<Option<i32>>>));
+    assert_eq!(type_without_option, parse_quote!(Option<Option<i32>>));
 }

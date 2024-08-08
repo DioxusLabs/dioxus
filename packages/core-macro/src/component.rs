@@ -52,9 +52,13 @@ impl ToTokens for ComponentBody {
             }
         };
 
+        let completion_hints = self.completion_hints();
+
         tokens.append_all(quote! {
             #props_struct
             #comp_fn
+
+            #completion_hints
         });
     }
 }
@@ -79,6 +83,7 @@ impl ComponentBody {
 
         let Generics { where_clause, .. } = generics;
         let (_, impl_generics, _) = generics.split_for_impl();
+        let generics_turbofish = ty_generics.as_turbofish();
 
         // We generate a struct with the same name as the component but called `Props`
         let struct_ident = Ident::new(&format!("{fn_ident}Props"), fn_ident.span());
@@ -98,6 +103,8 @@ impl ComponentBody {
             #[allow(non_snake_case)]
             #vis fn #fn_ident #generics (#inlined_props_argument) #fn_output #where_clause {
                 {
+                    // In debug mode we can detect if the user is calling the component like a function
+                    dioxus_core::internal::verify_component_called_as_component(#fn_ident #generics_turbofish);
                     #block
                 }
             }
@@ -151,6 +158,31 @@ impl ComponentBody {
         }
 
         false
+    }
+
+    // We generate an extra enum to help us autocomplete the braces after the component.
+    // This is a bit of a hack, but it's the only way to get the braces to autocomplete.
+    fn completion_hints(&self) -> TokenStream {
+        let comp_fn = &self.item_fn.sig.ident;
+        let completions_mod = Ident::new(&format!("{}_completions", comp_fn), comp_fn.span());
+
+        let vis = &self.item_fn.vis;
+
+        quote! {
+            #[allow(non_snake_case)]
+            #[doc(hidden)]
+            mod #completions_mod {
+                #[doc(hidden)]
+                #[allow(non_camel_case_types)]
+                /// This enum is generated to help autocomplete the braces after the component. It does nothing
+                pub enum Component {
+                    #comp_fn {}
+                }
+            }
+
+            #[allow(unused)]
+            #vis use #completions_mod::Component::#comp_fn;
+        }
     }
 }
 

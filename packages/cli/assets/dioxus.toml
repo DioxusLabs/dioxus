@@ -1,0 +1,60 @@
+[application]
+
+# dioxus project name
+name = "{{project-name}}"
+
+# default platform
+# you can also use `dx serve/build --platform XXX` to use other platform
+# value: web | desktop
+default_platform = "{{default-platform}}"
+
+# Web `build` & `serve` dist path
+out_dir = "dist"
+
+# resource (static) file folder
+asset_dir = "public"
+
+# hot reload by default
+hot_reload = true
+
+[web.wasm_opt]
+# The level wasm-opt should target. z is the smallest. 4 is the fastest.
+level = "4"
+
+[web.app]
+
+# HTML title tag content
+title = "Dioxus | An elegant GUI library for Rust"
+
+[web.watcher]
+
+index_on_404 = true
+
+watch_path = ["src", "examples"]
+
+[bundler]
+# Bundle identifier
+identifier = "io.github.{{project-name}}"
+
+# Bundle publisher
+publisher = "{{project-name}}"
+
+# Bundle icon
+icon = ["icons/icon.png"]
+
+# Bundle resources
+resources = ["public/*"]
+
+# Bundle copyright
+copyright = ""
+
+# Bundle category
+category = "Utility"
+
+# Bundle short description
+short_description = "An amazing dioxus application."
+
+# Bundle long description
+long_description = """
+An amazing dioxus application.
+"""

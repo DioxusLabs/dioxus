@@ -6,20 +6,28 @@ use std::{
 /// A reference to a value in a generational box.
 pub struct GenerationalRef<R> {
     pub(crate) inner: R,
-    #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-    pub(crate) borrow: GenerationalRefBorrowInfo,
+    guard: GenerationalRefBorrowGuard,
 }
 
-impl<T: 'static, R: Deref<Target = T>> GenerationalRef<R> {
-    pub(crate) fn new(
-        inner: R,
-        #[cfg(any(debug_assertions, feature = "debug_borrows"))] borrow: GenerationalRefBorrowInfo,
-    ) -> Self {
-        Self {
-            inner,
-            #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-            borrow,
+impl<T: ?Sized + 'static, R: Deref<Target = T>> GenerationalRef<R> {
+    pub(crate) fn new(inner: R, guard: GenerationalRefBorrowGuard) -> Self {
+        Self { inner, guard }
+    }
+
+    /// Map the inner value to a new type
+    pub fn map<R2, F: FnOnce(R) -> R2>(self, f: F) -> GenerationalRef<R2> {
+        GenerationalRef {
+            inner: f(self.inner),
+            guard: self.guard,
         }
+    }
+
+    /// Try to map the inner value to a new type
+    pub fn try_map<R2, F: FnOnce(R) -> Option<R2>>(self, f: F) -> Option<GenerationalRef<R2>> {
+        f(self.inner).map(|inner| GenerationalRef {
+            inner,
+            guard: self.guard,
+        })
     }
 }
 
@@ -43,42 +51,45 @@ impl<T: ?Sized + 'static, R: Deref<Target = T>> Deref for GenerationalRef<R> {
     }
 }
 
-#[cfg(any(debug_assertions, feature = "debug_borrows"))]
-/// Information about a borrow.
-pub struct GenerationalRefBorrowInfo {
+pub(crate) struct GenerationalRefBorrowGuard {
+    #[cfg(any(debug_assertions, feature = "debug_borrows"))]
     pub(crate) borrowed_at: &'static std::panic::Location<'static>,
-    pub(crate) borrowed_from: &'static crate::MemoryLocationBorrowInfo,
-    pub(crate) created_at: &'static std::panic::Location<'static>,
+    #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+    pub(crate) borrowed_from: &'static crate::entry::MemoryLocationBorrowInfo,
 }
 
 #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-impl Drop for GenerationalRefBorrowInfo {
+impl Drop for GenerationalRefBorrowGuard {
     fn drop(&mut self) {
-        self.borrowed_from
-            .borrowed_at
-            .write()
-            .retain(|location| !std::ptr::eq(*location, self.borrowed_at as *const _));
+        self.borrowed_from.drop_borrow(self.borrowed_at);
     }
 }
 
 /// A mutable reference to a value in a generational box.
 pub struct GenerationalRefMut<W> {
     pub(crate) inner: W,
-    #[cfg(any(debug_assertions, feature = "debug_borrows"))]
     pub(crate) borrow: GenerationalRefBorrowMutGuard,
 }
 
-impl<T, R: DerefMut<Target = T>> GenerationalRefMut<R> {
-    pub(crate) fn new(
-        inner: R,
-        #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-        borrow: GenerationalRefMutBorrowInfo,
-    ) -> Self {
-        Self {
-            inner,
-            #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-            borrow: borrow.into(),
+impl<T: ?Sized + 'static, R: DerefMut<Target = T>> GenerationalRefMut<R> {
+    pub(crate) fn new(inner: R, borrow: GenerationalRefBorrowMutGuard) -> Self {
+        Self { inner, borrow }
+    }
+
+    /// Map the inner value to a new type
+    pub fn map<R2, F: FnOnce(R) -> R2>(self, f: F) -> GenerationalRefMut<R2> {
+        GenerationalRefMut {
+            inner: f(self.inner),
+            borrow: self.borrow,
         }
+    }
+
+    /// Try to map the inner value to a new type
+    pub fn try_map<R2, F: FnOnce(R) -> Option<R2>>(self, f: F) -> Option<GenerationalRefMut<R2>> {
+        f(self.inner).map(|inner| GenerationalRefMut {
+            inner,
+            borrow: self.borrow,
+        })
     }
 }
 
@@ -96,33 +107,17 @@ impl<T: ?Sized, W: DerefMut<Target = T>> DerefMut for GenerationalRefMut<W> {
     }
 }
 
-#[cfg(any(debug_assertions, feature = "debug_borrows"))]
-/// Information about a mutable borrow.
-pub struct GenerationalRefMutBorrowInfo {
-    /// The location where the borrow occurred.
-    pub(crate) borrowed_from: &'static crate::MemoryLocationBorrowInfo,
-    pub(crate) created_at: &'static std::panic::Location<'static>,
-}
-
-#[cfg(any(debug_assertions, feature = "debug_borrows"))]
 pub(crate) struct GenerationalRefBorrowMutGuard {
-    borrow_info: GenerationalRefMutBorrowInfo,
-}
-
-#[cfg(any(debug_assertions, feature = "debug_borrows"))]
-impl From<GenerationalRefMutBorrowInfo> for GenerationalRefBorrowMutGuard {
-    fn from(borrow_info: GenerationalRefMutBorrowInfo) -> Self {
-        Self { borrow_info }
-    }
+    #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+    /// The location where the borrow occurred.
+    pub(crate) borrowed_from: &'static crate::entry::MemoryLocationBorrowInfo,
+    #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+    pub(crate) borrowed_mut_at: &'static std::panic::Location<'static>,
 }
 
 #[cfg(any(debug_assertions, feature = "debug_borrows"))]
 impl Drop for GenerationalRefBorrowMutGuard {
     fn drop(&mut self) {
-        self.borrow_info
-            .borrowed_from
-            .borrowed_mut_at
-            .write()
-            .take();
+        self.borrowed_from.drop_borrow_mut(self.borrowed_mut_at);
     }
 }

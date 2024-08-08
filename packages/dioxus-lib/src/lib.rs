@@ -33,16 +33,16 @@ pub mod prelude {
 
     #[cfg(feature = "macro")]
     #[allow(deprecated)]
-    pub use dioxus_core_macro::{component, format_args_f, inline_props, render, rsx, Props};
+    pub use dioxus_core_macro::{component, rsx, Props};
 
-    #[cfg(feature = "launch")]
+    #[cfg(feature = "macro")]
     pub use dioxus_config_macro::*;
 
     #[cfg(feature = "html")]
     pub use dioxus_html as dioxus_elements;
 
     #[cfg(feature = "html")]
-    pub use dioxus_elements::{prelude::*, GlobalAttributes, SvgAttributes};
+    pub use dioxus_elements::{global_attributes, prelude::*, svg_attributes};
 
     pub use dioxus_core;
 }

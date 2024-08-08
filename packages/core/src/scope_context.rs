@@ -1,4 +1,10 @@
-use crate::{innerlude::SchedulerMsg, Element, Runtime, ScopeId, Task};
+use crate::runtime::RuntimeError;
+use crate::{innerlude::SchedulerMsg, Runtime, ScopeId, Task};
+use crate::{
+    innerlude::{throw_into, CapturedError},
+    prelude::SuspenseContext,
+};
+use generational_box::{AnyStorage, Owner};
 use rustc_hash::FxHashSet;
 use std::{
     any::Any,
@@ -6,6 +12,34 @@ use std::{
     future::Future,
     sync::Arc,
 };
+
+pub(crate) enum ScopeStatus {
+    Mounted,
+    Unmounted {
+        // Before the component is mounted, we need to keep track of effects that need to be run once the scope is mounted
+        effects_queued: Vec<Box<dyn FnOnce() + 'static>>,
+    },
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) enum SuspenseLocation {
+    #[default]
+    NotSuspended,
+    SuspenseBoundary(SuspenseContext),
+    UnderSuspense(SuspenseContext),
+    InSuspensePlaceholder(SuspenseContext),
+}
+
+impl SuspenseLocation {
+    pub(crate) fn suspense_context(&self) -> Option<&SuspenseContext> {
+        match self {
+            SuspenseLocation::InSuspensePlaceholder(context) => Some(context),
+            SuspenseLocation::UnderSuspense(context) => Some(context),
+            SuspenseLocation::SuspenseBoundary(context) => Some(context),
+            _ => None,
+        }
+    }
+}
 
 /// A component's state separate from its props.
 ///
@@ -22,10 +56,13 @@ pub(crate) struct Scope {
     pub(crate) hook_index: Cell<usize>,
     pub(crate) shared_contexts: RefCell<Vec<Box<dyn Any>>>,
     pub(crate) spawned_tasks: RefCell<FxHashSet<Task>>,
-    /// The task that was last spawned that may suspend. We use this task to check what task to suspend in the event of an early None return from a component
-    pub(crate) last_suspendable_task: Cell<Option<Task>>,
     pub(crate) before_render: RefCell<Vec<Box<dyn FnMut()>>>,
     pub(crate) after_render: RefCell<Vec<Box<dyn FnMut()>>>,
+
+    /// The suspense boundary that this scope is currently in (if any)
+    suspense_boundary: SuspenseLocation,
+
+    pub(crate) status: RefCell<ScopeStatus>,
 }
 
 impl Scope {
@@ -34,6 +71,7 @@ impl Scope {
         id: ScopeId,
         parent_id: Option<ScopeId>,
         height: u32,
+        suspense_boundary: SuspenseLocation,
     ) -> Self {
         Self {
             name,
@@ -43,11 +81,14 @@ impl Scope {
             render_count: Cell::new(0),
             shared_contexts: RefCell::new(vec![]),
             spawned_tasks: RefCell::new(FxHashSet::default()),
-            last_suspendable_task: Cell::new(None),
             hooks: RefCell::new(vec![]),
             hook_index: Cell::new(0),
             before_render: RefCell::new(vec![]),
             after_render: RefCell::new(vec![]),
+            status: RefCell::new(ScopeStatus::Unmounted {
+                effects_queued: Vec::new(),
+            }),
+            suspense_boundary,
         }
     }
 
@@ -56,7 +97,40 @@ impl Scope {
     }
 
     fn sender(&self) -> futures_channel::mpsc::UnboundedSender<SchedulerMsg> {
-        Runtime::with(|rt| rt.sender.clone()).unwrap()
+        Runtime::with(|rt| rt.sender.clone()).unwrap_or_else(|e| panic!("{}", e))
+    }
+
+    /// Mount the scope and queue any pending effects if it is not already mounted
+    pub(crate) fn mount(&self, runtime: &Runtime) {
+        let mut status = self.status.borrow_mut();
+        if let ScopeStatus::Unmounted { effects_queued } = &mut *status {
+            for f in effects_queued.drain(..) {
+                runtime.queue_effect_on_mounted_scope(self.id, f);
+            }
+            *status = ScopeStatus::Mounted;
+        }
+    }
+
+    /// Get the suspense location of this scope
+    pub(crate) fn suspense_location(&self) -> SuspenseLocation {
+        self.suspense_boundary.clone()
+    }
+
+    /// If this scope is a suspense boundary, return the suspense context
+    pub(crate) fn suspense_boundary(&self) -> Option<SuspenseContext> {
+        match self.suspense_location() {
+            SuspenseLocation::SuspenseBoundary(context) => Some(context),
+            _ => None,
+        }
+    }
+
+    /// Check if a node should run during suspense
+    pub(crate) fn should_run_during_suspense(&self) -> bool {
+        let Some(context) = self.suspense_boundary.suspense_context() else {
+            return false;
+        };
+
+        !context.frozen()
     }
 
     /// Mark this scope as dirty, and schedule a render for it.
@@ -91,6 +165,17 @@ impl Scope {
         })
     }
 
+    /// Get the owner for the current scope.
+    pub fn owner<S: AnyStorage>(&self) -> Owner<S> {
+        match self.has_context() {
+            Some(rt) => rt,
+            None => {
+                let owner = S::owner();
+                self.provide_context(owner)
+            }
+        }
+    }
+
     /// Return any context of type T if it exists on this scope
     pub fn has_context<T: 'static + Clone>(&self) -> Option<T> {
         self.shared_contexts
@@ -105,10 +190,10 @@ impl Scope {
     /// Clones the state if it exists.
     pub fn consume_context<T: 'static + Clone>(&self) -> Option<T> {
         tracing::trace!(
-            "looking for context {} ({:?}) in {}",
+            "looking for context {} ({:?}) in {:?}",
             std::any::type_name::<T>(),
             std::any::TypeId::of::<T>(),
-            self.name
+            self.id
         );
         if let Some(this_ctx) = self.has_context() {
             return Some(this_ctx);
@@ -117,25 +202,25 @@ impl Scope {
         let mut search_parent = self.parent_id;
         let cur_runtime = Runtime::with(|runtime| {
             while let Some(parent_id) = search_parent {
-                let parent = runtime.get_state(parent_id).unwrap();
+                let Some(parent) = runtime.get_state(parent_id) else {
+                    tracing::error!("Parent scope {:?} not found", parent_id);
+                    return None;
+                };
                 tracing::trace!(
-                    "looking for context {} ({:?}) in {}",
+                    "looking for context {} ({:?}) in {:?}",
                     std::any::type_name::<T>(),
                     std::any::TypeId::of::<T>(),
-                    parent.name
+                    parent.id
                 );
-                if let Some(shared) = parent.shared_contexts.borrow().iter().find_map(|any| {
-                    tracing::trace!("found context {:?}", (**any).type_id());
-                    any.downcast_ref::<T>()
-                }) {
-                    return Some(shared.clone());
+                if let Some(shared) = parent.has_context() {
+                    return Some(shared);
                 }
                 search_parent = parent.parent_id;
             }
             None
         });
 
-        match cur_runtime.flatten() {
+        match cur_runtime.ok().flatten() {
             Some(ctx) => Some(ctx),
             None => {
                 tracing::trace!(
@@ -173,25 +258,29 @@ impl Scope {
     ///
     /// # Example
     ///
-    /// ```rust, ignore
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// #[derive(Clone)]
     /// struct SharedState(&'static str);
     ///
-    /// static app: Component = |cx| {
-    ///     cx.use_hook(|| cx.provide_context(SharedState("world")));
+    /// // The parent provides context that is available in all children
+    /// fn app() -> Element {
+    ///     use_hook(|| provide_context(SharedState("world")));
     ///     rsx!(Child {})
     /// }
     ///
-    /// static Child: Component = |cx| {
-    ///     let state = cx.consume_state::<SharedState>();
+    /// // Any child elements can access the context with the `consume_context` function
+    /// fn Child() -> Element {
+    ///     let state = use_context::<SharedState>();
     ///     rsx!(div { "hello {state.0}" })
     /// }
     /// ```
     pub fn provide_context<T: 'static + Clone>(&self, value: T) -> T {
         tracing::trace!(
-            "providing context {} ({:?}) in {}",
+            "providing context {} ({:?}) in {:?}",
             std::any::type_name::<T>(),
             std::any::TypeId::of::<T>(),
-            self.name
+            self.id
         );
         let mut contexts = self.shared_contexts.borrow_mut();
 
@@ -258,32 +347,59 @@ impl Scope {
         id
     }
 
-    /// Spawns the future but does not return the [`TaskId`]
+    /// Spawns the future and returns the [`Task`]
     pub fn spawn(&self, fut: impl Future<Output = ()> + 'static) -> Task {
         let id = Runtime::with(|rt| rt.spawn(self.id, fut)).expect("Runtime to exist");
         self.spawned_tasks.borrow_mut().insert(id);
         id
     }
 
-    /// Mark this component as suspended on a specific task and then return None
-    pub fn suspend(&self, task: Task) -> Option<Element> {
-        self.last_suspendable_task.set(Some(task));
-        None
+    /// Queue an effect to run after the next render
+    pub fn queue_effect(&self, f: impl FnOnce() + 'static) {
+        Runtime::with(|rt| rt.queue_effect(self.id, f)).expect("Runtime to exist");
     }
 
     /// Store a value between renders. The foundational hook for all other hooks.
     ///
-    /// Accepts an `initializer` closure, which is run on the first use of the hook (typically the initial render). The return value of this closure is stored for the lifetime of the component, and a mutable reference to it is provided on every render as the return value of `use_hook`.
+    /// Accepts an `initializer` closure, which is run on the first use of the hook (typically the initial render).
+    /// `use_hook` will return a clone of the value on every render.
     ///
-    /// When the component is unmounted (removed from the UI), the value is dropped. This means you can return a custom type and provide cleanup code by implementing the [`Drop`] trait
+    /// In order to clean up resources you would need to implement the [`Drop`] trait for an inner value stored in a RC or similar (Signals for instance),
+    /// as these only drop their inner value once all references have been dropped, which only happens when the component is dropped.
     ///
     /// # Example
     ///
-    /// ```
-    /// # use dioxus::prelude::*;
+    /// ```rust
+    /// use dioxus::prelude::*;
+    ///
     /// // prints a greeting on the initial render
     /// pub fn use_hello_world() {
     ///     use_hook(|| println!("Hello, world!"));
+    /// }
+    /// ```
+    ///
+    /// # Custom Hook Example
+    ///
+    /// ```rust
+    /// use dioxus::prelude::*;
+    ///
+    /// pub struct InnerCustomState(usize);
+    ///
+    /// impl Drop for InnerCustomState {
+    ///     fn drop(&mut self){
+    ///         println!("Component has been dropped.");
+    ///     }
+    /// }
+    ///
+    /// #[derive(Clone, Copy)]
+    /// pub struct CustomState {
+    ///     inner: Signal<InnerCustomState>
+    /// }
+    ///
+    /// pub fn use_custom_state() -> CustomState {
+    ///     use_hook(|| CustomState {
+    ///         inner: Signal::new(InnerCustomState(0))
+    ///     })
     /// }
     /// ```
     pub fn use_hook<State: Clone + 'static>(&self, initializer: impl FnOnce() -> State) -> State {
@@ -335,13 +451,18 @@ impl Scope {
 
 impl ScopeId {
     /// Get the current scope id
-    pub fn current_scope_id(self) -> Option<ScopeId> {
-        Runtime::with(|rt| rt.current_scope_id()).flatten()
+    pub fn current_scope_id(self) -> Result<ScopeId, RuntimeError> {
+        Runtime::with(|rt| rt.current_scope_id().ok())
+            .ok()
+            .flatten()
+            .ok_or(RuntimeError::new())
     }
 
     /// Consume context from the current scope
     pub fn consume_context<T: 'static + Clone>(self) -> Option<T> {
-        Runtime::with_scope(self, |cx| cx.consume_context::<T>()).flatten()
+        Runtime::with_scope(self, |cx| cx.consume_context::<T>())
+            .ok()
+            .flatten()
     }
 
     /// Consume context from the current scope
@@ -350,71 +471,101 @@ impl ScopeId {
             rt.get_state(scope_id)
                 .and_then(|cx| cx.consume_context::<T>())
         })
+        .ok()
         .flatten()
     }
 
     /// Check if the current scope has a context
     pub fn has_context<T: 'static + Clone>(self) -> Option<T> {
-        Runtime::with_scope(self, |cx| cx.has_context::<T>()).flatten()
+        Runtime::with_scope(self, |cx| cx.has_context::<T>())
+            .ok()
+            .flatten()
     }
 
     /// Provide context to the current scope
     pub fn provide_context<T: 'static + Clone>(self, value: T) -> T {
-        Runtime::with_scope(self, |cx| cx.provide_context(value))
-            .expect("to be in a dioxus runtime")
-    }
-
-    /// Suspended a component on a specific task and then return None
-    pub fn suspend(self, task: Task) -> Option<Element> {
-        Runtime::with_scope(self, |cx| {
-            cx.suspend(task);
-        });
-        None
+        Runtime::with_scope(self, |cx| cx.provide_context(value)).unwrap()
     }
 
     /// Pushes the future onto the poll queue to be polled after the component renders.
     pub fn push_future(self, fut: impl Future<Output = ()> + 'static) -> Option<Task> {
-        Runtime::with_scope(self, |cx| cx.spawn(fut))
+        Runtime::with_scope(self, |cx| cx.spawn(fut)).ok()
     }
 
-    /// Spawns the future but does not return the [`TaskId`]
+    /// Spawns the future but does not return the [`Task`]
     pub fn spawn(self, fut: impl Future<Output = ()> + 'static) {
-        Runtime::with_scope(self, |cx| cx.spawn(fut));
+        Runtime::with_scope(self, |cx| cx.spawn(fut)).unwrap();
     }
 
     /// Get the current render since the inception of this component
     ///
     /// This can be used as a helpful diagnostic when debugging hooks/renders, etc
     pub fn generation(self) -> Option<usize> {
-        Runtime::with_scope(self, |cx| Some(cx.generation())).expect("to be in a dioxus runtime")
+        Runtime::with_scope(self, |cx| Some(cx.generation())).unwrap()
     }
 
     /// Get the parent of the current scope if it exists
     pub fn parent_scope(self) -> Option<ScopeId> {
-        Runtime::with_scope(self, |cx| cx.parent_id()).flatten()
+        Runtime::with_scope(self, |cx| cx.parent_id())
+            .ok()
+            .flatten()
+    }
+
+    /// Check if the current scope is a descendant of the given scope
+    pub fn is_descendant_of(self, other: ScopeId) -> bool {
+        let mut current = self;
+        while let Some(parent) = current.parent_scope() {
+            if parent == other {
+                return true;
+            }
+            current = parent;
+        }
+        false
     }
 
     /// Mark the current scope as dirty, causing it to re-render
     pub fn needs_update(self) {
-        Runtime::with_scope(self, |cx| cx.needs_update());
+        Runtime::with_scope(self, |cx| cx.needs_update()).unwrap();
     }
 
     /// Create a subscription that schedules a future render for the reference component. Unlike [`Self::needs_update`], this function will work outside of the dioxus runtime.
     ///
-    /// ## Notice: you should prefer using [`dioxus_core::schedule_update_any`] and [`Self::scope_id`]
+    /// ## Notice: you should prefer using [`crate::prelude::schedule_update_any`]
     pub fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
-        Runtime::with_scope(*self, |cx| cx.schedule_update()).expect("to be in a dioxus runtime")
+        Runtime::with_scope(*self, |cx| cx.schedule_update()).unwrap()
     }
 
     /// Get the height of the current scope
     pub fn height(self) -> u32 {
-        Runtime::with_scope(self, |cx| cx.height()).expect("to be in a dioxus runtime")
+        Runtime::with_scope(self, |cx| cx.height()).unwrap()
     }
 
     /// Run a closure inside of scope's runtime
+    #[track_caller]
     pub fn in_runtime<T>(self, f: impl FnOnce() -> T) -> T {
         Runtime::current()
-            .expect("to be in a dioxus runtime")
+            .unwrap_or_else(|e| panic!("{}", e))
             .on_scope(self, f)
+    }
+
+    /// Throw a [`CapturedError`] into a scope. The error will bubble up to the nearest [`ErrorBoundary`] or the root of the app.
+    ///
+    /// # Examples
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// fn Component() -> Element {
+    ///     let request = spawn(async move {
+    ///         match reqwest::get("https://api.example.com").await {
+    ///             Ok(_) => todo!(),
+    ///             // You can explicitly throw an error into a scope with throw_error
+    ///             Err(err) => ScopeId::APP.throw_error(err)
+    ///         }
+    ///     });
+    ///
+    ///     todo!()
+    /// }
+    /// ```
+    pub fn throw_error(self, error: impl Into<CapturedError> + 'static) {
+        throw_into(error, self)
     }
 }

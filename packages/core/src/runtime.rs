@@ -1,10 +1,14 @@
+use crate::innerlude::{DirtyTasks, Effect};
+use crate::scope_context::SuspenseLocation;
 use crate::{
     innerlude::{LocalTask, SchedulerMsg},
-    render_signal::RenderSignal,
     scope_context::Scope,
     scopes::ScopeId,
     Task,
 };
+use slotmap::DefaultKey;
+use std::collections::BTreeSet;
+use std::fmt;
 use std::{
     cell::{Cell, Ref, RefCell},
     rc::Rc,
@@ -19,13 +23,18 @@ pub struct Runtime {
     pub(crate) scope_states: RefCell<Vec<Option<Scope>>>,
 
     // We use this to track the current scope
-    pub(crate) scope_stack: RefCell<Vec<ScopeId>>,
+    // This stack should only be modified through [`Runtime::with_scope_on_stack`] to ensure that the stack is correctly restored
+    scope_stack: RefCell<Vec<ScopeId>>,
+
+    // We use this to track the current suspense location. Generally this lines up with the scope stack, but it may be different for children of a suspense boundary
+    // This stack should only be modified through [`Runtime::with_suspense_location`] to ensure that the stack is correctly restored
+    suspense_stack: RefCell<Vec<SuspenseLocation>>,
 
     // We use this to track the current task
     pub(crate) current_task: Cell<Option<Task>>,
 
     /// Tasks created with cx.spawn
-    pub(crate) tasks: RefCell<slab::Slab<Rc<LocalTask>>>,
+    pub(crate) tasks: RefCell<slotmap::SlotMap<DefaultKey, Rc<LocalTask>>>,
 
     // Currently suspended tasks
     pub(crate) suspended_tasks: Cell<usize>,
@@ -34,27 +43,34 @@ pub struct Runtime {
 
     pub(crate) sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
 
-    // Synchronous tasks need to be run after the next render. The virtual dom stores a list of those tasks to send a signal to them when the next render is done.
-    pub(crate) render_signal: RenderSignal,
+    // The effects that need to be run after the next render
+    pub(crate) pending_effects: RefCell<BTreeSet<Effect>>,
+
+    // Tasks that are waiting to be polled
+    pub(crate) dirty_tasks: RefCell<BTreeSet<DirtyTasks>>,
 }
 
 impl Runtime {
     pub(crate) fn new(sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>) -> Rc<Self> {
         Rc::new(Self {
             sender,
-            render_signal: RenderSignal::default(),
             rendering: Cell::new(true),
             scope_states: Default::default(),
             scope_stack: Default::default(),
+            suspense_stack: Default::default(),
             current_task: Default::default(),
             tasks: Default::default(),
             suspended_tasks: Default::default(),
+            pending_effects: Default::default(),
+            dirty_tasks: Default::default(),
         })
     }
 
     /// Get the current runtime
-    pub fn current() -> Option<Rc<Self>> {
-        RUNTIMES.with(|stack| stack.borrow().last().cloned())
+    pub fn current() -> Result<Rc<Self>, RuntimeError> {
+        RUNTIMES
+            .with(|stack| stack.borrow().last().cloned())
+            .ok_or(RuntimeError::new())
     }
 
     /// Create a scope context. This slab is synchronized with the scope slab.
@@ -71,7 +87,6 @@ impl Runtime {
         {
             let borrow = self.scope_states.borrow();
             if let Some(scope) = &borrow[id.0] {
-                let _runtime_guard = RuntimeGuard::new(self.clone());
                 // Manually drop tasks, hooks, and contexts inside of the runtime
                 self.on_scope(id, || {
                     // Drop all spawned tasks - order doesn't matter since tasks don't rely on eachother
@@ -94,22 +109,71 @@ impl Runtime {
     }
 
     /// Get the current scope id
-    pub(crate) fn current_scope_id(&self) -> Option<ScopeId> {
-        self.scope_stack.borrow().last().copied()
+    pub(crate) fn current_scope_id(&self) -> Result<ScopeId, RuntimeError> {
+        self.scope_stack
+            .borrow()
+            .last()
+            .copied()
+            .ok_or(RuntimeError { _priv: () })
     }
 
     /// Call this function with the current scope set to the given scope
     ///
     /// Useful in a limited number of scenarios
-    pub fn on_scope<O>(&self, id: ScopeId, f: impl FnOnce() -> O) -> O {
+    pub fn on_scope<O>(self: &Rc<Self>, id: ScopeId, f: impl FnOnce() -> O) -> O {
+        let _runtime_guard = RuntimeGuard::new(self.clone());
         {
-            self.scope_stack.borrow_mut().push(id);
+            self.push_scope(id);
         }
         let o = f();
         {
-            self.scope_stack.borrow_mut().pop();
+            self.pop_scope();
         }
         o
+    }
+
+    /// Get the current suspense location
+    pub(crate) fn current_suspense_location(&self) -> Option<SuspenseLocation> {
+        self.suspense_stack.borrow().last().cloned()
+    }
+
+    /// Run a callback a [`SuspenseLocation`] at the top of the stack
+    pub(crate) fn with_suspense_location<O>(
+        &self,
+        suspense_location: SuspenseLocation,
+        f: impl FnOnce() -> O,
+    ) -> O {
+        self.suspense_stack.borrow_mut().push(suspense_location);
+        let o = f();
+        self.suspense_stack.borrow_mut().pop();
+        o
+    }
+
+    /// Run a callback with the current scope at the top of the stack
+    pub(crate) fn with_scope_on_stack<O>(&self, scope: ScopeId, f: impl FnOnce() -> O) -> O {
+        self.push_scope(scope);
+        let o = f();
+        self.pop_scope();
+        o
+    }
+
+    /// Push a scope onto the stack
+    fn push_scope(&self, scope: ScopeId) {
+        let suspense_location = self
+            .scope_states
+            .borrow()
+            .get(scope.0)
+            .and_then(|s| s.as_ref())
+            .map(|s| s.suspense_location())
+            .unwrap_or_default();
+        self.suspense_stack.borrow_mut().push(suspense_location);
+        self.scope_stack.borrow_mut().push(scope);
+    }
+
+    /// Pop a scope off the stack
+    fn pop_scope(&self) {
+        self.scope_stack.borrow_mut().pop();
+        self.suspense_stack.borrow_mut().pop();
     }
 
     /// Get the state for any scope given its ID
@@ -133,22 +197,53 @@ impl Runtime {
     }
 
     /// Runs a function with the current runtime
-    pub(crate) fn with<R>(f: impl FnOnce(&Runtime) -> R) -> Option<R> {
-        RUNTIMES.with(|stack| stack.borrow().last().map(|r| f(r)))
+    pub(crate) fn with<R>(f: impl FnOnce(&Runtime) -> R) -> Result<R, RuntimeError> {
+        Self::current().map(|r| f(&r))
     }
 
     /// Runs a function with the current scope
-    pub(crate) fn with_current_scope<R>(f: impl FnOnce(&Scope) -> R) -> Option<R> {
+    pub(crate) fn with_current_scope<R>(f: impl FnOnce(&Scope) -> R) -> Result<R, RuntimeError> {
         Self::with(|rt| {
             rt.current_scope_id()
+                .ok()
                 .and_then(|scope| rt.get_state(scope).map(|sc| f(&sc)))
         })
+        .ok()
         .flatten()
+        .ok_or(RuntimeError::new())
     }
 
     /// Runs a function with the current scope
-    pub(crate) fn with_scope<R>(scope: ScopeId, f: impl FnOnce(&Scope) -> R) -> Option<R> {
-        Self::with(|rt| rt.get_state(scope).map(|sc| f(&sc))).flatten()
+    pub(crate) fn with_scope<R>(
+        scope: ScopeId,
+        f: impl FnOnce(&Scope) -> R,
+    ) -> Result<R, RuntimeError> {
+        Self::with(|rt| rt.get_state(scope).map(|sc| f(&sc)))
+            .ok()
+            .flatten()
+            .ok_or(RuntimeError::new())
+    }
+
+    /// Finish a render. This will mark all effects as ready to run and send the render signal.
+    pub(crate) fn finish_render(&self) {
+        // If there are new effects we can run, send a message to the scheduler to run them (after the renderer has applied the mutations)
+        if !self.pending_effects.borrow().is_empty() {
+            self.sender
+                .unbounded_send(SchedulerMsg::EffectQueued)
+                .expect("Scheduler should exist");
+        }
+    }
+
+    /// Check if we should render a scope
+    pub(crate) fn scope_should_render(&self, scope_id: ScopeId) -> bool {
+        // If there are no suspended futures, we know the scope is not  and we can skip context checks
+        if self.suspended_tasks.get() == 0 {
+            return true;
+        }
+        // If this is not a suspended scope, and we are under a frozen context, then we should
+        let scopes = self.scope_states.borrow();
+        let scope = &scopes[scope_id.0].as_ref().unwrap();
+        !matches!(scope.suspense_location(), SuspenseLocation::UnderSuspense(suspense) if suspense.is_suspended())
     }
 }
 
@@ -200,3 +295,61 @@ impl Drop for RuntimeGuard {
         Runtime::pop();
     }
 }
+
+/// Missing Dioxus runtime error.
+pub struct RuntimeError {
+    _priv: (),
+}
+
+impl RuntimeError {
+    #[inline(always)]
+    pub(crate) fn new() -> Self {
+        Self { _priv: () }
+    }
+}
+
+impl fmt::Debug for RuntimeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RuntimeError").finish()
+    }
+}
+
+impl fmt::Display for RuntimeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Must be called from inside a Dioxus runtime.
+
+Help: Some APIs in dioxus require a global runtime to be present.
+If you are calling one of these APIs from outside of a dioxus runtime
+(typically in a web-sys closure or dynamic library), you will need to
+grab the runtime from a scope that has it and then move it into your
+new scope with a runtime guard.
+
+For example, if you are trying to use dioxus apis from a web-sys
+closure, you can grab the runtime from the scope it is created in:
+
+```rust
+use dioxus::prelude::*;
+static COUNT: GlobalSignal<i32> = Signal::global(|| 0);
+
+#[component]
+fn MyComponent() -> Element {{
+    use_effect(|| {{
+        // Grab the runtime from the MyComponent scope
+        let runtime = Runtime::current().expect(\"Components run in the Dioxus runtime\");
+        // Move the runtime into the web-sys closure scope
+        let web_sys_closure = Closure::new(|| {{
+            // Then create a guard to provide the runtime to the closure
+            let _guard = RuntimeGuard::new(runtime);
+            // and run whatever code needs the runtime
+            tracing::info!(\"The count is: {{COUNT}}\");
+        }});
+    }})
+}}
+```"
+        )
+    }
+}
+
+impl std::error::Error for RuntimeError {}

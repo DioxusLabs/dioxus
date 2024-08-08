@@ -1,0 +1,1 @@
+rsx! { "hello world" }

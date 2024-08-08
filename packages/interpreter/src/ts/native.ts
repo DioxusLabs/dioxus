@@ -7,7 +7,7 @@ import { BaseInterpreter, NodeId } from "./core";
 import { SerializedEvent, serializeEvent } from "./serialize";
 
 // okay so, we've got this JSChannel thing from sledgehammer, implicitly imported into our scope
-// we want to extend it, and it technically extends base intepreter. To make typescript happy,
+// we want to extend it, and it technically extends base interpreter. To make typescript happy,
 // we're going to bind the JSChannel_ object to the JSChannel object, and then extend it
 var JSChannel_: typeof BaseInterpreter;
 
@@ -15,7 +15,7 @@ var JSChannel_: typeof BaseInterpreter;
 if (RawInterpreter !== undefined && RawInterpreter !== null) {
   // @ts-ignore - this is coming from the host
   JSChannel_ = RawInterpreter;
-};
+}
 
 export class NativeInterpreter extends JSChannel_ {
   intercept_link_redirects: boolean;
@@ -40,28 +40,39 @@ export class NativeInterpreter extends JSChannel_ {
 
     // attach an event listener on the body that prevents file drops from navigating
     // this is because the browser will try to navigate to the file if it's dropped on the window
-    window.addEventListener("dragover", function (e) {
-      // // check which element is our target
-      if (e.target instanceof Element && e.target.tagName != "INPUT") {
+    window.addEventListener(
+      "dragover",
+      function (e) {
+        // // check which element is our target
+        if (e.target instanceof Element && e.target.tagName != "INPUT") {
+          e.preventDefault();
+        }
+      },
+      false
+    );
+
+    window.addEventListener(
+      "drop",
+      function (e) {
+        let target = e.target;
+
+        if (!(target instanceof Element)) {
+          return;
+        }
+
+        // Dropping a file on the window will navigate to the file, which we don't want
         e.preventDefault();
-      }
-    }, false);
-
-    window.addEventListener("drop", function (e) {
-      let target = e.target;
-
-      if (!(target instanceof Element)) {
-        return;
-      }
-
-      // Dropping a file on the window will navigate to the file, which we don't want
-      e.preventDefault();
-    }, false);
+      },
+      false
+    );
 
     // attach a listener to the route that listens for clicks and prevents the default file dialog
     window.addEventListener("click", (event) => {
       const target = event.target;
-      if (target instanceof HTMLInputElement && target.getAttribute("type") === "file") {
+      if (
+        target instanceof HTMLInputElement &&
+        target.getAttribute("type") === "file"
+      ) {
         // Send a message to the host to open the file dialog if the target is a file input and has a dioxus id attached to it
         let target_id = getTargetId(target);
         if (target_id !== null) {
@@ -79,12 +90,12 @@ export class NativeInterpreter extends JSChannel_ {
       }
     });
 
-
     // @ts-ignore - wry gives us this
     this.ipc = window.ipc;
 
     // make sure we pass the handler to the base interpreter
-    const handler: EventListener = (event) => this.handleEvent(event, event.type, true);
+    const handler: EventListener = (event) =>
+      this.handleEvent(event, event.type, true);
     super.initialize(root, handler);
   }
 
@@ -99,7 +110,37 @@ export class NativeInterpreter extends JSChannel_ {
     }
   }
 
-  getClientRect(id: NodeId): { type: string; origin: number[]; size: number[]; } | undefined {
+  getScrollHeight(id: NodeId): number | undefined {
+    const node = this.nodes[id];
+    if (node instanceof HTMLElement) {
+      return node.scrollHeight;
+    }
+  }
+
+  getScrollLeft(id: NodeId): number | undefined {
+    const node = this.nodes[id];
+    if (node instanceof HTMLElement) {
+      return node.scrollLeft;
+    }
+  }
+
+  getScrollTop(id: NodeId): number | undefined {
+    const node = this.nodes[id];
+    if (node instanceof HTMLElement) {
+      return node.scrollTop;
+    }
+  }
+
+  getScrollWidth(id: NodeId): number | undefined {
+    const node = this.nodes[id];
+    if (node instanceof HTMLElement) {
+      return node.scrollWidth;
+    }
+  }
+
+  getClientRect(
+    id: NodeId
+  ): { type: string; origin: number[]; size: number[] } | undefined {
     const node = this.nodes[id];
     if (node instanceof HTMLElement) {
       const rect = node.getBoundingClientRect();
@@ -168,16 +209,18 @@ export class NativeInterpreter extends JSChannel_ {
     // Liveview will still need to use this
     this.preventDefaults(event, target);
 
-    // liveview does not have syncronous event handling, so we need to send the event to the host
+    // liveview does not have synchronous event handling, so we need to send the event to the host
     if (this.liveview) {
       // Okay, so the user might've requested some files to be read
-      if (target instanceof HTMLInputElement && (event.type === "change" || event.type === "input")) {
+      if (
+        target instanceof HTMLInputElement &&
+        (event.type === "change" || event.type === "input")
+      ) {
         if (target.getAttribute("type") === "file") {
           this.readFiles(target, contents, bubbles, realId, name);
         }
       }
     } else {
-
       const message = this.serializeIpcMessage("user_event", body);
       this.ipc.postMessage(message);
 
@@ -195,8 +238,6 @@ export class NativeInterpreter extends JSChannel_ {
     }
   }
 
-
-
   // This should:
   // - prevent form submissions from navigating
   // - prevent anchor tags from navigating
@@ -210,7 +251,10 @@ export class NativeInterpreter extends JSChannel_ {
       preventDefaultRequests = target.getAttribute(`dioxus-prevent-default`);
     }
 
-    if (preventDefaultRequests && preventDefaultRequests.includes(`on${event.type}`)) {
+    if (
+      preventDefaultRequests &&
+      preventDefaultRequests.includes(`on${event.type}`)
+    ) {
       event.preventDefault();
     }
 
@@ -224,7 +268,11 @@ export class NativeInterpreter extends JSChannel_ {
     }
   }
 
-  handleClickNavigate(event: Event, target: Element, preventDefaultRequests: string) {
+  handleClickNavigate(
+    event: Event,
+    target: Element,
+    preventDefaultRequests: string
+  ) {
     // todo call prevent default if it's the right type of event
     if (!this.intercept_link_redirects) {
       return;
@@ -279,24 +327,30 @@ export class NativeInterpreter extends JSChannel_ {
     }
   }
 
-  waitForRequest(headless: boolean) {
-    fetch(new Request(this.editsPath))
-      .then(response => response.arrayBuffer())
-      .then(bytes => {
-        // In headless mode, the requestAnimationFrame callback is never called, so we need to run the bytes directly
-        if (headless) {
-          // @ts-ignore
-          this.run_from_bytes(bytes);
-        } else {
-          this.enqueueBytes(bytes);
-          requestAnimationFrame(() => {
-            this.flushQueuedBytes();
-          });
-        }
+  // Run the edits the next animation frame
+  rafEdits(headless: boolean, bytes: ArrayBuffer) {
+    // In headless mode, the requestAnimationFrame callback is never called, so we need to run the bytes directly
+    if (headless) {
+      // @ts-ignore
+      this.run_from_bytes(bytes);
+      this.waitForRequest(headless);
+    } else {
+      this.enqueueBytes(bytes);
+      requestAnimationFrame(() => {
+        this.flushQueuedBytes();
+        // With request animation frames, we use the next reqwest as a marker to know when the frame is done and it is safe to run effects
         this.waitForRequest(headless);
       });
+    }
   }
 
+  waitForRequest(headless: boolean) {
+    fetch(new Request(this.editsPath))
+      .then((response) => response.arrayBuffer())
+      .then((bytes) => {
+        this.rafEdits(headless, bytes);
+      });
+  }
 
   kickAllStylesheetsOnPage() {
     // If this function is being called and we have not explicitly set kickStylesheets to true, then we should
@@ -314,7 +368,13 @@ export class NativeInterpreter extends JSChannel_ {
 
   //  A liveview only function
   // Desktop will intercept the event before it hits this
-  async readFiles(target: HTMLInputElement, contents: SerializedEvent, bubbles: boolean, realId: NodeId, name: string) {
+  async readFiles(
+    target: HTMLInputElement,
+    contents: SerializedEvent,
+    bubbles: boolean,
+    realId: NodeId,
+    name: string
+  ) {
     let files = target.files!;
     let file_contents: { [name: string]: number[] } = {};
 
@@ -387,7 +447,6 @@ function getTargetId(target: EventTarget): NodeId | null {
 
   return parseInt(realId);
 }
-
 
 // function applyFileUpload() {
 //   let inputs = document.querySelectorAll("input");

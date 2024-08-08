@@ -1,17 +1,20 @@
 #![allow(missing_docs)]
 use crate::{use_callback, use_hook_did_run, use_signal, UseCallback};
-use dioxus_core::{prelude::*, Task};
+use dioxus_core::prelude::*;
 use dioxus_signals::*;
-use dioxus_signals::{Readable, Writable};
 use std::future::Future;
 use std::ops::Deref;
 
-/// A hook that allows you to spawn a future.
-/// This future will **not** run on the server
-/// The future is spawned on the next call to `wait_for_next_render` which means that it will not run on the server.
-/// To run a future on the server, you should use `spawn` directly.
-/// `use_future` **won't return a value**.
-/// If you want to return a value from a future, use `use_resource` instead.
+/// A hook that allows you to spawn a future the first time you render a component.
+///
+///
+/// This future will **not** run on the server. To run a future on the server, you should use [`spawn_isomorphic`] directly.
+///
+///
+/// `use_future` **won't return a value**. If you want to return a value from a future, use [`crate::use_resource()`] instead.
+///
+/// ## Example
+///
 /// ```rust
 /// # use dioxus::prelude::*;
 /// # use std::time::Duration;
@@ -36,13 +39,16 @@ use std::ops::Deref;
 ///     }
 /// }
 /// ```
+#[doc = include_str!("../docs/rules_of_hooks.md")]
+#[doc = include_str!("../docs/moving_state_around.md")]
+#[doc(alias = "use_async")]
 pub fn use_future<F>(mut future: impl FnMut() -> F + 'static) -> UseFuture
 where
     F: Future + 'static,
 {
     let mut state = use_signal(|| UseFutureState::Pending);
 
-    let callback = use_callback(move || {
+    let callback = use_callback(move |_| {
         let fut = future();
         spawn(async move {
             state.set(UseFutureState::Pending);
@@ -52,7 +58,7 @@ where
     });
 
     // Create the task inside a CopyValue so we can reset it in-place later
-    let task = use_hook(|| CopyValue::new(callback.call()));
+    let task = use_hook(|| CopyValue::new(callback(())));
 
     // Early returns in dioxus have consequences for use_memo, use_resource, and use_future, etc
     // We *don't* want futures to be running if the component early returns. It's a rather weird behavior to have
@@ -76,7 +82,7 @@ where
 pub struct UseFuture {
     task: CopyValue<Task>,
     state: Signal<UseFutureState>,
-    callback: UseCallback<Task>,
+    callback: UseCallback<(), Task>,
 }
 
 /// A signal that represents the state of a future
@@ -103,7 +109,7 @@ impl UseFuture {
     /// generates.
     pub fn restart(&mut self) {
         self.task.write().cancel();
-        let new_task = self.callback.call();
+        let new_task = self.callback.call(());
         self.task.set(new_task);
     }
 
@@ -169,8 +175,10 @@ impl Readable for UseFuture {
     }
 
     #[track_caller]
-    fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
-        self.state.peek_unchecked()
+    fn try_peek_unchecked(
+        &self,
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+        self.state.try_peek_unchecked()
     }
 }
 

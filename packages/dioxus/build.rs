@@ -5,8 +5,8 @@ fn main() {
             return;
         }
 
-        let liveview_renderers = ["liveview", "axum"];
-        let fullstack_renderers = ["axum"];
+        let liveview_renderers = ["liveview", "server"];
+        let fullstack_renderers = ["server"];
         let client_renderers = ["desktop", "mobile", "web"];
         let client_renderer_selected = client_renderers
             .iter()
@@ -32,6 +32,10 @@ fn main() {
         if !client_renderer_selected {
             println!("cargo:warning=You have enabled the launch feature, but have not enabled any client renderers. The application will not be able to launch. Try enabling one of the following renderers: {}, fullstack or liveview", client_renderers.join(", "));
         }
+    }
+
+    if feature_enabled("axum") {
+        println!("cargo:warning=The axum feature has been renamed to server and will be removed in a future release. Please update your code to use server feature instead.");
     }
 }
 

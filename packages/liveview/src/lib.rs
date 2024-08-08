@@ -85,7 +85,7 @@ fn handle_edits_code() -> String {
     .replace("export", "");
     while let Some(import_start) = interpreter.find("import") {
         let import_end = interpreter[import_start..]
-            .find(|c| c == ';' || c == '\n')
+            .find([';', '\n'])
             .map(|i| i + import_start)
             .unwrap_or_else(|| interpreter.len());
         interpreter.replace_range(import_start..import_end, "");
@@ -106,7 +106,9 @@ fn handle_edits_code() -> String {
 /// If you enter a relative path, the web client automatically prefixes the host address in
 /// `window.location` when creating a web socket to LiveView.
 ///
-/// ```
+/// ```rust
+/// use dioxus_liveview::interpreter_glue;
+///
 /// // Creates websocket connection to same host as current page
 /// interpreter_glue("/api/liveview");
 ///

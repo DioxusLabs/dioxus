@@ -26,7 +26,7 @@ fn main() {
 
 fn app() -> Element {
     rsx!(
-        link { href: "https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css", rel: "stylesheet" }
+        head::Link { href: "https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css", rel: "stylesheet" }
         Header {}
         div { class: "container mx-auto",
             div { class: "grid grid-cols-5",

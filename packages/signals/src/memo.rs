@@ -1,26 +1,26 @@
 use crate::read_impls;
 use crate::write::Writable;
-use crate::{read::Readable, ReactiveContext, ReadableRef, Signal};
+use crate::{read::Readable, ReadableRef, Signal};
 use crate::{CopyValue, ReadOnlySignal};
-use std::rc::Rc;
 use std::{
     cell::RefCell,
     ops::Deref,
-    panic::Location,
     sync::{atomic::AtomicBool, Arc},
 };
 
 use dioxus_core::prelude::*;
 use futures_util::StreamExt;
-use generational_box::UnsyncStorage;
-use once_cell::sync::OnceCell;
+use generational_box::{AnyStorage, BorrowResult, UnsyncStorage};
 
 struct UpdateInformation<T> {
     dirty: Arc<AtomicBool>,
     callback: RefCell<Box<dyn FnMut() -> T>>,
 }
 
-/// A value that is memoized. This is useful for caching the result of a computation.
+#[doc = include_str!("../docs/memo.md")]
+#[doc(alias = "Selector")]
+#[doc(alias = "UseMemo")]
+#[doc(alias = "Memorize")]
 pub struct Memo<T: 'static> {
     inner: Signal<T>,
     update: CopyValue<UpdateInformation<T>>,
@@ -38,14 +38,23 @@ where
 impl<T: 'static> Memo<T> {
     /// Create a new memo
     #[track_caller]
-    pub fn new(mut f: impl FnMut() -> T + 'static) -> Self
+    pub fn new(f: impl FnMut() -> T + 'static) -> Self
     where
         T: PartialEq,
     {
-        let dirty = Arc::new(AtomicBool::new(true));
-        let (tx, mut rx) = futures_channel::mpsc::unbounded();
+        Self::new_with_location(f, std::panic::Location::caller())
+    }
 
-        let myself: Rc<OnceCell<Memo<T>>> = Rc::new(OnceCell::new());
+    /// Create a new memo with an explicit location
+    pub fn new_with_location(
+        mut f: impl FnMut() -> T + 'static,
+        location: &'static std::panic::Location<'static>,
+    ) -> Self
+    where
+        T: PartialEq,
+    {
+        let dirty = Arc::new(AtomicBool::new(false));
+        let (tx, mut rx) = futures_channel::mpsc::unbounded();
 
         let callback = {
             let dirty = dirty.clone();
@@ -54,27 +63,23 @@ impl<T: 'static> Memo<T> {
                 let _ = tx.unbounded_send(());
             }
         };
-        let rc = ReactiveContext::new_with_callback(
-            callback,
-            current_scope_id().unwrap(),
-            Location::caller(),
-        );
+        let rc =
+            ReactiveContext::new_with_callback(callback, current_scope_id().unwrap(), location);
 
         // Create a new signal in that context, wiring up its dependencies and subscribers
-        let mut recompute = move || rc.run_in(&mut f);
+        let mut recompute = move || rc.reset_and_run_in(&mut f);
         let value = recompute();
         let recompute = RefCell::new(Box::new(recompute) as Box<dyn FnMut() -> T>);
         let update = CopyValue::new(UpdateInformation {
             dirty,
             callback: recompute,
         });
-        let state: Signal<T> = Signal::new(value);
+        let state: Signal<T> = Signal::new_with_caller(value, location);
 
         let memo = Memo {
             inner: state,
             update,
         };
-        let _ = myself.set(memo);
 
         spawn_isomorphic(async move {
             while rx.next().await.is_some() {
@@ -129,32 +134,38 @@ where
     fn try_read_unchecked(
         &self,
     ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
-        let read = self.inner.try_read_unchecked();
-        match read {
-            Ok(r) => {
-                let needs_update = self
-                    .update
-                    .read()
-                    .dirty
-                    .swap(false, std::sync::atomic::Ordering::Relaxed);
-                if needs_update {
-                    drop(r);
-                    self.recompute();
-                    self.inner.try_read_unchecked()
-                } else {
-                    Ok(r)
-                }
+        // Read the inner generational box instead of the signal so we have more fine grained control over exactly when the subscription happens
+        let read = self.inner.inner.try_read_unchecked()?;
+
+        let needs_update = self
+            .update
+            .read()
+            .dirty
+            .swap(false, std::sync::atomic::Ordering::Relaxed);
+        let result = if needs_update {
+            drop(read);
+            // We shouldn't be subscribed to the value here so we don't trigger the scope we are currently in to rerun even though that scope got the latest value because we synchronously update the value: https://github.com/DioxusLabs/dioxus/issues/2416
+            self.recompute();
+            self.inner.inner.try_read_unchecked()
+        } else {
+            Ok(read)
+        };
+        // Subscribe to the current scope before returning the value
+        if let Ok(read) = &result {
+            if let Some(reactive_context) = ReactiveContext::current() {
+                tracing::trace!("Subscribing to the reactive context {}", reactive_context);
+                reactive_context.subscribe(read.subscribers.clone());
             }
-            Err(e) => Err(e),
         }
+        result.map(|read| <UnsyncStorage as AnyStorage>::map(read, |v| &v.value))
     }
 
     /// Get the current value of the signal. **Unlike read, this will not subscribe the current scope to the signal which can cause parts of your UI to not update.**
     ///
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    fn peek_unchecked(&self) -> ReadableRef<'static, Self> {
-        self.inner.peek_unchecked()
+    fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>> {
+        self.inner.try_peek_unchecked()
     }
 }
 

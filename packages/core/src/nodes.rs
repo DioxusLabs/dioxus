@@ -1,13 +1,12 @@
-use crate::innerlude::VProps;
+use crate::innerlude::{RenderError, VProps};
 use crate::{any_props::BoxedAnyProps, innerlude::ScopeState};
 use crate::{arena::ElementId, Element, Event};
 use crate::{
     innerlude::{ElementRef, EventHandler, MountId},
     properties::ComponentFunction,
 };
-use crate::{Properties, VirtualDom};
-use core::panic;
-use std::ops::Deref;
+use crate::{Properties, ScopeId, VirtualDom};
+use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use std::vec;
 use std::{
@@ -21,28 +20,49 @@ pub type TemplateId = &'static str;
 /// The actual state of the component's most recent computation
 ///
 /// If the component returned early (e.g. `return None`), this will be Aborted(None)
-pub enum RenderReturn {
-    /// A currently-available element
-    Ready(VNode),
+#[derive(Debug)]
+pub struct RenderReturn {
+    /// The node that was rendered
+    pub(crate) node: Element,
+}
 
-    /// The component aborted rendering early. It might've thrown an error.
-    ///
-    /// In its place we've produced a placeholder to locate its spot in the dom when it recovers.
-    Aborted(VNode),
+impl From<RenderReturn> for VNode {
+    fn from(val: RenderReturn) -> Self {
+        match val.node {
+            Ok(node) => node,
+            Err(RenderError::Aborted(e)) => e.render,
+            Err(RenderError::Suspended(fut)) => fut.placeholder,
+        }
+    }
+}
+
+impl From<Element> for RenderReturn {
+    fn from(node: Element) -> Self {
+        RenderReturn { node }
+    }
 }
 
 impl Clone for RenderReturn {
     fn clone(&self) -> Self {
-        match self {
-            RenderReturn::Ready(node) => RenderReturn::Ready(node.clone_mounted()),
-            RenderReturn::Aborted(node) => RenderReturn::Aborted(node.clone_mounted()),
+        match &self.node {
+            Ok(node) => RenderReturn {
+                node: Ok(node.clone_mounted()),
+            },
+            Err(RenderError::Aborted(err)) => RenderReturn {
+                node: Err(RenderError::Aborted(err.clone_mounted())),
+            },
+            Err(RenderError::Suspended(fut)) => RenderReturn {
+                node: Err(RenderError::Suspended(fut.clone_mounted())),
+            },
         }
     }
 }
 
 impl Default for RenderReturn {
     fn default() -> Self {
-        RenderReturn::Aborted(VNode::placeholder())
+        RenderReturn {
+            node: Ok(VNode::placeholder()),
+        }
     }
 }
 
@@ -50,8 +70,20 @@ impl Deref for RenderReturn {
     type Target = VNode;
 
     fn deref(&self) -> &Self::Target {
-        match self {
-            RenderReturn::Ready(node) | RenderReturn::Aborted(node) => node,
+        match &self.node {
+            Ok(node) => node,
+            Err(RenderError::Aborted(err)) => &err.render,
+            Err(RenderError::Suspended(fut)) => &fut.placeholder,
+        }
+    }
+}
+
+impl DerefMut for RenderReturn {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match &mut self.node {
+            Ok(node) => node,
+            Err(RenderError::Aborted(err)) => &mut err.render,
+            Err(RenderError::Suspended(fut)) => &mut fut.placeholder,
         }
     }
 }
@@ -89,7 +121,7 @@ pub struct VNodeInner {
     pub key: Option<String>,
 
     /// The static nodes and static descriptor of the template
-    pub template: Cell<Template>,
+    pub template: Template,
 
     /// The dynamic nodes in the template
     pub dynamic_nodes: Box<[DynamicNode]>,
@@ -101,18 +133,25 @@ pub struct VNodeInner {
     /// The inner list *must* be in the format [static named attributes, remaining dynamically named attributes].
     ///
     /// For example:
-    /// ```rust, ignore
-    /// div {
-    ///     class: "{class}",
-    ///     ..attrs,
-    ///     p {
-    ///         color: "{color}",
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// let class = "my-class";
+    /// let attrs = vec![];
+    /// let color = "red";
+    ///
+    /// rsx! {
+    ///     div {
+    ///         class: "{class}",
+    ///         ..attrs,
+    ///         p {
+    ///             color: "{color}",
+    ///         }
     ///     }
-    /// }
+    /// };
     /// ```
     ///
     /// Would be represented as:
-    /// ```rust, ignore
+    /// ```text
     /// [
     ///     [class, every attribute in attrs sorted by name], // Slot 0 in the template
     ///     [color], // Slot 1 in the template
@@ -142,12 +181,18 @@ impl Clone for VNode {
     }
 }
 
+impl Default for VNode {
+    fn default() -> Self {
+        Self::placeholder()
+    }
+}
+
 impl Drop for VNode {
     fn drop(&mut self) {
         // FIXME:
         // TODO:
         //
-        // We have to add this drop *here* becase we can't add a drop impl to AttributeValue and
+        // We have to add this drop *here* because we can't add a drop impl to AttributeValue and
         // keep semver compatibility. Adding a drop impl means you can't destructure the value, which
         // we need to do for enums.
         //
@@ -157,7 +202,7 @@ impl Drop for VNode {
             for attrs in self.vnode.dynamic_attrs.iter() {
                 for attr in attrs.iter() {
                     if let AttributeValue::Listener(listener) = &attr.value {
-                        listener.callback.recycle();
+                        listener.callback.manually_drop();
                     }
                 }
             }
@@ -190,31 +235,7 @@ impl VNode {
 
     /// Create a template with no nodes that will be skipped over during diffing
     pub fn empty() -> Element {
-        use std::cell::OnceCell;
-        // We can reuse all placeholders across the same thread to save memory
-        thread_local! {
-            static EMPTY_VNODE: OnceCell<Rc<VNodeInner>> = const { OnceCell::new() };
-        }
-        let vnode = EMPTY_VNODE.with(|cell| {
-            cell.get_or_init(move || {
-                Rc::new(VNodeInner {
-                    key: None,
-                    dynamic_nodes: Box::new([]),
-                    dynamic_attrs: Box::new([]),
-                    template: Cell::new(Template {
-                        name: "packages/core/nodes.rs:180:0:0",
-                        roots: &[],
-                        node_paths: &[],
-                        attr_paths: &[],
-                    }),
-                })
-            })
-            .clone()
-        });
-        Some(Self {
-            vnode,
-            mount: Default::default(),
-        })
+        Ok(Self::default())
     }
 
     /// Create a template with a single placeholder node
@@ -230,12 +251,12 @@ impl VNode {
                     key: None,
                     dynamic_nodes: Box::new([DynamicNode::Placeholder(Default::default())]),
                     dynamic_attrs: Box::new([]),
-                    template: Cell::new(Template {
+                    template: Template {
                         name: "packages/core/nodes.rs:198:0:0",
                         roots: &[TemplateNode::Dynamic { id: 0 }],
-                        node_paths: &[&[]],
+                        node_paths: &[&[0]],
                         attr_paths: &[],
-                    }),
+                    },
                 })
             })
             .clone()
@@ -256,7 +277,7 @@ impl VNode {
         Self {
             vnode: Rc::new(VNodeInner {
                 key,
-                template: Cell::new(template),
+                template,
                 dynamic_nodes,
                 dynamic_attrs,
             }),
@@ -268,12 +289,9 @@ impl VNode {
     ///
     /// Returns [`None`] if the root is actually a static node (Element/Text)
     pub fn dynamic_root(&self, idx: usize) -> Option<&DynamicNode> {
-        match &self.template.get().roots[idx] {
-            TemplateNode::Element { .. } | TemplateNode::Text { text: _ } => None,
-            TemplateNode::Dynamic { id } | TemplateNode::DynamicText { id } => {
-                Some(&self.dynamic_nodes[*id])
-            }
-        }
+        self.template.roots[idx]
+            .dynamic_id()
+            .map(|id| &self.dynamic_nodes[id])
     }
 
     /// Get the mounted id for a dynamic node index
@@ -366,7 +384,7 @@ pub struct Template {
 }
 
 #[cfg(feature = "serialize")]
-fn deserialize_string_leaky<'a, 'de, D>(deserializer: D) -> Result<&'a str, D::Error>
+pub(crate) fn deserialize_string_leaky<'a, 'de, D>(deserializer: D) -> Result<&'a str, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -392,9 +410,7 @@ where
 }
 
 #[cfg(feature = "serialize")]
-fn deserialize_leaky<'a, 'de, T: serde::Deserialize<'de>, D>(
-    deserializer: D,
-) -> Result<&'a [T], D::Error>
+pub(crate) fn deserialize_leaky<'a, 'de, T, D>(deserializer: D) -> Result<&'a [T], D::Error>
 where
     T: serde::Deserialize<'de>,
     D: serde::Deserializer<'de>,
@@ -406,7 +422,9 @@ where
 }
 
 #[cfg(feature = "serialize")]
-fn deserialize_option_leaky<'a, 'de, D>(deserializer: D) -> Result<Option<&'static str>, D::Error>
+pub(crate) fn deserialize_option_leaky<'a, 'de, D>(
+    deserializer: D,
+) -> Result<Option<&'static str>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -422,9 +440,14 @@ impl Template {
     /// There's no point in saving templates that are completely dynamic, since they'll be recreated every time anyway.
     pub fn is_completely_dynamic(&self) -> bool {
         use TemplateNode::*;
-        self.roots
-            .iter()
-            .all(|root| matches!(root, Dynamic { .. } | DynamicText { .. }))
+        self.roots.iter().all(|root| matches!(root, Dynamic { .. }))
+    }
+
+    /// Get a unique id for this template. If the id between two templates are different, the contents of the template may be different.
+    pub fn id(&self) -> usize {
+        // We compare the template name by pointer so that the id is different after hot reloading even if the name is the same
+        let ptr: *const str = self.name;
+        ptr as *const () as usize
     }
 }
 
@@ -471,19 +494,15 @@ pub enum TemplateNode {
     /// This template node is just a piece of static text
     Text {
         /// The actual text
+        #[cfg_attr(
+            feature = "serialize",
+            serde(deserialize_with = "deserialize_string_leaky")
+        )]
         text: &'static str,
     },
 
     /// This template node is unknown, and needs to be created at runtime.
     Dynamic {
-        /// The index of the dynamic node in the VNode's dynamic_nodes list
-        id: usize,
-    },
-
-    /// This template node is known to be some text, but needs to be created at runtime
-    ///
-    /// This is separate from the pure Dynamic variant for various optimizations
-    DynamicText {
         /// The index of the dynamic node in the VNode's dynamic_nodes list
         id: usize,
     },
@@ -494,7 +513,7 @@ impl TemplateNode {
     pub fn dynamic_id(&self) -> Option<usize> {
         use TemplateNode::*;
         match self {
-            Dynamic { id } | DynamicText { id } => Some(*id),
+            Dynamic { id } => Some(*id),
             _ => None,
         }
     }
@@ -502,8 +521,8 @@ impl TemplateNode {
 
 /// A node created at runtime
 ///
-/// This node's index in the DynamicNode list on VNode should match its repsective `Dynamic` index
-#[derive(Debug)]
+/// This node's index in the DynamicNode list on VNode should match its respective `Dynamic` index
+#[derive(Debug, Clone)]
 pub enum DynamicNode {
     /// A component node
     ///
@@ -554,7 +573,18 @@ pub struct VComponent {
     /// It is possible that components get folded at compile time, so these shouldn't be really used as a key
     pub(crate) render_fn: TypeId,
 
+    /// The props for this component
     pub(crate) props: BoxedAnyProps,
+}
+
+impl Clone for VComponent {
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name,
+            render_fn: self.render_fn,
+            props: self.props.duplicate(),
+        }
+    }
 }
 
 impl VComponent {
@@ -580,6 +610,24 @@ impl VComponent {
             props,
             render_fn,
         }
+    }
+
+    /// Get the [`ScopeId`] this node is mounted to if it's mounted
+    ///
+    /// This is useful for rendering nodes outside of the VirtualDom, such as in SSR
+    ///
+    /// Returns [`None`] if the node is not mounted
+    pub fn mounted_scope_id(
+        &self,
+        dynamic_node_index: usize,
+        vnode: &VNode,
+        dom: &VirtualDom,
+    ) -> Option<ScopeId> {
+        let mount = vnode.mount.get().as_usize()?;
+
+        let scope_id = dom.mounts.get(mount)?.mounted_dynamic_nodes[dynamic_node_index];
+
+        Some(ScopeId(scope_id))
     }
 
     /// Get the scope this node is mounted to if it's mounted
@@ -618,8 +666,10 @@ pub struct VText {
 
 impl VText {
     /// Create a new VText
-    pub fn new(value: String) -> Self {
-        Self { value }
+    pub fn new(value: impl ToString) -> Self {
+        Self {
+            value: value.to_string(),
+        }
     }
 }
 
@@ -688,7 +738,7 @@ pub struct Attribute {
 impl Attribute {
     /// Create a new [`Attribute`] from a name, value, namespace, and volatile bool
     ///
-    /// "Volatile" referes to whether or not Dioxus should always override the value. This helps prevent the UI in
+    /// "Volatile" refers to whether or not Dioxus should always override the value. This helps prevent the UI in
     /// some renderers stay in sync with the VirtualDom's understanding of the world
     pub fn new(
         name: &'static str,
@@ -709,6 +759,7 @@ impl Attribute {
 ///
 /// These are built-in to be faster during the diffing process. To use a custom value, use the [`AttributeValue::Any`]
 /// variant.
+#[derive(Clone)]
 pub enum AttributeValue {
     /// Text attribute
     Text(String),
@@ -726,7 +777,7 @@ pub enum AttributeValue {
     Listener(ListenerCb),
 
     /// An arbitrary value that implements PartialEq and is static
-    Any(Box<dyn AnyValue>),
+    Any(Rc<dyn AnyValue>),
 
     /// A "none" value, resulting in the removal of an attribute from the dom
     None,
@@ -739,7 +790,7 @@ impl AttributeValue {
     pub fn listener<T: 'static>(mut callback: impl FnMut(Event<T>) + 'static) -> AttributeValue {
         // TODO: maybe don't use the copy-variant of EventHandler here?
         // Maybe, create an Owned variant so we are less likely to run into leaks
-        AttributeValue::Listener(EventHandler::new(move |event: Event<dyn Any>| {
+        AttributeValue::Listener(EventHandler::leak(move |event: Event<dyn Any>| {
             let data = event.data.downcast::<T>().unwrap();
             callback(Event {
                 propagates: event.propagates,
@@ -750,7 +801,7 @@ impl AttributeValue {
 
     /// Create a new [`AttributeValue`] with a value that implements [`AnyValue`]
     pub fn any_value<T: AnyValue>(value: T) -> AttributeValue {
-        AttributeValue::Any(Box::new(value))
+        AttributeValue::Any(Rc::new(value))
     }
 }
 
@@ -763,7 +814,7 @@ impl std::fmt::Debug for AttributeValue {
             Self::Float(arg0) => f.debug_tuple("Float").field(arg0).finish(),
             Self::Int(arg0) => f.debug_tuple("Int").field(arg0).finish(),
             Self::Bool(arg0) => f.debug_tuple("Bool").field(arg0).finish(),
-            Self::Listener(_) => f.debug_tuple("Listener").finish(),
+            Self::Listener(listener) => f.debug_tuple("Listener").field(listener).finish(),
             Self::Any(_) => f.debug_tuple("Any").finish(),
             Self::None => write!(f, "None"),
         }
@@ -781,19 +832,6 @@ impl PartialEq for AttributeValue {
             (Self::Any(l0), Self::Any(r0)) => l0.as_ref().any_cmp(r0.as_ref()),
             (Self::None, Self::None) => true,
             _ => false,
-        }
-    }
-}
-
-impl Clone for AttributeValue {
-    fn clone(&self) -> Self {
-        match self {
-            Self::Text(arg0) => Self::Text(arg0.clone()),
-            Self::Float(arg0) => Self::Float(*arg0),
-            Self::Int(arg0) => Self::Int(*arg0),
-            Self::Bool(arg0) => Self::Bool(*arg0),
-            Self::Listener(_) | Self::Any(_) => panic!("Cannot clone listener or any value"),
-            Self::None => Self::None,
         }
     }
 }
@@ -823,9 +861,7 @@ impl<T: Any + PartialEq + 'static> AnyValue for T {
 
 /// A trait that allows various items to be converted into a dynamic node for the rsx macro
 pub trait IntoDynNode<A = ()> {
-    /// Consume this item along with a scopestate and produce a DynamicNode
-    ///
-    /// You can use the bump alloactor of the scopestate to creat the dynamic node
+    /// Consume this item and produce a DynamicNode
     fn into_dyn_node(self) -> DynamicNode;
 }
 
@@ -839,13 +875,11 @@ impl IntoDynNode for VNode {
         DynamicNode::Fragment(vec![self])
     }
 }
-
 impl IntoDynNode for DynamicNode {
     fn into_dyn_node(self) -> DynamicNode {
         self
     }
 }
-
 impl<T: IntoDynNode> IntoDynNode for Option<T> {
     fn into_dyn_node(self) -> DynamicNode {
         match self {
@@ -854,8 +888,23 @@ impl<T: IntoDynNode> IntoDynNode for Option<T> {
         }
     }
 }
-
 impl IntoDynNode for &Element {
+    fn into_dyn_node(self) -> DynamicNode {
+        match self.as_ref() {
+            Ok(val) => val.into_dyn_node(),
+            _ => DynamicNode::default(),
+        }
+    }
+}
+impl IntoDynNode for Element {
+    fn into_dyn_node(self) -> DynamicNode {
+        match self {
+            Ok(val) => val.into_dyn_node(),
+            _ => DynamicNode::default(),
+        }
+    }
+}
+impl IntoDynNode for &Option<VNode> {
     fn into_dyn_node(self) -> DynamicNode {
         match self.as_ref() {
             Some(val) => val.clone().into_dyn_node(),
@@ -863,7 +912,6 @@ impl IntoDynNode for &Element {
         }
     }
 }
-
 impl IntoDynNode for &str {
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Text(VText {
@@ -871,13 +919,11 @@ impl IntoDynNode for &str {
         })
     }
 }
-
 impl IntoDynNode for String {
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Text(VText { value: self })
     }
 }
-
 impl IntoDynNode for Arguments<'_> {
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Text(VText {
@@ -885,7 +931,6 @@ impl IntoDynNode for Arguments<'_> {
         })
     }
 }
-
 impl IntoDynNode for &VNode {
     fn into_dyn_node(self) -> DynamicNode {
         DynamicNode::Fragment(vec![self.clone()])
@@ -908,7 +953,7 @@ impl IntoVNode for &VNode {
 impl IntoVNode for Element {
     fn into_vnode(self) -> VNode {
         match self {
-            Some(val) => val.into_vnode(),
+            Ok(val) => val.into_vnode(),
             _ => VNode::empty().unwrap(),
         }
     }
@@ -916,7 +961,39 @@ impl IntoVNode for Element {
 impl IntoVNode for &Element {
     fn into_vnode(self) -> VNode {
         match self {
+            Ok(val) => val.into_vnode(),
+            _ => VNode::empty().unwrap(),
+        }
+    }
+}
+impl IntoVNode for Option<VNode> {
+    fn into_vnode(self) -> VNode {
+        match self {
             Some(val) => val.into_vnode(),
+            _ => VNode::empty().unwrap(),
+        }
+    }
+}
+impl IntoVNode for &Option<VNode> {
+    fn into_vnode(self) -> VNode {
+        match self.as_ref() {
+            Some(val) => val.clone().into_vnode(),
+            _ => VNode::empty().unwrap(),
+        }
+    }
+}
+impl IntoVNode for Option<Element> {
+    fn into_vnode(self) -> VNode {
+        match self {
+            Some(val) => val.into_vnode(),
+            _ => VNode::empty().unwrap(),
+        }
+    }
+}
+impl IntoVNode for &Option<Element> {
+    fn into_vnode(self) -> VNode {
+        match self.as_ref() {
+            Some(val) => val.clone().into_vnode(),
             _ => VNode::empty().unwrap(),
         }
     }
@@ -964,15 +1041,31 @@ impl IntoAttributeValue for String {
     }
 }
 
+impl IntoAttributeValue for f32 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Float(self as _)
+    }
+}
 impl IntoAttributeValue for f64 {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Float(self)
     }
 }
 
+impl IntoAttributeValue for i32 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
+    }
+}
 impl IntoAttributeValue for i64 {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Int(self)
+    }
+}
+
+impl IntoAttributeValue for i128 {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Int(self as _)
     }
 }
 
@@ -988,7 +1081,7 @@ impl IntoAttributeValue for Arguments<'_> {
     }
 }
 
-impl IntoAttributeValue for Box<dyn AnyValue> {
+impl IntoAttributeValue for Rc<dyn AnyValue> {
     fn into_value(self) -> AttributeValue {
         AttributeValue::Any(self)
     }
@@ -1000,6 +1093,13 @@ impl<T: IntoAttributeValue> IntoAttributeValue for Option<T> {
             Some(val) => val.into_value(),
             None => AttributeValue::None,
         }
+    }
+}
+
+#[cfg(feature = "manganis")]
+impl IntoAttributeValue for manganis::ImageAsset {
+    fn into_value(self) -> AttributeValue {
+        AttributeValue::Text(self.path().to_string())
     }
 }
 

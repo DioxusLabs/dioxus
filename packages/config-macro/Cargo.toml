@@ -19,8 +19,12 @@ quote = { workspace = true }
 [features]
 default = []
 fullstack = []
+static-generation = []
 desktop = []
 mobile = []
 web = []
 ssr = []
 liveview = []
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

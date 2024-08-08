@@ -22,7 +22,7 @@ fn keyed_diffing_out_of_order() {
 
     {
         assert_eq!(
-            dom.rebuild_to_vec().santize().edits,
+            dom.rebuild_to_vec().sanitize().edits,
             [
                 LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
                 LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
@@ -39,7 +39,7 @@ fn keyed_diffing_out_of_order() {
         );
     }
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -64,7 +64,7 @@ fn keyed_diffing_out_of_order_adds() {
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -90,7 +90,7 @@ fn keyed_diffing_out_of_order_adds_3() {
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -101,7 +101,7 @@ fn keyed_diffing_out_of_order_adds_3() {
     );
 }
 
-/// Should result in moves onl
+/// Should result in moves only
 #[test]
 fn keyed_diffing_out_of_order_adds_4() {
     let mut dom = VirtualDom::new(|| {
@@ -116,7 +116,7 @@ fn keyed_diffing_out_of_order_adds_4() {
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -127,7 +127,7 @@ fn keyed_diffing_out_of_order_adds_4() {
     );
 }
 
-/// Should result in moves onl
+/// Should result in moves only
 #[test]
 fn keyed_diffing_out_of_order_adds_5() {
     let mut dom = VirtualDom::new(|| {
@@ -142,7 +142,7 @@ fn keyed_diffing_out_of_order_adds_5() {
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
@@ -152,7 +152,7 @@ fn keyed_diffing_out_of_order_adds_5() {
     );
 }
 
-/// Should result in moves onl
+/// Should result in moves only
 #[test]
 fn keyed_diffing_additions() {
     let mut dom = VirtualDom::new(|| {
@@ -167,9 +167,9 @@ fn keyed_diffing_additions() {
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(6) },
             LoadTemplate { name: "template", index: 0, id: ElementId(7) },
@@ -192,9 +192,9 @@ fn keyed_diffing_additions_and_moves_on_ends() {
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [
             // create 11, 12
             LoadTemplate { name: "template", index: 0, id: ElementId(5) },
@@ -222,9 +222,9 @@ fn keyed_diffing_additions_and_moves_in_middle() {
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     // LIS: 4, 5, 6
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [
             // create 5, 6
             LoadTemplate { name: "template", index: 0, id: ElementId(5) },
@@ -256,9 +256,9 @@ fn controlled_keyed_diffing_out_of_order() {
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     // LIS: 5, 6
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [
             // remove 7
             Remove { id: ElementId(4,) },
@@ -289,9 +289,9 @@ fn controlled_keyed_diffing_out_of_order_max_test() {
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [
             Remove { id: ElementId(5,) },
             LoadTemplate { name: "template", index: 0, id: ElementId(5) },
@@ -318,9 +318,9 @@ fn remove_list() {
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [
             Remove { id: ElementId(5) },
             Remove { id: ElementId(4) },
@@ -343,9 +343,9 @@ fn no_common_keys() {
 
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(4) },
             LoadTemplate { name: "template", index: 0, id: ElementId(5) },

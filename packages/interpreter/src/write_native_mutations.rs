@@ -75,7 +75,6 @@ impl MutationState {
                 self.channel.append_children_to_top(children.len() as u16);
             }
             Text { text } => self.channel.create_raw_text(text),
-            DynamicText { .. } => self.channel.create_raw_text("p"),
             Dynamic { .. } => self.channel.add_placeholder(),
         }
     }

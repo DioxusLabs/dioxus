@@ -20,7 +20,7 @@ html_parser = { workspace = true }
 proc-macro2 = { workspace = true }
 quote = { workspace = true }
 syn = { workspace = true, features = ["full"] }
-convert_case = "0.5.0"
+convert_case = { workspace = true }
 
 # [features]
 # default = ["html"]
@@ -29,3 +29,6 @@ convert_case = "0.5.0"
 
 [dev-dependencies]
 pretty_assertions = "1.2.1"
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

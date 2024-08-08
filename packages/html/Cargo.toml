@@ -11,22 +11,25 @@ keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
 dioxus-core = { workspace = true }
-dioxus-rsx = { workspace = true, features = ["hot_reload"], optional = true }
+dioxus-core-macro = { workspace = true }
+dioxus-rsx = { workspace = true, optional = true }
 dioxus-html-internal-macro = { workspace = true }
+dioxus-hooks = { workspace = true }
 generational-box = { workspace = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_repr = { version = "0.1", optional = true }
 wasm-bindgen = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
+js-sys = { version = "0.3.56", optional = true }
 euclid = "0.22.7"
 enumset = "1.1.2"
-keyboard-types = "0.7"
-async-trait = "0.1.58"
-serde-value = { version = "0.7.0", optional = true }
+keyboard-types = { version = "0.7", default-features = false }
+async-trait = { version = "0.1.58", optional = true }
 tokio = { workspace = true, features = ["fs", "io-util"], optional = true }
-rfd = { version = "0.14", optional = true }
 futures-channel = { workspace = true }
 serde_json = { version = "1", optional = true }
 tracing.workspace = true
+rustversion = "1.0.17"
 
 [dependencies.web-sys]
 optional = true
@@ -38,6 +41,7 @@ features = [
     "MouseEvent",
     "DragEvent",
     "InputEvent",
+    "HtmlInputElement",
     "ClipboardEvent",
     "KeyboardEvent",
     "WheelEvent",
@@ -48,19 +52,25 @@ features = [
     "CompositionEvent",
 ]
 
+[build-dependencies]
+lazy-js-bundle = { workspace = true }
+
 [dev-dependencies]
 serde_json = "1"
+dioxus = { workspace = true }
+dioxus-web = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+manganis = { workspace = true }
 
 [features]
-default = ["serialize", "mounted", "eval"]
+default = ["serialize", "mounted", "document", "file-engine"]
 serialize = [
-    "serde",
-    "serde_json",
-    "serde_repr",
+    "dep:serde",
+    "dep:serde_json",
+    "dep:serde_repr",
     "euclid/serde",
     "keyboard-types/serde",
-    "dioxus-core/serialize",
-    "serde-value",
+    "dioxus-core/serialize"
 ]
 mounted = [
     "web-sys?/Element",
@@ -70,11 +80,22 @@ mounted = [
     "web-sys?/ScrollBehavior",
     "web-sys?/HtmlElement",
 ]
-eval = [
-    "serde",
-    "serde_json"
+document = [
+    "dep:serde",
+    "dep:serde_json"
 ]
-wasm-bind = ["web-sys", "wasm-bindgen"]
-native-bind = ["tokio"]
-hot-reload-context = ["dioxus-rsx"]
+file-engine = [
+    "dep:async-trait",
+    "dep:js-sys",
+    "web-sys?/File",
+    "web-sys?/FileList",
+    "web-sys?/FileReader"
+]
+wasm-bind = ["dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures"]
+native-bind = ["dep:tokio", "file-engine"]
+hot-reload-context = ["dep:dioxus-rsx", "dioxus-rsx/hot_reload_traits"]
 html-to-rsx = []
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+feature = ["html-to-rsx", "hot-reload-context", "html-to-rsx", "native-bind", "wasm-bind"]

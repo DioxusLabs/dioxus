@@ -9,7 +9,7 @@ use std::{
 
 use generational_box::{AnyStorage, Owner, SyncStorage, UnsyncStorage};
 
-use crate::{innerlude::current_scope_id, ScopeId};
+use crate::{innerlude::current_scope_id, Runtime, ScopeId};
 
 /// Run a closure with the given owner.
 ///
@@ -90,13 +90,8 @@ pub fn current_owner<S: AnyStorage>() -> Owner<S> {
 
 impl ScopeId {
     /// Get the owner for the current scope.
+    #[track_caller]
     pub fn owner<S: AnyStorage>(self) -> Owner<S> {
-        match self.has_context() {
-            Some(rt) => rt,
-            None => {
-                let owner = S::owner();
-                self.provide_context(owner)
-            }
-        }
+        Runtime::with_scope(self, |cx| cx.owner::<S>()).unwrap_or_else(|e| panic!("{}", e))
     }
 }

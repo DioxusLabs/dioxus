@@ -2,14 +2,15 @@
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![deny(missing_docs)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod app;
 mod assets;
 mod config;
 mod desktop_context;
+mod document;
 mod edits;
 mod element;
-mod eval;
 mod event_handlers;
 mod events;
 mod file_upload;
@@ -44,6 +45,6 @@ pub use assets::AssetRequest;
 pub use config::{Config, WindowCloseBehaviour};
 pub use desktop_context::{window, DesktopContext, DesktopService};
 pub use event_handlers::WryEventHandler;
-pub use hooks::{use_asset_handler, use_global_shortcut, use_window, use_wry_event_handler};
+pub use hooks::*;
 pub use shortcut::{ShortcutHandle, ShortcutRegistryError};
 pub use wry::RequestAsyncResponder;

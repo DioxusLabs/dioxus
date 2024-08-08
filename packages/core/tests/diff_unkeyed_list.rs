@@ -18,7 +18,7 @@ fn list_creates_one_by_one() {
 
     // load the div and then assign the empty fragment as a placeholder
     assert_eq!(
-        dom.rebuild_to_vec().santize().edits,
+        dom.rebuild_to_vec().sanitize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
             AssignId { path: &[0], id: ElementId(2,) },
@@ -27,9 +27,9 @@ fn list_creates_one_by_one() {
     );
 
     // Rendering the first item should replace the placeholder with an element
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(3,) },
             HydrateText { path: &[0], value: "0".to_string(), id: ElementId(4,) },
@@ -38,9 +38,9 @@ fn list_creates_one_by_one() {
     );
 
     // Rendering the next item should insert after the previous
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
             HydrateText { path: &[0], value: "1".to_string(), id: ElementId(5,) },
@@ -49,9 +49,9 @@ fn list_creates_one_by_one() {
     );
 
     // ... and again!
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(6,) },
             HydrateText { path: &[0], value: "2".to_string(), id: ElementId(7,) },
@@ -60,9 +60,9 @@ fn list_creates_one_by_one() {
     );
 
     // once more
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(8,) },
             HydrateText { path: &[0], value: "3".to_string(), id: ElementId(9,) },
@@ -87,7 +87,7 @@ fn removes_one_by_one() {
 
     // load the div and then assign the empty fragment as a placeholder
     assert_eq!(
-        dom.rebuild_to_vec().santize().edits,
+        dom.rebuild_to_vec().sanitize().edits,
         [
             // The container
             LoadTemplate { name: "template", index: 0, id: ElementId(1) },
@@ -107,24 +107,24 @@ fn removes_one_by_one() {
 
     // Remove div(3)
     // Rendering the first item should replace the placeholder with an element
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [Remove { id: ElementId(6) }]
     );
 
     // Remove div(2)
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [Remove { id: ElementId(4) }]
     );
 
     // Remove div(1) and replace with a placeholder
     // todo: this should just be a remove with no placeholder
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [
             CreatePlaceholder { id: ElementId(4) },
             ReplaceWith { id: ElementId(2), m: 1 }
@@ -133,16 +133,16 @@ fn removes_one_by_one() {
 
     // load the 3 and replace the placeholder
     // todo: this should actually be append to, but replace placeholder is fine for now
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(2) },
-            HydrateText { path: &[0], value: "0".to_string(), id: ElementId(3) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(5) },
-            HydrateText { path: &[0], value: "1".to_string(), id: ElementId(6) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(7) },
-            HydrateText { path: &[0], value: "2".to_string(), id: ElementId(8) },
+            HydrateText { path: &[0], value: "0".to_string(), id: ElementId(6) },
+            LoadTemplate { name: "template", index: 0, id: ElementId(8) },
+            HydrateText { path: &[0], value: "1".to_string(), id: ElementId(9) },
+            LoadTemplate { name: "template", index: 0, id: ElementId(10) },
+            HydrateText { path: &[0], value: "2".to_string(), id: ElementId(11) },
             ReplaceWith { id: ElementId(4), m: 3 }
         ]
     );
@@ -162,7 +162,7 @@ fn list_shrink_multiroot() {
     });
 
     assert_eq!(
-        dom.rebuild_to_vec().santize().edits,
+        dom.rebuild_to_vec().sanitize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
             AssignId { path: &[0,], id: ElementId(2,) },
@@ -170,9 +170,9 @@ fn list_shrink_multiroot() {
         ]
     );
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(3) },
             HydrateText { path: &[0], value: "0".to_string(), id: ElementId(4) },
@@ -182,9 +182,9 @@ fn list_shrink_multiroot() {
         ]
     );
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(2) },
             HydrateText { path: &[0], value: "1".to_string(), id: ElementId(7) },
@@ -194,9 +194,9 @@ fn list_shrink_multiroot() {
         ]
     );
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(10) },
             HydrateText { path: &[0], value: "2".to_string(), id: ElementId(11) },
@@ -224,7 +224,7 @@ fn removes_one_by_one_multiroot() {
 
     // load the div and then assign the empty fragment as a placeholder
     assert_eq!(
-        dom.rebuild_to_vec().santize().edits,
+        dom.rebuild_to_vec().sanitize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1) },
             //
@@ -249,21 +249,21 @@ fn removes_one_by_one_multiroot() {
         ]
     );
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [Remove { id: ElementId(10) }, Remove { id: ElementId(12) }]
     );
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [Remove { id: ElementId(6) }, Remove { id: ElementId(8) }]
     );
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [
             CreatePlaceholder { id: ElementId(8) },
             Remove { id: ElementId(2) },
@@ -318,7 +318,7 @@ fn remove_many() {
     });
 
     {
-        let edits = dom.rebuild_to_vec().santize();
+        let edits = dom.rebuild_to_vec().sanitize();
         assert!(edits.templates.is_empty());
         assert_eq!(
             edits.edits,
@@ -330,8 +330,8 @@ fn remove_many() {
     }
 
     {
-        dom.mark_dirty(ScopeId::ROOT);
-        let edits = dom.render_immediate_to_vec().santize();
+        dom.mark_dirty(ScopeId::APP);
+        let edits = dom.render_immediate_to_vec().sanitize();
         assert_eq!(
             edits.edits,
             [
@@ -343,8 +343,8 @@ fn remove_many() {
     }
 
     {
-        dom.mark_dirty(ScopeId::ROOT);
-        let edits = dom.render_immediate_to_vec().santize();
+        dom.mark_dirty(ScopeId::APP);
+        let edits = dom.render_immediate_to_vec().sanitize();
         assert_eq!(
             edits.edits,
             [
@@ -362,8 +362,8 @@ fn remove_many() {
     }
 
     {
-        dom.mark_dirty(ScopeId::ROOT);
-        let edits = dom.render_immediate_to_vec().santize();
+        dom.mark_dirty(ScopeId::APP);
+        let edits = dom.render_immediate_to_vec().sanitize();
         assert_eq!(
             edits.edits,
             [
@@ -378,15 +378,96 @@ fn remove_many() {
     }
 
     {
-        dom.mark_dirty(ScopeId::ROOT);
-        let edits = dom.render_immediate_to_vec().santize();
+        dom.mark_dirty(ScopeId::APP);
+        let edits = dom.render_immediate_to_vec().sanitize();
         assert_eq!(
             edits.edits,
             [
                 LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
-                HydrateText { path: &[0,], value: "hello 0".to_string(), id: ElementId(3,) },
+                HydrateText { path: &[0,], value: "hello 0".to_string(), id: ElementId(1,) },
                 ReplaceWith { id: ElementId(11,), m: 1 },
             ]
         )
+    }
+}
+
+#[test]
+fn replace_and_add_items() {
+    let mut dom = VirtualDom::new(|| {
+        let items = (0..generation()).map(|_| {
+            if generation() % 2 == 0 {
+                VNode::empty()
+            } else {
+                rsx! {
+                    li {
+                        "Fizz"
+                    }
+                }
+            }
+        });
+
+        rsx! {
+            ul {
+                {items}
+            }
+        }
+    });
+
+    // The list starts empty with a placeholder
+    {
+        let edits = dom.rebuild_to_vec().sanitize();
+        assert_eq!(
+            edits.edits,
+            [
+                LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
+                AssignId { path: &[0], id: ElementId(2,) },
+                AppendChildren { id: ElementId(0), m: 1 },
+            ]
+        );
+    }
+
+    // Rerendering adds an a static template
+    {
+        dom.mark_dirty(ScopeId::APP);
+        let edits = dom.render_immediate_to_vec().sanitize();
+        assert_eq!(
+            edits.edits,
+            [
+                LoadTemplate { name: "template", index: 0, id: ElementId(3,) },
+                ReplaceWith { id: ElementId(2,), m: 1 },
+            ]
+        );
+    }
+
+    // Rerendering replaces the old node with a placeholder and adds a new placeholder
+    {
+        dom.mark_dirty(ScopeId::APP);
+        let edits = dom.render_immediate_to_vec().sanitize();
+        assert_eq!(
+            edits.edits,
+            [
+                CreatePlaceholder { id: ElementId(2,) },
+                InsertAfter { id: ElementId(3,), m: 1 },
+                CreatePlaceholder { id: ElementId(4,) },
+                ReplaceWith { id: ElementId(3,), m: 1 },
+            ]
+        );
+    }
+
+    // Rerendering replaces both placeholders with the static nodes and add a new static node
+    {
+        dom.mark_dirty(ScopeId::APP);
+        let edits = dom.render_immediate_to_vec().sanitize();
+        assert_eq!(
+            edits.edits,
+            [
+                LoadTemplate { name: "template", index: 0, id: ElementId(3,) },
+                InsertAfter { id: ElementId(2,), m: 1 },
+                LoadTemplate { name: "template", index: 0, id: ElementId(5,) },
+                ReplaceWith { id: ElementId(4,), m: 1 },
+                LoadTemplate { name: "template", index: 0, id: ElementId(4,) },
+                ReplaceWith { id: ElementId(2,), m: 1 },
+            ]
+        );
     }
 }

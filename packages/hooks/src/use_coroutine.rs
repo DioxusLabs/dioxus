@@ -1,3 +1,4 @@
+use ::warnings::Warning;
 use dioxus_core::prelude::{consume_context, provide_context, spawn, use_hook};
 use dioxus_core::Task;
 use dioxus_signals::*;
@@ -6,11 +7,11 @@ use std::future::Future;
 
 /// Maintain a handle over a future that can be paused, resumed, and canceled.
 ///
-/// This is an upgraded form of [`use_future`] with an integrated channel system.
-/// Specifically, the coroutine generated here comes with an [`UnboundedChannel`]
+/// This is an upgraded form of [`crate::use_future()`] with an integrated channel system.
+/// Specifically, the coroutine generated here comes with an [`futures_channel::mpsc::UnboundedSender`]
 /// built into it - saving you the hassle of building your own.
 ///
-/// Addititionally, coroutines are automatically injected as shared contexts, so
+/// Additionally, coroutines are automatically injected as shared contexts, so
 /// downstream components can tap into a coroutine's channel and send messages
 /// into a singular async event loop.
 ///
@@ -33,7 +34,7 @@ use std::future::Future;
 /// ## UseCallback instead
 ///
 /// However, you must plan out your own concurrency and synchronization. If you
-/// don't care about actions in your app being synchronized, you can use [`use_callback`]
+/// don't care about actions in your app being synchronized, you can use [`crate::use_callback()`]
 /// hook to spawn multiple tasks and run them concurrently.
 ///
 /// ### Notice
@@ -42,7 +43,9 @@ use std::future::Future;
 ///
 /// ## Example
 ///
-/// ```rust, ignore
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
+/// use futures_util::StreamExt;
 /// enum Action {
 ///     Start,
 ///     Stop,
@@ -63,8 +66,9 @@ use std::future::Future;
 ///         onclick: move |_| chat_client.send(Action::Start),
 ///         "Start Chat Service"
 ///     }
-/// })
+/// };
 /// ```
+#[doc = include_str!("../docs/rules_of_hooks.md")]
 pub fn use_coroutine<M, G, F>(init: G) -> Coroutine<M>
 where
     M: 'static,
@@ -81,21 +85,26 @@ where
 
     // We do this here so we can capture data with FnOnce
     // this might not be the best API
-    if *coroutine.needs_regen.peek() {
-        let (tx, rx) = futures_channel::mpsc::unbounded();
-        let task = spawn(init(rx));
-        coroutine.tx.set(Some(tx));
-        coroutine.task.set(Some(task));
-        coroutine.needs_regen.set(false);
-    }
+    dioxus_signals::warnings::signal_read_and_write_in_reactive_scope::allow(|| {
+        dioxus_signals::warnings::signal_write_in_component_body::allow(|| {
+            if *coroutine.needs_regen.peek() {
+                let (tx, rx) = futures_channel::mpsc::unbounded();
+                let task = spawn(init(rx));
+                coroutine.tx.set(Some(tx));
+                coroutine.task.set(Some(task));
+                coroutine.needs_regen.set(false);
+            }
+        })
+    });
 
     coroutine
 }
 
 /// Get a handle to a coroutine higher in the tree
-/// Analagous to use_context_provider and use_context,
+/// Analogous to use_context_provider and use_context,
 /// but used for coroutines specifically
 /// See the docs for [`use_coroutine`] for more details.
+#[doc = include_str!("../docs/rules_of_hooks.md")]
 #[must_use]
 pub fn use_coroutine_handle<M: 'static>() -> Coroutine<M> {
     use_hook(consume_context::<Coroutine<M>>)

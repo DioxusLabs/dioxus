@@ -2,20 +2,13 @@
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 
-use std::fmt::{Display, Write};
-
 use crate::writer::*;
-use collect_macros::byte_offset;
-use dioxus_rsx::{BodyNode, CallBody, IfmtInput};
-use proc_macro2::LineColumn;
-use quote::ToTokens;
-use syn::{ExprMacro, MacroDelimiter};
+use dioxus_rsx::{BodyNode, CallBody};
+use proc_macro2::{LineColumn, Span};
+use syn::parse::Parser;
 
 mod buffer;
 mod collect_macros;
-mod component;
-mod element;
-mod expr;
 mod indent;
 mod prettier_please;
 mod writer;
@@ -45,27 +38,43 @@ pub struct FormattedBlock {
 
 /// Format a file into a list of `FormattedBlock`s to be applied by an IDE for autoformatting.
 ///
+/// It accepts
+#[deprecated(note = "Use try_fmt_file instead - this function panics on error.")]
+pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
+    let parsed =
+        syn::parse_file(contents).expect("fmt_file should only be called on valid syn::File files");
+    try_fmt_file(contents, &parsed, indent).expect("Failed to format file")
+}
+
+/// Format a file into a list of `FormattedBlock`s to be applied by an IDE for autoformatting.
+///
 /// This function expects a complete file, not just a block of code. To format individual rsx! blocks, use fmt_block instead.
 ///
 /// The point here is to provide precise modifications of a source file so an accompanying IDE tool can map these changes
 /// back to the file precisely.
 ///
 /// Nested blocks of RSX will be handled automatically
-pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
+///
+/// This returns an error if the rsx itself is invalid.
+///
+/// Will early return if any of the expressions are not complete. Even though we *could* return the
+/// expressions, eventually we'll want to pass off expression formatting to rustfmt which will reject
+/// those.
+pub fn try_fmt_file(
+    contents: &str,
+    parsed: &syn::File,
+    indent: IndentOptions,
+) -> syn::Result<Vec<FormattedBlock>> {
     let mut formatted_blocks = Vec::new();
 
-    let parsed = syn::parse_file(contents).unwrap();
-
-    let mut macros = vec![];
-    collect_macros::collect_from_file(&parsed, &mut macros);
+    let macros = collect_macros::collect_from_file(parsed);
 
     // No macros, no work to do
     if macros.is_empty() {
-        return formatted_blocks;
+        return Ok(formatted_blocks);
     }
 
-    let mut writer = Writer::new(contents);
-    writer.out.indent = indent;
+    let mut writer = Writer::new(contents, indent);
 
     // Don't parse nested macros
     let mut end_span = LineColumn { column: 0, line: 0 };
@@ -77,7 +86,7 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
             continue;
         }
 
-        let body = item.parse_body::<CallBody>().unwrap();
+        let body = item.parse_body_with(CallBody::parse_strict)?;
 
         let rsx_start = macro_path.span().start();
 
@@ -86,31 +95,28 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
             .indent
             .count_indents(writer.src[rsx_start.line - 1]);
 
-        write_body(&mut writer, &body);
+        // TESTME
+        // Writing *should* not fail but it's possible that it does
+        if writer.write_rsx_call(&body.body).is_err() {
+            let span = writer.invalid_exprs.pop().unwrap_or_else(Span::call_site);
+            return Err(syn::Error::new(span, "Failed emit valid rsx - likely due to partially complete expressions in the rsx! macro"));
+        }
 
         // writing idents leaves the final line ended at the end of the last ident
         if writer.out.buf.contains('\n') {
-            writer.out.new_line().unwrap();
-            writer.out.tab().unwrap();
+            _ = writer.out.new_line();
+            _ = writer.out.tab();
         }
 
-        let span = match item.delimiter {
-            MacroDelimiter::Paren(b) => b.span,
-            MacroDelimiter::Brace(b) => b.span,
-            MacroDelimiter::Bracket(b) => b.span,
-        }
-        .join();
+        let span = item.delimiter.span().join();
+        let mut formatted = writer.out.buf.split_off(0);
 
-        let mut formatted = String::new();
-
-        std::mem::swap(&mut formatted, &mut writer.out.buf);
-
-        let start = byte_offset(contents, span.start()) + 1;
-        let end = byte_offset(contents, span.end()) - 1;
+        let start = collect_macros::byte_offset(contents, span.start()) + 1;
+        let end = collect_macros::byte_offset(contents, span.end()) - 1;
 
         // Rustfmt will remove the space between the macro and the opening paren if the macro is a single expression
-        let body_is_solo_expr = body.roots.len() == 1
-            && matches!(body.roots[0], BodyNode::RawExpr(_) | BodyNode::Text(_));
+        let body_is_solo_expr = body.body.roots.len() == 1
+            && matches!(body.body.roots[0], BodyNode::RawExpr(_) | BodyNode::Text(_));
 
         if formatted.len() <= 80 && !formatted.contains('\n') && !body_is_solo_expr {
             formatted = format!(" {formatted} ");
@@ -129,48 +135,25 @@ pub fn fmt_file(contents: &str, indent: IndentOptions) -> Vec<FormattedBlock> {
         });
     }
 
-    formatted_blocks
+    Ok(formatted_blocks)
 }
 
-pub fn write_block_out(body: CallBody) -> Option<String> {
-    let mut buf = Writer::new("");
-
-    write_body(&mut buf, &body);
-
-    buf.consume()
-}
-
-fn write_body(buf: &mut Writer, body: &CallBody) {
-    match body.roots.len() {
-        0 => {}
-        1 if matches!(body.roots[0], BodyNode::Text(_)) => {
-            write!(buf.out, " ").unwrap();
-            buf.write_ident(&body.roots[0]).unwrap();
-            write!(buf.out, " ").unwrap();
-        }
-        _ => buf.write_body_indented(&body.roots).unwrap(),
-    }
-}
-
-pub fn fmt_block_from_expr(raw: &str, expr: ExprMacro) -> Option<String> {
-    let body = syn::parse2::<CallBody>(expr.mac.tokens).unwrap();
-
-    let mut buf = Writer::new(raw);
-
-    write_body(&mut buf, &body);
-
+/// Write a Callbody (the rsx block) to a string
+///
+/// If the tokens can't be formatted, this returns None. This is usually due to an incomplete expression
+/// that passed partial expansion but failed to parse.
+pub fn write_block_out(body: &CallBody) -> Option<String> {
+    let mut buf = Writer::new("", IndentOptions::default());
+    buf.write_rsx_call(&body.body).ok()?;
     buf.consume()
 }
 
 pub fn fmt_block(block: &str, indent_level: usize, indent: IndentOptions) -> Option<String> {
-    let body = syn::parse_str::<dioxus_rsx::CallBody>(block).unwrap();
+    let body = CallBody::parse_strict.parse_str(block).unwrap();
 
-    let mut buf = Writer::new(block);
-
-    buf.out.indent = indent;
+    let mut buf = Writer::new(block, indent);
     buf.out.indent_level = indent_level;
-
-    write_body(&mut buf, &body);
+    buf.write_rsx_call(&body.body).ok()?;
 
     // writing idents leaves the final line ended at the end of the last ident
     if buf.out.buf.contains('\n') {
@@ -178,16 +161,6 @@ pub fn fmt_block(block: &str, indent_level: usize, indent: IndentOptions) -> Opt
     }
 
     buf.consume()
-}
-
-pub fn apply_format(input: &str, block: FormattedBlock) -> String {
-    let start = block.start;
-    let end = block.end;
-
-    let (left, _) = input.split_at(start);
-    let (_, right) = input.split_at(end);
-
-    format!("{}{}{}", left, block.formatted, right)
 }
 
 // Apply all the blocks
@@ -212,25 +185,4 @@ pub fn apply_formats(input: &str, blocks: Vec<FormattedBlock>) -> String {
     out.push_str(suffix);
 
     out
-}
-
-struct DisplayIfmt<'a>(&'a IfmtInput);
-
-impl Display for DisplayIfmt<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let inner_tokens = self.0.source.as_ref().unwrap().to_token_stream();
-        inner_tokens.fmt(f)
-    }
-}
-
-pub(crate) fn ifmt_to_string(input: &IfmtInput) -> String {
-    let mut buf = String::new();
-    let display = DisplayIfmt(input);
-    write!(&mut buf, "{}", display).unwrap();
-    buf
-}
-
-pub(crate) fn write_ifmt(input: &IfmtInput, writable: &mut impl Write) -> std::fmt::Result {
-    let display = DisplayIfmt(input);
-    write!(writable, "{}", display)
 }

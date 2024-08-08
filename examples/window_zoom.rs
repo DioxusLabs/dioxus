@@ -13,14 +13,14 @@ fn app() -> Element {
 
     rsx! {
         h1 { "Zoom level: {level}" }
-        p { "Change the zoom level of the webview by typing a number in the input below."}
+        p { "Change the zoom level of the webview by typing a number in the input below." }
         input {
             r#type: "number",
             value: "{level}",
             oninput: move |e| {
                 if let Ok(new_zoom) = e.value().parse::<f64>() {
                     level.set(new_zoom);
-                    dioxus::desktop::window().webview.zoom(new_zoom);
+                    _ = dioxus::desktop::window().webview.zoom(new_zoom);
                 }
             }
         }

@@ -3,6 +3,14 @@ use dioxus_signals::{Readable, Writable};
 use crate::use_signal;
 
 /// A dependency is a trait that can be used to determine if a effect or selector should be re-run.
+#[rustversion::attr(
+    since(1.78.0),
+    diagnostic::on_unimplemented(
+        message = "`Dependency` is not implemented for `{Self}`",
+        label = "Dependency",
+        note = "Dependency is automatically implemented for all tuples with less than 8 references to element that implement `PartialEq` and `Clone`. For example, `(&A, &B, &C)` implements `Dependency` automatically as long as `A`, `B`, and `C` implement `PartialEq` and `Clone`.",
+    )
+)]
 pub trait Dependency: Sized + Clone {
     /// The output of the dependency
     type Out: Clone + PartialEq + 'static;
@@ -20,6 +28,14 @@ impl Dependency for () {
 }
 
 /// A dependency is a trait that can be used to determine if a effect or selector should be re-run.
+#[rustversion::attr(
+    since(1.78.0),
+    diagnostic::on_unimplemented(
+        message = "`DependencyElement` is not implemented for `{Self}`",
+        label = "dependency element",
+        note = "DependencyElement is automatically implemented for types that implement `PartialEq` and `Clone`",
+    )
+)]
 pub trait DependencyElement: 'static + PartialEq + Clone {}
 impl<T> DependencyElement for T where T: 'static + PartialEq + Clone {}
 
@@ -74,7 +90,7 @@ impl_dep!(A = a1 a2, B = b1 b2, C = c1 c2, D = d1 d2, E = e1 e2, F = f1 f2, G = 
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust, no_run
 /// use dioxus::prelude::*;
 ///
 /// let data = 5;
@@ -83,6 +99,7 @@ impl_dep!(A = a1 a2, B = b1 b2, C = c1 c2, D = d1 d2, E = e1 e2, F = f1 f2, G = 
 ///     println!("Data changed: {}", data);
 /// }));
 /// ```
+#[doc = include_str!("../docs/rules_of_hooks.md")]
 pub fn use_reactive<O, D: Dependency>(
     non_reactive_data: D,
     mut closure: impl FnMut(D::Out) -> O + 'static,
@@ -93,7 +110,14 @@ pub fn use_reactive<O, D: Dependency>(
         non_reactive_data.out()
     });
     if !first_run && non_reactive_data.changed(&*last_state.peek()) {
-        last_state.set(non_reactive_data.out());
+        use warnings::Warning;
+        // In use_reactive we do read and write to a signal during rendering to bridge the reactive and non-reactive worlds.
+        // We ignore
+        dioxus_signals::warnings::signal_read_and_write_in_reactive_scope::allow(|| {
+            dioxus_signals::warnings::signal_write_in_component_body::allow(|| {
+                last_state.set(non_reactive_data.out())
+            })
+        });
     }
     move || closure(last_state())
 }
@@ -104,7 +128,7 @@ pub fn use_reactive<O, D: Dependency>(
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust, no_run
 /// use dioxus::prelude::*;
 ///
 /// let data = 5;
@@ -113,6 +137,7 @@ pub fn use_reactive<O, D: Dependency>(
 ///     println!("Data changed: {}", data);
 /// }));
 /// ```
+#[doc = include_str!("../docs/rules_of_hooks.md")]
 #[macro_export]
 macro_rules! use_reactive {
     (|| $($rest:tt)*) => { use_reactive( (), move |_| $($rest)* ) };

@@ -15,20 +15,23 @@ dioxus-html = { workspace = true, features = [
     "serialize",
     "native-bind",
     "mounted",
-    "eval",
+    "document",
 ] }
+dioxus-signals = { workspace = true, optional = true }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
 dioxus-cli-config = { workspace = true, features = ["read-config"] }
 generational-box = { workspace = true }
+# hotreload only works on desktop platforms.... mobile is still wip
+dioxus-hot-reload = { workspace = true, optional = true, features = ["serve", "client"]}
 
 serde = "1.0.136"
 serde_json = "1.0.79"
 thiserror = { workspace = true }
 tracing = { workspace = true }
-wry = { version = "0.37.0", default-features = false, features = [
+wry = { version = "0.41.0", default-features = false, features = [
     "os-webview",
     "protocol",
-    "file-drop",
+    "drag-drop",
 ] }
 futures-channel = { workspace = true }
 tokio = { workspace = true, features = [
@@ -50,19 +53,27 @@ urlencoding = "2.1.2"
 async-trait = "0.1.68"
 tao = { version = "0.26.1", features = ["rwh_05"] }
 
+
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3.17"
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
 global-hotkey = "0.5.0"
-rfd = "0.14"
+rfd = { version = "0.14", default-features = false, features = ["xdg-portal", "tokio"] }
 muda = "0.11.3"
-# hotreload only works on desktop platforms.... mobile is still wip
-dioxus-hot-reload = { workspace = true, optional = true }
+
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc = "0.2.7"
 objc_id = "0.1.1"
+
+# use rustls on android
+[target.'cfg(target_os = "android")'.dependencies]
+tokio-tungstenite = { workspace = true, optional = true, features = ["rustls"]}
+
+# use native tls on other platforms
+[target.'cfg(not(target_os = "android"))'.dependencies]
+tokio-tungstenite = { workspace = true, optional = true, features = ["native-tls"]}
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cocoa = "0.25"
@@ -71,20 +82,36 @@ objc = "0.2.7"
 
 [features]
 default = ["tokio_runtime", "wry/objc-exception", "hot-reload", "devtools"]
-tokio_runtime = ["tokio"]
+tokio_runtime = ["dep:tokio"]
 fullscreen = ["wry/fullscreen"]
 transparent = ["wry/transparent"]
 devtools = ["wry/devtools"]
-hot-reload = ["dioxus-hot-reload"]
+hot-reload = ["dep:dioxus-hot-reload", "dioxus-signals"]
 gnu = []
 
 [package.metadata.docs.rs]
-default-features = false
 features = ["tokio_runtime", "hot-reload"]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+default-features = false
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+    "aarch64-apple-darwin",
+    "aarch64-apple-ios",
+    "aarch64-linux-android",
+    "armv7-linux-androideabi",
+]
+rustc-args = [ "--cfg", "docsrs" ]
+rustdoc-args = [ "--cfg", "docsrs" ]
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["desktop"] }
 exitcode = "1.1.2"
+reqwest = { workspace = true, features = ["json"] }
+http-range = { version = "0.1.5" }
+dioxus-ssr = { workspace = true, default-features = false }
+separator = "0.4.1"
+rand = { version = "0.8.4", features = ["small_rng"] }
 
 # These tests need to be run on the main thread, so they cannot use rust's test harness.
 [[test]]
@@ -95,4 +122,9 @@ harness = false
 [[test]]
 name = "check_rendering"
 path = "headless_tests/rendering.rs"
+harness = false
+
+[[test]]
+name = "check_eval"
+path = "headless_tests/eval.rs"
 harness = false

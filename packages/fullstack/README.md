@@ -8,7 +8,7 @@
 [crates-badge]: https://img.shields.io/crates/v/dioxus-fullstack.svg
 [crates-url]: https://crates.io/crates/dioxus-fullstack
 [mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
-[mit-url]: https://github.com/dioxuslabs/dioxus/blob/master/LICENSE
+[mit-url]: https://github.com/dioxuslabs/dioxus/blob/main/LICENSE-MIT
 [actions-badge]: https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg
 [actions-url]: https://github.com/dioxuslabs/dioxus/actions?query=workflow%3ACI+branch%3Amaster
 [discord-badge]: https://img.shields.io/discord/899851952891002890.svg?logo=discord&style=flat-square
@@ -16,15 +16,15 @@
 
 [Website](https://dioxuslabs.com) |
 [Guides](https://dioxuslabs.com/learn/0.5/) |
-[API Docs](https://docs.rs/dioxus-fullstack/latest/dioxus_sever) |
+[API Docs](https://docs.rs/dioxus-fullstack/latest/dioxus_fullstack/) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 
 Fullstack utilities for the [`Dioxus`](https://dioxuslabs.com) framework.
 
 # Features
 
-- Integrates with the [Axum](https::/docs.rs/dioxus-fullstack/latest/dixous_server/axum_adapter/index.html) server framework with utilities for serving and rendering Dioxus applications.
-- [Server functions](https::/docs.rs/dioxus-fullstack/latest/dixous_server/prelude/attr.server.html) allow you to call code on the server from the client as if it were a normal function.
+- Integrates with the [Axum](./examples/axum-hello-world/src/main.rs) server framework with utilities for serving and rendering Dioxus applications.
+- [Server functions](https://docs.rs/dioxus-fullstack/latest/dioxus_fullstack/prelude/attr.server.html) allow you to call code on the server from the client as if it were a normal function.
 - Instant RSX Hot reloading with [`dioxus-hot-reload`](https://crates.io/crates/dioxus-hot-reload).
 - Passing root props from the server to the client.
 
@@ -32,7 +32,7 @@ Fullstack utilities for the [`Dioxus`](https://dioxuslabs.com) framework.
 
 Full stack Dioxus in under 30 lines of code
 
-```rust
+```rust, no_run
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
 
@@ -42,7 +42,7 @@ fn main() {
 
 #[component]
 fn App() -> Element {
-    let meaning = use_signal(|| None);
+    let mut meaning = use_signal(|| None);
 
     rsx! {
         h1 { "Meaning of life: {meaning:?}" }
@@ -76,7 +76,7 @@ To get started with full stack Dioxus, check out our [getting started guide](htt
 
 This project is licensed under the [MIT license].
 
-[mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
+[mit license]: https://github.com/dioxuslabs/dioxus/blob/main/LICENSE-MIT
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in Dioxus by you shall be licensed as MIT without any additional

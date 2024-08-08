@@ -1,87 +1,36 @@
 use crate::{
+    entry::{MemoryLocationBorrowInfo, StorageEntry},
     error,
     references::{GenerationalRef, GenerationalRefMut},
-    AnyStorage, MemoryLocation, MemoryLocationInner, Storage,
+    AnyStorage, BorrowError, BorrowMutError, GenerationalLocation, GenerationalPointer, Storage,
 };
 use std::cell::{Ref, RefCell, RefMut};
 
-/// A unsync storage. This is the default storage type.
-#[derive(Default)]
-pub struct UnsyncStorage(RefCell<Option<Box<dyn std::any::Any>>>);
-
-impl<T: 'static> Storage<T> for UnsyncStorage {
-    fn try_read(
-        &'static self,
-        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-        at: crate::GenerationalRefBorrowInfo,
-    ) -> Result<Self::Ref<'static, T>, error::BorrowError> {
-        let borrow = self.0.try_borrow();
-
-        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-        let borrow = borrow.map_err(|_| at.borrowed_from.borrow_error())?;
-
-        #[cfg(not(any(debug_assertions, feature = "debug_ownership")))]
-        let borrow = borrow.map_err(|_| {
-            error::BorrowError::AlreadyBorrowedMut(error::AlreadyBorrowedMutError {})
-        })?;
-
-        match Ref::filter_map(borrow, |any| any.as_ref()?.downcast_ref()) {
-            Ok(guard) => Ok(GenerationalRef::new(
-                guard,
-                #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-                at,
-            )),
-            Err(_) => Err(error::BorrowError::Dropped(error::ValueDroppedError {
-                #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-                created_at: at.created_at,
-            })),
-        }
-    }
-
-    fn try_write(
-        &'static self,
-        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-        at: crate::GenerationalRefMutBorrowInfo,
-    ) -> Result<Self::Mut<'static, T>, error::BorrowMutError> {
-        let borrow = self.0.try_borrow_mut();
-
-        #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-        let borrow = borrow.map_err(|_| at.borrowed_from.borrow_mut_error())?;
-
-        #[cfg(not(any(debug_assertions, feature = "debug_ownership")))]
-        let borrow = borrow
-            .map_err(|_| error::BorrowMutError::AlreadyBorrowed(error::AlreadyBorrowedError {}))?;
-
-        RefMut::filter_map(borrow, |any| any.as_mut()?.downcast_mut())
-            .map_err(|_| {
-                error::BorrowMutError::Dropped(error::ValueDroppedError {
-                    #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-                    created_at: at.created_at,
-                })
-            })
-            .map(|guard| {
-                GenerationalRefMut::new(
-                    guard,
-                    #[cfg(any(debug_assertions, feature = "debug_ownership"))]
-                    at,
-                )
-            })
-    }
-
-    fn set(&self, value: T) {
-        *self.0.borrow_mut() = Some(Box::new(value));
-    }
-
-    fn take(&'static self) -> Option<T> {
-        self.0
-            .borrow_mut()
-            .take()
-            .map(|any| *any.downcast().unwrap())
-    }
+thread_local! {
+    static UNSYNC_RUNTIME: RefCell<Vec<&'static UnsyncStorage>> = const { RefCell::new(Vec::new()) };
 }
 
-thread_local! {
-    static UNSYNC_RUNTIME: RefCell<Vec<MemoryLocation<UnsyncStorage>>> = const { RefCell::new(Vec::new()) };
+/// A unsync storage. This is the default storage type.
+#[derive(Default)]
+pub struct UnsyncStorage {
+    borrow_info: MemoryLocationBorrowInfo,
+    data: RefCell<StorageEntry<Box<dyn std::any::Any>>>,
+}
+
+impl UnsyncStorage {
+    fn try_borrow_mut(
+        &self,
+    ) -> Result<RefMut<'_, StorageEntry<Box<dyn std::any::Any>>>, BorrowMutError> {
+        self.data
+            .try_borrow_mut()
+            .map_err(|_| self.borrow_info.borrow_mut_error())
+    }
+
+    fn try_borrow(&self) -> Result<Ref<'_, StorageEntry<Box<dyn std::any::Any>>>, BorrowError> {
+        self.data
+            .try_borrow()
+            .map_err(|_| self.borrow_info.borrow_error())
+    }
 }
 
 impl AnyStorage for UnsyncStorage {
@@ -100,70 +49,136 @@ impl AnyStorage for UnsyncStorage {
         mut_
     }
 
+    fn map<T: ?Sized + 'static, U: ?Sized + 'static>(
+        ref_: Self::Ref<'_, T>,
+        f: impl FnOnce(&T) -> &U,
+    ) -> Self::Ref<'_, U> {
+        ref_.map(|inner| Ref::map(inner, f))
+    }
+
+    fn map_mut<T: ?Sized + 'static, U: ?Sized + 'static>(
+        mut_ref: Self::Mut<'_, T>,
+        f: impl FnOnce(&mut T) -> &mut U,
+    ) -> Self::Mut<'_, U> {
+        mut_ref.map(|inner| RefMut::map(inner, f))
+    }
+
     fn try_map<I: ?Sized + 'static, U: ?Sized + 'static>(
         _self: Self::Ref<'_, I>,
         f: impl FnOnce(&I) -> Option<&U>,
     ) -> Option<Self::Ref<'_, U>> {
-        let GenerationalRef {
-            inner,
-            #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-            borrow,
-            ..
-        } = _self;
-        Ref::filter_map(inner, f).ok().map(|inner| GenerationalRef {
-            inner,
-            #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-            borrow,
-        })
+        _self.try_map(|inner| Ref::filter_map(inner, f).ok())
     }
 
     fn try_map_mut<I: ?Sized + 'static, U: ?Sized + 'static>(
         mut_ref: Self::Mut<'_, I>,
         f: impl FnOnce(&mut I) -> Option<&mut U>,
     ) -> Option<Self::Mut<'_, U>> {
-        let GenerationalRefMut {
-            inner,
-            #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-            borrow,
-            ..
-        } = mut_ref;
-        RefMut::filter_map(inner, f)
-            .ok()
-            .map(|inner| GenerationalRefMut {
-                inner,
-                #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-                borrow,
-            })
+        mut_ref.try_map(|inner| RefMut::filter_map(inner, f).ok())
     }
 
     fn data_ptr(&self) -> *const () {
-        self.0.as_ptr() as *const ()
+        self.data.as_ptr() as *const ()
     }
 
-    fn manually_drop(&self) -> bool {
-        self.0.borrow_mut().take().is_some()
-    }
-
-    fn claim() -> MemoryLocation<Self> {
+    #[allow(unused)]
+    fn claim(caller: &'static std::panic::Location<'static>) -> GenerationalPointer<Self> {
         UNSYNC_RUNTIME.with(|runtime| {
-            if let Some(location) = runtime.borrow_mut().pop() {
-                location
+            if let Some(storage) = runtime.borrow_mut().pop() {
+                let location = GenerationalLocation {
+                    generation: storage.data.borrow().generation(),
+                    #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+                    created_at: caller,
+                };
+                GenerationalPointer { storage, location }
             } else {
-                let data: &'static MemoryLocationInner =
-                    &*Box::leak(Box::new(MemoryLocationInner {
-                        data: Self::default(),
-                        #[cfg(any(debug_assertions, feature = "check_generation"))]
-                        generation: 0.into(),
-                        #[cfg(any(debug_assertions, feature = "debug_borrows"))]
-                        borrow: Default::default(),
-                    }));
-                MemoryLocation(data)
+                let data: &'static Self = &*Box::leak(Box::default());
+                let location = GenerationalLocation {
+                    generation: 0,
+                    #[cfg(any(debug_assertions, feature = "debug_borrows"))]
+                    created_at: caller,
+                };
+                GenerationalPointer {
+                    storage: data,
+                    location,
+                }
             }
         })
     }
 
-    fn recycle(location: &MemoryLocation<Self>) {
-        location.drop();
-        UNSYNC_RUNTIME.with(|runtime| runtime.borrow_mut().push(*location));
+    fn recycle(pointer: GenerationalPointer<Self>) -> Option<Box<dyn std::any::Any>> {
+        let mut borrow_mut = pointer.storage.data.borrow_mut();
+
+        // First check if the generation is still valid
+        if !borrow_mut.valid(&pointer.location) {
+            return None;
+        }
+
+        borrow_mut.increment_generation();
+        let old_data = borrow_mut.data.take();
+        UNSYNC_RUNTIME.with(|runtime| runtime.borrow_mut().push(pointer.storage));
+
+        old_data
+    }
+}
+
+impl<T: 'static> Storage<T> for UnsyncStorage {
+    #[track_caller]
+    fn try_read(
+        pointer: GenerationalPointer<Self>,
+    ) -> Result<Self::Ref<'static, T>, error::BorrowError> {
+        let read = pointer.storage.try_borrow()?;
+
+        let ref_ = Ref::filter_map(read, |any| {
+            // Verify the generation is still correct
+            if !any.valid(&pointer.location) {
+                return None;
+            }
+            // Then try to downcast
+            any.data.as_ref()?.downcast_ref()
+        });
+        match ref_ {
+            Ok(guard) => Ok(GenerationalRef::new(
+                guard,
+                pointer.storage.borrow_info.borrow_guard(),
+            )),
+            Err(_) => Err(error::BorrowError::Dropped(
+                error::ValueDroppedError::new_for_location(pointer.location),
+            )),
+        }
+    }
+
+    #[track_caller]
+    fn try_write(
+        pointer: GenerationalPointer<Self>,
+    ) -> Result<Self::Mut<'static, T>, error::BorrowMutError> {
+        let write = pointer.storage.try_borrow_mut()?;
+
+        let ref_mut = RefMut::filter_map(write, |any| {
+            // Verify the generation is still correct
+            if !any.valid(&pointer.location) {
+                return None;
+            }
+            // Then try to downcast
+            any.data.as_mut()?.downcast_mut()
+        });
+        match ref_mut {
+            Ok(guard) => Ok(GenerationalRefMut::new(
+                guard,
+                pointer.storage.borrow_info.borrow_mut_guard(),
+            )),
+            Err(_) => Err(error::BorrowMutError::Dropped(
+                error::ValueDroppedError::new_for_location(pointer.location),
+            )),
+        }
+    }
+
+    fn set(pointer: GenerationalPointer<Self>, value: T) {
+        let mut borrow_mut = pointer.storage.data.borrow_mut();
+        // First check if the generation is still valid
+        if !borrow_mut.valid(&pointer.location) {
+            return;
+        }
+        borrow_mut.data = Some(Box::new(value));
     }
 }

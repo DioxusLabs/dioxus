@@ -13,14 +13,9 @@ use tokio::io::AsyncWriteExt;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Tool {
-    Binaryen,
     Sass,
     Tailwind,
 }
-
-// pub fn tool_list() -> Vec<&'static str> {
-//     vec!["binaryen", "sass", "tailwindcss"]
-// }
 
 pub fn app_path() -> PathBuf {
     let data_local = dirs::data_local_dir().unwrap();
@@ -70,7 +65,6 @@ impl Tool {
     /// from str to tool enum
     pub fn from_str(name: &str) -> Option<Self> {
         match name {
-            "binaryen" => Some(Self::Binaryen),
             "sass" => Some(Self::Sass),
             "tailwindcss" => Some(Self::Tailwind),
             _ => None,
@@ -80,7 +74,6 @@ impl Tool {
     /// get current tool name str
     pub fn name(&self) -> &str {
         match self {
-            Self::Binaryen => "binaryen",
             Self::Sass => "sass",
             Self::Tailwind => "tailwindcss",
         }
@@ -89,7 +82,6 @@ impl Tool {
     /// get tool bin dir path
     pub fn bin_path(&self) -> &str {
         match self {
-            Self::Binaryen => "bin",
             Self::Sass => ".",
             Self::Tailwind => ".",
         }
@@ -98,17 +90,6 @@ impl Tool {
     /// get target platform
     pub fn target_platform(&self) -> &str {
         match self {
-            Self::Binaryen => {
-                if cfg!(target_os = "windows") {
-                    "windows"
-                } else if cfg!(target_os = "macos") {
-                    "macos"
-                } else if cfg!(target_os = "linux") {
-                    "linux"
-                } else {
-                    panic!("unsupported platformm");
-                }
-            }
             Self::Sass => {
                 if cfg!(target_os = "windows") {
                     "windows"
@@ -137,7 +118,6 @@ impl Tool {
     /// get tool version
     pub fn tool_version(&self) -> &str {
         match self {
-            Self::Binaryen => "version_105",
             Self::Sass => "1.51.0",
             Self::Tailwind => "v3.1.6",
         }
@@ -146,13 +126,6 @@ impl Tool {
     /// get tool package download url
     pub fn download_url(&self) -> String {
         match self {
-            Self::Binaryen => {
-                format!(
-                    "https://github.com/WebAssembly/binaryen/releases/download/{version}/binaryen-{version}-x86_64-{target}.tar.gz",
-                    version = self.tool_version(),
-                    target = self.target_platform()
-                )
-            }
             Self::Sass => {
                 format!(
                     "https://github.com/sass/dart-sass/releases/download/{version}/dart-sass-{version}-{target}-x64.{extension}",
@@ -179,7 +152,6 @@ impl Tool {
     /// get package extension name
     pub fn extension(&self) -> &str {
         match self {
-            Self::Binaryen => "tar.gz",
             Self::Sass => {
                 if cfg!(target_os = "windows") {
                     "zip"
@@ -226,7 +198,6 @@ impl Tool {
         let tool_path = tools_path();
 
         let dir_name = match self {
-            Self::Binaryen => format!("binaryen-{}", self.tool_version()),
             Self::Sass => "dart-sass".to_string(),
             Self::Tailwind => self.name().to_string(),
         };
@@ -246,7 +217,7 @@ impl Tool {
                 "windows" => tool_path.join(&dir_name).join(self.name()).join(".exe"),
                 _ => tool_path.join(&dir_name).join(self.name()),
             };
-            // Manualy creating tool directory because we directly download the binary via Github
+            // Manually creating tool directory because we directly download the binary via Github
             std::fs::create_dir(tool_path.join(dir_name))?;
 
             let mut final_file = std::fs::File::create(&bin_path)?;
@@ -281,13 +252,6 @@ impl Tool {
         let bin_path = tools_path().join(self.name()).join(self.bin_path());
 
         let command_file = match self {
-            Tool::Binaryen => {
-                if cfg!(target_os = "windows") {
-                    format!("{}.exe", command)
-                } else {
-                    command.to_string()
-                }
-            }
             Tool::Sass => {
                 if cfg!(target_os = "windows") {
                     format!("{}.bat", command)
@@ -365,7 +329,6 @@ pub fn extract_zip(file: &Path, target: &Path) -> anyhow::Result<()> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::path::PathBuf;
     use tempfile::tempdir;
 
     #[test]

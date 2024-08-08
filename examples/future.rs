@@ -1,6 +1,6 @@
 //! A simple example that shows how to use the use_future hook to run a background task.
 //!
-//! use_future won't return a value, analagous to use_effect.
+//! use_future won't return a value, analogous to use_effect.
 //! If you want to return a value from a future, use use_resource instead.
 
 use dioxus::prelude::*;

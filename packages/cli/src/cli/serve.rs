@@ -1,93 +1,126 @@
-use dioxus_cli_config::Platform;
-use manganis_cli_support::AssetManifest;
+use crate::{
+    settings::{self},
+    tracer::CLILogControl,
+    DioxusCrate,
+};
+use anyhow::Context;
+use build::Build;
+use dioxus_cli_config::AddressArguments;
+use std::ops::Deref;
 
 use super::*;
-use cargo_toml::Dependency::{Detailed, Inherited, Simple};
-use std::{fs::create_dir_all, io::Write, path::PathBuf};
+
+/// Arguments for the serve command
+#[derive(Clone, Debug, Parser, Default)]
+pub struct ServeArguments {
+    /// The arguments for the address the server will run on
+    #[clap(flatten)]
+    pub address: AddressArguments,
+
+    /// Open the app in the default browser [default: true - unless cli settings are set]
+    #[arg(long, default_missing_value="true", num_args=0..=1)]
+    pub open: Option<bool>,
+
+    /// Enable full hot reloading for the app [default: true - unless cli settings are set]
+    #[clap(long, group = "release-incompatible")]
+    pub hot_reload: Option<bool>,
+
+    /// Configure always-on-top for desktop apps [default: true - unless cli settings are set]
+    #[clap(long, default_missing_value = "true")]
+    pub always_on_top: Option<bool>,
+
+    /// Set cross-origin-policy to same-origin [default: false]
+    #[clap(name = "cross-origin-policy")]
+    #[clap(long)]
+    pub cross_origin_policy: bool,
+
+    /// Additional arguments to pass to the executable
+    #[clap(long)]
+    pub args: Vec<String>,
+
+    /// Sets the interval in seconds that the CLI will poll for file changes on WSL.
+    #[clap(long, default_missing_value = "2")]
+    pub wsl_file_poll_interval: Option<u16>,
+}
 
 /// Run the WASM project on dev-server
-#[derive(Clone, Debug, Parser)]
+#[derive(Clone, Debug, Default, Parser)]
+#[command(group = clap::ArgGroup::new("release-incompatible").multiple(true).conflicts_with("release"))]
 #[clap(name = "serve")]
 pub struct Serve {
+    /// Arguments for the serve command
     #[clap(flatten)]
-    pub serve: ConfigOptsServe,
+    pub(crate) server_arguments: ServeArguments,
+
+    /// Arguments for the dioxus build
+    #[clap(flatten)]
+    pub(crate) build_arguments: Build,
+
+    /// Run the server in interactive mode
+    #[arg(long, default_missing_value="true", num_args=0..=1, short = 'i')]
+    pub interactive: Option<bool>,
 }
 
 impl Serve {
-    pub async fn serve(self, bin: Option<PathBuf>) -> Result<()> {
-        let mut crate_config = dioxus_cli_config::CrateConfig::new(bin)?;
-        let serve_cfg = self.serve.clone();
+    /// Resolve the serve arguments from the arguments or the config
+    fn resolve(&mut self, crate_config: &mut DioxusCrate) -> Result<()> {
+        // Set config settings.
+        let settings = settings::CliSettings::load();
 
-        // change the relase state.
-        let hot_reload = self.serve.hot_reload || crate_config.dioxus_config.application.hot_reload;
-        crate_config.with_hot_reload(hot_reload);
-        crate_config.with_cross_origin_policy(self.serve.cross_origin_policy);
-        crate_config.with_release(self.serve.release);
-        crate_config.with_verbose(self.serve.verbose);
-
-        if let Some(example) = self.serve.example {
-            crate_config.as_example(example);
+        // Enable hot reload.
+        if self.server_arguments.hot_reload.is_none() {
+            self.server_arguments.hot_reload = Some(settings.always_hot_reload.unwrap_or(true));
         }
 
-        if let Some(profile) = self.serve.profile {
-            crate_config.set_profile(profile);
+        // Open browser.
+        if self.server_arguments.open.is_none() {
+            self.server_arguments.open = Some(settings.always_open_browser.unwrap_or_default());
         }
 
-        if let Some(features) = self.serve.features {
-            crate_config.set_features(features);
+        // Set WSL file poll interval.
+        if self.server_arguments.wsl_file_poll_interval.is_none() {
+            self.server_arguments.wsl_file_poll_interval =
+                Some(settings.wsl_file_poll_interval.unwrap_or(2));
         }
 
-        if let Some(target) = self.serve.target {
-            crate_config.set_target(target);
+        // Set always-on-top for desktop.
+        if self.server_arguments.always_on_top.is_none() {
+            self.server_arguments.always_on_top = Some(settings.always_on_top.unwrap_or(true))
+        }
+        crate_config.dioxus_config.desktop.always_on_top =
+            self.server_arguments.always_on_top.unwrap_or(true);
+
+        // Resolve the build arguments
+        self.build_arguments.resolve(crate_config)?;
+
+        // Since this is a serve, adjust the outdir to be target/dx-dist/<crate name>
+        let mut dist_dir = crate_config.workspace_dir().join("target").join("dx-dist");
+
+        if crate_config.target.is_example() {
+            dist_dir = dist_dir.join("examples");
         }
 
-        crate_config.set_cargo_args(self.serve.cargo_args);
-
-        let mut platform = self.serve.platform;
-
-        if platform.is_none() {
-            if let Some(dependency) = &crate_config.manifest.dependencies.get("dioxus") {
-                let features = match dependency {
-                    Inherited(detail) => detail.features.to_vec(),
-                    Detailed(detail) => detail.features.to_vec(),
-                    Simple(_) => vec![],
-                };
-
-                platform = features
-                    .iter()
-                    .find_map(|platform| serde_json::from_str(&format!(r#""{}""#, platform)).ok());
-            }
-        }
-
-        let platform = platform.unwrap_or(crate_config.dioxus_config.application.default_platform);
-        crate_config.extend_with_platform(platform);
-
-        // start the develop server
-        use server::{desktop, fullstack, web};
-        match platform {
-            Platform::Web => web::startup(crate_config.clone(), &serve_cfg).await?,
-            Platform::Desktop => desktop::startup(crate_config.clone(), &serve_cfg).await?,
-            Platform::Fullstack => fullstack::startup(crate_config.clone(), &serve_cfg).await?,
-            _ => unreachable!(),
-        }
+        crate_config.dioxus_config.application.out_dir =
+            dist_dir.join(crate_config.executable_name());
 
         Ok(())
     }
 
-    pub fn regen_dev_page(
-        crate_config: &CrateConfig,
-        manifest: Option<&AssetManifest>,
-    ) -> anyhow::Result<()> {
-        let serve_html = gen_page(crate_config, manifest, true);
+    pub async fn serve(mut self, log_control: CLILogControl) -> anyhow::Result<()> {
+        let mut dioxus_crate = DioxusCrate::new(&self.build_arguments.target_args)
+            .context("Failed to load Dioxus workspace")?;
 
-        let dist_path = crate_config.out_dir();
-        if !dist_path.is_dir() {
-            create_dir_all(&dist_path)?;
-        }
-        let index_path = dist_path.join("index.html");
-        let mut file = std::fs::File::create(index_path)?;
-        file.write_all(serve_html.as_bytes())?;
+        self.resolve(&mut dioxus_crate)?;
 
+        crate::serve::serve_all(self, dioxus_crate, log_control).await?;
         Ok(())
+    }
+}
+
+impl Deref for Serve {
+    type Target = Build;
+
+    fn deref(&self) -> &Self::Target {
+        &self.build_arguments
     }
 }

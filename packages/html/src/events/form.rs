@@ -1,4 +1,3 @@
-use crate::file_data::FileEngine;
 use crate::file_data::HasFileData;
 use std::{collections::HashMap, fmt::Debug, ops::Deref};
 
@@ -30,7 +29,7 @@ impl FormValue {
         self.0.first().unwrap().clone()
     }
 
-    /// Convert into Vec<String>
+    /// Convert into [`Vec<String>`]
     pub fn to_vec(self) -> Vec<String> {
         self.0.clone()
     }
@@ -106,11 +105,13 @@ impl FormData {
     }
 
     /// Get the files of the form event
-    pub fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
+    #[cfg(feature = "file-engine")]
+    pub fn files(&self) -> Option<std::sync::Arc<dyn crate::file_data::FileEngine>> {
         self.inner.files()
     }
 
     /// Downcast this event to a concrete event type
+    #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         self.inner.as_any().downcast_ref::<T>()
     }
@@ -176,6 +177,7 @@ pub struct SerializedFormData {
     #[serde(default)]
     valid: bool,
 
+    #[cfg(feature = "file-engine")]
     #[serde(default)]
     files: Option<crate::file_data::SerializedFileEngine>,
 }
@@ -183,17 +185,21 @@ pub struct SerializedFormData {
 #[cfg(feature = "serialize")]
 impl SerializedFormData {
     /// Create a new serialized form data object
-    pub fn new(
-        value: String,
-        values: HashMap<String, FormValue>,
-        files: Option<crate::file_data::SerializedFileEngine>,
-    ) -> Self {
+    pub fn new(value: String, values: HashMap<String, FormValue>) -> Self {
         Self {
             value,
             values,
-            files,
             valid: true,
+            #[cfg(feature = "file-engine")]
+            files: None,
         }
+    }
+
+    #[cfg(feature = "file-engine")]
+    /// Add files to the serialized form data object
+    pub fn with_files(mut self, files: crate::file_data::SerializedFileEngine) -> Self {
+        self.files = Some(files);
+        self
     }
 
     /// Create a new serialized form data object from a traditional form data object
@@ -202,20 +208,23 @@ impl SerializedFormData {
             value: data.value(),
             values: data.values(),
             valid: data.valid(),
-            files: match data.files() {
-                Some(files) => {
-                    let mut resolved_files = HashMap::new();
+            #[cfg(feature = "file-engine")]
+            files: {
+                match data.files() {
+                    Some(files) => {
+                        let mut resolved_files = HashMap::new();
 
-                    for file in files.files() {
-                        let bytes = files.read_file(&file).await;
-                        resolved_files.insert(file, bytes.unwrap_or_default());
+                        for file in files.files() {
+                            let bytes = files.read_file(&file).await;
+                            resolved_files.insert(file, bytes.unwrap_or_default());
+                        }
+
+                        Some(crate::file_data::SerializedFileEngine {
+                            files: resolved_files,
+                        })
                     }
-
-                    Some(crate::file_data::SerializedFileEngine {
-                        files: resolved_files,
-                    })
+                    None => None,
                 }
-                None => None,
             },
         }
     }
@@ -225,6 +234,7 @@ impl SerializedFormData {
             value: data.value(),
             values: data.values(),
             valid: data.valid(),
+            #[cfg(feature = "file-engine")]
             files: None,
         }
     }
@@ -251,10 +261,18 @@ impl HasFormData for SerializedFormData {
 
 #[cfg(feature = "serialize")]
 impl HasFileData for SerializedFormData {
-    fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
+    #[cfg(feature = "file-engine")]
+    fn files(&self) -> Option<std::sync::Arc<dyn crate::FileEngine>> {
         self.files
             .as_ref()
             .map(|files| std::sync::Arc::new(files.clone()) as _)
+    }
+}
+
+#[cfg(feature = "file-engine")]
+impl HasFileData for FormData {
+    fn files(&self) -> Option<std::sync::Arc<dyn crate::FileEngine>> {
+        self.inner.files()
     }
 }
 
@@ -281,7 +299,50 @@ impl_event! {
     /// onchange
     onchange
 
-    /// oninput handler
+    /// The `oninput` event is fired when the value of a `<input>`, `<select>`, or `<textarea>` element is changed.
+    ///
+    /// There are two main approaches to updating your input element:
+    /// 1) Controlled inputs directly update the value of the input element as the user interacts with the element
+    ///
+    /// ```rust
+    /// use dioxus::prelude::*;
+    ///
+    /// fn App() -> Element {
+    ///     let mut value = use_signal(|| "hello world".to_string());
+    ///
+    ///     rsx! {
+    ///         input {
+    ///             // We directly set the value of the input element to our value signal
+    ///             value: "{value}",
+    ///             // The `oninput` event handler will run every time the user changes the value of the input element
+    ///             // We can set the `value` signal to the new value of the input element
+    ///             oninput: move |event| value.set(event.value())
+    ///         }
+    ///         // Since this is a controlled input, we can also update the value of the input element directly
+    ///         button {
+    ///             onclick: move |_| value.write().clear(),
+    ///             "Clear"
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// 2) Uncontrolled inputs just read the value of the input element as it changes
+    ///
+    /// ```rust
+    /// use dioxus::prelude::*;
+    ///
+    /// fn App() -> Element {
+    ///     rsx! {
+    ///         input {
+    ///             // In uncontrolled inputs, we don't set the value of the input element directly
+    ///             // But you can still read the value of the input element
+    ///             oninput: move |event| println!("{}", event.value()),
+    ///         }
+    ///         // Since we don't directly control the value of the input element, we can't easily modify it
+    ///     }
+    /// }
+    /// ```
     oninput
 
     /// oninvalid

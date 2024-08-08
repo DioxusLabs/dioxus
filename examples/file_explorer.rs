@@ -14,25 +14,22 @@ fn main() {
         .launch(app)
 }
 
-#[cfg(not(feature = "collect-assets"))]
-const _STYLE: &str = include_str!("../examples/assets/fileexplorer.css");
-
-#[cfg(feature = "collect-assets")]
-const _STYLE: &str = manganis::mg!(file("./examples/assets/fileexplorer.css"));
-
 fn app() -> Element {
     let mut files = use_signal(Files::new);
 
     rsx! {
+        head::Link {
+            rel: "stylesheet",
+            href: asset!("./examples/assets/fileexplorer.css")
+        }
         div {
-            link { href:"https://fonts.googleapis.com/icon?family=Material+Icons", rel:"stylesheet" }
+            head::Link { href: "https://fonts.googleapis.com/icon?family=Material+Icons", rel: "stylesheet" }
             header {
                 i { class: "material-icons icon-menu", "menu" }
-                h1 { "Files: ", {files.read().current()} }
+                h1 { "Files: " {files.read().current()} }
                 span { }
                 i { class: "material-icons", onclick: move |_| files.write().go_up(), "logout" }
             }
-            style { "{_STYLE}" }
             main {
                 for (dir_id, path) in files.read().path_names.iter().enumerate() {
                     {
@@ -92,7 +89,7 @@ impl Files {
         let paths = match std::fs::read_dir(cur_path) {
             Ok(e) => e,
             Err(err) => {
-                let err = format!("An error occured: {err:?}");
+                let err = format!("An error occurred: {err:?}");
                 self.err = Some(err);
                 self.path_stack.pop();
                 return;

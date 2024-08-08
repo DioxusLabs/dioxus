@@ -40,7 +40,7 @@ cargo run --example hello_world
 
 [all_events](./all_events.rs) - Basic event handling demo
 
-[filedragdrop](./filedragdrop.rs) - Handle dropped files
+[file upload](./file_upload.rs) - Handle uploading files
 
 [form](./form.rs) - Handle form submission
 
@@ -74,7 +74,7 @@ cargo run --example hello_world
 
 [disabled](./disabled.rs) - Disable buttons conditionally
 
-[error_handle](./error_handle.rs) - Handle errors with early return
+[errors](./errors.rs) - Handle errors with early return
 
 ## Routing
 

@@ -30,7 +30,7 @@ fn manual_diffing() {
     *value.lock().unwrap() = "goodbye";
 
     assert_eq!(
-        dom.rebuild_to_vec().santize().edits,
+        dom.rebuild_to_vec().sanitize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(3) },
             HydrateText { path: &[0], value: "goodbye".to_string(), id: ElementId(4) },
@@ -52,7 +52,7 @@ fn events_generate() {
                     "Click me!"
                 }
             },
-            _ => None,
+            _ => VNode::empty(),
         }
     };
 
@@ -66,7 +66,7 @@ fn events_generate() {
         true,
     );
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     let edits = dom.render_immediate_to_vec();
 
     assert_eq!(

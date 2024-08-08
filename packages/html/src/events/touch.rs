@@ -56,6 +56,7 @@ impl TouchData {
     }
 
     /// Downcast this event to a concrete event type
+    #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         self.inner.as_any().downcast_ref::<T>()
     }
@@ -213,6 +214,7 @@ impl TouchPoint {
     }
 
     /// Downcast this event to a concrete event type
+    #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         self.inner.as_any().downcast_ref::<T>()
     }

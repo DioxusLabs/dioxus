@@ -178,28 +178,27 @@ impl Debug for LinkProps {
 /// #[component]
 /// fn Index() -> Element {
 ///     rsx! {
-///         rsx! {
-///             Link {
-///                 active_class: "active",
-///                 class: "link_class",
-///                 id: "link_id",
-///                 new_tab: true,
-///                 rel: "link_rel",
-///                 to: Route::Index {},
+///         Link {
+///             active_class: "active",
+///             class: "link_class",
+///             id: "link_id",
+///             new_tab: true,
+///             rel: "link_rel",
+///             to: Route::Index {},
 ///
-///                 "A fully configured link"
-///             }
+///             "A fully configured link"
 ///         }
 ///     }
 /// }
 /// #
 /// # let mut vdom = VirtualDom::new(App);
-/// # let _ = vdom.rebuild();
+/// # vdom.rebuild_in_place();
 /// # assert_eq!(
 /// #     dioxus_ssr::render(&vdom),
-/// #     r#"<a href="/" dioxus-prevent-default="" class="link_class active" id="link_id" rel="link_rel" target="_blank">A fully configured link</a>"#
+/// #     r#"<a href="/" dioxus-prevent-default="" class="link_class active" rel="link_rel" target="_blank" aria-current="page" id="link_id">A fully configured link</a>"#
 /// # );
 /// ```
+#[doc(alias = "<a>")]
 #[allow(non_snake_case)]
 pub fn Link(props: LinkProps) -> Element {
     let LinkProps {
@@ -224,7 +223,7 @@ pub fn Link(props: LinkProps) -> Element {
             error!("{msg}, will be inactive");
             #[cfg(debug_assertions)]
             panic!("{}", msg);
-            return None;
+            return VNode::empty();
         }
     };
 
@@ -253,6 +252,8 @@ pub fn Link(props: LinkProps) -> Element {
     } else {
         Some(class_)
     };
+
+    let aria_current = (href == current_url).then_some("page");
 
     let tag_target = new_tab.then_some("_blank");
 
@@ -288,6 +289,7 @@ pub fn Link(props: LinkProps) -> Element {
             class,
             rel,
             target: tag_target,
+            aria_current,
             ..attributes,
             {children}
         }

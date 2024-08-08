@@ -1,7 +1,13 @@
 use crate::{assets::*, edits::EditQueue};
+use dioxus_html::document::NATIVE_EVAL_JS;
 use dioxus_interpreter_js::unified_bindings::SLEDGEHAMMER_JS;
 use dioxus_interpreter_js::NATIVE_JS;
-use std::path::{Path, PathBuf};
+use serde::Deserialize;
+use std::{
+    path::{Component, Path, PathBuf},
+    process::Command,
+    sync::OnceLock,
+};
 use wry::{
     http::{status::StatusCode, Request, Response},
     RequestAsyncResponder, Result,
@@ -81,14 +87,8 @@ fn assets_head() -> Option<String> {
         target_os = "openbsd"
     ))]
     {
-        let root = crate::protocol::get_asset_root_or_default();
-        let assets_head_path = "__assets_head.html";
-        let mut head = root.join(assets_head_path);
-        // If we can't find it, add the dist directory and try again
-        // When bundling we currently copy the whole dist directory to the output directory instead of the individual files because of a limitation of cargo bundle2
-        if !head.exists() {
-            head = root.join("dist").join(assets_head_path);
-        }
+        let assets_head_path = PathBuf::from("__assets_head.html");
+        let head = resolve_resource(&assets_head_path);
         match std::fs::read_to_string(&head) {
             Ok(s) => Some(s),
             Err(err) => {
@@ -109,6 +109,36 @@ fn assets_head() -> Option<String> {
     {
         None
     }
+}
+
+fn resolve_resource(path: &Path) -> PathBuf {
+    let mut base_path = get_asset_root_or_default();
+
+    if running_in_dev_mode() {
+        base_path.push(path);
+
+        // Special handler for Manganis filesystem fallback.
+        // We need this since Manganis provides assets from workspace root.
+        if !base_path.exists() {
+            let workspace_root = get_workspace_root_from_cargo();
+            let asset_path = workspace_root.join(path);
+            return asset_path;
+        }
+    } else {
+        let mut resource_path = PathBuf::new();
+        for component in path.components() {
+            // Tauri-bundle inserts special path segments for abnormal component paths
+            match component {
+                Component::Prefix(_) => {}
+                Component::RootDir => resource_path.push("_root_"),
+                Component::CurDir => {}
+                Component::ParentDir => resource_path.push("_up_"),
+                Component::Normal(p) => resource_path.push(p),
+            }
+        }
+        base_path.push(resource_path);
+    }
+    base_path
 }
 
 /// Handle a request from the webview
@@ -156,17 +186,11 @@ pub(super) fn desktop_handler(
 
 fn serve_from_fs(path: PathBuf) -> Result<Response<Vec<u8>>> {
     // If the path is relative, we'll try to serve it from the assets directory.
-    let mut asset = get_asset_root_or_default().join(&path);
+    let mut asset = resolve_resource(&path);
 
     // If we can't find it, make it absolute and try again
     if !asset.exists() {
         asset = PathBuf::from("/").join(&path);
-    }
-
-    // If we can't find it, add the dist directory and try again
-    // When bundling we currently copy the whole dist directory to the output directory instead of the individual files because of a limitation of cargo bundle2
-    if !asset.exists() {
-        asset = get_asset_root_or_default().join("dist").join(&path);
     }
 
     if !asset.exists() {
@@ -196,7 +220,7 @@ fn module_loader(root_id: &str, headless: bool) -> String {
     // And then extend it with our native bindings
     {NATIVE_JS}
 
-    // The nativeinterprerter extends the sledgehammer interpreter with a few extra methods that we use for IPC
+    // The native interpreter extends the sledgehammer interpreter with a few extra methods that we use for IPC
     window.interpreter = new NativeInterpreter("{EDITS_PATH}");
 
     // Wait for the page to load before sending the initialize message
@@ -208,6 +232,10 @@ fn module_loader(root_id: &str, headless: bool) -> String {
         }}
         window.interpreter.waitForRequest({headless});
     }}
+</script>
+<script type="module">
+    // Include the code for eval
+    {NATIVE_EVAL_JS}
 </script>
 "#
     )
@@ -221,6 +249,12 @@ fn get_asset_root_or_default() -> PathBuf {
     get_asset_root().unwrap_or_else(|| std::env::current_dir().unwrap())
 }
 
+fn running_in_dev_mode() -> bool {
+    // If running under cargo, there's no bundle!
+    // There might be a smarter/more resilient way of doing this
+    std::env::var_os("CARGO").is_some()
+}
+
 /// Get the asset directory, following tauri/cargo-bundles directory discovery approach
 ///
 /// Currently supports:
@@ -232,12 +266,10 @@ fn get_asset_root_or_default() -> PathBuf {
 /// - [ ] Android
 #[allow(unreachable_code)]
 fn get_asset_root() -> Option<PathBuf> {
-    // If running under cargo, there's no bundle!
-    // There might be a smarter/more resilient way of doing this
-    if std::env::var_os("CARGO").is_some() {
+    if running_in_dev_mode() {
         return dioxus_cli_config::CURRENT_CONFIG
             .as_ref()
-            .map(|c| c.out_dir())
+            .map(|c| c.application.out_dir.clone())
             .ok();
     }
 
@@ -286,4 +318,32 @@ fn get_mime_by_ext(trimmed: &Path) -> &'static str {
         // using octet stream according to this:
         None => "application/octet-stream",
     }
+}
+
+/// A global that stores the workspace root. Used in [`get_workspace_root_from_cargo`].
+static WORKSPACE_ROOT: OnceLock<PathBuf> = OnceLock::new();
+
+/// Describes the metadata we need from `cargo metadata`.
+#[derive(Deserialize)]
+struct CargoMetadata {
+    workspace_root: PathBuf,
+}
+
+/// Get the workspace root using `cargo metadata`. Should not be used in release mode.
+pub(crate) fn get_workspace_root_from_cargo() -> PathBuf {
+    WORKSPACE_ROOT
+        .get_or_init(|| {
+            let out = Command::new("cargo")
+                .args(["metadata", "--format-version", "1", "--no-deps"])
+                .output()
+                .expect("`cargo metadata` failed to run");
+
+            let out =
+                String::from_utf8(out.stdout).expect("failed to parse output of `cargo metadata`");
+            let metadata = serde_json::from_str::<CargoMetadata>(&out)
+                .expect("failed to deserialize data from `cargo metadata`");
+
+            metadata.workspace_root
+        })
+        .to_owned()
 }

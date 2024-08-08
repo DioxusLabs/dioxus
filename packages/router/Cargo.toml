@@ -26,33 +26,11 @@ js-sys = { version = "0.3.63", optional = true }
 gloo-utils = { version = "0.1.6", optional = true }
 dioxus-liveview = { workspace = true, optional = true }
 dioxus-ssr = { workspace = true, optional = true }
+http = { workspace = true, optional = true }
 dioxus-fullstack = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["full"], optional = true }
 dioxus-cli-config = { workspace = true, features = ["read-config"] }
-
-[features]
-default = []
-ssr = ["dioxus-ssr/incremental", "tokio", "dioxus-fullstack?/server"]
-liveview = ["dioxus-liveview", "tokio", "dep:serde", "serde_json"]
-wasm_test = []
-web = ["gloo", "web-sys", "wasm-bindgen", "gloo-utils", "js-sys", "dioxus-router-macro/web"]
-fullstack = ["dioxus-fullstack"]
-
-[dev-dependencies]
-axum = { workspace = true, features = ["ws"] }
-dioxus = { workspace = true, features = ["router"] }
-# dioxus-liveview = { workspace = true, features = ["axum"] }
-dioxus-ssr = { workspace = true }
-criterion = { version = "0.5", features = ["async_tokio", "html_reports"] }
-
-[[example]]
-name = "static_generation"
-required-features = ["ssr"]
-
-[[bench]]
-name = "incremental"
-required-features = ["ssr"]
-harness = false
+rustversion = "1.0.17"
 
 # you need to comment this out when publishing since cargo workspaces is not smart enough to wipe this when dropping
 # dev-dependncey crates
@@ -62,3 +40,39 @@ dioxus-router = { workspace = true, features = ["web"] }
 # dioxus-web = { workspace = true }
 gloo = "0.8.0"
 wasm-bindgen-test = "0.3.33"
+
+[features]
+default = []
+ssr = []
+liveview = ["dioxus-liveview", "dep:tokio", "dep:serde", "dep:serde_json"]
+wasm_test = []
+web = ["dep:gloo", "dep:web-sys", "dep:wasm-bindgen", "dep:gloo-utils", "dep:js-sys", "dioxus-router-macro/web"]
+fullstack = ["dep:dioxus-fullstack"]
+
+[dev-dependencies]
+axum = { workspace = true, features = ["ws"] }
+dioxus = { workspace = true, features = ["router"] }
+dioxus-ssr = { workspace = true }
+criterion = { workspace = true, features = ["async_tokio", "html_reports"] }
+ciborium = { version = "0.2.1" }
+base64 = { version = "0.21.0" }
+serde = { version = "1", features = ["derive"] }
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+# Most of the examples live in the workspace. We include some here so that docs.rs can scrape our examples for better inline docs
+
+[[example]]
+name = "hash_fragment_state"
+path = "../../examples/hash_fragment_state.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "query_segment_search"
+path = "../../examples/query_segment_search.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "simple_router"
+path = "../../examples/simple_router.rs"
+doc-scrape-examples = true

@@ -8,13 +8,15 @@
 
 use dioxus::prelude::*;
 
+const STYLE: &str = asset!("./examples/assets/links.css");
+
 fn main() {
-    launch_desktop(app);
+    launch(app);
 }
 
 fn app() -> Element {
     rsx! (
-        style { {include_str!("./assets/links.css")} }
+        head::Link { rel: "stylesheet", href: STYLE }
         Router::<Route> {}
     )
 }

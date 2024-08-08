@@ -1,7 +1,4 @@
-use crate::contexts::router::RoutingCallback;
-use crate::history::HistoryProvider;
 use crate::prelude::*;
-use crate::routable::Routable;
 use dioxus_lib::prelude::*;
 use std::sync::Arc;
 
@@ -13,26 +10,23 @@ use std::sync::Arc;
 /// # use dioxus::prelude::*;
 /// # #[component]
 /// # fn Index() -> Element {
-/// #     None
+/// #     VNode::empty()
 /// # }
 /// #[derive(Clone, Routable)]
 /// enum Route {
 ///     #[route("/")]
 ///     Index {},
 /// }
-/// let cfg = RouterConfig::default().history(WebHistory::<Route>::default());
+/// let cfg = RouterConfig::default().history(MemoryHistory::<Route>::default());
 /// ```
-pub struct RouterConfig<R: Routable> {
+pub struct RouterConfig<R> {
     pub(crate) failure_external_navigation: fn() -> Element,
     pub(crate) history: Option<Box<dyn AnyHistoryProvider>>,
     pub(crate) on_update: Option<RoutingCallback<R>>,
     pub(crate) initial_route: Option<R>,
 }
 
-impl<R: Routable + Clone> Default for RouterConfig<R>
-where
-    <R as std::str::FromStr>::Err: std::fmt::Display,
-{
+impl<R> Default for RouterConfig<R> {
     fn default() -> Self {
         Self {
             failure_external_navigation: FailureExternalNavigation,
@@ -43,19 +37,19 @@ where
     }
 }
 
-#[cfg(not(feature = "serde"))]
 impl<R: Routable + Clone> RouterConfig<R>
 where
     <R as std::str::FromStr>::Err: std::fmt::Display,
 {
     pub(crate) fn take_history(&mut self) -> Box<dyn AnyHistoryProvider> {
-        #[allow(unused)]
-        let initial_route = self.initial_route.clone().unwrap_or("/".parse().unwrap_or_else(|err|
-            panic!("index route does not exist:\n{}\n use MemoryHistory::with_initial_path or RouterConfig::initial_route to set a custom path", err)
-        ));
         self.history
             .take()
-            .unwrap_or_else(|| default_history(initial_route))
+            .unwrap_or_else(|| {
+                let initial_route = self.initial_route.clone().unwrap_or_else(|| "/".parse().unwrap_or_else(|err|
+                    panic!("index route does not exist:\n{}\n use MemoryHistory::with_initial_path or RouterConfig::initial_route to set a custom path", err)
+                ));
+                default_history(initial_route)
+    })
     }
 }
 
@@ -134,7 +128,7 @@ where
     return Box::new(AnyHistoryProviderImplWrapper::new(
         MemoryHistory::<R>::with_initial_path(
             dioxus_fullstack::prelude::server_context()
-                .request_parts_blocking()
+                .request_parts()
                 .uri
                 .to_string()
                 .parse()

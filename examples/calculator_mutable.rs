@@ -25,13 +25,11 @@ fn main() {
         .launch(app);
 }
 
-const STYLE: &str = include_str!("./assets/calculator.css");
-
 fn app() -> Element {
     let mut state = use_signal(Calculator::new);
 
     rsx! {
-        style { {STYLE} }
+        head::Link { rel: "stylesheet", href: asset!("./examples/assets/calculator.css") }
         div { id: "wrapper",
             div { class: "app",
                 div {
@@ -89,7 +87,7 @@ fn app() -> Element {
 #[component]
 fn CalculatorKey(name: String, onclick: EventHandler<MouseEvent>, children: Element) -> Element {
     rsx! {
-        button { class: "calculator-key {name}", onclick: move |e| onclick.call(e), {&children} }
+        button { class: "calculator-key {name}", onclick, {children} }
     }
 }
 

@@ -16,8 +16,8 @@ fn main() {
 
 fn app() -> Element {
     // Breed is a signal that will be updated when the user clicks a breed in the list
-    // `deerhound` is just a default that we know will exist. We could also use a `None` instead
-    let mut breed = use_signal(|| "deerhound".to_string());
+    // `shiba` is just a default that we know will exist. We could also use a `None` instead
+    let mut breed = use_signal(|| "shiba".to_string());
 
     // Fetch the list of breeds from the Dog API
     // Since there are no dependencies, this will never restart
@@ -55,7 +55,6 @@ fn app() -> Element {
     };
 
     rsx! {
-        style { {include_str!("./assets/dog_app.css")} }
         h1 { "Select a dog breed!" }
         div { height: "500px", display: "flex",
             ul { width: "100px", {breed_list} }

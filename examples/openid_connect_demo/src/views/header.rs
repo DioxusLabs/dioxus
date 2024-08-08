@@ -1,3 +1,4 @@
+use crate::storage::{auth_request, use_auth_request, use_auth_token};
 use crate::{
     oidc::{
         authorize_url, email, exchange_refresh_token, init_oidc_client, log_out_url,
@@ -5,149 +6,124 @@ use crate::{
     },
     props::client::ClientProps,
     router::Route,
-    storage::PersistentWrite,
-    FERMI_AUTH_REQUEST, FERMI_AUTH_TOKEN, FERMI_CLIENT,
+    CLIENT,
 };
+use anyhow::Result;
 use dioxus::prelude::*;
 use dioxus::router::prelude::{Link, Outlet};
-use fermi::*;
 use openidconnect::{url::Url, OAuth2TokenResponse, TokenResponse};
 
 #[component]
-pub fn LogOut(cx: Scope<ClientProps>) -> Element {
-    let fermi_auth_token = use_atom_ref(&FERMI_AUTH_TOKEN);
-    let fermi_auth_token_read = fermi_auth_token.read().clone();
-    let log_out_url_state = use_signal(|| None::<Option<Result<Url, crate::errors::Error>>>);
-    cx.render(match fermi_auth_token_read {
-        Some(fermi_auth_token_read) => match fermi_auth_token_read.id_token.clone() {
-            Some(id_token) => match log_out_url_state.get() {
-                Some(log_out_url_result) => match log_out_url_result {
-                    Some(uri) => match uri {
-                        Ok(uri) => {
-                            rsx! {
-                                Link {
-                                    onclick: move |_| {
-                                        {
-                                            AuthTokenState::persistent_set(
-                                                fermi_auth_token,
-                                                Some(AuthTokenState::default()),
-                                            );
-                                        }
-                                    },
-                                    to: uri.to_string(),
-                                    "Log out"
-                                }
+pub fn LogOut() -> Element {
+    let mut auth_token = use_auth_token();
+    let log_out_url_state = use_signal(|| None::<Option<Result<Url>>>);
+    match auth_token().id_token {
+        Some(id_token) => match &*log_out_url_state.read() {
+            Some(log_out_url_result) => match log_out_url_result {
+                Some(uri) => match uri {
+                    Ok(uri) => {
+                        rsx! {
+                            Link {
+                                onclick: move |_| {
+                                    auth_token.take();
+                                },
+                                to: uri.to_string(),
+                                "Log out"
                             }
                         }
-                        Err(error) => {
-                            rsx! { div { "Failed to load disconnection url: {error:?}" } }
-                        }
-                    },
-                    None => {
-                        rsx! { div { "Loading... Please wait" } }
+                    }
+                    Err(error) => {
+                        rsx! { div { "Failed to load disconnection url: {error:?}" } }
                     }
                 },
                 None => {
-                    let logout_url_task = move || {
-                        cx.spawn({
-                            let log_out_url_state = log_out_url_state.to_owned();
-                            async move {
-                                let logout_url = log_out_url(id_token).await;
-                                let logout_url_option = Some(logout_url);
-                                log_out_url_state.set(Some(logout_url_option));
-                            }
-                        })
-                    };
-                    logout_url_task();
-                    rsx! { div { "Loading log out url... Please wait" } }
+                    rsx! { div { "Loading... Please wait" } }
                 }
             },
             None => {
-                rsx! {{}}
+                let logout_url_task = move || {
+                    spawn({
+                        let mut log_out_url_state = log_out_url_state.to_owned();
+                        async move {
+                            let logout_url = log_out_url(id_token).await;
+                            let logout_url_option = Some(logout_url);
+                            log_out_url_state.set(Some(logout_url_option));
+                        }
+                    })
+                };
+                logout_url_task();
+                rsx! { div { "Loading log out url... Please wait" } }
             }
         },
         None => {
             rsx! {{}}
         }
-    })
+    }
 }
 
 #[component]
-pub fn RefreshToken(cx: Scope<ClientProps>) -> Element {
-    let fermi_auth_token = use_atom_ref(&FERMI_AUTH_TOKEN);
-    let fermi_auth_request = use_atom_ref(&FERMI_AUTH_REQUEST);
-    let fermi_auth_token_read = fermi_auth_token.read().clone();
-    cx.render(match fermi_auth_token_read {
-        Some(fermi_auth_client_read) => match fermi_auth_client_read.refresh_token {
-            Some(refresh_token) => {
-                let fermi_auth_token = fermi_auth_token.to_owned();
-                let fermi_auth_request = fermi_auth_request.to_owned();
-                let client = cx.props.client.clone();
-                let exchange_refresh_token_spawn = move || {
-                    cx.spawn({
+pub fn RefreshToken(props: ClientProps) -> Element {
+    let mut auth_token = use_auth_token();
+    match auth_token().refresh_token {
+        Some(refresh_token) => {
+            rsx! { div {
+                onmounted: {
+                    move |_| {
+                        let client = props.client.clone();
+                        let refresh_token = refresh_token.clone();
                         async move {
                             let exchange_refresh_token =
                                 exchange_refresh_token(client, refresh_token).await;
                             match exchange_refresh_token {
                                 Ok(response_token) => {
-                                    AuthTokenState::persistent_set(
-                                        &fermi_auth_token,
-                                        Some(AuthTokenState {
-                                            id_token: response_token.id_token().cloned(),
-                                            refresh_token: response_token.refresh_token().cloned(),
-                                        }),
-                                    );
+                                    auth_token.set(AuthTokenState {
+                                        id_token: response_token.id_token().cloned(),
+                                        refresh_token: response_token.refresh_token().cloned(),
+                                    });
                                 }
                                 Err(_error) => {
-                                    AuthTokenState::persistent_set(
-                                        &fermi_auth_token,
-                                        Some(AuthTokenState::default()),
-                                    );
-                                    AuthRequestState::persistent_set(
-                                        &fermi_auth_request,
-                                        Some(AuthRequestState::default()),
-                                    );
+                                    auth_token.take();
+                                    auth_request().take();
                                 }
                             }
                         }
-                    })
-                };
-                exchange_refresh_token_spawn();
-                rsx! { div { "Refreshing session, please wait" } }
-            }
-            None => {
-                rsx! { div { "Id token expired and no refresh token found" } }
-            }
-        },
-        None => {
-            rsx! {{}}
+                    }
+                },
+                "Refreshing session, please wait"
+            } }
         }
-    })
+        None => {
+            rsx! { div { "Id token expired and no refresh token found" } }
+        }
+    }
 }
 
 #[component]
 pub fn LoadClient() -> Element {
-    let init_client_future = use_future(move || async move { init_oidc_client().await });
-    let fermi_client: &UseAtomRef<ClientState> = use_atom_ref(&FERMI_CLIENT);
-    cx.render(match init_client_future.value() {
-        Some(client_props) => match client_props {
-            Ok((client_id, client)) => {
-                *fermi_client.write() = ClientState {
-                    oidc_client: Some(ClientProps::new(client_id.clone(), client.clone())),
-                };
-                rsx! {
-                    div { "Client successfully loaded" }
-                    Outlet::<Route> {}
-                }
+    let init_client_future = use_resource(move || async move { init_oidc_client().await });
+    match &*init_client_future.read_unchecked() {
+        Some(Ok((client_id, client))) => rsx! {
+            div {
+                onmounted: {
+                    let client_id = client_id.clone();
+                    let client = client.clone();
+                    move |_| {
+                        *CLIENT.write() = ClientState {
+                            oidc_client: Some(ClientProps::new(client_id.clone(), client.clone())),
+                        };
+                    }
+                },
+                "Client successfully loaded"
             }
-            Err(error) => {
-                log::info! {"Failed to load client: {:?}", error};
-                rsx! {
-                    div { "Failed to load client: {error:?}" }
-                    Outlet::<Route> {}
-                }
-            }
+            Outlet::<Route> {}
         },
+        Some(Err(error)) => {
+            log::info! {"Failed to load client: {:?}", error};
+            rsx! {
+                div { "Failed to load client: {error:?}" }
+                Outlet::<Route> {}
+            }
+        }
         None => {
             rsx! {
                 div {
@@ -156,34 +132,31 @@ pub fn LoadClient() -> Element {
                 }
             }
         }
-    })
+    }
 }
 
 #[component]
 pub fn AuthHeader() -> Element {
-    let auth_token = use_atom_ref(&FERMI_AUTH_TOKEN);
-    let fermi_auth_request = use_atom_ref(&FERMI_AUTH_REQUEST);
-    let fermi_client: &UseAtomRef<ClientState> = use_atom_ref(&FERMI_CLIENT);
-    let client = fermi_client.read().oidc_client.clone();
-    let auth_request_read = fermi_auth_request.read().clone();
-    let auth_token_read = auth_token.read().clone();
-    cx.render(match (client, auth_request_read, auth_token_read) {
+    let client = CLIENT.read().oidc_client.clone();
+    let mut auth_request = use_auth_request();
+    let auth_token = use_auth_token();
+    match (client, auth_request(), auth_token()) {
         // We have everything we need to attempt to authenticate the user
-        (Some(client_props), Some(auth_request), Some(auth_token)) => {
-            match auth_request.auth_request {
-                Some(auth_request) => {
-                    match auth_token.id_token {
+        (Some(client_props), current_auth_request, current_auth_token) => {
+            match current_auth_request.auth_request {
+                Some(new_auth_request) => {
+                    match current_auth_token.id_token {
                         Some(id_token) => {
                             match email(
                                 client_props.client.clone(),
                                 id_token.clone(),
-                                auth_request.nonce.clone(),
+                                new_auth_request.nonce.clone(),
                             ) {
                                 Ok(email) => {
                                     rsx! {
                                         div {
                                             div { {email} }
-                                            LogOut { client_id: client_props.client_id, client: client_props.client }
+                                            LogOut {}
                                             Outlet::<Route> {}
                                         }
                                     }
@@ -217,7 +190,7 @@ pub fn AuthHeader() -> Element {
                         None => {
                             rsx! {
                                 div {
-                                    Link { to: auth_request.authorize_url.clone(), "Log in" }
+                                    Link { to: new_auth_request.authorize_url.clone(), "Log in" }
                                     Outlet::<Route> {}
                                 }
                             }
@@ -225,14 +198,18 @@ pub fn AuthHeader() -> Element {
                     }
                 }
                 None => {
-                    let auth_request = authorize_url(client_props.client);
-                    AuthRequestState::persistent_set(
-                        fermi_auth_request,
-                        Some(AuthRequestState {
-                            auth_request: Some(auth_request),
-                        }),
-                    );
-                    rsx! { div { "Loading nonce" } }
+                    rsx! { div {
+                        onmounted: {
+                            let client = client_props.client;
+                            move |_| {
+                                let new_auth_request = authorize_url(client.clone());
+                                auth_request.set(AuthRequestState {
+                                    auth_request: Some(new_auth_request),
+                                });
+                            }
+                        },
+                        "Loading nonce"
+                    } }
                 }
             }
         }
@@ -240,9 +217,5 @@ pub fn AuthHeader() -> Element {
         (None, _, _) => {
             rsx! { LoadClient {} }
         }
-        // We need everything loaded before doing anything
-        (_client, _auth_request, _auth_token) => {
-            rsx! {{}}
-        }
-    })
+    }
 }

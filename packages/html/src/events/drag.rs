@@ -1,4 +1,3 @@
-use crate::file_data::{FileEngine, HasFileData};
 use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
 use crate::input_data::{MouseButton, MouseButtonSet};
 use crate::prelude::*;
@@ -53,13 +52,15 @@ impl DragData {
     }
 
     /// Downcast this event data to a specific type
+    #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         HasDragData::as_any(&*self.inner).downcast_ref::<T>()
     }
 }
 
-impl HasFileData for DragData {
-    fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
+impl crate::HasFileData for DragData {
+    #[cfg(feature = "file-engine")]
+    fn files(&self) -> Option<std::sync::Arc<dyn crate::file_data::FileEngine>> {
         self.inner.files()
     }
 }
@@ -111,16 +112,18 @@ impl PointerInteraction for DragData {
 pub struct SerializedDragData {
     pub mouse: crate::point_interaction::SerializedPointInteraction,
 
+    #[cfg(feature = "file-engine")]
     #[serde(default)]
     files: Option<crate::file_data::SerializedFileEngine>,
 }
 
 #[cfg(feature = "serialize")]
 impl SerializedDragData {
-    fn new(drag: &DragData, files: Option<crate::file_data::SerializedFileEngine>) -> Self {
+    fn new(drag: &DragData) -> Self {
         Self {
             mouse: crate::point_interaction::SerializedPointInteraction::from(drag),
-            files,
+            #[cfg(feature = "file-engine")]
+            files: None,
         }
     }
 }
@@ -133,8 +136,9 @@ impl HasDragData for SerializedDragData {
 }
 
 #[cfg(feature = "serialize")]
-impl HasFileData for SerializedDragData {
-    fn files(&self) -> Option<std::sync::Arc<dyn FileEngine>> {
+impl crate::file_data::HasFileData for SerializedDragData {
+    #[cfg(feature = "file-engine")]
+    fn files(&self) -> Option<std::sync::Arc<dyn crate::file_data::FileEngine>> {
         self.files
             .as_ref()
             .map(|files| std::sync::Arc::new(files.clone()) as _)
@@ -195,7 +199,7 @@ impl PointerInteraction for SerializedDragData {
 #[cfg(feature = "serialize")]
 impl serde::Serialize for DragData {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        SerializedDragData::new(self, None).serialize(serializer)
+        SerializedDragData::new(self).serialize(serializer)
     }
 }
 
@@ -210,7 +214,7 @@ impl<'de> serde::Deserialize<'de> for DragData {
 }
 
 /// A trait for any object that has the data for a drag event
-pub trait HasDragData: HasMouseData + HasFileData {
+pub trait HasDragData: HasMouseData + crate::HasFileData {
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
 }

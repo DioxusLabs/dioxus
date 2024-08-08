@@ -16,7 +16,7 @@ rsx! {
         id: "{a}",
         class: "ban",
         style: "color: red",
-        value: "{b}"
+        value: "{b}",
     }
 
     // Nested one level

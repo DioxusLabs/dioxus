@@ -14,14 +14,15 @@ parking_lot = "0.12.1"
 
 [dev-dependencies]
 rand = "0.8.5"
-criterion = "0.3"
+criterion = { workspace = true }
 
 [features]
-default = ["check_generation"]
-check_generation = []
 debug_borrows = []
 debug_ownership = []
 
 [[bench]]
 name = "lock"
 harness = false
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

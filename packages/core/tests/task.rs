@@ -66,7 +66,7 @@ async fn spawn_forever_persists() {
     #[component]
     fn Child() -> Element {
         spawn_forever(async move {
-            loop {
+            for _ in 0..10 {
                 POLL_COUNT.fetch_add(1, Ordering::Relaxed);
                 tokio::time::sleep(Duration::from_millis(50)).await;
             }
@@ -82,7 +82,9 @@ async fn spawn_forever_persists() {
 
     tokio::select! {
         _ = dom.wait_for_work() => {}
-        _ = tokio::time::sleep(Duration::from_millis(500)) => {}
+        // We intentionally wait a bit longer than 50ms*10 to make sure the test has time to finish
+        // Without the extra time, the test can fail on windows
+        _ = tokio::time::sleep(Duration::from_millis(1000)) => {}
     };
 
     // By the time the tasks are finished, we should've accumulated ticks from two tasks
@@ -123,96 +125,4 @@ async fn yield_now_works() {
     run_vdom(app).await;
 
     SEQUENCE.with(|s| assert_eq!(s.borrow().len(), 20));
-}
-
-/// Ensure that calling wait_for_flush waits for dioxus to finish its synchronous work
-#[tokio::test]
-async fn flushing() {
-    thread_local! {
-        static SEQUENCE: std::cell::RefCell<Vec<usize>> = const { std::cell::RefCell::new(Vec::new()) };
-        static BROADCAST: (tokio::sync::broadcast::Sender<()>, tokio::sync::broadcast::Receiver<()>) = tokio::sync::broadcast::channel(1);
-    }
-
-    fn app() -> Element {
-        if generation() > 0 {
-            println!("App");
-            SEQUENCE.with(|s| s.borrow_mut().push(0));
-        }
-
-        // The next two tasks mimic effects. They should only be run after the app has been rendered
-        use_hook(|| {
-            spawn(async move {
-                let mut channel = BROADCAST.with(|b| b.1.resubscribe());
-                for _ in 0..10 {
-                    wait_for_next_render().await;
-                    println!("Task 1 recved");
-                    channel.recv().await.unwrap();
-                    println!("Task 1");
-                    SEQUENCE.with(|s| s.borrow_mut().push(1));
-                }
-            })
-        });
-
-        use_hook(|| {
-            spawn(async move {
-                let mut channel = BROADCAST.with(|b| b.1.resubscribe());
-                for _ in 0..10 {
-                    wait_for_next_render().await;
-                    println!("Task 2 recved");
-                    channel.recv().await.unwrap();
-                    println!("Task 2");
-                    SEQUENCE.with(|s| s.borrow_mut().push(2));
-                }
-            })
-        });
-
-        rsx! {}
-    }
-
-    let mut dom = VirtualDom::new(app);
-
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
-
-    let fut = async {
-        // Trigger the flush by waiting for work
-        for i in 0..10 {
-            BROADCAST.with(|b| b.0.send(()).unwrap());
-            dom.mark_dirty(ScopeId(0));
-            dom.wait_for_work().await;
-            dom.render_immediate(&mut dioxus_core::NoOpMutations);
-            println!("Flushed {}", i);
-        }
-        BROADCAST.with(|b| b.0.send(()).unwrap());
-        dom.wait_for_work().await;
-    };
-
-    tokio::select! {
-        _ = fut => {}
-        _ = tokio::time::sleep(Duration::from_millis(500)) => {
-            println!("Aborting due to timeout");
-        }
-    };
-
-    SEQUENCE.with(|s| {
-        let s = s.borrow();
-        println!("{:?}", s);
-        assert_eq!(s.len(), 30);
-        // We need to check if every three elements look like [0, 1, 2] or [0, 2, 1]
-        let mut has_seen_1 = false;
-        for (i, &x) in s.iter().enumerate() {
-            let stage = i % 3;
-            if stage == 0 {
-                assert_eq!(x, 0);
-            } else if stage == 1 {
-                assert!(x == 1 || x == 2);
-                has_seen_1 = x == 1;
-            } else if stage == 2 {
-                if has_seen_1 {
-                    assert_eq!(x, 2);
-                } else {
-                    assert_eq!(x, 1);
-                }
-            }
-        }
-    });
 }

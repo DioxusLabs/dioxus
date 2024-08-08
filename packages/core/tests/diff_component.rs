@@ -39,7 +39,12 @@ fn component_swap() {
 
     fn nav_bar() -> Element {
         rsx! {
-            h1 { "NavBar", {(0..3).map(|_| rsx!(nav_link {}))} }
+            h1 {
+                "NavBar"
+                for _ in 0..3 {
+                    nav_link {}
+                }
+            }
         }
     }
 
@@ -57,7 +62,7 @@ fn component_swap() {
 
     let mut dom = VirtualDom::new(app);
     {
-        let edits = dom.rebuild_to_vec().santize();
+        let edits = dom.rebuild_to_vec().sanitize();
         assert_eq!(
             edits.edits,
             [
@@ -72,27 +77,27 @@ fn component_swap() {
         );
     }
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(6) },
             ReplaceWith { id: ElementId(5), m: 1 }
         ]
     );
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(5) },
             ReplaceWith { id: ElementId(6), m: 1 }
         ]
     );
 
-    dom.mark_dirty(ScopeId::ROOT);
+    dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().santize().edits,
+        dom.render_immediate_to_vec().sanitize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(6) },
             ReplaceWith { id: ElementId(5), m: 1 }

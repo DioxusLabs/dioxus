@@ -31,7 +31,7 @@ fn app() -> Element {
             e: "asd".to_string(),
         }
 
-        // `b` and `e` are ommitted
+        // `b` and `e` are omitted
         Button {
             a: "asd".to_string(),
             c: "asd".to_string(),

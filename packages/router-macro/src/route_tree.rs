@@ -8,6 +8,7 @@ use crate::{
     redirect::Redirect,
     route::{Route, RouteType},
     segment::{static_segment_idx, RouteSegment},
+    RouteEndpoint,
 };
 
 #[derive(Debug, Clone, Default)]
@@ -97,15 +98,13 @@ impl<'a> RouteTree<'a> {
             .expect("Cannot get children of non static or nest segment")
     }
 
-    pub(crate) fn new(routes: &'a [Route], nests: &'a [Nest], redirects: &'a [Redirect]) -> Self {
-        let routes = routes
+    pub(crate) fn new(endpoints: &'a [RouteEndpoint], nests: &'a [Nest]) -> Self {
+        let routes = endpoints
             .iter()
-            .map(|route| PathIter::new_route(route, nests))
-            .chain(
-                redirects
-                    .iter()
-                    .map(|redirect| PathIter::new_redirect(redirect, nests)),
-            )
+            .map(|endpoint| match endpoint {
+                RouteEndpoint::Route(route) => PathIter::new_route(route, nests),
+                RouteEndpoint::Redirect(redirect) => PathIter::new_redirect(redirect, nests),
+            })
             .collect::<Vec<_>>();
 
         let mut myself = Self::default();
@@ -337,6 +336,7 @@ impl<'a> RouteTreeSegmentData<'a> {
 
                 let construct_variant = route.construct(nests, enum_name);
                 let parse_query = route.parse_query();
+                let parse_hash = route.parse_hash();
 
                 let insure_not_trailing = match route.ty {
                     RouteType::Leaf { .. } => route
@@ -356,6 +356,7 @@ impl<'a> RouteTreeSegmentData<'a> {
                         enum_variant,
                         &variant_parse_error,
                         parse_query,
+                        parse_hash,
                     ),
                     &error_enum_name,
                     enum_variant,
@@ -426,6 +427,7 @@ impl<'a> RouteTreeSegmentData<'a> {
                     .skip_while(|(_, seg)| matches!(seg, RouteSegment::Static(_)));
 
                 let parse_query = redirect.parse_query();
+                let parse_hash = redirect.parse_hash();
 
                 let insure_not_trailing = redirect
                     .segments
@@ -454,6 +456,7 @@ impl<'a> RouteTreeSegmentData<'a> {
                         enum_variant,
                         &variant_parse_error,
                         parse_query,
+                        parse_hash,
                     ),
                     &error_enum_name,
                     enum_variant,
@@ -466,7 +469,7 @@ impl<'a> RouteTreeSegmentData<'a> {
 
 fn print_route_segment<'a, I: Iterator<Item = (usize, &'a RouteSegment)>>(
     mut s: std::iter::Peekable<I>,
-    sucess_tokens: TokenStream,
+    success_tokens: TokenStream,
     error_enum_name: &Ident,
     enum_variant: &Ident,
     variant_parse_error: &Ident,
@@ -474,7 +477,7 @@ fn print_route_segment<'a, I: Iterator<Item = (usize, &'a RouteSegment)>>(
     if let Some((i, route)) = s.next() {
         let children = print_route_segment(
             s,
-            sucess_tokens,
+            success_tokens,
             error_enum_name,
             enum_variant,
             variant_parse_error,
@@ -489,7 +492,7 @@ fn print_route_segment<'a, I: Iterator<Item = (usize, &'a RouteSegment)>>(
         )
     } else {
         quote! {
-            #sucess_tokens
+            #success_tokens
         }
     }
 }
@@ -501,6 +504,7 @@ fn return_constructed(
     enum_variant: &Ident,
     variant_parse_error: &Ident,
     parse_query: TokenStream,
+    parse_hash: TokenStream,
 ) -> TokenStream {
     if insure_not_trailing {
         quote! {
@@ -514,6 +518,7 @@ fn return_constructed(
                 // This is the last segment, return the parsed route
                 (None, _) | (Some(""), None) => {
                     #parse_query
+                    #parse_hash
                     return Ok(#construct_variant);
                 }
                 _ => {
@@ -530,6 +535,7 @@ fn return_constructed(
     } else {
         quote! {
             #parse_query
+            #parse_hash
             return Ok(#construct_variant);
         }
     }

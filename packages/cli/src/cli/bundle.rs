@@ -1,11 +1,13 @@
-use core::panic;
-use dioxus_cli_config::ExecutableType;
-use std::{fs::create_dir_all, str::FromStr};
-
+use crate::build::Build;
+use crate::DioxusCrate;
+use anyhow::Context;
+use std::env::current_dir;
+use std::fs::create_dir_all;
+use std::ops::Deref;
+use std::str::FromStr;
 use tauri_bundler::{BundleSettings, PackageSettings, SettingsBuilder};
 
 use super::*;
-use crate::{build_desktop, cfg::ConfigOptsBundle};
 
 /// Bundle the Rust desktop app and all of its assets
 #[derive(Clone, Debug, Parser)]
@@ -13,8 +15,17 @@ use crate::{build_desktop, cfg::ConfigOptsBundle};
 pub struct Bundle {
     #[clap(long)]
     pub package: Option<Vec<String>>,
+    /// The arguments for the dioxus build
     #[clap(flatten)]
-    pub build: ConfigOptsBundle,
+    pub build_arguments: Build,
+}
+
+impl Deref for Bundle {
+    type Target = Build;
+
+    fn deref(&self) -> &Self::Target {
+        &self.build_arguments
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -62,48 +73,19 @@ impl From<PackageType> for tauri_bundler::PackageType {
 }
 
 impl Bundle {
-    pub fn bundle(self, bin: Option<PathBuf>) -> Result<()> {
-        let mut crate_config = dioxus_cli_config::CrateConfig::new(bin)?;
+    pub async fn bundle(mut self) -> anyhow::Result<()> {
+        let mut dioxus_crate = DioxusCrate::new(&self.build_arguments.target_args)
+            .context("Failed to load Dioxus workspace")?;
 
-        // change the release state.
-        crate_config.with_release(true);
-        crate_config.with_verbose(self.build.verbose);
+        self.build_arguments.resolve(&mut dioxus_crate)?;
 
-        if self.build.example.is_some() {
-            crate_config.as_example(self.build.example.unwrap());
-        }
-
-        if self.build.profile.is_some() {
-            crate_config.set_profile(self.build.profile.unwrap());
-        }
-
-        if let Some(target) = &self.build.target {
-            crate_config.set_target(target.to_string());
-        }
-
-        crate_config.set_cargo_args(self.build.cargo_args);
-        if let Some(platform) = self.build.platform {
-            crate_config.extend_with_platform(platform);
-        }
-
-        if let Some(features) = self.build.features {
-            crate_config.set_features(features);
-        }
-
-        // build the desktop app
-        // Since the `bundle()` function is only run for the desktop platform,
-        // the `rust_flags` argument is set to `None`.
-        build_desktop(&crate_config, false, false, None)?;
+        // Build the app
+        self.build_arguments.build(&mut dioxus_crate).await?;
 
         // copy the binary to the out dir
-        let package = crate_config.manifest.package.as_ref().unwrap();
+        let package = dioxus_crate.package();
 
-        let mut name: PathBuf = match &crate_config.executable {
-            ExecutableType::Binary(name)
-            | ExecutableType::Lib(name)
-            | ExecutableType::Example(name) => name,
-        }
-        .into();
+        let mut name: PathBuf = dioxus_crate.executable_name().into();
         if cfg!(windows) {
             name.set_extension("exe");
         }
@@ -111,12 +93,12 @@ impl Bundle {
         // bundle the app
         let binaries = vec![
             tauri_bundler::BundleBinary::new(name.display().to_string(), true)
-                .set_src_path(Some(crate_config.crate_dir.display().to_string())),
+                .set_src_path(Some(dioxus_crate.workspace_dir().display().to_string())),
         ];
 
-        let mut bundle_settings: BundleSettings = crate_config.dioxus_config.bundle.clone().into();
+        let mut bundle_settings: BundleSettings = dioxus_crate.dioxus_config.bundle.clone().into();
         if cfg!(windows) {
-            let windows_icon_override = crate_config
+            let windows_icon_override = dioxus_crate
                 .dioxus_config
                 .bundle
                 .windows
@@ -135,7 +117,7 @@ impl Bundle {
                     if !path.exists() {
                         create_dir_all(path.parent().unwrap()).unwrap();
                         let mut file = File::create(&path).unwrap();
-                        file.write_all(include_bytes!("../assets/icon.ico"))
+                        file.write_all(include_bytes!("../../assets/icon.ico"))
                             .unwrap();
                     }
                     path
@@ -145,42 +127,63 @@ impl Bundle {
         }
 
         // Copy the assets in the dist directory to the bundle
-        let static_asset_output_dir = &crate_config.dioxus_config.application.out_dir;
+        let static_asset_output_dir = &dioxus_crate.dioxus_config.application.out_dir;
         // Make sure the dist directory is relative to the crate directory
         let static_asset_output_dir = static_asset_output_dir
-            .strip_prefix(&crate_config.crate_dir)
+            .strip_prefix(dioxus_crate.workspace_dir())
             .unwrap_or(static_asset_output_dir);
 
         let static_asset_output_dir = static_asset_output_dir.display().to_string();
         println!("Adding assets from {} to bundle", static_asset_output_dir);
-        if let Some(resources) = &mut bundle_settings.resources {
-            resources.push(static_asset_output_dir);
-        } else {
-            bundle_settings.resources = Some(vec![static_asset_output_dir]);
+
+        // Don't copy the executable or the old bundle directory
+        let ignored_files = [
+            dioxus_crate.out_dir().join("bundle"),
+            dioxus_crate.out_dir().join(name),
+        ];
+
+        for entry in std::fs::read_dir(&static_asset_output_dir)?.flatten() {
+            let path = entry.path().canonicalize()?;
+            if ignored_files.iter().any(|f| path.starts_with(f)) {
+                continue;
+            }
+
+            // Tauri bundle will add a __root__ prefix if the input path is absolute even though the output path is relative?
+            // We strip the prefix here to make sure the input path is relative so that the bundler puts the output path in the right place
+            let path = path
+                .strip_prefix(&current_dir()?)
+                .unwrap()
+                .display()
+                .to_string();
+            if let Some(resources) = &mut bundle_settings.resources_map {
+                resources.insert(path, "".to_string());
+            } else {
+                bundle_settings.resources_map = Some([(path, "".to_string())].into());
+            }
         }
 
         let mut settings = SettingsBuilder::new()
-            .project_out_directory(crate_config.out_dir())
+            .project_out_directory(dioxus_crate.out_dir())
             .package_settings(PackageSettings {
-                product_name: crate_config.dioxus_config.application.name.clone(),
-                version: package.version().to_string(),
-                description: package.description().unwrap_or_default().to_string(),
-                homepage: Some(package.homepage().unwrap_or_default().to_string()),
-                authors: Some(Vec::from(package.authors())),
-                default_run: Some(crate_config.dioxus_config.application.name.clone()),
+                product_name: dioxus_crate.dioxus_config.application.name.clone(),
+                version: package.version.to_string(),
+                description: package.description.clone().unwrap_or_default(),
+                homepage: Some(package.homepage.clone().unwrap_or_default()),
+                authors: Some(package.authors.clone()),
+                default_run: Some(dioxus_crate.dioxus_config.application.name.clone()),
             })
             .binaries(binaries)
             .bundle_settings(bundle_settings);
-        if let Some(packages) = self.package {
+        if let Some(packages) = &self.package {
             settings = settings.package_types(
                 packages
-                    .into_iter()
+                    .iter()
                     .map(|p| p.parse::<PackageType>().unwrap().into())
                     .collect(),
             );
         }
 
-        if let Some(target) = &self.build.target {
+        if let Some(target) = &self.target_args.target {
             settings = settings.target(target.to_string());
         }
 

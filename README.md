@@ -43,7 +43,7 @@
   <h3>
     <a href="https://dioxuslabs.com"> Website </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/example-projects"> Examples </a>
+    <a href="https://github.com/DioxusLabs/dioxus/tree/main/examples"> Examples </a>
     <span> | </span>
     <a href="https://dioxuslabs.com/learn/0.5/guide"> Guide </a>
     <span> | </span>
@@ -232,7 +232,7 @@ Dioxus places an emphasis on a few key points that make it different from other 
 - **React-like**: we rely on concepts like components, props, and hooks to build UIs, with our state management being closer to Svelte than to SolidJS.
 - **HTML and CSS**: we lean completely into HTML and CSS, quirks and all.
 - **Renderer-agnostic**: you can swap out the renderer for any platform you want thanks to [our fast VirtualDOM](https://dioxuslabs.com/blog/templates-diffing).
-- **Collaborative**: whenever possible, we spin out crates like [Taffy](https://github.com/DioxusLabs/taffy), [magnanis](https://github.com/DioxusLabs/collect-assets), [include_mdbook](https://github.com/DioxusLabs/include_mdbook), and [blitz](http://github.com/dioxusLabs/blitz) so the ecosystem can grow together.
+- **Collaborative**: whenever possible, we spin out crates like [Taffy](https://github.com/DioxusLabs/taffy), [magnanis](https://github.com/DioxusLabs/manganis), [include_mdbook](https://github.com/DioxusLabs/include_mdbook), and [blitz](http://github.com/dioxusLabs/blitz) so the ecosystem can grow together.
 
 ### Dioxus vs Tauri
 

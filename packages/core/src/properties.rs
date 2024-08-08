@@ -4,25 +4,47 @@ use crate::innerlude::*;
 
 /// Every "Props" used for a component must implement the `Properties` trait. This trait gives some hints to Dioxus
 /// on how to memoize the props and some additional optimizations that can be made. We strongly encourage using the
-/// derive macro to implement the `Properties` trait automatically as guarantee that your memoization strategy is safe.
+/// derive macro to implement the `Properties` trait automatically.
 ///
-/// If your props are 'static, then Dioxus will require that they also be PartialEq for the derived memoize strategy.
-///
-/// By default, the memoization strategy is very conservative, but can be tuned to be more aggressive manually. However,
-/// this is only safe if the props are 'static - otherwise you might borrow references after-free.
-///
-/// We strongly suggest that any changes to memoization be done at the "PartialEq" level for 'static props. Additionally,
-/// we advise the use of smart pointers in cases where memoization is important.
+/// Dioxus requires your props to be 'static, `Clone`, and `PartialEq`. We use the `PartialEq` trait to determine if
+/// the props have changed when we diff the component.
 ///
 /// ## Example
 ///
-/// For props that are 'static:
-/// ```rust, ignore
+/// ```rust
+/// # use dioxus::prelude::*;
 /// #[derive(Props, PartialEq, Clone)]
-/// struct MyProps {
+/// struct MyComponentProps {
 ///     data: String
 /// }
+///
+/// fn MyComponent(props: MyComponentProps) -> Element {
+///     rsx! {
+///         div { "Hello {props.data}" }
+///     }
+/// }
 /// ```
+///
+/// Or even better, derive your entire props struct with the [`#[crate::component]`] macro:
+///
+/// ```rust
+/// # use dioxus::prelude::*;
+/// #[component]
+/// fn MyComponent(data: String) -> Element {
+///     rsx! {
+///         div { "Hello {data}" }
+///     }
+/// }
+/// ```
+#[rustversion::attr(
+    since(1.78.0),
+    diagnostic::on_unimplemented(
+        message = "`Props` is not implemented for `{Self}`",
+        label = "Props",
+        note = "Props is a trait that is automatically implemented for all structs that can be used as props for a component",
+        note = "If you manually created a new properties struct, you may have forgotten to add `#[derive(Props, PartialEq, Clone)]` to your struct",
+    )
+)]
 pub trait Properties: Clone + Sized + 'static {
     /// The type of the builder for this component.
     /// Used to create "in-progress" versions of the props.
@@ -35,12 +57,9 @@ pub trait Properties: Clone + Sized + 'static {
     fn memoize(&mut self, other: &Self) -> bool;
 
     /// Create a component from the props.
-    fn into_vcomponent<M: 'static>(
-        self,
-        render_fn: impl ComponentFunction<Self, M>,
-        component_name: &'static str,
-    ) -> VComponent {
-        VComponent::new(render_fn, self, component_name)
+    fn into_vcomponent<M: 'static>(self, render_fn: impl ComponentFunction<Self, M>) -> VComponent {
+        let type_name = std::any::type_name_of_val(&render_fn);
+        VComponent::new(render_fn, self, type_name)
     }
 }
 
@@ -95,7 +114,58 @@ where
     P::builder()
 }
 
+/// A warning that will trigger if a component is called as a function
+#[warnings::warning]
+pub(crate) fn component_called_as_function<C: ComponentFunction<P, M>, P, M>(_: C) {
+    // We trim WithOwner from the end of the type name for component with a builder that include a special owner which may not match the function name directly
+    let type_name = std::any::type_name::<C>();
+    let component_name = Runtime::with(|rt| {
+        current_scope_id()
+            .ok()
+            .and_then(|id| rt.get_state(id).map(|scope| scope.name))
+    })
+    .ok()
+    .flatten();
+
+    // If we are in a component, and the type name is the same as the active component name, then we can just return
+    if component_name == Some(type_name) {
+        return;
+    }
+
+    // Otherwise the component was called like a function, so we should log an error
+    tracing::error!("It looks like you called the component {type_name} like a function instead of a component. Components should be called with braces like `{type_name} {{ prop: value }}` instead of as a function");
+}
+
+/// Make sure that this component is currently running as a component, not a function call
+#[doc(hidden)]
+#[allow(clippy::no_effect)]
+pub fn verify_component_called_as_component<C: ComponentFunction<P, M>, P, M>(component: C) {
+    component_called_as_function(component);
+}
+
 /// Any component that implements the `ComponentFn` trait can be used as a component.
+///
+/// This trait is automatically implemented for functions that are in one of the following forms:
+/// - `fn() -> Element`
+/// - `fn(props: Properties) -> Element`
+///
+/// You can derive it automatically for any function with arguments that implement PartialEq with the `#[component]` attribute:
+/// ```rust
+/// # use dioxus::prelude::*;
+/// #[component]
+/// fn MyComponent(a: u32, b: u32) -> Element {
+///     rsx! { "a: {a}, b: {b}" }
+/// }
+/// ```
+#[rustversion::attr(
+    since(1.78.0),
+    diagnostic::on_unimplemented(
+        message = "`Component<{Props}>` is not implemented for `{Self}`",
+        label = "Component",
+        note = "Components are functions in the form `fn() -> Element`, `fn(props: Properties) -> Element`, or `#[component] fn(partial_eq1: u32, partial_eq2: u32) -> Element`.",
+        note = "You may have forgotten to add `#[component]` to your function to automatically implement the `ComponentFunction` trait."
+    )
+)]
 pub trait ComponentFunction<Props, Marker = ()>: Clone + 'static {
     /// Get the type id of the component.
     fn id(&self) -> TypeId {
@@ -171,13 +241,34 @@ impl<'a> SuperFrom<Arguments<'a>, OptionArgumentsFromMarker> for Option<String> 
 }
 
 #[doc(hidden)]
-pub struct OptionHandlerMarker;
+pub struct OptionCallbackMarker<T>(std::marker::PhantomData<T>);
 
-impl<G: 'static, F: FnMut(G) + 'static> SuperFrom<F, OptionHandlerMarker>
-    for Option<EventHandler<G>>
+// Closure can be created from FnMut -> async { anything } or FnMut -> Ret
+impl<
+        Function: FnMut(Args) -> Spawn + 'static,
+        Args: 'static,
+        Spawn: SpawnIfAsync<Marker, Ret> + 'static,
+        Ret: 'static,
+        Marker,
+    > SuperFrom<Function, OptionCallbackMarker<Marker>> for Option<Callback<Args, Ret>>
 {
-    fn super_from(input: F) -> Self {
-        Some(EventHandler::new(input))
+    fn super_from(input: Function) -> Self {
+        Some(Callback::new(input))
+    }
+}
+
+#[test]
+#[allow(unused)]
+fn optional_callback_compiles() {
+    fn compiles() {
+        // Converting from closures (without type hints in the closure works)
+        let callback: Callback<i32, i32> = (|num| num * num).super_into();
+        let callback: Callback<i32, ()> = (|num| async move { println!("{num}") }).super_into();
+
+        // Converting from closures to optional callbacks works
+        let optional: Option<Callback<i32, i32>> = (|num| num * num).super_into();
+        let optional: Option<Callback<i32, ()>> =
+            (|num| async move { println!("{num}") }).super_into();
     }
 }
 

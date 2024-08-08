@@ -1,11 +1,11 @@
 use crate::menubar::DioxusMenu;
 use crate::{
-    app::SharedContext, assets::AssetHandlerRegistry, edits::EditQueue, eval::DesktopEvalProvider,
+    app::SharedContext, assets::AssetHandlerRegistry, document::DesktopDocument, edits::EditQueue,
     file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, waker::tao_waker, Config,
     DesktopContext, DesktopService,
 };
 use dioxus_core::{ScopeId, VirtualDom};
-use dioxus_html::prelude::EvalProvider;
+use dioxus_html::document::Document;
 use futures_util::{pin_mut, FutureExt};
 use std::{rc::Rc, task::Waker};
 use wry::{RequestAsyncResponder, WebContext, WebViewBuilder};
@@ -106,9 +106,10 @@ impl WebviewInstance {
             }
         };
 
-        let ipc_handler = move |payload: String| {
+        let ipc_handler = move |payload: wry::http::Request<String>| {
             // defer the event to the main thread
-            if let Ok(msg) = serde_json::from_str(&payload) {
+            let body = payload.into_body();
+            if let Ok(msg) = serde_json::from_str(&body) {
                 _ = proxy_.send_event(UserWindowEvent::Ipc { id: window_id, msg });
             }
         };
@@ -141,6 +142,13 @@ impl WebviewInstance {
             WebViewBuilder::new_gtk(vbox)
         };
 
+        // Disable the webview default shortcuts to disable the reload shortcut
+        #[cfg(target_os = "windows")]
+        {
+            use wry::WebViewBuilderExtWindows;
+            webview = webview.with_browser_accelerator_keys(false);
+        }
+
         webview = webview
             .with_transparent(cfg.window.window.transparent)
             .with_url("dioxus://index.html/")
@@ -159,7 +167,7 @@ impl WebviewInstance {
             }) // prevent all navigations
             .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler)
             .with_web_context(&mut web_context)
-            .with_file_drop_handler(file_drop_handler);
+            .with_drag_drop_handler(file_drop_handler);
 
         if let Some(color) = cfg.background_color {
             webview = webview.with_background_color(color);
@@ -167,6 +175,10 @@ impl WebviewInstance {
 
         for (name, handler) in cfg.protocols.drain(..) {
             webview = webview.with_custom_protocol(name, handler);
+        }
+
+        for (name, handler) in cfg.asynchronous_protocols.drain(..) {
+            webview = webview.with_asynchronous_custom_protocol(name, handler);
         }
 
         const INITIALIZATION_SCRIPT: &str = r#"
@@ -209,8 +221,7 @@ impl WebviewInstance {
             file_hover,
         ));
 
-        let provider: Rc<dyn EvalProvider> =
-            Rc::new(DesktopEvalProvider::new(desktop_context.clone()));
+        let provider: Rc<dyn Document> = Rc::new(DesktopDocument::new(desktop_context.clone()));
 
         dom.in_runtime(|| {
             ScopeId::ROOT.provide_context(desktop_context.clone());
@@ -229,10 +240,16 @@ impl WebviewInstance {
     pub fn poll_vdom(&mut self) {
         let mut cx = std::task::Context::from_waker(&self.waker);
 
-        // Continously poll the virtualdom until it's pending
+        // Continuously poll the virtualdom until it's pending
         // Wait for work will return Ready when it has edits to be sent to the webview
         // It will return Pending when it needs to be polled again - nothing is ready
         loop {
+            // If we're waiting for a render, wait for it to finish before we continue
+            let edits_flushed_poll = self.desktop_context.edit_queue.poll_edits_flushed(&mut cx);
+            if edits_flushed_poll.is_pending() {
+                return;
+            }
+
             {
                 let fut = self.dom.wait_for_work();
                 pin_mut!(fut);

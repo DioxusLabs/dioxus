@@ -15,12 +15,11 @@ use super::{
 
 #[allow(dead_code)]
 fn base_path() -> Option<&'static str> {
-    let base_path = dioxus_cli_config::CURRENT_CONFIG
-        .as_ref()
-        .ok()
-        .and_then(|c| c.dioxus_config.web.app.base_path.as_deref());
-    tracing::trace!("Using base_path from Dioxus.toml: {:?}", base_path);
-    base_path
+    tracing::trace!(
+        "Using base_path from Dioxus.toml: {:?}",
+        dioxus_cli_config::BASE_PATH
+    );
+    dioxus_cli_config::BASE_PATH
 }
 
 #[allow(clippy::extra_unused_type_parameters)]
@@ -74,7 +73,9 @@ impl<R: Routable> WebHistory<R> {
         let myself = Self::new_inner(prefix, do_scroll_restoration);
 
         let current_route = myself.current_route();
-        let current_url = current_route.to_string();
+        let current_route_str = current_route.to_string();
+        let prefix_str = myself.prefix.as_deref().unwrap_or("");
+        let current_url = format!("{prefix_str}{current_route_str}");
         let state = myself.create_state(current_route);
         let _ = replace_state_with_url(&myself.history, &state, Some(&current_url));
 
@@ -95,8 +96,14 @@ impl<R: Routable> WebHistory<R> {
         }
 
         let prefix = prefix
+            // If there isn't a base path, try to grab one from the CLI
             .or_else(|| base_path().map(|s| s.to_string()))
-            .map(|prefix| format!("/{}", prefix.trim_matches('/')));
+            // Normalize the prefix to start and end with no slashes
+            .map(|prefix| prefix.trim_matches('/').to_string())
+            // If the prefix is empty, don't add it
+            .filter(|prefix| !prefix.is_empty())
+            // Otherwise, start with a slash
+            .map(|prefix| format!("/{prefix}"));
 
         Self {
             do_scroll_restoration,
@@ -128,18 +135,17 @@ where
     fn route_from_location(&self) -> R {
         let location = self.window.location();
         let path = location.pathname().unwrap_or_else(|_| "/".into())
-            + &location.search().unwrap_or("".into());
-        let path = match self.prefix {
-            None => path,
-            Some(ref prefix) => {
-                if path.starts_with(prefix) {
-                    path[prefix.len()..].to_string()
-                } else {
-                    path
-                }
-            }
+            + &location.search().unwrap_or("".into())
+            + &location.hash().unwrap_or("".into());
+        let mut path = match self.prefix {
+            None => &path,
+            Some(ref prefix) => path.strip_prefix(prefix).unwrap_or(prefix),
         };
-        R::from_str(&path).unwrap_or_else(|err| panic!("{}", err))
+        // If the path is empty, parse the root route instead
+        if path.is_empty() {
+            path = "/"
+        }
+        R::from_str(path).unwrap_or_else(|err| panic!("{}", err))
     }
 
     fn full_path(&self, state: &R) -> String {
@@ -214,10 +220,7 @@ where
     }
 
     fn replace(&mut self, state: R) {
-        let path = match &self.prefix {
-            None => format!("{state}"),
-            Some(prefix) => format!("{prefix}{state}"),
-        };
+        let path = self.full_path(&state);
 
         let state = self.create_state(state);
         self.handle_nav(replace_state_with_url(&self.history, &state, Some(&path)));

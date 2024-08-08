@@ -20,11 +20,10 @@
 //! To purview the examples, check of the root Dioxus crate - the examples in this crate are mostly meant to provide
 //! validation of websys-specific features and not the general use of Dioxus.
 
-use std::rc::Rc;
+use std::{panic, rc::Rc};
 
 pub use crate::cfg::Config;
-#[cfg(feature = "file_engine")]
-pub use crate::file_engine::WebFileEngineExt;
+use crate::hydration::SuspenseMessage;
 use dioxus_core::VirtualDom;
 use futures_util::{pin_mut, select, FutureExt, StreamExt};
 
@@ -36,17 +35,17 @@ pub mod launch;
 mod mutations;
 pub use event::*;
 
-#[cfg(feature = "eval")]
-mod eval;
-
-#[cfg(feature = "file_engine")]
-mod file_engine;
+#[cfg(feature = "document")]
+mod document;
+#[cfg(feature = "document")]
+pub use document::WebDocument;
 
 #[cfg(all(feature = "hot_reload", debug_assertions))]
 mod hot_reload;
 
-#[cfg(feature = "hydrate")]
-mod rehydrate;
+mod hydration;
+#[allow(unused)]
+pub use hydration::*;
 
 /// Runs the app as a future that can be scheduled around the main thread.
 ///
@@ -58,13 +57,13 @@ mod rehydrate;
 /// let app_fut = dioxus_web::run_with_props(App, RootProps { name: String::from("foo") });
 /// wasm_bindgen_futures::spawn_local(app_fut);
 /// ```
-pub async fn run(virtual_dom: VirtualDom, web_config: Config) {
+pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
     tracing::info!("Starting up");
 
     let mut dom = virtual_dom;
 
-    #[cfg(feature = "eval")]
-    dom.in_runtime(eval::init_eval);
+    #[cfg(feature = "document")]
+    dom.in_runtime(document::init_document);
 
     #[cfg(feature = "panic_hook")]
     if web_config.default_panic_hook {
@@ -80,22 +79,40 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) {
 
     let mut websys_dom = dom::WebsysDom::new(web_config, tx);
 
-    tracing::info!("rebuilding app");
+    let mut hydration_receiver: Option<futures_channel::mpsc::UnboundedReceiver<SuspenseMessage>> =
+        None;
 
     if should_hydrate {
         #[cfg(feature = "hydrate")]
         {
-            dom.rebuild(&mut crate::rehydrate::OnlyWriteTemplates(&mut websys_dom));
-
-            if let Err(err) = websys_dom.rehydrate(&dom) {
-                tracing::error!("Rehydration failed. {:?}", err);
-                tracing::error!("Rebuild DOM into element from scratch");
-                websys_dom.root.set_text_content(None);
-
-                dom.rebuild(&mut websys_dom);
-
-                websys_dom.flush_edits();
+            websys_dom.only_write_templates = true;
+            // Get the initial hydration data from the client
+            #[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
+                export function get_initial_hydration_data() {
+                    const decoded = atob(window.initial_dioxus_hydration_data);
+                    return Uint8Array.from(decoded, (c) => c.charCodeAt(0))
+                }
+            "#)]
+            extern "C" {
+                fn get_initial_hydration_data() -> js_sys::Uint8Array;
             }
+            let hydration_data = get_initial_hydration_data().to_vec();
+            let server_data = HTMLDataCursor::from_serialized(&hydration_data);
+            // If the server serialized an error into the root suspense boundary, throw it into the root scope
+            if let Some(error) = server_data.error() {
+                dom.in_runtime(|| dioxus_core::ScopeId::APP.throw_error(error));
+            }
+            with_server_data(server_data, || {
+                dom.rebuild(&mut websys_dom);
+            });
+            websys_dom.only_write_templates = false;
+
+            let rx = websys_dom.rehydrate(&dom).unwrap();
+            hydration_receiver = Some(rx);
+        }
+        #[cfg(not(feature = "hydrate"))]
+        {
+            panic!("Hydration is not enabled. Please enable the `hydrate` feature.");
         }
     } else {
         dom.rebuild(&mut websys_dom);
@@ -109,31 +126,80 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) {
     loop {
         // if virtual dom has nothing, wait for it to have something before requesting idle time
         // if there is work then this future resolves immediately.
-        let (mut res, template) = {
+        let mut res;
+        #[cfg(all(feature = "hot_reload", debug_assertions))]
+        let template;
+        #[allow(unused)]
+        let mut hydration_work: Option<SuspenseMessage> = None;
+
+        {
             let work = dom.wait_for_work().fuse();
             pin_mut!(work);
 
             let mut rx_next = rx.select_next_some();
+            let mut hydration_receiver_iter = futures_util::stream::iter(&mut hydration_receiver)
+                .fuse()
+                .flatten();
+            let mut rx_hydration = hydration_receiver_iter.select_next_some();
 
             #[cfg(all(feature = "hot_reload", debug_assertions))]
+            #[allow(unused)]
             {
                 let mut hot_reload_next = hotreload_rx.select_next_some();
                 select! {
-                    _ = work => (None, None),
-                    new_template = hot_reload_next => (None, Some(new_template)),
-                    evt = rx_next => (Some(evt), None),
+                    _ = work => {
+                        res = None;
+                        template = None;
+                    },
+                    new_template = hot_reload_next => {
+                        res = None;
+                        template = Some(new_template);
+                    },
+                    evt = rx_next => {
+                        res = Some(evt);
+                        template = None;
+                    }
+                    hydration_data = rx_hydration => {
+                        res = None;
+                        template = None;
+                        #[cfg(feature = "hydrate")]
+                        {
+                            hydration_work = Some(hydration_data);
+                        }
+                    },
                 }
             }
 
             #[cfg(not(all(feature = "hot_reload", debug_assertions)))]
-            select! {
-                _ = work => (None, None),
-                evt = rx_next => (Some(evt), None),
+            #[allow(unused)]
+            {
+                select! {
+                    _ = work => res = None,
+                    evt = rx_next => res = Some(evt),
+                    hyd = rx_hydration => {
+                        res = None;
+                        #[cfg(feature = "hydrate")]
+                        {
+                            hydration_work = Some(hyd);
+                        }
+                    }
+                }
             }
-        };
+        }
 
-        if let Some(template) = template {
-            dom.replace_template(template);
+        #[cfg(all(feature = "hot_reload", debug_assertions))]
+        if let Some(hr_msg) = template {
+            // Replace all templates
+            dioxus_hot_reload::apply_changes(&mut dom, &hr_msg);
+
+            if !hr_msg.assets.is_empty() {
+                crate::hot_reload::invalidate_browser_asset_cache();
+            }
+        }
+
+        #[cfg(feature = "hydrate")]
+        if let Some(hydration_data) = hydration_work {
+            websys_dom.rehydrate_streaming(hydration_data, &mut dom);
         }
 
         // Dequeue all of the events from the channel in send order
@@ -153,7 +219,7 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) {
         //
         // 1. wait for the browser to give us "idle" time
         // 2. During idle time, diff the dom
-        // 3. Stop diffing if the deadline is exceded
+        // 3. Stop diffing if the deadline is exceeded
         // 4. Wait for the animation frame to patch the dom
 
         // wait for the mainthread to schedule us in
