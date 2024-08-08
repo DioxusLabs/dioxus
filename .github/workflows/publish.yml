@@ -69,6 +69,10 @@ jobs:
         if: matrix.platform.os == 'macos-latest'
         run: brew install openssl
 
+      - name: Install nasm for windows (tls)
+        if: ${{ matrix.platform.target == 'x86_64-pc-windows-msvc' }}
+        uses: ilammy/setup-nasm@v1
+
       - name: Install stable
         uses: dtolnay/rust-toolchain@master
         with:
