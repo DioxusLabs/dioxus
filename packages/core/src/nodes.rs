@@ -15,8 +15,6 @@ use std::{
     fmt::{Arguments, Debug},
 };
 
-pub type TemplateId = &'static str;
-
 /// The actual state of the component's most recent computation
 ///
 /// If the component returned early (e.g. `return None`), this will be Aborted(None)
@@ -252,7 +250,6 @@ impl VNode {
                     dynamic_nodes: Box::new([DynamicNode::Placeholder(Default::default())]),
                     dynamic_attrs: Box::new([]),
                     template: Template {
-                        name: "packages/core/nodes.rs:198:0:0",
                         roots: &[TemplateNode::Dynamic { id: 0 }],
                         node_paths: &[&[0]],
                         attr_paths: &[],
@@ -345,17 +342,9 @@ impl VNode {
 /// For this to work properly, the [`Template::name`] *must* be unique across your entire project. This can be done via variety of
 /// ways, with the suggested approach being the unique code location (file, line, col, etc).
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
+#[derive(Debug, Clone, Copy, Eq, PartialOrd, Ord)]
 pub struct Template {
-    /// The name of the template. This must be unique across your entire program for template diffing to work properly
-    ///
-    /// If two templates have the same name, it's likely that Dioxus will panic when diffing.
-    #[cfg_attr(
-        feature = "serialize",
-        serde(deserialize_with = "deserialize_string_leaky")
-    )]
-    pub name: &'static str,
-
     /// The list of template nodes that make up the template
     ///
     /// Unlike react, calls to `rsx!` can have multiple roots. This list supports that paradigm.
@@ -381,6 +370,22 @@ pub struct Template {
         serde(deserialize_with = "deserialize_bytes_leaky")
     )]
     pub attr_paths: &'static [&'static [u8]],
+}
+
+impl std::hash::Hash for Template {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::ptr::hash(self.roots as *const _, state);
+        std::ptr::hash(self.node_paths as *const _, state);
+        std::ptr::hash(self.attr_paths as *const _, state);
+    }
+}
+
+impl PartialEq for Template {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.roots as *const _, other.roots as *const _)
+            && std::ptr::eq(self.node_paths as *const _, other.node_paths as *const _)
+            && std::ptr::eq(self.attr_paths as *const _, other.attr_paths as *const _)
+    }
 }
 
 #[cfg(feature = "serialize")]
@@ -441,13 +446,6 @@ impl Template {
     pub fn is_completely_dynamic(&self) -> bool {
         use TemplateNode::*;
         self.roots.iter().all(|root| matches!(root, Dynamic { .. }))
-    }
-
-    /// Get a unique id for this template. If the id between two templates are different, the contents of the template may be different.
-    pub fn id(&self) -> usize {
-        // We compare the template name by pointer so that the id is different after hot reloading even if the name is the same
-        let ptr: *const str = self.name;
-        ptr as *const () as usize
     }
 }
 
@@ -1102,6 +1100,13 @@ impl IntoAttributeValue for manganis::ImageAsset {
         AttributeValue::Text(self.path().to_string())
     }
 }
+
+// #[cfg(feature = "manganis")]
+// impl IntoAttributeValue for manganis::Asset {
+//     fn into_value(self) -> AttributeValue {
+//         AttributeValue::Text(self.to_string())
+//     }
+// }
 
 /// A trait for anything that has a dynamic list of attributes
 pub trait HasAttributes {

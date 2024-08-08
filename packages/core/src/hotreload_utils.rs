@@ -239,7 +239,6 @@ impl DynamicValuePool {
         let attr_paths = hot_reload.attr_paths();
 
         let template = Template {
-            name: hot_reload.name,
             roots: hot_reload.roots,
             node_paths,
             attr_paths,
