@@ -104,10 +104,9 @@ impl BuildRequest {
         tracing::info!("🚅 Running build [Desktop] command...");
 
         // Set up runtime guards
-        let mut dioxus_version = crate::dx_build_info::PKG_VERSION.to_string();
+        let mut dioxus_version = env!("CARGO_PKG_VERSION").to_string();
         if let Some(hash) = crate::dx_build_info::GIT_COMMIT_HASH_SHORT {
-            let hash = &hash.trim_start_matches('g')[..4];
-            dioxus_version.push_str(&format!("-{hash}"));
+            dioxus_version.push_str(&format!("-{}", &hash[..4]));
         }
         let _guard = dioxus_cli_config::__private::save_config(
             &self.dioxus_crate.dioxus_config,
