@@ -9,6 +9,7 @@ use syn::parse_macro_input;
 
 mod component;
 mod props;
+mod utils;
 
 use dioxus_rsx as rsx;
 

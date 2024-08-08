@@ -83,13 +83,15 @@ impl ComponentBody {
 
         let Generics { where_clause, .. } = generics;
         let (_, impl_generics, _) = generics.split_for_impl();
-        let generics_turbofish = ty_generics.as_turbofish();
+        let generics_turbofish = impl_generics.as_turbofish();
 
         // We generate a struct with the same name as the component but called `Props`
         let struct_ident = Ident::new(&format!("{fn_ident}Props"), fn_ident.span());
 
         // We pull in the field names from the original function signature, but need to strip off the mutability
-        let struct_field_names = inputs.iter().filter_map(rebind_mutability);
+        let struct_field_names = inputs.iter().map(rebind_mutability);
+
+        let props_docs = self.props_docs(inputs.iter().collect());
 
         let inlined_props_argument = if inputs.is_empty() {
             quote! {}
@@ -100,6 +102,7 @@ impl ComponentBody {
         // The extra nest is for the snake case warning to kick back in
         parse_quote! {
             #(#attrs)*
+            #(#props_docs)*
             #[allow(non_snake_case)]
             #vis fn #fn_ident #generics (#inlined_props_argument) #fn_output #where_clause {
                 {
@@ -138,6 +141,77 @@ impl ComponentBody {
                 #(#struct_fields),*
             }
         }
+    }
+
+    /// Convert a list of function arguments into a list of doc attributes for the props struct
+    ///
+    /// This lets us generate set of attributes that we can apply to the props struct to give it a nice docstring.
+    fn props_docs(&self, inputs: Vec<&FnArg>) -> Vec<Attribute> {
+        let fn_ident = &self.item_fn.sig.ident;
+
+        if inputs.is_empty() {
+            return Vec::new();
+        }
+
+        let arg_docs = inputs
+            .iter()
+            .filter_map(|f| build_doc_fields(f))
+            .collect::<Vec<_>>();
+
+        let mut props_docs = Vec::with_capacity(5);
+        let props_def_link = fn_ident.to_string() + "Props";
+        let header =
+            format!("# Props\n*For details, see the [props struct definition]({props_def_link}).*");
+
+        props_docs.push(parse_quote! {
+            #[doc = #header]
+        });
+
+        for arg in arg_docs {
+            let DocField {
+                arg_name,
+                arg_type,
+                deprecation,
+                input_arg_doc,
+            } = arg;
+
+            let arg_name = strip_pat_mutability(arg_name).to_token_stream().to_string();
+            let arg_type = crate::utils::format_type_string(arg_type);
+
+            let input_arg_doc = keep_up_to_n_consecutive_chars(input_arg_doc.trim(), 2, '\n')
+                .replace("\n\n", "</p><p>");
+            let prop_def_link = format!("{props_def_link}::{arg_name}");
+            let mut arg_doc = format!("- [`{arg_name}`]({prop_def_link}) : `{arg_type}`");
+
+            if let Some(deprecation) = deprecation {
+                arg_doc.push_str("<p>👎 Deprecated");
+
+                if let Some(since) = deprecation.since {
+                    arg_doc.push_str(&format!(" since {since}"));
+                }
+
+                if let Some(note) = deprecation.note {
+                    let note = keep_up_to_n_consecutive_chars(&note, 1, '\n').replace('\n', " ");
+                    let note = keep_up_to_n_consecutive_chars(&note, 1, '\t').replace('\t', " ");
+
+                    arg_doc.push_str(&format!(": {note}"));
+                }
+
+                arg_doc.push_str("</p>");
+
+                if !input_arg_doc.is_empty() {
+                    arg_doc.push_str("<hr/>");
+                }
+            }
+
+            if !input_arg_doc.is_empty() {
+                arg_doc.push_str(&format!("<p>{input_arg_doc}</p>"));
+            }
+
+            props_docs.push(parse_quote! { #[doc = #arg_doc] });
+        }
+
+        props_docs
     }
 
     fn is_explicit_props_ident(&self) -> bool {
@@ -184,6 +258,65 @@ impl ComponentBody {
             #vis use #completions_mod::Component::#comp_fn;
         }
     }
+}
+
+struct DocField<'a> {
+    arg_name: &'a Pat,
+    arg_type: &'a Type,
+    deprecation: Option<crate::utils::DeprecatedAttribute>,
+    input_arg_doc: String,
+}
+
+fn build_doc_fields(f: &FnArg) -> Option<DocField> {
+    let FnArg::Typed(pt) = f else { unreachable!() };
+
+    let arg_doc = pt
+        .attrs
+        .iter()
+        .filter_map(|attr| {
+            // TODO: Error reporting
+            // Check if the path of the attribute is "doc"
+            if !is_attr_doc(attr) {
+                return None;
+            };
+
+            let Meta::NameValue(meta_name_value) = &attr.meta else {
+                return None;
+            };
+
+            let Expr::Lit(doc_lit) = &meta_name_value.value else {
+                return None;
+            };
+
+            let Lit::Str(doc_lit_str) = &doc_lit.lit else {
+                return None;
+            };
+
+            Some(doc_lit_str.value())
+        })
+        .fold(String::new(), |mut doc, next_doc_line| {
+            doc.push('\n');
+            doc.push_str(&next_doc_line);
+            doc
+        });
+
+    Some(DocField {
+        arg_name: &pt.pat,
+        arg_type: &pt.ty,
+        deprecation: pt.attrs.iter().find_map(|attr| {
+            if !attr.path().is_ident("deprecated") {
+                return None;
+            }
+
+            let res = crate::utils::DeprecatedAttribute::from_meta(&attr.meta);
+
+            match res {
+                Err(e) => panic!("{}", e.to_string()),
+                Ok(v) => Some(v),
+            }
+        }),
+        input_arg_doc: arg_doc,
+    })
 }
 
 fn validate_component_fn(item_fn: &ItemFn) -> Result<()> {
@@ -266,20 +399,56 @@ fn make_prop_struct_field(f: &FnArg, vis: &Visibility) -> TokenStream {
     }
 }
 
-fn rebind_mutability(f: &FnArg) -> Option<TokenStream> {
+fn rebind_mutability(f: &FnArg) -> TokenStream {
     // There's no receivers (&self) allowed in the component body
     let FnArg::Typed(pt) = f else { unreachable!() };
 
-    let pat = &pt.pat;
+    let immutable = strip_pat_mutability(&pt.pat);
 
+    quote!(mut #immutable)
+}
+
+fn strip_pat_mutability(pat: &Pat) -> Pat {
     let mut pat = pat.clone();
-
     // rip off mutability, but still write it out eventually
-    if let Pat::Ident(ref mut pat_ident) = pat.as_mut() {
+    if let Pat::Ident(ref mut pat_ident) = &mut pat {
         pat_ident.mutability = None;
     }
 
-    Some(quote!(mut #pat))
+    pat
+}
+
+/// Checks if the attribute is a `#[doc]` attribute.
+fn is_attr_doc(attr: &Attribute) -> bool {
+    attr.path() == &parse_quote!(doc)
+}
+
+fn keep_up_to_n_consecutive_chars(
+    input: &str,
+    n_of_consecutive_chars_allowed: usize,
+    target_char: char,
+) -> String {
+    let mut output = String::new();
+    let mut prev_char: Option<char> = None;
+    let mut consecutive_count = 0;
+
+    for c in input.chars() {
+        match prev_char {
+            Some(prev) if c == target_char && prev == target_char => {
+                if consecutive_count < n_of_consecutive_chars_allowed {
+                    output.push(c);
+                    consecutive_count += 1;
+                }
+            }
+            _ => {
+                output.push(c);
+                prev_char = Some(c);
+                consecutive_count = 1;
+            }
+        }
+    }
+
+    output
 }
 
 /// Takes a function and returns a clone of it where an `UpperCamelCase` identifier is allowed by the compiler.
