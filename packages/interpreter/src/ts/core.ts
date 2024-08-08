@@ -31,7 +31,7 @@ export class BaseInterpreter {
   // sledgehammer is generating this...
   m: any;
 
-  constructor() { }
+  constructor() {}
 
   initialize(root: HTMLElement, handler: EventListener | null = null) {
     this.global = {};
@@ -45,26 +45,23 @@ export class BaseInterpreter {
     if (handler) {
       this.handler = handler;
 
-      this.resize_observer = new ResizeObserver(this.on_resize_event);
+      this.resize_observer = new ResizeObserver(this.onResizeEvent);
     }
   }
 
-  on_resize_event(entries: ResizeObserverEntry[], _observer: ResizeObserver) {
+  onResizeEvent(entries: ResizeObserverEntry[], _observer: ResizeObserver) {
     for (const entry of entries) {
       const target = entry.target;
 
-      let event = new CustomEvent<ResizeEventDetail>(
-        "resize",
-        {
-          bubbles: false,
-          detail: new ResizeEventDetail(
-            entry.borderBoxSize?.[0],
-            entry.contentBoxSize?.[0],
-            entry.contentRect,
-            entry.target
-          ),
-        }
-      );
+      let event = new CustomEvent<ResizeEventDetail>("resize", {
+        bubbles: false,
+        detail: new ResizeEventDetail(
+          entry.borderBoxSize?.[0],
+          entry.contentBoxSize?.[0],
+          entry.contentRect,
+          entry.target
+        ),
+      });
 
       target.dispatchEvent(event);
     }
