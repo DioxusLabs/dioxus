@@ -119,12 +119,6 @@ impl RenderedElementBacking for LiveviewElement {
     }
 }
 
-impl HasResizeData for LiveviewElement {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
-
 #[derive(Debug)]
 enum DesktopQueryError {
     FailedToQuery,

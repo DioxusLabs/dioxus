@@ -266,15 +266,10 @@ export class NativeInterpreter extends JSChannel_ {
         bubbles: false,
       };
 
-      if (this.liveview) {
-        // TODO:
-      } else {
-        const message = this.serializeIpcMessage("user_event", body);
-        this.ipc.postMessage(message);
-      }
+      const message = this.serializeIpcMessage("user_event", body);
+      this.ipc.postMessage(message);
     }
   }
-
 
   // This should:
   // - prevent form submissions from navigating

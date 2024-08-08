@@ -188,39 +188,3 @@ fn walk_event_for_id(event: &web_sys::Event) -> Option<(ElementId, web_sys::Elem
         }
     }
 }
-
-// TODO: Merge with walk_event_for_id
-fn walk_node_for_id(target: web_sys::Element) -> Option<(ElementId, web_sys::Element)> {
-    let target = target
-        .dyn_into::<web_sys::Node>()
-        .expect("not a valid node");
-    let mut current_target_element = target.dyn_ref::<web_sys::Element>().cloned();
-
-    loop {
-        match (
-            current_target_element
-                .as_ref()
-                .and_then(|el| el.get_attribute("data-dioxus-id").map(|f| f.parse())),
-            current_target_element,
-        ) {
-            // This node is an element, and has a dioxus id, so we can stop walking
-            (Some(Ok(id)), Some(target)) => return Some((ElementId(id), target)),
-
-            // Walk the tree upwards until we actually find an event target
-            (None, target_element) => {
-                let parent = match target_element.as_ref() {
-                    Some(el) => el.parent_element(),
-                    // if this is the first node and not an element, we need to get the parent from the target node
-                    None => target.parent_element(),
-                };
-                match parent {
-                    Some(parent) => current_target_element = Some(parent),
-                    _ => return None,
-                }
-            }
-
-            // This node is an element with an invalid dioxus id, give up
-            _ => return None,
-        }
-    }
-}
