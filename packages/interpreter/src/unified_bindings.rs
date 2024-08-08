@@ -76,28 +76,15 @@ mod js {
     }
 
     fn new_event_listener(event_name: &str<u8, evt>, id: u32, bubbles: u8) {
-        r#"{
-            const event_name = $event_name$;
+        r#"
             const node = this.nodes[id];
-            const bubbles = $bubbles$;
-
-            if (node.listening) { node.listening += 1; } else { node.listening = 1; }
+            if(node.listening){node.listening += 1;}else{node.listening = 1;}
             node.setAttribute('data-dioxus-id', `\${id}`);
-
-            this.createListener(event_name, node, bubbles);
-        }"#
+            this.createListener($event_name$, node, $bubbles$);
+        "#
     }
     fn remove_event_listener(event_name: &str<u8, evt>, id: u32, bubbles: u8) {
-        r#"{
-            const event_name = $event_name$;
-            const node = this.nodes[$id$];
-            const bubbles = $bubbles$;
-
-            node.listening -= 1;
-            node.removeAttribute('data-dioxus-id');
-
-            this.removeListener(node, event_name, bubbles);
-        }"#
+        "{let node = this.nodes[$id$]; node.listening -= 1; node.removeAttribute('data-dioxus-id'); this.removeListener(node, $event_name$, $bubbles$);}"
     }
     fn set_text(id: u32, text: &str) {
         "{this.nodes[$id$].textContent = $text$;}"
@@ -217,9 +204,9 @@ mod js {
             })
         );
     } else {
-      this.createListener(event_name, this_node, bubbles, (event) => {
-        this.handler(event, event_name, bubbles);
-      });
+        this.createListener(event_name, this_node, bubbles, (event) => {
+            this.handler(event, event_name, bubbles);
+        });
     }"#
     }
 
