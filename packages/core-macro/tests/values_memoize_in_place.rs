@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_core::ElementId;
-use std::rc::Rc;
+use std::{any::Any, rc::Rc};
 
 #[tokio::test]
 async fn values_memoize_in_place() {
@@ -49,12 +49,11 @@ async fn values_memoize_in_place() {
     println!("{:#?}", mutations);
     dom.mark_dirty(ScopeId::APP);
     for _ in 0..40 {
-        dom.handle_event(
-            "click",
-            Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())),
-            ElementId(1),
+        let event = Event::new(
+            Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())) as Rc<dyn Any>,
             true,
         );
+        dom.runtime().handle_event("click", event, ElementId(1));
         tokio::select! {
             _ = tokio::time::sleep(std::time::Duration::from_millis(20)) => {},
             _ = dom.wait_for_work() => {}

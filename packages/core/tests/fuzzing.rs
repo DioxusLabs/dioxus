@@ -3,7 +3,12 @@
 use dioxus::prelude::*;
 use dioxus_core::{AttributeValue, DynamicNode, NoOpMutations, VComponent, VNode, *};
 use std::{
-    cfg, collections::HashSet, default::Default, sync::atomic::AtomicUsize, sync::atomic::Ordering,
+    any::Any,
+    cfg,
+    collections::HashSet,
+    default::Default,
+    rc::Rc,
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
 fn random_ns() -> Option<&'static str> {
@@ -295,12 +300,11 @@ fn diff() {
         for _ in 0..100 {
             for &id in &event_listeners {
                 println!("firing event on {:?}", id);
-                vdom.handle_event(
-                    "data",
-                    std::rc::Rc::new(String::from("hello world")),
-                    id,
+                let event = Event::new(
+                    std::rc::Rc::new(String::from("hello world")) as Rc<dyn Any>,
                     true,
                 );
+                vdom.runtime().handle_event("data", event, id);
             }
             {
                 vdom.render_immediate(&mut InsertEventListenerMutationHandler(
