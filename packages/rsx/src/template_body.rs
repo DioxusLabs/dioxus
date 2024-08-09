@@ -151,26 +151,6 @@ impl ToTokens for TemplateBody {
                 const NORMAL: &str = dioxus_core::const_format::str_replace!(PATH, '\\', "/");
                 dioxus_core::const_format::concatcp!(NORMAL, ':', line!(), ':', column!(), ':', #index)
             };
-            #[cfg(not(debug_assertions))]
-            {
-                #[doc(hidden)] // vscode please stop showing these in symbol search
-                static ___TEMPLATE: dioxus_core::Template = dioxus_core::Template {
-                    name: ___TEMPLATE_NAME,
-                    roots: &[ #( #roots ),* ],
-                    node_paths: &[ #( #node_paths ),* ],
-                    attr_paths: &[ #( #attr_paths ),* ],
-                };
-
-                // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
-                #[allow(clippy::let_and_return)]
-                let __vnodes = dioxus_core::VNode::new(
-                    #key_tokens,
-                    ___TEMPLATE,
-                    Box::new([ #( #dynamic_nodes ),* ]),
-                    Box::new([ #( #dyn_attr_printer ),* ]),
-                );
-                __vnodes
-            }
             #[cfg(debug_assertions)]
             {
                 // The key is important here - we're creating a new GlobalSignal each call to this
@@ -191,6 +171,26 @@ impl ToTokens for TemplateBody {
                     );
                     __dynamic_value_pool.render_with(__template_read)
                 })
+            }
+            #[cfg(not(debug_assertions))]
+            {
+                #[doc(hidden)] // vscode please stop showing these in symbol search
+                static ___TEMPLATE: dioxus_core::Template = dioxus_core::Template {
+                    name: ___TEMPLATE_NAME,
+                    roots: &[ #( #roots ),* ],
+                    node_paths: &[ #( #node_paths ),* ],
+                    attr_paths: &[ #( #attr_paths ),* ],
+                };
+
+                // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
+                #[allow(clippy::let_and_return)]
+                let __vnodes = dioxus_core::VNode::new(
+                    #key_tokens,
+                    ___TEMPLATE,
+                    Box::new([ #( #dynamic_nodes ),* ]),
+                    Box::new([ #( #dyn_attr_printer ),* ]),
+                );
+                __vnodes
             }
         };
         tokens.append_all(quote! {

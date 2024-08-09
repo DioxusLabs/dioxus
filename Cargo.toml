@@ -33,11 +33,11 @@ members = [
     "packages/lazy-js-bundle",
 
     # Fullstack examples
-    "packages/fullstack/examples/axum-hello-world",
-    "packages/fullstack/examples/axum-router",
-    "packages/fullstack/examples/axum-streaming",
-    "packages/fullstack/examples/axum-desktop",
-    "packages/fullstack/examples/axum-auth",
+    "packages/fullstack/examples/hello-world",
+    "packages/fullstack/examples/router",
+    "packages/fullstack/examples/streaming",
+    "packages/fullstack/examples/desktop",
+    "packages/fullstack/examples/auth",
     "packages/fullstack/examples/hackernews",
 
     # Static generation examples
@@ -59,7 +59,7 @@ members = [
 exclude = ["examples/mobile_demo", "examples/openid_connect_demo"]
 
 [workspace.package]
-version = "0.6.0-alpha.1"
+version = "0.6.0-alpha.2"
 
 # dependencies that are shared across packages
 [workspace.dependencies]
@@ -96,6 +96,8 @@ manganis-cli-support = { version = "0.3.0-alpha.0", features = ["html"], path = 
 manganis = { version = "0.3.0-alpha.0", default-features = false, features = ["macro"], path = "../ecosystem-dioxus/manganis/packages/manganis" }
 # manganis-cli-support = { version = "0.3.0-alpha.0", features = ["html"] }
 # manganis = { version = "0.3.0-alpha.0", default-features = false }
+# manganis-cli-support = { version = "0.3.0-alpha.1", features = ["html"] }
+# manganis = { version = "0.3.0-alpha.1", default-features = false, features = ["html", "macro"]}
 warnings = { version = "0.2.0" }
 
 

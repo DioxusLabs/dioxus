@@ -98,6 +98,10 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
             }
             let hydration_data = get_initial_hydration_data().to_vec();
             let server_data = HTMLDataCursor::from_serialized(&hydration_data);
+            // If the server serialized an error into the root suspense boundary, throw it into the root scope
+            if let Some(error) = server_data.error() {
+                dom.in_runtime(|| dioxus_core::ScopeId::APP.throw_error(error));
+            }
             with_server_data(server_data, || {
                 dom.rebuild(&mut websys_dom);
             });

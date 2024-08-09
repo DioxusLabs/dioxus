@@ -138,7 +138,12 @@ impl WebsysDom {
             self.interpreter.base().push_root(node);
         }
 
-        with_server_data(HTMLDataCursor::from_serialized(&data), || {
+        let server_data = HTMLDataCursor::from_serialized(&data);
+        // If the server serialized an error into the suspense boundary, throw it on the client so that it bubbles up to the nearest error boundary
+        if let Some(error) = server_data.error() {
+            dom.in_runtime(|| id.throw_error(error));
+        }
+        with_server_data(server_data, || {
             // rerun the scope with the new data
             SuspenseBoundaryProps::resolve_suspense(
                 id,

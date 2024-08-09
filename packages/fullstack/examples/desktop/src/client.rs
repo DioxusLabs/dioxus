@@ -3,7 +3,7 @@
 // cargo run --bin client --features desktop
 // ```
 
-use axum_desktop::*;
+use fullstack_desktop_example::*;
 
 fn main() {
     // Set the url of the server where server functions are hosted.
