@@ -94,12 +94,11 @@ fn cloning_event_handler_components_work() {
     println!("{:#?}", mutations);
     dom.mark_dirty(ScopeId::APP);
     for _ in 0..20 {
-        dom.handle_event(
-            "click",
-            Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())),
-            ElementId(1),
+        let event = Event::new(
+            Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())) as Rc<dyn Any>,
             true,
         );
+        dom.handle_event("click", event, ElementId(1));
         dom.render_immediate(&mut dioxus_core::NoOpMutations);
     }
     dom.render_immediate(&mut dioxus_core::NoOpMutations);
