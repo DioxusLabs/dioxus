@@ -1,16 +1,20 @@
 use crate::{
     config::{Config, WindowCloseBehaviour},
     event_handlers::WindowEventHandlers,
+    file_upload::{DesktopFileUploadForm, FileDialogRequest},
     ipc::{IpcMessage, UserWindowEvent},
     query::QueryResult,
     shortcut::ShortcutRegistry,
     webview::WebviewInstance,
 };
-use dioxus_core::VirtualDom;
+use dioxus_core::{ElementId, VirtualDom};
+use dioxus_html::{native_bind::NativeFileEngine, PlatformEventData};
 use std::{
+    any::Any,
     cell::{Cell, RefCell},
     collections::HashMap,
     rc::Rc,
+    sync::Arc,
 };
 use tao::{
     event::Event,
@@ -307,35 +311,30 @@ impl App {
     }
 
     pub fn handle_file_dialog_msg(&mut self, msg: IpcMessage, window: WindowId) {
-        todo!()
-        // let Ok(file_dialog) = serde_json::from_value::<FileDialogRequest>(msg.params()) else {
-        //     return;
-        // };
+        let Ok(file_dialog) = serde_json::from_value::<FileDialogRequest>(msg.params()) else {
+            return;
+        };
 
-        // let id = ElementId(file_dialog.target);
-        // let event_name = &file_dialog.event;
-        // let event_bubbles = file_dialog.bubbles;
-        // let files = file_dialog.get_file_event();
+        let id = ElementId(file_dialog.target);
+        let event_name = &file_dialog.event;
+        let event_bubbles = file_dialog.bubbles;
+        let files = file_dialog.get_file_event();
 
-        // let as_any = Box::new(DesktopFileUploadForm {
-        //     files: Arc::new(NativeFileEngine::new(files)),
-        // });
+        let as_any = Box::new(DesktopFileUploadForm {
+            files: Arc::new(NativeFileEngine::new(files)),
+        });
 
-        // let data = Rc::new(PlatformEventData::new(as_any));
+        let data = Rc::new(PlatformEventData::new(as_any));
 
-        // let view = self.webviews.get_mut(&window).unwrap();
+        let view = self.webviews.get_mut(&window).unwrap();
 
-        // if event_name == "change&input" {
-        //     view.dom
-        //         .handle_event("input", data.clone(), id, event_bubbles);
-        //     view.dom.handle_event("change", data, id, event_bubbles);
-        // } else {
-        //     view.dom.handle_event(event_name, data, id, event_bubbles);
-        // }
-
-        // view.dom
-        //     .render_immediate(&mut *view.desktop_context.mutation_state.borrow_mut());
-        // view.desktop_context.send_edits();
+        let event = dioxus_core::Event::new(data as Rc<dyn Any>, event_bubbles);
+        if event_name == "change&input" {
+            view.dom.runtime().handle_event("input", event.clone(), id);
+            view.dom.runtime().handle_event("change", event, id);
+        } else {
+            view.dom.runtime().handle_event(event_name, event, id);
+        }
     }
 
     /// Poll the virtualdom until it's pending
