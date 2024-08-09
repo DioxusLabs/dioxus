@@ -34,7 +34,7 @@ async fn main() {
     .unwrap();
 }
 
-#[cfg(all(not(feature = "web"), not(feature = "server")))]
+#[cfg(all(not(feature = "desktop"), not(feature = "server")))]
 fn main() {}
 
 pub fn app() -> Element {
