@@ -220,23 +220,35 @@ export class NativeInterpreter extends JSChannel_ {
       ) {
         if (target.getAttribute("type") === "file") {
           this.readFiles(target, contents, bubbles, realId, name);
+          return;
         }
       }
-    } else {
-      // Run the event handler on the virtualdom
-      // capture/prevent default of the event if the virtualdom wants to
-      const res = handleVirtualdomEventSync(
-        this.eventsPath,
-        JSON.stringify(body)
-      );
-
-      if (res.preventDefault) {
+    }
+    const response = this.sendSerializedEvent(body);
+    // capture/prevent default of the event if the virtualdom wants to
+    if (response) {
+      if (response.preventDefault) {
         event.preventDefault();
       }
 
-      if (res.stopPropagation) {
+      if (response.stopPropagation) {
         event.stopPropagation();
       }
+    }
+  }
+
+  sendSerializedEvent(body: {
+    name: string;
+    element: number;
+    data: any;
+    bubbles: boolean;
+  }): EventSyncResult | void {
+    if (this.liveview) {
+      const message = this.serializeIpcMessage("user_event", body);
+      this.ipc.postMessage(message);
+    } else {
+      // Run the event handler on the virtualdom
+      return handleVirtualdomEventSync(this.eventsPath, JSON.stringify(body));
     }
   }
 
@@ -389,7 +401,7 @@ export class NativeInterpreter extends JSChannel_ {
 
     contents.files = { files: file_contents };
 
-    const message = this.serializeIpcMessage("user_event", {
+    const message = this.sendSerializedEvent({
       name: name,
       element: realId,
       data: contents,
