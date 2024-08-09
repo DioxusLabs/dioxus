@@ -276,7 +276,7 @@ impl Runtime {
     /// It is up to the listeners themselves to mark nodes as dirty.
     ///
     /// If you have multiple events, you can call this method multiple times before calling "render_with_deadline"
-    #[instrument(skip(self, event), level = "trace", name = "VirtualDom::handle_event")]
+    #[instrument(skip(self, event), level = "trace", name = "Runtime::handle_event")]
     pub fn handle_event(self: &Rc<Self>, name: &str, event: Event<dyn Any>, element: ElementId) {
         let _runtime = RuntimeGuard::new(self.clone());
         let elements = self.elements.borrow();
