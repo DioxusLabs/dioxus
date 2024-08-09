@@ -1101,13 +1101,6 @@ impl IntoAttributeValue for manganis::ImageAsset {
     }
 }
 
-// #[cfg(feature = "manganis")]
-// impl IntoAttributeValue for manganis::Asset {
-//     fn into_value(self) -> AttributeValue {
-//         AttributeValue::Text(self.to_string())
-//     }
-// }
-
 /// A trait for anything that has a dynamic list of attributes
 pub trait HasAttributes {
     /// Push an attribute onto the list of attributes

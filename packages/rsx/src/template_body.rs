@@ -141,18 +141,11 @@ impl ToTokens for TemplateBody {
 
         let diagnostics = &self.diagnostics;
         let index = self.template_idx.get();
-        let hot_reload_mapping = self.hot_reload_mapping(quote! { ___TEMPLATE_NAME });
+        let hot_reload_mapping = self.hot_reload_mapping();
 
         tokens.append_all(quote! {
             dioxus_core::Element::Ok({
                 #diagnostics
-
-                #[doc(hidden)] // vscode please stop showing these in symbol search
-                const ___TEMPLATE_NAME: &str = {
-                    const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
-                    const NORMAL: &str = dioxus_core::const_format::str_replace!(PATH, '\\', "/");
-                    dioxus_core::const_format::concatcp!(NORMAL, ':', line!(), ':', column!(), ':', #index)
-                };
 
                 #[cfg(debug_assertions)]
                 {
@@ -160,7 +153,11 @@ impl ToTokens for TemplateBody {
                     // But the key is what's keeping it stable
                     let __template = GlobalSignal::with_key(
                         || #hot_reload_mapping,
-                        ___TEMPLATE_NAME
+                        {
+                            const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
+                            const NORMAL: &str = dioxus_core::const_format::str_replace!(PATH, '\\', "/");
+                            dioxus_core::const_format::concatcp!(NORMAL, ':', line!(), ':', column!(), ':', #index)
+                        }
                     );
 
                     __template.maybe_with_rt(|__template_read| {
@@ -179,7 +176,6 @@ impl ToTokens for TemplateBody {
                 {
                     #[doc(hidden)] // vscode please stop showing these in symbol search
                     static ___TEMPLATE: dioxus_core::Template = dioxus_core::Template {
-                        name: ___TEMPLATE_NAME,
                         roots: &[ #( #roots ),* ],
                         node_paths: &[ #( #node_paths ),* ],
                         attr_paths: &[ #( #attr_paths ),* ],
@@ -321,7 +317,7 @@ impl TemplateBody {
             })
     }
 
-    fn hot_reload_mapping(&self, name: impl ToTokens) -> TokenStream2 {
+    fn hot_reload_mapping(&self) -> TokenStream2 {
         let key = if let Some(AttributeValue::AttrLiteral(HotLiteral::Fmted(key))) =
             self.implicit_key()
         {
@@ -343,7 +339,6 @@ impl TemplateBody {
             .map(|literal| literal.quote_as_hot_reload_literal());
         quote! {
             dioxus_core::internal::HotReloadedTemplate::new(
-                #name,
                 #key,
                 vec![ #( #dynamic_nodes ),* ],
                 vec![ #( #dyn_attr_printer ),* ],

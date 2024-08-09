@@ -22,7 +22,7 @@ impl VNode {
         debug_assert!(dom.mounts.get(self.mount.get().0).is_some() || to.is_none());
 
         // If the templates are different by name, we need to replace the entire template
-        if self.templates_are_different(new) {
+        if self.template != new.template {
             return self.light_diff_templates(new, dom, to);
         }
 
@@ -399,10 +399,6 @@ impl VNode {
                 }
             }
         };
-    }
-
-    fn templates_are_different(&self, other: &VNode) -> bool {
-        self.template == other.template
     }
 
     pub(super) fn reclaim_attributes(&self, mount: MountId, dom: &mut VirtualDom) {

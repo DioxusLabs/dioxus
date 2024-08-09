@@ -317,8 +317,8 @@ pub struct HotReloadTemplateWithLocation {
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 pub struct HotReloadedTemplate {
-    pub name: &'static str,
     pub key: Option<FmtedSegments>,
     pub dynamic_nodes: Vec<HotReloadDynamicNode>,
     pub dynamic_attributes: Vec<HotReloadDynamicAttribute>,
@@ -332,7 +332,6 @@ pub struct HotReloadedTemplate {
 
 impl HotReloadedTemplate {
     pub fn new(
-        name: &'static str,
         key: Option<FmtedSegments>,
         dynamic_nodes: Vec<HotReloadDynamicNode>,
         dynamic_attributes: Vec<HotReloadDynamicAttribute>,
@@ -340,7 +339,6 @@ impl HotReloadedTemplate {
         roots: &'static [TemplateNode],
     ) -> Self {
         Self {
-            name,
             key,
             dynamic_nodes,
             dynamic_attributes,
