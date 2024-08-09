@@ -204,13 +204,17 @@ impl WriteMutations for MutationState {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[derive(Default)]
 pub struct SynchronousEventResponse {
-    #[cfg_attr(feature = "serialize", serde(rename = "preventDefault"))]
+    #[cfg(feature = "serialize")]
+    #[serde(rename = "preventDefault")]
     prevent_default: bool,
 }
 
 impl SynchronousEventResponse {
     /// Create a new SynchronousEventResponse
     pub fn new(prevent_default: bool) -> Self {
-        Self { prevent_default }
+        Self {
+            #[cfg(feature = "serialize")]
+            prevent_default,
+        }
     }
 }

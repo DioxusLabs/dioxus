@@ -26,7 +26,7 @@ export class NativeInterpreter extends JSChannel_ {
   queuedBytes: ArrayBuffer[] = [];
 
   // eventually we want to remove liveview and build it into the server-side-events of fullstack
-  // however, for now we need to support it since SSE in fullstack doesn't exist yet
+  // however, for now we need to support it since WebSockets in fullstack doesn't exist yet
   liveview: boolean;
 
   constructor(editsPath: string, eventsPath: string) {
