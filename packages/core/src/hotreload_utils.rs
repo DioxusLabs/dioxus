@@ -311,15 +311,15 @@ pub struct HotReloadTemplateWithLocation {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 pub struct HotReloadedTemplate {
-    key: Option<FmtedSegments>,
-    dynamic_nodes: Vec<HotReloadDynamicNode>,
-    dynamic_attributes: Vec<HotReloadDynamicAttribute>,
-    component_values: Vec<HotReloadLiteral>,
+    pub key: Option<FmtedSegments>,
+    pub dynamic_nodes: Vec<HotReloadDynamicNode>,
+    pub dynamic_attributes: Vec<HotReloadDynamicAttribute>,
+    pub component_values: Vec<HotReloadLiteral>,
     #[cfg_attr(
         feature = "serialize",
         serde(deserialize_with = "crate::nodes::deserialize_leaky")
     )]
-    roots: &'static [TemplateNode],
+    pub roots: &'static [TemplateNode],
     /// The template that is computed from the hot reload roots
     template: Template,
 }
