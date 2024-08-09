@@ -442,21 +442,15 @@ impl VirtualDom {
     /// It is up to the listeners themselves to mark nodes as dirty.
     ///
     /// If you have multiple events, you can call this method multiple times before calling "render_with_deadline"
-    #[instrument(skip(self), level = "trace", name = "VirtualDom::handle_event")]
-    pub fn handle_event(
-        &mut self,
-        name: &str,
-        data: Rc<dyn Any>,
-        element: ElementId,
-        bubbles: bool,
-    ) {
+    #[instrument(skip(self, event), level = "trace", name = "VirtualDom::handle_event")]
+    pub fn handle_event(&self, name: &str, event: Event<dyn Any>, element: ElementId) {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
 
         if let Some(Some(parent_path)) = self.elements.get(element.0).copied() {
-            if bubbles {
-                self.handle_bubbling_event(parent_path, name, Event::new(data, bubbles));
+            if event.propagates() {
+                self.handle_bubbling_event(parent_path, name, event);
             } else {
-                self.handle_non_bubbling_event(parent_path, name, Event::new(data, bubbles));
+                self.handle_non_bubbling_event(parent_path, name, event);
             }
         }
     }
@@ -819,7 +813,7 @@ impl VirtualDom {
         level = "trace",
         name = "VirtualDom::handle_bubbling_event"
     )]
-    fn handle_bubbling_event(&mut self, parent: ElementRef, name: &str, uievent: Event<dyn Any>) {
+    fn handle_bubbling_event(&self, parent: ElementRef, name: &str, uievent: Event<dyn Any>) {
         // If the event bubbles, we traverse through the tree until we find the target element.
         // Loop through each dynamic attribute (in a depth first order) in this template before moving up to the template's parent.
         let mut parent = Some(parent);
@@ -884,7 +878,7 @@ impl VirtualDom {
         level = "trace",
         name = "VirtualDom::handle_non_bubbling_event"
     )]
-    fn handle_non_bubbling_event(&mut self, node: ElementRef, name: &str, uievent: Event<dyn Any>) {
+    fn handle_non_bubbling_event(&self, node: ElementRef, name: &str, uievent: Event<dyn Any>) {
         let Some(mount) = self.mounts.get(node.mount.0) else {
             // If the node is suspended and not mounted, we can just ignore the event
             return;

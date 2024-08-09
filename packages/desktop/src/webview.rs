@@ -1,17 +1,132 @@
+use crate::element::DesktopElement;
+use crate::file_upload::DesktopFileDragEvent;
 use crate::menubar::DioxusMenu;
 use crate::{
-    app::SharedContext, assets::AssetHandlerRegistry, document::DesktopDocument, edits::EditQueue,
+    app::SharedContext, assets::AssetHandlerRegistry, document::DesktopDocument, edits::WryQueue,
     file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, waker::tao_waker, Config,
     DesktopContext, DesktopService,
 };
 use dioxus_core::{ScopeId, VirtualDom};
+use dioxus_hooks::to_owned;
 use dioxus_html::document::Document;
+use dioxus_html::native_bind::NativeFileEngine;
+use dioxus_html::{HasFileData, HtmlEvent, PlatformEventData};
+use dioxus_interpreter_js::SynchronousEventResponse;
 use futures_util::{pin_mut, FutureExt};
+use std::cell::{OnceCell, RefCell};
+use std::sync::Arc;
 use std::{rc::Rc, task::Waker};
 use wry::{RequestAsyncResponder, WebContext, WebViewBuilder};
 
+#[derive(Clone)]
+pub(crate) struct WebviewEdits {
+    pub dom: Rc<RefCell<VirtualDom>>,
+    pub wry_queue: WryQueue,
+    desktop_context: Rc<OnceCell<DesktopContext>>,
+}
+
+impl WebviewEdits {
+    fn new(dom: VirtualDom, wry_queue: WryQueue) -> Self {
+        Self {
+            dom: Rc::new(RefCell::new(dom)),
+            wry_queue,
+            desktop_context: Default::default(),
+        }
+    }
+
+    fn set_desktop_context(&self, context: DesktopContext) {
+        _ = self.desktop_context.set(context);
+    }
+
+    pub fn handle_event(
+        &self,
+        request: wry::http::Request<Vec<u8>>,
+        responder: wry::RequestAsyncResponder,
+    ) {
+        let body = self.try_handle_event(request).unwrap_or_default();
+        responder.respond(wry::http::Response::new(body))
+    }
+
+    pub fn try_handle_event(
+        &self,
+        request: wry::http::Request<Vec<u8>>,
+    ) -> Result<Vec<u8>, serde_json::Error> {
+        let response = match serde_json::from_slice(request.body()) {
+            Ok(event) => self.handle_html_event(event),
+            Err(err) => {
+                tracing::error!("Error parsing user_event: {:?}", err);
+                println!("as string: {:?}", request);
+                SynchronousEventResponse::new(false)
+            }
+        };
+
+        let body = match serde_json::to_vec(&response) {
+            Ok(body) => body,
+            Err(err) => {
+                tracing::error!("failed to serialize SynchronousEventResponse: {err:?}");
+                return Err(err);
+            }
+        };
+
+        Ok(body)
+    }
+
+    pub fn handle_html_event(&self, event: HtmlEvent) -> SynchronousEventResponse {
+        let HtmlEvent {
+            element,
+            name,
+            bubbles,
+            data,
+        } = event;
+        let Some(desktop_context) = self.desktop_context.get() else {
+            tracing::error!(
+                "Tried to handle event before setting the desktop context on the event handler"
+            );
+            return Default::default();
+        };
+
+        let query = desktop_context.query.clone();
+        let recent_file = desktop_context.file_hover.clone();
+
+        // check for a mounted event placeholder and replace it with a desktop specific element
+        let as_any = match data {
+            dioxus_html::EventData::Mounted => {
+                let element = DesktopElement::new(element, desktop_context.clone(), query);
+                Rc::new(PlatformEventData::new(Box::new(element)))
+            }
+            dioxus_html::EventData::Drag(ref drag) => {
+                // we want to override this with a native file engine, provided by the most recent drag event
+                if drag.files().is_some() {
+                    let file_event = recent_file.current().unwrap();
+                    let paths = match file_event {
+                        wry::DragDropEvent::Enter { paths, .. } => paths,
+                        wry::DragDropEvent::Drop { paths, .. } => paths,
+                        _ => vec![],
+                    };
+                    Rc::new(PlatformEventData::new(Box::new(DesktopFileDragEvent {
+                        mouse: drag.mouse.clone(),
+                        files: Arc::new(NativeFileEngine::new(paths)),
+                    })))
+                } else {
+                    data.into_any()
+                }
+            }
+            _ => data.into_any(),
+        };
+
+        let event = dioxus_core::Event::new(as_any, bubbles);
+        let mut dom = self.dom.borrow_mut();
+        dom.handle_event(&name, event.clone(), element);
+        dom.render_immediate(&mut *self.wry_queue.mutation_state_mut());
+        self.wry_queue.send_edits();
+
+        // Get the response from the event
+        SynchronousEventResponse::new(!event.default_action_enabled())
+    }
+}
+
 pub(crate) struct WebviewInstance {
-    pub dom: VirtualDom,
+    pub edits: WebviewEdits,
     pub desktop_context: DesktopContext,
     pub waker: Waker,
 
@@ -69,56 +184,57 @@ impl WebviewInstance {
         }
 
         let mut web_context = WebContext::new(cfg.data_dir.clone());
-        let edit_queue = EditQueue::default();
-        let file_hover = NativeFileHover::default();
+        let edit_queue = WryQueue::default();
         let asset_handlers = AssetHandlerRegistry::new(dom.runtime());
+        let edits = WebviewEdits::new(dom, edit_queue.clone());
+        let file_hover = NativeFileHover::default();
         let headless = !cfg.window.window.visible;
 
-        // Rust :(
-        let window_id = window.id();
-        let custom_head = cfg.custom_head.clone();
-        let index_file = cfg.custom_index.clone();
-        let root_name = cfg.root_name.clone();
-        let asset_handlers_ = asset_handlers.clone();
-        let edit_queue_ = edit_queue.clone();
-        let proxy_ = shared.proxy.clone();
-        let file_hover_ = file_hover.clone();
+        let request_handler = {
+            to_owned![
+                cfg.custom_head,
+                cfg.custom_index,
+                cfg.root_name,
+                asset_handlers,
+                edits
+            ];
+            move |request, responder: RequestAsyncResponder| {
+                // Try to serve the index file first
+                if let Some(index_bytes) = protocol::index_request(
+                    &request,
+                    custom_head.clone(),
+                    custom_index.clone(),
+                    &root_name,
+                    headless,
+                ) {
+                    return responder.respond(index_bytes);
+                }
 
-        let request_handler = move |request, responder: RequestAsyncResponder| {
-            // Try to serve the index file first
-            let index_bytes = protocol::index_request(
-                &request,
-                custom_head.clone(),
-                index_file.clone(),
-                &root_name,
-                headless,
-            );
-
-            // Otherwise, try to serve an asset, either from the user or the filesystem
-            match index_bytes {
-                Some(body) => responder.respond(body),
-                None => protocol::desktop_handler(
-                    request,
-                    asset_handlers_.clone(),
-                    &edit_queue_,
-                    responder,
-                ),
+                // Otherwise, try to serve an asset, either from the user or the filesystem
+                protocol::desktop_handler(request, asset_handlers.clone(), responder, &edits);
             }
         };
 
-        let ipc_handler = move |payload: wry::http::Request<String>| {
-            // defer the event to the main thread
-            let body = payload.into_body();
-            if let Ok(msg) = serde_json::from_str(&body) {
-                _ = proxy_.send_event(UserWindowEvent::Ipc { id: window_id, msg });
+        let ipc_handler = {
+            let window_id = window.id();
+            to_owned![shared.proxy];
+            move |payload: wry::http::Request<String>| {
+                // defer the event to the main thread
+                let body = payload.into_body();
+                if let Ok(msg) = serde_json::from_str(&body) {
+                    _ = proxy.send_event(UserWindowEvent::Ipc { id: window_id, msg });
+                }
             }
         };
 
-        let file_drop_handler = move |evt| {
-            // Update the most recent file drop event - when the event comes in from the webview we can use the
-            // most recent event to build a new event with the files in it.
-            file_hover_.set(evt);
-            false
+        let file_drop_handler = {
+            to_owned![file_hover];
+            move |evt| {
+                // Update the most recent file drop event - when the event comes in from the webview we can use the
+                // most recent event to build a new event with the files in it.
+                file_hover.set(evt);
+                false
+            }
         };
 
         #[cfg(any(
@@ -216,22 +332,22 @@ impl WebviewInstance {
             webview,
             window,
             shared.clone(),
-            edit_queue,
             asset_handlers,
             file_hover,
         ));
 
+        // Provide the desktop context to the virtual dom and edit handler
+        edits.set_desktop_context(desktop_context.clone());
         let provider: Rc<dyn Document> = Rc::new(DesktopDocument::new(desktop_context.clone()));
-
-        dom.in_runtime(|| {
+        edits.dom.borrow_mut().in_runtime(|| {
             ScopeId::ROOT.provide_context(desktop_context.clone());
             ScopeId::ROOT.provide_context(provider);
         });
 
         WebviewInstance {
+            edits,
             waker: tao_waker(shared.proxy.clone(), desktop_context.window.id()),
             desktop_context,
-            dom,
             _menu: menu,
             _web_context: web_context,
         }
@@ -239,19 +355,20 @@ impl WebviewInstance {
 
     pub fn poll_vdom(&mut self) {
         let mut cx = std::task::Context::from_waker(&self.waker);
+        let mut dom = self.edits.dom.borrow_mut();
 
         // Continuously poll the virtualdom until it's pending
         // Wait for work will return Ready when it has edits to be sent to the webview
         // It will return Pending when it needs to be polled again - nothing is ready
         loop {
             // If we're waiting for a render, wait for it to finish before we continue
-            let edits_flushed_poll = self.desktop_context.edit_queue.poll_edits_flushed(&mut cx);
+            let edits_flushed_poll = self.edits.wry_queue.poll_edits_flushed(&mut cx);
             if edits_flushed_poll.is_pending() {
                 return;
             }
 
             {
-                let fut = self.dom.wait_for_work();
+                let fut = dom.wait_for_work();
                 pin_mut!(fut);
 
                 match fut.poll_unpin(&mut cx) {
@@ -260,9 +377,8 @@ impl WebviewInstance {
                 }
             }
 
-            self.dom
-                .render_immediate(&mut *self.desktop_context.mutation_state.borrow_mut());
-            self.desktop_context.send_edits();
+            dom.render_immediate(&mut *self.edits.wry_queue.mutation_state_mut());
+            self.edits.wry_queue.send_edits();
         }
     }
 

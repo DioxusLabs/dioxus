@@ -36,18 +36,19 @@ pub(crate) struct EventMetadata {
 }
 
 impl<T: ?Sized + 'static> Event<T> {
-    pub(crate) fn new(data: Rc<T>, bubbles: bool) -> Self {
+    /// Create a new event from the inner data
+    pub fn new(data: Rc<T>, propagates: bool) -> Self {
         Self {
             data,
             metadata: Rc::new(Cell::new(EventMetadata {
-                propagates: bubbles,
+                propagates,
                 prevent_default: false,
             })),
         }
     }
 }
 
-impl<T> Event<T> {
+impl<T: ?Sized> Event<T> {
     /// Map the event data to a new type
     ///
     /// # Example
@@ -90,6 +91,11 @@ impl<T> Event<T> {
         let mut metadata = self.metadata.get();
         metadata.propagates = false;
         self.metadata.set(metadata);
+    }
+
+    /// Check if the event propagates up the tree to parent elements
+    pub fn propagates(&self) -> bool {
+        self.metadata.get().propagates
     }
 
     /// Prevent this event from continuing to bubble up the tree to parent elements.

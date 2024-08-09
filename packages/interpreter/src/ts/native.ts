@@ -21,6 +21,7 @@ export class NativeInterpreter extends JSChannel_ {
   intercept_link_redirects: boolean;
   ipc: any;
   editsPath: string;
+  eventsPath: string;
   kickStylesheets: boolean;
   queuedBytes: ArrayBuffer[] = [];
 
@@ -28,9 +29,10 @@ export class NativeInterpreter extends JSChannel_ {
   // however, for now we need to support it since SSE in fullstack doesn't exist yet
   liveview: boolean;
 
-  constructor(editsPath: string) {
+  constructor(editsPath: string, eventsPath: string) {
     super();
     this.editsPath = editsPath;
+    this.eventsPath = eventsPath;
     this.kickStylesheets = false;
   }
 
@@ -221,20 +223,20 @@ export class NativeInterpreter extends JSChannel_ {
         }
       }
     } else {
-      const message = this.serializeIpcMessage("user_event", body);
-      this.ipc.postMessage(message);
+      // Run the event handler on the virtualdom
+      // capture/prevent default of the event if the virtualdom wants to
+      const res = handleVirtualdomEventSync(
+        this.eventsPath,
+        JSON.stringify(body)
+      );
 
-      // // Run the event handler on the virtualdom
-      // // capture/prevent default of the event if the virtualdom wants to
-      // const res = handleVirtualdomEventSync(JSON.stringify(body));
+      if (res.preventDefault) {
+        event.preventDefault();
+      }
 
-      // if (res.preventDefault) {
-      //   event.preventDefault();
-      // }
-
-      // if (res.stopPropagation) {
-      //   event.stopPropagation();
-      // }
+      if (res.stopPropagation) {
+        event.stopPropagation();
+      }
     }
   }
 
@@ -401,8 +403,6 @@ export class NativeInterpreter extends JSChannel_ {
 type EventSyncResult = {
   preventDefault: boolean;
   stopPropagation: boolean;
-  stopImmediatePropagation: boolean;
-  filesRequested: boolean;
 };
 
 // This function sends the event to the virtualdom and then waits for the virtualdom to process it
@@ -410,15 +410,19 @@ type EventSyncResult = {
 // However, it's not really suitable for liveview, because it's synchronous and will block the main thread
 // We should definitely consider using a websocket if we want to block... or just not block on liveview
 // Liveview is a little bit of a tricky beast
-function handleVirtualdomEventSync(contents: string): EventSyncResult {
+function handleVirtualdomEventSync(
+  endpoint: string,
+  contents: string
+): EventSyncResult {
   // Handle the event on the virtualdom and then process whatever its output was
   const xhr = new XMLHttpRequest();
 
   // Serialize the event and send it to the custom protocol in the Rust side of things
-  xhr.timeout = 1000;
-  xhr.open("GET", "/handle/event.please", false);
+  xhr.open("GET", endpoint, false);
   xhr.setRequestHeader("Content-Type", "application/json");
-  xhr.send(contents);
+  const blob = new Blob([contents], { type: "text/plain" });
+  console.log("sending", blob);
+  xhr.send(blob);
 
   // Deserialize the response, and then prevent the default/capture the event if the virtualdom wants to
   return JSON.parse(xhr.responseText);
