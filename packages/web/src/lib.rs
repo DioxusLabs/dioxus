@@ -20,11 +20,11 @@
 //! To purview the examples, check of the root Dioxus crate - the examples in this crate are mostly meant to provide
 //! validation of websys-specific features and not the general use of Dioxus.
 
-use std::{panic, rc::Rc};
+use std::{any::Any, panic, rc::Rc};
 
 pub use crate::cfg::Config;
 use crate::hydration::SuspenseMessage;
-use dioxus_core::{ScopeId, VirtualDom};
+use dioxus_core::{Event, ScopeId, VirtualDom};
 use futures_util::{pin_mut, select, FutureExt, StreamExt};
 
 mod cfg;
@@ -205,12 +205,9 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
         // Dequeue all of the events from the channel in send order
         // todo: we should re-order these if possible
         while let Some(evt) = res {
-            dom.handle_event(
-                evt.name.as_str(),
-                Rc::new(evt.data),
-                evt.element,
-                evt.bubbles,
-            );
+            let event = Event::new(Rc::new(evt.data) as Rc<dyn Any>, evt.bubbles);
+            dom.runtime()
+                .handle_event(evt.name.as_str(), event, evt.element);
             res = rx.try_next().transpose().unwrap().ok();
         }
 

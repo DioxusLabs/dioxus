@@ -104,7 +104,7 @@ impl DesktopService {
     pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> Weak<DesktopService> {
         let window = WebviewInstance::new(cfg, dom, self.shared.clone());
 
-        let cx = window.edits.dom.borrow().in_runtime(|| {
+        let cx = window.dom.in_runtime(|| {
             ScopeId::ROOT
                 .consume_context::<Rc<DesktopService>>()
                 .unwrap()

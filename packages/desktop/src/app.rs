@@ -238,9 +238,8 @@ impl App {
     pub fn handle_initialize_msg(&mut self, id: WindowId) {
         let view = self.webviews.get_mut(&id).unwrap();
 
-        let mut dom = view.edits.dom.borrow_mut();
-
-        dom.rebuild(&mut *view.edits.wry_queue.mutation_state_mut());
+        view.dom
+            .rebuild(&mut *view.edits.wry_queue.mutation_state_mut());
 
         view.edits.wry_queue.send_edits();
 
@@ -285,7 +284,7 @@ impl App {
         match msg {
             DevserverMsg::HotReload(hr_msg) => {
                 for webview in self.webviews.values_mut() {
-                    dioxus_hot_reload::apply_changes(&mut webview.edits.dom.borrow_mut(), &hr_msg);
+                    dioxus_hot_reload::apply_changes(&mut webview.dom, &hr_msg);
                     webview.poll_vdom();
                 }
 

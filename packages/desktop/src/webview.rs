@@ -6,29 +6,29 @@ use crate::{
     file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, waker::tao_waker, Config,
     DesktopContext, DesktopService,
 };
-use dioxus_core::{ScopeId, VirtualDom};
+use dioxus_core::{Runtime, ScopeId, VirtualDom};
 use dioxus_hooks::to_owned;
 use dioxus_html::document::Document;
 use dioxus_html::native_bind::NativeFileEngine;
 use dioxus_html::{HasFileData, HtmlEvent, PlatformEventData};
 use dioxus_interpreter_js::SynchronousEventResponse;
 use futures_util::{pin_mut, FutureExt};
-use std::cell::{OnceCell, RefCell};
+use std::cell::OnceCell;
 use std::sync::Arc;
 use std::{rc::Rc, task::Waker};
 use wry::{RequestAsyncResponder, WebContext, WebViewBuilder};
 
 #[derive(Clone)]
 pub(crate) struct WebviewEdits {
-    pub dom: Rc<RefCell<VirtualDom>>,
+    runtime: Rc<Runtime>,
     pub wry_queue: WryQueue,
     desktop_context: Rc<OnceCell<DesktopContext>>,
 }
 
 impl WebviewEdits {
-    fn new(dom: VirtualDom, wry_queue: WryQueue) -> Self {
+    fn new(runtime: Rc<Runtime>, wry_queue: WryQueue) -> Self {
         Self {
-            dom: Rc::new(RefCell::new(dom)),
+            runtime,
             wry_queue,
             desktop_context: Default::default(),
         }
@@ -115,10 +115,7 @@ impl WebviewEdits {
         };
 
         let event = dioxus_core::Event::new(as_any, bubbles);
-        let mut dom = self.dom.borrow_mut();
-        dom.handle_event(&name, event.clone(), element);
-        dom.render_immediate(&mut *self.wry_queue.mutation_state_mut());
-        self.wry_queue.send_edits();
+        self.runtime.handle_event(&name, event.clone(), element);
 
         // Get the response from the event
         SynchronousEventResponse::new(!event.default_action_enabled())
@@ -126,6 +123,7 @@ impl WebviewEdits {
 }
 
 pub(crate) struct WebviewInstance {
+    pub dom: VirtualDom,
     pub edits: WebviewEdits,
     pub desktop_context: DesktopContext,
     pub waker: Waker,
@@ -186,7 +184,7 @@ impl WebviewInstance {
         let mut web_context = WebContext::new(cfg.data_dir.clone());
         let edit_queue = WryQueue::default();
         let asset_handlers = AssetHandlerRegistry::new(dom.runtime());
-        let edits = WebviewEdits::new(dom, edit_queue.clone());
+        let edits = WebviewEdits::new(dom.runtime(), edit_queue.clone());
         let file_hover = NativeFileHover::default();
         let headless = !cfg.window.window.visible;
 
@@ -339,12 +337,13 @@ impl WebviewInstance {
         // Provide the desktop context to the virtual dom and edit handler
         edits.set_desktop_context(desktop_context.clone());
         let provider: Rc<dyn Document> = Rc::new(DesktopDocument::new(desktop_context.clone()));
-        edits.dom.borrow_mut().in_runtime(|| {
+        dom.in_runtime(|| {
             ScopeId::ROOT.provide_context(desktop_context.clone());
             ScopeId::ROOT.provide_context(provider);
         });
 
         WebviewInstance {
+            dom,
             edits,
             waker: tao_waker(shared.proxy.clone(), desktop_context.window.id()),
             desktop_context,
@@ -355,7 +354,6 @@ impl WebviewInstance {
 
     pub fn poll_vdom(&mut self) {
         let mut cx = std::task::Context::from_waker(&self.waker);
-        let mut dom = self.edits.dom.borrow_mut();
 
         // Continuously poll the virtualdom until it's pending
         // Wait for work will return Ready when it has edits to be sent to the webview
@@ -368,7 +366,7 @@ impl WebviewInstance {
             }
 
             {
-                let fut = dom.wait_for_work();
+                let fut = self.dom.wait_for_work();
                 pin_mut!(fut);
 
                 match fut.poll_unpin(&mut cx) {
@@ -377,7 +375,8 @@ impl WebviewInstance {
                 }
             }
 
-            dom.render_immediate(&mut *self.edits.wry_queue.mutation_state_mut());
+            self.dom
+                .render_immediate(&mut *self.edits.wry_queue.mutation_state_mut());
             self.edits.wry_queue.send_edits();
         }
     }

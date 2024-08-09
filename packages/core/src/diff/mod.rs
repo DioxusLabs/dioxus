@@ -58,6 +58,46 @@ impl VirtualDom {
         self.reclaim(placeholder_id);
     }
 
+    pub(crate) fn get_mounted_parent(&self, mount: MountId) -> Option<ElementRef> {
+        let mounts = self.runtime.mounts.borrow();
+        mounts[mount.0].parent
+    }
+
+    pub(crate) fn get_mounted_dyn_node(&self, mount: MountId, dyn_node_idx: usize) -> usize {
+        let mounts = self.runtime.mounts.borrow();
+        mounts[mount.0].mounted_dynamic_nodes[dyn_node_idx]
+    }
+
+    pub(crate) fn set_mounted_dyn_node(&self, mount: MountId, dyn_node_idx: usize, value: usize) {
+        let mut mounts = self.runtime.mounts.borrow_mut();
+        mounts[mount.0].mounted_dynamic_nodes[dyn_node_idx] = value;
+    }
+
+    pub(crate) fn get_mounted_dyn_attr(&self, mount: MountId, dyn_attr_idx: usize) -> ElementId {
+        let mounts = self.runtime.mounts.borrow();
+        mounts[mount.0].mounted_attributes[dyn_attr_idx]
+    }
+
+    pub(crate) fn set_mounted_dyn_attr(
+        &self,
+        mount: MountId,
+        dyn_attr_idx: usize,
+        value: ElementId,
+    ) {
+        let mut mounts = self.runtime.mounts.borrow_mut();
+        mounts[mount.0].mounted_attributes[dyn_attr_idx] = value;
+    }
+
+    pub(crate) fn get_mounted_root_node(&self, mount: MountId, root_idx: usize) -> ElementId {
+        let mounts = self.runtime.mounts.borrow();
+        mounts[mount.0].root_ids[root_idx]
+    }
+
+    pub(crate) fn set_mounted_root_node(&self, mount: MountId, root_idx: usize, value: ElementId) {
+        let mut mounts = self.runtime.mounts.borrow_mut();
+        mounts[mount.0].root_ids[root_idx] = value;
+    }
+
     fn nodes_to_placeholder(
         &mut self,
         mut to: Option<&mut impl WriteMutations>,
@@ -69,7 +109,7 @@ impl VirtualDom {
         let placeholder = self.next_element();
 
         // Set the id of the placeholder
-        self.mounts[mount.0].mounted_dynamic_nodes[dyn_node_idx] = placeholder.0;
+        self.set_mounted_dyn_node(mount, dyn_node_idx, placeholder.0);
 
         if let Some(to) = to.as_deref_mut() {
             to.create_placeholder(placeholder);

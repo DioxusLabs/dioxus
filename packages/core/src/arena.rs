@@ -56,7 +56,8 @@ pub struct ElementPath {
 
 impl VirtualDom {
     pub(crate) fn next_element(&mut self) -> ElementId {
-        ElementId(self.elements.insert(None))
+        let mut elements = self.runtime.elements.borrow_mut();
+        ElementId(elements.insert(None))
     }
 
     pub(crate) fn reclaim(&mut self, el: ElementId) {
@@ -71,7 +72,8 @@ impl VirtualDom {
             return true;
         }
 
-        self.elements.try_remove(el.0).is_some()
+        let mut elements = self.runtime.elements.borrow_mut();
+        elements.try_remove(el.0).is_some()
     }
 
     // Drop a scope without dropping its children
