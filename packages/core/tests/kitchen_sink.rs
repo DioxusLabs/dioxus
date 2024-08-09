@@ -38,7 +38,7 @@ fn dual_stream() {
     use Mutation::*;
     assert_eq!(edits.edits, {
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(1) },
+            LoadTemplate { index: 0, id: ElementId(1) },
             HydrateText { path: &[0, 0], value: "123".to_string(), id: ElementId(2) },
             SetAttribute {
                 name: "class",

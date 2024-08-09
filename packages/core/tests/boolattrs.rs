@@ -8,7 +8,7 @@ fn bool_test() {
     assert_eq!(
         app.rebuild_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(1) },
+            LoadTemplate { index: 0, id: ElementId(1) },
             SetAttribute {
                 name: "hidden",
                 value: dioxus_core::AttributeValue::Bool(false),

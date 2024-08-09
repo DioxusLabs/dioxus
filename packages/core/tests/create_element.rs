@@ -26,7 +26,7 @@ fn multiroot() {
     //         CreateElement { name: "div" },
     //         CreateStaticText { value: "Hello c" },
     //         AppendChildren { m: 1 },
-    //         SaveTemplate { name: "template", m: 3 }
+    //         SaveTemplate {  m: 3 }
     //     ]
     // )
 }

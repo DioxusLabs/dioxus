@@ -632,13 +632,6 @@ impl VNode {
             });
         }
 
-        // If we are outputting mutations, mount the node as well
-        if let Some(to) = to.as_deref_mut() {
-            // The best renderers will have templates pre-hydrated and registered
-            // Just in case, let's create the template using instructions anyways
-            dom.register_template(to, template);
-        }
-
         // Walk the roots, creating nodes and assigning IDs
         // nodes in an iterator of (dynamic_node_index, path) and attrs in an iterator of (attr_index, path)
         let mut nodes = template.node_paths.iter().copied().enumerate().peekable();

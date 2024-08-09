@@ -26,7 +26,7 @@ fn nested_passthru_creates() {
     assert_eq!(
         edits.edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(1) },
+            LoadTemplate { index: 0, id: ElementId(1) },
             AppendChildren { m: 1, id: ElementId(0) },
         ]
     )
@@ -63,13 +63,13 @@ fn nested_passthru_creates_add() {
         dom.rebuild_to_vec().sanitize().edits,
         [
             // load 1
-            LoadTemplate { name: "template", index: 0, id: ElementId(1) },
+            LoadTemplate { index: 0, id: ElementId(1) },
             // load 2
-            LoadTemplate { name: "template", index: 0, id: ElementId(2) },
+            LoadTemplate { index: 0, id: ElementId(2) },
             // load 3
-            LoadTemplate { name: "template", index: 0, id: ElementId(3) },
+            LoadTemplate { index: 0, id: ElementId(3) },
             // load div that contains 4
-            LoadTemplate { name: "template", index: 1, id: ElementId(4) },
+            LoadTemplate { index: 1, id: ElementId(4) },
             AppendChildren { id: ElementId(0), m: 4 },
         ]
     );

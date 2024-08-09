@@ -50,7 +50,7 @@ fn element_swap() {
     assert_eq!(
         vdom.render_immediate_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
+            LoadTemplate { index: 0, id: ElementId(2,) },
             ReplaceWith { id: ElementId(1,), m: 1 },
         ]
     );
@@ -59,7 +59,7 @@ fn element_swap() {
     assert_eq!(
         vdom.render_immediate_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
+            LoadTemplate { index: 0, id: ElementId(1,) },
             ReplaceWith { id: ElementId(2,), m: 1 },
         ]
     );
@@ -68,7 +68,7 @@ fn element_swap() {
     assert_eq!(
         vdom.render_immediate_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
+            LoadTemplate { index: 0, id: ElementId(2,) },
             ReplaceWith { id: ElementId(1,), m: 1 },
         ]
     );
@@ -77,7 +77,7 @@ fn element_swap() {
     assert_eq!(
         vdom.render_immediate_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
+            LoadTemplate { index: 0, id: ElementId(1,) },
             ReplaceWith { id: ElementId(2,), m: 1 },
         ]
     );

@@ -139,9 +139,8 @@ impl ToTokens for TemplateBody {
 
         let dynamic_text = self.dynamic_text_segments.iter();
 
-        let index = self.template_idx.get();
-
         let diagnostics = &self.diagnostics;
+        let index = self.template_idx.get();
         let hot_reload_mapping = self.hot_reload_mapping(quote! { ___TEMPLATE_NAME });
 
         let vnode = quote! {
@@ -151,11 +150,12 @@ impl ToTokens for TemplateBody {
                 const NORMAL: &str = dioxus_core::const_format::str_replace!(PATH, '\\', "/");
                 dioxus_core::const_format::concatcp!(NORMAL, ':', line!(), ':', column!(), ':', #index)
             };
+
             #[cfg(not(debug_assertions))]
             {
+
                 #[doc(hidden)] // vscode please stop showing these in symbol search
                 static ___TEMPLATE: dioxus_core::Template = dioxus_core::Template {
-                    name: ___TEMPLATE_NAME,
                     roots: &[ #( #roots ),* ],
                     node_paths: &[ #( #node_paths ),* ],
                     attr_paths: &[ #( #attr_paths ),* ],

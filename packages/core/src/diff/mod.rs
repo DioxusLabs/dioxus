@@ -14,7 +14,7 @@ use crate::{
     innerlude::{ElementRef, MountId, WriteMutations},
     nodes::VNode,
     virtual_dom::VirtualDom,
-    Template, TemplateNode,
+    TemplateNode,
 };
 
 mod component;
@@ -101,26 +101,6 @@ impl VirtualDom {
         for (i, node) in nodes.iter().rev().enumerate() {
             let last_node = i == nodes.len() - 1;
             node.remove_node(self, to.as_deref_mut(), replace_with.filter(|_| last_node));
-        }
-    }
-
-    /// Insert a new template into the VirtualDom's template registry
-    // used in conditional compilation
-    #[allow(unused_mut)]
-    pub(crate) fn register_template(
-        &mut self,
-        to: &mut impl WriteMutations,
-        mut template: Template,
-    ) {
-        if self.templates.contains(&template) {
-            return;
-        }
-
-        _ = self.templates.insert(template);
-
-        // If it's all dynamic nodes, then we don't need to register it
-        if !template.is_completely_dynamic() {
-            to.register_template(template)
         }
     }
 }

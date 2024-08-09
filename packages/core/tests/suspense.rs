@@ -422,7 +422,7 @@ fn toggle_suspense() {
             assert_eq!(
                 mutations.edits,
                 [
-                    Mutation::LoadTemplate { name: "template", index: 0, id: ElementId(1) },
+                    Mutation::LoadTemplate { index: 0, id: ElementId(1) },
                     Mutation::AppendChildren { id: ElementId(0), m: 1 }
                 ]
             );
@@ -448,7 +448,7 @@ fn toggle_suspense() {
             assert_eq!(
                 mutations.edits,
                 [
-                    Mutation::LoadTemplate { name: "template", index: 0, id: ElementId(1) },
+                    Mutation::LoadTemplate { index: 0, id: ElementId(1) },
                     Mutation::ReplaceWith { id: ElementId(2), m: 1 },
                 ]
             );
@@ -463,7 +463,7 @@ fn toggle_suspense() {
                 [
                     Mutation::CreatePlaceholder { id: ElementId(2,) },
                     Mutation::ReplaceWith { id: ElementId(1,), m: 1 },
-                    Mutation::LoadTemplate { name: "template", index: 0, id: ElementId(1) },
+                    Mutation::LoadTemplate { index: 0, id: ElementId(1) },
                     Mutation::ReplaceWith { id: ElementId(2), m: 1 },
                 ]
             );
@@ -607,7 +607,7 @@ fn nested_suspense_resolves_client() {
                 mutations.edits,
                 vec![
                     // Creating and swapping these placeholders doesn't do anything
-                    // It is just extra work that we are forced to do because mutations are not 
+                    // It is just extra work that we are forced to do because mutations are not
                     // reversible. We start rendering the children and then realize it is suspended.
                     // Then we need to replace what we just rendered with the suspense placeholder
                     CreatePlaceholder { id: ElementId(3,) },
@@ -622,7 +622,7 @@ fn nested_suspense_resolves_client() {
                     ReplaceWith { id: ElementId(2,), m: 1 },
 
                     // Load the title
-                    LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
+                    LoadTemplate {  index: 0, id: ElementId(2,) },
                     HydrateText {
                         path: &[0,],
                         value: "The robot says hello world".to_string(),
@@ -636,7 +636,7 @@ fn nested_suspense_resolves_client() {
                     },
 
                     // Then load the body
-                    LoadTemplate { name: "template", index: 1, id: ElementId(5,) },
+                    LoadTemplate {  index: 1, id: ElementId(5,) },
                     HydrateText {
                         path: &[0,],
                         value: "The robot becomes sentient and says hello world".to_string(),
@@ -650,7 +650,7 @@ fn nested_suspense_resolves_client() {
                     },
 
                     // Then load the suspended children
-                    LoadTemplate { name: "template", index: 2, id: ElementId(7,) },
+                    LoadTemplate {  index: 2, id: ElementId(7,) },
                     CreateTextNode { value: "Loading 1...".to_string(), id: ElementId(8,) },
                     CreateTextNode { value: "Loading 2...".to_string(), id: ElementId(9,) },
                     ReplacePlaceholder { path: &[0,], m: 2 },
@@ -693,7 +693,7 @@ fn nested_suspense_resolves_client() {
 
                     // Load the nested suspense
                     LoadTemplate {
-                        name: "template",
+
                         index: 0,
                         id: ElementId(
                             8,
@@ -717,7 +717,7 @@ fn nested_suspense_resolves_client() {
                         ),
                     },
                     LoadTemplate {
-                        name: "template",
+
                         index: 1,
                         id: ElementId(
                             11,
@@ -741,7 +741,7 @@ fn nested_suspense_resolves_client() {
                         ),
                     },
                     LoadTemplate {
-                        name: "template",
+
                         index: 2,
                         id: ElementId(
                             13,
@@ -783,7 +783,7 @@ fn nested_suspense_resolves_client() {
                         m: 1,
                     },
                     LoadTemplate {
-                        name: "template",
+
                         index: 0,
                         id: ElementId(
                             9,
@@ -807,7 +807,7 @@ fn nested_suspense_resolves_client() {
                         ),
                     },
                     LoadTemplate {
-                        name: "template",
+
                         index: 1,
                         id: ElementId(
                             16,
@@ -831,7 +831,7 @@ fn nested_suspense_resolves_client() {
                         ),
                     },
                     LoadTemplate {
-                        name: "template",
+
                         index: 2,
                         id: ElementId(
                             18,
@@ -876,7 +876,7 @@ fn nested_suspense_resolves_client() {
                         m: 1,
                     },
                     LoadTemplate {
-                        name: "template",
+
                         index: 0,
                         id: ElementId(
                             19,
@@ -900,7 +900,7 @@ fn nested_suspense_resolves_client() {
                         ),
                     },
                     LoadTemplate {
-                        name: "template",
+
                         index: 1,
                         id: ElementId(
                             21,
@@ -924,7 +924,7 @@ fn nested_suspense_resolves_client() {
                         ),
                     },
                     LoadTemplate {
-                        name: "template",
+
                         index: 2,
                         id: ElementId(
                             23,

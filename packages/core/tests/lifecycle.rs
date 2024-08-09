@@ -32,7 +32,7 @@ fn manual_diffing() {
     assert_eq!(
         dom.rebuild_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(3) },
+            LoadTemplate { index: 0, id: ElementId(3) },
             HydrateText { path: &[0], value: "goodbye".to_string(), id: ElementId(4) },
             AppendChildren { m: 1, id: ElementId(0) }
         ]

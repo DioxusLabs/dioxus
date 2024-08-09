@@ -23,7 +23,7 @@ fn attrs_cycle() {
     assert_eq!(
         dom.rebuild_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
+            LoadTemplate { index: 0, id: ElementId(1,) },
             AppendChildren { m: 1, id: ElementId(0) },
         ]
     );
@@ -32,7 +32,7 @@ fn attrs_cycle() {
     assert_eq!(
         dom.render_immediate_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
+            LoadTemplate { index: 0, id: ElementId(2,) },
             AssignId { path: &[0,], id: ElementId(3,) },
             SetAttribute { name: "class", value: "1".into_value(), id: ElementId(3,), ns: None },
             SetAttribute { name: "id", value: "1".into_value(), id: ElementId(3,), ns: None },
@@ -44,7 +44,7 @@ fn attrs_cycle() {
     assert_eq!(
         dom.render_immediate_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(1) },
+            LoadTemplate { index: 0, id: ElementId(1) },
             ReplaceWith { id: ElementId(2), m: 1 }
         ]
     );
@@ -53,7 +53,7 @@ fn attrs_cycle() {
     assert_eq!(
         dom.render_immediate_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(2) },
+            LoadTemplate { index: 0, id: ElementId(2) },
             AssignId { path: &[0], id: ElementId(3) },
             SetAttribute {
                 name: "class",
@@ -76,7 +76,7 @@ fn attrs_cycle() {
     assert_eq!(
         dom.render_immediate_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(1) },
+            LoadTemplate { index: 0, id: ElementId(1) },
             ReplaceWith { id: ElementId(2), m: 1 }
         ]
     );

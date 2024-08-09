@@ -66,12 +66,12 @@ fn component_swap() {
         assert_eq!(
             edits.edits,
             [
-                LoadTemplate { name: "template", index: 0, id: ElementId(1) },
-                LoadTemplate { name: "template", index: 0, id: ElementId(2) },
-                LoadTemplate { name: "template", index: 0, id: ElementId(3) },
-                LoadTemplate { name: "template", index: 0, id: ElementId(4) },
+                LoadTemplate { index: 0, id: ElementId(1) },
+                LoadTemplate { index: 0, id: ElementId(2) },
+                LoadTemplate { index: 0, id: ElementId(3) },
+                LoadTemplate { index: 0, id: ElementId(4) },
                 ReplacePlaceholder { path: &[1], m: 3 },
-                LoadTemplate { name: "template", index: 0, id: ElementId(5) },
+                LoadTemplate { index: 0, id: ElementId(5) },
                 AppendChildren { m: 2, id: ElementId(0) }
             ]
         );
@@ -81,7 +81,7 @@ fn component_swap() {
     assert_eq!(
         dom.render_immediate_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(6) },
+            LoadTemplate { index: 0, id: ElementId(6) },
             ReplaceWith { id: ElementId(5), m: 1 }
         ]
     );
@@ -90,7 +90,7 @@ fn component_swap() {
     assert_eq!(
         dom.render_immediate_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(5) },
+            LoadTemplate { index: 0, id: ElementId(5) },
             ReplaceWith { id: ElementId(6), m: 1 }
         ]
     );
@@ -99,7 +99,7 @@ fn component_swap() {
     assert_eq!(
         dom.render_immediate_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(6) },
+            LoadTemplate { index: 0, id: ElementId(6) },
             ReplaceWith { id: ElementId(5), m: 1 }
         ]
     );

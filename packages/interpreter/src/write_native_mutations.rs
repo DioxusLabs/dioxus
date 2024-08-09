@@ -1,5 +1,5 @@
 use crate::unified_bindings::Interpreter as Channel;
-use dioxus_core::{TemplateAttribute, TemplateNode, WriteMutations};
+use dioxus_core::{Template, TemplateAttribute, TemplateNode, WriteMutations};
 use dioxus_html::event_bubbles;
 use sledgehammer_utils::rustc_hash::FxHashMap;
 
@@ -10,7 +10,7 @@ pub struct MutationState {
     max_template_count: u16,
 
     /// The currently registered templates with the template ids
-    templates: FxHashMap<String, u16>,
+    templates: FxHashMap<Template, u16>,
 
     /// The channel that we are applying mutations to
     channel: Channel,
@@ -81,19 +81,6 @@ impl MutationState {
 }
 
 impl WriteMutations for MutationState {
-    fn register_template(&mut self, template: dioxus_core::prelude::Template) {
-        let current_max_template_count = self.max_template_count;
-        for root in template.roots.iter() {
-            self.create_template_node(root);
-            self.templates
-                .insert(template.name.to_owned(), current_max_template_count);
-        }
-        self.channel
-            .add_templates(current_max_template_count, template.roots.len() as u16);
-
-        self.max_template_count += 1;
-    }
-
     fn append_children(&mut self, id: dioxus_core::ElementId, m: usize) {
         self.channel.append_children(id.0 as u32, m as u16);
     }
@@ -114,11 +101,22 @@ impl WriteMutations for MutationState {
         self.channel.hydrate_text_ref(path, value, id.0 as u32);
     }
 
-    fn load_template(&mut self, name: &'static str, index: usize, id: dioxus_core::ElementId) {
-        if let Some(tmpl_id) = self.templates.get(name) {
-            self.channel
-                .load_template(*tmpl_id, index as u16, id.0 as u32)
-        }
+    fn load_template(&mut self, template: Template, index: usize, id: dioxus_core::ElementId) {
+        // Get the template or create it if we haven't seen it before
+        let tmpl_id = self.templates.get(&template).cloned().unwrap_or_else(|| {
+            let current_max_template_count = self.max_template_count;
+            for root in template.roots.iter() {
+                self.create_template_node(root);
+                self.templates.insert(template, current_max_template_count);
+            }
+            let id = template.roots.len() as u16;
+            self.channel.add_templates(current_max_template_count, id);
+            self.max_template_count += 1;
+            id
+        });
+
+        self.channel
+            .load_template(tmpl_id, index as u16, id.0 as u32);
     }
 
     fn replace_node_with(&mut self, id: dioxus_core::ElementId, m: usize) {

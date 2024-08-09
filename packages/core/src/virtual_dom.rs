@@ -11,14 +11,12 @@ use crate::{
         ElementRef, NoOpMutations, SchedulerMsg, ScopeOrder, ScopeState, VNodeMount, VProps,
         WriteMutations,
     },
-    nodes::Template,
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
     AttributeValue, ComponentFunction, Element, Event, Mutations,
 };
 use crate::{Task, VComponent};
 use futures_util::StreamExt;
-use rustc_hash::FxHashSet;
 use slab::Slab;
 use std::collections::BTreeSet;
 use std::{any::Any, rc::Rc};
@@ -208,12 +206,6 @@ pub struct VirtualDom {
 
     pub(crate) dirty_scopes: BTreeSet<ScopeOrder>,
 
-    // A map of templates we have sent to the renderer
-    pub(crate) templates: FxHashSet<Template>,
-
-    // Templates changes that are queued for the next render
-    pub(crate) queued_templates: Vec<Template>,
-
     // The element ids that are used in the renderer
     // These mark a specific place in a whole rsx block
     pub(crate) elements: Slab<Option<ElementRef>>,
@@ -336,8 +328,6 @@ impl VirtualDom {
             runtime: Runtime::new(tx),
             scopes: Default::default(),
             dirty_scopes: Default::default(),
-            templates: Default::default(),
-            queued_templates: Default::default(),
             elements: Default::default(),
             mounts: Default::default(),
             resolved_scopes: Default::default(),
@@ -612,24 +602,29 @@ impl VirtualDom {
     /// ```
     #[instrument(skip(self, to), level = "trace", name = "VirtualDom::rebuild")]
     pub fn rebuild(&mut self, to: &mut impl WriteMutations) {
-        self.flush_templates(to);
+        self.maybe_rebuild(Some(to));
+    }
+
+    /// Rebuild the virtual dom without handling any of the mutations
+    pub fn maybe_rebuild<M: WriteMutations>(&mut self, to: Option<&mut M>) {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
         let new_nodes = self.run_scope(ScopeId::ROOT);
 
         self.scopes[ScopeId::ROOT.0].last_rendered_node = Some(new_nodes.clone());
 
-        // Rebuilding implies we append the created elements to the root
-        let m = self.create_scope(Some(to), ScopeId::ROOT, new_nodes, None);
-
-        to.append_children(ElementId(0), m);
+        if let Some(to) = to {
+            let m = self.create_scope(Some(to), ScopeId::ROOT, new_nodes, None);
+            // Rebuilding implies we append the created elements to the root
+            to.append_children(ElementId(0), m);
+        } else {
+            self.create_scope::<M>(None, ScopeId::ROOT, new_nodes, None);
+        }
     }
 
     /// Render whatever the VirtualDom has ready as fast as possible without requiring an executor to progress
     /// suspended subtrees.
     #[instrument(skip(self, to), level = "trace", name = "VirtualDom::render_immediate")]
     pub fn render_immediate(&mut self, to: &mut impl WriteMutations) {
-        self.flush_templates(to);
-
         // Process any events that might be pending in the queue
         // Signals marked with .write() need a chance to be handled by the effect driver
         // This also processes futures which might progress into immediately rerunning a scope
@@ -783,14 +778,6 @@ impl VirtualDom {
     /// Get the current runtime
     pub fn runtime(&self) -> Rc<Runtime> {
         self.runtime.clone()
-    }
-
-    /// Flush any queued template changes
-    #[instrument(skip(self, to), level = "trace", name = "VirtualDom::flush_templates")]
-    fn flush_templates(&mut self, to: &mut impl WriteMutations) {
-        for template in self.queued_templates.drain(..) {
-            to.register_template(template);
-        }
     }
 
     /*

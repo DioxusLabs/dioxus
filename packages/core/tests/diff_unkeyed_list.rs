@@ -20,7 +20,7 @@ fn list_creates_one_by_one() {
     assert_eq!(
         dom.rebuild_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
+            LoadTemplate { index: 0, id: ElementId(1,) },
             AssignId { path: &[0], id: ElementId(2,) },
             AppendChildren { id: ElementId(0), m: 1 },
         ]
@@ -31,7 +31,7 @@ fn list_creates_one_by_one() {
     assert_eq!(
         dom.render_immediate_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(3,) },
+            LoadTemplate { index: 0, id: ElementId(3,) },
             HydrateText { path: &[0], value: "0".to_string(), id: ElementId(4,) },
             ReplaceWith { id: ElementId(2,), m: 1 },
         ]
@@ -42,7 +42,7 @@ fn list_creates_one_by_one() {
     assert_eq!(
         dom.render_immediate_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
+            LoadTemplate { index: 0, id: ElementId(2,) },
             HydrateText { path: &[0], value: "1".to_string(), id: ElementId(5,) },
             InsertAfter { id: ElementId(3,), m: 1 },
         ]
@@ -53,7 +53,7 @@ fn list_creates_one_by_one() {
     assert_eq!(
         dom.render_immediate_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(6,) },
+            LoadTemplate { index: 0, id: ElementId(6,) },
             HydrateText { path: &[0], value: "2".to_string(), id: ElementId(7,) },
             InsertAfter { id: ElementId(2,), m: 1 },
         ]
@@ -64,7 +64,7 @@ fn list_creates_one_by_one() {
     assert_eq!(
         dom.render_immediate_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(8,) },
+            LoadTemplate { index: 0, id: ElementId(8,) },
             HydrateText { path: &[0], value: "3".to_string(), id: ElementId(9,) },
             InsertAfter { id: ElementId(6,), m: 1 },
         ]
@@ -90,13 +90,13 @@ fn removes_one_by_one() {
         dom.rebuild_to_vec().sanitize().edits,
         [
             // The container
-            LoadTemplate { name: "template", index: 0, id: ElementId(1) },
+            LoadTemplate { index: 0, id: ElementId(1) },
             // each list item
-            LoadTemplate { name: "template", index: 0, id: ElementId(2) },
+            LoadTemplate { index: 0, id: ElementId(2) },
             HydrateText { path: &[0], value: "0".to_string(), id: ElementId(3) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(4) },
+            LoadTemplate { index: 0, id: ElementId(4) },
             HydrateText { path: &[0], value: "1".to_string(), id: ElementId(5) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(6) },
+            LoadTemplate { index: 0, id: ElementId(6) },
             HydrateText { path: &[0], value: "2".to_string(), id: ElementId(7) },
             // replace the placeholder in the template with the 3 templates on the stack
             ReplacePlaceholder { m: 3, path: &[0] },
@@ -137,11 +137,11 @@ fn removes_one_by_one() {
     assert_eq!(
         dom.render_immediate_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(2) },
+            LoadTemplate { index: 0, id: ElementId(2) },
             HydrateText { path: &[0], value: "0".to_string(), id: ElementId(6) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(8) },
+            LoadTemplate { index: 0, id: ElementId(8) },
             HydrateText { path: &[0], value: "1".to_string(), id: ElementId(9) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(10) },
+            LoadTemplate { index: 0, id: ElementId(10) },
             HydrateText { path: &[0], value: "2".to_string(), id: ElementId(11) },
             ReplaceWith { id: ElementId(4), m: 3 }
         ]
@@ -164,7 +164,7 @@ fn list_shrink_multiroot() {
     assert_eq!(
         dom.rebuild_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
+            LoadTemplate { index: 0, id: ElementId(1,) },
             AssignId { path: &[0,], id: ElementId(2,) },
             AppendChildren { id: ElementId(0), m: 1 }
         ]
@@ -174,9 +174,9 @@ fn list_shrink_multiroot() {
     assert_eq!(
         dom.render_immediate_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(3) },
+            LoadTemplate { index: 0, id: ElementId(3) },
             HydrateText { path: &[0], value: "0".to_string(), id: ElementId(4) },
-            LoadTemplate { name: "template", index: 1, id: ElementId(5) },
+            LoadTemplate { index: 1, id: ElementId(5) },
             HydrateText { path: &[0], value: "0".to_string(), id: ElementId(6) },
             ReplaceWith { id: ElementId(2), m: 2 }
         ]
@@ -186,9 +186,9 @@ fn list_shrink_multiroot() {
     assert_eq!(
         dom.render_immediate_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(2) },
+            LoadTemplate { index: 0, id: ElementId(2) },
             HydrateText { path: &[0], value: "1".to_string(), id: ElementId(7) },
-            LoadTemplate { name: "template", index: 1, id: ElementId(8) },
+            LoadTemplate { index: 1, id: ElementId(8) },
             HydrateText { path: &[0], value: "1".to_string(), id: ElementId(9) },
             InsertAfter { id: ElementId(5), m: 2 }
         ]
@@ -198,9 +198,9 @@ fn list_shrink_multiroot() {
     assert_eq!(
         dom.render_immediate_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(10) },
+            LoadTemplate { index: 0, id: ElementId(10) },
             HydrateText { path: &[0], value: "2".to_string(), id: ElementId(11) },
-            LoadTemplate { name: "template", index: 1, id: ElementId(12) },
+            LoadTemplate { index: 1, id: ElementId(12) },
             HydrateText { path: &[0], value: "2".to_string(), id: ElementId(13) },
             InsertAfter { id: ElementId(8), m: 2 }
         ]
@@ -226,21 +226,21 @@ fn removes_one_by_one_multiroot() {
     assert_eq!(
         dom.rebuild_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(1) },
+            LoadTemplate { index: 0, id: ElementId(1) },
             //
-            LoadTemplate { name: "template", index: 0, id: ElementId(2) },
+            LoadTemplate { index: 0, id: ElementId(2) },
             HydrateText { path: &[0], value: "0".to_string(), id: ElementId(3) },
-            LoadTemplate { name: "template", index: 1, id: ElementId(4) },
+            LoadTemplate { index: 1, id: ElementId(4) },
             HydrateText { path: &[0], value: "0".to_string(), id: ElementId(5) },
             //
-            LoadTemplate { name: "template", index: 0, id: ElementId(6) },
+            LoadTemplate { index: 0, id: ElementId(6) },
             HydrateText { path: &[0], value: "1".to_string(), id: ElementId(7) },
-            LoadTemplate { name: "template", index: 1, id: ElementId(8) },
+            LoadTemplate { index: 1, id: ElementId(8) },
             HydrateText { path: &[0], value: "1".to_string(), id: ElementId(9) },
             //
-            LoadTemplate { name: "template", index: 0, id: ElementId(10) },
+            LoadTemplate { index: 0, id: ElementId(10) },
             HydrateText { path: &[0], value: "2".to_string(), id: ElementId(11) },
-            LoadTemplate { name: "template", index: 1, id: ElementId(12) },
+            LoadTemplate { index: 1, id: ElementId(12) },
             HydrateText { path: &[0], value: "2".to_string(), id: ElementId(13) },
             //
             ReplacePlaceholder { path: &[0], m: 6 },
@@ -335,7 +335,7 @@ fn remove_many() {
         assert_eq!(
             edits.edits,
             [
-                LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
+                LoadTemplate { index: 0, id: ElementId(2,) },
                 HydrateText { path: &[0,], value: "hello 0".to_string(), id: ElementId(3,) },
                 ReplaceWith { id: ElementId(1,), m: 1 },
             ]
@@ -348,13 +348,13 @@ fn remove_many() {
         assert_eq!(
             edits.edits,
             [
-                LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
+                LoadTemplate { index: 0, id: ElementId(1,) },
                 HydrateText { path: &[0,], value: "hello 1".to_string(), id: ElementId(4,) },
-                LoadTemplate { name: "template", index: 0, id: ElementId(5,) },
+                LoadTemplate { index: 0, id: ElementId(5,) },
                 HydrateText { path: &[0,], value: "hello 2".to_string(), id: ElementId(6,) },
-                LoadTemplate { name: "template", index: 0, id: ElementId(7,) },
+                LoadTemplate { index: 0, id: ElementId(7,) },
                 HydrateText { path: &[0,], value: "hello 3".to_string(), id: ElementId(8,) },
-                LoadTemplate { name: "template", index: 0, id: ElementId(9,) },
+                LoadTemplate { index: 0, id: ElementId(9,) },
                 HydrateText { path: &[0,], value: "hello 4".to_string(), id: ElementId(10,) },
                 InsertAfter { id: ElementId(2,), m: 4 },
             ]
@@ -383,7 +383,7 @@ fn remove_many() {
         assert_eq!(
             edits.edits,
             [
-                LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
+                LoadTemplate { index: 0, id: ElementId(2,) },
                 HydrateText { path: &[0,], value: "hello 0".to_string(), id: ElementId(1,) },
                 ReplaceWith { id: ElementId(11,), m: 1 },
             ]
@@ -419,7 +419,7 @@ fn replace_and_add_items() {
         assert_eq!(
             edits.edits,
             [
-                LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
+                LoadTemplate { index: 0, id: ElementId(1,) },
                 AssignId { path: &[0], id: ElementId(2,) },
                 AppendChildren { id: ElementId(0), m: 1 },
             ]
@@ -433,7 +433,7 @@ fn replace_and_add_items() {
         assert_eq!(
             edits.edits,
             [
-                LoadTemplate { name: "template", index: 0, id: ElementId(3,) },
+                LoadTemplate { index: 0, id: ElementId(3,) },
                 ReplaceWith { id: ElementId(2,), m: 1 },
             ]
         );
@@ -461,11 +461,11 @@ fn replace_and_add_items() {
         assert_eq!(
             edits.edits,
             [
-                LoadTemplate { name: "template", index: 0, id: ElementId(3,) },
+                LoadTemplate { index: 0, id: ElementId(3,) },
                 InsertAfter { id: ElementId(2,), m: 1 },
-                LoadTemplate { name: "template", index: 0, id: ElementId(5,) },
+                LoadTemplate { index: 0, id: ElementId(5,) },
                 ReplaceWith { id: ElementId(4,), m: 1 },
-                LoadTemplate { name: "template", index: 0, id: ElementId(4,) },
+                LoadTemplate { index: 0, id: ElementId(4,) },
                 ReplaceWith { id: ElementId(2,), m: 1 },
             ]
         );

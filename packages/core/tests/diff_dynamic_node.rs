@@ -19,7 +19,7 @@ fn toggle_option_text() {
     assert_eq!(
         dom.rebuild_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
+            LoadTemplate { index: 0, id: ElementId(1,) },
             AssignId { path: &[0], id: ElementId(2,) },
             AppendChildren { id: ElementId(0), m: 1 },
         ]

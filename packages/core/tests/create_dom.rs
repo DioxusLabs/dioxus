@@ -23,7 +23,7 @@ fn test_original_diff() {
         edits.edits,
         [
             // add to root
-            LoadTemplate { name: "template", index: 0, id: ElementId(1) },
+            LoadTemplate { index: 0, id: ElementId(1) },
             AppendChildren { m: 1, id: ElementId(0) }
         ]
     )
@@ -64,11 +64,11 @@ fn create() {
     //         AppendChildren { m: 1 },
     //         AppendChildren { m: 2 },
     //         AppendChildren { m: 1 },
-    //         SaveTemplate { name: "template", m: 1 },
+    //         SaveTemplate {  m: 1 },
     //         // The fragment child template
     //         CreateStaticText { value: "hello" },
     //         CreateStaticText { value: "world" },
-    //         SaveTemplate { name: "template", m: 2 },
+    //         SaveTemplate {  m: 2 },
     //     ]
     // );
 }
@@ -87,7 +87,7 @@ fn create_list() {
     //         CreateElement { name: "div" },
     //         CreateStaticText { value: "hello" },
     //         AppendChildren { m: 1 },
-    //         SaveTemplate { name: "template", m: 1 }
+    //         SaveTemplate {  m: 1 }
     //     ]
     // );
 }
@@ -115,7 +115,7 @@ fn create_simple() {
     //         CreateElement { name: "div" },
     //         CreateElement { name: "div" },
     //         // add to root
-    //         SaveTemplate { name: "template", m: 4 }
+    //         SaveTemplate {  m: 4 }
     //     ]
     // );
 }
@@ -178,7 +178,7 @@ fn anchors() {
     assert_eq!(
         edits.edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(1) },
+            LoadTemplate { index: 0, id: ElementId(1) },
             CreatePlaceholder { id: ElementId(2) },
             AppendChildren { m: 2, id: ElementId(0) }
         ]

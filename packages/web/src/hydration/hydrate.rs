@@ -145,17 +145,7 @@ impl WebsysDom {
         }
         with_server_data(server_data, || {
             // rerun the scope with the new data
-            SuspenseBoundaryProps::resolve_suspense(
-                id,
-                dom,
-                self,
-                |to| {
-                    // Switch to only writing templates
-                    to.only_write_templates = true;
-                },
-                children.len(),
-            );
-            self.only_write_templates = false;
+            SuspenseBoundaryProps::resolve_suspense(id, dom, self, children.len());
         });
 
         // Flush the mutations that will swap the placeholder nodes with the resolved nodes

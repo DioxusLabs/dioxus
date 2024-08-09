@@ -15,7 +15,7 @@ fn cycling_elements() {
         assert_eq!(
             edits.edits,
             [
-                LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
+                LoadTemplate { index: 0, id: ElementId(1,) },
                 AppendChildren { m: 1, id: ElementId(0) },
             ]
         );
@@ -25,7 +25,7 @@ fn cycling_elements() {
     assert_eq!(
         dom.render_immediate_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
+            LoadTemplate { index: 0, id: ElementId(2,) },
             ReplaceWith { id: ElementId(1,), m: 1 },
         ]
     );
@@ -35,7 +35,7 @@ fn cycling_elements() {
     assert_eq!(
         dom.render_immediate_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
+            LoadTemplate { index: 0, id: ElementId(1,) },
             ReplaceWith { id: ElementId(2,), m: 1 },
         ]
     );
@@ -44,7 +44,7 @@ fn cycling_elements() {
     assert_eq!(
         dom.render_immediate_to_vec().sanitize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
+            LoadTemplate { index: 0, id: ElementId(2,) },
             ReplaceWith { id: ElementId(1,), m: 1 },
         ]
     );
