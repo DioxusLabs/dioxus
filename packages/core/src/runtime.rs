@@ -264,7 +264,7 @@ impl Runtime {
         // If this is not a suspended scope, and we are under a frozen context, then we should
         let scopes = self.scope_states.borrow();
         let scope = &scopes[scope_id.0].as_ref().unwrap();
-        !matches!(scope.suspense_location(), SuspenseLocation::UnderSuspense(suspense) if suspense.has_suspended_tasks())
+        !matches!(scope.suspense_location(), SuspenseLocation::UnderSuspense(suspense) if suspense.is_suspended())
     }
 
     /// Call a listener inside the VirtualDom with data from outside the VirtualDom. **The ElementId passed in must be the id of an element with a listener, not a static node or a text node.**
