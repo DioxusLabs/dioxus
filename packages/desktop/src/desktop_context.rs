@@ -62,7 +62,7 @@ pub struct DesktopService {
     pub(crate) file_hover: NativeFileHover,
 
     #[cfg(target_os = "ios")]
-    pub(crate) views: Rc<RefCell<Vec<*mut objc::runtime::Object>>>,
+    pub(crate) views: Rc<std::cell::RefCell<Vec<*mut objc::runtime::Object>>>,
 }
 
 /// A smart pointer to the current window.
