@@ -242,7 +242,7 @@ fn ListFooter(
                             href: url,
                             class: if filter() == state { "selected" },
                             onclick: move |evt| {
-                                evt.prevent_default(),
+                                evt.prevent_default();
                                 filter.set(state)
                             },
                             {state_text}

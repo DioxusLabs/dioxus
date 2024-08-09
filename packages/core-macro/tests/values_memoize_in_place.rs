@@ -98,7 +98,7 @@ fn cloning_event_handler_components_work() {
             Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())) as Rc<dyn Any>,
             true,
         );
-        dom.handle_event("click", event, ElementId(1));
+        dom.runtime().handle_event("click", event, ElementId(1));
         dom.render_immediate(&mut dioxus_core::NoOpMutations);
     }
     dom.render_immediate(&mut dioxus_core::NoOpMutations);
