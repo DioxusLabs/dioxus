@@ -14,7 +14,9 @@ mod eval;
 pub use eval::*;
 
 pub mod head;
-pub use head::{Meta, MetaProps, Script, ScriptProps, Style, StyleProps, Title, TitleProps};
+pub use head::{
+    Meta, MetaProps, Script, ScriptProps, Style, StyleProps, Stylesheet, Title, TitleProps,
+};
 
 fn format_attributes(attributes: &[(&str, String)]) -> String {
     let mut formatted = String::from("[");

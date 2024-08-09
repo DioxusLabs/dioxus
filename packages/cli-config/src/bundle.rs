@@ -53,6 +53,16 @@ impl From<DebianSettings> for tauri_bundler::DebianSettings {
             depends: val.depends,
             files: val.files,
             desktop_template: None,
+            provides: todo!(),
+            conflicts: todo!(),
+            replaces: todo!(),
+            section: todo!(),
+            priority: todo!(),
+            changelog: todo!(),
+            pre_install_script: todo!(),
+            post_install_script: todo!(),
+            pre_remove_script: todo!(),
+            post_remove_script: todo!(),
         }
     }
 }
@@ -104,8 +114,6 @@ impl From<WixSettings> for tauri_bundler::WixSettings {
             feature_group_refs: val.feature_group_refs,
             feature_refs: val.feature_refs,
             merge_refs: val.merge_refs,
-            skip_webview_install: val.skip_webview_install,
-            license: val.license,
             enable_elevated_update_task: val.enable_elevated_update_task,
             banner_path: val.banner_path,
             dialog_image_path: val.dialog_image_path,
@@ -132,12 +140,13 @@ impl From<MacOsSettings> for tauri_bundler::MacOsSettings {
         tauri_bundler::MacOsSettings {
             frameworks: val.frameworks,
             minimum_system_version: val.minimum_system_version,
-            license: val.license,
             exception_domain: val.exception_domain,
             signing_identity: val.signing_identity,
             provider_short_name: val.provider_short_name,
             entitlements: val.entitlements,
             info_plist_path: val.info_plist_path,
+            files: todo!(),
+            hardened_runtime: todo!(),
         }
     }
 }
@@ -170,6 +179,7 @@ impl From<WindowsSettings> for tauri_bundler::WindowsSettings {
             webview_fixed_runtime_path: val.webview_fixed_runtime_path,
             allow_downgrades: val.allow_downgrades,
             nsis: val.nsis.map(Into::into),
+            sign_command: todo!(),
         }
     }
 }
@@ -191,7 +201,6 @@ pub struct NsisSettings {
 impl From<NsisSettings> for tauri_bundler::NsisSettings {
     fn from(val: NsisSettings) -> Self {
         tauri_bundler::NsisSettings {
-            license: val.license,
             header_image: val.header_image,
             sidebar_image: val.sidebar_image,
             installer_icon: val.installer_icon,
@@ -200,7 +209,9 @@ impl From<NsisSettings> for tauri_bundler::NsisSettings {
             display_language_selector: val.display_language_selector,
             custom_language_files: None,
             template: None,
-            compression: None,
+            compression: tauri_utils::config::NsisCompression::None,
+            start_menu_folder: todo!(),
+            installer_hooks: todo!(),
         }
     }
 }

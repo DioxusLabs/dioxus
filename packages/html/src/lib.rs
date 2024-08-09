@@ -60,7 +60,7 @@ pub mod prelude {
     #[cfg(feature = "document")]
     pub use crate::document::{
         self, document, eval, head, Document, Meta, MetaProps, Script, ScriptProps, Style,
-        StyleProps, Title, TitleProps, UseEval,
+        StyleProps, Stylesheet, Title, TitleProps, UseEval,
     };
     pub use crate::elements::extensions::*;
     pub use crate::events::*;

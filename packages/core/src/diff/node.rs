@@ -79,7 +79,7 @@ impl VNode {
         match (old_node, new_node) {
             (Text(old), Text(new)) => {
                 // Diffing text is just a side effect, if we are diffing suspended nodes and are not outputting mutations, we can skip it
-                if let Some(to) = to{
+                if let Some(to) = to {
                     let mount = &dom.mounts[mount.0];
                     self.diff_vtext(to, mount, idx, old, new)
                 }

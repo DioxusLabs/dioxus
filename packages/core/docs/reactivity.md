@@ -89,14 +89,14 @@ let doubled = use_memo(move || state() * 2);
 #[component]
 fn MyComponent(state: i32) -> Element {
     let doubled = use_memo(move || state * 2);
-    todo!()
+    unimplemented!()
 }
 
 // ✅ Wrap your props in ReadOnlySignal to make them reactive
 #[component]
 fn MyReactiveComponent(state: ReadOnlySignal<i32>) -> Element {
     let doubled = use_memo(move || state() * 2);
-    todo!()
+    unimplemented!()
 }
 ```
 

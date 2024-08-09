@@ -20,7 +20,7 @@ fn App() -> Element {
         })
     });
 
-    todo!()
+    unimplemented!()
 }
 ```
 
@@ -39,7 +39,7 @@ fn App() -> Element {
         })
     });
 
-    todo!()
+    unimplemented!()
 }
 ```
 
@@ -68,7 +68,7 @@ fn MyComponent(string: String) -> Element {
         })
     });
 
-    todo!()
+    unimplemented!()
 }
 ```
 
@@ -92,7 +92,7 @@ fn MyComponent(string: ReadOnlySignal<String>) -> Element {
         })
     });
 
-    todo!()
+    unimplemented!()
 }
 ```
 
@@ -119,7 +119,7 @@ fn MyComponent(string: String) -> Element {
         })
     });
 
-    todo!()
+    unimplemented!()
 }
 ```
 

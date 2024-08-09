@@ -40,7 +40,7 @@ use std::future::Future;
 ///
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
-/// # async fn fetch_article(id: u32) -> String { todo!() }
+/// # async fn fetch_article(id: u32) -> String { unimplemented!() }
 /// use dioxus::prelude::*;
 ///
 /// fn App() -> Element {

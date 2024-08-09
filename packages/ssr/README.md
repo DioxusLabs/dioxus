@@ -51,7 +51,7 @@ let content = dioxus_ssr::render_element(rsx!{
 
 ```rust, no_run
 # use dioxus::prelude::*;
-# fn app() -> Element { todo!() }
+# fn app() -> Element { unimplemented!() }
 let mut vdom = VirtualDom::new(app);
 vdom.rebuild_in_place();
 
@@ -70,7 +70,7 @@ To enable pre-rendering, simply set the pre-rendering flag to true.
 
 ```rust, no_run
 # use dioxus::prelude::*;
-# fn App() -> Element { todo!() }
+# fn App() -> Element { unimplemented!() }
 let mut vdom = VirtualDom::new(App);
 
 vdom.rebuild_in_place();
