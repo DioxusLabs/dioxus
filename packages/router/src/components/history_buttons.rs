@@ -75,8 +75,10 @@ pub fn GoBackButton(props: HistoryButtonProps) -> Element {
     rsx! {
         button {
             disabled: "{disabled}",
-            prevent_default: "onclick",
-            onclick: move |_| router.go_back(),
+            onclick: move |evt| {
+                evt.prevent_default();
+                router.go_back()
+            },
             {children}
         }
     }
@@ -146,8 +148,10 @@ pub fn GoForwardButton(props: HistoryButtonProps) -> Element {
     rsx! {
         button {
             disabled: "{disabled}",
-            prevent_default: "onclick",
-            onclick: move |_| router.go_forward(),
+            onclick: move |evt| {
+                evt.prevent_default();
+                router.go_forward()
+            },
             {children}
         }
     }
