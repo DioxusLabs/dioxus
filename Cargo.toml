@@ -229,7 +229,7 @@ fullstack = ["dioxus/fullstack"]
 axum = ["dioxus/axum"]
 server = ["dioxus/axum"]
 web = ["dioxus/web"]
-collect-assets = ["dep:manganis"]
+# collect-assets = ["dep:manganis"]
 http = ["dep:reqwest", "dep:http-range"]
 
 [[example]]

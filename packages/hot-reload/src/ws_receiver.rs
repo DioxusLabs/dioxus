@@ -30,14 +30,17 @@ pub struct NativeReceiver {
 impl NativeReceiver {
     /// Connect to the devserver
     async fn create(url: String) -> TtResult<Self> {
-        let (socket, _ws) = tokio_tungstenite::connect_async(&url).await?;
+        let (socket, _ws) = tokio_tungstenite::connect_async(&url).await.unwrap();
         Ok(Self { socket })
     }
 
     /// Connect to the devserver with an address from the CLI. Returns None if the current application was not run with the CLI
     pub async fn create_from_cli() -> Option<TtResult<Self>> {
-        let cli_args = dioxus_cli_config::RuntimeCLIArguments::from_cli()?;
-        let addr = cli_args.cli_address();
+        // todo: allow external configuration of this address for use by mobile when launching
+        //       from the ios-deploy tooling. This could be stored in a config file= that gets
+        //       uploaded to the device.
+        let addr =
+            dioxus_cli_config::RuntimeCLIArguments::from_cli().map(|args| args.cli_address())?;
         Some(Self::create(format!("ws://{addr}/_dioxus")).await)
     }
 

@@ -111,33 +111,40 @@ fn assets_head() -> Option<String> {
     }
 }
 
+fn running_in_dev_mode() -> bool {
+    // If running under cargo, there's no bundle!
+    // There might be a smarter/more resilient way of doing this
+    std::env::var_os("CARGO").is_some()
+}
+
 fn resolve_resource(path: &Path) -> PathBuf {
     let mut base_path = get_asset_root_or_default();
 
-    // if running_in_dev_mode() {
-    //     base_path.push(path);
+    // Even in dev mode, mobile needs to resolve the asset path from the bundle
+    if running_in_dev_mode() || cfg!(any(target_os = "ios", target_os = "android")) {
+        base_path.push(path);
+        // Special handler for Manganis filesystem fallback.
+        // We need this since Manganis provides assets from workspace root.
+        if !base_path.exists() {
+            let workspace_root = get_workspace_root_from_cargo();
+            let asset_path = workspace_root.join(path);
+            return asset_path;
+        }
+    } else {
+        let mut resource_path = PathBuf::new();
+        for component in path.components() {
+            // Tauri-bundle inserts special path segments for abnormal component paths
+            match component {
+                Component::Prefix(_) => {}
+                Component::RootDir => resource_path.push("_root_"),
+                Component::CurDir => {}
+                Component::ParentDir => resource_path.push("_up_"),
+                Component::Normal(p) => resource_path.push(p),
+            }
+        }
+        base_path.push(resource_path);
+    }
 
-    //     // Special handler for Manganis filesystem fallback.
-    //     // We need this since Manganis provides assets from workspace root.
-    //     if !base_path.exists() {
-    //         let workspace_root = get_workspace_root_from_cargo();
-    //         let asset_path = workspace_root.join(path);
-    //         return asset_path;
-    //     }
-    // } else {
-    //     let mut resource_path = PathBuf::new();
-    //     for component in path.components() {
-    //         // Tauri-bundle inserts special path segments for abnormal component paths
-    //         match component {
-    //             Component::Prefix(_) => {}
-    //             Component::RootDir => resource_path.push("_root_"),
-    //             Component::CurDir => {}
-    //             Component::ParentDir => resource_path.push("_up_"),
-    //             Component::Normal(p) => resource_path.push(p),
-    //         }
-    //     }
-    //     base_path.push(resource_path);
-    // }
     base_path
 }
 
@@ -249,40 +256,30 @@ fn get_asset_root_or_default() -> PathBuf {
     get_asset_root().unwrap_or_else(|| std::env::current_dir().unwrap())
 }
 
-// fn running_in_dev_mode() -> bool {
-//     // If running under cargo, there's no bundle!
-//     // There might be a smarter/more resilient way of doing this
-//     std::env::var_os("CARGO").is_some()
-// }
-
 /// Get the asset directory, following tauri/cargo-bundles directory discovery approach
 ///
 /// Currently supports:
 /// - [x] macOS
-/// - [ ] Windows
+/// - [x] iOS
 /// - [ ] Linux (rpm)
 /// - [ ] Linux (deb)
-/// - [ ] iOS
+/// - [ ] Windows
 /// - [ ] Android
 #[allow(unreachable_code)]
 fn get_asset_root() -> Option<PathBuf> {
-    // if running_in_dev_mode() {
-    //     return dioxus_cli_config::CURRENT_CONFIG
-    //         .as_ref()
-    //         .map(|c| c.application.out_dir.clone())
-    //         .ok();
-    // }
-
-    #[cfg(target_os = "macos")]
+    // Use the prescence of the bundle to determine if we're in dev mode
+    // todo: for other platforms, we should check their bundles too. This currently only works for macOS and iOS
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
     {
-        let bundle = core_foundation::bundle::CFBundle::main_bundle();
-        let bundle_path = bundle.path()?;
-        let resources_path = bundle.resources_path()?;
-        let absolute_resources_root = bundle_path.join(resources_path);
-        return dunce::canonicalize(absolute_resources_root).ok();
+        if let Some(resources) = core_foundation::bundle::CFBundle::main_bundle().resources_path() {
+            return dunce::canonicalize(resources).ok();
+        }
     }
 
-    None
+    dioxus_cli_config::CURRENT_CONFIG
+        .as_ref()
+        .map(|c| c.application.out_dir.clone())
+        .ok()
 }
 
 /// Get the mime type from a path-like string
@@ -319,31 +316,3 @@ fn get_mime_by_ext(trimmed: &Path) -> &'static str {
         None => "application/octet-stream",
     }
 }
-
-// /// A global that stores the workspace root. Used in [`get_workspace_root_from_cargo`].
-// static WORKSPACE_ROOT: OnceLock<PathBuf> = OnceLock::new();
-
-// /// Describes the metadata we need from `cargo metadata`.
-// #[derive(Deserialize)]
-// struct CargoMetadata {
-//     workspace_root: PathBuf,
-// }
-
-// /// Get the workspace root using `cargo metadata`. Should not be used in release mode.
-// pub(crate) fn get_workspace_root_from_cargo() -> PathBuf {
-//     WORKSPACE_ROOT
-//         .get_or_init(|| {
-//             let out = Command::new("cargo")
-//                 .args(["metadata", "--format-version", "1", "--no-deps"])
-//                 .output()
-//                 .expect("`cargo metadata` failed to run");
-
-//             let out =
-//                 String::from_utf8(out.stdout).expect("failed to parse output of `cargo metadata`");
-//             let metadata = serde_json::from_str::<CargoMetadata>(&out)
-//                 .expect("failed to deserialize data from `cargo metadata`");
-
-//             metadata.workspace_root
-//         })
-//         .to_owned()
-// }
