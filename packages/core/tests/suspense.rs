@@ -415,7 +415,7 @@ fn toggle_suspense() {
         .unwrap()
         .block_on(async {
             let mut dom = VirtualDom::new(app);
-            let mutations = dom.rebuild_to_vec().sanitize();
+            let mutations = dom.rebuild_to_vec();
 
             // First create goodbye world
             println!("{:#?}", mutations);
@@ -428,7 +428,7 @@ fn toggle_suspense() {
             );
 
             dom.mark_dirty(ScopeId::APP);
-            let mutations = dom.render_immediate_to_vec().sanitize();
+            let mutations = dom.render_immediate_to_vec();
 
             // Then replace that with nothing
             println!("{:#?}", mutations);
@@ -441,7 +441,7 @@ fn toggle_suspense() {
             );
 
             dom.wait_for_work().await;
-            let mutations = dom.render_immediate_to_vec().sanitize();
+            let mutations = dom.render_immediate_to_vec();
 
             // Then replace it with a placeholder
             println!("{:#?}", mutations);
@@ -454,7 +454,7 @@ fn toggle_suspense() {
             );
 
             dom.wait_for_work().await;
-            let mutations = dom.render_immediate_to_vec().sanitize();
+            let mutations = dom.render_immediate_to_vec();
 
             // Then replace it with the resolved node
             println!("{:#?}", mutations);
@@ -600,7 +600,7 @@ fn nested_suspense_resolves_client() {
             // DOM STATE:
             // placeholder // ID: 1
             // "Loading 0..." // ID: 2
-            let mutations = dom.render_immediate_to_vec().sanitize();
+            let mutations = dom.render_immediate_to_vec();
             // Fill in the contents of the initial message and start loading the nested suspense
             // The title also finishes loading
             assert_eq!(
@@ -674,7 +674,7 @@ fn nested_suspense_resolves_client() {
             // div // ID: 7
             //   "Loading 1..." // ID: 8
             //   "Loading 2..." // ID: 9
-            let mutations = dom.render_immediate_to_vec().sanitize();
+            let mutations = dom.render_immediate_to_vec();
             assert_eq!(
                 mutations.edits,
                 vec![
@@ -860,7 +860,7 @@ fn nested_suspense_resolves_client() {
             );
 
             dom.wait_for_work().await;
-            let mutations = dom.render_immediate_to_vec().sanitize();
+            let mutations = dom.render_immediate_to_vec();
             assert_eq!(
                 mutations.edits,
                 vec![
