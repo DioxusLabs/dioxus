@@ -31,7 +31,7 @@ impl Control for String {
         state.clone()
     }
 
-    fn control(name: &'static str, mut state: Signal<Self::State>) -> Element {
+    fn control(_name: &'static str, mut state: Signal<Self::State>) -> Element {
         rsx!(Input {
             value: state,
             oninput: move |event: FormEvent| state.set(event.data.value())
@@ -72,7 +72,7 @@ where
         Self(state.clone())
     }
 
-    fn control(name: &'static str, mut state: Signal<Self::State>) -> Element {
+    fn control(_name: &'static str, mut state: Signal<Self::State>) -> Element {
         let json = serde_json::to_string(&*state.read()).unwrap();
 
         rsx!(Input {

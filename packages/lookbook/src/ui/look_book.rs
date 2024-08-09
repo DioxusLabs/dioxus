@@ -7,7 +7,7 @@ use dioxus_router::prelude::Router;
 pub fn LookBook<I: IntoIterator<Item = Preview> + PartialEq + Clone + 'static>(
     previews: I,
     home: Component,
-    prefix: Option<&'static str>,
+    #[props(default = None)] prefix: Option<&'static str>,
 ) -> Element {
     use_hook(move || {
         for preview in previews.clone() {

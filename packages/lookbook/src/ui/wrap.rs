@@ -1,6 +1,6 @@
 use crate::{prefixed_route::PrefixedRoute, ui::pane::HorizontalPane, Route, CONTEXT};
 use dioxus::prelude::*;
-use dioxus_material::{use_theme, Icon, IconFont, IconKind};
+use dioxus_material::{use_theme, IconFont};
 use dioxus_router::prelude::*;
 
 /// The main application wrap component.
