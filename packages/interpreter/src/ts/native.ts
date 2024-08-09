@@ -418,11 +418,9 @@ function handleVirtualdomEventSync(
   const xhr = new XMLHttpRequest();
 
   // Serialize the event and send it to the custom protocol in the Rust side of things
-  xhr.open("GET", endpoint, false);
+  xhr.open("POST", endpoint, false);
   xhr.setRequestHeader("Content-Type", "application/json");
-  const blob = new Blob([contents], { type: "text/plain" });
-  console.log("sending", blob);
-  xhr.send(blob);
+  xhr.send(contents);
 
   // Deserialize the response, and then prevent the default/capture the event if the virtualdom wants to
   return JSON.parse(xhr.responseText);
