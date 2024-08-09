@@ -6,10 +6,10 @@
 //! - tests to ensure dyn_into works for various event types.
 //! - Partial delegation?
 
-use dioxus_core::ElementId;
-use dioxus_html::PlatformEventData;
+use std::{any::Any, rc::Rc};
+
+use dioxus_core::{ElementId, Runtime};
 use dioxus_interpreter_js::unified_bindings::Interpreter;
-use futures_channel::mpsc;
 use rustc_hash::FxHashMap;
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{Document, Element, Event};
@@ -25,7 +25,7 @@ pub struct WebsysDom {
     pub(crate) interpreter: Interpreter,
 
     #[cfg(feature = "mounted")]
-    pub(crate) event_channel: mpsc::UnboundedSender<UiEvent>,
+    pub(crate) runtime: Rc<Runtime>,
 
     #[cfg(feature = "mounted")]
     pub(crate) queued_mounted_events: Vec<ElementId>,
@@ -50,15 +50,8 @@ pub struct WebsysDom {
     pub(crate) suspense_hydration_ids: crate::hydration::SuspenseHydrationIds,
 }
 
-pub struct UiEvent {
-    pub name: String,
-    pub bubbles: bool,
-    pub element: ElementId,
-    pub data: PlatformEventData,
-}
-
 impl WebsysDom {
-    pub fn new(cfg: Config, event_channel: mpsc::UnboundedSender<UiEvent>) -> Self {
+    pub fn new(cfg: Config, runtime: Rc<Runtime>) -> Self {
         let (document, root) = match cfg.root {
             crate::cfg::ConfigRoot::RootName(rootname) => {
                 // eventually, we just want to let the interpreter do all the work of decoding events into our event type
@@ -88,7 +81,7 @@ impl WebsysDom {
         let interpreter = Interpreter::default();
 
         let handler: Closure<dyn FnMut(&Event)> = Closure::wrap(Box::new({
-            let event_channel = event_channel.clone();
+            let runtime = runtime.clone();
             move |event: &web_sys::Event| {
                 let name = event.type_();
                 let element = walk_event_for_id(event);
@@ -122,12 +115,9 @@ impl WebsysDom {
                 }
 
                 let data = virtual_event_from_websys_event(event.clone(), target);
-                let _ = event_channel.unbounded_send(UiEvent {
-                    name,
-                    bubbles,
-                    element,
-                    data,
-                });
+
+                let event = dioxus_core::Event::new(Rc::new(data) as Rc<dyn Any>, bubbles);
+                runtime.handle_event(name.as_str(), event, element);
             }
         }));
 
@@ -147,7 +137,7 @@ impl WebsysDom {
             templates: FxHashMap::default(),
             max_template_id: 0,
             #[cfg(feature = "mounted")]
-            event_channel,
+            runtime,
             #[cfg(feature = "mounted")]
             queued_mounted_events: Default::default(),
             #[cfg(feature = "hydrate")]

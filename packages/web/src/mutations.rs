@@ -63,12 +63,14 @@ impl WebsysDom {
         for id in self.queued_mounted_events.drain(..) {
             let node = self.interpreter.base().get_node(id.0 as u32);
             if let Some(element) = node.dyn_ref::<web_sys::Element>() {
-                let _ = self.event_channel.unbounded_send(crate::dom::UiEvent {
-                    name: "mounted".to_string(),
-                    bubbles: false,
-                    element: id,
-                    data: dioxus_html::PlatformEventData::new(Box::new(element.clone())),
-                });
+                let event = dioxus_core::Event::new(
+                    std::rc::Rc::new(dioxus_html::PlatformEventData::new(Box::new(
+                        element.clone(),
+                    ))) as std::rc::Rc<dyn std::any::Any>,
+                    false,
+                );
+                let name = "mounted";
+                self.runtime.handle_event(name, event, id)
             }
         }
     }

@@ -158,6 +158,12 @@ impl<T: ?Sized> Event<T> {
     /// ```
     ///
     /// Note: This must be called synchronously when handling the event. Calling it after the event has been handled will have no effect.
+    ///
+    /// <div class="warning">
+    ///
+    /// This method is not available on the LiveView renderer because LiveView handles all events over a websocket which cannot block.
+    ///
+    /// </div>
     #[track_caller]
     pub fn prevent_default(&self) {
         let mut metadata = self.metadata.get();
