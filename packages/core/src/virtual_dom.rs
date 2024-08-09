@@ -96,15 +96,16 @@ use tracing::instrument;
 /// let edits = vdom.rebuild_to_vec();
 /// ```
 ///
-/// To call listeners inside the VirtualDom, call [`VirtualDom::handle_event`] with the appropriate event data.
+/// To call listeners inside the VirtualDom, call [`Runtime::handle_event`] with the appropriate event data.
 ///
 /// ```rust, no_run
 /// # use dioxus::prelude::*;
 /// # use dioxus_core::*;
 /// # fn app() -> Element { rsx! { div {} } }
 /// # let mut vdom = VirtualDom::new(app);
-/// let event = std::rc::Rc::new(0);
-/// vdom.handle_event("onclick", event, ElementId(0), true);
+/// # let runtime = vdom.runtime();
+/// let event = Event::new(std::rc::Rc::new(0) as std::rc::Rc<dyn std::any::Any>, true);
+/// runtime.handle_event("onclick", event, ElementId(0));
 /// ```
 ///
 /// While no events are ready, call [`VirtualDom::wait_for_work`] to poll any futures inside the VirtualDom.
@@ -173,7 +174,10 @@ use tracing::instrument;
 /// loop {
 ///     tokio::select! {
 ///         _ = dom.wait_for_work() => {}
-///         evt = real_dom.wait_for_event() => dom.handle_event("onclick", evt, ElementId(0), true),
+///         evt = real_dom.wait_for_event() => {
+///             let evt = dioxus_core::Event::new(evt, true);
+///             dom.runtime().handle_event("onclick", evt, ElementId(0))
+///         },
 ///     }
 ///
 ///     dom.render_immediate(&mut real_dom.apply());
