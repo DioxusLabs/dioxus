@@ -215,7 +215,11 @@ mod_methods! {
     map_global_attributes;
     map_html_global_attributes_to_rsx;
 
-    /// Prevent the default action for this element.
+    /// Prevent the default action for this element. This attribute is only recommended in the LiveView renderer
+    /// which does not support the prevent default method on events.
+    ///
+    ///
+    /// For most renderers, you should prefer calling [`dioxus_core::Event::prevent_default`] on the event instead.
     ///
     /// For more information, see the MDN docs:
     /// <https://developer.mozilla.org/en-US/docs/Web/API/Event/preventDefault>
@@ -1746,7 +1750,12 @@ mod_methods! {
     map_svg_attributes;
     map_html_svg_attributes_to_rsx;
 
-    /// Prevent the default action for this element.
+    /// Prevent the default action for this element. This attribute is only recommended in the LiveView renderer
+    /// which does not support the prevent default method on events.
+    ///
+    ///
+    /// For most renderers, you should prefer calling [`dioxus_core::Event::prevent_default`] on the event instead.
+    ///
     ///
     /// For more information, see the MDN docs:
     /// <https://developer.mozilla.org/en-US/docs/Web/API/Event/preventDefault>
