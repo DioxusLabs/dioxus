@@ -82,10 +82,10 @@ impl WebsysDom {
 
         let handler: Closure<dyn FnMut(&Event)> = Closure::wrap(Box::new({
             let runtime = runtime.clone();
-            move |event: &web_sys::Event| {
-                let name = event.type_();
-                let element = walk_event_for_id(event);
-                let bubbles = event.bubbles();
+            move |web_sys_event: &web_sys::Event| {
+                let name = web_sys_event.type_();
+                let element = walk_event_for_id(web_sys_event);
+                let bubbles = web_sys_event.bubbles();
 
                 let Some((element, target)) = element else {
                     return;
@@ -108,16 +108,21 @@ impl WebsysDom {
                 if name == "submit" {
                     // On forms the default behavior is not to submit, if prevent default is set then we submit the form
                     if !prevent_event {
-                        event.prevent_default();
+                        web_sys_event.prevent_default();
                     }
                 } else if prevent_event {
-                    event.prevent_default();
+                    web_sys_event.prevent_default();
                 }
 
-                let data = virtual_event_from_websys_event(event.clone(), target);
+                let data = virtual_event_from_websys_event(web_sys_event.clone(), target);
 
                 let event = dioxus_core::Event::new(Rc::new(data) as Rc<dyn Any>, bubbles);
-                runtime.handle_event(name.as_str(), event, element);
+                runtime.handle_event(name.as_str(), event.clone(), element);
+
+                // Prevent the default action if the user set prevent default on the event
+                if !event.default_action_enabled() {
+                    web_sys_event.prevent_default();
+                }
             }
         }));
 
