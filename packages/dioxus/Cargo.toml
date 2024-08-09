@@ -57,7 +57,8 @@ web = ["dep:dioxus-web", "dioxus-fullstack?/web", "dioxus-static-site-generation
 ssr = ["dep:dioxus-ssr", "dioxus-router?/ssr", "dioxus-config-macro/ssr"]
 liveview = ["dep:dioxus-liveview", "dioxus-config-macro/liveview", "dioxus-router?/liveview"]
 static-generation = ["dep:dioxus-static-site-generation", "dioxus-config-macro/static-generation"]
-axum = ["dioxus-fullstack?/axum", "dioxus-fullstack?/server", "dioxus-static-site-generation?/server", "ssr", "dioxus-liveview?/axum", "dep:axum"]
+axum = ["server"]
+server = ["dioxus-fullstack?/axum", "dioxus-fullstack?/server", "dioxus-static-site-generation?/server", "ssr", "dioxus-liveview?/axum", "dep:axum"]
 
 # This feature just disables the no-renderer-enabled warning
 third-party-renderer = []
@@ -88,5 +89,5 @@ features = [
     "html",
     "liveview",
     "static-generation",
-    "axum"
+    "server"
 ]
