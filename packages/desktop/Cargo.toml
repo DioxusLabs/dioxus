@@ -18,7 +18,7 @@ dioxus-html = { workspace = true, features = [
     "document",
 ] }
 dioxus-signals = { workspace = true, optional = true }
-dioxus-interpreter-js = { workspace = true, features = ["binary-protocol"] }
+dioxus-interpreter-js = { workspace = true, features = ["binary-protocol", "serialize"] }
 dioxus-cli-config = { workspace = true, features = ["read-config"] }
 generational-box = { workspace = true }
 # hotreload only works on desktop platforms.... mobile is still wip
