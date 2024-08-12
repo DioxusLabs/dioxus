@@ -55,7 +55,6 @@ impl WebviewEdits {
             Ok(event) => self.handle_html_event(event),
             Err(err) => {
                 tracing::error!("Error parsing user_event: {:?}", err);
-                println!("as string: {:?}", request);
                 SynchronousEventResponse::new(false)
             }
         };
