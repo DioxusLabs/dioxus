@@ -108,13 +108,25 @@ impl VNode {
                 )
             }
             (old, new) => {
+                // TODO: we should pass around the mount instead of the mount id
+                // that would make moving the mount around here much easier
+
+                // Mark the mount as unused. When a scope is created, it reads the mount and
+                // if it is the placeholder value, it will create the scope, otherwise it will
+                // reuse the scope
                 let old_mount = dom.mounts[mount.0].mounted_dynamic_nodes[idx];
                 dom.mounts[mount.0].mounted_dynamic_nodes[idx] = usize::MAX;
+
                 let new_nodes_on_stack =
                     self.create_dynamic_node(new, mount, idx, dom, to.as_deref_mut());
+
+                // Restore the mount for the scope we are removing
                 let new_mount = dom.mounts[mount.0].mounted_dynamic_nodes[idx];
                 dom.mounts[mount.0].mounted_dynamic_nodes[idx] = old_mount;
+
                 self.remove_dynamic_node(mount, dom, to, true, idx, old, Some(new_nodes_on_stack));
+
+                // Restore the mount for the node we created
                 dom.mounts[mount.0].mounted_dynamic_nodes[idx] = new_mount;
             }
         };
