@@ -211,6 +211,7 @@ pub struct SynchronousEventResponse {
 
 impl SynchronousEventResponse {
     /// Create a new SynchronousEventResponse
+    #[allow(unused)]
     pub fn new(prevent_default: bool) -> Self {
         Self {
             #[cfg(feature = "serialize")]

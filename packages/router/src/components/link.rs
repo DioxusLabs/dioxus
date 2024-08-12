@@ -293,15 +293,10 @@ pub fn Link(props: LinkProps) -> Element {
     // in javascript. The prevent_default method is not available in the liveview renderer because
     // event handlers are handled over a websocket.
     let liveview_prevent_default = {
+        // If the event is a click with the left mouse button and no modifiers, prevent the default action
+        // and navigate to the href with client side routing
         router.is_liveview().then_some(
-            "(evt) => 
-                // If the event is a click with the left mouse button and no modifiers, prevent the default action
-                // and navigate to the href with client side routing
-                const normalClick = evt.button === 0 && !evt.ctrlKey && !evt.metaKey && !evt.shiftKey && !evt.altKey;
-                if (normalClick) {
-                    evt.preventDefault();
-                }
-            }"
+            "if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault() }"   
         )
     };
 
