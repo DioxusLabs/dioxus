@@ -9,6 +9,7 @@
 use std::{any::Any, rc::Rc};
 
 use dioxus_core::{ElementId, Runtime};
+use dioxus_html::g::prevent_default;
 use dioxus_interpreter_js::unified_bindings::Interpreter;
 use rustc_hash::FxHashMap;
 use wasm_bindgen::{closure::Closure, JsCast};
@@ -91,36 +92,20 @@ impl WebsysDom {
                     return;
                 };
 
-                let prevent_event;
-                if let Some(prevent_requests) = target
-                    .get_attribute("dioxus-prevent-default")
-                    .as_deref()
-                    .map(|f| f.split_whitespace())
-                {
-                    prevent_event = prevent_requests
-                        .map(|f| f.strip_prefix("on").unwrap_or(f))
-                        .any(|f| f == name);
-                } else {
-                    prevent_event = false;
-                }
-
-                // Prevent forms from submitting and redirecting
-                if name == "submit" {
-                    // On forms the default behavior is not to submit, if prevent default is set then we submit the form
-                    if !prevent_event {
-                        web_sys_event.prevent_default();
-                    }
-                } else if prevent_event {
-                    web_sys_event.prevent_default();
-                }
-
                 let data = virtual_event_from_websys_event(web_sys_event.clone(), target);
 
                 let event = dioxus_core::Event::new(Rc::new(data) as Rc<dyn Any>, bubbles);
                 runtime.handle_event(name.as_str(), event.clone(), element);
 
                 // Prevent the default action if the user set prevent default on the event
-                if !event.default_action_enabled() {
+                let prevent_default = !event.default_action_enabled();
+                // Prevent forms from submitting and redirecting
+                if name == "submit" {
+                    // On forms the default behavior is not to submit, if prevent default is set then we submit the form
+                    if !prevent_default {
+                        web_sys_event.prevent_default();
+                    }
+                } else if prevent_default {
                     web_sys_event.prevent_default();
                 }
             }

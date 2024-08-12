@@ -229,6 +229,11 @@ export class NativeInterpreter extends JSChannel_ {
     if (response) {
       if (response.preventDefault) {
         event.preventDefault();
+      } else {
+        // Attempt to intercept if the event is a click and the default action was not prevented
+        if (target instanceof Element && event.type === "click") {
+          this.handleClickNavigate(event, target);
+        }
       }
 
       if (response.stopPropagation) {
@@ -258,35 +263,12 @@ export class NativeInterpreter extends JSChannel_ {
   // - prevent buttons from submitting forms
   // - let the virtualdom attempt to prevent the event
   preventDefaults(event: Event, target: EventTarget) {
-    let preventDefaultRequests: string | null = null;
-
-    // Some events can be triggered on text nodes, which don't have attributes
-    if (target instanceof Element) {
-      preventDefaultRequests = target.getAttribute(`dioxus-prevent-default`);
-    }
-
-    if (
-      preventDefaultRequests &&
-      preventDefaultRequests.includes(`on${event.type}`)
-    ) {
-      event.preventDefault();
-    }
-
     if (event.type === "submit") {
       event.preventDefault();
     }
-
-    // Attempt to intercept if the event is a click
-    if (target instanceof Element && event.type === "click") {
-      this.handleClickNavigate(event, target, preventDefaultRequests);
-    }
   }
 
-  handleClickNavigate(
-    event: Event,
-    target: Element,
-    preventDefaultRequests: string
-  ) {
+  handleClickNavigate(event: Event, target: Element) {
     // todo call prevent default if it's the right type of event
     if (!this.intercept_link_redirects) {
       return;
@@ -305,24 +287,9 @@ export class NativeInterpreter extends JSChannel_ {
 
     event.preventDefault();
 
-    let elementShouldPreventDefault =
-      preventDefaultRequests && preventDefaultRequests.includes(`onclick`);
-
-    let aElementShouldPreventDefault = a_element.getAttribute(
-      `dioxus-prevent-default`
-    );
-
-    let linkShouldPreventDefault =
-      aElementShouldPreventDefault &&
-      aElementShouldPreventDefault.includes(`onclick`);
-
-    if (!elementShouldPreventDefault && !linkShouldPreventDefault) {
-      const href = a_element.getAttribute("href");
-      if (href !== "" && href !== null && href !== undefined) {
-        this.ipc.postMessage(
-          this.serializeIpcMessage("browser_open", { href })
-        );
-      }
+    const href = a_element.getAttribute("href");
+    if (href !== "" && href !== null && href !== undefined) {
+      this.ipc.postMessage(this.serializeIpcMessage("browser_open", { href }));
     }
   }
 
