@@ -264,16 +264,13 @@ pub fn Link(props: LinkProps) -> Element {
     let do_default = onclick.is_none() || !onclick_only;
 
     let action = move |event: MouseEvent| {
-        #[cfg(feature = "web")]
-        {
-            // Only handle events without modifiers
-            if !event.modifiers().is_empty() {
-                return;
-            }
-            // only handle left clicks
-            if event.trigger_button() != Some(dioxus_elements::input_data::MouseButton::Primary) {
-                return;
-            }
+        // Only handle events without modifiers
+        if !event.modifiers().is_empty() {
+            return;
+        }
+        // only handle left clicks
+        if event.trigger_button() != Some(dioxus_elements::input_data::MouseButton::Primary) {
+            return;
         }
         event.prevent_default();
 
