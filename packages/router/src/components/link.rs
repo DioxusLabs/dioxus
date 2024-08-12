@@ -289,9 +289,26 @@ pub fn Link(props: LinkProps) -> Element {
         }
     };
 
+    // In liveview, we need to prevent the default action if the user clicks on the link with modifiers
+    // in javascript. The prevent_default method is not available in the liveview renderer because
+    // event handlers are handled over a websocket.
+    let liveview_prevent_default = {
+        router.is_liveview().then_some(
+            "(evt) => 
+                // If the event is a click with the left mouse button and no modifiers, prevent the default action
+                // and navigate to the href with client side routing
+                const normalClick = evt.button === 0 && !evt.ctrlKey && !evt.metaKey && !evt.shiftKey && !evt.altKey;
+                if (normalClick) {
+                    evt.preventDefault();
+                }
+            }"
+        )
+    };
+
     rsx! {
         a {
             onclick: action,
+            "onclick": liveview_prevent_default,
             href,
             onmounted: onmounted,
             class,

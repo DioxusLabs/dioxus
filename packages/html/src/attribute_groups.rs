@@ -1,4 +1,5 @@
 #![allow(non_upper_case_globals)]
+#![allow(deprecated)]
 
 use dioxus_core::prelude::IntoAttributeValue;
 use dioxus_core::HasAttributes;
@@ -215,8 +216,7 @@ mod_methods! {
     map_global_attributes;
     map_html_global_attributes_to_rsx;
 
-    #[deprecated(note = "For most renderers, you should prefer calling [`dioxus_core::Event::prevent_default`] on the event instead.
-For liveview, you can use `"onclick": (evt) => evt.prevent_default()` to prevent the default action for this element.")]
+    #[deprecated(note = "This attribute does nothing. For most renderers, you should prefer calling [`dioxus_core::Event::prevent_default`] on the event instead. For liveview, you can use `\"onclick\": (evt) => evt.prevent_default()` to prevent the default action for this element.")]
     /// This attribute has been deprecated in favor of [`dioxus_core::Event::prevent_default`]
     prevent_default: "dioxus-prevent-default";
 
