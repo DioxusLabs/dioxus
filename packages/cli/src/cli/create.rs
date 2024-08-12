@@ -1,6 +1,5 @@
 use super::*;
 use cargo_generate::{GenerateArgs, TemplatePath};
-use cargo_metadata::Metadata;
 use std::path::Path;
 
 pub(crate) static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
@@ -8,16 +7,12 @@ pub(crate) static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 #[clap(name = "new")]
 pub struct Create {
-    /// Project name (required when `--yes` is used)
+    /// Create a new Dioxus project at specified path (required when `--yes` is used)
+    path: Option<PathBuf>,
+
+    /// Project name. Defaults to directory name
+    #[arg(short, long)]
     name: Option<String>,
-
-    /// Generate the template directly at the given path.
-    #[arg(long, value_parser)]
-    destination: Option<PathBuf>,
-
-    /// Generate the template directly into the current dir. No subfolder will be created and no vcs is initialized.
-    #[arg(long, action)]
-    init: bool,
 
     /// Template path
     #[clap(default_value = DEFAULT_TEMPLATE, short, long)]
@@ -38,44 +33,72 @@ pub struct Create {
 }
 
 impl Create {
-    pub fn create(mut self) -> Result<()> {
-        let metadata = cargo_metadata::MetadataCommand::new().exec().ok();
+    pub fn create(self) -> Result<()> {
+        // TODO: try to get all paths of `yes` `name` `path` options fixed.
 
-        // If we're getting pass a `.` name, that's actually a path
-        // We're actually running an init - we should clear the name
-        if self.name.as_deref() == Some(".") {
-            self.name = None;
-            self.init = true;
+        // NOTE: destination \wo init means base_dir + name, \w means dest_dir
+        // so use init: true and always handle the dest_dir manually and carefully.
+        // Cargo never adds name to the path. Name is solely for project name.
+
+        if self.yes && self.path.is_none() {
+            return Err("You have to provide the project's path when using `--yes` option.".into());
         }
 
-        // A default destination is set for nameless projects
-        if self.name.is_none() {
-            self.destination = Some(PathBuf::from("."));
-        }
+        todo!();
 
         // Split the name into path components
         // such that dx new packages/app will create a directory called packages/app
-        let destination = self.destination.unwrap_or_else(|| {
-            let mut path = PathBuf::from(self.name.as_deref().unwrap());
+        // let project_dir = self.path.unwrap_or_else(|| {
+        //     let mut path = PathBuf::from(self.name.as_deref().unwrap());
+        //
+        //     // if path.is_relative() {
+        //     //     path = std::env::current_dir().unwrap().join(path);
+        //     // }
+        //
+        //     path = std::env::current_dir().unwrap().join(path);
+        //
+        //     // split the path into the parent and the name
+        //     let parent = path.parent().unwrap();
+        //     let name = path.file_name().unwrap();
+        //     self.name = Some(name.to_str().unwrap().to_string());
+        //
+        //     // let get_parent_and_name = || -> Option<(&Path, String)> {
+        //     //     let parent = path.parent()?;
+        //     //     let name = path.file_name()?.to_str()?.to_string();
+        //     //     Some((parent, name))
+        //     // };
+        //     // let (parent, name) = get_parent_and_name().unwrap();
+        //     // self.name = Some(name);
+        //
+        //     // create the parent directory if it doesn't exist
+        //     std::fs::create_dir_all(parent).unwrap();
+        //
+        //     // And then the "destination" is the parent directory
+        //     parent.to_path_buf()
+        // });
 
-            if path.is_relative() {
-                path = std::env::current_dir().unwrap().join(path);
-            }
-
-            // split the path into the parent and the name
-            let parent = path.parent().unwrap();
-            let name = path.file_name().unwrap();
-            self.name = Some(name.to_str().unwrap().to_string());
-
-            // create the parent directory if it doesn't exist
-            std::fs::create_dir_all(parent).unwrap();
-
-            // And then the "destination" is the parent directory
-            parent.to_path_buf()
-        });
+        // if self.name.is_none() {
+        //     let dir_name = self
+        //         .path
+        //         .absolutize()?
+        //         .to_path_buf()
+        //         .file_name()
+        //         .ok_or(Error::RuntimeError(
+        //             "Current path does not include directory name".into(),
+        //         ))?
+        //         .to_str()
+        //         .ok_or(Error::RuntimeError(
+        //             "Current directory name is not a valid UTF-8 string".into(),
+        //         ))?
+        //         .to_string();
+        //     self.name = Some(dir_name);
+        // }
 
         let args = GenerateArgs {
             define: self.option,
+            destination: self.path,
+            // https://github.com/cargo-generate/cargo-generate/issues/1250
+            init: true,
             name: self.name,
             silent: self.yes,
             template_path: TemplatePath {
@@ -83,35 +106,50 @@ impl Create {
                 subfolder: self.subtemplate,
                 ..Default::default()
             },
-            init: self.init,
-            destination: Some(destination),
-            vcs: if metadata.is_some() {
-                Some(cargo_generate::Vcs::None)
-            } else {
-                None
-            },
             ..Default::default()
         };
 
-        if self.yes && args.name.is_none() {
-            return Err("You have to provide the project's name when using `--yes` option.".into());
-        }
-
-        // https://github.com/console-rs/dialoguer/issues/294
-        ctrlc::set_handler(move || {
-            let _ = console::Term::stdout().show_cursor();
-            std::process::exit(0);
-        })
-        .expect("ctrlc::set_handler");
         let path = cargo_generate::generate(args)?;
+        // let m = cargo_metadata::MetadataCommand::new()
+        //     .current_dir(project_dir)
+        //     .exec()
+        //     .unwrap();
+        // let root = m.workspace_root;
+        // let name = m
+        //     .packages
+        //     .iter()
+        //     .filter_map(|p| {
+        //         if p.manifest_path.parent().unwrap() == root {
+        //             Some(p.name.clone())
+        //         } else {
+        //             None
+        //         }
+        //     })
+        //     .next()
+        //     .expect("should be only 1 package");
 
-        post_create(&path, metadata)
+        post_create(&path)
     }
 }
 
 /// Post-creation actions for newly setup crates.
 // Also used by `init`.
-pub fn post_create(path: &Path, metadata: Option<Metadata>) -> Result<()> {
+pub(crate) fn post_create(path: &Path) -> Result<()> {
+    let parent_dir = path.parent();
+    let metadata = if parent_dir.is_none() {
+        None
+    } else {
+        match cargo_metadata::MetadataCommand::new()
+            .current_dir(parent_dir.unwrap())
+            .exec()
+        {
+            Ok(v) => Some(v),
+            // Only 1 error means that CWD isn't a cargo project.
+            Err(cargo_metadata::Error::CargoMetadata { .. }) => None,
+            Err(err) => return Err(Error::CargoMetadata(err)),
+        }
+    };
+
     // 1. Add the new project to the workspace, if it exists.
     //    This must be executed first in order to run `cargo fmt` on the new project.
     metadata.and_then(|metadata| {

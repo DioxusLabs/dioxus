@@ -2449,6 +2449,7 @@ dependencies = [
  "notify",
  "once_cell",
  "open",
+ "path-absolutize",
  "prettyplease",
  "proc-macro2",
  "ratatui",
