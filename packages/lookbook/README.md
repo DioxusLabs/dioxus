@@ -7,12 +7,8 @@
 <a href="https://docs.rs/lookbook/latest/lookbook">
     <img src="https://img.shields.io/badge/docs-stable-blue.svg?style=flat-square"alt="docs.rs docs" />
 </a>
-<a href="https://dioxus-material.netlify.app/dioxus_material/">
-    <img src="https://img.shields.io/badge/docs-nightly-blue.svg?style=flat-square"
-  alt="nightly docs" />
-</a>
-<a href="https://github.com/matthunz/dioxus-material/actions">
-    <img src="https://github.com/matthunz/dioxus-material/actions/workflows/ci.yml/badge.svg"
+<a href="https://github.com/dioxuslabs/dioxus/actions?query=workflow%3ACI+branch%3Amaster">
+    <img src="https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg"
   alt="CI status" />
 </div>
 <div align="center">
@@ -63,25 +59,25 @@ fn main() {
 First add Lookbook as a dependency to your project.
 
 ```sh
-cargo add lookbook --git https://github.com/matthunz/lookbook
+cargo add lookbook
 ```
 
 Then create a preview like the one above and add it to a lookbook.
 
 ```rust
-fn app(cx: Scope) -> Element {
+fn app() -> Element {
     rsx!(LookBook {
-        home: |cx| rsx!("Home"),
+        home: |()| rsx!("Home"),
         previews: [TaskPreview]
     })
 }
 
 fn main() {
-    dioxus_web::launch(app)
+    dioxus::launch(app)
 }
 ```
 
-Run with `dx serve`!
+Finally, run with `dx serve`!
 
 ## Running examples
 Run the examples with `dx serve --example {name}`.
