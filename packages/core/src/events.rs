@@ -1,10 +1,6 @@
 use crate::{global_context::current_scope_id, properties::SuperFrom, Runtime, ScopeId};
 use generational_box::GenerationalBox;
-use std::{
-    cell::{Cell, RefCell},
-    marker::PhantomData,
-    rc::Rc,
-};
+use std::{cell::RefCell, marker::PhantomData, rc::Rc};
 
 /// A wrapper around some generic data that handles the event's state
 ///
@@ -26,7 +22,7 @@ use std::{
 pub struct Event<T: 'static + ?Sized> {
     /// The data associated with this event
     pub data: Rc<T>,
-    pub(crate) metadata: Rc<Cell<EventMetadata>>,
+    pub(crate) metadata: Rc<RefCell<EventMetadata>>,
 }
 
 #[derive(Clone, Copy)]
@@ -40,7 +36,7 @@ impl<T: ?Sized + 'static> Event<T> {
     pub fn new(data: Rc<T>, propagates: bool) -> Self {
         Self {
             data,
-            metadata: Rc::new(Cell::new(EventMetadata {
+            metadata: Rc::new(RefCell::new(EventMetadata {
                 propagates,
                 prevent_default: false,
             })),
@@ -88,14 +84,12 @@ impl<T: ?Sized> Event<T> {
     /// ```
     #[deprecated = "use stop_propagation instead"]
     pub fn cancel_bubble(&self) {
-        let mut metadata = self.metadata.get();
-        metadata.propagates = false;
-        self.metadata.set(metadata);
+        self.metadata.borrow_mut().propagates = false;
     }
 
     /// Check if the event propagates up the tree to parent elements
     pub fn propagates(&self) -> bool {
-        self.metadata.get().propagates
+        self.metadata.borrow().propagates
     }
 
     /// Prevent this event from continuing to bubble up the tree to parent elements.
@@ -113,9 +107,7 @@ impl<T: ?Sized> Event<T> {
     /// };
     /// ```
     pub fn stop_propagation(&self) {
-        let mut metadata = self.metadata.get();
-        metadata.propagates = false;
-        self.metadata.set(metadata);
+        self.metadata.borrow_mut().propagates = false;
     }
 
     /// Get a reference to the inner data from this event
@@ -166,14 +158,12 @@ impl<T: ?Sized> Event<T> {
     /// </div>
     #[track_caller]
     pub fn prevent_default(&self) {
-        let mut metadata = self.metadata.get();
-        metadata.prevent_default = true;
-        self.metadata.set(metadata);
+        self.metadata.borrow_mut().prevent_default = true;
     }
 
     /// Check if the default action of the event is enabled.
     pub fn default_action_enabled(&self) -> bool {
-        !self.metadata.get().prevent_default
+        !self.metadata.borrow().prevent_default
     }
 }
 
@@ -196,8 +186,8 @@ impl<T> std::ops::Deref for Event<T> {
 impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("UiEvent")
-            .field("bubble_state", &self.metadata.get().propagates)
-            .field("prevent_default", &self.metadata.get().prevent_default)
+            .field("bubble_state", &self.propagates())
+            .field("prevent_default", &!self.default_action_enabled())
             .field("data", &self.data)
             .finish()
     }
