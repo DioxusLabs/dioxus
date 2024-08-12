@@ -79,30 +79,54 @@ impl VNode {
         match (old_node, new_node) {
             (Text(old), Text(new)) => {
                 // Diffing text is just a side effect, if we are diffing suspended nodes and are not outputting mutations, we can skip it
-                if let Some(to) = to{
+                if let Some(to) = to {
                     let mount = &dom.mounts[mount.0];
                     self.diff_vtext(to, mount, idx, old, new)
                 }
-            },
-            (Text(_), Placeholder(_)) => {
-                self.replace_text_with_placeholder(to, mount, idx, dom)
-            },
+            }
+            (Text(_), Placeholder(_)) => self.replace_text_with_placeholder(to, mount, idx, dom),
             (Placeholder(_), Text(new)) => {
                 self.replace_placeholder_with_text(to, mount, idx, new, dom)
-            },
-            (Placeholder(_), Placeholder(_)) => {},
-            (Fragment(old), Fragment(new)) => dom.diff_non_empty_fragment(to, old, new, Some(self.reference_to_dynamic_node(mount, idx))),
+            }
+            (Placeholder(_), Placeholder(_)) => {}
+            (Fragment(old), Fragment(new)) => dom.diff_non_empty_fragment(
+                to,
+                old,
+                new,
+                Some(self.reference_to_dynamic_node(mount, idx)),
+            ),
             (Component(old), Component(new)) => {
-				let scope_id = ScopeId(dom.mounts[mount.0].mounted_dynamic_nodes[idx]);
-                self.diff_vcomponent(mount, idx, new, old, scope_id, Some(self.reference_to_dynamic_node(mount, idx)), dom, to)
-            },
+                let scope_id = ScopeId(dom.mounts[mount.0].mounted_dynamic_nodes[idx]);
+                self.diff_vcomponent(
+                    mount,
+                    idx,
+                    new,
+                    old,
+                    scope_id,
+                    Some(self.reference_to_dynamic_node(mount, idx)),
+                    dom,
+                    to,
+                )
+            }
             (Placeholder(_), Fragment(right)) => {
                 let placeholder_id = ElementId(dom.mounts[mount.0].mounted_dynamic_nodes[idx]);
-                dom.replace_placeholder(to, placeholder_id, right, Some(self.reference_to_dynamic_node(mount, idx)))},
-            (Fragment(left), Placeholder(_)) => {
-                dom.nodes_to_placeholder(to, mount, idx, left,)
-            },
-            _ => todo!("This is an usual custom case for dynamic nodes. We don't know how to handle it yet."),
+                dom.replace_placeholder(
+                    to,
+                    placeholder_id,
+                    right,
+                    Some(self.reference_to_dynamic_node(mount, idx)),
+                )
+            }
+            (Fragment(left), Placeholder(_)) => dom.nodes_to_placeholder(to, mount, idx, left),
+
+            (Component(_), Text(_)) => todo!("(Component(_), Text(_))"),
+            (Component(_), Placeholder(_)) => todo!("(Component(_), Placeholder(_))"),
+            (Component(_), Fragment(_)) => todo!("(Component(_), Fragment(_))"),
+            (Text(_), Component(_)) => todo!("(Text(_), Component(_))"),
+            (Text(_), Fragment(_)) => todo!("(Text(_), Fragment(_))"),
+            (Placeholder(_), Component(_)) => todo!("(Placeholder(_), Component(_))"),
+            (Fragment(_), Component(_)) => todo!("(Fragment(_), Component(_))"),
+            (Fragment(_), Text(_)) => todo!("(Fragment(_), Text(_))"),
         };
     }
 
