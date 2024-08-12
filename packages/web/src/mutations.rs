@@ -97,11 +97,6 @@ impl WriteMutations for WebsysDom {
         self.interpreter.create_text_node(value, id.0 as u32)
     }
 
-    fn hydrate_text_node(&mut self, path: &'static [u8], value: &str, id: ElementId) {
-        self.interpreter
-            .hydrate_text(path.as_ptr() as u32, path.len() as u8, value, id.0 as u32)
-    }
-
     fn load_template(&mut self, template: Template, index: usize, id: ElementId) {
         let tmpl_id = self.templates.get(&template).cloned().unwrap_or_else(|| {
             let mut roots = vec![];

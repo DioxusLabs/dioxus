@@ -1,5 +1,8 @@
+use std::collections::HashSet;
+
 use dioxus::dioxus_core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
+use dioxus_core::Mutation;
 use pretty_assertions::assert_eq;
 
 #[test]
@@ -21,7 +24,8 @@ fn list_creates_one_by_one() {
         dom.rebuild_to_vec().edits,
         [
             LoadTemplate { index: 0, id: ElementId(1,) },
-            AssignId { path: &[0], id: ElementId(2,) },
+            CreatePlaceholder { id: ElementId(2,) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             AppendChildren { id: ElementId(0), m: 1 },
         ]
     );
@@ -32,7 +36,8 @@ fn list_creates_one_by_one() {
         dom.render_immediate_to_vec().edits,
         [
             LoadTemplate { index: 0, id: ElementId(3,) },
-            HydrateText { path: &[0], value: "0".to_string(), id: ElementId(4,) },
+            CreateTextNode { value: "0".to_string(), id: ElementId(4,) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             ReplaceWith { id: ElementId(2,), m: 1 },
         ]
     );
@@ -43,7 +48,8 @@ fn list_creates_one_by_one() {
         dom.render_immediate_to_vec().edits,
         [
             LoadTemplate { index: 0, id: ElementId(2,) },
-            HydrateText { path: &[0], value: "1".to_string(), id: ElementId(5,) },
+            CreateTextNode { value: "1".to_string(), id: ElementId(5,) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             InsertAfter { id: ElementId(3,), m: 1 },
         ]
     );
@@ -54,7 +60,8 @@ fn list_creates_one_by_one() {
         dom.render_immediate_to_vec().edits,
         [
             LoadTemplate { index: 0, id: ElementId(6,) },
-            HydrateText { path: &[0], value: "2".to_string(), id: ElementId(7,) },
+            CreateTextNode { value: "2".to_string(), id: ElementId(7,) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             InsertAfter { id: ElementId(2,), m: 1 },
         ]
     );
@@ -65,7 +72,8 @@ fn list_creates_one_by_one() {
         dom.render_immediate_to_vec().edits,
         [
             LoadTemplate { index: 0, id: ElementId(8,) },
-            HydrateText { path: &[0], value: "3".to_string(), id: ElementId(9,) },
+            CreateTextNode { value: "3".to_string(), id: ElementId(9,) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             InsertAfter { id: ElementId(6,), m: 1 },
         ]
     );
@@ -93,11 +101,14 @@ fn removes_one_by_one() {
             LoadTemplate { index: 0, id: ElementId(1) },
             // each list item
             LoadTemplate { index: 0, id: ElementId(2) },
-            HydrateText { path: &[0], value: "0".to_string(), id: ElementId(3) },
+            CreateTextNode { value: "0".to_string(), id: ElementId(3) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             LoadTemplate { index: 0, id: ElementId(4) },
-            HydrateText { path: &[0], value: "1".to_string(), id: ElementId(5) },
+            CreateTextNode { value: "1".to_string(), id: ElementId(5) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             LoadTemplate { index: 0, id: ElementId(6) },
-            HydrateText { path: &[0], value: "2".to_string(), id: ElementId(7) },
+            CreateTextNode { value: "2".to_string(), id: ElementId(7) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             // replace the placeholder in the template with the 3 templates on the stack
             ReplacePlaceholder { m: 3, path: &[0] },
             // Mount the div
@@ -138,11 +149,14 @@ fn removes_one_by_one() {
         dom.render_immediate_to_vec().edits,
         [
             LoadTemplate { index: 0, id: ElementId(2) },
-            HydrateText { path: &[0], value: "0".to_string(), id: ElementId(6) },
+            CreateTextNode { value: "0".to_string(), id: ElementId(6) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             LoadTemplate { index: 0, id: ElementId(8) },
-            HydrateText { path: &[0], value: "1".to_string(), id: ElementId(9) },
+            CreateTextNode { value: "1".to_string(), id: ElementId(9) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             LoadTemplate { index: 0, id: ElementId(10) },
-            HydrateText { path: &[0], value: "2".to_string(), id: ElementId(11) },
+            CreateTextNode { value: "2".to_string(), id: ElementId(11) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             ReplaceWith { id: ElementId(4), m: 3 }
         ]
     );
@@ -165,7 +179,8 @@ fn list_shrink_multiroot() {
         dom.rebuild_to_vec().edits,
         [
             LoadTemplate { index: 0, id: ElementId(1,) },
-            AssignId { path: &[0,], id: ElementId(2,) },
+            CreatePlaceholder { id: ElementId(2,) },
+            ReplacePlaceholder { path: &[0,], m: 1 },
             AppendChildren { id: ElementId(0), m: 1 }
         ]
     );
@@ -175,9 +190,11 @@ fn list_shrink_multiroot() {
         dom.render_immediate_to_vec().edits,
         [
             LoadTemplate { index: 0, id: ElementId(3) },
-            HydrateText { path: &[0], value: "0".to_string(), id: ElementId(4) },
+            CreateTextNode { value: "0".to_string(), id: ElementId(4) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             LoadTemplate { index: 1, id: ElementId(5) },
-            HydrateText { path: &[0], value: "0".to_string(), id: ElementId(6) },
+            CreateTextNode { value: "0".to_string(), id: ElementId(6) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             ReplaceWith { id: ElementId(2), m: 2 }
         ]
     );
@@ -187,9 +204,11 @@ fn list_shrink_multiroot() {
         dom.render_immediate_to_vec().edits,
         [
             LoadTemplate { index: 0, id: ElementId(2) },
-            HydrateText { path: &[0], value: "1".to_string(), id: ElementId(7) },
+            CreateTextNode { value: "1".to_string(), id: ElementId(7) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             LoadTemplate { index: 1, id: ElementId(8) },
-            HydrateText { path: &[0], value: "1".to_string(), id: ElementId(9) },
+            CreateTextNode { value: "1".to_string(), id: ElementId(9) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             InsertAfter { id: ElementId(5), m: 2 }
         ]
     );
@@ -199,9 +218,11 @@ fn list_shrink_multiroot() {
         dom.render_immediate_to_vec().edits,
         [
             LoadTemplate { index: 0, id: ElementId(10) },
-            HydrateText { path: &[0], value: "2".to_string(), id: ElementId(11) },
+            CreateTextNode { value: "2".to_string(), id: ElementId(11) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             LoadTemplate { index: 1, id: ElementId(12) },
-            HydrateText { path: &[0], value: "2".to_string(), id: ElementId(13) },
+            CreateTextNode { value: "2".to_string(), id: ElementId(13) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             InsertAfter { id: ElementId(8), m: 2 }
         ]
     );
@@ -229,22 +250,24 @@ fn removes_one_by_one_multiroot() {
             LoadTemplate { index: 0, id: ElementId(1) },
             //
             LoadTemplate { index: 0, id: ElementId(2) },
-            HydrateText { path: &[0], value: "0".to_string(), id: ElementId(3) },
+            CreateTextNode { value: "0".to_string(), id: ElementId(3) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             LoadTemplate { index: 1, id: ElementId(4) },
-            HydrateText { path: &[0], value: "0".to_string(), id: ElementId(5) },
-            //
+            CreateTextNode { value: "0".to_string(), id: ElementId(5) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             LoadTemplate { index: 0, id: ElementId(6) },
-            HydrateText { path: &[0], value: "1".to_string(), id: ElementId(7) },
+            CreateTextNode { value: "1".to_string(), id: ElementId(7) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             LoadTemplate { index: 1, id: ElementId(8) },
-            HydrateText { path: &[0], value: "1".to_string(), id: ElementId(9) },
-            //
+            CreateTextNode { value: "1".to_string(), id: ElementId(9) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             LoadTemplate { index: 0, id: ElementId(10) },
-            HydrateText { path: &[0], value: "2".to_string(), id: ElementId(11) },
+            CreateTextNode { value: "2".to_string(), id: ElementId(11) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             LoadTemplate { index: 1, id: ElementId(12) },
-            HydrateText { path: &[0], value: "2".to_string(), id: ElementId(13) },
-            //
+            CreateTextNode { value: "2".to_string(), id: ElementId(13) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             ReplacePlaceholder { path: &[0], m: 6 },
-            //
             AppendChildren { id: ElementId(0), m: 1 }
         ]
     );
@@ -317,6 +340,7 @@ fn remove_many() {
         }
     });
 
+    // len = 0
     {
         let edits = dom.rebuild_to_vec();
         assert_eq!(
@@ -328,6 +352,7 @@ fn remove_many() {
         );
     }
 
+    // len = 1
     {
         dom.mark_dirty(ScopeId::APP);
         let edits = dom.render_immediate_to_vec();
@@ -335,12 +360,14 @@ fn remove_many() {
             edits.edits,
             [
                 LoadTemplate { index: 0, id: ElementId(2,) },
-                HydrateText { path: &[0,], value: "hello 0".to_string(), id: ElementId(3,) },
+                CreateTextNode { value: "hello 0".to_string(), id: ElementId(3,) },
+                ReplacePlaceholder { path: &[0,], m: 1 },
                 ReplaceWith { id: ElementId(1,), m: 1 },
             ]
         );
     }
 
+    // len = 5
     {
         dom.mark_dirty(ScopeId::APP);
         let edits = dom.render_immediate_to_vec();
@@ -348,42 +375,53 @@ fn remove_many() {
             edits.edits,
             [
                 LoadTemplate { index: 0, id: ElementId(1,) },
-                HydrateText { path: &[0,], value: "hello 1".to_string(), id: ElementId(4,) },
+                CreateTextNode { value: "hello 1".to_string(), id: ElementId(4,) },
+                ReplacePlaceholder { path: &[0,], m: 1 },
                 LoadTemplate { index: 0, id: ElementId(5,) },
-                HydrateText { path: &[0,], value: "hello 2".to_string(), id: ElementId(6,) },
+                CreateTextNode { value: "hello 2".to_string(), id: ElementId(6,) },
+                ReplacePlaceholder { path: &[0,], m: 1 },
                 LoadTemplate { index: 0, id: ElementId(7,) },
-                HydrateText { path: &[0,], value: "hello 3".to_string(), id: ElementId(8,) },
+                CreateTextNode { value: "hello 3".to_string(), id: ElementId(8,) },
+                ReplacePlaceholder { path: &[0,], m: 1 },
                 LoadTemplate { index: 0, id: ElementId(9,) },
-                HydrateText { path: &[0,], value: "hello 4".to_string(), id: ElementId(10,) },
+                CreateTextNode { value: "hello 4".to_string(), id: ElementId(10,) },
+                ReplacePlaceholder { path: &[0,], m: 1 },
                 InsertAfter { id: ElementId(2,), m: 4 },
             ]
         );
     }
 
+    // len = 0
     {
         dom.mark_dirty(ScopeId::APP);
         let edits = dom.render_immediate_to_vec();
+        assert_eq!(edits.edits[0], CreatePlaceholder { id: ElementId(11,) });
+        let removed = edits.edits[1..5]
+            .iter()
+            .map(|edit| match edit {
+                Mutation::Remove { id } => *id,
+                _ => panic!("Expected remove"),
+            })
+            .collect::<HashSet<_>>();
         assert_eq!(
-            edits.edits,
-            [
-                CreatePlaceholder { id: ElementId(11,) },
-                Remove { id: ElementId(9,) },
-                Remove { id: ElementId(7,) },
-                Remove { id: ElementId(5,) },
-                Remove { id: ElementId(1,) },
-                ReplaceWith { id: ElementId(2,), m: 1 },
-            ]
+            removed,
+            [ElementId(7), ElementId(5), ElementId(2), ElementId(1)]
+                .into_iter()
+                .collect::<HashSet<_>>()
         );
+        assert_eq!(edits.edits[5..], [ReplaceWith { id: ElementId(9,), m: 1 },]);
     }
 
+    // len = 1
     {
         dom.mark_dirty(ScopeId::APP);
         let edits = dom.render_immediate_to_vec();
         assert_eq!(
             edits.edits,
             [
-                LoadTemplate { index: 0, id: ElementId(2,) },
-                HydrateText { path: &[0,], value: "hello 0".to_string(), id: ElementId(1,) },
+                LoadTemplate { index: 0, id: ElementId(9,) },
+                CreateTextNode { value: "hello 0".to_string(), id: ElementId(7,) },
+                ReplacePlaceholder { path: &[0,], m: 1 },
                 ReplaceWith { id: ElementId(11,), m: 1 },
             ]
         )
@@ -419,7 +457,8 @@ fn replace_and_add_items() {
             edits.edits,
             [
                 LoadTemplate { index: 0, id: ElementId(1,) },
-                AssignId { path: &[0], id: ElementId(2,) },
+                CreatePlaceholder { id: ElementId(2,) },
+                ReplacePlaceholder { path: &[0], m: 1 },
                 AppendChildren { id: ElementId(0), m: 1 },
             ]
         );

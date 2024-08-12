@@ -7,6 +7,7 @@ fn toggle_option_text() {
     let mut dom = VirtualDom::new(|| {
         let gen = generation();
         let text = if gen % 2 != 0 { Some("hello") } else { None };
+        println!("{:?}", text);
 
         rsx! {
             div {
@@ -20,7 +21,8 @@ fn toggle_option_text() {
         dom.rebuild_to_vec().edits,
         [
             LoadTemplate { index: 0, id: ElementId(1,) },
-            AssignId { path: &[0], id: ElementId(2,) },
+            CreatePlaceholder { id: ElementId(2,) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             AppendChildren { id: ElementId(0), m: 1 },
         ]
     );

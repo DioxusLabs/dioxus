@@ -1,6 +1,7 @@
 use dioxus::dioxus_core::Mutation::*;
 use dioxus::prelude::*;
 use dioxus_core::ElementId;
+use pretty_assertions::assert_eq;
 
 // A real-world usecase of templates at peak performance
 // In react, this would be a lot of node creation.
@@ -58,11 +59,14 @@ fn list_renders() {
             LoadTemplate { index: 0, id: ElementId(1) },
             // Load each template one-by-one, rehydrating it
             LoadTemplate { index: 0, id: ElementId(2) },
-            HydrateText { path: &[1, 0], value: "0".to_string(), id: ElementId(3) },
+            CreateTextNode { value: "0".to_string(), id: ElementId(3) },
+            ReplacePlaceholder { path: &[1, 0], m: 1 },
             LoadTemplate { index: 0, id: ElementId(4) },
-            HydrateText { path: &[1, 0], value: "1".to_string(), id: ElementId(5) },
+            CreateTextNode { value: "1".to_string(), id: ElementId(5) },
+            ReplacePlaceholder { path: &[1, 0], m: 1 },
             LoadTemplate { index: 0, id: ElementId(6) },
-            HydrateText { path: &[1, 0], value: "2".to_string(), id: ElementId(7) },
+            CreateTextNode { value: "2".to_string(), id: ElementId(7) },
+            ReplacePlaceholder { path: &[1, 0], m: 1 },
             // Replace the 0th childn on the div with the 3 templates on the stack
             ReplacePlaceholder { m: 3, path: &[0] },
             // Append the container div to the dom

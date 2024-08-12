@@ -33,7 +33,8 @@ fn manual_diffing() {
         dom.rebuild_to_vec().edits,
         [
             LoadTemplate { index: 0, id: ElementId(3) },
-            HydrateText { path: &[0], value: "goodbye".to_string(), id: ElementId(4) },
+            CreateTextNode { value: "goodbye".to_string(), id: ElementId(4) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             AppendChildren { m: 1, id: ElementId(0) }
         ]
     );

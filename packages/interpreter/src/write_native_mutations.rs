@@ -97,10 +97,6 @@ impl WriteMutations for MutationState {
         self.channel.create_text_node(value, id.0 as u32);
     }
 
-    fn hydrate_text_node(&mut self, path: &'static [u8], value: &str, id: dioxus_core::ElementId) {
-        self.channel.hydrate_text_ref(path, value, id.0 as u32);
-    }
-
     fn load_template(&mut self, template: Template, index: usize, id: dioxus_core::ElementId) {
         // Get the template or create it if we haven't seen it before
         let tmpl_id = self.templates.get(&template).cloned().unwrap_or_else(|| {

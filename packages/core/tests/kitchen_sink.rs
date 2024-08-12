@@ -39,7 +39,8 @@ fn dual_stream() {
     assert_eq!(edits.edits, {
         [
             LoadTemplate { index: 0, id: ElementId(1) },
-            HydrateText { path: &[0, 0], value: "123".to_string(), id: ElementId(2) },
+            CreateTextNode { value: "123".to_string(), id: ElementId(2) },
+            ReplacePlaceholder { path: &[0, 0], m: 1 },
             SetAttribute {
                 name: "class",
                 value: "asd 123 123 ".into_value(),

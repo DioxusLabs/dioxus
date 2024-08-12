@@ -306,8 +306,6 @@ impl WriteMutations for InsertEventListenerMutationHandler<'_> {
 
     fn create_text_node(&mut self, _: &str, _: ElementId) {}
 
-    fn hydrate_text_node(&mut self, _: &'static [u8], _: &str, _: ElementId) {}
-
     fn load_template(&mut self, _: Template, _: usize, _: ElementId) {}
 
     fn replace_node_with(&mut self, _: ElementId, _: usize) {}

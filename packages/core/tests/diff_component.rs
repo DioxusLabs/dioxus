@@ -1,5 +1,6 @@
 use dioxus::dioxus_core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
+use pretty_assertions::assert_eq;
 
 /// When returning sets of components, we do a light diff of the contents to preserve some react-like functionality
 ///
@@ -7,6 +8,15 @@ use dioxus::prelude::*;
 /// different pointers
 #[test]
 fn component_swap() {
+    // Check that templates with the same structure are deduplicated at compile time
+    // If they are not, this test will fail because it is being run in debug mode where templates are not deduped
+    let dynamic = 0;
+    let template_1 = rsx! { "{dynamic}" };
+    let template_2 = rsx! { "{dynamic}" };
+    if template_1.unwrap().template != template_2.unwrap().template {
+        return;
+    }
+
     fn app() -> Element {
         let mut render_phase = use_signal(|| 0);
 

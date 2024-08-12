@@ -40,15 +40,6 @@ pub trait WriteMutations {
     /// Id: The ID we're assigning to this specific text nodes. This will be used later to modify the element or replace it with another element.
     fn create_text_node(&mut self, value: &str, id: ElementId);
 
-    /// Hydrate an existing text node at the given path with the given text.
-    ///
-    /// Assign this text node the given ID since we will likely need to modify this text at a later point
-    ///
-    /// Path: The path of the child of the topmost node on the stack. A path of `[]` represents the topmost node. A path of `[0]` represents the first child. `[0,1,2]` represents 1st child's 2nd child's 3rd child.
-    /// Value: The value of the textnode that we want to set the placeholder with
-    /// Id: The ID we're assigning to this specific text nodes. This will be used later to modify the element or replace it with another element.
-    fn hydrate_text_node(&mut self, path: &'static [u8], value: &str, id: ElementId);
-
     /// Load and clone an existing node from a template saved under that specific name
     ///
     /// Dioxus guarantees that the renderer will have already been provided the template.
@@ -171,25 +162,6 @@ pub enum Mutation {
     /// Create a node specifically for text with the given value
     CreateTextNode {
         /// The text content of this text node
-        value: String,
-
-        /// The ID we're assigning to this specific text nodes
-        ///
-        /// This will be used later to modify the element or replace it with another element.
-        id: ElementId,
-    },
-
-    /// Hydrate an existing text node at the given path with the given text.
-    ///
-    /// Assign this text node the given ID since we will likely need to modify this text at a later point
-    HydrateText {
-        /// The path of the child of the topmost node on the stack
-        ///
-        /// A path of `[]` represents the topmost node. A path of `[0]` represents the first child.
-        /// `[0,1,2]` represents 1st child's 2nd child's 3rd child.
-        path: &'static [u8],
-
-        /// The value of the textnode that we want to set the placeholder with
         value: String,
 
         /// The ID we're assigning to this specific text nodes
@@ -336,14 +308,6 @@ impl WriteMutations for Mutations {
         })
     }
 
-    fn hydrate_text_node(&mut self, path: &'static [u8], value: &str, id: ElementId) {
-        self.edits.push(Mutation::HydrateText {
-            path,
-            value: value.into(),
-            id,
-        })
-    }
-
     fn load_template(&mut self, _template: Template, index: usize, id: ElementId) {
         self.edits.push(Mutation::LoadTemplate { index, id })
     }
@@ -427,8 +391,6 @@ impl WriteMutations for NoOpMutations {
     fn create_placeholder(&mut self, _: ElementId) {}
 
     fn create_text_node(&mut self, _: &str, _: ElementId) {}
-
-    fn hydrate_text_node(&mut self, _: &'static [u8], _: &str, _: ElementId) {}
 
     fn load_template(&mut self, _: Template, _: usize, _: ElementId) {}
 
