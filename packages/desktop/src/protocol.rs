@@ -201,6 +201,7 @@ fn serve_from_fs(path: PathBuf) -> Result<Response<Vec<u8>>> {
 
     Ok(Response::builder()
         .header("Content-Type", get_mime_from_path(&asset)?)
+        .header("Access-Control-Allow-Origin", "*")
         .body(std::fs::read(asset)?)?)
 }
 
