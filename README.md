@@ -1,61 +1,58 @@
-<p>
-    <p align="center" >
-      <img src="./notes/header-light.svg#gh-light-mode-only" >
-      <img src="./notes/header-dark.svg#gh-dark-mode-only" >
-      <a href="https://dioxuslabs.com">
-          <img src="./notes/dioxus_splash_8.avif">
-      </a>
-    </p>
-</p>
 <div align="center">
-  <!-- Crates version -->
-  <a href="https://crates.io/crates/dioxus">
-    <img src="https://img.shields.io/crates/v/dioxus.svg?style=flat-square"
-    alt="Crates.io version" />
-  </a>
-  <!-- Downloads -->
-  <a href="https://crates.io/crates/dioxus">
-    <img src="https://img.shields.io/crates/d/dioxus.svg?style=flat-square"
-      alt="Download" />
-  </a>
-  <!-- docs -->
-  <a href="https://docs.rs/dioxus">
-    <img src="https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square"
-      alt="docs.rs docs" />
-  </a>
-  <!-- CI -->
-  <a href="https://github.com/jkelleyrtp/dioxus/actions">
-    <img src="https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg"
-      alt="CI status" />
-  </a>
-
-  <!--Awesome -->
-  <a href="https://dioxuslabs.com/awesome">
-    <img src="https://cdn.rawgit.com/sindresorhus/awesome/d7305f38d29fed78fa85652e3a63e154dd8e8829/media/badge.svg" alt="Awesome Page" />
-  </a>
-  <!-- Discord -->
-  <a href="https://discord.gg/XgGxMSkvUM">
-    <img src="https://img.shields.io/discord/899851952891002890.svg?logo=discord&style=flat-square" alt="Discord Link" />
-  </a>
+    <img src="./notes/header-light.svg#gh-light-mode-only">
+    <img src="./notes/header-dark.svg#gh-dark-mode-only">
+    <a href="https://dioxuslabs.com">
+        <img src="./notes/dioxus_splash_8.avif">
+    </a>
 </div>
 
 <div align="center">
-  <h3>
-    <a href="https://dioxuslabs.com"> Website </a>
-    <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/tree/main/examples"> Examples </a>
-    <span> | </span>
-    <a href="https://dioxuslabs.com/learn/0.5/guide"> Guide </a>
-    <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/zh-cn/README.md"> 中文 </a>
-    <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/pt-br/README.md"> PT-BR </a>
-    <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/ja-jp/README.md"> 日本語 </a>
-    <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/tr-tr"> Türkçe </a>
-  </h3>
+    <!-- Crates version -->
+    <a href="https://crates.io/crates/dioxus">
+        <img src="https://img.shields.io/crates/v/dioxus.svg?style=flat-square" alt="Crates.io version" />
+    </a>
+    <!-- Downloads -->
+    <a href="https://crates.io/crates/dioxus">
+        <img src="https://img.shields.io/crates/d/dioxus.svg?style=flat-square" alt="Download" />
+    </a>
+    <!-- Docs -->
+    <a href="https://docs.rs/dioxus">
+        <img src="https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square" alt="docs.rs docs" />
+    </a>
+    <!-- CI -->
+    <a href="https://github.com/jkelleyrtp/dioxus/actions">
+        <img src="https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg" alt="CI status" />
+    </a>
+    <!-- Awesome -->
+    <a href="https://dioxuslabs.com/awesome">
+        <img src="https://cdn.rawgit.com/sindresorhus/awesome/d7305f38d29fed78fa85652e3a63e154dd8e8829/media/badge.svg" alt="Awesome Page" />
+    </a>
+    <!-- Discord -->
+    <a href="https://discord.gg/XgGxMSkvUM">
+        <img src="https://img.shields.io/discord/899851952891002890.svg?logo=discord&style=flat-square" alt="Discord Link" />
+    </a>
 </div>
+
+<div align="center">
+    <h3>
+        <a href="https://dioxuslabs.com">Website</a>
+        <span> | </span>
+        <a href="https://github.com/DioxusLabs/dioxus/tree/main/examples">Examples</a>
+        <span> | </span>
+        <a href="https://dioxuslabs.com/learn/0.5/guide">Guide</a>
+        <span> | </span>
+        <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/zh-cn/README.md">中文</a>
+        <span> | </span>
+        <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/pt-br/README.md">PT-BR</a>
+        <span> | </span>
+        <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/ja-jp/README.md">日本語</a>
+        <span> | </span>
+        <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/tr-tr">Türkçe</a>
+    </h3>
+</div>
+<br>
+<br>
+
 <br>
 <br>
 
