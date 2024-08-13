@@ -235,15 +235,6 @@ impl DynamicValuePool {
 
     pub fn render_with(&mut self, hot_reload: &HotReloadedTemplate) -> VNode {
         // Get the node_paths from a depth first traversal of the template
-        let node_paths = hot_reload.node_paths();
-        let attr_paths = hot_reload.attr_paths();
-
-        let template = Template {
-            name: hot_reload.name,
-            roots: hot_reload.roots,
-            node_paths,
-            attr_paths,
-        };
         let key = hot_reload
             .key
             .as_ref()
@@ -259,7 +250,7 @@ impl DynamicValuePool {
             .map(|attr| self.render_attribute(attr))
             .collect();
 
-        VNode::new(key, template, dynamic_nodes, dynamic_attrs)
+        VNode::new(key, hot_reload.template, dynamic_nodes, dynamic_attrs)
     }
 
     fn render_dynamic_node(&mut self, node: &HotReloadDynamicNode) -> DynamicNode {
@@ -318,8 +309,8 @@ pub struct HotReloadTemplateWithLocation {
 #[doc(hidden)]
 #[derive(Debug, PartialEq, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", serde(bound(deserialize = "'de: 'static")))]
 pub struct HotReloadedTemplate {
-    pub name: &'static str,
     pub key: Option<FmtedSegments>,
     pub dynamic_nodes: Vec<HotReloadDynamicNode>,
     pub dynamic_attributes: Vec<HotReloadDynamicAttribute>,
@@ -329,28 +320,37 @@ pub struct HotReloadedTemplate {
         serde(deserialize_with = "crate::nodes::deserialize_leaky")
     )]
     pub roots: &'static [TemplateNode],
+    /// The template that is computed from the hot reload roots
+    template: Template,
 }
 
 impl HotReloadedTemplate {
     pub fn new(
-        name: &'static str,
         key: Option<FmtedSegments>,
         dynamic_nodes: Vec<HotReloadDynamicNode>,
         dynamic_attributes: Vec<HotReloadDynamicAttribute>,
         component_values: Vec<HotReloadLiteral>,
         roots: &'static [TemplateNode],
     ) -> Self {
+        let node_paths = Self::node_paths(roots);
+        let attr_paths = Self::attr_paths(roots);
+
+        let template = Template {
+            roots,
+            node_paths,
+            attr_paths,
+        };
         Self {
-            name,
             key,
             dynamic_nodes,
             dynamic_attributes,
             component_values,
             roots,
+            template,
         }
     }
 
-    fn node_paths(&self) -> &'static [&'static [u8]] {
+    fn node_paths(roots: &'static [TemplateNode]) -> &'static [&'static [u8]] {
         fn add_node_paths(
             roots: &[TemplateNode],
             node_paths: &mut Vec<&'static [u8]>,
@@ -373,12 +373,12 @@ impl HotReloadedTemplate {
         }
 
         let mut node_paths = Vec::new();
-        add_node_paths(self.roots, &mut node_paths, Vec::new());
+        add_node_paths(roots, &mut node_paths, Vec::new());
         let leaked: &'static [&'static [u8]] = Box::leak(node_paths.into_boxed_slice());
         leaked
     }
 
-    fn attr_paths(&self) -> &'static [&'static [u8]] {
+    fn attr_paths(roots: &'static [TemplateNode]) -> &'static [&'static [u8]] {
         fn add_attr_paths(
             roots: &[TemplateNode],
             attr_paths: &mut Vec<&'static [u8]>,
@@ -403,7 +403,7 @@ impl HotReloadedTemplate {
         }
 
         let mut attr_paths = Vec::new();
-        add_attr_paths(self.roots, &mut attr_paths, Vec::new());
+        add_attr_paths(roots, &mut attr_paths, Vec::new());
         let leaked: &'static [&'static [u8]] = Box::leak(attr_paths.into_boxed_slice());
         leaked
     }

@@ -70,9 +70,6 @@ use dioxus_core::internal::{
     HotReloadLiteral, HotReloadedTemplate, NamedAttribute,
 };
 use std::collections::HashMap;
-use std::hash::DefaultHasher;
-use std::hash::Hash;
-use std::hash::Hasher;
 
 use super::last_build_state::LastBuildState;
 
@@ -200,23 +197,7 @@ impl HotReloadResult {
             .collect();
         let roots: &[dioxus_core::TemplateNode] = intern(&*roots);
 
-        // Add the template name, the dyn index and the hash of the template to get a unique name
-        let name = {
-            let mut hasher = DefaultHasher::new();
-            key.hash(&mut hasher);
-            new_dynamic_attributes.hash(&mut hasher);
-            new_dynamic_nodes.hash(&mut hasher);
-            literal_component_properties.hash(&mut hasher);
-            roots.hash(&mut hasher);
-            let hash = hasher.finish();
-            let name = &self.full_rebuild_state.name;
-
-            format!("{}:{}-{}", name, hash, new.template_idx.get())
-        };
-        let name = Box::leak(name.into_boxed_str());
-
         let template = HotReloadedTemplate::new(
-            name,
             key,
             new_dynamic_nodes,
             new_dynamic_attributes,

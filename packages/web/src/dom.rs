@@ -6,7 +6,7 @@
 //! - tests to ensure dyn_into works for various event types.
 //! - Partial delegation?
 
-use dioxus_core::ElementId;
+use dioxus_core::{ElementId, Template};
 use dioxus_html::PlatformEventData;
 use dioxus_interpreter_js::unified_bindings::Interpreter;
 use futures_channel::mpsc;
@@ -20,8 +20,7 @@ pub struct WebsysDom {
     #[allow(dead_code)]
     pub(crate) root: Element,
     pub(crate) document: Document,
-    pub(crate) templates: FxHashMap<String, u16>,
-    pub(crate) max_template_id: u16,
+    pub(crate) templates: FxHashMap<Template, u16>,
     pub(crate) interpreter: Interpreter,
 
     #[cfg(feature = "mounted")]
@@ -41,10 +40,10 @@ pub struct WebsysDom {
     // Instead we now store a flag to see if we should be writing templates at all if hydration is enabled.
     // This has a small overhead, but it avoids dynamic dispatch and reduces the binary size
     //
-    // NOTE: running the virtual dom with the `only_write_templates` flag set to true is different from running
+    // NOTE: running the virtual dom with the `write_mutations` flag set to true is different from running
     // it with no mutation writer because it still assigns ids to nodes, but it doesn't write them to the dom
     #[cfg(feature = "hydrate")]
-    pub(crate) only_write_templates: bool,
+    pub(crate) skip_mutations: bool,
 
     #[cfg(feature = "hydrate")]
     pub(crate) suspense_hydration_ids: crate::hydration::SuspenseHydrationIds,
@@ -145,13 +144,12 @@ impl WebsysDom {
             root,
             interpreter,
             templates: FxHashMap::default(),
-            max_template_id: 0,
             #[cfg(feature = "mounted")]
             event_channel,
             #[cfg(feature = "mounted")]
             queued_mounted_events: Default::default(),
             #[cfg(feature = "hydrate")]
-            only_write_templates: false,
+            skip_mutations: false,
             #[cfg(feature = "hydrate")]
             suspense_hydration_ids: Default::default(),
         }

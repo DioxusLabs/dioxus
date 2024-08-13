@@ -11,14 +11,12 @@ use crate::{
         ElementRef, NoOpMutations, SchedulerMsg, ScopeOrder, ScopeState, VNodeMount, VProps,
         WriteMutations,
     },
-    nodes::{Template, TemplateId},
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
     AttributeValue, ComponentFunction, Element, Event, Mutations,
 };
 use crate::{Task, VComponent};
 use futures_util::StreamExt;
-use rustc_hash::FxHashSet;
 use slab::Slab;
 use std::collections::BTreeSet;
 use std::{any::Any, rc::Rc};
@@ -208,12 +206,6 @@ pub struct VirtualDom {
 
     pub(crate) dirty_scopes: BTreeSet<ScopeOrder>,
 
-    // A map of templates we have sent to the renderer
-    pub(crate) templates: FxHashSet<TemplateId>,
-
-    // Templates changes that are queued for the next render
-    pub(crate) queued_templates: Vec<Template>,
-
     // The element ids that are used in the renderer
     // These mark a specific place in a whole rsx block
     pub(crate) elements: Slab<Option<ElementRef>>,
@@ -336,8 +328,6 @@ impl VirtualDom {
             runtime: Runtime::new(tx),
             scopes: Default::default(),
             dirty_scopes: Default::default(),
-            templates: Default::default(),
-            queued_templates: Default::default(),
             elements: Default::default(),
             mounts: Default::default(),
             resolved_scopes: Default::default(),
@@ -612,7 +602,6 @@ impl VirtualDom {
     /// ```
     #[instrument(skip(self, to), level = "trace", name = "VirtualDom::rebuild")]
     pub fn rebuild(&mut self, to: &mut impl WriteMutations) {
-        self.flush_templates(to);
         let _runtime = RuntimeGuard::new(self.runtime.clone());
         let new_nodes = self.run_scope(ScopeId::ROOT);
 
@@ -628,8 +617,6 @@ impl VirtualDom {
     /// suspended subtrees.
     #[instrument(skip(self, to), level = "trace", name = "VirtualDom::render_immediate")]
     pub fn render_immediate(&mut self, to: &mut impl WriteMutations) {
-        self.flush_templates(to);
-
         // Process any events that might be pending in the queue
         // Signals marked with .write() need a chance to be handled by the effect driver
         // This also processes futures which might progress into immediately rerunning a scope
@@ -783,14 +770,6 @@ impl VirtualDom {
     /// Get the current runtime
     pub fn runtime(&self) -> Rc<Runtime> {
         self.runtime.clone()
-    }
-
-    /// Flush any queued template changes
-    #[instrument(skip(self, to), level = "trace", name = "VirtualDom::flush_templates")]
-    fn flush_templates(&mut self, to: &mut impl WriteMutations) {
-        for template in self.queued_templates.drain(..) {
-            to.register_template(template);
-        }
     }
 
     /*
