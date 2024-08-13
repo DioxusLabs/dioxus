@@ -451,17 +451,6 @@ impl CapturedError {
         self
     }
 
-    /// Clone the error while retaining the mounted information of the error
-    pub(crate) fn clone_mounted(&self) -> Self {
-        Self {
-            error: self.error.clone(),
-            backtrace: self.backtrace.clone(),
-            scope: self.scope,
-            render: self.render.clone_mounted(),
-            context: self.context.clone(),
-        }
-    }
-
     /// Get a VNode representation of the error if the error provides one
     pub fn show(&self) -> Option<Element> {
         if self.render == VNode::placeholder() {

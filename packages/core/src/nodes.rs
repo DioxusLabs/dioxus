@@ -44,13 +44,13 @@ impl Clone for RenderReturn {
     fn clone(&self) -> Self {
         match &self.node {
             Ok(node) => RenderReturn {
-                node: Ok(node.clone_mounted()),
+                node: Ok(node.clone()),
             },
             Err(RenderError::Aborted(err)) => RenderReturn {
-                node: Err(RenderError::Aborted(err.clone_mounted())),
+                node: Err(RenderError::Aborted(err.clone())),
             },
             Err(RenderError::Suspended(fut)) => RenderReturn {
-                node: Err(RenderError::Suspended(fut.clone_mounted())),
+                node: Err(RenderError::Suspended(fut.clone())),
             },
         }
     }
@@ -162,21 +162,12 @@ pub struct VNodeInner {
 ///
 /// The dynamic parts of the template are stored separately from the static parts. This allows faster diffing by skipping
 /// static parts of the template.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VNode {
     vnode: Rc<VNodeInner>,
 
     /// The mount information for this template
     pub(crate) mount: Cell<MountId>,
-}
-
-impl Clone for VNode {
-    fn clone(&self) -> Self {
-        Self {
-            vnode: self.vnode.clone(),
-            mount: Default::default(),
-        }
-    }
 }
 
 impl Default for VNode {
@@ -223,14 +214,6 @@ impl Deref for VNode {
 }
 
 impl VNode {
-    /// Clone the element while retaining the mount information of the node
-    pub(crate) fn clone_mounted(&self) -> Self {
-        Self {
-            vnode: self.vnode.clone(),
-            mount: self.mount.clone(),
-        }
-    }
-
     /// Create a template with no nodes that will be skipped over during diffing
     pub fn empty() -> Element {
         Ok(Self::default())

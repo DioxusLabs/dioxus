@@ -65,7 +65,7 @@ impl VNode {
             let mount = &mut dom.mounts[mount_id.0];
 
             // Update the reference to the node for bubbling events
-            mount.node = new.clone_mounted();
+            mount.node = new.clone();
         }
     }
 
@@ -531,7 +531,7 @@ impl VNode {
             self.mount.set(mount);
             tracing::trace!(?self, ?mount, "creating template");
             entry.insert(VNodeMount {
-                node: self.clone_mounted(),
+                node: self.clone(),
                 parent,
                 root_ids: vec![ElementId(0); template.roots.len()].into_boxed_slice(),
                 mounted_attributes: vec![ElementId(0); template.attr_paths.len()]

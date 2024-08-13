@@ -307,11 +307,7 @@ impl SuspenseBoundaryProps {
                     .unwrap();
 
             let children = RenderReturn {
-                node: props
-                    .children
-                    .as_ref()
-                    .map(|node| node.clone_mounted())
-                    .map_err(Clone::clone),
+                node: props.children.clone(),
             };
 
             // First always render the children in the background. Rendering the children may cause this boundary to suspend
@@ -413,11 +409,7 @@ impl SuspenseBoundaryProps {
             let props = Self::downcast_from_props(&mut *scope_state.props).unwrap();
 
             // Unmount any children to reset any scopes under this suspense boundary
-            let children = props
-                .children
-                .as_ref()
-                .map(|node| node.clone_mounted())
-                .map_err(Clone::clone);
+            let children = props.children.clone();
             let suspense_context =
                 SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime, scope_id)
                     .unwrap();
@@ -459,7 +451,7 @@ impl SuspenseBoundaryProps {
                 .unwrap()
                 .clone();
 
-            let last_rendered_node = scope.last_rendered_node.as_ref().unwrap().clone_mounted();
+            let last_rendered_node = scope.last_rendered_node.as_ref().unwrap().clone();
 
             let Self {
                 fallback, children, ..

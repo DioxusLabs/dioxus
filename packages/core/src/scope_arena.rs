@@ -102,7 +102,7 @@ impl VirtualDom {
                     "Error while rendering component `{}`:\n{e}",
                     scope_state.name
                 );
-                throw_error(e.clone_mounted());
+                throw_error(e.clone());
                 e.render = VNode::placeholder();
             }
             Err(RenderError::Suspended(e)) => {
