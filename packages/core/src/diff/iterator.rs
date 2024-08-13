@@ -145,13 +145,12 @@ impl VirtualDom {
             // we need to find the right "foothold" though - we shouldn't use the "append" at all
             if left_offset == 0 {
                 // insert at the beginning of the old list
-                let foothold = &new[old.len() - right_offset];
+                let foothold = &new[new.len() - right_offset];
                 self.create_and_insert_before(to, new_middle, foothold, parent);
-            } else if right_offset == 0 {
-                // insert at the end of the old list
-                let foothold = &new[old.len() - 1];
-                self.create_and_insert_after(to, new_middle, foothold, parent);
             } else {
+                // Double check that if old middle is empty and right offset is 0, then it was just an append
+                debug_assert!(right_offset != 0);
+
                 // inserting in the middle
                 let foothold = &new[left_offset - 1];
                 self.create_and_insert_after(to, new_middle, foothold, parent);
