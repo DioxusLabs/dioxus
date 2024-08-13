@@ -345,7 +345,7 @@ Iced is a cross-platform GUI library inspired by Elm. Iced renders natively with
 
 - **Native Feel**: Since Dioxus uses a webview as its renderer, it automatically gets native text input, paste handling, and other native features like accessibility. Iced's renderer currently doesn't implement these features, making it feel less native.
 
-- **WGPU**: Dioxus' WGPU renderer is currently quite immature and not yet reader for production use. Iced's WGPU renderer is much more mature and is being used in production. This enables certain types of apps that need GPU access to be built with Iced that can't currently be built with Dioxus.
+- **WGPU**: Dioxus WGPU renderer is currently quite immature and not yet reader for production use. Iced's WGPU renderer is much more mature and is being used in production. This enables certain types of apps that need GPU access to be built with Iced that can't currently be built with Dioxus.
 
 ### Dioxus vs Electron
 
