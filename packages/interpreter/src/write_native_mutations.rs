@@ -104,7 +104,7 @@ impl WriteMutations for MutationState {
             }
             let id = template.roots.len() as u16;
             self.channel.add_templates(current_max_template_count, id);
-            id
+            current_max_template_count
         });
 
         self.channel

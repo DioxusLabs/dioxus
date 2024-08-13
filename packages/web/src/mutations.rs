@@ -103,10 +103,9 @@ impl WriteMutations for WebsysDom {
             for root in template.roots {
                 roots.push(self.create_template_node(root))
             }
-            let id = self.max_template_id;
+            let id = self.templates.len() as u16;
             self.templates.insert(template, id);
             self.interpreter.base().save_template(roots, id);
-            self.max_template_id += 1;
             id
         });
 

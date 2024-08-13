@@ -21,7 +21,6 @@ pub struct WebsysDom {
     pub(crate) root: Element,
     pub(crate) document: Document,
     pub(crate) templates: FxHashMap<Template, u16>,
-    pub(crate) max_template_id: u16,
     pub(crate) interpreter: Interpreter,
 
     #[cfg(feature = "mounted")]
@@ -129,7 +128,6 @@ impl WebsysDom {
             root,
             interpreter,
             templates: FxHashMap::default(),
-            max_template_id: 0,
             #[cfg(feature = "mounted")]
             event_channel,
             #[cfg(feature = "mounted")]
