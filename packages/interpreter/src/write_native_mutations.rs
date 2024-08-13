@@ -6,9 +6,6 @@ use sledgehammer_utils::rustc_hash::FxHashMap;
 /// The state needed to apply mutations to a channel. This state should be kept across all mutations for the app
 #[derive(Default)]
 pub struct MutationState {
-    /// The maximum number of templates that we have registered
-    max_template_count: u16,
-
     /// The currently registered templates with the template ids
     templates: FxHashMap<Template, u16>,
 
@@ -100,14 +97,13 @@ impl WriteMutations for MutationState {
     fn load_template(&mut self, template: Template, index: usize, id: dioxus_core::ElementId) {
         // Get the template or create it if we haven't seen it before
         let tmpl_id = self.templates.get(&template).cloned().unwrap_or_else(|| {
-            let current_max_template_count = self.max_template_count;
+            let current_max_template_count = self.templates.len() as u16;
             for root in template.roots.iter() {
                 self.create_template_node(root);
                 self.templates.insert(template, current_max_template_count);
             }
             let id = template.roots.len() as u16;
             self.channel.add_templates(current_max_template_count, id);
-            self.max_template_count += 1;
             id
         });
 
