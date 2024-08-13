@@ -9,11 +9,11 @@ use crate::{
         ElementRef, MountId, ScopeOrder, SuspenseBoundaryProps, SuspenseBoundaryPropsWithOwner,
         VComponent, WriteMutations,
     },
-    nodes::VNode,
+    nodes::{AsVNode, VNode},
     prelude::SuspenseContext,
     scopes::ScopeId,
     virtual_dom::VirtualDom,
-    RenderReturn,
+    Element,
 };
 
 impl VirtualDom {
@@ -36,11 +36,11 @@ impl VirtualDom {
         &mut self,
         to: Option<&mut M>,
         scope: ScopeId,
-        new_nodes: RenderReturn,
+        new_nodes: Element,
     ) {
         self.runtime.clone().with_scope_on_stack(scope, || {
             // We don't diff the nodes if the scope is suspended or has an error
-            let Ok(new_real_nodes) = &new_nodes.node else {
+            let Ok(new_real_nodes) = &new_nodes else {
                 return;
             };
             let scope_state = &mut self.scopes[scope.0];
@@ -51,7 +51,8 @@ impl VirtualDom {
             // If it is suspended, we need to diff it but write the mutations nothing
             // Note: It is important that we still diff the scope even if it is suspended, because the scope may render other child components which may change between renders
             let mut render_to = to.filter(|_| self.runtime.scope_should_render(scope));
-            old.diff_node(new_real_nodes, self, render_to.as_deref_mut());
+            old.as_vnode()
+                .diff_node(new_real_nodes, self, render_to.as_deref_mut());
 
             self.scopes[scope.0].last_rendered_node = Some(new_nodes);
 
@@ -69,7 +70,7 @@ impl VirtualDom {
         &mut self,
         to: Option<&mut M>,
         scope: ScopeId,
-        new_nodes: RenderReturn,
+        new_nodes: Element,
         parent: Option<ElementRef>,
     ) -> usize {
         self.runtime.clone().with_scope_on_stack(scope, || {
@@ -79,7 +80,9 @@ impl VirtualDom {
             let mut render_to = to.filter(|_| self.runtime.scope_should_render(scope));
 
             // Create the node
-            let nodes = new_nodes.create(self, parent, render_to.as_deref_mut());
+            let nodes = new_nodes
+                .as_vnode()
+                .create(self, parent, render_to.as_deref_mut());
 
             // Then set the new node as the last rendered node
             self.scopes[scope.0].last_rendered_node = Some(new_nodes);
@@ -104,8 +107,12 @@ impl VirtualDom {
 
         // Remove the component from the dom
         if let Some(node) = self.scopes[scope_id.0].last_rendered_node.as_ref() {
-            node.clone()
-                .remove_node_inner(self, to, destroy_component_state, replace_with)
+            node.clone().as_vnode().remove_node_inner(
+                self,
+                to,
+                destroy_component_state,
+                replace_with,
+            )
         };
 
         if destroy_component_state {
