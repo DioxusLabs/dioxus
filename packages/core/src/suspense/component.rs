@@ -383,6 +383,7 @@ impl SuspenseBoundaryProps {
         scope_id: ScopeId,
         dom: &mut VirtualDom,
         to: &mut M,
+        only_write_templates: impl FnOnce(&mut M),
         replace_with: usize,
     ) {
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
@@ -428,12 +429,15 @@ impl SuspenseBoundaryProps {
             // Replace the rendered nodes with resolved nodes
             currently_rendered.remove_node(&mut *dom, Some(to), Some(replace_with));
 
+            // Switch to only writing templates
+            only_write_templates(to);
+
             let children = RenderReturn { node: children };
             children.mount.take();
 
             // First always render the children in the background. Rendering the children may cause this boundary to suspend
             suspense_context.under_suspense_boundary(&dom.runtime(), || {
-                children.create(dom, parent, None::<&mut M>);
+                children.create(dom, parent, Some(to));
             });
 
             // Store the (now mounted) children back into the scope state

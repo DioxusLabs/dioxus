@@ -602,21 +602,15 @@ impl VirtualDom {
     /// ```
     #[instrument(skip(self, to), level = "trace", name = "VirtualDom::rebuild")]
     pub fn rebuild(&mut self, to: &mut impl WriteMutations) {
-        self.maybe_rebuild(Some(to));
-    }
-
-    /// Rebuild the virtual dom without handling any of the mutations
-    pub fn maybe_rebuild<M: WriteMutations>(&mut self, mut to: Option<&mut M>) {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
         let new_nodes = self.run_scope(ScopeId::ROOT);
 
         self.scopes[ScopeId::ROOT.0].last_rendered_node = Some(new_nodes.clone());
 
-        let m = self.create_scope(to.as_deref_mut(), ScopeId::ROOT, new_nodes, None);
         // Rebuilding implies we append the created elements to the root
-        if let Some(to) = to {
-            to.append_children(ElementId(0), m);
-        }
+        let m = self.create_scope(Some(to), ScopeId::ROOT, new_nodes, None);
+
+        to.append_children(ElementId(0), m);
     }
 
     /// Render whatever the VirtualDom has ready as fast as possible without requiring an executor to progress
