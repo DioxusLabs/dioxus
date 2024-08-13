@@ -2,7 +2,7 @@
 
 use dioxus::prelude::*;
 use dioxus_core::{AttributeValue, DynamicNode, NoOpMutations, Template, VComponent, VNode, *};
-use std::{cfg, collections::HashSet, default::Default};
+use std::{cell::RefCell, cfg, collections::HashSet, default::Default, rc::Rc};
 
 fn random_ns() -> Option<&'static str> {
     let namespace = rand::random::<u8>() % 2;
@@ -127,13 +127,18 @@ enum DynamicNodeType {
     Other,
 }
 
-fn create_random_template() -> (Template, Vec<DynamicNodeType>) {
-    let mut dynamic_node_type = Vec::new();
+fn create_random_template(depth: usize) -> (Template, Box<[DynamicNode]>) {
+    let mut dynamic_node_types = Vec::new();
     let mut template_idx = 0;
     let mut attr_idx = 0;
     let roots = (0..(1 + rand::random::<usize>() % 5))
         .map(|_| {
-            create_random_template_node(&mut dynamic_node_type, &mut template_idx, &mut attr_idx, 0)
+            create_random_template_node(
+                &mut dynamic_node_types,
+                &mut template_idx,
+                &mut attr_idx,
+                0,
+            )
         })
         .collect::<Vec<_>>();
     assert!(!roots.is_empty());
@@ -157,10 +162,16 @@ fn create_random_template() -> (Template, Vec<DynamicNodeType>) {
             .collect::<Vec<_>>()
             .into_boxed_slice(),
     );
-    (
-        Template { roots, node_paths, attr_paths },
-        dynamic_node_type,
-    )
+    let dynamic_nodes = dynamic_node_types
+        .iter()
+        .map(|ty| match ty {
+            DynamicNodeType::Text => {
+                DynamicNode::Text(VText::new(format!("{}", rand::random::<usize>())))
+            }
+            DynamicNodeType::Other => create_random_dynamic_node(depth + 1),
+        })
+        .collect();
+    (Template { roots, node_paths, attr_paths }, dynamic_nodes)
 }
 
 fn create_random_dynamic_node(depth: usize) -> DynamicNode {
@@ -223,31 +234,46 @@ struct DepthProps {
 }
 
 fn create_random_element(cx: DepthProps) -> Element {
+    let last_template = use_hook(|| Rc::new(RefCell::new(None)));
     if rand::random::<usize>() % 10 == 0 {
         needs_update();
     }
     let range = if cx.root { 2 } else { 3 };
     let node = match rand::random::<usize>() % range {
-        0 | 1 => {
-            let (template, dynamic_node_types) = create_random_template();
-            let node = VNode::new(
+        // Change both the template and the dynamic nodes
+        0 => {
+            let (template, dynamic_nodes) = create_random_template(cx.depth + 1);
+            last_template.replace(Some(template));
+            VNode::new(
                 None,
                 template,
-                dynamic_node_types
-                    .iter()
-                    .map(|ty| match ty {
-                        DynamicNodeType::Text => {
-                            DynamicNode::Text(VText::new(format!("{}", rand::random::<usize>())))
-                        }
-                        DynamicNodeType::Other => create_random_dynamic_node(cx.depth + 1),
-                    })
-                    .collect(),
+                dynamic_nodes,
                 (0..template.attr_paths.len())
                     .map(|_| Box::new([create_random_dynamic_attr()]) as Box<[Attribute]>)
                     .collect(),
-            );
-            node
+            )
         }
+        // Change just the dynamic nodes
+        1 => {
+            let (template, dynamic_nodes) = match *last_template.borrow() {
+                Some(template) => (
+                    template,
+                    (0..template.attr_paths.len())
+                        .map(|_| create_random_dynamic_node(cx.depth + 1))
+                        .collect(),
+                ),
+                None => create_random_template(cx.depth + 1),
+            };
+            VNode::new(
+                None,
+                template,
+                dynamic_nodes,
+                (0..template.attr_paths.len())
+                    .map(|_| Box::new([create_random_dynamic_attr()]) as Box<[Attribute]>)
+                    .collect(),
+            )
+        }
+        // Remove the template
         _ => VNode::default(),
     };
     Element::Ok(node)
