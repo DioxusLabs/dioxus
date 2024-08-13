@@ -149,8 +149,12 @@ impl ToTokens for TemplateBody {
 
                 #[cfg(debug_assertions)]
                 {
-                    fn __original_template() -> dioxus_core::internal::HotReloadedTemplate {
-                        #hot_reload_mapping
+                    static __ORIGINAL_TEMPLATE: ::std::sync::OnceLock<dioxus_core::internal::HotReloadedTemplate> = ::std::sync::OnceLock::new();
+                    fn __original_template() -> &'static dioxus_core::internal::HotReloadedTemplate {
+                        if __ORIGINAL_TEMPLATE.get().is_none() {
+                            __ORIGINAL_TEMPLATE.set(#hot_reload_mapping);
+                        }
+                        __ORIGINAL_TEMPLATE.get().unwrap()
                     }
                     // The key is important here - we're creating a new GlobalSignal each call to this
                     // But the key is what's keeping it stable
@@ -169,7 +173,7 @@ impl ToTokens for TemplateBody {
                         // They cannot be hot reloaded, so this prevents incorrect rendering
                         let __template_read = match __template_read.as_ref() {
                             Some(__template_read) => __template_read,
-                            None => &__original_template(),
+                            None => __original_template(),
                         };
                         let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
                             vec![ #( #dynamic_text.to_string() ),* ],
