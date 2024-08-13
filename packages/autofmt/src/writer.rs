@@ -72,6 +72,8 @@ impl<'a> Writer<'a> {
 
     /// Check if the rsx call is short enough to be inlined
     pub(crate) fn is_short_rsx_call(roots: &[BodyNode]) -> bool {
+        // eventually I want to use the _text length, so shutup now
+        #[allow(clippy::match_like_matches_macro)]
         match roots {
             [] => true,
             [BodyNode::Text(_text)] => true,
