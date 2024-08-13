@@ -1212,7 +1212,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 true => {
                     let struct_name = self.name.to_string();
                     let component_name = struct_name.strip_suffix("Props").unwrap_or(&struct_name);
-                    let deprecation_note = format!("{} component's props don't accept children; add a `children: Element` field to your props to accept children elements", component_name);
+                    let deprecation_note = format!("`{}` component's props don't accept children; add a `children: Element` field to your props to accept children elements", component_name);
                     (
                         quote!(
                             #[deprecated(note = #deprecation_note)]
