@@ -1,6 +1,6 @@
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::{ExprClosure, LitStr};
+use syn::{ExprClosure, Ident, LitStr, Type, Variant};
 
 use crate::{
     hash::HashFragment,
@@ -16,8 +16,14 @@ pub(crate) struct Redirect {
     pub segments: Vec<RouteSegment>,
     pub query: Option<QuerySegment>,
     pub hash: Option<HashFragment>,
-    pub function: syn::ExprClosure,
+    pub function: RedirectExpr,
     pub index: usize,
+}
+
+#[derive(Debug)]
+pub(crate) enum RedirectExpr {
+    TypedClosure(ExprClosure),
+    RouteVariant(Variant),
 }
 
 impl Redirect {
@@ -55,10 +61,42 @@ impl Redirect {
         index: usize,
     ) -> syn::Result<Self> {
         let path = input.parse::<syn::LitStr>()?;
-
         let _ = input.parse::<syn::Token![,]>();
-        let function = input.parse::<syn::ExprClosure>()?;
 
+        let function = match input.parse::<syn::ExprClosure>() {
+            Ok(c) => RedirectExpr::TypedClosure(c),
+            Err(_) => RedirectExpr::RouteVariant(
+                input
+                    .parse::<syn::Variant>()
+                    .expect("redirect function must be a closure or a route variant"),
+            ),
+        };
+
+        let (segments, query, hash) = match function {
+            RedirectExpr::TypedClosure(ref fun) => Self::parse_closure_redirect(&path, fun)?,
+            RedirectExpr::RouteVariant(ref fun) => Self::parse_field_redirect(&path, fun)?,
+        };
+
+
+        Ok(Redirect {
+            route: path,
+            nests: active_nests,
+            segments,
+            query,
+            hash,
+            function,
+            index,
+        })
+    }
+
+    fn parse_closure_redirect(
+        path: &LitStr,
+        function: &ExprClosure,
+    ) -> syn::Result<(
+        Vec<RouteSegment>,
+        Option<QuerySegment>,
+        Option<HashFragment>,
+    )> {
         let mut closure_arguments = Vec::new();
         for arg in function.inputs.iter() {
             match arg {
@@ -82,25 +120,26 @@ impl Redirect {
             }
         }
 
-        let (segments, query, hash) = parse_route_segments(
+        Ok(parse_route_segments(
             path.span(),
             #[allow(clippy::map_identity)]
             closure_arguments.iter().map(|(name, ty)| (name, ty)),
             &path.value(),
-        )?;
-
-        Ok(Redirect {
-            route: path,
-            nests: active_nests,
-            segments,
-            query,
-            hash,
-            function,
-            index,
-        })
+        )?)
     }
 
-    fn get_closure_redirect(function: ExprClosure) -> (Vec<RouteSegment>, Option<QuerySegment>, Option<HashFragment>) {
-
+    fn parse_field_redirect(
+        path: &LitStr,
+        _variant: &Variant,
+    ) -> syn::Result<(
+        Vec<RouteSegment>,
+        Option<QuerySegment>,
+        Option<HashFragment>,
+    )> {
+        Ok(parse_route_segments(
+            path.span(),
+            std::iter::empty::<(&Ident, &Type)>(),
+            &path.value(),
+        )?)
     }
 }
