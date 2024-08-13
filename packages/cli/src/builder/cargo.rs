@@ -236,7 +236,7 @@ impl BuildRequest {
 
     pub fn copy_assets_dir(&self) -> anyhow::Result<()> {
         tracing::info!("Copying public assets to the output directory...");
-        let out_dir = self.dioxus_crate.out_dir();
+        let out_dir = self.target_out_dir();
         let asset_dir = self.dioxus_crate.asset_dir();
 
         if asset_dir.is_dir() {

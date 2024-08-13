@@ -126,19 +126,6 @@ mod js {
     fn assign_id(ptr: u32, len: u8, id: u32) {
         "{this.nodes[$id$] = this.loadChild($ptr$, $len$);}"
     }
-    fn hydrate_text(ptr: u32, len: u8, value: &str, id: u32) {
-        r#"{
-            let node = this.loadChild($ptr$, $len$);
-            if (node.nodeType == node.TEXT_NODE) {
-                node.textContent = value;
-            } else {
-                let text = document.createTextNode(value);
-                node.replaceWith(text);
-                node = text;
-            }
-            this.nodes[$id$] = node;
-        }"#
-    }
     fn replace_placeholder(ptr: u32, len: u8, n: u16) {
         "{let els = this.stack.splice(this.stack.length - $n$); let node = this.loadChild($ptr$, $len$); node.replaceWith(...els);}"
     }
@@ -149,11 +136,11 @@ mod js {
     #[cfg(feature = "binary-protocol")]
     fn append_children_to_top(many: u16) {
         "{
-        let root = this.stack[this.stack.length-many-1];
-        let els = this.stack.splice(this.stack.length-many);
-        for (let k = 0; k < many; k++) {
-            root.appendChild(els[k]);
-        }
+            let root = this.stack[this.stack.length-many-1];
+            let els = this.stack.splice(this.stack.length-many);
+            for (let k = 0; k < many; k++) {
+                root.appendChild(els[k]);
+            }
         }"
     }
 
@@ -216,22 +203,6 @@ mod js {
     #[cfg(feature = "binary-protocol")]
     fn assign_id_ref(array: &[u8], id: u32) {
         "{this.nodes[$id$] = this.loadChild($array$);}"
-    }
-
-    /// The coolest ID ever!
-    #[cfg(feature = "binary-protocol")]
-    fn hydrate_text_ref(array: &[u8], value: &str, id: u32) {
-        r#"{
-        let node = this.loadChild($array$);
-        if (node.nodeType == node.TEXT_NODE) {
-            node.textContent = value;
-        } else {
-            let text = document.createTextNode(value);
-            node.replaceWith(text);
-            node = text;
-        }
-        this.nodes[$id$] = node;
-    }"#
     }
 
     #[cfg(feature = "binary-protocol")]

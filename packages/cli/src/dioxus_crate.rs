@@ -180,7 +180,7 @@ impl DioxusCrate {
     /// Compose an asset directory. Represents the typical "public" directory
     /// with publicly available resources (configurable in the `Dioxus.toml`).
     pub fn asset_dir(&self) -> PathBuf {
-        self.workspace_dir()
+        self.crate_dir()
             .join(&self.dioxus_config.application.asset_dir)
     }
 

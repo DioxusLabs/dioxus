@@ -102,7 +102,7 @@ impl AssetConfigDropGuard {
             None => "/".to_string(),
         };
         manganis_cli_support::Config::default()
-            .with_assets_serve_location(&base)
+            .with_assets_serve_location(base)
             .save();
         Self {}
     }

@@ -7,6 +7,7 @@ fn toggle_option_text() {
     let mut dom = VirtualDom::new(|| {
         let gen = generation();
         let text = if gen % 2 != 0 { Some("hello") } else { None };
+        println!("{:?}", text);
 
         rsx! {
             div {
@@ -17,10 +18,11 @@ fn toggle_option_text() {
 
     // load the div and then assign the None as a placeholder
     assert_eq!(
-        dom.rebuild_to_vec().sanitize().edits,
+        dom.rebuild_to_vec().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
-            AssignId { path: &[0], id: ElementId(2,) },
+            LoadTemplate { index: 0, id: ElementId(1,) },
+            CreatePlaceholder { id: ElementId(2,) },
+            ReplacePlaceholder { path: &[0], m: 1 },
             AppendChildren { id: ElementId(0), m: 1 },
         ]
     );
@@ -28,7 +30,7 @@ fn toggle_option_text() {
     // Rendering again should replace the placeholder with an text node
     dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().sanitize().edits,
+        dom.render_immediate_to_vec().edits,
         [
             CreateTextNode { value: "hello".to_string(), id: ElementId(3,) },
             ReplaceWith { id: ElementId(2,), m: 1 },
@@ -38,7 +40,7 @@ fn toggle_option_text() {
     // Rendering again should replace the placeholder with an text node
     dom.mark_dirty(ScopeId::APP);
     assert_eq!(
-        dom.render_immediate_to_vec().sanitize().edits,
+        dom.render_immediate_to_vec().edits,
         [
             CreatePlaceholder { id: ElementId(2,) },
             ReplaceWith { id: ElementId(3,), m: 1 },

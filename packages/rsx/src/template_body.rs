@@ -139,65 +139,58 @@ impl ToTokens for TemplateBody {
 
         let dynamic_text = self.dynamic_text_segments.iter();
 
-        let index = self.template_idx.get();
-
         let diagnostics = &self.diagnostics;
-        let hot_reload_mapping = self.hot_reload_mapping(quote! { ___TEMPLATE_NAME });
+        let index = self.template_idx.get();
+        let hot_reload_mapping = self.hot_reload_mapping();
 
-        let vnode = quote! {
-            #[doc(hidden)] // vscode please stop showing these in symbol search
-            const ___TEMPLATE_NAME: &str = {
-                const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
-                const NORMAL: &str = dioxus_core::const_format::str_replace!(PATH, '\\', "/");
-                dioxus_core::const_format::concatcp!(NORMAL, ':', line!(), ':', column!(), ':', #index)
-            };
-            #[cfg(debug_assertions)]
-            {
-                // The key is important here - we're creating a new GlobalSignal each call to this
-                // But the key is what's keeping it stable
-                let __template = GlobalSignal::with_key(
-                    || #hot_reload_mapping,
-                    ___TEMPLATE_NAME
-                );
-
-                __template.maybe_with_rt(|__template_read| {
-                    let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
-                        vec![ #( #dynamic_text.to_string() ),* ],
-                    );
-                    let mut __dynamic_value_pool = dioxus_core::internal::DynamicValuePool::new(
-                        vec![ #( #dynamic_nodes ),* ],
-                        vec![ #( #dyn_attr_printer ),* ],
-                        __dynamic_literal_pool
-                    );
-                    __dynamic_value_pool.render_with(__template_read)
-                })
-            }
-            #[cfg(not(debug_assertions))]
-            {
-                #[doc(hidden)] // vscode please stop showing these in symbol search
-                static ___TEMPLATE: dioxus_core::Template = dioxus_core::Template {
-                    name: ___TEMPLATE_NAME,
-                    roots: &[ #( #roots ),* ],
-                    node_paths: &[ #( #node_paths ),* ],
-                    attr_paths: &[ #( #attr_paths ),* ],
-                };
-
-                // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
-                #[allow(clippy::let_and_return)]
-                let __vnodes = dioxus_core::VNode::new(
-                    #key_tokens,
-                    ___TEMPLATE,
-                    Box::new([ #( #dynamic_nodes ),* ]),
-                    Box::new([ #( #dyn_attr_printer ),* ]),
-                );
-                __vnodes
-            }
-        };
         tokens.append_all(quote! {
             dioxus_core::Element::Ok({
                 #diagnostics
 
-                #vnode
+                #[cfg(debug_assertions)]
+                {
+                    // The key is important here - we're creating a new GlobalSignal each call to this
+                    // But the key is what's keeping it stable
+                    let __template = GlobalSignal::with_key(
+                        || #hot_reload_mapping,
+                        {
+                            const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
+                            const NORMAL: &str = dioxus_core::const_format::str_replace!(PATH, '\\', "/");
+                            dioxus_core::const_format::concatcp!(NORMAL, ':', line!(), ':', column!(), ':', #index)
+                        }
+                    );
+
+                    __template.maybe_with_rt(|__template_read| {
+                        let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
+                            vec![ #( #dynamic_text.to_string() ),* ],
+                        );
+                        let mut __dynamic_value_pool = dioxus_core::internal::DynamicValuePool::new(
+                            vec![ #( #dynamic_nodes ),* ],
+                            vec![ #( #dyn_attr_printer ),* ],
+                            __dynamic_literal_pool
+                        );
+                        __dynamic_value_pool.render_with(__template_read)
+                    })
+                }
+                #[cfg(not(debug_assertions))]
+                {
+                    #[doc(hidden)] // vscode please stop showing these in symbol search
+                    static ___TEMPLATE: dioxus_core::Template = dioxus_core::Template {
+                        roots: &[ #( #roots ),* ],
+                        node_paths: &[ #( #node_paths ),* ],
+                        attr_paths: &[ #( #attr_paths ),* ],
+                    };
+
+                    // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
+                    #[allow(clippy::let_and_return)]
+                    let __vnodes = dioxus_core::VNode::new(
+                        #key_tokens,
+                        ___TEMPLATE,
+                        Box::new([ #( #dynamic_nodes ),* ]),
+                        Box::new([ #( #dyn_attr_printer ),* ]),
+                    );
+                    __vnodes
+                }
             })
         });
     }
@@ -324,7 +317,7 @@ impl TemplateBody {
             })
     }
 
-    fn hot_reload_mapping(&self, name: impl ToTokens) -> TokenStream2 {
+    fn hot_reload_mapping(&self) -> TokenStream2 {
         let key = if let Some(AttributeValue::AttrLiteral(HotLiteral::Fmted(key))) =
             self.implicit_key()
         {
@@ -346,7 +339,6 @@ impl TemplateBody {
             .map(|literal| literal.quote_as_hot_reload_literal());
         quote! {
             dioxus_core::internal::HotReloadedTemplate::new(
-                #name,
                 #key,
                 vec![ #( #dynamic_nodes ),* ],
                 vec![ #( #dyn_attr_printer ),* ],

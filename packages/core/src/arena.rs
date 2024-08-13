@@ -27,10 +27,10 @@ impl MountId {
     pub(crate) const PLACEHOLDER: Self = Self(usize::MAX);
 
     pub(crate) fn as_usize(self) -> Option<usize> {
-        if self == Self::PLACEHOLDER {
-            None
-        } else {
+        if self.mounted() {
             Some(self.0)
+        } else {
+            None
         }
     }
 

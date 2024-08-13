@@ -23,6 +23,7 @@
 pub use crate::cfg::Config;
 use crate::hydration::SuspenseMessage;
 use dioxus_core::VirtualDom;
+use dom::WebsysDom;
 use futures_util::{pin_mut, select, FutureExt, StreamExt};
 
 mod cfg;
@@ -73,7 +74,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
 
     let should_hydrate = web_config.hydrate;
 
-    let mut websys_dom = dom::WebsysDom::new(web_config, runtime);
+    let mut websys_dom = WebsysDom::new(web_config, runtime);
 
     let mut hydration_receiver: Option<futures_channel::mpsc::UnboundedReceiver<SuspenseMessage>> =
         None;
@@ -81,7 +82,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
     if should_hydrate {
         #[cfg(feature = "hydrate")]
         {
-            websys_dom.only_write_templates = true;
+            websys_dom.skip_mutations = true;
             // Get the initial hydration data from the client
             #[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
                 export function get_initial_hydration_data() {
@@ -101,7 +102,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
             with_server_data(server_data, || {
                 virtual_dom.rebuild(&mut websys_dom);
             });
-            websys_dom.only_write_templates = false;
+            websys_dom.skip_mutations = false;
 
             let rx = websys_dom.rehydrate(&virtual_dom).unwrap();
             hydration_receiver = Some(rx);

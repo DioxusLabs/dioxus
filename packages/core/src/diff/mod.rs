@@ -10,11 +10,10 @@
 #![allow(clippy::too_many_arguments)]
 
 use crate::{
-    arena::ElementId,
-    innerlude::{ElementRef, MountId, WriteMutations},
+    innerlude::{ElementRef, WriteMutations},
     nodes::VNode,
     virtual_dom::VirtualDom,
-    Template, TemplateNode,
+    TemplateNode,
 };
 
 mod component;
@@ -32,30 +31,6 @@ impl VirtualDom {
             .iter()
             .map(|child| child.create(self, parent, to.as_deref_mut()))
             .sum()
-    }
-
-    /// Simply replace a placeholder with a list of nodes
-    fn replace_placeholder(
-        &mut self,
-        mut to: Option<&mut impl WriteMutations>,
-        placeholder_id: ElementId,
-        r: &[VNode],
-        parent: Option<ElementRef>,
-    ) {
-        let m = self.create_children(to.as_deref_mut(), r, parent);
-        if let Some(to) = to {
-            self.replace_placeholder_with_nodes_on_stack(to, placeholder_id, m)
-        }
-    }
-
-    fn replace_placeholder_with_nodes_on_stack(
-        &mut self,
-        to: &mut impl WriteMutations,
-        placeholder_id: ElementId,
-        m: usize,
-    ) {
-        to.replace_node_with(placeholder_id, m);
-        self.reclaim(placeholder_id);
     }
 
     pub(crate) fn get_mounted_parent(&self, mount: MountId) -> Option<ElementRef> {
@@ -98,26 +73,6 @@ impl VirtualDom {
         mounts[mount.0].root_ids[root_idx] = value;
     }
 
-    fn nodes_to_placeholder(
-        &mut self,
-        mut to: Option<&mut impl WriteMutations>,
-        mount: MountId,
-        dyn_node_idx: usize,
-        old_nodes: &[VNode],
-    ) {
-        // Create the placeholder first, ensuring we get a dedicated ID for the placeholder
-        let placeholder = self.next_element();
-
-        // Set the id of the placeholder
-        self.set_mounted_dyn_node(mount, dyn_node_idx, placeholder.0);
-
-        if let Some(to) = to.as_deref_mut() {
-            to.create_placeholder(placeholder);
-        }
-
-        self.replace_nodes(to, old_nodes, 1);
-    }
-
     /// Replace many nodes with a number of nodes on the stack
     fn replace_nodes(&mut self, to: Option<&mut impl WriteMutations>, nodes: &[VNode], m: usize) {
         debug_assert!(
@@ -141,26 +96,6 @@ impl VirtualDom {
         for (i, node) in nodes.iter().rev().enumerate() {
             let last_node = i == nodes.len() - 1;
             node.remove_node(self, to.as_deref_mut(), replace_with.filter(|_| last_node));
-        }
-    }
-
-    /// Insert a new template into the VirtualDom's template registry
-    // used in conditional compilation
-    #[allow(unused_mut)]
-    pub(crate) fn register_template(
-        &mut self,
-        to: &mut impl WriteMutations,
-        mut template: Template,
-    ) {
-        if self.templates.contains(&template.name) {
-            return;
-        }
-
-        _ = self.templates.insert(template.name);
-
-        // If it's all dynamic nodes, then we don't need to register it
-        if !template.is_completely_dynamic() {
-            to.register_template(template)
         }
     }
 }

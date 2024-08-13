@@ -527,7 +527,6 @@ impl<F: Fn(ErrorContext) -> Element + 'static> From<F> for ErrorHandler {
 
 fn default_handler(errors: ErrorContext) -> Element {
     static TEMPLATE: Template = Template {
-        name: "error_handle.rs:42:5:884",
         roots: &[TemplateNode::Element {
             tag: "div",
             namespace: None,
@@ -549,7 +548,6 @@ fn default_handler(errors: ErrorContext) -> Element {
             .iter()
             .map(|e| {
                 static TEMPLATE: Template = Template {
-                    name: "error_handle.rs:43:5:884",
                     roots: &[TemplateNode::Element {
                         tag: "pre",
                         namespace: None,
@@ -753,7 +751,6 @@ pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
     if errors.is_empty() {
         std::result::Result::Ok({
             static TEMPLATE: Template = Template {
-                name: "examples/error_handle.rs:81:17:2342",
                 roots: &[TemplateNode::Dynamic { id: 0usize }],
                 node_paths: &[&[0u8]],
                 attr_paths: &[],

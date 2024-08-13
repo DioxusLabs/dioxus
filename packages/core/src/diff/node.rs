@@ -5,7 +5,7 @@ use core::iter::Peekable;
 
 use crate::{
     arena::ElementId,
-    innerlude::{ElementPath, ElementRef, VComponent, VNodeMount, VText},
+    innerlude::{ElementPath, ElementRef, VNodeMount, VText},
     nodes::DynamicNode,
     scopes::ScopeId,
     TemplateNode,
@@ -28,9 +28,12 @@ impl VNode {
                 || to.is_none()
         );
 
-        // If the templates are different by name, we need to replace the entire template
-        if self.templates_are_different(new) {
-            return self.light_diff_templates(new, dom, to);
+        // If the templates are different, we need to replace the entire template
+        if self.template != new.template {
+            let mount_id = self.mount.get();
+            let mount = &dom.mounts[mount_id.0];
+            let parent = mount.parent;
+            return self.replace(std::slice::from_ref(new), parent, dom, to);
         }
 
         let mount_id = self.mount.get();
@@ -81,73 +84,60 @@ impl VNode {
         old_node: &DynamicNode,
         new_node: &DynamicNode,
         dom: &mut VirtualDom,
-        to: Option<&mut impl WriteMutations>,
+        mut to: Option<&mut impl WriteMutations>,
     ) {
         tracing::trace!("diffing dynamic node from {old_node:?} to {new_node:?}");
         match (old_node, new_node) {
             (Text(old), Text(new)) => {
                 // Diffing text is just a side effect, if we are diffing suspended nodes and are not outputting mutations, we can skip it
-                if let Some(to) = to{
+                if let Some(to) = to {
                     let id = ElementId(dom.get_mounted_dyn_node(mount, idx));
                     self.diff_vtext(to, id, old, new)
                 }
-            },
-            (Text(_), Placeholder(_)) => {
-                self.replace_text_with_placeholder(to, mount, idx, dom)
-            },
-            (Placeholder(_), Text(new)) => {
-                self.replace_placeholder_with_text(to, mount, idx, new, dom)
-            },
-            (Placeholder(_), Placeholder(_)) => {},
-            (Fragment(old), Fragment(new)) => dom.diff_non_empty_fragment(to, old, new, Some(self.reference_to_dynamic_node(mount, idx))),
+            }
+            (Placeholder(_), Placeholder(_)) => {}
+            (Fragment(old), Fragment(new)) => dom.diff_non_empty_fragment(
+                to,
+                old,
+                new,
+                Some(self.reference_to_dynamic_node(mount, idx)),
+            ),
             (Component(old), Component(new)) => {
-				let scope_id = ScopeId(dom.get_mounted_dyn_node(mount, idx));
-                self.diff_vcomponent(mount, idx, new, old, scope_id, Some(self.reference_to_dynamic_node(mount, idx)), dom, to)
-            },
-            (Placeholder(_), Fragment(right)) => {
-                let placeholder_id = ElementId(dom.get_mounted_dyn_node(mount, idx));
-                dom.replace_placeholder(to, placeholder_id, right, Some(self.reference_to_dynamic_node(mount, idx)))},
-            (Fragment(left), Placeholder(_)) => {
-                dom.nodes_to_placeholder(to, mount, idx, left,)
-            },
-            _ => todo!("This is an usual custom case for dynamic nodes. We don't know how to handle it yet."),
+                let scope_id = ScopeId(dom.get_mounted_dyn_node(mount, idx));
+                self.diff_vcomponent(
+                    mount,
+                    idx,
+                    new,
+                    old,
+                    scope_id,
+                    Some(self.reference_to_dynamic_node(mount, idx)),
+                    dom,
+                    to,
+                )
+            }
+            (old, new) => {
+                // TODO: we should pass around the mount instead of the mount id
+                // that would make moving the mount around here much easier
+
+                // Mark the mount as unused. When a scope is created, it reads the mount and
+                // if it is the placeholder value, it will create the scope, otherwise it will
+                // reuse the scope
+                let old_mount = dom.mounts[mount.0].mounted_dynamic_nodes[idx];
+                dom.mounts[mount.0].mounted_dynamic_nodes[idx] = usize::MAX;
+
+                let new_nodes_on_stack =
+                    self.create_dynamic_node(new, mount, idx, dom, to.as_deref_mut());
+
+                // Restore the mount for the scope we are removing
+                let new_mount = dom.mounts[mount.0].mounted_dynamic_nodes[idx];
+                dom.mounts[mount.0].mounted_dynamic_nodes[idx] = old_mount;
+
+                self.remove_dynamic_node(mount, dom, to, true, idx, old, Some(new_nodes_on_stack));
+
+                // Restore the mount for the node we created
+                dom.mounts[mount.0].mounted_dynamic_nodes[idx] = new_mount;
+            }
         };
-    }
-
-    /// Replace a text node with a placeholder node
-    pub(crate) fn replace_text_with_placeholder(
-        &self,
-        to: Option<&mut impl WriteMutations>,
-        mount: MountId,
-        idx: usize,
-        dom: &mut VirtualDom,
-    ) {
-        if let Some(to) = to {
-            // Grab the text element id from the mount and replace it with a new placeholder
-            let text_id = ElementId(dom.get_mounted_dyn_node(mount, idx));
-            let (id, _) = self.create_dynamic_node_with_path(mount, idx, dom);
-            to.create_placeholder(id);
-            to.replace_node_with(text_id, 1);
-            dom.reclaim(text_id);
-        }
-    }
-
-    /// Replace a placeholder node with a text node
-    pub(crate) fn replace_placeholder_with_text(
-        &self,
-        to: Option<&mut impl WriteMutations>,
-        mount: MountId,
-        idx: usize,
-        new: &VText,
-        dom: &mut VirtualDom,
-    ) {
-        if let Some(to) = to {
-            // Grab the placeholder id from the mount and replace it with a new text node
-            let placeholder_id = ElementId(dom.get_mounted_dyn_node(mount, idx));
-            let (new_id, _) = self.create_dynamic_node_with_path(mount, idx, dom);
-            to.create_text_node(&new.value, new_id);
-            dom.replace_placeholder_with_nodes_on_stack(to, placeholder_id, 1);
-        }
     }
 
     /// Try to get the dynamic node and its index for a root node
@@ -404,12 +394,6 @@ impl VNode {
         };
     }
 
-    fn templates_are_different(&self, other: &VNode) -> bool {
-        let self_node_name = self.template.id();
-        let other_node_name = other.template.id();
-        self_node_name != other_node_name
-    }
-
     pub(super) fn reclaim_attributes(&self, mount: MountId, dom: &mut VirtualDom) {
         let mut next_id = None;
         for (idx, path) in self.template.attr_paths.iter().enumerate() {
@@ -534,81 +518,6 @@ impl VNode {
         }
     }
 
-    /// Lightly diff the two templates, checking only their roots.
-    ///
-    /// The goal here is to preserve any existing component state that might exist. This is to preserve some React-like
-    /// behavior where the component state is preserved when the component is re-rendered.
-    ///
-    /// This is implemented by iterating each root, checking if the component is the same, if it is, then diff it.
-    ///
-    /// We then pass the new template through "create" which should be smart enough to skip roots.
-    ///
-    /// Currently, we only handle the case where the roots are the same component list. If there's any sort of deviation,
-    /// IE more nodes, less nodes, different nodes, or expressions, then we just replace the whole thing.
-    ///
-    /// This is mostly implemented to help solve the issue where the same component is rendered under two different
-    /// conditions:
-    ///
-    /// ```rust, no_run
-    /// # use dioxus::prelude::*;
-    /// # let enabled = true;
-    /// # #[component]
-    /// # fn Component(enabled_sign: String) -> Element { unimplemented!() }
-    /// if enabled {
-    ///     rsx!{ Component { enabled_sign: "abc" } }
-    /// } else {
-    ///     rsx!{ Component { enabled_sign: "xyz" } }
-    /// };
-    /// ```
-    ///
-    /// However, we should not that it's explicit in the docs that this is not a guarantee. If you need to preserve state,
-    /// then you should be passing in separate props instead.
-    ///
-    /// ```rust, no_run
-    /// # use dioxus::prelude::*;
-    /// # #[component]
-    /// # fn Component(enabled_sign: String) -> Element { unimplemented!() }
-    /// # let enabled = true;
-    /// let props = if enabled {
-    ///     ComponentProps { enabled_sign: "abc".to_string() }
-    /// } else {
-    ///     ComponentProps { enabled_sign: "xyz".to_string() }
-    /// };
-    ///
-    /// rsx! {
-    ///     Component { ..props }
-    /// };
-    /// ```
-    pub(crate) fn light_diff_templates(
-        &self,
-        new: &VNode,
-        dom: &mut VirtualDom,
-        mut to: Option<&mut impl WriteMutations>,
-    ) {
-        let mount_id = self.mount.get();
-        let parent = dom.get_mounted_parent(mount_id);
-        match matching_components(self, new) {
-            None => self.replace(std::slice::from_ref(new), parent, dom, to),
-            Some(components) => {
-                self.move_mount_to(new, dom);
-
-                for (idx, (old_component, new_component)) in components.into_iter().enumerate() {
-                    let scope_id = ScopeId(dom.get_mounted_dyn_node(mount_id, idx));
-                    self.diff_vcomponent(
-                        mount_id,
-                        idx,
-                        new_component,
-                        old_component,
-                        scope_id,
-                        parent,
-                        dom,
-                        to.as_deref_mut(),
-                    )
-                }
-            }
-        }
-    }
-
     /// Create this rsx block. This will create scopes from components that this rsx block contains, but it will not write anything to the DOM.
     pub(crate) fn create(
         &self,
@@ -635,13 +544,6 @@ impl VNode {
                 mounted_dynamic_nodes: vec![usize::MAX; template.node_paths.len()]
                     .into_boxed_slice(),
             });
-        }
-
-        // If we are outputting mutations, mount the node as well
-        if let Some(to) = to.as_deref_mut() {
-            // The best renderers will have templates pre-hydrated and registered
-            // Just in case, let's create the template using instructions anyways
-            dom.register_template(to, template);
         }
 
         // Walk the roots, creating nodes and assigning IDs
@@ -674,7 +576,13 @@ impl VNode {
                         // Take a dynamic node off the depth first iterator
                         nodes.next().unwrap();
                         // Then mount the node
-                        self.create_dynamic_node(mount, *id, dom, to.as_deref_mut())
+                        self.create_dynamic_node(
+                            &self.dynamic_nodes[*id],
+                            mount,
+                            *id,
+                            dom,
+                            to.as_deref_mut(),
+                        )
                     }
                     // For static text and element nodes, just load the template root. This may be a placeholder or just a static node. We now know that each root node has a unique id
                     TemplateNode::Text { .. } | TemplateNode::Element { .. } => {
@@ -723,13 +631,13 @@ impl VNode {
 
     pub(crate) fn create_dynamic_node(
         &self,
+        node: &DynamicNode,
         mount: MountId,
         dynamic_node_id: usize,
         dom: &mut VirtualDom,
         to: Option<&mut impl WriteMutations>,
     ) -> usize {
         use DynamicNode::*;
-        let node = &self.dynamic_nodes[dynamic_node_id];
         match node {
             Component(component) => {
                 let parent = Some(self.reference_to_dynamic_node(mount, dynamic_node_id));
@@ -789,7 +697,13 @@ impl VNode {
         // Only take nodes that are under this root node
         let from_root_node = |(_, path): &(usize, &[u8])| path.first() == Some(&root_idx);
         while let Some((dynamic_node_id, path)) = dynamic_nodes_iter.next_if(from_root_node) {
-            let m = self.create_dynamic_node(mount, dynamic_node_id, dom, to.as_deref_mut());
+            let m = self.create_dynamic_node(
+                &self.dynamic_nodes[dynamic_node_id],
+                mount,
+                dynamic_node_id,
+                dom,
+                to.as_deref_mut(),
+            );
             if let Some(to) = to.as_deref_mut() {
                 // If we actually created real new nodes, we need to replace the placeholder for this dynamic node with the new dynamic nodes
                 if m > 0 {
@@ -859,7 +773,7 @@ impl VNode {
         let this_id = dom.next_element();
         dom.set_mounted_root_node(mount, root_idx, this_id);
 
-        to.load_template(self.template.name, root_idx, this_id);
+        to.load_template(self.template, root_idx, this_id);
 
         this_id
     }
@@ -891,22 +805,6 @@ impl VNode {
         id
     }
 
-    /// Mount a root node and return its ID and the path to the node
-    fn create_dynamic_node_with_path(
-        &self,
-        mount: MountId,
-        idx: usize,
-        dom: &mut VirtualDom,
-    ) -> (ElementId, &'static [u8]) {
-        // Add the mutation to the list
-        let path = self.template.node_paths[idx];
-
-        // Allocate a dynamic element reference for this text node
-        let new_id = mount.mount_node(idx, dom);
-
-        (new_id, &path[1..])
-    }
-
     fn create_dynamic_text(
         &self,
         mount: MountId,
@@ -915,19 +813,12 @@ impl VNode {
         dom: &mut VirtualDom,
         to: &mut impl WriteMutations,
     ) -> usize {
-        let (new_id, path) = self.create_dynamic_node_with_path(mount, idx, dom);
+        let new_id = mount.mount_node(idx, dom);
 
         // If this is a root node, the path is empty and we need to create a new text node
-        if path.is_empty() {
-            to.create_text_node(&text.value, new_id);
-            // We create one node on the stack
-            1
-        } else {
-            // Dynamic text nodes always exist as a placeholder text node in the template, we can just hydrate that text node instead of creating a new one
-            to.hydrate_text_node(path, &text.value, new_id);
-            // Since we're hydrating an existing node, we don't create any new nodes
-            0
-        }
+        to.create_text_node(&text.value, new_id);
+        // We create one node on the stack
+        1
     }
 
     pub(crate) fn create_placeholder(
@@ -937,19 +828,12 @@ impl VNode {
         dom: &mut VirtualDom,
         to: &mut impl WriteMutations,
     ) -> usize {
-        let (id, path) = self.create_dynamic_node_with_path(mount, idx, dom);
+        let new_id = mount.mount_node(idx, dom);
 
         // If this is a root node, the path is empty and we need to create a new placeholder node
-        if path.is_empty() {
-            to.create_placeholder(id);
-            // We create one node on the stack
-            1
-        } else {
-            // Assign the ID to the existing node in the template
-            to.assign_node_id(path, id);
-            // Since the placeholder is already in the DOM, we don't create any new nodes
-            0
-        }
+        to.create_placeholder(new_id);
+        // We create one node on the stack
+        1
     }
 }
 
@@ -959,35 +843,4 @@ impl MountId {
         dom.set_mounted_dyn_node(self, node_index, id.0);
         id
     }
-}
-
-fn matching_components<'a>(
-    left: &'a VNode,
-    right: &'a VNode,
-) -> Option<Vec<(&'a VComponent, &'a VComponent)>> {
-    let left_node = left.template;
-    let right_node = right.template;
-    if left_node.roots.len() != right_node.roots.len() {
-        return None;
-    }
-
-    // run through the components, ensuring they're the same
-    left_node
-        .roots
-        .iter()
-        .zip(right_node.roots.iter())
-        .map(|(l, r)| {
-            let (l, r) = match (l, r) {
-                (TemplateNode::Dynamic { id: l }, TemplateNode::Dynamic { id: r }) => (l, r),
-                _ => return None,
-            };
-
-            let (l, r) = match (&left.dynamic_nodes[*l], &right.dynamic_nodes[*r]) {
-                (Component(l), Component(r)) => (l, r),
-                _ => return None,
-            };
-
-            Some((l, r))
-        })
-        .collect()
 }

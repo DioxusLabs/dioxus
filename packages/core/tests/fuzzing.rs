@@ -134,7 +134,7 @@ enum DynamicNodeType {
     Other,
 }
 
-fn create_random_template(name: &'static str) -> (Template, Vec<DynamicNodeType>) {
+fn create_random_template() -> (Template, Vec<DynamicNodeType>) {
     let mut dynamic_node_type = Vec::new();
     let mut template_idx = 0;
     let mut attr_idx = 0;
@@ -165,7 +165,7 @@ fn create_random_template(name: &'static str) -> (Template, Vec<DynamicNodeType>
             .into_boxed_slice(),
     );
     (
-        Template { name, roots, node_paths, attr_paths },
+        Template { roots, node_paths, attr_paths },
         dynamic_node_type,
     )
 }
@@ -179,7 +179,6 @@ fn create_random_dynamic_node(depth: usize) -> DynamicNode {
                 VNode::new(
                     None,
                     Template {
-                        name: create_template_location(),
                         roots: &[TemplateNode::Dynamic { id: 0 }],
                         node_paths: &[&[0]],
                         attr_paths: &[],
@@ -224,19 +223,6 @@ fn create_random_dynamic_attr() -> Attribute {
     )
 }
 
-static TEMPLATE_COUNT: AtomicUsize = AtomicUsize::new(0);
-
-fn create_template_location() -> &'static str {
-    Box::leak(
-        format!(
-            "{}{}",
-            concat!(file!(), ":", line!(), ":", column!(), ":"),
-            TEMPLATE_COUNT.fetch_add(1, Ordering::Relaxed)
-        )
-        .into_boxed_str(),
-    )
-}
-
 #[derive(PartialEq, Props, Clone)]
 struct DepthProps {
     depth: usize,
@@ -250,7 +236,7 @@ fn create_random_element(cx: DepthProps) -> Element {
     let range = if cx.root { 2 } else { 3 };
     let node = match rand::random::<usize>() % range {
         0 | 1 => {
-            let (template, dynamic_node_types) = create_random_template(create_template_location());
+            let (template, dynamic_node_types) = create_random_template();
             let node = VNode::new(
                 None,
                 template,
@@ -318,8 +304,6 @@ fn diff() {
 struct InsertEventListenerMutationHandler<'a>(&'a mut HashSet<ElementId>);
 
 impl WriteMutations for InsertEventListenerMutationHandler<'_> {
-    fn register_template(&mut self, _: Template) {}
-
     fn append_children(&mut self, _: ElementId, _: usize) {}
 
     fn assign_node_id(&mut self, _: &'static [u8], _: ElementId) {}
@@ -328,9 +312,7 @@ impl WriteMutations for InsertEventListenerMutationHandler<'_> {
 
     fn create_text_node(&mut self, _: &str, _: ElementId) {}
 
-    fn hydrate_text_node(&mut self, _: &'static [u8], _: &str, _: ElementId) {}
-
-    fn load_template(&mut self, _: &'static str, _: usize, _: ElementId) {}
+    fn load_template(&mut self, _: Template, _: usize, _: ElementId) {}
 
     fn replace_node_with(&mut self, _: ElementId, _: usize) {}
 

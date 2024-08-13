@@ -34,6 +34,9 @@ async fn main() {
     .unwrap();
 }
 
+#[cfg(all(not(feature = "desktop"), not(feature = "server")))]
+fn main() {}
+
 pub fn app() -> Element {
     let mut count = use_signal(|| 0);
     let mut text = use_signal(|| "...".to_string());
