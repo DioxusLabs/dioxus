@@ -21,16 +21,18 @@ export class NativeInterpreter extends JSChannel_ {
   intercept_link_redirects: boolean;
   ipc: any;
   editsPath: string;
+  eventsPath: string;
   kickStylesheets: boolean;
   queuedBytes: ArrayBuffer[] = [];
 
   // eventually we want to remove liveview and build it into the server-side-events of fullstack
-  // however, for now we need to support it since SSE in fullstack doesn't exist yet
+  // however, for now we need to support it since WebSockets in fullstack doesn't exist yet
   liveview: boolean;
 
-  constructor(editsPath: string) {
+  constructor(editsPath: string, eventsPath: string) {
     super();
     this.editsPath = editsPath;
+    this.eventsPath = eventsPath;
     this.kickStylesheets = false;
   }
 
@@ -218,23 +220,40 @@ export class NativeInterpreter extends JSChannel_ {
       ) {
         if (target.getAttribute("type") === "file") {
           this.readFiles(target, contents, bubbles, realId, name);
+          return;
         }
       }
-    } else {
+    }
+    const response = this.sendSerializedEvent(body);
+    // capture/prevent default of the event if the virtualdom wants to
+    if (response) {
+      if (response.preventDefault) {
+        event.preventDefault();
+      } else {
+        // Attempt to intercept if the event is a click and the default action was not prevented
+        if (target instanceof Element && event.type === "click") {
+          this.handleClickNavigate(event, target);
+        }
+      }
+
+      if (response.stopPropagation) {
+        event.stopPropagation();
+      }
+    }
+  }
+
+  sendSerializedEvent(body: {
+    name: string;
+    element: number;
+    data: any;
+    bubbles: boolean;
+  }): EventSyncResult | void {
+    if (this.liveview) {
       const message = this.serializeIpcMessage("user_event", body);
       this.ipc.postMessage(message);
-
-      // // Run the event handler on the virtualdom
-      // // capture/prevent default of the event if the virtualdom wants to
-      // const res = handleVirtualdomEventSync(JSON.stringify(body));
-
-      // if (res.preventDefault) {
-      //   event.preventDefault();
-      // }
-
-      // if (res.stopPropagation) {
-      //   event.stopPropagation();
-      // }
+    } else {
+      // Run the event handler on the virtualdom
+      return handleVirtualdomEventSync(this.eventsPath, JSON.stringify(body));
     }
   }
 
@@ -244,35 +263,12 @@ export class NativeInterpreter extends JSChannel_ {
   // - prevent buttons from submitting forms
   // - let the virtualdom attempt to prevent the event
   preventDefaults(event: Event, target: EventTarget) {
-    let preventDefaultRequests: string | null = null;
-
-    // Some events can be triggered on text nodes, which don't have attributes
-    if (target instanceof Element) {
-      preventDefaultRequests = target.getAttribute(`dioxus-prevent-default`);
-    }
-
-    if (
-      preventDefaultRequests &&
-      preventDefaultRequests.includes(`on${event.type}`)
-    ) {
-      event.preventDefault();
-    }
-
     if (event.type === "submit") {
       event.preventDefault();
     }
-
-    // Attempt to intercept if the event is a click
-    if (target instanceof Element && event.type === "click") {
-      this.handleClickNavigate(event, target, preventDefaultRequests);
-    }
   }
 
-  handleClickNavigate(
-    event: Event,
-    target: Element,
-    preventDefaultRequests: string
-  ) {
+  handleClickNavigate(event: Event, target: Element) {
     // todo call prevent default if it's the right type of event
     if (!this.intercept_link_redirects) {
       return;
@@ -291,24 +287,9 @@ export class NativeInterpreter extends JSChannel_ {
 
     event.preventDefault();
 
-    let elementShouldPreventDefault =
-      preventDefaultRequests && preventDefaultRequests.includes(`onclick`);
-
-    let aElementShouldPreventDefault = a_element.getAttribute(
-      `dioxus-prevent-default`
-    );
-
-    let linkShouldPreventDefault =
-      aElementShouldPreventDefault &&
-      aElementShouldPreventDefault.includes(`onclick`);
-
-    if (!elementShouldPreventDefault && !linkShouldPreventDefault) {
-      const href = a_element.getAttribute("href");
-      if (href !== "" && href !== null && href !== undefined) {
-        this.ipc.postMessage(
-          this.serializeIpcMessage("browser_open", { href })
-        );
-      }
+    const href = a_element.getAttribute("href");
+    if (href !== "" && href !== null && href !== undefined) {
+      this.ipc.postMessage(this.serializeIpcMessage("browser_open", { href }));
     }
   }
 
@@ -387,7 +368,7 @@ export class NativeInterpreter extends JSChannel_ {
 
     contents.files = { files: file_contents };
 
-    const message = this.serializeIpcMessage("user_event", {
+    const message = this.sendSerializedEvent({
       name: name,
       element: realId,
       data: contents,
@@ -401,8 +382,6 @@ export class NativeInterpreter extends JSChannel_ {
 type EventSyncResult = {
   preventDefault: boolean;
   stopPropagation: boolean;
-  stopImmediatePropagation: boolean;
-  filesRequested: boolean;
 };
 
 // This function sends the event to the virtualdom and then waits for the virtualdom to process it
@@ -410,13 +389,15 @@ type EventSyncResult = {
 // However, it's not really suitable for liveview, because it's synchronous and will block the main thread
 // We should definitely consider using a websocket if we want to block... or just not block on liveview
 // Liveview is a little bit of a tricky beast
-function handleVirtualdomEventSync(contents: string): EventSyncResult {
+function handleVirtualdomEventSync(
+  endpoint: string,
+  contents: string
+): EventSyncResult {
   // Handle the event on the virtualdom and then process whatever its output was
   const xhr = new XMLHttpRequest();
 
   // Serialize the event and send it to the custom protocol in the Rust side of things
-  xhr.timeout = 1000;
-  xhr.open("GET", "/handle/event.please", false);
+  xhr.open("POST", endpoint, false);
   xhr.setRequestHeader("Content-Type", "application/json");
   xhr.send(contents);
 

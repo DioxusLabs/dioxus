@@ -189,3 +189,23 @@ impl WriteMutations for MutationState {
         self.channel.push_root(id.0 as _);
     }
 }
+
+/// A synchronous response to a browser event which may prevent the default browser's action
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[derive(Default)]
+pub struct SynchronousEventResponse {
+    #[cfg(feature = "serialize")]
+    #[serde(rename = "preventDefault")]
+    prevent_default: bool,
+}
+
+impl SynchronousEventResponse {
+    /// Create a new SynchronousEventResponse
+    #[allow(unused)]
+    pub fn new(prevent_default: bool) -> Self {
+        Self {
+            #[cfg(feature = "serialize")]
+            prevent_default,
+        }
+    }
+}

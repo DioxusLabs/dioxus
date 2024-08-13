@@ -275,7 +275,7 @@ impl SuspenseBoundaryProps {
         dom: &mut VirtualDom,
         to: Option<&mut M>,
     ) -> usize {
-        let mut scope_id = ScopeId(dom.mounts[mount.0].mounted_dynamic_nodes[idx]);
+        let mut scope_id = ScopeId(dom.get_mounted_dyn_node(mount, idx));
         // If the ScopeId is a placeholder, we need to load up a new scope for this vcomponent. If it's already mounted, then we can just use that
         if scope_id.is_placeholder() {
             {
@@ -297,7 +297,7 @@ impl SuspenseBoundaryProps {
             }
 
             // Store the scope id for the next render
-            dom.mounts[mount.0].mounted_dynamic_nodes[idx] = scope_id.0;
+            dom.set_mounted_dyn_node(mount, idx, scope_id.0);
         }
         dom.runtime.clone().with_scope_on_stack(scope_id, || {
             let scope_state = &mut dom.scopes[scope_id.0];
@@ -404,11 +404,13 @@ impl SuspenseBoundaryProps {
             // Get the parent of the suspense boundary to later create children with the right parent
             let currently_rendered = scope_state.last_rendered_node.as_ref().unwrap().clone();
             let mount = currently_rendered.mount.get();
-            let parent = dom
-                .mounts
-                .get(mount.0)
-                .expect("suspense placeholder is not mounted")
-                .parent;
+            let parent = {
+                let mounts = dom.runtime.mounts.borrow();
+                mounts
+                    .get(mount.0)
+                    .expect("suspense placeholder is not mounted")
+                    .parent
+            };
 
             let props = Self::downcast_from_props(&mut *scope_state.props).unwrap();
 
@@ -524,8 +526,7 @@ impl SuspenseBoundaryProps {
 
                     // Move the children to the background
                     let mount = old_children.mount.get();
-                    let mount = dom.mounts.get(mount.0).expect("mount should exist");
-                    let parent = mount.parent;
+                    let parent = dom.get_mounted_parent(mount);
 
                     suspense_context.in_suspense_placeholder(&dom.runtime(), || {
                         old_children.move_node_to_background(
@@ -566,8 +567,7 @@ impl SuspenseBoundaryProps {
 
                         // Then replace the placeholder with the new children
                         let mount = old_placeholder.mount.get();
-                        let mount = dom.mounts.get(mount.0).expect("mount should exist");
-                        let parent = mount.parent;
+                        let parent = dom.get_mounted_parent(mount);
                         old_placeholder.replace(
                             std::slice::from_ref(&*new_children),
                             parent,

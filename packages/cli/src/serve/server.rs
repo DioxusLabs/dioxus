@@ -109,7 +109,7 @@ impl Server {
         // If we're serving a fullstack app, we need to find a port to proxy to
         let fullstack_port = if matches!(
             serve.build_arguments.platform(),
-            Platform::Fullstack | Platform::StaticGeneration
+            Platform::Liveview | Platform::Fullstack | Platform::StaticGeneration
         ) {
             get_available_port(addr.ip())
         } else {
@@ -379,7 +379,7 @@ fn setup_router(
 
             router = router.nest_service(&base_path, build_serve_dir(serve, config));
         }
-        Platform::Fullstack | Platform::StaticGeneration => {
+        Platform::Liveview | Platform::Fullstack | Platform::StaticGeneration => {
             // For fullstack and static generation, forward all requests to the server
             let address = fullstack_address.unwrap();
 

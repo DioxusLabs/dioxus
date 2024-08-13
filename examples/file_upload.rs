@@ -73,11 +73,14 @@ fn app() -> Element {
 
         div {
             id: "drop-zone",
-            prevent_default: "ondragover ondrop",
             background_color: if hovered() { "lightblue" } else { "lightgray" },
-            ondragover: move |_| hovered.set(true),
+            ondragover: move |evt| {
+                evt.prevent_default();
+                hovered.set(true)
+            },
             ondragleave: move |_| hovered.set(false),
             ondrop: move |evt| async move {
+                evt.prevent_default();
                 hovered.set(false);
                 if let Some(file_engine) = evt.files() {
                     read_files(file_engine).await;

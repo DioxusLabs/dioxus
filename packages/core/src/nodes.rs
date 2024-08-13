@@ -300,12 +300,14 @@ impl VNode {
         let mount = self.mount.get().as_usize()?;
 
         match &self.dynamic_nodes[dynamic_node_idx] {
-            DynamicNode::Text(_) | DynamicNode::Placeholder(_) => dom
-                .mounts
-                .get(mount)?
-                .mounted_dynamic_nodes
-                .get(dynamic_node_idx)
-                .map(|id| ElementId(*id)),
+            DynamicNode::Text(_) | DynamicNode::Placeholder(_) => {
+                let mounts = dom.runtime.mounts.borrow();
+                mounts
+                    .get(mount)?
+                    .mounted_dynamic_nodes
+                    .get(dynamic_node_idx)
+                    .map(|id| ElementId(*id))
+            }
             _ => None,
         }
     }
@@ -314,7 +316,8 @@ impl VNode {
     pub fn mounted_root(&self, root_idx: usize, dom: &VirtualDom) -> Option<ElementId> {
         let mount = self.mount.get().as_usize()?;
 
-        dom.mounts.get(mount)?.root_ids.get(root_idx).copied()
+        let mounts = dom.runtime.mounts.borrow();
+        mounts.get(mount)?.root_ids.get(root_idx).copied()
     }
 
     /// Get the mounted id for a dynamic attribute index
@@ -325,7 +328,8 @@ impl VNode {
     ) -> Option<ElementId> {
         let mount = self.mount.get().as_usize()?;
 
-        dom.mounts
+        let mounts = dom.runtime.mounts.borrow();
+        mounts
             .get(mount)?
             .mounted_attributes
             .get(dynamic_attribute_idx)
@@ -623,7 +627,8 @@ impl VComponent {
     ) -> Option<ScopeId> {
         let mount = vnode.mount.get().as_usize()?;
 
-        let scope_id = dom.mounts.get(mount)?.mounted_dynamic_nodes[dynamic_node_index];
+        let mounts = dom.runtime.mounts.borrow();
+        let scope_id = mounts.get(mount)?.mounted_dynamic_nodes[dynamic_node_index];
 
         Some(ScopeId(scope_id))
     }
@@ -641,7 +646,8 @@ impl VComponent {
     ) -> Option<&'a ScopeState> {
         let mount = vnode.mount.get().as_usize()?;
 
-        let scope_id = dom.mounts.get(mount)?.mounted_dynamic_nodes[dynamic_node_index];
+        let mounts = dom.runtime.mounts.borrow();
+        let scope_id = mounts.get(mount)?.mounted_dynamic_nodes[dynamic_node_index];
 
         dom.scopes.get(scope_id)
     }
@@ -791,7 +797,7 @@ impl AttributeValue {
         AttributeValue::Listener(EventHandler::leak(move |event: Event<dyn Any>| {
             let data = event.data.downcast::<T>().unwrap();
             callback(Event {
-                propagates: event.propagates,
+                metadata: event.metadata.clone(),
                 data,
             });
         }))
