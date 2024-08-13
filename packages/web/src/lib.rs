@@ -78,7 +78,7 @@ pub async fn run(virtual_dom: VirtualDom, web_config: Config) -> ! {
 
     let should_hydrate = web_config.hydrate;
 
-    let mut websys_dom = dom::WebsysDom::new(web_config, tx);
+    let mut websys_dom = WebsysDom::new(web_config, tx);
 
     let mut hydration_receiver: Option<futures_channel::mpsc::UnboundedReceiver<SuspenseMessage>> =
         None;
