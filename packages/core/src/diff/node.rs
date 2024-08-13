@@ -63,11 +63,6 @@ impl VNode {
 
     fn move_mount_to(&self, new: &VNode, dom: &mut VirtualDom) {
         // Copy over the mount information
-        println!(
-            "moving mount {:?} to {:?}",
-            self.mount.get(),
-            new.mount.get()
-        );
         let mount_id = self.mount.take();
         new.mount.set(mount_id);
 
@@ -539,7 +534,6 @@ impl VNode {
             let mount = MountId(entry.key());
             self.mount.set(mount);
             tracing::trace!(?self, ?mount, "creating template");
-            println!("creating template {:?}", entry.key());
             entry.insert(VNodeMount {
                 node: self.clone(),
                 parent,
