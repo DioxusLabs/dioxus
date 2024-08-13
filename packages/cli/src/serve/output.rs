@@ -20,14 +20,17 @@ use crossterm::{
 use dioxus_cli_config::{AddressArguments, Platform};
 use dioxus_hot_reload::ClientMsg;
 use futures_util::{future::select_all, Future, FutureExt, StreamExt};
+use once_cell::sync::Lazy;
 use ratatui::{prelude::*, widgets::*, TerminalOptions, Viewport};
 use std::{
+    borrow::BorrowMut,
     cell::RefCell,
     collections::{HashMap, HashSet},
     fmt::Display,
     io::{self, stdout},
+    ops::Deref,
     rc::Rc,
-    sync::atomic::Ordering,
+    sync::{atomic::Ordering, Arc, Mutex, RwLock},
     time::{Duration, Instant},
 };
 use tokio::{
@@ -80,8 +83,15 @@ impl BuildProgress {
     }
 }
 
+/// The way TSTP "signal" is handled. Instead of built-in signal the Ctrl+Z is
+/// read directly from user input by crossterm.
+///
+/// See: [crossterm issue #494](https://github.com/crossterm-rs/crossterm/issues/494).
+pub(crate) static TEMPORARY_STOP: Lazy<Mutex<bool>> = Lazy::new(|| Mutex::new(false));
+
 pub struct Output {
-    term: Rc<RefCell<Option<TerminalBackend>>>,
+    // term: Rc<RefCell<Option<TerminalBackend>>>,
+    pub(crate) term: Arc<RwLock<Option<TerminalBackend>>>,
     log_control: CLILogControl,
 
     // optional since when there's no tty there's no eventstream to read from - just stdin
@@ -166,7 +176,7 @@ impl Output {
         let platform = cfg.build_arguments.platform.expect("To be resolved by now");
 
         Ok(Self {
-            term: Rc::new(RefCell::new(term)),
+            term: Arc::new(RwLock::new(term)),
             log_control,
             events,
             _rustc_version,
@@ -372,6 +382,18 @@ impl Output {
             }
         }
 
+        // Handle Ctrl+Z (SIGTSTP a.k.a. suspend job).
+        if let Event::Key(key) = input {
+            if let KeyCode::Char('z') = key.code {
+                if key.modifiers.contains(KeyModifiers::CONTROL) {
+                    tracing::info!("got Ctrl+Z");
+                    tracing::info!("setting STOP to true");
+                    *TEMPORARY_STOP.lock().unwrap() = true;
+                    return Ok(false);
+                }
+            }
+        }
+
         if let Event::Key(key) = input {
             if let KeyCode::Char('/') = key.code {
                 self.fly_modal_open = !self.fly_modal_open;
@@ -563,6 +585,18 @@ impl Output {
         }
     }
 
+    // TODO: need to call this from another task or some other way.
+    // pub fn clear(&self) {
+    //     self.term
+    //         .deref()
+    //         .write()
+    //         .unwrap()
+    //         .as_mut()
+    //         .unwrap()
+    //         .clear()
+    //         .unwrap();
+    // }
+
     pub fn render(
         &mut self,
         _opts: &Serve,
@@ -586,7 +620,9 @@ impl Output {
         _ = self
             .term
             .clone()
-            .borrow_mut()
+            .deref()
+            .write()
+            .unwrap()
             .as_mut()
             .unwrap()
             .draw(|frame| {

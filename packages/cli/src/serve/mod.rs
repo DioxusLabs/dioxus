@@ -1,4 +1,6 @@
 use std::future::{poll_fn, Future, IntoFuture};
+use std::ops::Deref;
+use std::sync::{Arc, RwLock};
 use std::task::Poll;
 
 use crate::builder::{Stage, TargetPlatform, UpdateBuildProgress, UpdateStage};
@@ -7,6 +9,8 @@ use crate::dioxus_crate::DioxusCrate;
 use crate::tracer::CLILogControl;
 use crate::Result;
 use futures_util::FutureExt;
+use signal_hook::consts::SIGCONT;
+use signal_hook_tokio::Signals;
 use tokio::task::yield_now;
 
 mod builder;
@@ -63,6 +67,37 @@ pub async fn serve_all(
     let mut watcher = Watcher::start(&serve, &dioxus_crate);
     let mut screen = Output::start(&serve, log_control).expect("Failed to open terminal logger");
 
+    let term = screen.term.clone();
+
+    let mut signals = Signals::new(vec![SIGCONT]).unwrap();
+    let signals_handle = signals.handle();
+
+    let signals_task = tokio::spawn(async move {
+        use crossterm::terminal::enable_raw_mode;
+        use crossterm::terminal::EnterAlternateScreen;
+        use crossterm::ExecutableCommand;
+        use futures_util::stream::StreamExt;
+
+        while let Some(signal) = signals.next().await {
+            match signal {
+                SIGCONT => {
+                    tracing::info!("received CONT signal");
+                    enable_raw_mode().unwrap();
+                    std::io::stdout().execute(EnterAlternateScreen).unwrap();
+                    tracing::info!("clearing screen");
+                    term.deref()
+                        .write()
+                        .unwrap()
+                        .as_mut()
+                        .unwrap()
+                        .clear()
+                        .unwrap();
+                }
+                _ => unreachable!(),
+            }
+        }
+    });
+
     let is_hot_reload = serve.server_arguments.hot_reload.unwrap_or(true);
 
     loop {
@@ -71,6 +106,29 @@ pub async fn serve_all(
 
         // Draw the state of the server to the screen
         screen.render(&serve, &dioxus_crate, &builder, &server, &watcher);
+
+        {
+            let mut temporary_stop = TEMPORARY_STOP.lock().unwrap();
+            if *temporary_stop {
+                tracing::info!("STOP is true");
+                tracing::info!("setting resume to false");
+                use crossterm::terminal::disable_raw_mode;
+                use crossterm::terminal::LeaveAlternateScreen;
+                use crossterm::ExecutableCommand;
+                use signal_hook::consts::SIGTSTP;
+
+                tracing::info!("setting STOP to false");
+                *temporary_stop = false;
+
+                disable_raw_mode().unwrap();
+                std::io::stdout().execute(LeaveAlternateScreen).unwrap();
+                // Note: this probably only works on UNIX-like systems, so this
+                // maybe should be put under a cfg for unix.
+                signal_hook::low_level::emulate_default_handler(SIGTSTP).unwrap();
+                // This is the place where (at least) main tread is blocked.
+                tracing::info!("{}", dbg!("Back to work!"));
+            }
+        }
 
         // And then wait for any updates before redrawing
         tokio::select! {
@@ -200,6 +258,9 @@ pub async fn serve_all(
     _ = screen.shutdown();
     _ = server.shutdown().await;
     builder.shutdown();
+
+    signals_handle.close();
+    signals_task.await.unwrap();
 
     Ok(())
 }
