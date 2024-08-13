@@ -6,10 +6,11 @@
 //! - tests to ensure dyn_into works for various event types.
 //! - Partial delegation?
 
+use std::{any::Any, rc::Rc};
+
+use dioxus_core::Runtime;
 use dioxus_core::{ElementId, Template};
-use dioxus_html::PlatformEventData;
 use dioxus_interpreter_js::unified_bindings::Interpreter;
-use futures_channel::mpsc;
 use rustc_hash::FxHashMap;
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{Document, Element, Event};
@@ -24,7 +25,7 @@ pub struct WebsysDom {
     pub(crate) interpreter: Interpreter,
 
     #[cfg(feature = "mounted")]
-    pub(crate) event_channel: mpsc::UnboundedSender<UiEvent>,
+    pub(crate) runtime: Rc<Runtime>,
 
     #[cfg(feature = "mounted")]
     pub(crate) queued_mounted_events: Vec<ElementId>,
@@ -49,15 +50,8 @@ pub struct WebsysDom {
     pub(crate) suspense_hydration_ids: crate::hydration::SuspenseHydrationIds,
 }
 
-pub struct UiEvent {
-    pub name: String,
-    pub bubbles: bool,
-    pub element: ElementId,
-    pub data: PlatformEventData,
-}
-
 impl WebsysDom {
-    pub fn new(cfg: Config, event_channel: mpsc::UnboundedSender<UiEvent>) -> Self {
+    pub fn new(cfg: Config, runtime: Rc<Runtime>) -> Self {
         let (document, root) = match cfg.root {
             crate::cfg::ConfigRoot::RootName(rootname) => {
                 // eventually, we just want to let the interpreter do all the work of decoding events into our event type
@@ -87,46 +81,32 @@ impl WebsysDom {
         let interpreter = Interpreter::default();
 
         let handler: Closure<dyn FnMut(&Event)> = Closure::wrap(Box::new({
-            let event_channel = event_channel.clone();
-            move |event: &web_sys::Event| {
-                let name = event.type_();
-                let element = walk_event_for_id(event);
-                let bubbles = event.bubbles();
+            let runtime = runtime.clone();
+            move |web_sys_event: &web_sys::Event| {
+                let name = web_sys_event.type_();
+                let element = walk_event_for_id(web_sys_event);
+                let bubbles = web_sys_event.bubbles();
 
                 let Some((element, target)) = element else {
                     return;
                 };
 
-                let prevent_event;
-                if let Some(prevent_requests) = target
-                    .get_attribute("dioxus-prevent-default")
-                    .as_deref()
-                    .map(|f| f.split_whitespace())
-                {
-                    prevent_event = prevent_requests
-                        .map(|f| f.strip_prefix("on").unwrap_or(f))
-                        .any(|f| f == name);
-                } else {
-                    prevent_event = false;
-                }
+                let data = virtual_event_from_websys_event(web_sys_event.clone(), target);
 
+                let event = dioxus_core::Event::new(Rc::new(data) as Rc<dyn Any>, bubbles);
+                runtime.handle_event(name.as_str(), event.clone(), element);
+
+                // Prevent the default action if the user set prevent default on the event
+                let prevent_default = !event.default_action_enabled();
                 // Prevent forms from submitting and redirecting
                 if name == "submit" {
                     // On forms the default behavior is not to submit, if prevent default is set then we submit the form
-                    if !prevent_event {
-                        event.prevent_default();
+                    if !prevent_default {
+                        web_sys_event.prevent_default();
                     }
-                } else if prevent_event {
-                    event.prevent_default();
+                } else if prevent_default {
+                    web_sys_event.prevent_default();
                 }
-
-                let data = virtual_event_from_websys_event(event.clone(), target);
-                let _ = event_channel.unbounded_send(UiEvent {
-                    name,
-                    bubbles,
-                    element,
-                    data,
-                });
             }
         }));
 
@@ -145,7 +125,7 @@ impl WebsysDom {
             interpreter,
             templates: FxHashMap::default(),
             #[cfg(feature = "mounted")]
-            event_channel,
+            runtime,
             #[cfg(feature = "mounted")]
             queued_mounted_events: Default::default(),
             #[cfg(feature = "hydrate")]

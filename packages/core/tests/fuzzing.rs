@@ -305,12 +305,11 @@ fn diff() {
         for _ in 0..100 {
             for &id in &event_listeners {
                 println!("firing event on {:?}", id);
-                vdom.handle_event(
-                    "data",
-                    std::rc::Rc::new(String::from("hello world")),
-                    id,
+                let event = Event::new(
+                    std::rc::Rc::new(String::from("hello world")) as Rc<dyn Any>,
                     true,
                 );
+                vdom.runtime().handle_event("data", event, id);
             }
             {
                 vdom.render_immediate(&mut InsertEventListenerMutationHandler(

@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use dioxus_core::ElementId;
 use dioxus_elements::SerializedHtmlEventConverter;
-use std::rc::Rc;
+use std::{any::Any, rc::Rc};
 
 #[test]
 fn miri_rollover() {
@@ -11,12 +11,11 @@ fn miri_rollover() {
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
     for _ in 0..3 {
-        dom.handle_event(
-            "click",
-            Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())),
-            ElementId(2),
+        let event = Event::new(
+            Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())) as Rc<dyn Any>,
             true,
         );
+        dom.runtime().handle_event("click", event, ElementId(2));
         dom.process_events();
         _ = dom.render_immediate_to_vec();
     }

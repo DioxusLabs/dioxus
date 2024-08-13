@@ -185,7 +185,7 @@ mod js {
     // if this is a mounted listener, we send the event immediately
     if (event_name === "mounted") {
         window.ipc.postMessage(
-            this.serializeIpcMessage("user_event", {
+            this.sendSerializedEvent({
                 name: event_name,
                 element: id,
                 data: null,

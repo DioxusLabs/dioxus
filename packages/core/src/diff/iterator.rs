@@ -469,7 +469,8 @@ impl VNode {
     ) -> usize {
         let template = self.template;
 
-        let mount = dom.mounts.get(self.mount.get().0).unwrap();
+        let mounts = dom.runtime.mounts.borrow();
+        let mount = mounts.get(self.mount.get().0).unwrap();
 
         template
             .roots
