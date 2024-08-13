@@ -561,7 +561,7 @@ impl SuspenseBoundaryProps {
                         let mount = old_placeholder.as_vnode().mount.get();
                         let parent = dom.get_mounted_parent(mount);
                         old_placeholder.as_vnode().replace(
-                            std::slice::from_ref(&*new_children),
+                            std::slice::from_ref(new_children.as_vnode()),
                             parent,
                             dom,
                             to,

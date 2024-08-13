@@ -58,7 +58,7 @@ impl VirtualDom {
             Ordering::Less => self.create_and_insert_after(
                 to.as_deref_mut(),
                 &new[old.len()..],
-                old.last().unwrap(),
+                &new[old.len() - 1],
                 parent,
             ),
             Ordering::Equal => {}
@@ -148,7 +148,7 @@ impl VirtualDom {
                 let foothold = &old[old.len() - right_offset];
                 self.create_and_insert_before(to, new_middle, foothold, parent);
             } else if right_offset == 0 {
-                // insert at the end  the old list
+                // insert at the end of the old list
                 let foothold = old.last().unwrap();
                 self.create_and_insert_after(to, new_middle, foothold, parent);
             } else {
@@ -187,7 +187,7 @@ impl VirtualDom {
         // If that was all of the old children, then create and append the remaining
         // new children and we're finished.
         if left_offset == old.len() {
-            self.create_and_insert_after(to, &new[left_offset..], old.last().unwrap(), parent);
+            self.create_and_insert_after(to, &new[left_offset..], &new[left_offset - 1], parent);
             return None;
         }
 
