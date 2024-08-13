@@ -2,14 +2,7 @@
 
 use dioxus::prelude::*;
 use dioxus_core::{AttributeValue, DynamicNode, NoOpMutations, VComponent, VNode, *};
-use std::{
-    any::Any,
-    cfg,
-    collections::HashSet,
-    default::Default,
-    rc::Rc,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::{any::Any, cfg, collections::HashSet, default::Default, rc::Rc};
 
 fn random_ns() -> Option<&'static str> {
     let namespace = rand::random::<u8>() % 2;
