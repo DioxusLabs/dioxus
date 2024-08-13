@@ -149,10 +149,17 @@ impl ToTokens for TemplateBody {
 
                 #[cfg(debug_assertions)]
                 {
+                    static __ORIGINAL_TEMPLATE: ::std::sync::OnceLock<dioxus_core::internal::HotReloadedTemplate> = ::std::sync::OnceLock::new();
+                    fn __original_template() -> &'static dioxus_core::internal::HotReloadedTemplate {
+                        if __ORIGINAL_TEMPLATE.get().is_none() {
+                            _ = __ORIGINAL_TEMPLATE.set(#hot_reload_mapping);
+                        }
+                        __ORIGINAL_TEMPLATE.get().unwrap()
+                    }
                     // The key is important here - we're creating a new GlobalSignal each call to this
                     // But the key is what's keeping it stable
                     let __template = GlobalSignal::with_key(
-                        || #hot_reload_mapping,
+                        || None::<dioxus_core::internal::HotReloadedTemplate>,
                         {
                             const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
                             const NORMAL: &str = dioxus_core::const_format::str_replace!(PATH, '\\', "/");
@@ -161,6 +168,13 @@ impl ToTokens for TemplateBody {
                     );
 
                     __template.maybe_with_rt(|__template_read| {
+                        // If the template has not been hot reloaded, we always use the original template
+                        // Templates nested within macros may be merged because they have the same file-line-column-index
+                        // They cannot be hot reloaded, so this prevents incorrect rendering
+                        let __template_read = match __template_read.as_ref() {
+                            Some(__template_read) => __template_read,
+                            None => __original_template(),
+                        };
                         let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
                             vec![ #( #dynamic_text.to_string() ),* ],
                         );

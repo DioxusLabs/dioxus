@@ -531,14 +531,16 @@ impl crate::RenderedElementBacking for web_sys::Element {
         &self,
         behavior: crate::ScrollBehavior,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = crate::MountedResult<()>>>> {
+        let options = web_sys::ScrollIntoViewOptions::new();
         match behavior {
-            crate::ScrollBehavior::Instant => self.scroll_into_view_with_scroll_into_view_options(
-                web_sys::ScrollIntoViewOptions::new().behavior(web_sys::ScrollBehavior::Instant),
-            ),
-            crate::ScrollBehavior::Smooth => self.scroll_into_view_with_scroll_into_view_options(
-                web_sys::ScrollIntoViewOptions::new().behavior(web_sys::ScrollBehavior::Smooth),
-            ),
+            crate::ScrollBehavior::Instant => {
+                options.set_behavior(web_sys::ScrollBehavior::Instant);
+            }
+            crate::ScrollBehavior::Smooth => {
+                options.set_behavior(web_sys::ScrollBehavior::Smooth);
+            }
         }
+        self.scroll_into_view_with_scroll_into_view_options(&options);
 
         Box::pin(async { Ok(()) })
     }
