@@ -57,5 +57,7 @@ twoway![
     tiny,
     tinynoopt,
     trailing_expr,
-    oneline
+    oneline,
+    prop_rsx,
+    asset
 ];

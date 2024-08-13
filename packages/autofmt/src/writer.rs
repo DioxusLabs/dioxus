@@ -72,9 +72,9 @@ impl<'a> Writer<'a> {
 
     /// Check if the rsx call is short enough to be inlined
     pub(crate) fn is_short_rsx_call(roots: &[BodyNode]) -> bool {
-        match roots.len() {
-            0 => true,
-            1 if matches!(roots[0], BodyNode::Text(_)) => true,
+        match roots {
+            [] => true,
+            [BodyNode::Text(_text)] => true,
             _ => false,
         }
     }
