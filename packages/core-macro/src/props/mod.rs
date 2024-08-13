@@ -6,14 +6,16 @@
 //! - [x] Automatically implement [`Into<Option>`] on the setters (IE the strip setter option)
 //! - [x] Automatically implement a default of none for optional fields (those explicitly wrapped with [`Option<T>`])
 
+use field_info::FieldInfo;
 use proc_macro2::TokenStream;
 
+use struct_info::TypeBuilderAttr;
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
 use syn::{parse::Error, PathArguments};
 
 use quote::quote;
-use syn::{parse_quote, GenericArgument, PathSegment, Type};
+use syn::{parse_quote, Field, GenericArgument, PathSegment, Type};
 
 pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
     let data = match &ast.data {
@@ -22,9 +24,25 @@ pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
                 let struct_info = struct_info::StructInfo::new(ast, fields.named.iter())?;
                 let builder_creation = struct_info.builder_creation_impl()?;
                 let conversion_helper = struct_info.conversion_helper_impl()?;
+
+                let children_field_raw: Field = parse_quote!(children: Element);
+                let mut children_field = match struct_info.has_children_field {
+                    true => None,
+                    false => Some(FieldInfo::new(
+                        struct_info.fields.len(),
+                        &children_field_raw,
+                        TypeBuilderAttr::new(&[])?.field_defaults,
+                    )?),
+                };
+
+                let children_field_impl = match children_field.take() {
+                    Some(field) => struct_info.field_impl(&field, true)?,
+                    None => quote!(),
+                };
+
                 let fields = struct_info
                     .included_fields()
-                    .map(|f| struct_info.field_impl(f))
+                    .map(|f| struct_info.field_impl(f, false))
                     .collect::<Result<Vec<_>, _>>()?;
                 let extends = struct_info
                     .extend_fields()
@@ -42,6 +60,7 @@ pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
                     #builder_creation
                     #conversion_helper
                     #( #fields )*
+                    #children_field_impl
                     #( #extends )*
                     #( #required_fields )*
                     #build_method
@@ -556,6 +575,7 @@ mod struct_info {
         pub name: &'a syn::Ident,
         pub generics: &'a syn::Generics,
         pub fields: Vec<FieldInfo<'a>>,
+        pub has_children_field: bool,
 
         pub builder_attr: TypeBuilderAttr,
         pub builder_name: syn::Ident,
@@ -583,14 +603,26 @@ mod struct_info {
         ) -> Result<StructInfo<'a>, Error> {
             let builder_attr = TypeBuilderAttr::new(&ast.attrs)?;
             let builder_name = strip_raw_ident_prefix(format!("{}Builder", ast.ident));
+
+            let fields: Vec<FieldInfo> = fields
+                .enumerate()
+                .map(|(i, f)| FieldInfo::new(i, f, builder_attr.field_defaults.clone()))
+                .collect::<Result<_, _>>()?;
+
+            let mut has_children_field = false;
+            for field in fields.iter() {
+                if field.name == "children" {
+                    has_children_field = true;
+                    break;
+                }
+            }
+
             Ok(StructInfo {
                 vis: &ast.vis,
                 name: &ast.ident,
                 generics: &ast.generics,
-                fields: fields
-                    .enumerate()
-                    .map(|(i, f)| FieldInfo::new(i, f, builder_attr.field_defaults.clone()))
-                    .collect::<Result<_, _>>()?,
+                fields,
+                has_children_field,
                 builder_attr,
                 builder_name: syn::Ident::new(&builder_name, ast.ident.span()),
                 conversion_helper_trait_name: syn::Ident::new(
@@ -1047,7 +1079,11 @@ Finally, call `.build()` to create the instance of `{name}`.
             })
         }
 
-        pub fn field_impl(&self, field: &FieldInfo) -> Result<TokenStream, Error> {
+        pub fn field_impl(
+            &self,
+            field: &FieldInfo,
+            is_fake_children: bool,
+        ) -> Result<TokenStream, Error> {
             let FieldInfo {
                 name: field_name, ..
             } = field;
@@ -1170,6 +1206,45 @@ Finally, call `.build()` to create the instance of `{name}`.
             );
             let repeated_fields_error_message = format!("Repeated field {field_name}");
 
+            // Add deprecation warning if field is a fake children field.
+            let (fake_children_deprecation, children_deny_deprecation) = match is_fake_children {
+                false => (quote!(), quote!()),
+                true => {
+                    let struct_name = self.name.to_string();
+                    let component_name = struct_name.strip_suffix("Props").unwrap_or(&struct_name);
+                    let deprecation_note = format!("{} component's props don't accept children; add a `children: Element` field to your props to accept children elements", component_name);
+                    (
+                        quote!(
+                            #[deprecated(note = #deprecation_note)]
+                        ),
+                        quote!(#[deny(deprecated)]),
+                    )
+                }
+            };
+
+            let mut repeated_impl = quote! {
+                #[doc(hidden)]
+                #[allow(dead_code, non_camel_case_types, non_snake_case)]
+                pub enum #repeated_fields_error_type_name {}
+                #[doc(hidden)]
+                #[allow(dead_code, non_camel_case_types, missing_docs)]
+                impl #impl_generics #builder_name < #( #target_generics ),* > #where_clause {
+                    #children_deny_deprecation
+                    #[deprecated(
+                        note = #repeated_fields_error_message
+                    )]
+                    #[allow(clippy::type_complexity)]
+                    pub fn #field_name< #marker > (self, _: #repeated_fields_error_type_name) -> #builder_name < #( #target_generics ),* > {
+                        self
+                    }
+                }
+            };
+
+            // Remove repeated impl if the field is a fake children field.
+            if is_fake_children {
+                repeated_impl = quote!();
+            }
+
             let forward_fields = self
                 .extend_fields()
                 .map(|f| {
@@ -1186,6 +1261,8 @@ Finally, call `.build()` to create the instance of `{name}`.
                 impl #impl_generics #builder_name < #( #ty_generics ),* > #where_clause {
                     #( #docs )*
                     #[allow(clippy::type_complexity)]
+                    #children_deny_deprecation
+                    #fake_children_deprecation
                     pub fn #field_name < #marker > (self, #field_name: #arg_type) -> #builder_name < #( #target_generics ),* > {
                         let #field_name = (#arg_expr,);
                         let ( #(#descructuring,)* ) = self.fields;
@@ -1196,20 +1273,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                         }
                     }
                 }
-                #[doc(hidden)]
-                #[allow(dead_code, non_camel_case_types, non_snake_case)]
-                pub enum #repeated_fields_error_type_name {}
-                #[doc(hidden)]
-                #[allow(dead_code, non_camel_case_types, missing_docs)]
-                impl #impl_generics #builder_name < #( #target_generics ),* > #where_clause {
-                    #[deprecated(
-                        note = #repeated_fields_error_message
-                    )]
-                    #[allow(clippy::type_complexity)]
-                    pub fn #field_name< #marker > (self, _: #repeated_fields_error_type_name) -> #builder_name < #( #target_generics ),* > {
-                        self
-                    }
-                }
+                #repeated_impl
             })
         }
 
