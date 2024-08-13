@@ -31,8 +31,7 @@ impl VNode {
         // If the templates are different, we need to replace the entire template
         if self.template != new.template {
             let mount_id = self.mount.get();
-            let mount = &dom.mounts[mount_id.0];
-            let parent = mount.parent;
+            let parent = dom.get_mounted_parent(mount_id);
             return self.replace(std::slice::from_ref(new), parent, dom, to);
         }
 
@@ -122,20 +121,20 @@ impl VNode {
                 // Mark the mount as unused. When a scope is created, it reads the mount and
                 // if it is the placeholder value, it will create the scope, otherwise it will
                 // reuse the scope
-                let old_mount = dom.mounts[mount.0].mounted_dynamic_nodes[idx];
-                dom.mounts[mount.0].mounted_dynamic_nodes[idx] = usize::MAX;
+                let old_mount = dom.get_mounted_dyn_node(mount, idx);
+                dom.set_mounted_dyn_node(mount, idx, usize::MAX);
 
                 let new_nodes_on_stack =
                     self.create_dynamic_node(new, mount, idx, dom, to.as_deref_mut());
 
                 // Restore the mount for the scope we are removing
-                let new_mount = dom.mounts[mount.0].mounted_dynamic_nodes[idx];
-                dom.mounts[mount.0].mounted_dynamic_nodes[idx] = old_mount;
+                let new_mount = dom.get_mounted_dyn_node(mount, idx);
+                dom.set_mounted_dyn_node(mount, idx, old_mount);
 
                 self.remove_dynamic_node(mount, dom, to, true, idx, old, Some(new_nodes_on_stack));
 
                 // Restore the mount for the node we created
-                dom.mounts[mount.0].mounted_dynamic_nodes[idx] = new_mount;
+                dom.set_mounted_dyn_node(mount, idx, new_mount);
             }
         };
     }

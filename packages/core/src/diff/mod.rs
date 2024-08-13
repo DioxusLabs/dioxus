@@ -10,10 +10,11 @@
 #![allow(clippy::too_many_arguments)]
 
 use crate::{
+    arena::MountId,
     innerlude::{ElementRef, WriteMutations},
     nodes::VNode,
     virtual_dom::VirtualDom,
-    TemplateNode,
+    ElementId, TemplateNode,
 };
 
 mod component;
@@ -71,18 +72,6 @@ impl VirtualDom {
     pub(crate) fn set_mounted_root_node(&self, mount: MountId, root_idx: usize, value: ElementId) {
         let mut mounts = self.runtime.mounts.borrow_mut();
         mounts[mount.0].root_ids[root_idx] = value;
-    }
-
-    /// Replace many nodes with a number of nodes on the stack
-    fn replace_nodes(&mut self, to: Option<&mut impl WriteMutations>, nodes: &[VNode], m: usize) {
-        debug_assert!(
-            !nodes.is_empty(),
-            "replace_nodes must have at least one node"
-        );
-
-        // We want to optimize the replace case to use one less mutation if possible
-        // Instead of *just* removing it, we can use the replace mutation
-        self.remove_nodes(to, nodes, Some(m));
     }
 
     /// Remove these nodes from the dom

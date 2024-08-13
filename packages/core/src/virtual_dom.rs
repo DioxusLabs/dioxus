@@ -7,12 +7,7 @@ use crate::properties::RootProps;
 use crate::root_wrapper::RootScopeWrapper;
 use crate::{
     arena::ElementId,
-    innerlude::{
-        ElementRef, NoOpMutations, SchedulerMsg, ScopeOrder, ScopeState, VNodeMount, VProps,
-        WriteMutations,
-    },
     innerlude::{NoOpMutations, SchedulerMsg, ScopeOrder, ScopeState, VProps, WriteMutations},
-    nodes::{Template, TemplateId},
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
     ComponentFunction, Element, Mutations,
@@ -212,9 +207,7 @@ pub struct VirtualDom {
 
     pub(crate) dirty_scopes: BTreeSet<ScopeOrder>,
 
-    // The element ids that are used in the renderer
-    // These mark a specific place in a whole rsx block
-    pub(crate) elements: Slab<Option<ElementRef>>,
+    pub(crate) runtime: Rc<Runtime>,
 
     // The scopes that have been resolved since the last render
     pub(crate) resolved_scopes: Vec<ScopeId>,
@@ -743,14 +736,6 @@ impl VirtualDom {
     pub fn handle_event(&self, name: &str, event: Rc<dyn Any>, element: ElementId, bubbling: bool) {
         let event = crate::Event::new(event, bubbling);
         self.runtime().handle_event(name, event, element);
-    }
-
-    /// Flush any queued template changes
-    #[instrument(skip(self, to), level = "trace", name = "VirtualDom::flush_templates")]
-    fn flush_templates(&mut self, to: &mut impl WriteMutations) {
-        for template in self.queued_templates.drain(..) {
-            to.register_template(template);
-        }
     }
 }
 
