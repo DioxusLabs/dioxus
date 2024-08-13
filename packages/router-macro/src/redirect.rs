@@ -1,6 +1,6 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
-use syn::LitStr;
+use syn::{ExprClosure, LitStr};
 
 use crate::{
     hash::HashFragment,
@@ -98,5 +98,9 @@ impl Redirect {
             function,
             index,
         })
+    }
+
+    fn get_closure_redirect(function: ExprClosure) -> (Vec<RouteSegment>, Option<QuerySegment>, Option<HashFragment>) {
+
     }
 }
